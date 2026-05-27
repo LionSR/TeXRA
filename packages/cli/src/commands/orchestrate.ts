@@ -12,6 +12,7 @@ import {
   withCliMultiAgentPresetVisibility,
 } from '../runtime/multiAgentPresets';
 import { buildCliOrchestrationItems } from '../runtime/orchestration';
+import { notifyCliUpdate } from '../runtime/updateChecker';
 
 import { contextFromArgs } from './_helpers/context';
 import { setExitCode } from './_helpers/exitCode';
@@ -38,6 +39,8 @@ async function runOrchestration(context: CliContext): Promise<number> {
     );
     return CliExitCode.Usage;
   }
+
+  await notifyCliUpdate(context);
 
   await initLocalCliPlatform(context);
   await loadAgents({ includeRemote: false });

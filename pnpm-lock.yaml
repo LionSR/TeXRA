@@ -351,6 +351,9 @@ importers:
       '@types/react':
         specifier: ^19.2.15
         version: 19.2.15
+      '@types/semver':
+        specifier: ^7.7.1
+        version: 7.7.1
       babel-plugin-react-compiler:
         specifier: ^1.0.0
         version: 1.0.0
@@ -381,6 +384,9 @@ importers:
       react:
         specifier: ^19.2.0
         version: 19.2.6
+      semver:
+        specifier: ^7.8.1
+        version: 7.8.1
       string-width:
         specifier: ^8.0.0
         version: 8.2.1
@@ -2291,6 +2297,9 @@ packages:
 
   '@types/sarif@2.1.7':
     resolution: {integrity: sha512-kRz0VEkJqWLf1LLVN4pT1cg1Z9wAuvI6L97V3m2f5B76Tg8d413ddvLBPTEHAZJlnn4XSvu0FkZtViCQGVyrXQ==}
+
+  '@types/semver@7.7.1':
+    resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
 
   '@types/shell-quote@1.7.5':
     resolution: {integrity: sha512-+UE8GAGRPbJVQDdxi16dgadcBfQ+KG2vgZhV1+3A1XmHbmwcdwhCUwIdy+d3pAGrbvgRoVSjeI9vOWyq376Yzw==}
@@ -8471,6 +8480,8 @@ snapshots:
 
   '@types/sarif@2.1.7': {}
 
+  '@types/semver@7.7.1': {}
+
   '@types/shell-quote@1.7.5': {}
 
   '@types/sortablejs@1.15.9': {}
@@ -8724,7 +8735,7 @@ snapshots:
       parse-semver: 1.1.1
       read: 1.0.7
       secretlint: 10.2.2
-      semver: 7.7.4
+      semver: 7.8.1
       tmp: 0.2.5
       typed-rest-client: 1.8.11
       url-join: 4.0.1
