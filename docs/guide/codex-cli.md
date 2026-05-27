@@ -6,7 +6,7 @@ TeXRA can hand off tasks to [OpenAI Codex](https://developers.openai.com/codex/c
 
 Set everything up from the TeXRA Dashboard — no terminal copy-paste.
 
-1. Open **TeXRA: Show Dashboard** (`Ctrl+Shift+P`) → **Tools** tab (<wa-icon library="texra" name="tools"></wa-icon>) → **Computation** (<wa-icon library="texra" name="symbol-operator"></wa-icon>).
+1. Open **TeXRA: Show Dashboard** (`Ctrl+Shift+P`) → **Integrations** tab (<wa-icon library="texra" name="robot"></wa-icon>).
 2. Find the **OpenAI Codex CLI** card. When it's **Not Found**, the setup actions expand automatically.
 3. Click the two buttons in order:
    - <wa-icon library="texra" name="terminal"></wa-icon> **Install in Terminal** — opens an integrated terminal and runs `npm install -g @openai/codex`.
@@ -28,7 +28,7 @@ TeXRA looks up Codex in the same environment as the VS Code extension host, so i
 
 ## Settings
 
-All Codex options live on the Codex card in **Dashboard → Tools** and are scoped to the current workspace.
+All Codex options live on the Codex card in **Dashboard → Integrations** and are scoped to the current workspace.
 
 | Setting              | Options                                                                                | Default           | What it controls                                                           |
 | -------------------- | -------------------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------- |

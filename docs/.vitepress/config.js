@@ -154,6 +154,7 @@ const baseConfig = {
             { text: 'TeXRA CLI', link: '/guide/texra-cli' },
             { text: 'Code Review', link: '/guide/code-review' },
             { text: 'Codex CLI', link: '/guide/codex-cli' },
+            { text: 'Claude Code', link: '/guide/claude-code' },
             { text: 'File Management', link: '/guide/file-management' },
             { text: 'ProgressBoard', link: '/guide/progress-board' },
           ],
