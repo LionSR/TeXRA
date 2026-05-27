@@ -6,7 +6,7 @@ This guide will walk you through the process of installing TeXRA and all its dep
 
 TeXRA is designed to work on all major operating systems with the following minimum requirements:
 
-- **Visual Studio Code**: Version 1.99 or newer
+- **Visual Studio Code**: Version 1.105 or newer (for the VS Code extension)
 - **Operating System**: Windows, macOS, or Linux
 - **Internet Connection**: Required for API access to language models
 
@@ -49,16 +49,22 @@ re-authenticate and reconfigure local provider, agent, Git, and LaTeX settings.
 See [Migrating to the Desktop App](./desktop-migration.md).
 :::
 
-### CLI Preview
+### CLI
 
-The standalone `texra` command is currently installed from a repository checkout
-rather than from npm. See [TeXRA CLI](./texra-cli.md) for build, local link, and
-uninstall instructions.
+The standalone `texra` command is published to npm. Install it globally (requires
+Node.js 22 or newer):
+
+```bash
+npm install -g @texra-ai/cli
+```
+
+See [TeXRA CLI](./texra-cli.md) for usage, shell completion, and instructions for
+building from a repository checkout if you want to track unreleased changes.
 
 ### From VSIX File
 
 1. Open VS Code
-2. Obtain the newest release (`.vsix` file, e.g., `texra-0.36.7.vsix`)
+2. Obtain the newest release (`.vsix` file, e.g., `texra-<version>.vsix`)
 3. Find the `.vsix` file in the VS Code file explorer
 4. Right-click on the `.vsix` file
 5. From the context menu, select "Install Extension VSIX"
@@ -284,7 +290,7 @@ If any component is missing, TeXRA will typically show an error message indicati
 ### Common Installation Issues
 
 1. **Extension Not Loading**:
-   - Check VS Code's minimum version requirement (1.99+)
+   - Check VS Code's minimum version requirement (1.105+)
    - Look for errors in the Output panel (select "TeXRA" in the dropdown)
    - Try reinstalling the extension
 
