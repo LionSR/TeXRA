@@ -303,6 +303,17 @@ async function validateCodeReviewActionHelpers() {
     'TeXRA review parser should parse fenced JSON',
   );
   assert(
+    parseModelJson(
+      `\`\`\`json
+${JSON.stringify({
+  body: 'fenced',
+  comments: [{ path: 'paper.tex', line: 1, body: 'body contains ```' }],
+})}
+\`\`\``,
+    ).comments[0].body === 'body contains ```',
+    'TeXRA review parser should keep fenced JSON intact when strings contain backticks',
+  );
+  assert(
     parseModelJson('text before {"body":"embedded"} text after').body ===
       'embedded',
     'TeXRA review parser should parse embedded JSON',

@@ -30,15 +30,21 @@ function stringOrUndefined(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function fencedJsonBlocks(text) {
+  return Array.from(
+    text.matchAll(/^```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n```[ \t]*$/gim),
+    (match) => match[1],
+  );
+}
+
 function parseModelJson(text) {
   try {
     return JSON.parse(text);
   } catch {}
 
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced?.[1]) {
+  for (const fenced of fencedJsonBlocks(text)) {
     try {
-      return JSON.parse(fenced[1]);
+      return JSON.parse(fenced);
     } catch {}
   }
 
@@ -186,6 +192,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  fencedJsonBlocks,
   normalizeModelComment,
   normalizeReview,
   normalizeReviewFile,
