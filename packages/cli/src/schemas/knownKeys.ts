@@ -1,3 +1,6 @@
+// Local imports - shared state keys (canonical git-author key names)
+import { WorkspaceStateKey } from '@common/state/stateKeys';
+
 // Local imports - shared core schema
 import { CORE_SETTING_PATHS } from '@shared/schemas/coreSettings';
 
@@ -19,8 +22,8 @@ export const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set<string>([
   // Git commit-author marking is stored as workspace state in the VS Code
   // extension, but the CLI reads it from `.texra/config.json`. Recognize the
   // keys here so they don't warn as unknown.
-  'texra.git.markCommits',
-  'texra.git.authorName',
-  'texra.git.authorEmail',
-  'texra.git.worktreeSupport',
+  WorkspaceStateKey.GIT_MARK_COMMITS,
+  WorkspaceStateKey.GIT_AUTHOR_NAME,
+  WorkspaceStateKey.GIT_AUTHOR_EMAIL,
+  WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
 ]);
