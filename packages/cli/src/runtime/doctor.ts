@@ -17,10 +17,12 @@ import {
   writeTextStdout,
 } from './logSinks';
 import { getCliModelAccessList } from './modelAccess';
+import { createCliStyle } from './style';
 import { getCliStoredAuthProfile } from './supabaseAuth';
 
 // Type imports - CLI runtime
 import type { CliContext } from './cliContext';
+import type { CliStyle } from './style';
 import type { CliModelAccess } from './modelAccess';
 
 export type DoctorCheckStatus = 'pass' | 'warn' | 'fail' | 'skip';
@@ -319,17 +321,20 @@ export function doctorExitCode(report: DoctorReport): number {
   return report.ok ? CliExitCode.Success : CliExitCode.ModelOrNetworkError;
 }
 
-export function formatDoctorText(report: DoctorReport): string {
+export function formatDoctorText(
+  report: DoctorReport,
+  style: CliStyle = createCliStyle(false),
+): string {
   const marker: Record<DoctorCheckStatus, string> = {
-    pass: 'PASS',
-    warn: 'WARN',
-    fail: 'FAIL',
-    skip: 'SKIP',
+    pass: style.success('PASS'),
+    warn: style.warn('WARN'),
+    fail: style.error('FAIL'),
+    skip: style.muted('SKIP'),
   };
   return report.checks
     .map((check) => {
       const head = `${marker[check.status]} ${check.name}: ${check.message}`;
-      return check.hint ? `${head}\n     ${check.hint}` : head;
+      return check.hint ? `${head}\n     ${style.muted(check.hint)}` : head;
     })
     .join('\n');
 }
@@ -362,7 +367,7 @@ export function writeDoctorReport(
     }
     return;
   }
-  const text = formatDoctorText(report);
+  const text = formatDoctorText(report, createCliStyle(context.colorEnabled));
   if (report.ok) {
     writeTextStdout(text);
   } else {
