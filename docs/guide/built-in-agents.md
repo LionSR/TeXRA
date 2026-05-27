@@ -238,7 +238,7 @@ Highlight key figures and tables. Make it visually appealing with appropriate co
 ```
 
 ::: tip Creating figures
-There is no longer a dedicated `draw` agent. To generate or enhance TikZ figures, use a tool-use agent (`research`, `chat`, or `presenter`) and describe the figure — the agent writes compilable TikZ, compiles it, and visually verifies the result. See [Working with Figures](./working-with-figures.md) and [TikZ Figures](./tikz-figures.md).
+There is no longer a dedicated `draw` agent. To generate or enhance TikZ figures, use a tool-use agent (`research` or `presenter`) and describe the figure — the agent writes compilable TikZ, compiles it, and visually verifies the result. See [Working with Figures](./working-with-figures.md) and [TikZ Figures](./tikz-figures.md).
 :::
 
 ## LaTeX & Build Agents

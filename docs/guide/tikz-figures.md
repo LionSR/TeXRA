@@ -6,9 +6,9 @@ TeXRA offers specialised features for TikZ, built around its tool-use agents —
 
 ::: info No dedicated `draw` agent
 Earlier versions of TeXRA shipped a standalone `draw` agent. Figure generation
-is now handled by the general tool-use agents (`research`, `presenter`, or
-`chat`), which can write TikZ, compile it, inspect the rendered output, and
-iterate until it looks right.
+is now handled by the general tool-use agents (`research` or `presenter`), which
+can write TikZ, compile it, inspect the rendered output, and iterate until it
+looks right.
 :::
 
 ::: tip General Media Handling
@@ -34,7 +34,7 @@ This code draws a blue circle with text inside. TeXRA's tools help manage and ge
 
 ## <wa-icon library="texra" name="sparkle"></wa-icon> Generating TikZ with Agents
 
-A tool-use agent (`research`, `presenter`, or `chat`) acts as your AI graphics assistant for TikZ. It can:
+A tool-use agent (`research` or `presenter`) acts as your AI graphics assistant for TikZ. It can:
 
 1. <wa-icon library="texra" name="add"></wa-icon> **Create new TikZ figures** from a textual description.
 2. <wa-icon library="texra" name="edit"></wa-icon> **Enhance existing figures** with improvements or additions.
@@ -47,7 +47,7 @@ Because these are tool-use agents, they can compile the figure and inspect the r
 
 ### Creating New Figures
 
-1. Select a tool-use agent — `research`, `presenter`, or `chat` (<wa-icon library="texra" name="sparkle"></wa-icon>).
+1. Select a tool-use agent — `research` or `presenter` (<wa-icon library="texra" name="sparkle"></wa-icon>).
 2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>) — `sonnet46T`, `opus47T`, `gpt54`, or `gemini31p` are good choices for complex drawings.
 3. Provide a detailed description of the figure you want.
 4. Click Execute (<wa-icon library="texra" name="play"></wa-icon>).
@@ -66,7 +66,7 @@ Connect the steps with arrows and add appropriate labels.
 ### Enhancing Existing Figures
 
 1. Select the input file (<wa-icon library="texra" name="file-code"></wa-icon>) containing the TikZ code.
-2. Select a tool-use agent (`research`, `presenter`, or `chat`).
+2. Select a tool-use agent (`research` or `presenter`).
 3. Provide instructions for the desired improvements.
 4. Execute (<wa-icon library="texra" name="play"></wa-icon>).
 
