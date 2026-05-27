@@ -8,7 +8,6 @@ import {
 } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
-import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 import { CliUsageError } from '../runtime/cliContext';
@@ -33,7 +32,6 @@ import {
   type CliMultiAgentPresetRunPlan,
 } from '../runtime/multiAgentPresets';
 import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
-import { createCliRuntimeHost } from '../runtime/runtimeHost';
 import { getCliAuthProvider } from '../runtime/supabaseAuth';
 
 import { contextFromArgs } from './_helpers/context';
@@ -45,17 +43,13 @@ import {
   collectStringFlagValues,
   optString,
 } from './_helpers/globalArgs';
+import { executeCliRequest } from './_helpers/runExecution';
 import {
   createCliRunResult,
-  readCliTerminalStatus,
   terminalStatusExitCode,
   type CliRunResult,
-  type ExecuteAgentResult,
 } from './_helpers/terminalStatus';
-import {
-  expandWorkflowInputSpec,
-  expandWorkflowInputSpecs,
-} from './_helpers/workflowInputs';
+import { expandRunInputs } from './_helpers/workflowInputs';
 import type { CliContext } from '../runtime/cliContext';
 
 type CliToolUseRunResult = Extract<CliRunResult, { category: 'toolUse' }>;
@@ -201,6 +195,8 @@ async function runMultiAgentPreset(
   init: MultiAgentRunInit,
 ): Promise<number> {
   const explicitModel = assertExplicitModelKnown(init.model);
+  // A team run drives a tool-use orchestrator, so it follows the `chat`
+  // (tool-use) model config rather than `run` (workflow agents).
   const model =
     explicitModel ||
     context.envModel ||
@@ -213,17 +209,11 @@ async function runMultiAgentPreset(
     quietLogs: true,
     renderRunProgress,
   };
-  const inputFiles = await expandWorkflowInputSpecs(
+  const { inputFiles, contextFiles } = await expandRunInputs(
     init.inputFiles,
+    init.contextFiles,
     runContext.cwd,
   );
-  const contextFiles = (
-    await Promise.all(
-      init.contextFiles.map((spec) =>
-        expandWorkflowInputSpec(spec, runContext.cwd, '--context'),
-      ),
-    )
-  ).flat();
 
   await initCliPlatform(runContext);
   installCliApprovalHandlers(runContext);
@@ -251,27 +241,16 @@ async function runMultiAgentPreset(
 
   const executionId = generateExecutionId();
   const registeredConfig = AgentConfigSchema.parse(config);
-  const runtimeHost = createCliRuntimeHost(runContext);
-  let result: ExecuteAgentResult;
-  try {
-    result = await withCliMultiAgentPresetVisibility(plan, () =>
-      runValidatedExecutionRequest(
-        { config: registeredConfig, executionId },
-        {
-          runtimeHost,
-          enforceCategory: true,
-          registerExecution: true,
-        },
-      ),
-    );
-  } catch (error) {
-    await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
-    throw error;
-  } finally {
-    await runtimeHost.close();
-  }
-
-  const terminalStatus = await readCliTerminalStatus(result);
+  const { result, terminalStatus } = await executeCliRequest(
+    { config: registeredConfig, executionId },
+    runContext,
+    {
+      enforceCategory: true,
+      registerExecution: true,
+      markErrorOnThrow: true,
+      wrap: (run) => withCliMultiAgentPresetVisibility(plan, run),
+    },
+  );
   if (result.category !== AgentCategory.ToolUse) {
     await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
     writeTextStderr(
@@ -367,7 +346,10 @@ const multiAgentRunCommand = defineCommand({
 });
 
 export const multiAgentCommand = defineCommand({
-  meta: { name: 'multi-agent', description: 'Inspect multi-agent teams' },
+  meta: {
+    name: 'multi-agent',
+    description: 'List, inspect, and run multi-agent team presets',
+  },
   subCommands: {
     list: multiAgentListCommand,
     show: multiAgentShowCommand,
