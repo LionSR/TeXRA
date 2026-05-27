@@ -405,7 +405,7 @@ prompts:
         The finite-time bound from the main text now gives...
         \criticize{Enhancement: Using strengthened result from main text \cref{thm:main}. Previous version only had asymptotic bound.}{3}{5}
 
-      Ensure that the output documents are in the following order: {{ INPUT_FILES | join(', ') }}
+      Ensure that the output documents are in the following order: {{ INPUT_FILES | default([], true) | join(', ') }}
 
       <documents>
       {% for output in INPUT_FILES %}
