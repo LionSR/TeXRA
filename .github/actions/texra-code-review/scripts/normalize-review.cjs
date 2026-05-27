@@ -151,11 +151,9 @@ function normalizeReviewFile({
   const raw = fs.readFileSync(resultJson, 'utf8');
   const payload = JSON.parse(raw);
   const result = payload.result ?? payload;
-  const rawFinalMessage = String(
-    result.lastResponse ||
-      result.status ||
-      'TeXRA completed without a final review message.',
-  ).trim();
+  const rawFinalMessage =
+    String(result.lastResponse || '').trim() ||
+    'TeXRA completed without a final review message.';
   const review = normalizeReview(rawFinalMessage);
   const finalMessage = review.body.trim();
   const resolvedOutputFile =

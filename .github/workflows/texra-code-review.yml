@@ -193,16 +193,30 @@ jobs:
           api-mode: personal
           approval-policy: never
 
+      - name: Write TeXRA review failure fallback
+        if: always() && steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.texra-review-trusted.outputs.review-json == '' && steps.texra-review-bootstrap.outputs.review-json == ''
+        id: texra-review-fallback
+        run: |
+          mkdir -p .texra-action
+          cat > .texra-action/texra-review-fallback.json <<'JSON'
+          {
+            "body": "## TeXRA Code Review\n\nTeXRA did not produce a review payload. Inspect the TeXRA Code Review workflow logs for the agent failure.",
+            "comments": [],
+            "thread_actions": []
+          }
+          JSON
+          echo "review-json=.texra-action/texra-review-fallback.json" >> "$GITHUB_OUTPUT"
+
       - name: Post TeXRA pull request review
-        if: steps.texra-review-trusted.outputs.review-json != '' || steps.texra-review-bootstrap.outputs.review-json != ''
+        if: always() && (steps.texra-review-trusted.outputs.review-json != '' || steps.texra-review-bootstrap.outputs.review-json != '' || steps.texra-review-fallback.outputs.review-json != '')
         uses: actions/github-script@v7
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           TEXRA_COMMENTABLE_LINES_JSON: .texra-action/commentable-lines.json
           TEXRA_POST_REVIEW_SCRIPT: ${{ steps.trusted-texra-action.outputs.source == 'trusted' && './.trusted-actions/.github/actions/texra-code-review/scripts/post-review.cjs' || './.github/actions/texra-code-review/scripts/post-review.cjs' }}
-          TEXRA_REVIEW_JSON: ${{ steps.texra-review-trusted.outputs.review-json || steps.texra-review-bootstrap.outputs.review-json }}
+          TEXRA_REVIEW_JSON: ${{ steps.texra-review-trusted.outputs.review-json || steps.texra-review-bootstrap.outputs.review-json || steps.texra-review-fallback.outputs.review-json }}
         with:
-          github-token: ${{ github.token }}
+          github-token: ${{ secrets.TEXRA_REVIEW_GITHUB_TOKEN || github.token }}
           script: |
             const path = require('node:path');
             const { postTexraReview } = require(path.resolve(process.env.TEXRA_POST_REVIEW_SCRIPT));

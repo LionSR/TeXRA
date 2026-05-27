@@ -46,7 +46,7 @@ function parseCommentableLines(diffText) {
       continue;
     }
     const newFileMatch = line.match(/^\+\+\+ b\/(.+)$/);
-    if (newFileMatch) {
+    if (newFileMatch && !inHunk) {
       currentPath = newFileMatch[1];
       inHunk = false;
       continue;

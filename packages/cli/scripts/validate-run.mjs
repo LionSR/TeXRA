@@ -17,7 +17,7 @@ const cliRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.dirname(path.dirname(cliRoot));
 const binaryPath = path.join(cliRoot, 'dist/bin/texra.js');
 const require = createRequire(import.meta.url);
-const { normalizeReview, parseModelJson } = require(
+const { normalizeReview, normalizeReviewFile, parseModelJson } = require(
   path.join(
     repoRoot,
     '.github/actions/texra-code-review/scripts/normalize-review.cjs',
@@ -320,24 +320,43 @@ async function validateCodeReviewActionHelpers() {
   const anchors = parseCommentableLines(`diff --git a/paper.tex b/paper.tex
 --- a/paper.tex
 +++ b/paper.tex
-@@ -1,4 +1,5 @@
+@@ -1,4 +1,6 @@
  unchanged
 -old
 ---flag
 +new
 +++count;
 +--sql
++++ b/not-a-header
  done
 `);
   const file = anchors.files.find((entry) => entry.path === 'paper.tex');
   assert(
-    JSON.stringify(file?.right) === JSON.stringify([{ start: 2, end: 4 }]),
+    JSON.stringify(file?.right) === JSON.stringify([{ start: 2, end: 5 }]),
     'commentable line parser should report changed head lines',
   );
   assert(
     JSON.stringify(file?.left) === JSON.stringify([{ start: 2, end: 3 }]),
     'commentable line parser should report removed base lines',
   );
+
+  const reviewCwd = mkdtempSync(path.join(tmpdir(), 'texra-review-output-'));
+  try {
+    const resultJson = path.join(reviewCwd, 'result.json');
+    const outputFile = path.join(reviewCwd, 'review.md');
+    writeFileSync(resultJson, JSON.stringify({ status: 'success' }));
+    const { finalMessage } = normalizeReviewFile({
+      resultJson,
+      outputFile,
+      runnerTemp: reviewCwd,
+    });
+    assert(
+      finalMessage === 'TeXRA completed without a final review message.',
+      'review normalization should not use status-only strings as review bodies',
+    );
+  } finally {
+    rmSync(reviewCwd, { recursive: true, force: true });
+  }
 
   const threadsCwd = mkdtempSync(path.join(tmpdir(), 'texra-review-threads-'));
   const threadsOutput = path.join(threadsCwd, 'nested', 'threads.json');
