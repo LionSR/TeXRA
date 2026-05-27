@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { withBase } from 'vitepress';
+import MockupFrame from './MockupFrame.vue';
 import MockupSidebar from './MockupSidebar.vue';
 import MockupResult from './MockupResult.vue';
 
@@ -11,9 +12,6 @@ const installOpen = ref(false);
 const copied = ref(false);
 
 const CLI = 'npm install -g @texra-ai/cli';
-
-// Real product logo, served from docs/public.
-const LOGO = withBase('/logo-128x128.svg');
 
 // Editors all resolve to their respective marketplaces; Cursor, Windsurf and
 // other VS Code forks install TeXRA from Open VSX.
@@ -115,45 +113,14 @@ async function copyCli() {
     ></div>
 
     <!-- Product slice: a real TeXRA run, not a marketing illustration -->
-    <div
-      class="win"
-      role="group"
+    <MockupFrame
+      title="spectral-gap — texra-paper"
       aria-label="TeXRA running an orchestrated research task in VS Code"
     >
-      <div class="win-bar">
-        <span class="dot dot-r"></span>
-        <span class="dot dot-y"></span>
-        <span class="dot dot-g"></span>
-        <span class="win-title">spectral-gap — texra-paper</span>
-      </div>
-      <div class="win-body">
-        <!-- VS Code activity bar -->
-        <nav class="act">
-          <span class="act-i"
-            ><wa-icon library="texra" name="files"></wa-icon
-          ></span>
-          <span class="act-i"
-            ><wa-icon library="texra" name="search"></wa-icon
-          ></span>
-          <span class="act-i"
-            ><wa-icon library="texra" name="source-control"></wa-icon
-          ></span>
-          <span class="act-i"
-            ><wa-icon library="texra" name="debug-alt"></wa-icon
-          ></span>
-          <span class="act-i act-on"
-            ><img class="act-logo" :src="LOGO" alt="TeXRA"
-          /></span>
-          <span class="act-i act-bottom"
-            ><wa-icon library="texra" name="settings-gear"></wa-icon
-          ></span>
-        </nav>
-
-        <!-- Left: TeXRA sidebar (Progress tab). Right: the resulting files. -->
-        <MockupSidebar v-model:view="view" />
-        <MockupResult v-model:view="view" />
-      </div>
-    </div>
+      <!-- Left: TeXRA sidebar (Progress tab). Right: the resulting files. -->
+      <MockupSidebar v-model:view="view" />
+      <MockupResult v-model:view="view" />
+    </MockupFrame>
   </div>
 </template>
 
@@ -340,164 +307,6 @@ async function copyCli() {
   border-color: var(--vp-c-brand-1);
 }
 
-/* ============================================
-   PRODUCT WINDOW — faithful TeXRA / VS Code
-
-   The token block below mirrors the design tokens the real webview
-   components use (src/shared/styles/litStyles.ts + Web Awesome), resolved to
-   the dark VS Code surface values the extension gets from the host theme (the
-   docs site has no --vscode-* / dark --wa-* theme). They inherit into the
-   MockupSidebar / MockupResult children, which consume them.
-   ============================================ */
-.win {
-  /* Spacing scale (Web Awesome) */
-  --wa-space-3xs: 2px;
-  --wa-space-2xs: 4px;
-  --wa-space-xs: 8px;
-  --wa-space-s: 12px;
-  /* Borders & radii (litStyles designTokens) */
-  --border-thin: 1px;
-  --border-medium: 2px;
-  --border-radius-small: 2px;
-  --border-radius: 3px;
-  --border-radius-large: 6px;
-  /* Weights */
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-  /* Surfaces / text (dark editor host theme) */
-  --editor-bg: #1e1e1e;
-  --surface-bg: #181818;
-  --panel-bg: #252526;
-  --color-border: #2a2a2a;
-  --wa-color-text-normal: #cccccc;
-  --color-text-secondary: #8a8a8a;
-  --color-text-tertiary: #6f6f6f;
-  --color-text-link: #4daafc;
-  /* Status colors (litStyles designTokens fallbacks + logEntryStyles) */
-  --color-success: #2ea043;
-  --color-warning: #cca700;
-  --color-error: #f14c4c;
-  --wa-color-icon-info: #75beff;
-  --wa-color-debug-name: #4b9ef9;
-  --brand: #c89be0;
-
-  text-align: left;
-  background: var(--editor-bg);
-  border: 1px solid #000;
-  border-radius: 12px;
-  overflow: hidden;
-  position: relative;
-  z-index: 1;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.04) inset,
-    0 24px 60px -20px rgba(0, 0, 0, 0.55),
-    0 8px 20px -12px rgba(77, 33, 97, 0.45);
-}
-.win-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 38px;
-  padding: 0 14px;
-  background: #323233;
-  border-bottom: 1px solid #000;
-}
-.dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  display: inline-block;
-}
-.dot-r {
-  background: #ff5f57;
-}
-.dot-y {
-  background: #febc2e;
-}
-.dot-g {
-  background: #28c840;
-}
-.win-title {
-  flex: 1;
-  text-align: center;
-  font-size: 0.8rem;
-  color: #b4b4b4;
-  font-family: var(--vp-font-family-mono);
-  margin-right: 48px;
-}
-.win-body {
-  display: grid;
-  grid-template-columns: 46px 340px 1fr;
-  min-height: 440px;
-}
-
-/* Activity bar */
-.act {
-  background: #2c2c2c;
-  border-right: 1px solid #000;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 10px 0;
-  gap: 16px;
-}
-.act-i {
-  color: #858585;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  padding: 2px 0;
-  font-size: 20px;
-}
-.act-on {
-  color: #fff;
-}
-.act-on::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: -4px;
-  bottom: -4px;
-  width: 2px;
-  background: #c89be0;
-}
-.act-logo {
-  width: 23px;
-  height: 23px;
-  display: block;
-}
-.act-bottom {
-  margin-top: auto;
-}
-
-@media (max-width: 820px) {
-  .win-body {
-    grid-template-columns: 1fr;
-  }
-  .act {
-    flex-direction: row;
-    justify-content: flex-start;
-    gap: 18px;
-    padding: 0 12px;
-    height: 40px;
-    border-right: none;
-    border-bottom: 1px solid #000;
-  }
-  .act-on::before {
-    left: -2px;
-    top: auto;
-    bottom: 0;
-    right: -2px;
-    width: auto;
-    height: 2px;
-  }
-  .win-title {
-    margin-right: 0;
-  }
-}
 @media (max-width: 760px) {
   .lh {
     padding-top: 2.5rem;

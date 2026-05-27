@@ -8,7 +8,7 @@ TeXRA organizes files into several categories:
 
 ### Input Files
 
-These are the primary files that the agent will process. They typically include:
+These are the primary files the agent reads and edits. They typically include:
 
 - LaTeX documents (`.tex`)
 - Text files (`.txt`)
@@ -16,24 +16,14 @@ These are the primary files that the agent will process. They typically include:
 
 Input files can be a single main document or multiple related files (like chapters of a book or sections of a paper).
 
-### Reference Files
+### Context Files
 
-Reference files provide examples or additional context for the agent. They can be:
+Read-only files the agent sees but won't modify. They can be:
 
-- Sample documents with desired formatting
-- Previous versions of your work
-- Published papers with similar content
-- Templates or examples
-
-### Auxiliary Files
-
-These are supporting files needed for proper document processing:
-
-- LaTeX class files (`.cls`)
-- LaTeX style files (`.sty`)
-- Bibliography files (`.bib`)
-- Custom macro files
-- Configuration files
+- Bibliographies (`.bib`/`.bbl`)
+- Style and macro files (`.sty`/`.cls`)
+- Reference papers or previous versions
+- Any document the output should match for formatting
 
 ### Figure & Media Files
 
@@ -57,9 +47,11 @@ Note: Pasted images are stored in workspace storage and automatically cleaned up
 
 ## File Selection Interface
 
-The TeXRA interface provides a streamlined way to select and manage files using distinct sections for each file category (Input <wa-icon library="texra" name="file-code"></wa-icon>, Reference <wa-icon library="texra" name="book"></wa-icon>, Auxiliary <wa-icon library="texra" name="file-add"></wa-icon>, Media <wa-icon library="texra" name="file-media"></wa-icon>):
+The TeXRA interface provides a streamlined way to select and manage files using distinct sections for each file category (Input <wa-icon library="texra" name="file-code"></wa-icon>, Context <wa-icon library="texra" name="book"></wa-icon>, Media <wa-icon library="texra" name="device-camera-video"></wa-icon>):
 
-![File Selection Interface](/images/file-selection.png)
+<FileSelectHero />
+
+<p class="hero-caption">Each category is a dropdown with quick controls — set the current file, clear it, refresh the list, or switch to multiple-file mode (shown here for Context).</p>
 
 ### Single File Selection
 
@@ -90,7 +82,7 @@ Multiple file selection is particularly useful for:
 
 ### Adding Opened Files
 
-The "Add Opened Files" button (<wa-icon library="texra" name="folder-opened"></wa-icon>) available for Input, Reference, and Auxiliary files allows you to quickly add all currently open files in your VS Code editor (that match the allowed file types) to the respective multiple file list. This is useful when you have already opened the relevant files for your project.
+The "Add Opened Files" button (<wa-icon library="texra" name="folder-opened"></wa-icon>) available for the Input, Context, and Media categories allows you to quickly add all currently open files in your VS Code editor (that match the allowed file types) to the respective multiple file list. This is useful when you have already opened the relevant files for your project.
 
 ### Output Files
 
