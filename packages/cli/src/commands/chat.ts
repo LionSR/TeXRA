@@ -20,6 +20,8 @@ export const chatCommand = defineCommand({
     rejectHeadlessOnlyFlags(ctx.rawArgs, 'chat');
     const modelOverride = assertExplicitModelKnown(optString(ctx.args.model));
     const context = await contextFromArgs(ctx.args);
+    const { notifyCliUpdate } = await import('../runtime/updateChecker');
+    await notifyCliUpdate(context);
     const { runChat } = await import('../chat/tui/runChatTui');
     const result = await runChat(context, {
       agentOverride: optString(ctx.args.agent),
