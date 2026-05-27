@@ -135,7 +135,7 @@ prompts:
       </instruction>
       If no specific instruction is given, apply your full critical scrutiny to all mathematical content.
 
-      The output documents should use the selected input filenames in this order: {{ INPUT_FILES | join(', ') }}.
+      The output documents should use the selected input filenames in this order: {{ INPUT_FILES | default([], true) | join(', ') }}.
 
       FIRST PHASE - DERIVATION EXPANSION: First, create an expanded version showing all mathematical steps explicitly. This is your working document where you verify every claim.
 
@@ -340,7 +340,7 @@ prompts:
 
       Remember: Focus on the crucial points that matter most. Quality over quantity---better to identify 5 critical issues than 50 minor ones. If appendix errors invalidate main results, that's severity 5. Be harsh on what matters, lenient on what doesn't. Identify issues that cascade between documents. If one paper's errors invalidate others, that's severity 5. Be strategic about comment placement to maximize clarity.
 
-      Ensure that the output documents use the selected input filenames in this order: {{ INPUT_FILES | join(', ') }}.
+      Ensure that the output documents use the selected input filenames in this order: {{ INPUT_FILES | default([], true) | join(', ') }}.
 
       <documents>
       {% for output in INPUT_FILES %}
