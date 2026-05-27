@@ -32,7 +32,7 @@ This is the crucial part for generating multiple distinct files:
 2. **Agent Generates Structured XML:** The selected agent must be designed (through its `prompts`) to produce a _single XML response_ containing separate blocks for each intended output file, using a structure like this:
 
    ```xml
-   <latex_documents>  <!-- Or agent's specific documentTag -->
+   <documents>  <!-- the agent's configured documentTag; "documents" by default -->
      <document name="chapter2.tex">
        % ... content for the first output file ...
      </document>
@@ -40,7 +40,7 @@ This is the crucial part for generating multiple distinct files:
        % ... content for the second output file ...
      </document>
      ...
-   </latex_documents>
+   </documents>
    ```
 
 3. **TeXRA Extracts:** The TeXRA backend parses this XML response. It looks for `<document>` tags with a `name` attribute that **exactly matches** one of the expected output filenames.
@@ -55,9 +55,9 @@ that declare generated output filenames.
 
 TeXRA uses the selected input filenames as the output filenames for ordinary
 editing agents. Agents that generate files with fixed names can declare
-`defaultOutputFiles`; those names are exposed as `OUTPUT_FILES`. Stream
-identifiers may still append `_multiple` for readability, but prompt rendering
-and output extraction depend on the filename lists, not on a separate YAML flag.
+`defaultOutputFiles`; those names are exposed as `OUTPUT_FILES`. Prompt rendering
+and output extraction depend on these filename lists, not on a separate YAML flag
+or a `_multiple` filename convention.
 
 ### Declaring multi-output agents in YAML
 
@@ -67,7 +67,7 @@ prompts a fixed `OUTPUT_FILES` list when the filenames are not the input
 filenames.
 
 ```yaml
-name: my_agent_multiple
+name: my_agent
 settings:
   agentCategory: workflow
   defaultOutputFiles:
@@ -82,7 +82,7 @@ part of the current agent settings schema. Update existing YAML files to declare
 ## Example: Multiple-Output Agent Prompts
 
 Workflow edit prompts can use `INPUT_FILES` to request and format
-multiple outputs within the `<latex_documents>` tag. `INPUT_FILES` is an array
+multiple outputs within the `<documents>` tag. `INPUT_FILES` is an array
 of selected input filenames, so templates should iterate over it. Use
 `&#123;&#123; INPUT_FILES | join(", ") &#125;&#125;` when the prompt needs a readable list.
 

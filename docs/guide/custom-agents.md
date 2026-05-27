@@ -59,10 +59,10 @@ settings:
   isRewrite: true # Does the agent primarily rewrite existing content (true) or generate new content (false)?
 
   # Output Handling
-  documentTag: document # The main XML tag wrapping the agent's final output (required for CoT).
-  endTag: '</document>' # The closing tag that signals the agent has finished its main output.
+  documentTag: documents # The main XML tag wrapping the agent's final output (required for CoT).
+  endTag: '</documents>' # The closing tag that signals the agent has finished its main output.
   prefills:
-    - "<document>\n" # List of strings the AI should start its response(s) with.
+    - "<documents>\n" # List of strings the AI should start its response(s) with.
       # Item [0] is for Round 0, Item [1] is for Round 1 (reflection).
       # Crucial for models needing specific start formats (e.g., XML tags).
 
@@ -200,7 +200,7 @@ To create your own tool-use agent, set `agentCategory: toolUse` and list the too
 | <wa-icon library="texra" name="beaker"></wa-icon> **Lean 4**                    | Check Lean proofs and search Mathlib                                | `lean_diagnostics`, `lean_inspect`, `lean_loogle`, `lean_file`, `lean_project`                           |
 | <wa-icon library="texra" name="type-hierarchy"></wa-icon> **Memory & Workflow** | Persistent memory, to-do lists, sub-agent delegation                | `memory`, `todo_write`, `plan`, `delegate_workflow`, `delegate_agent`, `executions`, `accept_run_files`  |
 
-For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `research`, `search`, `ask`, or `code`) in the **Agents** tab — their `tools:` array shows exactly which tools are wired up.
+For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `research`, `review`, `lean`, or `numerics`) in the **Agents** tab — their `tools:` array shows exactly which tools are wired up.
 
 Example skeleton:
 
