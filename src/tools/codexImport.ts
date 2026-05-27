@@ -17,16 +17,15 @@
 import { createRequire } from 'module';
 import * as path from 'path';
 
-import { platform } from '@platform/platform';
 import { isModuleNotFoundError } from '@common/errors';
 import { executeCommandSync } from '@utils/system/execUtils';
+import {
+  getPackagedElectronResourcesPath,
+  pathExists,
+} from './support/externalBinaryUtils';
 
 type CodexConstructor = new (options?: any) => any;
 type PlatformInfo = { pkg: string; triple: string };
-type ElectronProcess = NodeJS.Process & {
-  defaultApp?: boolean;
-  resourcesPath?: string;
-};
 
 // ---------------------------------------------------------------------------
 // SDK import
@@ -224,13 +223,6 @@ export async function findCodexBinaryInElectronResources(
   );
 }
 
-function getPackagedElectronResourcesPath(): string | undefined {
-  const electronProcess = process as ElectronProcess;
-  if (electronProcess.versions.electron == null) return undefined;
-  if (electronProcess.defaultApp === true) return undefined;
-  return electronProcess.resourcesPath;
-}
-
 /**
  * Resolve the native Codex binary from a directory that contains (or nests)
  * the platform-specific package.  Returns the binary path if found, or
@@ -272,11 +264,4 @@ async function resolveCodexBinaryFromPlatformPackage(
     binaryName,
   );
   return (await pathExists(binary)) ? binary : undefined;
-}
-
-async function pathExists(target: string): Promise<boolean> {
-  return platform()
-    .fs.stat(target)
-    .then(() => true)
-    .catch(() => false);
 }
