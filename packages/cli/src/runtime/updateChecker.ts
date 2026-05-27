@@ -134,7 +134,7 @@ export async function fetchLatestCliVersion(options?: {
 function runCliUpdate(method: InstallMethod): Promise<boolean> {
   const { command, args } = buildUpdateCommand(method);
   return new Promise<boolean>((resolve) => {
-    const child = spawn(command, args, { stdio: 'inherit' });
+    const child = spawn(command, args, { stdio: 'inherit', shell: true });
     child.on('error', () => resolve(false));
     child.on('close', (code) => resolve(code === 0));
   });
