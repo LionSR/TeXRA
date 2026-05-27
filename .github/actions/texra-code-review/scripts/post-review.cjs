@@ -191,7 +191,7 @@ async function postTexraReview({ github, context, core }) {
   const threadActions = Array.isArray(review.thread_actions)
     ? review.thread_actions
     : [];
-  let skippedThreadStateChanges = 0;
+  let skippedThreadActions = 0;
   for (const action of threadActions) {
     const knownThreadState = knownThreadStates?.get(action.thread_id);
     if (knownThreadStates && !knownThreadState) {
@@ -202,11 +202,15 @@ async function postTexraReview({ github, context, core }) {
     }
     try {
       if (action.action === 'reply') {
+        if (!canResolveThreads) {
+          skippedThreadActions += 1;
+          continue;
+        }
         await replyToThread(action.thread_id, action.body);
       } else if (action.action === 'resolve') {
         if (knownThreadState?.isResolved === true) continue;
         if (!canResolveThreads) {
-          skippedThreadStateChanges += 1;
+          skippedThreadActions += 1;
           continue;
         }
         if (action.body) await replyToThread(action.thread_id, action.body);
@@ -214,7 +218,7 @@ async function postTexraReview({ github, context, core }) {
       } else if (action.action === 'unresolve') {
         if (knownThreadState?.isResolved === false) continue;
         if (!canResolveThreads) {
-          skippedThreadStateChanges += 1;
+          skippedThreadActions += 1;
           continue;
         }
         if (action.body) await replyToThread(action.thread_id, action.body);
@@ -226,9 +230,9 @@ async function postTexraReview({ github, context, core }) {
       );
     }
   }
-  if (skippedThreadStateChanges > 0) {
+  if (skippedThreadActions > 0) {
     core.notice(
-      `Skipped ${skippedThreadStateChanges} TeXRA resolve/unresolve action(s). Configure TEXRA_REVIEW_GITHUB_TOKEN to allow review-thread state mutations.`,
+      `Skipped ${skippedThreadActions} TeXRA review-thread action(s). Configure TEXRA_REVIEW_GITHUB_TOKEN to post previous-thread follow-ups as the TeXRA GitHub identity.`,
     );
   }
 }

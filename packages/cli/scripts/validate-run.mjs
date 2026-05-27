@@ -489,12 +489,12 @@ async function validateCodeReviewActionHelpers() {
       },
     });
     assert(
-      replies.length === 1 && replies[0].includes('Additional note.'),
-      'thread state actions should not add replies when resolution is unavailable',
+      replies.length === 0,
+      'thread actions should not add replies when the TeXRA identity token is unavailable',
     );
     assert(
-      notices.some((message) => message.includes('resolve/unresolve')),
-      'skipped thread state changes should produce a notice',
+      notices.some((message) => message.includes('review-thread action')),
+      'skipped thread actions should produce a notice',
     );
   } finally {
     for (const [name, value] of Object.entries(previousPostEnv)) {
