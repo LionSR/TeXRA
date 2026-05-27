@@ -81,11 +81,11 @@ The `inquiry` tool lets a TeXRA agent ask one question in an external chat (Chat
 
 ## Which Agent to Use
 
-| Agent      | Best for                                                       |
-| ---------- | -------------------------------------------------------------- |
-| `search`   | Finding papers, literature reviews, fact-checking              |
+| Agent      | Best for                                                                                              |
+| ---------- | ----------------------------------------------------------------------------------------------------- |
+| `search`   | Finding papers, literature reviews, fact-checking                                                     |
 | `research` | Computational verification with Wolfram, literature lookups, and quick questions about your documents |
-| `discuss`  | Brainstorming research directions with literature context      |
+| `discuss`  | Brainstorming research directions with literature context                                             |
 
 Pick any of them from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). Check `Dashboard → Agents` (<wa-icon library="texra" name="sparkle"></wa-icon>) to see exactly which tools each one has enabled.
 

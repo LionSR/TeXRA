@@ -12,7 +12,7 @@ TeXRA ships with built-in agents for common research tasks—polishing prose, fi
 | `lean`             | Tool-use | Lean 4 proof development                                                  |
 | `presenter`        | Tool-use | Interactive presentation and poster builder                               |
 | `latexFixer`       | Tool-use | Diagnose and fix LaTeX compilation errors, warnings, and bad boxes        |
-| `latexDiff`        | Tool-use | Generate a visual latexdiff PDF between two LaTeX versions                 |
+| `latexDiff`        | Tool-use | Generate a visual latexdiff PDF between two LaTeX versions                |
 | `creator`          | Tool-use | Design, write, and test new TeXRA agents                                  |
 | `setup`            | Tool-use | Setup wizard: diagnose environment, install dependencies, configure       |
 | `chat`             | Tool-use | General assistance, file editing (opt-in; not in any default team preset) |

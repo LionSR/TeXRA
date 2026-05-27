@@ -69,18 +69,18 @@ The agent system is built on three established AI design patterns:
 
 ## What you can do
 
-| Task                 | Agent                         | How it works                                                                                                                                             |
-| -------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Polish a manuscript  | `polish`                      | Rewrites for clarity and precision, preserving all math environments and cross-references. Outputs a reviewable diff.                                    |
-| Fix LaTeX errors     | `correct`                     | Finds and repairs compilation errors, notation inconsistencies, broken references, and formatting issues across multi-file projects.                     |
+| Task                 | Agent                         | How it works                                                                                                                                                       |
+| -------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Polish a manuscript  | `polish`                      | Rewrites for clarity and precision, preserving all math environments and cross-references. Outputs a reviewable diff.                                              |
+| Fix LaTeX errors     | `correct`                     | Finds and repairs compilation errors, notation inconsistencies, broken references, and formatting issues across multi-file projects.                               |
 | Generate figures     | `research` / `presenter`      | Tool-use agents write TikZ diagrams — commutative diagrams, Feynman diagrams, phase portraits, lattice structures — then compile and visually verify every figure. |
-| Search literature    | `research`                    | Queries arXiv, Crossref, Zotero. Returns verified citations with BibTeX — no hallucinated references.                                                    |
-| Verify manuscript    | `review`                      | Systematically audits mathematical correctness, derivation soundness, notation consistency, and goal achievement.                                        |
-| Work with Lean 4     | `lean`                        | Search Mathlib theorems via Loogle by type signature, inspect proof states, check diagnostics, manage builds and cache.                                  |
-| Symbolic computation | `research`                    | Run WolframScript to evaluate integrals, check identities, simplify expressions, or verify numerical results.                                            |
-| Build slide decks    | `presenter`                   | Reads your paper, drafts a Beamer deck that preserves logical structure — definitions before theorems, diagrams in TikZ. Compiles and checks every page. |
-| General research     | `research`                    | Open-ended agent with full tool access for any research task.                                                                                            |
-| Convert formats      | `paper2slide`, `paper2poster` | Transform papers into presentations or posters.                                                                                                          |
+| Search literature    | `research`                    | Queries arXiv, Crossref, Zotero. Returns verified citations with BibTeX — no hallucinated references.                                                              |
+| Verify manuscript    | `review`                      | Systematically audits mathematical correctness, derivation soundness, notation consistency, and goal achievement.                                                  |
+| Work with Lean 4     | `lean`                        | Search Mathlib theorems via Loogle by type signature, inspect proof states, check diagnostics, manage builds and cache.                                            |
+| Symbolic computation | `research`                    | Run WolframScript to evaluate integrals, check identities, simplify expressions, or verify numerical results.                                                      |
+| Build slide decks    | `presenter`                   | Reads your paper, drafts a Beamer deck that preserves logical structure — definitions before theorems, diagrams in TikZ. Compiles and checks every page.           |
+| General research     | `research`                    | Open-ended agent with full tool access for any research task.                                                                                                      |
+| Convert formats      | `paper2slide`, `paper2poster` | Transform papers into presentations or posters.                                                                                                                    |
 
 ## Who uses TeXRA
 
