@@ -323,7 +323,11 @@ export function App(props: AppProps): React.JSX.Element {
             />
           ) : null}
           {foregroundSurface ? (
-            <Box height={foregroundRows} overflowY="hidden">
+            <Box
+              height={foregroundRows}
+              alignItems="flex-start"
+              overflowY="hidden"
+            >
               {foregroundSurface}
             </Box>
           ) : null}
