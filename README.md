@@ -31,7 +31,7 @@ code, figures, and PRs.
 
 ### One assistant, two surfaces
 
-The same agents, sign-in, history, and memory are available wherever you work:
+The same agents, account, and model providers are available wherever you work:
 
 |               | **VS Code extension**                                                                                                                         | **Terminal CLI**                                          |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
@@ -39,8 +39,8 @@ The same agents, sign-in, history, and memory are available wherever you work:
 | Install       | [Marketplace](https://marketplace.visualstudio.com/items?itemName=texra-ai.texra) / [Open VSX](https://open-vsx.org/extension/texra-ai/texra) | `npm install -g @texra-ai/cli`                            |
 | Drive it with | Sidebar chat + the **progress board**                                                                                                         | `texra chat` (TUI) and `texra run` (headless)             |
 
-Pick whichever fits the moment—or move between them mid-project, since runs,
-history, and memory are shared. The deeper walkthroughs live at
+Pick whichever fits the moment—both run the same teams on the same `.tex`
+projects. The deeper walkthroughs live at
 [texra.ai](https://texra.ai) and the
 [full documentation](https://texra.ai/guide/).
 
@@ -72,11 +72,11 @@ history, and memory are shared. The deeper walkthroughs live at
   bypass).
 - **Live, persistent runs** – watch reasoning, tool calls, sub-agent file
   diffs, and per-run token usage and cost stream in real time—on the VS Code
-  **progress board** or in the `texra chat` terminal UI. Runs are saved and
-  resumable from either surface: reopen saved state via **Show Agent Execution
-  History** or `texra history`, resume an interrupted agent in the sidebar or
-  with `texra resume <id>`, and archive a finished run's outputs into the
-  workspace's `History/` directory.
+  **progress board** or in the `texra chat` terminal UI. Each surface saves its
+  runs so you can reopen and resume them later: via **Show Agent Execution
+  History** and **Resume Tool-Use Agent** in VS Code, or `texra history` and
+  `texra resume <id>` in the terminal. Finished outputs can be archived into
+  the workspace's `History/` directory.
 - **Odyssey mode (experimental)** – let a tool-use agent run a long task to
   completion on its own. A configurable budget auto-pauses the run for your
   approval before going further, and a dedicated panel shows progress so
@@ -184,12 +184,13 @@ The Setup Wizard checks for and helps install most of the above for you.
 
 ## Configuring Models
 
-Sign in once—via the Profile view in VS Code or `texra login` in the
-terminal—to use the Researcher Access Program (which also unlocks the hosted
-Orchestrator and remote specialists). To bring your own keys, store them via
-the **`TeXRA: Set API Key`** command (kept in VS Code's encrypted
-SecretStorage) or place them in a workspace `.env` file that both the extension
-and CLI load automatically:
+Sign in to the Researcher Access Program—via the Profile view in VS Code or
+`texra login` in the terminal—to use the hosted Orchestrator and remote
+specialists. To bring your own keys instead, the extension reads them from the
+**`TeXRA: Set API Key`** command (stored in VS Code's encrypted SecretStorage)
+or a workspace `.env` file it loads automatically; the CLI reads the same
+`<PROVIDER>_API_KEY` variables from your environment when run with
+`--api-mode personal`:
 
 ```env
 OPENAI_API_KEY=your_openai_key_here
