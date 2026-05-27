@@ -24,6 +24,36 @@ const OUTPUT_CORNER = '⎿';
 const MAX_HEADER_PREVIEW = 80;
 const MAX_ERROR_PREVIEW = 240;
 
+// Tool output can be arbitrarily large (a 50 KB bash dump, a long grep). The
+// finalized `<Static>` scrollback and the live region show a head+tail slice
+// with a `… +N lines` marker; the full text stays on `toolUse.outputText` and
+// is reachable via the ctrl+t transcript viewer. Tune head/tail here.
+const OUTPUT_HEAD_LINES = 6;
+const OUTPUT_TAIL_LINES = 3;
+
+interface ElidedOutput {
+  readonly head: readonly string[];
+  readonly tail: readonly string[];
+  readonly hiddenCount: number;
+}
+
+function elideOutputLines(lines: readonly string[]): ElidedOutput {
+  // Only elide when it actually hides something: head + tail + at least one
+  // collapsed line. Otherwise show everything.
+  if (lines.length <= OUTPUT_HEAD_LINES + OUTPUT_TAIL_LINES) {
+    return { head: lines, tail: [], hiddenCount: 0 };
+  }
+  return {
+    head: lines.slice(0, OUTPUT_HEAD_LINES),
+    tail: lines.slice(lines.length - OUTPUT_TAIL_LINES),
+    hiddenCount: lines.length - OUTPUT_HEAD_LINES - OUTPUT_TAIL_LINES,
+  };
+}
+
+function elisionMarker(hiddenCount: number): string {
+  return `… +${hiddenCount} lines (ctrl + t to view transcript)`;
+}
+
 // Tool inputs vary in shape; show whichever of these "primary" fields
 // exists first. Order matters: earlier keys win.
 const PRIMARY_INPUT_KEYS = [
@@ -35,11 +65,20 @@ const PRIMARY_INPUT_KEYS = [
   'url',
 ] as const;
 
+export interface DisplayLineOptions {
+  /** When false, emit the full output instead of the head+tail slice.
+   *  The transcript viewer (ctrl+t) sets this to show everything. */
+  readonly elide?: boolean;
+}
+
 export interface ToolRenderer {
   readonly key: string;
   matches(toolUse: NormalizedToolUse): boolean;
   render(toolUse: NormalizedToolUse): React.JSX.Element;
-  displayLines(toolUse: NormalizedToolUse): readonly string[];
+  displayLines(
+    toolUse: NormalizedToolUse,
+    options?: DisplayLineOptions,
+  ): readonly string[];
 }
 
 function lastSegmentToolName(toolName: string): string {
@@ -148,10 +187,22 @@ function extractExitCode(toolUse: NormalizedToolUse): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-function outputDisplayLines(toolUse: NormalizedToolUse): string[] {
-  return visibleOutputLines(toolUse).map((line, index) =>
+function outputDisplayLines(
+  toolUse: NormalizedToolUse,
+  elide = true,
+): string[] {
+  const lines = visibleOutputLines(toolUse);
+  const sliced = elide
+    ? elideOutputLines(lines)
+    : { head: lines, tail: [] as readonly string[], hiddenCount: 0 };
+  const out = sliced.head.map((line, index) =>
     index === 0 ? `${OUTPUT_CORNER} ${line}` : `  ${line}`,
   );
+  if (sliced.hiddenCount > 0) {
+    out.push(`  ${elisionMarker(sliced.hiddenCount)}`);
+  }
+  for (const line of sliced.tail) out.push(`  ${line}`);
+  return out;
 }
 
 export function universalToolUseDisplayLines(
@@ -159,12 +210,15 @@ export function universalToolUseDisplayLines(
   options: {
     readonly displayName?: string;
     readonly showOutput?: boolean;
+    readonly elide?: boolean;
   } = {},
 ): readonly string[] {
   const patchLines = toolUsePatchDisplayLines(toolUse);
   const errorText = toolUse.isError ? toolUse.errorText || '(error)' : '';
   const outputLines =
-    options.showOutput === true ? outputDisplayLines(toolUse) : [];
+    options.showOutput === true
+      ? outputDisplayLines(toolUse, options.elide ?? true)
+      : [];
   const showNoOutput =
     options.showOutput === true &&
     toolUse.status === TOOL_USE_STATUS.COMPLETED &&
@@ -190,9 +244,10 @@ export function universalToolUseDisplayLines(
 
 export function bashToolUseDisplayLines(
   toolUse: NormalizedToolUse,
+  options: { readonly elide?: boolean } = {},
 ): readonly string[] {
   const exitCode = extractExitCode(toolUse);
-  const outputLines = outputDisplayLines(toolUse);
+  const outputLines = outputDisplayLines(toolUse, options.elide ?? true);
   const errorText = toolUse.isError ? toolUse.errorText || '(error)' : '';
   return [
     formatHeader(toolUse),
@@ -250,11 +305,24 @@ function OutputBlock({
   readonly lines: readonly string[];
 }): React.JSX.Element | null {
   if (lines.length === 0) return null;
+  const { head, tail, hiddenCount } = elideOutputLines(lines);
   return (
     <Box flexDirection="column" paddingLeft={2}>
-      {lines.map((line, index) => (
-        <Box key={index} flexDirection="row" flexWrap="nowrap">
+      {head.map((line, index) => (
+        <Box key={`h${index}`} flexDirection="row" flexWrap="nowrap">
           <Text dimColor>{index === 0 ? `${OUTPUT_CORNER} ` : '  '}</Text>
+          <Text>{line}</Text>
+        </Box>
+      ))}
+      {hiddenCount > 0 && (
+        <Box flexDirection="row" flexWrap="nowrap">
+          <Text dimColor>{'  '}</Text>
+          <Text dimColor>{elisionMarker(hiddenCount)}</Text>
+        </Box>
+      )}
+      {tail.map((line, index) => (
+        <Box key={`t${index}`} flexDirection="row" flexWrap="nowrap">
+          <Text dimColor>{'  '}</Text>
           <Text>{line}</Text>
         </Box>
       ))}
@@ -409,14 +477,16 @@ const editRenderer: ToolRenderer = {
   key: 'edit',
   matches: (toolUse) => toolUsePatchGroups(toolUse) !== undefined,
   render: (toolUse) => <UniversalToolRow toolUse={toolUse} />,
-  displayLines: (toolUse) => universalToolUseDisplayLines(toolUse),
+  displayLines: (toolUse, options) =>
+    universalToolUseDisplayLines(toolUse, { elide: options?.elide }),
 };
 
 const bashRenderer: ToolRenderer = {
   key: 'bash',
   matches: isBashTool,
   render: (toolUse) => <BashToolRow toolUse={toolUse} />,
-  displayLines: bashToolUseDisplayLines,
+  displayLines: (toolUse, options) =>
+    bashToolUseDisplayLines(toolUse, { elide: options?.elide }),
 };
 
 const mcpRenderer: ToolRenderer = {
@@ -429,10 +499,11 @@ const mcpRenderer: ToolRenderer = {
       showOutput={true}
     />
   ),
-  displayLines: (toolUse) =>
+  displayLines: (toolUse, options) =>
     universalToolUseDisplayLines(toolUse, {
       displayName: displayMcpToolName(toolUse.toolName),
       showOutput: true,
+      elide: options?.elide,
     }),
 };
 
@@ -450,9 +521,10 @@ export function pickToolRenderer(
 
 export function toolUseDisplayLines(
   toolUse: NormalizedToolUse,
+  options?: DisplayLineOptions,
 ): readonly string[] {
   return (
-    pickToolRenderer(toolUse)?.displayLines(toolUse) ??
-    universalToolUseDisplayLines(toolUse)
+    pickToolRenderer(toolUse)?.displayLines(toolUse, options) ??
+    universalToolUseDisplayLines(toolUse, { elide: options?.elide })
   );
 }
