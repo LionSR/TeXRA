@@ -17,7 +17,11 @@ import {
   insertText,
   type TextEdit,
 } from './textInputEditing';
-import { isPlainReturnInput, metaChordInput } from './inputKeys';
+import {
+  isPlainReturnInput,
+  isShiftReturnInput,
+  metaChordInput,
+} from './inputKeys';
 
 export interface BaseTextInputProps {
   readonly value: string;
@@ -88,8 +92,9 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
 
   useInput(
     (input, key) => {
-      if (key.ctrl && input === 'j') {
-        // Ctrl-J → literal newline (kills the legacy `/multi` ceremony).
+      if ((key.ctrl && input === 'j') || isShiftReturnInput(input, key)) {
+        // Ctrl-J (universal) or Shift+Enter (Kitty-protocol terminals) →
+        // literal newline. Kills the legacy `/multi` ceremony.
         applyEdit(insertText(value, cursor, '\n'));
         return;
       }
