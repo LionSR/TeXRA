@@ -16,4 +16,10 @@ import { CLI_SETTING_PATHS } from './cliSettings';
 export const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set<string>([
   ...CORE_SETTING_PATHS.map((path) => `texra.${path}`),
   ...CLI_SETTING_PATHS.map((path) => `texra.${path}`),
+  // Git commit-author marking is stored as workspace state in the VS Code
+  // extension, but the CLI reads it from `.texra/config.json`. Recognize the
+  // keys here so they don't warn as unknown.
+  'texra.git.markCommits',
+  'texra.git.authorName',
+  'texra.git.authorEmail',
 ]);
