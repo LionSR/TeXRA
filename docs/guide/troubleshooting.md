@@ -291,7 +291,6 @@ to confirm available models, and `texra tools status` to check tool availability
    - Use relative paths within the workspace
 
 3. **File list not updating**:
-   - Click the refresh icon next to the file type
    - Restart VS Code if file lists remain outdated
    - Check file extension settings to ensure your files are included:
 
@@ -299,10 +298,10 @@ to confirm available models, and `texra tools status` to check tool availability
    "texra.files.included.inputExtensions": [".txt", ".tex", ".md"]
    ```
 
-4. **Multiple file selection issues**:
-   - Verify the multiple selection panel is expanded
-   - Try adding files one by one instead of in bulk
-   - Check the browser console for any JavaScript errors
+4. **File selection issues**:
+   - Try adding files one by one with the picker instead of dragging in bulk
+   - If a file does not appear after dropping, confirm its extension is in the category's allowed-extensions setting
+   - Check the developer console (`Developer: Open Webview Developer Tools`) for any errors
 
 ## Output File Issues
 
