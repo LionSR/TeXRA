@@ -1,9 +1,6 @@
-import { promises as fsp } from 'fs';
 import * as path from 'path';
 
 import { XMLParser } from 'fast-xml-parser';
-
-import { isFileNotFoundError } from '@common/errors';
 
 import {
   debugInternal,
@@ -16,6 +13,7 @@ import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
 import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
 import { toErrorMessage } from '@common/errors';
+import { platform } from '@platform/platform';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import type { OutputFileInfo } from '@shared/schemas';
@@ -49,13 +47,8 @@ async function writeRoundOutput(
   absolutePath: string,
   content: string,
 ): Promise<void> {
-  try {
-    const stat = await fsp.lstat(absolutePath);
-    if (stat.isSymbolicLink()) {
-      await fsp.unlink(absolutePath);
-    }
-  } catch (error) {
-    if (!isFileNotFoundError(error)) throw error;
+  if (await AbsoluteFS.isSymbolicLink(absolutePath)) {
+    await platform().fs.delete(absolutePath);
   }
   await AbsoluteFS.write(absolutePath, content);
 }
