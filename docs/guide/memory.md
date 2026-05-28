@@ -29,16 +29,16 @@ When memory is on, every tool-use agent run has access to the `memory` tool: it 
 
 Behind the scenes, agents work with memory through a small set of commands on the `memory` tool:
 
-| Command       | What it does                                                              |
-| ------------- | ------------------------------------------------------------------------- |
-| `view`        | List `/memories` or read a single note                                    |
-| `create`      | Write a new note (or overwrite an existing one)                           |
-| `str_replace` | Edit a note by replacing a substring                                      |
-| `insert`      | Insert text at a specific line                                            |
-| `delete`      | Remove a note                                                             |
-| `rename`      | Move a note to a new path                                                 |
+| Command       | What it does                                                               |
+| ------------- | -------------------------------------------------------------------------- |
+| `view`        | List `/memories` or read a single note                                     |
+| `create`      | Write a new note (or overwrite an existing one)                            |
+| `str_replace` | Edit a note by replacing a substring                                       |
+| `insert`      | Insert text at a specific line                                             |
+| `delete`      | Remove a note                                                              |
+| `rename`      | Move a note to a new path                                                  |
 | `pin`         | Mark a note as a **core long-term memory** (loaded at every session start) |
-| `unpin`       | Remove the pinned status                                                  |
+| `unpin`       | Remove the pinned status                                                   |
 
 Every note is a Markdown file. Agents see them at `/memories/<name>.md`; on disk they live under your workspace's TeXRA storage folder. Each file carries a small YAML header that records which agent last modified it, when, and whether it's pinned — that's what powers the metadata strip in the Dashboard.
 

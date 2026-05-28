@@ -38,7 +38,8 @@ function toggle(id) {
           ><wa-icon library="texra" name="account"></wa-icon> Agents</span
         >
         <span class="dt"
-          ><wa-icon library="texra" name="organization"></wa-icon> Multi-Agent</span
+          ><wa-icon library="texra" name="organization"></wa-icon>
+          Multi-Agent</span
         >
         <span class="dt"
           ><wa-icon library="texra" name="tools"></wa-icon> Tools</span
@@ -128,9 +129,7 @@ function toggle(id) {
             <wa-icon
               class="chev"
               library="texra"
-              :name="
-                expanded === 'pinned' ? 'chevron-down' : 'chevron-right'
-              "
+              :name="expanded === 'pinned' ? 'chevron-down' : 'chevron-right'"
             ></wa-icon>
             Contents
           </button>
@@ -149,7 +148,10 @@ function toggle(id) {
                 Cite with <code class="md-code">\citep</code> inside parentheses
                 and <code class="md-code">\citet</code> in running prose.
               </li>
-              <li>The bibliography lives in <code class="md-code">references.bib</code>.</li>
+              <li>
+                The bibliography lives in
+                <code class="md-code">references.bib</code>.
+              </li>
             </ul>
           </div>
         </div>
@@ -187,16 +189,18 @@ function toggle(id) {
             <wa-icon
               class="chev"
               library="texra"
-              :name="
-                expanded === 'notation' ? 'chevron-down' : 'chevron-right'
-              "
+              :name="expanded === 'notation' ? 'chevron-down' : 'chevron-right'"
             ></wa-icon>
             Contents
           </button>
           <div v-if="expanded === 'notation'" class="mem-preview">
             <ul class="md-ul">
-              <li>Use <code class="md-code">\lambda_2</code> for the spectral gap.</li>
-              <li>Vectors bold lowercase: <code class="md-code">\mathbf{x}</code>.</li>
+              <li>
+                Use <code class="md-code">\lambda_2</code> for the spectral gap.
+              </li>
+              <li>
+                Vectors bold lowercase: <code class="md-code">\mathbf{x}</code>.
+              </li>
             </ul>
           </div>
         </div>
@@ -234,15 +238,16 @@ function toggle(id) {
             <wa-icon
               class="chev"
               library="texra"
-              :name="
-                expanded === 'figures' ? 'chevron-down' : 'chevron-right'
-              "
+              :name="expanded === 'figures' ? 'chevron-down' : 'chevron-right'"
             ></wa-icon>
             Contents
           </button>
           <div v-if="expanded === 'figures'" class="mem-preview">
             <ul class="md-ul">
-              <li>Figures stored as PDF under <code class="md-code">figures/</code>.</li>
+              <li>
+                Figures stored as PDF under
+                <code class="md-code">figures/</code>.
+              </li>
               <li>Always include a TikZ source alongside each rendered PDF.</li>
             </ul>
           </div>
