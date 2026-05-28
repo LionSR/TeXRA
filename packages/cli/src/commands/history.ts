@@ -1,6 +1,5 @@
 import { defineCommand } from 'citty';
 
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { type ExecutionId } from '@shared/schemas';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -15,10 +14,9 @@ import {
   readCliHistoryDetails,
 } from '../runtime/history';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr } from '../runtime/logSinks';
+import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 
-import { contextFromArgs } from './_helpers/context';
-import { setExitCode } from './_helpers/exitCode';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
@@ -85,7 +83,7 @@ async function runHistoryDelete(
   try {
     result = await deleteCliHistory({ ...options, preCountForAll });
   } catch (error) {
-    writeTextStderr(toErrorMessage(error));
+    writeErrorStderr(error);
     return CliExitCode.Usage;
   }
 
@@ -119,18 +117,15 @@ async function runHistoryDelete(
   return CliExitCode.Success;
 }
 
-const historyListCommand = defineCommand({
+const historyListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List stored executions' },
   args: {
     ...GLOBAL_ARGS,
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(await runHistoryList(context));
-  },
+  run: (context) => runHistoryList(context),
 });
 
-const historyShowCommand = defineCommand({
+const historyShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show one stored execution' },
   args: {
     ...GLOBAL_ARGS,
@@ -140,19 +135,17 @@ const historyShowCommand = defineCommand({
       description: 'Execution id from `texra history list`',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
+  run: (context, ctx) => {
     const id = parseCliHistoryId(ctx.args.id);
     if (!id) {
       writeTextStderr(`Invalid execution id: ${ctx.args.id}`);
-      setExitCode(CliExitCode.Usage);
-      return;
+      return Promise.resolve(CliExitCode.Usage);
     }
-    setExitCode(await runHistoryShow(context, id));
+    return runHistoryShow(context, id);
   },
 });
 
-const historyDeleteCommand = defineCommand({
+const historyDeleteCommand = defineCliCommand({
   meta: { name: 'delete', description: 'Delete stored executions' },
   args: {
     ...GLOBAL_ARGS,
@@ -172,22 +165,18 @@ const historyDeleteCommand = defineCommand({
         'Confirm destructive deletes (required with --all; ignored otherwise)',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
+  run: (context, ctx) => {
     const rawId = optString(ctx.args.id);
     const id = rawId ? parseCliHistoryId(rawId) : undefined;
     if (rawId && !id) {
       writeTextStderr(`Invalid execution id: ${rawId}`);
-      setExitCode(CliExitCode.Usage);
-      return;
+      return Promise.resolve(CliExitCode.Usage);
     }
-    setExitCode(
-      await runHistoryDelete(context, {
-        id,
-        all: ctx.args.all === true,
-        yes: ctx.args.yes === true,
-      }),
-    );
+    return runHistoryDelete(context, {
+      id,
+      all: ctx.args.all === true,
+      yes: ctx.args.yes === true,
+    });
   },
 });
 

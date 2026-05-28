@@ -1,6 +1,5 @@
 import { defineCommand } from 'citty';
 
-import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   loadMemoryItems,
   loadMemoryPreview,
@@ -9,15 +8,14 @@ import { toDisplayPath } from '@tools/memory/memoryUtils';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
+import { writeTextStdout } from '../runtime/logSinks';
 import {
   formatCliMemoryList,
   formatCliMemoryPreview,
   resolveCliMemoryStoragePath,
 } from '../runtime/memory';
 
-import { contextFromArgs } from './_helpers/context';
-import { setExitCode } from './_helpers/exitCode';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
@@ -63,21 +61,14 @@ async function runMemoryShow(
   return CliExitCode.Success;
 }
 
-const memoryListCommand = defineCommand({
+const memoryListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List stored memories' },
   args: { ...GLOBAL_ARGS },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    try {
-      setExitCode(await runMemoryList(context));
-    } catch (error) {
-      writeTextStderr(toErrorMessage(error));
-      setExitCode(CliExitCode.AgentError);
-    }
-  },
+  catchExitCode: CliExitCode.AgentError,
+  run: (context) => runMemoryList(context),
 });
 
-const memoryShowCommand = defineCommand({
+const memoryShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show one stored memory' },
   args: {
     ...GLOBAL_ARGS,
@@ -88,15 +79,8 @@ const memoryShowCommand = defineCommand({
         'Memory path from `texra memory list` (e.g. memories/<file>)',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    try {
-      setExitCode(await runMemoryShow(context, ctx.args.path));
-    } catch (error) {
-      writeTextStderr(toErrorMessage(error));
-      setExitCode(CliExitCode.Usage);
-    }
-  },
+  catchExitCode: CliExitCode.Usage,
+  run: (context, ctx) => runMemoryShow(context, ctx.args.path),
 });
 
 export const memoryCommand = defineCommand({

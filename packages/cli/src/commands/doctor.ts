@@ -1,5 +1,3 @@
-import { defineCommand } from 'citty';
-
 import {
   buildDoctorReport,
   doctorExitCode,
@@ -7,8 +5,7 @@ import {
 } from '../runtime/doctor';
 import { initCliPlatform } from '../runtime/initPlatform';
 
-import { contextFromArgs } from './_helpers/context';
-import { setExitCode } from './_helpers/exitCode';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { suppressCliFetchStackLogs } from './_helpers/fetchSilencer';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/cliContext';
@@ -45,13 +42,10 @@ async function runDoctor(context: CliContext): Promise<number> {
   return doctorExitCode(report);
 }
 
-export const doctorCommand = defineCommand({
+export const doctorCommand = defineCliCommand({
   meta: { name: 'doctor', description: 'Check CLI runtime dependencies' },
   args: {
     ...GLOBAL_ARGS,
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(await runDoctor(context));
-  },
+  run: (context) => runDoctor(context),
 });
