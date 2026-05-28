@@ -1,6 +1,7 @@
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@logger';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
+import { chainStreamWrite } from '@progressView/persistence/writeChaining';
 import {
   TokenUsageStatsParsingSchema,
   isEmptyUsage,
@@ -108,17 +109,11 @@ export class UsageStatsManager {
   // -- Per-stream persistence -----------------------------------------------
 
   private saveStream(stream: StreamTabId): void {
-    if (!this.loaded) return;
-    const prev = this.pendingWrites.get(stream) ?? Promise.resolve();
-    const next = prev.then(() => {
-      if (!this.pendingWrites.has(stream)) return;
+    chainStreamWrite(stream, this.loaded, this.pendingWrites, () => {
       const data = this.items.get(stream);
-      const store = getStreamTabStore(stream);
-      return store.writeUsageStats(data ? mapToRecord(data) : {});
+      return getStreamTabStore(stream).writeUsageStats(
+        data ? mapToRecord(data) : {},
+      );
     });
-    this.pendingWrites.set(
-      stream,
-      next.catch(() => {}),
-    );
   }
 }

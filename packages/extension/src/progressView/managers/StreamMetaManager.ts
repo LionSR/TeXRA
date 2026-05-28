@@ -13,6 +13,7 @@ import {
   mapStreamTabStorage,
 } from '@progressView/persistence/StreamTabStore';
 import type { StreamTabMeta } from '@progressView/persistence/streamTabSchemas';
+import { chainStreamWrite } from '@progressView/persistence/writeChaining';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 /**
@@ -268,22 +269,10 @@ export class StreamMetaManager {
   // -- Per-stream persistence -------------------------------------------------
 
   private save(stream: StreamTabId): void {
-    if (!this.loaded) return;
-    // Serialize writes per stream to avoid concurrent writes to the same meta.json.
-    // Each new save chains after the previous pending write for that stream.
-    const prev = this.pendingWrites.get(stream) ?? Promise.resolve();
-    const next = prev.then(() => {
-      // Skip write if the stream was evicted while this write was queued.
-      // evict() deletes from pendingWrites, so absence means eviction.
-      if (!this.pendingWrites.has(stream)) return;
+    chainStreamWrite(stream, this.loaded, this.pendingWrites, () => {
       const meta = this.buildMeta(stream);
-      const store = getStreamTabStore(stream);
-      return store.writeMeta(meta);
+      return getStreamTabStore(stream).writeMeta(meta);
     });
-    this.pendingWrites.set(
-      stream,
-      next.catch(() => {}),
-    );
   }
 
   private buildMeta(stream: StreamTabId): StreamTabMeta {
