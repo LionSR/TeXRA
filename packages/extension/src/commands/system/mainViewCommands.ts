@@ -3,8 +3,8 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { computeAgentOptionsData, refresh } from '@agent/index';
-import { registerCommands } from '@commands/_shared/registerCommands';
 import { arXivCommands } from '@commands/latex';
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { gitCommands } from '@commands/git/gitCommands';
 import { toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';

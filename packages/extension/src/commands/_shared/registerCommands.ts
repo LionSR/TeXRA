@@ -11,7 +11,6 @@ import * as vscode from 'vscode';
  */
 export interface CommandEntry {
   id: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler: (...args: any[]) => any;
 }
 

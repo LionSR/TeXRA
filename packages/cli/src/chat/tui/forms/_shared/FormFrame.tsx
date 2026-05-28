@@ -4,7 +4,7 @@
 
 import { Box, Text } from 'ink';
 
-import { KeyHints } from '../../ui/KeyHints';
+import { KeyHints } from '@cli/chat/tui/ui/KeyHints';
 
 export interface FormFrameProps {
   readonly color: string;

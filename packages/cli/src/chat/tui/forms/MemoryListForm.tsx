@@ -35,8 +35,7 @@ export function memorySelectWindow(args: {
 
 export function MemoryListForm(props: MemoryListFormProps): React.JSX.Element {
   const { data, loading, error } = useAsyncListForm<readonly MemoryViewItem[]>({
-    load: async () =>
-      (await loadMemoryItems()).slice(0, CLI_MEMORY_LIST_LIMIT),
+    load: async () => (await loadMemoryItems()).slice(0, CLI_MEMORY_LIST_LIMIT),
     onClose: props.onClose,
     isEmpty: (entries) => entries.length === 0,
   });

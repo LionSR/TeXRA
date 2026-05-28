@@ -174,6 +174,8 @@ export const initCommand = defineCliCommand({
       yes: ctx.args.yes === true,
       force: ctx.args.force === true,
       gitignore:
-        typeof ctx.args.gitignore === 'boolean' ? ctx.args.gitignore : undefined,
+        typeof ctx.args.gitignore === 'boolean'
+          ? ctx.args.gitignore
+          : undefined,
     }),
 });
