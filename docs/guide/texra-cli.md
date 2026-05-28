@@ -58,13 +58,18 @@ texra auth usage            # relay usage for the current account
 texra logout
 ```
 
-To use your own provider keys instead of relay access, set the provider
-environment variables (for example `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or
-`GOOGLE_API_KEY`) or a project `.env` file, then force personal-key mode:
+To use your own provider keys instead of relay access, export the provider
+environment variables in the shell where you run `texra` (for example
+`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GOOGLE_API_KEY`), then force
+personal-key mode:
 
 ```bash
+export ANTHROPIC_API_KEY=sk-…
 texra run polish --input paper.tex --api-mode personal
 ```
+
+The CLI does not auto-load `.env` files. To use a project `.env`, source it
+into the shell first (`set -a; . .env; set +a` in bash/zsh).
 
 `texra doctor` reports which runtime dependencies were found, the active sign-in
 profile, and which models are reachable with the current credentials.

@@ -39,7 +39,19 @@ Copy these into the repository you want reviewed:
 
 The workflow loads the action from the **base branch** of each PR (a
 `.trusted-actions` checkout), so PR branches cannot alter the review logic. Once
-the files are merged to your default branch, reviews run for every incoming PR.
+the files are merged to your default branch, reviews run on PRs opened from
+branches in the same repository.
+
+::: warning Forked PRs
+The workflow triggers on `pull_request`, which by design does not expose
+repository secrets to forks. PRs opened from forked repositories will hit the
+"no model provider API key" skip path and produce no review. This is the
+intended trade-off — reviewing untrusted code with privileged secrets would let
+fork authors exfiltrate them. If you need reviews on external contributor PRs,
+gate them behind a maintainer-triggered workflow (for example
+`pull_request_target` with explicit checkout safeguards) rather than the shipped
+configuration.
+:::
 
 ### 2. Add a provider API key secret
 
@@ -101,7 +113,7 @@ By default the action posts with the built-in `GITHUB_TOKEN`. Add a
 TeXRA reuse existing review threads across runs — resolving and replying instead
 of posting duplicate comments.
 
-## See Also
+## Next Steps
 
 - [TeXRA CLI](./texra-cli.md) — the `texra` command the action runs under the hood.
 - [Built-in Agents](./built-in-agents.md#review) — what the `review` agent checks.

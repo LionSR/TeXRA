@@ -231,7 +231,7 @@ sudo apt-get install ghostscript
 
 ## Setting Up API Keys
 
-TeXRA loads provider keys from the OS credential store, the environment, or a `.env` file in your workspace. Both surfaces read the same `${PROVIDER}_API_KEY` variables (for example `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`).
+TeXRA loads provider keys from the OS credential store or from `${PROVIDER}_API_KEY` environment variables (for example `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`). The VS Code extension additionally auto-loads a `.env` file from your workspace; the CLI does not, so for the CLI you need to export the variables (or source the `.env`) in the shell where you run `texra`.
 
 ### In the VS Code Extension
 
@@ -243,11 +243,16 @@ You can also click **Set API Key** in the main TeXRA panel and select a provider
 
 ### In the CLI
 
-Set the provider variables in your shell or a project `.env` file, then verify:
+Export the provider variables in the shell where you run `texra`, then verify:
 
 ```bash
+export ANTHROPIC_API_KEY=sk-…
 texra doctor
 ```
+
+The CLI does not auto-load `.env`. To use a project `.env` file, source it
+first (`set -a; . .env; set +a` in bash/zsh) or pass the variables inline
+(`ANTHROPIC_API_KEY=sk-… texra run …`).
 
 To use included relay access instead of bringing your own keys, sign in:
 
