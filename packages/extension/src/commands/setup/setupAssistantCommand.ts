@@ -32,7 +32,7 @@ const SIGNED_IN_SETUP_MODEL = 'gemini31p';
  * agent can actually authenticate with the key it's been given.
  */
 const API_KEY_MODEL_BY_PROVIDER: Readonly<Record<string, string>> = {
-  anthropic: 'opus47T',
+  anthropic: 'opus48T',
   openai: 'gpt55',
   google: 'gemini31p',
   deepseek: 'deepseekT',

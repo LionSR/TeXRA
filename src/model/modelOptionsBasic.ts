@@ -16,7 +16,7 @@ import {
 export const DEFAULT_MODELS = [
   'gemini31p',
   'sonnet46T',
-  'opus47T',
+  'opus48T',
   'gpt55',
   'gpt54',
   'deepseekT',
@@ -25,7 +25,7 @@ export const DEFAULT_MODELS = [
 ];
 
 /** Increment when the persisted model list needs reconciliation. */
-export const MODEL_LIST_VERSION = 15;
+export const MODEL_LIST_VERSION = 16;
 
 const MILLION = 1_000_000;
 const THOUSAND = 1_000;
