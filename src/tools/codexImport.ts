@@ -14,14 +14,12 @@
  *    are cached for the session.
  */
 
-import { createRequire } from 'module';
 import * as path from 'path';
 
 import { isModuleNotFoundError } from '@common/errors';
-import { executeCommandSync } from '@utils/system/execUtils';
 import {
-  getPackagedElectronResourcesPath,
   pathExists,
+  resolveBinary,
 } from './support/externalBinaryUtils';
 
 type CodexConstructor = new (options?: any) => any;
@@ -104,6 +102,27 @@ const PLATFORM_INFO: Record<string, PlatformInfo> = {
 /** Cached result — found paths are cached; misses are retried. */
 let cachedBinaryPath: string | undefined;
 
+/** Native CLI binary filename for the current platform. */
+const CODEX_BINARY_NAME = process.platform === 'win32' ? 'codex.exe' : 'codex';
+
+/**
+ * Locate the native Codex binary inside a resolved platform-package directory.
+ * The binary nests under `vendor/<triple>/codex/<binaryName>`.
+ */
+async function codexBinaryInPlatformPackage(
+  platformPkgDir: string,
+  platformInfo: PlatformInfo,
+): Promise<string | undefined> {
+  const binary = path.join(
+    platformPkgDir,
+    'vendor',
+    platformInfo.triple,
+    'codex',
+    CODEX_BINARY_NAME,
+  );
+  return (await pathExists(binary)) ? binary : undefined;
+}
+
 /**
  * Locate the native Codex CLI binary. Results are cached for the session
  * (misses are always retried so mid-session installs are picked up).
@@ -114,84 +133,22 @@ let cachedBinaryPath: string | undefined;
 export async function findCodexBinaryPath(): Promise<string | undefined> {
   if (cachedBinaryPath !== undefined) return cachedBinaryPath;
 
-  const result = await findCodexBinaryPathUncached();
-  if (result) cachedBinaryPath = result;
-  return result;
-}
-
-async function findCodexBinaryPathUncached(): Promise<string | undefined> {
   const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
   if (!info) return undefined;
 
-  const binaryName = process.platform === 'win32' ? 'codex.exe' : 'codex';
-
-  // Strategy 1: packaged Electron app.asar.unpacked resources
-  // Highest priority when present — packaged apps cannot execute binaries
-  // from inside app.asar.
-  {
-    const resourcesPath = getPackagedElectronResourcesPath();
-    const result =
-      resourcesPath == null
-        ? undefined
-        : await findCodexBinaryInElectronResources(resourcesPath);
-    if (result) return result;
-  }
-
-  // Strategy 2: resolve from local project's node_modules
-  // Preferred in VS Code extension development — matches package.json.
-  {
-    const result = await resolveCodexBinary(
-      path.join(__dirname, '..'),
-      info,
-      binaryName,
-    );
-    if (result) return result;
-  }
-
-  // Strategy 3: resolve from global npm prefix
-  // Preferred over PATH because the npm-installed binary matches the SDK.
-  {
-    const prefixResult = executeCommandSync(['npm', 'prefix', '-g'], {
-      timeout: 5000,
-    });
-    const prefix = prefixResult.success ? prefixResult.stdout : undefined;
-
-    if (prefix) {
-      const roots = [
-        path.join(prefix, 'lib', 'node_modules', '@openai', 'codex'),
-        path.join(prefix, 'node_modules', '@openai', 'codex'),
-      ];
-
-      for (const codexPkgDir of roots) {
-        const result = await resolveCodexBinary(codexPkgDir, info, binaryName);
-        if (result) return result;
-      }
-    }
-  }
-
-  // Strategy 4: PATH lookup (Homebrew, manual install, etc.)
-  // Fallback — may find an older version that doesn't match the SDK.
-  {
-    const lookupResult = executeCommandSync(
-      [process.platform === 'win32' ? 'where' : 'which', 'codex'],
-      {
-        timeout: 5000,
-      },
-    );
-    const pathHits = lookupResult.success
-      ? (lookupResult.stdout ?? '').split(/\r?\n/)
-      : [];
-
-    for (const hit of pathHits) {
-      const p = hit.trim();
-      if (!p) continue;
-      // The SDK spawns the binary directly, so skip shell-only npm shims.
-      if (process.platform === 'win32' && /\.(cmd|ps1)$/i.test(p)) continue;
-      if (await pathExists(p)) return p;
-    }
-  }
-
-  return undefined;
+  const result = await resolveBinary({
+    platformPackages: [info.pkg],
+    binaryInPlatformPackage: (dir) => codexBinaryInPlatformPackage(dir, info),
+    // The npm global prefix hosts the `@openai/codex` meta-package; the
+    // platform package is resolved relative to those roots.
+    globalPrefixRoots: (prefix) => [
+      path.join(prefix, 'lib', 'node_modules', '@openai', 'codex'),
+      path.join(prefix, 'node_modules', '@openai', 'codex'),
+    ],
+    pathCommand: 'codex',
+  });
+  if (result) cachedBinaryPath = result;
+  return result;
 }
 
 /**
@@ -208,7 +165,6 @@ export async function findCodexBinaryInElectronResources(
   const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
   if (!info) return undefined;
 
-  const binaryName = process.platform === 'win32' ? 'codex.exe' : 'codex';
   const platformPkgDir = path.join(
     resourcesPath,
     'app.asar.unpacked',
@@ -216,52 +172,5 @@ export async function findCodexBinaryInElectronResources(
     ...info.pkg.split('/'),
   );
 
-  return resolveCodexBinaryFromPlatformPackage(
-    platformPkgDir,
-    info,
-    binaryName,
-  );
-}
-
-/**
- * Resolve the native Codex binary from a directory that contains (or nests)
- * the platform-specific package.  Returns the binary path if found, or
- * `undefined`.
- *
- * Works for both a direct `@openai/codex` package dir and any ancestor
- * that Node module resolution can traverse from.
- */
-async function resolveCodexBinary(
-  baseDir: string,
-  platformInfo: PlatformInfo,
-  binaryName: string,
-): Promise<string | undefined> {
-  try {
-    const req = createRequire(path.join(baseDir, 'package.json'));
-    const platformPkgJson = req.resolve(`${platformInfo.pkg}/package.json`);
-    const binary = await resolveCodexBinaryFromPlatformPackage(
-      path.dirname(platformPkgJson),
-      platformInfo,
-      binaryName,
-    );
-    if (binary) return binary;
-  } catch {
-    // Platform package not resolvable
-  }
-  return undefined;
-}
-
-async function resolveCodexBinaryFromPlatformPackage(
-  platformPkgDir: string,
-  platformInfo: PlatformInfo,
-  binaryName: string,
-): Promise<string | undefined> {
-  const binary = path.join(
-    platformPkgDir,
-    'vendor',
-    platformInfo.triple,
-    'codex',
-    binaryName,
-  );
-  return (await pathExists(binary)) ? binary : undefined;
+  return codexBinaryInPlatformPackage(platformPkgDir, info);
 }

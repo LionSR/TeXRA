@@ -2,10 +2,13 @@
 import { platform } from '@platform/platform';
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { getWorkspaceState } from '@agent/core/stateStore';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
+import {
+  createEnumParser,
+  createEnumStateGetter,
+} from './support/enumConfig';
 import {
   CLAUDE_AGENT_NAME,
   CLAUDE_AGENT_DISPLAY_MODEL,
@@ -35,20 +38,19 @@ const RETIRED_CLAUDE_AGENT_MODELS: Readonly<Record<string, ClaudeAgentModel>> =
     'claude-opus-4-7': 'claude-opus-4-8',
   };
 
-export function parseClaudeAgentModel(raw: string): ClaudeAgentModel {
-  if ((CLAUDE_AGENT_MODELS as readonly string[]).includes(raw)) {
-    return raw as ClaudeAgentModel;
-  }
-  return RETIRED_CLAUDE_AGENT_MODELS[raw] ?? CLAUDE_AGENT_DEFAULT_MODEL;
-}
+export const parseClaudeAgentModel: (raw: string) => ClaudeAgentModel =
+  createEnumParser(
+    CLAUDE_AGENT_MODELS,
+    CLAUDE_AGENT_DEFAULT_MODEL,
+    RETIRED_CLAUDE_AGENT_MODELS,
+  );
 
-export function getClaudeAgentModel(): ClaudeAgentModel {
-  const raw = getWorkspaceState().get<string>(
+export const getClaudeAgentModel: () => ClaudeAgentModel =
+  createEnumStateGetter(
     WorkspaceStateKey.CLAUDE_AGENT_MODEL,
     CLAUDE_AGENT_DEFAULT_MODEL,
+    parseClaudeAgentModel,
   );
-  return parseClaudeAgentModel(raw);
-}
 
 // ============================================================================
 // Permission mode
@@ -56,21 +58,19 @@ export function getClaudeAgentModel(): ClaudeAgentModel {
 
 const PERMISSION_MODE_DEFAULT: ClaudeAgentPermissionMode = 'acceptEdits';
 
-export function parseClaudeAgentPermissionMode(
+export const parseClaudeAgentPermissionMode: (
   raw: string,
-): ClaudeAgentPermissionMode {
-  return (CLAUDE_AGENT_PERMISSION_MODES as readonly string[]).includes(raw)
-    ? (raw as ClaudeAgentPermissionMode)
-    : PERMISSION_MODE_DEFAULT;
-}
+) => ClaudeAgentPermissionMode = createEnumParser(
+  CLAUDE_AGENT_PERMISSION_MODES,
+  PERMISSION_MODE_DEFAULT,
+);
 
-export function getClaudeAgentPermissionMode(): ClaudeAgentPermissionMode {
-  const raw = getWorkspaceState().get<string>(
+export const getClaudeAgentPermissionMode: () => ClaudeAgentPermissionMode =
+  createEnumStateGetter(
     WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
     PERMISSION_MODE_DEFAULT,
+    parseClaudeAgentPermissionMode,
   );
-  return parseClaudeAgentPermissionMode(raw);
-}
 
 // ============================================================================
 // Effort — adaptive thinking depth hint passed via `effort` SDK option
@@ -78,19 +78,15 @@ export function getClaudeAgentPermissionMode(): ClaudeAgentPermissionMode {
 
 const EFFORT_DEFAULT: ClaudeAgentEffort = 'high';
 
-export function parseClaudeAgentEffort(raw: string): ClaudeAgentEffort {
-  return (CLAUDE_AGENT_EFFORT_LEVELS as readonly string[]).includes(raw)
-    ? (raw as ClaudeAgentEffort)
-    : EFFORT_DEFAULT;
-}
+export const parseClaudeAgentEffort: (raw: string) => ClaudeAgentEffort =
+  createEnumParser(CLAUDE_AGENT_EFFORT_LEVELS, EFFORT_DEFAULT);
 
-export function getClaudeAgentEffort(): ClaudeAgentEffort {
-  const raw = getWorkspaceState().get<string>(
+export const getClaudeAgentEffort: () => ClaudeAgentEffort =
+  createEnumStateGetter(
     WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
     EFFORT_DEFAULT,
+    parseClaudeAgentEffort,
   );
-  return parseClaudeAgentEffort(raw);
-}
 
 // ============================================================================
 // Auth env — pulls ANTHROPIC_API_KEY from secrets if set
