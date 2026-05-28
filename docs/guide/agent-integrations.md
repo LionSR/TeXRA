@@ -1,18 +1,18 @@
 # Agent Integrations
 
-TeXRA can hand off work to two external coding agents that run locally on your
-machine:
+TeXRA can hand off a task to a second coding agent that runs on your machine
+alongside it. Two are supported today:
 
-- **OpenAI Codex** — a sandboxed coding agent backed by your ChatGPT Plus / Pro
-  plan or an OpenAI API key. Exposed to TeXRA as the `codex` tool.
-- **Claude Code** — Anthropic's agentic coding CLI, backed by your Claude
-  Pro / Max plan or an Anthropic API key. Exposed to TeXRA as the `claude_code`
+- **OpenAI Codex** — a sandboxed coding agent on your ChatGPT Plus / Pro plan
+  (or an OpenAI API key). TeXRA agents reach it through the `codex` tool.
+- **Claude Code** — Anthropic's coding agent on your Claude Pro / Max plan
+  (or an Anthropic API key). TeXRA agents reach it through the `claude_code`
   tool.
 
-Each integration is configured from its own card in **Dashboard → Integrations**,
-and any TeXRA tool-use agent with the tool enabled can delegate to it. Calls are
-async — the tool returns an execution ID immediately, and each turn arrives as a
-follow-up to the calling agent.
+Each one is set up from its own card on **Dashboard → Integrations**. When a
+TeXRA agent uses the tool, the work runs in a side panel on the ProgressBoard
+that you can watch live and reply to — TeXRA carries on while the side agent
+does its thing.
 
 ## Quick Start
 
@@ -51,10 +51,9 @@ TeXRA pins Codex to the `gpt-5.5` model. Providers, MCP servers, and custom inst
 
 ### Follow-ups
 
-To send a follow-up from the calling agent, call `codex` again with `thread_id`
-set to the ID from the previous delivery. The prompt is queued as the next turn
-and errors if the thread is still processing — same contract as
-`delegate_agent(execution_id=…)`.
+To continue an earlier Codex turn instead of starting a fresh one, the calling
+agent calls `codex` again with the `thread_id` it received in the previous
+delivery. The new prompt joins that Codex session as the next turn.
 
 ## Claude Code
 
@@ -75,10 +74,10 @@ MCP servers, custom instructions, and hooks come from Claude Code's own configur
 
 ### Follow-ups
 
-To continue a session from the calling agent, call `claude_code` again with
-`session_id` set to the ID from the previous delivery. The prompt is enqueued as
-the session's next turn; if the session is still processing, it waits in the
-queue.
+To continue an earlier Claude Code session, the calling agent calls
+`claude_code` again with the `session_id` from the previous delivery. The new
+prompt joins that session as the next turn (and waits its turn in the queue if
+the session is still working).
 
 ## Running an Integration
 
@@ -92,10 +91,10 @@ one of them:
 
 When the tool fires:
 
-1. A child stream tab opens on the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) — `codex@codex-sdk` for Codex, `claude@agent-sdk` for Claude Code.
-2. Reasoning, commands, file diffs, web searches (<wa-icon library="texra" name="globe"></wa-icon>), and todos stream in live.
-3. When the turn ends, the tab sits in **WAITING**. Type a follow-up to continue the thread, or press <wa-icon library="texra" name="debug-stop"></wa-icon> **Stop** to end it.
-4. Each turn is delivered to the calling agent as a follow-up message (final response, token usage, and the thread or session id).
+1. A new stream tab opens on the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) labelled `codex@codex-sdk` or `claude@agent-sdk`.
+2. You see the side agent's reasoning, the commands it runs, the file changes it makes, and any web searches (<wa-icon library="texra" name="globe"></wa-icon>) and todos — all live.
+3. When the turn ends, the tab shows **WAITING**. Type into it to send a follow-up, or press <wa-icon library="texra" name="debug-stop"></wa-icon> **Stop** to close the session.
+4. The result (final message and token cost) is handed back to the TeXRA agent that asked for it, which then continues its own work.
 
 ## Troubleshooting
 

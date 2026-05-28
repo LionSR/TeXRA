@@ -39,40 +39,40 @@ now runs your local build.
 
 ## Authentication
 
-The CLI can run two ways: with **included relay access** after signing in, or
-with your **own provider API keys**.
+You can run the CLI either with a TeXRA sign-in (included relay access) or
+with your own provider API keys — whichever you prefer.
 
-Sign in with your GitHub or Google account for included access:
+**Sign in with GitHub or Google** to use included access without managing keys:
 
 ```bash
 texra login                 # opens a browser to complete sign-in
 texra login github          # choose the OAuth provider explicitly
-texra login --no-browser    # print the sign-in URL instead of opening a browser
+texra login --no-browser    # print the sign-in URL if no browser is available
 ```
 
-Check the current account, sign out, or review relay usage:
-
 ```bash
-texra auth status
-texra auth usage            # relay usage for the current account
+texra auth status           # who am I signed in as?
+texra auth usage            # how much of my included quota have I used?
 texra logout
 ```
 
-To use your own provider keys instead of relay access, export the provider
-environment variables in the shell where you run `texra` (for example
-`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GOOGLE_API_KEY`), then force
-personal-key mode:
+**Bring your own provider keys.** Set the right environment variable for the
+provider you want to use (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+`GOOGLE_API_KEY`, …), then run the CLI normally:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-…
-texra run polish --input paper.tex --api-mode personal
+texra run polish --input paper.tex
 ```
 
-The CLI does not auto-load `.env` files. To use a project `.env`, source it
-into the shell first (`set -a; . .env; set +a` in bash/zsh).
+If you're signed in **and** want this particular run to use your own key
+instead of relay access, add `--api-mode personal`.
 
-`texra doctor` reports which runtime dependencies were found, the active sign-in
-profile, and which models are reachable with the current credentials.
+The CLI doesn't read `.env` files automatically. If you already keep keys
+there, load them into the shell first (in bash/zsh: `set -a; . .env; set +a`).
+
+Run `texra doctor` any time to see which dependencies are detected, who you're
+signed in as, and which models the CLI can reach with the current credentials.
 
 ## Interactive Chat
 

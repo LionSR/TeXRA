@@ -1,31 +1,29 @@
 # Code Review
 
-TeXRA can review your pull requests automatically. The **TeXRA Code Review**
-GitHub Action runs the `review` tool-use agent headlessly on each PR, then posts
-a pull request review with inline comments anchored to the changed lines.
+The **TeXRA Code Review** GitHub Action posts a pull request review on each PR
+— a short summary at the top, and inline comments on the lines TeXRA wants to
+flag.
 
-The review runs entirely from your repository using your own provider API keys —
-TeXRA does not proxy your code or your diffs.
+It runs from your own GitHub Actions environment, using model provider API keys
+you put in your repo's secrets. Your code and diffs are not sent through any
+TeXRA service.
 
-## What It Does
+## What you'll see on a PR
 
-On every pull request the workflow:
+Once installed, every PR gets a single review from `github-actions[bot]`:
 
-1. Builds the PR diff (`merge-base..head`) and computes the set of lines that can
-   take inline comments.
-2. Collects any previous TeXRA review threads so follow-up runs can update or
-   resolve them instead of repeating themselves.
-3. Runs the `review` agent headlessly (`texra agents run review … --output-format json`)
-   with the diff as read-only context.
-4. Posts a single pull request review: a summary plus inline comments on the
-   changed lines.
+- A summary comment at the top of the PR with TeXRA's overall verdict.
+- Inline comments on the lines TeXRA wants to question or suggest changes for.
+- On the next push to the same PR, TeXRA updates the same threads instead of
+  posting duplicates.
 
-## Requirements
+## What you need
 
 - A GitHub repository with Actions enabled.
-- At least one **model provider API key** stored as a repository secret.
-- The workflow needs `contents: read` and `pull-requests: write` permissions
-  (already declared in the shipped workflow).
+- A model provider API key (Anthropic, OpenAI, Google, etc.) saved as a repo
+  secret.
+- Nothing else — the shipped workflow already declares the GitHub permissions
+  it needs to read code and write review comments.
 
 ## Setup
 
@@ -37,20 +35,17 @@ Copy these into the repository you want reviewed:
 - `.github/actions/texra-code-review/` — the composite action and its scripts.
 - `.github/prompts/texra-code-review-prompt.md` — the review prompt.
 
-The workflow loads the action from the **base branch** of each PR (a
-`.trusted-actions` checkout), so PR branches cannot alter the review logic. Once
-the files are merged to your default branch, reviews run on PRs opened from
-branches in the same repository.
+Once these are merged to your default branch, every new PR from a branch in
+the same repository will get a TeXRA review. The review code always runs from
+the version on your default branch, so PR authors can't change how reviews
+work by editing the workflow.
 
-::: warning Forked PRs
-The workflow triggers on `pull_request`, which by design does not expose
-repository secrets to forks. PRs opened from forked repositories will hit the
-"no model provider API key" skip path and produce no review. This is the
-intended trade-off — reviewing untrusted code with privileged secrets would let
-fork authors exfiltrate them. If you need reviews on external contributor PRs,
-gate them behind a maintainer-triggered workflow (for example
-`pull_request_target` with explicit checkout safeguards) rather than the shipped
-configuration.
+::: warning Forks don't get reviewed
+PRs opened from a **fork** are not reviewed. GitHub deliberately doesn't share
+your repo secrets with forks, so the workflow has nothing to talk to the model
+provider with and exits quietly. If a contributor needs a TeXRA review, push
+their branch into your repo (or to a topic branch you control) and reopen the
+PR from there.
 :::
 
 ### 2. Add a provider API key secret
@@ -67,23 +62,28 @@ Actions → **Secrets**):
 | `OPENROUTER_API_KEY` | OpenRouter |
 | `XAI_API_KEY`        | xAI        |
 
-If no provider key is present, the workflow logs a notice and skips the review
-instead of failing. The action runs with `api-mode: personal`, so it always uses
-these keys rather than a TeXRA sign-in.
+Without at least one of these, TeXRA can't talk to any model — the workflow
+posts no review and skips quietly (you'll see a "no model provider API key"
+notice on the run). TeXRA charges these keys directly; you don't need a TeXRA
+sign-in for code review.
 
-### 3. (Optional) Configure the model
+### 3. (Optional) Pick a model
 
-Model selection is resolved at runtime (Settings → Secrets and variables →
-Actions → **Variables**):
+By default TeXRA picks a sensible model for whichever provider key you set,
+trying providers in this order: **DeepSeek → Anthropic → OpenAI → Google →
+OpenRouter → xAI**.
 
-- Set `TEXRA_REVIEW_MODEL` to pin one model id for every review.
-- Otherwise the first provider with a configured key wins, in this order:
-  DeepSeek, Anthropic, OpenAI, Google, OpenRouter, xAI. Override the per-provider
-  default with `TEXRA_REVIEW_ANTHROPIC_MODEL`, `TEXRA_REVIEW_OPENAI_MODEL`,
+To override, add one of these as a repo **variable** (Settings → Secrets and
+variables → Actions → **Variables**):
+
+- `TEXRA_REVIEW_MODEL` — pin one model id for every review, regardless of
+  provider.
+- `TEXRA_REVIEW_ANTHROPIC_MODEL`, `TEXRA_REVIEW_OPENAI_MODEL`,
   `TEXRA_REVIEW_GOOGLE_MODEL`, `TEXRA_REVIEW_DEEPSEEK_MODEL`,
-  `TEXRA_REVIEW_OPENROUTER_MODEL`, or `TEXRA_REVIEW_XAI_MODEL`.
+  `TEXRA_REVIEW_OPENROUTER_MODEL`, `TEXRA_REVIEW_XAI_MODEL` — override the
+  default for one provider only.
 
-Built-in defaults per provider:
+The built-in defaults:
 
 | Provider   | Default model  |
 | ---------- | -------------- |
@@ -94,24 +94,27 @@ Built-in defaults per provider:
 | OpenRouter | `gptoss`       |
 | xAI        | `grok4`        |
 
-### 4. (Optional) Pin the CLI version
+### 4. (Optional) Pin the TeXRA CLI version
 
-Set the `TEXRA_CLI_VERSION` variable to install a specific `@texra-ai/cli`
-version in CI. Leave it empty (or `latest`) to track the latest published
-release.
+By default the workflow installs the latest published `texra` CLI on each run.
+To pin a specific version (e.g. for reproducibility), set the
+`TEXRA_CLI_VERSION` repository variable to the version you want — `0.38.2`,
+`latest`, or empty for latest.
 
-## Turning Reviews Off
+## Turning reviews off
 
-Set the repository variable `TEXRA_REVIEW_ENABLED` to `false` to skip the review
-on every PR without removing the workflow. Any other value (or no value) keeps it
-enabled.
+Set the repository variable `TEXRA_REVIEW_ENABLED` to `false` to pause TeXRA
+reviews without removing the workflow file. Set it back to anything else (or
+unset it) to resume.
 
-## Threaded Follow-ups
+## Replying to your own threads
 
-By default the action posts with the built-in `GITHUB_TOKEN`. Add a
-`TEXRA_REVIEW_GITHUB_TOKEN` secret (with pull-request review permissions) to let
-TeXRA reuse existing review threads across runs — resolving and replying instead
-of posting duplicate comments.
+Out of the box, TeXRA posts review comments but can't resolve or reply to its
+own earlier threads — GitHub's default Actions token isn't allowed to. If you
+want TeXRA to clean up its own threads on subsequent pushes (resolving fixed
+ones, replying with updates rather than re-posting), create a personal or
+fine-grained access token with pull-request review permissions and add it as a
+`TEXRA_REVIEW_GITHUB_TOKEN` repo secret.
 
 ## Next Steps
 

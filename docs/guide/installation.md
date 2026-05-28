@@ -231,30 +231,31 @@ sudo apt-get install ghostscript
 
 ## Setting Up API Keys
 
-TeXRA loads provider keys from the OS credential store or from `${PROVIDER}_API_KEY` environment variables (for example `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`). The VS Code extension additionally auto-loads a `.env` file from your workspace; the CLI does not, so for the CLI you need to export the variables (or source the `.env`) in the shell where you run `texra`.
+TeXRA talks to model providers directly with an API key you supply. You need a key from at least one provider — Anthropic, OpenAI, Google, etc. — and you give it to TeXRA the same way on every platform: the key is named `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_API_KEY` and so on.
 
 ### In the VS Code Extension
 
-Open the TeXRA Dashboard, go to the **Models tab**, and use the inline set/remove controls for each provider. Keys are stored in VS Code's Secret Storage.
-
-You can also click **Set API Key** in the main TeXRA panel and select a provider, or define the variables in a workspace `.env` file.
+The friendliest path: open the TeXRA Dashboard, go to the **Models** tab, and click the provider you want. Paste the key and it's saved in VS Code's secret storage. You can also run **TeXRA: Set API Key** from the Command Palette, or drop the keys in a `.env` file in your project — the extension reads it on startup.
 
 ![API Key Setup](/images/api-key-setup.png)
 
 ### In the CLI
 
-Export the provider variables in the shell where you run `texra`, then verify:
+Set the provider key in your shell, then check it's picked up:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-…
 texra doctor
 ```
 
-The CLI does not auto-load `.env`. To use a project `.env` file, source it
-first (`set -a; . .env; set +a` in bash/zsh) or pass the variables inline
-(`ANTHROPIC_API_KEY=sk-… texra run …`).
+The CLI **doesn't read `.env` files automatically** (the extension does). If you already keep keys in a project `.env`, load them into the shell first — for example in bash or zsh:
 
-To use included relay access instead of bringing your own keys, sign in:
+```bash
+set -a; . .env; set +a
+texra doctor
+```
+
+Prefer not to manage keys at all? Sign in to TeXRA for included relay access:
 
 ```bash
 texra login
