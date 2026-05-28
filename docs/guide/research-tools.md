@@ -1,6 +1,6 @@
 # Research Tools
 
-You're deep in a manuscript and realise you need to cite "that attention paper from 2017" but can't remember the title. Or you want to verify an integral in your appendix. Or you need to pull twenty BibTeX entries from your Zotero library into a new project. TeXRA's research agents handle all of this without leaving your editor — in VS Code, the desktop app, or the `texra` CLI.
+You're deep in a manuscript and realise you need to cite "that attention paper from 2017" but can't remember the title. Or you want to verify an integral in your appendix. Or you need to pull twenty BibTeX entries from your Zotero library into a new project. TeXRA's research agents handle all of this without leaving your editor — in VS Code or the `texra` CLI.
 
 ## What You Can Do
 
@@ -92,5 +92,5 @@ Pick any of them from the **Agent** dropdown (<wa-icon library="texra" name="spa
 ## Next Steps
 
 - [LaTeX Tools](./latex-tools.md) — formatting, diffs, texcount, figures, bibliography
-- [Codex CLI](./codex-cli.md) — delegate long-running code tasks to OpenAI Codex
+- [Agent Integrations](./agent-integrations.md) — delegate long-running code tasks to Codex or Claude Code
 - [Working with Figures](./working-with-figures.md) — feed figures and PDFs to vision models

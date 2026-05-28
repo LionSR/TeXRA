@@ -119,7 +119,7 @@ Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the 
 ### Step 6: Execute the Agent
 
 1. Click the "Execute" button (<wa-icon library="texra" name="play"></wa-icon>)
-2. The ProgressBoard panel (typically at the bottom) will show the progress. See the [ProgressBoard guide](./progress-board.md) for more details on interpreting the logs.
+2. The ProgressBoard opens in the TeXRA view and streams the run live. See the [ProgressBoard guide](./progress-board.md) for more details on interpreting the logs.
 3. Wait for the process to complete - this may take a few moments depending on the document size and model choice
 
 <GuideIntroHero />
@@ -156,6 +156,27 @@ Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the 
 </div>
 
 For details on how LaTeX diff works, see the [LaTeX Diff guide](./latex-diff.md).
+
+## From the CLI
+
+The same agents are one command away from the terminal. After
+`npm install -g @texra-ai/cli` (Node.js 22+):
+
+```bash
+# Sign in for included relay access, or set ANTHROPIC_API_KEY / OPENAI_API_KEY in your shell:
+texra login
+
+# One-shot run (writes output next to the input):
+texra run polish --input draft.tex \
+  --instruction "Improve clarity; preserve math and citations."
+
+# Or open an interactive tool-use session:
+texra chat
+```
+
+Run history is shared with VS Code, so a run started in the CLI shows up in the
+extension's ProgressBoard (and vice versa). See [TeXRA CLI](./texra-cli.md) for
+sign-in, workspace defaults, and headless output formats.
 
 <style>
 .quick-pdf-viewer {
