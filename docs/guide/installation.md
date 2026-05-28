@@ -35,20 +35,6 @@ You can also install TeXRA directly in your preferred editor using protocol-base
 - [Open in Cursor](cursor:extension/texra-ai.texra)
 - [Open in Windsurf](windsurf:extension/texra-ai.texra)
 
-### Desktop App Beta
-
-The standalone desktop app is in beta development. Public signed installers and
-automatic updates are not enabled until the desktop release pipeline is
-complete. See [Desktop App](./desktop.md) for supported platforms, current beta
-installation expectations, logs, and update behavior.
-
-::: tip Desktop app migration
-If you are moving from the VS Code extension to the desktop app, treat the first
-desktop launch as a fresh setup. Open the same project folder, then
-re-authenticate and reconfigure local provider, agent, Git, and LaTeX settings.
-See [Migrating to the Desktop App](./desktop-migration.md).
-:::
-
 ### CLI
 
 The standalone `texra` command is published to npm. Install it globally (requires
@@ -245,19 +231,38 @@ sudo apt-get install ghostscript
 
 ## Setting Up API Keys
 
-TeXRA requires API keys to access language models. Here's how to set them up:
+TeXRA talks to model providers directly with an API key you supply. You need a key from at least one provider — Anthropic, OpenAI, Google, etc. — and you give it to TeXRA the same way on every platform: the key is named `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `GOOGLE_API_KEY` and so on.
 
-1. Open VS Code with TeXRA installed
-2. Click on the TeXRA icon in the Activity Bar
-3. Click "Set API Key" in the TeXRA panel
-4. Select the provider (e.g., Anthropic, OpenAI, Google)
-5. Enter your API key when prompted
+### In the VS Code Extension
 
-You can also manage API keys from the **Models tab** in the TeXRA Dashboard, which provides inline set/remove controls for each provider.
-
-TeXRA also loads environment variables from a `.env` file in your workspace. Define variables like `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in this file to avoid entering keys manually.
+The friendliest path: open the TeXRA Dashboard, go to the **Models** tab, and click the provider you want. Paste the key and it's saved in VS Code's secret storage. You can also run **TeXRA: Set API Key** from the Command Palette, or drop the keys in a `.env` file in your project — the extension reads it on startup.
 
 ![API Key Setup](/images/api-key-setup.png)
+
+### In the CLI
+
+Set the provider key in your shell, then check it's picked up:
+
+```bash
+export ANTHROPIC_API_KEY=sk-…
+texra doctor
+```
+
+The CLI **doesn't read `.env` files automatically** (the extension does). If you already keep keys in a project `.env`, load them into the shell first — for example in bash or zsh:
+
+```bash
+set -a; . .env; set +a
+texra doctor
+```
+
+Prefer not to manage keys at all? Sign in to TeXRA for included relay access:
+
+```bash
+texra login
+texra auth status
+```
+
+See [TeXRA CLI](./texra-cli.md) for sign-in, workspace defaults, and switching between relay and personal-key access.
 
 ::: info Getting API Keys
 
