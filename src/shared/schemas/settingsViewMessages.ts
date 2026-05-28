@@ -46,6 +46,9 @@ import {
   PinMemoryMessageSchema,
   SetMemoryEnabledMessageSchema,
   UnpinMemoryMessageSchema,
+  UpdateMemoryEnabledMessageSchema,
+  UpdateMemoryMessageSchema,
+  UpdateMemoryPreviewMessageSchema,
 } from './memoryViewMessages';
 import { NESTED_DELEGATION_DEPTH_RANGE } from '../constants/delegationPolicy';
 import {
@@ -61,8 +64,10 @@ import {
   ExportChatMdMessageSchema,
   ExportChatTexMessageSchema,
   GetHistoryDataMessageSchema,
+  HistoryClearedMessageSchema,
   RerunAgentMessageSchema,
   RestoreAgentMessageSchema,
+  UpdateHistoryMessageSchema,
 } from './historyViewMessages';
 import { WebviewReadyMessageSchema } from './commonViewMessages';
 import { commandOnly } from './messageFactories';
@@ -73,6 +78,7 @@ import {
   SetApiAccessModeInboundMessageSchema,
   SignInMessageSchema,
   SignOutMessageSchema,
+  UpdateProfileMessageSchema,
 } from './profileViewMessages';
 import { StreamTabIdSchema } from './identifiers';
 export { SETTINGS_VIEW_CMD };
@@ -1125,4 +1131,47 @@ export type SettingsViewInboundHandlerRegistry =
 
 export const dispatchSettingsViewInbound = createDispatcher(
   SettingsViewInboundMessageSchema,
+);
+
+// ============================================================
+// Outbound messages (extension host → settings webview)
+// ============================================================
+
+export const SettingsViewOutboundMessageSchema = z.discriminatedUnion(
+  'command',
+  [
+    SetTabMessageSchema,
+    UpdateMemoryMessageSchema,
+    UpdateMemoryEnabledMessageSchema,
+    UpdateMemoryPreviewMessageSchema,
+    UpdateHistoryMessageSchema,
+    HistoryClearedMessageSchema,
+    UpdateModelSelectionMessageSchema,
+    UpdateAgentSelectionMessageSchema,
+    UpdateCustomAgentDirMessageSchema,
+    UpdateSuperYoloEnabledMessageSchema,
+    UpdateAgentModePresetsMessageSchema,
+    UpdateApprovalSettingsMessageSchema,
+    UpdateToolDashboardMessageSchema,
+    UpdateGitAuthorSettingsMessageSchema,
+    UpdateGitHubTokenStatusMessageSchema,
+    UpdateDesktopCrashReportingMessageSchema,
+    UpdatePRSubscriptionsMessageSchema,
+    UpdateLatexSettingsStatusMessageSchema,
+    UpdateLatexConfigValuesMessageSchema,
+    UpdateInlineCriticismEnabledMessageSchema,
+    UpdateOdysseyListMessageSchema,
+    UpdateProfileMessageSchema,
+  ],
+);
+
+export type SettingsViewOutboundMessage = z.infer<
+  typeof SettingsViewOutboundMessageSchema
+>;
+
+export type SettingsViewOutboundHandlerRegistry =
+  HandlerRegistry<SettingsViewOutboundMessage>;
+
+export const dispatchSettingsViewOutbound = createDispatcher(
+  SettingsViewOutboundMessageSchema,
 );
