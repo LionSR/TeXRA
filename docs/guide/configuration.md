@@ -20,8 +20,10 @@ The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open i
 - **Agents** - Turn agents on or off for the current workspace. Agents that support multiple output files are marked with a badge.
 - **Multi-Agent** - Configure multi-agent orchestration and presets.
 - **Tools** - Manage tool-use agent capabilities and approval settings.
+- **Integrations** - Set up third-party coding agents (OpenAI Codex, Claude Code) that TeXRA can hand off to. See [Agent Integrations](./agent-integrations.md).
 - **Git** - Set a GitHub personal access token (required for the `github_subscription` tool) and optionally attribute TeXRA commits to a custom author.
 - **LaTeX** - Configure LaTeX formatting, diff, and TikZ settings.
+- **Odyssey** - Monitor long-running multi-agent jobs from the orchestrator.
 
 ::: tip
 Many connection and model settings are configured through VS Code's standard settings. The Dashboard tabs provide convenient access to agent, model, and tool configuration.
