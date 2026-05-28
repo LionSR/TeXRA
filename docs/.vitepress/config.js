@@ -112,6 +112,7 @@ const baseConfig = {
           items: [
             { text: 'Introduction', link: '/guide/' },
             { text: 'Installation', link: '/guide/installation' },
+            { text: 'First Run', link: '/guide/first-run' },
             { text: 'Quick Start', link: '/guide/quick-start' },
           ],
         },
@@ -131,6 +132,7 @@ const baseConfig = {
         {
           text: 'Workflows',
           items: [
+            { text: 'Polish a Draft', link: '/guide/workflows/polish-a-draft' },
             { text: 'LaTeX Diff', link: '/guide/latex-diff' },
             { text: 'Intelligent Merge', link: '/guide/intelligent-merge' },
             { text: 'Research Tools', link: '/guide/research-tools' },

@@ -128,7 +128,7 @@ Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the 
 
 ### Step 7: Review Results
 
-1. When the agent completes, VS Code will open the generated output file from the run's task storage folder (e.g., `r0/output.tex`).
+1. When the agent completes, VS Code will open the generated output file from the run's task storage folder (e.g., `r0/draft.tex`, preserving the input filename).
 2. Review the changes made by the AI. Remember, it's smart, but hasn't passed its quals yet!
 3. You can compare the original and modified versions using:
    - **ProgressBoard Diff**: Click the <wa-icon library="texra" name="diff-multiple"></wa-icon> Diff button on the completed stream to compare the original file against the generated task-storage output.
@@ -163,7 +163,7 @@ The same agents are one command away from the terminal. After
 `npm install -g @texra-ai/cli` (Node.js 22+):
 
 ```bash
-# Sign in for included relay access, or set ANTHROPIC_API_KEY / OPENAI_API_KEY in your shell:
+# Sign in for included hosted access, or set ANTHROPIC_API_KEY / OPENAI_API_KEY in your shell:
 texra login
 
 # One-shot run (writes output next to the input):
@@ -293,11 +293,12 @@ When TeXRA completes a task, it produces:
 2. **Log Files**: Detailed information about the process
 3. **Diff Files**: Visual comparison between original and modified versions (if applicable)
 
-Output files are saved in the run's task storage folder with a naming pattern:
-`r{round}/output.extension`
+Output files are saved in the run's task storage folder, one per
+round, using the **input filename** as the document name:
+`r{round}/<input-filename>`
 
 For example, if your input file is `paper.tex` and the first round produces TeX, the output path inside task storage is:
-`r0/output.tex`
+`r0/paper.tex`
 
 ## Next Steps
 
