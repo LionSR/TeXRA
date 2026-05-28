@@ -123,6 +123,8 @@ const MainAppBase = SignalWatcher(
   BaseWebviewApp as unknown as new (...args: any[]) => BaseWebviewApp,
 );
 
+const ENABLE_MOCKS_GALLERY = process.env.NODE_ENV === 'development';
+
 @customElement('main-app')
 export class MainApp extends MainAppBase {
   static styles = [
@@ -183,6 +185,7 @@ export class MainApp extends MainAppBase {
     ONBOARDING_PLACEHOLDERS[DEFAULT_STATE.sessionType][0],
   );
   @state() protected override debugMode = false;
+  @state() private mocksGalleryLoaded = false;
   private readonly isGitRepo = signal(true);
   private instructionSaveTimer: number | null = null;
 
@@ -324,6 +327,11 @@ export class MainApp extends MainAppBase {
 
   override connectedCallback(): void {
     super.connectedCallback();
+    if (ENABLE_MOCKS_GALLERY && localStorage.getItem('texra-mocks') === '1') {
+      void import('./mocks').then(() => {
+        this.mocksGalleryLoaded = true;
+      });
+    }
     this.restorePersistedState();
   }
 
@@ -1652,6 +1660,16 @@ export class MainApp extends MainAppBase {
   }
 
   render(): TemplateResult {
+    if (ENABLE_MOCKS_GALLERY && this.mocksGalleryLoaded) {
+      return html`
+        <div class="content-wrapper">
+          <div class="main-content">
+            <texra-mocks-gallery></texra-mocks-gallery>
+          </div>
+        </div>
+      `;
+    }
+
     const isToolUse = this.sessionType.get() === SESSION_TYPES.TOOL_USE;
     const fileSelectionClasses = classMap({
       'file-selection-group': true,
