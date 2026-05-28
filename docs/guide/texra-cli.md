@@ -19,6 +19,64 @@ texra version
 texra agents list
 ```
 
+## Running Agents
+
+Run a workflow agent from a project directory:
+
+```bash
+texra run polish --input paper.tex --output paper.polished.tex --print
+```
+
+Pass read-only context files with repeated `--context` flags. The agent can
+read these files through `{{ ALL_CONTEXTS }}`, but it should only emit revised
+documents for the selected inputs:
+
+```bash
+texra run firstread --input appendices.tex --context Draft0.tex --context refs.bib
+```
+
+Pass multiple inputs with repeated `--input` flags, a directory, or a glob.
+Directory inputs expand recursively to `.tex` files. Multi-input runs can copy
+their generated artifacts to a directory with `--output-dir`; relative document
+paths are preserved under that directory:
+
+```bash
+texra run firstread --input Draft0.tex --input appendices.tex --output-dir flagged
+texra run logic --input 'paper/**/*.tex' --output-dir logic-pass
+```
+
+Workflow agents always write generated files into the execution's run-storage
+directory first. In text mode, TeXRA prints a filesystem path: the copied path
+when `--output` or `--output-dir` is used, otherwise the final generated file in
+run storage.
+
+With `--output`, TeXRA also copies the final artifact to the requested
+filesystem destination. JSON and NDJSON output keep `outputs[]` as the
+run-storage source of truth (`relativePath`, `absolutePath`, and `location`),
+include `runDirectory`, include `copiedOutput` or `copiedOutputs` when a
+filesystem copy was written, and report `terminalStatus` for the completed run.
+
+## Shell Completion
+
+TeXRA can print completion scripts for Bash, Zsh, and Fish:
+
+```bash
+texra completion bash >> ~/.bashrc
+texra completion zsh > "${fpath[1]}/_texra"
+texra completion fish > ~/.config/fish/completions/texra.fish
+```
+
+Restart the shell, or source the file you updated. Completion includes
+subcommands, flags, enum values such as `--output-format text|json|ndjson`,
+agent names for `texra run <TAB>`, and model names for `--model <TAB>`.
+
+Agent and model completion call back into `texra agents list` and
+`texra models list`. Disable those dynamic lookups in slow shells with:
+
+```bash
+export TEXRA_COMPLETION_DYNAMIC=0
+```
+
 ## Execution History
 
 TeXRA stores completed executions in the workspace run store. List recent runs:
@@ -113,18 +171,3 @@ included relay access. `--api-mode included` keeps the default relay behavior
 when the account is signed in. The accepted aliases match the TUI `/api`
 command: for example, `direct`, `api`, and `byok` select personal API keys,
 while `relay` selects included access.
-
-## Validation
-
-The CLI build performs type checking, architecture checks, bundling, and resource
-copying:
-
-```bash
-corepack pnpm --filter @texra-ai/cli build
-```
-
-For a deterministic local run check that does not require provider credentials:
-
-```bash
-corepack pnpm --filter @texra-ai/cli validate:run
-```

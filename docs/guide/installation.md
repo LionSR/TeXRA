@@ -58,7 +58,7 @@ Node.js 22 or newer):
 npm install -g @texra-ai/cli
 ```
 
-See [TeXRA CLI](./texra-cli.md) for usage and workspace defaults.
+See [TeXRA CLI](./texra-cli.md) for usage, shell completion, and workspace defaults.
 
 ### From VSIX File
 
