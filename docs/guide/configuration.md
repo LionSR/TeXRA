@@ -69,7 +69,7 @@ Configure how TeXRA connects to AI model providers:
 - `improvedConnectionDomain`: Custom proxy domain when `useImprovedConnection` is enabled. Defaults to the built-in proxy when unset.
   - ⚠️ **Security Warning:** When using a proxy, ensure you trust the proxy server as it will receive your API keys. Only use proxies from trusted sources.
 - `useOpenAIResponsesAPI`: Use OpenAI's Responses API instead of Chat Completions when available
-- `gpt5ReasoningSummary`: Request reasoning summaries from the GPT-5 family, including GPT-5.4 and GPT-5.4 Pro (requires verified account and user tier)
+- `gpt5ReasoningSummary`: Request reasoning summaries from the GPT-5 family, including GPT-5.5 and GPT-5.5 Pro (requires verified account and user tier)
 
 | Provider         | Proxy path                  | Supported |
 | ---------------- | --------------------------- | --------- |
