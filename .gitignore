@@ -41,3 +41,5 @@ packages/desktop/playwright-report/
 
 # External design references cloned locally; do not vendor them into TeXRA.
 references/openrouter-skills/
+
+.pnpm-store/

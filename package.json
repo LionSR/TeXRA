@@ -160,6 +160,7 @@
     "node-pandoc": "^0.3.0",
     "openai": "^6.39.0",
     "p-map": "^7.0.4",
+    "p-queue": "^9.3.0",
     "pdf2pic": "^3.2.0",
     "perfect-debounce": "^2.1.0",
     "postal-mime": "^2.7.4",
