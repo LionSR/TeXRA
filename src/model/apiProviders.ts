@@ -4,6 +4,8 @@
  * Shared between SecretManager (VS Code), ModelHandler (agent core),
  * and computeModelOptions (model). Platform-agnostic.
  */
+import { LRUCache } from 'lru-cache';
+
 import { API_KEY_PROVIDER_IDS } from '@shared/constants/apiKeyProviders';
 import type { PlatformSecrets } from '@platform/secrets';
 
@@ -41,11 +43,15 @@ interface ResolvedApiKey {
 // (e.g. computeModelOptions + settings-view profile refresh after a key
 // change). Invalidate explicitly when a key is set or removed.
 const LOOKUP_CACHE_TTL_MS = 5_000;
-const lookupCache = new Map<
-  ApiProvider,
-  { value: ResolvedApiKey; expiry: number }
->();
+const lookupCache = new LRUCache<ApiProvider, ResolvedApiKey>({
+  max: API_PROVIDERS.length,
+  ttl: LOOKUP_CACHE_TTL_MS,
+});
 const lookupPending = new Map<ApiProvider, Promise<ResolvedApiKey>>();
+// Generation counter: in-flight lookups capture the generation at start,
+// then refuse to cache their result if invalidation bumped it during the
+// await. Without this, a stale secrets read could re-poison the cache
+// after the user already deleted the key.
 let lookupCacheGeneration = 0;
 
 export function invalidateApiKeyCache(): void {
@@ -59,7 +65,7 @@ async function resolveApiKey(
   provider: ApiProvider,
 ): Promise<ResolvedApiKey> {
   const cached = lookupCache.get(provider);
-  if (cached && Date.now() < cached.expiry) return cached.value;
+  if (cached) return cached;
 
   const inFlight = lookupPending.get(provider);
   if (inFlight) return inFlight;
@@ -76,10 +82,7 @@ async function resolveApiKey(
   try {
     const value = await request;
     if (lookupCacheGeneration === requestGeneration) {
-      lookupCache.set(provider, {
-        value,
-        expiry: Date.now() + LOOKUP_CACHE_TTL_MS,
-      });
+      lookupCache.set(provider, value);
     }
     return value;
   } finally {
