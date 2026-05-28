@@ -30,9 +30,10 @@ export const CLAUDE_AGENT_DEFAULT_MODEL: ClaudeAgentModel = 'claude-sonnet-4-6';
  * so a persisted selection maps forward to Opus 4.8 to keep users on the Opus
  * tier across the bump.
  */
-const RETIRED_CLAUDE_AGENT_MODELS: Readonly<Record<string, ClaudeAgentModel>> = {
-  'claude-opus-4-7': 'claude-opus-4-8',
-};
+const RETIRED_CLAUDE_AGENT_MODELS: Readonly<Record<string, ClaudeAgentModel>> =
+  {
+    'claude-opus-4-7': 'claude-opus-4-8',
+  };
 
 export function parseClaudeAgentModel(raw: string): ClaudeAgentModel {
   if ((CLAUDE_AGENT_MODELS as readonly string[]).includes(raw)) {
