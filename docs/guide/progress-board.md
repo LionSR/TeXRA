@@ -91,7 +91,7 @@ The followup picks up right where the previous run left off - no need to re-sele
 
 ### Memory
 
-Tool-use agents can remember things between sessions. When memory is enabled (toggle in the toolbar), agents save useful notes about your project. You can browse and delete these notes from the **Memory** tab in the Dashboard, or by running **TeXRA: Show Memory** from the Command Palette.
+Tool-use agents can remember things between sessions. When memory is enabled (toggle in the toolbar), agents save useful notes about your project. You can browse, pin, and delete these notes from the **Memory** tab in the Dashboard, or by running **TeXRA: Show Memory** from the Command Palette. See the [Memory guide](./memory.md) for a full walkthrough.
 
 ### Log Content
 
