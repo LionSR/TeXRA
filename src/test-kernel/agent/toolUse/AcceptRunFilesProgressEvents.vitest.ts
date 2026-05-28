@@ -31,6 +31,7 @@ describe('accept_run_files progress events', () => {
   let originalWorkspaceWrite: typeof WorkspaceFS.write;
   let originalWorkspaceDelete: typeof WorkspaceFS.delete;
   let originalAbsoluteIsFile: typeof AbsoluteFS.isFile;
+  let originalAbsoluteIsSymbolicLink: typeof AbsoluteFS.isSymbolicLink;
   let originalAbsoluteRead: typeof AbsoluteFS.read;
   let originalFlexibleRead: typeof flexibleFS.read;
 
@@ -43,8 +44,10 @@ describe('accept_run_files progress events', () => {
     originalWorkspaceWrite = WorkspaceFS.write;
     originalWorkspaceDelete = WorkspaceFS.delete;
     originalAbsoluteIsFile = AbsoluteFS.isFile;
+    originalAbsoluteIsSymbolicLink = AbsoluteFS.isSymbolicLink;
     originalAbsoluteRead = AbsoluteFS.read;
     originalFlexibleRead = flexibleFS.read;
+    AbsoluteFS.isSymbolicLink = async () => false;
     cleanupAllApprovals();
   });
 
@@ -57,6 +60,7 @@ describe('accept_run_files progress events', () => {
     WorkspaceFS.write = originalWorkspaceWrite;
     WorkspaceFS.delete = originalWorkspaceDelete;
     AbsoluteFS.isFile = originalAbsoluteIsFile;
+    AbsoluteFS.isSymbolicLink = originalAbsoluteIsSymbolicLink;
     AbsoluteFS.read = originalAbsoluteRead;
     flexibleFS.read = originalFlexibleRead;
     setToolEditApprovalHandler();
@@ -244,6 +248,69 @@ describe('accept_run_files progress events', () => {
       expect(result.isError).toBeUndefined();
       expect(result.output).toContain('No changes to accept');
       expect(result.output).toContain('unchanged: draft.tex');
+      expect(approvals).toBe(0);
+      expect(writes).toBe(0);
+      expect(fallback.events).toEqual([]);
+    } finally {
+      setDefaultAgentRuntimeHost(previousDefault);
+    }
+  });
+
+  it('refuses symlinked run-storage entries so unemitted files cannot be accepted', async () => {
+    const previousDefault = getDefaultAgentRuntimeHost();
+    const fallback = createRecordingHost();
+    const tool = new AcceptRunFilesTool();
+    let approvals = 0;
+    let writes = 0;
+
+    try {
+      setDefaultAgentRuntimeHost(fallback.host);
+      StorageFS.exists = async (target) =>
+        target === `executions/${executionId}` ||
+        target === `executions/${executionId}/r1/Draft/appendices.tex`;
+      StorageFS.fullPath = (target) => `${storagePath}/${target}`;
+      WorkspaceFS.locatePath = (target) => ({
+        kind: 'workspace',
+        absolutePath: `${workspacePath}/${target}`,
+        relativePath: target,
+      });
+      WorkspaceFS.exists = async () => true;
+      WorkspaceFS.read = async () => '';
+      WorkspaceFS.write = async () => {
+        writes++;
+      };
+      WorkspaceFS.delete = async () => undefined;
+      AbsoluteFS.isSymbolicLink = async (target) =>
+        target ===
+        `${storagePath}/executions/${executionId}/r1/Draft/appendices.tex`;
+      setToolEditApprovalHandler(async () => {
+        approvals++;
+        return { accepted: true };
+      });
+
+      const result = await withRunContext(
+        createRunContext({
+          runtimeHost: fallback.host,
+          streamId,
+          executionId,
+        }),
+        () =>
+          withToolFileInteractionContext({ tracker: {} as never }, () =>
+            tool.call({
+              execution_id: executionId,
+              files: [
+                {
+                  path: 'r1/Draft/appendices.tex',
+                  original: 'Draft/appendices.tex',
+                },
+              ],
+            }),
+          ),
+      );
+
+      expect(result.isError).toBe(true);
+      expect(result.error).toContain('symlink');
+      expect(result.error).toContain('did not emit');
       expect(approvals).toBe(0);
       expect(writes).toBe(0);
       expect(fallback.events).toEqual([]);
