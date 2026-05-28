@@ -57,6 +57,7 @@ settings:
   agentCategory: workflow # 'workflow' for structured reasoning with XML-wrapped output, or 'toolUse' for interactive agents that call tools (file editing, web search, etc.)
   temperature: 0.1 # LLM creativity (0.0 = deterministic, >0 = more random). Can be overridden by user settings.
   isRewrite: true # Does the agent primarily rewrite existing content (true) or generate new content (false)?
+  rounds: 2 # Maximum number of passes (Round 0 plus reflection rounds). The actual count is max(rounds, number of userRequest entries); a run can still stop early once the model signals it is finished.
 
   # Output Handling
   documentTag: documents # The main XML tag wrapping the agent's final output (required for CoT).
@@ -74,7 +75,7 @@ settings:
   # filePatternsContain:
   #   - pattern: 'bibliography' # Find files whose names contain this pattern.
   #     varName: BIBLIOGRAPHY # Make content available via {{ BIBLIOGRAPHY_CONTENT }} in prompts.
-  #     categories: ['contextFile', 'contextFiles'] # Search within these UI file categories.
+  #     categories: ['inputFiles', 'contextFiles'] # Search within these UI file categories (e.g. inputFiles, contextFiles, mediaFiles).
   # defaultOutputFiles: # Used when the agent is designed to produce multiple outputs.
   #   - 'introduction.tex'
   #   - 'methods.tex'

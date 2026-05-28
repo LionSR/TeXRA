@@ -32,7 +32,7 @@ read these files through `{{ ALL_CONTEXTS }}`, but it should only emit revised
 documents for the selected inputs:
 
 ```bash
-texra run firstread --input appendices.tex --context Draft0.tex --context refs.bib
+texra run correct --input appendices.tex --context Draft0.tex --context refs.bib
 ```
 
 Pass multiple inputs with repeated `--input` flags, a directory, or a glob.
@@ -41,8 +41,8 @@ their generated artifacts to a directory with `--output-dir`; relative document
 paths are preserved under that directory:
 
 ```bash
-texra run firstread --input Draft0.tex --input appendices.tex --output-dir flagged
-texra run logic --input 'paper/**/*.tex' --output-dir logic-pass
+texra run polish --input Draft0.tex --input appendices.tex --output-dir polished
+texra run correct --input 'paper/**/*.tex' --output-dir corrected
 ```
 
 Workflow agents always write generated files into the execution's run-storage
