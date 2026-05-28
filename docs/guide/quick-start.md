@@ -276,7 +276,7 @@ Here are some common tasks you can try with TeXRA:
 ### Converting a Paper to Slides
 
 - **Agent**: `paper2slide`
-- **Model**: `sonnet46T`, `opus47T`, or `gpt55`
+- **Model**: `sonnet46T`, `opus48T`, or `gpt55`
 - **Instruction**: "Convert this paper into presentation slides using the beamer template. Create approximately 12-15 slides highlighting the key points, methodology, and results."
 
 ### Improving Writing Style

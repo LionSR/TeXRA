@@ -13,7 +13,7 @@ import { WorkspaceFS } from '@utils/files';
 
 const BASE_INPUT: WorkflowAgentInput = {
   agent: 'criticize',
-  model: 'opus47T',
+  model: 'opus48T',
   instruction: 'Review the manuscript.',
   inputFiles: ['main.tex'],
   contextFiles: [],
