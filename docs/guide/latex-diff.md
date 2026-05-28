@@ -10,7 +10,7 @@ TeXRA automatically generates diff files after agent runs that modify `.tex` fil
 
 This guide explains how to use TeXRA's dedicated LaTeXdiff features for comparing arbitrary file versions and understanding the results.
 
-::: tip CLI and desktop
+::: tip CLI
 The automatic post-run diffs and the buttons described below belong to the VS Code
 extension. To produce a diff PDF from the terminal, use the [`latexDiff`
 agent](./built-in-agents.md#latexdiff), which wraps `latexdiff` to compare two
