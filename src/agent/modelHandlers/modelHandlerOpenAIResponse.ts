@@ -48,7 +48,7 @@ import {
 import { flexibleFS } from '@utils/files/flexibleFS';
 import type { FileLocation } from '@utils/files/taskRunStorage';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
-import { computeCachePercentage } from './utils/usageNormalization';
+import { normalizeUsage } from './support/UsageNormalizer';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 import { tagOpenAISdkError, withSdkErrorTag } from './support/sdkErrorAdapters';
 import {
@@ -2240,31 +2240,20 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     rawUsage: ResponseUsage,
     responseTimeMs: number,
   ): NormalizedUsage {
-    if (!rawUsage) {
-      return {
-        inputTokens: 0,
-        outputTokens: 0,
-        cost: 0,
-        responseTimeMs,
+    return normalizeUsage(
+      {
         provider: 'openai-response',
-      };
-    }
-
-    const inputTokens = rawUsage.input_tokens ?? 0;
-    const cachedTokens = rawUsage.input_tokens_details?.cached_tokens ?? 0;
-
-    return {
-      inputTokens,
-      outputTokens: rawUsage.output_tokens ?? 0,
-      cost: this.computePrice(rawUsage),
+        computePrice: (usage) => this.computePrice(usage),
+        extract: (usage) => ({
+          inputTokens: usage.input_tokens ?? 0,
+          outputTokens: usage.output_tokens ?? 0,
+          cachedTokens: usage.input_tokens_details?.cached_tokens ?? 0,
+          reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? 0,
+        }),
+      },
+      rawUsage,
       responseTimeMs,
-      provider: 'openai-response',
-      cachedInputTokens: cachedTokens || undefined,
-      percentageCached: computeCachePercentage(cachedTokens, inputTokens),
-      reasoningTokens:
-        rawUsage.output_tokens_details?.reasoning_tokens || undefined,
-      _native: rawUsage,
-    };
+    );
   }
 
   /** Models with prefill support do not require additional continuation messages. */

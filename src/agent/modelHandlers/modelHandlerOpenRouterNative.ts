@@ -19,7 +19,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
-import { computeCachePercentage } from './utils/usageNormalization';
+import { normalizeUsage } from './support/UsageNormalizer';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports
@@ -793,31 +793,21 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     rawUsage: ChatUsage | null,
     responseTimeMs: number,
   ): NormalizedUsage {
-    if (!rawUsage) {
-      return {
-        inputTokens: 0,
-        outputTokens: 0,
-        cost: 0,
-        responseTimeMs,
+    return normalizeUsage(
+      {
         provider: this.usageProvider,
-      };
-    }
-
-    const inputTokens = rawUsage.promptTokens ?? 0;
-    const cachedTokens = rawUsage.promptTokensDetails?.cachedTokens ?? 0;
-
-    return {
-      inputTokens,
-      outputTokens: rawUsage.completionTokens ?? 0,
-      cost: this.computePrice(rawUsage),
+        computePrice: (usage) => this.computePrice(usage),
+        extract: (usage) => ({
+          inputTokens: usage.promptTokens ?? 0,
+          outputTokens: usage.completionTokens ?? 0,
+          cachedTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+          reasoningTokens:
+            usage.completionTokensDetails?.reasoningTokens ?? 0,
+        }),
+      },
+      rawUsage,
       responseTimeMs,
-      provider: this.usageProvider,
-      cachedInputTokens: cachedTokens || undefined,
-      percentageCached: computeCachePercentage(cachedTokens, inputTokens),
-      reasoningTokens:
-        rawUsage.completionTokensDetails?.reasoningTokens || undefined,
-      _native: rawUsage,
-    };
+    );
   }
 
   // ---------------------------------------------------------------------------
