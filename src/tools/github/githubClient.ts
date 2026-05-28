@@ -73,6 +73,19 @@ function abortAfter(ms: number): { signal: AbortSignal; cancel: () => void } {
   return { signal: controller.signal, cancel: () => clearTimeout(timer) };
 }
 
+/**
+ * Defeat octokit's legacy URI-template colon syntax. `@octokit/endpoint`
+ * rewrites `:name` (lowercase letter + word chars) into `{name}` before
+ * RFC-6570 expansion; with no matching parameter, the variable expands to
+ * the empty string. Our callers pass already-interpolated paths, so any
+ * literal colon (e.g. the `head=owner:branch` filter on `/pulls`) would
+ * silently truncate the URL. Encode just enough of the colon to escape
+ * the legacy rewrite while leaving the rest of the path alone.
+ */
+function escapeOctokitLegacyTemplate(path: string): string {
+  return path.replace(/:([a-z]\w+)/g, '%3A$1');
+}
+
 export async function ghGet<T>(
   path: string,
   etag?: string,
@@ -87,7 +100,7 @@ export async function ghGet<T>(
 
   const { signal, cancel } = abortAfter(TIMEOUT_MS);
   try {
-    const res = await octokitRequest(`GET ${path}`, {
+    const res = await octokitRequest(`GET ${escapeOctokitLegacyTemplate(path)}`, {
       headers,
       request: { signal },
     });

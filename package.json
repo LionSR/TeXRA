@@ -140,7 +140,6 @@
     "fast-xml-parser": "^5.8.0",
     "fs-extra": "^11.3.5",
     "glob": "^13.0.6",
-    "gray-matter": "^4.0.3",
     "he": "^1.2.0",
     "highlight.js": "^11.11.1",
     "highlightjs-lean": "^1.2.0",

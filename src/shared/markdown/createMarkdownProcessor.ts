@@ -128,7 +128,9 @@ export function createMarkdownProcessor(
     const rendered = config.renderer.render(formatted);
     const result = restoreLatexReferences(rendered, refs, format);
 
-    if (result.length <= MAX_CACHE_ENTRY_CHARS) {
+    // lru-cache's `sizeCalculation` rejects zero, so skip caching the empty
+    // render (e.g. content that's only a link-reference definition).
+    if (result.length > 0 && result.length <= MAX_CACHE_ENTRY_CHARS) {
       cache.set(key, result);
     }
 

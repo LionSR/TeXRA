@@ -23,9 +23,14 @@ const CACHE_MAX_ENTRIES = 32;
 
 // Cap entries so an unusual session that probes many distinct working
 // directories doesn't grow this Map forever; the LRU drops cold paths.
+// `noDeleteOnStaleGet` keeps stale entries in place so a render path can
+// keep showing the last-known value across many frames while an async
+// refresh runs — without it, the first stale read would evict the entry
+// and subsequent frames would see `undefined` until the probe completes.
 const cache = new LRUCache<string, WorktreeInfo>({
   max: CACHE_MAX_ENTRIES,
   ttl: CACHE_TTL_MS,
+  noDeleteOnStaleGet: true,
 });
 const inflight = new Map<string, Promise<WorktreeInfo>>();
 
