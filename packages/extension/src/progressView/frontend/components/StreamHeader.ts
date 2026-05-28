@@ -27,6 +27,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { ELEMENT_IDS, TOOLBAR_BUTTONS } from '../constants';
 import { ProgressEvents } from '../events';
 import { getComposedPathElement } from '../utils';
+import { toolbarToggleStyles } from '../styles/toolbarToggleStyles';
 import {
   renderProgressBadgeContent,
   getProgressBadgeTitle,
@@ -128,6 +129,7 @@ export class StreamHeader extends LitElement {
     animationStyles,
     commonViewStyles,
     statusIndicatorStyles,
+    toolbarToggleStyles,
     css`
       :host {
         display: block;
@@ -244,36 +246,6 @@ export class StreamHeader extends LitElement {
       .run-button {
         margin-left: var(--wa-space-3xs);
         color: var(--color-success);
-      }
-
-      /* Shared toggle button base */
-      .yolo-toggle-button,
-      .super-yolo-toggle-button {
-        flex-shrink: 0;
-      }
-
-      .yolo-toggle-button.is-active,
-      .super-yolo-toggle-button.is-active {
-        border-radius: var(--border-radius);
-      }
-
-      /* Toggle color per variant */
-      .yolo-toggle-button.is-active {
-        --_toggle-color: var(--color-error);
-      }
-
-      .super-yolo-toggle-button.is-active {
-        --_toggle-color: var(--color-warning);
-      }
-
-      /* Active toggle: color + tinted background. */
-      :is(.yolo-toggle-button, .super-yolo-toggle-button).is-active {
-        color: var(--_toggle-color);
-        background-color: color-mix(
-          in srgb,
-          var(--_toggle-color) 15%,
-          transparent
-        );
       }
 
       .odyssey-chip {
