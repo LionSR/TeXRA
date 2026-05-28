@@ -26,6 +26,21 @@ npm install -g @texra-ai/cli
 Sign in with GitHub or Google for hosted access (no key management
 required), or set `<PROVIDER>_API_KEY` to use your own credentials.
 
+### Researcher Access Program
+
+Academic researchers can sign in for complimentary hosted access to
+a curated set of budget-friendly models — enough to run the
+Orchestrator and the full roster of hosted specialists on real work,
+without managing provider keys or paying per-token rates. Sign in
+through the Profile view in VS Code, or `texra login` in the
+terminal.
+
+The program is sustained by the community. If TeXRA helps your
+research, consider supporting it via
+[GitHub Sponsors](https://github.com/sponsors/texra-ai) or
+[Buy Me a Coffee](https://buymeacoffee.com/texra.ai) to keep it open
+for everyone.
+
 ## Run
 
 In VS Code: open a `.tex` file, click the TeXRA icon, pick
