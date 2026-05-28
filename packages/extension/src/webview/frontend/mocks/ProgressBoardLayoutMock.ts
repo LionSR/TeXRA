@@ -1,22 +1,30 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, query } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 
-// Side-effect imports - Web Awesome components
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/tag/tag.js';
-
-// Reuse the production FileList — it lives INSIDE the conversation column
-// (stacked below the log), matching WorkflowStreamContent's vertical layout.
 // Side-effect imports - production progress view components
 import '@progressView/frontend/components/FileList';
+import '@progressView/frontend/components/StreamHeader';
+import '@progressView/frontend/components/StreamTabs';
+import '@progressView/frontend/components/TaskGroupList';
 
 // Local imports - shared types and styles
-import type { OutputFileInfo } from '@shared/schemas';
+import {
+  AgentCategory,
+  createWorkflowStreamState,
+  LOG_LEVELS,
+  MESSAGE_TYPES,
+  STREAM_STATUS,
+  type LogMessageData,
+  type OutputFileInfo,
+  type StreamState,
+  type StreamTabInfo,
+  type TaskGroup,
+} from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+
+const ACTIVE_STREAM_ID = 'polish';
+const BASE_TIME = Date.parse('2026-05-28T16:00:00Z');
 
 /** Realistic OutputFileInfo fixture for the production <file-list>. */
 function mockFile(
@@ -44,73 +52,150 @@ const SAMPLE_FILES: Record<string, OutputFileInfo[]> = {
   ],
 };
 
-/** Sample stream-tabs rail entries — matches what ProgressApp passes
- *  into the right-hand <stream-tabs> in production. */
-const SAMPLE_RAIL: Array<{
-  id: string;
-  label: string;
-  meta: string;
-  status: 'running' | 'ready' | 'finished';
-  icon: string;
-  active?: boolean;
-}> = [
+const SAMPLE_STREAMS: StreamTabInfo[] = [
   {
-    id: 'polish',
-    label: 'manuscript_revised — polish',
-    meta: 'workflow · 02:14',
-    status: 'running',
-    icon: 'pencil',
-    active: true,
+    name: ACTIVE_STREAM_ID,
+    label: 'manuscript_revised.tex - polish workflow',
+    modelLabel: 'Opus 4.7',
+    agent: 'paper-polish',
+    agentCategory: AgentCategory.Workflow,
+    inputFile: 'manuscript.tex',
+    creationTimestamp: BASE_TIME,
+    executionId: 'abc123',
   },
   {
-    id: 'figures',
-    label: 'figures.tex — tikz tighten',
-    meta: 'tool-use · 14m',
-    status: 'finished',
-    icon: 'wand-magic-sparkles',
+    name: 'figures',
+    label: 'figures.tex - tikz tighten',
+    modelLabel: 'Sonnet 4.5',
+    agent: 'latex-fixer',
+    agentCategory: AgentCategory.ToolUse,
+    inputFile: 'figures.tex',
+    creationTimestamp: BASE_TIME - 14 * 60_000,
+    executionId: 'abc124',
   },
   {
-    id: 'review',
-    label: 'reviewer-response — draft',
-    meta: 'workflow · 1h',
-    status: 'finished',
-    icon: 'comments',
+    name: 'review',
+    label: 'reviewer-response - draft',
+    modelLabel: 'Opus 4.7',
+    agent: 'reviewer-response',
+    agentCategory: AgentCategory.Workflow,
+    inputFile: 'response.tex',
+    creationTimestamp: BASE_TIME - 60 * 60_000,
+    executionId: 'abc125',
   },
   {
-    id: 'bib',
+    name: 'bib',
     label: 'bibliography sync',
-    meta: 'tool-use · 3h',
-    status: 'finished',
-    icon: 'book',
+    modelLabel: 'Sonnet 4.5',
+    agent: 'research',
+    agentCategory: AgentCategory.ToolUse,
+    creationTimestamp: BASE_TIME - 3 * 60 * 60_000,
+    executionId: 'abc126',
   },
 ];
 
-const RAIL_STATUS_CLASS: Record<
-  (typeof SAMPLE_RAIL)[number]['status'],
-  string
-> = {
-  running: 'is-running',
-  ready: 'is-ready',
-  finished: 'is-stopped',
-};
+const SAMPLE_TASK_GROUPS: TaskGroup[] = [
+  {
+    id: 'outline',
+    name: 'Analyze manuscript structure',
+    startTime: BASE_TIME + 1_000,
+    endTime: BASE_TIME + 24_000,
+    status: STREAM_STATUS.STOPPED,
+  },
+  {
+    id: 'rewrite',
+    name: 'Polish abstract and introduction',
+    startTime: BASE_TIME + 25_000,
+    status: STREAM_STATUS.RUNNING,
+  },
+];
+
+const SAMPLE_MESSAGES: LogMessageData[] = [
+  {
+    id: 'm1',
+    text: 'Polish the introduction; tighten the abstract.',
+    level: LOG_LEVELS.INFO,
+    timestamp: BASE_TIME + 1_000,
+    messageType: MESSAGE_TYPES.USER_MESSAGE,
+  },
+  {
+    id: 'm2',
+    text: 'Skim outline, identify weak transitions, plan two passes.',
+    level: LOG_LEVELS.INFO,
+    timestamp: BASE_TIME + 7_000,
+    groupId: 'outline',
+    messageType: MESSAGE_TYPES.THINKING,
+  },
+  {
+    id: 'm3',
+    text: 'read_file manuscript.tex (1,824 lines)',
+    level: LOG_LEVELS.INFO,
+    timestamp: BASE_TIME + 14_000,
+    groupId: 'outline',
+    messageType: MESSAGE_TYPES.TOOL_USE,
+  },
+  {
+    id: 'm4',
+    text: 'Applied 4 edits to the opening paragraph.',
+    level: LOG_LEVELS.INFO,
+    timestamp: BASE_TIME + 33_000,
+    groupId: 'rewrite',
+    messageType: MESSAGE_TYPES.TOOL_USE,
+  },
+  {
+    id: 'm5',
+    text: 'Rewriting abstract for tone and length...',
+    level: LOG_LEVELS.INFO,
+    timestamp: BASE_TIME + 41_000,
+    groupId: 'rewrite',
+    messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+  },
+];
+
+const SAMPLE_STREAM_STATES: Map<string, StreamState> = new Map([
+  [
+    ACTIVE_STREAM_ID,
+    createWorkflowStreamState({
+      status: STREAM_STATUS.RUNNING,
+      lastTimestamp: BASE_TIME + 41_000,
+      conversationProgress: { conversationTurns: 2, toolCallCount: 4 },
+      taskGroups: SAMPLE_TASK_GROUPS,
+      files: SAMPLE_FILES,
+    }),
+  ],
+  [
+    'figures',
+    createWorkflowStreamState({
+      status: STREAM_STATUS.STOPPED,
+      lastTimestamp: BASE_TIME - 10 * 60_000,
+    }),
+  ],
+  [
+    'review',
+    createWorkflowStreamState({
+      status: STREAM_STATUS.STOPPED,
+      lastTimestamp: BASE_TIME - 52 * 60_000,
+    }),
+  ],
+  [
+    'bib',
+    createWorkflowStreamState({
+      status: STREAM_STATUS.STOPPED,
+      lastTimestamp: BASE_TIME - 2 * 60 * 60_000,
+    }),
+  ],
+]);
 
 /**
- * Static layout mock of the ProgressBoard split, mirroring production:
- *   - Left column (wide, ~75%): the active stream's conversation —
- *     stream-header → live log → file-list (stacked vertically, as in
- *     WorkflowStreamContent).
- *   - Right column (narrow rail, ~25%): the stream-tabs list of all runs
- *     (active highlighted, finished dimmed). Equivalent to the
- *     `<stream-tabs>` rail in `slot="end"` of `ProgressApp`'s
- *     `wa-split-panel`.
- * Editors are not shown — opening a file is delegated to the host.
+ * Static layout mock of the ProgressBoard split. The fixture data is local,
+ * but the header, log body, output files, and stream rail are the production
+ * Lit components used by the real progress view.
  */
 @customElement('texra-progress-board-layout-mock')
 export class ProgressBoardLayoutMock extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
-    statusIndicatorStyles,
     css`
       :host {
         display: block;
@@ -119,7 +204,6 @@ export class ProgressBoardLayoutMock extends LitElement {
       .board {
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(200px, 240px);
-        gap: 0;
         min-height: 360px;
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--wa-border-radius-m);
@@ -133,218 +217,37 @@ export class ProgressBoardLayoutMock extends LitElement {
         }
       }
 
-      .col {
+      .conversation {
         display: flex;
         flex-direction: column;
         min-width: 0;
-      }
-
-      .col--conversation {
         border-right: var(--border-thin) solid var(--color-border);
       }
 
       @media (max-width: 720px) {
-        .col--conversation {
+        .conversation {
           border-right: none;
           border-bottom: var(--border-thin) solid var(--color-border);
         }
       }
 
-      /* ---- Conversation column ---- */
-
-      .stream-header {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        padding: var(--wa-space-2xs) var(--wa-space-s);
-        border-bottom: var(--border-thin) solid var(--color-border);
-        background: var(--wa-color-surface-raised, transparent);
-      }
-
-      .stream-header__title {
-        font-weight: var(--font-weight-medium);
+      .log-body {
+        min-height: 0;
         flex: 1;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
       }
 
-      .stream-header__meta {
-        font-size: var(--font-size-sm);
-        color: var(--wa-color-text-quiet);
-        white-space: nowrap;
+      task-group-list {
+        height: 100%;
       }
 
-      .log {
-        flex: 1;
-        overflow: hidden;
-        padding: var(--wa-space-2xs) var(--wa-space-s);
-        font-size: var(--font-size-sm);
-        line-height: 1.45;
-        font-family: var(
-          --wa-font-family-mono,
-          ui-monospace,
-          SFMono-Regular,
-          Menlo,
-          monospace
-        );
-        background: var(--wa-color-surface-default, transparent);
-      }
-
-      .log__line {
-        white-space: pre-wrap;
-        word-break: break-word;
-      }
-
-      .log__line--turn {
-        margin-top: var(--wa-space-2xs);
-        font-weight: var(--font-weight-medium);
-        color: var(--wa-color-text-normal);
-      }
-
-      .log__line--tool {
-        color: var(--wa-color-brand-text-loud);
-      }
-
-      .log__line--ok {
-        color: var(--wa-color-success-text-loud);
-      }
-
-      .log__line--info {
-        color: var(--wa-color-text-quiet);
-      }
-
-      .log__cursor::after {
-        content: '▍';
-        margin-left: 2px;
-        color: var(--wa-color-brand-text-loud);
-        animation: blink 1s steps(2) infinite;
-      }
-
-      @keyframes blink {
-        50% {
-          opacity: 0;
-        }
-      }
-
-      /* file-list sits inside the conversation column, separated from the
-         log by a hairline divider — same vertical stacking as
-         WorkflowStreamContent uses in production. */
       .files-block {
         border-top: var(--border-thin) solid var(--color-border);
         padding: var(--wa-space-2xs) var(--wa-space-s) var(--wa-space-xs);
         background: var(--wa-color-surface-raised, transparent);
       }
-
-      /* ---- Stream-tabs rail (right column) ---- */
-
-      .rail {
-        display: flex;
-        flex-direction: column;
-        background: var(--wa-color-surface-default, transparent);
-      }
-
-      .rail__list {
-        display: flex;
-        flex-direction: column;
-        gap: var(--wa-space-3xs);
-        padding: var(--wa-space-2xs);
-        flex: 1;
-        min-height: 0;
-        overflow: hidden;
-      }
-
-      .rail__tab {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
-        border: var(--border-thin) solid transparent;
-        border-radius: var(--border-radius);
-        cursor: pointer;
-        min-width: 0;
-      }
-
-      .rail__tab--active {
-        background-color: color-mix(
-          in srgb,
-          var(--wa-color-brand-fill-loud, var(--color-info)) 12%,
-          transparent
-        );
-        border-color: var(--color-border);
-      }
-
-      .rail__tab--finished {
-        opacity: var(--opacity-subtle, 0.62);
-      }
-
-      .rail__icon {
-        flex-shrink: 0;
-        color: var(--wa-color-text-quiet);
-      }
-
-      .rail__tab--active .rail__icon {
-        color: var(--wa-color-brand-text-loud);
-      }
-
-      .rail__body {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 0;
-        flex: 1;
-      }
-
-      .rail__label {
-        font-size: var(--font-size-sm);
-        font-weight: var(--font-weight-medium);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .rail__meta {
-        font-size: var(--font-size-xs);
-        color: var(--wa-color-text-quiet);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .rail__status {
-        flex-shrink: 0;
-      }
-
-      .rail__footer {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: var(--wa-space-2xs) var(--wa-space-s);
-        border-top: var(--border-thin) solid var(--color-border);
-        font-size: var(--font-size-xs);
-        color: var(--wa-color-text-quiet);
-      }
-
-      .rail__filter {
-        display: inline-flex;
-        gap: var(--wa-space-3xs);
-      }
-
-      .rail__filter-pill {
-        padding: 0 var(--wa-space-2xs);
-        border-radius: 999px;
-        border: var(--border-thin) solid var(--color-border);
-      }
-
-      .rail__filter-pill--active {
-        background: var(--wa-color-surface-raised, transparent);
-        color: var(--wa-color-text-normal);
-      }
     `,
   ];
 
-  private readonly filesByRound = SAMPLE_FILES;
   @query('file-list') private fileListEl?: HTMLElement;
 
   override async firstUpdated(): Promise<void> {
@@ -361,105 +264,44 @@ export class ProgressBoardLayoutMock extends LitElement {
   }
 
   override render(): TemplateResult {
+    const activeStream = SAMPLE_STREAMS[0];
     return html`
       <div class="board">
-        <div class="col col--conversation">${this.renderConversation()}</div>
-        <div class="col rail">${this.renderRail()}</div>
-      </div>
-    `;
-  }
-
-  private renderConversation(): TemplateResult {
-    return html`
-      <div class="stream-header">
-        <span class="status-indicator is-running" aria-hidden="true"></span>
-        <span class="stream-header__title">
-          manuscript_revised.tex — polish workflow
-        </span>
-        <wa-tag size="small" variant="brand">Running</wa-tag>
-        <span class="stream-header__meta">opus-4.7 · 02:14</span>
-      </div>
-      <div class="log" aria-label="Live log">
-        <div class="log__line log__line--turn">
-          → user: Polish the introduction; tighten the abstract.
+        <div class="conversation">
+          <stream-header
+            .stream=${activeStream}
+            .status=${STREAM_STATUS.RUNNING}
+            .progress=${{
+              conversationTurns: 2,
+              toolCallCount: 4,
+            }}
+            .yoloActive=${true}
+          ></stream-header>
+          <div class="log-body">
+            <task-group-list
+              .groups=${SAMPLE_TASK_GROUPS}
+              .messages=${SAMPLE_MESSAGES}
+              .hasStreams=${true}
+              .streamStatus=${STREAM_STATUS.RUNNING}
+              .messageGeneration=${SAMPLE_MESSAGES.length}
+            ></task-group-list>
+          </div>
+          <div class="files-block">
+            <file-list
+              .filesByRound=${SAMPLE_FILES}
+              .failuresByRound=${{}}
+              .showRoundHeaders=${false}
+            ></file-list>
+          </div>
         </div>
-        <div class="log__line log__line--info">
-          [thinking] Skim outline, identify weak transitions, plan two passes.
-        </div>
-        <div class="log__line log__line--tool">
-          ⚙ read_file manuscript.tex (1,824 lines)
-        </div>
-        <div class="log__line log__line--ok">
-          ✓ extracted 12 sections, 38 paragraphs
-        </div>
-        <div class="log__line log__line--tool">
-          ⚙ edit intro paragraph 1 — clarity pass
-        </div>
-        <div class="log__line log__line--ok">
-          ✓ applied 4 edits, 0 conflicts
-        </div>
-        <div class="log__line log__line--turn">
-          → assistant: Rewriting abstract for tone and length…
-        </div>
-        <div class="log__line log__cursor">
-          Drafting new abstract opening: "We present a unified
-        </div>
-      </div>
-      <div class="files-block">
-        <file-list
-          .filesByRound=${this.filesByRound}
-          .failuresByRound=${{}}
-          .showRoundHeaders=${false}
-        ></file-list>
-      </div>
-    `;
-  }
-
-  private renderRail(): TemplateResult {
-    return html`
-      <div class="rail__list" role="list">
-        ${SAMPLE_RAIL.map((tab) => this.renderRailTab(tab))}
-      </div>
-      <div class="rail__footer">
-        <div class="rail__filter" aria-label="Stream filter">
-          <span class="rail__filter-pill rail__filter-pill--active">All</span>
-          <span class="rail__filter-pill">Workflow</span>
-          <span class="rail__filter-pill">Tool-use</span>
-        </div>
-        <wa-icon
-          library=${TEXRA_ICON_LIBRARY}
-          name="trash"
-          variant="solid"
-          aria-hidden="true"
-        ></wa-icon>
-      </div>
-    `;
-  }
-
-  private renderRailTab(tab: (typeof SAMPLE_RAIL)[number]): TemplateResult {
-    const classes = {
-      rail__tab: true,
-      'rail__tab--active': tab.active ?? false,
-      'rail__tab--finished': tab.status === 'finished',
-    };
-    const statusClass = RAIL_STATUS_CLASS[tab.status];
-    return html`
-      <div class=${classMap(classes)} role="listitem">
-        <wa-icon
-          class="rail__icon"
-          library=${TEXRA_ICON_LIBRARY}
-          name=${tab.icon}
-          variant="solid"
-          aria-hidden="true"
-        ></wa-icon>
-        <div class="rail__body">
-          <div class="rail__label">${tab.label}</div>
-          <div class="rail__meta">${tab.meta}</div>
-        </div>
-        <span
-          class="status-indicator rail__status ${statusClass}"
-          aria-hidden="true"
-        ></span>
+        <stream-tabs
+          .streams=${SAMPLE_STREAMS}
+          .activeStreamId=${ACTIVE_STREAM_ID}
+          .filter=${'all'}
+          .streamStates=${SAMPLE_STREAM_STATES}
+          .pendingApprovalStreamIds=${new Set<string>()}
+          .childStreamsByParent=${new Map<string, StreamTabInfo[]>()}
+        ></stream-tabs>
       </div>
     `;
   }
