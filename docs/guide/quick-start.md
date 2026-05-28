@@ -65,8 +65,8 @@ Run **TeXRA: Create Sample Project** from the Command Palette to add a ready-mad
 
 ### Step 2: Select Files
 
-1. In the TeXRA panel, click the "Current" button next to "Input" to set your active document as the input file
-2. (Optional) Add reference, auxiliary, or figure files if needed for your task
+1. In the **Input** section, click <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick your document from the file picker. You can also drag-and-drop it from the OS file manager. If you have several `.tex` files open and want them all, use <wa-icon library="texra" name="folder-opened"></wa-icon> **Add opened files** — it appends every editor tab whose extension matches.
+2. (Optional) Use the same buttons in **Context** or **Media** to add reference, auxiliary, or figure files.
 
 ::: tip Onboarding Prompt
 The first time you choose an input file, TeXRA shows a tooltip explaining the selector.
@@ -74,7 +74,7 @@ Select **Never remind again** to hide it permanently.
 :::
 
 ::: info Multiple Files
-For complex documents with multiple input files, use the "Multiple" dropdown to select additional files.
+Each category holds an ordered list — add as many files as the task needs and drag rows to reorder them.
 :::
 
 ### Step 3: Choose Agent and Model
@@ -276,7 +276,7 @@ Here are some common tasks you can try with TeXRA:
 ### Converting a Paper to Slides
 
 - **Agent**: `paper2slide`
-- **Model**: `sonnet46T`, `opus47`, or `gpt54`
+- **Model**: `sonnet46T`, `opus47T`, or `gpt55`
 - **Instruction**: "Convert this paper into presentation slides using the beamer template. Create approximately 12-15 slides highlighting the key points, methodology, and results."
 
 ### Improving Writing Style

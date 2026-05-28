@@ -44,8 +44,8 @@ EOF
 
 1. Open `draft.tex`.
 2. Click the TeXRA icon in the activity bar.
-3. In the sidebar, click **Current** next to **Input**.
-4. Pick **polish** under Agent. Pick **sonnet46** under Model (or any
+3. In the **Input** section, click <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick `draft.tex` from the file picker.
+4. Pick **polish** under Agent. Pick **sonnet46T** under Model (or any
    available model).
 5. Type an instruction:
    > Tighten the prose. Preserve all math and citations.

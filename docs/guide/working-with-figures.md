@@ -12,7 +12,7 @@ agent in `texra chat`.
 ## <wa-icon library="texra" name="rocket"></wa-icon> Quick Task: Add a Figure Caption
 
 1. Select the `polish` agent from the agent dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>).
-2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>) — e.g. `gpt54`, `sonnet46`, `gemini31p`.
+2. Pick a vision-capable model (<wa-icon library="texra" name="robot"></wa-icon>) — e.g. `gpt55`, `sonnet46T`, `gemini31p`.
 3. Select your figure in the **Media** (<wa-icon library="texra" name="file-media"></wa-icon>) section.
 4. Type the instruction: "Write a detailed caption for this figure."
 5. Click Execute (<wa-icon library="texra" name="play"></wa-icon>).
@@ -21,11 +21,13 @@ agent in `texra chat`.
 
 The main TeXRA panel includes a **Media** section for figure files:
 
-- **Dropdown** (<wa-icon library="texra" name="file-media"></wa-icon>): pick a primary media file from the workspace.
-- **Multiple Toggle** (<wa-icon library="texra" name="list-unordered"></wa-icon>): expand to select multiple files.
 - **Auto Extract Dropdown** (<wa-icon library="texra" name="wand"></wa-icon>): configure automatic figure extraction.
-- **Current Button** (<wa-icon library="texra" name="file-code"></wa-icon>): select the figure currently open in the editor.
-- **Empty Button** (<wa-icon library="texra" name="close"></wa-icon>): clear the selection.
+- **Add opened files** (<wa-icon library="texra" name="folder-opened"></wa-icon>): append every open editor tab whose extension is a configured media type.
+- **Clear all media files** (<wa-icon library="texra" name="trash"></wa-icon>): empty the media list.
+- **Add media files** (<wa-icon library="texra" name="add"></wa-icon>): open a file picker to append figures.
+- **Drag-and-drop** image, PDF, or audio files from anywhere onto the section.
+
+Each file appears as a row with a drag handle (for reordering) and a small trash icon (to remove just that file).
 
 ## <wa-icon library="texra" name="file-symlink-file"></wa-icon> Supported File Types
 
@@ -91,7 +93,7 @@ Retrieves BibTeX records for every citation key found in the document.
 
 When you provide media files, they're handed to the model according to its capabilities:
 
-- **Vision models** (GPT-5.4, Claude 4.6 Sonnet/Opus, Gemini 3.1 Pro, …): images are encoded and attached to the prompt.
+- **Vision models** (GPT-5.5, Claude 4.7 Opus / 4.6 Sonnet, Gemini 3.1 Pro, …): images are encoded and attached to the prompt.
 - **Audio models**: audio files are uploaded for transcription.
 - **Non-multimodal models**: only filenames are passed as context.
 
