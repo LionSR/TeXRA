@@ -7,11 +7,14 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { designTokens, commonViewStyles } from '@shared/styles';
-import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 /**
- * Visual-only mock of a header-level YOLO mode toggle. No real wiring —
- * clicking only flips a local @state so screenshots can show both states.
+ * Visual-only mock of a header-level YOLO mode toggle. Mirrors the real
+ * `yolo-toggle-button` styling from StreamHeader (icon-only, `is-active`
+ * applies a tinted background via color-mix) so the gallery reflects the
+ * production toggle, not an invented one. No live wiring — clicking only
+ * flips a local @state.
  */
 @customElement('texra-yolo-toggle-mock')
 export class YoloToggleMock extends LitElement {
@@ -24,30 +27,20 @@ export class YoloToggleMock extends LitElement {
         align-items: center;
       }
 
-      .yolo-toggle {
+      /* Mirror StreamHeader.ts: .yolo-toggle-button + .is-active tint. */
+      .yolo-toggle-button {
         flex-shrink: 0;
       }
 
-      .yolo-toggle::part(base) {
-        min-height: var(--height-control, 24px);
-        gap: var(--wa-space-3xs);
-        font-size: var(--font-size-small);
-        padding: 0 var(--wa-space-2xs);
-        border-radius: var(--wa-border-radius-m);
-      }
-
-      .yolo-toggle--on::part(base) {
-        background: var(--wa-color-warning-fill-loud);
-        color: var(--wa-color-warning-on-loud);
-      }
-
-      .yolo-toggle--on::part(base):hover {
-        background: var(--wa-color-warning-fill-loud);
-        filter: brightness(1.05);
-      }
-
-      .yolo-toggle__indicator {
-        font-size: var(--font-size-icon-sm);
+      .yolo-toggle-button.is-active {
+        --_toggle-color: var(--color-error);
+        border-radius: var(--border-radius);
+        color: var(--_toggle-color);
+        background-color: color-mix(
+          in srgb,
+          var(--_toggle-color) 15%,
+          transparent
+        );
       }
     `,
   ];
@@ -55,31 +48,23 @@ export class YoloToggleMock extends LitElement {
   @state() private active = false;
 
   override render(): TemplateResult {
-    const label = this.active ? 'YOLO on' : 'YOLO off';
     const title = this.active
-      ? 'YOLO mode is on — tool-use agents run hands-free'
-      : 'YOLO mode is off — agents pause on each tool call';
+      ? 'Edit auto-accept active — click to resume approval prompts'
+      : 'Skip edit approvals (auto-accept file changes)';
     return html`
-      <wa-button
+      <span
         class=${classMap({
-          'yolo-toggle': true,
-          'yolo-toggle--on': this.active,
+          'yolo-toggle-button': true,
+          'is-active': this.active,
         })}
-        appearance=${this.active ? 'accent' : 'plain'}
-        size="small"
-        aria-pressed=${this.active}
-        title=${title}
         @click=${this.toggle}
       >
-        <wa-icon
-          slot="start"
-          library=${TEXRA_ICON_LIBRARY}
-          name=${this.active ? 'bolt' : 'shield'}
-          class="yolo-toggle__indicator"
-          variant="solid"
-        ></wa-icon>
-        ${label}
-      </wa-button>
+        ${renderIconActionButton({
+          icon: 'shield',
+          label: title,
+          title,
+        })}
+      </span>
     `;
   }
 

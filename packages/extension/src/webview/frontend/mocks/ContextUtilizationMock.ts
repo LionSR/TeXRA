@@ -32,7 +32,7 @@ export class ContextUtilizationMock extends LitElement {
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--wa-border-radius-m);
         background: var(--wa-color-surface-default, transparent);
-        font-size: var(--font-size-small);
+        font-size: var(--font-size-sm);
         color: var(--wa-color-text-quiet);
         font-variant-numeric: tabular-nums;
         line-height: 1;
@@ -86,15 +86,14 @@ export class ContextUtilizationMock extends LitElement {
 
   override render(): TemplateResult {
     const clamped = Math.max(0, Math.min(100, this.percent));
-    const tone = clamped >= 90 ? 'danger' : clamped >= 70 ? 'warn' : 'ok';
     const scale = (clamped / 100).toFixed(3);
     const title = `Context ${clamped}% used — ${this.tokens}`;
     return html`
       <span
         class=${classMap({
           'ctx-chip': true,
-          'ctx-chip--warn': tone === 'warn',
-          'ctx-chip--danger': tone === 'danger',
+          'ctx-chip--warn': clamped >= 70 && clamped < 90,
+          'ctx-chip--danger': clamped >= 90,
         })}
         title=${title}
         role="img"

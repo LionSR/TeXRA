@@ -189,13 +189,8 @@ export class MainApp extends MainAppBase {
 
   // Design-mocks toggle. Flip from the webview DevTools console:
   //   localStorage.setItem('texra-mocks','1'); location.reload();
-  private readonly showMocksGallery: boolean = (() => {
-    try {
-      return localStorage.getItem('texra-mocks') === '1';
-    } catch {
-      return false;
-    }
-  })();
+  private readonly showMocksGallery =
+    localStorage.getItem('texra-mocks') === '1';
 
   private readonly fileStateContext$ = new Signal.Computed(
     (): FileStateContextValue => ({

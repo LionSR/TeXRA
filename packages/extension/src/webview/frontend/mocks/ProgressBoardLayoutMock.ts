@@ -1,25 +1,59 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
-import { customElement } from 'lit/decorators.js';
+import { customElement, query, state } from 'lit/decorators.js';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 
+// Reuse the production FileList so the right-hand "Run outputs" panel
+// matches the real progress board, not a hand-rolled approximation.
+import '@progressView/frontend/components/FileList';
+
+import type { OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+
+/** Realistic OutputFileInfo fixture for the production <file-list>. */
+function mockFile(
+  relative: string,
+  diff: { added: number; removed: number },
+): OutputFileInfo {
+  return {
+    source: relative,
+    location: {
+      kind: 'workspace',
+      absolutePath: `/workspace/${relative}`,
+      relativePath: relative,
+    },
+    round: 1,
+    lineage: null,
+    diff,
+  };
+}
+
+const SAMPLE_FILES: Record<string, OutputFileInfo[]> = {
+  '1': [
+    mockFile('manuscript_revised.tex', { added: 142, removed: 89 }),
+    mockFile('abstract_draft.tex', { added: 18, removed: 0 }),
+    mockFile('change_summary.md', { added: 24, removed: 0 }),
+  ],
+};
 
 /**
  * Static layout mock of a proposed split ProgressBoard:
  *   - Left column: stream header + live log
- *   - Right column: run's output files
+ *   - Right column: run's output files (rendered via the production
+ *     `<file-list>` so the panel matches the real board)
  * Editors are intentionally not shown — opening a file is delegated to
- * the host (VS Code / desktop), keeping the board focused on chat + diffs.
+ * the host (VS Code / desktop).
  */
 @customElement('texra-progress-board-layout-mock')
 export class ProgressBoardLayoutMock extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    statusIndicatorStyles,
     css`
       :host {
         display: block;
@@ -78,41 +112,16 @@ export class ProgressBoardLayoutMock extends LitElement {
       }
 
       .stream-header__meta {
-        font-size: var(--font-size-small);
+        font-size: var(--font-size-sm);
         color: var(--wa-color-text-quiet);
         white-space: nowrap;
-      }
-
-      .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--wa-color-success-fill-loud);
-        box-shadow: 0 0 0 3px var(--wa-color-success-fill-quiet);
-        flex-shrink: 0;
-      }
-
-      .status-dot--running {
-        background: var(--wa-color-brand-fill-loud);
-        box-shadow: 0 0 0 3px var(--wa-color-brand-fill-quiet);
-        animation: pulse 1.8s ease-in-out infinite;
-      }
-
-      @keyframes pulse {
-        0%,
-        100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.55;
-        }
       }
 
       .log {
         flex: 1;
         overflow: hidden;
         padding: var(--wa-space-2xs) var(--wa-space-s);
-        font-size: var(--font-size-small);
+        font-size: var(--font-size-sm);
         line-height: 1.45;
         font-family: var(
           --wa-font-family-mono,
@@ -166,77 +175,36 @@ export class ProgressBoardLayoutMock extends LitElement {
       }
 
       .files-col__title {
-        font-weight: var(--font-weight-medium);
-        margin-bottom: var(--wa-space-2xs);
         display: flex;
         align-items: center;
         gap: var(--wa-space-3xs);
+        margin-bottom: var(--wa-space-2xs);
+        font-weight: var(--font-weight-medium);
       }
 
       .files-col__title small {
-        font-weight: var(--font-weight-normal);
         color: var(--wa-color-text-quiet);
-        font-size: var(--font-size-small);
-      }
-
-      .file-row {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        padding: var(--wa-space-2xs);
-        border-radius: var(--wa-border-radius-s);
-        border: var(--border-thin) solid transparent;
-        cursor: default;
-      }
-
-      .file-row:hover {
-        background: var(--wa-color-neutral-fill-quiet);
-        border-color: var(--color-border);
-      }
-
-      .file-row__icon {
-        font-size: var(--font-size-icon);
-        color: var(--wa-color-text-quiet);
-      }
-
-      .file-row__body {
-        flex: 1;
-        min-width: 0;
-      }
-
-      .file-row__name {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .file-row__meta {
-        font-size: var(--font-size-xs, 11px);
-        color: var(--wa-color-text-quiet);
-      }
-
-      .file-row__diff {
-        font-variant-numeric: tabular-nums;
-        font-size: var(--font-size-small);
-        white-space: nowrap;
-      }
-
-      .file-row__diff .add {
-        color: var(--wa-color-success-text-loud);
-      }
-      .file-row__diff .del {
-        color: var(--wa-color-danger-text-loud);
-      }
-
-      .files-col__hint {
-        margin-top: var(--wa-space-s);
-        padding: var(--wa-space-2xs);
-        border-top: var(--border-thin) dashed var(--color-border);
-        font-size: var(--font-size-small);
-        color: var(--wa-color-text-quiet);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight);
       }
     `,
   ];
+
+  @state() private filesByRound = SAMPLE_FILES;
+  @query('file-list') private fileListEl?: HTMLElement;
+
+  override async firstUpdated(): Promise<void> {
+    // Wait for the production <file-list> and wa-details to upgrade so the
+    // imperative open below targets a real shadow tree.
+    await customElements.whenDefined('file-list');
+    await customElements.whenDefined('wa-details');
+    await Promise.resolve();
+    const root = this.fileListEl?.shadowRoot;
+    if (!root) return;
+    for (const det of root.querySelectorAll('wa-details')) {
+      (det as HTMLElement & { open: boolean }).open = true;
+    }
+  }
 
   override render(): TemplateResult {
     return html`
@@ -250,7 +218,7 @@ export class ProgressBoardLayoutMock extends LitElement {
   private renderLeft(): TemplateResult {
     return html`
       <div class="stream-header">
-        <span class="status-dot status-dot--running" aria-hidden="true"></span>
+        <span class="status-indicator is-running" aria-hidden="true"></span>
         <span class="stream-header__title">
           manuscript_revised.tex — polish workflow
         </span>
@@ -287,6 +255,10 @@ export class ProgressBoardLayoutMock extends LitElement {
   }
 
   private renderRight(): TemplateResult {
+    const count = Object.values(this.filesByRound).reduce(
+      (n, files) => n + files.length,
+      0,
+    );
     return html`
       <div class="files-col__title">
         <wa-icon
@@ -295,58 +267,13 @@ export class ProgressBoardLayoutMock extends LitElement {
           variant="solid"
         ></wa-icon>
         Run outputs
-        <small>3 files</small>
+        <small>${count} files</small>
       </div>
-
-      ${this.renderFile({
-        name: 'manuscript_revised.tex',
-        meta: 'edited · 02:14',
-        add: 142,
-        del: 89,
-      })}
-      ${this.renderFile({
-        name: 'abstract_draft.tex',
-        meta: 'new · 02:13',
-        add: 18,
-        del: 0,
-      })}
-      ${this.renderFile({
-        name: 'change_summary.md',
-        meta: 'new · 02:13',
-        add: 24,
-        del: 0,
-      })}
-
-      <div class="files-col__hint">
-        Click to open in the host editor — the board itself doesn't render
-        editors.
-      </div>
-    `;
-  }
-
-  private renderFile(opts: {
-    name: string;
-    meta: string;
-    add: number;
-    del: number;
-  }): TemplateResult {
-    return html`
-      <div class="file-row" tabindex="0">
-        <wa-icon
-          class="file-row__icon"
-          library=${TEXRA_ICON_LIBRARY}
-          name="file"
-          variant="solid"
-        ></wa-icon>
-        <div class="file-row__body">
-          <div class="file-row__name">${opts.name}</div>
-          <div class="file-row__meta">${opts.meta}</div>
-        </div>
-        <div class="file-row__diff">
-          <span class="add">+${opts.add}</span>
-          <span class="del">−${opts.del}</span>
-        </div>
-      </div>
+      <file-list
+        .filesByRound=${this.filesByRound}
+        .failuresByRound=${{}}
+        .showRoundHeaders=${false}
+      ></file-list>
     `;
   }
 }

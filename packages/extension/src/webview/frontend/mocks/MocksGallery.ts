@@ -7,6 +7,9 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
+// Keep the gallery self-contained: importing this file alone is enough to
+// render every section. ES module dedup makes the second registration path
+// (via ./index.ts) a no-op.
 import './YoloToggleMock';
 import './ContextUtilizationMock';
 import './TodoListMock';
@@ -32,12 +35,12 @@ export class MocksGallery extends LitElement {
 
       .heading {
         font-weight: var(--font-weight-medium);
-        font-size: var(--font-size-large);
+        font-size: var(--font-size-lg);
         margin-bottom: var(--wa-space-3xs);
       }
 
       .subheading {
-        font-size: var(--font-size-small);
+        font-size: var(--font-size-sm);
         color: var(--wa-color-text-quiet);
         margin-bottom: var(--wa-space-m);
       }
@@ -56,7 +59,7 @@ export class MocksGallery extends LitElement {
 
       .section__desc {
         color: var(--wa-color-text-quiet);
-        font-size: var(--font-size-small);
+        font-size: var(--font-size-sm);
         margin-bottom: var(--wa-space-2xs);
       }
 
@@ -80,7 +83,7 @@ export class MocksGallery extends LitElement {
       .header-strip__label {
         flex: 1;
         color: var(--wa-color-text-quiet);
-        font-size: var(--font-size-small);
+        font-size: var(--font-size-sm);
       }
     `,
   ];
@@ -106,6 +109,11 @@ export class MocksGallery extends LitElement {
   }
 
   private renderHeaderStrip(): TemplateResult {
+    const CHIPS = [
+      { percent: 12, tokens: '24k / 200k' },
+      { percent: 72, tokens: '144k / 200k' },
+      { percent: 93, tokens: '186k / 200k' },
+    ];
     return html`
       <div class="section">
         <div class="section__title">
@@ -122,18 +130,14 @@ export class MocksGallery extends LitElement {
         </div>
         <div class="header-strip">
           <span class="header-strip__label">TeXRA</span>
-          <texra-context-utilization-mock
-            percent="12"
-            tokens="24k / 200k"
-          ></texra-context-utilization-mock>
-          <texra-context-utilization-mock
-            percent="72"
-            tokens="144k / 200k"
-          ></texra-context-utilization-mock>
-          <texra-context-utilization-mock
-            percent="93"
-            tokens="186k / 200k"
-          ></texra-context-utilization-mock>
+          ${CHIPS.map(
+            (c) => html`
+              <texra-context-utilization-mock
+                percent=${c.percent}
+                tokens=${c.tokens}
+              ></texra-context-utilization-mock>
+            `,
+          )}
           <texra-yolo-toggle-mock></texra-yolo-toggle-mock>
         </div>
       </div>
