@@ -35,13 +35,10 @@ import {
 } from '@utils/text/xmlUtils';
 
 /**
- * Write an extracted round-output document, replacing any pre-staged symlink
- * placeholder at the destination. Round directories are populated with
- * symlinks to `runDir/original/<rel>` by `ensureMirroredInRoundDir` so
- * compile/latexdiff can resolve transitive `\input` targets — when the
- * agent re-emits a file this round, that placeholder must be promoted to
- * a real file owned by the round. Without this, `fs.writeFile` follows
- * the symlink and clobbers the immutable snapshot.
+ * Write a round-emitted document, promoting any pre-staged symlink at the
+ * destination to a real round-owned file. Round dirs are populated with
+ * symlinks to `runDir/original/<rel>` for `\input` resolution; following
+ * them with `fs.writeFile` would clobber the immutable snapshot.
  */
 async function writeRoundOutput(
   absolutePath: string,

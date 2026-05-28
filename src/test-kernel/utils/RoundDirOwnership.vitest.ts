@@ -12,7 +12,7 @@ import {
 import * as os from 'os';
 import * as path from 'path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { createMemoryStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -55,10 +55,6 @@ async function installPlatform(
 }
 
 describe('round-dir ownership and editable .tex inheritance', () => {
-  beforeEach(() => {
-    // empty
-  });
-
   afterEach(async () => {
     await Promise.all(
       tempDirs

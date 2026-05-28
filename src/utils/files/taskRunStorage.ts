@@ -163,6 +163,25 @@ async function ensureParentDir(filePath: string): Promise<void> {
   await fs.mkdir(parentDir, { recursive: true });
 }
 
+/**
+ * Probe whether a previously-captured snapshot exists. Distinct from a
+ * generic existence check because non-ENOENT stat failures must be
+ * surfaced rather than silently treated as "missing" — corrupting that
+ * decision would re-copy over a real snapshot.
+ */
+async function snapshotExists(absolutePath: string): Promise<boolean> {
+  try {
+    await fs.stat(absolutePath);
+    return true;
+  } catch (error) {
+    if (isFileNotFoundError(error)) return false;
+    throw new Error(
+      `Failed to inspect snapshot destination ${absolutePath}: ${toErrorMessage(error)}`,
+      { cause: error },
+    );
+  }
+}
+
 async function createSymlink(
   source: FileLocation,
   destination: string,
@@ -322,7 +341,7 @@ export class TaskRunFileService {
    * non-regular files, and missing sources.
    */
   private async captureOriginalSnapshot(target: FileLocation): Promise<void> {
-    if (!target || target.kind !== 'workspace') return;
+    if (target.kind !== 'workspace') return;
     if (shouldSkipRelocation(target.relativePath)) return;
 
     const executionId = this.metadata.executionId;
@@ -335,19 +354,7 @@ export class TaskRunFileService {
       const snapshotRelative = path.join('original', target.relativePath);
       const snapshotPaths = getRunStoragePaths(executionId, snapshotRelative);
 
-      const alreadyCaptured = await fs.stat(snapshotPaths.absolute).then(
-        () => true,
-        (err: unknown) => {
-          if (!isFileNotFoundError(err)) {
-            throw new Error(
-              `Failed to inspect snapshot destination ${snapshotPaths.absolute}: ${toErrorMessage(err)}`,
-              { cause: err },
-            );
-          }
-          return false;
-        },
-      );
-      if (alreadyCaptured) return;
+      if (await snapshotExists(snapshotPaths.absolute)) return;
 
       await ensureParentDir(snapshotPaths.absolute);
       await fs.copyFile(target.absolutePath, snapshotPaths.absolute);
