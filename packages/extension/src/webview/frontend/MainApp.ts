@@ -60,6 +60,7 @@ import './components/FileSelectGroup';
 import './components/BannerGroup';
 import './components/LatexDiffsSection';
 import './components/InstructionPanel';
+import './mocks';
 import {
   ELEMENT_IDS,
   DOCUMENT_FILE_TYPES,
@@ -185,6 +186,16 @@ export class MainApp extends MainAppBase {
   @state() protected override debugMode = false;
   private readonly isGitRepo = signal(true);
   private instructionSaveTimer: number | null = null;
+
+  // Design-mocks toggle. Flip from the webview DevTools console:
+  //   localStorage.setItem('texra-mocks','1'); location.reload();
+  private readonly showMocksGallery: boolean = (() => {
+    try {
+      return localStorage.getItem('texra-mocks') === '1';
+    } catch {
+      return false;
+    }
+  })();
 
   private readonly fileStateContext$ = new Signal.Computed(
     (): FileStateContextValue => ({
@@ -1652,6 +1663,16 @@ export class MainApp extends MainAppBase {
   }
 
   render(): TemplateResult {
+    if (this.showMocksGallery) {
+      return html`
+        <div class="content-wrapper">
+          <div class="main-content">
+            <texra-mocks-gallery></texra-mocks-gallery>
+          </div>
+        </div>
+      `;
+    }
+
     const isToolUse = this.sessionType.get() === SESSION_TYPES.TOOL_USE;
     const fileSelectionClasses = classMap({
       'file-selection-group': true,
