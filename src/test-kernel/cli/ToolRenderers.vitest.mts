@@ -94,6 +94,71 @@ describe('CLI tool renderer registry', () => {
     `);
   });
 
+  it('elides long bash output to a head+tail slice with a line marker', () => {
+    const entry = toolUse(
+      'bash',
+      { command: 'seq 20' },
+      {
+        headerSummary: 'seq 20',
+        outputText: Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join(
+          '\n',
+        ),
+      },
+    );
+
+    expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
+      [
+        "● bash (seq 20)",
+        "⎿ line 1",
+        "  line 2",
+        "  line 3",
+        "  line 4",
+        "  line 5",
+        "  line 6",
+        "  … +11 lines (ctrl + t to view transcript)",
+        "  line 18",
+        "  line 19",
+        "  line 20",
+      ]
+    `);
+  });
+
+  it('keeps short bash output whole when elision would not reduce height', () => {
+    const entry = toolUse(
+      'bash',
+      { command: 'seq 10' },
+      {
+        headerSummary: 'seq 10',
+        outputText: Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join(
+          '\n',
+        ),
+      },
+    );
+
+    const lines = toolUseDisplayLines(entry);
+    expect(lines).toHaveLength(11);
+    expect(lines.some((line) => line.includes('ctrl + t'))).toBe(false);
+    expect(lines.at(-1)).toBe('  line 10');
+  });
+
+  it('shows the full bash output when elision is disabled (transcript viewer)', () => {
+    const entry = toolUse(
+      'bash',
+      { command: 'seq 12' },
+      {
+        headerSummary: 'seq 12',
+        outputText: Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join(
+          '\n',
+        ),
+      },
+    );
+
+    const full = toolUseDisplayLines(entry, { elide: false });
+    expect(full).toHaveLength(13); // header + 12 output lines, no marker
+    expect(full.some((line) => line.includes('ctrl + t'))).toBe(false);
+    expect(full.at(-1)).toBe('  line 12');
+  });
+
   it('preserves MCP server names as server/tool labels', () => {
     const entry = toolUse(
       'mcp:slack:send',
