@@ -7,42 +7,28 @@ import { classMap } from 'lit/directives/class-map.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
+// Local imports - progress view styles
+import { toolbarToggleStyles } from '@progressView/frontend/styles/toolbarToggleStyles';
+
 // Local imports - shared styles and controls
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 /**
  * Visual-only mock of a header-level YOLO mode toggle. Mirrors the real
- * `yolo-toggle-button` styling from StreamHeader (icon-only, `is-active`
- * applies a tinted background via color-mix) so the gallery reflects the
- * production toggle, not an invented one. No live wiring — clicking only
- * flips a local @state.
+ * `yolo-toggle-button` styling from StreamHeader so the gallery reflects the
+ * production toggle. No live wiring — clicking only flips a local @state.
  */
 @customElement('texra-yolo-toggle-mock')
 export class YoloToggleMock extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
+    toolbarToggleStyles,
     css`
       :host {
         display: inline-flex;
         align-items: center;
-      }
-
-      /* Mirror StreamHeader.ts: .yolo-toggle-button + .is-active tint. */
-      .yolo-toggle-button {
-        flex-shrink: 0;
-      }
-
-      .yolo-toggle-button.is-active {
-        --_toggle-color: var(--color-error);
-        border-radius: var(--border-radius);
-        color: var(--_toggle-color);
-        background-color: color-mix(
-          in srgb,
-          var(--_toggle-color) 15%,
-          transparent
-        );
       }
     `,
   ];

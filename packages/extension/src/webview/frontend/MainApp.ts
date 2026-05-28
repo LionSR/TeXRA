@@ -190,10 +190,6 @@ export class MainApp extends MainAppBase {
   private readonly isGitRepo = signal(true);
   private instructionSaveTimer: number | null = null;
 
-  // Dev-only design-mocks toggle. Flip from the webview DevTools console:
-  //   localStorage.setItem('texra-mocks','1'); location.reload();
-  private readonly showMocksGallery = SHOW_MOCKS_GALLERY;
-
   private readonly fileStateContext$ = new Signal.Computed(
     (): FileStateContextValue => ({
       sessionType: this.sessionType.get(),
@@ -1663,7 +1659,7 @@ export class MainApp extends MainAppBase {
   }
 
   render(): TemplateResult {
-    if (this.showMocksGallery) {
+    if (SHOW_MOCKS_GALLERY) {
       return html`
         <div class="content-wrapper">
           <div class="main-content">

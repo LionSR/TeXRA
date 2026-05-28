@@ -12,10 +12,5 @@
 // To exit:
 //   localStorage.removeItem('texra-mocks'); location.reload();
 
-// Side-effect imports - mock custom elements
-import './YoloToggleMock';
-import './ContextUtilizationMock';
-import './TodoListMock';
-import './FollowupControlsMock';
-import './ProgressBoardLayoutMock';
+// Side-effect imports - gallery root and its child mock custom elements
 import './MocksGallery';
