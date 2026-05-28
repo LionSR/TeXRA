@@ -1,6 +1,9 @@
+import { promises as fsp } from 'fs';
 import * as path from 'path';
 
 import { XMLParser } from 'fast-xml-parser';
+
+import { isFileNotFoundError } from '@common/errors';
 
 import {
   debugInternal,
@@ -32,6 +35,30 @@ import {
   extractDocument,
   extractDocuments,
 } from '@utils/text/xmlUtils';
+
+/**
+ * Write an extracted round-output document, replacing any pre-staged symlink
+ * placeholder at the destination. Round directories are populated with
+ * symlinks to `runDir/original/<rel>` by `ensureMirroredInRoundDir` so
+ * compile/latexdiff can resolve transitive `\input` targets — when the
+ * agent re-emits a file this round, that placeholder must be promoted to
+ * a real file owned by the round. Without this, `fs.writeFile` follows
+ * the symlink and clobbers the immutable snapshot.
+ */
+async function writeRoundOutput(
+  absolutePath: string,
+  content: string,
+): Promise<void> {
+  try {
+    const stat = await fsp.lstat(absolutePath);
+    if (stat.isSymbolicLink()) {
+      await fsp.unlink(absolutePath);
+    }
+  } catch (error) {
+    if (!isFileNotFoundError(error)) throw error;
+  }
+  await AbsoluteFS.write(absolutePath, content);
+}
 
 /** Global version of DOCUMENT_NAME_REGEX for counting matches */
 const DOCUMENT_NAME_REGEX_GLOBAL = new RegExp(DOCUMENT_NAME_REGEX.source, 'g');
@@ -144,7 +171,7 @@ export class XmlOutputManager {
       const suffix = EXTRACTION_METHOD_MESSAGES[regexResult.method];
       if (suffix)
         logInternal(this.logger, `Recovered ${documentTag} ${suffix}`);
-      await AbsoluteFS.write(texLocation.absolutePath, regexResult.content);
+      await writeRoundOutput(texLocation.absolutePath, regexResult.content);
       return { location: texLocation, sourceName };
     }
     debugInternal(
@@ -157,7 +184,7 @@ export class XmlOutputManager {
 
     const latexDocument = extractContentFromXMLbyTag(root, documentTag);
     if (latexDocument) {
-      await AbsoluteFS.write(texLocation.absolutePath, latexDocument);
+      await writeRoundOutput(texLocation.absolutePath, latexDocument);
       return { location: texLocation, sourceName };
     }
     throw new Error(
@@ -289,7 +316,7 @@ export class XmlOutputManager {
         doc.content.trim(),
         texFile,
       );
-      await AbsoluteFS.write(texLocation.absolutePath, cleanedContent);
+      await writeRoundOutput(texLocation.absolutePath, cleanedContent);
       outputFiles.push({
         source,
         round,

@@ -291,52 +291,9 @@ export class TaskRunFileService {
       if (extra) linkTargets.add(extra);
     }
 
-    const captureTasks = baseFiles.map(async (target) => {
-      if (!target || target.kind !== 'workspace') {
-        return;
-      }
-
-      if (shouldSkipRelocation(target.relativePath)) {
-        return;
-      }
-
-      try {
-        const stats = await fs.stat(target.absolutePath);
-        if (!stats.isFile()) {
-          return;
-        }
-
-        const snapshotRelative = path.join('original', target.relativePath);
-        const snapshotPaths = getRunStoragePaths(executionId, snapshotRelative);
-
-        const alreadyCaptured = await fs.stat(snapshotPaths.absolute).then(
-          () => true,
-          (err: unknown) => {
-            if (!isFileNotFoundError(err)) {
-              throw new Error(
-                `Failed to inspect snapshot destination ${snapshotPaths.absolute}: ${toErrorMessage(err)}`,
-                { cause: err },
-              );
-            }
-            return false;
-          },
-        );
-        if (alreadyCaptured) return;
-
-        await ensureParentDir(snapshotPaths.absolute);
-        await fs.copyFile(target.absolutePath, snapshotPaths.absolute);
-      } catch (error) {
-        if (isFileNotFoundError(error)) {
-          return;
-        }
-        throw new Error(
-          `Failed to capture original file ${target}: ${toErrorMessage(error)}`,
-          { cause: error },
-        );
-      }
-    });
-
-    await Promise.all(captureTasks);
+    await Promise.all(
+      baseFiles.map((target) => this.captureOriginalSnapshot(target)),
+    );
 
     await Promise.all(
       [...linkTargets].map(async (candidate) => {
@@ -352,6 +309,55 @@ export class TaskRunFileService {
     );
 
     this.hasPreparedSnapshot = true;
+  }
+
+  /**
+   * Copy a workspace file into `original/<relativePath>` if not already
+   * captured. Snapshots are the execution-owned anchor for editable inputs:
+   * round-dir symlinks point here rather than chaining back to the live
+   * workspace, so an agent write at `r<N>/<relPath>` can never reach the
+   * user's working copy via symlink follow.
+   *
+   * Idempotent. Silently skips non-workspace locations, ignored roots,
+   * non-regular files, and missing sources.
+   */
+  private async captureOriginalSnapshot(target: FileLocation): Promise<void> {
+    if (!target || target.kind !== 'workspace') return;
+    if (shouldSkipRelocation(target.relativePath)) return;
+
+    const executionId = this.metadata.executionId;
+    if (!executionId) return;
+
+    try {
+      const stats = await fs.stat(target.absolutePath);
+      if (!stats.isFile()) return;
+
+      const snapshotRelative = path.join('original', target.relativePath);
+      const snapshotPaths = getRunStoragePaths(executionId, snapshotRelative);
+
+      const alreadyCaptured = await fs.stat(snapshotPaths.absolute).then(
+        () => true,
+        (err: unknown) => {
+          if (!isFileNotFoundError(err)) {
+            throw new Error(
+              `Failed to inspect snapshot destination ${snapshotPaths.absolute}: ${toErrorMessage(err)}`,
+              { cause: err },
+            );
+          }
+          return false;
+        },
+      );
+      if (alreadyCaptured) return;
+
+      await ensureParentDir(snapshotPaths.absolute);
+      await fs.copyFile(target.absolutePath, snapshotPaths.absolute);
+    } catch (error) {
+      if (isFileNotFoundError(error)) return;
+      throw new Error(
+        `Failed to capture original file ${target.absolutePath}: ${toErrorMessage(error)}`,
+        { cause: error },
+      );
+    }
   }
 
   /**
@@ -397,9 +403,16 @@ export class TaskRunFileService {
   /**
    * Ensure a workspace dependency is reachable from run storage via symlink.
    * Takes a FileLocation and creates a symlink in run storage if needed.
+   *
+   * Pass `snapshot: true` for editable inputs (primary inputs, transitive
+   * `\input` targets) so the file is also copied into `original/<relPath>`.
+   * That snapshot becomes the symlink source when staging round dirs, which
+   * keeps editable content reachable from `r<N>/` without the chain ever
+   * touching the live workspace.
    */
   public async mirrorWorkspaceFile(
     location: FileLocation,
+    options: { snapshot?: boolean } = {},
   ): Promise<FileLocation> {
     if (location.kind !== 'workspace') {
       return location;
@@ -420,6 +433,10 @@ export class TaskRunFileService {
     if (!this.mirroredDependencies.has(location.relativePath)) {
       await createSymlink(location, runPaths.absolute);
       this.mirroredDependencies.add(location.relativePath);
+    }
+
+    if (options.snapshot) {
+      await this.captureOriginalSnapshot(location);
     }
 
     return createRunStorageLocation(
@@ -495,7 +512,26 @@ export class TaskRunFileService {
           return;
         }
 
-        const sourceAbsolute = path.join(runDir, relativePath);
+        // Prefer the immutable `original/` snapshot as the symlink source
+        // for editable inputs, so the chain `r<N>/<rel> → original/<rel>`
+        // never reaches the live workspace. Read-only build assets
+        // (cls/sty/bib/figures) have no snapshot and fall through to the
+        // workspace mirror at `runDir/<rel>`, which is correct — those
+        // are never written to.
+        const snapshotAbsolute = path.join(runDir, 'original', relativePath);
+        const workspaceMirrorAbsolute = path.join(runDir, relativePath);
+        let sourceAbsolute = workspaceMirrorAbsolute;
+        try {
+          await fs.stat(snapshotAbsolute);
+          sourceAbsolute = snapshotAbsolute;
+        } catch (error) {
+          if (!isFileNotFoundError(error)) {
+            logger.debug(
+              CHANNEL,
+              `Unable to stat snapshot ${snapshotAbsolute}: ${toErrorMessage(error)}`,
+            );
+          }
+        }
         const destinationAbsolute = path.join(
           runDir,
           destinationSegment,
