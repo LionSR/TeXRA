@@ -44,9 +44,13 @@ function reconcileEnabledModels(
     }
   }
 
-  // One-time strip for users upgrading past version 15: remove models that
-  // the registry now marks as deprecated so normal dropdowns stay current.
-  if ((previousVersion ?? 0) < 15) {
+  // Generic deprecated-model sweep for users upgrading past version 16: remove
+  // models the registry now marks as deprecated so normal dropdowns stay
+  // current. Introduced at version 15 (sonnet/opus tiers) and re-bumped to 16
+  // when opus47/opus47T were deprecated in favor of opus48/opus48T. Bump the
+  // guard to the current MODEL_LIST_VERSION whenever the registry deprecates
+  // more defaults.
+  if ((previousVersion ?? 0) < 16) {
     for (const model of currentModels) {
       if (isDeprecatedModel(model)) strippedSet.add(model);
     }

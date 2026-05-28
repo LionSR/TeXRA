@@ -24,10 +24,22 @@ import {
 /** Default Claude model passed to the Agent SDK. */
 export const CLAUDE_AGENT_DEFAULT_MODEL: ClaudeAgentModel = 'claude-sonnet-4-6';
 
+/**
+ * Models retired from the picker that should resolve to their successor instead
+ * of silently dropping to the Sonnet default. Opus 4.7 was the prior top tier,
+ * so a persisted selection maps forward to Opus 4.8 to keep users on the Opus
+ * tier across the bump.
+ */
+const RETIRED_CLAUDE_AGENT_MODELS: Readonly<Record<string, ClaudeAgentModel>> =
+  {
+    'claude-opus-4-7': 'claude-opus-4-8',
+  };
+
 export function parseClaudeAgentModel(raw: string): ClaudeAgentModel {
-  return (CLAUDE_AGENT_MODELS as readonly string[]).includes(raw)
-    ? (raw as ClaudeAgentModel)
-    : CLAUDE_AGENT_DEFAULT_MODEL;
+  if ((CLAUDE_AGENT_MODELS as readonly string[]).includes(raw)) {
+    return raw as ClaudeAgentModel;
+  }
+  return RETIRED_CLAUDE_AGENT_MODELS[raw] ?? CLAUDE_AGENT_DEFAULT_MODEL;
 }
 
 export function getClaudeAgentModel(): ClaudeAgentModel {
