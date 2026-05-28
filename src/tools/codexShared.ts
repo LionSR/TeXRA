@@ -88,7 +88,6 @@ export const CodexTurnToolInputSchema = z.object({
 
 export type CodexTurnToolInput = z.infer<typeof CodexTurnToolInputSchema>;
 
-
 /** Normalize Codex command execution events for the native bash tool card. */
 export function buildCodexCommandToolLog(
   options: CodexCommandToolLogOptions,
