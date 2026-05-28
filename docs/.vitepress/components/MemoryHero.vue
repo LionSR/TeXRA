@@ -111,7 +111,11 @@ function toggle(id) {
           <div class="mem-head">
             <div class="mem-path">/memories/project-conventions.md</div>
             <div class="mem-acts">
-              <button type="button" class="m-act m-act-on" title="Unpin this memory">
+              <button
+                type="button"
+                class="m-act m-act-on"
+                title="Unpin this memory"
+              >
                 <wa-icon library="texra" name="thumbtack-slash"></wa-icon>
               </button>
               <button type="button" class="m-act" title="Open in editor">
@@ -174,7 +178,11 @@ function toggle(id) {
           <div class="mem-head">
             <div class="mem-path">/memories/notation.md</div>
             <div class="mem-acts">
-              <button type="button" class="m-act" title="Pin as core long-term memory">
+              <button
+                type="button"
+                class="m-act"
+                title="Pin as core long-term memory"
+              >
                 <wa-icon library="texra" name="thumbtack"></wa-icon>
               </button>
               <button type="button" class="m-act" title="Open in editor">
@@ -224,7 +232,11 @@ function toggle(id) {
           <div class="mem-head">
             <div class="mem-path">/memories/figures.md</div>
             <div class="mem-acts">
-              <button type="button" class="m-act" title="Pin as core long-term memory">
+              <button
+                type="button"
+                class="m-act"
+                title="Pin as core long-term memory"
+              >
                 <wa-icon library="texra" name="thumbtack"></wa-icon>
               </button>
               <button type="button" class="m-act" title="Open in editor">
