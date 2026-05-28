@@ -26,6 +26,7 @@ import {
   nextFocusForward,
 } from '@cli/chat/tui/state/focusCycle';
 import {
+  finalizeSettledPrefix,
   stripOrchestratorFollowup,
   syncStreamLog,
 } from '@cli/chat/tui/state/subscribeStreamLog';
@@ -343,6 +344,71 @@ describe('CLI TUI row allocation', () => {
       runCompleted: false,
       stopRequested: false,
     });
+  });
+});
+
+describe('finalizeSettledPrefix', () => {
+  const tool = (id: string, status: 'in_progress' | 'completed') =>
+    ({
+      id,
+      role: 'tool',
+      text: '',
+      finalized: false,
+      toolUse: {
+        parsed: {},
+        toolName: 'Bash',
+        errorText: '',
+        outputText: '',
+        userInstructionText: '',
+        input: {},
+        isError: false,
+        isUserFeedback: false,
+        headerSummary: '',
+        status,
+      },
+    }) as const;
+  const assistant = (id: string) =>
+    ({ id, role: 'assistant', text: id, finalized: false }) as const;
+  const finalizedIds = (
+    entries: readonly { id: string; finalized: boolean }[],
+  ) => entries.filter((entry) => entry.finalized).map((entry) => entry.id);
+
+  it('finalizes an assistant block once the model moves on to a tool call', () => {
+    const out = finalizeSettledPrefix(
+      [assistant('a1'), tool('t1', 'completed'), assistant('a2')],
+      false,
+    );
+    // a1 settled (later entry exists), t1 settled (completed), a2 is the
+    // live tail and stays pending.
+    expect(finalizedIds(out)).toEqual(['a1', 't1']);
+  });
+
+  it('keeps the in-flight tail pending while the stream runs', () => {
+    const out = finalizeSettledPrefix([assistant('a1')], false);
+    expect(finalizedIds(out)).toEqual([]);
+  });
+
+  it('does not promote past a still-running tool (preserves Static order)', () => {
+    const out = finalizeSettledPrefix(
+      [assistant('a1'), tool('t1', 'in_progress'), tool('t2', 'completed')],
+      false,
+    );
+    // t1 is still running: t2 must wait behind it even though it completed,
+    // or it would print above t1 in append-only scrollback.
+    expect(finalizedIds(out)).toEqual(['a1']);
+  });
+
+  it('finalizes every remaining entry once the stream reaches a final status', () => {
+    const out = finalizeSettledPrefix(
+      [assistant('a1'), tool('t1', 'in_progress'), assistant('a2')],
+      true,
+    );
+    expect(finalizedIds(out)).toEqual(['a1', 't1', 'a2']);
+  });
+
+  it('returns the same entries when nothing newly settles', () => {
+    const entries = [assistant('a1')];
+    expect(finalizeSettledPrefix(entries, false)).toBe(entries);
   });
 });
 
