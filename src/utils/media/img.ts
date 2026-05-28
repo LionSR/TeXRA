@@ -109,7 +109,7 @@ async function getImageDimensions(
   const width = parseInt(widthStr, 10);
   const height = parseInt(heightStr, 10);
 
-  if (isNaN(width) || isNaN(height)) {
+  if (Number.isNaN(width) || Number.isNaN(height)) {
     throw new Error(
       `Invalid dimensions parsed: width=${widthStr}, height=${heightStr}`,
     );

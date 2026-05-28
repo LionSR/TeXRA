@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 // Local imports - shared schemas
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
+import { getBasename } from '@shared/utils/path';
 import { truncateSummary } from '@utils/text/stringUtils';
 import type {
   CommandExecutionItem,
@@ -87,10 +88,6 @@ export const CodexTurnToolInputSchema = z.object({
 
 export type CodexTurnToolInput = z.infer<typeof CodexTurnToolInputSchema>;
 
-function getPathBasename(filePath: string): string {
-  const normalized = filePath.replaceAll('\\', '/');
-  return normalized.split('/').at(-1) || normalized;
-}
 
 /** Normalize Codex command execution events for the native bash tool card. */
 export function buildCodexCommandToolLog(
@@ -150,7 +147,7 @@ export function buildCodexFileChangeToolLog(
 
   const summary =
     dedupedChanges.length === 1
-      ? `${item.status === 'failed' ? 'failed ' : ''}${dedupedChanges[0].kind} ${getPathBasename(dedupedChanges[0].path)}`
+      ? `${item.status === 'failed' ? 'failed ' : ''}${dedupedChanges[0].kind} ${getBasename(dedupedChanges[0].path)}`
       : `${dedupedChanges.length} file changes${item.status === 'failed' ? ' failed' : ''}`;
 
   return {
