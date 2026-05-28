@@ -2,7 +2,7 @@
 
 _Effective Date: February 9, 2026_
 
-_Last Updated: February 9, 2026_
+_Last Updated: May 28, 2026_
 
 ---
 
@@ -36,6 +36,12 @@ We reserve all rights not expressly granted in these Terms.
 
 - **API Keys**: Certain features require you to provide your own API keys for third-party AI providers. You are solely responsible for obtaining, maintaining, and securing your API keys. API keys are stored locally using VS Code's built-in Secret Storage and are never transmitted to TeXRA servers. See Section 9 for details on how data is handled in this mode.
 - **Researcher Access Program**: TeXRA may offer access programs that provide limited access to AI models without requiring personal API keys. When using this program, requests are routed through a TeXRA-operated relay server (see Section 9 for details). Participation is limited to personal research and academic use, is subject to fair-use limits, and may be modified or discontinued at any time.
+- **Account Integrity**: You may only create and operate one account for your own personal use. To prevent abuse of free and Researcher Access tier resources, sign-up may be restricted by automated checks on the email address and the underlying identity provider account. In particular, we may reject sign-ups that:
+  1. use a disposable, temporary, or throwaway email provider;
+  2. use a privacy / forwarding-only email provider that has been disproportionately associated with abuse;
+  3. authenticate through a third-party identity provider account (e.g., a GitHub account) that was created very recently (typically within the last 30 days) or that otherwise has no meaningful prior history.
+
+  You agree to sign up using your primary institutional, employer, or long-term personal email address and a primary identity-provider account, rather than a newly-created or disposable account. If you have a legitimate need for an exception (for example, you are a researcher whose only available address is a privacy-relay email), you may contact contact@texra.ai to request manual approval.
 
 ## 6. Acceptable Use
 
@@ -49,6 +55,7 @@ You agree not to use the Service to:
 6. Circumvent any access controls, rate limits, or usage restrictions.
 7. Use the Service for automated bulk processing in a manner that abuses third-party API services.
 8. Misrepresent AI-generated content as solely human-authored in contexts where disclosure is required.
+9. Create more than one account, or use disposable, temporary, throwaway, privacy-relay, or other newly-created or pseudonymous email or identity-provider accounts in order to obtain additional free or Researcher Access Program resources, or otherwise to circumvent per-user fair-use limits ("multi-accounting"). Accounts found to engage in such conduct, together with any other accounts we reasonably believe to be operated by the same person, may be suspended or terminated without notice and without refund. Quotas and credits associated with such accounts are forfeit.
 
 ## 7. Intellectual Property
 
