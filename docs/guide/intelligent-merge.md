@@ -24,7 +24,7 @@ The Intelligent Merge button pairs a **Base File** with a separate **Edited
 File**, which the VS Code extension supplies through its file dropdowns. The
 `texra run` CLI command takes only `--input`/`--context` files and has no
 edited-file slot, so this merge workflow currently runs from the VS Code
-extension (or desktop app), not the CLI.
+extension, not the CLI.
 :::
 
 TeXRA will then invoke the specialized `merge` agent:
