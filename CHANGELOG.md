@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- **Workflow rounds no longer overwrite the workspace** — past round 0, a workflow agent's emitted documents were being written through a symlink chain that ended at your live workspace file. The round directory's outputs are now real files owned by the round, and the workspace is unreachable from the backend.
+
 ## [0.38.2] - 2026-05-27
 
 ### Features
