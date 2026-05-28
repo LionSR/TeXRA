@@ -993,7 +993,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.equal(compactionEdit.instructions, undefined);
   });
 
-  it('uses adaptive thinking with max effort for Opus 4.8 xhigh reasoning', async () => {
+  it('uses adaptive thinking with xhigh effort for Opus 4.8 xhigh reasoning', async () => {
     const handler = createAnthropicHandler({
       supportsReasoning: true,
       supportsReasoningEffort: true,
@@ -1039,8 +1039,8 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
     assert.equal(
       options.output_config?.effort,
-      'max',
-      'xhigh reasoning effort should map to max on Opus 4.8',
+      'xhigh',
+      "xhigh reasoning effort should map to the 'xhigh' (extra) tier on Opus 4.8",
     );
   });
 
