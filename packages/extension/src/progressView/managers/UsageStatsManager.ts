@@ -1,9 +1,7 @@
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@logger';
-import {
-  chainStreamWrite,
-  mapToRecord,
-} from '@progressView/persistence/serializationUtils';
+import { mapToRecord } from '@progressView/persistence/serializationUtils';
+import { chainStreamWrite } from '@progressView/persistence/writeChaining';
 import {
   TokenUsageStatsParsingSchema,
   isEmptyUsage,

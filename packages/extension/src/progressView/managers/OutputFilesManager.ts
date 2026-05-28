@@ -1,10 +1,8 @@
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@logger';
 import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
-import {
-  chainStreamWrite,
-  mapToRecord,
-} from '@progressView/persistence/serializationUtils';
+import { mapToRecord } from '@progressView/persistence/serializationUtils';
+import { chainStreamWrite } from '@progressView/persistence/writeChaining';
 import {
   getStreamTabStore,
   mapStreamTabStorage,

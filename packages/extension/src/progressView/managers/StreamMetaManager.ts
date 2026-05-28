@@ -13,7 +13,7 @@ import {
   mapStreamTabStorage,
 } from '@progressView/persistence/StreamTabStore';
 import type { StreamTabMeta } from '@progressView/persistence/streamTabSchemas';
-import { chainStreamWrite } from '@progressView/persistence/serializationUtils';
+import { chainStreamWrite } from '@progressView/persistence/writeChaining';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 /**
