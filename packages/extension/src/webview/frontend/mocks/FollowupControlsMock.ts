@@ -83,7 +83,6 @@ export class FollowupControlsMock extends LitElement {
     `,
   ];
 
-  private readonly options: FollowupOptionsState = SAMPLE_OPTIONS;
   @query('workflow-tool-use-followup-section')
   private followupEl?: HTMLElement;
 
@@ -104,7 +103,7 @@ export class FollowupControlsMock extends LitElement {
         <workflow-tool-use-followup-section
           .status=${SAMPLE_STATUS}
           .hasOutputFiles=${true}
-          .options=${this.options}
+          .options=${SAMPLE_OPTIONS}
           .streamModel=${SAMPLE_STREAM_MODEL}
         ></workflow-tool-use-followup-section>
       </div>

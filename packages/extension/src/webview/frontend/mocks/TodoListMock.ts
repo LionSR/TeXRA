@@ -62,7 +62,6 @@ export class TodoListMock extends LitElement {
     `,
   ];
 
-  private readonly todos: TodoItem[] = SAMPLE_TODOS;
   @query('todo-list') private todoListEl?: HTMLElement;
 
   override async firstUpdated(): Promise<void> {
@@ -79,7 +78,7 @@ export class TodoListMock extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="frame">
-        <todo-list .todos=${this.todos}></todo-list>
+        <todo-list .todos=${SAMPLE_TODOS}></todo-list>
       </div>
     `;
   }
