@@ -1,7 +1,10 @@
 import type { AgentTrace } from '@agent/trace';
 import { createChannelTrace } from '@logger';
 import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
-import { mapToRecord } from '@progressView/persistence/serializationUtils';
+import {
+  chainStreamWrite,
+  mapToRecord,
+} from '@progressView/persistence/serializationUtils';
 import {
   getStreamTabStore,
   mapStreamTabStorage,
@@ -274,15 +277,6 @@ export class OutputFilesManager {
     writesMap: Map<StreamTabId, Promise<void>>,
     write: () => Promise<void> | void,
   ): void {
-    if (!this.loaded) return;
-    const prev = writesMap.get(stream) ?? Promise.resolve();
-    const next = prev.then(() => {
-      if (!writesMap.has(stream)) return;
-      return write();
-    });
-    writesMap.set(
-      stream,
-      next.catch(() => {}),
-    );
+    chainStreamWrite(stream, this.loaded, writesMap, write);
   }
 }
