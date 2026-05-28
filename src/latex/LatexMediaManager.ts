@@ -228,9 +228,12 @@ export class LatexMediaManager {
       await Promise.all(
         deps.map(async (absolutePath) => {
           const depLocation = pathToLocation(absolutePath);
+          const isTex = hasExtension(absolutePath, '.tex');
           try {
-            await this.fileService!.mirrorWorkspaceFile(depLocation);
-            if (hasExtension(absolutePath, '.tex')) {
+            await this.fileService!.mirrorWorkspaceFile(depLocation, {
+              snapshot: isTex,
+            });
+            if (isTex) {
               worklist.push(depLocation);
             }
           } catch (error) {
