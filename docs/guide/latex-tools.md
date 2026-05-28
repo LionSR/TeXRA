@@ -46,7 +46,7 @@ See the [LaTeX Diff guide](./latex-diff.md) for the full workflow.
 
 **Enabling `texcount`:**
 
-1. **For context:** toggle <wa-icon library="texra" name="symbol-numeric"></wa-icon> **Attach TeX Count** in the Tool Configuration dropdown — see [File Management](./file-management.md#tool-config-dropdown).
+1. **For context:** toggle <wa-icon library="texra" name="symbol-numeric"></wa-icon> **Attach TeX Count** in the Tool Configuration dropdown — see [Configuration](./configuration.md#agent-execution-settings-webview-interface).
 2. **As a tool:** tool-use agents can invoke `texcount` directly to analyse files on demand.
 
 **Modes:**
