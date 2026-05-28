@@ -45,6 +45,8 @@ import {
   type ReorderFilesDetail,
   type RemoveFileDetail,
   type SessionTypeChangeDetail,
+  dispatchMainView,
+  type MainViewHandlerRegistry,
 } from '@shared/schemas';
 import {
   registerTeXRAWebAwesomeIcons,
@@ -76,10 +78,6 @@ import {
   type FileStateContextValue,
   type SessionContextValue,
 } from './contexts/mainViewContexts';
-import {
-  dispatchMainViewMessage,
-  type MainViewHandlerRegistry,
-} from './mainViewDispatcher';
 import { SESSION_DEFAULTS } from './sessionDefaults';
 import {
   DEFAULT_STATE,
@@ -346,7 +344,7 @@ export class MainApp extends MainAppBase {
   }
 
   protected handleMessage(raw: unknown): void {
-    dispatchMainViewMessage(raw, this.messageHandlers, (error) => {
+    dispatchMainView(raw, this.messageHandlers, (error) => {
       this.logSchemaError(
         '[MainApp] Main view message validation failed.',
         error,
