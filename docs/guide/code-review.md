@@ -66,14 +66,12 @@ Actions → **Variables**):
 
 - Set `TEXRA_REVIEW_MODEL` to pin one model id for every review.
 - Otherwise the first provider with a configured key wins, in this order:
-  DeepSeek, Anthropic, OpenAI, Google, OpenRouter, xAI. You can override the
-  default model for a provider with a per-provider variable
-  (`TEXRA_REVIEW_ANTHROPIC_MODEL`, `TEXRA_REVIEW_OPENAI_MODEL`,
+  DeepSeek, Anthropic, OpenAI, Google, OpenRouter, xAI. Override the per-provider
+  default with `TEXRA_REVIEW_ANTHROPIC_MODEL`, `TEXRA_REVIEW_OPENAI_MODEL`,
   `TEXRA_REVIEW_GOOGLE_MODEL`, `TEXRA_REVIEW_DEEPSEEK_MODEL`,
-  `TEXRA_REVIEW_OPENROUTER_MODEL`, `TEXRA_REVIEW_XAI_MODEL`).
+  `TEXRA_REVIEW_OPENROUTER_MODEL`, or `TEXRA_REVIEW_XAI_MODEL`.
 
-When neither a variable nor a per-provider override is set, each provider falls
-back to a built-in default:
+Built-in defaults per provider:
 
 | Provider   | Default model |
 | ---------- | ------------- |
@@ -98,11 +96,10 @@ enabled.
 
 ## Threaded Follow-ups
 
-By default the action posts with the built-in `GITHUB_TOKEN`. To let TeXRA
-**resolve and reply to its own earlier review threads** across runs, add a
-`TEXRA_REVIEW_GITHUB_TOKEN` secret with a token that has pull-request review
-permissions. When present, the action reuses existing TeXRA threads instead of
-posting duplicate comments.
+By default the action posts with the built-in `GITHUB_TOKEN`. Add a
+`TEXRA_REVIEW_GITHUB_TOKEN` secret (with pull-request review permissions) to let
+TeXRA reuse existing review threads across runs — resolving and replying instead
+of posting duplicate comments.
 
 ## See Also
 

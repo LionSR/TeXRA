@@ -231,45 +231,32 @@ sudo apt-get install ghostscript
 
 ## Setting Up API Keys
 
-TeXRA requires API keys to access language models.
+TeXRA loads provider keys from the OS credential store, the environment, or a `.env` file in your workspace. Both surfaces read the same `${PROVIDER}_API_KEY` variables (for example `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`).
 
 ### In the VS Code Extension
 
-1. Open VS Code with TeXRA installed
-2. Click on the TeXRA icon in the Activity Bar
-3. Click "Set API Key" in the TeXRA panel
-4. Select the provider (e.g., Anthropic, OpenAI, Google)
-5. Enter your API key when prompted
+Open the TeXRA Dashboard, go to the **Models tab**, and use the inline set/remove controls for each provider. Keys are stored in VS Code's Secret Storage.
 
-You can also manage API keys from the **Models tab** in the TeXRA Dashboard, which provides inline set/remove controls for each provider.
+You can also click **Set API Key** in the main TeXRA panel and select a provider, or define the variables in a workspace `.env` file.
+
+![API Key Setup](/images/api-key-setup.png)
 
 ### In the CLI
 
-The `texra` CLI reads the same provider keys from environment variables or a
-project `.env` file (for example `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or
-`GOOGLE_API_KEY`). Set them in your shell or in a `.env` file at the workspace
-root and run a quick check:
+Set the provider variables in your shell or a project `.env` file, then verify:
 
 ```bash
 texra doctor
 ```
 
-Alternatively, sign in for included relay access instead of bringing your own
-keys:
+To use included relay access instead of bringing your own keys, sign in:
 
 ```bash
 texra login
 texra auth status
 ```
 
-See [TeXRA CLI](./texra-cli.md) for sign-in, workspace defaults, and choosing
-between relay and personal-key access.
-
-### Shared Across Surfaces
-
-TeXRA also loads environment variables from a `.env` file in your workspace. Define variables like `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in this file to avoid entering keys manually.
-
-![API Key Setup](/images/api-key-setup.png)
+See [TeXRA CLI](./texra-cli.md) for sign-in, workspace defaults, and switching between relay and personal-key access.
 
 ::: info Getting API Keys
 

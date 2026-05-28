@@ -71,9 +71,9 @@ profile, and which models are reachable with the current credentials.
 
 ## Interactive Chat
 
-`texra chat` opens an interactive tool-use session in the terminal — the CLI
-equivalent of the extension's chat webview. It streams reasoning, tool calls,
-and diffs, and shares run history with the other surfaces.
+`texra chat` opens an interactive tool-use session in the terminal. It streams
+reasoning, tool calls, and diffs, and writes to the same run history as the VS
+Code extension.
 
 ```bash
 texra chat                          # default chat agent and model
@@ -81,11 +81,10 @@ texra chat --agent research         # pick a tool-use agent for the session
 texra chat --model deepseekT        # override the session model
 ```
 
-Inside the session, slash commands mirror the dashboard: `/tools` toggles
-integrations, `/api` switches between relay and personal-key access, and
-`/resume` restores a stored execution. Chat requires an interactive terminal;
-for scripted, non-interactive runs use `texra run` with `--print` or
-`--output-format json|ndjson`.
+Slash commands inside the session: `/tools` lists and toggles integrations,
+`/api` switches between relay and personal-key access, and `/resume` restores a
+stored execution. Chat requires an interactive terminal — for scripted, non-TTY
+runs use `texra run` with `--print` or `--output-format json|ndjson`.
 
 ## Shell Completion
 

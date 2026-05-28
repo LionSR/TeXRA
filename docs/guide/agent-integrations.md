@@ -16,46 +16,38 @@ follow-up to the calling agent.
 
 ## Quick Start
 
-Both integrations share the same setup flow. Do it from the TeXRA Dashboard —
-no terminal copy-paste.
+Both integrations follow the same setup flow from the TeXRA Dashboard.
 
 1. Open **TeXRA: Show Dashboard** (`Ctrl+Shift+P`) → **Integrations** tab (<wa-icon library="texra" name="robot"></wa-icon>).
-2. Find the card (**OpenAI Codex CLI** or **Claude Code CLI**). When it's **Not Found**, the setup actions expand automatically.
-3. Click the buttons in order:
-   - <wa-icon library="texra" name="terminal"></wa-icon> **Install in Terminal** — opens an integrated terminal and runs the CLI's install command.
-   - <wa-icon library="texra" name="sign-in"></wa-icon> **Sign in** — runs the CLI's OAuth login in your browser.
-4. Click **Recheck**. The status flips to <wa-icon library="texra" name="check"></wa-icon> **Available** and the tool is ready.
+2. Find the **OpenAI Codex CLI** or **Claude Code CLI** card. When it's **Not Found**, the setup actions expand automatically.
+3. Click <wa-icon library="texra" name="terminal"></wa-icon> **Install in Terminal**, then <wa-icon library="texra" name="sign-in"></wa-icon> **Sign in** to OAuth in your browser.
+4. Click **Recheck**. The status flips to <wa-icon library="texra" name="check"></wa-icon> **Available**.
+
+Each integration's options live on its card and are scoped to the current workspace. Per-call approval prompts are governed by the global **Require approval for shell commands & agent sessions** switch under **Dashboard → Tools → Approval & Safety** (on by default); turn it off to let agents call Codex or Claude Code without confirming each time.
 
 ::: warning Windows
-TeXRA looks up each CLI binary in the same environment as the VS Code extension
-host, so install it there:
+TeXRA spawns each CLI binary directly in the same environment as the extension host and skips `.cmd` / PowerShell shims, so an npm wrapper alone is not enough.
 
-- **WSL Remote** — open TeXRA inside the WSL window before clicking **Install in Terminal**.
-- **Native Windows** — install the CLI on Windows so the real binary is on PATH. TeXRA spawns the binary directly and skips `.cmd` / PowerShell shims, so an npm wrapper alone won't be found.
+- **WSL Remote** — open TeXRA inside the WSL window before installing.
+- **Native Windows** — install the CLI on Windows so the real binary is on PATH.
   :::
 
 ## OpenAI Codex
 
 ### Install and Authenticate
 
-| Step    | Command                                                                                                              |
-| ------- | -------------------------------------------------------------------------------------------------------------------- |
-| Install | `npm install -g @openai/codex` (or the official installer from [developers.openai.com/codex/cli](https://developers.openai.com/codex/cli)) |
-| Sign in | `codex login` — OAuth with ChatGPT Plus / Pro                                                                        |
-| Or      | Set `OPENAI_API_KEY` in the shell you launch VS Code from to bill against your API account instead.                  |
+- **Install** with `npm install -g @openai/codex`, or use the official installer linked from [developers.openai.com/codex/cli](https://developers.openai.com/codex/cli).
+- **Sign in** with `codex login` to use ChatGPT Plus / Pro — or set `OPENAI_API_KEY` in the shell you launch VS Code from to bill against an API account.
 
 ### Settings
 
-All Codex options live on the Codex card in **Dashboard → Integrations** and are scoped to the current workspace.
+| Setting              | Options                                                                     | Default           | What it controls                                                           |
+| -------------------- | --------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------- |
+| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                        | `workspace-write` | File-system access. Agents may override per call via `sandbox_mode`.       |
+| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                            | `high`            | How deeply Codex deliberates. `xhigh` is capped to `high` before hand-off. |
+| **Approval policy**  | `auto approve`, `ask when requested`, `ask for untrusted`, `ask on failure` | `auto approve`    | When the Codex child process may stop to ask before running commands.      |
 
-| Setting              | Options                                                                                | Default           | What it controls                                                           |
-| -------------------- | -------------------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------- |
-| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                                   | `workspace-write` | File-system access. Agents may override per call via `sandbox_mode`.       |
-| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`                                                       | `high`            | How deeply Codex deliberates. `xhigh` is capped to `high` before hand-off. |
-| **Approval policy**  | `auto approve`, `ask when requested`, `ask for untrusted`, `ask on failure`            | `auto approve`    | When the Codex child process may stop to ask before running commands.      |
-| **Require approval** | checkbox under _Approval & Safety_ (<wa-icon library="texra" name="shield"></wa-icon>) | on                | Show a confirmation prompt before every Codex call.                        |
-
-TeXRA always drives Codex with the short model name `gpt-5.5` — OpenAI's latest flagship, well-suited to the planning, tool use, and multi-step execution Codex relies on. Everything else (providers, MCP servers, custom instructions) comes from Codex's own `~/.codex/config.toml`.
+TeXRA pins Codex to the `gpt-5.5` model. Providers, MCP servers, and custom instructions come from Codex's own `~/.codex/config.toml`.
 
 ### Follow-ups
 
@@ -68,25 +60,18 @@ and errors if the thread is still processing — same contract as
 
 ### Install and Authenticate
 
-| Step    | Command                                                                                                                          |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Install | `npm install -g @anthropic-ai/claude-code` — or `brew install --cask claude-code` (macOS), `winget install Anthropic.ClaudeCode` (Windows), or the native installer from [claude.com/code](https://claude.com/code) |
-| Sign in | `claude login` — OAuth with Claude Pro / Max                                                                                     |
-| Or      | Set `ANTHROPIC_API_KEY` in **Dashboard → Models → Anthropic** or in the environment, or run `claude setup-token` to set `CLAUDE_CODE_OAUTH_TOKEN`. |
-
-If none are detected, Claude Code falls back to whatever `claude login` session already exists on your machine.
+- **Install** with `npm install -g @anthropic-ai/claude-code` — or `brew install --cask claude-code` (macOS), `winget install Anthropic.ClaudeCode` (Windows), or the native installer at [claude.com/code](https://claude.com/code).
+- **Sign in** with `claude login` to use Claude Pro / Max — or set `ANTHROPIC_API_KEY` (Dashboard → Models → Anthropic, or the environment), or run `claude setup-token` to set `CLAUDE_CODE_OAUTH_TOKEN`. With none of these set, the CLI falls back to any existing `claude login` session.
 
 ### Settings
 
-All Claude Code options live on the **Claude Code CLI** card in **Dashboard → Integrations** and are scoped to the current workspace.
-
-| Setting              | Options                                                                                          | Default             | What it controls                                                              |
-| -------------------- | ------------------------------------------------------------------------------------------------ | ------------------- | ----------------------------------------------------------------------------- |
-| **Model**            | `Sonnet 4.6`, `Opus 4.7`, `Haiku 4.5`                                                            | `Sonnet 4.6`        | Which Claude model the delegated agent runs on. Agents may override per call. |
+| Setting              | Options                                                                                            | Default             | What it controls                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------------------- |
+| **Model**            | `Sonnet 4.6`, `Opus 4.7`, `Haiku 4.5`                                                              | `Sonnet 4.6`        | Which Claude model the delegated agent runs on. Agents may override per call. |
 | **Permission mode**  | `Prompt for risky actions`, `Auto-accept edits`, `Bypass all (dangerous)`, `Plan only (read-only)` | `Auto-accept edits` | How much the Claude Code child process may do before stopping to ask.         |
-| **Reasoning effort** | `Low`, `Medium`, `High`, `Extra high`, `Maximum`                                                 | `High`              | How deeply Claude deliberates before acting.                                  |
+| **Reasoning effort** | `Low`, `Medium`, `High`, `Extra high`, `Maximum`                                                   | `High`              | How deeply Claude deliberates before acting.                                  |
 
-Everything else (MCP servers, custom instructions, hooks) comes from Claude Code's own configuration.
+MCP servers, custom instructions, and hooks come from Claude Code's own configuration.
 
 ### Follow-ups
 
@@ -107,7 +92,7 @@ one of them:
 
 When the tool fires:
 
-1. A child stream tab opens on the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) — Codex labels its stream `codex@codex-sdk`; Claude Code labels its stream after the Claude Code agent.
+1. A child stream tab opens on the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) — `codex@codex-sdk` for Codex, `claude@agent-sdk` for Claude Code.
 2. Reasoning, commands, file diffs, web searches (<wa-icon library="texra" name="globe"></wa-icon>), and todos stream in live.
 3. When the turn ends, the tab sits in **WAITING**. Type a follow-up to continue the thread, or press <wa-icon library="texra" name="debug-stop"></wa-icon> **Stop** to end it.
 4. Each turn is delivered to the calling agent as a follow-up message (final response, token usage, and the thread or session id).
