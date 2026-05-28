@@ -27,8 +27,12 @@ import { WorkspaceFS } from '@utils/files';
 import { defineTool } from './core/define';
 
 const WriteInputSchema = z.strictObject({
-  path: z.string(),
-  content: z.string(),
+  path: z
+    .string()
+    .describe(
+      'The file path to write, workspace-relative or absolute.',
+    ),
+  content: z.string().describe('The full file contents to write.'),
 });
 
 export type WriteInput = z.infer<typeof WriteInputSchema>;
