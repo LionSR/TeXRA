@@ -73,7 +73,7 @@ const SAMPLE_RAIL: Array<{
     label: 'reviewer-response — draft',
     meta: 'workflow · 1h',
     status: 'finished',
-    icon: 'messages',
+    icon: 'comments',
   },
   {
     id: 'bib',
