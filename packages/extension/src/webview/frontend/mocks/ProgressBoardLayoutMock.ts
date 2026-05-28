@@ -84,6 +84,15 @@ const SAMPLE_RAIL: Array<{
   },
 ];
 
+const RAIL_STATUS_CLASS: Record<
+  (typeof SAMPLE_RAIL)[number]['status'],
+  string
+> = {
+  running: 'is-running',
+  ready: 'is-ready',
+  finished: 'is-stopped',
+};
+
 /**
  * Static layout mock of the ProgressBoard split, mirroring production:
  *   - Left column (wide, ~75%): the active stream's conversation —
@@ -434,12 +443,7 @@ export class ProgressBoardLayoutMock extends LitElement {
     ]
       .filter(Boolean)
       .join(' ');
-    const statusClass =
-      tab.status === 'running'
-        ? 'is-running'
-        : tab.status === 'finished'
-          ? 'is-stopped'
-          : 'is-ready';
+    const statusClass = RAIL_STATUS_CLASS[tab.status];
     return html`
       <div class=${classes} role="listitem">
         <wa-icon
