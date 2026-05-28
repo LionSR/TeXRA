@@ -6,10 +6,10 @@
  * every {@link AgentEvent}. Every other method on this interface is sugar
  * over `emit()` so the trace channel remains a single source of truth.
  *
- * Host-specific helpers (TeXRA's `logError`/`logProgress`/`latexDiff`/
- * `userMessage`/etc.) live on {@link TexraTrace} in `@logger/TexraTrace`,
- * which extends this interface. SDK consumers should program against
- * `AgentTrace` so they don't depend on TeXRA-specific message taxonomy.
+ * TeXRA-specific helpers (`logError`/`logProgress`/`latexDiff`/
+ * `userMessage`/etc.) are plain functions in `helpers.ts` and
+ * `toolUseHelpers.ts` that operate on this interface — there is no host
+ * subtype. SDK consumers program directly against `AgentTrace`.
  */
 import type { EndGroupStatus } from '@shared/schemas';
 

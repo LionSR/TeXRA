@@ -37,6 +37,26 @@ The gaps are **incremental, not structural**:
 Estimated cleanup is small (low hundreds of LOC removed/flattened) with
 outsized clarity gains. No rewrite warranted.
 
+### Applied in this branch (net −64 LOC, behavior-preserving)
+
+The line-removing, no-new-indirection items have been executed and pass
+`npm run typecheck` + `eslint`:
+
+- **§2.1** — Deleted the three dead logger facades (`TexraTrace.ts`,
+  `TexraTraceEmitter.ts`, `noopTexraTrace.ts`), repointed `runTrace.ts` at
+  `@agent/trace` directly, and fixed the reversed doc comments in `trace/`.
+- **§2.2** — Inlined the single-use `createExecutionRunContext` into
+  `withExecutionRunContext` and dropped the now-unused `RunContext` type import.
+- **§3.4** — Replaced the five duplicated `getMessageNormalizationOptions()`
+  overrides (DeepSeek, Kimi, MiniMax, GLM, DashScope) with three declarative
+  flags on the base OpenAI handler (`convertContentToString`,
+  `convertContentToStringUnlessVision`, `mergeConsecutiveRoles`).
+
+Deferred (not pure line-removal / would add indirection or risk behavior):
+the `@agent/runtime` facade barrel (§3.1, adds indirection), the `bridgeState`
+→ `RunContext` move (§2.3, risky), and the duplicate usage-emission removal
+(§4) — that one is a consumer rewire of the progress-view UI, not a deletion.
+
 ---
 
 ## 1. Areas Identified
