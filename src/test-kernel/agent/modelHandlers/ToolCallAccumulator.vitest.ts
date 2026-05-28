@@ -22,6 +22,30 @@ describe('ToolCallAccumulator', () => {
     ]);
   });
 
+  it('keeps the first non-empty id and never concatenates re-sent ids', () => {
+    const acc = new ToolCallAccumulator();
+    // A provider re-sending the same id across chunks must not corrupt it.
+    acc.add({ index: 0, id: 'call_1', name: 'fn' });
+    acc.add({ index: 0, id: 'call_1', arguments: '{}' });
+
+    expect(build(acc)).toEqual([{ id: 'call_1', name: 'fn', arguments: '{}' }]);
+  });
+
+  it('can emit raw entries without dropping empties or adding fallback ids', () => {
+    const acc = new ToolCallAccumulator();
+    acc.add({ index: 0, id: '', name: '', arguments: '' });
+    acc.add({ index: 1, name: 'noId', arguments: '{}' });
+
+    const raw = acc.build(
+      ({ id, name, arguments: args }) => ({ id, name, arguments: args }),
+      { dropEmpty: false, fallbackId: false },
+    );
+    expect(raw).toEqual([
+      { id: '', name: '', arguments: '' },
+      { id: '', name: 'noId', arguments: '{}' },
+    ]);
+  });
+
   it('materializes multiple calls in ascending index order', () => {
     const acc = new ToolCallAccumulator();
     acc.add({ index: 1, id: 'b', name: 'second', arguments: '{}' });

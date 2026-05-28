@@ -153,12 +153,15 @@ class OpenRouterStreamAggregator {
   }
 
   buildResponse(): ChatResult {
+    // Preserve the original OpenRouter materialization: emit every accumulated
+    // entry with its raw id (no empty-dropping, no fallback id).
     const toolCalls: ChatToolCall[] = this.toolCalls.build(
       ({ id, name, arguments: args }) => ({
         id,
         type: 'function',
         function: { name, arguments: args },
       }),
+      { dropEmpty: false, fallbackId: false },
     );
 
     const message: ChatAssistantMessage & { role: 'assistant' } = {
