@@ -1522,7 +1522,7 @@
   "homepage": "https://texra.ai",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.153",
-    "@anthropic-ai/sdk": "^0.99.0",
+    "@anthropic-ai/sdk": "^0.100.0",
     "@awesome.me/webawesome": "^3.7.0",
     "@cantoo/pdf-lib": "^2.7.1",
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
@@ -1557,7 +1557,7 @@
     "identifiers-arxiv": "^0.1.1",
     "katex": "^0.17.0",
     "lit": "^3.3.3",
-    "llm-zoo": "^1.7.0",
+    "llm-zoo": "^1.8.0",
     "mark.js": "^8.11.1",
     "markdown-it": "^14.2.0",
     "markdown-it-texmath": "^1.0.0",

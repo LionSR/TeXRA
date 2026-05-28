@@ -5,13 +5,13 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
+import { legacyWorkflowOutputStem } from '@agent/output/workflowOutputLayout';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   showLoggedErrorMessage,
   toErrorMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
-import { legacyWorkflowOutputStem } from '@agent/output/workflowOutputLayout';
 import {
   getAcceptedFileTarget,
   siblingLocation,

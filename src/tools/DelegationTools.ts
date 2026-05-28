@@ -670,7 +670,7 @@ const WorkflowAgentInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe(
-      'Model short name (e.g., opus47T, sonnet46T, gpt55, gemini31p). Defaults to the current model if omitted.',
+      'Model short name (e.g., opus48T, sonnet46T, gpt55, gemini31p). Defaults to the current model if omitted.',
     ),
   instruction: z
     .string()
@@ -855,7 +855,7 @@ const DelegateAgentInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe(
-      'Model short name (e.g., opus47T, sonnet46T, gpt55, gemini31p). Defaults to the current model if omitted.',
+      'Model short name (e.g., opus48T, sonnet46T, gpt55, gemini31p). Defaults to the current model if omitted.',
     ),
   instruction: z
     .string()

@@ -88,7 +88,7 @@ The built-in defaults:
 | Provider   | Default model  |
 | ---------- | -------------- |
 | DeepSeek   | `deepseekproT` |
-| Anthropic  | `opus47T`      |
+| Anthropic  | `opus48T`      |
 | OpenAI     | `gpt55`        |
 | Google     | `gemini31p`    |
 | OpenRouter | `gptoss`       |
