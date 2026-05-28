@@ -58,7 +58,7 @@ filesystem copy was written, and report `terminalStatus` for the completed run.
 
 ## Authentication
 
-You can run the CLI either with a TeXRA sign-in (included relay access) or
+You can run the CLI either with a TeXRA sign-in (included hosted access) or
 with your own provider API keys — whichever you prefer.
 
 **Sign in with GitHub or Google** to use included access without managing keys:
@@ -85,7 +85,7 @@ texra run polish --input paper.tex
 ```
 
 If you're signed in **and** want this particular run to use your own key
-instead of relay access, add `--api-mode personal`.
+instead of hosted access, add `--api-mode personal`.
 
 The CLI doesn't read `.env` files automatically. If you already keep keys
 there, load them into the shell first (in bash/zsh: `set -a; . .env; set +a`).
@@ -106,7 +106,7 @@ texra chat --model deepseekT        # override the session model
 ```
 
 Slash commands inside the session: `/tools` lists and toggles integrations,
-`/api` switches between relay and personal-key access, and `/resume` restores a
+`/api` switches between hosted and personal-key access, and `/resume` restores a
 stored execution. Chat requires an interactive terminal — for scripted, non-TTY
 runs use `texra run` with `--print` or `--output-format json|ndjson`.
 
@@ -223,7 +223,7 @@ keys were ignored.
 
 Use `--api-mode personal` or `TEXRA_API_MODE=personal` to force a `run` or
 `chat` invocation to use provider API keys even when the CLI is signed in for
-included relay access. `--api-mode included` keeps the default relay behavior
+included hosted access. `--api-mode included` keeps the default hosted behavior
 when the account is signed in. The accepted aliases match the TUI `/api`
 command: for example, `direct`, `api`, and `byok` select personal API keys,
-while `relay` selects included access.
+while `included` selects hosted access.
