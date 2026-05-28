@@ -10,10 +10,10 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.153
-        version: 0.3.153(@anthropic-ai/sdk@0.99.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+        version: 0.3.153(@anthropic-ai/sdk@0.100.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
       '@anthropic-ai/sdk':
-        specifier: ^0.99.0
-        version: 0.99.0(zod@4.4.3)
+        specifier: ^0.100.0
+        version: 0.100.0(zod@4.4.3)
       '@awesome.me/webawesome':
         specifier: ^3.7.0
         version: 3.7.0(@floating-ui/utils@0.2.11)(@types/react@19.2.15)
@@ -123,8 +123,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.7.0
-        version: 1.7.0(zod@4.4.3)
+        specifier: ^1.8.0
+        version: 1.8.0(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.1
         version: 11.5.1
@@ -422,7 +422,7 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.153
-        version: 0.3.153(@anthropic-ai/sdk@0.99.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+        version: 0.3.153(@anthropic-ai/sdk@0.100.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
       '@fortawesome/free-solid-svg-icons':
         specifier: ^7.2.0
         version: 7.2.0
@@ -465,10 +465,10 @@ importers:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.153
-        version: 0.3.153(@anthropic-ai/sdk@0.99.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+        version: 0.3.153(@anthropic-ai/sdk@0.100.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
       '@anthropic-ai/sdk':
-        specifier: ^0.99.0
-        version: 0.99.0(zod@4.4.3)
+        specifier: ^0.100.0
+        version: 0.100.0(zod@4.4.3)
       '@awesome.me/webawesome':
         specifier: ^3.7.0
         version: 3.7.0(@floating-ui/utils@0.2.11)(@types/react@19.2.15)
@@ -572,8 +572,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.7.0
-        version: 1.7.0(zod@4.4.3)
+        specifier: ^1.8.0
+        version: 1.8.0(zod@4.4.3)
       mark.js:
         specifier: ^8.11.1
         version: 8.11.1
@@ -835,8 +835,8 @@ packages:
       '@modelcontextprotocol/sdk': ^1.29.0
       zod: ^4.0.0
 
-  '@anthropic-ai/sdk@0.99.0':
-    resolution: {integrity: sha512-vdicFA9YjtvgpG8rxp39hqW4oxpkdRGPTq0QEts5TZhr2GkLozDduK/GiXrLQ7PzrKYBtIkQFdRW+QBjzlsABg==}
+  '@anthropic-ai/sdk@0.100.0':
+    resolution: {integrity: sha512-cAm3aXm6qAiHIvHxyIIGd6tVmsD2gDqlc2h0R20ijNUzGgVnIN822bit4mKbF6CkuV7qIrLQIPoAepHEpanrQQ==}
     hasBin: true
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
@@ -4723,8 +4723,8 @@ packages:
   lit@3.3.3:
     resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
 
-  llm-zoo@1.7.0:
-    resolution: {integrity: sha512-9K3j+HmVQZ4akZ3sqzl/S0XyuEoz8QcK7ArkYh/4iSFB4NtyXnYV7t0Np58SZkhnFjIlea0dpobfqESf3tXsRA==}
+  llm-zoo@1.8.0:
+    resolution: {integrity: sha512-7lDi/LmlLEK6hSYOO7A+d5q7wX6DMInuIZk6FuHvImnN1PhAuWjxYA41rMVfTUk4WEDkPL+CYL6NYTudL3mstw==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^4.0.0
@@ -6890,9 +6890,9 @@ snapshots:
   '@anthropic-ai/claude-agent-sdk-win32-x64@0.3.153':
     optional: true
 
-  '@anthropic-ai/claude-agent-sdk@0.3.153(@anthropic-ai/sdk@0.99.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)':
+  '@anthropic-ai/claude-agent-sdk@0.3.153(@anthropic-ai/sdk@0.100.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)':
     dependencies:
-      '@anthropic-ai/sdk': 0.99.0(zod@4.4.3)
+      '@anthropic-ai/sdk': 0.100.0(zod@4.4.3)
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       zod: 4.4.3
     optionalDependencies:
@@ -6905,7 +6905,7 @@ snapshots:
       '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.153
       '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.153
 
-  '@anthropic-ai/sdk@0.99.0(zod@4.4.3)':
+  '@anthropic-ai/sdk@0.100.0(zod@4.4.3)':
     dependencies:
       json-schema-to-ts: 3.1.1
       standardwebhooks: 1.0.0
@@ -11443,7 +11443,7 @@ snapshots:
       lit-element: 4.2.2
       lit-html: 3.3.2
 
-  llm-zoo@1.7.0(zod@4.4.3):
+  llm-zoo@1.8.0(zod@4.4.3):
     optionalDependencies:
       zod: 4.4.3
 
