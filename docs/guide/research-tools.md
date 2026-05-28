@@ -92,5 +92,5 @@ Pick any of them from the **Agent** dropdown (<wa-icon library="texra" name="spa
 ## Next Steps
 
 - [LaTeX Tools](./latex-tools.md) — formatting, diffs, texcount, figures, bibliography
-- [Codex CLI](./codex-cli.md) — delegate long-running code tasks to OpenAI Codex
+- [Agent Integrations](./agent-integrations.md) — delegate long-running code tasks to Codex or Claude Code
 - [Working with Figures](./working-with-figures.md) — feed figures and PDFs to vision models
