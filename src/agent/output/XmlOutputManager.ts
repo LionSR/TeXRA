@@ -13,7 +13,6 @@ import { AgentSetting } from '@agent/core/AgentDataclass';
 import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
 import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
 import { toErrorMessage } from '@common/errors';
-import { platform } from '@platform/platform';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import type { OutputFileInfo } from '@shared/schemas';
@@ -40,7 +39,7 @@ async function writeRoundOutput(
   content: string,
 ): Promise<void> {
   if (await AbsoluteFS.isSymbolicLink(absolutePath)) {
-    await platform().fs.delete(absolutePath);
+    await AbsoluteFS.delete(absolutePath);
   }
   await AbsoluteFS.write(absolutePath, content);
 }
