@@ -5,6 +5,8 @@
 // Each host (webview HTML, CLI ANSI) builds its own processor so caches stay
 // isolated — the cached values are not interchangeable between renderers.
 
+import { LRUCache } from 'lru-cache';
+
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
 import type { MarkdownItInstance } from './createMarkdownRenderer';
@@ -101,20 +103,19 @@ export function createMarkdownProcessor(
   config: MarkdownProcessorConfig,
 ): MarkdownProcessor {
   const format = config.formatLatexReference ?? defaultFormatLatexReference;
-  const cache = new Map<string, string>();
-  let cacheChars = 0;
+  const cache = new LRUCache<string, string>({
+    max: MAX_CACHE_ENTRIES,
+    maxSize: MAX_CACHE_TOTAL_CHARS,
+    sizeCalculation: (value) => value.length,
+  });
   let hitCount = 0;
   let missCount = 0;
 
   const processor = ((content: string): string => {
     const key = hashContent(content);
-    if (cache.has(key)) {
-      const cached = cache.get(key);
-      if (cached === undefined) return '';
+    const cached = cache.get(key);
+    if (cached !== undefined) {
       hitCount += 1;
-      // Promote to MRU.
-      cache.delete(key);
-      cache.set(key, cached);
       return cached;
     }
     missCount += 1;
@@ -127,18 +128,9 @@ export function createMarkdownProcessor(
     const rendered = config.renderer.render(formatted);
     const result = restoreLatexReferences(rendered, refs, format);
 
-    if (result.length <= MAX_CACHE_ENTRY_CHARS) {
-      while (
-        cache.size >= MAX_CACHE_ENTRIES ||
-        cacheChars + result.length > MAX_CACHE_TOTAL_CHARS
-      ) {
-        const firstKey = cache.keys().next().value;
-        if (firstKey === undefined) break;
-        const firstValue = cache.get(firstKey);
-        cache.delete(firstKey);
-        if (firstValue) cacheChars -= firstValue.length;
-      }
-      cacheChars += result.length;
+    // lru-cache's `sizeCalculation` rejects zero, so skip caching the empty
+    // render (e.g. content that's only a link-reference definition).
+    if (result.length > 0 && result.length <= MAX_CACHE_ENTRY_CHARS) {
       cache.set(key, result);
     }
 
