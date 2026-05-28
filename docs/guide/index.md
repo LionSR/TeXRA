@@ -1,35 +1,69 @@
-# Introduction
+# TeXRA
 
-TeXRA is a multi-agent AI system for rigorous scientific work. You direct one orchestrator; it delegates to **specialized agents** — for literature search, manuscript drafting, figure generation, formal verification, and symbolic computation — each grounded in its own tools and model. Every citation is real, every figure compiles, and every edit comes back as a diff you approve. TeXRA runs in two places that share the same agents and run history: the **VS Code extension** and the **`texra` command-line interface**.
+A LaTeX research assistant for VS Code and the terminal. Multi-agent
+workflows for writing, reviewing, formalizing, and rendering academic
+work — with every change returned as a diff you approve.
 
 <GuideIntroHero />
 
 <p class="hero-caption">A single task, split across three specialists in the Progress view — click a delegation to see what it produced.</p>
 
-Prefer the terminal? Install the CLI with `npm install -g @texra-ai/cli` (Node.js 22+) — see [TeXRA CLI](./texra-cli.md).
+## Get started
 
-## Why multi-agent?
+- [**Installation**](./installation.md) — VS Code extension or the `texra` CLI
+- [**First run**](./first-run.md) — open a `.tex` file, watch one agent work
+- [**Quick start**](./quick-start.md) — the longer walkthrough in VS Code
 
-The gap between having a result and having a correct, publishable manuscript is where most research time goes. A 40-page paper where notation must be consistent from Definition 2.1 through Appendix C. A bibliography where every entry is real and every `\cite` key resolves. Commutative diagrams and Feynman diagrams that compile. A literature survey of a field where hundreds of papers appeared this year. A Lean formalization where the proof state needs careful tactic selection.
+## Use it
 
-General-purpose AI tools make this worse, not better:
+| Task                                       | Workflow                                                      |
+| ------------------------------------------ | ------------------------------------------------------------- |
+| Tighten prose in a draft                   | [Polish a draft](./workflows/polish-a-draft.md)               |
+| Fix LaTeX errors and notation              | `correct` agent — see [Built-in Agents](./built-in-agents.md) |
+| Search literature, no fabricated citations | `research` — see [Research Tools](./research-tools.md)        |
+| Verify proofs and derivations              | `review` — see [Built-in Agents](./built-in-agents.md)        |
+| Formalize in Lean 4                        | [Lean 4 Proofs](./lean.md)                                    |
+| Build slides from a paper                  | `paper2slide` — see [Built-in Agents](./built-in-agents.md)   |
+| Generate TikZ figures                      | [TikZ Figures](./tikz-figures.md)                             |
 
-- **Hallucinated citations.** Without grounded search tools, models fabricate references — dangerous in peer-reviewed work, unacceptable in mathematics.
-- **Lost structure.** Chatbots can't reason across theorem environments, `\label`/`\ref` graphs, BibTeX databases, and multi-file projects simultaneously.
-- **No verification.** You get text output with no way to compile, diff, type-check, or audit what changed.
-- **No tool access.** A single prompt can't search Mathlib by type signature, run a WolframScript computation, compile TikZ, and verify the result.
+## Understand the system
 
-Scientific work needs a _system_ of agents — each specialized, each grounded in real tools, each producing verifiable output.
+- [**Built-in Agents**](./built-in-agents.md) — the full catalog
+- [**Agent Architecture**](./agent-architecture.md) — workflow vs. tool-use, reflection, planning
+- [**Models**](./models.md) — picking a model for the job
+- [**Custom Agents**](./custom-agents.md) — define your own in YAML
 
-## The multi-agent approach
+## Why multi-agent
 
-TeXRA solves this with a team of agents that share context and use tools:
+The gap between a result and a publishable manuscript is where most
+research time goes. A 40-page paper where notation must be consistent
+from Definition 2.1 through Appendix C. A bibliography where every
+`\cite` resolves to a real paper. Commutative diagrams that compile.
+A Lean formalization where the proof state needs careful tactic
+selection.
+
+General-purpose chatbots make this worse, not better:
+
+- **Hallucinated citations** — no grounded search means fabricated references.
+- **Lost structure** — one prompt can't reason across theorem environments, `\label`/`\ref` graphs, BibTeX, and multi-file projects at once.
+- **No verification** — text output with no way to compile, diff, or type-check what changed.
+- **No tools** — no Mathlib search by type signature, no WolframScript, no TikZ compile.
+
+TeXRA solves this by splitting the work across agents — each
+specialized, each grounded in real tools, each producing verifiable
+output.
+
+## Two surfaces, one system
+
+The VS Code extension and the `texra` CLI share the same agents, the
+same sign-in, and the same run history. A run started in the CLI shows
+up in the extension's Progress Board, and vice versa.
 
 ```mermaid
 graph TB
     User[User] --> |selects files + agent| Orchestrator[Agent Orchestrator]
     Orchestrator --> WA[Workflow Agents]
-    Orchestrator --> IA[Interactive Agents]
+    Orchestrator --> IA[Tool-use Agents]
 
     WA --> |polish, correct, merge| Output[Versioned Output Files]
     Output --> Diff[Color-Coded Diff]
@@ -43,68 +77,50 @@ graph TB
     Tools --> Shell[Shell Commands]
 ```
 
-### Two types of agents
+**Workflow agents** (`polish`, `correct`, `merge`, `ocr`,
+`transcribe_audio`, `paper2slide`, `paper2poster`) run a structured
+pipeline and write task-scoped output files with diffs.
 
-**Workflow agents** (`polish`, `correct`, `paper2slide`, `paper2poster`, `ocr`, `transcribe_audio`, `merge`) execute structured pipelines:
+**Tool-use agents** (`research`, `numerics`, `review`, `lean`,
+`presenter`, `latexFixer`, `creator`, `chat`, `setup`) work
+conversationally — they read and edit workspace files, search arXiv
+and Crossref, query Mathlib by type signature, compile LaTeX, and run
+WolframScript.
 
-1. Analyze your input files and instructions
-2. Plan and execute changes via LLM calls
-3. Optionally reflect on their output and iterate
-4. Produce task-scoped output files (`r0/output.*`, `r1/output.*`) with diffs
-
-**Interactive agents** include `research`, `numerics`, `review`, `lean`, and `presenter`, which operate conversationally with tool access:
-
-- Read and edit files across your entire workspace
-- Search arXiv, Crossref, and Zotero for references with verified BibTeX
-- Search Mathlib by type signature (Loogle), inspect Lean proof states, check diagnostics
-- Run WolframScript for symbolic and numerical computation
-- Compile LaTeX and visually verify output
-- Maintain persistent context across multi-turn conversations
-
-### Design patterns
-
-The agent system is built on three established AI design patterns:
-
-1. **Reflection** — agents examine their own output to identify errors and inconsistencies, running multiple rounds when rigor demands it
-2. **Tool use** — agents call external tools (compilers, Lean LSP, Loogle, WolframScript, search APIs, file systems) to ground their reasoning in verified data
-3. **Planning** — agents break complex tasks into steps, execute them sequentially, and adapt based on intermediate results
-
-## What you can do
-
-| Task                 | Agent                         | How it works                                                                                                                                                       |
-| -------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Polish a manuscript  | `polish`                      | Rewrites for clarity and precision, preserving all math environments and cross-references. Outputs a reviewable diff.                                              |
-| Fix LaTeX errors     | `correct`                     | Finds and repairs compilation errors, notation inconsistencies, broken references, and formatting issues across multi-file projects.                               |
-| Generate figures     | `research` / `presenter`      | Tool-use agents write TikZ diagrams — commutative diagrams, Feynman diagrams, phase portraits, lattice structures — then compile and visually verify every figure. |
-| Search literature    | `research`                    | Queries arXiv, Crossref, Zotero. Returns verified citations with BibTeX — no hallucinated references.                                                              |
-| Verify manuscript    | `review`                      | Systematically audits mathematical correctness, derivation soundness, notation consistency, and goal achievement.                                                  |
-| Work with Lean 4     | `lean`                        | Search Mathlib theorems via Loogle by type signature, inspect proof states, check diagnostics, manage builds and cache.                                            |
-| Symbolic computation | `research`                    | Run WolframScript to evaluate integrals, check identities, simplify expressions, or verify numerical results.                                                      |
-| Build slide decks    | `presenter`                   | Reads your paper, drafts a Beamer deck that preserves logical structure — definitions before theorems, diagrams in TikZ. Compiles and checks every page.           |
-| General research     | `research`                    | Open-ended agent with full tool access for any research task.                                                                                                      |
-| Convert formats      | `paper2slide`, `paper2poster` | Transform papers into presentations or posters.                                                                                                                    |
+The system rests on three established AI design patterns: **reflection**
+(agents critique their own output and iterate), **tool use** (agents
+ground their reasoning in verified data from compilers, LSPs, and search
+APIs), and **planning** (agents decompose tasks, execute steps, and
+adapt to intermediate results).
 
 ## Who uses TeXRA
 
-- **Mathematicians** writing papers with complex theorem environments, maintaining notation consistency across long proofs, formalizing results in Lean 4
-- **Theoretical physicists** managing multi-file manuscripts with extensive equation environments, Feynman diagrams, and large bibliographies
-- **Computational scientists** producing papers that combine numerical methods, algorithm descriptions, convergence plots, and reproducible workflows
-- **PhD students** maintaining consistency across thesis chapters, surveying literature in a new subfield, preparing seminar talks from written work
-- **Research groups** collaborating on papers where every change needs to be traceable and auditable by co-authors and referees
+- **Mathematicians** — papers with complex theorem environments, notation consistency across long proofs, Lean 4 formalization.
+- **Theoretical physicists** — multi-file manuscripts with extensive equation environments, Feynman diagrams, large bibliographies.
+- **Computational scientists** — papers combining numerical methods, algorithm descriptions, convergence plots, reproducible workflows.
+- **PhD students** — thesis chapters with consistent notation, literature surveys in new subfields, seminar talks from written work.
+- **Research groups** — collaborations where every change is traceable and auditable by co-authors and referees.
 
 ## Privacy and data handling
 
-All API calls go **directly from your machine** to the model provider you choose (Anthropic, OpenAI, Google, etc.). TeXRA does not operate intermediate servers. Your unpublished proofs, manuscripts, and API keys never leave your machine except to the provider endpoint.
+**Bring-your-own-key mode.** API calls go directly from your machine
+to the model provider you chose. TeXRA does not sit between you and
+the provider. Your unpublished proofs, manuscripts, and API keys
+never leave your machine except to the provider endpoint.
 
-API keys are stored in your operating system's secure credential store — VS Code's built-in Secret Storage in the extension, and the OS keychain (or a local config file) for the CLI. They can also be supplied via environment variables or a `.env` file in your project.
+**Hosted access** (signed in with GitHub or Google). Requests to
+hosted models are proxied through TeXRA's service so we can manage
+provider credentials and quota on your behalf. Switch any run back
+to direct mode with `--api-mode personal` (CLI) or by providing your
+own key in Settings (extension).
 
-## Next steps
+API keys, whichever mode you use, are stored in your operating
+system's secure credential store — VS Code's built-in Secret Storage
+in the extension, the OS keychain (or a local config file) for the
+CLI. They can also be supplied via environment variables or a `.env`
+file in your project.
 
-- [Installation](/guide/installation) — set up TeXRA and its dependencies
-- [TeXRA CLI](/guide/texra-cli) — run agents from the terminal with the `texra` command
-- [Quick Start](/guide/quick-start) — your first agent run in under five minutes
-- [Built-in Agents](/guide/built-in-agents) — the full catalog of available agents
-- [Agent Architecture](/guide/agent-architecture) — how the multi-agent system works under the hood
-- [Custom Agents](/guide/custom-agents) — build your own agents with YAML configuration
+## Support
 
-If you spot a bug, email [contact@texra.ai](mailto:contact@texra.ai) or open an issue on [GitHub](https://github.com/texra-ai/texra-issues).
+Issues and feature requests: [GitHub](https://github.com/texra-ai/texra-issues).
+Contact: [contact@texra.ai](mailto:contact@texra.ai).
