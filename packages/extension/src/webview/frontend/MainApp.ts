@@ -60,7 +60,6 @@ import './components/FileSelectGroup';
 import './components/BannerGroup';
 import './components/LatexDiffsSection';
 import './components/InstructionPanel';
-import './mocks';
 import {
   ELEMENT_IDS,
   DOCUMENT_FILE_TYPES,
@@ -123,6 +122,10 @@ type SetMultipleFilesMessage =
 const MainAppBase = SignalWatcher(
   BaseWebviewApp as unknown as new (...args: any[]) => BaseWebviewApp,
 );
+
+const SHOW_MOCKS_GALLERY =
+  process.env.NODE_ENV === 'development' &&
+  localStorage.getItem('texra-mocks') === '1';
 
 @customElement('main-app')
 export class MainApp extends MainAppBase {
@@ -187,10 +190,9 @@ export class MainApp extends MainAppBase {
   private readonly isGitRepo = signal(true);
   private instructionSaveTimer: number | null = null;
 
-  // Design-mocks toggle. Flip from the webview DevTools console:
+  // Dev-only design-mocks toggle. Flip from the webview DevTools console:
   //   localStorage.setItem('texra-mocks','1'); location.reload();
-  private readonly showMocksGallery =
-    localStorage.getItem('texra-mocks') === '1';
+  private readonly showMocksGallery = SHOW_MOCKS_GALLERY;
 
   private readonly fileStateContext$ = new Signal.Computed(
     (): FileStateContextValue => ({
@@ -330,6 +332,9 @@ export class MainApp extends MainAppBase {
 
   override connectedCallback(): void {
     super.connectedCallback();
+    if (SHOW_MOCKS_GALLERY) {
+      void import('./mocks');
+    }
     this.restorePersistedState();
   }
 

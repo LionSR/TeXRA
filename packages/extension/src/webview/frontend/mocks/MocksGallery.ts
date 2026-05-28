@@ -63,13 +63,6 @@ export class MocksGallery extends LitElement {
         margin-bottom: var(--wa-space-2xs);
       }
 
-      .row {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: var(--wa-space-s);
-      }
-
       .header-strip {
         display: flex;
         align-items: center;
