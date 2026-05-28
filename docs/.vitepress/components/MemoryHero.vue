@@ -3,8 +3,8 @@
 // from packages/extension/src/settingsView/frontend/components/memory/ —
 // reminder banner, "Enable memory for chat agents" switch, then a list of
 // memory items with pinned/size/lines/updated/by metadata and a collapsible
-// "Contents" preview. The first item is pinned and expanded so the markdown
-// preview is visible; the others stay collapsed to keep the mockup compact.
+// "Contents" preview. Tab order, icons, and `by <agent>` attributions match
+// SettingsApp.ts / SETTINGS_TAB_ORDER and the real tool-use agent roster.
 import { ref } from 'vue';
 import MockupFrame from './MockupFrame.vue';
 
@@ -18,37 +18,44 @@ function toggle(id) {
 
 <template>
   <MockupFrame title="Dashboard — texra-paper">
-    <!-- Dashboard tab strip (mirrors SettingsTabBar) -->
-    <aside class="dash-nav">
-      <div class="dash-title">
-        <wa-icon library="texra" name="settings-gear"></wa-icon>
-        <span>Dashboard</span>
-      </div>
+    <!-- Settings tab strip. Tab order, panel names, and icons mirror
+         SettingsApp.ts (Memory · History · Models · Agents · Multi-Agent ·
+         Tools · Integrations · Git · LaTeX · Odyssey). The real UI lays them
+         out horizontally above the content; this hero stacks them vertically
+         only because ten tabs do not fit horizontally at mockup width. -->
+    <aside class="board dash-nav">
       <nav class="dash-tabs">
-        <span class="dt"
-          ><wa-icon library="texra" name="history"></wa-icon> History</span
-        >
         <span class="dt dt-on"
           ><wa-icon library="texra" name="database"></wa-icon> Memory</span
         >
         <span class="dt"
-          ><wa-icon library="texra" name="robot"></wa-icon> Models</span
+          ><wa-icon library="texra" name="clock-rotate-left"></wa-icon>
+          History</span
         >
         <span class="dt"
-          ><wa-icon library="texra" name="account"></wa-icon> Agents</span
+          ><wa-icon library="texra" name="server"></wa-icon> Models</span
         >
         <span class="dt"
-          ><wa-icon library="texra" name="organization"></wa-icon>
-          Multi-Agent</span
+          ><wa-icon library="texra" name="robot"></wa-icon> Agents</span
         >
         <span class="dt"
-          ><wa-icon library="texra" name="tools"></wa-icon> Tools</span
+          ><wa-icon library="texra" name="users"></wa-icon> Multi-Agent</span
         >
         <span class="dt"
-          ><wa-icon library="texra" name="source-control"></wa-icon> Git</span
+          ><wa-icon library="texra" name="screwdriver-wrench"></wa-icon>
+          Tools</span
+        >
+        <span class="dt"
+          ><wa-icon library="texra" name="robot"></wa-icon> Integrations</span
+        >
+        <span class="dt"
+          ><wa-icon library="texra" name="code-branch"></wa-icon> Git</span
         >
         <span class="dt"
           ><wa-icon library="texra" name="file-code"></wa-icon> LaTeX</span
+        >
+        <span class="dt"
+          ><wa-icon library="texra" name="compass"></wa-icon> Odyssey</span
         >
       </nav>
     </aside>
@@ -67,20 +74,23 @@ function toggle(id) {
           </div>
           <div class="reminder-acts">
             <button type="button" class="r-btn">
-              <wa-icon library="texra" name="refresh"></wa-icon>
+              <wa-icon library="texra" name="rotate-right"></wa-icon>
               Refresh
             </button>
             <button type="button" class="r-btn">
-              <wa-icon library="texra" name="folder-opened"></wa-icon>
+              <wa-icon library="texra" name="folder-open"></wa-icon>
               Open Folder
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Memory toggle (mirrors MemoryToggle) -->
+      <!-- Memory toggle (mirrors MemoryToggle). Implemented as a real <button>
+           so it's keyboard-focusable and Space/Enter activate it, per ARIA's
+           `role="switch"` contract. -->
       <div class="mem-toggle">
-        <span
+        <button
+          type="button"
           class="switch"
           :class="{ on: enabled }"
           role="switch"
@@ -88,30 +98,32 @@ function toggle(id) {
           @click="enabled = !enabled"
         >
           <span class="switch-knob"></span>
-        </span>
+        </button>
         <span class="switch-label">Enable memory for chat agents</span>
       </div>
 
-      <!-- Memory list (mirrors MemoryList → MemoryItem) -->
+      <!-- Memory list (mirrors MemoryList → MemoryItem). `by <agent>` uses
+           tool-use agents (research, review, chat) — workflow agents like
+           polish/correct don't run the memory tool. -->
       <div class="mem-list">
         <!-- Item 1: pinned, expanded with markdown preview -->
         <div class="mem-item pinned">
           <div class="mem-head">
             <div class="mem-path">/memories/project-conventions.md</div>
             <div class="mem-acts">
-              <button class="m-act m-act-on" title="Unpin">
+              <button type="button" class="m-act m-act-on" title="Unpin this memory">
                 <wa-icon library="texra" name="thumbtack-slash"></wa-icon>
               </button>
-              <button class="m-act" title="Open in editor">
+              <button type="button" class="m-act" title="Open in editor">
                 <wa-icon library="texra" name="file-export"></wa-icon>
               </button>
-              <button class="m-act" title="Delete this memory">
+              <button type="button" class="m-act" title="Delete this memory">
                 <wa-icon library="texra" name="trash"></wa-icon>
               </button>
             </div>
           </div>
           <div class="mem-meta">
-            <span class="meta-pill meta-pin">Pinned</span>
+            <span>Pinned</span>
             <span class="meta-dot">·</span>
             <span>1.2 KB</span>
             <span class="meta-dot">·</span>
@@ -119,9 +131,10 @@ function toggle(id) {
             <span class="meta-dot">·</span>
             <span>Updated 5m ago</span>
             <span class="meta-dot">·</span>
-            <span>by polish</span>
+            <span>by research</span>
           </div>
           <button
+            type="button"
             class="mem-coll"
             :class="{ open: expanded === 'pinned' }"
             @click="toggle('pinned')"
@@ -161,13 +174,13 @@ function toggle(id) {
           <div class="mem-head">
             <div class="mem-path">/memories/notation.md</div>
             <div class="mem-acts">
-              <button class="m-act" title="Pin">
+              <button type="button" class="m-act" title="Pin as core long-term memory">
                 <wa-icon library="texra" name="thumbtack"></wa-icon>
               </button>
-              <button class="m-act" title="Open in editor">
+              <button type="button" class="m-act" title="Open in editor">
                 <wa-icon library="texra" name="file-export"></wa-icon>
               </button>
-              <button class="m-act" title="Delete this memory">
+              <button type="button" class="m-act" title="Delete this memory">
                 <wa-icon library="texra" name="trash"></wa-icon>
               </button>
             </div>
@@ -179,9 +192,10 @@ function toggle(id) {
             <span class="meta-dot">·</span>
             <span>Updated 2h ago</span>
             <span class="meta-dot">·</span>
-            <span>by correct</span>
+            <span>by review</span>
           </div>
           <button
+            type="button"
             class="mem-coll"
             :class="{ open: expanded === 'notation' }"
             @click="toggle('notation')"
@@ -210,13 +224,13 @@ function toggle(id) {
           <div class="mem-head">
             <div class="mem-path">/memories/figures.md</div>
             <div class="mem-acts">
-              <button class="m-act" title="Pin">
+              <button type="button" class="m-act" title="Pin as core long-term memory">
                 <wa-icon library="texra" name="thumbtack"></wa-icon>
               </button>
-              <button class="m-act" title="Open in editor">
+              <button type="button" class="m-act" title="Open in editor">
                 <wa-icon library="texra" name="file-export"></wa-icon>
               </button>
-              <button class="m-act" title="Delete this memory">
+              <button type="button" class="m-act" title="Delete this memory">
                 <wa-icon library="texra" name="trash"></wa-icon>
               </button>
             </div>
@@ -228,9 +242,10 @@ function toggle(id) {
             <span class="meta-dot">·</span>
             <span>Updated yesterday</span>
             <span class="meta-dot">·</span>
-            <span>by figure</span>
+            <span>by chat</span>
           </div>
           <button
+            type="button"
             class="mem-coll"
             :class="{ open: expanded === 'figures' }"
             @click="toggle('figures')"
@@ -258,35 +273,16 @@ function toggle(id) {
 </template>
 
 <style scoped>
-/* Dashboard tab nav on the left (the real settings view stacks tabs across the
-   top, but a vertical strip works better at mockup widths). */
+/* Tab nav on the left. The shell uses the shared .board class (from
+   theme/mockup.css); .dash-nav only overrides width and adds the vertical
+   layout for this hero's many tabs. */
 .dash-nav {
   width: 168px;
-  flex-shrink: 0;
-  background: #1e1e1e;
-  border-right: 1px solid #000;
-  display: flex;
-  flex-direction: column;
-  padding: 12px 0;
-}
-.dash-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 14px 12px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--wa-color-text-normal);
-  border-bottom: 1px solid var(--color-border);
-}
-.dash-title wa-icon {
-  color: var(--brand);
-  font-size: 14px;
 }
 .dash-tabs {
   display: flex;
   flex-direction: column;
-  padding-top: 8px;
+  padding: 8px 0;
 }
 .dt {
   display: inline-flex;
@@ -394,11 +390,13 @@ function toggle(id) {
   width: 32px;
   height: 18px;
   background: #444;
+  border: none;
   border-radius: 10px;
   position: relative;
   cursor: pointer;
   transition: background 0.15s;
   flex-shrink: 0;
+  padding: 0;
 }
 .switch.on {
   background: var(--brand);
@@ -482,7 +480,7 @@ function toggle(id) {
   color: var(--color-text-link);
 }
 
-/* Meta strip (Pinned · size · lines · updated · by) */
+/* Meta strip (Pinned · size · lines · updated · by <agent>) */
 .mem-meta {
   display: flex;
   flex-wrap: wrap;
@@ -493,16 +491,6 @@ function toggle(id) {
 }
 .meta-dot {
   color: var(--color-text-tertiary);
-}
-.meta-pill {
-  background: rgba(77, 170, 252, 0.12);
-  color: var(--color-text-link);
-  font-size: 0.64rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 1px 6px;
-  border-radius: 3px;
 }
 
 /* Collapsible Contents header */
@@ -565,9 +553,6 @@ function toggle(id) {
     border-bottom: 1px solid #000;
     padding: 0;
     overflow-x: auto;
-  }
-  .dash-title {
-    display: none;
   }
   .dash-tabs {
     flex-direction: row;
