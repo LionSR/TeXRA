@@ -951,8 +951,10 @@ export function createDesktopSettingsIpc(
   // is intentionally absent — it is a broadcast handled in `handleMessage` so
   // sibling handlers (startup, onboarding) still receive it.
   const settingsHandlers: SettingsViewInboundHandlerRegistry = {
-    [SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION]: () => postAgentSelectionData(),
-    [SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION]: () => postModelSelectionData(),
+    [SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION]: () =>
+      postAgentSelectionData(),
+    [SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION]: () =>
+      postModelSelectionData(),
     [SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA]: () => postMemoryData(),
     [SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW]: (d) =>
       postMemoryPreview(d.storagePath),
@@ -967,7 +969,8 @@ export function createDesktopSettingsIpc(
     [SETTINGS_VIEW_COMMANDS.UNPIN_MEMORY]: (d) =>
       setMemoryPinned(d.storagePath, false),
     [SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA]: () => postHistoryData(),
-    [SETTINGS_VIEW_COMMANDS.DELETE_AGENT]: (d) => deleteHistoryItem(d.historyId),
+    [SETTINGS_VIEW_COMMANDS.DELETE_AGENT]: (d) =>
+      deleteHistoryItem(d.historyId),
     [SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY]: () => clearHistory(),
     [SETTINGS_VIEW_COMMANDS.RERUN_AGENT]: () =>
       showUnsupportedHistoryAction('Rerun'),
@@ -982,7 +985,8 @@ export function createDesktopSettingsIpc(
     [SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA]: () => postProfileData(),
     [SETTINGS_VIEW_COMMANDS.SIGN_IN]: () => signIn(),
     [SETTINGS_VIEW_COMMANDS.SIGN_OUT]: () => signOut(),
-    [SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE]: (d) => setApiAccessMode(d.mode),
+    [SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE]: (d) =>
+      setApiAccessMode(d.mode),
     [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY]: (d) =>
       setProviderKey(d.provider, d.apiKey),
     [SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY]: (d) =>
@@ -1005,9 +1009,12 @@ export function createDesktopSettingsIpc(
       updateModelReasoningLevel({ modelName: d.modelName, level: d.level }),
     [SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES]: (d) =>
       updatePreferShortModelNames(d.enabled),
-    [SETTINGS_VIEW_COMMANDS.GET_APPROVAL_SETTINGS]: () => postApprovalSettings(),
-    [SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED]: () => postSuperYoloEnabled(),
-    [SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED]: () => postSuperYoloEnabled(),
+    [SETTINGS_VIEW_COMMANDS.GET_APPROVAL_SETTINGS]: () =>
+      postApprovalSettings(),
+    [SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED]: () =>
+      postSuperYoloEnabled(),
+    [SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED]: () =>
+      postSuperYoloEnabled(),
     [SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL]: (d) =>
       updateBooleanWorkspaceSetting(
         WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
@@ -1031,7 +1038,10 @@ export function createDesktopSettingsIpc(
     [SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_MODEL]: (d) =>
       updateAgentSetting(WorkspaceStateKey.CLAUDE_AGENT_MODEL, d.model),
     [SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_PERMISSION_MODE]: (d) =>
-      updateAgentSetting(WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE, d.mode),
+      updateAgentSetting(
+        WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
+        d.mode,
+      ),
     [SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_EFFORT]: (d) =>
       updateAgentSetting(WorkspaceStateKey.CLAUDE_AGENT_EFFORT, d.effort),
     [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
@@ -1065,11 +1075,14 @@ export function createDesktopSettingsIpc(
       revealAgentFile({ source: d.agentSource, name: d.agentName }),
     [SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR]: () => postCustomAgentDir(),
     [SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR]: () => setCustomAgentDir(),
-    [SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR]: () => resetCustomAgentDir(),
-    [SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS]: () => postAgentModePresets(),
+    [SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR]: () =>
+      resetCustomAgentDir(),
+    [SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS]: () =>
+      postAgentModePresets(),
     [SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET]: (d) =>
       applyAgentModePreset(d.presetId),
-    [SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET]: () => saveAgentModePreset(),
+    [SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET]: () =>
+      saveAgentModePreset(),
     [SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET]: (d) =>
       deleteAgentModePreset(d.presetId),
     [SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS]: () =>
@@ -1082,7 +1095,8 @@ export function createDesktopSettingsIpc(
       updateDesktopCrashReportingDsn(),
     [SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS]: () =>
       postLatexSettingsStatus(),
-    [SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS]: () => postLatexSettingsStatus(),
+    [SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS]: () =>
+      postLatexSettingsStatus(),
     [SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP]: () =>
       options.installToolExtension?.(LATEX_WORKSHOP_EXT_ID) ??
       Promise.resolve(),
