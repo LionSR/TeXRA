@@ -306,9 +306,7 @@ app.post('/exchange', async (c) => {
           },
         });
       } else {
-        // New user about to be created — enforce sign-up policy.
-        // Existing users (matched by identity or email above) are not re-checked,
-        // so users that pre-date the policy keep their access.
+        // New user — enforce sign-up policy (existing users are never re-checked).
         const emailDecision = checkEmailDomain(email);
         if (!emailDecision.allowed) {
           console.warn(

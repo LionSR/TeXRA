@@ -1,25 +1,8 @@
-/**
- * Sign-up policy checks shared across edge functions.
- *
- * Two gates are enforced at the auth-github exchange when a *new* user is
- * about to be created:
- *
- *   1. Email domain is not in a blocklist of disposable / privacy-relay
- *      providers that are routinely used to farm the free tier.
- *   2. The GitHub account is at least MIN_GITHUB_ACCOUNT_AGE_DAYS old.
- *
- * Both checks are intentionally only enforced at user creation. Existing
- * users keep their access regardless of the lists below.
- */
+// Sign-up policy checks enforced at user creation (existing users are never re-checked).
 
 export const MIN_GITHUB_ACCOUNT_AGE_DAYS = 30;
 
-/**
- * Disposable / throwaway mailbox providers.
- *
- * These produce zero legitimate signups in practice and have been observed
- * directly farming the Researcher Access Program.
- */
+// Disposable mailbox providers observed farming the Researcher Access Program.
 const DISPOSABLE_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
   'atomicmail.io',
   'tempmail.com',
@@ -55,12 +38,8 @@ const DISPOSABLE_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
   'trashmail.de',
 ]);
 
-/**
- * Privacy mail providers that, while legitimate, are disproportionately used
- * for free-tier abuse here. Treated the same as disposable for now — see ToS.
- * Kept as a separate list so we can flip it to soft-review later without
- * touching the disposable list.
- */
+// Privacy-relay providers disproportionately used for free-tier abuse.
+// Kept separate from DISPOSABLE so it can be moved to soft-review independently.
 const PRIVACY_RELAY_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
   'protonmail.com',
   'protonmail.ch',
@@ -145,8 +124,7 @@ export function checkGitHubAccountAge(
     };
   }
 
-  const ageMs = now.getTime() - created.getTime();
-  const ageDays = ageMs / (1000 * 60 * 60 * 24);
+  const ageDays = (now.getTime() - created.getTime()) / 86_400_000;
 
   if (ageDays < MIN_GITHUB_ACCOUNT_AGE_DAYS) {
     const remaining = Math.ceil(MIN_GITHUB_ACCOUNT_AGE_DAYS - ageDays);
