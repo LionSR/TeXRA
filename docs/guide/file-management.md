@@ -51,38 +51,31 @@ The TeXRA interface provides a streamlined way to select and manage files using 
 
 <FileSelectHero />
 
-<p class="hero-caption">Each category is a dropdown with quick controls — set the current file, clear it, refresh the list, or switch to multiple-file mode (shown here for Context).</p>
+<p class="hero-caption">Each category holds an ordered list of files with three quick actions in the header.</p>
 
-### Single File Selection
+### File List Controls
 
-For each file category, you can select a single file using the dropdown menu. The interface provides several helpful options:
+Each category — Input, Context, and Media — manages a list of files (a single-file workflow is just a list of length one). The header exposes three buttons:
 
-- **Current Button** (<wa-icon library="texra" name="file-code"></wa-icon>): Select the currently open file in VS Code
-- **Empty Button** (<wa-icon library="texra" name="close"></wa-icon>): Clear the current selection
-- **Multiple Toggle** (▼): Switch to multiple file selection mode
-- **Refresh Button** (<wa-icon library="texra" name="refresh"></wa-icon> icon next to label): Update the file list
+- **Add opened files** (<wa-icon library="texra" name="folder-opened"></wa-icon>): Append every editor tab whose extension matches the category to the list.
+- **Clear all files** (<wa-icon library="texra" name="trash"></wa-icon>): Empty the list.
+- **Add files** (<wa-icon library="texra" name="add"></wa-icon>): Open a file picker to append files.
 
-### Multiple File Selection
+You can also **drag-and-drop files** from the OS file manager (or from VS Code's Explorer) onto a category to add them.
 
-For projects requiring multiple files, enable the multiple file selection mode:
+Inside the list:
 
-1. Click the "▼" toggle next to the file category
-2. The multiple selection panel will expand
-3. Use the "Add" button (<wa-icon library="texra" name="add"></wa-icon>) to add files via a file picker
-4. Remove files with the "-" button next to each file
-5. Reorder files by dragging and dropping
-6. Clear the entire list using the "Empty List" button (<wa-icon library="texra" name="trash"></wa-icon>)
+- Each file row has a small trash icon to remove just that file.
+- Drag a row by its grip handle to reorder files. Input files are sent to the agent in this order.
 
-Multiple file selection is particularly useful for:
+The list is the only mode — there is no separate "single file" view. To work with one file, just keep the list at length one.
+
+This works well for:
 
 - Processing multiple chapters of a book
 - Working with documents split across multiple files
 - Batch processing similar documents
 - Including multiple reference materials
-
-### Adding Opened Files
-
-The "Add Opened Files" button (<wa-icon library="texra" name="folder-opened"></wa-icon>) available for the Input, Context, and Media categories allows you to quickly add all currently open files in your VS Code editor (that match the allowed file types) to the respective multiple file list. This is useful when you have already opened the relevant files for your project.
 
 ### Output Files
 
