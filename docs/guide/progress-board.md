@@ -53,7 +53,7 @@ The header provides a summary and actions for the selected stream:
   - **Grey (Stopped)**: The agent finished successfully or was stopped manually before completion.
   - **Red (Error)**: The agent encountered an error during execution.
   - **Yellow (Ready/Initial)**: The view is ready, but no stream is active yet.
-- **Token & Cost Summary**: Displays the combined input and output token counts from all completed rounds (`r0` and `r1`) along with the estimated cost.
+- **Token & Cost Summary**: Displays the combined input and output token counts from all completed rounds (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
 - **Stream Header Actions**:
   - <wa-icon library="texra" name="debug-stop"></wa-icon> **Stop**: Attempts to gracefully stop the currently running task for this stream. For providers supporting `AbortController` (like OpenAI or Anthropic) the active request is aborted immediately; otherwise the current API call will finish before stopping.
   - <wa-icon library="texra" name="debug-rerun"></wa-icon> **Run Again**: Re-runs the task associated with this stream using the _exact same configuration_ (agent, model, files, instruction) that was used when it originally ran. Useful for retrying failed tasks or reproducing results.
