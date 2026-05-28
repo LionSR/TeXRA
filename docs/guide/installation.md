@@ -56,7 +56,11 @@ See [TeXRA CLI](./texra-cli.md) for usage, shell completion, and workspace defau
 
 ## Installing Required Dependencies
 
-Now for the slightly less fun part – making sure TeXRA has all the tools it needs to work its magic. TeXRA relies on several external tools to function properly. Follow the instructions for your operating system.
+Now for the slightly less fun part – making sure TeXRA has the tools it needs. Only a **LaTeX distribution** is strictly required for core document processing; the other tools below unlock specific features (Perl for `latexindent`/`latexdiff`, GraphicsMagick/ImageMagick + Ghostscript for figure and image processing). Install the ones you need and follow the instructions for your operating system.
+
+::: tip Check what's detected with `texra doctor`
+Run `texra doctor` to see what TeXRA found. It reports the LaTeX toolchain (`latexmk`, `pdflatex`, `xelatex`, `lualatex`, `bibtex`, `biber`, `latexdiff`, `latexindent`) along with Node.js, authentication, and model availability. The optional image tools (GraphicsMagick/ImageMagick, Ghostscript) and Wolfram are checked on demand the first time you use a feature that needs them, rather than up front.
+:::
 
 ### Homebrew (macOS only) {#homebrew}
 
@@ -141,8 +145,8 @@ pdflatex --version
 
 ### Perl
 
-::: info
-Perl is required for LaTeX tools and document processing.
+::: info OPTIONAL
+Perl backs the `latexindent` and `latexdiff` LaTeX tools (both are Perl scripts). Install it only if you use auto-formatting or LaTeX diffs — it's usually already bundled with MiKTeX/TeX Live and pre-installed on macOS/Linux.
 :::
 
 #### Windows
@@ -163,8 +167,8 @@ sudo apt-get install perl
 
 ### GraphicsMagick/ImageMagick
 
-::: tip RECOMMENDED
-GraphicsMagick is the recommended option for better performance.
+::: tip OPTIONAL
+Needed only for TeXRA's figure and image processing features. GraphicsMagick is the recommended option for better performance; ImageMagick is a drop-in alternative.
 :::
 
 #### GraphicsMagick
@@ -207,8 +211,8 @@ sudo apt-get install imagemagick
 
 ### Ghostscript
 
-::: warning REQUIRED
-Ghostscript is required by GraphicsMagick/ImageMagick for PDF processing.
+::: info OPTIONAL
+Ghostscript is used by GraphicsMagick/ImageMagick to rasterize PDF figures. Install it alongside GraphicsMagick/ImageMagick only if you use TeXRA's figure/image processing features.
 :::
 
 #### Windows
