@@ -43,10 +43,12 @@ import {
 import type { LatexConfigField } from '@shared/constants/latex';
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 import {
+  dispatchSettingsViewInbound,
   SettingsViewInboundMessageSchema,
   type LatexSettingsStatus,
   type ProviderKeyStatus,
   type ReasoningLevel,
+  type SettingsViewInboundHandlerRegistry,
   type ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
 import {
@@ -943,398 +945,190 @@ export function createDesktopSettingsIpc(
 
   applyCurrentGitAuthorSettings();
 
+  // Registry of settings commands → handlers. The dispatcher parses the
+  // message, looks up the handler by `command`, and routes async rejections to
+  // `onError` (replacing the former per-case `runAsync` wrapper). WEBVIEW_READY
+  // is intentionally absent — it is a broadcast handled in `handleMessage` so
+  // sibling handlers (startup, onboarding) still receive it.
+  const settingsHandlers: SettingsViewInboundHandlerRegistry = {
+    [SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION]: () => postAgentSelectionData(),
+    [SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION]: () => postModelSelectionData(),
+    [SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA]: () => postMemoryData(),
+    [SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW]: (d) =>
+      postMemoryPreview(d.storagePath),
+    [SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED]: () => postMemoryEnabled(),
+    [SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE]: (d) => openMemoryFile(d),
+    [SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER]: () => openMemoryFolder(),
+    [SETTINGS_VIEW_COMMANDS.DELETE_MEMORY]: (d) => deleteMemory(d),
+    [SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED]: (d) =>
+      setMemoryEnabled(d.enabled),
+    [SETTINGS_VIEW_COMMANDS.PIN_MEMORY]: (d) =>
+      setMemoryPinned(d.storagePath, true),
+    [SETTINGS_VIEW_COMMANDS.UNPIN_MEMORY]: (d) =>
+      setMemoryPinned(d.storagePath, false),
+    [SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA]: () => postHistoryData(),
+    [SETTINGS_VIEW_COMMANDS.DELETE_AGENT]: (d) => deleteHistoryItem(d.historyId),
+    [SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY]: () => clearHistory(),
+    [SETTINGS_VIEW_COMMANDS.RERUN_AGENT]: () =>
+      showUnsupportedHistoryAction('Rerun'),
+    [SETTINGS_VIEW_COMMANDS.RESTORE_AGENT]: () =>
+      showUnsupportedHistoryAction('Setup'),
+    [SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD]: () =>
+      showUnsupportedHistoryAction('Markdown export'),
+    [SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX]: () =>
+      showUnsupportedHistoryAction('LaTeX export'),
+    [SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML]: () =>
+      showUnsupportedHistoryAction('HTML export'),
+    [SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA]: () => postProfileData(),
+    [SETTINGS_VIEW_COMMANDS.SIGN_IN]: () => signIn(),
+    [SETTINGS_VIEW_COMMANDS.SIGN_OUT]: () => signOut(),
+    [SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE]: (d) => setApiAccessMode(d.mode),
+    [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY]: (d) =>
+      setProviderKey(d.provider, d.apiKey),
+    [SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY]: (d) =>
+      removeProviderKey(d.provider),
+    [SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL]: (d) =>
+      openProviderKeyUrl(d.provider),
+    [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING]: (d) =>
+      updateProviderStreaming({ provider: d.provider, enabled: d.enabled }),
+    [SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT]: (d) =>
+      updateProviderEndpoint({ provider: d.provider, endpoint: d.endpoint }),
+    [SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING]: (d) =>
+      updateGlobalStreaming(d.enabled),
+    [SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL]: (d) =>
+      options.openExternalUrl?.(d.url) ?? Promise.resolve(),
+    [SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED]: (d) =>
+      updateModelEnabled({ modelName: d.modelName, enabled: d.enabled }),
+    [SETTINGS_VIEW_COMMANDS.SET_HELPER_MODEL]: (d) =>
+      updateHelperModel(d.modelName),
+    [SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL]: (d) =>
+      updateModelReasoningLevel({ modelName: d.modelName, level: d.level }),
+    [SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES]: (d) =>
+      updatePreferShortModelNames(d.enabled),
+    [SETTINGS_VIEW_COMMANDS.GET_APPROVAL_SETTINGS]: () => postApprovalSettings(),
+    [SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED]: () => postSuperYoloEnabled(),
+    [SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED]: () => postSuperYoloEnabled(),
+    [SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL]: (d) =>
+      updateBooleanWorkspaceSetting(
+        WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
+        d.enabled,
+      ),
+    [SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP]: (d) =>
+      updateBooleanWorkspaceSetting(
+        WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+        d.enabled,
+      ),
+    [SETTINGS_VIEW_COMMANDS.SET_NESTED_DELEGATION_MAX_DEPTH]: (d) =>
+      updateNestedDelegationMaxDepth(d.value),
+    [SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED]: (d) =>
+      updateBashApprovalEnabled(d.enabled),
+    [SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE]: (d) =>
+      updateAgentSetting(WorkspaceStateKey.CODEX_SANDBOX_MODE, d.mode),
+    [SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT]: (d) =>
+      updateAgentSetting(WorkspaceStateKey.CODEX_REASONING_EFFORT, d.effort),
+    [SETTINGS_VIEW_COMMANDS.SET_CODEX_APPROVAL_POLICY]: (d) =>
+      updateAgentSetting(WorkspaceStateKey.CODEX_APPROVAL_POLICY, d.policy),
+    [SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_MODEL]: (d) =>
+      updateAgentSetting(WorkspaceStateKey.CLAUDE_AGENT_MODEL, d.model),
+    [SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_PERMISSION_MODE]: (d) =>
+      updateAgentSetting(WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE, d.mode),
+    [SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_EFFORT]: (d) =>
+      updateAgentSetting(WorkspaceStateKey.CLAUDE_AGENT_EFFORT, d.effort),
+    [SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA]: () =>
+      postToolDashboardData(),
+    [SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL]: (d) =>
+      options.openExternalUrl?.(d.url) ?? Promise.resolve(),
+    [SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION]: (d) =>
+      options.installToolExtension?.(d.extensionId) ?? Promise.resolve(),
+    [SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS]: () => recheckToolStatus(),
+    [SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL]: (d) =>
+      setToolEnabled(d.toolId, d.enabled),
+    [SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND]: (d) =>
+      runToolCommand({ toolId: d.toolId, kind: d.kind }),
+    [SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED]: (d) =>
+      updateAgentEnabled({
+        category: d.category,
+        source: d.agentSource,
+        name: d.agentName,
+        enabled: d.enabled,
+      }),
+    [SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED]: (d) =>
+      updateAllAgentsEnabled({
+        category: d.category,
+        source: d.source,
+        enabled: d.enabled,
+      }),
+    [SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML]: (d) =>
+      openAgentYaml({ source: d.agentSource, name: d.agentName }),
+    [SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER]: () => openAgentFolder(),
+    [SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE]: (d) =>
+      revealAgentFile({ source: d.agentSource, name: d.agentName }),
+    [SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR]: () => postCustomAgentDir(),
+    [SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR]: () => setCustomAgentDir(),
+    [SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR]: () => resetCustomAgentDir(),
+    [SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS]: () => postAgentModePresets(),
+    [SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET]: (d) =>
+      applyAgentModePreset(d.presetId),
+    [SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET]: () => saveAgentModePreset(),
+    [SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET]: (d) =>
+      deleteAgentModePreset(d.presetId),
+    [SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS]: () =>
+      postGitAuthorSettings(),
+    [SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING]: () =>
+      postDesktopCrashReportingStatus(),
+    [SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED]: (d) =>
+      updateDesktopCrashReportingEnabled(d.enabled),
+    [SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN]: () =>
+      updateDesktopCrashReportingDsn(),
+    [SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS]: () =>
+      postLatexSettingsStatus(),
+    [SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS]: () => postLatexSettingsStatus(),
+    [SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP]: () =>
+      options.installToolExtension?.(LATEX_WORKSHOP_EXT_ID) ??
+      Promise.resolve(),
+    [SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND]: (d) => {
+      if (!isAllowedLatexInstallCommand(d.installCommand)) {
+        onError(
+          new Error(`Rejected unknown install command: ${d.installCommand}`),
+        );
+        return;
+      }
+      return options.runInstallCommand?.(d.installCommand) ?? Promise.resolve();
+    },
+    [SETTINGS_VIEW_COMMANDS.GET_LATEX_CONFIG_VALUES]: () =>
+      postLatexConfigValues(),
+    [SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE]: (d) =>
+      updateLatexConfigValue({ field: d.field, value: d.value }),
+    [SETTINGS_VIEW_COMMANDS.SET_GIT_MARK_COMMITS]: (d) =>
+      updateGitAuthorSetting(WorkspaceStateKey.GIT_MARK_COMMITS, d.enabled),
+    [SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME]: (d) =>
+      updateGitAuthorSetting(WorkspaceStateKey.GIT_AUTHOR_NAME, d.name),
+    [SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_EMAIL]: (d) =>
+      updateGitAuthorSetting(WorkspaceStateKey.GIT_AUTHOR_EMAIL, d.email),
+    [SETTINGS_VIEW_COMMANDS.SET_GIT_WORKTREE_SUPPORT]: (d) =>
+      updateGitAuthorSetting(WorkspaceStateKey.GIT_WORKTREE_SUPPORT, d.enabled),
+  };
+
   return {
     refreshAuthDependentData,
 
     handleMessage(message: DesktopCommandMessage) {
-      const result = SettingsViewInboundMessageSchema.safeParse(message);
-      if (!result.success) return false;
-
-      switch (result.data.command) {
-        case SETTINGS_VIEW_COMMANDS.WEBVIEW_READY:
-          if (result.data.view === 'settings') {
-            if (options.sendStartupCatalogData) {
-              runAsync(postInitialSettingsData());
-            } else {
-              postGitAuthorSettings();
-              postLatexConfigValues();
-            }
+      // WEBVIEW_READY is a broadcast: act on it but return false so sibling
+      // handlers (startup, onboarding) in the chain still receive it.
+      const parsed = SettingsViewInboundMessageSchema.safeParse(message);
+      if (!parsed.success) return false;
+      if (parsed.data.command === SETTINGS_VIEW_COMMANDS.WEBVIEW_READY) {
+        if (parsed.data.view === 'settings') {
+          if (options.sendStartupCatalogData) {
+            runAsync(postInitialSettingsData());
+          } else {
+            postGitAuthorSettings();
+            postLatexConfigValues();
           }
-          return false;
-        case SETTINGS_VIEW_COMMANDS.GET_AGENT_SELECTION:
-          runAsync(postAgentSelectionData());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_MODEL_SELECTION:
-          runAsync(postModelSelectionData());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_MEMORY_DATA:
-          runAsync(postMemoryData());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_MEMORY_PREVIEW:
-          runAsync(postMemoryPreview(result.data.storagePath));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_MEMORY_ENABLED:
-          runAsync(postMemoryEnabled());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FILE:
-          runAsync(openMemoryFile(result.data));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.OPEN_MEMORY_FOLDER:
-          runAsync(openMemoryFolder());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.DELETE_MEMORY:
-          runAsync(deleteMemory(result.data));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED:
-          runAsync(setMemoryEnabled(result.data.enabled));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.PIN_MEMORY:
-          runAsync(setMemoryPinned(result.data.storagePath, true));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.UNPIN_MEMORY:
-          runAsync(setMemoryPinned(result.data.storagePath, false));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA:
-          runAsync(postHistoryData());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.DELETE_AGENT:
-          runAsync(deleteHistoryItem(result.data.historyId));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY:
-          runAsync(clearHistory());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.RERUN_AGENT:
-          runAsync(showUnsupportedHistoryAction('Rerun'));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.RESTORE_AGENT:
-          runAsync(showUnsupportedHistoryAction('Setup'));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD:
-          runAsync(showUnsupportedHistoryAction('Markdown export'));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX:
-          runAsync(showUnsupportedHistoryAction('LaTeX export'));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML:
-          runAsync(showUnsupportedHistoryAction('HTML export'));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA:
-          runAsync(postProfileData());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SIGN_IN:
-          runAsync(signIn());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SIGN_OUT:
-          runAsync(signOut());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_API_ACCESS_MODE:
-          runAsync(setApiAccessMode(result.data.mode));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY:
-          runAsync(setProviderKey(result.data.provider, result.data.apiKey));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY:
-          runAsync(removeProviderKey(result.data.provider));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL:
-          runAsync(openProviderKeyUrl(result.data.provider));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_PROVIDER_STREAMING:
-          runAsync(
-            updateProviderStreaming({
-              provider: result.data.provider,
-              enabled: result.data.enabled,
-            }),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_PROVIDER_ENDPOINT:
-          runAsync(
-            updateProviderEndpoint({
-              provider: result.data.provider,
-              endpoint: result.data.endpoint,
-            }),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_GLOBAL_STREAMING:
-          runAsync(updateGlobalStreaming(result.data.enabled));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL:
-          runAsync(
-            options.openExternalUrl?.(result.data.url) ?? Promise.resolve(),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED:
-          runAsync(
-            updateModelEnabled({
-              modelName: result.data.modelName,
-              enabled: result.data.enabled,
-            }),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_HELPER_MODEL:
-          runAsync(updateHelperModel(result.data.modelName));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL:
-          runAsync(
-            updateModelReasoningLevel({
-              modelName: result.data.modelName,
-              level: result.data.level,
-            }),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_PREFER_SHORT_MODEL_NAMES:
-          runAsync(updatePreferShortModelNames(result.data.enabled));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_APPROVAL_SETTINGS:
-          postApprovalSettings();
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_SUPER_YOLO_ENABLED:
-          postSuperYoloEnabled();
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_SUPER_YOLO_ENABLED:
-          postSuperYoloEnabled();
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_ALLOW_ORCHESTRATOR_KILL:
-          runAsync(
-            updateBooleanWorkspaceSetting(
-              WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
-              result.data.enabled,
-            ),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_DETACH_SUBAGENTS_ON_STOP:
-          runAsync(
-            updateBooleanWorkspaceSetting(
-              WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-              result.data.enabled,
-            ),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_NESTED_DELEGATION_MAX_DEPTH:
-          runAsync(updateNestedDelegationMaxDepth(result.data.value));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_BASH_APPROVAL_ENABLED:
-          runAsync(updateBashApprovalEnabled(result.data.enabled));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_CODEX_SANDBOX_MODE:
-          runAsync(
-            updateAgentSetting(
-              WorkspaceStateKey.CODEX_SANDBOX_MODE,
-              result.data.mode,
-            ),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_CODEX_REASONING_EFFORT:
-          runAsync(
-            updateAgentSetting(
-              WorkspaceStateKey.CODEX_REASONING_EFFORT,
-              result.data.effort,
-            ),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_CODEX_APPROVAL_POLICY:
-          runAsync(
-            updateAgentSetting(
-              WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-              result.data.policy,
-            ),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_MODEL:
-          runAsync(
-            updateAgentSetting(
-              WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-              result.data.model,
-            ),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_PERMISSION_MODE:
-          runAsync(
-            updateAgentSetting(
-              WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-              result.data.mode,
-            ),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_CLAUDE_AGENT_EFFORT:
-          runAsync(
-            updateAgentSetting(
-              WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-              result.data.effort,
-            ),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_TOOL_DASHBOARD_DATA:
-          runAsync(postToolDashboardData());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL:
-          runAsync(
-            options.openExternalUrl?.(result.data.url) ?? Promise.resolve(),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION:
-          runAsync(
-            options.installToolExtension?.(result.data.extensionId) ??
-              Promise.resolve(),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS:
-          runAsync(recheckToolStatus());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL:
-          runAsync(setToolEnabled(result.data.toolId, result.data.enabled));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND:
-          runAsync(
-            runToolCommand({
-              toolId: result.data.toolId,
-              kind: result.data.kind,
-            }),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED:
-          runAsync(
-            updateAgentEnabled({
-              category: result.data.category,
-              source: result.data.agentSource,
-              name: result.data.agentName,
-              enabled: result.data.enabled,
-            }),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED:
-          runAsync(
-            updateAllAgentsEnabled({
-              category: result.data.category,
-              source: result.data.source,
-              enabled: result.data.enabled,
-            }),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML:
-          runAsync(
-            openAgentYaml({
-              source: result.data.agentSource,
-              name: result.data.agentName,
-            }),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER:
-          runAsync(openAgentFolder());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE:
-          runAsync(
-            revealAgentFile({
-              source: result.data.agentSource,
-              name: result.data.agentName,
-            }),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_CUSTOM_AGENT_DIR:
-          runAsync(postCustomAgentDir());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR:
-          runAsync(setCustomAgentDir());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR:
-          runAsync(resetCustomAgentDir());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_AGENT_MODE_PRESETS:
-          postAgentModePresets();
-          return true;
-        case SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET:
-          runAsync(applyAgentModePreset(result.data.presetId));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET:
-          runAsync(saveAgentModePreset());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET:
-          runAsync(deleteAgentModePreset(result.data.presetId));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_GIT_AUTHOR_SETTINGS:
-          postGitAuthorSettings();
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_DESKTOP_CRASH_REPORTING:
-          runAsync(postDesktopCrashReportingStatus());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_ENABLED:
-          runAsync(updateDesktopCrashReportingEnabled(result.data.enabled));
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_DESKTOP_CRASH_REPORTING_DSN:
-          runAsync(updateDesktopCrashReportingDsn());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_LATEX_SETTINGS_STATUS:
-          runAsync(postLatexSettingsStatus());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS:
-          runAsync(postLatexSettingsStatus());
-          return true;
-        case SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP:
-          runAsync(
-            options.installToolExtension?.(LATEX_WORKSHOP_EXT_ID) ??
-              Promise.resolve(),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND:
-          if (!isAllowedLatexInstallCommand(result.data.installCommand)) {
-            onError(
-              new Error(
-                `Rejected unknown install command: ${result.data.installCommand}`,
-              ),
-            );
-            return true;
-          }
-          runAsync(
-            options.runInstallCommand?.(result.data.installCommand) ??
-              Promise.resolve(),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.GET_LATEX_CONFIG_VALUES:
-          postLatexConfigValues();
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_LATEX_CONFIG_VALUE:
-          runAsync(
-            updateLatexConfigValue({
-              field: result.data.field,
-              value: result.data.value,
-            }),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_GIT_MARK_COMMITS:
-          runAsync(
-            updateGitAuthorSetting(
-              WorkspaceStateKey.GIT_MARK_COMMITS,
-              result.data.enabled,
-            ),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_NAME:
-          runAsync(
-            updateGitAuthorSetting(
-              WorkspaceStateKey.GIT_AUTHOR_NAME,
-              result.data.name,
-            ),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_GIT_AUTHOR_EMAIL:
-          runAsync(
-            updateGitAuthorSetting(
-              WorkspaceStateKey.GIT_AUTHOR_EMAIL,
-              result.data.email,
-            ),
-          );
-          return true;
-        case SETTINGS_VIEW_COMMANDS.SET_GIT_WORKTREE_SUPPORT:
-          runAsync(
-            updateGitAuthorSetting(
-              WorkspaceStateKey.GIT_WORKTREE_SUPPORT,
-              result.data.enabled,
-            ),
-          );
-          return true;
-        default:
-          return false;
+        }
+        return false;
       }
+      return dispatchSettingsViewInbound(message, settingsHandlers, onError);
     },
   };
 }
