@@ -344,10 +344,13 @@ export class ProgressViewState {
     const store = getStreamTabStore(stream);
     await Promise.all([this.streamLogs.delete(stream), store.clear()]);
 
-    // Update active stream *after* deletion so keys() no longer includes it
+    // Update active stream *after* deletion so keys() no longer includes it.
+    // `streamLogs.keys()` is ascending by creation time (load() sorts by
+    // `firstTimestamp` ASC, and session additions are appended), but the
+    // sidebar sorts newest-first — `.at(-1)` picks the topmost visible tab.
     if (this._prefs.get('activeStream') === stream) {
       this._prefs.update({
-        activeStream: this.streamLogs.keys()[0] || '',
+        activeStream: this.streamLogs.keys().at(-1) ?? '',
       });
     }
 
@@ -508,7 +511,11 @@ export class ProgressViewState {
   private validateActiveStream(): void {
     const savedActiveStream = this._prefs.get('activeStream');
     if (!savedActiveStream || !this.streamLogs.has(savedActiveStream)) {
-      const fallback = this.streamLogs.keys()[0] ?? '';
+      // `streamLogs.keys()` is ascending by creation time (load() sorts by
+      // `firstTimestamp` ASC), but the sidebar renders newest-first — pick
+      // the last key so the fallback matches the topmost visible tab
+      // instead of the oldest one at the bottom.
+      const fallback = this.streamLogs.keys().at(-1) ?? '';
       if (fallback !== savedActiveStream) {
         this._prefs.update({ activeStream: fallback });
       }
