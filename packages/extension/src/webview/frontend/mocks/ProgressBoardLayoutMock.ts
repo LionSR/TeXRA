@@ -1,6 +1,7 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
-import { customElement, query, state } from 'lit/decorators.js';
+import { customElement, query } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 
 // Side-effect imports - Web Awesome components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -343,7 +344,7 @@ export class ProgressBoardLayoutMock extends LitElement {
     `,
   ];
 
-  @state() private filesByRound = SAMPLE_FILES;
+  private readonly filesByRound = SAMPLE_FILES;
   @query('file-list') private fileListEl?: HTMLElement;
 
   override async firstUpdated(): Promise<void> {
@@ -436,16 +437,14 @@ export class ProgressBoardLayoutMock extends LitElement {
   }
 
   private renderRailTab(tab: (typeof SAMPLE_RAIL)[number]): TemplateResult {
-    const classes = [
-      'rail__tab',
-      tab.active ? 'rail__tab--active' : '',
-      tab.status === 'finished' ? 'rail__tab--finished' : '',
-    ]
-      .filter(Boolean)
-      .join(' ');
+    const classes = {
+      rail__tab: true,
+      'rail__tab--active': tab.active ?? false,
+      'rail__tab--finished': tab.status === 'finished',
+    };
     const statusClass = RAIL_STATUS_CLASS[tab.status];
     return html`
-      <div class=${classes} role="listitem">
+      <div class=${classMap(classes)} role="listitem">
         <wa-icon
           class="rail__icon"
           library=${TEXRA_ICON_LIBRARY}

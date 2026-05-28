@@ -1,6 +1,6 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
-import { customElement, query, state } from 'lit/decorators.js';
+import { customElement, query } from 'lit/decorators.js';
 
 // Reuse the production followup component so the mock reflects the real
 // affordance instead of inventing one. The wrapper just feeds it static
@@ -83,7 +83,7 @@ export class FollowupControlsMock extends LitElement {
     `,
   ];
 
-  @state() private options: FollowupOptionsState = SAMPLE_OPTIONS;
+  private readonly options: FollowupOptionsState = SAMPLE_OPTIONS;
   @query('workflow-tool-use-followup-section')
   private followupEl?: HTMLElement;
 

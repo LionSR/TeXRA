@@ -1,6 +1,6 @@
 // Third-party imports
 import { LitElement, html, css, type TemplateResult } from 'lit';
-import { customElement, query, state } from 'lit/decorators.js';
+import { customElement, query } from 'lit/decorators.js';
 
 // Reuse the production TodoList component with mock data so the demo
 // reflects the real visual output, not a hand-rolled copy.
@@ -62,7 +62,7 @@ export class TodoListMock extends LitElement {
     `,
   ];
 
-  @state() private todos: TodoItem[] = SAMPLE_TODOS;
+  private readonly todos: TodoItem[] = SAMPLE_TODOS;
   @query('todo-list') private todoListEl?: HTMLElement;
 
   override async firstUpdated(): Promise<void> {
