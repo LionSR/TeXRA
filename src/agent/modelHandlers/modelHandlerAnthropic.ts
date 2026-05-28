@@ -178,11 +178,12 @@ const INTERLEAVED_THINKING_BETA: AnthropicBeta =
 
 const OPUS_46_FULLNAME = 'claude-opus-4-6';
 const OPUS_47_FULLNAME = 'claude-opus-4-7';
+const OPUS_48_FULLNAME = 'claude-opus-4-8';
 const SONNET_46_FULLNAME = 'claude-sonnet-4-6';
 
-// 1M context window is available natively for Opus 4.6, Opus 4.7, and Sonnet 4.6
-// at standard pricing (no beta header needed). Context window sizes come from
-// llm-zoo. Other Claude models use 200K.
+// 1M context window is available natively for Opus 4.6, Opus 4.7, Opus 4.8, and
+// Sonnet 4.6 at standard pricing (no beta header needed). Context window sizes
+// come from llm-zoo. Other Claude models use 200K.
 
 /**
  * Model patterns that require temperature removal when thinking is enabled.
@@ -252,6 +253,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return this.config.fullName.startsWith(OPUS_47_FULLNAME);
   }
 
+  private isClaudeOpus48(): boolean {
+    return this.config.fullName.startsWith(OPUS_48_FULLNAME);
+  }
+
   private isClaudeSonnet46(): boolean {
     return this.config.fullName.startsWith(SONNET_46_FULLNAME);
   }
@@ -263,12 +268,16 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   /**
    * Whether this model supports adaptive thinking with the effort parameter.
-   * Per Anthropic docs, Opus 4.6, Opus 4.7, and Sonnet 4.6 support adaptive thinking.
-   * Opus 4.7 only accepts adaptive thinking — manual budget_tokens returns 400.
+   * Per Anthropic docs, Opus 4.6, Opus 4.7, Opus 4.8, and Sonnet 4.6 support
+   * adaptive thinking. Opus 4.7+ only accepts adaptive thinking — manual
+   * budget_tokens returns 400.
    */
   private supportsAdaptiveThinking(): boolean {
     return (
-      this.isClaudeOpus46() || this.isClaudeOpus47() || this.isClaudeSonnet46()
+      this.isClaudeOpus46() ||
+      this.isClaudeOpus47() ||
+      this.isClaudeOpus48() ||
+      this.isClaudeSonnet46()
     );
   }
 
@@ -276,7 +285,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * Returns the Anthropic effort level for the current model.
    * Maps the llm-zoo ReasoningEffort enum to Anthropic's effort levels.
    * Falls back to 'high' (the API default) when no specific effort is configured.
-   * 'max' is only valid for Opus-tier models (Opus 4.6 and Opus 4.7).
+   * 'max' is only valid for Opus-tier models (Opus 4.6, Opus 4.7, and Opus 4.8).
    */
   private getAnthropicEffort(): BetaOutputConfig['effort'] {
     const reasoningEffort = this.getEffectiveReasoningEffort();
@@ -286,8 +295,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     switch (reasoningEffort) {
       case 'xhigh':
-        // 'max' is supported on Opus 4.6 and Opus 4.7
-        return this.isClaudeOpus46() || this.isClaudeOpus47() ? 'max' : 'high';
+        // 'max' is supported on Opus 4.6, Opus 4.7, and Opus 4.8
+        return this.isClaudeOpus46() ||
+          this.isClaudeOpus47() ||
+          this.isClaudeOpus48()
+          ? 'max'
+          : 'high';
       case 'high':
         return 'high';
       case 'medium':
@@ -304,7 +317,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
   /** Whether this model supports Anthropic's native server-side context compaction. */
   private isCompactionEligibleModel(): boolean {
     return (
-      this.isClaudeOpus46() || this.isClaudeOpus47() || this.isClaudeSonnet46()
+      this.isClaudeOpus46() ||
+      this.isClaudeOpus47() ||
+      this.isClaudeOpus48() ||
+      this.isClaudeSonnet46()
     );
   }
 
@@ -561,18 +577,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
       this.logger.debug('Enabling thinking for model with reasoning support');
 
       if (this.supportsAdaptiveThinking()) {
-        // Opus 4.6, Opus 4.7, and Sonnet 4.6: use adaptive thinking with effort parameter.
-        // Adaptive thinking lets the model decide when and how much to think,
-        // and automatically enables interleaved thinking between tool calls.
-        // budget_tokens is deprecated on these models.
+        // Opus 4.6, Opus 4.7, Opus 4.8, and Sonnet 4.6: use adaptive thinking
+        // with the effort parameter. Adaptive thinking lets the model decide
+        // when and how much to think, and automatically enables interleaved
+        // thinking between tool calls. budget_tokens is deprecated on these
+        // models.
         const effort = this.getAnthropicEffort();
-        // Opus 4.7 defaults display to 'omitted', which suppresses reasoning
+        // Opus 4.7+ defaults display to 'omitted', which suppresses reasoning
         // output. Request 'summarized' so thinking tokens still stream to the
         // user — older adaptive-thinking models already emit reasoning by
         // default and are unaffected.
-        options.thinking = this.isClaudeOpus47()
-          ? { type: 'adaptive', display: 'summarized' }
-          : { type: 'adaptive' };
+        options.thinking =
+          this.isClaudeOpus47() || this.isClaudeOpus48()
+            ? { type: 'adaptive', display: 'summarized' }
+            : { type: 'adaptive' };
         options.output_config = {
           ...options.output_config,
           effort,

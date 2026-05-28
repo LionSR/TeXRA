@@ -52,6 +52,14 @@ function reconcileEnabledModels(
     }
   }
 
+  // One-time strip for users upgrading past version 16: opus47/opus47T are now
+  // deprecated in favor of opus48/opus48T, so re-run the deprecated sweep.
+  if ((previousVersion ?? 0) < 16) {
+    for (const model of currentModels) {
+      if (isDeprecatedModel(model)) strippedSet.add(model);
+    }
+  }
+
   const kept = currentModels.filter((model) => !strippedSet.has(model));
   const added = DEFAULT_MODELS.filter(
     (model) => !kept.includes(model) && !isDeprecatedModel(model),
