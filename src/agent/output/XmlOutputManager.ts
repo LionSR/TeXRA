@@ -33,6 +33,17 @@ import {
   extractDocuments,
 } from '@utils/text/xmlUtils';
 
+/** Delete any pre-staged symlink before writing so the write never follows the link into the immutable snapshot. */
+async function writeRoundOutput(
+  absolutePath: string,
+  content: string,
+): Promise<void> {
+  if (await AbsoluteFS.isSymbolicLink(absolutePath)) {
+    await AbsoluteFS.delete(absolutePath);
+  }
+  await AbsoluteFS.write(absolutePath, content);
+}
+
 /** Global version of DOCUMENT_NAME_REGEX for counting matches */
 const DOCUMENT_NAME_REGEX_GLOBAL = new RegExp(DOCUMENT_NAME_REGEX.source, 'g');
 
@@ -144,7 +155,7 @@ export class XmlOutputManager {
       const suffix = EXTRACTION_METHOD_MESSAGES[regexResult.method];
       if (suffix)
         logInternal(this.logger, `Recovered ${documentTag} ${suffix}`);
-      await AbsoluteFS.write(texLocation.absolutePath, regexResult.content);
+      await writeRoundOutput(texLocation.absolutePath, regexResult.content);
       return { location: texLocation, sourceName };
     }
     debugInternal(
@@ -157,7 +168,7 @@ export class XmlOutputManager {
 
     const latexDocument = extractContentFromXMLbyTag(root, documentTag);
     if (latexDocument) {
-      await AbsoluteFS.write(texLocation.absolutePath, latexDocument);
+      await writeRoundOutput(texLocation.absolutePath, latexDocument);
       return { location: texLocation, sourceName };
     }
     throw new Error(
@@ -289,7 +300,7 @@ export class XmlOutputManager {
         doc.content.trim(),
         texFile,
       );
-      await AbsoluteFS.write(texLocation.absolutePath, cleanedContent);
+      await writeRoundOutput(texLocation.absolutePath, cleanedContent);
       outputFiles.push({
         source,
         round,
