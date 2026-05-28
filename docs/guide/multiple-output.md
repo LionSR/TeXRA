@@ -15,7 +15,7 @@ Working with multiple files is often necessary when:
 
 The TeXRA UI provides dedicated sections for managing multiple input files.
 
-- **Input Files**: Use the "▼" toggle to add multiple source files. These are typically concatenated and provided as context to the selected agent. For editing agents, the expected output filenames are the selected input filenames in the same order.
+- **Input Files**: Each Input row is an ordered list — use **Add files** (<wa-icon library="texra" name="add"></wa-icon>), **Add opened files** (<wa-icon library="texra" name="folder-opened"></wa-icon>), or drag-and-drop to append sources. They are concatenated and provided as context to the selected agent. For editing agents, the expected output filenames are the selected input filenames in the same order.
 - **Fixed Outputs**: Agents that create files with names not determined by the inputs declare those filenames in `settings.defaultOutputFiles`.
 
 _(See [File Management](./file-management.md) for general UI controls.)_

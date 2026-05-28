@@ -1,7 +1,8 @@
 <script setup>
 // File Management product slice: the Launcher's file-selection section with the
-// real Input / Context / Media groups (FILE_SELECT_CONFIGS in store.ts) — Input
-// as a single file, Context in multiple-file mode, Media as a single file.
+// real Input / Context / Media groups (FILE_SELECT_CONFIGS in store.ts). Each
+// group is an ordered list with three header actions — Add opened files, Clear
+// all, Add files.
 import MockupFrame from './MockupFrame.vue';
 </script>
 
@@ -23,7 +24,7 @@ import MockupFrame from './MockupFrame.vue';
           <span class="sec-lbl">Files</span>
         </div>
 
-        <!-- Input — single file -->
+        <!-- Input -->
         <div class="field">
           <div class="frow">
             <span class="f-label"
@@ -35,31 +36,31 @@ import MockupFrame from './MockupFrame.vue';
               Input</span
             >
             <div class="acts">
-              <span class="act" title="Refresh file list"
-                ><wa-icon library="texra" name="refresh"></wa-icon
+              <span class="act" title="Add opened files as input"
+                ><wa-icon library="texra" name="folder-opened"></wa-icon
               ></span>
-              <span class="act" title="Multiple files"
-                ><wa-icon library="texra" name="chevron-down"></wa-icon
+              <span class="act" title="Clear all input files"
+                ><wa-icon library="texra" name="trash"></wa-icon
               ></span>
-              <span class="act" title="Set current file"
-                ><wa-icon library="texra" name="file-code"></wa-icon
-              ></span>
-              <span class="act" title="Clear selection"
-                ><wa-icon library="texra" name="close"></wa-icon
+              <span class="act" title="Add input files"
+                ><wa-icon library="texra" name="add"></wa-icon
               ></span>
             </div>
           </div>
-          <div class="select">
-            <span class="s-val">draft.tex</span>
-            <wa-icon
-              class="s-caret"
-              library="texra"
-              name="chevron-down"
-            ></wa-icon>
+          <div class="flist">
+            <div class="fitem">
+              <wa-icon
+                class="fi-grip"
+                library="texra"
+                name="ellipsis"
+              ></wa-icon>
+              <span class="fi-name">draft.tex</span>
+              <wa-icon class="fi-rm" library="texra" name="trash"></wa-icon>
+            </div>
           </div>
         </div>
 
-        <!-- Context — multiple-file mode, expanded -->
+        <!-- Context -->
         <div class="field">
           <div class="frow">
             <span class="f-label"
@@ -67,14 +68,14 @@ import MockupFrame from './MockupFrame.vue';
               Context</span
             >
             <div class="acts">
-              <span class="act act-on" title="Multiple files"
-                ><wa-icon library="texra" name="chevron-up"></wa-icon
+              <span class="act" title="Add opened files as context"
+                ><wa-icon library="texra" name="folder-opened"></wa-icon
               ></span>
-              <span class="act" title="Add files"
-                ><wa-icon library="texra" name="add"></wa-icon
-              ></span>
-              <span class="act" title="Clear all"
+              <span class="act" title="Clear all context files"
                 ><wa-icon library="texra" name="trash"></wa-icon
+              ></span>
+              <span class="act" title="Add context files"
+                ><wa-icon library="texra" name="add"></wa-icon
               ></span>
             </div>
           </div>
@@ -86,7 +87,7 @@ import MockupFrame from './MockupFrame.vue';
                 name="ellipsis"
               ></wa-icon>
               <span class="fi-name">references.bib</span>
-              <wa-icon class="fi-rm" library="texra" name="dash"></wa-icon>
+              <wa-icon class="fi-rm" library="texra" name="trash"></wa-icon>
             </div>
             <div class="fitem">
               <wa-icon
@@ -95,12 +96,12 @@ import MockupFrame from './MockupFrame.vue';
                 name="ellipsis"
               ></wa-icon>
               <span class="fi-name">preamble.sty</span>
-              <wa-icon class="fi-rm" library="texra" name="dash"></wa-icon>
+              <wa-icon class="fi-rm" library="texra" name="trash"></wa-icon>
             </div>
           </div>
         </div>
 
-        <!-- Media — single file -->
+        <!-- Media -->
         <div class="field">
           <div class="frow">
             <span class="f-label"
@@ -112,27 +113,27 @@ import MockupFrame from './MockupFrame.vue';
               Media</span
             >
             <div class="acts">
-              <span class="act" title="Refresh file list"
-                ><wa-icon library="texra" name="refresh"></wa-icon
+              <span class="act" title="Add opened files as media"
+                ><wa-icon library="texra" name="folder-opened"></wa-icon
               ></span>
-              <span class="act" title="Multiple files"
-                ><wa-icon library="texra" name="chevron-down"></wa-icon
+              <span class="act" title="Clear all media files"
+                ><wa-icon library="texra" name="trash"></wa-icon
               ></span>
-              <span class="act" title="Set current file"
-                ><wa-icon library="texra" name="file-code"></wa-icon
-              ></span>
-              <span class="act" title="Clear selection"
-                ><wa-icon library="texra" name="close"></wa-icon
+              <span class="act" title="Add media files"
+                ><wa-icon library="texra" name="add"></wa-icon
               ></span>
             </div>
           </div>
-          <div class="select">
-            <span class="s-val">figure1.pdf</span>
-            <wa-icon
-              class="s-caret"
-              library="texra"
-              name="chevron-down"
-            ></wa-icon>
+          <div class="flist">
+            <div class="fitem">
+              <wa-icon
+                class="fi-grip"
+                library="texra"
+                name="ellipsis"
+              ></wa-icon>
+              <span class="fi-name">figure1.pdf</span>
+              <wa-icon class="fi-rm" library="texra" name="trash"></wa-icon>
+            </div>
           </div>
         </div>
       </div>
