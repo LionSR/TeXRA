@@ -18,6 +18,10 @@ import { Hono } from 'jsr:@hono/hono@4.12.15';
 import { createClient } from 'jsr:@supabase/supabase-js@2.104.1';
 import { create, getNumericDate } from 'https://deno.land/x/djwt@v3.0.2/mod.ts';
 import { handleCors } from '../_shared/cors.ts';
+import {
+  checkEmailDomain,
+  checkGitHubAccountAge,
+} from '../_shared/emailPolicy.ts';
 
 // =============================================================================
 // Constants
@@ -45,6 +49,7 @@ interface GitHubUser {
   email: string | null;
   avatar_url: string;
   name: string | null;
+  created_at: string;
 }
 
 type Variables = {
@@ -301,6 +306,23 @@ app.post('/exchange', async (c) => {
           },
         });
       } else {
+        // New user — enforce sign-up policy (existing users are never re-checked).
+        const emailDecision = checkEmailDomain(email);
+        if (!emailDecision.allowed) {
+          console.warn(
+            `[AUTH] Sign-up rejected for GitHub ${githubUser.login} (${email}): ${emailDecision.reason}`,
+          );
+          return errorResponse(c, emailDecision.userMessage, 403);
+        }
+
+        const ageDecision = checkGitHubAccountAge(githubUser.created_at);
+        if (!ageDecision.allowed) {
+          console.warn(
+            `[AUTH] Sign-up rejected for GitHub ${githubUser.login} (${email}): ${ageDecision.reason}`,
+          );
+          return errorResponse(c, ageDecision.userMessage, 403);
+        }
+
         // Create new user
         const { data: newUser, error } = await supabase.auth.admin.createUser({
           email,
