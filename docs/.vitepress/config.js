@@ -157,6 +157,7 @@ const baseConfig = {
             { text: 'Code Review', link: '/guide/code-review' },
             { text: 'Agent Integrations', link: '/guide/agent-integrations' },
             { text: 'File Management', link: '/guide/file-management' },
+            { text: 'Memory', link: '/guide/memory' },
             { text: 'ProgressBoard', link: '/guide/progress-board' },
           ],
         },
