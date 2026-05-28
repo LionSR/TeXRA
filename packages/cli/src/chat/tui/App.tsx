@@ -9,6 +9,7 @@ import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ChildControlPicker } from './modals/ChildControlPicker';
+import { TranscriptViewer } from './modals/TranscriptViewer';
 import { ConversationPane } from './panes/ConversationPane';
 import { StaticConversationTranscript } from './panes/StaticConversationTranscript';
 import { InputBar } from './panes/InputBar';
@@ -196,6 +197,7 @@ export function App(props: AppProps): React.JSX.Element {
   const activeForm = useSignal(cliState.activeForm);
   const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
   const reverseSearchOpen = useSignal(cliState.reverseSearchOpen);
+  const transcriptViewerOpen = useSignal(cliState.transcriptViewerOpen);
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
   const [childControlMode, setChildControlMode] = useState<
@@ -226,7 +228,8 @@ export function App(props: AppProps): React.JSX.Element {
   const foregroundOpen =
     pending !== undefined ||
     activeForm !== undefined ||
-    childControlMode !== undefined;
+    childControlMode !== undefined ||
+    transcriptViewerOpen;
   const inputDisabled = props.inputDisabled === true || foregroundOpen;
 
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
@@ -263,6 +266,16 @@ export function App(props: AppProps): React.JSX.Element {
   function renderForegroundSurface(): React.ReactNode {
     if (pending) {
       return <ApprovalModal pending={pending} availableRows={foregroundRows} />;
+    }
+    if (transcriptViewerOpen) {
+      return (
+        <TranscriptViewer
+          availableRows={foregroundRows}
+          onClose={() => cliState.transcriptViewerOpen.set(false)}
+          slice={activeSlice}
+          width={transcriptWidth}
+        />
+      );
     }
     if (childControlMode) {
       return (
@@ -313,6 +326,11 @@ export function App(props: AppProps): React.JSX.Element {
     // Everything below stands down while a modal/form/input overlay owns the
     // keyboard.
     if (!focusShortcutsActive) return;
+
+    if (key.ctrl && input.toLowerCase() === 't') {
+      if (activeSlice) cliState.transcriptViewerOpen.set(true);
+      return;
+    }
 
     // Tab / Shift-Tab cycles stream focus.
     if (key.tab) {
