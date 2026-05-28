@@ -27,8 +27,10 @@ import {
   type HistoryItem,
   type ProviderKeyStatus,
   type ModelSelectionItem,
+  dispatchSettingsViewOutbound,
   SETTINGS_TAB,
   SETTINGS_TAB_ORDER,
+  type SettingsViewOutboundHandlerRegistry,
 } from '@shared/schemas';
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
 import {
@@ -65,10 +67,6 @@ import type { AgentModePreset } from '@shared/schemas/agentPresets';
 import '@shared/wa/tabs';
 import type { WaTabShowEvent } from '@shared/wa/tabs';
 import { settingsViewStyles } from './styles';
-import {
-  dispatchSettingsViewMessage,
-  type SettingsMessageHandlerContext,
-} from './settingsViewDispatcher';
 
 // Side-effect: register tab components
 import './tabs/MemoryTab';
@@ -113,6 +111,20 @@ function forwardDetail<T extends Record<string, unknown>>(
 /** Create an event handler that sends a postMessage command with no payload. */
 function forwardCommand(command: string): () => void {
   return () => postMessage(command);
+}
+
+function spendingStatusEqual(
+  a: SpendingStatus | null,
+  b: SpendingStatus | null,
+): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return false;
+  return (
+    a.currentSpend === b.currentSpend &&
+    a.limit === b.limit &&
+    a.remaining === b.remaining &&
+    a.percentUsed === b.percentUsed
+  );
 }
 
 // Cast: BaseWebviewApp is abstract, but SignalWatcher expects a concrete constructor.
@@ -327,66 +339,151 @@ export class SettingsApp extends SettingsAppBase {
   // Odyssey settings state
   private readonly odysseyItems = signal<readonly Odyssey[]>([]);
 
-  private getMessageHandlerContext(): SettingsMessageHandlerContext {
-    return {
-      selectedTabIndex: this.selectedTabIndex,
-      memoryItems: this.memoryItems,
-      memoryEnabled: this.memoryEnabled,
-      memoryToggleDisabled: this.memoryToggleDisabled,
-      historyItems: this.historyItems,
-      authenticated: this.authenticated,
-      userEmail: this.userEmail,
-      tier: this.tier,
-      apiAccessMode: this.apiAccessMode,
-      spendingStatus: this.spendingStatus,
-      quotaAutoSwitched: this.quotaAutoSwitched,
-      allowedModels: this.allowedModels,
-      providerKeyStatuses: this.providerKeyStatuses,
-      globalStreamingDefault: this.globalStreamingDefault,
-      modelSelectionItems: this.modelSelectionItems,
-      helperModel: this.helperModel,
-      preferShortModelNames: this.preferShortModelNames,
-      workflowAgents: this.workflowAgents,
-      toolUseAgents: this.toolUseAgents,
-      customAgentDir: this.customAgentDir,
-      customAgentDirIsDefault: this.customAgentDirIsDefault,
-      agentSubTab: this.agentSubTab,
-      customPresets: this.customPresets,
-      reliabilitySettings: this.reliabilitySettings,
-      allowOrchestratorKill: this.allowOrchestratorKill,
-      detachSubagentsOnStop: this.detachSubagentsOnStop,
-      nestedDelegationMaxDepth: this.nestedDelegationMaxDepth,
-      bashApprovalEnabled: this.bashApprovalEnabled,
-      codexSandboxMode: this.codexSandboxMode,
-      codexReasoningEffort: this.codexReasoningEffort,
-      codexApprovalPolicy: this.codexApprovalPolicy,
-      claudeAgentModel: this.claudeAgentModel,
-      claudeAgentPermissionMode: this.claudeAgentPermissionMode,
-      claudeAgentEffort: this.claudeAgentEffort,
-      toolDashboardItems: this.toolDashboardItems,
-      toolDashboardLoaded: this.toolDashboardLoaded,
-      gitMarkCommits: this.gitMarkCommits,
-      gitAuthorName: this.gitAuthorName,
-      gitAuthorEmail: this.gitAuthorEmail,
-      gitWorktreeSupport: this.gitWorktreeSupport,
-      gitSettingsLoaded: this.gitSettingsLoaded,
-      githubTokenStatus: this.githubTokenStatus,
-      desktopCrashReportingEnabled: this.desktopCrashReportingEnabled,
-      desktopCrashReportingConfigured: this.desktopCrashReportingConfigured,
-      prSubscriptions: this.prSubscriptions,
-      latexSettingsStatus: this.latexSettingsStatus,
-      latexSettingsLoaded: this.latexSettingsLoaded,
-      latexConfigValues: this.latexConfigValues,
-      latexConfigValuesLoaded: this.latexConfigValuesLoaded,
-      inlineCriticismEnabled: this.inlineCriticismEnabled,
-      odysseyItems: this.odysseyItems,
-      clearHistorySearch: () => this.historyTab?.clearSearch(),
-      logSchemaError: (message, error) => this.logSchemaError(message, error),
-    };
-  }
+  // Outbound message handlers (extension host → settings webview). Each entry
+  // receives the already-parsed, typed message and updates the matching
+  // signal(s). The dispatcher handles parsing and command lookup.
+  private readonly messageHandlers: SettingsViewOutboundHandlerRegistry = {
+    [SETTINGS_VIEW_COMMANDS.SET_TAB]: (data) => {
+      this.selectedTabIndex.set(data.tabIndex);
+      this.agentSubTab.set(data.agentSubTab);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY]: (data) => {
+      this.memoryItems.set(data.items ?? []);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_ENABLED]: (data) => {
+      this.memoryEnabled.set(data.enabled);
+      this.memoryToggleDisabled.set(false);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW]: (data) => {
+      const { storagePath, preview, lineCount, error } = data.preview;
+      this.memoryItems.set(
+        this.memoryItems.get().map((item) =>
+          item.storagePath === storagePath
+            ? error
+              ? {
+                  ...item,
+                  preview: undefined,
+                  lineCount: undefined,
+                  previewError: true,
+                }
+              : {
+                  ...item,
+                  preview,
+                  ...(lineCount === undefined ? {} : { lineCount }),
+                  previewError: undefined,
+                }
+            : item,
+        ),
+      );
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY]: (data) => {
+      this.historyItems.set(
+        [...data.historyItems].sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+        ),
+      );
+    },
+    [SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED]: () => {
+      this.historyItems.set([]);
+      this.historyTab?.clearSearch();
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION]: (data) => {
+      this.modelSelectionItems.set(data.models);
+      this.helperModel.set(data.helperModel);
+      this.preferShortModelNames.set(data.preferShortModelNames);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION]: (data) => {
+      this.workflowAgents.set(data.workflow);
+      this.toolUseAgents.set(data.toolUse);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR]: (data) => {
+      this.customAgentDir.set(data.path);
+      this.customAgentDirIsDefault.set(data.isDefault);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_SUPER_YOLO_ENABLED]: (data) => {
+      this.reliabilitySettings.set(data.reliabilitySettings);
+      this.allowOrchestratorKill.set(data.allowOrchestratorKill);
+      this.detachSubagentsOnStop.set(data.detachSubagentsOnStop);
+      this.nestedDelegationMaxDepth.set(data.nestedDelegationMaxDepth);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS]: (data) => {
+      this.customPresets.set(data.customPresets);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS]: (data) => {
+      this.bashApprovalEnabled.set(data.bashApprovalEnabled);
+      this.codexSandboxMode.set(data.codexSandboxMode);
+      this.codexReasoningEffort.set(data.codexReasoningEffort);
+      this.codexApprovalPolicy.set(data.codexApprovalPolicy);
+      this.claudeAgentModel.set(data.claudeAgentModel);
+      this.claudeAgentPermissionMode.set(data.claudeAgentPermissionMode);
+      this.claudeAgentEffort.set(data.claudeAgentEffort);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD]: (data) => {
+      this.toolDashboardItems.set(data.items);
+      this.toolDashboardLoaded.set(true);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_GIT_AUTHOR_SETTINGS]: (data) => {
+      this.gitMarkCommits.set(data.markCommits);
+      this.gitAuthorName.set(data.authorName);
+      this.gitAuthorEmail.set(data.authorEmail);
+      this.gitWorktreeSupport.set(data.worktreeSupport);
+      this.gitSettingsLoaded.set(true);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS]: (data) => {
+      this.githubTokenStatus.set(data.status);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_DESKTOP_CRASH_REPORTING]: (data) => {
+      this.desktopCrashReportingEnabled.set(data.enabled);
+      this.desktopCrashReportingConfigured.set(data.configured);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS]: (data) => {
+      this.prSubscriptions.set(data.subscriptions);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS]: (data) => {
+      this.latexSettingsStatus.set(data.settings);
+      this.latexSettingsLoaded.set(true);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES]: (data) => {
+      this.latexConfigValues.set(data.values);
+      this.latexConfigValuesLoaded.set(true);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED]: (data) => {
+      this.inlineCriticismEnabled.set(data.enabled);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_ODYSSEY_LIST]: (data) => {
+      this.odysseyItems.set(data.items);
+    },
+    [SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE]: (data) => {
+      this.authenticated.set(data.authenticated);
+      this.userEmail.set(data.user?.email ?? 'N/A');
+      this.tier.set(data.tier ?? 'free');
+      const newSpend = data.spendingStatus ?? null;
+      // Skip the signal update when the snapshot is value-equal so the Lit
+      // re-render isn't triggered on every UPDATE_PROFILE just because the
+      // JSON parse produced a fresh object reference.
+      if (!spendingStatusEqual(this.spendingStatus.get(), newSpend)) {
+        this.spendingStatus.set(newSpend);
+      }
+      this.quotaAutoSwitched.set(data.quotaAutoSwitched ?? false);
+      this.apiAccessMode.set(data.apiAccessMode);
+      this.allowedModels.set(data.allowedModels ?? null);
+      this.providerKeyStatuses.set(data.providerKeyStatuses ?? []);
+      this.globalStreamingDefault.set(data.globalStreamingDefault ?? true);
+    },
+  };
 
   protected override handleMessage(raw: unknown): void {
-    dispatchSettingsViewMessage(raw, this.getMessageHandlerContext());
+    dispatchSettingsViewOutbound(raw, this.messageHandlers, (error) => {
+      const command =
+        raw && typeof raw === 'object' && 'command' in raw
+          ? String((raw as { command: unknown }).command)
+          : 'unknown';
+      this.logSchemaError(
+        `[SettingsApp] Message validation failed for command "${command}".`,
+        error,
+      );
+    });
   }
 
   override connectedCallback(): void {

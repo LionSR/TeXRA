@@ -440,26 +440,10 @@ export const InstructionTextTranscribedMessageSchema = z.object({
   text: z.string().nullish(),
 });
 
-export const RecordingStartedMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.RECORDING_STARTED),
-});
-
-export const RecordingStoppedMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.RECORDING_STOPPED),
-});
-
-export const RecordingErrorMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.RECORDING_ERROR),
-});
-
 export const ShowApiKeyBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER),
   provider: z.string().nullish(),
   requiresKey: z.boolean().nullish(),
-});
-
-export const HideApiKeyBannerMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER),
 });
 
 export const ShowAgentConfigBannerMessageSchema = z.object({
@@ -468,41 +452,21 @@ export const ShowAgentConfigBannerMessageSchema = z.object({
   customDirSet: z.boolean().nullish(),
 });
 
-export const HideAgentConfigBannerMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER),
-});
-
 export const ShowDependencyBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER),
   missingTools: z.array(z.string()).nullish(),
-});
-
-export const HideDependencyBannerMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER),
 });
 
 export const ShowGettingStartedBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER),
 });
 
-export const HideGettingStartedBannerMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER),
-});
-
 export const ShowOrchestratorBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER),
 });
 
-export const HideOrchestratorBannerMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER),
-});
-
 export const ShowLoginBannerMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER),
-});
-
-export const HideLoginBannerMessageSchema = z.object({
-  command: z.literal(MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER),
 });
 
 export const SetSelectedAgentMessageSchema = z.object({
@@ -570,25 +534,31 @@ export const MainViewMessageSchema = z.discriminatedUnion('command', [
   InstructionTextPolishedMessageSchema,
   InstructionTextPolishErrorMessageSchema,
   InstructionTextTranscribedMessageSchema,
-  RecordingStartedMessageSchema,
-  RecordingStoppedMessageSchema,
-  RecordingErrorMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.RECORDING_STARTED),
+  commandOnly(MAIN_VIEW_COMMANDS.RECORDING_STOPPED),
+  commandOnly(MAIN_VIEW_COMMANDS.RECORDING_ERROR),
   ShowApiKeyBannerMessageSchema,
-  HideApiKeyBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER),
   ShowAgentConfigBannerMessageSchema,
-  HideAgentConfigBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER),
   ShowDependencyBannerMessageSchema,
-  HideDependencyBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER),
   ShowGettingStartedBannerMessageSchema,
-  HideGettingStartedBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER),
   ShowOrchestratorBannerMessageSchema,
-  HideOrchestratorBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER),
   ShowLoginBannerMessageSchema,
-  HideLoginBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER),
   SetSelectedAgentMessageSchema,
 ]);
 
 export type MainViewMessage = z.infer<typeof MainViewMessageSchema>;
+
+/** Handler registry for messages the webview receives (extension → webview). */
+export type MainViewHandlerRegistry = HandlerRegistry<MainViewMessage>;
+
+/** Dispatcher for messages the webview receives (extension → webview). */
+export const dispatchMainView = createDispatcher(MainViewMessageSchema);
 export type RequestRecentCommitsMessage = z.infer<
   typeof RequestRecentCommitsMessageSchema
 >;
