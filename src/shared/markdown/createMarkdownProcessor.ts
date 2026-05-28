@@ -32,6 +32,23 @@ export interface MarkdownProcessorConfig {
    * progress-view callers keep their behaviour.
    */
   readonly formatLatexReference?: LatexReferenceFormatter;
+  /**
+   * When true, shield LaTeX math from markdown-it so it reaches the renderer
+   * verbatim. Without a math plugin, markdown-it treats the body of `$…$` /
+   * `$$…$$` / `\(…\)` / `\[…\]` spans as ordinary markdown and corrupts it two
+   * ways: its CommonMark escape rule strips the backslash before escapable
+   * punctuation (`\(`→`(`, `\;`→`;`, `\{`→`{`, `\,`→`,`), and its emphasis rule
+   * eats `_{…}` subscripts (`a_{i}b_{j}` → `a<em>i</em>b_{j}`). We protect the
+   * whole span, plus a safety net for stray spacing/brace macros (`\,` `\;`
+   * `\:` `\!` `\(` `\)` `\[` `\]` `\{` `\}`) outside any span.
+   *
+   * Enabled by the CLI host, which deliberately shows LaTeX *source* verbatim
+   * (terminal math rendering is disabled). The webview / HTML-export leave this
+   * off: their KaTeX/texmath pipeline consumes the math and must see it raw.
+   * `\$` `\#` `\&` `\%` `\_` `\*` are never protected — they carry genuine
+   * markdown-escape meaning.
+   */
+  readonly protectLatexMath?: boolean;
 }
 
 /**
@@ -89,6 +106,71 @@ function restoreLatexReferences(
   });
 }
 
+const MATH_PLACEHOLDER = /@@LATEX-MATH-(\d+)@@/g;
+
+// Math spans whose body must reach the renderer verbatim. Order matters: the
+// display fences are matched before the inline ones so `$…$` never splits a
+// `$$…$$`. Inline `$…$` requires an unescaped opening `$` and a closing `$` on
+// the same line, which keeps stray currency `$` from being captured.
+const MATH_SPAN_PATTERNS: readonly RegExp[] = [
+  /\$\$[\s\S]+?\$\$/g, // $$ … $$  (display, may span lines)
+  /\\\[[\s\S]+?\\\]/g, // \[ … \]  (display)
+  /\\\([\s\S]+?\\\)/g, // \( … \)  (inline)
+  /(?<!\\)\$(?!\$)[^\n$]+?\$/g, // $ … $  (inline, single line, unescaped)
+];
+
+function protectLatexMath(content: string): {
+  content: string;
+  spans: string[];
+} {
+  const spans: string[] = [];
+  let out = content;
+  for (const pattern of MATH_SPAN_PATTERNS) {
+    out = out.replaceAll(pattern, (match) => {
+      const index = spans.push(match) - 1;
+      return `@@LATEX-MATH-${index}@@`;
+    });
+  }
+  return { content: out, spans };
+}
+
+function restoreLatexMath(content: string, spans: string[]): string {
+  return content.replaceAll(MATH_PLACEHOLDER, (match, rawIndex) => {
+    const span = spans[Number(rawIndex)];
+    return span ?? match;
+  });
+}
+
+const MACRO_PLACEHOLDER = /@@LATEX-MACRO-(\d+)@@/g;
+
+// LaTeX backslash-macros whose trailing character is CommonMark-escapable
+// punctuation, so markdown-it's parser strips the backslash (`\;`→`;`,
+// `\(`→`(`, …). These are the math spacing macros (`\,` `\;` `\:` `\!`), the
+// inline/display math delimiters (`\(` `\)` `\[` `\]`) and literal braces
+// (`\{` `\}`) — all meaningful LaTeX and effectively never an intentional
+// markdown escape in math output. We deliberately exclude `\$` `\#` `\&` `\%`
+// `\_` `\*` etc., which carry real markdown-escape semantics.
+const LATEX_MACRO = /\\([,;:!(){}[\]])/g;
+
+function protectLatexMacros(content: string): {
+  content: string;
+  macros: string[];
+} {
+  const macros: string[] = [];
+  const protectedContent = content.replaceAll(LATEX_MACRO, (match) => {
+    const index = macros.push(match) - 1;
+    return `@@LATEX-MACRO-${index}@@`;
+  });
+  return { content: protectedContent, macros };
+}
+
+function restoreLatexMacros(content: string, macros: string[]): string {
+  return content.replaceAll(MACRO_PLACEHOLDER, (match, rawIndex) => {
+    const macro = macros[Number(rawIndex)];
+    return macro ?? match;
+  });
+}
+
 /** FNV-1a hash → base-36 string. Cheap, no crypto needs here. */
 function hashContent(str: string): string {
   let hash = 2166136261;
@@ -120,13 +202,27 @@ export function createMarkdownProcessor(
     }
     missCount += 1;
 
-    const { content: protectedContent, refs } = protectLatexReferences(content);
+    // Protect in widening order (refs → math spans → stray macros); restore in
+    // reverse so a ref placeholder revealed inside a restored span is still
+    // formatted. After span protection, only out-of-span macros remain to net.
+    const { content: refProtected, refs } = protectLatexReferences(content);
+    const { content: mathProtected, spans } = config.protectLatexMath
+      ? protectLatexMath(refProtected)
+      : { content: refProtected, spans: [] };
+    const { content: protectedContent, macros } = config.protectLatexMath
+      ? protectLatexMacros(mathProtected)
+      : { content: mathProtected, macros: [] };
     // OpenAI reasoning summaries sometimes omit the line break before a bold
     // heading mid-sentence (".**Heading**" → no break). Force one.
     const formatted = protectedContent.replaceAll(/\.(\*\*[A-Z])/g, '.\n$1');
 
     const rendered = config.renderer.render(formatted);
-    const result = restoreLatexReferences(rendered, refs, format);
+    let result = rendered;
+    if (config.protectLatexMath) {
+      result = restoreLatexMacros(result, macros);
+      result = restoreLatexMath(result, spans);
+    }
+    result = restoreLatexReferences(result, refs, format);
 
     // lru-cache's `sizeCalculation` rejects zero, so skip caching the empty
     // render (e.g. content that's only a link-reference definition).
