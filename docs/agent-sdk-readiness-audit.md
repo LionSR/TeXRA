@@ -8,7 +8,7 @@ that don't earn their keep; proposes surface simplifications; and marks subagent
 split points that map onto Claude Agent SDK patterns.
 
 All `file:line` references and counts below were verified directly against the tree
-at audit time. Claims about Anthropic/Agent SDK *native* features are marked
+at audit time. Claims about Anthropic/Agent SDK _native_ features are marked
 **(verify)** where they depend on SDK versions not pinned in this repo.
 
 ---
@@ -31,7 +31,7 @@ The gaps are **incremental, not structural**:
    comments.
 4. The model-handler layer is sound but carries duplicated OpenAI streaming logic
    and hand-rolled Anthropic context management that could lean on SDK natives.
-5. Delegation is a *tool call*, not a first-class primitive; subagent boundaries
+5. Delegation is a _tool call_, not a first-class primitive; subagent boundaries
    exist conceptually but aren't exposed as an API.
 
 Estimated cleanup is small (low hundreds of LOC removed/flattened) with
@@ -61,14 +61,14 @@ the `@agent/runtime` facade barrel (§3.1, adds indirection), the `bridgeState`
 
 ## 1. Areas Identified
 
-| Area | Location | Size | Role |
-|------|----------|------|------|
-| Agent core | `src/agent/core/` (incl. `core/flows`) | ~3.5k LOC, 21 files | Config, state, cycle flows, services |
-| Implementations | `src/agent/implementations/flows/{reflection,tooluse}` | ~2.5k LOC, 19 files | The two real agent loops |
-| Runtime | `src/agent/runtime/` | ~4.3k LOC, 30 files | Entrypoints, context, coordinators, model factory |
-| Model handlers | `src/agent/modelHandlers/` | ~16k LOC, 35 files | Per-provider API adapters |
-| Logger | `src/logger/` + `src/agent/trace/` | ~1.5k LOC, 14 files | Trace event stream + host sinks |
-| Event bus | `src/eventBus/` | ~0.3k LOC | Progress/UI events |
+| Area            | Location                                               | Size                | Role                                              |
+| --------------- | ------------------------------------------------------ | ------------------- | ------------------------------------------------- |
+| Agent core      | `src/agent/core/` (incl. `core/flows`)                 | ~3.5k LOC, 21 files | Config, state, cycle flows, services              |
+| Implementations | `src/agent/implementations/flows/{reflection,tooluse}` | ~2.5k LOC, 19 files | The two real agent loops                          |
+| Runtime         | `src/agent/runtime/`                                   | ~4.3k LOC, 30 files | Entrypoints, context, coordinators, model factory |
+| Model handlers  | `src/agent/modelHandlers/`                             | ~16k LOC, 35 files  | Per-provider API adapters                         |
+| Logger          | `src/logger/` + `src/agent/trace/`                     | ~1.5k LOC, 14 files | Trace event stream + host sinks                   |
+| Event bus       | `src/eventBus/`                                        | ~0.3k LOC           | Progress/UI events                                |
 
 **The run call path (verified):**
 
@@ -98,7 +98,7 @@ CLAUDE.md ("Flattening Abstraction Layers", "Discouraged Factory Patterns").
 re-export/alias shims. **No production code imports them** — the only references
 to `TexraTrace` (11 files) live inside `trace/` and `logger/` themselves, and the
 doc comments are **stale and reversed**: `trace/AgentTrace.ts:10`, `trace/TraceEmitter.ts:6`,
-and `trace/noopTrace.ts:4` all point readers *back* to the deprecated facades as if
+and `trace/noopTrace.ts:4` all point readers _back_ to the deprecated facades as if
 those were canonical, when in fact `@agent/trace` is now the source of truth.
 
 - **Action:** Delete the three `logger/*Trace*` shims; move the one live type that
@@ -129,14 +129,14 @@ to agent code and duplicates what `RunContext.coordinators` already holds.
 
 `executeAgent` (~145 lines), `runToolUseFlow` (~205), `runReflectionFlow` (~251)
 are heavy on "assemble services → build node graph → run flow → map result."
-Per CLAUDE.md's flatten rule, the *pure result-mapping + lifecycle* portions are
+Per CLAUDE.md's flatten rule, the _pure result-mapping + lifecycle_ portions are
 candidates to fold into the flow runners. **However**, unlike the already-deleted
 `ResponseCycle.ts`/`ToolUseCycle.ts` wrappers (see CLAUDE.md history), these still
 do real work (tool resolution, delegation config, round looping, lifecycle).
 
 - **Action (conservative):** Don't delete. Extract only the trivial result→
   `AgentFlowResult` mapping and the service-assembly bookkeeping into named
-  helpers so the *loop* reads cleanly. Leave the orchestration in place.
+  helpers so the _loop_ reads cleanly. Leave the orchestration in place.
 
 ### 2.5 `createRunContext` identity-ish factory — **leave or inline** (cosmetic)
 
@@ -185,7 +185,7 @@ The public barrels (`@agent/index`, `@agent/core`, `@agent/types`) are
 
 4. **Repeated `getMessageNormalizationOptions()` overrides.** 5–6 OpenAI-compatible
    handlers (DeepSeek, Kimi, MiniMax, GLM, XAI, DashScope) each re-declare nearly
-   identical normalization. These are otherwise *good* thin wrappers (19–137 LOC).
+   identical normalization. These are otherwise _good_ thin wrappers (19–137 LOC).
    - **Action:** Drive normalization from capability flags in the base handler;
      keep only genuine per-provider deltas. ~250 LOC saving, low risk.
 
@@ -212,14 +212,14 @@ Two independent event streams exist where the Agent SDK favors one:
   ~40 UI-oriented payload types (permissions, stream status, output-file tracking),
   with pre-listener buffering.
 
-**Genuine duplication:** token usage is emitted on *both* — `trace.usage(...)`
-*and* `bus.emit('updateStreamUsage', ...)` (in `UsageMonitor`). Stream status and
+**Genuine duplication:** token usage is emitted on _both_ — `trace.usage(...)`
+_and_ `bus.emit('updateStreamUsage', ...)` (in `UsageMonitor`). Stream status and
 tool-approval events live only on the bus, with no trace counterpart.
 
 - **Action:** Make `AgentTrace` the single source of truth. Route UI/extension
   concerns through the trace `domain({ key, data })` escape hatch and let the
   progress view subscribe + filter by key, rather than maintaining a parallel bus.
-  This collapses observability to one SDK-aligned stream. (Do this *after* the
+  This collapses observability to one SDK-aligned stream. (Do this _after_ the
   facade deletion in §2.1 so there's one obvious trace import path.)
 
 ---
@@ -234,25 +234,25 @@ and multi-agent presets (Physicist / Mathematician / CS-ML / Lean). The agents
 themselves are config-driven (5 workflow + 10 tool-use YAMLs over 2 flows) — so
 new subagents are a YAML + tool-list concern, not new code.
 
-The **architectural gap** is that delegation is a *tool call inside the LLM loop*,
+The **architectural gap** is that delegation is a _tool call inside the LLM loop_,
 not a first-class SDK primitive with typed input/output and constraints.
 
 Split candidates, by SDK fit:
 
-| Candidate | Today | SDK fit | Why |
-|-----------|-------|---------|-----|
-| `polish`, `merge`, `correct` | Workflow YAMLs on reflection flow | ★★★★★ | Single-turn, deterministic, no tools — clean prompt-in/structured-out actors |
-| `latexDiff` | Tool-use YAML | ★★★★☆ | Already structured for orchestrator calls; clear I/O contract |
-| `review` | Tool-use YAML | ★★★☆☆ | Critique loop; tools mostly read context — could be a near-stateless reviewer |
-| `orchestrator` | Tool-use + delegation tools | ★★★★☆ | Natural fit for an SDK orchestrator primitive (pure dispatch, no domain tools) |
-| Helper/polish models | `runtime/helperModel.ts`, `polishModel.ts` | ★★★☆☆ | Already isolated single-shot model kits; thin to formalize |
+| Candidate                    | Today                                      | SDK fit | Why                                                                            |
+| ---------------------------- | ------------------------------------------ | ------- | ------------------------------------------------------------------------------ |
+| `polish`, `merge`, `correct` | Workflow YAMLs on reflection flow          | ★★★★★   | Single-turn, deterministic, no tools — clean prompt-in/structured-out actors   |
+| `latexDiff`                  | Tool-use YAML                              | ★★★★☆   | Already structured for orchestrator calls; clear I/O contract                  |
+| `review`                     | Tool-use YAML                              | ★★★☆☆   | Critique loop; tools mostly read context — could be a near-stateless reviewer  |
+| `orchestrator`               | Tool-use + delegation tools                | ★★★★☆   | Natural fit for an SDK orchestrator primitive (pure dispatch, no domain tools) |
+| Helper/polish models         | `runtime/helperModel.ts`, `polishModel.ts` | ★★★☆☆   | Already isolated single-shot model kits; thin to formalize                     |
 
 **Not good split points** (keep inline): `chat`, `research`, `numerics`, `creator`,
 `latexFixer`, `lean` — open-ended, user-interaction- or environment-coupled
 (persistent Lean state, file-system feedback loops).
 
 > Correction to a common framing: polish/merge/correct are **not** "buried inside"
-> the reflection flow — they are already independent agent definitions that *share*
+> the reflection flow — they are already independent agent definitions that _share_
 > one flow implementation. The work is exposing each as an SDK actor with a typed
 > contract, not extracting code from a monolith.
 
