@@ -329,10 +329,6 @@ importers:
         version: 1.21.2
 
   packages/cli:
-    dependencies:
-      cli-table3:
-        specifier: ^0.6.5
-        version: 0.6.5
     devDependencies:
       '@babel/core':
         specifier: ^7.29.7
@@ -370,6 +366,9 @@ importers:
       cli-highlight:
         specifier: ^2.1.11
         version: 2.1.11
+      cli-table3:
+        specifier: ^0.6.5
+        version: 0.6.5
       diff:
         specifier: ^9.0.0
         version: 9.0.0

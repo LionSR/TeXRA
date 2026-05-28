@@ -123,6 +123,24 @@ describe('CLI tool renderer registry', () => {
     `);
   });
 
+  it('keeps short bash output whole when elision would not reduce height', () => {
+    const entry = toolUse(
+      'bash',
+      { command: 'seq 10' },
+      {
+        headerSummary: 'seq 10',
+        outputText: Array.from({ length: 10 }, (_, i) => `line ${i + 1}`).join(
+          '\n',
+        ),
+      },
+    );
+
+    const lines = toolUseDisplayLines(entry);
+    expect(lines).toHaveLength(11);
+    expect(lines.some((line) => line.includes('ctrl + t'))).toBe(false);
+    expect(lines.at(-1)).toBe('  line 10');
+  });
+
   it('shows the full bash output when elision is disabled (transcript viewer)', () => {
     const entry = toolUse(
       'bash',

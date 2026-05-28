@@ -20,6 +20,11 @@ export interface TranscriptViewerProps {
   readonly onClose: () => void;
 }
 
+interface ScrollState {
+  readonly offset: number;
+  readonly followBottom: boolean;
+}
+
 export function TranscriptViewer({
   slice,
   width,
@@ -32,7 +37,6 @@ export function TranscriptViewer({
     // fresh slice object every ~16ms tick, but the entries array stays the
     // same reference when nothing was promoted. Keying on entries skips the
     // O(N) re-flatten on status-only ticks during streaming.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [slice?.entries, width],
   );
   // Reserve one row for the footer hint strip.
@@ -40,32 +44,41 @@ export function TranscriptViewer({
   const maxOffset = Math.max(0, lines.length - viewRows);
   // Open pinned to the bottom — the latest output is what the user just asked
   // to inspect.
-  const [offset, setOffset] = useState(maxOffset);
-  // While at the bottom, follow new output as it streams in (mid-run); once the
-  // user scrolls up, hold position so reading isn't yanked. Scrolling back to
-  // the bottom re-arms following.
-  const [followBottom, setFollowBottom] = useState(true);
+  const [{ offset }, setScrollState] = useState<ScrollState>(() => ({
+    offset: maxOffset,
+    followBottom: true,
+  }));
 
-  function scrollTo(next: number): void {
-    const clamped = Math.max(0, Math.min(maxOffset, next));
-    setOffset(clamped);
-    setFollowBottom(clamped >= maxOffset);
+  function clampOffset(next: number): number {
+    return Math.max(0, Math.min(maxOffset, next));
+  }
+
+  function scrollTo(next: number | ((currentOffset: number) => number)): void {
+    setScrollState((current) => {
+      const requested =
+        typeof next === 'function' ? next(current.offset) : next;
+      const offset = clampOffset(requested);
+      return { offset, followBottom: offset >= maxOffset };
+    });
   }
 
   // React to content growth / resize: follow the tail when armed, otherwise
   // just clamp so the offset never points past the end.
   useEffect(() => {
-    setOffset((current) =>
-      followBottom ? maxOffset : Math.min(current, maxOffset),
-    );
-  }, [maxOffset, followBottom]);
+    setScrollState((current) => {
+      const offset = current.followBottom
+        ? maxOffset
+        : Math.min(current.offset, maxOffset);
+      return offset === current.offset ? current : { ...current, offset };
+    });
+  }, [maxOffset]);
 
   useInput((input, key) => {
     if (key.escape || (key.ctrl && input === 't')) onClose();
-    else if (key.downArrow) scrollTo(offset + 1);
-    else if (key.upArrow) scrollTo(offset - 1);
-    else if (key.pageDown) scrollTo(offset + viewRows);
-    else if (key.pageUp) scrollTo(offset - viewRows);
+    else if (key.downArrow) scrollTo((current) => current + 1);
+    else if (key.upArrow) scrollTo((current) => current - 1);
+    else if (key.pageDown) scrollTo((current) => current + viewRows);
+    else if (key.pageUp) scrollTo((current) => current - viewRows);
     else if (input === 'g') scrollTo(0);
     else if (input === 'G') scrollTo(maxOffset);
   });

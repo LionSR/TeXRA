@@ -30,6 +30,7 @@ const MAX_ERROR_PREVIEW = 240;
 // is reachable via the ctrl+t transcript viewer. Tune head/tail here.
 const OUTPUT_HEAD_LINES = 6;
 const OUTPUT_TAIL_LINES = 3;
+const OUTPUT_MARKER_LINES = 1;
 
 interface ElidedOutput {
   readonly head: readonly string[];
@@ -38,9 +39,11 @@ interface ElidedOutput {
 }
 
 function elideOutputLines(lines: readonly string[]): ElidedOutput {
-  // Only elide when it actually hides something: head + tail + at least one
-  // collapsed line. Otherwise show everything.
-  if (lines.length <= OUTPUT_HEAD_LINES + OUTPUT_TAIL_LINES) {
+  // Only elide when the head + marker + tail form is shorter than the original.
+  if (
+    lines.length <=
+    OUTPUT_HEAD_LINES + OUTPUT_TAIL_LINES + OUTPUT_MARKER_LINES
+  ) {
     return { head: lines, tail: [], hiddenCount: 0 };
   }
   return {
