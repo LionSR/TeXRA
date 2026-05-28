@@ -14,7 +14,7 @@ exposes models, tools, and agents through `texra models`, `texra tools`, and
 
 The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard**.
 
-- **Memory** - See what your tool-use agents have remembered across sessions, and delete entries you no longer need.
+- **[Memory](./memory.md)** - See what your tool-use agents have remembered across sessions, pin core insights, and delete entries you no longer need.
 - **History** - Search and browse past runs. Handy for finding that polish job you ran last week.
 - **Models** - Pick which models show up in your dropdown. Models are grouped by provider (Anthropic, OpenAI, Google, etc.) and you can set or remove API keys for each provider right there - no need to hunt through settings.
 - **Agents** - Turn agents on or off for the current workspace. Agents that support multiple output files are marked with a badge.
