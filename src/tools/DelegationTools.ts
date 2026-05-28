@@ -55,6 +55,7 @@ import {
   evaluateDelegationGate,
   type NestedDelegationConfig,
 } from '@shared/constants/delegationPolicy';
+import { getBasename } from '@shared/utils/path';
 import { formatBytes } from '@shared/utils/string';
 
 // Local imports - tools
@@ -716,8 +717,7 @@ const WorkflowAgentInputSchema = z.strictObject({
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 
 function isBibFile(filePath: string): boolean {
-  const basename = filePath.replaceAll('\\', '/').split('/').at(-1);
-  return basename?.toLowerCase().endsWith('.bib') ?? false;
+  return getBasename(filePath).toLowerCase().endsWith('.bib');
 }
 
 function getContextFiles(input: WorkflowAgentInput): string[] {
