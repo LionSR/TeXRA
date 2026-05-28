@@ -64,6 +64,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "citty": "^0.2.2",
     "cli-highlight": "^2.1.11",
+    "cli-table3": "^0.6.5",
     "diff": "^9.0.0",
     "esbuild": "^0.28.0",
     "ink": "^7.0.4",
@@ -75,8 +76,5 @@
     "string-width": "^8.0.0",
     "typescript": "^6.0.3",
     "wrap-ansi": "^10.0.0"
-  },
-  "dependencies": {
-    "cli-table3": "^0.6.5"
   }
 }
