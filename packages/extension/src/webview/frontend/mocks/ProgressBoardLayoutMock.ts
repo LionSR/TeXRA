@@ -5,8 +5,8 @@ import { customElement, query, state } from 'lit/decorators.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 
-// Reuse the production FileList so the right-hand "Run outputs" panel
-// matches the real progress board, not a hand-rolled approximation.
+// Reuse the production FileList — it lives INSIDE the conversation column
+// (stacked below the log), matching WorkflowStreamContent's vertical layout.
 import '@progressView/frontend/components/FileList';
 
 import type { OutputFileInfo } from '@shared/schemas';
@@ -40,13 +40,57 @@ const SAMPLE_FILES: Record<string, OutputFileInfo[]> = {
   ],
 };
 
+/** Sample stream-tabs rail entries — matches what ProgressApp passes
+ *  into the right-hand <stream-tabs> in production. */
+const SAMPLE_RAIL: Array<{
+  id: string;
+  label: string;
+  meta: string;
+  status: 'running' | 'ready' | 'finished';
+  icon: string;
+  active?: boolean;
+}> = [
+  {
+    id: 'polish',
+    label: 'manuscript_revised — polish',
+    meta: 'workflow · 02:14',
+    status: 'running',
+    icon: 'pencil',
+    active: true,
+  },
+  {
+    id: 'figures',
+    label: 'figures.tex — tikz tighten',
+    meta: 'tool-use · 14m',
+    status: 'finished',
+    icon: 'wand-magic-sparkles',
+  },
+  {
+    id: 'review',
+    label: 'reviewer-response — draft',
+    meta: 'workflow · 1h',
+    status: 'finished',
+    icon: 'messages',
+  },
+  {
+    id: 'bib',
+    label: 'bibliography sync',
+    meta: 'tool-use · 3h',
+    status: 'finished',
+    icon: 'book',
+  },
+];
+
 /**
- * Static layout mock of a proposed split ProgressBoard:
- *   - Left column: stream header + live log
- *   - Right column: run's output files (rendered via the production
- *     `<file-list>` so the panel matches the real board)
- * Editors are intentionally not shown — opening a file is delegated to
- * the host (VS Code / desktop).
+ * Static layout mock of the ProgressBoard split, mirroring production:
+ *   - Left column (wide, ~75%): the active stream's conversation —
+ *     stream-header → live log → file-list (stacked vertically, as in
+ *     WorkflowStreamContent).
+ *   - Right column (narrow rail, ~25%): the stream-tabs list of all runs
+ *     (active highlighted, finished dimmed). Equivalent to the
+ *     `<stream-tabs>` rail in `slot="end"` of `ProgressApp`'s
+ *     `wa-split-panel`.
+ * Editors are not shown — opening a file is delegated to the host.
  */
 @customElement('texra-progress-board-layout-mock')
 export class ProgressBoardLayoutMock extends LitElement {
@@ -61,8 +105,8 @@ export class ProgressBoardLayoutMock extends LitElement {
 
       .board {
         display: grid;
-        grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr);
-        gap: var(--wa-space-s);
+        grid-template-columns: minmax(0, 1fr) minmax(200px, 240px);
+        gap: 0;
         min-height: 360px;
         border: var(--border-thin) solid var(--color-border);
         border-radius: var(--wa-border-radius-m);
@@ -82,16 +126,18 @@ export class ProgressBoardLayoutMock extends LitElement {
         min-width: 0;
       }
 
-      .col--left {
+      .col--conversation {
         border-right: var(--border-thin) solid var(--color-border);
       }
 
       @media (max-width: 720px) {
-        .col--left {
+        .col--conversation {
           border-right: none;
           border-bottom: var(--border-thin) solid var(--color-border);
         }
       }
+
+      /* ---- Conversation column ---- */
 
       .stream-header {
         display: flex;
@@ -169,23 +215,118 @@ export class ProgressBoardLayoutMock extends LitElement {
         }
       }
 
-      .files-col {
-        padding: var(--wa-space-s);
-        gap: var(--wa-space-2xs);
+      /* file-list sits inside the conversation column, separated from the
+         log by a hairline divider — same vertical stacking as
+         WorkflowStreamContent uses in production. */
+      .files-block {
+        border-top: var(--border-thin) solid var(--color-border);
+        padding: var(--wa-space-2xs) var(--wa-space-s) var(--wa-space-xs);
+        background: var(--wa-color-surface-raised, transparent);
       }
 
-      .files-col__title {
+      /* ---- Stream-tabs rail (right column) ---- */
+
+      .rail {
+        display: flex;
+        flex-direction: column;
+        background: var(--wa-color-surface-default, transparent);
+      }
+
+      .rail__list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--wa-space-3xs);
+        padding: var(--wa-space-2xs);
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .rail__tab {
         display: flex;
         align-items: center;
-        gap: var(--wa-space-3xs);
-        margin-bottom: var(--wa-space-2xs);
-        font-weight: var(--font-weight-medium);
+        gap: var(--wa-space-2xs);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
+        border: var(--border-thin) solid transparent;
+        border-radius: var(--border-radius);
+        cursor: pointer;
+        min-width: 0;
       }
 
-      .files-col__title small {
+      .rail__tab--active {
+        background-color: color-mix(
+          in srgb,
+          var(--wa-color-brand-fill-loud, var(--color-info)) 12%,
+          transparent
+        );
+        border-color: var(--color-border);
+      }
+
+      .rail__tab--finished {
+        opacity: var(--opacity-subtle, 0.62);
+      }
+
+      .rail__icon {
+        flex-shrink: 0;
         color: var(--wa-color-text-quiet);
+      }
+
+      .rail__tab--active .rail__icon {
+        color: var(--wa-color-brand-text-loud);
+      }
+
+      .rail__body {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        flex: 1;
+      }
+
+      .rail__label {
         font-size: var(--font-size-sm);
-        font-weight: var(--font-weight);
+        font-weight: var(--font-weight-medium);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rail__meta {
+        font-size: var(--font-size-xs);
+        color: var(--wa-color-text-quiet);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rail__status {
+        flex-shrink: 0;
+      }
+
+      .rail__footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--wa-space-2xs) var(--wa-space-s);
+        border-top: var(--border-thin) solid var(--color-border);
+        font-size: var(--font-size-xs);
+        color: var(--wa-color-text-quiet);
+      }
+
+      .rail__filter {
+        display: inline-flex;
+        gap: var(--wa-space-3xs);
+      }
+
+      .rail__filter-pill {
+        padding: 0 var(--wa-space-2xs);
+        border-radius: 999px;
+        border: var(--border-thin) solid var(--color-border);
+      }
+
+      .rail__filter-pill--active {
+        background: var(--wa-color-surface-raised, transparent);
+        color: var(--wa-color-text-normal);
       }
     `,
   ];
@@ -194,8 +335,8 @@ export class ProgressBoardLayoutMock extends LitElement {
   @query('file-list') private fileListEl?: HTMLElement;
 
   override async firstUpdated(): Promise<void> {
-    // Wait for the production <file-list> and wa-details to upgrade so the
-    // imperative open below targets a real shadow tree.
+    // Wait for the production <file-list> and its <wa-details> to upgrade
+    // so the imperative open below targets a real shadow tree.
     await customElements.whenDefined('file-list');
     await customElements.whenDefined('wa-details');
     await Promise.resolve();
@@ -209,13 +350,13 @@ export class ProgressBoardLayoutMock extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="board">
-        <div class="col col--left">${this.renderLeft()}</div>
-        <div class="col files-col">${this.renderRight()}</div>
+        <div class="col col--conversation">${this.renderConversation()}</div>
+        <div class="col rail">${this.renderRail()}</div>
       </div>
     `;
   }
 
-  private renderLeft(): TemplateResult {
+  private renderConversation(): TemplateResult {
     return html`
       <div class="stream-header">
         <span class="status-indicator is-running" aria-hidden="true"></span>
@@ -251,29 +392,71 @@ export class ProgressBoardLayoutMock extends LitElement {
           Drafting new abstract opening: "We present a unified
         </div>
       </div>
+      <div class="files-block">
+        <file-list
+          .filesByRound=${this.filesByRound}
+          .failuresByRound=${{}}
+          .showRoundHeaders=${false}
+        ></file-list>
+      </div>
     `;
   }
 
-  private renderRight(): TemplateResult {
-    const count = Object.values(this.filesByRound).reduce(
-      (n, files) => n + files.length,
-      0,
-    );
+  private renderRail(): TemplateResult {
     return html`
-      <div class="files-col__title">
+      <div class="rail__list" role="list">
+        ${SAMPLE_RAIL.map((tab) => this.renderRailTab(tab))}
+      </div>
+      <div class="rail__footer">
+        <div class="rail__filter" aria-label="Stream filter">
+          <span class="rail__filter-pill rail__filter-pill--active">All</span>
+          <span class="rail__filter-pill">Workflow</span>
+          <span class="rail__filter-pill">Tool-use</span>
+        </div>
         <wa-icon
           library=${TEXRA_ICON_LIBRARY}
-          name="folder"
+          name="trash"
           variant="solid"
+          aria-hidden="true"
         ></wa-icon>
-        Run outputs
-        <small>${count} files</small>
       </div>
-      <file-list
-        .filesByRound=${this.filesByRound}
-        .failuresByRound=${{}}
-        .showRoundHeaders=${false}
-      ></file-list>
+    `;
+  }
+
+  private renderRailTab(
+    tab: (typeof SAMPLE_RAIL)[number],
+  ): TemplateResult {
+    const classes = [
+      'rail__tab',
+      tab.active ? 'rail__tab--active' : '',
+      tab.status === 'finished' ? 'rail__tab--finished' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const statusClass =
+      tab.status === 'running'
+        ? 'is-running'
+        : tab.status === 'finished'
+          ? 'is-ready'
+          : 'is-ready';
+    return html`
+      <div class=${classes} role="listitem">
+        <wa-icon
+          class="rail__icon"
+          library=${TEXRA_ICON_LIBRARY}
+          name=${tab.icon}
+          variant="solid"
+          aria-hidden="true"
+        ></wa-icon>
+        <div class="rail__body">
+          <div class="rail__label">${tab.label}</div>
+          <div class="rail__meta">${tab.meta}</div>
+        </div>
+        <span
+          class="status-indicator rail__status ${statusClass}"
+          aria-hidden="true"
+        ></span>
+      </div>
     `;
   }
 }
