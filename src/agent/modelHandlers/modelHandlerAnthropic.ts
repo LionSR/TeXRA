@@ -1411,6 +1411,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
         usageTotals.cacheReadTokens + usageTotals.cacheCreationTokens,
         totalInput,
       ),
+      // SDK 0.100.0 reports the thinking-token breakdown of output_tokens, so
+      // Anthropic now surfaces reasoning tokens like OpenAI/Google/xAI. This is
+      // a subset of outputTokens (already billed), not an additional charge.
+      reasoningTokens: rawUsage.output_tokens_details?.thinking_tokens || undefined,
       serverToolRequests:
         (rawUsage.server_tool_use?.web_search_requests ?? 0) +
           (rawUsage.server_tool_use?.web_fetch_requests ?? 0) || undefined,
