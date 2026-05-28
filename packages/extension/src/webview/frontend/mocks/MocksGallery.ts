@@ -156,8 +156,8 @@ export class MocksGallery extends LitElement {
           Todo list on ProgressBoard
         </div>
         <div class="section__desc">
-          Live checklist that shows each step transition Pending → In Progress
-          → Completed.
+          Live checklist that shows each step transition Pending → In Progress →
+          Completed.
         </div>
         <texra-todo-list-mock></texra-todo-list-mock>
       </div>
@@ -176,9 +176,8 @@ export class MocksGallery extends LitElement {
           Followup task controls
         </div>
         <div class="section__desc">
-          After a workflow completes, the followup controls let users chat
-          about the output or hand it to another agent without re-selecting
-          files.
+          After a workflow completes, the followup controls let users chat about
+          the output or hand it to another agent without re-selecting files.
         </div>
         <texra-followup-controls-mock></texra-followup-controls-mock>
       </div>
@@ -197,8 +196,8 @@ export class MocksGallery extends LitElement {
           ProgressBoard layout (stream + outputs, no editors)
         </div>
         <div class="section__desc">
-          Stream header and live log on the left, the run's output files on
-          the right. Editors live in the host, not the board.
+          Stream header and live log on the left, the run's output files on the
+          right. Editors live in the host, not the board.
         </div>
         <texra-progress-board-layout-mock></texra-progress-board-layout-mock>
       </div>

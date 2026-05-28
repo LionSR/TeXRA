@@ -92,8 +92,7 @@ export class FollowupControlsMock extends LitElement {
     await customElements.whenDefined('workflow-tool-use-followup-section');
     await customElements.whenDefined('wa-details');
     await Promise.resolve();
-    const details =
-      this.followupEl?.shadowRoot?.querySelector('wa-details');
+    const details = this.followupEl?.shadowRoot?.querySelector('wa-details');
     if (details) (details as HTMLElement & { open: boolean }).open = true;
   }
 

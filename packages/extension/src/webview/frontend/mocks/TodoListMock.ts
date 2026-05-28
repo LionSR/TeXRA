@@ -69,8 +69,7 @@ export class TodoListMock extends LitElement {
     await customElements.whenDefined('todo-list');
     await customElements.whenDefined('wa-details');
     await Promise.resolve();
-    const details =
-      this.todoListEl?.shadowRoot?.querySelector('wa-details');
+    const details = this.todoListEl?.shadowRoot?.querySelector('wa-details');
     if (details) (details as HTMLElement & { open: boolean }).open = true;
   }
 
