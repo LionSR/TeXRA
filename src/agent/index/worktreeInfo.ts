@@ -11,19 +11,22 @@
  * triggered separately by callers (e.g. on stream creation).
  */
 
+import { LRUCache } from 'lru-cache';
+
 import type { WorktreeInfo } from '@shared/schemas';
 
 import { executeCommand } from '@utils/system/execUtils';
 
 const GIT_TIMEOUT_MS = 5_000;
 const CACHE_TTL_MS = 10_000;
+const CACHE_MAX_ENTRIES = 32;
 
-type CacheEntry = {
-  value: WorktreeInfo;
-  expiresAt: number;
-};
-
-const cache = new Map<string, CacheEntry>();
+// Cap entries so an unusual session that probes many distinct working
+// directories doesn't grow this Map forever; the LRU drops cold paths.
+const cache = new LRUCache<string, WorktreeInfo>({
+  max: CACHE_MAX_ENTRIES,
+  ttl: CACHE_TTL_MS,
+});
 const inflight = new Map<string, Promise<WorktreeInfo>>();
 
 /** Read the last-known worktree info synchronously. Returns stale entries
@@ -31,7 +34,9 @@ const inflight = new Map<string, Promise<WorktreeInfo>>();
 export function peekWorktreeInfo(
   workingDirectory: string,
 ): WorktreeInfo | undefined {
-  return cache.get(workingDirectory)?.value;
+  // `allowStale` so a render path can show the last-known value while a
+  // refresh is in flight; an empty slot still returns undefined.
+  return cache.get(workingDirectory, { allowStale: true });
 }
 
 /**
@@ -42,7 +47,7 @@ export async function resolveWorktreeInfo(
   workingDirectory: string,
 ): Promise<WorktreeInfo> {
   const cached = cache.get(workingDirectory);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  if (cached) return cached;
 
   const pending = inflight.get(workingDirectory);
   if (pending) return pending;
@@ -65,7 +70,7 @@ async function probeWorktree(workingDirectory: string): Promise<WorktreeInfo> {
     branch,
     dirty,
   };
-  cache.set(workingDirectory, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+  cache.set(workingDirectory, value);
   return value;
 }
 
