@@ -51,7 +51,7 @@ The `web_search` tool prefers the active provider's native search (Anthropic, Op
 
 ### <wa-icon library="texra" name="book"></wa-icon> Manage References with Zotero
 
-If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Make sure Zotero is running while you use these features — check status on **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) → **Academic Research** (<wa-icon library="texra" name="mortar-board"></wa-icon>).
+If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Make sure Zotero is running while you use these features — check status on **Dashboard → Integrations** (<wa-icon library="texra" name="robot"></wa-icon>).
 
 ```
 Search my Zotero library for papers by Vaswani on attention mechanisms.

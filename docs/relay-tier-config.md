@@ -154,7 +154,13 @@ interface TierModelConfig {
 
 ## Model Names
 
-Model names must match the short names defined in `src/model/ModelRegistry.ts`.
+Model names must match the short names defined by the [`llm-zoo`](https://www.npmjs.com/package/llm-zoo) package's `MODEL_CONFIGS` — the same source of truth `src/model/modelOptionsBasic.ts` and the relay function (`supabase/functions/relay/models.ts`) both import.
+
+::: warning Auto-derived snapshot
+The model rows and prices below are a **snapshot of `llm-zoo` `MODEL_CONFIGS`**. The relay builds its model list and tier assignments automatically from that package (see [Single Source of Truth](#single-source-of-truth)), so individual IDs and prices here drift whenever `llm-zoo` is bumped. Treat the tables as illustrative and re-derive from `MODEL_CONFIGS` before relying on a specific value.
+
+**Prices last verified against `llm-zoo`: 2026-05-28.**
+:::
 
 ### Free / Max Tier Models (≤$3/M Input)
 
@@ -200,11 +206,12 @@ Available to Ultra tier subscribers only (includes all lower tier models).
 
 ### Single Source of Truth
 
-The relay function uses a `RELAY_MODELS` array as the single source of truth. Each model entry specifies:
+The relay function builds its `RELAY_MODELS` array automatically from the `llm-zoo` package's `MODEL_CONFIGS` (every non-`openRouterOnly` model), so no model list is hand-maintained. Each derived entry specifies:
 
-- `shortName`: UI identifier
-- `apiPatterns`: API name prefixes for server-side validation
-- `minTier`: Minimum tier required ('free' or 'Ultra' — free and Max share the same ≤$3 cutoff)
+- `shortName`: UI identifier (from `config.name`)
+- `apiPatterns`: API name prefixes for server-side validation (from `config.fullName`)
+- `inputPrice`: input price per 1M tokens (from `config.inputPrice`)
+- `minTier`: minimum tier required, computed from `inputPrice` — `≤$3` → `free`, `>$3` → `Ultra`. (Free and Max share the same ≤$3 cutoff, so all non-Ultra models are assigned `free`.)
 
 Tier-specific arrays are derived automatically:
 
