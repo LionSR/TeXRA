@@ -50,7 +50,7 @@ texra run polish --input intro.tex --output intro.polished.tex
 
 1. Open `intro.tex`.
 2. Click the TeXRA icon in the activity bar.
-3. With `intro.tex` open in the editor, click <wa-icon library="texra" name="folder-opened"></wa-icon> **Add opened files** in the **Input** section.
+3. In the **Input** section, click <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick `intro.tex` from the file picker.
 4. Pick **polish** as the agent. Pick a model.
 5. Type the instruction. Press **Execute**.
 6. When the run completes, open the diff from the **Progress Board**.

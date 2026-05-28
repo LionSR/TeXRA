@@ -65,7 +65,7 @@ Run **TeXRA: Create Sample Project** from the Command Palette to add a ready-mad
 
 ### Step 2: Select Files
 
-1. With your document open in the editor, click <wa-icon library="texra" name="folder-opened"></wa-icon> **Add opened files** in the **Input** section. You can also drag-and-drop files onto a section or use <wa-icon library="texra" name="add"></wa-icon> **Add files** to pick from a dialog.
+1. In the **Input** section, click <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick your document from the file picker. You can also drag-and-drop it from the OS file manager. If you have several `.tex` files open and want them all, use <wa-icon library="texra" name="folder-opened"></wa-icon> **Add opened files** — it appends every editor tab whose extension matches.
 2. (Optional) Use the same buttons in **Context** or **Media** to add reference, auxiliary, or figure files.
 
 ::: tip Onboarding Prompt
