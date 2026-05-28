@@ -245,7 +245,9 @@ describe('renderAnsiMarkdown', () => {
   it('preserves \\(…\\) and \\[…\\] math delimiter spans verbatim', () => {
     _resetAnsiMarkdownForTests();
     const out = stripAnsi(
-      renderAnsiMarkdown('Euler: \\(e^{i\\pi}+1=0\\) and \\[a \\; = \\; b\\] done'),
+      renderAnsiMarkdown(
+        'Euler: \\(e^{i\\pi}+1=0\\) and \\[a \\; = \\; b\\] done',
+      ),
     );
     expect(out).toContain('\\(e^{i\\pi}+1=0\\)');
     expect(out).toContain('\\[a \\; = \\; b\\]');
@@ -254,7 +256,9 @@ describe('renderAnsiMarkdown', () => {
   it('preserves $…$ and $$…$$ spans incl. subscripts (no emphasis) and backslash-braces', () => {
     _resetAnsiMarkdownForTests();
     const out = stripAnsi(
-      renderAnsiMarkdown('Pairs $a_{i}b_{j}$ and $$P_k = \\{2k-1,\\; 2k\\}$$ end'),
+      renderAnsiMarkdown(
+        'Pairs $a_{i}b_{j}$ and $$P_k = \\{2k-1,\\; 2k\\}$$ end',
+      ),
     );
     // emphasis rule must NOT fire inside the math span
     expect(out).toContain('$a_{i}b_{j}$');
@@ -265,7 +269,9 @@ describe('renderAnsiMarkdown', () => {
 
   it('nets stray spacing macros / literal braces outside any math span', () => {
     _resetAnsiMarkdownForTests();
-    const out = stripAnsi(renderAnsiMarkdown('loose \\; macro and set \\{1,2\\}'));
+    const out = stripAnsi(
+      renderAnsiMarkdown('loose \\; macro and set \\{1,2\\}'),
+    );
     expect(out).toContain('\\;');
     expect(out).toContain('\\{1,2\\}');
   });
