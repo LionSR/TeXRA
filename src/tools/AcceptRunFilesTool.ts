@@ -342,6 +342,15 @@ Optional:
       const rel = await resolveStoragePath(executionId, runPath);
       if (rel) {
         const abs = StorageFS.fullPath(rel);
+        // Symlinks in run storage mean the round didn't emit the file —
+        // it's a stand-in for the `original/` snapshot (or, on pre-fix
+        // runs, the live workspace). Promoting that to the workspace would
+        // propagate non-agent content as if it were agent output.
+        if (await AbsoluteFS.isSymbolicLink(abs)) {
+          throw new ToolError(
+            `Cannot accept ${runPath} from run ${executionId}: the run-storage entry is a symlink, meaning this round did not emit the file. Accepting it would propagate snapshot or workspace content rather than agent output.`,
+          );
+        }
         return {
           sourceAbsolute: abs,
           sourceLocation: createRunStorageLocation(abs, runPath, executionId),
