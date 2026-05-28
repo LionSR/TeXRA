@@ -5,8 +5,10 @@ import { customElement, query, state } from 'lit/decorators.js';
 // Reuse the production followup component so the mock reflects the real
 // affordance instead of inventing one. The wrapper just feeds it static
 // FollowupOptionsState (agents + models) and a READY-status fixture.
+// Side-effect imports - production progress view components
 import '@progressView/frontend/components/WorkflowToolUseFollowupSection';
 
+// Local imports - progress view types and shared styles
 import type { FollowupOptionsState } from '@progressView/frontend/store';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';

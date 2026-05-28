@@ -3,8 +3,10 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 
+// Side-effect imports - Web Awesome components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
+// Local imports - shared styles and icons
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 

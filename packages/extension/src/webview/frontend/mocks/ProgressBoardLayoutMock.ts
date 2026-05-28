@@ -2,13 +2,16 @@
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, query, state } from 'lit/decorators.js';
 
+// Side-effect imports - Web Awesome components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 
 // Reuse the production FileList — it lives INSIDE the conversation column
 // (stacked below the log), matching WorkflowStreamContent's vertical layout.
+// Side-effect imports - production progress view components
 import '@progressView/frontend/components/FileList';
 
+// Local imports - shared types and styles
 import type { OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
@@ -435,7 +438,7 @@ export class ProgressBoardLayoutMock extends LitElement {
       tab.status === 'running'
         ? 'is-running'
         : tab.status === 'finished'
-          ? 'is-ready'
+          ? 'is-stopped'
           : 'is-ready';
     return html`
       <div class=${classes} role="listitem">

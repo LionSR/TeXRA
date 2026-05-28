@@ -4,7 +4,10 @@ import { customElement, query, state } from 'lit/decorators.js';
 
 // Reuse the production TodoList component with mock data so the demo
 // reflects the real visual output, not a hand-rolled copy.
+// Side-effect imports - production progress view components
 import '@progressView/frontend/components/TodoList';
+
+// Local imports - shared schemas and styles
 import { TODO_STATUS, type TodoItem } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 

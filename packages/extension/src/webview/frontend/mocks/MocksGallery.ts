@@ -2,14 +2,17 @@
 import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
+// Side-effect imports - Web Awesome components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
+// Local imports - shared styles and icons
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
 
 // Keep the gallery self-contained: importing this file alone is enough to
 // render every section. ES module dedup makes the second registration path
 // (via ./index.ts) a no-op.
+// Side-effect imports - local mock components
 import './YoloToggleMock';
 import './ContextUtilizationMock';
 import './TodoListMock';
