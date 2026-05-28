@@ -32,7 +32,7 @@ export type ClaudeAgentEffort = (typeof CLAUDE_AGENT_EFFORT_LEVELS)[number];
  * suffix (its only published identifier at time of writing). */
 export const CLAUDE_AGENT_MODELS = [
   'claude-sonnet-4-6',
-  'claude-opus-4-7',
+  'claude-opus-4-8',
   'claude-haiku-4-5-20251001',
 ] as const;
 export type ClaudeAgentModel = (typeof CLAUDE_AGENT_MODELS)[number];

@@ -83,7 +83,7 @@ function abortAfter(ms: number): { signal: AbortSignal; cancel: () => void } {
  * the legacy rewrite while leaving the rest of the path alone.
  */
 function escapeOctokitLegacyTemplate(path: string): string {
-  return path.replace(/:([a-z]\w+)/g, '%3A$1');
+  return path.replaceAll(/:([a-z]\w+)/g, '%3A$1');
 }
 
 export async function ghGet<T>(

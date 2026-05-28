@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Features
+
+- **Claude Opus 4.8 support** — the latest Opus 4.8 models (`opus48`, `opus48T`) are available for demanding research and engineering tasks, replacing Opus 4.7 as the default Anthropic model. Opus 4.8 keeps the full 1M context window, adaptive thinking, and native server-side compaction.
+
 ### Bug Fixes
 
 - **Workflow rounds no longer overwrite the workspace** — past round 0, a workflow agent's emitted documents were being written through a symlink chain that ended at your live workspace file. The round directory's outputs are now real files owned by the round, and the workspace is unreachable from the backend.
