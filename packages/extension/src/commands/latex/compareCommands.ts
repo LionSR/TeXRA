@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { legacyWorkflowOutputStem } from '@agent/output/workflowOutputLayout';
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
   showLoggedErrorMessage,
@@ -66,10 +67,10 @@ async function validateFilesExist(
 export function registerCompareCommands(
   context: vscode.ExtensionContext,
 ): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand('texra.compare', handleCompare),
-    vscode.commands.registerCommand('texra.acceptEdited', handleAcceptEdited),
-  );
+  registerCommands(context, [
+    { id: 'texra.compare', handler: handleCompare },
+    { id: 'texra.acceptEdited', handler: handleAcceptEdited },
+  ]);
 }
 
 async function handleCompare(
