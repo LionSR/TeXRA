@@ -123,9 +123,7 @@ const MainAppBase = SignalWatcher(
   BaseWebviewApp as unknown as new (...args: any[]) => BaseWebviewApp,
 );
 
-const SHOW_MOCKS_GALLERY =
-  process.env.NODE_ENV === 'development' &&
-  localStorage.getItem('texra-mocks') === '1';
+const ENABLE_MOCKS_GALLERY = process.env.NODE_ENV === 'development';
 
 @customElement('main-app')
 export class MainApp extends MainAppBase {
@@ -328,7 +326,7 @@ export class MainApp extends MainAppBase {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    if (SHOW_MOCKS_GALLERY) {
+    if (ENABLE_MOCKS_GALLERY && localStorage.getItem('texra-mocks') === '1') {
       void import('./mocks');
     }
     this.restorePersistedState();
@@ -1659,7 +1657,7 @@ export class MainApp extends MainAppBase {
   }
 
   render(): TemplateResult {
-    if (SHOW_MOCKS_GALLERY) {
+    if (ENABLE_MOCKS_GALLERY && localStorage.getItem('texra-mocks') === '1') {
       return html`
         <div class="content-wrapper">
           <div class="main-content">
