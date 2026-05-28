@@ -2,25 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.38.2] - 2026-05-27
 
 ### Features
 
 - **Claude Opus 4.8 support** — the latest Opus 4.8 models (`opus48`, `opus48T`) are available for demanding research and engineering tasks, replacing Opus 4.7 as the default Anthropic model. Opus 4.8 keeps the full 1M context window, adaptive thinking, and native server-side compaction.
 
-### Bug Fixes
-
-- **Workflow rounds no longer overwrite the workspace** — past round 0, a workflow agent's emitted documents were being written through a symlink chain that ended at your live workspace file. The round directory's outputs are now real files owned by the round, and the workspace is unreachable from the backend.
-
-## [0.38.2] - 2026-05-27
-
-### Features
-
 - **Stay on the latest CLI** — `texra` notices when a newer version is on npm and offers to update for you.
 - **Shift+Enter for newlines** in the CLI chat input — write multi-line prompts without leaving the input.
 - **Easier-to-read diffs** — added and removed lines show as full-width green and red bands in the terminal, matching the editor view.
+- **See the full output anytime** — press **Ctrl+T** in the CLI chat to view a tool's complete output when it's shown shortened.
+- **Tables render in the terminal** — Markdown tables now show as proper bordered tables in the CLI chat.
 
 ### Bug Fixes
+
+- **Workflow rounds no longer overwrite the workspace** — past round 0, a workflow agent's emitted documents were being written through a symlink chain that ended at your live workspace file. The round directory's outputs are now real files owned by the round, and the workspace is unreachable from the backend.
 
 - **Ctrl+C works on modern terminals again** — cancel a run or exit `texra chat` on kitty, WezTerm, and Ghostty.
 - **Approval prompts stay compact** — they no longer stretch to fill the terminal and push the input off-screen.
