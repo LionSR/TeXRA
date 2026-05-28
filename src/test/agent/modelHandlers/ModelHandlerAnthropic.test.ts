@@ -924,12 +924,12 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
-  it('adds native compaction context edit for Claude Opus 4.7 tool-use runs', async () => {
+  it('adds native compaction context edit for Claude Opus 4.8 tool-use runs', async () => {
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,
       supportsReasoning: false,
     });
-    handler.config.fullName = 'claude-opus-4-7';
+    handler.config.fullName = 'claude-opus-4-8';
     handler.setAgentCategory(AgentCategory.ToolUse);
 
     stubHandlerForTest(handler);
@@ -950,7 +950,7 @@ describe('ModelHandlerAnthropic message guards', () => {
               id: 'msg',
               type: 'message',
               role: 'assistant',
-              model: 'claude-opus-4-7',
+              model: 'claude-opus-4-8',
               content: [{ type: 'text', text: 'ok' }],
               stop_reason: 'end_turn',
               usage: { input_tokens: 1, output_tokens: 1 },
@@ -993,13 +993,13 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.equal(compactionEdit.instructions, undefined);
   });
 
-  it('uses adaptive thinking with max effort for Opus 4.7 xhigh reasoning', async () => {
+  it('uses adaptive thinking with xhigh effort for Opus 4.8 xhigh reasoning', async () => {
     const handler = createAnthropicHandler({
       supportsReasoning: true,
       supportsReasoningEffort: true,
       reasoningEffort: ReasoningEffort.XHIGH,
     });
-    handler.config.fullName = 'claude-opus-4-7';
+    handler.config.fullName = 'claude-opus-4-8';
 
     stubHandlerForTest(handler);
 
@@ -1019,7 +1019,7 @@ describe('ModelHandlerAnthropic message guards', () => {
               id: 'msg',
               type: 'message',
               role: 'assistant',
-              model: 'claude-opus-4-7',
+              model: 'claude-opus-4-8',
               content: [{ type: 'text', text: 'ok' }],
               stop_reason: 'end_turn',
               usage: { input_tokens: 1, output_tokens: 1 },
@@ -1035,12 +1035,12 @@ describe('ModelHandlerAnthropic message guards', () => {
     assert.deepEqual(
       options.thinking,
       { type: 'adaptive', display: 'summarized' },
-      'Opus 4.7 should request adaptive thinking with display: summarized so reasoning still streams',
+      'Opus 4.8 should request adaptive thinking with display: summarized so reasoning still streams',
     );
     assert.equal(
       options.output_config?.effort,
-      'max',
-      'xhigh reasoning effort should map to max on Opus 4.7',
+      'xhigh',
+      "xhigh reasoning effort should map to the 'xhigh' (extra) tier on Opus 4.8",
     );
   });
 
