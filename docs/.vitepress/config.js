@@ -126,6 +126,7 @@ const baseConfig = {
             },
             { text: 'Custom Agents', link: '/guide/custom-agents' },
             { text: 'Remote Agents', link: '/guide/remote-agents' },
+            { text: 'Memory', link: '/guide/memory' },
             { text: 'Models', link: '/guide/models' },
           ],
         },
