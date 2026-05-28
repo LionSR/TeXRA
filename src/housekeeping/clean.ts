@@ -2,7 +2,6 @@
 import * as path from 'path';
 
 // Third-party imports
-import * as vscode from 'vscode';
 import { sync as globSync } from 'glob';
 import { MODELS } from 'llm-zoo';
 
@@ -152,13 +151,7 @@ export async function runCleanBuild(): Promise<void> {
 
   for (const dir of buildDirs) {
     try {
-      await vscode.workspace.fs.delete(
-        vscode.Uri.file(path.join(workspacePath, dir)),
-        {
-          recursive: true,
-          useTrash: false,
-        },
-      );
+      await WorkspaceFS.delete(dir, { recursive: true, useTrash: false });
       logger.debug(CHANNEL, `Removed build directory: ${dir}`);
     } catch (err) {
       logger.error(
