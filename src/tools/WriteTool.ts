@@ -29,9 +29,7 @@ import { defineTool } from './core/define';
 const WriteInputSchema = z.strictObject({
   path: z
     .string()
-    .describe(
-      'The file path to write, workspace-relative or absolute.',
-    ),
+    .describe('The file path to write, workspace-relative or absolute.'),
   content: z.string().describe('The full file contents to write.'),
 });
 
