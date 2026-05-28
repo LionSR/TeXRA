@@ -100,10 +100,13 @@ export async function ghGet<T>(
 
   const { signal, cancel } = abortAfter(TIMEOUT_MS);
   try {
-    const res = await octokitRequest(`GET ${escapeOctokitLegacyTemplate(path)}`, {
-      headers,
-      request: { signal },
-    });
+    const res = await octokitRequest(
+      `GET ${escapeOctokitLegacyTemplate(path)}`,
+      {
+        headers,
+        request: { signal },
+      },
+    );
     const newEtag = (res.headers.etag as string | undefined) ?? undefined;
     return { status: 200, data: res.data as T, etag: newEtag };
   } catch (err) {
