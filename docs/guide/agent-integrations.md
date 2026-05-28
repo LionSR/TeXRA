@@ -115,9 +115,9 @@ Hover the card for the exact error message before applying a fix.
 
 ### Claude Code
 
-| Message                                                     | Fix                                                                                                                |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `@anthropic-ai/claude-agent-sdk not found`                  | Reinstall TeXRA, or run `npm install @anthropic-ai/claude-agent-sdk`, then **Recheck**.                            |
+| Message                                                     | Fix                                                                                                                   |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `@anthropic-ai/claude-agent-sdk not found`                  | Reinstall TeXRA, or run `npm install @anthropic-ai/claude-agent-sdk`, then **Recheck**.                               |
 | `Claude Code SDK loaded but native claude binary not found` | Run `npm install -g @anthropic-ai/claude-code` in the same environment as the extension host (inside WSL on Windows). |
 
 **`claude login` opens a terminal but nothing happens.** The button runs `claude login` in a fresh integrated terminal. Focus the terminal and press **Enter** if the browser didn't open, or paste the login URL manually.

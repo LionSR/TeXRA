@@ -73,8 +73,8 @@ Actions → **Variables**):
 
 Built-in defaults per provider:
 
-| Provider   | Default model |
-| ---------- | ------------- |
+| Provider   | Default model  |
+| ---------- | -------------- |
 | DeepSeek   | `deepseekproT` |
 | Anthropic  | `opus47T`      |
 | OpenAI     | `gpt55`        |
