@@ -34,12 +34,7 @@ import {
   extractDocuments,
 } from '@utils/text/xmlUtils';
 
-/**
- * Write a round-emitted document, promoting any pre-staged symlink at the
- * destination to a real round-owned file. Round dirs are populated with
- * symlinks to `runDir/original/<rel>` for `\input` resolution; following
- * them with `fs.writeFile` would clobber the immutable snapshot.
- */
+/** Delete any pre-staged symlink before writing so the write never follows the link into the immutable snapshot. */
 async function writeRoundOutput(
   absolutePath: string,
   content: string,

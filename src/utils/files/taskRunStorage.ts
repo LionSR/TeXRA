@@ -163,12 +163,7 @@ async function ensureParentDir(filePath: string): Promise<void> {
   await fs.mkdir(parentDir, { recursive: true });
 }
 
-/**
- * Probe whether a previously-captured snapshot exists. Distinct from a
- * generic existence check because non-ENOENT stat failures must be
- * surfaced rather than silently treated as "missing" — corrupting that
- * decision would re-copy over a real snapshot.
- */
+/** Non-ENOENT stat failures are re-thrown so a permissions error never silently forces a re-copy over a real snapshot. */
 async function snapshotExists(absolutePath: string): Promise<boolean> {
   try {
     await fs.stat(absolutePath);
@@ -331,14 +326,10 @@ export class TaskRunFileService {
   }
 
   /**
-   * Copy a workspace file into `original/<relativePath>` if not already
-   * captured. Snapshots are the execution-owned anchor for editable inputs:
-   * round-dir symlinks point here rather than chaining back to the live
-   * workspace, so an agent write at `r<N>/<relPath>` can never reach the
-   * user's working copy via symlink follow.
-   *
-   * Idempotent. Silently skips non-workspace locations, ignored roots,
-   * non-regular files, and missing sources.
+   * Copy a workspace file into `original/<relativePath>` if not already captured.
+   * Round-dir symlinks point here rather than the live workspace so an agent
+   * write at `r<N>/<relPath>` can never reach the user's working copy.
+   * Idempotent; skips non-workspace, ignored-root, non-regular, and missing sources.
    */
   private async captureOriginalSnapshot(target: FileLocation): Promise<void> {
     if (target.kind !== 'workspace') return;
@@ -411,11 +402,9 @@ export class TaskRunFileService {
    * Ensure a workspace dependency is reachable from run storage via symlink.
    * Takes a FileLocation and creates a symlink in run storage if needed.
    *
-   * Pass `snapshot: true` for editable inputs (primary inputs, transitive
-   * `\input` targets) so the file is also copied into `original/<relPath>`.
-   * That snapshot becomes the symlink source when staging round dirs, which
-   * keeps editable content reachable from `r<N>/` without the chain ever
-   * touching the live workspace.
+   * Pass `snapshot: true` for editable inputs so the file is also copied into
+   * `original/<relPath>`; round-dir symlinks then point there rather than
+   * chaining back to the live workspace.
    */
   public async mirrorWorkspaceFile(
     location: FileLocation,

@@ -78,8 +78,6 @@ describe('round-dir ownership and editable .tex inheritance', () => {
 
     const fileService = new TaskRunFileService('run-1');
 
-    // Editable input: mirror with snapshot=true (the path
-    // mirrorLatexFileDependencies takes for .tex deps).
     await fileService.mirrorWorkspaceFile(
       createWorkspaceLocation(draftAbsolute, 'Draft/Draft.tex'),
       { snapshot: true },
@@ -90,7 +88,6 @@ describe('round-dir ownership and editable .tex inheritance', () => {
       workspaceOriginal,
     );
 
-    // Stage round 1 working tree.
     await fileService.ensureMirroredInRoundDir(1);
 
     const roundFilePath = path.join(
@@ -100,8 +97,6 @@ describe('round-dir ownership and editable .tex inheritance', () => {
       'Draft.tex',
     );
 
-    // Symlink target must point at the immutable snapshot, not at the
-    // workspace mirror that chains back to the user's file.
     const linkStat = await lstat(roundFilePath);
     expect(linkStat.isSymbolicLink()).toBe(true);
     const linkTarget = await readlink(roundFilePath);
@@ -109,15 +104,14 @@ describe('round-dir ownership and editable .tex inheritance', () => {
       snapshotPath,
     );
 
-    // Simulate XmlOutputManager.writeRoundOutput: lstat → unlink-if-symlink
-    // → write. This is the round-N ownership handoff.
+    // Inline the writeRoundOutput contract so the test is host-neutral
+    // (no platform wiring needed) and the ownership handoff is visible.
     const roundOneContent =
       '\\documentclass{article}\\begin{document}round 1\\end{document}\n';
     const pre = await lstat(roundFilePath);
     if (pre.isSymbolicLink()) await unlink(roundFilePath);
     await AbsoluteFS.write(roundFilePath, roundOneContent);
 
-    // r1/Draft/Draft.tex is now a real file owned by round 1.
     const post = await lstat(roundFilePath);
     expect(post.isSymbolicLink()).toBe(false);
     expect(post.isFile()).toBe(true);
@@ -125,12 +119,9 @@ describe('round-dir ownership and editable .tex inheritance', () => {
       roundOneContent,
     );
 
-    // Snapshot is intact — never written through.
     await expect(readFile(snapshotPath, 'utf8')).resolves.toBe(
       workspaceOriginal,
     );
-
-    // User's workspace file is untouched.
     await expect(readFile(draftAbsolute, 'utf8')).resolves.toBe(
       workspaceOriginal,
     );
@@ -150,7 +141,6 @@ describe('round-dir ownership and editable .tex inheritance', () => {
 
     const fileService = new TaskRunFileService('run-2');
 
-    // Mirror without snapshot — represents cls/sty/bib/figure deps.
     await fileService.mirrorWorkspaceFile(
       createWorkspaceLocation(stylePath, 'macros.sty'),
     );
@@ -164,7 +154,6 @@ describe('round-dir ownership and editable .tex inheritance', () => {
     const linkStat = await lstat(roundFilePath);
     expect(linkStat.isSymbolicLink()).toBe(true);
     const linkTarget = await readlink(roundFilePath);
-    // Falls through to the workspace mirror at runDir/<rel>.
     expect(path.resolve(path.dirname(roundFilePath), linkTarget)).toBe(
       path.join(getRunDir('run-2'), 'macros.sty'),
     );

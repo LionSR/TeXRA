@@ -280,8 +280,6 @@ describe('accept_run_files progress events', () => {
         writes++;
       };
       WorkspaceFS.delete = async () => undefined;
-      // Source resolves to a symlink in r1/ — the round didn't emit this
-      // file, so accepting it would propagate snapshot content.
       AbsoluteFS.isSymbolicLink = async (target) =>
         target ===
         `${storagePath}/executions/${executionId}/r1/Draft/appendices.tex`;
