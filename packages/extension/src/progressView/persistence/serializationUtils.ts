@@ -31,5 +31,8 @@ export function chainStreamWrite<K>(
     if (!pendingWrites.has(stream)) return;
     return write();
   });
-  pendingWrites.set(stream, next.catch(() => {}));
+  pendingWrites.set(
+    stream,
+    next.catch(() => {}),
+  );
 }
