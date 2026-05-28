@@ -131,7 +131,7 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- **GPT-5.5 Pro** — OpenAI's GPT-5.5 Pro (`gpt55pro`) is now available in the model catalog as an opt-in choice for the hardest planning, long-horizon, and large-codebase tasks. It extends GPT-5.5 with a 1.05M-token context window and `xhigh` default reasoning effort. Premium pricing ($30/M input, $180/M output) and Ultra-tier only on the relay — enable it from Settings → Models when GPT-5.5 isn't enough.
+- **GPT-5.5 Pro** — OpenAI's GPT-5.5 Pro (`gpt55pro`) is now available in the model catalog as an opt-in choice for the hardest planning, long-horizon, and large-codebase tasks. It extends GPT-5.5 with a 1.05M-token context window and `xhigh` default reasoning effort. Premium pricing ($30/M input, $180/M output); available on premium plans — enable it from Settings → Models when GPT-5.5 isn't enough.
 - **Computer Scientist (ML) multi-agent preset** — a new built-in team preset tuned for empirical ML and CS work pairs a numerics agent for code-driven experiments with a search agent for literature and a review/criticize agent for methodology and baseline scrutiny.
 - **Setup assistant can run terminal commands** — the setup wizard can now hand off sudo prompts and interactive installers to your VS Code terminal instead of stalling on them.
 
@@ -237,7 +237,7 @@ All notable changes to this project will be documented in this file.
 
 - **Better multi-file paper support** — workflow agents handle papers with shared files and bibliographies more reliably.
 - **More flexible arXiv downloads** — downloaded papers can be saved where they fit your project organization.
-- **Remote-agent transparency** — Ultra users can inspect the prompt sent to a remote agent.
+- **Remote-agent transparency** — premium users can inspect the prompt sent to a remote agent.
 - **Settings import** — settings can now be loaded from a saved file.
 
 ### Improvements
@@ -790,9 +790,9 @@ All notable changes to this project will be documented in this file.
 
 - Added **Gemini 3 Flash** (`gemini3f`) to the default models list.
 - Chat and tool-use agents can now be hosted as remote agents.
-- Introduced **Max tier** with access to premium models for subscribed users.
-- Added **Researcher Access Program** (free tier) with budget models including
-  GPT-5 Mini and Nano.
+- Introduced **premium plans** with access to flagship models for subscribers.
+- Added **Researcher Access Program** with complimentary access to budget
+  models including GPT-5 Mini and Nano.
 - Added access expiration system for researcher access program.
 
 ### Bug Fixes
@@ -835,7 +835,7 @@ All notable changes to this project will be documented in this file.
 
 - Added **GPT-5.2** (`gpt52`, `gpt52pro`) to the default model list.
 - Introduced **flexible user groups** with permission-based access control
-  and tier levels (Max/Ultra) for remote agents.
+  and subscription tiers for remote agents.
 - Added a **todo list UI** in the progress view for tool-use agents.
 - Added **Research agent** for analytical derivations and scientific research.
 - Added **Search agent** to the default tool-use agents for web search workflows.
