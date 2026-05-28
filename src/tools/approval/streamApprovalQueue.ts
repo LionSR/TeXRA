@@ -11,6 +11,8 @@
  * domain-specific result fields (e.g. tool-edit appliedContent / userPatch).
  */
 
+import PQueue from 'p-queue';
+
 import type { StreamTabId } from '@shared/schemas';
 
 export interface PendingApproval<R extends { accepted: boolean }> {
@@ -43,7 +45,8 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
 ): StreamApprovalController<R> {
   const pending = new Map<string, PendingApproval<R>>();
   const bypassedByStream = new Map<StreamTabId, boolean>();
-  let queue: Promise<void> = Promise.resolve();
+  // Serialize approvals so only one prompt is in flight at a time.
+  const queue = new PQueue({ concurrency: 1 });
 
   function rejectMatching(streamId?: StreamTabId): void {
     for (const entry of pending.values()) {
@@ -70,13 +73,10 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
     setBypass(streamId, enabled) {
       bypassedByStream.set(streamId, enabled);
     },
-    enqueue(run) {
-      const operation = queue.then(run);
-      queue = operation.then(
-        () => {},
-        () => {},
-      );
-      return operation;
+    enqueue<T>(run: () => Promise<T>): Promise<T> {
+      // `add` widens to `T | void` to cover abort via signal/timeout; we pass
+      // neither, so the task always runs and resolves with `T`.
+      return queue.add(run) as Promise<T>;
     },
     rejectPendingForStream(streamId) {
       rejectMatching(streamId);

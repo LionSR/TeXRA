@@ -200,6 +200,32 @@ describe('renderAnsiMarkdown', () => {
     }
   });
 
+  it('renders GFM pipe tables as a box-drawing table, not raw HTML', () => {
+    _resetAnsiMarkdownForTests();
+    const md = '| Dimension | Workflow |\n|---|---|\n| Output | Rewrites |';
+    const out = renderAnsiMarkdown(md);
+    const plain = stripAnsi(out);
+    // The cells render…
+    expect(plain).toContain('Dimension');
+    expect(plain).toContain('Rewrites');
+    // …inside an actual table, with no markdown-it HTML fallback leaking.
+    expect(plain).toMatch(/[┌┬┐├┼┤└┴┘─│]/);
+    expect(plain).not.toContain('<table>');
+    expect(plain).not.toContain('<td>');
+    expect(plain).not.toContain('<th>');
+  });
+
+  it('keeps a table within the requested width', () => {
+    _resetAnsiMarkdownForTests();
+    const md =
+      '| Col A | Col B | Col C |\n|---|---|---|\n' +
+      '| a fairly long cell value | another long one | third column here |';
+    const out = renderAnsiMarkdown(md, { width: 40 });
+    for (const line of stripAnsi(out).split('\n')) {
+      expect(displayWidthForTest(line)).toBeLessThanOrEqual(40);
+    }
+  });
+
   it('memoises identical inputs (second call hits the cache)', () => {
     _resetAnsiMarkdownForTests();
     const first = renderAnsiMarkdown('# Title\n\nParagraph.');

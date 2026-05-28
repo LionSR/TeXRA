@@ -7,6 +7,7 @@ import { appendCliApiSwitchHint } from '@cli/runtime/approvalAdapter';
 import { flushPendingRunTraces } from '@logger';
 import {
   MESSAGE_TYPES,
+  TOOL_USE_STATUS,
   type NormalizedToolUse,
   type StreamLogEntry,
   type StreamTabId,
@@ -119,22 +120,29 @@ function logEntryRole(
   return 'assistant';
 }
 
+function renderLogEntryText(
+  role: ConversationEntry['role'],
+  text: string,
+): string {
+  switch (role) {
+    case 'error':
+      return appendCliApiSwitchHint(text);
+    case 'user':
+      return summarizeSubagentFollowup(stripOrchestratorFollowup(text));
+    default:
+      return text;
+  }
+}
+
 function renderLogEntry(
   entry: StreamLogEntry,
   prev: ConversationEntry | undefined,
-  finalizeDeferred: boolean,
 ): ConversationEntry | null {
   if (entry.messageType === MESSAGE_TYPES.TOOL_USE) {
     // Cache hit: same `data` reference as last sync, no re-normalize.
-    // Still honor a pending finalize — otherwise a tool row whose payload
-    // stopped changing before the stream went idle would never promote
-    // into `<Static>` scrollback and would vanish per splitTranscriptEntries.
+    // Promotion to `<Static>` is decided later by `finalizeSettledPrefix`
+    // over the ordered slice, so a cache hit just returns `prev` as-is.
     if (prev?.toolUse && toolUseSourceCache.get(prev) === entry.data) {
-      if (finalizeDeferred && !prev.finalized) {
-        const promoted = { ...prev, finalized: true };
-        toolUseSourceCache.set(promoted, entry.data);
-        return promoted;
-      }
       return prev;
     }
 
@@ -142,17 +150,16 @@ function renderLogEntry(
     // Drop malformed tool entries rather than crash. The progress view
     // does the same — a bad payload shouldn't take down the transcript.
     if (!toolUse) return null;
-    // Defer finalization to `finalizeAssistantTranscriptEntries`. A
-    // fast-completing tool would otherwise jump into `<Static>`
-    // scrollback while preceding assistant text from the same turn is
-    // still streaming, reversing the visible order (Static items are
-    // append-only). Inherit the prior flag so a sync tick that fires
-    // after the finalize step doesn't roll the entry back to false.
+    // Never finalize here. `finalizeSettledPrefix` promotes a tool row only
+    // once it completes AND every entry before it has promoted, so a
+    // fast tool can't jump ahead of still-streaming assistant text in
+    // `<Static>` (which is append-only). Inherit the prior flag so a sync
+    // tick can't roll an already-promoted entry back to false.
     const next: ConversationEntry = {
       id: entry.id,
       role: 'tool',
       text: '',
-      finalized: finalizeDeferred || (prev?.finalized ?? false),
+      finalized: prev?.finalized ?? false,
       toolUse,
     };
     if (prev && entriesEqual(prev, next)) {
@@ -170,20 +177,12 @@ function renderLogEntry(
 
   const text = entry.text ?? '';
   const role = logEntryRole(entry.messageType);
-  const renderedText =
-    role === 'error'
-      ? appendCliApiSwitchHint(text)
-      : role === 'user'
-        ? summarizeSubagentFollowup(stripOrchestratorFollowup(text))
-        : text;
-  // Assistant entries defer finalization (see comment above); inherit
-  // from `prev` so re-syncs after finalize don't de-finalize and drop
-  // the entry from `splitTranscriptEntries` once status flips to
-  // WAITING.
-  const finalized =
-    role === 'assistant'
-      ? finalizeDeferred || (prev?.finalized ?? false)
-      : true;
+  const renderedText = renderLogEntryText(role, text);
+  // Assistant text is promoted by `finalizeSettledPrefix` once the model
+  // moves on to a later entry; inherit the prior flag here so a re-sync
+  // can't de-finalize an already-promoted block. User/error rows can't
+  // change after they appear, so they finalize immediately.
+  const finalized = role === 'assistant' ? (prev?.finalized ?? false) : true;
   const next: ConversationEntry = {
     id: entry.id,
     role,
@@ -191,6 +190,65 @@ function renderLogEntry(
     finalized,
   };
   return prev && entriesEqual(prev, next) ? prev : next;
+}
+
+// An entry is "settled" once its content can no longer change, so it is
+// safe to print once into `<Static>` scrollback:
+//   - user / error / process: fixed the moment they appear.
+//   - assistant: frozen once the model emits a later entry (more text or a
+//     tool call). The trailing block may still be streaming.
+//   - tool: frozen once its result lands (status COMPLETED).
+function isSettledEntry(
+  entry: ConversationEntry,
+  index: number,
+  entries: readonly ConversationEntry[],
+): boolean {
+  switch (entry.role) {
+    case 'user':
+    case 'error':
+    case 'process':
+      return true;
+    case 'tool':
+      return entry.toolUse?.status === TOOL_USE_STATUS.COMPLETED;
+    case 'assistant':
+      return index < entries.length - 1;
+  }
+}
+
+// Promote the contiguous leading run of settled entries to `finalized`, so
+// completed parts of a round flow into `<Static>` scrollback as the round
+// progresses instead of piling up in the bounded live pane (where the
+// viewport would clip the round's earlier content). Only a contiguous
+// prefix is promoted: `<Static>` is append-only, so an entry must not
+// finalize while any earlier entry is still pending, or insertion order
+// would reverse. When the stream reaches a final status every remaining
+// entry settles, including the trailing live block.
+export function finalizeSettledPrefix(
+  entries: readonly ConversationEntry[],
+  streamFinal: boolean,
+): ConversationEntry[] {
+  let result: ConversationEntry[] | undefined;
+  let sealed = false; // hit the first still-pending entry in this round
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (!entry || entry.finalized) continue;
+    if (!streamFinal && (sealed || !isSettledEntry(entry, index, entries))) {
+      sealed = true;
+      continue;
+    }
+    if (!result) result = [...entries];
+    const promoted: ConversationEntry = { ...entry, finalized: true };
+    // Carry the WeakMap cache key onto the clone so the tool fast-path in
+    // `renderLogEntry` keeps hitting after promotion.
+    if (entry.role === 'tool') {
+      const cached = toolUseSourceCache.get(entry);
+      if (cached !== undefined) toolUseSourceCache.set(promoted, cached);
+    }
+    result[index] = promoted;
+  }
+  // No promotions: hand back the input as-is. The caller's `changed` check
+  // is element-wise, so the same reference is safe and skips a per-tick copy.
+  return result ?? (entries as ConversationEntry[]);
 }
 
 // Coalesce bursts into a single render without visibly delaying the
@@ -246,15 +304,11 @@ export function syncStreamLog(streamId: StreamTabId): void {
   patchStream(streamId, (slice) => {
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
     const syntheticEntries = slice.entries.filter((entry) => entry.synthetic);
-    const finalizeDeferred = isFinalTranscriptStatus(slice.status);
+    const streamFinal = isFinalTranscriptStatus(slice.status);
     const logEntries: { entry: StreamLogEntry; rendered: ConversationEntry }[] =
       [];
     for (const entry of responses) {
-      const rendered = renderLogEntry(
-        entry,
-        existing.get(entry.id),
-        finalizeDeferred,
-      );
+      const rendered = renderLogEntry(entry, existing.get(entry.id));
       if (!rendered) continue;
       logEntries.push({ entry, rendered });
     }
@@ -269,10 +323,11 @@ export function syncStreamLog(streamId: StreamTabId): void {
 
     for (const [index, entry] of syntheticEntries.entries()) {
       if (entry.syntheticKind !== 'local') {
+        const entryTextTrimmed = entry.text.trim();
         const duplicate = logCandidates.some(
           (candidate) =>
             candidate.rendered.role === entry.role &&
-            candidate.rendered.text.trim() === entry.text.trim(),
+            candidate.rendered.text.trim() === entryTextTrimmed,
         );
         if (duplicate) continue;
       }
@@ -284,12 +339,16 @@ export function syncStreamLog(streamId: StreamTabId): void {
       });
     }
 
-    const next = candidates
+    const ordered = candidates
       .sort(
         (left, right) =>
           left.sortSeq - right.sortSeq || left.tieBreak - right.tieBreak,
       )
       .map((candidate) => candidate.rendered);
+    // Promote the settled prefix only after sorting: "is there a later
+    // entry" and Static append order are both defined on the final stream
+    // order, not the per-entry render order.
+    const next = finalizeSettledPrefix(ordered, streamFinal);
 
     const changed =
       slice.entries.length !== next.length ||
