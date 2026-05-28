@@ -10,9 +10,29 @@ history, tools), see the [public CLI guide](../guide/texra-cli.md).
 
 ## Install From a Checkout
 
-To track unreleased changes, clone the repository, install workspace
-dependencies, build the CLI package, and link the bundled CLI binary into the
-global pnpm bin directory:
+There are two supported paths. Pick based on whether you want the local build to
+**replace** the published `texra` command or sit **alongside** it.
+
+### Side-by-side as `texra-local` (recommended)
+
+Use the maintained workspace scripts. `texra-local:link` symlinks
+`~/.local/bin/texra-local` to `packages/cli/dist/bin/texra.js` once;
+`texra-local:build` overwrites that target in place, so the symlink always
+points at your latest build without relinking:
+
+```bash
+corepack pnpm install
+npm run texra-local:build   # bundle CLI + copy resources/docs into packages/cli/dist
+npm run texra-local:link    # one-time; override the install dir with TEXRA_LOCAL_BIN_DIR=/some/dir
+```
+
+Run with `texra-local` instead of `texra`. Re-run `texra-local:build` to refresh.
+See also the "Local CLI (`texra-local`)" section of `CLAUDE.md`.
+
+### Override the published `texra`
+
+To shadow the npm-installed `texra` command with the local build, link the
+bundled binary into the global pnpm bin directory:
 
 ```bash
 corepack pnpm install
@@ -71,6 +91,14 @@ corepack pnpm --filter @texra-ai/cli validate:run
 ```
 
 ## Remove the Linked Command
+
+For the side-by-side `texra-local` link:
+
+```bash
+rm "${TEXRA_LOCAL_BIN_DIR:-$HOME/.local/bin}/texra-local"
+```
+
+For the global `texra` override:
 
 ```bash
 rm "$(corepack pnpm bin -g)/texra"
