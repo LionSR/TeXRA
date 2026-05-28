@@ -801,8 +801,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           inputTokens: usage.promptTokens ?? 0,
           outputTokens: usage.completionTokens ?? 0,
           cachedTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
-          reasoningTokens:
-            usage.completionTokensDetails?.reasoningTokens ?? 0,
+          reasoningTokens: usage.completionTokensDetails?.reasoningTokens ?? 0,
         }),
       },
       rawUsage,

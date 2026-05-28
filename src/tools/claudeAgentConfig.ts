@@ -5,10 +5,7 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
-import {
-  createEnumParser,
-  createEnumStateGetter,
-} from './support/enumConfig';
+import { createEnumParser, createEnumStateGetter } from './support/enumConfig';
 import {
   CLAUDE_AGENT_NAME,
   CLAUDE_AGENT_DISPLAY_MODEL,

@@ -42,7 +42,9 @@ export async function refreshApiKeyCaches(
   invalidateModelOptionsCache();
   invalidateApiKeyCache();
   await Promise.all([
-    platform.commands.invoke('texra.refreshApiKeyStatus').catch(() => undefined),
+    platform.commands
+      .invoke('texra.refreshApiKeyStatus')
+      .catch(() => undefined),
     platform.commands.invoke('texra.refreshAllOptions').catch(() => undefined),
   ]);
 }

@@ -65,8 +65,7 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
           </div>
         </div>
         <div class="approval-request__actions">
-          ${this.renderDiffActions()}
-          ${this.renderApproveButton('Approve (y)')}
+          ${this.renderDiffActions()} ${this.renderApproveButton('Approve (y)')}
           ${this.renderRejectButton('Reject (n)')}
         </div>
         ${this.renderFeedbackSection(

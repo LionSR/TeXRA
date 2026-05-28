@@ -17,10 +17,7 @@
 import * as path from 'path';
 
 import { isModuleNotFoundError } from '@common/errors';
-import {
-  pathExists,
-  resolveBinary,
-} from './support/externalBinaryUtils';
+import { pathExists, resolveBinary } from './support/externalBinaryUtils';
 
 type CodexConstructor = new (options?: any) => any;
 type PlatformInfo = { pkg: string; triple: string };

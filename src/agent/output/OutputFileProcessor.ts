@@ -184,9 +184,7 @@ export class OutputFileProcessor {
           documentTag,
         );
         if (documentEntries.length > 0) {
-          const trimmedDocuments = documentEntries.map((e) =>
-            e.content.trim(),
-          );
+          const trimmedDocuments = documentEntries.map((e) => e.content.trim());
           if (trimmedDocuments.length === 1) {
             tagContents[documentTag] = trimmedDocuments[0];
           } else {

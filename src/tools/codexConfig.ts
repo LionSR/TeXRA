@@ -5,10 +5,7 @@ import {
   buildAgentWorkspaceOptions,
   type AgentWorkspaceOptions,
 } from './agentWorkspaceOptions';
-import {
-  createEnumParser,
-  createEnumStateGetter,
-} from './support/enumConfig';
+import { createEnumParser, createEnumStateGetter } from './support/enumConfig';
 import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 
 // Type-only imports
