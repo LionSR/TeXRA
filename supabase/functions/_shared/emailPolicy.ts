@@ -60,6 +60,23 @@ function normalizeDomain(email: string): string | null {
     .toLowerCase();
 }
 
+function findBlockedDomain(
+  domain: string,
+  blockedDomains: ReadonlySet<string>,
+): string | null {
+  let candidate = domain;
+
+  while (candidate) {
+    if (blockedDomains.has(candidate)) return candidate;
+
+    const dot = candidate.indexOf('.');
+    if (dot < 0) return null;
+    candidate = candidate.slice(dot + 1);
+  }
+
+  return null;
+}
+
 export function checkEmailDomain(email: string): EmailPolicyDecision {
   const domain = normalizeDomain(email);
   if (!domain) {
@@ -71,24 +88,29 @@ export function checkEmailDomain(email: string): EmailPolicyDecision {
     };
   }
 
-  if (DISPOSABLE_EMAIL_DOMAINS.has(domain)) {
+  const disposableDomain = findBlockedDomain(domain, DISPOSABLE_EMAIL_DOMAINS);
+  if (disposableDomain) {
     return {
       allowed: false,
-      reason: `disposable-domain:${domain}`,
+      reason: `disposable-domain:${disposableDomain}`,
       userMessage:
-        `Sign-up is restricted: "${domain}" is a disposable / temporary email provider. ` +
+        `Sign-up is restricted: "${disposableDomain}" is a disposable / temporary email provider. ` +
         'Please sign in with a GitHub account that uses your primary institutional, ' +
         'employer, or long-term personal email address. ' +
         'If you believe this is in error, contact contact@texra.ai.',
     };
   }
 
-  if (PRIVACY_RELAY_EMAIL_DOMAINS.has(domain)) {
+  const privacyRelayDomain = findBlockedDomain(
+    domain,
+    PRIVACY_RELAY_EMAIL_DOMAINS,
+  );
+  if (privacyRelayDomain) {
     return {
       allowed: false,
-      reason: `privacy-relay-domain:${domain}`,
+      reason: `privacy-relay-domain:${privacyRelayDomain}`,
       userMessage:
-        `Sign-up via "${domain}" is currently not accepted for the Researcher ` +
+        `Sign-up via "${privacyRelayDomain}" is currently not accepted for the Researcher ` +
         'Access Program due to repeated abuse. Please sign in with a GitHub ' +
         'account that uses your primary institutional or long-term personal ' +
         'email address. If this is your only email and you are a legitimate ' +
