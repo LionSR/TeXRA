@@ -1602,7 +1602,7 @@
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.1",
-    "concurrently": "^9.1.2",
+    "concurrently": "^10.0.0",
     "css-loader": "^7.1.4",
     "esbuild": "^0.28.0",
     "eslint": "^9.39.4",
