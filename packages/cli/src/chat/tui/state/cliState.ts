@@ -130,6 +130,11 @@ const ACTIVE_FORM = signal<ActiveSlashForm | undefined>(undefined);
 const SLASH_PALETTE_OPEN = signal<boolean>(false);
 const REVERSE_SEARCH_OPEN = signal<boolean>(false);
 
+/** True while the ctrl+t full-output transcript viewer owns the screen. The
+ *  viewer shows the active stream's tool output untruncated and scrollable;
+ *  the finalized scrollback and live region only ever show a head+tail slice. */
+const TRANSCRIPT_VIEWER_OPEN = signal<boolean>(false);
+
 const PENDING_EXIT_HINT = signal<boolean>(false);
 const PENDING_EXIT_RESUME_ID = signal<string | undefined>(undefined);
 
@@ -145,6 +150,7 @@ export const cliState = {
   activeForm: ACTIVE_FORM as Signal.State<ActiveSlashForm | undefined>,
   slashPaletteOpen: SLASH_PALETTE_OPEN as Signal.State<boolean>,
   reverseSearchOpen: REVERSE_SEARCH_OPEN as Signal.State<boolean>,
+  transcriptViewerOpen: TRANSCRIPT_VIEWER_OPEN as Signal.State<boolean>,
   pendingExitHint: PENDING_EXIT_HINT as Signal.State<boolean>,
   pendingExitResumeId: PENDING_EXIT_RESUME_ID as Signal.State<
     string | undefined
@@ -238,6 +244,7 @@ export function resetCliState(sessionMeta = defaultSessionMeta()): void {
   cliState.activeForm.set(undefined);
   cliState.slashPaletteOpen.set(false);
   cliState.reverseSearchOpen.set(false);
+  cliState.transcriptViewerOpen.set(false);
   cliState.pendingExitHint.set(false);
   cliState.pendingExitResumeId.set(undefined);
   for (const resetHook of RESET_HOOKS) resetHook();

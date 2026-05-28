@@ -9,7 +9,9 @@
 // `highlight.js` grammars the webview already pulls — keeping fence rendering
 // consistent between hosts without dragging the HTML wrapper through.
 
+import Table from 'cli-table3';
 import { highlight, supportsLanguage } from 'cli-highlight';
+import Token from 'markdown-it/lib/token.mjs';
 import pico from 'picocolors';
 
 import {
@@ -41,7 +43,69 @@ function highlightForTui(code: string, lang: string): string {
   return pico.gray(trimmed);
 }
 
-function configureAnsi(md: MarkdownItInstance): void {
+type ColumnAlign = 'left' | 'center' | 'right';
+
+// markdown-it encodes GFM cell alignment as an inline `text-align` style on the
+// `th`/`td` open token; map it to cli-table3's `colAligns` vocabulary.
+function columnAlign(style: string | null): ColumnAlign {
+  if (style?.includes('right')) return 'right';
+  if (style?.includes('center')) return 'center';
+  return 'left';
+}
+
+const TABLE_MIN_COL_WIDTH = 5;
+// Fallback table width when the caller renders without a known terminal width
+// (the live region and Markdown component both pass one, so this is rare).
+const TABLE_FALLBACK_WIDTH = 80;
+
+// Distribute the available width across columns so the rendered table is never
+// wider than `width` — otherwise the trailing `wrapAnsiToWidth` hard-wrap would
+// shred the box-drawing borders. cli-table3's total width is the sum of the
+// column widths plus one border column per column boundary (numCols + 1).
+// Returns undefined when there isn't room to cap, letting cli-table3 size to
+// content instead.
+function tableColWidths(
+  numCols: number,
+  width: number | undefined,
+): number[] | undefined {
+  const total = Math.floor(width ?? TABLE_FALLBACK_WIDTH);
+  const usable = total - (numCols + 1);
+  if (usable < numCols * TABLE_MIN_COL_WIDTH) return undefined;
+  const base = Math.floor(usable / numCols);
+  const widths = Array.from({ length: numCols }, () => base);
+  // Hand the floor remainder to the leftmost columns so the table fills `width`.
+  let i = 0;
+  for (let remainder = usable - base * numCols; remainder > 0; remainder--)
+    widths[i++ % numCols] += 1;
+  return widths;
+}
+
+// Lay out a parsed markdown table through cli-table3 (borders, per-cell word
+// wrap, column widths) rather than hand-rolling alignment math.
+function renderAnsiTable(
+  head: readonly string[],
+  rows: readonly (readonly string[])[],
+  aligns: readonly ColumnAlign[],
+  width: number | undefined,
+): string {
+  const numCols = Math.max(head.length, ...rows.map((row) => row.length), 1);
+  const table = new Table({
+    head: head.map((cell) => pico.bold(cell)),
+    colWidths: tableColWidths(numCols, width),
+    colAligns: Array.from({ length: numCols }, (_, i) => aligns[i] ?? 'left'),
+    wordWrap: true,
+    // No cli-table3 colorizing — cell content already carries its own ANSI and
+    // the border stays the terminal's default foreground.
+    style: { head: [], border: [] },
+  });
+  for (const row of rows) table.push([...row]);
+  return table.toString();
+}
+
+function configureAnsi(
+  md: MarkdownItInstance,
+  width: number | undefined,
+): void {
   const r = md.renderer.rules;
   let quoteDepth = 0;
   let headingDepth = 0;
@@ -180,12 +244,73 @@ function configureAnsi(md: MarkdownItInstance): void {
   r.text = (tokens, idx) => styleHeadingText(tokens[idx]?.content ?? '');
   r.image = (tokens, idx) => pico.dim(`[image: ${tokens[idx]?.content ?? ''}]`);
 
+  // The table-family tokens (table_open … table_close) have no ANSI rules, so
+  // we collapse each table's token range into a single pre-rendered
+  // `ansi_table` token before the default render loop runs — otherwise the
+  // in-cell `inline` tokens would stream into the output and the table tags
+  // would fall through to markdown-it's default HTML renderer.
+  r.ansi_table = (tokens, idx) => `${tokens[idx]?.content ?? ''}\n\n`;
+
+  // The submodule's renderer typings narrow tokens to `unknown[]` and omit
+  // `renderInline`; recover the real shapes locally.
+  const renderInline = (
+    md.renderer as unknown as {
+      renderInline(tokens: Token[], options: unknown, env: unknown): string;
+    }
+  ).renderInline.bind(md.renderer);
   const render = md.renderer.render.bind(md.renderer);
-  md.renderer.render = (tokens, options, env) => {
+  md.renderer.render = (rawTokens, options, env) => {
     quoteDepth = 0;
     headingDepth = 0;
+    const tokens = rawTokens as Token[];
+    const collapsed: Token[] = [];
+    for (let i = 0; i < tokens.length; i++) {
+      if (tokens[i]?.type !== 'table_open') {
+        collapsed.push(tokens[i]!);
+        continue;
+      }
+      const head: string[] = [];
+      const rows: string[][] = [];
+      const aligns: ColumnAlign[] = [];
+      let cells: string[] = [];
+      let inHeader = false;
+      let col = 0;
+      let j = i + 1;
+      for (; j < tokens.length && tokens[j]?.type !== 'table_close'; j++) {
+        const token = tokens[j]!;
+        switch (token.type) {
+          case 'thead_open':
+            inHeader = true;
+            break;
+          case 'thead_close':
+            inHeader = false;
+            break;
+          case 'tr_open':
+            cells = [];
+            col = 0;
+            break;
+          case 'tr_close':
+            if (inHeader) head.push(...cells);
+            else rows.push(cells);
+            break;
+          case 'th_open':
+          case 'td_open': {
+            if (inHeader) aligns[col] = columnAlign(token.attrGet('style'));
+            col++;
+            break;
+          }
+          case 'inline':
+            cells.push(renderInline(token.children ?? [], options, env));
+            break;
+        }
+      }
+      const tableToken = new Token('ansi_table', '', 0);
+      tableToken.content = renderAnsiTable(head, rows, aligns, width);
+      collapsed.push(tableToken);
+      i = j; // land on table_close; the loop's i++ skips it
+    }
     try {
-      return render(tokens, options, env);
+      return render(collapsed, options, env);
     } finally {
       quoteDepth = 0;
       headingDepth = 0;
@@ -198,6 +323,11 @@ function formatAnsiLatexReference(refType: string, label: string): string {
 }
 
 let cachedProcessor: MarkdownProcessor | null = null;
+// Table layout needs the terminal width baked into the renderer (the shared
+// processor caches by content only), so the processor is bound to one width
+// and rebuilt when the width changes — a rare event (resize), unlike the
+// per-delta streaming calls the cache exists to serve.
+let cachedWidth: number | undefined;
 
 export interface RenderAnsiMarkdownOptions {
   readonly width?: number;
@@ -212,15 +342,16 @@ export function renderAnsiMarkdown(
   content: string,
   options: RenderAnsiMarkdownOptions = {},
 ): string {
-  if (!cachedProcessor) {
+  if (!cachedProcessor || cachedWidth !== options.width) {
     const renderer = createMarkdownRenderer({
       highlight: highlightForTui,
-      configure: configureAnsi,
+      configure: (md) => configureAnsi(md, options.width),
     });
     cachedProcessor = createMarkdownProcessor({
       renderer,
       formatLatexReference: formatAnsiLatexReference,
     });
+    cachedWidth = options.width;
   }
   return wrapAnsiToWidth(cachedProcessor(content), options.width, {
     preserveMarkdownPrefix: true,
@@ -230,6 +361,7 @@ export function renderAnsiMarkdown(
 /** Test seam: drop the cached processor so tests can re-init cleanly. */
 export function _resetAnsiMarkdownForTests(): void {
   cachedProcessor = null;
+  cachedWidth = undefined;
 }
 
 /** Test seam: returns cache hit/miss counters for the active processor. */
