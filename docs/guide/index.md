@@ -1,6 +1,6 @@
 # Introduction
 
-TeXRA is a multi-agent AI system for rigorous scientific work. You direct one orchestrator; it delegates to **specialized agents** — for literature search, manuscript drafting, figure generation, formal verification, and symbolic computation — each grounded in its own tools and model. Every citation is real, every figure compiles, and every edit comes back as a diff you approve. TeXRA runs in three places that share the same agents and run history: the **VS Code extension**, the **`texra` command-line interface**, and the standalone **desktop app** (beta).
+TeXRA is a multi-agent AI system for rigorous scientific work. You direct one orchestrator; it delegates to **specialized agents** — for literature search, manuscript drafting, figure generation, formal verification, and symbolic computation — each grounded in its own tools and model. Every citation is real, every figure compiles, and every edit comes back as a diff you approve. TeXRA runs in two places that share the same agents and run history: the **VS Code extension** and the **`texra` command-line interface**.
 
 <GuideIntroHero />
 
@@ -96,13 +96,12 @@ The agent system is built on three established AI design patterns:
 
 All API calls go **directly from your machine** to the model provider you choose (Anthropic, OpenAI, Google, etc.). TeXRA does not operate intermediate servers. Your unpublished proofs, manuscripts, and API keys never leave your machine except to the provider endpoint.
 
-API keys are stored in your operating system's secure credential store — VS Code's built-in Secret Storage in the extension, and the OS keychain (or a local config file) for the CLI and desktop app. They can also be supplied via environment variables or a `.env` file in your project.
+API keys are stored in your operating system's secure credential store — VS Code's built-in Secret Storage in the extension, and the OS keychain (or a local config file) for the CLI. They can also be supplied via environment variables or a `.env` file in your project.
 
 ## Next steps
 
 - [Installation](/guide/installation) — set up TeXRA and its dependencies
-- [Desktop App](/guide/desktop) — install and configure the standalone desktop beta
-- [Desktop Migration](/guide/desktop-migration) — move from the VS Code extension to the desktop app
+- [TeXRA CLI](/guide/texra-cli) — run agents from the terminal with the `texra` command
 - [Quick Start](/guide/quick-start) — your first agent run in under five minutes
 - [Built-in Agents](/guide/built-in-agents) — the full catalog of available agents
 - [Agent Architecture](/guide/agent-architecture) — how the multi-agent system works under the hood

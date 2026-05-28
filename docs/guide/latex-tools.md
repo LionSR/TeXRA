@@ -112,4 +112,4 @@ For detailed tool settings (formatter paths, TikZ processing options, etc.), see
 - [TikZ Figures](./tikz-figures.md) — advanced TikZ workflows
 - [LaTeX Diff](./latex-diff.md) — version comparison in detail
 - [Research Tools](./research-tools.md) — arXiv, Crossref, Zotero, and web search
-- [Codex CLI](./codex-cli.md) — one-click Codex agent setup
+- [Agent Integrations](./agent-integrations.md) — one-click setup for the Codex and Claude Code agents

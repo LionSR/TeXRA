@@ -2,19 +2,20 @@
 
 The ProgressBoard is where you watch agents work and review what they did. Think of it as the flight recorder for every TeXRA run—you can see live progress, re-run a past job, or restore its settings with one click.
 
-::: tip CLI and desktop
+::: tip CLI
 The ProgressBoard is the VS Code extension's live view. The CLI shows the same
-streaming reasoning, tool calls, and diffs in its `texra chat` terminal UI, and
-the desktop app has an equivalent panel. Past runs are shared across surfaces —
-browse them with `texra history` or **Show Agent Execution History** in VS Code.
+streaming reasoning, tool calls, and diffs in its `texra chat` terminal UI. Past
+runs are shared across surfaces — browse them with `texra history` or **Show
+Agent Execution History** in VS Code.
 :::
 
 ## Accessing the ProgressBoard
 
-The ProgressBoard typically appears in the **Panel area** at the bottom of your VS Code window.
+The ProgressBoard shares the **TeXRA view** in the Activity Bar with the launcher — click the TeXRA icon in the Activity Bar, then switch to the Progress view.
 
 - **Automatic**: It often opens automatically when you execute an agent.
-- **Manual**: If it's closed, you can open it via the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) by searching for `View: Show TeXRA ProgressBoard`, or press `Ctrl+Alt+P` (`Cmd+Option+P` on macOS).
+- **Manual**: Open it from the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) with **TeXRA: Show Progress**, or press `Ctrl+Alt+P` (`Cmd+Option+P` on macOS).
+- **Editor tab**: Run **TeXRA: Open Progress in Editor Tab** to open the ProgressBoard as a full editor tab.
 
 <GuideIntroHero />
 
