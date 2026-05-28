@@ -342,6 +342,20 @@ Optional:
       const rel = await resolveStoragePath(executionId, runPath);
       if (rel) {
         const abs = StorageFS.fullPath(rel);
+        // Round-dir entries are real files only when the round actually
+        // emitted them; unemitted `\input` targets are symlinks into the
+        // `original/` snapshot (and pre-fix runs may have symlinks chaining
+        // back to the workspace). Refusing symlinks keeps `accept_run_files`
+        // honest — only content the agent owns this run can be promoted to
+        // the workspace.
+        if (await AbsoluteFS.isSymbolicLink(abs)) {
+          throw new ToolError(
+            `Cannot accept ${runPath} from run ${executionId}: ` +
+              `the run-storage entry is a symlink, meaning this round did ` +
+              `not emit the file. Accepting it would propagate snapshot or ` +
+              `workspace content rather than agent output.`,
+          );
+        }
         return {
           sourceAbsolute: abs,
           sourceLocation: createRunStorageLocation(abs, runPath, executionId),
