@@ -423,9 +423,7 @@ export class ProgressBoardLayoutMock extends LitElement {
     `;
   }
 
-  private renderRailTab(
-    tab: (typeof SAMPLE_RAIL)[number],
-  ): TemplateResult {
+  private renderRailTab(tab: (typeof SAMPLE_RAIL)[number]): TemplateResult {
     const classes = [
       'rail__tab',
       tab.active ? 'rail__tab--active' : '',
