@@ -74,7 +74,7 @@ export function TranscriptViewer({
   }, [maxOffset]);
 
   useInput((input, key) => {
-    if (key.escape || (key.ctrl && input === 't')) onClose();
+    if (key.escape || (key.ctrl && input.toLowerCase() === 't')) onClose();
     else if (key.downArrow) scrollTo((current) => current + 1);
     else if (key.upArrow) scrollTo((current) => current - 1);
     else if (key.pageDown) scrollTo((current) => current + viewRows);
