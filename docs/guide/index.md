@@ -16,15 +16,15 @@ work — with every change returned as a diff you approve.
 
 ## Use it
 
-| Task | Workflow |
-| --- | --- |
-| Tighten prose in a draft | [Polish a draft](./workflows/polish-a-draft.md) |
-| Fix LaTeX errors and notation | `correct` agent — see [Built-in Agents](./built-in-agents.md) |
-| Search literature, no fabricated citations | `research` — see [Research Tools](./research-tools.md) |
-| Verify proofs and derivations | `review` — see [Built-in Agents](./built-in-agents.md) |
-| Formalize in Lean 4 | [Lean 4 Proofs](./lean.md) |
-| Build slides from a paper | `paper2slide` — see [Built-in Agents](./built-in-agents.md) |
-| Generate TikZ figures | [TikZ Figures](./tikz-figures.md) |
+| Task                                       | Workflow                                                      |
+| ------------------------------------------ | ------------------------------------------------------------- |
+| Tighten prose in a draft                   | [Polish a draft](./workflows/polish-a-draft.md)               |
+| Fix LaTeX errors and notation              | `correct` agent — see [Built-in Agents](./built-in-agents.md) |
+| Search literature, no fabricated citations | `research` — see [Research Tools](./research-tools.md)        |
+| Verify proofs and derivations              | `review` — see [Built-in Agents](./built-in-agents.md)        |
+| Formalize in Lean 4                        | [Lean 4 Proofs](./lean.md)                                    |
+| Build slides from a paper                  | `paper2slide` — see [Built-in Agents](./built-in-agents.md)   |
+| Generate TikZ figures                      | [TikZ Figures](./tikz-figures.md)                             |
 
 ## Understand the system
 
