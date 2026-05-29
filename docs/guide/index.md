@@ -20,7 +20,7 @@ work — with every change returned as a diff you approve.
 | ------------------------------------------ | ------------------------------------------------------------- |
 | Tighten prose in a draft                   | [Polish a draft](./workflows/polish-a-draft.md)               |
 | Fix LaTeX errors and notation              | `correct` agent — see [Built-in Agents](./built-in-agents.md) |
-| Search literature, no fabricated citations | `research` — see [Research Tools](./research-tools.md)        |
+| Search literature, no fabricated citations | `search` — see [Research Tools](./research-tools.md)          |
 | Verify proofs and derivations              | `review` — see [Built-in Agents](./built-in-agents.md)        |
 | Formalize in Lean 4                        | [Lean 4 Proofs](./lean.md)                                    |
 | Build slides from a paper                  | `paper2slide` — see [Built-in Agents](./built-in-agents.md)   |
