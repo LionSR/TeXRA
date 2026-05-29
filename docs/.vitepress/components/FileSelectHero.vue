@@ -49,6 +49,8 @@ import MockupFrame from './MockupFrame.vue';
           </div>
           <div class="flist">
             <div class="fitem">
+              <!-- Decorative only: the real UI has no grip handle; the whole
+                   row is draggable to reorder. -->
               <wa-icon
                 class="fi-grip"
                 library="texra"
@@ -201,6 +203,8 @@ import MockupFrame from './MockupFrame.vue';
   border-radius: 4px;
   background: #2c2c2c;
 }
+/* Decorative only — the real file rows have no grip handle (the whole row is
+   draggable). Kept here purely as a visual cue in this marketing mockup. */
 .fi-grip {
   font-size: 11px;
   color: var(--color-text-tertiary);
