@@ -76,7 +76,7 @@ the `@agent/runtime` facade barrel (§3.1, adds indirection), the `bridgeState`
 executeCommand.ts:36 (ext)  ─┐
 agentsRun/multiAgent (cli) ──┤→ runValidatedExecutionRequest (runExecutionRequest.ts:18)
                               │     → executeAgent (executeAgent.ts:376)
-                              │         → buildAgentLaunchContext (AgentLaunchContext.ts:390)
+                              │         → buildAgentLaunchContext (AgentLaunchContext.ts:386)
                               │         → withExecutionRunContext (AsyncLocalStorage)
                               │         → branch on agentCategory:
                               │             toolUse  → runToolUseFlow   → PersistedFlow.run
@@ -183,8 +183,8 @@ The public barrels (`@agent/index`, `@agent/core`, `@agent/types`) are
    - **Action:** Extract a shared `finalizeOpenAIResponse(...)` helper; document
      the Responses-API split as known debt.
 
-4. **Repeated `getMessageNormalizationOptions()` overrides.** 5–6 OpenAI-compatible
-   handlers (DeepSeek, Kimi, MiniMax, GLM, XAI, DashScope) each re-declare nearly
+4. **Repeated `getMessageNormalizationOptions()` overrides.** 5 OpenAI-compatible
+   handlers (DeepSeek, Kimi, MiniMax, GLM, DashScope) each re-declare nearly
    identical normalization. These are otherwise _good_ thin wrappers (19–137 LOC).
    - **Action:** Drive normalization from capability flags in the base handler;
      keep only genuine per-provider deltas. ~250 LOC saving, low risk.

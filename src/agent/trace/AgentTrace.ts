@@ -129,8 +129,8 @@ export interface StagedEmitOptions {
 
 /**
  * Agent-general SDK surface. Every method ultimately reduces to `emit()` so
- * the trace channel is a single source of truth. TeXRA-specific helpers
- * extend this via `TexraTrace`.
+ * the trace channel is a single source of truth. TeXRA-specific helpers are
+ * plain functions over this interface (see `helpers.ts` / `toolUseHelpers.ts`).
  */
 export interface AgentTrace {
   // ─── SSoT primitives ────────────────────────────────────────────────

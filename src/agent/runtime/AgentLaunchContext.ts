@@ -88,10 +88,8 @@ export async function withExecutionRunContext<T>(
   ctx: AgentLaunchContext,
   fn: () => T | Promise<T>,
 ): Promise<T> {
-  const release = retainRunCoordinatorsForStream(
-    ctx.streamId,
-    ctx.coordinators,
-  );
+  // Build the run context first: createRunContext throws on a null
+  // runtimeHost, and we must not retain a coordinator we can't release.
   const runContext = createRunContext({
     runtimeHost: ctx.runtimeHost,
     streamId: ctx.streamId,
@@ -104,6 +102,10 @@ export async function withExecutionRunContext<T>(
     delegationDepth: ctx.delegationDepth,
     delegationConfig: ctx.delegationConfig,
   });
+  const release = retainRunCoordinatorsForStream(
+    ctx.streamId,
+    ctx.coordinators,
+  );
   try {
     return await withRunContext(runContext, fn);
   } finally {
