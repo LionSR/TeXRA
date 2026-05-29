@@ -1,3 +1,7 @@
+<script setup>
+import ProgressLogHero from '../.vitepress/components/ProgressLogHero.vue';
+</script>
+
 # Troubleshooting
 
 Even the best research assistants (human or AI) have off days. This guide helps you diagnose and resolve common issues you might encounter when using TeXRA. We've organized troubleshooting tips by category to help you quickly find solutions to specific problems.
@@ -458,10 +462,13 @@ Key points for troubleshooting:
    - Look for "TeXRA ProgressBoard" in the panel at the bottom of VS Code
    - If not visible, open it via the Command Palette: "TeXRA: Show ProgressBoard"
 
-2. **Interpreting logs**:
-   - Green entries: Information and successful operations
-   - Yellow entries: Warnings that might affect performance
-   - Red entries: Errors that need attention
+2. **Interpreting logs**: entries are colour-coded by severity, and nested
+   entries expand to reveal detail — green for information and successful
+   operations, yellow for warnings, red for errors that need attention.
+
+<ProgressLogHero />
+
+<p class="hero-caption">ProgressBoard colour-codes every entry by severity — green info/success, yellow warnings, red errors — with task-id chips and expandable nested detail.</p>
 
 3. **Finding specific information**:
    - Use the search function to find relevant messages

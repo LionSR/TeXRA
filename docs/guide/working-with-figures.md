@@ -1,5 +1,10 @@
 # Working with Figures
 
+<script setup>
+import MediaSectionPanel from '../.vitepress/components/MediaSectionPanel.vue';
+import AutoExtractMenu from '../.vitepress/components/AutoExtractMenu.vue';
+</script>
+
 TeXRA lets AI agents analyse, reference, and generate figures inside your documents — from `.png` screenshots to embedded TikZ diagrams and PDFs.
 
 ::: tip CLI
@@ -19,15 +24,17 @@ agent in `texra chat`.
 
 ## <wa-icon library="texra" name="file-media"></wa-icon> The Media Section
 
-The main TeXRA panel includes a **Media** section for figure files:
+The main TeXRA panel includes a **Media** section for figure files. Its header carries the inline **Auto Extract** dropdown (<wa-icon library="texra" name="wand"></wa-icon>) plus a three-action toolbar, and each file is a row you can drag to reorder:
+
+<MediaSectionPanel />
+
+<p class="hero-caption">The Media group: the wand opens auto-extract options, the toolbar adds opened files / clears all / adds media files, and each row drags to reorder with a trailing trash icon.</p>
 
 - **Auto Extract Dropdown** (<wa-icon library="texra" name="wand"></wa-icon>): configure automatic figure extraction.
 - **Add opened files** (<wa-icon library="texra" name="folder-opened"></wa-icon>): append every open editor tab whose extension is a configured media type.
 - **Clear all media files** (<wa-icon library="texra" name="trash"></wa-icon>): empty the media list.
 - **Add media files** (<wa-icon library="texra" name="add"></wa-icon>): open a file picker to append figures.
 - **Drag-and-drop** image, PDF, or audio files from anywhere onto the section.
-
-Each file appears as a row you can drag to reorder, with a small trash icon (to remove just that file).
 
 ## <wa-icon library="texra" name="file-symlink-file"></wa-icon> Supported File Types
 
@@ -53,6 +60,10 @@ Pasted images are stored temporarily and cleaned up after 3 days.
 ## <wa-icon library="texra" name="wand"></wa-icon> Automatic Figure Extraction
 
 Enable via the **Auto Extract** dropdown (<wa-icon library="texra" name="wand"></wa-icon>) near the Media label:
+
+<AutoExtractMenu />
+
+<p class="hero-caption">The lit wand button opens a checkbox menu — toggle Figures, TikZ Figures, and Compile Input PDF.</p>
 
 - **Figures** (<wa-icon library="texra" name="file-media"></wa-icon>): extracts images from `\includegraphics` commands.
 - **TikZ Figures** (<wa-icon library="texra" name="symbol-structure"></wa-icon>): extracts `tikzpicture` environments as `.tikz` files and compiles them.

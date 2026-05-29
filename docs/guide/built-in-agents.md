@@ -1,6 +1,60 @@
+<script setup>
+import DropdownMenu from '../.vitepress/components/DropdownMenu.vue';
+</script>
+
 # Built-in Agent Reference
 
 TeXRA ships with built-in agents for common research tasks—polishing prose, fixing errors, creating figures, converting formats, and more. Pick one from the dropdown in the TeXRA UI and you're ready to go.
+
+<DropdownMenu
+  label="Agent"
+  value="polish"
+  valueIcon="sparkle"
+  maxWidth="380px"
+  :groups="[
+    { label: 'Conversational', items: [
+      { name: 'chat', icon: 'comment', badge: 'tool-use', badgeVariant: 'info' },
+    ] },
+    { label: 'Research & Discovery', items: [
+      { name: 'research', icon: 'robot', badge: 'tool-use', badgeVariant: 'info' },
+      { name: 'numerics', icon: 'pulse', badge: 'tool-use', badgeVariant: 'info' },
+    ] },
+    { label: 'Verification', items: [
+      { name: 'review', icon: 'circle-check', badge: 'tool-use', badgeVariant: 'info' },
+    ] },
+    { label: 'Formal Methods', items: [
+      { name: 'lean', icon: 'check', badge: 'tool-use', badgeVariant: 'info' },
+    ] },
+    { label: 'Presentation', items: [
+      { name: 'presenter', icon: 'device-camera-video', badge: 'tool-use', badgeVariant: 'info' },
+    ] },
+    { label: 'Correction & Polishing', items: [
+      { name: 'correct', icon: 'check', badge: 'workflow', badgeVariant: 'accent' },
+      { name: 'polish', icon: 'sparkle', badge: 'workflow', badgeVariant: 'accent', active: true },
+    ] },
+    { label: 'Content Generation', items: [
+      { name: 'paper2slide', icon: 'file-pdf', badge: 'workflow', badgeVariant: 'accent' },
+      { name: 'paper2poster', icon: 'file-pdf', badge: 'workflow', badgeVariant: 'accent' },
+    ] },
+    { label: 'LaTeX & Build', items: [
+      { name: 'latexFixer', icon: 'screwdriver-wrench', badge: 'tool-use', badgeVariant: 'info' },
+      { name: 'latexDiff', icon: 'diff', badge: 'tool-use', badgeVariant: 'info' },
+    ] },
+    { label: 'Figure & Media', items: [
+      { name: 'ocr', icon: 'file-code', badge: 'workflow', badgeVariant: 'accent' },
+      { name: 'transcribe_audio', icon: 'mic', badge: 'workflow', badgeVariant: 'accent' },
+    ] },
+    { label: 'Merge', items: [
+      { name: 'merge', icon: 'merge', badge: 'workflow', badgeVariant: 'accent' },
+    ] },
+    { label: 'Setup & Meta', items: [
+      { name: 'setup', icon: 'settings-gear', badge: 'tool-use', badgeVariant: 'info' },
+      { name: 'creator', icon: 'wand', badge: 'tool-use', badgeVariant: 'info' },
+    ] },
+  ]"
+/>
+
+<p class="hero-caption">The grouped agent picker in the Launcher footer — each item is tagged <code>tool-use</code> or <code>workflow</code>, with the selected agent (<code>polish</code>) highlighted.</p>
 
 ## Quick Reference
 

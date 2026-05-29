@@ -25,8 +25,46 @@
   --vp-c-brand-dark: var(--vp-c-brand-3);
 }
 
+/* ---- Web Awesome in prose ----
+   wa-* components used in the markdown body (callouts, badges, cards — OUTSIDE
+   the .mockup surfaces) read their own --wa-* tokens. default.css wraps those
+   in `@layer wa-theme`, so these unlayered overrides win without specificity
+   games. Point the brand tokens at the VitePress brand vars so prose WA reads
+   on-brand and flips light/dark (the `.wa-dark` class is synced in theme/index.js;
+   --vp-c-brand-1 itself flips under .dark). */
+:root {
+  --wa-color-brand-fill-loud: var(--vp-c-brand-1);
+  --wa-color-brand-fill-quiet: var(--vp-c-brand-soft);
+  --wa-color-brand-border-loud: var(--vp-c-brand-1);
+  --wa-color-brand-border-quiet: var(--vp-c-brand-soft);
+  --wa-color-brand-on-loud: #ffffff;
+  --wa-color-brand-on-quiet: var(--vp-c-brand-1);
+}
+
+/* Web Awesome custom elements upgrade on the client; hide them until defined so
+   they don't flash as unstyled markup on first paint / navigation. */
+wa-switch:not(:defined),
+wa-callout:not(:defined),
+wa-badge:not(:defined),
+wa-tag:not(:defined),
+wa-spinner:not(:defined),
+wa-card:not(:defined) {
+  visibility: hidden;
+}
+
+/* A prose callout sits in the flow like VitePress's own custom blocks. */
+.vp-doc wa-callout {
+  margin: 1rem 0;
+}
+
 /* Product-mockup heroes on guide pages fill the prose column. */
 .vp-doc .win {
+  margin-top: 1.5rem;
+}
+
+/* Frameless mock-UI panels/figures also fill the prose column, like .win. */
+.vp-doc .mk-panel,
+.vp-doc .ac {
   margin-top: 1.5rem;
 }
 

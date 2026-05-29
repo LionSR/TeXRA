@@ -1,6 +1,15 @@
 # Research Tools
 
+<script setup>
+import InquiryFlowHero from '../.vitepress/components/InquiryFlowHero.vue';
+</script>
+
 You're deep in a manuscript and realise you need to cite "that attention paper from 2017" but can't remember the title. Or you want to verify an integral in your appendix. Or you need to pull twenty BibTeX entries from your Zotero library into a new project. TeXRA's research agents handle all of this without leaving your editor — in VS Code or the `texra` CLI.
+
+<wa-callout variant="brand">
+  <wa-icon slot="icon" library="texra" name="shield"></wa-icon>
+  Every citation comes from a real <strong>arXiv</strong> or <strong>Crossref</strong> lookup — TeXRA's research agents search grounded sources and never fabricate references.
+</wa-callout>
 
 ## What You Can Do
 
@@ -67,6 +76,19 @@ Add this arXiv paper to my Zotero library.
 
 **User story:** A PhD student is collecting references for a thesis chapter. She asks the `search` agent to find key papers on graph neural networks, then says "add these to my Zotero and export them to `references.bib`." The agent handles the lookup, adds entries to her Zotero library, and writes the BibTeX file — all in one conversation.
 
+<ToolCallPanel
+  title="zotero"
+  icon="book"
+  tool="zotero"
+  :calls="[
+    { state: 'done', verb: 'search', target: 'graph neural networks', effect: 'Finds matching items in your library' },
+    { state: 'done', verb: 'add', target: 'arxiv:2401.12345', effect: 'Adds the paper to your Zotero library' },
+    { state: 'active', verb: 'export', target: 'references.bib', effect: 'Writes the selected items as BibTeX' },
+  ]"
+/>
+
+<p class="hero-caption">How the <code>search</code> agent drives the <code>zotero</code> tool across one conversation — search → add → export — as the calls surface in the Progress view.</p>
+
 ::: tip Default Bibliography Path
 Set `texra.bib.defaultPath` in your VS Code settings (<wa-icon library="texra" name="gear"></wa-icon>) to specify where Zotero exports land by default, so agents always know where to save bibliography entries.
 :::
@@ -79,15 +101,52 @@ The `research` agent can call `wolfram` to run Wolfram Language code and check s
 
 The `inquiry` tool lets a TeXRA agent ask one question in an external chat (ChatGPT, Claude, Gemini) through a copy/paste flow, then resume with the answer. Dispatch is non-blocking: the agent's cycle continues while you fetch the answer, and resumes automatically once you paste it back (even after a reload). No API key required — it uses your existing subscription. In the CLI, the same flow appears as a terminal modal: paste the prepared question into your chat subscription, then paste the answer back into TeXRA.
 
+<InquiryFlowHero />
+
+<p class="hero-caption">The <code>inquiry</code> copy-out / paste-back loop: TeXRA prepares a question, you copy it into ChatGPT, Claude, or Gemini, then paste the reply back to resume the run — no API key needed.</p>
+
 ## Which Agent to Use
 
-| Agent      | Best for                                                                                                                   |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `search`   | Finding papers, literature reviews, fact-checking                                                                          |
-| `research` | Computational verification with Wolfram, plus bash, file edits, and local LaTeX analysis (`.bib`, figures, TikZ, texcount) |
-| `discuss`  | Brainstorming research directions with literature context                                                                  |
+Three research agents, each tuned for a different stage of the work — pick one from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>):
 
-Pick any of them from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). Check `Dashboard → Agents` (<wa-icon library="texra" name="sparkle"></wa-icon>) to see exactly which tools each one has enabled.
+<DropdownMenu
+  label="Agent"
+  value="search"
+  valueIcon="sparkle"
+  maxWidth="320px"
+  :groups="[{ label: 'Research', items: [
+    { name: 'search', icon: 'mortar-board', badge: 'tool-use', badgeVariant: 'info', active: true },
+    { name: 'research', icon: 'symbol-operator', badge: 'tool-use', badgeVariant: 'info' },
+    { name: 'discuss', icon: 'comment-discussion', badge: 'tool-use', badgeVariant: 'info' },
+  ] }]"
+/>
+
+<FeatureCards
+  min="220px"
+  :cards="[
+    { icon: 'mortar-board', title: 'search', tag: 'default', tagVariant: 'accent', desc: 'Finding papers, literature reviews, fact-checking.', chips: [
+      { text: 'arxiv_metadata', variant: 'neutral' },
+      { text: 'crossref_doi', variant: 'neutral' },
+      { text: 'web_search', variant: 'neutral' },
+      { text: 'web_fetch', variant: 'neutral' },
+      { text: 'zotero', variant: 'neutral' },
+    ] },
+    { icon: 'symbol-operator', title: 'research', desc: 'Computational verification, plus bash, file edits, and local LaTeX analysis.', chips: [
+      { text: 'wolfram', variant: 'info' },
+      { text: 'bash', variant: 'neutral' },
+      { text: 'file-edit', variant: 'neutral' },
+      { text: 'texcount', variant: 'neutral' },
+      { text: 'arxiv_metadata', variant: 'neutral' },
+    ] },
+    { icon: 'comment-discussion', title: 'discuss', desc: 'Brainstorming research directions with literature context.', chips: [
+      { text: 'web_search', variant: 'neutral' },
+      { text: 'arxiv_metadata', variant: 'neutral' },
+      { text: 'inquiry', variant: 'neutral' },
+    ] },
+  ]"
+/>
+
+<p class="hero-caption">Each research agent and the tools it has enabled — check <code>Dashboard → Agents</code> (<wa-icon library="texra" name="sparkle"></wa-icon>) for the exact set.</p>
 
 ## Next Steps
 

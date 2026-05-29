@@ -1,3 +1,7 @@
+<script setup>
+import CritiquePassCard from '../../.vitepress/components/CritiquePassCard.vue';
+</script>
+
 # Polish a draft
 
 Rewrite a LaTeX paper for clarity. Keeps math, citations, and structure
@@ -69,6 +73,10 @@ diff -u .texra/runs/<run-id>/r0/intro.tex .texra/runs/<run-id>/r1/intro.tex
 VS Code — the Progress Board shows side-by-side diffs and lets you accept
 the output back into the workspace.
 
+<CompareHero />
+
+<p class="hero-caption">The Progress Board opens the polished round as a diff — accept each change back into your draft.</p>
+
 For a **compiled PDF comparison** (additions in blue, deletions in red),
 use the LaTeXdiff feature in the TeXRA panel. See
 [LaTeX Diff](../latex-diff.md).
@@ -78,11 +86,9 @@ use the LaTeXdiff feature in the TeXRA panel. See
 After Round 0 produces a revision, polish re-prompts itself to check
 for common failure modes:
 
-- Edits that weakened the original.
-- Mathematical content that went missing.
-- Notation used before being defined.
-- Generic filler ("provides crucial insights into…").
-- Changes outside the scope of your instruction.
+<CritiquePassCard />
+
+<p class="hero-caption">Round 1 rereads its own Round 0 output and scans for five regressions before revising again.</p>
 
 The result is written to `r1/`. Use **Round 0 alone** for fast
 iteration. Use **Round 1** when the draft is close to final.

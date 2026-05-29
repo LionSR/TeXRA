@@ -1,3 +1,7 @@
+<script setup>
+import CliChatHero from '../.vitepress/components/CliChatHero.vue';
+</script>
+
 # TeXRA CLI
 
 The TeXRA CLI provides a local `texra` command for running TeXRA agents from a
@@ -98,6 +102,10 @@ signed in as, and which models the CLI can reach with the current credentials.
 `texra chat` opens an interactive tool-use session in the terminal. It streams
 reasoning, tool calls, and diffs, and writes to the same run history as the VS
 Code extension.
+
+<CliChatHero />
+
+<p class="hero-caption">A <code>texra chat</code> session streams reasoning and tool calls inline, shows diffs as the agent edits, and lists its slash commands at the bottom.</p>
 
 ```bash
 texra chat                          # default chat agent and model

@@ -1,3 +1,7 @@
+<script setup>
+import DoctorReportCard from '../.vitepress/components/DoctorReportCard.vue';
+</script>
+
 # Installation Guide
 
 This guide will walk you through the process of installing TeXRA and all its dependencies to ensure optimal performance.
@@ -59,8 +63,12 @@ See [TeXRA CLI](./texra-cli.md) for usage, shell completion, and workspace defau
 Now for the slightly less fun part – making sure TeXRA has the tools it needs. Only a **LaTeX distribution** is strictly required for core document processing; the other tools below unlock specific features (Perl for `latexindent`/`latexdiff`, GraphicsMagick/ImageMagick + Ghostscript for figure and image processing). Install the ones you need and follow the instructions for your operating system.
 
 ::: tip Check what's detected with `texra doctor`
-Run `texra doctor` to see what TeXRA found. It reports the LaTeX toolchain (`latexmk`, `pdflatex`, `xelatex`, `lualatex`, `bibtex`, `biber`, `latexdiff`, `latexindent`) along with Node.js, authentication, and model availability. The optional image tools (GraphicsMagick/ImageMagick, Ghostscript) and Wolfram are checked on demand the first time you use a feature that needs them, rather than up front.
+Run `texra doctor` to see what TeXRA found — the LaTeX toolchain, runtime and authentication, and which optional tools are deferred until first use.
 :::
+
+<DoctorReportCard />
+
+<p class="hero-caption"><code>texra doctor</code> groups its findings: the full LaTeX toolchain and runtime/auth are verified up front, while the optional image tools and Wolfram are checked on demand the first time a feature needs them.</p>
 
 ### Homebrew (macOS only) {#homebrew}
 

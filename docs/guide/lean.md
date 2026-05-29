@@ -1,3 +1,8 @@
+<script setup>
+import LeanToolsHero from '../.vitepress/components/LeanToolsHero.vue';
+import LeanProofHero from '../.vitepress/components/LeanProofHero.vue';
+</script>
+
 # Lean 4 Proofs
 
 You're formalizing a theorem and Lean is fighting you: the proof state isn't what you expected, you can't remember the name of the Mathlib lemma you need, and the build cache is stale. TeXRA drives a real Lean 4 language server so its agents can read compiler diagnostics, inspect the proof state at any point, search Mathlib, and manage your build — all without leaving your editor.
@@ -64,7 +69,11 @@ Pick any agent from the **Agent** dropdown (<wa-icon library="texra" name="spark
 
 ## What You Can Do
 
-Just describe the task in plain language — the agent decides which tools to call. Here's what's happening under the hood.
+Just describe the task in plain language — the agent decides which tools to call. Here's what's happening under the hood: five Lean tools the agent reaches for, as they surface in the tool-call log.
+
+<LeanToolsHero />
+
+<p class="hero-caption">The agent picks the tool — read diagnostics, inspect the proof state, search Mathlib, refresh a file, or manage the build — and you watch each call land in the run log.</p>
 
 ### <wa-icon library="texra" name="alert"></wa-icon> Read Diagnostics
 
@@ -81,6 +90,10 @@ What's the goal state at line 42 of Analysis/Limits.lean?
 ```
 
 The `lean_inspect` tool reads the **tactic proof state** (`goal`), the **expected type** in term mode (`term_goal`), or the **type signature and docs** of an identifier (`hover`) at a given position — the same information Lean shows in its infoview.
+
+<LeanProofHero />
+
+<p class="hero-caption">The agent reads the unsolved-goals diagnostic, inspects the goal state, finds the right lemma, and iterates the proof until it compiles with 0 errors and 0 <code>sorry</code>.</p>
 
 ### <wa-icon library="texra" name="book"></wa-icon> Search Mathlib
 

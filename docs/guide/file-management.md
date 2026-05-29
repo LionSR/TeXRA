@@ -4,7 +4,53 @@ Academic projects often involve juggling numerous files – main documents, chap
 
 ## File Categories
 
-TeXRA organizes files into several categories:
+TeXRA organizes files into three categories, each with its own accepted file types and read/write role:
+
+<FeatureCards
+  min="220px"
+  :cards="[
+    {
+      icon: 'file-code',
+      title: 'Input',
+      tag: 'Read + edit',
+      tagVariant: 'success',
+      desc: 'Primary documents the agent reads and rewrites.',
+      chips: [
+        { text: '.tex', variant: 'accent' },
+        { text: '.txt', variant: 'accent' },
+        { text: '.md', variant: 'accent' },
+      ],
+    },
+    {
+      icon: 'book',
+      title: 'Context',
+      tag: 'Read-only',
+      tagVariant: 'info',
+      desc: 'Reference material the agent sees but never modifies.',
+      chips: [
+        { text: '.bib', variant: 'info' },
+        { text: '.bbl', variant: 'info' },
+        { text: '.sty', variant: 'info' },
+        { text: '.cls', variant: 'info' },
+        { text: 'reference papers', variant: 'neutral' },
+      ],
+    },
+    {
+      icon: 'device-camera-video',
+      title: 'Media',
+      tag: 'Visual / audio',
+      tagVariant: 'neutral',
+      desc: 'Figures and recordings handed to vision/audio models.',
+      chips: [
+        { text: 'images', variant: 'neutral' },
+        { text: 'PDF figures', variant: 'neutral' },
+        { text: 'audio', variant: 'neutral' },
+      ],
+    },
+  ]"
+/>
+
+<p class="hero-caption">Three categories: Input is read + edited, Context is read-only, Media carries visual and audio content.</p>
 
 ### Input Files
 

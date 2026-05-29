@@ -1,3 +1,7 @@
+<script setup>
+import FlowSteps from '../.vitepress/components/FlowSteps.vue';
+</script>
+
 # First run
 
 You have TeXRA installed. This page walks you through running one
@@ -84,13 +88,15 @@ storage, add `--output draft.polished.tex` to the command.
 
 ## What just happened
 
-Polish ran two passes:
+Polish ran two passes: a first revision, then a critique pass that
+rereads its own output and revises again.
 
-- **Round 0** — read your file, applied your instruction, wrote the
-  first revision.
-- **Round 1** — reread its own Round 0 output, checked for missing
-  math, weakened sentences, generic filler, and out-of-scope changes,
-  then revised again.
+<FlowSteps :steps="[
+  { n: 1, icon: 'wand', title: 'Round 0 — draft', desc: 'Reads draft.tex, applies your instruction, writes the first revision.', chips: [{ text: 'r0/draft.tex', variant: 'info', icon: 'file-code' }] },
+  { n: 2, icon: 'search', title: 'Round 1 — critique', desc: 'Rereads its own Round 0 output, then revises again.', chips: [{ text: 'missing math', variant: 'warning' }, { text: 'weakened sentences', variant: 'warning' }, { text: 'generic filler', variant: 'warning' }, { text: 'out-of-scope edits', variant: 'warning' }, { text: 'r1/draft.tex', variant: 'info', icon: 'file-code' }] }
+]" />
+
+<p class="hero-caption">Polish is a two-pass workflow: Round 0 drafts from your instruction, Round 1 critiques its own output against a fixed checklist and revises into <code>r1/draft.tex</code>.</p>
 
 Workflow agents like `polish` do not call tools. They read input, run
 their pipeline, and write a diff. The next step up — tool-use agents

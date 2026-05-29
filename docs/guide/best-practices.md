@@ -1,3 +1,7 @@
+<script setup>
+import StagedWorkflowHero from '../.vitepress/components/StagedWorkflowHero.vue';
+</script>
+
 # Best Practices
 
 ## Effective Prompting
@@ -63,11 +67,11 @@ project/
 
 ### Staged Approach
 
-1. **Research**: `search` or `research` to find papers and verify ideas
-2. **Writing**: `research` or `orchestrator` to draft LaTeX content interactively
-3. **Development**: `polish` for clarity and style
-4. **Visualization**: `research` or `presenter` for figures, `presenter` for slides
-5. **Finalization**: `correct` for proofreading
+A typical project moves through five stages, each owned by one or more agents:
+
+<StagedWorkflowHero />
+
+<p class="hero-caption">A typical project flows from research to finalization, with each stage handed to the agent best suited for it.</p>
 
 ### Quality Assurance
 

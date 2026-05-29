@@ -1,5 +1,9 @@
 # Remote Agents
 
+<script setup>
+import RemoteAgentsProfile from '../.vitepress/components/RemoteAgentsProfile.vue';
+</script>
+
 Remote agents are cloud-hosted AI agents maintained by the TeXRA team that extend your extension's capabilities with specialized functionality. They're automatically updated with the latest improvements and optimizations without requiring extension updates.
 
 ## What Are Remote Agents?
@@ -35,6 +39,12 @@ Once signed in, you can explore remote agents from your profile:
 3. Browse the **Remote Agents** table showing all available agents
 4. Click **Use** on any agent to add it to your agent selector
 
+The Profile panel shows your account at a glance — your email, user ID, and access level — above the table of remote agents you can pull in:
+
+<RemoteAgentsProfile />
+
+<p class="hero-caption">The View Profile panel: your access level sits above the Remote Agents table — click <strong>Use</strong> on any cloud agent to add it to your selector.</p>
+
 The selected agent will appear in your main TeXRA view alongside your built-in agents.
 
 ### 3. Use Remote Agents
@@ -49,6 +59,28 @@ Remote agents work just like built-in agents:
 ::: info
 Remote agents are marked with a cloud icon (☁️) in the agent selector to distinguish them from local agents.
 :::
+
+In the agent dropdown, your local agents sit above a **Remote** group whose entries each carry a cloud marker:
+
+<DropdownMenu
+  label="Agent"
+  value="search"
+  valueIcon="cloud"
+  maxWidth="320px"
+  :groups="[
+    { label: 'Local', items: [
+      { name: 'polish', icon: 'sparkle' },
+      { name: 'correct', icon: 'pencil' },
+    ] },
+    { label: 'Remote', items: [
+      { name: 'search', icon: 'cloud', badge: 'in use', badgeVariant: 'accent', active: true },
+      { name: 'discuss', icon: 'cloud' },
+      { name: 'simplifier', icon: 'cloud' },
+    ] },
+  ]"
+/>
+
+<p class="hero-caption">The agent dropdown: remote agents (<code>search</code>, <code>discuss</code>, <code>simplifier</code>) carry a cloud marker that sets them apart from local agents like <code>polish</code> and <code>correct</code>.</p>
 
 ## Research Access Program
 

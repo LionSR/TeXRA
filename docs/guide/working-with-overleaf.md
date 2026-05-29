@@ -1,3 +1,7 @@
+<script setup>
+import OverleafCloneFlow from '../.vitepress/components/OverleafCloneFlow.vue';
+</script>
+
 # Power Up Overleaf with TeXRA: A Git-Based Workflow
 
 Overleaf is the go-to platform for collaborative LaTeX writing. But what if you could combine its convenience with the advanced AI editing, local tool integration (like `latexdiff`), and VS Code power offered by TeXRA? You can, using Overleaf\'s Git integration!
@@ -38,6 +42,10 @@ and push as usual.
 2.  Paste the Overleaf project URL or 24-character project ID when prompted.
 3.  Enter your Overleaf Git token (it begins with `olp_`). TeXRA saves it to VS Code's secret storage so future clones can reuse it.
 4.  The command runs `git clone` directly into your workspace root so the cloned project becomes the repository you're working in. Make sure that folder is empty before starting.
+
+<OverleafCloneFlow />
+
+<p class="hero-caption">Three quick-input prompts: pick the command, paste the project URL or 24-character ID, then enter your <code>olp_</code> token — cached to VS Code secret storage for next time.</p>
 
 > **Token storage:** Reset the cached token anytime via the VS Code command **Developer: Clear Secret Storage**.
 

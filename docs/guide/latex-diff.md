@@ -1,3 +1,7 @@
+<script setup>
+import DiffMarkupHero from '../.vitepress/components/DiffMarkupHero.vue';
+</script>
+
 # LaTeX Diff
 
 A core design philosophy of TeXRA is transparency and control over the AI's modifications. You see and evaluate every change an agent suggests, in the typeset document, before deciding how to incorporate it.
@@ -117,15 +121,11 @@ The diff document uses a specialized markup to highlight changes:
 
 ### Default Markup
 
-By default, latexdiff uses the following markup:
+By default, latexdiff wraps each edit in a markup command that is defined in the preamble of the generated document and typesets the change inline:
 
-- **Additions**: `\DIFadd{Added text}`
-- **Deletions**: `\DIFdel{Deleted text}`
+<DiffMarkupHero />
 
-These commands are defined in the preamble of the generated document and typically render as:
-
-- Additions: <span style="color: blue; text-decoration: underline;">Blue underlined text</span>
-- Deletions: <span style="color: red; text-decoration: line-through;">Red struck-through text</span>
+<p class="hero-caption">latexdiff's source commands and how they typeset — <code>\DIFadd{…}</code> renders as a blue underlined addition, <code>\DIFdel{…}</code> as a red struck-through deletion, and adjacent del+add forms a change.</p>
 
 ### Interpreting Complex Changes
 

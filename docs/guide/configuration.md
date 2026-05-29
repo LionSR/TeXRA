@@ -1,5 +1,10 @@
 # Configuration
 
+<script setup>
+import DashboardTabsCard from '../.vitepress/components/DashboardTabsCard.vue';
+import InstructionHeaderCard from '../.vitepress/components/InstructionHeaderCard.vue';
+</script>
+
 TeXRA provides extensive configuration options that allow you to customize its behavior to match your workflow (don't worry, the defaults are sensible!). This guide explains the available settings and how to adjust them for optimal performance.
 
 ::: tip CLI
@@ -12,7 +17,11 @@ exposes models, tools, and agents through `texra models`, `texra tools`, and
 
 ## The TeXRA Dashboard
 
-The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard**.
+The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard**. Its ten tabs all live in one navigation rail:
+
+<DashboardTabsCard />
+
+<p class="hero-caption">The Dashboard navigation rail: ten tabs from Memory through Odyssey, each opening a focused configuration surface.</p>
 
 - **[Memory](./memory.md)** - See what your tool-use agents have remembered across sessions, pin core insights, and delete entries you no longer need.
 - **History** - Search and browse past runs. Handy for finding that polish job you ran last week.
@@ -417,6 +426,10 @@ Now that you understand how to configure TeXRA, you may want to learn about:
 ## Agent Execution Settings (Webview Interface)
 
 These settings, accessible directly in the main TeXRA webview, control how agents run:
+
+<InstructionHeaderCard />
+
+<p class="hero-caption">The instruction-panel header: header actions (Settings, History, Pack, Clean, Magic Polish, Erase), the open Tool-configuration dropdown, and the agent and model selectors.</p>
 
 **Tool Configuration Dropdown** (<wa-icon library="texra" name="tools"></wa-icon> ○<wa-icon library="texra" name="chevron-down"></wa-icon> next to Instruction label):
 

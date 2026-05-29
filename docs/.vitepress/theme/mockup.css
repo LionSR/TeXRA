@@ -126,6 +126,59 @@
   --mk-fs-95: 0.95rem;
   --mk-fs-105: 1.05rem;
 }
+
+/* ---- litStyles alias bridge ----
+   These alias names (--color-*, --editor-bg, --brand, --wa-color-text-normal,
+   …) are what every shared rule below — and every hero body — references,
+   NOT the raw --mk-* tokens. They used to live only in MockupFrame's scoped
+   `.win` style, so they resolved only inside the full VS Code window. Lifting
+   them here onto `.mockup` lets FRAMELESS panels (MockupPanel) and any focused
+   figure resolve the same names. The var(--mk-*) aliases flip with the docs
+   theme automatically; the success/warning/error literals are sanctioned fixed
+   values (status colors read in both themes). */
+.mockup {
+  --wa-space-3xs: 2px;
+  --wa-space-2xs: 4px;
+  --wa-space-xs: 8px;
+  --wa-space-s: 12px;
+  --border-thin: 1px;
+  --border-medium: 2px;
+  --border-radius-small: 2px;
+  --border-radius: 3px;
+  --border-radius-large: 6px;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --editor-bg: var(--mk-bg);
+  --surface-bg: var(--mk-bg-deep);
+  --panel-bg: var(--mk-bg-soft);
+  --color-border: var(--mk-bg-raised);
+  --wa-color-text-normal: var(--mk-text-dim);
+  --color-text-secondary: var(--mk-text-faint);
+  --color-text-tertiary: var(--mk-text-faint);
+  --color-text-link: var(--mk-syn-fn);
+  --color-success: #2ea043;
+  --color-warning: #cca700;
+  --color-error: #f14c4c;
+  --wa-color-icon-info: var(--mk-syn-fn);
+  --wa-color-debug-name: #4b9ef9;
+  --brand: var(--mk-accent);
+
+  /* ---- WebAwesome bridge ----
+     Map the --wa-* design tokens that bridged Web Awesome components read
+     (wa-switch, wa-spinner, …) onto the --mk-* palette, so any wa-* element
+     placed inside a mockup themes to the editor surface and flips with
+     html.dark by construction — no per-instance overrides, no hardcoded
+     literals. CSS custom properties inherit through the shadow boundary, so
+     these reach each component's internal styles. */
+  --wa-color-surface-default: var(--mk-bg);
+  --wa-form-control-background-color: var(--mk-bg-raised);
+  --wa-form-control-border-color: var(--mk-border-soft);
+  --wa-form-control-activated-color: var(--mk-accent);
+  --wa-color-brand-fill-loud: var(--mk-accent);
+  --wa-color-brand-on-loud: #ffffff;
+  --wa-color-neutral-fill-normal: var(--mk-border-soft);
+}
 :where(html.dark) .mockup {
   --mk-bg: #1e1e1e;
   --mk-bg-soft: #252526;

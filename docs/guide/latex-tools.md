@@ -1,3 +1,7 @@
+<script setup>
+import ToolStatusPanel from '../.vitepress/components/ToolStatusPanel.vue';
+</script>
+
 # LaTeX Tools
 
 TeXRA doesn't just send text to an AI and hope for the best. It plugs into battle-tested LaTeX tools so formatting, diffing, figure extraction, and citation lookup are handled by the right software — not by a language model guessing at syntax.
@@ -14,7 +18,11 @@ TeXRA doesn't just send text to an AI and hope for the best. It plugs into battl
 | <wa-icon library="texra" name="book"></wa-icon> Bibliography resolution       | Built-in                   |
 | <wa-icon library="texra" name="symbol-operator"></wa-icon> Symbolic math      | `wolfram`                  |
 
-All are configured from **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) or **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>). Missing dependencies show <wa-icon library="texra" name="warning"></wa-icon> **Not Found**; ready ones show <wa-icon library="texra" name="check"></wa-icon> **Available**.
+All are configured from **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) or **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>), where each tool shows its status at a glance.
+
+<ToolStatusPanel />
+
+<p class="hero-caption">Dashboard → Tools — ready tools show a green <strong>Available</strong> check; missing dependencies show an amber <strong>Not Found</strong> with a one-click <strong>Install</strong>.</p>
 
 ## <wa-icon library="texra" name="symbol-keyword"></wa-icon> Formatting Tools
 

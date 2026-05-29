@@ -1,6 +1,14 @@
+<script setup>
+import ModelPickerHero from '../.vitepress/components/ModelPickerHero.vue';
+</script>
+
 # AI Models
 
-TeXRA supports models from multiple providers. Select models from the dropdown in the TeXRA UI. Hover over options to see context window and cost estimates.
+TeXRA supports models from multiple providers. Select models from the dropdown in the TeXRA UI. Hover over an option to see its context window and cost estimate.
+
+<ModelPickerHero />
+
+<p class="hero-caption">The model picker: monospace model ids with a <code>T</code> badge on thinking variants, and a hover popover showing context window and per-1M token pricing.</p>
 
 **Model ID suffixes:**
 

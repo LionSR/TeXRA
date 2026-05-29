@@ -1,3 +1,7 @@
+<script setup>
+import StreamHeaderActions from '../.vitepress/components/StreamHeaderActions.vue';
+</script>
+
 # ProgressBoard
 
 The ProgressBoard is where you watch agents work and review what they did. Think of it as the flight recorder for every TeXRA run—you can see live progress, re-run a past job, or restore its settings with one click.
@@ -54,19 +58,26 @@ The header provides a summary and actions for the selected stream:
   - **Red (Error)**: The agent encountered an error during execution.
   - **Yellow (Ready/Initial)**: The view is ready, but no stream is active yet.
 - **Token & Cost Summary**: Displays the combined input and output token counts from all completed rounds (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
-- **Stream Header Actions**:
-  - <wa-icon library="texra" name="debug-stop"></wa-icon> **Stop**: Attempts to gracefully stop the currently running task for this stream. For providers supporting `AbortController` (like OpenAI or Anthropic) the active request is aborted immediately; otherwise the current API call will finish before stopping.
-  - <wa-icon library="texra" name="debug-rerun"></wa-icon> **Run Again**: Re-runs the task associated with this stream using the _exact same configuration_ (agent, model, files, instruction) that was used when it originally ran. Useful for retrying failed tasks or reproducing results.
-  - <wa-icon library="texra" name="reply"></wa-icon> **Restore**: Loads the configuration (agent, model, files, instruction) from this stream back into the main TeXRA webview interface. This allows you to easily modify and re-run a previous task.
-  - <wa-icon library="texra" name="diff-multiple"></wa-icon> **Diff**: Triggers the `latexdiff` process to compare the original input file(s) with the generated output `.tex` file(s) from this stream. If no base file was selected, TeXRA automatically falls back to the original file. Requires `latexdiff` to be installed. See [LaTeX Diff](./latex-diff.md).
-  - <wa-icon library="texra" name="check"></wa-icon> **Accept**: After reviewing a diff, replace the base file with the edited version.
-  - <wa-icon library="texra" name="folder-opened"></wa-icon> **Open in task storage**:
-    Reveals the run folder under task-run storage so you can browse generated
-    files, compile logs, mirrored dependencies, and intermediate artifacts
-    manually.
-  - <wa-icon library="texra" name="archive"></wa-icon> **Pack**: Archives the output files and log for this stream into the `History` folder. See [File Management](./file-management.md).
-  - <wa-icon library="texra" name="trash"></wa-icon> **Clean**: Deletes the task storage folder associated with this stream.
-  - <wa-icon library="texra" name="clear-all"></wa-icon> **Erase**: Removes this stream and its log content entirely from the ProgressBoard.
+- **Stream Header Actions**: A toolbar of icon buttons acting on the selected stream, in order — Stop, Run Again, Restore, Diff, Accept, Open in task storage, Pack, Clean, and Erase.
+
+<StreamHeaderActions />
+
+<p class="hero-caption">The stream header: identity and token/cost summary on the left, the action toolbar on the right — every icon mapped to its action.</p>
+
+Each action in detail:
+
+- <wa-icon library="texra" name="debug-stop"></wa-icon> **Stop**: Attempts to gracefully stop the currently running task for this stream. For providers supporting `AbortController` (like OpenAI or Anthropic) the active request is aborted immediately; otherwise the current API call will finish before stopping.
+- <wa-icon library="texra" name="debug-rerun"></wa-icon> **Run Again**: Re-runs the task associated with this stream using the _exact same configuration_ (agent, model, files, instruction) that was used when it originally ran. Useful for retrying failed tasks or reproducing results.
+- <wa-icon library="texra" name="reply"></wa-icon> **Restore**: Loads the configuration (agent, model, files, instruction) from this stream back into the main TeXRA webview interface. This allows you to easily modify and re-run a previous task.
+- <wa-icon library="texra" name="diff-multiple"></wa-icon> **Diff**: Triggers the `latexdiff` process to compare the original input file(s) with the generated output `.tex` file(s) from this stream. If no base file was selected, TeXRA automatically falls back to the original file. Requires `latexdiff` to be installed. See [LaTeX Diff](./latex-diff.md).
+- <wa-icon library="texra" name="check"></wa-icon> **Accept**: After reviewing a diff, replace the base file with the edited version.
+- <wa-icon library="texra" name="folder-opened"></wa-icon> **Open in task storage**:
+  Reveals the run folder under task-run storage so you can browse generated
+  files, compile logs, mirrored dependencies, and intermediate artifacts
+  manually.
+- <wa-icon library="texra" name="archive"></wa-icon> **Pack**: Archives the output files and log for this stream into the `History` folder. See [File Management](./file-management.md).
+- <wa-icon library="texra" name="trash"></wa-icon> **Clean**: Deletes the task storage folder associated with this stream.
+- <wa-icon library="texra" name="clear-all"></wa-icon> **Erase**: Removes this stream and its log content entirely from the ProgressBoard.
 
 ### YOLO Mode
 

@@ -1,3 +1,7 @@
+<script setup>
+import TaskRecipeCards from '../.vitepress/components/TaskRecipeCards.vue';
+</script>
+
 # Quick Start Guide
 
 You have a paper draft and a deadline. Let's get TeXRA working for you in under five minutes.
@@ -286,25 +290,11 @@ sign-in, workspace defaults, and headless output formats.
 
 ## Common Quick Tasks
 
-Here are some common tasks you can try with TeXRA:
+Here are some common tasks you can try with TeXRA. Each is just an agent, a model, and a one-line instruction in the Launcher footer:
 
-### Fixing Grammar and Typos
+<TaskRecipeCards />
 
-- **Agent**: `correct`
-- **Model**: `qwenturbo`, `deepseek`, `gemini31p`, or `sonnet46`
-- **Instruction**: "Fix grammatical errors and typos without changing the content or technical terminology."
-
-### Converting a Paper to Slides
-
-- **Agent**: `paper2slide`
-- **Model**: `sonnet46T`, `opus48T`, or `gpt55`
-- **Instruction**: "Convert this paper into presentation slides using the beamer template. Create approximately 12-15 slides highlighting the key points, methodology, and results."
-
-### Improving Writing Style
-
-- **Agent**: `polish`
-- **Model**: `opus46` or `sonnet46T`
-- **Instruction**: "Improve the writing style to make it more engaging and clear. Enhance the flow between paragraphs while preserving all technical content."
+<p class="hero-caption">Three starter recipes — pick the agent and model, then paste the instruction. The first model listed is a good default; the others are interchangeable alternatives.</p>
 
 ## Understanding the Output
 

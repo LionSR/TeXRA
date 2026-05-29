@@ -43,6 +43,20 @@ A tool-use agent (`research` or `presenter`) acts as your AI graphics assistant 
 
 Because these are tool-use agents, they can compile the figure and inspect the rendered PDF, then refine the code until it compiles cleanly and looks correct.
 
+<ToolCallPanel
+  title="research"
+  icon="sparkle"
+  caption="drawing a TikZ figure · iterating · this run"
+  :calls="[
+    { state: 'done', verb: 'write_tikz', target: 'figures/ml-pipeline.tex', effect: 'Writes a first draft of the flowchart' },
+    { state: 'done', verb: 'compile_tikz', target: 'ml-pipeline.tex', effect: 'pdflatex OK → renders a PNG preview' },
+    { state: 'done', verb: 'read', target: 'ml-pipeline.png', effect: 'Sees nodes overlap, one arrow misaligned' },
+    { state: 'active', verb: 'write_tikz', target: 'ml-pipeline.tex', effect: 'Adjusts node spacing and arrow anchors, then recompiles' },
+  ]"
+/>
+
+<p class="hero-caption">The agent writes, compiles, looks at the rendered PNG, and loops back to fix what it sees — a self-correcting draw cycle, not a one-shot generation.</p>
+
 ![TikZ Figure Example](/images/tikz-figure-example.png)
 
 ### Creating New Figures

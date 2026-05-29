@@ -7,6 +7,7 @@
 // SettingsApp.ts / SETTINGS_TAB_ORDER and the real tool-use agent roster.
 import { ref } from 'vue';
 import MockupFrame from './MockupFrame.vue';
+import MockSwitch from './MockSwitch.vue';
 
 const enabled = ref(true);
 const expanded = ref('pinned');
@@ -85,21 +86,9 @@ function toggle(id) {
         </div>
       </div>
 
-      <!-- Memory toggle (mirrors MemoryToggle). Implemented as a real <button>
-           so it's keyboard-focusable and Space/Enter activate it, per ARIA's
-           `role="switch"` contract. -->
+      <!-- Memory toggle (mirrors MemoryToggle), now a bridged wa-switch. -->
       <div class="mem-toggle">
-        <button
-          type="button"
-          class="switch"
-          :class="{ on: enabled }"
-          role="switch"
-          :aria-checked="enabled"
-          @click="enabled = !enabled"
-        >
-          <span class="switch-knob"></span>
-        </button>
-        <span class="switch-label">Enable memory for chat agents</span>
+        <MockSwitch v-model="enabled" label="Enable memory for chat agents" />
       </div>
 
       <!-- Memory list (mirrors MemoryList → MemoryItem). `by <agent>` uses

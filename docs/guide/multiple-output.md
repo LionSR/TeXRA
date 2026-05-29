@@ -1,3 +1,7 @@
+<script setup>
+import MultiOutputMatchHero from '../.vitepress/components/MultiOutputMatchHero.vue'
+</script>
+
 # Handling Multiple Files (Inputs & Outputs)
 
 TeXRA excels at managing complex academic projects often split across multiple files, like a paper with several chapters or appendices. This guide explains how to work with multiple input files and how agents can generate multiple, distinct output files in a single run.
@@ -45,6 +49,10 @@ This is the crucial part for generating multiple distinct files:
 
 3. **TeXRA Extracts:** The TeXRA backend parses this XML response. It looks for `<document>` tags with a `name` attribute that **exactly matches** one of the expected output filenames.
 4. **Files Saved:** For each matching tag found, TeXRA extracts the content within that tag and saves it to the corresponding filename. If the agent's response doesn't include a `<document>` tag with a name matching one you specified, that file will not be created or updated.
+
+<MultiOutputMatchHero />
+
+<p class="hero-caption">Each <code>&lt;document name="…"&gt;</code> block is matched by name against the expected output filenames — matches are saved, a block with no matching name is skipped.</p>
 
 **Key Point:** The agent must be explicitly instructed via its prompts to
 generate the `<document name=\"...\">` structure matching the output filenames
