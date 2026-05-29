@@ -1,11 +1,5 @@
 export { capitalize } from '@utils/text/stringUtils';
 
-export function isPlainObject(
-  value: unknown,
-): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
   month: 'short',

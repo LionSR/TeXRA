@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { isPlainObject } from '@shared/utils/string';
+import { isObject } from '@utils/core';
 
 import { PlanSchema, type Plan } from './plan';
 import { TodoItemSchema } from './todo';
@@ -15,11 +15,11 @@ function parsePlan(value: unknown): Plan | null {
 }
 
 function extractPlanSummary(value: unknown): string | null {
-  return isPlainObject(value) ? nonEmptyString(value.summary) : null;
+  return isObject(value) ? nonEmptyString(value.summary) : null;
 }
 
 function normalizeWorkPlanSnapshot(input: unknown): unknown {
-  const record = isPlainObject(input) ? input : {};
+  const record = isObject(input) ? input : {};
   const plan = parsePlan(record.plan);
   const planSummary =
     plan?.summary ??
