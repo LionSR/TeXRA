@@ -9,7 +9,6 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import {
   BaseWebviewProvider,
   getCombinedLocalResourceRoots,
-  MAIN_VIEW_COMMANDS,
   SIDEBAR_VIEWS,
   setActiveSidebarView,
 } from '@common/webview';
@@ -17,6 +16,7 @@ import { consumePendingState } from '@common/state';
 
 import { agentDirectories } from '@frontend/agents';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
 import { watchConfig, DEBOUNCE_OPTIONS_MS } from '@utils/config';
 import { debounce } from '@utils/core';

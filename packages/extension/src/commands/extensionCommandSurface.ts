@@ -59,7 +59,6 @@ import { handleParseXml as sysParseXml } from '@commands/system/xmlCommands';
 import { handleParseYaml as sysParseYaml } from '@commands/system/yamlCommands';
 import { handleTestTextEditor as sysTestTextEditor } from '@commands/system/textEditorCommands';
 import {
-  MAIN_VIEW_COMMANDS,
   SIDEBAR_VIEWS,
   getActiveSidebarView,
 } from '@common/webview';
@@ -67,6 +66,7 @@ import { type ApiProvider, SecretManager } from '@frontend/secretManager';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { runCleanBuild, runCleanOutput } from '@housekeeping';
 import type { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { CommandId } from '@shared/commands/catalog';
 import {
   awaitTrue,

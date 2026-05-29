@@ -6,7 +6,7 @@
  */
 import { z } from 'zod';
 
-import { HISTORY_VIEW_COMMANDS } from '@common/webview/commands';
+import { HISTORY_VIEW_COMMANDS } from '@shared/ipc';
 import { commandOnly } from './messageFactories';
 
 import { AGENT_CATEGORY } from './agent';

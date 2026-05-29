@@ -15,7 +15,7 @@ import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import {
   COMMON_COMMANDS,
   PROGRESS_VIEW_COMMANDS,
-} from '@common/webview/commands';
+} from '@shared/ipc';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
 import { PersistedState } from '@shared/state';

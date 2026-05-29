@@ -14,13 +14,13 @@ import { EdgeFunctionResponseSchema } from '@agent/remote/types';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, SUPABASE_CONFIG } from '@auth/config';
 import { renderAgentTemplateFromBundle } from '@commands/agent/agentTemplateRenderer';
-import { SETTINGS_VIEW_COMMANDS } from '@common/webview';
 import { workspaceSM, globalSM } from '@common/state';
 import {
   isFileNotFoundError,
   showLoggedErrorMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { createSettingsAgentControllers } from '@shared/settingsView/handlers/agentControllerFactory';
 import {
   SETTINGS_VIEW_CMD,

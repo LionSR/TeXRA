@@ -2,13 +2,13 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { SecretManager, ApiProvider } from '@frontend/secretManager';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { invalidateApiKeyCache } from '@model/apiProviders';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { PROVIDER_URLS } from '@shared/constants/providers';
 
 const CHANNEL = 'ApiKeyCommands';

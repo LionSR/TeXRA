@@ -5,7 +5,7 @@
 
 import { create } from 'mutative';
 
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { getStreamState, isToolUseState } from '../store';

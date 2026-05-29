@@ -40,8 +40,6 @@ import {
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
-import { COMMON_COMMANDS } from '@common/webview/commonCommands';
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { DiffViewHost } from '@hosts/diffViewHost';
 import type { ExternalOpener } from '@hosts/externalOpener';
@@ -65,6 +63,8 @@ import {
   type StreamTabInfo,
 } from '@shared/schemas';
 import type { RestoredStreamSnapshot } from '@shared/schemas';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
+import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import {
   cleanupAllApprovals,
