@@ -8,6 +8,7 @@ import GuideIntroHero from '../components/GuideIntroHero.vue';
 import QuickStartHero from '../components/QuickStartHero.vue';
 import LatexDiffHero from '../components/LatexDiffHero.vue';
 import FileSelectHero from '../components/FileSelectHero.vue';
+import ApiKeysHero from '../components/ApiKeysHero.vue';
 import ToolConfigHero from '../components/ToolConfigHero.vue';
 import CompareHero from '../components/CompareHero.vue';
 import MemoryHero from '../components/MemoryHero.vue';
@@ -40,6 +41,7 @@ export default {
     app.component('QuickStartHero', QuickStartHero);
     app.component('LatexDiffHero', LatexDiffHero);
     app.component('FileSelectHero', FileSelectHero);
+    app.component('ApiKeysHero', ApiKeysHero);
     app.component('ToolConfigHero', ToolConfigHero);
     app.component('CompareHero', CompareHero);
     app.component('MemoryHero', MemoryHero);

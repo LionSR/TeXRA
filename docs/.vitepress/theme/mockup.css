@@ -791,3 +791,101 @@
     border-bottom: 1px solid #000;
   }
 }
+
+/* ============================================
+   DASHBOARD (settings) CHROME
+   Shared by MemoryHero + ApiKeysHero — the Settings Dashboard's left tab nav
+   and the labelled toggle switch. Each hero adds only its own tab-body markup.
+   ============================================ */
+.mockup .dash-nav {
+  width: 168px;
+}
+.mockup .dash-tabs {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+.mockup .dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  font-size: 0.76rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.mockup .dt wa-icon {
+  font-size: 12px;
+}
+.mockup .dt:hover {
+  color: var(--wa-color-text-normal);
+  background: rgba(255, 255, 255, 0.03);
+}
+.mockup .dt-on {
+  color: #fff;
+  font-weight: 600;
+  background: rgba(200, 155, 224, 0.08);
+  border-left-color: var(--brand);
+}
+
+/* Labelled toggle switch (memory enable, global streaming, …). */
+.mockup .switch {
+  display: inline-flex;
+  align-items: center;
+  width: 32px;
+  height: 18px;
+  background: #444;
+  border: none;
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  padding: 0;
+}
+.mockup .switch.on {
+  background: var(--brand);
+}
+.mockup .switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.15s;
+}
+.mockup .switch.on .switch-knob {
+  transform: translateX(14px);
+}
+.mockup .switch-label {
+  font-size: 0.78rem;
+  color: var(--wa-color-text-normal);
+}
+
+@media (max-width: 820px) {
+  .mockup .dash-nav {
+    width: auto;
+    flex-direction: row;
+    border-right: none;
+    border-bottom: 1px solid #000;
+    padding: 0;
+    overflow-x: auto;
+  }
+  .mockup .dash-tabs {
+    flex-direction: row;
+    padding: 0;
+  }
+  .mockup .dt {
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+  .mockup .dt-on {
+    border-left-color: transparent;
+    border-bottom-color: var(--brand);
+  }
+}

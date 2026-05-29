@@ -36,6 +36,10 @@ Before you can use TeXRA's AI features, you need to provide API keys for the ser
 
 The Status column shows `Set` once the key is stored. To replace a key, set it again; to remove one, click the <wa-icon library="texra" name="trash"></wa-icon> trash icon. Repeat for each provider you plan to use.
 
+<ApiKeysHero />
+
+<p class="hero-caption">The Models tab's API Configuration table: each provider shows its key status and Set / Get / Remove actions.</p>
+
 ::: tip Per-provider settings
 Expand a provider's row (click the chevron) to toggle streaming or, for providers that support it, point requests at a custom endpoint.
 :::
