@@ -1,7 +1,5 @@
 import * as path from 'node:path';
 
-import { defineCommand } from 'citty';
-
 import { getAgent, loadAgents } from '@agent/index';
 import { writeTerminalStatus } from '@agent/storage';
 import {
@@ -9,7 +7,6 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 
@@ -21,11 +18,10 @@ import {
 } from '../runtime/cliConfig';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr } from '../runtime/logSinks';
+import { writeErrorStderr } from '../runtime/logSinks';
 import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
 
-import { contextFromArgs } from './_helpers/context';
-import { setExitCode } from './_helpers/exitCode';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { assertExplicitModelKnown } from './_helpers/modelArg';
 import { emitCliResult } from './_helpers/output';
 import {
@@ -158,11 +154,11 @@ async function runWorkflowAgent(
     ));
   } catch (error) {
     if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
-      writeTextStderr(toErrorMessage(error));
+      writeErrorStderr(error);
       return CliExitCode.Interrupted;
     }
     await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
-    writeTextStderr(toErrorMessage(error));
+    writeErrorStderr(error);
     return CliExitCode.AgentError;
   }
 
@@ -178,7 +174,7 @@ async function runWorkflowAgent(
   return terminalStatusExitCode(terminalStatus, runContext);
 }
 
-export const runWorkflowCommand = defineCommand({
+export const runWorkflowCommand = defineCliCommand({
   meta: { name: 'run', description: 'Run a workflow agent' },
   args: {
     ...GLOBAL_ARGS,
@@ -218,18 +214,14 @@ export const runWorkflowCommand = defineCommand({
       description: 'Instruction passed to the workflow agent',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(
-      await runWorkflowAgent(context, {
-        agent: ctx.args.agent,
-        inputFiles: collectStringFlagValues(ctx.rawArgs, 'input', 'i'),
-        contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
-        output: optString(ctx.args.output),
-        outputDir: optString(ctx.args['output-dir']),
-        model: optString(ctx.args.model),
-        instruction: optString(ctx.args.instruction) ?? '',
-      }),
-    );
-  },
+  run: (context, ctx) =>
+    runWorkflowAgent(context, {
+      agent: ctx.args.agent,
+      inputFiles: collectStringFlagValues(ctx.rawArgs, 'input', 'i'),
+      contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
+      output: optString(ctx.args.output),
+      outputDir: optString(ctx.args['output-dir']),
+      model: optString(ctx.args.model),
+      instruction: optString(ctx.args.instruction) ?? '',
+    }),
 });

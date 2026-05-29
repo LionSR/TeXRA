@@ -14,6 +14,7 @@ import {
   parseWorkflowOutputRoundDir,
 } from '@agent/output/workflowOutputLayout';
 import { getStreamTabId } from '@agent/runtime/streamTab';
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import {
   showLoggedErrorMessage,
@@ -166,27 +167,21 @@ function showLatexdiffPackNotifications(
 export function registerLatexdiffCommands(
   context: vscode.ExtensionContext,
 ): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand('texra.latexdiff', handleLatexdiff),
-    vscode.commands.registerCommand('texra.latexdiffvc', handleLatexdiffvc),
-    vscode.commands.registerCommand(
-      'texra.packLatexdiffvc',
-      handlePackLatexdiffvc,
-    ),
-    vscode.commands.registerCommand(
-      'texra.packLatexdiffvcMultiple',
-      handlePackLatexdiffvcMultiple,
-    ),
-    vscode.commands.registerCommand(
-      'texra.cleanLatexdiffvc',
-      handleCleanLatexdiffvc,
-    ),
-    vscode.commands.registerCommand(
-      'texra.cleanLatexdiffvcMultiple',
-      handleCleanLatexdiffvcMultiple,
-    ),
-    vscode.commands.registerCommand('texra.runLatexdiff', handleRunLatexdiff),
-  );
+  registerCommands(context, [
+    { id: 'texra.latexdiff', handler: handleLatexdiff },
+    { id: 'texra.latexdiffvc', handler: handleLatexdiffvc },
+    { id: 'texra.packLatexdiffvc', handler: handlePackLatexdiffvc },
+    {
+      id: 'texra.packLatexdiffvcMultiple',
+      handler: handlePackLatexdiffvcMultiple,
+    },
+    { id: 'texra.cleanLatexdiffvc', handler: handleCleanLatexdiffvc },
+    {
+      id: 'texra.cleanLatexdiffvcMultiple',
+      handler: handleCleanLatexdiffvcMultiple,
+    },
+    { id: 'texra.runLatexdiff', handler: handleRunLatexdiff },
+  ]);
 }
 
 async function handleLatexdiff(

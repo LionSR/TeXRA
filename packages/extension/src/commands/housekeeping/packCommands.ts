@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import type { FileOpResult } from '@agent/types';
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { parseWithErrorDisplay } from '@frontend/ui/errorHandlingUtils';
 import {
   runPack,
@@ -197,9 +198,9 @@ async function handlePackMultiple(
 }
 
 export function registerPackCommands(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand('texra.pack', handlePack),
-    vscode.commands.registerCommand('texra.packSingle', handlePackSingle),
-    vscode.commands.registerCommand('texra.packMultiple', handlePackMultiple),
-  );
+  registerCommands(context, [
+    { id: 'texra.pack', handler: handlePack },
+    { id: 'texra.packSingle', handler: handlePackSingle },
+    { id: 'texra.packMultiple', handler: handlePackMultiple },
+  ]);
 }

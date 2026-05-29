@@ -34,6 +34,7 @@ import {
   publishCompiledPdfArtifact,
   type CompiledPdfArtifact,
 } from './compiledPdfArtifacts';
+import { tryOperation } from './outputOperations';
 import type { RoundFileMapping } from './types';
 
 interface DiffOutputDirectory {
@@ -113,15 +114,12 @@ export class LatexDiffManager {
     stage?: StageHandle,
   ): Promise<CompiledPdfArtifact[]> {
     const execute = () => this.performLatexdiffOperations(currRound, mapping);
-    try {
-      return await (stage ? stage.within(execute) : execute());
-    } catch (err) {
-      this.logger.error(
-        `Error during latexdiff processing: ${toErrorMessage(err)}`,
-        { messageType: MESSAGE_TYPES.INTERNAL },
-      );
-      return [];
-    }
+    return tryOperation(() => (stage ? stage.within(execute) : execute()), {
+      logger: this.logger,
+      level: 'error',
+      label: 'Error during latexdiff processing',
+      recover: () => [],
+    });
   }
 
   private async performLatexdiffOperations(

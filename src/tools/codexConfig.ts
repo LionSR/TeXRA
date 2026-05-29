@@ -1,11 +1,11 @@
 // Local imports - agent config
 import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { getWorkspaceState } from '@agent/core/stateStore';
 import {
   buildAgentWorkspaceOptions,
   type AgentWorkspaceOptions,
 } from './agentWorkspaceOptions';
+import { createEnumParser, createEnumStateGetter } from './support/enumConfig';
 import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 
 // Type-only imports
@@ -33,19 +33,16 @@ export type CodexReasoningEffort = (typeof REASONING_EFFORTS)[number];
 const REASONING_EFFORT_KEY = 'texra.codexReasoningEffort';
 const REASONING_EFFORT_DEFAULT: CodexReasoningEffort = 'high';
 
-export function parseCodexReasoningEffort(raw: string): CodexReasoningEffort {
-  return (REASONING_EFFORTS as readonly string[]).includes(raw)
-    ? (raw as CodexReasoningEffort)
-    : REASONING_EFFORT_DEFAULT;
-}
+export const parseCodexReasoningEffort = createEnumParser(
+  REASONING_EFFORTS,
+  REASONING_EFFORT_DEFAULT,
+);
 
-export function getCodexReasoningEffort(): CodexReasoningEffort {
-  const raw = getWorkspaceState().get<string>(
-    REASONING_EFFORT_KEY,
-    REASONING_EFFORT_DEFAULT,
-  );
-  return parseCodexReasoningEffort(raw);
-}
+export const getCodexReasoningEffort = createEnumStateGetter(
+  REASONING_EFFORT_KEY,
+  REASONING_EFFORT_DEFAULT,
+  parseCodexReasoningEffort,
+);
 
 /**
  * Codex CLI's Rust-side config deserializer only accepts a subset of the
@@ -85,19 +82,15 @@ export type CodexApprovalPolicy = ApprovalMode;
 const APPROVAL_POLICY_KEY = 'texra.codexApprovalPolicy';
 const APPROVAL_POLICY_DEFAULT: CodexApprovalPolicy = 'never';
 
-export function parseCodexApprovalPolicy(raw: string): CodexApprovalPolicy {
-  return (APPROVAL_POLICIES as readonly string[]).includes(raw)
-    ? (raw as CodexApprovalPolicy)
-    : APPROVAL_POLICY_DEFAULT;
-}
+export const parseCodexApprovalPolicy: (raw: string) => CodexApprovalPolicy =
+  createEnumParser(APPROVAL_POLICIES, APPROVAL_POLICY_DEFAULT);
 
-export function getCodexApprovalPolicy(): CodexApprovalPolicy {
-  const raw = getWorkspaceState().get<string>(
+export const getCodexApprovalPolicy: () => CodexApprovalPolicy =
+  createEnumStateGetter(
     APPROVAL_POLICY_KEY,
     APPROVAL_POLICY_DEFAULT,
+    parseCodexApprovalPolicy,
   );
-  return parseCodexApprovalPolicy(raw);
-}
 
 // ============================================================================
 // Sandbox mode
@@ -115,19 +108,15 @@ export type CodexSandboxMode = SandboxMode;
 const SANDBOX_MODE_KEY = 'texra.codexSandboxMode';
 const SANDBOX_MODE_DEFAULT: CodexSandboxMode = 'workspace-write';
 
-export function parseCodexSandboxMode(raw: string): CodexSandboxMode {
-  return (SANDBOX_MODES as readonly string[]).includes(raw)
-    ? (raw as CodexSandboxMode)
-    : SANDBOX_MODE_DEFAULT;
-}
+export const parseCodexSandboxMode: (raw: string) => CodexSandboxMode =
+  createEnumParser(SANDBOX_MODES, SANDBOX_MODE_DEFAULT);
 
-export function getCodexSandboxMode(): CodexSandboxMode {
-  const raw = getWorkspaceState().get<string>(
+export const getCodexSandboxMode: () => CodexSandboxMode =
+  createEnumStateGetter(
     SANDBOX_MODE_KEY,
     SANDBOX_MODE_DEFAULT,
+    parseCodexSandboxMode,
   );
-  return parseCodexSandboxMode(raw);
-}
 
 /**
  * Build synthetic execution metadata for Codex child streams.
