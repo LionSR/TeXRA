@@ -3,7 +3,6 @@ import { ReasoningEffort } from 'llm-zoo';
 
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
 // Type imports
 import type { DeepSeekToolCall } from './types/IModelHandler';
@@ -88,15 +87,9 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
     return effort === ReasoningEffort.XHIGH ? 'max' : 'high';
   }
 
-  /**
-   * DeepSeek requires merging consecutive roles and converting content to strings.
-   */
-  protected override getMessageNormalizationOptions(): NormalizeOpenAIMessageContentOptions {
-    return {
-      mergeConsecutiveRoles: true,
-      convertContentToString: true,
-    };
-  }
+  /** DeepSeek requires merging consecutive roles and stringified content. */
+  protected override readonly convertContentToString = true;
+  protected override readonly mergeConsecutiveRoles = true;
 
   /**
    * DeepSeek's `thinking` param is only sent when the desired mode differs
