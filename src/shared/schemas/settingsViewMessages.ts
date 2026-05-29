@@ -6,10 +6,7 @@
  */
 import { z } from 'zod';
 
-import {
-  SETTINGS_VIEW_CMD,
-  SETTINGS_VIEW_COMMANDS,
-} from '@shared/ipc';
+import { SETTINGS_VIEW_CMD, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   LATEX_CONFIG_FIELDS,
   LATEX_CONFIG_RANGES,
