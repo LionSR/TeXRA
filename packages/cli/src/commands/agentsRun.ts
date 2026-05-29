@@ -13,15 +13,10 @@ import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
-import {
-  CLI_BUILTIN_DEFAULT_MODEL,
-  resolveConfiguredModel,
-} from '../runtime/cliConfig';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
-import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
@@ -29,7 +24,10 @@ import {
   collectStringFlagValues,
   optString,
 } from './_helpers/globalArgs';
-import { assertExplicitModelKnown } from './_helpers/modelArg';
+import {
+  buildHeadlessRunContext,
+  resolveCliRunModel,
+} from './_helpers/modelArg';
 import { emitCliResult } from './_helpers/output';
 import { shouldHonorRemoteAgentPriority } from './_helpers/remoteAgents';
 import { executeCliRequest } from './_helpers/runExecution';
@@ -102,19 +100,8 @@ async function runToolUseAgent(
   context: CliContext,
   init: ToolUseAgentRunInit,
 ): Promise<number> {
-  const explicitModel = assertExplicitModelKnown(init.model);
-  const model =
-    explicitModel ||
-    context.envModel ||
-    resolveConfiguredModel(context.cliConfig, 'chat') ||
-    CLI_BUILTIN_DEFAULT_MODEL;
-  const renderRunProgress = shouldRenderRunProgress(context);
-  const runContext: CliContext = {
-    ...context,
-    helperModel: model,
-    quietLogs: true,
-    renderRunProgress,
-  };
+  const model = resolveCliRunModel(context, init.model, 'chat');
+  const runContext = buildHeadlessRunContext(context, model);
 
   let inputFiles: string[];
   let contextFiles: string[];

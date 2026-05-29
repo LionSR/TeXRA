@@ -11,10 +11,6 @@ import { AgentCategory } from '@agent/core/AgentDataclass';
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 import { CliUsageError } from '../runtime/cliContext';
-import {
-  CLI_BUILTIN_DEFAULT_MODEL,
-  resolveConfiguredModel,
-} from '../runtime/cliConfig';
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, initLocalCliPlatform } from '../runtime/initPlatform';
@@ -31,11 +27,13 @@ import {
   type CliMultiAgentPreset,
   type CliMultiAgentPresetRunPlan,
 } from '../runtime/multiAgentPresets';
-import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
 import { getCliAuthProvider } from '../runtime/supabaseAuth';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { assertExplicitModelKnown } from './_helpers/modelArg';
+import {
+  buildHeadlessRunContext,
+  resolveCliRunModel,
+} from './_helpers/modelArg';
 import { emitCliResult } from './_helpers/output';
 import {
   GLOBAL_ARGS,
@@ -193,21 +191,10 @@ async function runMultiAgentPreset(
   context: CliContext,
   init: MultiAgentRunInit,
 ): Promise<number> {
-  const explicitModel = assertExplicitModelKnown(init.model);
   // A team run drives a tool-use orchestrator, so it follows the `chat`
   // (tool-use) model config rather than `run` (workflow agents).
-  const model =
-    explicitModel ||
-    context.envModel ||
-    resolveConfiguredModel(context.cliConfig, 'chat') ||
-    CLI_BUILTIN_DEFAULT_MODEL;
-  const renderRunProgress = shouldRenderRunProgress(context);
-  const runContext: CliContext = {
-    ...context,
-    helperModel: model,
-    quietLogs: true,
-    renderRunProgress,
-  };
+  const model = resolveCliRunModel(context, init.model, 'chat');
+  const runContext = buildHeadlessRunContext(context, model);
   const { inputFiles, contextFiles } = await expandRunInputs(
     init.inputFiles,
     init.contextFiles,
