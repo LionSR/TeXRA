@@ -107,6 +107,56 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('[Alt-1..9]focus');
   });
 
+  it('shows a live elapsed segment only while running', () => {
+    const running = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      elapsedMs: 110_000,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUps: 0,
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+    });
+
+    expect(running.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'running',
+      '110s',
+      'api',
+    ]);
+
+    // The same elapsed reading is suppressed once the turn is no longer running.
+    const idle = buildStatusBarDisplay({
+      status: STREAM_STATUS.WAITING,
+      elapsedMs: 110_000,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUps: 0,
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+    });
+
+    expect(idle.left.map(statusBarSegmentText)).toEqual(['◆', 'idle', 'api']);
+  });
+
   it('preserves YOLO and BYPASS badges without agent/model text', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,
