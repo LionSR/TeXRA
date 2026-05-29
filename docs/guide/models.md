@@ -1,5 +1,6 @@
 <script setup>
 import ModelPickerHero from '../.vitepress/components/ModelPickerHero.vue';
+import ProviderConfigRow from '../.vitepress/components/ProviderConfigRow.vue';
 </script>
 
 # AI Models
@@ -140,11 +141,17 @@ To access additional models or alternative pricing:
 2. Add via `TeXRA: Set API Key` command
 3. In the Dashboard → Models tab → API Configuration, expand the OpenRouter row and enable **"Use OpenRouter for All Models"**
 
+Expanding any provider's row in **API Configuration** reveals its key field plus the per-provider toggles described here and under [Streaming](#streaming):
+
+<ProviderConfigRow />
+
+<p class="hero-caption">Expand a provider's <strong>API Configuration</strong> row to reveal its masked key field, the per-provider <strong>Enable streaming</strong> toggle, and <strong>Use OpenRouter for All Models</strong>.</p>
+
 ## Streaming
 
 Streaming is configured per provider rather than through a single global
 setting. Open the **Dashboard → Models** tab, expand a provider's **API
-Configuration**, and toggle streaming there. Enabling it makes long responses
+Configuration**, and toggle streaming there (see the [expanded row above](#using-openrouter)). Enabling it makes long responses
 arrive incrementally instead of in one large reply.
 
 ## Next Steps

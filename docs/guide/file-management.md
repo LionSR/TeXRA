@@ -1,3 +1,7 @@
+<script setup>
+import StorageLifecycleFlow from '../.vitepress/components/StorageLifecycleFlow.vue';
+</script>
+
 # File Management
 
 Academic projects often involve juggling numerous files – main documents, chapters, figures, references, auxiliary styles... TeXRA aims to make this less of a circus act with its comprehensive file management system. This guide explains how to effectively organize, select, and manage files when working with TeXRA.
@@ -217,9 +221,13 @@ executions/<executionId>/
 ```
 
 Workflow outputs are written there first, not directly over your workspace
-files. Use **Accept** to copy reviewed outputs back into the workspace, **Pack**
-to archive the whole run, and **Clean** to remove the run folder when you no
-longer need it. The folder also stores intermediate artifacts such as optional
+files. Three commands then move that run's artifacts to three different places:
+
+<StorageLifecycleFlow />
+
+<p class="hero-caption">Accept copies reviewed outputs into the workspace, Pack archives the run into History, and Clean deletes the run folder — your input files are never touched.</p>
+
+The folder also stores intermediate artifacts such as optional
 debug JSON files written when `texra.debug.saveDebugObjects` is enabled.
 
 ## Working with LaTeX Projects

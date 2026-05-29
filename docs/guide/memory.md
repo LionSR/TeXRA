@@ -1,3 +1,7 @@
+<script setup>
+import MemoryItemAnatomy from '../.vitepress/components/MemoryItemAnatomy.vue';
+</script>
+
 # Memory
 
 Tool-use agents in TeXRA can save notes that persist across conversations. The next time you start a chat — even days later — the agent loads those notes and picks up where it left off, without you having to re-explain the project.
@@ -68,6 +72,10 @@ The Memory tab shows every saved note, sorted with the most recently updated fir
 - **Actions** — pin / unpin, open in editor, delete
 
 The toolbar above the list has **Refresh** and **Open Folder** — the latter reveals the on-disk `memories/` directory in your file explorer, useful if you want to edit notes by hand or check them into a side repo.
+
+<MemoryItemAnatomy />
+
+<p class="hero-caption">One expanded note, part by part: the <code>/memories/...</code> path, the metadata strip, the pin / open / delete actions, and the collapsible Contents preview — with Refresh and Open Folder in the toolbar above.</p>
 
 ## Memory is shared across the run
 

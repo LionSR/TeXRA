@@ -1,5 +1,6 @@
 <script setup>
 import DiffMarkupHero from '../.vitepress/components/DiffMarkupHero.vue';
+import DiffArtifactsHero from '../.vitepress/components/DiffArtifactsHero.vue';
 </script>
 
 # LaTeX Diff
@@ -110,10 +111,13 @@ TeXRA will:
 
 ### Step 3: Manage Diff Outputs
 
-After generating a Git-based diff using the "latexdiff-vc" button, you can:
+After generating a Git-based diff using the "latexdiff-vc" button, you can manage the resulting files from the Commit section's **Pack** (<wa-icon library="texra" name="archive"></wa-icon>) and **Clean** (<wa-icon library="texra" name="trash"></wa-icon>) buttons. Pack archives the diff files; Clean removes them.
 
-- **Pack** (<wa-icon library="texra" name="archive"></wa-icon>): Archive the diff files using the "Pack" button in the Commit section.
-- **Clean** (<wa-icon library="texra" name="trash"></wa-icon>): Remove the diff files using the "Clean" button in the Commit section.
+Each diff route writes its own predictably-named artifacts alongside the source pair — `latexdiff` produces `_diff.tex`, `latexdiff-vc` appends the commit hash (`_diff_rev<hash>.tex`), and between-round runs use `_diff_rN-rM.tex` — and every `.tex` compiles to a matching `.pdf`. Pack and Clean act on this whole set:
+
+<DiffArtifactsHero />
+
+<p class="hero-caption">The diff file-naming scheme grounded as one set — the base/edited source pair, then each generated diff (<code>latexdiff</code>, <code>latexdiff-vc</code> with its commit hash, and between-round) paired with its compiled PDF. The Pack and Clean buttons archive or remove the whole set.</p>
 
 ## Understanding Diff Output
 

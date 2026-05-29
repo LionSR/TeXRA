@@ -70,7 +70,20 @@ Enable via the **Auto Extract** dropdown (<wa-icon library="texra" name="wand"><
 
 ## <wa-icon library="texra" name="tools"></wa-icon> Figure Extraction Tools
 
-Tool-use agents can extract figures programmatically. These are part of the **LaTeX Extraction** built-in tool group — always available.
+Tool-use agents can extract figures programmatically. These are part of the **LaTeX Extraction** built-in tool group — always available. In a run, an agent like `research` drives them one after another, attaching what it finds so a multimodal model can read it:
+
+<ToolCallPanel
+  title="research"
+  icon="sparkle"
+  caption="gathering a paper's figures · LaTeX Extraction · this run"
+  :calls="[
+    { state: 'done', verb: 'extract_figures', target: 'paper/main.tex', effect: 'Found 9 \\includegraphics — attached 9 files' },
+    { state: 'done', verb: 'extract_bib_entries', target: 'paper/main.tex', effect: 'Returned BibTeX for every \\cite key' },
+    { state: 'active', verb: 'extract_tikz_figures', target: 'paper/main.tex', effect: 'compile: true → latexmk renders 7 tikzpicture snippets, attaches 7 PDFs' },
+  ]"
+/>
+
+<p class="hero-caption">The three LaTeX Extraction tools as they surface in the Progress view — each returns referenced files, BibTeX records, or compiled TikZ PDFs the model can read directly. The raw request form for each is below.</p>
 
 ### `extract_figures`
 

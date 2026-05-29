@@ -1,5 +1,6 @@
 <script setup>
 import FlowSteps from '../.vitepress/components/FlowSteps.vue';
+import PolishRunTree from '../.vitepress/components/PolishRunTree.vue';
 </script>
 
 # First run
@@ -68,23 +69,18 @@ texra run polish \
 ```
 
 The run streams reasoning, tool calls, and the assembled output.
-When it completes, polish has written:
+When it completes, polish has written one folder per round under
+`.texra/runs/<run-id>/`:
 
-```
-.texra/runs/<run-id>/r0/draft.tex   # First revision
-.texra/runs/<run-id>/r1/draft.tex   # Critique pass
-```
+<PolishRunTree />
 
-(The input filename is preserved — not `output.tex`.)
+<p class="hero-caption">Each round lands in its own folder and keeps the input filename — <code>r0/draft.tex</code> is the first revision, <code>r1/draft.tex</code> the critique pass and final. Add <code>--output draft.polished.tex</code> to write the result next to your input instead.</p>
 
 To diff against your original:
 
 ```sh
 diff -u draft.tex .texra/runs/<run-id>/r1/draft.tex
 ```
-
-To write the final result next to your input instead of into task
-storage, add `--output draft.polished.tex` to the command.
 
 ## What just happened
 

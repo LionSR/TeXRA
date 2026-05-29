@@ -1,5 +1,8 @@
 <script setup>
 import CliChatHero from '../.vitepress/components/CliChatHero.vue';
+import CliAuthModesHero from '../.vitepress/components/CliAuthModesHero.vue';
+import CliToolsListHero from '../.vitepress/components/CliToolsListHero.vue';
+import ConfigPrecedenceStack from '../.vitepress/components/ConfigPrecedenceStack.vue';
 </script>
 
 # TeXRA CLI
@@ -64,6 +67,10 @@ filesystem copy was written, and report `terminalStatus` for the completed run.
 
 You can run the CLI either with a TeXRA sign-in (included hosted access) or
 with your own provider API keys — whichever you prefer.
+
+<CliAuthModesHero />
+
+<p class="hero-caption">Two credential paths: included hosted access after <code>texra login</code>, or your own provider keys via env vars. <code>--api-mode personal</code> flips a single run to your key even while signed in.</p>
 
 **Sign in with GitHub or Google** to use included access without managing keys:
 
@@ -190,7 +197,13 @@ texra tools auth codex
 ```
 
 `tools list` reports each integration id, name, category, enabled state, and
-detection result. Use `--output-format json` or `--output-format ndjson` for
+detection result.
+
+<CliToolsListHero />
+
+<p class="hero-caption"><code>tools list</code> reports five fields per integration: a status dot marks enabled vs disabled, and a check or cross marks whether the backing tool was detected on this machine.</p>
+
+Use `--output-format json` or `--output-format ndjson` for
 scripts. `tools install <id>` prints the install guide and registered command;
 it only runs the command when passed `--run`. In the interactive TUI, `/tools`
 opens the same integration list and toggles integrations that support enabling
@@ -204,6 +217,10 @@ defaults non-interactively, or `--gitignore` to add `.texra/` to `.gitignore`).
 Command-line flags override environment variables, environment variables
 override the workspace file, and the workspace file overrides built-in
 defaults.
+
+<ConfigPrecedenceStack />
+
+<p class="hero-caption">Resolution order, highest priority on top: a CLI flag beats its <code>TEXRA_*</code> env var, which beats the <code>.texra/config.json</code> key, which beats the built-in default (<code>deepseekT</code>).</p>
 
 ```json
 {

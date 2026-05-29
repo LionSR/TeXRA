@@ -2,6 +2,8 @@
 
 <script setup>
 import ToolCategoriesHero from '../.vitepress/components/ToolCategoriesHero.vue';
+import AgentAnatomyHero from '../.vitepress/components/AgentAnatomyHero.vue';
+import OutputMappingHero from '../.vitepress/components/OutputMappingHero.vue';
 </script>
 
 Every lab has its own writing style, formatting quirks, and recurring tasks. Maybe your group always needs a "rewrite the abstract for a Nature-style letter" pass, or you want an agent that converts your internal notes into arXiv-ready LaTeX. Custom agents let you encode these workflows once and reuse them with a single click.
@@ -45,7 +47,13 @@ If you'd like TeXRA to draft an agent for you, click **New Agent** (<wa-icon lib
 
 ### <wa-icon library="texra" name="edit"></wa-icon> Step 3 — Define the Agent
 
-Open the newly created `.yaml` file and you'll find a starter template already inserted. Customize it to define your agent's structure. Here are the key fields:
+Open the newly created `.yaml` file and you'll find a starter template already inserted. An agent is just three labelled sections plus one mapping you need to keep in mind:
+
+<AgentAnatomyHero />
+
+<p class="hero-caption">An agent file is <code>inherits</code> + <code>settings</code> + <code>prompts</code>; the <code>userRequest</code> array maps position-by-position onto rounds (item <code>[0]</code> is Round 0, item <code>[1]</code> the first reflection).</p>
+
+Customize it to define your agent's structure. Here are the key fields:
 
 ```yaml
 # --- Agent Inheritance (Optional) ---
@@ -251,8 +259,13 @@ prompts:
 ```
 
 This structure lets TeXRA save each `<document>` block to the corresponding
-filename from the selected input list or from `settings.defaultOutputFiles`. See
-[Handling Multiple Files](./multiple-output.md) for more details.
+filename from the selected input list or from `settings.defaultOutputFiles`:
+
+<OutputMappingHero />
+
+<p class="hero-caption">Each <code>&lt;document name="…"&gt;</code> block is saved to the file whose name matches; a <code>name</code> that isn't in the declared list is skipped and nothing is written.</p>
+
+See [Handling Multiple Files](./multiple-output.md) for more details.
 
 ### <wa-icon library="texra" name="save"></wa-icon> Step 4 — Save and Reload
 

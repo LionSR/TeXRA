@@ -1,5 +1,6 @@
 <script setup>
 import DropdownMenu from '../.vitepress/components/DropdownMenu.vue';
+import AgentModeShapes from '../.vitepress/components/AgentModeShapes.vue';
 </script>
 
 # Built-in Agent Reference
@@ -66,6 +67,12 @@ TeXRA ships with built-in agents for common research tasks—polishing prose, fi
 | `ocr`              | Workflow | Extract text from images/PDFs                                             |
 | `transcribe_audio` | Workflow | Transcribe audio to text                                                  |
 | `merge`            | Workflow | Intelligently merge document versions                                     |
+
+The **Type** column above splits every agent into one of two execution shapes:
+
+<AgentModeShapes />
+
+<p class="hero-caption">Tool-use agents loop — converse and call tools until done; workflow agents run a fixed input → edit → diff pipeline and hand back a versioned diff.</p>
 
 ::: warning Important Note
 The underlying prompts and specific behaviors of these built-in agents may change slightly between TeXRA versions as we continue to optimize them. If you require precise, unchanging behavior or wish to heavily customize the process, consider creating a [Custom Agent](./custom-agents.md) based on these examples.

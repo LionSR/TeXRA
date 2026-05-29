@@ -3,6 +3,8 @@
 <script setup>
 import DashboardTabsCard from '../.vitepress/components/DashboardTabsCard.vue';
 import InstructionHeaderCard from '../.vitepress/components/InstructionHeaderCard.vue';
+import AgentOutputToolbarCard from '../.vitepress/components/AgentOutputToolbarCard.vue';
+import GitTabCard from '../.vitepress/components/GitTabCard.vue';
 </script>
 
 TeXRA provides extensive configuration options that allow you to customize its behavior to match your workflow (don't worry, the defaults are sensible!). This guide explains the available settings and how to adjust them for optimal performance.
@@ -128,6 +130,10 @@ reachable from the progress-view toolbar:
 - **Clean** — discard the run's folder entirely.
 - **Open in task storage** — reveal the folder so you can browse
   artifacts manually.
+
+<AgentOutputToolbarCard />
+
+<p class="hero-caption">The progress-view toolbar for one finished run: Accept, Pack, and Open in task storage, plus the destructive Clean, all acting on <code>executions/{id}/</code>.</p>
 
 When a workflow completes, the final revised file auto-opens in a new
 editor tab as a read-only preview so you don't feel the output
@@ -256,6 +262,10 @@ Configure how TikZ figures are extracted and compiled:
 ## Git Integration
 
 The **Git tab** in the TeXRA Dashboard (`TeXRA: Show Dashboard` → **Git**) covers two independent features: a GitHub token used by the PR-subscription tool, and optional TeXRA-branded commit authorship for agent-made commits.
+
+<GitTabCard />
+
+<p class="hero-caption">The Git tab: the GitHub token row (here picked up from <code>GITHUB_TOKEN</code>, shown as <strong>Env</strong>) with Create on GitHub and Set token, and the commit-author toggle.</p>
 
 ### GitHub personal access token
 

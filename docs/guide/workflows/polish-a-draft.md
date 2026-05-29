@@ -1,5 +1,6 @@
 <script setup>
 import CritiquePassCard from '../../.vitepress/components/CritiquePassCard.vue';
+import PolishRoundsTree from '../../.vitepress/components/PolishRoundsTree.vue';
 </script>
 
 # Polish a draft
@@ -43,6 +44,10 @@ Each round writes its output into the run's task storage, using the
 .texra/runs/<run-id>/r0/intro.tex   # Round 0 — first revision
 .texra/runs/<run-id>/r1/intro.tex   # Round 1 — critique-and-revise pass
 ```
+
+<PolishRoundsTree />
+
+<p class="hero-caption">Both rounds reuse your input filename — <code>r0/</code> holds the first revision, <code>r1/</code> the critique-and-revise pass you usually keep.</p>
 
 To write the final revision next to your input instead:
 

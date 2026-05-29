@@ -103,6 +103,20 @@ TeXRA can pull TikZ figures out of your LaTeX source for separate processing.
 3. Select your input file(s) (<wa-icon library="texra" name="file-code"></wa-icon>).
 4. Execute your chosen agent (<wa-icon library="texra" name="play"></wa-icon>).
 
+<DropdownMenu
+  label="Media · Auto-extract"
+  value="Auto Extract"
+  valueIcon="wand"
+  maxWidth="320px"
+  :groups="[{ items: [
+    { name: 'Figures', checkbox: true, checked: false },
+    { name: 'TikZ Figures', checkbox: true, checked: true },
+    { name: 'Compile Input PDF', checkbox: true, checked: false },
+  ] }]"
+/>
+
+<p class="hero-caption">Open the wand <strong>Auto-extract</strong> menu in the Media group and check <strong>TikZ Figures</strong> — every <code>tikzpicture</code> in your selected files is then pulled out on the next run.</p>
+
 When automatic extraction is enabled, TeXRA will:
 
 1. <wa-icon library="texra" name="search"></wa-icon> Scan your LaTeX documents for `tikzpicture` environments.
@@ -142,11 +156,17 @@ Once extracted, TikZ figures can be compiled into viewable images.
 
 ### Automatic Compilation
 
-With automatic extraction on, TeXRA will:
+With automatic extraction on, one source file fans out into one standalone document, one PDF, and one PNG preview per figure — handed back to the agent:
 
-1. Create a standalone LaTeX document per TikZ figure.
-2. Compile it with your LaTeX distribution (`latexmk`/`pdflatex`).
-3. Convert the PDF to PNG for preview via GraphicsMagick / ImageMagick + Ghostscript.
+<FlowSteps :steps="[
+  { icon: 'file-code', title: 'Source', desc: 'One .tex file with several tikzpicture environments.', chips: [{ text: 'diagrams.tex', variant: 'info', icon: 'file-code' }] },
+  { icon: 'file-submodule', title: 'Extract', desc: 'A standalone LaTeX document per figure.', chips: [{ text: 'fig1.tex', variant: 'neutral' }, { text: 'fig2.tex', variant: 'neutral' }, { text: 'fig3.tex', variant: 'neutral' }] },
+  { icon: 'play-circle', title: 'Compile', desc: 'latexmk / pdflatex builds each standalone.', chips: [{ text: '3 PDFs', variant: 'warning', icon: 'file-pdf' }] },
+  { icon: 'output', title: 'Preview', desc: 'PDF → PNG via GraphicsMagick / ImageMagick + Ghostscript.', chips: [{ text: '3 PNGs', variant: 'success', icon: 'eye' }] },
+  { icon: 'robot', title: 'Agent', desc: 'Sees both the TikZ code and the rendered previews.', chips: [{ text: 'code + image', variant: 'accent' }] }
+]" />
+
+<p class="hero-caption">The extract → compile → preview pipeline: each <code>tikzpicture</code> becomes its own standalone document, PDF, and PNG. The last hop needs GraphicsMagick / ImageMagick + Ghostscript.</p>
 
 Missing system dependencies show <wa-icon library="texra" name="warning"></wa-icon> on **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>).
 

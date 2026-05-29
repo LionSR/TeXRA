@@ -1,6 +1,7 @@
 <script setup>
 import LeanToolsHero from '../.vitepress/components/LeanToolsHero.vue';
 import LeanProofHero from '../.vitepress/components/LeanProofHero.vue';
+import LeanProjectCommands from '../.vitepress/components/LeanProjectCommands.vue';
 </script>
 
 # Lean 4 Proofs
@@ -117,11 +118,11 @@ The `lean_file` tool runs file-scoped commands: `restart` (reload the language s
 Download the Mathlib build cache, then build the project.
 ```
 
-The `lean_project` tool runs project-wide commands without a target file:
+The `lean_project` tool runs project-wide commands without a target file, grouped into server control, build operations, and toolchain setup:
 
-- **Server:** `restart_server`, `stop_server`
-- **Build:** `build`, `clean`, `fetch_cache` (whole project), `fetch_file_cache` (current file's imports — faster)
-- **Setup (VS Code only):** `install_elan`, `update_elan`, `install_deps`, `select_toolchain`
+<LeanProjectCommands />
+
+<p class="hero-caption">Server and build commands run everywhere; the Setup group drives the Lean 4 extension's installers, so it's gated to VS Code. <code>fetch_cache</code> pulls the whole project; <code>fetch_file_cache</code> covers just the current file's imports — faster.</p>
 
 ::: warning Setup commands are VS Code-only
 The setup commands drive the Lean 4 extension's installers, so they only work in the VS Code build. In the CLI they fail with a "run the shell command directly" message — manage your toolchain with `elan` and `lake` directly instead (for example `elan self update`, `elan toolchain install`, or `lake update`). See the [Lean install guide](https://leanprover-community.github.io/install/).

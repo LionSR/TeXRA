@@ -1,5 +1,6 @@
 <script setup>
 import StagedWorkflowHero from '../.vitepress/components/StagedWorkflowHero.vue';
+import QaChecklistCard from '../.vitepress/components/QaChecklistCard.vue';
 </script>
 
 # Best Practices
@@ -75,13 +76,11 @@ A typical project moves through five stages, each owned by one or more agents:
 
 ### Quality Assurance
 
-Always review AI-generated content:
+Always review AI-generated content - tick through the same checks after every run:
 
-1. Compile to check for LaTeX errors
-2. Verify cross-references and citations
-3. Check figure and table numbering
-4. Review mathematical expressions
-5. Look for omissions or duplications
+<QaChecklistCard />
+
+<p class="hero-caption">A short review pass after each run catches the errors automation cannot see for itself.</p>
 
 Use [LaTeX Diff](./latex-diff.md) to visualize changes between versions.
 

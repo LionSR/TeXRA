@@ -1,6 +1,7 @@
 <script setup>
 import AgentYamlHero from '../.vitepress/components/AgentYamlHero.vue'
 import RoundOutputTree from '../.vitepress/components/RoundOutputTree.vue'
+import AgentModesCompare from '../.vitepress/components/AgentModesCompare.vue'
 </script>
 
 # Workflow Agents: How They Work
@@ -12,6 +13,11 @@ Workflow agents are built for **deep, single-shot thinking**—things like rewri
 
 If you want a snappier turnaround (e.g. quick polishes, small corrections), pick a **smaller or faster model** in the model dropdown—output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, use a **tool-use agent** (`chat`, `research`, `review`) instead: those stream back in seconds and don't go through the full workflow pipeline.
 :::
+
+The `settings.agentCategory` key decides which of these two modes an agent runs in:
+
+<AgentModesCompare />
+<p class="hero-caption">Workflow agents reason once and write a versioned, diffable file; tool-use agents converse and call tools turn by turn—it is the first thing to pick for any task.</p>
 
 ## Agent Definition Files (`.yaml`)
 

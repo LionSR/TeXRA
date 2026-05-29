@@ -1,5 +1,7 @@
 <script setup>
 import StreamHeaderActions from '../.vitepress/components/StreamHeaderActions.vue';
+import StatusDotLegend from '../.vitepress/components/StatusDotLegend.vue';
+import TodoLifecycle from '../.vitepress/components/TodoLifecycle.vue';
 </script>
 
 # ProgressBoard
@@ -52,11 +54,12 @@ The header provides a summary and actions for the selected stream:
 - **Stream Name**: Displays the identifier of the current run.
   Workflow agents use the familiar `agent@model: inputFile` format.
   Tool-use sessions show just the agent name so they stand alone even without an associated input file.
-- **Status Indicator**: A colored circle shows the current status:
-  - **Green (Running)**: The agent is actively processing.
-  - **Grey (Stopped)**: The agent finished successfully or was stopped manually before completion.
-  - **Red (Error)**: The agent encountered an error during execution.
-  - **Yellow (Ready/Initial)**: The view is ready, but no stream is active yet.
+- **Status Indicator**: A colored circle shows the current status — the four states read at a glance:
+
+<StatusDotLegend />
+
+<p class="hero-caption">The status dot: only the running state pulses; stopped, error, and ready are static.</p>
+
 - **Token & Cost Summary**: Displays the combined input and output token counts from all completed rounds (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
 - **Stream Header Actions**: A toolbar of icon buttons acting on the selected stream, in order — Stop, Run Again, Restore, Diff, Accept, Open in task storage, Pack, Clean, and Erase.
 
@@ -90,6 +93,10 @@ A small percentage next to the token count shows how full the model's context wi
 ### Todo List
 
 When a tool-use agent tackles a multi-step task, it shows a **live checklist** right in the ProgressBoard. Each item moves from Pending to In Progress to Completed so you always know what the agent is working on and how far along it is.
+
+<TodoLifecycle />
+
+<p class="hero-caption">A live checklist: completed items are checked and struck through, the active item spins, pending items wait.</p>
 
 ### Followup Tasks
 

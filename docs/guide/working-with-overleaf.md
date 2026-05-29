@@ -1,5 +1,6 @@
 <script setup>
 import OverleafCloneFlow from '../.vitepress/components/OverleafCloneFlow.vue';
+import OverleafRoundTripFlow from '../.vitepress/components/OverleafRoundTripFlow.vue';
 </script>
 
 # Power Up Overleaf with TeXRA: A Git-Based Workflow
@@ -33,6 +34,12 @@ and push as usual.
 - TeXRA installed in VS Code ([Installation Guide](./installation.md)).
 
 ## Workflow Steps
+
+The whole loop is a round-trip: pull your project down from Overleaf, edit it locally with TeXRA, then push your commits back.
+
+<OverleafRoundTripFlow />
+
+<p class="hero-caption">Clone or pull brings the project into VS Code, where TeXRA's agents do the heavy lifting; <code>git push</code> sends your committed changes straight back to Overleaf for your collaborators.</p>
 
 ### 1. Clone Your Overleaf Project
 
