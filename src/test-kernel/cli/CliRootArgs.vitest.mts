@@ -2,10 +2,10 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { detectUnknownCliCommand } from '@cli/commands/root';
+import { detectUnknownCliCommand, runCli } from '@cli/commands/root';
 import { resolveLoginProvider } from '@cli/commands/auth';
 import { doctorPlatformInitContext } from '@cli/commands/doctor';
 import {
@@ -524,5 +524,85 @@ describe('CLI model flag validation contract', () => {
 describe('CLI login arguments', () => {
   it('prefers explicit provider flags over positional providers', () => {
     expect(resolveLoginProvider('google', 'github')).toBe('github');
+  });
+});
+
+describe('runCli usage output stream routing', () => {
+  // Capture every byte the CLI writes. Usage on an ERROR flows through
+  // writeRawStderr -> process.stderr.write; citty's showUsage (the explicit
+  // --help path) flows through console.log -> process.stdout.write. We stub
+  // both stream writers AND console.* so nothing leaks to the real terminal.
+  let stdout = '';
+  let stderr = '';
+  let stdoutSpy: ReturnType<typeof vi.spyOn>;
+  let stderrSpy: ReturnType<typeof vi.spyOn>;
+  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    stdout = '';
+    stderr = '';
+    stdoutSpy = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
+        stdout += String(chunk);
+        const cb = rest.find((arg) => typeof arg === 'function') as
+          | ((err?: Error | null) => void)
+          | undefined;
+        cb?.(null);
+        return true;
+      }) as unknown as ReturnType<typeof vi.spyOn>;
+    stderrSpy = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
+        stderr += String(chunk);
+        const cb = rest.find((arg) => typeof arg === 'function') as
+          | ((err?: Error | null) => void)
+          | undefined;
+        cb?.(null);
+        return true;
+      }) as unknown as ReturnType<typeof vi.spyOn>;
+    // citty's showUsage writes via console.log; its errors via console.error.
+    consoleLogSpy = vi
+      .spyOn(console, 'log')
+      .mockImplementation((...args: unknown[]) => {
+        stdout += `${args.join(' ')}\n`;
+      });
+    consoleErrorSpy = vi
+      .spyOn(console, 'error')
+      .mockImplementation((...args: unknown[]) => {
+        stderr += `${args.join(' ')}\n`;
+      });
+  });
+
+  afterEach(() => {
+    stdoutSpy.mockRestore();
+    stderrSpy.mockRestore();
+    consoleLogSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('routes usage text to stderr (not stdout) on a usage error', async () => {
+    // Regression guard for the headless-parity contract: usage shown because
+    // of an ERROR must not land on STDOUT, or it pollutes
+    // `--output-format json|ndjson` (e.g. `texra run ... | jq`).
+    // Mirrors the documented repro: a usage error under --output-format json.
+    const result = await runCli(['run', 'badagent', '--output-format', 'json']);
+    expect(result.exitCode).toBe(2);
+    // Usage banner + the short error line both go to the diagnostic stream.
+    expect(stderr).toContain('USAGE');
+    expect(stderr).toContain('Missing required argument: --input');
+    // STDOUT stays clean so structured output remains machine-parseable.
+    expect(stdout).toBe('');
+  });
+
+  it('prints explicit --help usage to stdout, not stderr', async () => {
+    // Unix convention: an explicit `--help` request is normal output (STDOUT).
+    // Only usage shown on an error is diagnostic (STDERR). This must not
+    // regress when fixing the error path.
+    const result = await runCli(['run', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('USAGE');
+    expect(stderr).toBe('');
   });
 });
