@@ -32,7 +32,7 @@ const tools = [
     icon: 'book',
     label: 'Search Mathlib',
     tool: 'lean_loogle',
-    result: { kind: 'time', text: '0:02' },
+    result: { kind: 'timer', text: '0:02' },
   },
   {
     icon: 'sync',
@@ -44,7 +44,7 @@ const tools = [
     icon: 'tools',
     label: 'Manage the project',
     tool: 'lean_project',
-    result: { kind: 'time', text: '1:48' },
+    result: { kind: 'timer', text: '1:48' },
   },
 ];
 </script>
@@ -143,7 +143,9 @@ const tools = [
 }
 .tc-state {
   color: var(--mk-syn-tac);
-  background: rgba(14, 124, 107, 0.12);
+  /* Tint derived from the (theme-flipping) tactic color, so the bg flips with
+     the text instead of staying the light-mode teal in dark. */
+  background: color-mix(in srgb, var(--mk-syn-tac) 14%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: 0 var(--mk-space-5);
   font-family: var(--vp-font-family-mono);

@@ -25,6 +25,7 @@ const toolUse = [
   'lean',
   'presenter',
   'latexFixer',
+  'latexDiff',
   'creator',
   'chat',
   'setup',

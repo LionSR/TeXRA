@@ -99,7 +99,7 @@ const options = [
   white-space: nowrap;
 }
 .wa-item:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--mk-hover-bg);
 }
 .wa-check {
   display: inline-flex;

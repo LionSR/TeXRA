@@ -6,8 +6,9 @@
 // control. The final message + token cost hand back to the calling TeXRA agent.
 //
 // Standalone (frameless) — just the stream column, no MockupFrame / dash-nav.
-// Reuses the shared .stream-head / .tcard / .todos / .task-tag vocabulary from
-// theme/mockup.css; the root carries `.mockup` so `--mk-*` tokens resolve and
+// Reuses the shared .stream-head / .tcard / .todos vocabulary from theme/
+// mockup.css plus the StatusPill primitive for the WAITING tag; the root carries
+// `.mockup` so `--mk-*` tokens resolve and
 // the panel flips with the docs light / dark theme. Static strings only.
 </script>
 
@@ -99,7 +100,7 @@
 
       <!-- Turn-end state: WAITING + follow-up affordance -->
       <div class="ds-foot">
-        <span class="task-tag">WAITING</span>
+        <StatusPill variant="warning">WAITING</StatusPill>
         <span class="ds-hint">Type to send a follow-up</span>
       </div>
 
@@ -116,9 +117,9 @@
 </template>
 
 <style scoped>
-/* Frameless stream column. Window chrome + .stream-head / .tcard / .todos /
-   .task-tag primitives come from theme/mockup.css (.mockup scope); this file
-   adds only the bits unique to a delegated session. */
+/* Frameless stream column. .stream-head / .tcard / .todos primitives come from
+   theme/mockup.css (.mockup scope) and the WAITING tag uses StatusPill; this
+   file adds only the bits unique to a delegated session. */
 .ds-stream {
   background: var(--mk-bg);
   border: 1px solid var(--mk-border-soft);
@@ -236,16 +237,6 @@
   align-items: center;
   gap: var(--mk-space-8);
   padding-top: var(--mk-space-2);
-}
-.task-tag {
-  flex-shrink: 0;
-  font-size: var(--mk-fs-66);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: #e0b341;
-  background: rgba(215, 169, 62, 0.16);
-  border-radius: var(--mk-radius);
-  padding: 1px var(--mk-space-8);
 }
 .ds-hint {
   font-size: var(--mk-fs-72);

@@ -29,6 +29,10 @@
   --mk-syn-tac: #0e7c6b; /* Lean tactic keyword (teal) */
   --mk-del-text: #b42318; /* del text shown ON the editor surface */
   --mk-ins-text: #15803d; /* ins text shown ON the editor surface */
+  /* Hover overlay — theme-adaptive. The mockups were dark-first and used
+     rgba(255,255,255,…) hovers everywhere, which are invisible on the light
+     surface; this darkens in light, lightens in dark. */
+  --mk-hover-bg: rgba(0, 0, 0, 0.05);
 
   /* ---- Dimensional tokens (theme-independent) ----
      A maintainability indirection layer: every token equals the literal it
@@ -202,6 +206,7 @@
   --mk-syn-tac: #4ec9b0;
   --mk-del-text: #ffb3b3;
   --mk-ins-text: #b6f0c0;
+  --mk-hover-bg: rgba(255, 255, 255, 0.06);
 }
 
 /* ============================================
@@ -212,6 +217,10 @@
    under a hairline). Consolidated here so each stops re-rolling it. This is the
    inline-header variant; MockupPanel is the header-strip variant.
    ============================================ */
+/* Match BOTH a same-element root (class="mockup mk-card", how MockCard and the
+   consolidated figures apply it) and a nested descendant — a plain
+   `.mockup .mk-card` descendant rule would NOT match the same-element case. */
+.mockup.mk-card,
 .mockup .mk-card {
   background: var(--mk-bg);
   border: 1px solid var(--mk-border-soft);
@@ -391,7 +400,7 @@
   font-size: var(--mk-space-12);
 }
 .mockup .act:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--mk-hover-bg);
   color: var(--wa-color-text-normal);
 }
 .mockup .act-on {
@@ -668,7 +677,7 @@
   font-size: var(--mk-space-14);
 }
 .mockup .iact:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--mk-hover-bg);
   color: var(--wa-color-text-normal);
 }
 .mockup .prompt {
@@ -914,7 +923,7 @@
   color: inherit;
 }
 .mockup .tcard:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--mk-hover-bg);
 }
 .mockup .tcard.active {
   background: rgba(200, 155, 224, 0.13);
@@ -1071,7 +1080,7 @@
 }
 .mockup .dt:hover {
   color: var(--wa-color-text-normal);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--mk-hover-bg);
 }
 .mockup .dt-on {
   color: var(--mk-text);

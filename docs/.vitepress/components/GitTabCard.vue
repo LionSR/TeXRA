@@ -171,7 +171,7 @@ const authorInfo = ref(true);
   color: var(--color-text-secondary);
 }
 .gtc-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--mk-hover-bg);
 }
 
 .gtc-divider {

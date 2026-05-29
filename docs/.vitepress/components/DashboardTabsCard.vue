@@ -135,7 +135,7 @@ const tabs = [
   border-left: 2px solid transparent;
 }
 .dtc-tab:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--mk-hover-bg);
 }
 .dtc-on {
   background: rgba(200, 155, 224, 0.08);

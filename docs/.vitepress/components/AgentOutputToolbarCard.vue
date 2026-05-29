@@ -116,14 +116,14 @@ const actions = [
   font-size: var(--mk-space-13);
 }
 .aotc-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--mk-hover-bg);
   color: var(--wa-color-text-normal);
 }
 .aotc-btn--rm {
   color: var(--mk-del-text);
 }
 .aotc-btn--rm:hover {
-  background: rgba(224, 108, 117, 0.12);
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
   color: var(--color-error);
 }
 .aotc-btn-lbl {

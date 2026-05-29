@@ -408,7 +408,7 @@ function toggle(id) {
   font-size: var(--mk-space-12);
 }
 .m-act:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--mk-hover-bg);
   color: var(--wa-color-text-normal);
 }
 .m-act-on {
