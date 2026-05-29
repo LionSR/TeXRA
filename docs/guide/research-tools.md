@@ -6,7 +6,7 @@ You're deep in a manuscript and realise you need to cite "that attention paper f
 
 ### <wa-icon library="texra" name="mortar-board"></wa-icon> Find Papers
 
-Ask any research agent to search for papers. TeXRA queries **arXiv** (preprints) and **Crossref** (published works) automatically:
+Ask a literature-search agent — `search`, `chat`, `review`, or `presenter` — to find papers. TeXRA queries **arXiv** (preprints) and **Crossref** (published works) automatically:
 
 ```
 Find recent papers on transformer architectures for document understanding.
@@ -81,11 +81,11 @@ The `inquiry` tool lets a TeXRA agent ask one question in an external chat (Chat
 
 ## Which Agent to Use
 
-| Agent      | Best for                                                                                              |
-| ---------- | ----------------------------------------------------------------------------------------------------- |
-| `search`   | Finding papers, literature reviews, fact-checking                                                     |
-| `research` | Computational verification with Wolfram, literature lookups, and quick questions about your documents |
-| `discuss`  | Brainstorming research directions with literature context                                             |
+| Agent      | Best for                                                                                                                   |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `search`   | Finding papers, literature reviews, fact-checking                                                                          |
+| `research` | Computational verification with Wolfram, plus bash, file edits, and local LaTeX analysis (`.bib`, figures, TikZ, texcount) |
+| `discuss`  | Brainstorming research directions with literature context                                                                  |
 
 Pick any of them from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). Check `Dashboard → Agents` (<wa-icon library="texra" name="sparkle"></wa-icon>) to see exactly which tools each one has enabled.
 
