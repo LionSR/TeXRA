@@ -1716,11 +1716,17 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // Build shared params used by both token counting and API call
 
-    // OpenAI Responses API doesn't support 'none'; clamp to 'low'.
+    // OpenAI Responses API doesn't support 'none' (clamp to 'low') or
+    // Anthropic's top 'max' tier (clamp to OpenAI's 'xhigh' ceiling).
     const rawEffort = this.capabilities.supportsReasoning
       ? this.getEffectiveReasoningEffort()
       : undefined;
-    const reasoningEffort = rawEffort === 'none' ? ('low' as const) : rawEffort;
+    const reasoningEffort =
+      rawEffort === 'none'
+        ? ('low' as const)
+        : rawEffort === 'max'
+          ? ('xhigh' as const)
+          : rawEffort;
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const baseParams = {
