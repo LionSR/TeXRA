@@ -223,3 +223,59 @@ describe('task-group-list ungrouped message indexes', () => {
     );
   });
 });
+
+describe('task-group-list orphan re-rooting', () => {
+  it('renders a group whose parent is absent as a root, with its subtree and messages', () => {
+    const list = createList([]);
+    // "run" points at a parent that is NOT in the set — e.g. a cross-trace
+    // stage id this stream never recorded. It must still render.
+    const run: TaskGroup = {
+      id: 'run',
+      name: 'Run: subagent',
+      startTime: 1,
+      status: STREAM_STATUS.RUNNING,
+      parentGroupId: 'phantom-orchestrator-stage',
+    };
+    const init: TaskGroup = {
+      id: 'init',
+      name: 'Init',
+      startTime: 2,
+      status: STREAM_STATUS.STOPPED,
+      parentGroupId: 'run',
+    };
+    const scratchpad = createMessage('m1', 'scratchpad', 3, 'init');
+
+    list.index.rebuildTree([run, init], [scratchpad]);
+
+    // The dangling-parent group is re-rooted instead of silently dropped.
+    expect(list.index.tree).toHaveLength(1);
+    const root = list.index.tree[0];
+    expect(root.group.id).toBe('run');
+    // Its subtree survives...
+    expect(root.children.map((c) => c.group.id)).toEqual(['init']);
+    // ...and so do the messages nested under it.
+    expect(root.children[0].messages.map((m) => m.id)).toEqual(['m1']);
+    // The nested message is not mis-filed as ungrouped.
+    expect(list.index.ungrouped).toHaveLength(0);
+  });
+
+  it('renders a re-rooted orphan with the root-container layout, not nested', async () => {
+    // A group with a dangling parent is promoted to a tree root; the renderer
+    // must give it the root container (keyed on tree position), not the
+    // collapsible <details> layout it would get from its raw parentGroupId.
+    const run: TaskGroup = {
+      id: 'run',
+      name: 'Run: subagent',
+      startTime: 1,
+      status: STREAM_STATUS.RUNNING,
+      parentGroupId: 'phantom-orchestrator-stage',
+    };
+    const list = await renderList([run], []);
+
+    // Root layout emits a div.log-run with data-run-id; child groups never do
+    // (they render as <details> with summary/content ids only).
+    const rootEl = list.shadowRoot?.querySelector('[data-run-id="run"]');
+    expect(rootEl).not.toBeNull();
+    expect(rootEl?.classList.contains('log-run')).toBe(true);
+  });
+});

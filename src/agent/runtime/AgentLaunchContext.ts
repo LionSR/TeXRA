@@ -153,12 +153,12 @@ async function validateModelExists(
  * its timestamp precedes the stage's startTime. The chronological timeline
  * therefore renders the instruction before the run group.
  *
- * ROOT INVARIANT: opened with `root: true` so it never inherits an ambient
- * stage from the shared trace scope. For a subagent run, the active stage at
- * launch is the orchestrator's tool-use stage — a cross-trace id that this
- * run's own stream never records. Inheriting it would orphan "Run:" (and its
- * whole Init/r0/r1 subtree) in the subagent's transcript, since the renderer
- * can only build group trees down from parentless roots.
+ * ROOT INVARIANT: each run trace owns its stage scope (per-instance
+ * AsyncLocalStorage in TraceEmitter), so this opens as a root — it cannot
+ * inherit a cross-trace ambient stage from a parent run (e.g. an
+ * orchestrator's tool-use stage when this is a subagent). That isolation is
+ * what keeps a subagent's "Run:"/Init/r0/r1 subtree from orphaning in its own
+ * transcript. See docs/proposals/progress-grouping-refactor.md (R1).
  */
 async function beginRunStage(
   agentLogger: AgentTrace,
@@ -166,7 +166,7 @@ async function beginRunStage(
   instruction: string | undefined,
 ): Promise<StageHandle> {
   if (instruction) logUserMessage(agentLogger, instruction);
-  return agentLogger.openStage(label, { root: true });
+  return agentLogger.openStage(label);
 }
 
 async function assembleAgentLaunchContext(
