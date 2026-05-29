@@ -438,76 +438,71 @@ export async function executeAgent(
           taskState: agentConfigToTaskState(config),
         });
 
-        const taskStage = logger.openStage(
-          `Task: ${agentName}@${config.model}`,
-        );
-        return taskStage.run(async () => {
-          logger.info(`Executing ${agentName} with model ${config.model}`);
-          const interrupts = createInterruptCallbacks();
+        logger.info(`Executing ${agentName} with model ${config.model}`);
+        const interrupts = createInterruptCallbacks();
 
-          if (setting.agentCategory === AgentCategory.ToolUse) {
-            let toolUseTurns = 0;
-            const result = await runToolUseFlow({
-              ...ctx,
-              ...interrupts,
-              onRoundFinalized: (run) => ctx.usageMonitor.recordUsage(run),
-              setting,
-              isSubagent,
-              onBeforeWaiting: options.onBeforeWaiting,
-              stopAfterCycle: options.stopAfterCycle,
-              onProgress: (update) => {
-                if (update.kind === 'overview') {
-                  toolUseTurns++;
-                  ctx.runtimeHost.emit('updateConversationProgress', {
-                    streamId,
-                    progress: {
-                      conversationTurns: toolUseTurns,
-                      toolCallCount: update.toolCallCount,
-                    },
-                  });
-                }
-                options.onProgress?.(update);
-              },
-              onFollowUpConsumed: () => {
-                ctx.runtimeHost.emit('updateQueuedFollowUps', {
-                  streamId: ctx.streamId,
-                });
-                options.onFollowUpConsumed?.();
-              },
-              onModelChanged: (modelHandler, model) => {
-                ctx.config.model = model;
-                ctx.usageMonitor.setModelInfo({
-                  capabilities: modelHandler.capabilities,
-                  config: modelHandler.config,
-                });
-              },
-            });
-            return {
-              category: 'toolUse' as const,
-              status: result.status,
-              lastResponse: result.lastResponse,
-              touchedFiles: result.touchedFiles,
-              executionId: ctx.executionId,
-              streamId,
-            };
-          }
-
-          const onRoundCompleted = createRoundProgressCallback(
-            ctx.executionId,
-            streamId,
-            ctx.runtimeHost,
-            options.onProgress,
-          );
-          const result = await runReflectionFlow({
+        if (setting.agentCategory === AgentCategory.ToolUse) {
+          let toolUseTurns = 0;
+          const result = await runToolUseFlow({
             ...ctx,
             ...interrupts,
             onRoundFinalized: (run) => ctx.usageMonitor.recordUsage(run),
             setting,
-            parentStage: ctx.parentStage,
-            onRoundCompleted,
+            isSubagent,
+            onBeforeWaiting: options.onBeforeWaiting,
+            stopAfterCycle: options.stopAfterCycle,
+            onProgress: (update) => {
+              if (update.kind === 'overview') {
+                toolUseTurns++;
+                ctx.runtimeHost.emit('updateConversationProgress', {
+                  streamId,
+                  progress: {
+                    conversationTurns: toolUseTurns,
+                    toolCallCount: update.toolCallCount,
+                  },
+                });
+              }
+              options.onProgress?.(update);
+            },
+            onFollowUpConsumed: () => {
+              ctx.runtimeHost.emit('updateQueuedFollowUps', {
+                streamId: ctx.streamId,
+              });
+              options.onFollowUpConsumed?.();
+            },
+            onModelChanged: (modelHandler, model) => {
+              ctx.config.model = model;
+              ctx.usageMonitor.setModelInfo({
+                capabilities: modelHandler.capabilities,
+                config: modelHandler.config,
+              });
+            },
           });
-          return buildWorkflowFlowResult(result, ctx.executionId, streamId);
+          return {
+            category: 'toolUse' as const,
+            status: result.status,
+            lastResponse: result.lastResponse,
+            touchedFiles: result.touchedFiles,
+            executionId: ctx.executionId,
+            streamId,
+          };
+        }
+
+        const onRoundCompleted = createRoundProgressCallback(
+          ctx.executionId,
+          streamId,
+          ctx.runtimeHost,
+          options.onProgress,
+        );
+        const result = await runReflectionFlow({
+          ...ctx,
+          ...interrupts,
+          onRoundFinalized: (run) => ctx.usageMonitor.recordUsage(run),
+          setting,
+          parentStage: ctx.parentStage,
+          onRoundCompleted,
         });
+        return buildWorkflowFlowResult(result, ctx.executionId, streamId);
       },
       {
         isSubagent,
