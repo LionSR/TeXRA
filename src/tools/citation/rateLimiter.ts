@@ -4,7 +4,10 @@ const limiters = new Map<string, Bottleneck>();
 
 function getLimiter(apiName: string, minDelayMs: number): Bottleneck {
   const existing = limiters.get(apiName);
-  if (existing) return existing;
+  if (existing) {
+    void existing.updateSettings({ minTime: minDelayMs });
+    return existing;
+  }
   const limiter = new Bottleneck({ minTime: minDelayMs, maxConcurrent: 1 });
   limiters.set(apiName, limiter);
   return limiter;
