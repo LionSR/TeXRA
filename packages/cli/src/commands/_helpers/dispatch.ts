@@ -1,4 +1,6 @@
-import { showUsage, type CommandDef } from 'citty';
+import { renderUsage, showUsage, type CommandDef } from 'citty';
+
+import { writeRawStderr } from '../../runtime/logSinks';
 
 import { GLOBAL_BOOL_FLAGS, GLOBAL_VALUE_FLAGS } from './globalArgs';
 
@@ -208,6 +210,23 @@ export async function detectUnknownCliCommand(
 
 export function formatUnknownCliCommand(command: UnknownCliCommand): string {
   return `Unknown command: ${command.typedCommand}. Run \`${command.helpCommand} --help\` for usage.`;
+}
+
+/**
+ * Render usage text to STDERR (the diagnostic stream) instead of citty's
+ * `showUsage`, which prints to STDOUT via `consola.log`. Usage shown because of
+ * a usage error must not pollute STDOUT — otherwise `--output-format json|ndjson`
+ * stops being machine-parseable (`texra run ... --output-format json | jq`).
+ *
+ * `renderUsage` is citty's string-returning primitive (it does not write
+ * anywhere), so we own the destination. Explicit `--help` keeps using
+ * `showUsage` (STDOUT) per Unix convention.
+ */
+export async function showUsageStderr(
+  cmd: AnyCommand,
+  parent?: AnyCommand,
+): Promise<void> {
+  writeRawStderr(`${await renderUsage(cmd, parent)}\n`);
 }
 
 export { showUsage };
