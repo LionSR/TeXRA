@@ -9,9 +9,9 @@
  *
  * These helpers exist so agent code can program against `AgentTrace`
  * without importing TeXRA-specific sugar (`logToolUseStart`,
- * `updateToolUse`, `emitToolUse`). The TexraTrace surface keeps those
- * names for its own host callers but they ultimately reduce to the same
- * `toolStart` / `toolEnd` emissions.
+ * `updateToolUse`, `emitToolUse`) — those names live alongside the other
+ * helper functions but ultimately reduce to the same `toolStart` /
+ * `toolEnd` emissions.
  */
 import { randomUUID } from 'node:crypto';
 

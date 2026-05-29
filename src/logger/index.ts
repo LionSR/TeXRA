@@ -6,6 +6,3 @@ export {
   flushPendingRunTraces,
   type RunTrace,
 } from './runTrace';
-export type { FilesLoadedInput, TexraTrace, ToolStartRef } from './TexraTrace';
-export { TexraTraceEmitter } from './TexraTraceEmitter';
-export { noopTexraTrace } from './noopTexraTrace';
