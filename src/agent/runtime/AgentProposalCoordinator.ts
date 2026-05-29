@@ -6,7 +6,6 @@
  * 3. On resolution → emits 'resolveAgentProposal' to dismiss UI.
  */
 
-import { getDefaultAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { AgentProposal } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
@@ -61,7 +60,3 @@ export class AgentProposalCoordinator extends BasePromiseCoordinator<
     );
   }
 }
-
-export const proposalCoordinator = new AgentProposalCoordinator(
-  getDefaultAgentRuntimeHost,
-);
