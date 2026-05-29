@@ -91,7 +91,7 @@ import MockupFrame from './MockupFrame.vue';
               ></wa-icon>
               Media
               <span class="act act-on" title="Auto-extract options"
-                ><wa-icon library="texra" name="sparkle"></wa-icon
+                ><wa-icon library="texra" name="wand"></wa-icon
               ></span>
             </span>
             <div class="acts">
@@ -168,15 +168,10 @@ import MockupFrame from './MockupFrame.vue';
 </template>
 
 <style scoped>
+/* File-selector vocabulary (.files/.flist/.fitem/.fi-*) lives in mockup.css,
+   shared with FileSelectHero. Only the sidebar width is unique here. */
 .board {
   width: 320px;
-}
-.files {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  font-family: var(--vp-font-family-base);
 }
 
 /* The lit menu trigger sits inline with the group label. */

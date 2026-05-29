@@ -116,7 +116,7 @@ Two icon buttons sit in the instruction footer next to the agent and model dropd
 
 1. Click the <wa-icon library="texra" name="tools"></wa-icon> **Tool configuration options** button to:
    - **Attach TeX Count** — include document word-count statistics so the agent knows the document's size and structure
-2. Click the <wa-icon library="texra" name="sparkle"></wa-icon> **Auto-extract options** button to enable, for this run:
+2. Click the <wa-icon library="texra" name="wand"></wa-icon> **Auto-extract options** button to enable, for this run:
    - **Figures** — pull figures out of the document automatically
    - **TikZ Figures** — extract TikZ figures
    - **Compile Input PDF** — compile the input to PDF first

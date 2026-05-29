@@ -115,7 +115,7 @@ import MockupFrame from './MockupFrame.vue';
               ></wa-icon>
               Media
               <span class="act" title="Auto-extract options"
-                ><wa-icon library="texra" name="sparkle"></wa-icon
+                ><wa-icon library="texra" name="wand"></wa-icon
               ></span>
             </span>
             <div class="acts">

@@ -460,7 +460,7 @@
   flex-shrink: 0;
   color: #c89be0;
 }
-.mockup .run {
+.mockup .lpanel .run {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -477,7 +477,7 @@
   cursor: pointer;
   font-family: var(--vp-font-family-base);
 }
-.mockup .run wa-icon {
+.mockup .lpanel .run wa-icon {
   font-size: 13px;
 }
 
