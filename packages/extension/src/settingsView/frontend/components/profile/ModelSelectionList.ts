@@ -49,6 +49,8 @@ const REASONING_LEVEL_LABELS: Record<ReasoningLevel, string> = {
   low: 'Low',
   medium: 'Medium',
   high: 'High',
+  xhigh: 'Extra High',
+  max: 'Max',
 };
 
 const REASONING_LEVELS = ReasoningLevelSchema.options;

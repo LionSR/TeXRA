@@ -81,10 +81,13 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
 
   /**
    * DeepSeek's OpenAI-format API accepts only high/max. Its compatibility layer
-   * maps low/medium to high and xhigh to max, so do that explicitly.
+   * maps low/medium to high and the above-high tiers (xhigh, max) to max, so do
+   * that explicitly.
    */
   protected override validateReasoningEffort(effort: string): string {
-    return effort === ReasoningEffort.XHIGH ? 'max' : 'high';
+    return effort === ReasoningEffort.XHIGH || effort === ReasoningEffort.MAX
+      ? 'max'
+      : 'high';
   }
 
   /** DeepSeek requires merging consecutive roles and stringified content. */
