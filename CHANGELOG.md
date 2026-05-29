@@ -4,9 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.38.3] - 2026-05-29
+
 ### Features
 
+- **"Max" reasoning effort for Opus 4.8** — pick the new top **Max** tier (above Extra High) in the Models tab for the hardest, longest-horizon tasks; it maps to Anthropic's `max` effort, with Extra High remaining as the `xhigh` tier.
 - **Live elapsed timer in the CLI chat** — the status bar now shows the seconds elapsed next to `running`, so a long "thinking" turn that streams no text still reads as alive instead of looking frozen.
+
+### Bug Fixes
+
+- **CLI chat redraws cleanly on resize** — fixed leftover Ink live-region residue when the terminal is resized, and cut idle repaint churn.
+- **LaTeX math survives in the transcript** — inline `$…$` / `\(…\)` spans are now preserved verbatim in the CLI's Markdown rendering instead of being mangled.
+- **Markdown tables size to their content** in the CLI chat, instead of stretching to the full terminal width.
+- **Wolfram results always show a summary** — runs that returned only structured data no longer render as an empty line.
+- **Clean `--output-format` output** — usage text is routed to stderr on errors so the JSON / NDJSON stream on stdout stays parseable for scripts and CI.
+- **Drag-and-drop file selection works** — files dragged from the workspace explorer now land in the workflow Input / Context / Media buckets.
+
+### Improvements
+
+- **Install the CLI straight from the Dashboard** — the TeXRA CLI integration card now shows the `npm install -g @texra-ai/cli` command and an npm link, for running the same agents on your `.tex` projects without an editor.
 
 ## [0.38.2] - 2026-05-27
 
