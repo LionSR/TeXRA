@@ -6,8 +6,8 @@
 // and the agent (sparkle) + model (robot) select pills in the footer. Icon
 // names and labels match the configuration.md "Agent Execution Settings"
 // prose. Reuses the .phead/.seg/.hactions/.iact/.select/.footer/.sgroup chrome
-// from QuickStartHero and the open .wa-menu checkbox dropdown from
-// ToolConfigHero — no editor pane, no window chrome. The root carries
+// from QuickStartHero and the open .wa-menu/.wa-item/.wa-check checkbox dropdown
+// — all from mockup.css; no editor pane, no window chrome. The root carries
 // `.mockup`, so it inherits the --mk-* tokens and flips with the docs theme.
 const actions = [
   { icon: 'gear', label: 'Settings' },
@@ -141,48 +141,14 @@ const actions = [
   background: rgba(200, 155, 224, 0.13);
 }
 
-/* Local copy of the open checkbox dropdown (ToolConfigHero's .wa-menu). The
-   menu hangs under the Tool-config trigger; left-indented to align with it. */
+/* The open checkbox dropdown (.wa-menu/.wa-item/.wa-check/.wa-lead) is shared
+   via mockup.css. The menu hangs directly under the Tool-config trigger, and
+   its rows carry a leading category icon, so they sit a touch tighter than the
+   shared default — only that offset and gap are unique here. */
 .wa-menu {
-  align-self: flex-start;
-  min-width: var(--mk-size-180);
   margin: calc(-1 * var(--mk-space-6)) 0 0 0;
-  background: var(--mk-bg-raised);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-4);
-  box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.75);
 }
 .wa-item {
-  display: flex;
-  align-items: center;
   gap: var(--mk-space-7);
-  padding: var(--mk-space-5) var(--mk-space-12) var(--mk-space-5)
-    var(--mk-space-6);
-  border-radius: var(--mk-radius);
-  font-size: var(--mk-fs-80);
-  color: var(--wa-color-text-normal);
-  white-space: nowrap;
-}
-.wa-item:hover {
-  background: var(--mk-hover-bg);
-}
-.wa-check {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--mk-space-16);
-  flex-shrink: 0;
-  font-size: var(--mk-space-11);
-  color: var(--mk-accent);
-  opacity: 0;
-}
-.wa-item.checked .wa-check {
-  opacity: 1;
-}
-.wa-lead {
-  font-size: var(--mk-space-12);
-  color: var(--color-text-secondary);
-  flex-shrink: 0;
 }
 </style>

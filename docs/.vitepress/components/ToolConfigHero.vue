@@ -7,8 +7,8 @@
 // shown here with their wa-dropdown menus open.
 //
 // Reuses the shared file-selector vocabulary (.board/.field/.frow/.acts/.act/
-// .flist/.fitem from mockup.css + FileSelectHero); only the open menus are
-// unique here.
+// .flist/.fitem) and the open checkbox dropdown (.wa-menu/.wa-item/.wa-check),
+// both from mockup.css; only the sidebar width and menu offset are unique here.
 import MockupFrame from './MockupFrame.vue';
 </script>
 
@@ -168,49 +168,14 @@ import MockupFrame from './MockupFrame.vue';
 </template>
 
 <style scoped>
-/* File-selector vocabulary (.files/.flist/.fitem/.fi-*) lives in mockup.css,
-   shared with FileSelectHero. Only the sidebar width is unique here. */
+/* File-selector vocabulary (.files/.flist/.fitem/.fi-*) and the open
+   .wa-menu/.wa-item/.wa-check checkbox dropdown both live in mockup.css, shared
+   with FileSelectHero. Only the sidebar width and the menu's offset under its
+   trigger are unique here. */
 .board {
   width: var(--mk-size-320);
 }
-
-/* wa-dropdown popover with checkbox items (mirrors wa-dropdown-item
-   type="checkbox": a leading check that only shows when selected). */
 .wa-menu {
-  align-self: flex-start;
-  min-width: var(--mk-size-180);
   margin: var(--mk-space-2) 0 var(--mk-space-2) var(--mk-space-18);
-  background: var(--mk-bg-raised);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-4);
-  box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.75);
-}
-.wa-item {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-8);
-  padding: var(--mk-space-5) var(--mk-space-12) var(--mk-space-5)
-    var(--mk-space-6);
-  border-radius: var(--mk-radius);
-  font-size: var(--mk-fs-80);
-  color: var(--wa-color-text-normal);
-  white-space: nowrap;
-}
-.wa-item:hover {
-  background: var(--mk-hover-bg);
-}
-.wa-check {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--mk-space-16);
-  flex-shrink: 0;
-  font-size: var(--mk-space-11);
-  color: var(--mk-accent);
-  opacity: 0;
-}
-.wa-item.checked .wa-check {
-  opacity: 1;
 }
 </style>

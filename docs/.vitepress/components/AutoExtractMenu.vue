@@ -7,8 +7,8 @@
 // Figures, Compile Input PDF.
 //
 // Root carries `.mockup` so the shared file-selector vocabulary
-// (.field/.frow/.act/.f-label from theme/mockup.css) resolves; the .wa-menu /
-// .wa-item checkbox-dropdown styling mirrors ToolConfigHero's scoped CSS.
+// (.field/.frow/.act/.f-label) and the open checkbox dropdown
+// (.wa-menu/.wa-item/.wa-check) both resolve from theme/mockup.css.
 const options = [
   { label: 'Figures', checked: true },
   { label: 'TikZ Figures', checked: false },
@@ -63,9 +63,9 @@ const options = [
 </template>
 
 <style scoped>
-/* Standalone card. The .field/.frow/.act/.f-label vocabulary lives on
-   `.mockup` in theme/mockup.css; the .wa-menu / .wa-item checkbox dropdown
-   mirrors ToolConfigHero's scoped popover styling. */
+/* Standalone card. The .field/.frow/.act/.f-label vocabulary and the open
+   .wa-menu/.wa-item/.wa-check checkbox dropdown both live on `.mockup` in
+   theme/mockup.css; only the card shell and the menu's offset are unique here. */
 .autoext {
   background: var(--mk-bg);
   border: 1px solid var(--mk-border-soft);
@@ -74,40 +74,8 @@ const options = [
   margin: var(--mk-space-12) 0;
   max-width: var(--mk-size-300);
 }
-
-/* wa-dropdown popover with checkbox items (mirrors wa-dropdown-item
-   type="checkbox": a leading check that only shows when selected). */
+/* Hang the popover under the Auto-extract trigger, indented to align with it. */
 .wa-menu {
-  align-self: flex-start;
-  min-width: var(--mk-size-180);
   margin: var(--mk-space-2) 0 0 var(--mk-space-18);
-  background: var(--mk-bg-raised);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-4);
-  box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.75);
-}
-.wa-item {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-8);
-  padding: var(--mk-space-5) var(--mk-space-12) var(--mk-space-5)
-    var(--mk-space-6);
-  border-radius: var(--mk-radius);
-  font-size: var(--mk-fs-80);
-  color: var(--wa-color-text-normal);
-  white-space: nowrap;
-}
-.wa-item:hover {
-  background: var(--mk-hover-bg);
-}
-.wa-check {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--mk-space-16);
-  flex-shrink: 0;
-  font-size: var(--mk-space-11);
-  color: var(--mk-accent);
 }
 </style>
