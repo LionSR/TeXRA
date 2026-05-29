@@ -142,8 +142,7 @@ function collectValidationWarnings(
 }
 
 function parseOptional<T>(schema: z.ZodType<T>, value: unknown): T | undefined {
-  const result = schema.safeParse(value);
-  return result.success ? result.data : undefined;
+  return schema.optional().catch(undefined).parse(value);
 }
 
 function pickCommandConfig(record: Record<string, unknown>): CliCommandConfig {
