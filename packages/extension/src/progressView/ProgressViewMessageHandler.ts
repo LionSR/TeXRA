@@ -388,29 +388,12 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    await this.withActiveView(webviewView, async () => {
-      const handled = dispatchProgressViewInbound(
-        message,
-        this.handlerRegistry,
-        (error) => {
-          this.logger.debug(this.channel, 'Message validation failed', {
-            data: error,
-          });
-        },
-      );
-
-      if (
-        !handled &&
-        message &&
-        typeof message === 'object' &&
-        'command' in message
-      ) {
-        this.logger.warn(
-          this.channel,
-          `Unhandled command: ${(message as { command: string }).command}`,
-        );
-      }
-    });
+    await this.dispatchInbound(
+      message,
+      webviewView,
+      dispatchProgressViewInbound,
+      this.handlerRegistry,
+    );
   }
 
   // ============================================================
@@ -423,10 +406,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     if (view) {
       this.provider.markWebviewReady(view);
     }
-  }
-
-  private postToActiveView(message: unknown): void {
-    this.getActiveView()?.webview.postMessage(message);
   }
 
   private createStreamLifecycleController(): ProgressStreamLifecycleController {

@@ -13,8 +13,7 @@ import {
   skillListRecord,
 } from '../runtime/skills';
 
-import { contextFromArgs } from './_helpers/context';
-import { setExitCode } from './_helpers/exitCode';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, collectStringFlagValues } from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/cliContext';
 
@@ -64,7 +63,7 @@ async function listSkills(
   return CliExitCode.Success;
 }
 
-const skillsListCommand = defineCommand({
+const skillsListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List available skills' },
   args: {
     ...GLOBAL_ARGS,
@@ -80,15 +79,11 @@ const skillsListCommand = defineCommand({
         'Additional skill root to scan; may be repeated and is resolved relative to --cwd',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(
-      await listSkills(context, {
-        includeInterop: ctx.args['include-interop'] === true,
-        additionalPaths: collectStringFlagValues(ctx.rawArgs, 'source', 's'),
-      }),
-    );
-  },
+  run: (context, ctx) =>
+    listSkills(context, {
+      includeInterop: ctx.args['include-interop'] === true,
+      additionalPaths: collectStringFlagValues(ctx.rawArgs, 'source', 's'),
+    }),
 });
 
 export const skillsCommand = defineCommand({

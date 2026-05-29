@@ -49,7 +49,7 @@ import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 import { objectToLogString } from '@utils/text/stringUtils';
-import { computeCachePercentage } from './utils/usageNormalization';
+import { normalizeUsage } from './support/UsageNormalizer';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 import { tagOpenAISdkError, withSdkErrorTag } from './support/sdkErrorAdapters';
 
@@ -1245,45 +1245,40 @@ export class ModelHandlerOpenAI<
     rawUsage: ExtendedCompletionUsage | null,
     responseTimeMs: number,
   ): NormalizedUsage {
-    if (!rawUsage) {
-      return {
-        inputTokens: 0,
-        outputTokens: 0,
-        cost: 0,
-        responseTimeMs,
+    return normalizeUsage(
+      {
         provider: this.usageProvider,
-      };
-    }
+        computePrice: (usage) => this.computePrice(usage),
+        extract: (usage) => {
+          // OpenAI: prompt_tokens_details.cached_tokens; DeepSeek: prompt_cache_hit_tokens
+          const cachedTokens =
+            usage.prompt_tokens_details?.cached_tokens ??
+            usage.prompt_cache_hit_tokens ??
+            0;
+          const cacheMissTokens = usage.prompt_cache_miss_tokens ?? 0;
 
-    // OpenAI: prompt_tokens_details.cached_tokens; DeepSeek: prompt_cache_hit_tokens
-    const cachedTokens =
-      rawUsage.prompt_tokens_details?.cached_tokens ??
-      rawUsage.prompt_cache_hit_tokens ??
-      0;
-    const cacheMissTokens = rawUsage.prompt_cache_miss_tokens ?? 0;
+          // OpenAI's prompt_tokens is the TOTAL (includes cached tokens). DeepSeek
+          // also exposes cache hit/miss fields; use their sum as a fallback if
+          // prompt_tokens is absent from an OpenAI-compatible response.
+          const inputTokens =
+            usage.prompt_tokens ??
+            (cachedTokens > 0 || cacheMissTokens > 0
+              ? cachedTokens + cacheMissTokens
+              : 0);
 
-    // OpenAI's prompt_tokens is the TOTAL (includes cached tokens). DeepSeek also
-    // exposes cache hit/miss fields; use their sum as a fallback if prompt_tokens
-    // is absent from an OpenAI-compatible response.
-    const inputTokens =
-      rawUsage.prompt_tokens ??
-      (cachedTokens > 0 || cacheMissTokens > 0
-        ? cachedTokens + cacheMissTokens
-        : 0);
-
-    return {
-      inputTokens,
-      outputTokens: rawUsage.completion_tokens ?? 0,
-      cost: this.computePrice(rawUsage),
+          return {
+            inputTokens,
+            outputTokens: usage.completion_tokens ?? 0,
+            cachedTokens,
+            cacheMissTokens,
+            reasoningTokens:
+              usage.completion_tokens_details?.reasoning_tokens ?? 0,
+          };
+        },
+      },
+      rawUsage,
       responseTimeMs,
-      provider: this.usageProvider,
-      cachedInputTokens: cachedTokens || undefined,
-      cacheMissInputTokens: cacheMissTokens || undefined,
-      percentageCached: computeCachePercentage(cachedTokens, inputTokens),
-      reasoningTokens:
-        rawUsage.completion_tokens_details?.reasoning_tokens || undefined,
-      _native: rawUsage,
-    };
+    );
   }
 
   /** Updates message content for models with prefill support. */
