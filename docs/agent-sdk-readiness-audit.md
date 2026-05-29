@@ -276,3 +276,65 @@ independent of whether the parent model happened to emit a tool call.
    SDK natives (§3.5); formalize `delegateTo` subagent primitive (§5).
 
 Each step is independently shippable and reversible; none requires a rewrite.
+
+---
+
+## 7. Re-verification addendum — 2026-05-29
+
+A second independent pass re-audited the same surfaces against the current tree.
+The 2026-05-28 findings hold. Status of the plan and two corrections:
+
+**Applied & merged (PR #4579, commit `a2cef9f`) — verified in tree:**
+
+- §2.1 — the three `logger/*Trace*` facades are gone; `runTrace` points at `@agent/trace`.
+- §2.2 — `createExecutionRunContext` is inlined (no longer exists).
+- §3.4 — `getMessageNormalizationOptions` overrides collapsed; only the base
+  `modelHandlerOpenAI.ts` retains it.
+- §3.2 (partial) — `@agent/core` now re-exports `AgentConfigSchema` and
+  `AgentWorkflowSetting`.
+
+**Applied 2026-05-29 — §2.3 (scoped correction):**
+
+Both the original §2.3 and the first addendum overstated this: the `bridgeState`
+maps are **load-bearing**, not dead weight. The resolve-side functions
+(`resolvePlanApproval`, `resolveProposal`, `triggerRetry`, `cancelRetry`) are
+called from the host/UI layer (extension `ProgressViewMessageHandler`, CLI
+`approvalAdapter`, desktop `desktopAgentExecution`) — async contexts with no
+access to the run's `AsyncLocalStorage`. `bridgeState` is exactly the lookup that
+maps `approvalId`/`streamId` → that run's coordinators across contexts, so it must
+stay. `RunContext.coordinators` therefore cannot be made non-optional or the bridge
+deleted.
+
+What _was_ vestigial: the `legacyCoordinators` singleton **fallback** on the resolve
+side. Every `waitForX` registers the per-run coordinators in `bridgeState`, and the
+module singletons were referenced nowhere else, so the fallback never held pending
+state — it always no-op'd. It also contradicted the suite's documented intent
+(`runCoordinators.vitest.ts`: "does not fall back to default coordinators when a run
+has none"). Removed the `legacyCoordinators` object and the three now-dead exported
+singletons (`planApprovalCoordinator`/`proposalCoordinator`/`retryCoordinator`);
+resolve-side misses now no-op via optional chaining. Verified: `test:kernel`
+runtime suite (13 tests) + root/test-kernel typecheck + eslint all green.
+
+**Still pending (verified present):**
+
+- §2.6 — `modelHandlerValidation.ts` still sits in the dispatch dir.
+- §3.1 — no `@agent/runtime` facade barrel yet (`src/agent/runtime/index.ts` absent).
+- §4 — token usage is still double-emitted in `UsageMonitor.ts:173` (`emit('updateStreamUsage')`)
+  and `:179` (`logger.usage`).
+
+**New finding (not in the 2026-05-28 audit) — provider identity vs. capability:**
+
+`ModelHandler.ts:399-426` exposes `isAnthropic`/`isOpenai`/`isGoogle`/`isDeepSeek`/
+`isKimi`/`isMiniMax` getters that leak provider identity to callers. These are
+consumed in ~6 sites (verified): behavioral gates in `ToolUseCycleFlow.ts:809-812`
+and `ModelFactory.ts:72`, plus display/template flags in `AgentLaunchContext.ts:256-257`
+and `userVars.ts:168-169`. For SDK alignment (capability-driven, not identity-driven
+dispatch), convert the two _behavioral_ gates to named `capabilities.*` flags; the
+display flags can keep an explicit allow-list. Complements §3.4. Low risk, ~1 day.
+
+**Correction to retract:** an interim pass flagged `redactSecrets`
+(`logger/redaction.ts`) as a dead export. **It is not dead** — it is used by
+`packages/desktop/src/main/desktopAppLog.ts` (4 call sites) via the `@logger/redaction`
+deep import, which is exactly why the `logger/index.ts` re-export exists. Methodology
+note: audits of `src/` must also grep `packages/**` (desktop, cli, extension) before
+declaring a symbol unused.

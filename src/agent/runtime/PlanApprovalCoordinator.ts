@@ -6,7 +6,6 @@
  * 3. On resolution → emits 'resolvePlanApproval' to dismiss UI.
  */
 
-import { getDefaultAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { Plan } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
@@ -95,7 +94,3 @@ export class PlanApprovalCoordinator extends BasePromiseCoordinator<
     if (approvalId) this.clearRequest(approvalId);
   }
 }
-
-export const planApprovalCoordinator = new PlanApprovalCoordinator(
-  getDefaultAgentRuntimeHost,
-);
