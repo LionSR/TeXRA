@@ -1,6 +1,7 @@
 // Standard library imports
 import { createInterface } from 'node:readline/promises';
 
+import { toErrorMessage } from '@common/errors/errorMessage';
 import type { LogLevel } from '@shared/schemas';
 
 /**
@@ -117,6 +118,15 @@ export function writeRawStderr(text: string): void {
 
 export function writeTextStderr(text: string): void {
   writeRaw('stderr', `${text}\n`);
+}
+
+/**
+ * Write a caught error's human-readable message to stderr. Folds the
+ * `writeTextStderr(toErrorMessage(error))` pair every command's catch block
+ * repeated so the error-formatting choice lives in one place.
+ */
+export function writeErrorStderr(error: unknown): void {
+  writeTextStderr(toErrorMessage(error));
 }
 
 export async function askCliQuestion(question: string): Promise<string> {

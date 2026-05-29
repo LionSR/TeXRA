@@ -2,11 +2,13 @@ import { spawn } from 'node:child_process';
 
 import { defineCommand } from 'citty';
 
-import { toErrorMessage } from '@common/errors';
-
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
+import {
+  writeErrorStderr,
+  writeTextStderr,
+  writeTextStdout,
+} from '../runtime/logSinks';
 import {
   findCliToolDef,
   formatCliToolList,
@@ -140,7 +142,7 @@ async function authTool(context: CliContext, id: string): Promise<number> {
   try {
     return await shellRun(def.authCommand);
   } catch (error) {
-    writeTextStderr(toErrorMessage(error));
+    writeErrorStderr(error);
     return CliExitCode.AgentError;
   }
 }

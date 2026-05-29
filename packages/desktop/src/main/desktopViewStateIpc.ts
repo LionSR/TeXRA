@@ -7,10 +7,10 @@ import {
   type DesktopThemeKind,
 } from '@shared/constants/desktopTheme';
 
-import type {
-  DesktopCommandMessage,
-  DesktopMessageHandler,
-  DesktopRenderer,
+import {
+  createCommandHandler,
+  type DesktopMessageHandler,
+  type DesktopRenderer,
 } from './desktopIpcTypes.js';
 
 export type DesktopTheme = DesktopThemeKind;
@@ -56,23 +56,17 @@ export function createDesktopViewStateIpc(
 
   nativeTheme.on('updated', postTheme);
 
-  return {
-    handleMessage(message: DesktopCommandMessage): boolean {
-      switch (message.command) {
-        case MAIN_VIEW_COMMANDS.WEBVIEW_READY:
-          postTheme();
-          postDebugMode();
-          return true;
-        case MAIN_VIEW_COMMANDS.GET_THEME:
-          postTheme();
-          return true;
-        case MAIN_VIEW_COMMANDS.GET_DEBUG_MODE:
-          postDebugMode();
-          return true;
-        default:
-          return false;
-      }
+  const handler = createCommandHandler({
+    [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: () => {
+      postTheme();
+      postDebugMode();
     },
+    [MAIN_VIEW_COMMANDS.GET_THEME]: () => postTheme(),
+    [MAIN_VIEW_COMMANDS.GET_DEBUG_MODE]: () => postDebugMode(),
+  });
+
+  return {
+    handleMessage: handler.handleMessage,
     dispose() {
       nativeTheme.off('updated', postTheme);
     },

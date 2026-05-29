@@ -173,13 +173,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
           ${this.renderProposalFiles(data)}
         </div>
         <div class="workflow-proposal__actions">
-          ${renderLabeledActionButton({
-            icon: 'check',
-            text: 'Approve',
-            title: 'Approve (y)',
-            action: 'approve',
-            onClick: () => this.emitAction('approve'),
-          })}
+          ${this.renderApproveButton('Approve (y)')}
           ${this.renderRejectButton('Reject (n)')}
           ${renderLabeledActionButton({
             icon: 'reply',

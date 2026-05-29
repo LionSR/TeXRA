@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { computeAgentOptionsData, refresh } from '@agent/index';
 import { arXivCommands } from '@commands/latex';
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { gitCommands } from '@commands/git/gitCommands';
 import { toErrorMessage } from '@common/errors';
 import { MAIN_VIEW_COMMANDS } from '@common/webview';
@@ -32,10 +33,10 @@ export const mainViewCommands = {
 export function registerMainViewCommands(
   context: vscode.ExtensionContext,
 ): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      mainViewCommands.refreshModelOptions,
-      async () => {
+  registerCommands(context, [
+    {
+      id: mainViewCommands.refreshModelOptions,
+      handler: async () => {
         const webview = await getMainWebview(CHANNEL);
         if (!webview) return;
 
@@ -53,11 +54,10 @@ export function registerMainViewCommands(
           );
         }
       },
-    ),
-
-    vscode.commands.registerCommand(
-      mainViewCommands.refreshAgentOptions,
-      async () => {
+    },
+    {
+      id: mainViewCommands.refreshAgentOptions,
+      handler: async () => {
         const webview = await getMainWebview(CHANNEL);
         if (!webview) return;
 
@@ -76,11 +76,10 @@ export function registerMainViewCommands(
           );
         }
       },
-    ),
-
-    vscode.commands.registerCommand(
-      mainViewCommands.refreshAllOptions,
-      async () => {
+    },
+    {
+      id: mainViewCommands.refreshAllOptions,
+      handler: async () => {
         const webview = await getMainWebview(CHANNEL);
         if (!webview) return;
 
@@ -106,8 +105,8 @@ export function registerMainViewCommands(
           );
         }
       },
-    ),
-  );
+    },
+  ]);
 }
 
 /**

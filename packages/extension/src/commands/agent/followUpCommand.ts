@@ -10,6 +10,7 @@ import {
 } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { hasPersistedFlowRecord } from '@agent/storage/detectWaitingStreams';
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
@@ -102,10 +103,10 @@ async function handleFollowUpResult(
 }
 
 export function registerFollowUpCommand(context: vscode.ExtensionContext) {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'texra.sendFollowUp',
-      async (payload: { stream: StreamTabId; text: string }) => {
+  registerCommands(context, [
+    {
+      id: 'texra.sendFollowUp',
+      handler: async (payload: { stream: StreamTabId; text: string }) => {
         const { stream: streamId, text } = payload;
 
         await lazyDetectWaitingStatus(streamId);
@@ -113,6 +114,6 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
         const result = await sendFollowUp(streamId, text);
         await handleFollowUpResult(result, streamId);
       },
-    ),
-  );
+    },
+  ]);
 }

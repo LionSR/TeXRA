@@ -2,17 +2,12 @@
 import { z } from 'zod';
 
 // Local imports
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import {
-  API_PROVIDERS,
-  invalidateApiKeyCache,
-  isApiProvider,
-} from '@model/apiProviders';
-import { ToolError, type ToolResult } from '@tools/result';
+import { type ToolResult } from '@tools/result';
 
 // Local file imports
 import { defineTool } from '../core/define';
 import { getSetupPlatform } from './platform';
+import { refreshApiKeyCaches, requireApiProvider } from './apiKeyHelpers';
 
 const UnsetApiKeyInputSchema = z.strictObject({
   provider: z
@@ -30,13 +25,7 @@ export class UnsetApiKeyTool extends defineTool({
 }) {
   protected async execute(input: UnsetApiKeyInput): Promise<ToolResult> {
     const platform = getSetupPlatform();
-    const provider = input.provider.trim();
-
-    if (!isApiProvider(provider)) {
-      throw new ToolError(
-        `Unknown provider "${provider}". Supported: ${API_PROVIDERS.join(', ')}.`,
-      );
-    }
+    const provider = requireApiProvider(input.provider);
 
     const storedExists = await platform.secrets.storedApiKeyExists(provider);
     if (!storedExists) {
@@ -64,16 +53,7 @@ export class UnsetApiKeyTool extends defineTool({
     // Mirror the manual removal flow: drop cached model availability and
     // key-origin lookups so models that just lost their credential stop
     // appearing selectable.
-    invalidateModelOptionsCache();
-    invalidateApiKeyCache();
-    await Promise.all([
-      platform.commands
-        .invoke('texra.refreshApiKeyStatus')
-        .catch(() => undefined),
-      platform.commands
-        .invoke('texra.refreshAllOptions')
-        .catch(() => undefined),
-    ]);
+    await refreshApiKeyCaches(platform);
 
     // A shell env var can shadow the deletion — flag that so the agent can
     // tell the user why the key still appears to exist after removal.
