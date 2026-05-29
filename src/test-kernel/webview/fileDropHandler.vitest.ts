@@ -41,6 +41,13 @@ describe('fileDropHandler', () => {
     ).toBe(false);
   });
 
+  it('accepts a uri-list payload during dragover when the data store is protected', () => {
+    // While dragging, `getData()` returns '' (protected mode); only `types` is
+    // readable. We must still report the payload as droppable so the dragover
+    // handler calls preventDefault() and the drop event can fire.
+    expect(hasDroppedFilePayload(dataTransfer(['text/uri-list']))).toBe(true);
+  });
+
   it('extracts file paths from dropped File objects', () => {
     const paths = extractDroppedFilePaths(
       dataTransfer(['Files'], {}, [{ path: '/Users/a/project/main.tex' }]),
