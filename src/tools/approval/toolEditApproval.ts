@@ -364,6 +364,54 @@ export function buildApprovalRejectedResult(
   return result;
 }
 
+export interface ApprovedEditContent {
+  approval: ToolEditApprovalResult;
+  /** Content to write: the user's adjustments if any, else the proposal. */
+  finalContent: string;
+}
+
+/**
+ * Run the tool-edit approval handshake for a proposed edit.
+ *
+ * Returns `{ rejected }` (a {@link ToolResult} to return directly) when the
+ * user declines, otherwise the approval plus the resolved `finalContent`.
+ * Centralizes the request → reject → resolve sequence shared by every edit
+ * tool so `sourceTool` is named once and the rejection message stays uniform.
+ * Callers own the write/record/post-processing steps, which vary per tool.
+ */
+export async function requestApprovedEditContent(request: {
+  path: string;
+  displayPath: string;
+  originalContent: string;
+  proposedContent: string;
+  sourceTool: string;
+}): Promise<{ rejected: ToolResult } | ApprovedEditContent> {
+  const { path, displayPath, originalContent, proposedContent, sourceTool } =
+    request;
+
+  const approval = await requestToolEditApproval({
+    path,
+    originalContent,
+    proposedContent,
+    sourceTool,
+  });
+
+  if (!approval.accepted) {
+    return {
+      rejected: buildApprovalRejectedResult(
+        displayPath,
+        sourceTool,
+        approval.userMessage,
+      ),
+    };
+  }
+
+  return {
+    approval,
+    finalContent: getApprovedContent(approval, proposedContent),
+  };
+}
+
 /**
  * Enable tool-edit YOLO on a freshly resolved child subagent stream.
  *
