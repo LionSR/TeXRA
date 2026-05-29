@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 - **Wolfram results always show a summary** — runs that returned only structured data no longer render as an empty line.
 - **Clean `--output-format` output** — usage text is routed to stderr on errors so the JSON / NDJSON stream on stdout stays parseable for scripts and CI.
 - **Drag-and-drop file selection works** — files dragged from the workspace explorer now land in the workflow Input / Context / Media buckets.
+- **Subagent progress shows in the transcript** — fixed subagent progress, result, and error updates not rendering on the progress board and chat transcript during multi-agent runs.
 
 ### Improvements
 
