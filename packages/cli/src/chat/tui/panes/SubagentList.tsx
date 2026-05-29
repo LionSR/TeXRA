@@ -4,7 +4,6 @@
 //
 // The leading numeric index is currently a visual cue only.
 
-import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
 
 import type { ActiveChildInfo } from '@shared/schemas';
@@ -13,39 +12,17 @@ import { processTailLines } from '../state/childControls';
 import { visibleSubagentRows } from '../state/childStreamMerge';
 import { cliState, type ProcessOutputTail } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
-import {
-  childStatusColor,
-  childStatusMarker,
-  childStatusPulses,
-} from './SubagentListDisplay';
+import { CHILD_STATUS_MARKER, childStatusColor } from './SubagentListDisplay';
 
 interface RowProps {
   readonly child: ActiveChildInfo;
   readonly index: number;
-  readonly pulseOn: boolean;
   readonly tail?: ProcessOutputTail;
 }
 
 const TAIL_LINES = 4;
-const PULSE_INTERVAL_MS = 700;
 
-function usePulse(enabled: boolean): boolean {
-  const [pulseOn, setPulseOn] = useState(true);
-  useEffect(() => {
-    if (!enabled) {
-      setPulseOn(true);
-      return;
-    }
-    const timer = setInterval(
-      () => setPulseOn((value) => !value),
-      PULSE_INTERVAL_MS,
-    );
-    return () => clearInterval(timer);
-  }, [enabled]);
-  return pulseOn;
-}
-
-function Row({ child, index, pulseOn, tail }: RowProps): React.JSX.Element {
+function Row({ child, index, tail }: RowProps): React.JSX.Element {
   // The state layer already caps each stream at PROCESS_TAIL_CHARS_MAX, so
   // pulling the last `TAIL_LINES` non-blank lines is bounded work.
   const tailLines = processTailLines(tail).slice(-TAIL_LINES);
@@ -54,7 +31,7 @@ function Row({ child, index, pulseOn, tail }: RowProps): React.JSX.Element {
       <Box flexDirection="row">
         <Text dimColor>{index < 9 ? ` ${index + 1} ` : '   '}</Text>
         <Text color={childStatusColor(child.status)}>
-          {childStatusMarker(child.status, pulseOn)}
+          {CHILD_STATUS_MARKER}
         </Text>
         <Text>{child.agentName || child.toolName || child.executionId}</Text>
         {child.status ? <Text dimColor>{` ${child.status}`}</Text> : null}
@@ -86,11 +63,6 @@ export function SubagentList(
   const activeProcesses = slice?.activeProcesses ?? [];
   const processOutput = slice?.processOutput;
   const subagents = slice ? visibleSubagentRows(slice) : [];
-  const pulseOn = usePulse(
-    [...subagents, ...activeProcesses].some((child) =>
-      childStatusPulses(child.status),
-    ),
-  );
   if (!slice) return null;
   if (subagents.length === 0 && activeProcesses.length === 0) return null;
   if (props.maxRows !== undefined && props.maxRows <= 0) return null;
@@ -109,12 +81,7 @@ export function SubagentList(
             Subagents
           </Text>
           {subagents.map((child, i) => (
-            <Row
-              key={child.executionId}
-              child={child}
-              index={i}
-              pulseOn={pulseOn}
-            />
+            <Row key={child.executionId} child={child} index={i} />
           ))}
         </Box>
       ) : null}
@@ -128,7 +95,6 @@ export function SubagentList(
               key={child.executionId}
               child={child}
               index={subagents.length + i}
-              pulseOn={pulseOn}
               tail={processOutput?.get(child.executionId)}
             />
           ))}

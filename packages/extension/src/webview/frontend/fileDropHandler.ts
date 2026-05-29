@@ -1,5 +1,5 @@
 // Local imports - common webview
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - shared utilities
 import { postMessage } from '@shared/hostBridge';
@@ -66,8 +66,15 @@ function addFileUri(
 }
 
 function hasFileUri(dataTransfer: DataTransfer, type: string): boolean {
+  // During `dragenter`/`dragover` the drag data store is in protected mode, so
+  // `getData()` returns an empty string and only `types` is readable. We must
+  // still treat the payload as droppable then (and call `preventDefault()`),
+  // otherwise the browser rejects the element as a drop target and the `drop`
+  // event never fires. The real URI content is validated at drop time in
+  // `extractDroppedFilePaths` and again on the host when resolving workspace
+  // files, so an empty read here is safe to accept.
   const data = dataTransfer.getData(type);
-  if (!data) return false;
+  if (!data) return true;
   return data.split(/\r?\n/).some((line) => normalizeFileUri(line) != null);
 }
 

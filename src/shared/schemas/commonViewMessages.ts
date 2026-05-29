@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { COMMON_COMMANDS } from '@common/webview/commands';
+import { COMMON_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from './mainView';
 
 /** Theme values - single source of truth for all theme schemas */

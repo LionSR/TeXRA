@@ -116,7 +116,7 @@ Be specific about what you want! Vague instructions are like asking a genie for 
 
 ### Step 5: Configure Tools
 
-Two icon buttons sit in the instruction footer next to the agent and model dropdowns. They light up when a helper is active.
+Two icon buttons sit in the file-group header rows of the file selector — one next to the **Input** label, one next to the **Media** label. They light up when a helper is active.
 
 1. Click the <wa-icon library="texra" name="tools"></wa-icon> **Tool configuration options** button to:
    - **Attach TeX Count** — include document word-count statistics so the agent knows the document's size and structure
@@ -129,7 +129,7 @@ Reflection rounds are controlled by the selected agent—most writing agents alr
 
 <ToolConfigHero />
 
-<p class="hero-caption">The two helper menus in the instruction footer. Active helpers tint their buttons; here Attach TeX Count and Figures are on.</p>
+<p class="hero-caption">The two helper menus in the Input and Media file-group headers. Active helpers tint their buttons; here Attach TeX Count and Figures are on.</p>
 
 ::: tip Save Prompts for Later
 Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the generated prompt alongside other debug artifacts.

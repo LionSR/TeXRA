@@ -1,9 +1,5 @@
-/**
- * Command constants for the main view.
- */
 import { COMMON_COMMANDS } from './commonCommands';
 
-// Main view specific commands
 export const MAIN_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
 

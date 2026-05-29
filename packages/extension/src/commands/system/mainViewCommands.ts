@@ -7,10 +7,10 @@ import { arXivCommands } from '@commands/latex';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { gitCommands } from '@commands/git/gitCommands';
 import { toErrorMessage } from '@common/errors';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 import { sampleProjectCommands } from './sampleProjectCommands';
 

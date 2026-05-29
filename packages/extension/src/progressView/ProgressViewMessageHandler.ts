@@ -22,19 +22,16 @@ import {
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { toErrorMessage } from '@common/errors';
-import {
-  BaseViewMessageHandler,
-  COMMON_COMMANDS,
-  PROGRESS_VIEW_COMMANDS,
-} from '@common/webview';
-import { RecordingManager } from '@common/managers/RecordingManager';
+import { BaseViewMessageHandler } from '@common/webview';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager, type ApiProvider } from '@frontend/secretManager';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nativeToolEditApproval';
+import { RecordingManager } from '@frontend/media/RecordingManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
+import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
 import {
   dispatchProgressViewInbound,

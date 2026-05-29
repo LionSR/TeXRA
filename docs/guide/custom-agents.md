@@ -60,7 +60,7 @@ settings:
   rounds: 2 # Maximum number of passes (Round 0 plus reflection rounds). The actual count is max(rounds, number of userRequest entries); a run can still stop early once the model signals it is finished.
 
   # Output Handling
-  documentTag: documents # The main XML tag wrapping the agent's final output (required for CoT).
+  documentTag: documents # The main XML tag wrapping the agent's final output (defaults to `documents`).
   endTag: '</documents>' # The closing tag that signals the agent has finished its main output.
   prefills:
     - "<documents>\n" # List of strings the AI should start its response(s) with.
@@ -112,9 +112,9 @@ prompts:
 
 #### <wa-icon library="texra" name="symbol-variable"></wa-icon> Using Variables in Prompts (Jinja2 Templating)
 
-Prompts are processed using the Jinja2 templating engine, allowing you to insert dynamic information using `&#123;&#123; variable_name &#125;&#125;` syntax. TeXRA provides several built-in variables based on the files and instructions you select in the UI:
+Prompts are processed using the Jinja2 templating engine, allowing you to insert dynamic information using `{{ variable_name }}` syntax. TeXRA provides several built-in variables based on the files and instructions you select in the UI:
 
-This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the extension loads your chosen inputs, references, figures, and any additional context, then exposes them as template variables. For example, the text content of your main file becomes `&#123;&#123; INPUT_CONTENT &#125;&#125;` while the full list of selected files can be accessed through `&#123;&#123; ALL_INPUTS &#125;&#125;`. When you run the agent these placeholders are replaced with real data.
+This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the extension loads your chosen inputs, references, figures, and any additional context, then exposes them as template variables. For example, the text content of your main file becomes `{{ INPUT_CONTENT }}` while the full list of selected files can be accessed through `{{ ALL_INPUTS }}`. When you run the agent these placeholders are replaced with real data.
 
 **Common Variables:**
 
@@ -141,7 +141,7 @@ This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the ext
 - &#123;&#123; INPUT_FILES &#125;&#125;: Array of input filenames. Editing agents
   should iterate over this list and emit one `<document name="...">` block per
   input filename, preserving the input order and names. Use
-  `&#123;&#123; INPUT_FILES | join(", ") &#125;&#125;` for a human-readable list. See
+  `{{ INPUT_FILES | join(", ") }}` for a human-readable list. See
   [Handling Multiple Files](./multiple-output.md).
 - &#123;&#123; OUTPUT_FILES &#125;&#125;: Array of declared generated output filenames.
   This is only populated for agents that set `defaultOutputFiles` or receive an
@@ -149,8 +149,8 @@ This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the ext
 
 **Custom Variables (from `settings`):**
 
-- Files specified in `requiredFiles` or `requiredFilesInternal` are available as `&#123;&#123; VARNAME_CONTENT &#125;&#125;` (e.g., `&#123;&#123; TEMPLATE_CONTENT &#125;&#125;`).
-- Files matched by `filePatternsContain` are available as `&#123;&#123; VARNAME_CONTENT &#125;&#125;` (e.g., `&#123;&#123; BIBLIOGRAPHY_CONTENT &#125;&#125;`).
+- Files specified in `requiredFiles` or `requiredFilesInternal` are available as `{{ VARNAME_CONTENT }}` (e.g., `{{ TEMPLATE_CONTENT }}`).
+- Files matched by `filePatternsContain` are available as `{{ VARNAME_CONTENT }}` (e.g., `{{ BIBLIOGRAPHY_CONTENT }}`).
 - When agents finish, TeXRA automatically captures detected XML segments so orchestrated workflows can reuse them without going through the file picker again (details below).
 
 **Example Usage in `userPrefix`:**

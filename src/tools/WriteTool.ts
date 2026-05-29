@@ -15,10 +15,8 @@ import {
   currentToolRoot,
 } from '@tools/pathResolution';
 import {
-  buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
-  getApprovedContent,
-  requestToolEditApproval,
+  requestApprovedEditContent,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
@@ -27,8 +25,10 @@ import { WorkspaceFS } from '@utils/files';
 import { defineTool } from './core/define';
 
 const WriteInputSchema = z.strictObject({
-  path: z.string(),
-  content: z.string(),
+  path: z
+    .string()
+    .describe('The file path to write, workspace-relative or absolute.'),
+  content: z.string().describe('The full file contents to write.'),
 });
 
 export type WriteInput = z.infer<typeof WriteInputSchema>;
@@ -60,22 +60,18 @@ export class WriteFileTool extends defineTool({
       ? replacementEngine.applyAll(input.content)
       : input.content;
 
-    const approval = await requestToolEditApproval({
+    const outcome = await requestApprovedEditContent({
       path: filePath,
+      displayPath,
       originalContent,
       proposedContent,
       sourceTool: 'write_file',
     });
-
-    if (!approval.accepted) {
-      return buildApprovalRejectedResult(
-        displayPath,
-        'write_file',
-        approval.userMessage,
-      );
+    if ('rejected' in outcome) {
+      return outcome.rejected;
     }
+    const { approval, finalContent } = outcome;
 
-    const finalContent = getApprovedContent(approval, proposedContent);
     const { appliedContent } = await writeApprovedContent(
       filePath,
       originalContent,

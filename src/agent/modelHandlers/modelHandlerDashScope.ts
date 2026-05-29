@@ -1,6 +1,5 @@
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
 /**
  * Handler for DashScope Qwen models using OpenAI-compatible API.
@@ -10,10 +9,6 @@ import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils'
  * createMediaContent is inherited from ModelHandlerOpenAI.
  */
 export class ModelHandlerDashScope extends ModelHandlerOpenAI {
-  /**
-   * DashScope requires content to be converted to strings.
-   */
-  protected override getMessageNormalizationOptions(): NormalizeOpenAIMessageContentOptions {
-    return { convertContentToString: true };
-  }
+  /** DashScope requires content to be converted to strings. */
+  protected override readonly convertContentToString = true;
 }

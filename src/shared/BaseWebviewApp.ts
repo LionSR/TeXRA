@@ -4,7 +4,7 @@ import { provide } from '@lit/context';
 import { state } from 'lit/decorators.js';
 
 // Local imports - shared handlers
-import { COMMON_COMMANDS } from '@common/webview/commands';
+import { COMMON_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { installToolbarTooltips } from '@shared/controllers';
 import { handleCommonMessage } from '@shared/handlers/commonMessageHandlers';

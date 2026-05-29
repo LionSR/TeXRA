@@ -52,6 +52,8 @@ import MockupFrame from './MockupFrame.vue';
           </div>
           <div class="flist">
             <div class="fitem">
+              <!-- Decorative only: the real UI has no grip handle; the whole
+                   row is draggable to reorder. -->
               <wa-icon
                 class="fi-grip"
                 library="texra"
@@ -182,9 +184,5 @@ import MockupFrame from './MockupFrame.vue';
    shared with ToolConfigHero. Only the sidebar width is unique here. */
 .board {
   width: 320px;
-}
-/* The per-group helper-menu trigger sits inline with the group label. */
-.f-label .act {
-  margin-left: 2px;
 }
 </style>

@@ -99,6 +99,11 @@
 .mockup .f-label wa-icon {
   font-size: 11px;
 }
+/* Per-group helper-menu trigger (tools / wand), inline with the group label.
+   Shared by FileSelectHero + ToolConfigHero. */
+.mockup .f-label .act {
+  margin-left: 2px;
+}
 .mockup .select {
   display: flex;
   align-items: center;
@@ -178,6 +183,8 @@
   border-radius: 4px;
   background: #2c2c2c;
 }
+/* Decorative only — the real file rows have no grip handle (the whole row is
+   draggable). Kept here purely as a visual cue in these marketing mockups. */
 .mockup .fi-grip {
   font-size: 11px;
   color: var(--color-text-tertiary);

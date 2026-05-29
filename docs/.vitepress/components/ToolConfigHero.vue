@@ -174,11 +174,6 @@ import MockupFrame from './MockupFrame.vue';
   width: 320px;
 }
 
-/* The lit menu trigger sits inline with the group label. */
-.f-label .act {
-  margin-left: 2px;
-}
-
 /* wa-dropdown popover with checkbox items (mirrors wa-dropdown-item
    type="checkbox": a leading check that only shows when selected). */
 .wa-menu {

@@ -226,6 +226,22 @@ describe('renderAnsiMarkdown', () => {
     }
   });
 
+  it('sizes a small table to its content instead of stretching to full width', () => {
+    _resetAnsiMarkdownForTests();
+    const md = '| n | digits |\n|---|---|\n| 447 | 993.3 |';
+    const out = renderAnsiMarkdown(md, { width: 80 });
+    const widest = Math.max(
+      ...stripAnsi(out)
+        .split('\n')
+        .map((line) => displayWidthForTest(line)),
+    );
+    // Content needs only a handful of columns — it must not balloon to 80.
+    expect(widest).toBeLessThan(24);
+    expect(widest).toBeGreaterThan(0);
+    expect(stripAnsi(out)).toContain('447');
+    expect(stripAnsi(out)).toContain('993.3');
+  });
+
   it('memoises identical inputs (second call hits the cache)', () => {
     _resetAnsiMarkdownForTests();
     const first = renderAnsiMarkdown('# Title\n\nParagraph.');
@@ -236,5 +252,62 @@ describe('renderAnsiMarkdown', () => {
     // The second call must hit the cache, not re-render through markdown-it.
     expect(after.hits - before.hits).toBe(1);
     expect(after.misses - before.misses).toBe(0);
+  });
+
+  // Regression: without a math plugin, markdown-it corrupts LaTeX inside math
+  // spans — its escape rule strips `\(`→`(`, `\;`→`;`, `\{`→`{`, and its
+  // emphasis rule eats `_{…}` subscripts. The CLI shows LaTeX source verbatim,
+  // so whole spans must survive untouched.
+  it('preserves \\(…\\) and \\[…\\] math delimiter spans verbatim', () => {
+    _resetAnsiMarkdownForTests();
+    const out = stripAnsi(
+      renderAnsiMarkdown(
+        'Euler: \\(e^{i\\pi}+1=0\\) and \\[a \\; = \\; b\\] done',
+      ),
+    );
+    expect(out).toContain('\\(e^{i\\pi}+1=0\\)');
+    expect(out).toContain('\\[a \\; = \\; b\\]');
+  });
+
+  it('preserves $…$ and $$…$$ spans incl. subscripts (no emphasis) and backslash-braces', () => {
+    _resetAnsiMarkdownForTests();
+    const out = stripAnsi(
+      renderAnsiMarkdown(
+        'Pairs $a_{i}b_{j}$ and $$P_k = \\{2k-1,\\; 2k\\}$$ end',
+      ),
+    );
+    // emphasis rule must NOT fire inside the math span
+    expect(out).toContain('$a_{i}b_{j}$');
+    expect(out).not.toContain('<em>');
+    // display span with backslash-braces and a thin-space survives whole
+    expect(out).toContain('$$P_k = \\{2k-1,\\; 2k\\}$$');
+  });
+
+  it('nets stray spacing macros / literal braces outside any math span', () => {
+    _resetAnsiMarkdownForTests();
+    const out = stripAnsi(
+      renderAnsiMarkdown('loose \\; macro and set \\{1,2\\}'),
+    );
+    expect(out).toContain('\\;');
+    expect(out).toContain('\\{1,2\\}');
+  });
+
+  it('still honours genuine markdown backslash-escapes outside the LaTeX set', () => {
+    _resetAnsiMarkdownForTests();
+    const out = stripAnsi(renderAnsiMarkdown('a \\* b and \\$ c'));
+    // `\*` and `\$` carry real markdown-escape meaning — leave them stripped.
+    expect(out).toContain('a * b and $ c');
+    expect(out).not.toContain('\\*');
+  });
+
+  // Regression for the Cursor Bugbot finding: an escaped `\$` (a literal dollar
+  // in LaTeX) must not be treated as a closing `$` delimiter, or it mis-splits
+  // the span and cascades into later `$`. With both delimiters guarded, the
+  // fragment isn't protected — markdown handles `\$` → `$` instead.
+  it('does not treat an escaped \\$ as a closing math delimiter', () => {
+    _resetAnsiMarkdownForTests();
+    const out = stripAnsi(renderAnsiMarkdown('A price $a = \\$5$ here'));
+    expect(out).not.toContain('$a = \\$');
+    expect(out).toContain('here');
   });
 });

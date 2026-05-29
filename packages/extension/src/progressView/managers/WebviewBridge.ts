@@ -1,4 +1,4 @@
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
 import type { StreamLogStore } from '@transcript';
 import type * as vscode from 'vscode';

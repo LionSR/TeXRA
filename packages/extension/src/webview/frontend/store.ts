@@ -5,7 +5,7 @@
  * Uses Zod-derived types from shared schemas for type safety.
  */
 
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   MainViewPersistedStateSchema,
   type MainViewPersistedState,
