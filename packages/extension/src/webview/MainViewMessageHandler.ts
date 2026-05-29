@@ -8,8 +8,8 @@ import { MainViewStartupController } from '@controllers/mainView/MainViewStartup
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { toErrorMessage } from '@common/errors';
 import { BaseViewMessageHandler } from '@common/webview';
-import { RecordingManager } from '@common/managers/RecordingManager';
 import { agentDirectories } from '@frontend/agents';
+import { RecordingManager } from '@frontend/media/RecordingManager';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
