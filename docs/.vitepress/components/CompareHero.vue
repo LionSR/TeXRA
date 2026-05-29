@@ -51,7 +51,7 @@ import MockupFrame from './MockupFrame.vue';
             </div>
             <div class="dl chg">
               <span class="gut">18</span>Let <span class="m">$G$</span> be a
-              graph<del>.</del>
+              graph.
             </div>
           </div>
         </div>
@@ -90,7 +90,7 @@ import MockupFrame from './MockupFrame.vue';
             </div>
             <div class="dl add">
               <span class="gut">18</span>Let <span class="m">$G$</span> be a
-              <ins>$d$-regular</ins> graph<ins> on $n$ vertices.</ins>
+              <ins>$d$-regular</ins> graph.
             </div>
           </div>
         </div>
