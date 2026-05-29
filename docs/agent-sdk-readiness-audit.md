@@ -276,3 +276,48 @@ independent of whether the parent model happened to emit a tool call.
    SDK natives (§3.5); formalize `delegateTo` subagent primitive (§5).
 
 Each step is independently shippable and reversible; none requires a rewrite.
+
+---
+
+## 7. Re-verification addendum — 2026-05-29
+
+A second independent pass re-audited the same surfaces against the current tree.
+The 2026-05-28 findings hold. Status of the plan and two corrections:
+
+**Applied & merged (PR #4579, commit `a2cef9f`) — verified in tree:**
+
+- §2.1 — the three `logger/*Trace*` facades are gone; `runTrace` points at `@agent/trace`.
+- §2.2 — `createExecutionRunContext` is inlined (no longer exists).
+- §3.4 — `getMessageNormalizationOptions` overrides collapsed; only the base
+  `modelHandlerOpenAI.ts` retains it.
+- §3.2 (partial) — `@agent/core` now re-exports `AgentConfigSchema` and
+  `AgentWorkflowSetting`.
+
+**Still pending (verified present):**
+
+- §2.3 — `legacyCoordinators` + the 8-`Map` `bridgeState` global persist in
+  `runCoordinators.ts:22,36-45`; the up-to-4-tier fallback chains are live
+  (`clearPlanApprovalForStream` :104-119, `resolveProposal` :156-169,
+  `triggerRetry` :203-209). Highest-value remaining cleanup: make
+  `RunContext.coordinators` non-optional and delete the bridge.
+- §2.6 — `modelHandlerValidation.ts` still sits in the dispatch dir.
+- §3.1 — no `@agent/runtime` facade barrel yet (`src/agent/runtime/index.ts` absent).
+- §4 — token usage is still double-emitted in `UsageMonitor.ts:173` (`emit('updateStreamUsage')`)
+  and `:179` (`logger.usage`).
+
+**New finding (not in the 2026-05-28 audit) — provider identity vs. capability:**
+
+`ModelHandler.ts:399-426` exposes `isAnthropic`/`isOpenai`/`isGoogle`/`isDeepSeek`/
+`isKimi`/`isMiniMax` getters that leak provider identity to callers. These are
+consumed in ~6 sites (verified): behavioral gates in `ToolUseCycleFlow.ts:809-812`
+and `ModelFactory.ts:72`, plus display/template flags in `AgentLaunchContext.ts:256-257`
+and `userVars.ts:168-169`. For SDK alignment (capability-driven, not identity-driven
+dispatch), convert the two *behavioral* gates to named `capabilities.*` flags; the
+display flags can keep an explicit allow-list. Complements §3.4. Low risk, ~1 day.
+
+**Correction to retract:** an interim pass flagged `redactSecrets`
+(`logger/redaction.ts`) as a dead export. **It is not dead** — it is used by
+`packages/desktop/src/main/desktopAppLog.ts` (4 call sites) via the `@logger/redaction`
+deep import, which is exactly why the `logger/index.ts` re-export exists. Methodology
+note: audits of `src/` must also grep `packages/**` (desktop, cli, extension) before
+declaring a symbol unused.
