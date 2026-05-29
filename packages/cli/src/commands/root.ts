@@ -17,6 +17,7 @@ import {
   reorderGlobalFlags,
   resolveDeepestSubCommand,
   showUsage,
+  showUsageStderr,
   type UnknownCliCommand,
 } from './_helpers/dispatch';
 import { getExitCode, resetExitCode } from './_helpers/exitCode';
@@ -146,7 +147,11 @@ export async function runCli(
         rootCommand,
         rawArgs,
       );
-      await showUsage(target, parent);
+      // Usage shown on an ERROR goes to STDERR so STDOUT stays clean and
+      // machine-parseable under `--output-format json|ndjson`. The explicit
+      // `--help` path above keeps using STDOUT (`showUsage`) per Unix
+      // convention.
+      await showUsageStderr(target, parent);
       writeTextStderr(error.message);
       return { exitCode: CliExitCode.Usage };
     }
