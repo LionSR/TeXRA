@@ -143,11 +143,11 @@ const rows = [
 .api-pane {
   flex: 1;
   min-width: 0;
-  background: #1e1e1e;
-  padding: 14px 18px;
+  background: var(--mk-bg);
+  padding: var(--mk-space-14) var(--mk-space-18);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--mk-space-12);
   overflow: hidden;
   font-family: var(--vp-font-family-base);
 }
@@ -155,13 +155,13 @@ const rows = [
   margin: 0;
   padding: 0;
   border: none;
-  font-size: 0.95rem;
+  font-size: var(--mk-fs-95);
   font-weight: 600;
   color: var(--wa-color-text-normal);
 }
 .api-desc {
   margin: 0;
-  font-size: 0.76rem;
+  font-size: var(--mk-fs-76);
   line-height: 1.45;
   color: var(--color-text-secondary);
 }
@@ -169,47 +169,47 @@ const rows = [
 .api-stream {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  background: #252526;
+  gap: var(--mk-space-10);
+  padding: var(--mk-space-8) var(--mk-space-10);
+  background: var(--mk-bg-soft);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--mk-radius-lg);
 }
 .api-stream-desc {
-  font-size: 0.72rem;
+  font-size: var(--mk-fs-72);
   color: var(--color-text-secondary);
 }
 
 .api-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.8rem;
+  font-size: var(--mk-fs-80);
 }
 .api-table th {
   text-align: left;
-  font-size: 0.66rem;
+  font-size: var(--mk-fs-66);
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--color-text-secondary);
-  padding: 0 8px 6px;
+  padding: 0 var(--mk-space-8) var(--mk-space-6);
   border-bottom: 1px solid var(--color-border);
 }
 .api-table th.ta-r {
   text-align: right;
 }
 .api-table td {
-  padding: 7px 8px;
-  border-bottom: 1px solid #232323;
+  padding: var(--mk-space-7) var(--mk-space-8);
+  border-bottom: 1px solid var(--mk-border);
 }
 
 .prov {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--mk-space-7);
 }
 .prov-chev {
-  font-size: 11px;
+  font-size: var(--mk-space-11);
   color: var(--color-text-tertiary);
 }
 .prov-name {
@@ -220,11 +220,11 @@ const rows = [
 .status {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 0.74rem;
+  gap: var(--mk-space-5);
+  font-size: var(--mk-fs-74);
 }
 .status wa-icon {
-  font-size: 12px;
+  font-size: var(--mk-space-12);
 }
 .status--set {
   color: var(--color-success);
@@ -239,17 +239,17 @@ const rows = [
 .row-acts {
   display: flex;
   justify-content: flex-end;
-  gap: 2px;
+  gap: var(--mk-space-2);
 }
 .key-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
+  width: var(--mk-size-24);
+  height: var(--mk-size-24);
+  border-radius: var(--mk-radius);
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: var(--mk-space-12);
   cursor: pointer;
 }
 .key-btn:hover {
