@@ -17,7 +17,7 @@ function makeContext(partial: Partial<CliContext> = {}): CliContext {
   return {
     cwd: '/tmp',
     colorEnabled: false,
-    mode: 'oneshot',
+    mode: 'headless',
     outputFormat: 'text',
     stderrIsTty: false,
     quietLogs: false,
