@@ -1,30 +1,19 @@
-import { delay } from '@utils/core';
+import Bottleneck from 'bottleneck';
 
-/**
- * Simple rate limiter to respect API rate limits for academic metadata services.
- * Ensures minimum delay between consecutive requests to the same API.
- */
+const limiters = new Map<string, Bottleneck>();
 
-const lastRequestTimes = new Map<string, number>();
+function getLimiter(apiName: string, minDelayMs: number): Bottleneck {
+  const existing = limiters.get(apiName);
+  if (existing) return existing;
+  const limiter = new Bottleneck({ minTime: minDelayMs, maxConcurrent: 1 });
+  limiters.set(apiName, limiter);
+  return limiter;
+}
 
-/**
- * Enforces rate limiting by waiting if necessary before allowing the next request.
- *
- * @param apiName - Unique identifier for the API (e.g., 'arxiv', 'crossref')
- * @param minDelayMs - Minimum milliseconds between requests
- * @returns Promise that resolves when it's safe to make the next request
- */
+/** Enforces a minimum delay between consecutive requests to the same API. */
 export async function waitForRateLimit(
   apiName: string,
   minDelayMs: number,
 ): Promise<void> {
-  const lastTime = lastRequestTimes.get(apiName) ?? 0;
-  const elapsed = Date.now() - lastTime;
-  const waitTime = minDelayMs - elapsed;
-
-  if (waitTime > 0) {
-    await delay(waitTime);
-  }
-
-  lastRequestTimes.set(apiName, Date.now());
+  await getLimiter(apiName, minDelayMs).schedule(() => Promise.resolve());
 }
