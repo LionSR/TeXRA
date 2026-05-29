@@ -312,7 +312,7 @@ The 2026-05-28 findings hold. Status of the plan and two corrections:
 consumed in ~6 sites (verified): behavioral gates in `ToolUseCycleFlow.ts:809-812`
 and `ModelFactory.ts:72`, plus display/template flags in `AgentLaunchContext.ts:256-257`
 and `userVars.ts:168-169`. For SDK alignment (capability-driven, not identity-driven
-dispatch), convert the two *behavioral* gates to named `capabilities.*` flags; the
+dispatch), convert the two _behavioral_ gates to named `capabilities.*` flags; the
 display flags can keep an explicit allow-list. Complements §3.4. Low risk, ~1 day.
 
 **Correction to retract:** an interim pass flagged `redactSecrets`
