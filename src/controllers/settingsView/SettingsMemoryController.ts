@@ -1,8 +1,8 @@
 // Local imports - common
-import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
+import type { PromptHost } from '@hosts/promptHost';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 
 // Local imports - hosts
-import type { PromptHost } from '@hosts/promptHost';
 
 // Local imports - shared
 import type {

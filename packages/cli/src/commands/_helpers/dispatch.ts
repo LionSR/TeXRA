@@ -1,6 +1,6 @@
 import { renderUsage, showUsage, type CommandDef } from 'citty';
 
-import { writeRawStderr } from '../../runtime/logSinks';
+import { writeRawStderr } from '@cli/runtime/logSinks';
 
 import { GLOBAL_BOOL_FLAGS, GLOBAL_VALUE_FLAGS } from './globalArgs';
 
