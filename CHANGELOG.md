@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - **Live elapsed timer in the CLI chat** — the status bar now shows the seconds elapsed next to `running`, so a long "thinking" turn that streams no text still reads as alive instead of looking frozen.
 
+### Bug Fixes
+
+- **Subagent progress boards show their rounds again** — a subagent run's transcript was blank except for the instruction: the round groups (Init, r0/r1) and everything nested under them — scratchpad, statistics, latexdiff results, loaded files — failed to render. The run's root stage was inheriting the orchestrator's active stage as a cross-trace parent, orphaning the whole group tree in the subagent's own stream.
+
 ## [0.38.2] - 2026-05-27
 
 ### Features
