@@ -249,9 +249,7 @@ function isMcpTextBlock(
   block: unknown,
 ): block is { type: 'text'; text: string } {
   return (
-    isObject(block) &&
-    block.type === 'text' &&
-    typeof block.text === 'string'
+    isObject(block) && block.type === 'text' && typeof block.text === 'string'
   );
 }
 
@@ -677,13 +675,11 @@ const TOOL_SECTION_BUILDERS: Array<{
     build: buildExecutionsSections,
   },
   {
-    match: (ctx) =>
-      ctx.toolName === 'accept_run_files' && isObject(ctx.input),
+    match: (ctx) => ctx.toolName === 'accept_run_files' && isObject(ctx.input),
     build: buildAcceptRunFilesSections,
   },
   {
-    match: (ctx) =>
-      DELEGATION_TOOLS.has(ctx.toolName) && isObject(ctx.input),
+    match: (ctx) => DELEGATION_TOOLS.has(ctx.toolName) && isObject(ctx.input),
     build: buildDelegationSections,
   },
   {
