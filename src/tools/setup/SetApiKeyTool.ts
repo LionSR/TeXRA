@@ -2,17 +2,12 @@
 import { z } from 'zod';
 
 // Local imports
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
-import {
-  API_PROVIDERS,
-  invalidateApiKeyCache,
-  isApiProvider,
-} from '@model/apiProviders';
 import { ToolError, type ToolResult } from '@tools/result';
 
 // Local file imports
 import { defineTool } from '../core/define';
 import { getSetupPlatform } from './platform';
+import { refreshApiKeyCaches, requireApiProvider } from './apiKeyHelpers';
 
 const SetApiKeyInputSchema = z.strictObject({
   provider: z
@@ -71,13 +66,7 @@ export class SetApiKeyTool extends defineTool({
 }) {
   protected async execute(input: SetApiKeyInput): Promise<ToolResult> {
     const platform = getSetupPlatform();
-    const provider = input.provider.trim();
-
-    if (!isApiProvider(provider)) {
-      throw new ToolError(
-        `Unknown provider "${provider}". Supported: ${API_PROVIDERS.join(', ')}.`,
-      );
-    }
+    const provider = requireApiProvider(input.provider);
 
     if (looksLikePlaceholder(input.key)) {
       throw new ToolError(
@@ -90,16 +79,7 @@ export class SetApiKeyTool extends defineTool({
     // Drop cached model availability and key-origin lookups before the refresh
     // so every downstream status surface sees the just-added key. Matches the
     // manual `texra.setApiKey` command's ordering in `apiKeyCommands`.
-    invalidateModelOptionsCache();
-    invalidateApiKeyCache();
-    await Promise.all([
-      platform.commands
-        .invoke('texra.refreshApiKeyStatus')
-        .catch(() => undefined),
-      platform.commands
-        .invoke('texra.refreshAllOptions')
-        .catch(() => undefined),
-    ]);
+    await refreshApiKeyCaches(platform);
 
     const masked = maskKey(input.key);
     return {

@@ -1,15 +1,16 @@
 // `/agent` form. It lists visible tool-use agents and workflows. Before the
 // first message, tool-use agents can be chosen as the root chat agent.
 
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
-import { useEffect, useState } from 'react';
 
 import { computeAgentOptionsData } from '@agent/index';
 import type { AgentOptionData } from '@shared/schemas';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
+import { FormFrame } from './_shared/FormFrame';
+import { useAsyncListForm } from './_shared/useAsyncListForm';
 
 export interface AgentListFormProps {
   readonly currentAgent: string;
@@ -22,34 +23,6 @@ export interface AgentListFormProps {
 interface AgentGroups {
   readonly toolUse: readonly AgentOptionData[];
   readonly workflow: readonly AgentOptionData[];
-}
-
-interface AgentFrameProps {
-  readonly color: string;
-  readonly title: string;
-  readonly children: React.ReactNode;
-}
-
-function AgentFrame(props: AgentFrameProps): React.JSX.Element {
-  return (
-    <Box
-      borderStyle="round"
-      borderColor={props.color}
-      flexDirection="column"
-      paddingX={1}
-    >
-      <Text bold color={props.color}>
-        {props.title}
-      </Text>
-      {props.children}
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[{ key: 'Esc', action: 'close' }]}
-          confirmCancel={false}
-        />
-      </Box>
-    </Box>
-  );
 }
 
 function agentDescription(agent: AgentOptionData): string {
@@ -135,56 +108,31 @@ export function agentSelectWindow({
 }
 
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
-  const [agents, setAgents] = useState<AgentGroups>({
-    toolUse: [],
-    workflow: [],
+  const { data, loading, error } = useAsyncListForm<AgentGroups>({
+    load: async () => {
+      const options = await computeAgentOptionsData();
+      return { toolUse: options.toolUse, workflow: options.workflow };
+    },
+    onClose: props.onClose,
   });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | undefined>(undefined);
-
-  useInput((_input, key) => {
-    if ((loading || error) && key.escape) {
-      props.onClose();
-    }
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    void computeAgentOptionsData()
-      .then((options) => {
-        if (cancelled) return;
-        setAgents({
-          toolUse: options.toolUse,
-          workflow: options.workflow,
-        });
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(String(err));
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   if (loading) {
     return (
-      <AgentFrame color="cyan" title="/agent">
+      <FormFrame color="cyan" title="/agent">
         <Spinner label="Loading agent registry..." />
-      </AgentFrame>
+      </FormFrame>
     );
   }
 
   if (error) {
     return (
-      <AgentFrame color="red" title="/agent - error">
+      <FormFrame color="red" title="/agent - error">
         <Text>{error}</Text>
-      </AgentFrame>
+      </FormFrame>
     );
   }
 
+  const agents: AgentGroups = data ?? { toolUse: [], workflow: [] };
   const selectable = props.selectable === true;
   const items = agents.toolUse.map((agent) => ({
     value: agent.label,

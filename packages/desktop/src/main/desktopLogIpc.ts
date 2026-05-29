@@ -1,4 +1,5 @@
 import {
+  createCommandHandler,
   createDesktopErrorReporter,
   type DesktopMessageHandler,
   type DesktopRenderer,
@@ -50,21 +51,14 @@ export function createDesktopLogIpc(
     void options.exportLog?.(log.text).catch(reportAsyncError);
   }
 
-  return {
-    handleMessage(message): boolean {
-      switch (message.command) {
-        case DESKTOP_LOG_COMMANDS.REQUEST_LOG:
-          postSnapshot();
-          return true;
-        case DESKTOP_LOG_COMMANDS.COPY_LOG:
-          copyLog();
-          return true;
-        case DESKTOP_LOG_COMMANDS.EXPORT_LOG:
-          exportLog();
-          return true;
-        default:
-          return false;
-      }
+  return createCommandHandler(
+    {
+      [DESKTOP_LOG_COMMANDS.REQUEST_LOG]: () => {
+        postSnapshot();
+      },
+      [DESKTOP_LOG_COMMANDS.COPY_LOG]: () => copyLog(),
+      [DESKTOP_LOG_COMMANDS.EXPORT_LOG]: () => exportLog(),
     },
-  };
+    { onAsyncError: options.onAsyncError },
+  );
 }

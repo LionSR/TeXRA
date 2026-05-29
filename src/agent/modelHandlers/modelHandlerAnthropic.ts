@@ -70,7 +70,7 @@ import {
   formatToolResultAsText,
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
-import { computeCachePercentage } from './utils/usageNormalization';
+import { normalizeUsage } from './support/UsageNormalizer';
 import {
   tagAnthropicSdkError,
   withSdkErrorTag,
@@ -1383,44 +1383,39 @@ export class ModelHandlerAnthropic extends ModelHandler<
     rawUsage: AnthropicUsage,
     responseTimeMs: number,
   ): NormalizedUsage {
-    if (!rawUsage) {
-      return {
-        inputTokens: 0,
-        outputTokens: 0,
-        cost: 0,
-        responseTimeMs,
+    return normalizeUsage(
+      {
         provider: 'anthropic',
-      };
-    }
+        computePrice: (usage) => this.computePrice(usage),
+        extract: (usage) => {
+          const usageTotals = this.getUsageTokenTotals(usage);
+          // Anthropic bills cache-read and cache-creation tokens separately, so
+          // total input is base + read + creation (matches percentageCached).
+          const totalInput =
+            usageTotals.baseInputTokens +
+            usageTotals.cacheReadTokens +
+            usageTotals.cacheCreationTokens;
 
-    const usageTotals = this.getUsageTokenTotals(rawUsage);
-    const totalInput =
-      usageTotals.baseInputTokens +
-      usageTotals.cacheReadTokens +
-      usageTotals.cacheCreationTokens;
-
-    return {
-      inputTokens: totalInput,
-      outputTokens: usageTotals.outputTokens,
-      cost: this.computePrice(rawUsage),
+          return {
+            inputTokens: totalInput,
+            outputTokens: usageTotals.outputTokens,
+            cachedTokens: usageTotals.cacheReadTokens,
+            cacheCreationTokens: usageTotals.cacheCreationTokens,
+            cachePercentageBasis:
+              usageTotals.cacheReadTokens + usageTotals.cacheCreationTokens,
+            // SDK 0.100.0 reports the thinking-token breakdown of output_tokens,
+            // so Anthropic surfaces reasoning tokens like OpenAI/Google/xAI. This
+            // is a subset of outputTokens (already billed), not an extra charge.
+            reasoningTokens: usage.output_tokens_details?.thinking_tokens ?? 0,
+            serverToolRequests:
+              (usage.server_tool_use?.web_search_requests ?? 0) +
+              (usage.server_tool_use?.web_fetch_requests ?? 0),
+          };
+        },
+      },
+      rawUsage,
       responseTimeMs,
-      provider: 'anthropic',
-      cachedInputTokens: usageTotals.cacheReadTokens || undefined,
-      cacheCreationTokens: usageTotals.cacheCreationTokens || undefined,
-      percentageCached: computeCachePercentage(
-        usageTotals.cacheReadTokens + usageTotals.cacheCreationTokens,
-        totalInput,
-      ),
-      // SDK 0.100.0 reports the thinking-token breakdown of output_tokens, so
-      // Anthropic now surfaces reasoning tokens like OpenAI/Google/xAI. This is
-      // a subset of outputTokens (already billed), not an additional charge.
-      reasoningTokens:
-        rawUsage.output_tokens_details?.thinking_tokens || undefined,
-      serverToolRequests:
-        (rawUsage.server_tool_use?.web_search_requests ?? 0) +
-          (rawUsage.server_tool_use?.web_fetch_requests ?? 0) || undefined,
-      _native: rawUsage,
-    };
+    );
   }
 
   /**
