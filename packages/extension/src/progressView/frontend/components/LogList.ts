@@ -26,7 +26,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
 // Local imports
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { LogMessageData, TaskGroup } from '@shared/schemas';
 import { PersistedState } from '@shared/state';
 import { designTokens } from '@shared/styles';

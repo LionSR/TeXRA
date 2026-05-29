@@ -12,10 +12,7 @@ import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 
 // Local imports - shared webview
-import {
-  COMMON_COMMANDS,
-  PROGRESS_VIEW_COMMANDS,
-} from '@common/webview/commands';
+import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
 import { PersistedState } from '@shared/state';

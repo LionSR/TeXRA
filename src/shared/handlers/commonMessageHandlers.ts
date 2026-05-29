@@ -1,4 +1,4 @@
-import { COMMON_COMMANDS } from '@common/webview/commands';
+import { COMMON_COMMANDS } from '@shared/ipc';
 import {
   CommonViewMessageSchema,
   type StateRestoreMessage,

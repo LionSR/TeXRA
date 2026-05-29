@@ -2,8 +2,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - progress schemas
-import { COMMON_COMMANDS } from '@common/webview/commonCommands';
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
 import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
 import {
   AGENT_CATEGORY,
@@ -12,6 +10,8 @@ import {
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
+import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 // Local imports - desktop test paths

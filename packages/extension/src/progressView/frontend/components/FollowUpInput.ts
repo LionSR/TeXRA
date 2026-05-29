@@ -12,7 +12,7 @@ import { live } from 'lit/directives/live.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { RecordingButtonController } from '@shared/controllers';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';

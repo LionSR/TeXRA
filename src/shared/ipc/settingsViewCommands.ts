@@ -1,6 +1,3 @@
-/**
- * Command constants for the settings view.
- */
 import { COMMON_COMMANDS } from './commonCommands';
 
 /**

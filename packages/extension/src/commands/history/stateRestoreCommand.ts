@@ -8,10 +8,10 @@ import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreCo
 import { TaskStateSchema, type TaskState } from '@agent/core/TaskState';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { setPendingState } from '@common/state';
-import { COMMON_COMMANDS } from '@common/webview/commands';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
+import { COMMON_COMMANDS } from '@shared/ipc';
 
 const CHANNEL = 'stateRestoreCommand';
 logger.initialize(CHANNEL);
