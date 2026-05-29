@@ -84,7 +84,7 @@ const LOGO = withBase('/logo-128x128.svg');
   text-align: left;
   background: var(--editor-bg);
   border: 1px solid var(--mk-border-strong);
-  border-radius: 12px;
+  border-radius: var(--mk-radius-window);
   overflow: hidden;
   position: relative;
   box-shadow:
@@ -95,15 +95,15 @@ const LOGO = withBase('/logo-128x128.svg');
 .win-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 38px;
-  padding: 0 14px;
+  gap: var(--mk-space-8);
+  height: var(--mk-size-38);
+  padding: 0 var(--mk-space-14);
   background: var(--mk-bg-soft);
   border-bottom: 1px solid var(--mk-border-strong);
 }
 .dot {
-  width: 12px;
-  height: 12px;
+  width: var(--mk-space-12);
+  height: var(--mk-space-12);
   border-radius: 50%;
   display: inline-block;
 }
@@ -119,14 +119,14 @@ const LOGO = withBase('/logo-128x128.svg');
 .win-title {
   flex: 1;
   text-align: center;
-  font-size: 0.8rem;
+  font-size: var(--mk-fs-80);
   color: var(--mk-text-dim);
   font-family: var(--vp-font-family-mono);
-  margin-right: 48px;
+  margin-right: var(--mk-size-48);
 }
 .win-body {
   display: flex;
-  min-height: 470px;
+  min-height: var(--mk-size-470);
 }
 .win-content {
   display: flex;
@@ -137,14 +137,14 @@ const LOGO = withBase('/logo-128x128.svg');
 /* Activity bar */
 .act {
   flex-shrink: 0;
-  width: 46px;
+  width: var(--mk-size-46);
   background: var(--mk-bg-raised);
   border-right: 1px solid var(--mk-border-strong);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 10px 0;
-  gap: 16px;
+  padding: var(--mk-space-10) 0;
+  gap: var(--mk-space-16);
 }
 .act-i {
   color: var(--mk-text-faint);
@@ -153,8 +153,8 @@ const LOGO = withBase('/logo-128x128.svg');
   align-items: center;
   justify-content: center;
   position: relative;
-  padding: 2px 0;
-  font-size: 20px;
+  padding: var(--mk-space-2) 0;
+  font-size: var(--mk-space-20);
 }
 .act-on {
   color: var(--mk-text);
@@ -165,12 +165,12 @@ const LOGO = withBase('/logo-128x128.svg');
   left: 0;
   top: -4px;
   bottom: -4px;
-  width: 2px;
+  width: var(--mk-space-2);
   background: var(--mk-accent);
 }
 .act-logo {
-  width: 23px;
-  height: 23px;
+  width: var(--mk-size-23);
+  height: var(--mk-size-23);
   display: block;
 }
 .act-bottom {
@@ -188,9 +188,9 @@ const LOGO = withBase('/logo-128x128.svg');
     flex-direction: row;
     width: auto;
     justify-content: flex-start;
-    gap: 18px;
-    padding: 0 12px;
-    height: 40px;
+    gap: var(--mk-space-18);
+    padding: 0 var(--mk-space-12);
+    height: var(--mk-size-40);
     border-right: none;
     border-bottom: 1px solid var(--mk-border-strong);
   }
@@ -200,7 +200,7 @@ const LOGO = withBase('/logo-128x128.svg');
     bottom: 0;
     right: -2px;
     width: auto;
-    height: 2px;
+    height: var(--mk-space-2);
   }
   .win-title {
     margin-right: 0;

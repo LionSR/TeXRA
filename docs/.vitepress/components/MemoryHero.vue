@@ -293,10 +293,10 @@ function toggle(id) {
   flex: 1;
   min-width: 0;
   background: var(--mk-bg);
-  padding: 14px 16px;
+  padding: var(--mk-space-14) var(--mk-space-16);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--mk-space-12);
   overflow: hidden;
   font-family: var(--vp-font-family-base);
 }
@@ -304,56 +304,56 @@ function toggle(id) {
 /* Reminder banner (mirrors .settings-reminder) */
 .reminder {
   display: flex;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: var(--mk-space-10);
+  padding: var(--mk-space-10) var(--mk-space-12);
   background: rgba(117, 190, 255, 0.06);
   border: 1px solid rgba(117, 190, 255, 0.18);
-  border-radius: 6px;
+  border-radius: var(--mk-radius-lg);
 }
 .reminder-ic {
   color: var(--wa-color-icon-info);
-  font-size: 14px;
-  margin-top: 2px;
+  font-size: var(--mk-space-14);
+  margin-top: var(--mk-space-2);
   flex-shrink: 0;
 }
 .reminder-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--mk-space-4);
   min-width: 0;
 }
 .reminder-title {
-  font-size: 0.78rem;
+  font-size: var(--mk-fs-78);
   font-weight: 600;
   color: var(--wa-color-text-normal);
 }
 .reminder-desc {
-  font-size: 0.74rem;
+  font-size: var(--mk-fs-74);
   color: var(--color-text-secondary);
   line-height: 1.45;
 }
 .reminder-acts {
   display: flex;
-  gap: 8px;
-  margin-top: 6px;
+  gap: var(--mk-space-8);
+  margin-top: var(--mk-space-6);
 }
 .r-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 0.7rem;
+  gap: var(--mk-space-5);
+  font-size: var(--mk-fs-70);
   color: var(--wa-color-text-normal);
   background: var(--mk-bg-raised);
   border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 4px 9px;
+  border-radius: var(--mk-radius);
+  padding: var(--mk-space-4) var(--mk-space-9);
   cursor: pointer;
 }
 .r-btn:hover {
   background: var(--mk-border-soft);
 }
 .r-btn wa-icon {
-  font-size: 11px;
+  font-size: var(--mk-space-11);
   color: var(--color-text-secondary);
 }
 
@@ -361,62 +361,62 @@ function toggle(id) {
 .mem-toggle {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 2px;
+  gap: var(--mk-space-10);
+  padding: var(--mk-space-6) var(--mk-space-2);
 }
 
 /* Memory list */
 .mem-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--mk-space-8);
 }
 .mem-item {
   background: var(--mk-bg-soft);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 10px 12px;
+  border-radius: var(--mk-radius-lg);
+  padding: var(--mk-space-10) var(--mk-space-12);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--mk-space-4);
 }
 .mem-item.pinned {
   border-left: 2px solid var(--color-text-link);
-  padding-left: calc(12px - 1px);
+  padding-left: calc(var(--mk-space-12) - 1px);
 }
 .mem-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--mk-space-8);
 }
 .mem-path {
   flex: 1;
   min-width: 0;
   font-family: var(--vp-font-family-mono);
-  font-size: 0.78rem;
+  font-size: var(--mk-fs-78);
   font-weight: 500;
   color: var(--color-text-link);
   word-break: break-all;
 }
 .mem-acts {
   display: flex;
-  gap: 2px;
+  gap: var(--mk-space-2);
   flex-shrink: 0;
 }
 .m-act {
   background: transparent;
   border: none;
-  width: 22px;
-  height: 22px;
+  width: var(--mk-space-22);
+  height: var(--mk-space-22);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 3px;
+  border-radius: var(--mk-radius-sm);
   color: var(--color-text-secondary);
   cursor: pointer;
 }
 .m-act wa-icon {
-  font-size: 12px;
+  font-size: var(--mk-space-12);
 }
 .m-act:hover {
   background: rgba(255, 255, 255, 0.06);
@@ -431,8 +431,8 @@ function toggle(id) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  font-size: 0.7rem;
+  gap: var(--mk-space-4);
+  font-size: var(--mk-fs-70);
   color: var(--color-text-secondary);
 }
 .meta-dot {
@@ -441,14 +441,14 @@ function toggle(id) {
 
 /* Collapsible Contents header */
 .mem-coll {
-  margin-top: 4px;
+  margin-top: var(--mk-space-4);
   background: transparent;
   border: none;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 2px 0;
-  font-size: 0.72rem;
+  gap: var(--mk-space-5);
+  padding: var(--mk-space-2) 0;
+  font-size: var(--mk-fs-72);
   color: var(--color-text-secondary);
   cursor: pointer;
   align-self: flex-start;
@@ -457,37 +457,37 @@ function toggle(id) {
   color: var(--wa-color-text-normal);
 }
 .mem-coll wa-icon {
-  font-size: 11px;
+  font-size: var(--mk-space-11);
 }
 
 /* Inline markdown preview */
 .mem-preview {
-  margin-top: 4px;
-  padding: 8px 10px;
+  margin-top: var(--mk-space-4);
+  padding: var(--mk-space-8) var(--mk-space-10);
   background: var(--mk-bg);
   border: 1px solid var(--color-border);
-  border-radius: 4px;
-  font-size: 0.76rem;
+  border-radius: var(--mk-radius);
+  font-size: var(--mk-fs-76);
   line-height: 1.45;
   color: var(--wa-color-text-normal);
 }
 .md-h {
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: var(--mk-space-4);
 }
 .md-ul {
   margin: 0;
-  padding-left: 18px;
+  padding-left: var(--mk-space-18);
 }
 .md-ul li {
-  margin: 2px 0;
+  margin: var(--mk-space-2) 0;
 }
 .md-code {
   font-family: var(--vp-font-family-mono);
-  font-size: 0.72rem;
+  font-size: var(--mk-fs-72);
   background: var(--mk-bg-raised);
-  padding: 1px 4px;
-  border-radius: 3px;
+  padding: 1px var(--mk-space-4);
+  border-radius: var(--mk-radius-sm);
   color: var(--mk-accent);
 }
 </style>

@@ -129,28 +129,28 @@ import MockupFrame from './MockupFrame.vue';
 .pane-head {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 12px;
+  gap: var(--mk-space-7);
+  padding: var(--mk-space-6) var(--mk-space-12);
   background: var(--mk-bg-soft);
   border-bottom: 1px solid var(--color-border);
   font-family: var(--vp-font-family-mono);
-  font-size: 0.74rem;
+  font-size: var(--mk-fs-74);
   color: var(--wa-color-text-normal);
 }
 .ph-ic {
-  font-size: 12px;
+  font-size: var(--mk-space-12);
 }
 .ph-tag {
   margin-left: auto;
   font-family: var(--vp-font-family-base);
-  font-size: 0.62rem;
+  font-size: var(--mk-fs-62);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--color-text-secondary);
   background: var(--mk-bg-raised);
-  border-radius: 999px;
-  padding: 1px 8px;
+  border-radius: var(--mk-radius-pill);
+  padding: 1px var(--mk-space-8);
 }
 .ph-tag--new {
   color: var(--mk-accent);
@@ -160,24 +160,24 @@ import MockupFrame from './MockupFrame.vue';
 /* Diff body reuses .result/.tabs/.tab/.t-ic from mockup.css; the two-pane
    gutter layout below is unique to the compare editor. */
 .diff-surface {
-  padding: 8px 0;
+  padding: var(--mk-space-8) 0;
   font-family: var(--vp-font-family-mono);
-  font-size: 0.82rem;
+  font-size: var(--mk-fs-82);
   color: var(--wa-color-text-normal);
   line-height: 1.7;
 }
 .dl {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 0 14px 0 0;
+  gap: var(--mk-space-10);
+  padding: 0 var(--mk-space-14) 0 0;
   white-space: pre-wrap;
 }
 .gut {
   flex-shrink: 0;
-  width: 30px;
+  width: var(--mk-size-30);
   text-align: right;
-  padding-right: 6px;
+  padding-right: var(--mk-space-6);
   color: var(--color-text-tertiary);
   border-right: 1px solid var(--color-border);
   user-select: none;
@@ -192,14 +192,14 @@ import MockupFrame from './MockupFrame.vue';
   background: rgba(241, 76, 76, 0.28);
   color: var(--mk-del-text);
   text-decoration: line-through;
-  border-radius: 2px;
+  border-radius: var(--mk-radius-xs);
   padding: 0 1px;
 }
 .dl ins {
   background: rgba(46, 160, 67, 0.32);
   color: var(--mk-ins-text);
   text-decoration: none;
-  border-radius: 2px;
+  border-radius: var(--mk-radius-xs);
   padding: 0 1px;
 }
 
@@ -213,19 +213,19 @@ import MockupFrame from './MockupFrame.vue';
 .accept {
   position: absolute;
   right: -13px;
-  top: 2px;
+  top: var(--mk-space-2);
   z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 21px;
+  width: var(--mk-size-24);
+  height: var(--mk-size-21);
   padding: 0;
   border: 1px solid var(--mk-border-soft);
-  border-radius: 5px;
+  border-radius: var(--mk-radius-md);
   background: var(--mk-bg-raised);
   color: var(--mk-accent);
-  font-size: 12px;
+  font-size: var(--mk-space-12);
   cursor: pointer;
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.45);
 }

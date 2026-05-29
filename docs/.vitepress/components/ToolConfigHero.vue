@@ -171,28 +171,29 @@ import MockupFrame from './MockupFrame.vue';
 /* File-selector vocabulary (.files/.flist/.fitem/.fi-*) lives in mockup.css,
    shared with FileSelectHero. Only the sidebar width is unique here. */
 .board {
-  width: 320px;
+  width: var(--mk-size-320);
 }
 
 /* wa-dropdown popover with checkbox items (mirrors wa-dropdown-item
    type="checkbox": a leading check that only shows when selected). */
 .wa-menu {
   align-self: flex-start;
-  min-width: 180px;
-  margin: 2px 0 2px 18px;
+  min-width: var(--mk-size-180);
+  margin: var(--mk-space-2) 0 var(--mk-space-2) var(--mk-space-18);
   background: var(--mk-bg-raised);
   border: 1px solid var(--mk-border-soft);
-  border-radius: 6px;
-  padding: 4px;
+  border-radius: var(--mk-radius-lg);
+  padding: var(--mk-space-4);
   box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.75);
 }
 .wa-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 12px 5px 6px;
-  border-radius: 4px;
-  font-size: 0.8rem;
+  gap: var(--mk-space-8);
+  padding: var(--mk-space-5) var(--mk-space-12) var(--mk-space-5)
+    var(--mk-space-6);
+  border-radius: var(--mk-radius);
+  font-size: var(--mk-fs-80);
   color: var(--wa-color-text-normal);
   white-space: nowrap;
 }
@@ -203,9 +204,9 @@ import MockupFrame from './MockupFrame.vue';
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
+  width: var(--mk-space-16);
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--mk-space-11);
   color: var(--mk-accent);
   opacity: 0;
 }
