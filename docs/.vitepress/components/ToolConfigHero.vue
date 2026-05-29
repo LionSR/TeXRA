@@ -68,17 +68,25 @@ import MockupFrame from './MockupFrame.vue';
 
         <!-- The two open helper menus, focused on this step. -->
         <div class="menu">
-          <div class="f-label"><wa-icon library="texra" name="tools"></wa-icon> Tool config</div>
+          <div class="f-label">
+            <wa-icon library="texra" name="tools"></wa-icon> Tool config
+          </div>
           <div class="opt on">
-            <span class="ckbox"><wa-icon library="texra" name="check"></wa-icon></span>
+            <span class="ckbox"
+              ><wa-icon library="texra" name="check"></wa-icon
+            ></span>
             Attach TeX Count
           </div>
         </div>
 
         <div class="menu">
-          <div class="f-label"><wa-icon library="texra" name="sparkle"></wa-icon> Auto-extract</div>
+          <div class="f-label">
+            <wa-icon library="texra" name="sparkle"></wa-icon> Auto-extract
+          </div>
           <div class="opt on">
-            <span class="ckbox"><wa-icon library="texra" name="check"></wa-icon></span>
+            <span class="ckbox"
+              ><wa-icon library="texra" name="check"></wa-icon
+            ></span>
             Figures
           </div>
           <div class="opt">
