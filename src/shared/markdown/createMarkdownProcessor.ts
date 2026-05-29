@@ -110,13 +110,14 @@ const MATH_PLACEHOLDER = /@@LATEX-MATH-(\d+)@@/g;
 
 // Math spans whose body must reach the renderer verbatim. Order matters: the
 // display fences are matched before the inline ones so `$…$` never splits a
-// `$$…$$`. Inline `$…$` requires an unescaped opening `$` and a closing `$` on
-// the same line, which keeps stray currency `$` from being captured.
+// `$$…$$`. Inline `$…$` requires both delimiters to be unescaped (`\$` is a
+// literal dollar in LaTeX, not a delimiter) and on the same line, which keeps
+// stray currency `$` from being captured and avoids cascading mis-splits.
 const MATH_SPAN_PATTERNS: readonly RegExp[] = [
   /\$\$[\s\S]+?\$\$/g, // $$ … $$  (display, may span lines)
   /\\\[[\s\S]+?\\\]/g, // \[ … \]  (display)
   /\\\([\s\S]+?\\\)/g, // \( … \)  (inline)
-  /(?<!\\)\$(?!\$)[^\n$]+?\$/g, // $ … $  (inline, single line, unescaped)
+  /(?<!\\)\$(?!\$)[^\n$]+?(?<!\\)\$/g, // $ … $  (inline, single line, both $ unescaped)
 ];
 
 function protectLatexMath(content: string): {

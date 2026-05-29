@@ -283,4 +283,15 @@ describe('renderAnsiMarkdown', () => {
     expect(out).toContain('a * b and $ c');
     expect(out).not.toContain('\\*');
   });
+
+  // Regression for the Cursor Bugbot finding: an escaped `\$` (a literal dollar
+  // in LaTeX) must not be treated as a closing `$` delimiter, or it mis-splits
+  // the span and cascades into later `$`. With both delimiters guarded, the
+  // fragment isn't protected — markdown handles `\$` → `$` instead.
+  it('does not treat an escaped \\$ as a closing math delimiter', () => {
+    _resetAnsiMarkdownForTests();
+    const out = stripAnsi(renderAnsiMarkdown('A price $a = \\$5$ here'));
+    expect(out).not.toContain('$a = \\$');
+    expect(out).toContain('here');
+  });
 });
