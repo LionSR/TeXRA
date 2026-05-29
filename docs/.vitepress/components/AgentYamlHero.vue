@@ -9,24 +9,16 @@
 //
 // The root carries `.mockup` so the shared `--mk-*` colour + dimensional tokens
 // resolve here and the card flips cleanly between the docs light / dark themes.
+import MockCard from './MockCard.vue';
 </script>
 
 <template>
-  <div
-    class="mockup mk-card yaml-hero"
-    role="group"
-    aria-label="agent YAML structure"
+  <MockCard
+    class="yaml-hero"
+    title="polish.yaml"
+    icon="file-code"
+    sub="agent definition"
   >
-    <div class="mk-card-head">
-      <wa-icon
-        class="mk-card-head-ic"
-        library="texra"
-        name="file-code"
-      ></wa-icon>
-      <span class="mk-card-title">polish.yaml</span>
-      <span class="mk-card-sub">agent definition</span>
-    </div>
-
     <div class="yh-body">
       <!-- settings block -->
       <div class="yh-line">
@@ -96,12 +88,12 @@
         <span class="yh-note round">reflection</span>
       </div>
     </div>
-  </div>
+  </MockCard>
 </template>
 
 <style scoped>
-/* Standalone card. Shell + inline mono header come from the shared `.mk-card*`
-   family (theme/mockup.css); only the body styling is unique below. */
+/* Standalone card. Shell + inline mono header come from <MockCard>; only the
+   body styling is unique below (it still applies to slotted content via scope). */
 .yh-body {
   display: flex;
   flex-direction: column;

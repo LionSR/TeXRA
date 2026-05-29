@@ -6,9 +6,10 @@
 // Round 0 is the draft; r1/r2 carry a small "reflection" tag. A caption
 // between output.xml and output.tex names the extraction step.
 //
-// Standalone (no MockupFrame) — just the focused tree on the `.mockup`
-// surface so the shared `--mk-*` tokens resolve and it flips with the
-// docs light / dark themes.
+// Standalone (no MockupFrame) — the focused tree composed inside the shared
+// <MockCard> primitive, so the card shell + inline mono header come for free
+// and it flips with the docs light / dark themes.
+import MockCard from './MockCard.vue';
 
 const rounds = [
   {
@@ -48,21 +49,12 @@ const icon = (kind) =>
 </script>
 
 <template>
-  <div
-    class="mockup mk-card rot"
-    role="group"
-    aria-label="round output file tree"
+  <MockCard
+    class="rot"
+    title="task storage"
+    icon="folder-opened"
+    sub="one folder per round"
   >
-    <div class="mk-card-head rot-head">
-      <wa-icon
-        class="mk-card-head-ic"
-        library="texra"
-        name="folder-opened"
-      ></wa-icon>
-      <span class="mk-card-title">task storage</span>
-      <span class="mk-card-sub">one folder per round</span>
-    </div>
-
     <div class="rot-tree">
       <div v-for="r in rounds" :key="r.name" class="rot-round">
         <div class="rot-folder">
@@ -108,16 +100,13 @@ const icon = (kind) =>
         </ul>
       </div>
     </div>
-  </div>
+  </MockCard>
 </template>
 
 <style scoped>
-/* .rot card shell + .rot-head row inherit the shared .mk-card / .mk-card-head
-   family from theme/mockup.css. Only the header's larger margin-bottom differs. */
-.rot-head {
-  margin-bottom: var(--mk-space-10);
-}
-
+/* The card shell + inline mono header come from <MockCard> (which composes the
+   shared .mk-card / .mk-card-head family from theme/mockup.css). Only the body
+   tree below is scoped here. */
 .rot-tree {
   display: flex;
   flex-direction: column;

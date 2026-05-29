@@ -1,4 +1,6 @@
 <script setup>
+import MockCard from './MockCard.vue';
+
 // Frameless memory-tool slice: how a tool-use agent actually drives the
 // `memory` tool over a run, as it surfaces in the ProgressBoard / CLI tool-call
 // log. Standalone (no MockupFrame / dash-nav) — just the focused tool-call
@@ -41,20 +43,12 @@ const calls = [
 </script>
 
 <template>
-  <div
-    class="mockup mk-card mem-cmds"
-    role="group"
-    aria-label="memory tool calls"
+  <MockCard
+    class="mem-cmds"
+    icon="database"
+    title="memory"
+    sub="tool calls · this run"
   >
-    <div class="mk-card-head mc-head">
-      <wa-icon
-        class="mk-card-head-ic"
-        library="texra"
-        name="database"
-      ></wa-icon>
-      <span class="mk-card-title">memory</span>
-      <span class="mk-card-sub">tool calls · this run</span>
-    </div>
     <ul class="mc-list">
       <li
         v-for="(c, i) in calls"
@@ -69,17 +63,13 @@ const calls = [
         <span class="mc-effect">{{ c.effect }}</span>
       </li>
     </ul>
-  </div>
+  </MockCard>
 </template>
 
 <style scoped>
-/* Standalone card shell + inline mono header come from the shared `.mk-card*`
-   family (theme/mockup.css). This card has no header margin-bottom — the list
-   sits directly under the divider — so trim that one declaration. */
-.mc-head {
-  margin-bottom: 0;
-}
-
+/* Card shell + inline mono header come from the shared <MockCard> primitive
+   (which composes the .mk-card* family from theme/mockup.css). Only the body —
+   the tool-call list rows below — is scoped here. */
 .mc-list {
   list-style: none;
   margin: 0;

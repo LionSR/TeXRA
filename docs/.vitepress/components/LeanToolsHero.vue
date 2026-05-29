@@ -11,6 +11,7 @@
 //
 // The root carries `.mockup` so the shared `--mk-*` colour + dimensional tokens
 // resolve here and the card flips cleanly between docs light / dark themes.
+import MockCard from './MockCard.vue';
 
 // Tool names match guide/lean.md exactly: lean_diagnostics, lean_inspect,
 // lean_loogle, lean_file, lean_project.
@@ -49,17 +50,12 @@ const tools = [
 </script>
 
 <template>
-  <div
-    class="mockup mk-card lean-tools"
-    role="group"
-    aria-label="Lean tool calls"
+  <MockCard
+    title="lean"
+    icon="beaker"
+    sub="tool calls · this run"
+    class="lean-tools"
   >
-    <div class="mk-card-head lt-head">
-      <wa-icon class="mk-card-head-ic" library="texra" name="beaker"></wa-icon>
-      <span class="mk-card-title">lean</span>
-      <span class="mk-card-sub">tool calls · this run</span>
-    </div>
-
     <div class="lt-list">
       <template v-for="(t, i) in tools" :key="i">
         <!-- Expanded card: shows the real lean_inspect return payload -->
@@ -117,21 +113,14 @@ const tools = [
         </div>
       </template>
     </div>
-  </div>
+  </MockCard>
 </template>
 
 <style scoped>
-/* Standalone card. The frameless shell + inline mono header come from the
-   shared .mk-card / .mk-card-head family in theme/mockup.css; tool-card
-   internals (.tcard / .tc-*) also come from .mockup. This file adds only the
-   header spacing tweak + the few extras the inspect payload needs. */
-
-/* The header sits flush with the list (the .lt-list margin-top owns the gap),
-   so drop the shared .mk-card-head bottom margin. Matches the shared rule's
-   .mockup-scoped specificity so the override actually lands. */
-.mockup .lt-head {
-  margin-bottom: 0;
-}
+/* Standalone card composed from <MockCard> (shared .mk-card frameless shell +
+   inline mono header). Tool-card internals (.tcard / .tc-*) come from .mockup.
+   This file adds only the list layout + the few extras the inspect payload
+   needs. */
 
 .lt-list {
   display: flex;

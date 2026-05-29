@@ -1,4 +1,6 @@
 <script setup>
+import MockCard from './MockCard.vue';
+
 // Frameless "Dashboard → Tools" category map: the seven tool categories a
 // tool-use agent can be granted, each with its icon, a one-line capability
 // sub-label, and the example tool names rendered as mono accent code-chips —
@@ -94,12 +96,12 @@ const categories = [
 </script>
 
 <template>
-  <div class="mockup mk-card tcats" role="group" aria-label="tool categories">
-    <div class="mk-card-head tcats-head">
-      <wa-icon class="mk-card-head-ic" library="texra" name="tools"></wa-icon>
-      <span class="mk-card-title">Dashboard → Tools</span>
-      <span class="mk-card-sub">tools you can grant a tool-use agent</span>
-    </div>
+  <MockCard
+    class="tcats"
+    icon="tools"
+    title="Dashboard → Tools"
+    sub="tools you can grant a tool-use agent"
+  >
     <ul class="tcats-list">
       <li v-for="(c, i) in categories" :key="i" class="tcat">
         <header class="tcat-head">
@@ -114,19 +116,15 @@ const categories = [
         </div>
       </li>
     </ul>
-  </div>
+  </MockCard>
 </template>
 
 <style scoped>
-/* Card shell + inline mono header come from the shared `.mk-card*` family
-   (theme/mockup.css). Only the deltas from those defaults stay scoped: a wider
-   vertical margin, and no margin-bottom on the header (the list provides its
-   own top padding). */
+/* Card shell + inline mono header come from <MockCard> (.mk-card* family in
+   theme/mockup.css). The only scoped delta on the card root is a wider vertical
+   margin — it merges onto the .mk-card root via attribute inheritance. */
 .tcats {
   margin: var(--mk-space-16) 0;
-}
-.tcats-head {
-  margin-bottom: 0;
 }
 
 .tcats-list {

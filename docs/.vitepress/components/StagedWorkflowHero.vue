@@ -6,9 +6,10 @@
 // from MemoryCommandsHero. Standalone (no MockupFrame) — the focused pipeline
 // card only.
 //
-// The root carries `.mockup` so the shared `--mk-*` colour + dimensional tokens
-// (defined in theme/mockup.css on `.mockup`) resolve here too, and the card
-// flips cleanly between the docs light / dark themes.
+// The card shell + inline mono header come by COMPOSITION from the shared
+// <MockCard> primitive, so the `--mk-*` colour + dimensional tokens resolve here
+// too and the card flips cleanly between the docs light / dark themes.
+import MockCard from './MockCard.vue';
 
 // Each stage: number · icon · stage name · one-line purpose · owning agent(s)
 // rendered as accent verb-chips. Agent names match those on the page exactly.
@@ -47,16 +48,12 @@ const stages = [
 </script>
 
 <template>
-  <div class="mockup mk-card staged" role="group" aria-label="staged workflow">
-    <div class="mk-card-head sw-head">
-      <wa-icon
-        class="mk-card-head-ic"
-        library="texra"
-        name="diagram-project"
-      ></wa-icon>
-      <span class="mk-card-title">Staged workflow</span>
-      <span class="mk-card-sub">research → finalization</span>
-    </div>
+  <MockCard
+    title="Staged workflow"
+    icon="diagram-project"
+    sub="research → finalization"
+    class="staged"
+  >
     <ol class="sw-list">
       <li v-for="(s, i) in stages" :key="i" class="sw-row">
         <span class="sw-rail" aria-hidden="true">
@@ -75,17 +72,12 @@ const stages = [
         </div>
       </li>
     </ol>
-  </div>
+  </MockCard>
 </template>
 
 <style scoped>
-/* Card shell + inline mono header come from shared .mk-card* (theme/mockup.css).
-   This header sits directly above the stage list, so it drops the shared
-   header's margin-bottom. */
-.sw-head {
-  margin-bottom: 0;
-}
-
+/* Card shell + inline mono header come by composition from <MockCard>, which
+   owns the header spacing. Everything below scopes the stage-list body. */
 .sw-list {
   list-style: none;
   margin: var(--mk-space-4) 0 0;

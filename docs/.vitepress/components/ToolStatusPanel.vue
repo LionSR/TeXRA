@@ -157,16 +157,28 @@ const groups = [
   color: var(--color-text-tertiary);
 }
 
+/* Fixed two EQUAL columns so every card aligns into clean rows and a lone card
+   (e.g. Computation → Wolfram) sits left-aligned in the first column at the same
+   width as the others. minmax(0, 1fr) + min-width:0 on the cards defeats grid
+   blowout — the cards have wide single-row content (name + backend + status
+   pill), so a plain 1fr would size each track to content and stagger them. */
 .tsp-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--mk-space-8);
+  align-items: stretch;
+}
+@media (max-width: 560px) {
+  .tsp-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .tsp-card {
   display: flex;
   align-items: center;
   gap: var(--mk-space-8);
+  min-width: 0;
   background: var(--mk-bg-soft);
   border: 1px solid var(--mk-border-soft);
   border-radius: var(--mk-radius-md);
