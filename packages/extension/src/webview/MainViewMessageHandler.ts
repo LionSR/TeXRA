@@ -7,16 +7,13 @@ import {
 import { MainViewStartupController } from '@controllers/mainView/MainViewStartupController';
 import { AUTH_COMMANDS, getAuthStatus } from '@commands/auth';
 import { toErrorMessage } from '@common/errors';
-import {
-  BaseViewMessageHandler,
-  COMMON_COMMANDS,
-  MAIN_VIEW_COMMANDS,
-} from '@common/webview';
+import { BaseViewMessageHandler } from '@common/webview';
 import { RecordingManager } from '@common/managers/RecordingManager';
 import { agentDirectories } from '@frontend/agents';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
+import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
   dispatchMainViewInbound,
   MainViewInboundHandlerRegistry,

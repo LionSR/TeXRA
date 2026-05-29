@@ -8,8 +8,6 @@ import '@awesome.me/webawesome/dist/components/drawer/drawer.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { html, render, type TemplateResult } from 'lit';
 import { create as mutate } from 'mutative';
-import { COMMON_COMMANDS } from '@common/webview/commands';
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
 import '@progressView/frontend';
 import '@progressView/frontend/components/TexraDiffView';
 import {
@@ -45,11 +43,13 @@ import {
   streams$,
   tabStreams$,
 } from '@progressView/frontend/progressState';
+import { COMMON_COMMANDS } from '@shared/ipc';
 import '@settingsView/frontend';
 import '@webview/frontend';
 import { postMessage } from '@shared/hostBridge';
 import type { StreamTabId } from '@shared/schemas';
 import { Signal } from '@shared/signals';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import {
   SetThemeMessageSchema,
   type SetThemeMessage,

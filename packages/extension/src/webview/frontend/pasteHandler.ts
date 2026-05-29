@@ -2,7 +2,7 @@
 import { nanoid } from 'nanoid';
 
 // Local imports - shared utilities
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { insertTextAtCursor } from '@shared/utils/textarea';
 import { PASTED_PREFIX } from '@shared/files/pastedImageConstants';

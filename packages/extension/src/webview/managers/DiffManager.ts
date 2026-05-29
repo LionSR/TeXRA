@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { fetchRecentCommits } from '@frontend/git/recentCommits';
 import * as logger from '@logger/logUtils';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { mainViewMessages } from '@shared/schemas';
 
 import { BaseWebviewManager } from './BaseWebviewManager';

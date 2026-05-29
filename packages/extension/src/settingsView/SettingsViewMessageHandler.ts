@@ -39,10 +39,7 @@ import {
   generateExportFolderName,
   type ChatExportInput,
 } from '@commands/history/chatExportFormatter';
-import {
-  BaseViewMessageHandler,
-  SETTINGS_VIEW_COMMANDS,
-} from '@common/webview';
+import { BaseViewMessageHandler } from '@common/webview';
 import {
   GlobalStateKey,
   WorkspaceStateKey,
@@ -72,6 +69,7 @@ import {
 } from '@model/apiProviders';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { buildStreamInfo } from '@progressView/streamInfoUtils';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
   dispatchSettingsViewInbound,

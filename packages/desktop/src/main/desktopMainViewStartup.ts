@@ -3,8 +3,8 @@ import {
   type MainViewStartupOptions,
 } from '@controllers/mainView/MainViewStartupController';
 import { computeAgentOptionsData } from '@agent/index/agentRegistry';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 import { getConfig } from '@utils/config/configUtils';
 
 import {

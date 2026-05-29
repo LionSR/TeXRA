@@ -9,7 +9,7 @@
 
 import { create } from 'mutative';
 
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { sumUsageStats } from '@shared/schemas';
 
 import { isToolUseState, isWorkflowState } from '../store';
