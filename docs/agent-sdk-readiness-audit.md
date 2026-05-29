@@ -293,13 +293,30 @@ The 2026-05-28 findings hold. Status of the plan and two corrections:
 - §3.2 (partial) — `@agent/core` now re-exports `AgentConfigSchema` and
   `AgentWorkflowSetting`.
 
+**Applied 2026-05-29 — §2.3 (scoped correction):**
+
+Both the original §2.3 and the first addendum overstated this: the `bridgeState`
+maps are **load-bearing**, not dead weight. The resolve-side functions
+(`resolvePlanApproval`, `resolveProposal`, `triggerRetry`, `cancelRetry`) are
+called from the host/UI layer (extension `ProgressViewMessageHandler`, CLI
+`approvalAdapter`, desktop `desktopAgentExecution`) — async contexts with no
+access to the run's `AsyncLocalStorage`. `bridgeState` is exactly the lookup that
+maps `approvalId`/`streamId` → that run's coordinators across contexts, so it must
+stay. `RunContext.coordinators` therefore cannot be made non-optional or the bridge
+deleted.
+
+What _was_ vestigial: the `legacyCoordinators` singleton **fallback** on the resolve
+side. Every `waitForX` registers the per-run coordinators in `bridgeState`, and the
+module singletons were referenced nowhere else, so the fallback never held pending
+state — it always no-op'd. It also contradicted the suite's documented intent
+(`runCoordinators.vitest.ts`: "does not fall back to default coordinators when a run
+has none"). Removed the `legacyCoordinators` object and the three now-dead exported
+singletons (`planApprovalCoordinator`/`proposalCoordinator`/`retryCoordinator`);
+resolve-side misses now no-op via optional chaining. Verified: `test:kernel`
+runtime suite (13 tests) + root/test-kernel typecheck + eslint all green.
+
 **Still pending (verified present):**
 
-- §2.3 — `legacyCoordinators` + the 8-`Map` `bridgeState` global persist in
-  `runCoordinators.ts:22,36-45`; the up-to-4-tier fallback chains are live
-  (`clearPlanApprovalForStream` :104-119, `resolveProposal` :156-169,
-  `triggerRetry` :203-209). Highest-value remaining cleanup: make
-  `RunContext.coordinators` non-optional and delete the bridge.
 - §2.6 — `modelHandlerValidation.ts` still sits in the dispatch dir.
 - §3.1 — no `@agent/runtime` facade barrel yet (`src/agent/runtime/index.ts` absent).
 - §4 — token usage is still double-emitted in `UsageMonitor.ts:173` (`emit('updateStreamUsage')`)

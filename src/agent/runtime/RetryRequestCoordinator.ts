@@ -9,7 +9,6 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
-import { getDefaultAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ProviderErrorPartial } from '@shared/schemas';
 import {
   BasePromiseCoordinator,
@@ -113,7 +112,3 @@ export class RetryRequestCoordinatorImpl extends BasePromiseCoordinator<
     super.clearAll();
   }
 }
-
-export const retryCoordinator = new RetryRequestCoordinatorImpl(
-  getDefaultAgentRuntimeHost,
-);
