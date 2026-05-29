@@ -5,7 +5,7 @@ import { Box, Text, useWindowSize } from 'ink';
 
 // Local imports - shared schemas and utilities
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
-import { isPlainObject } from '@shared/utils/string';
+import { isObject } from '@utils/core';
 import {
   collapseWhitespace,
   truncateWithEllipsis,
@@ -106,7 +106,7 @@ function displayToolName(toolName: string): string {
 function previewInput(input: unknown): string {
   if (typeof input === 'string') return input;
   if (input === undefined || input === null) return '';
-  if (isPlainObject(input)) {
+  if (isObject(input)) {
     for (const key of PRIMARY_INPUT_KEYS) {
       const value = input[key];
       if (typeof value === 'string' && value) return value;
@@ -175,11 +175,11 @@ function visibleOutputLines(toolUse: NormalizedToolUse): readonly string[] {
 function extractExitCode(toolUse: NormalizedToolUse): number | undefined {
   const candidates = [toolUse.parsed, toolUse.input];
   for (const candidate of candidates) {
-    if (!isPlainObject(candidate)) continue;
+    if (!isObject(candidate)) continue;
     const raw =
       candidate.exitCode ??
       candidate.exit_code ??
-      (isPlainObject(candidate.output) ? candidate.output.exitCode : undefined);
+      (isObject(candidate.output) ? candidate.output.exitCode : undefined);
     if (typeof raw === 'number' && Number.isInteger(raw)) return raw;
     if (typeof raw === 'string' && /^\d+$/.test(raw)) return Number(raw);
   }

@@ -9,7 +9,7 @@
 import yaml from 'yaml';
 
 import { ToolUseLogSchema, type NormalizedToolUse } from '@shared/schemas';
-import { isPlainObject } from '@shared/utils/string';
+import { isObject } from '@utils/core';
 
 function trimmedOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -22,7 +22,7 @@ function firstTrimmed(primary: unknown, fallback: unknown): string {
 }
 
 function extractOutputContent(candidate: unknown): unknown {
-  if (!isPlainObject(candidate)) return candidate;
+  if (!isObject(candidate)) return candidate;
   const {
     output,
     summary: _summary,
@@ -41,7 +41,7 @@ function formatOutputText(content: unknown): string {
   // renders the literal string "null", which would surface a spurious
   // output section for tools that return `output: null`.
   if (content === undefined || content === null) return '';
-  if (isPlainObject(content) && Object.keys(content).length === 0) return '';
+  if (isObject(content) && Object.keys(content).length === 0) return '';
   try {
     const yamlString = yaml.stringify(content);
     return typeof yamlString === 'string' ? yamlString.trimEnd() : '';
@@ -55,7 +55,7 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
   if (!parseResult.success) return null;
 
   const validated = parseResult.data;
-  const nested = isPlainObject(validated.output) ? validated.output : {};
+  const nested = isObject(validated.output) ? validated.output : {};
 
   const summaryText = firstTrimmed(validated.summary, nested.summary);
   const errorText = firstTrimmed(validated.error, nested.error);
@@ -71,7 +71,7 @@ export function normalizeToolUseData(data: unknown): NormalizedToolUse | null {
   const isUserFeedback = userInstructionText.length > 0;
 
   // Preserve unknown fields stripped by the schema for fallback rendering.
-  const parsed: Record<string, unknown> = isPlainObject(data)
+  const parsed: Record<string, unknown> = isObject(data)
     ? { ...data }
     : { ...validated };
 
