@@ -18,6 +18,8 @@ import { CopyButtonController } from '@shared/controllers';
 import { compactIconActionButtonStyles } from '@shared/styles';
 import { designTokens } from '@shared/styles/litStyles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
+// Shared, host-neutral entity decoding for subagent/structured-delivery bodies.
+import { decodeXmlEntities } from '@shared/subagentFollowup';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - formatter helpers
@@ -55,17 +57,6 @@ const STRUCTURED_DELIVERY_PATTERN = new RegExp(
 
 function getStructuredDeliveryTag(text: string): string | null {
   return STRUCTURED_DELIVERY_PATTERN.exec(text)?.[1] ?? null;
-}
-
-function decodeXmlEntitiesForDisplay(text: string): string {
-  if (!text.includes('&')) return text;
-
-  return text
-    .replaceAll('&quot;', '"')
-    .replaceAll('&apos;', "'")
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&amp;', '&');
 }
 
 @customElement('user-message')
@@ -204,7 +195,7 @@ export class UserMessage extends LitElement {
     const isStructuredDelivery = tag != null;
     const hasRawMessage = tag != null && XML_ESCAPED_TAGS.has(tag);
     const displayText = hasRawMessage
-      ? decodeXmlEntitiesForDisplay(this.text)
+      ? decodeXmlEntities(this.text)
       : this.text;
 
     this.displayCache = {
