@@ -15,10 +15,8 @@ import {
   currentToolRoot,
 } from '@tools/pathResolution';
 import {
-  buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
-  getApprovedContent,
-  requestToolEditApproval,
+  requestApprovedEditContent,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
@@ -60,22 +58,18 @@ export class WriteFileTool extends defineTool({
       ? replacementEngine.applyAll(input.content)
       : input.content;
 
-    const approval = await requestToolEditApproval({
+    const outcome = await requestApprovedEditContent({
       path: filePath,
+      displayPath,
       originalContent,
       proposedContent,
       sourceTool: 'write_file',
     });
-
-    if (!approval.accepted) {
-      return buildApprovalRejectedResult(
-        displayPath,
-        'write_file',
-        approval.userMessage,
-      );
+    if ('rejected' in outcome) {
+      return outcome.rejected;
     }
+    const { approval, finalContent } = outcome;
 
-    const finalContent = getApprovedContent(approval, proposedContent);
     const { appliedContent } = await writeApprovedContent(
       filePath,
       originalContent,
