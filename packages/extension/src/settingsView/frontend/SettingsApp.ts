@@ -6,7 +6,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared webview
-import { SETTINGS_VIEW_COMMANDS } from '@common/webview/commands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { postMessage } from '@shared/hostBridge';
 

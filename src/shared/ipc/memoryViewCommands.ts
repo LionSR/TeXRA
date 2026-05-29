@@ -1,9 +1,5 @@
-/**
- * Command constants for the memory view.
- */
 import { COMMON_COMMANDS } from './commonCommands';
 
-// Memory view specific commands
 export const MEMORY_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
   GET_MEMORY_DATA: 'getMemoryData',

@@ -3,8 +3,8 @@ import { strict as assert } from 'assert';
 
 // Local imports - common
 import { MainViewInteractionController } from '@controllers/mainView/MainViewInteractionController';
-import { COMMON_COMMANDS } from '@common/webview/commonCommands';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
+import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 
 // Local imports - controllers
 

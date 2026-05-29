@@ -7,7 +7,7 @@ import * as logger from '@logger/logUtils';
 import type { DispatcherFn, HandlerRegistry } from '@shared/utils/dispatcher';
 
 // Local file imports
-import { COMMON_COMMANDS } from './commands';
+import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 
 type CommandMessage = { command: string };
 

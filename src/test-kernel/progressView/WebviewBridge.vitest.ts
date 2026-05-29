@@ -3,10 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - common webview
 import { StreamLogStore, type StreamLogAppendInput } from '@transcript';
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { WebviewBridge } from '@progressView/managers/WebviewBridge';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - progress view
-import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 
 // Local imports - shared schemas
 import {

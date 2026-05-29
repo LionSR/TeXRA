@@ -2,7 +2,8 @@
 import * as vscode from 'vscode';
 
 // Local imports - common webview
-import { BaseWebviewProvider, SETTINGS_VIEW_COMMANDS } from '@common/webview';
+import { BaseWebviewProvider } from '@common/webview';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsTab } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - settings view components

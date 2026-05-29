@@ -2,9 +2,9 @@ import * as vscode from 'vscode';
 
 import { createKey, getAgent, type AgentSource } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { delay } from '@utils/core';
 
 const CHANNEL = 'RemoteAgentUtils';

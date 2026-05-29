@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
 
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 import { buildStreamInfos } from '@progressView/streamInfoUtils';
 import {
   type ActiveStreamId,
   ProgressViewState,
   type StreamExecutionState,
 } from '@progressView/state/ProgressViewState';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { STREAM_STATUS } from '@shared/schemas';
 import type {
   AgentCategoryFilter,
