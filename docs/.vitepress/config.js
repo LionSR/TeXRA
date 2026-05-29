@@ -196,7 +196,7 @@ const baseConfig = {
         md.renderer.rules.code_inline ||
         ((tokens, idx, options, _env, self) =>
           `<code${self.renderAttrs(tokens[idx])}>${md.utils.escapeHtml(
-            tokens[idx].content
+            tokens[idx].content,
           )}</code>`);
       md.renderer.rules.code_inline = (tokens, idx, options, env, self) => {
         const token = tokens[idx];
