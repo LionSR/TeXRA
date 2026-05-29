@@ -12,17 +12,15 @@ import { generateExecutionId } from '@utils/core/executionId';
 
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliUsageError } from '../runtime/cliContext';
-import {
-  CLI_BUILTIN_DEFAULT_MODEL,
-  resolveConfiguredModel,
-} from '../runtime/cliConfig';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeErrorStderr } from '../runtime/logSinks';
-import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { assertExplicitModelKnown } from './_helpers/modelArg';
+import {
+  buildHeadlessRunContext,
+  resolveCliRunModel,
+} from './_helpers/modelArg';
 import { emitCliResult } from './_helpers/output';
 import {
   GLOBAL_ARGS,
@@ -59,19 +57,8 @@ async function runWorkflowAgent(
   context: CliContext,
   init: WorkflowRunInit,
 ): Promise<number> {
-  const explicitModel = assertExplicitModelKnown(init.model);
-  const model =
-    explicitModel ||
-    context.envModel ||
-    resolveConfiguredModel(context.cliConfig, 'run') ||
-    CLI_BUILTIN_DEFAULT_MODEL;
-  const renderRunProgress = shouldRenderRunProgress(context);
-  const runContext: CliContext = {
-    ...context,
-    helperModel: model,
-    quietLogs: true,
-    renderRunProgress,
-  };
+  const model = resolveCliRunModel(context, init.model, 'run');
+  const runContext = buildHeadlessRunContext(context, model);
   if (init.output && init.outputDir) {
     throw new CliUsageError('Use either --output or --output-dir, not both.');
   }
