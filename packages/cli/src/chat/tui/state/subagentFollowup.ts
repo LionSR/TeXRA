@@ -9,7 +9,4 @@
 // the CLI transcript and the extension ProgressView bubble share one source of
 // truth. Re-exported here to keep the TUI's import path stable.
 
-export {
-  decodeXmlEntities,
-  summarizeSubagentFollowup,
-} from '@shared/subagentFollowup';
+export { summarizeSubagentFollowup } from '@shared/subagentFollowup';
