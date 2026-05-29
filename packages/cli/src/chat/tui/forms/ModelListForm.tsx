@@ -2,9 +2,8 @@
 // Before the first message it can choose the root model; after that it is
 // read-only because an active conversation owns a concrete model handler.
 
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
-import { useEffect, useState } from 'react';
 
 import {
   getCliModelAccessList,
@@ -13,6 +12,12 @@ import {
 import { formatCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
 import { Select } from '../ui/Select';
 import { KeyHints } from '../ui/KeyHints';
+import { FormFrame } from './_shared/FormFrame';
+import {
+  computeSelectWindowSize,
+  type SelectWindowSize,
+} from './_shared/selectWindow';
+import { useAsyncListForm } from './_shared/useAsyncListForm';
 
 export interface ModelListFormProps {
   readonly currentModel: string;
@@ -21,34 +26,6 @@ export interface ModelListFormProps {
   readonly selectable?: boolean;
   readonly onSelect?: (value: string) => void;
   readonly onClose: () => void;
-}
-
-interface ModelFrameProps {
-  readonly color: string;
-  readonly title: string;
-  readonly children: React.ReactNode;
-}
-
-function ModelFrame(props: ModelFrameProps): React.JSX.Element {
-  return (
-    <Box
-      borderStyle="round"
-      borderColor={props.color}
-      flexDirection="column"
-      paddingX={1}
-    >
-      <Text bold color={props.color}>
-        {props.title}
-      </Text>
-      {props.children}
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[{ key: 'Esc', action: 'close' }]}
-          confirmCancel={false}
-        />
-      </Box>
-    </Box>
-  );
 }
 
 export function formatModelStatusForCliMode(
@@ -75,82 +52,36 @@ export function formatModelStatusForCliMode(
   }
 }
 
-export function modelSelectWindow({
-  availableRows,
-  itemCount,
-}: {
+export function modelSelectWindow(args: {
   readonly availableRows: number | undefined;
   readonly itemCount: number;
-}): {
-  readonly maxVisibleItems: number | undefined;
-  readonly showOverflow: boolean;
-} {
-  if (availableRows == null) {
-    return { maxVisibleItems: undefined, showOverflow: false };
-  }
-
+}): SelectWindowSize {
   // Border, title, description, and key hints are the irreducible chrome.
-  const selectRows = Math.max(1, availableRows - 5);
-  if (itemCount <= selectRows) {
-    return { maxVisibleItems: itemCount, showOverflow: false };
-  }
-
-  // Overflow markers cost rows too. On very short terminals, keep the active
-  // choice visible instead of spending the whole budget on markers.
-  if (selectRows < 3) {
-    return { maxVisibleItems: selectRows, showOverflow: false };
-  }
-
-  return {
-    maxVisibleItems: Math.max(1, selectRows - 2),
-    showOverflow: true,
-  };
+  return computeSelectWindowSize({ ...args, chromeRows: 5 });
 }
 
 export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
-  const [models, setModels] = useState<readonly CliModelAccess[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | undefined>(undefined);
-
-  useInput((_input, key) => {
-    if ((loading || error) && key.escape) {
-      props.onClose();
-    }
+  const { data, loading, error } = useAsyncListForm<readonly CliModelAccess[]>({
+    load: getCliModelAccessList,
+    onClose: props.onClose,
   });
-
-  useEffect(() => {
-    let cancelled = false;
-    void getCliModelAccessList()
-      .then((list) => {
-        if (cancelled) return;
-        setModels(list);
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(String(err));
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   if (loading) {
     return (
-      <ModelFrame color="cyan" title="/model">
+      <FormFrame color="cyan" title="/model">
         <Spinner label="Loading model registry..." />
-      </ModelFrame>
+      </FormFrame>
     );
   }
   if (error) {
     return (
-      <ModelFrame color="red" title="/model - error">
+      <FormFrame color="red" title="/model - error">
         <Text>{error}</Text>
-      </ModelFrame>
+      </FormFrame>
     );
   }
 
+  const models = data ?? [];
   const items = models.map((m) => ({
     value: m.model.value,
     label: m.model.label || m.model.value,

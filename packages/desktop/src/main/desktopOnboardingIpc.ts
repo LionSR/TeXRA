@@ -5,8 +5,7 @@ import {
   DESKTOP_ONBOARDING_DISMISSED_STATE_KEY,
 } from '../desktopOnboardingMessages.js';
 import {
-  createDesktopErrorReporter,
-  type DesktopCommandMessage,
+  createCommandHandler,
   type DesktopMessageHandler,
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
@@ -22,7 +21,6 @@ export function createDesktopOnboardingIpc(
   options: DesktopOnboardingIpcOptions = {},
 ): DesktopMessageHandler {
   const state = options.state ?? platform().globalState;
-  const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
 
   function postCurrentState(): void {
     const dismissed = state.get<boolean>(
@@ -37,18 +35,11 @@ export function createDesktopOnboardingIpc(
     renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(false));
   }
 
-  return {
-    handleMessage(message: DesktopCommandMessage): boolean {
-      switch (message.command) {
-        case DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE:
-          postCurrentState();
-          return true;
-        case DESKTOP_ONBOARDING_COMMANDS.DISMISS:
-          void dismiss().catch(reportAsyncError);
-          return true;
-        default:
-          return false;
-      }
+  return createCommandHandler(
+    {
+      [DESKTOP_ONBOARDING_COMMANDS.REQUEST_STATE]: () => postCurrentState(),
+      [DESKTOP_ONBOARDING_COMMANDS.DISMISS]: () => dismiss(),
     },
-  };
+    { onAsyncError: options.onAsyncError },
+  );
 }

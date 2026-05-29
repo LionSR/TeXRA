@@ -7,8 +7,7 @@ import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import { getCliModelAccessList } from '../runtime/modelAccess';
 
-import { contextFromArgs } from './_helpers/context';
-import { setExitCode } from './_helpers/exitCode';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
   formatCliModelListError,
   suppressCliFetchStackLogs,
@@ -114,18 +113,15 @@ async function showModel(context: CliContext, id: string): Promise<number> {
   return CliExitCode.Success;
 }
 
-const modelsListCommand = defineCommand({
+const modelsListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List available models' },
   args: {
     ...GLOBAL_ARGS,
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(await listModels(context));
-  },
+  run: (context) => listModels(context),
 });
 
-const modelsShowCommand = defineCommand({
+const modelsShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show one model' },
   args: {
     ...GLOBAL_ARGS,
@@ -135,10 +131,7 @@ const modelsShowCommand = defineCommand({
       description: 'Model id from `texra models list` (case-insensitive)',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(await showModel(context, ctx.args.id));
-  },
+  run: (context, ctx) => showModel(context, ctx.args.id),
 });
 
 export const modelsCommand = defineCommand({

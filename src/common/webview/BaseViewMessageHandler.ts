@@ -4,9 +4,12 @@ import * as vscode from 'vscode';
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import type { DispatcherFn, HandlerRegistry } from '@shared/utils/dispatcher';
 
 // Local file imports
 import { COMMON_COMMANDS } from './commands';
+
+type CommandMessage = { command: string };
 
 /** Type guard to check if a message has a command field */
 function isCommandMessage(
@@ -106,6 +109,51 @@ export abstract class BaseViewMessageHandler<
       this._activeView = webviewView;
     }
     await handler();
+  }
+
+  /** Post a message to the tracked active view, if one is available. */
+  protected postToActiveView(message: unknown): void {
+    this._activeView?.webview.postMessage(message);
+  }
+
+  /** Run a callback with the active view's webview, if available. */
+  protected async withActiveWebview(
+    fn: (webview: vscode.Webview) => Promise<void> | void,
+  ): Promise<void> {
+    const view = this.getActiveView();
+    if (view) await fn(view.webview);
+  }
+
+  /**
+   * Schema-driven dispatch shared by views that route through a typed
+   * {@link DispatcherFn}. Tracks the active view, runs the dispatcher, logs
+   * validation failures at debug, and warns on commands with no handler.
+   */
+  protected async dispatchInbound<TMessage extends CommandMessage>(
+    message: unknown,
+    webviewView: T,
+    dispatcher: DispatcherFn<TMessage>,
+    handlers: HandlerRegistry<TMessage>,
+  ): Promise<void> {
+    await this.withActiveView(webviewView, () => {
+      const handled = dispatcher(message, handlers, (error) => {
+        this.logger.debug(this.channel, 'Message validation failed', {
+          data: error,
+        });
+      });
+
+      if (
+        !handled &&
+        message &&
+        typeof message === 'object' &&
+        'command' in message
+      ) {
+        this.logger.warn(
+          this.channel,
+          `Unhandled command: ${(message as { command: string }).command}`,
+        );
+      }
+    });
   }
 
   /**

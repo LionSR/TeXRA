@@ -15,15 +15,10 @@
  *    `query()`. Results are cached for the session.
  */
 
-import { createRequire } from 'module';
 import * as path from 'path';
 
 import { isModuleNotFoundError } from '@common/errors';
-import { executeCommandSync } from '@utils/system/execUtils';
-import {
-  getPackagedElectronResourcesPath,
-  pathExists,
-} from './support/externalBinaryUtils';
+import { pathExists, resolveBinary } from './support/externalBinaryUtils';
 
 type QueryFn = (params: {
   prompt: string | AsyncIterable<unknown>;
@@ -123,129 +118,34 @@ let cachedBinaryPath: string | undefined;
 export async function findClaudeBinaryPath(): Promise<string | undefined> {
   if (cachedBinaryPath !== undefined) return cachedBinaryPath;
 
-  const result = await findClaudeBinaryPathUncached();
-  if (result) cachedBinaryPath = result;
-  return result;
-}
-
-async function findClaudeBinaryPathUncached(): Promise<string | undefined> {
   const info = PLATFORM_INFO[`${process.platform}-${process.arch}`];
   if (!info) return undefined;
 
-  // Strategy 1: packaged Electron app.asar.unpacked resources
-  // Highest priority when present — packaged apps cannot execute binaries
-  // from inside app.asar.
-  {
-    const resourcesPath = getPackagedElectronResourcesPath();
-    const result =
-      resourcesPath == null
-        ? undefined
-        : await findClaudeBinaryInElectronResources(resourcesPath, info);
-    if (result) return result;
-  }
-
-  // Strategy 2: resolve from local project's node_modules
-  // Preferred in VS Code extension development — matches package.json.
-  {
-    const result = await resolveClaudeBinary(path.join(__dirname, '..'), info);
-    if (result) return result;
-  }
-
-  // Strategy 3: resolve from global npm prefix
-  // Preferred over PATH because the npm-installed binary matches the SDK.
-  {
-    const prefixResult = executeCommandSync(['npm', 'prefix', '-g'], {
-      timeout: 5000,
-    });
-    const prefix = prefixResult.success ? prefixResult.stdout : undefined;
-
-    if (prefix) {
-      const roots = [
-        path.join(
-          prefix,
-          'lib',
-          'node_modules',
-          '@anthropic-ai',
-          'claude-agent-sdk',
-        ),
-        path.join(prefix, 'node_modules', '@anthropic-ai', 'claude-agent-sdk'),
-      ];
-
-      for (const sdkRoot of roots) {
-        const result = await resolveClaudeBinary(sdkRoot, info);
-        if (result) return result;
-      }
-    }
-  }
-
-  // Strategy 4: PATH lookup (native installer, Homebrew, manual install)
-  // The Claude Code CLI's recommended installer drops a `claude` binary into
-  // ~/.local/bin (or similar) that the SDK is happy to invoke directly.
-  {
-    const lookupResult = executeCommandSync(
-      [process.platform === 'win32' ? 'where' : 'which', 'claude'],
-      {
-        timeout: 5000,
-      },
-    );
-    const pathHits = lookupResult.success
-      ? (lookupResult.stdout ?? '').split(/\r?\n/)
-      : [];
-
-    for (const hit of pathHits) {
-      const p = hit.trim();
-      if (!p) continue;
-      // The SDK spawns the binary directly, so skip shell-only npm shims.
-      if (process.platform === 'win32' && /\.(cmd|ps1)$/i.test(p)) continue;
-      if (await pathExists(p)) return p;
-    }
-  }
-
-  return undefined;
-}
-
-/**
- * Locate the Claude binary inside an Electron packaged app's unpacked
- * resources directory.
- */
-async function findClaudeBinaryInElectronResources(
-  resourcesPath: string,
-  info: PlatformInfo,
-): Promise<string | undefined> {
-  for (const pkg of info.pkgs) {
-    const platformPkgDir = path.join(
-      resourcesPath,
-      'app.asar.unpacked',
-      'node_modules',
-      ...pkg.split('/'),
-    );
+  // The platform binary sits directly in the platform-package directory.
+  const binaryInPlatformPackage = async (
+    platformPkgDir: string,
+  ): Promise<string | undefined> => {
     const binary = path.join(platformPkgDir, CLAUDE_BINARY_NAME);
-    if (await pathExists(binary)) return binary;
-  }
-  return undefined;
-}
+    return (await pathExists(binary)) ? binary : undefined;
+  };
 
-/**
- * Resolve the native Claude binary from a directory that contains (or nests)
- * the platform-specific package. Returns the binary path if found, or
- * `undefined`.
- */
-async function resolveClaudeBinary(
-  baseDir: string,
-  platformInfo: PlatformInfo,
-): Promise<string | undefined> {
-  const req = createRequire(path.join(baseDir, 'package.json'));
-  for (const pkg of platformInfo.pkgs) {
-    try {
-      const platformPkgJson = req.resolve(`${pkg}/package.json`);
-      const binary = path.join(
-        path.dirname(platformPkgJson),
-        CLAUDE_BINARY_NAME,
-      );
-      if (await pathExists(binary)) return binary;
-    } catch {
-      // Platform package not resolvable
-    }
-  }
-  return undefined;
+  const result = await resolveBinary({
+    platformPackages: info.pkgs,
+    binaryInPlatformPackage,
+    // The npm global prefix hosts the `@anthropic-ai/claude-agent-sdk`
+    // package; the platform packages resolve relative to those roots.
+    globalPrefixRoots: (prefix) => [
+      path.join(
+        prefix,
+        'lib',
+        'node_modules',
+        '@anthropic-ai',
+        'claude-agent-sdk',
+      ),
+      path.join(prefix, 'node_modules', '@anthropic-ai', 'claude-agent-sdk'),
+    ],
+    pathCommand: 'claude',
+  });
+  if (result) cachedBinaryPath = result;
+  return result;
 }

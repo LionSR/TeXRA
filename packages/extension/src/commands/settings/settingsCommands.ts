@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
@@ -52,9 +53,10 @@ export function registerSettingsViewCommands(
 ): void {
   initializeSettingsViewProvider(context);
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand(settingsViewCommands.showGitSettings, () =>
-      settingsViewProvider?.showSettingsView(SETTINGS_TAB.GIT),
-    ),
-  );
+  registerCommands(context, [
+    {
+      id: settingsViewCommands.showGitSettings,
+      handler: () => settingsViewProvider?.showSettingsView(SETTINGS_TAB.GIT),
+    },
+  ]);
 }

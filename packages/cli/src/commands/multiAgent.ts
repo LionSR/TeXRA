@@ -34,8 +34,7 @@ import {
 import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
 import { getCliAuthProvider } from '../runtime/supabaseAuth';
 
-import { contextFromArgs } from './_helpers/context';
-import { setExitCode } from './_helpers/exitCode';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { assertExplicitModelKnown } from './_helpers/modelArg';
 import { emitCliResult } from './_helpers/output';
 import {
@@ -267,18 +266,15 @@ async function runMultiAgentPreset(
   return terminalStatusExitCode(terminalStatus, runContext);
 }
 
-const multiAgentListCommand = defineCommand({
+const multiAgentListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List multi-agent team presets' },
   args: {
     ...GLOBAL_ARGS,
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(await runMultiAgentList(context));
-  },
+  run: (context) => runMultiAgentList(context),
 });
 
-const multiAgentShowCommand = defineCommand({
+const multiAgentShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show one multi-agent team preset' },
   args: {
     ...GLOBAL_ARGS,
@@ -288,13 +284,10 @@ const multiAgentShowCommand = defineCommand({
       description: 'Preset id or name from `texra multi-agent list`',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(await runMultiAgentShow(context, ctx.args.preset));
-  },
+  run: (context, ctx) => runMultiAgentShow(context, ctx.args.preset),
 });
 
-const multiAgentRunCommand = defineCommand({
+const multiAgentRunCommand = defineCliCommand({
   meta: { name: 'run', description: 'Run a multi-agent team preset' },
   args: {
     ...GLOBAL_ARGS,
@@ -330,19 +323,15 @@ const multiAgentRunCommand = defineCommand({
       description: 'Additional instruction for the team orchestrator',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(
-      await runMultiAgentPreset(context, {
-        preset: ctx.args.preset,
-        inputFiles: collectStringFlagValues(ctx.rawArgs, 'input', 'i'),
-        contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
-        agent: optString(ctx.args.agent),
-        model: optString(ctx.args.model),
-        instruction: optString(ctx.args.instruction) ?? '',
-      }),
-    );
-  },
+  run: (context, ctx) =>
+    runMultiAgentPreset(context, {
+      preset: ctx.args.preset,
+      inputFiles: collectStringFlagValues(ctx.rawArgs, 'input', 'i'),
+      contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
+      agent: optString(ctx.args.agent),
+      model: optString(ctx.args.model),
+      instruction: optString(ctx.args.instruction) ?? '',
+    }),
 });
 
 export const multiAgentCommand = defineCommand({

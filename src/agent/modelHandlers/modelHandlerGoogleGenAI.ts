@@ -62,7 +62,7 @@ import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
-import { computeCachePercentage } from './utils/usageNormalization';
+import { normalizeUsage } from './support/UsageNormalizer';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 import { tagGoogleSdkError, withSdkErrorTag } from './support/sdkErrorAdapters';
 import { TOOL_USE_SAFETY_BUFFER } from './contextManagementConstants';
@@ -990,32 +990,25 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     rawUsage: GenerateContentResponseUsageMetadata | null,
     responseTimeMs: number,
   ): NormalizedUsage {
-    if (!rawUsage) {
-      return {
-        inputTokens: 0,
-        outputTokens: 0,
-        cost: 0,
-        responseTimeMs,
+    return normalizeUsage(
+      {
         provider: 'google',
-      };
-    }
-
-    const { inputTokens, outputTokens, reasoningTokens } =
-      this.computeTokenCounts(rawUsage);
-    const cachedTokens = rawUsage.cachedContentTokenCount ?? 0;
-
-    return {
-      inputTokens,
-      outputTokens,
-      cost: this.computePrice(rawUsage),
+        computePrice: (usage) => this.computePrice(usage),
+        extract: (usage) => {
+          const { inputTokens, outputTokens, reasoningTokens } =
+            this.computeTokenCounts(usage);
+          return {
+            inputTokens,
+            outputTokens,
+            cachedTokens: usage.cachedContentTokenCount ?? 0,
+            reasoningTokens,
+            toolUsePromptTokens: usage.toolUsePromptTokenCount ?? 0,
+          };
+        },
+      },
+      rawUsage,
       responseTimeMs,
-      provider: 'google',
-      cachedInputTokens: cachedTokens || undefined,
-      percentageCached: computeCachePercentage(cachedTokens, inputTokens),
-      reasoningTokens: reasoningTokens || undefined,
-      toolUsePromptTokens: rawUsage.toolUsePromptTokenCount || undefined,
-      _native: rawUsage,
-    };
+    );
   }
 
   addContinueMessageWithPrefill(

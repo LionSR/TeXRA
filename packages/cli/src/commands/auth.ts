@@ -2,12 +2,15 @@ import { defineCommand } from 'citty';
 
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { isOAuthProvider } from '@auth/sharedConfig';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { isNonEmptyString } from '@utils/core/stringCore';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
+import {
+  writeErrorStderr,
+  writeTextStderr,
+  writeTextStdout,
+} from '../runtime/logSinks';
 import {
   fetchRelayUsageSummary,
   parseUtcMonth,
@@ -20,6 +23,7 @@ import {
 } from '../runtime/supabaseAuth';
 
 import { contextFromArgs } from './_helpers/context';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
@@ -74,7 +78,7 @@ async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
       },
     });
   } catch (error) {
-    writeTextStderr(toErrorMessage(error));
+    writeErrorStderr(error);
     return CliExitCode.ModelOrNetworkError;
   }
 
@@ -92,7 +96,7 @@ async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
   return CliExitCode.Success;
 }
 
-export const loginCommand = defineCommand({
+export const loginCommand = defineCliCommand({
   meta: { name: 'login', description: 'Sign in to TeXRA for included access' },
   args: {
     ...GLOBAL_ARGS,
@@ -121,19 +125,16 @@ export const loginCommand = defineCommand({
         'Suggest a specific provider account, such as a GitHub username or Google email',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
+  run: (context, ctx) => {
     const positional = optString(ctx.args.providerArg);
     const flag = optString(ctx.args.provider);
     const provider = resolveLoginProvider(positional, flag);
-    setExitCode(
-      await runLogin(context, {
-        provider,
-        noBrowser: ctx.args['no-browser'] === true,
-        selectAccount: ctx.args['select-account'] === true,
-        loginHint: optString(ctx.args['login-hint']),
-      }),
-    );
+    return runLogin(context, {
+      provider,
+      noBrowser: ctx.args['no-browser'] === true,
+      selectAccount: ctx.args['select-account'] === true,
+      loginHint: optString(ctx.args['login-hint']),
+    });
   },
 });
 
@@ -148,7 +149,7 @@ export const logoutCommand = defineCommand({
     try {
       await signOutCliSupabase();
     } catch (error) {
-      writeTextStderr(toErrorMessage(error));
+      writeErrorStderr(error);
       setExitCode(CliExitCode.ModelOrNetworkError);
       return;
     }
@@ -174,7 +175,7 @@ const authStatusCommand = defineCommand({
       await initCliPlatform({ ...context, quietLogs: true });
       profile = await getCliAuthProfile();
     } catch (error) {
-      writeTextStderr(toErrorMessage(error));
+      writeErrorStderr(error);
       setExitCode(CliExitCode.ModelOrNetworkError);
       return;
     }
@@ -228,7 +229,7 @@ const usageCommand = defineCommand({
       try {
         parseUtcMonth(month);
       } catch (error) {
-        writeTextStderr(toErrorMessage(error));
+        writeErrorStderr(error);
         setExitCode(CliExitCode.Usage);
         return;
       }
@@ -247,7 +248,7 @@ const usageCommand = defineCommand({
         month,
       });
     } catch (error) {
-      writeTextStderr(toErrorMessage(error));
+      writeErrorStderr(error);
       setExitCode(CliExitCode.ModelOrNetworkError);
       return;
     }

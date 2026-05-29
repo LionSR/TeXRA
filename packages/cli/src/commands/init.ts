@@ -1,5 +1,3 @@
-import { defineCommand } from 'citty';
-
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 
@@ -18,8 +16,7 @@ import {
   type InitAnswers,
 } from '../runtime/initConfig';
 
-import { contextFromArgs } from './_helpers/context';
-import { setExitCode } from './_helpers/exitCode';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import type { CliContext } from '../runtime/cliContext';
 
 async function gatherOptions(): Promise<{
@@ -148,7 +145,7 @@ async function runInit(
   return CliExitCode.Success;
 }
 
-export const initCommand = defineCommand({
+export const initCommand = defineCliCommand({
   meta: {
     name: 'init',
     description: 'Bootstrap a .texra/config.json with sensible defaults',
@@ -172,17 +169,13 @@ export const initCommand = defineCommand({
       description: 'Add .texra/ to .gitignore (non-interactive default: false)',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(
-      await runInit(context, {
-        yes: ctx.args.yes === true,
-        force: ctx.args.force === true,
-        gitignore:
-          typeof ctx.args.gitignore === 'boolean'
-            ? ctx.args.gitignore
-            : undefined,
-      }),
-    );
-  },
+  run: (context, ctx) =>
+    runInit(context, {
+      yes: ctx.args.yes === true,
+      force: ctx.args.force === true,
+      gitignore:
+        typeof ctx.args.gitignore === 'boolean'
+          ? ctx.args.gitignore
+          : undefined,
+    }),
 });
