@@ -1044,6 +1044,52 @@ describe('ModelHandlerAnthropic message guards', () => {
     );
   });
 
+  it('uses adaptive thinking with max effort for Opus 4.8 max reasoning', async () => {
+    const handler = createAnthropicHandler({
+      supportsReasoning: true,
+      supportsReasoningEffort: true,
+      reasoningEffort: ReasoningEffort.MAX,
+    });
+    handler.config.fullName = 'claude-opus-4-8';
+
+    stubHandlerForTest(handler);
+
+    const messages: MessageParam[] = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'hello', citations: null }],
+      },
+    ];
+    const messageOptions: any[] = [];
+    const client = {
+      beta: {
+        messages: {
+          create: async (opts: any) => {
+            messageOptions.push(opts);
+            return {
+              id: 'msg',
+              type: 'message',
+              role: 'assistant',
+              model: 'claude-opus-4-8',
+              content: [{ type: 'text', text: 'ok' }],
+              stop_reason: 'end_turn',
+              usage: { input_tokens: 1, output_tokens: 1 },
+            } as any;
+          },
+        },
+      },
+    } as any;
+
+    await handler.createResponse({ client, messages, temperature: 0 });
+
+    const options = messageOptions[0] ?? {};
+    assert.equal(
+      options.output_config?.effort,
+      'max',
+      "max reasoning effort should map to the top 'max' tier on Opus 4.8",
+    );
+  });
+
   it('uses the Anthropic minimum trigger for manual compaction requests', async () => {
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,
