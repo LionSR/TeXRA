@@ -254,6 +254,17 @@
   color: var(--mk-text-faint);
 }
 
+/* Bridged Web Awesome spinner: maps wa-spinner's track/indicator to the accent,
+   so the in-flight spinners in the tool-call logs flip with the theme. Shared so
+   the bridge block isn't re-declared per component; consumers add their own size
+   (font-size) / layout (align-self) alongside this class. */
+.mockup .mk-spinner {
+  --track-width: 2px;
+  --track-color: color-mix(in srgb, var(--mk-accent) 30%, transparent);
+  --indicator-color: var(--mk-accent);
+  --speed: 0.9s;
+}
+
 /* Sidebar shell (board). Width is set per hero (content differs). */
 .mockup .board {
   flex-shrink: 0;

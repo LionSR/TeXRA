@@ -31,7 +31,10 @@ defineProps({
         class="tcp-row"
         :class="{ active: c.state === 'active' }"
       >
-        <wa-spinner v-if="c.state === 'active'" class="tcp-spin"></wa-spinner>
+        <wa-spinner
+          v-if="c.state === 'active'"
+          class="tcp-spin mk-spinner"
+        ></wa-spinner>
         <span v-else class="tcp-dot"></span>
         <span class="tcp-tool">{{ tool }}</span>
         <StatusPill variant="accent" shape="chip">{{ c.verb }}</StatusPill>
@@ -79,10 +82,6 @@ defineProps({
   align-self: center;
   font-size: var(--mk-space-12);
   flex-shrink: 0;
-  --track-width: 2px;
-  --track-color: rgba(200, 155, 224, 0.3);
-  --indicator-color: var(--mk-accent);
-  --speed: 0.9s;
 }
 .tcp-tool {
   color: var(--mk-syn-fn);

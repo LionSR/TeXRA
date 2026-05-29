@@ -43,6 +43,7 @@
 
 /* Web Awesome custom elements upgrade on the client; hide them until defined so
    they don't flash as unstyled markup on first paint / navigation. */
+wa-icon:not(:defined),
 wa-switch:not(:defined),
 wa-callout:not(:defined),
 wa-badge:not(:defined),

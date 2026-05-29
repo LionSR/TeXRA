@@ -232,7 +232,7 @@ const targets = [
   border: 1px solid var(--mk-border-soft);
 }
 .inq-btn--brand {
-  color: #fff;
+  color: var(--wa-color-brand-on-loud);
   background: var(--mk-accent);
   border: 1px solid var(--mk-accent);
 }

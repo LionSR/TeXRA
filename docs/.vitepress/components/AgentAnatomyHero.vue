@@ -115,7 +115,10 @@ const rounds = [
   border-left: 2px solid var(--mk-accent);
   border-radius: var(--mk-radius-md);
   padding: var(--mk-space-7) var(--mk-space-10);
-  background: rgba(200, 155, 224, 0.05);
+  /* Accent tint derived from the (theme-flipping) accent so the band tints
+     correctly in light mode too — a fixed dark-accent rgba reads as the wrong
+     hue on the light surface. */
+  background: color-mix(in srgb, var(--mk-accent) 6%, transparent);
 }
 .anat-band-head {
   display: flex;

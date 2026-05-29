@@ -61,7 +61,7 @@ const calls = [
       <!-- Streaming assistant reasoning line (in-flight spinner) -->
       <div class="cc-turn cc-turn--ai">
         <span class="cc-who cc-who--ai">research</span>
-        <wa-spinner class="cc-spin"></wa-spinner>
+        <wa-spinner class="cc-spin mk-spinner"></wa-spinner>
         <span class="cc-reasoning"
           >Reading the section, then rewriting the first sentence…</span
         >
@@ -75,7 +75,10 @@ const calls = [
           class="cc-tool-row"
           :class="{ active: c.state === 'active' }"
         >
-          <wa-spinner v-if="c.state === 'active'" class="cc-tspin"></wa-spinner>
+          <wa-spinner
+            v-if="c.state === 'active'"
+            class="cc-tspin mk-spinner"
+          ></wa-spinner>
           <span v-else class="cc-dot"></span>
           <span class="cc-tname">{{ c.tool }}</span>
           <code class="cc-verb">{{ c.verb }}</code>
@@ -217,10 +220,6 @@ const calls = [
   align-self: center;
   font-size: var(--mk-space-11);
   flex-shrink: 0;
-  --track-width: 2px;
-  --track-color: rgba(200, 155, 224, 0.3);
-  --indicator-color: var(--mk-accent);
-  --speed: 0.9s;
 }
 
 /* Tool-call rows */
@@ -257,10 +256,6 @@ const calls = [
   align-self: center;
   font-size: var(--mk-space-11);
   flex-shrink: 0;
-  --track-width: 2px;
-  --track-color: rgba(200, 155, 224, 0.3);
-  --indicator-color: var(--mk-accent);
-  --speed: 0.9s;
 }
 .cc-tname {
   color: var(--mk-syn-fn);
