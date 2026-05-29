@@ -1,5 +1,6 @@
 import process from 'node:process';
 
+import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
 import { Badge } from '@inkjs/ui';
 import { MODEL_CONFIGS } from 'llm-zoo';
@@ -32,6 +33,10 @@ export interface StatusBarSegment {
 
 export interface StatusBarDisplayInput {
   readonly status: string | undefined;
+  /** Milliseconds since the running turn began. When set and `status` is
+   *  `running`, the bar shows a live `Ns` segment so a long token-less
+   *  "thinking" turn still reads as alive. Omitted in tests/headless. */
+  readonly elapsedMs?: number;
   readonly pendingExitHint: boolean;
   readonly pendingExitResumeId: string | undefined;
   readonly bypass: BypassState;
@@ -180,6 +185,15 @@ export function buildStatusBarDisplay(
     left.push({ text: 'Press Ctrl-C again to exit', color: 'yellow' });
   } else {
     left.push({ text: statusLabel(input.status), color: 'dim' });
+    if (
+      input.status === STREAM_STATUS.RUNNING &&
+      input.elapsedMs !== undefined
+    ) {
+      left.push({
+        text: `${Math.floor(input.elapsedMs / 1000)}s`,
+        color: 'dim',
+      });
+    }
   }
 
   left.push({ text: input.apiMode, color: 'dim' });
@@ -242,8 +256,24 @@ export function StatusBar(): React.JSX.Element {
   const approvals = useSignal(approvalQueueDepth);
   const caps = useSignal(terminalCapabilities);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
+
+  // Re-render once a second while a turn is running so the elapsed segment
+  // ticks even when the model streams no tokens (the live region is otherwise
+  // only repainted by stream-log change events). The interval is armed only
+  // while `runStartedAt` is set, so an idle session adds no churn.
+  const runStartedAt =
+    slice?.status === STREAM_STATUS.RUNNING ? slice.runStartedAt : undefined;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (runStartedAt === undefined) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [runStartedAt]);
+
   const display = buildStatusBarDisplay({
     status: slice?.status,
+    elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
     pendingExitHint,
     pendingExitResumeId,
     bypass: slice?.bypass ?? NO_BYPASS,
