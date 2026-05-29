@@ -1,10 +1,8 @@
-// Local imports - common
-import type { PromptHost } from '@hosts/promptHost';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
-
 // Local imports - hosts
+import type { PromptHost } from '@hosts/promptHost';
 
 // Local imports - shared
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import type {
   MemoryPreview,
   MemoryViewItem,
