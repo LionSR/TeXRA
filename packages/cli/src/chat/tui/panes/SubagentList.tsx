@@ -12,7 +12,7 @@ import { processTailLines } from '../state/childControls';
 import { visibleSubagentRows } from '../state/childStreamMerge';
 import { cliState, type ProcessOutputTail } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
-import { childStatusColor, childStatusMarker } from './SubagentListDisplay';
+import { CHILD_STATUS_MARKER, childStatusColor } from './SubagentListDisplay';
 
 interface RowProps {
   readonly child: ActiveChildInfo;
@@ -31,7 +31,7 @@ function Row({ child, index, tail }: RowProps): React.JSX.Element {
       <Box flexDirection="row">
         <Text dimColor>{index < 9 ? ` ${index + 1} ` : '   '}</Text>
         <Text color={childStatusColor(child.status)}>
-          {childStatusMarker()}
+          {CHILD_STATUS_MARKER}
         </Text>
         <Text>{child.agentName || child.toolName || child.executionId}</Text>
         {child.status ? <Text dimColor>{` ${child.status}`}</Text> : null}

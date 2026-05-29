@@ -11,6 +11,4 @@ export function childStatusColor(status: string | undefined): string {
 // non-alt-screen repaint can leave stale glyphs behind on those reprints. Status
 // is conveyed by `childStatusColor`, and liveness by the `running · Ns` text, so
 // the animation bought churn without information.
-export function childStatusMarker(): string {
-  return '● ';
-}
+export const CHILD_STATUS_MARKER = '● ';
