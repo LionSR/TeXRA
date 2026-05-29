@@ -1,13 +1,19 @@
 <script setup>
-// File Management product slice: the Launcher's file-selection section with the
-// real Input / Context / Media groups (FILE_SELECT_CONFIGS in store.ts). Each
-// group is an ordered list with three header actions — Add opened files, Clear
-// all, Add files.
+// Tool Config product slice: the per-run helper menus that live in the file-
+// group headers (FileSelectGroup.ts). The Input group carries the "Tool
+// configuration options" button (tools) → Attach TeX Count; the Media group
+// carries the "Auto-extract options" button (wand) → Figures / TikZ Figures /
+// Compile Input PDF. Both buttons light up (has-options) while a helper is on,
+// shown here with their wa-dropdown menus open.
+//
+// Reuses the shared file-selector vocabulary (.board/.field/.frow/.acts/.act/
+// .flist/.fitem from mockup.css + FileSelectHero); only the open menus are
+// unique here.
 import MockupFrame from './MockupFrame.vue';
 </script>
 
 <template>
-  <MockupFrame title="draft.tex — texra-paper">
+  <MockupFrame title="draft.tex — texra-sample">
     <aside class="board">
       <div class="board-tabs">
         <span class="bt bt-on"
@@ -24,7 +30,7 @@ import MockupFrame from './MockupFrame.vue';
           <span class="sec-lbl">Files</span>
         </div>
 
-        <!-- Input -->
+        <!-- Input: carries the Tool config menu (Attach TeX Count). -->
         <div class="field">
           <div class="frow">
             <span class="f-label"
@@ -34,7 +40,7 @@ import MockupFrame from './MockupFrame.vue';
                 name="file-code"
               ></wa-icon>
               Input
-              <span class="act" title="Tool configuration options"
+              <span class="act act-on" title="Tool configuration options"
                 ><wa-icon library="texra" name="tools"></wa-icon
               ></span>
             </span>
@@ -50,10 +56,19 @@ import MockupFrame from './MockupFrame.vue';
               ></span>
             </div>
           </div>
+
+          <!-- Open Tool config dropdown. -->
+          <div class="wa-menu">
+            <div class="wa-item checked">
+              <span class="wa-check"
+                ><wa-icon library="texra" name="check"></wa-icon
+              ></span>
+              Attach TeX Count
+            </div>
+          </div>
+
           <div class="flist">
             <div class="fitem">
-              <!-- Decorative only: the real UI has no grip handle; the whole
-                   row is draggable to reorder. -->
               <wa-icon
                 class="fi-grip"
                 library="texra"
@@ -65,48 +80,7 @@ import MockupFrame from './MockupFrame.vue';
           </div>
         </div>
 
-        <!-- Context -->
-        <div class="field">
-          <div class="frow">
-            <span class="f-label"
-              ><wa-icon class="lbl-ic" library="texra" name="book"></wa-icon>
-              Context</span
-            >
-            <div class="acts">
-              <span class="act" title="Add opened files as context"
-                ><wa-icon library="texra" name="folder-opened"></wa-icon
-              ></span>
-              <span class="act" title="Clear all context files"
-                ><wa-icon library="texra" name="trash"></wa-icon
-              ></span>
-              <span class="act" title="Add context files"
-                ><wa-icon library="texra" name="add"></wa-icon
-              ></span>
-            </div>
-          </div>
-          <div class="flist">
-            <div class="fitem">
-              <wa-icon
-                class="fi-grip"
-                library="texra"
-                name="ellipsis"
-              ></wa-icon>
-              <span class="fi-name">references.bib</span>
-              <wa-icon class="fi-rm" library="texra" name="trash"></wa-icon>
-            </div>
-            <div class="fitem">
-              <wa-icon
-                class="fi-grip"
-                library="texra"
-                name="ellipsis"
-              ></wa-icon>
-              <span class="fi-name">preamble.sty</span>
-              <wa-icon class="fi-rm" library="texra" name="trash"></wa-icon>
-            </div>
-          </div>
-        </div>
-
-        <!-- Media -->
+        <!-- Media: carries the Auto-extract menu. -->
         <div class="field">
           <div class="frow">
             <span class="f-label"
@@ -116,7 +90,7 @@ import MockupFrame from './MockupFrame.vue';
                 name="device-camera-video"
               ></wa-icon>
               Media
-              <span class="act" title="Auto-extract options"
+              <span class="act act-on" title="Auto-extract options"
                 ><wa-icon library="texra" name="wand"></wa-icon
               ></span>
             </span>
@@ -132,6 +106,25 @@ import MockupFrame from './MockupFrame.vue';
               ></span>
             </div>
           </div>
+
+          <!-- Open Auto-extract dropdown. -->
+          <div class="wa-menu">
+            <div class="wa-item checked">
+              <span class="wa-check"
+                ><wa-icon library="texra" name="check"></wa-icon
+              ></span>
+              Figures
+            </div>
+            <div class="wa-item">
+              <span class="wa-check"></span>
+              TikZ Figures
+            </div>
+            <div class="wa-item">
+              <span class="wa-check"></span>
+              Compile Input PDF
+            </div>
+          </div>
+
           <div class="flist">
             <div class="fitem">
               <wa-icon
@@ -147,7 +140,7 @@ import MockupFrame from './MockupFrame.vue';
       </div>
     </aside>
 
-    <!-- Editor: the selected input document -->
+    <!-- Editor: the document being prepared for the run. -->
     <div class="result">
       <div class="tabs">
         <button type="button" class="tab active">
@@ -156,24 +149,19 @@ import MockupFrame from './MockupFrame.vue';
         </button>
       </div>
       <div class="surface">
-        <div class="cl"><span class="kw">\documentclass</span>{article}</div>
-        <div class="cl">
-          <span class="kw">\usepackage</span>{preamble}
-          <span class="cmt">% from Context</span>
-        </div>
-        <div class="cl"><span class="kw">\begin</span>{document}</div>
+        <div class="cl"><span class="cmt">% sample project</span></div>
+        <div class="cl"><span class="kw">\begin</span>{abstract}</div>
         <div class="cl indent">
-          <span class="kw">\input</span>{sections/intro}
+          We present an efficient method for the estimation
         </div>
+        <div class="cl indent">of spectral gaps in random regular graphs.</div>
+        <div class="cl"><span class="kw">\end</span>{abstract}</div>
+        <div class="cl"></div>
+        <div class="cl"><span class="kw">\section</span>{Preliminaries}</div>
         <div class="cl indent">
-          <span class="kw">\includegraphics</span>{figure1.pdf}
-          <span class="cmt">% from Media</span>
+          Let <span class="m">$G$</span> be a <span class="m">$d$</span>-regular
+          graph.
         </div>
-        <div class="cl indent">
-          <span class="kw">\bibliography</span>{references}
-          <span class="cmt">% from Context</span>
-        </div>
-        <div class="cl"><span class="kw">\end</span>{document}</div>
       </div>
     </div>
   </MockupFrame>
@@ -181,8 +169,47 @@ import MockupFrame from './MockupFrame.vue';
 
 <style scoped>
 /* File-selector vocabulary (.files/.flist/.fitem/.fi-*) lives in mockup.css,
-   shared with ToolConfigHero. Only the sidebar width is unique here. */
+   shared with FileSelectHero. Only the sidebar width is unique here. */
 .board {
   width: 320px;
+}
+
+/* wa-dropdown popover with checkbox items (mirrors wa-dropdown-item
+   type="checkbox": a leading check that only shows when selected). */
+.wa-menu {
+  align-self: flex-start;
+  min-width: 180px;
+  margin: 2px 0 2px 18px;
+  background: #2c2c2c;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.75);
+}
+.wa-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: var(--wa-color-text-normal);
+  white-space: nowrap;
+}
+.wa-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.wa-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #c89be0;
+  opacity: 0;
+}
+.wa-item.checked .wa-check {
+  opacity: 1;
 }
 </style>

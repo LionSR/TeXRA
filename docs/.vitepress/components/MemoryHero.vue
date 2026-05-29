@@ -285,40 +285,8 @@ function toggle(id) {
 </template>
 
 <style scoped>
-/* Tab nav on the left. The shell uses the shared .board class (from
-   theme/mockup.css); .dash-nav only overrides width and adds the vertical
-   layout for this hero's many tabs. */
-.dash-nav {
-  width: 168px;
-}
-.dash-tabs {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 0;
-}
-.dt {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
-  font-size: 0.76rem;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  border-left: 2px solid transparent;
-}
-.dt wa-icon {
-  font-size: 12px;
-}
-.dt:hover {
-  color: var(--wa-color-text-normal);
-  background: rgba(255, 255, 255, 0.03);
-}
-.dt-on {
-  color: #fff;
-  font-weight: 600;
-  background: rgba(200, 155, 224, 0.08);
-  border-left-color: var(--brand);
-}
+/* Dashboard chrome (.dash-nav/.dash-tabs/.dt + the toggle .switch) lives in
+   mockup.css, shared with ApiKeysHero. Only this tab's body is unique here. */
 
 /* Memory tab body */
 .mem-pane {
@@ -389,46 +357,12 @@ function toggle(id) {
   color: var(--color-text-secondary);
 }
 
-/* Toggle switch */
+/* Toggle switch layout (the .switch control itself is shared via mockup.css) */
 .mem-toggle {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 6px 2px;
-}
-.switch {
-  display: inline-flex;
-  align-items: center;
-  width: 32px;
-  height: 18px;
-  background: #444;
-  border: none;
-  border-radius: 10px;
-  position: relative;
-  cursor: pointer;
-  transition: background 0.15s;
-  flex-shrink: 0;
-  padding: 0;
-}
-.switch.on {
-  background: var(--brand);
-}
-.switch-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform 0.15s;
-}
-.switch.on .switch-knob {
-  transform: translateX(14px);
-}
-.switch-label {
-  font-size: 0.78rem;
-  color: var(--wa-color-text-normal);
 }
 
 /* Memory list */
@@ -555,30 +489,5 @@ function toggle(id) {
   padding: 1px 4px;
   border-radius: 3px;
   color: #d7baee;
-}
-
-@media (max-width: 820px) {
-  .dash-nav {
-    width: auto;
-    flex-direction: row;
-    border-right: none;
-    border-bottom: 1px solid #000;
-    padding: 0;
-    overflow-x: auto;
-  }
-  .dash-tabs {
-    flex-direction: row;
-    padding: 0;
-  }
-  .dt {
-    border-left: none;
-    border-bottom: 2px solid transparent;
-    padding: 8px 12px;
-    white-space: nowrap;
-  }
-  .dt-on {
-    border-left-color: transparent;
-    border-bottom-color: var(--brand);
-  }
 }
 </style>
