@@ -1,12 +1,14 @@
 <script setup>
-// Tool Config product slice: the Launcher's instruction footer with its two
-// per-run helper dropdowns open. Mirrors FileSelectGroup.ts — the "Tool
-// configuration options" menu (tools) carries Attach TeX Count; the
-// "Auto-extract options" menu (wand) carries Figures / TikZ Figures / Compile
-// Input PDF. Both trigger buttons light up while a helper is enabled.
+// Tool Config product slice: the per-run helper menus that live in the file-
+// group headers (FileSelectGroup.ts). The Input group carries the "Tool
+// configuration options" button (tools) → Attach TeX Count; the Media group
+// carries the "Auto-extract options" button (wand) → Figures / TikZ Figures /
+// Compile Input PDF. Both buttons light up (has-options) while a helper is on,
+// shown here with their wa-dropdown menus open.
 //
-// Reuses the shared launcher chrome (.lpanel/.footer/.sgroup/.settings/.run
-// from mockup.css); only the helper buttons + open menus are unique here.
+// Reuses the shared file-selector vocabulary (.board/.field/.frow/.acts/.act/
+// .flist/.fitem from mockup.css + FileSelectHero); only the open menus are
+// unique here.
 import MockupFrame from './MockupFrame.vue';
 </script>
 
@@ -22,86 +24,123 @@ import MockupFrame from './MockupFrame.vue';
         >
       </div>
 
-      <div class="lpanel">
-        <div class="footer">
-          <div class="sgroup">
-            <span class="iact settings" title="Agent settings"
-              ><wa-icon library="texra" name="sparkle"></wa-icon
-            ></span>
-            <div class="select">
-              <span class="s-val">polish</span>
-              <wa-icon
-                class="s-caret"
+      <div class="files">
+        <div class="sechead">
+          <wa-icon class="chev" library="texra" name="chevron-down"></wa-icon>
+          <span class="sec-lbl">Files</span>
+        </div>
+
+        <!-- Input: carries the Tool config menu (Attach TeX Count). -->
+        <div class="field">
+          <div class="frow">
+            <span class="f-label"
+              ><wa-icon
+                class="lbl-ic"
                 library="texra"
-                name="chevron-down"
+                name="file-code"
               ></wa-icon>
-            </div>
-          </div>
-          <div class="sgroup">
-            <span class="iact settings" title="Model settings"
-              ><wa-icon library="texra" name="robot"></wa-icon
-            ></span>
-            <div class="select">
-              <span class="s-val">sonnet46</span>
-              <wa-icon
-                class="s-caret"
-                library="texra"
-                name="chevron-down"
-              ></wa-icon>
+              Input
+              <span class="act act-on" title="Tool configuration options"
+                ><wa-icon library="texra" name="tools"></wa-icon
+              ></span>
+            </span>
+            <div class="acts">
+              <span class="act" title="Add opened files as input"
+                ><wa-icon library="texra" name="folder-opened"></wa-icon
+              ></span>
+              <span class="act" title="Clear all input files"
+                ><wa-icon library="texra" name="trash"></wa-icon
+              ></span>
+              <span class="act" title="Add input files"
+                ><wa-icon library="texra" name="add"></wa-icon
+              ></span>
             </div>
           </div>
 
-          <!-- Helper buttons + Execute. Both helpers active → buttons lit. -->
-          <div class="sgroup">
-            <span class="cfg-btn on" title="Tool configuration options"
-              ><wa-icon library="texra" name="tools"></wa-icon
-            ></span>
-            <span class="cfg-btn on" title="Auto-extract options"
-              ><wa-icon library="texra" name="sparkle"></wa-icon
-            ></span>
-            <button class="run">
-              <wa-icon library="texra" name="play"></wa-icon
-              ><span class="run-lbl">Execute</span>
-            </button>
+          <!-- Open Tool config dropdown. -->
+          <div class="wa-menu">
+            <div class="wa-item checked">
+              <span class="wa-check"
+                ><wa-icon library="texra" name="check"></wa-icon
+              ></span>
+              Attach TeX Count
+            </div>
+          </div>
+
+          <div class="flist">
+            <div class="fitem">
+              <wa-icon
+                class="fi-grip"
+                library="texra"
+                name="ellipsis"
+              ></wa-icon>
+              <span class="fi-name">draft.tex</span>
+              <wa-icon class="fi-rm" library="texra" name="trash"></wa-icon>
+            </div>
           </div>
         </div>
 
-        <!-- The two open helper menus, focused on this step. -->
-        <div class="menu">
-          <div class="f-label">
-            <wa-icon library="texra" name="tools"></wa-icon> Tool config
+        <!-- Media: carries the Auto-extract menu. -->
+        <div class="field">
+          <div class="frow">
+            <span class="f-label"
+              ><wa-icon
+                class="lbl-ic"
+                library="texra"
+                name="device-camera-video"
+              ></wa-icon>
+              Media
+              <span class="act act-on" title="Auto-extract options"
+                ><wa-icon library="texra" name="sparkle"></wa-icon
+              ></span>
+            </span>
+            <div class="acts">
+              <span class="act" title="Add opened files as media"
+                ><wa-icon library="texra" name="folder-opened"></wa-icon
+              ></span>
+              <span class="act" title="Clear all media files"
+                ><wa-icon library="texra" name="trash"></wa-icon
+              ></span>
+              <span class="act" title="Add media files"
+                ><wa-icon library="texra" name="add"></wa-icon
+              ></span>
+            </div>
           </div>
-          <div class="opt on">
-            <span class="ckbox"
-              ><wa-icon library="texra" name="check"></wa-icon
-            ></span>
-            Attach TeX Count
-          </div>
-        </div>
 
-        <div class="menu">
-          <div class="f-label">
-            <wa-icon library="texra" name="sparkle"></wa-icon> Auto-extract
+          <!-- Open Auto-extract dropdown. -->
+          <div class="wa-menu">
+            <div class="wa-item checked">
+              <span class="wa-check"
+                ><wa-icon library="texra" name="check"></wa-icon
+              ></span>
+              Figures
+            </div>
+            <div class="wa-item">
+              <span class="wa-check"></span>
+              TikZ Figures
+            </div>
+            <div class="wa-item">
+              <span class="wa-check"></span>
+              Compile Input PDF
+            </div>
           </div>
-          <div class="opt on">
-            <span class="ckbox"
-              ><wa-icon library="texra" name="check"></wa-icon
-            ></span>
-            Figures
-          </div>
-          <div class="opt">
-            <span class="ckbox"></span>
-            TikZ Figures
-          </div>
-          <div class="opt">
-            <span class="ckbox"></span>
-            Compile Input PDF
+
+          <div class="flist">
+            <div class="fitem">
+              <wa-icon
+                class="fi-grip"
+                library="texra"
+                name="ellipsis"
+              ></wa-icon>
+              <span class="fi-name">figure1.pdf</span>
+              <wa-icon class="fi-rm" library="texra" name="trash"></wa-icon>
+            </div>
           </div>
         </div>
       </div>
     </aside>
 
-    <!-- Editor: TeX Count attaches a word-count summary to the run. -->
+    <!-- Editor: the document being prepared for the run. -->
     <div class="result">
       <div class="tabs">
         <button type="button" class="tab active">
@@ -109,15 +148,19 @@ import MockupFrame from './MockupFrame.vue';
           >draft.tex
         </button>
       </div>
-      <div class="term">
-        <div class="wl"><span class="tac">$</span> texcount draft.tex</div>
-        <div class="wl out">Words in text: 1842</div>
-        <div class="wl out">Words in headers: 24</div>
-        <div class="wl out">Words outside text (captions, etc.): 96</div>
-        <div class="wl out">Number of floats/tables/figures: 3</div>
-        <div class="term-note">
-          With <b>Attach TeX Count</b> on, this summary is fed to the agent so
-          it knows the document's size and structure before it edits.
+      <div class="surface">
+        <div class="cl"><span class="cmt">% sample project</span></div>
+        <div class="cl"><span class="kw">\begin</span>{abstract}</div>
+        <div class="cl indent">
+          We present an efficient method for the estimation
+        </div>
+        <div class="cl indent">of spectral gaps in random regular graphs.</div>
+        <div class="cl"><span class="kw">\end</span>{abstract}</div>
+        <div class="cl"></div>
+        <div class="cl"><span class="kw">\section</span>{Preliminaries}</div>
+        <div class="cl indent">
+          Let <span class="m">$G$</span> be a <span class="m">$d$</span>-regular
+          graph.
         </div>
       </div>
     </div>
@@ -128,75 +171,55 @@ import MockupFrame from './MockupFrame.vue';
 .board {
   width: 320px;
 }
-
-/* Helper trigger buttons (lit when a helper is on) — the only footer-control
-   variant unique to this slice; the rest of the footer is shared chrome. */
-.cfg-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  flex-shrink: 0;
-  border-radius: 5px;
-  border: 1px solid rgba(200, 155, 224, 0.55);
-  background: rgba(200, 155, 224, 0.12);
-  color: #c89be0;
-  font-size: 14px;
-}
-/* Execute shares .run but sits inline with the helper buttons here. */
-.sgroup .run {
-  flex: 1;
-  width: auto;
-  margin-top: 0;
-  padding: 7px;
-  font-size: 0.82rem;
+.files {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  font-family: var(--vp-font-family-base);
 }
 
-/* Open dropdown menu (checkbox list). Reuses .f-label for the header. */
-.menu {
-  background: #2a2a2a;
-  border: 1px solid var(--color-border);
+/* The lit menu trigger sits inline with the group label. */
+.f-label .act {
+  margin-left: 2px;
+}
+
+/* wa-dropdown popover with checkbox items (mirrors wa-dropdown-item
+   type="checkbox": a leading check that only shows when selected). */
+.wa-menu {
+  align-self: flex-start;
+  min-width: 180px;
+  margin: 2px 0 2px 18px;
+  background: #2c2c2c;
+  border: 1px solid #3a3a3a;
   border-radius: 6px;
-  padding: 6px;
-  box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.6);
+  padding: 4px;
+  box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.75);
 }
-.menu .f-label {
-  padding: 2px 4px 6px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid var(--color-border);
-}
-.menu .f-label wa-icon {
-  color: #c89be0;
-}
-.opt {
+.wa-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 6px;
+  padding: 5px 12px 5px 6px;
   border-radius: 4px;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: var(--wa-color-text-normal);
+  white-space: nowrap;
 }
-.opt.on {
-  background: rgba(200, 155, 224, 0.1);
+.wa-item:hover {
+  background: rgba(255, 255, 255, 0.07);
 }
-.ckbox {
+.wa-check {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 15px;
-  height: 15px;
+  width: 16px;
   flex-shrink: 0;
-  border: 1px solid #5a5a5a;
-  border-radius: 3px;
-  background: #1e1e1e;
-  font-size: 9px;
-  color: transparent;
+  font-size: 11px;
+  color: #c89be0;
+  opacity: 0;
 }
-.opt.on .ckbox {
-  background: #8957b5;
-  border-color: #8957b5;
-  color: #fff;
+.wa-item.checked .wa-check {
+  opacity: 1;
 }
 </style>

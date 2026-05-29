@@ -33,8 +33,11 @@ import MockupFrame from './MockupFrame.vue';
                 library="texra"
                 name="file-code"
               ></wa-icon>
-              Input</span
-            >
+              Input
+              <span class="act" title="Tool configuration options"
+                ><wa-icon library="texra" name="tools"></wa-icon
+              ></span>
+            </span>
             <div class="acts">
               <span class="act" title="Add opened files as input"
                 ><wa-icon library="texra" name="folder-opened"></wa-icon
@@ -110,8 +113,11 @@ import MockupFrame from './MockupFrame.vue';
                 library="texra"
                 name="device-camera-video"
               ></wa-icon>
-              Media</span
-            >
+              Media
+              <span class="act" title="Auto-extract options"
+                ><wa-icon library="texra" name="sparkle"></wa-icon
+              ></span>
+            </span>
             <div class="acts">
               <span class="act" title="Add opened files as media"
                 ><wa-icon library="texra" name="folder-opened"></wa-icon
@@ -172,52 +178,13 @@ import MockupFrame from './MockupFrame.vue';
 </template>
 
 <style scoped>
+/* File-selector vocabulary (.files/.flist/.fitem/.fi-*) lives in mockup.css,
+   shared with ToolConfigHero. Only the sidebar width is unique here. */
 .board {
   width: 320px;
 }
-.files {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  font-family: var(--vp-font-family-base);
-}
-
-/* Multiple-file list */
-.flist {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px;
-  background: #181818;
-  border: 1px solid var(--color-border);
-  border-radius: 5px;
-}
-.fitem {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 3px 5px;
-  border-radius: 4px;
-  background: #2c2c2c;
-}
-.fi-grip {
-  font-size: 11px;
-  color: var(--color-text-tertiary);
-  cursor: grab;
-}
-.fi-name {
-  flex: 1;
-  font-family: var(--vp-font-family-mono);
-  font-size: 0.76rem;
-  color: var(--color-text-link);
-}
-.fi-rm {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-}
-.fi-rm:hover {
-  color: var(--color-error);
+/* The per-group helper-menu trigger sits inline with the group label. */
+.f-label .act {
+  margin-left: 2px;
 }
 </style>

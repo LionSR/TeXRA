@@ -152,6 +152,52 @@
   color: #c89be0;
 }
 
+/* File-selector groups (Input / Context / Media). Shared by FileSelectHero +
+   ToolConfigHero — the .board column padding and the ordered file-row list. */
+.mockup .files {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  font-family: var(--vp-font-family-base);
+}
+.mockup .flist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  background: #181818;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+}
+.mockup .fitem {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  background: #2c2c2c;
+}
+.mockup .fi-grip {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  cursor: grab;
+}
+.mockup .fi-name {
+  flex: 1;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.76rem;
+  color: var(--color-text-link);
+}
+.mockup .fi-rm {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.mockup .fi-rm:hover {
+  color: var(--color-error);
+}
+
 /* Code / terminal output surface (editor body) */
 .mockup .surface {
   flex: 1;
