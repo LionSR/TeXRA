@@ -28,8 +28,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect non-docs changes
+        id: detect
+        run: |
+          # Heavy validation (compile/build/desktop) only runs when a PR touches
+          # something other than docs. Docs-only PRs fall through to the
+          # lightweight docs-build job below, keeping CI spend down. Pushes to
+          # main and manual dispatches always run the full matrix.
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "Event '${{ github.event_name }}' -> full validation."
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base='${{ github.event.pull_request.base.sha }}'
+          head='${{ github.event.pull_request.head.sha }}'
+          files="$(git diff --name-only "$base...$head")"
+          echo "Changed files in this PR:"
+          printf '%s\n' "$files"
+          # A file counts as "code" unless it lives under docs/ or is a *.md file.
+          if printf '%s\n' "$files" | grep -vE '^docs/|\.md$' | grep -q .; then
+            echo "Non-docs changes detected -> full validation."
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Docs-only change -> lightweight docs build only."
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   validate:
     name: validate (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -124,6 +164,34 @@ jobs:
           path: packages/desktop/dist/
           if-no-files-found: error
           retention-days: 14
+
+  docs-check:
+    name: docs build
+    needs: changes
+    # Runs only for docs-only PRs (where the heavy validate matrix is skipped).
+    # The VitePress docs are a self-contained npm sub-project, so this mirrors
+    # docs-deploy.yml's install/build rather than the pnpm workspace.
+    if: needs.changes.outputs.code != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install docs dependencies
+        working-directory: docs
+        run: npm ci --legacy-peer-deps
+
+      - name: Build docs site
+        working-directory: docs
+        run: npm run docs:build
 
   desktop-macos-installer:
     name: desktop installer (macOS)
@@ -425,7 +493,9 @@ jobs:
     name: validate
     runs-on: ubuntu-latest
     needs:
+      - changes
       - validate
+      - docs-check
       - desktop-macos-installer
       - desktop-linux-installer
       - desktop-windows-artifact
@@ -435,8 +505,18 @@ jobs:
     steps:
       - name: Require validation jobs success
         run: |
-          if [ '${{ needs.validate.result }}' != 'success' ]; then
+          # On code PRs the validate matrix gates; on docs-only PRs it is skipped
+          # and the lightweight docs build gates instead — require whichever ran.
+          if [ '${{ needs.validate.result }}' != 'success' ] && [ '${{ needs.validate.result }}' != 'skipped' ]; then
             echo 'Validation matrix result: ${{ needs.validate.result }}'
+            exit 1
+          fi
+          if [ '${{ needs.docs-check.result }}' != 'success' ] && [ '${{ needs.docs-check.result }}' != 'skipped' ]; then
+            echo 'Docs build result: ${{ needs.docs-check.result }}'
+            exit 1
+          fi
+          if [ '${{ needs.validate.result }}' = 'skipped' ] && [ '${{ needs.docs-check.result }}' != 'success' ]; then
+            echo 'Docs-only PR but docs build did not succeed: ${{ needs.docs-check.result }}'
             exit 1
           fi
           if [ '${{ needs.desktop-macos-installer.result }}' != 'success' ] && [ '${{ needs.desktop-macos-installer.result }}' != 'skipped' ]; then
