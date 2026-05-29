@@ -465,13 +465,20 @@ export class TaskGroupList extends LitElement {
   }
 
   /** Render a group node and its children recursively */
-  private renderGroupNode(node: GroupTree): TemplateResult | typeof nothing {
+  private renderGroupNode(
+    node: GroupTree,
+    isRoot = false,
+  ): TemplateResult | typeof nothing {
     const { group, children, messages } = node;
     const detailsId = `${GROUP_DOM_IDS.DETAILS_PREFIX}${group.id}`;
     const contentId = `${GROUP_DOM_IDS.CONTENT_PREFIX}${group.id}`;
 
-    // Root groups: simple container (no collapsible), always render content
-    if (!group.parentGroupId) {
+    // Tree roots: simple container (no collapsible), always render content.
+    // Keyed on tree position (isRoot), NOT group.parentGroupId, so a re-rooted
+    // orphan — a group whose parent is absent, promoted to a root by
+    // messageIndex (R2) — gets the root layout instead of nested/collapsible
+    // even though it retains its dangling parentGroupId.
+    if (isRoot) {
       return html`
         <div id=${detailsId} class="log-group log-run" data-run-id=${group.id}>
           <div id=${contentId} class="log-group-content">
@@ -612,7 +619,7 @@ export class TaskGroupList extends LitElement {
           (item) =>
             'msg' in item
               ? guard([item.msg], () => formatLogEntry(item.msg))
-              : this.renderGroupNode(item.tree),
+              : this.renderGroupNode(item.tree, true),
         )}
       </div>
     `;

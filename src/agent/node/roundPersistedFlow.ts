@@ -66,12 +66,6 @@ export interface RoundCallbacks<S extends RoundAwareState> {
     parentStage: StageHandle | null,
   ) => StageHandle;
 
-  /**
-   * Called after a new round stage is created.
-   * Use for registering usage tracking callbacks etc.
-   */
-  onStageCreated?: (stage: StageHandle) => void;
-
   /** Check if execution should be interrupted. */
   checkInterruption?: () => boolean;
 
@@ -251,7 +245,7 @@ export class RoundPersistedFlow<
   }
 
   /**
-   * Create a round stage and notify callback.
+   * Create a round stage.
    */
   private createStage(roundIndex: number): void {
     if (this.callbacks.createRoundStage) {
@@ -259,7 +253,6 @@ export class RoundPersistedFlow<
         roundIndex,
         this.parentStage,
       );
-      this.callbacks.onStageCreated?.(this.currentRoundStage);
     }
   }
 }
