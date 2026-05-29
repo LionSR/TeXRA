@@ -6,7 +6,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { AGENT_CATEGORY } from '@shared/schemas';
 import { postMessage } from '@shared/hostBridge';
 import type {

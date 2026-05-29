@@ -6,7 +6,7 @@
  */
 import { z } from 'zod';
 
-import { MEMORY_VIEW_COMMANDS } from '@common/webview/commands';
+import { MEMORY_VIEW_COMMANDS } from '@shared/ipc';
 import { commandOnly } from './messageFactories';
 
 // ============================================================

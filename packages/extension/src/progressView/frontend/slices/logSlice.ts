@@ -1,6 +1,6 @@
 import { create } from 'mutative';
 
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,

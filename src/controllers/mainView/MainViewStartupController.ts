@@ -1,10 +1,10 @@
 // Local imports - common
-import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
 import type {
   AgentOptionData,
   MainViewMessage,
   ModelOptionData,
 } from '@shared/schemas';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 
 // Local imports - controllers
 import type { MainViewAuthStatus } from './MainViewTypes';

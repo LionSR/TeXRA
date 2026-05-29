@@ -1,4 +1,4 @@
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { STREAM_STATUS, type AgentCategoryFilter } from '@shared/schemas';
 
 /**

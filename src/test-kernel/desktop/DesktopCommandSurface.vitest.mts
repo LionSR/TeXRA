@@ -2,10 +2,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - webview commands
-import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
+import type { DesktopCommandActions } from '@desktop/desktopCommandSurface';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 
 // Local imports - command catalog and shared schemas
-import type { DesktopCommandActions } from '@desktop/desktopCommandSurface';
 import { commandCatalogById, type CommandId } from '@shared/commands/catalog';
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
