@@ -8,8 +8,7 @@ import { computeModelOptionsData } from '@model/computeModelOptions';
 import { getConfig } from '@utils/config/configUtils';
 
 import {
-  createDesktopErrorReporter,
-  type DesktopCommandMessage,
+  createCommandHandler,
   type DesktopMessageHandler,
   type DesktopRenderer,
 } from './desktopIpcTypes.js';
@@ -34,7 +33,6 @@ export function createDesktopMainViewStartup({
   loadOptions,
   onAsyncError,
 }: DesktopMainViewStartupOptions): DesktopMessageHandler {
-  const reportAsyncError = createDesktopErrorReporter(onAsyncError);
   const startupController = new MainViewStartupController({
     getConfig,
     loadOptions: async () => {
@@ -57,17 +55,16 @@ export function createDesktopMainViewStartup({
     }
   }
 
-  return {
-    handleMessage(message: DesktopCommandMessage): boolean {
-      if (
-        message.command !== MAIN_VIEW_COMMANDS.WEBVIEW_READY ||
-        message.view !== 'main'
-      ) {
-        return false;
-      }
-
-      void postStartupMessages().catch(reportAsyncError);
-      return false;
+  return createCommandHandler(
+    {
+      // WEBVIEW_READY is a broadcast: post startup messages for the main view
+      // but return `false` so sibling handlers still receive it.
+      [MAIN_VIEW_COMMANDS.WEBVIEW_READY]: {
+        when: (message) => message.view === 'main',
+        run: () => postStartupMessages(),
+        claim: false,
+      },
     },
-  };
+    { onAsyncError },
+  );
 }

@@ -6,6 +6,7 @@ import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreCo
 
 // Local imports
 import { TaskStateSchema, type TaskState } from '@agent/core/TaskState';
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { setPendingState } from '@common/state';
 import { COMMON_COMMANDS } from '@common/webview/commands';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -21,9 +22,9 @@ const RESTORE_MALFORMED_MESSAGE =
 export function registerStateRestoreCommand(
   context: vscode.ExtensionContext,
 ): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand('texra.restoreState', restoreState),
-  );
+  registerCommands(context, [
+    { id: 'texra.restoreState', handler: restoreState },
+  ]);
 }
 
 async function restoreState(

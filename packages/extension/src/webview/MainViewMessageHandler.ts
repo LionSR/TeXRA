@@ -355,11 +355,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
     await updateConfig(configUpdate.key, configUpdate.value);
   }
 
-  /** Post message to active view if available */
-  private postToActiveView(message: unknown): void {
-    this.getActiveView()?.webview.postMessage(message);
-  }
-
   protected async handleWebviewReady(): Promise<void> {
     const webviewView = this.getActiveView();
     if (!webviewView) {

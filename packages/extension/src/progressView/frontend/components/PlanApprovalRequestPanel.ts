@@ -83,13 +83,7 @@ export class PlanApprovalRequestPanel extends BaseFeedbackPanel {
           </ol>
         </div>
         <div class="plan-approval-request__actions">
-          ${renderLabeledActionButton({
-            icon: 'check',
-            text: 'Approve',
-            title: 'Approve this plan (y)',
-            action: 'approve',
-            onClick: () => this.emitAction('approve'),
-          })}
+          ${this.renderApproveButton('Approve this plan (y)')}
           ${odysseyEnabled
             ? renderLabeledActionButton({
                 icon: 'rocket',

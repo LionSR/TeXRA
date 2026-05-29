@@ -8,8 +8,7 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 
-import { contextFromArgs } from './_helpers/context';
-import { setExitCode } from './_helpers/exitCode';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { agentsRunCommand } from './agentsRun';
@@ -83,18 +82,15 @@ async function showAgent(context: CliContext, name: string): Promise<number> {
   return CliExitCode.Success;
 }
 
-const agentsListCommand = defineCommand({
+const agentsListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List available agents' },
   args: {
     ...GLOBAL_ARGS,
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(await listAgents(context));
-  },
+  run: (context) => listAgents(context),
 });
 
-const agentsShowCommand = defineCommand({
+const agentsShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show one agent' },
   args: {
     ...GLOBAL_ARGS,
@@ -105,10 +101,7 @@ const agentsShowCommand = defineCommand({
         'Agent name from `texra agents list` (use `source:name` to disambiguate when the same name exists in multiple sources)',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(await showAgent(context, ctx.args.name));
-  },
+  run: (context, ctx) => showAgent(context, ctx.args.name),
 });
 
 export const agentsCommand = defineCommand({

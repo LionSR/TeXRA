@@ -1,20 +1,16 @@
-import { defineCommand } from 'citty';
-
 import { getAgent, loadAgents } from '@agent/index';
 import { writeTerminalStatus } from '@agent/storage';
 import { AgentCategory } from '@agent/core/AgentDataclass';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliExitCode } from '../runtime/exitCodes';
 import { readCliHistoryConfig, parseCliHistoryId } from '../runtime/history';
 import { initCliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr } from '../runtime/logSinks';
+import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
 
-import { contextFromArgs } from './_helpers/context';
-import { setExitCode } from './_helpers/exitCode';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { shouldHonorRemoteAgentPriority } from './_helpers/remoteAgents';
@@ -72,11 +68,11 @@ export async function runResumeExecution(
     ));
   } catch (error) {
     if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
-      writeTextStderr(toErrorMessage(error));
+      writeErrorStderr(error);
       return CliExitCode.Interrupted;
     }
     await writeTerminalStatus(id, EXECUTION_STATUS.ERROR);
-    writeTextStderr(toErrorMessage(error));
+    writeErrorStderr(error);
     return CliExitCode.AgentError;
   }
 
@@ -92,7 +88,7 @@ export async function runResumeExecution(
   return terminalStatusExitCode(terminalStatus, runContext);
 }
 
-export const resumeCommand = defineCommand({
+export const resumeCommand = defineCliCommand({
   meta: { name: 'resume', description: 'Re-run a stored execution config' },
   args: {
     ...GLOBAL_ARGS,
@@ -102,14 +98,12 @@ export const resumeCommand = defineCommand({
       description: 'Execution id from `texra history list`',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
+  run: (context, ctx) => {
     const id = parseCliHistoryId(ctx.args.id);
     if (!id) {
       writeTextStderr(`Invalid execution id: ${ctx.args.id}`);
-      setExitCode(CliExitCode.Usage);
-      return;
+      return Promise.resolve(CliExitCode.Usage);
     }
-    setExitCode(await runResumeExecution(context, id));
+    return runResumeExecution(context, id);
   },
 });

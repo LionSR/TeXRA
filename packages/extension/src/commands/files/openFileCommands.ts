@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - common
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { toErrorMessage } from '@common/errors';
 // Local imports - frontend
 import { getFileLister } from '@frontend/files';
@@ -86,12 +87,9 @@ export async function openLabel(
 export function registerOpenFileCommands(
   context: vscode.ExtensionContext,
 ): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      openFileCommands.openFileCompile,
-      openBuildDisplayIfTex,
-    ),
-    vscode.commands.registerCommand(openFileCommands.openFile, openFile),
-    vscode.commands.registerCommand(openFileCommands.openLabel, openLabel),
-  );
+  registerCommands(context, [
+    { id: openFileCommands.openFileCompile, handler: openBuildDisplayIfTex },
+    { id: openFileCommands.openFile, handler: openFile },
+    { id: openFileCommands.openLabel, handler: openLabel },
+  ]);
 }

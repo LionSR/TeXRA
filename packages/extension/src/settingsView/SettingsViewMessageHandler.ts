@@ -659,42 +659,17 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     message: unknown,
     webviewView: vscode.WebviewView | vscode.WebviewPanel,
   ): Promise<void> {
-    await this.withActiveView(webviewView, async () => {
-      const handled = dispatchSettingsViewInbound(
-        message,
-        this.handlerRegistry,
-        (error) => {
-          this.logger.debug(this.channel, 'Message validation failed', {
-            data: error,
-          });
-        },
-      );
-
-      if (
-        !handled &&
-        message &&
-        typeof message === 'object' &&
-        'command' in message
-      ) {
-        this.logger.warn(
-          this.channel,
-          `Unhandled command: ${(message as { command: string }).command}`,
-        );
-      }
-    });
+    await this.dispatchInbound(
+      message,
+      webviewView,
+      dispatchSettingsViewInbound,
+      this.handlerRegistry,
+    );
   }
 
   // ============================================================
   // Helpers
   // ============================================================
-
-  /** Run a callback with the active view's webview, if available. */
-  private async withActiveWebview(
-    fn: (webview: vscode.Webview) => Promise<void>,
-  ): Promise<void> {
-    const view = this.getActiveView();
-    if (view) await fn(view.webview);
-  }
 
   private async primeIncludedAccessIfAuthenticated(): Promise<boolean> {
     const serverSideKeyService = getServerSideKeyService();
