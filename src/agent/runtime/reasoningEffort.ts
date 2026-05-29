@@ -9,4 +9,6 @@ export const LEVEL_TO_EFFORT: Readonly<Record<string, ReasoningEffort>> = {
   low: ReasoningEffort.LOW,
   medium: ReasoningEffort.MEDIUM,
   high: ReasoningEffort.HIGH,
+  xhigh: ReasoningEffort.XHIGH,
+  max: ReasoningEffort.MAX,
 };

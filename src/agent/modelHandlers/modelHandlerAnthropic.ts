@@ -286,8 +286,8 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * Maps the llm-zoo ReasoningEffort enum to Anthropic's effort levels.
    * Falls back to 'high' (the API default) when no specific effort is configured.
    * The above-'high' tiers are only valid for Opus-tier models: Opus 4.8 accepts
-   * the distinct 'xhigh' ("extra") tier, while Opus 4.6/4.7 predate that split
-   * and only accept 'max'.
+   * both the distinct 'xhigh' ("extra") tier and the top 'max' tier, while Opus
+   * 4.6/4.7 predate that split and only accept 'max'.
    */
   private getAnthropicEffort(): BetaOutputConfig['effort'] {
     const reasoningEffort = this.getEffectiveReasoningEffort();
@@ -296,6 +296,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
 
     switch (reasoningEffort) {
+      case 'max':
+        // The top tier ("Max"). Opus 4.8/4.7/4.6 all accept Anthropic's 'max'
+        // effort; everything else caps at 'high'.
+        return this.isClaudeOpus48() ||
+          this.isClaudeOpus47() ||
+          this.isClaudeOpus46()
+          ? 'max'
+          : 'high';
       case 'xhigh':
         // Opus 4.8 exposes the distinct 'xhigh' ("extra") effort tier the SDK
         // added in 0.100.0, which is exactly what TeXRA's "Extra High" selector
