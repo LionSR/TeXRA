@@ -19,7 +19,7 @@ All notable changes to this project will be documented in this file.
 - **Wolfram results always show a summary** — runs that returned only structured data no longer render as an empty line.
 - **Clean `--output-format` output** — usage text is routed to stderr on errors so the JSON / NDJSON stream on stdout stays parseable for scripts and CI.
 - **Drag-and-drop file selection works** — files dragged from the workspace explorer now land in the workflow Input / Context / Media buckets.
-- **Subagent progress shows in the transcript** — fixed subagent progress, result, and error updates not rendering on the progress board and chat transcript during multi-agent runs.
+- **Subagent progress boards show their rounds again** — a subagent run's transcript was blank except for the instruction: the round groups (Init, r0/r1) and everything nested under them — scratchpad, statistics, latexdiff results, loaded files — failed to render. The run's root stage was inheriting the orchestrator's active stage as a cross-trace parent, orphaning the whole group tree in the subagent's own stream.
 
 ### Improvements
 
