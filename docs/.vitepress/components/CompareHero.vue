@@ -1,7 +1,9 @@
 <script setup>
 // Review-results product slice: the VS Code diff editor TeXRA opens after a
-// run — the original input on the left, the round-0 output (r0/draft.tex) on
-// the right, with removed text struck in red and improved text added in green.
+// run — the round-0 output (r0/draft.tex) with TeXRA's suggestions on the left,
+// the previous draft on the right, with improved text added in green (left) and
+// removed text struck in red (right). Accept-change arrows in the central gutter
+// pull each hunk leftward, from the previous draft into the TeXRA suggestions.
 // Mirrors the "ProgressBoard Diff" compare view from the Quick Start walkthrough.
 import MockupFrame from './MockupFrame.vue';
 </script>
@@ -17,7 +19,52 @@ import MockupFrame from './MockupFrame.vue';
       </div>
 
       <div class="diff-body">
-        <!-- Original -->
+        <!-- Revised — TeXRA's suggestions (left) -->
+        <div class="pane">
+          <div class="pane-head">
+            <wa-icon
+              class="ph-ic t-tex"
+              library="texra"
+              name="file-code"
+            ></wa-icon>
+            r0/draft.tex
+            <span class="ph-tag ph-tag--new">TeXRA</span>
+          </div>
+          <div class="diff-surface">
+            <div class="dl">
+              <span class="gut">12</span
+              ><span class="kw">\begin</span>{abstract}
+            </div>
+            <div class="dl add hunk-start">
+              <button class="accept" title="Accept change">
+                <wa-icon library="texra" name="arrow-left"></wa-icon>
+              </button>
+              <span class="gut">13</span>We present an
+              <ins>efficient</ins> method for the
+            </div>
+            <div class="dl add">
+              <span class="gut">14</span>estimation of spectral gaps
+              <ins>in random regular graphs</ins>.
+            </div>
+            <div class="dl">
+              <span class="gut">15</span><span class="kw">\end</span>{abstract}
+            </div>
+            <div class="dl"><span class="gut">16</span></div>
+            <div class="dl">
+              <span class="gut">17</span
+              ><span class="kw">\section</span>{Preliminaries}
+            </div>
+            <div class="dl add hunk-start">
+              <button class="accept" title="Accept change">
+                <wa-icon library="texra" name="arrow-left"></wa-icon>
+              </button>
+              <span class="gut">18</span>Let <span class="m">$G$</span> be a
+              <ins>$d$-regular</ins> graph.
+            </div>
+          </div>
+        </div>
+
+        <!-- Previous draft (right) -->
         <div class="pane">
           <div class="pane-head">
             <wa-icon
@@ -26,7 +73,7 @@ import MockupFrame from './MockupFrame.vue';
               name="file-code"
             ></wa-icon>
             draft.tex
-            <span class="ph-tag">Original</span>
+            <span class="ph-tag">Previous draft</span>
           </div>
           <div class="diff-surface">
             <div class="dl">
@@ -55,51 +102,6 @@ import MockupFrame from './MockupFrame.vue';
             </div>
           </div>
         </div>
-
-        <!-- Revised -->
-        <div class="pane">
-          <div class="pane-head">
-            <wa-icon
-              class="ph-ic t-tex"
-              library="texra"
-              name="file-code"
-            ></wa-icon>
-            r0/draft.tex
-            <span class="ph-tag ph-tag--new">TeXRA</span>
-          </div>
-          <div class="diff-surface">
-            <div class="dl">
-              <span class="gut">12</span
-              ><span class="kw">\begin</span>{abstract}
-            </div>
-            <div class="dl add hunk-start">
-              <button class="accept" title="Accept change">
-                <wa-icon library="texra" name="arrow-right"></wa-icon>
-              </button>
-              <span class="gut">13</span>We present an
-              <ins>efficient</ins> method for the
-            </div>
-            <div class="dl add">
-              <span class="gut">14</span>estimation of spectral gaps
-              <ins>in random regular graphs</ins>.
-            </div>
-            <div class="dl">
-              <span class="gut">15</span><span class="kw">\end</span>{abstract}
-            </div>
-            <div class="dl"><span class="gut">16</span></div>
-            <div class="dl">
-              <span class="gut">17</span
-              ><span class="kw">\section</span>{Preliminaries}
-            </div>
-            <div class="dl add hunk-start">
-              <button class="accept" title="Accept change">
-                <wa-icon library="texra" name="arrow-right"></wa-icon>
-              </button>
-              <span class="gut">18</span>Let <span class="m">$G$</span> be a
-              <ins>$d$-regular</ins> graph.
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </MockupFrame>
@@ -122,60 +124,60 @@ import MockupFrame from './MockupFrame.vue';
   flex-direction: column;
 }
 .pane + .pane {
-  border-left: 1px solid #000;
+  border-left: 1px solid var(--mk-border-strong);
 }
 .pane-head {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 12px;
-  background: #252526;
+  gap: var(--mk-space-7);
+  padding: var(--mk-space-6) var(--mk-space-12);
+  background: var(--mk-bg-soft);
   border-bottom: 1px solid var(--color-border);
   font-family: var(--vp-font-family-mono);
-  font-size: 0.74rem;
+  font-size: var(--mk-fs-74);
   color: var(--wa-color-text-normal);
 }
 .ph-ic {
-  font-size: 12px;
+  font-size: var(--mk-space-12);
 }
 .ph-tag {
   margin-left: auto;
   font-family: var(--vp-font-family-base);
-  font-size: 0.62rem;
+  font-size: var(--mk-fs-62);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--color-text-secondary);
-  background: #2c2c2c;
-  border-radius: 999px;
-  padding: 1px 8px;
+  background: var(--mk-bg-raised);
+  border-radius: var(--mk-radius-pill);
+  padding: 1px var(--mk-space-8);
 }
 .ph-tag--new {
-  color: #c89be0;
+  color: var(--mk-accent);
   background: rgba(200, 155, 224, 0.14);
 }
 
 /* Diff body reuses .result/.tabs/.tab/.t-ic from mockup.css; the two-pane
    gutter layout below is unique to the compare editor. */
 .diff-surface {
-  padding: 8px 0;
+  padding: var(--mk-space-8) 0;
   font-family: var(--vp-font-family-mono);
-  font-size: 0.82rem;
+  font-size: var(--mk-fs-82);
   color: var(--wa-color-text-normal);
   line-height: 1.7;
 }
 .dl {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 0 14px 0 0;
+  gap: var(--mk-space-10);
+  padding: 0 var(--mk-space-14) 0 0;
   white-space: pre-wrap;
 }
 .gut {
   flex-shrink: 0;
-  width: 30px;
+  width: var(--mk-size-30);
   text-align: right;
-  padding-right: 6px;
+  padding-right: var(--mk-space-6);
   color: var(--color-text-tertiary);
   border-right: 1px solid var(--color-border);
   user-select: none;
@@ -188,41 +190,42 @@ import MockupFrame from './MockupFrame.vue';
 }
 .dl del {
   background: rgba(241, 76, 76, 0.28);
-  color: #ffb3b3;
+  color: var(--mk-del-text);
   text-decoration: line-through;
-  border-radius: 2px;
+  border-radius: var(--mk-radius-xs);
   padding: 0 1px;
 }
 .dl ins {
   background: rgba(46, 160, 67, 0.32);
-  color: #b6f0c0;
+  color: var(--mk-ins-text);
   text-decoration: none;
-  border-radius: 2px;
+  border-radius: var(--mk-radius-xs);
   padding: 0 1px;
 }
 
 /* Accept-change control in the central gutter: like VS Code's diff editor,
-   one arrow per hunk pointing left-to-right — from the draft (left) into the
-   current file (right). It straddles the divider at the right pane's edge. */
+   one arrow per hunk pointing right-to-left — pulling each hunk from the
+   previous draft (right) into the TeXRA suggestions (left). It straddles the
+   divider at the left pane's right edge. */
 .dl.hunk-start {
   position: relative;
 }
 .accept {
   position: absolute;
-  left: -13px;
-  top: 2px;
+  right: -13px;
+  top: var(--mk-space-2);
   z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 21px;
+  width: var(--mk-size-24);
+  height: var(--mk-size-21);
   padding: 0;
-  border: 1px solid #3a3a3a;
-  border-radius: 5px;
-  background: #2c2c2c;
-  color: #c89be0;
-  font-size: 12px;
+  border: 1px solid var(--mk-border-soft);
+  border-radius: var(--mk-radius-md);
+  background: var(--mk-bg-raised);
+  color: var(--mk-accent);
+  font-size: var(--mk-space-12);
   cursor: pointer;
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.45);
 }
@@ -238,7 +241,7 @@ import MockupFrame from './MockupFrame.vue';
   }
   .pane + .pane {
     border-left: none;
-    border-top: 1px solid #000;
+    border-top: 1px solid var(--mk-border-strong);
   }
 }
 </style>
