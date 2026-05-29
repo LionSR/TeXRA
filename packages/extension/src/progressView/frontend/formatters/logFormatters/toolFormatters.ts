@@ -14,7 +14,7 @@ import type {
   LogMessageData,
 } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
-import { isPlainObject } from '@shared/utils/string';
+import { isObject } from '@utils/core';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
@@ -112,7 +112,7 @@ function getToolTimeoutMs(
 ): number | undefined {
   const defaultTimeout = TOOL_DEFAULT_TIMEOUTS[toolName];
   if (defaultTimeout === undefined) return undefined;
-  if (!isPlainObject(input)) return defaultTimeout;
+  if (!isObject(input)) return defaultTimeout;
 
   // Some tools only have a meaningful timeout for a specific action
   const requiredAction = TIMEOUT_GATED_BY_ACTION[toolName];
@@ -191,7 +191,7 @@ function buildBannerContent(
 
 /** Extract typed edits array from parsed tool output, if present. */
 function getOutputEdits<T>(output: unknown): T[] | undefined {
-  return isPlainObject(output) ? (output.edits as T[] | undefined) : undefined;
+  return isObject(output) ? (output.edits as T[] | undefined) : undefined;
 }
 
 type ToolSectionOptions = {
@@ -249,9 +249,7 @@ function isMcpTextBlock(
   block: unknown,
 ): block is { type: 'text'; text: string } {
   return (
-    isPlainObject(block) &&
-    block.type === 'text' &&
-    typeof block.text === 'string'
+    isObject(block) && block.type === 'text' && typeof block.text === 'string'
   );
 }
 
@@ -266,7 +264,7 @@ type ToolSectionContext = {
 
 function buildEditDiffInputSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input, filePath, parsedOutput } = ctx;
-  if (!isPlainObject(input)) return [];
+  if (!isObject(input)) return [];
   const editInput = input as EditInput | TextEditorInput;
   if (
     typeof editInput.old_str !== 'string' ||
@@ -331,7 +329,7 @@ function buildFileContentSections(ctx: ToolSectionContext): TemplateResult[] {
 
 function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
   const { input } = ctx;
-  if (!isPlainObject(input)) return [];
+  if (!isObject(input)) return [];
   const memInput = input as MemoryToolInput;
   const command = memInput.command;
   const memPath = memInput.path ?? '';
@@ -393,7 +391,7 @@ function buildMemorySections(ctx: ToolSectionContext): TemplateResult[] {
 
 function buildExecutionsSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input } = ctx;
-  if (!isPlainObject(input)) return [];
+  if (!isObject(input)) return [];
   const execInput = input as ExecutionsToolInput;
   const execPath = execInput.path ?? '';
   const action = execInput.action ?? EXECUTIONS_DEFAULT_ACTION;
@@ -427,7 +425,7 @@ function buildAcceptRunFilesSections(
   ctx: ToolSectionContext,
 ): TemplateResult[] {
   const { input, parsedOutput } = ctx;
-  if (!isPlainObject(input)) return [];
+  if (!isObject(input)) return [];
   const acceptInput = input as AcceptRunFilesInput;
   const sections: TemplateResult[] = [];
 
@@ -466,7 +464,7 @@ function buildAcceptRunFilesSections(
 
 function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
   const { input } = ctx;
-  if (!isPlainObject(input)) return [];
+  if (!isObject(input)) return [];
   const delegateInput = input as DelegateAgentInput | WorkflowAgentInput;
   const sections: TemplateResult[] = [];
 
@@ -655,7 +653,7 @@ const TOOL_SECTION_BUILDERS: Array<{
 }> = [
   {
     match: (ctx) =>
-      TOOLS_WITH_DIFF_INPUT.has(ctx.toolName) && isPlainObject(ctx.input),
+      TOOLS_WITH_DIFF_INPUT.has(ctx.toolName) && isObject(ctx.input),
     build: buildEditDiffInputSections,
   },
   {
@@ -669,21 +667,19 @@ const TOOL_SECTION_BUILDERS: Array<{
     build: buildFileContentSections,
   },
   {
-    match: (ctx) => ctx.toolName === 'memory' && isPlainObject(ctx.input),
+    match: (ctx) => ctx.toolName === 'memory' && isObject(ctx.input),
     build: buildMemorySections,
   },
   {
-    match: (ctx) => ctx.toolName === 'executions' && isPlainObject(ctx.input),
+    match: (ctx) => ctx.toolName === 'executions' && isObject(ctx.input),
     build: buildExecutionsSections,
   },
   {
-    match: (ctx) =>
-      ctx.toolName === 'accept_run_files' && isPlainObject(ctx.input),
+    match: (ctx) => ctx.toolName === 'accept_run_files' && isObject(ctx.input),
     build: buildAcceptRunFilesSections,
   },
   {
-    match: (ctx) =>
-      DELEGATION_TOOLS.has(ctx.toolName) && isPlainObject(ctx.input),
+    match: (ctx) => DELEGATION_TOOLS.has(ctx.toolName) && isObject(ctx.input),
     build: buildDelegationSections,
   },
   {
@@ -740,18 +736,18 @@ export function formatToolUseTemplate(
   // Surface action + path for executions tool so it's visible without expanding
   let headerSummary = normalizedToolLog.headerSummary || '';
   if (!headerSummary) {
-    if (toolName === 'executions' && isPlainObject(input)) {
+    if (toolName === 'executions' && isObject(input)) {
       headerSummary =
         `${input.action ?? EXECUTIONS_DEFAULT_ACTION} ${input.path ?? ''}`.trim();
     } else if (
       toolName === 'codex' &&
-      isPlainObject(input) &&
+      isObject(input) &&
       typeof input.prompt === 'string'
     ) {
       headerSummary = truncatePrompt(input.prompt, 60);
     } else if (
       toolName === 'bash' &&
-      isPlainObject(input) &&
+      isObject(input) &&
       typeof input.command === 'string'
     ) {
       headerSummary = truncatePrompt(input.command, 60);
@@ -763,7 +759,7 @@ export function formatToolUseTemplate(
     : titleBase;
 
   const filePath =
-    isPlainObject(input) && typeof input.path === 'string' ? input.path : '';
+    isObject(input) && typeof input.path === 'string' ? input.path : '';
 
   const sections: TemplateResult[] = dispatchToolSections({
     toolName,
