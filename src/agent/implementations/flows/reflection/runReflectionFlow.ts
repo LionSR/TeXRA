@@ -25,7 +25,6 @@ import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { RoundPersistedFlow } from '@agent/node/roundPersistedFlow';
-import type { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
   WORKFLOW_DOCUMENT_OUTPUT_EXT,
   WORKFLOW_RAW_OUTPUT_EXT,
@@ -66,7 +65,6 @@ export interface RunReflectionFlowInput<
   storageKey: StorageKey;
   parentStage: StageHandle;
   getOutputFileLocation?: (round: number) => AgentFileLocation;
-  usageMonitor?: UsageMonitor;
   onRoundCompleted?: (
     roundIndex: number,
     totalRounds: number,
@@ -96,7 +94,6 @@ export async function runReflectionFlow<C = unknown>(
     userVarChannels,
     checkInterruption,
     onRoundFinalized = async () => {},
-    usageMonitor,
   } = input;
 
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
@@ -253,9 +250,6 @@ export async function runReflectionFlow<C = unknown>(
           logger.openStage(`r${roundIndex}`, {
             parent: parent ?? undefined,
           }),
-        onStageCreated: (stage) => {
-          usageMonitor?.setActiveGroupId(stage.id);
-        },
         resetForNextRound: (s) => {
           s.workspaceSnapshot = AgentWorkspaceState.emptySnapshot();
         },
