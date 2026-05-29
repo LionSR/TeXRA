@@ -128,10 +128,20 @@ export class FileSelectGroup extends LitElement {
   }
 
   private handleDrop(event: DragEvent): void {
-    if (!hasDroppedFilePayload(event.dataTransfer)) return;
-    event.preventDefault();
+    // Always clear the drag-active visuals on drop. `dragenter`/`dragover`
+    // can only inspect `dataTransfer.types` (protected mode), so a non-file
+    // URI such as an https link is optimistically treated as droppable and
+    // activates the outline. At drop time the payload is readable and may be
+    // rejected — but no `dragleave` follows a `drop`, so failing to reset here
+    // would leave the bucket permanently stuck in the drop-active state.
+    const wasDragActive = this.isDragActive;
     this.dragDepth = 0;
     this.isDragActive = false;
+    if (!hasDroppedFilePayload(event.dataTransfer)) {
+      if (wasDragActive) event.preventDefault();
+      return;
+    }
+    event.preventDefault();
     postDroppedFiles(
       extractDroppedFilePaths(event.dataTransfer),
       this.config.type,
