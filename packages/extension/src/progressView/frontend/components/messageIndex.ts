@@ -123,10 +123,15 @@ export class MessageIndex {
       return node;
     }
 
-    // Get root groups (no parent), sorted by start time.
+    // Get root groups, sorted by start time. A group counts as a root when it
+    // has no parent OR its parent is absent from this set (a dangling parent —
+    // e.g. a cross-trace id the stream never recorded). Re-rooting orphans here
+    // makes them degrade gracefully (rendered un-nested at the timeline top)
+    // instead of vanishing silently along with their whole subtree and messages.
+    // See docs/proposals/progress-grouping-refactor.md (R2).
     // Stable sort preserves original order for equal timestamps.
     this.tree = groups
-      .filter((g) => !g.parentGroupId)
+      .filter((g) => !g.parentGroupId || !groupMap.has(g.parentGroupId))
       .sort(
         (a, b) =>
           (a.startTime ?? Number.MAX_SAFE_INTEGER) -
