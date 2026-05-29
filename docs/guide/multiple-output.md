@@ -84,7 +84,7 @@ part of the current agent settings schema. Update existing YAML files to declare
 Workflow edit prompts can use `INPUT_FILES` to request and format
 multiple outputs within the `<documents>` tag. `INPUT_FILES` is an array
 of selected input filenames, so templates should iterate over it. Use
-`&#123;&#123; INPUT_FILES | join(", ") &#125;&#125;` when the prompt needs a readable list.
+`{{ INPUT_FILES | join(", ") }}` when the prompt needs a readable list.
 
 ```yaml
 # Inside a workflow agent's userRequest prompt:
