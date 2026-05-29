@@ -587,12 +587,7 @@ describe('runCli usage output stream routing', () => {
     // of an ERROR must not land on STDOUT, or it pollutes
     // `--output-format json|ndjson` (e.g. `texra run ... | jq`).
     // Mirrors the documented repro: a usage error under --output-format json.
-    const result = await runCli([
-      'run',
-      'badagent',
-      '--output-format',
-      'json',
-    ]);
+    const result = await runCli(['run', 'badagent', '--output-format', 'json']);
     expect(result.exitCode).toBe(2);
     // Usage banner + the short error line both go to the diagnostic stream.
     expect(stderr).toContain('USAGE');
