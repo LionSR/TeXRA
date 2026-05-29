@@ -434,9 +434,14 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     description:
       'Local TeXRA command-line app integration. Detection is shown now; activation is coming soon.',
     installGuide:
-      'The TeXRA CLI is installed with the TeXRA package. Make sure the `texra` command is on the PATH visible to VS Code or the desktop app.\n\n' +
+      'Run the same agents on your .tex projects without an editor — ideal for scripts, CI, and remote machines.\n\n' +
+      'Install globally from npm (requires Node.js >= 22):\n' +
+      '  npm install -g @texra-ai/cli\n\n' +
+      'The CLI also ships with the TeXRA package — make sure the `texra` command is on the PATH visible to VS Code or the desktop app.\n\n' +
       'Check from a terminal:\n' +
       '  texra --version',
+    installUrl: 'https://www.npmjs.com/package/@texra-ai/cli',
+    installCommand: 'npm install -g @texra-ai/cli',
     configNotes:
       'Coming soon. This entry only checks whether the local CLI is visible.',
     comingSoon: true,
