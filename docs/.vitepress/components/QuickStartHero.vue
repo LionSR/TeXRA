@@ -111,6 +111,6 @@ import MockupFrame from './MockupFrame.vue';
 /* Launcher chrome (lpanel/prompt/footer/run/…) lives in mockup.css, shared
    with ToolConfigHero. Only the sidebar width is unique to this hero. */
 .board {
-  width: 320px;
+  width: var(--mk-size-320);
 }
 </style>

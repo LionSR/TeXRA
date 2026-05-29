@@ -157,19 +157,19 @@ import MockupFrame from './MockupFrame.vue';
 
 <style scoped>
 .board {
-  width: 300px;
+  width: var(--mk-size-300);
 }
 .diffui {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 12px;
+  gap: var(--mk-space-12);
+  padding: var(--mk-space-12);
   font-family: var(--vp-font-family-base);
 }
 .sec-ic {
   display: inline-flex;
-  color: #c89be0;
-  font-size: 13px;
+  color: var(--mk-accent);
+  font-size: var(--mk-space-13);
 }
 .s-mute {
   color: var(--color-text-secondary);
