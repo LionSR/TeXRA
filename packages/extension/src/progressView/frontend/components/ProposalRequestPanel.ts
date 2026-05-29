@@ -14,7 +14,7 @@ import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 
 // Local imports - shared styles
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   commonViewStyles,
   designTokens,

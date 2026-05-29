@@ -3,8 +3,8 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 import { toErrorMessage } from '@common/errors';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import * as logger from '@logger/logUtils';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewInboundMessage } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { THREE_DAYS_MS } from '@utils/config';

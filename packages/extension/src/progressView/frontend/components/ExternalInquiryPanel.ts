@@ -22,7 +22,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type {
   ExternalInquiryPermission,

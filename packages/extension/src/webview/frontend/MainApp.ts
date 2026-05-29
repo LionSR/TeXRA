@@ -6,7 +6,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
 import { hostBridge, postMessage } from '@shared/hostBridge';

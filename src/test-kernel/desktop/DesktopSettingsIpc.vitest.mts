@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
-import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
 import { DEFAULT_MODELS, MODEL_LIST_VERSION } from '@model/modelOptionsBasic';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import { DEFAULT_GIT_MARK_COMMITS } from '@shared/constants/git';
 import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latex';
 import {

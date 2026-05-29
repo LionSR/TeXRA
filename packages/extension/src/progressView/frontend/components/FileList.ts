@@ -16,7 +16,7 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { renderIconActionButton } from '@shared/wa/actionButtons';

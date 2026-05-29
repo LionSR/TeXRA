@@ -1,9 +1,5 @@
-/**
- * Command constants for the history view.
- */
 import { COMMON_COMMANDS } from './commonCommands';
 
-// History view specific commands
 export const HISTORY_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
   GET_HISTORY_DATA: 'getHistoryData',

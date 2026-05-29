@@ -6,7 +6,7 @@
  */
 import { z } from 'zod';
 
-import { PROFILE_VIEW_COMMANDS } from '@common/webview/commands';
+import { PROFILE_VIEW_COMMANDS } from '@shared/ipc';
 import { ProviderVscodeSettingDefSchema } from '@shared/constants/providers';
 import { AgentMetadataBaseSchema } from './agent';
 import { commandOnly } from './messageFactories';

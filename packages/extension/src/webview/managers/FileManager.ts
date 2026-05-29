@@ -10,7 +10,6 @@ import {
   getIncludedExtensions,
   type MultiFileCategory,
 } from '@common/files';
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
 import { getFileLister } from '@frontend/files';
 import {
   showLoggedErrorMessage,
@@ -18,6 +17,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
 import * as logger from '@logger/logUtils';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   MainViewInboundMessage,
   MultipleDocumentFileType,
