@@ -15,10 +15,8 @@ import {
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
 import {
-  buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
-  getApprovedContent,
-  requestToolEditApproval,
+  requestApprovedEditContent,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
@@ -310,20 +308,17 @@ export class TextEditorTool extends defineTool({
       const proposedContent = isTexFile(filePath)
         ? replacementEngine.applyAll(content)
         : content;
-      const approval = await requestToolEditApproval({
+      const outcome = await requestApprovedEditContent({
         path: filePath,
+        displayPath,
         originalContent: '',
-        proposedContent: proposedContent,
+        proposedContent,
         sourceTool: 'text_editor:create',
       });
-
-      if (!approval.accepted) {
-        return buildApprovalRejectedResult(
-          displayPath,
-          'text_editor:create',
-          approval.userMessage,
-        );
+      if ('rejected' in outcome) {
+        return outcome.rejected;
       }
+      const { approval, finalContent } = outcome;
 
       // Create parent directories if they don't exist
       const dirPath = path.dirname(filePath);
@@ -331,7 +326,6 @@ export class TextEditorTool extends defineTool({
         await WorkspaceFS.ensureDir(dirPath);
       }
 
-      const finalContent = getApprovedContent(approval, proposedContent);
       const { appliedContent } = await writeApprovedContent(
         filePath,
         '',
@@ -407,26 +401,22 @@ export class TextEditorTool extends defineTool({
         expandedNewStr,
       );
 
-      const approval = await requestToolEditApproval({
+      const outcome = await requestApprovedEditContent({
         path: filePath,
+        displayPath,
         originalContent: fileContent,
         proposedContent: newFileContent,
         sourceTool: 'text_editor:str_replace',
       });
-
-      if (!approval.accepted) {
-        return buildApprovalRejectedResult(
-          displayPath,
-          'text_editor:str_replace',
-          approval.userMessage,
-        );
+      if ('rejected' in outcome) {
+        return outcome.rejected;
       }
+      const { approval, finalContent } = outcome;
 
-      const approvedContent = getApprovedContent(approval, newFileContent);
       const { appliedContent, baseContent } = await writeApprovedContent(
         filePath,
         fileContent,
-        approvedContent,
+        finalContent,
       );
       if (appliedContent !== baseContent) {
         this.addToHistory(filePath, baseContent);
@@ -500,26 +490,22 @@ export class TextEditorTool extends defineTool({
       ];
       const newFileContent = newFileLines.join('\n');
 
-      const approval = await requestToolEditApproval({
+      const outcome = await requestApprovedEditContent({
         path: filePath,
+        displayPath,
         originalContent: fileContent,
         proposedContent: newFileContent,
         sourceTool: 'text_editor:insert',
       });
-
-      if (!approval.accepted) {
-        return buildApprovalRejectedResult(
-          displayPath,
-          'text_editor:insert',
-          approval.userMessage,
-        );
+      if ('rejected' in outcome) {
+        return outcome.rejected;
       }
+      const { approval, finalContent } = outcome;
 
-      const approvedContent = getApprovedContent(approval, newFileContent);
       const { appliedContent, baseContent } = await writeApprovedContent(
         filePath,
         fileContent,
-        approvedContent,
+        finalContent,
       );
       if (appliedContent !== baseContent) {
         this.addToHistory(filePath, baseContent);
@@ -578,26 +564,22 @@ export class TextEditorTool extends defineTool({
       const previousContent = history.at(-1)!;
       const currentContent = await WorkspaceFS.read(filePath);
 
-      const approval = await requestToolEditApproval({
+      const outcome = await requestApprovedEditContent({
         path: filePath,
+        displayPath,
         originalContent: currentContent,
         proposedContent: previousContent,
         sourceTool: 'text_editor:undo_edit',
       });
-
-      if (!approval.accepted) {
-        return buildApprovalRejectedResult(
-          displayPath,
-          'text_editor:undo_edit',
-          approval.userMessage,
-        );
+      if ('rejected' in outcome) {
+        return outcome.rejected;
       }
+      const { approval, finalContent } = outcome;
 
-      const approvedContent = getApprovedContent(approval, previousContent);
       const { appliedContent } = await writeApprovedContent(
         filePath,
         currentContent,
-        approvedContent,
+        finalContent,
       );
       history.pop();
 

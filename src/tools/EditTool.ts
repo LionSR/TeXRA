@@ -15,10 +15,8 @@ import {
 } from '@tools/pathResolution';
 import { countOccurrences } from '@tools/utils';
 import {
-  buildApprovalRejectedResult,
   formatUnifiedApprovalUserDiff,
-  getApprovedContent,
-  requestToolEditApproval,
+  requestApprovedEditContent,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
@@ -98,22 +96,18 @@ export class EditFileTool extends defineTool({
         currentContent.slice(idx + old_str.length);
     }
 
-    const approval = await requestToolEditApproval({
+    const outcome = await requestApprovedEditContent({
       path: targetPath,
+      displayPath,
       originalContent: currentContent,
       proposedContent: updatedContent,
       sourceTool: 'edit_file',
     });
-
-    if (!approval.accepted) {
-      return buildApprovalRejectedResult(
-        displayPath,
-        'edit_file',
-        approval.userMessage,
-      );
+    if ('rejected' in outcome) {
+      return outcome.rejected;
     }
+    const { approval, finalContent } = outcome;
 
-    const finalContent = getApprovedContent(approval, updatedContent);
     const { appliedContent } = await writeApprovedContent(
       targetPath,
       currentContent,
