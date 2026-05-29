@@ -1,29 +1,20 @@
 import {
-  proposalCoordinator,
-  type ProposalRequestOptions,
-  type ProposalResult,
-} from './AgentProposalCoordinator';
-import {
-  planApprovalCoordinator,
-  type PlanApprovalRequestOptions,
-  type PlanApprovalResult,
-} from './PlanApprovalCoordinator';
-import {
-  retryCoordinator,
-  type RetryRequestOptions,
-  type RetryResult,
-} from './RetryRequestCoordinator';
-import {
   tryUseRunContext,
   useRunContext,
   type RunCoordinators,
 } from './RunContext';
-
-const legacyCoordinators: RunCoordinators = {
-  plan: planApprovalCoordinator,
-  proposal: proposalCoordinator,
-  retry: retryCoordinator,
-};
+import type {
+  ProposalRequestOptions,
+  ProposalResult,
+} from './AgentProposalCoordinator';
+import type {
+  PlanApprovalRequestOptions,
+  PlanApprovalResult,
+} from './PlanApprovalCoordinator';
+import type {
+  RetryRequestOptions,
+  RetryResult,
+} from './RetryRequestCoordinator';
 
 function useRunCoordinators(): RunCoordinators {
   const coordinators = useRunContext().coordinators;
@@ -106,17 +97,18 @@ export function resolvePlanApproval(
   result: PlanApprovalResult,
 ): boolean {
   return (
-    bridgeState.planApprovals.get(approvalId)?.plan ?? legacyCoordinators.plan
-  ).resolveRequest(approvalId, result);
+    bridgeState.planApprovals
+      .get(approvalId)
+      ?.plan.resolveRequest(approvalId, result) ?? false
+  );
 }
 
 export function clearPlanApprovalForStream(streamId: string): void {
   (
     bridgeState.planStreams.get(streamId)?.plan ??
     bridgeState.runStreams.get(streamId)?.plan ??
-    tryUseRunContext()?.coordinators?.plan ??
-    legacyCoordinators.plan
-  ).clearForStream(streamId);
+    tryUseRunContext()?.coordinators?.plan
+  )?.clearForStream(streamId);
   clearPlanBridgeForStream(streamId);
 }
 
@@ -125,7 +117,6 @@ function clearAllPlanApprovals(): void {
   for (const runCoordinators of bridgeState.runStreams.values()) {
     coordinators.add(runCoordinators);
   }
-  coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
     coordinator.plan.clearAll();
   }
@@ -154,9 +145,10 @@ export function resolveProposal(
   result: ProposalResult,
 ): boolean {
   return (
-    bridgeState.proposals.get(proposalId)?.proposal ??
-    legacyCoordinators.proposal
-  ).resolveRequest(proposalId, result);
+    bridgeState.proposals
+      .get(proposalId)
+      ?.proposal.resolveRequest(proposalId, result) ?? false
+  );
 }
 
 function clearProposalForStream(streamId: string): void {
@@ -164,10 +156,7 @@ function clearProposalForStream(streamId: string): void {
     .filter(([, proposalStreamId]) => proposalStreamId === streamId)
     .map(([proposalId]) => proposalId);
   for (const proposalId of proposalIds) {
-    (
-      bridgeState.proposals.get(proposalId)?.proposal ??
-      legacyCoordinators.proposal
-    ).clearRequest(proposalId);
+    bridgeState.proposals.get(proposalId)?.proposal.clearRequest(proposalId);
     bridgeState.proposals.delete(proposalId);
     bridgeState.proposalStreams.delete(proposalId);
   }
@@ -175,7 +164,6 @@ function clearProposalForStream(streamId: string): void {
 
 function clearAllProposals(): void {
   const coordinators = new Set(bridgeState.proposals.values());
-  coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
     coordinator.proposal.clearAll();
   }
@@ -200,14 +188,15 @@ export async function waitForRetry(
 
 export function triggerRetry(streamId: string, feedback?: string): boolean {
   return (
-    bridgeState.retries.get(streamId)?.retry ?? legacyCoordinators.retry
-  ).triggerRetry(streamId, feedback);
+    bridgeState.retries.get(streamId)?.retry.triggerRetry(streamId, feedback) ??
+    false
+  );
 }
 
 export function cancelRetry(streamId: string): boolean {
   return (
-    bridgeState.retries.get(streamId)?.retry ?? legacyCoordinators.retry
-  ).cancelRetry(streamId);
+    bridgeState.retries.get(streamId)?.retry.cancelRetry(streamId) ?? false
+  );
 }
 
 export function clearRetryRequest(streamId: string): void {
@@ -218,7 +207,6 @@ export function clearRetryRequest(streamId: string): void {
   if (runCoordinators) coordinators.add(runCoordinators);
   const ambient = tryUseRunContext()?.coordinators;
   if (ambient) coordinators.add(ambient);
-  coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
     coordinator.retry.clearRequest(streamId);
   }
@@ -233,7 +221,6 @@ export function clearAllRetryRequests(): void {
   for (const runCoordinators of bridgeState.retries.values()) {
     coordinators.add(runCoordinators);
   }
-  coordinators.add(legacyCoordinators);
   for (const coordinator of coordinators) {
     coordinator.retry.clearAll();
   }
