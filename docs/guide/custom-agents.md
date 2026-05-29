@@ -60,7 +60,7 @@ settings:
   rounds: 2 # Maximum number of passes (Round 0 plus reflection rounds). The actual count is max(rounds, number of userRequest entries); a run can still stop early once the model signals it is finished.
 
   # Output Handling
-  documentTag: documents # The main XML tag wrapping the agent's final output (required for CoT).
+  documentTag: documents # The main XML tag wrapping the agent's final output (defaults to `documents`).
   endTag: '</documents>' # The closing tag that signals the agent has finished its main output.
   prefills:
     - "<documents>\n" # List of strings the AI should start its response(s) with.
