@@ -2,8 +2,8 @@
  * Default in-process implementation of {@link AgentTrace}.
  *
  * This is the agent-general core: no MESSAGE_TYPES, no TeXRA-specific
- * sugar. Hosts that need product-specific helpers extend this class
- * (see `TexraTraceEmitter` in `@logger/TexraTraceEmitter`).
+ * sugar. Product-specific helpers are plain functions in `helpers.ts` /
+ * `toolUseHelpers.ts` that operate on the emitted event stream.
  *
  * Responsibilities at the emit boundary (one place, not many):
  *   - stamp `stageId` from the AsyncLocalStorage scope

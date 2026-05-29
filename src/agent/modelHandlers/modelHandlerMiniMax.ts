@@ -2,7 +2,6 @@
 import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 import type { ToolDefinition } from '@model';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
 // Type imports
 import type {
@@ -121,16 +120,7 @@ export class ModelHandlerMiniMax extends ModelHandlerOpenAI {
     return callMsg;
   }
 
-  /**
-   * MiniMax requires content to be converted to strings for non-vision models.
-   * Vision models use standard OpenAI image_url format.
-   */
-  protected override getMessageNormalizationOptions():
-    | NormalizeOpenAIMessageContentOptions
-    | undefined {
-    if (this.capabilities.supportsVision) {
-      return undefined;
-    }
-    return { convertContentToString: true };
-  }
+  // MiniMax stringifies content for non-vision models; vision models use the
+  // standard OpenAI image_url format.
+  protected override readonly convertContentToStringUnlessVision = true;
 }

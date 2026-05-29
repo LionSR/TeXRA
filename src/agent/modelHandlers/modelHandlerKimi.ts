@@ -2,7 +2,6 @@
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { ToolDefinition } from '@model';
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
 // Type imports
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
@@ -35,16 +34,9 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
     return 'moonshot';
   }
 
-  protected override getMessageNormalizationOptions():
-    | NormalizeOpenAIMessageContentOptions
-    | undefined {
-    // Kimi K2.5 supports vision with standard OpenAI-style image_url format.
-    // Don't convert content to strings for vision models as it strips image parts.
-    if (this.capabilities.supportsVision) {
-      return undefined;
-    }
-    return { convertContentToString: true };
-  }
+  // Kimi K2.5 supports vision with standard OpenAI-style image_url format;
+  // only stringify content for non-vision variants so image parts survive.
+  protected override readonly convertContentToStringUnlessVision = true;
 
   protected override getThinkingParameter():
     | { type: 'enabled' | 'disabled' }

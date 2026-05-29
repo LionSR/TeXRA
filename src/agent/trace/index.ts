@@ -5,8 +5,8 @@
  * `subscribe()`. Plain `debug/info/warn/error`, stages, streams, and the
  * domain helpers are sugar over `emit()`.
  *
- * Host-specific helpers (TeXRA's `logError`/`latexDiff`/`statistics`/
- * etc.) live on `TexraTrace` in `@logger`, which extends this interface.
+ * TeXRA-specific helpers (`logError`/`latexDiff`/`statistics`/etc.) are
+ * plain functions over this interface in `helpers.ts` / `toolUseHelpers.ts`.
  *
  * See `docs/proposals/agent-trace-sdk-surface.md` for the design.
  */
