@@ -1,23 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  CHILD_STATUS_MARKER,
   childStatusColor,
-  childStatusMarker,
-  childStatusPulses,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
 
 describe('CLI SubagentList display model', () => {
-  it('pulses running statuses', () => {
-    expect(childStatusPulses(undefined)).toBe(true);
-    expect(childStatusPulses('running')).toBe(true);
-    expect(childStatusPulses('in_progress')).toBe(true);
-    expect(childStatusPulses('waiting')).toBe(false);
-  });
-
-  it('alternates the marker only for active rows', () => {
-    expect(childStatusMarker('running', true)).toBe('● ');
-    expect(childStatusMarker('running', false)).toBe('○ ');
-    expect(childStatusMarker('waiting', false)).toBe('● ');
+  it('renders a steady (non-animated) marker for every status', () => {
+    // The marker is intentionally static: a blinking dot forced the whole live
+    // region to repaint twice a second, which surfaced Ink repaint residue.
+    expect(CHILD_STATUS_MARKER).toBe('● ');
   });
 
   it('maps status colors consistently', () => {
