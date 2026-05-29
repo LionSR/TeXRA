@@ -72,7 +72,10 @@ import MockupFrame from './MockupFrame.vue';
               <span class="gut">12</span
               ><span class="kw">\begin</span>{abstract}
             </div>
-            <div class="dl add">
+            <div class="dl add hunk-start">
+              <button class="accept" title="Accept change">
+                <wa-icon library="texra" name="arrow-left"></wa-icon>
+              </button>
               <span class="gut">13</span>We present an
               <ins>efficient</ins> method for the
             </div>
@@ -88,7 +91,10 @@ import MockupFrame from './MockupFrame.vue';
               <span class="gut">17</span
               ><span class="kw">\section</span>{Preliminaries}
             </div>
-            <div class="dl add">
+            <div class="dl add hunk-start">
+              <button class="accept" title="Accept change">
+                <wa-icon library="texra" name="arrow-left"></wa-icon>
+              </button>
               <span class="gut">18</span>Let <span class="m">$G$</span> be a
               <ins>$d$-regular</ins> graph.
             </div>
@@ -193,6 +199,36 @@ import MockupFrame from './MockupFrame.vue';
   text-decoration: none;
   border-radius: 2px;
   padding: 0 1px;
+}
+
+/* Accept-change control in the central gutter: like VS Code's diff editor,
+   one arrow per hunk that applies the revision back into the original. It
+   straddles the divider at the revised pane's left edge. */
+.dl.hunk-start {
+  position: relative;
+}
+.accept {
+  position: absolute;
+  left: -13px;
+  top: 2px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 21px;
+  padding: 0;
+  border: 1px solid #3a3a3a;
+  border-radius: 5px;
+  background: #2c2c2c;
+  color: #c89be0;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.45);
+}
+.accept:hover {
+  background: rgba(200, 155, 224, 0.18);
+  border-color: rgba(200, 155, 224, 0.6);
 }
 
 /* On narrow screens the two panes stack like VS Code's inline diff. */
