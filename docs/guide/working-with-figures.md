@@ -27,7 +27,7 @@ The main TeXRA panel includes a **Media** section for figure files:
 - **Add media files** (<wa-icon library="texra" name="add"></wa-icon>): open a file picker to append figures.
 - **Drag-and-drop** image, PDF, or audio files from anywhere onto the section.
 
-Each file appears as a row with a drag handle (for reordering) and a small trash icon (to remove just that file).
+Each file appears as a row you can drag to reorder, with a small trash icon (to remove just that file).
 
 ## <wa-icon library="texra" name="file-symlink-file"></wa-icon> Supported File Types
 
