@@ -6,6 +6,7 @@ If you've never written a custom agent, skip this guide.
 
 <script setup>
 import ContextPickerMigration from '../.vitepress/components/ContextPickerMigration.vue';
+import MigrationTroubleshooting from '../.vitepress/components/MigrationTroubleshooting.vue';
 </script>
 
 ## What changed and why
@@ -223,6 +224,10 @@ prompts:
 The `_multiple` sibling is gone; this YAML works for one input or several.
 
 ## When something looks wrong
+
+<MigrationTroubleshooting />
+
+<p class="hero-caption">Four symptoms of a not-yet-migrated custom YAML, each with its cause and the canonical fix.</p>
 
 - **Empty context section in prompt** — your YAML uses an old alias like `{{ ALL_AUXILIARYS }}` that returns content but no UI exposes the "auxiliary" picker any more, so users have nothing to attach. Switch to `{{ ALL_CONTEXTS }}` and your users see the unified Context picker.
 - **Output file ends up named `output.tex` instead of the input filename** — your YAML has `<document name="output.tex">` hard-coded. Use `<document name="{{ INPUT_FILE }}">` (resolves to `inputFiles[0]`) or omit the inner `<document>` template and let the agent name files based on `{{ ALL_INPUTS }}` content.

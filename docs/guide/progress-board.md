@@ -2,6 +2,7 @@
 import StreamHeaderActions from '../.vitepress/components/StreamHeaderActions.vue';
 import StatusDotLegend from '../.vitepress/components/StatusDotLegend.vue';
 import TodoLifecycle from '../.vitepress/components/TodoLifecycle.vue';
+import ProgressLogHero from '../.vitepress/components/ProgressLogHero.vue';
 </script>
 
 # ProgressBoard
@@ -119,6 +120,10 @@ This scrollable area displays the detailed, timestamped logs for the selected ag
 - **Log Levels**: Messages are prefixed with levels like `INFO`, `DEBUG`, `WARN`, `ERROR` to indicate severity. Verbose debug messages (`DEBUG`) are only shown if `texra.logger.debugMode` is enabled in settings.
 - **Agent Thinking**: The log highlights model reasoning in purple **Thinking** blocks. These sections are flagged internally with a `thinking` type so you can easily spot when the AI is exploring ideas.
 - **Errors**: Errors are highlighted, often providing clues if something went wrong.
+
+<ProgressLogHero />
+
+<p class="hero-caption">The log: each row is color-keyed by severity — green for info/success, yellow for warnings, red for errors — with expandable nested detail and per-task IDs.</p>
 
 Understanding the log content is key to diagnosing problems and seeing how TeXRA and the AI models process your requests. Refer to the [Troubleshooting](./troubleshooting.md) guide for more tips on using logs.
 

@@ -66,15 +66,17 @@ The "Current" button (<wa-icon library="texra" name="file-code"></wa-icon>) allo
 
 ### Step 2: Generate the Diff
 
-Click the "latexdiff" button with the <wa-icon library="texra" name="diff-single"></wa-icon> icon.
+Click the "latexdiff" button with the <wa-icon library="texra" name="diff-single"></wa-icon> icon. TeXRA then runs the same five-stage pipeline for every diff route — only the tool and output name change:
 
-TeXRA will:
+<FlowSteps :steps="[
+  { n: 1, icon: 'diff-single', title: 'Run latexdiff', desc: 'Invokes the latexdiff tool on your selected base and edited files.' },
+  { n: 2, icon: 'file-code', title: 'Write diff .tex', desc: 'Produces a marked-up LaTeX document.', chips: [{ text: 'original_diff.tex', variant: 'info', icon: 'file-code' }] },
+  { n: 3, icon: 'edit', title: 'Open in editor', desc: 'Automatically opens the generated diff source.' },
+  { n: 4, icon: 'play', title: 'Trigger build', desc: 'Runs LaTeX Workshop\'s build command, if the extension is installed.', chips: [{ text: 'LaTeX Workshop', variant: 'neutral' }] },
+  { n: 5, icon: 'file-pdf', title: 'Open PDF', desc: 'After compilation, triggers the view command to show the diff PDF.', chips: [{ text: 'auto', variant: 'success', icon: 'check' }] }
+]" />
 
-1. Run the `latexdiff` tool on your selected files.
-2. Generate a new LaTeX document (e.g., `original_diff.tex`) with highlighted changes.
-3. **Automatically open** this generated `.tex` diff file in your editor.
-4. If the [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension is installed, TeXRA will then automatically trigger its **build** command for the diff file.
-5. After a short delay (to allow compilation), it will trigger LaTeX Workshop's **view** command to show the compiled PDF diff.
+<p class="hero-caption">After you press a diff button, TeXRA runs latexdiff, writes the marked-up <code>.tex</code>, opens it, then (with LaTeX Workshop installed) builds and views the compiled diff PDF.</p>
 
 ### Step 3: Review Changes
 
@@ -101,13 +103,7 @@ The commit dropdown shows recent commits. Click the refresh icon (<wa-icon libra
 
 Click the "latexdiff-vc" button (<wa-icon library="texra" name="diff-single"></wa-icon> icon) to compare your file with its version at the selected commit.
 
-TeXRA will:
-
-1. Run the `latexdiff-vc` tool using the selected file and commit.
-2. Generate a new LaTeX document (e.g., `original_diff_rev[commit_hash].tex`) with highlighted changes.
-3. **Automatically open** this generated `.tex` diff file in your editor.
-4. If the [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension is installed, TeXRA will then automatically trigger its **build** command for the diff file.
-5. After a short delay (to allow compilation), it will trigger LaTeX Workshop's **view** command to show the compiled PDF diff.
+TeXRA runs the same five-stage pipeline shown above — only this route uses the `latexdiff-vc` tool and names its output with the commit hash (e.g., `original_diff_rev[commit_hash].tex`).
 
 ### Step 3: Manage Diff Outputs
 

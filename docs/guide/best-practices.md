@@ -1,6 +1,7 @@
 <script setup>
 import StagedWorkflowHero from '../.vitepress/components/StagedWorkflowHero.vue';
 import QaChecklistCard from '../.vitepress/components/QaChecklistCard.vue';
+import ModelTierMatrixCard from '../.vitepress/components/ModelTierMatrixCard.vue';
 </script>
 
 # Best Practices
@@ -38,9 +39,9 @@ For complex tasks:
 
 Match model capability to task complexity - overpowered models waste money, underpowered ones produce poor results.
 
-- **Simple tasks** (corrections): Use fast, cheap models (`qwenturbo`, `deepseek`, `haiku45`)
-- **Complex tasks** (transformations): Use powerful models (`opus48T`, `gpt55`, `gemini31p`)
-- **Reasoning-heavy**: Use thinking models (`sonnet46T`, `opus48T`, `deepseekT`)
+<ModelTierMatrixCard />
+
+<p class="hero-caption">Find the row that matches your task, then pick one of the recommended model handles.</p>
 
 See the [AI Models Guide](./models.md) for detailed comparisons.
 

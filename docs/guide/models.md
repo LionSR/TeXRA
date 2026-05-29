@@ -1,6 +1,7 @@
 <script setup>
 import ModelPickerHero from '../.vitepress/components/ModelPickerHero.vue';
 import ProviderConfigRow from '../.vitepress/components/ProviderConfigRow.vue';
+import ModelChoiceMatrix from '../.vitepress/components/ModelChoiceMatrix.vue';
 </script>
 
 # AI Models
@@ -113,11 +114,9 @@ GLM models support thinking mode (reasoning is shown inline). The API uses a non
 
 ## Choosing a Model
 
-- **Simple tasks**: Fast, cheap models (`qwenturbo`, `deepseek`, `haiku45`)
-- **Complex tasks**: Powerful models (`opus48`, `gpt55`, `gemini31p`)
-- **Code-heavy / LaTeX editing**: Strong editing models (`opus48T`, `sonnet46T`, `qwenplus`)
-- **Reasoning-heavy**: Thinking models (`opus48T`, `sonnet46T`, `deepseekT`, `kimi26T`)
-- **Large documents**: High-context models (`gemini31p`, `sonnet46`, `opus48`)
+<ModelChoiceMatrix />
+
+<p class="hero-caption">Pick a model by intent: each use case maps to a short list of recommended model ids.</p>
 
 ## Configuration
 

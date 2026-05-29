@@ -1,6 +1,7 @@
 <script setup>
 import ProgressLogHero from '../.vitepress/components/ProgressLogHero.vue';
 import XmlRepairCard from '../.vitepress/components/XmlRepairCard.vue';
+import ToolPathSearchOrder from '../.vitepress/components/ToolPathSearchOrder.vue';
 </script>
 
 # Troubleshooting
@@ -63,43 +64,51 @@ to confirm available models, and `texra tools status` to check tool availability
 
 - When launching VS Code from the system menu or Finder, it may inherit a minimal PATH. TeXRA automatically searches common locations in the following order:
 
-  **macOS:**
-  1. `/opt/homebrew/bin` (Apple Silicon Homebrew)
-  2. `/usr/local/bin` (Intel Homebrew and general tools)
-  3. `/Library/TeX/texbin` (MacTeX symlink)
-  4. `/usr/texbin` (legacy MacTeX location)
-  5. `/Applications/MiKTeX Console.app/Contents/bin` (MiKTeX app bundle)
-  6. `~/bin` (MiKTeX default symlink target)
-  7. Versioned TeX Live directories (e.g., `/usr/local/texlive/2024/bin/universal-darwin`)
-  8. User-specific installations in `~/texlive/*/bin/*` and `~/TinyTeX/bin/*`
+<ToolPathSearchOrder />
 
-  **Windows:**
-  1. `C:\Program Files\MiKTeX\miktex\bin\x64` (64-bit MiKTeX)
-  2. `C:\Program Files\MiKTeX\miktex\bin` (32-bit MiKTeX)
-  3. `C:\Program Files (x86)\MiKTeX\miktex\bin` (32-bit on 64-bit Windows)
-  4. `%LOCALAPPDATA%\Programs\MiKTeX\miktex\bin\x64` (user MiKTeX installation)
-  5. `%LOCALAPPDATA%\Programs\MiKTeX\miktex\bin` (user MiKTeX, 32-bit)
-  6. `%LOCALAPPDATA%\Programs\MiKTeX 2.9\miktex\bin\x64` (legacy user MiKTeX 2.9)
-  7. `%LOCALAPPDATA%\MiKTeX\miktex\bin\x64` (user MiKTeX without Programs subfolder)
-  8. Versioned TeX Live directories (e.g., `C:\texlive\2024\bin\windows`)
-  9. User-specific installations in `%USERPROFILE%\texlive\*\bin\*` and `%USERPROFILE%\TinyTeX\bin\*`
+<p class="hero-caption">Launched from Finder or the Start menu, VS Code inherits a minimal PATH — so TeXRA probes these well-known install dirs in order, per OS, falling back to <code>kpsewhich</code> and <code>texmf-dist/scripts</code>.</p>
 
-  **Linux:**
-  1. `/usr/local/bin`
-  2. `/usr/bin`
-  3. `/opt/miktex/bin` (MiKTeX installed via APT/AUR)
-  4. `/snap/bin` (Ubuntu snap packages)
-  5. `/home/linuxbrew/.linuxbrew/bin` (Linuxbrew)
-  6. `~/bin` (MiKTeX default symlink target)
-  7. Versioned TeX Live directories
-  8. User-specific installations
+**macOS:**
 
-  **Fallback mechanisms:**
-  - If tools aren't found in standard paths, TeXRA searches `texmf-dist/scripts` directories
-  - Uses `kpsewhich` to locate Perl scripts (e.g., `latexdiff.pl`)
-  - Automatically runs Perl scripts with `perl` interpreter when needed
+1. `/opt/homebrew/bin` (Apple Silicon Homebrew)
+2. `/usr/local/bin` (Intel Homebrew and general tools)
+3. `/Library/TeX/texbin` (MacTeX symlink)
+4. `/usr/texbin` (legacy MacTeX location)
+5. `/Applications/MiKTeX Console.app/Contents/bin` (MiKTeX app bundle)
+6. `~/bin` (MiKTeX default symlink target)
+7. Versioned TeX Live directories (e.g., `/usr/local/texlive/2024/bin/universal-darwin`)
+8. User-specific installations in `~/texlive/*/bin/*` and `~/TinyTeX/bin/*`
 
-  Opening VS Code from a configured terminal provides the most reliable environment.
+**Windows:**
+
+1. `C:\Program Files\MiKTeX\miktex\bin\x64` (64-bit MiKTeX)
+2. `C:\Program Files\MiKTeX\miktex\bin` (32-bit MiKTeX)
+3. `C:\Program Files (x86)\MiKTeX\miktex\bin` (32-bit on 64-bit Windows)
+4. `%LOCALAPPDATA%\Programs\MiKTeX\miktex\bin\x64` (user MiKTeX installation)
+5. `%LOCALAPPDATA%\Programs\MiKTeX\miktex\bin` (user MiKTeX, 32-bit)
+6. `%LOCALAPPDATA%\Programs\MiKTeX 2.9\miktex\bin\x64` (legacy user MiKTeX 2.9)
+7. `%LOCALAPPDATA%\MiKTeX\miktex\bin\x64` (user MiKTeX without Programs subfolder)
+8. Versioned TeX Live directories (e.g., `C:\texlive\2024\bin\windows`)
+9. User-specific installations in `%USERPROFILE%\texlive\*\bin\*` and `%USERPROFILE%\TinyTeX\bin\*`
+
+**Linux:**
+
+1. `/usr/local/bin`
+2. `/usr/bin`
+3. `/opt/miktex/bin` (MiKTeX installed via APT/AUR)
+4. `/snap/bin` (Ubuntu snap packages)
+5. `/home/linuxbrew/.linuxbrew/bin` (Linuxbrew)
+6. `~/bin` (MiKTeX default symlink target)
+7. Versioned TeX Live directories
+8. User-specific installations
+
+**Fallback mechanisms:**
+
+- If tools aren't found in standard paths, TeXRA searches `texmf-dist/scripts` directories
+- Uses `kpsewhich` to locate Perl scripts (e.g., `latexdiff.pl`)
+- Automatically runs Perl scripts with `perl` interpreter when needed
+
+Opening VS Code from a configured terminal provides the most reliable environment.
 
 3. **Manual installation**:
    - Follow the detailed installation steps in the [Installation Guide](/guide/installation)

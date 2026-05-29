@@ -1,5 +1,6 @@
 <script setup>
 import DoctorReportCard from '../.vitepress/components/DoctorReportCard.vue';
+import InstallTroubleshootCards from '../.vitepress/components/InstallTroubleshootCards.vue';
 </script>
 
 # Installation Guide
@@ -319,26 +320,11 @@ If any component is missing, TeXRA will typically show an error message indicati
 
 ### Common Installation Issues
 
-1. **Extension Not Loading**:
-   - Check VS Code's minimum version requirement (1.105+)
-   - Look for errors in the Output panel (select "TeXRA" in the dropdown)
-   - Try reinstalling the extension
+Most installation problems fall into one of four categories. Find your symptom and work through its checks:
 
-2. **LaTeX Processing Errors**:
-   - Verify LaTeX is in your system PATH
+<InstallTroubleshootCards />
 
-- Run `latexmk --version` (or `pdflatex --version`) in terminal to confirm installation
-- Check if required LaTeX packages are installed
-
-3. **Image Processing Errors**:
-   - Confirm GraphicsMagick/ImageMagick is properly installed
-   - Verify Ghostscript is installed and accessible
-   - Check PATH environment variables
-
-4. **API Key Issues**:
-   - Verify API keys are entered correctly
-   - Check your usage limits
-   - Ensure your network allows connections to API endpoints
+<p class="hero-caption">Four common failure modes and the checks for each: a loading extension, LaTeX or image processing, and API keys.</p>
 
 ### Getting Help
 

@@ -40,9 +40,49 @@ The main TeXRA panel includes a **Media** section for figure files. Its header c
 
 Configurable via `texra.files.included.mediaExtensions`:
 
-- **Images**: `.png`, `.jpeg`, `.jpg`, `.gif`, `.heic`, `.heif`, `.webp`
-- **Documents**: `.pdf` (native on Anthropic/Gemini/OpenAI, otherwise rasterised)
-- **Audio** (experimental): `.wav`, `.m4a`, `.mp3`, `.aiff`, `.aac`, `.ogg`, `.flac`
+<FeatureCards
+  min="220px"
+  :cards="[
+    {
+      icon: 'file-media',
+      title: 'Images',
+      desc: 'Encoded and attached for vision-capable models.',
+      chips: [
+        { text: '.png', variant: 'accent' },
+        { text: '.jpeg', variant: 'accent' },
+        { text: '.jpg', variant: 'accent' },
+        { text: '.gif', variant: 'accent' },
+        { text: '.heic', variant: 'accent' },
+        { text: '.heif', variant: 'accent' },
+        { text: '.webp', variant: 'accent' },
+      ],
+    },
+    {
+      icon: 'file-pdf',
+      title: 'Documents',
+      desc: 'Native multimodal on Anthropic / Gemini / OpenAI, otherwise rasterised.',
+      chips: [{ text: '.pdf', variant: 'info' }],
+    },
+    {
+      icon: 'unmute',
+      title: 'Audio',
+      tag: 'Experimental',
+      tagVariant: 'warning',
+      desc: 'Uploaded for transcription by audio-capable models.',
+      chips: [
+        { text: '.wav', variant: 'neutral' },
+        { text: '.m4a', variant: 'neutral' },
+        { text: '.mp3', variant: 'neutral' },
+        { text: '.aiff', variant: 'neutral' },
+        { text: '.aac', variant: 'neutral' },
+        { text: '.ogg', variant: 'neutral' },
+        { text: '.flac', variant: 'neutral' },
+      ],
+    },
+  ]"
+/>
+
+<p class="hero-caption">Three media categories with their accepted extensions — images and audio carry several formats, while PDFs lean on native multimodal support where the provider offers it.</p>
 
 PDFs use native multimodal support when the provider offers it. Otherwise TeXRA converts them via GraphicsMagick / ImageMagick + Ghostscript — status for those system dependencies lives on **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>).
 

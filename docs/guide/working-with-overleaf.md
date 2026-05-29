@@ -1,6 +1,7 @@
 <script setup>
 import OverleafCloneFlow from '../.vitepress/components/OverleafCloneFlow.vue';
 import OverleafRoundTripFlow from '../.vitepress/components/OverleafRoundTripFlow.vue';
+import OverleafEditActions from '../.vitepress/components/OverleafEditActions.vue';
 </script>
 
 # Power Up Overleaf with TeXRA: A Git-Based Workflow
@@ -77,6 +78,10 @@ The whole loop is a round-trip: pull your project down from Overleaf, edit it lo
     - Use `latexdiff` (<wa-icon library="texra" name="diff-single"></wa-icon>) or merge (<wa-icon library="texra" name="merge"></wa-icon>).
     - Leverage features like auto-extract (<wa-icon library="texra" name="wand"></wa-icon>) and tool options (<wa-icon library="texra" name="tools"></wa-icon>).
     - Optionally use LaTeX Workshop for local previews ([Setup](./latex-compilation.md)).
+
+<OverleafEditActions />
+
+<p class="hero-caption">Each toolbar action in the local edit loop, from selecting files and writing instructions through <code>Execute</code>, reviewing outputs, <code>latexdiff</code>/merge, and auto-extract.</p>
 
 ### 3. Commit Local Changes
 

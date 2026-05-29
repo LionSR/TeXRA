@@ -1,5 +1,9 @@
 # Working with TikZ Figures
 
+<script setup>
+import TikzTroubleshootCards from '../.vitepress/components/TikzTroubleshootCards.vue';
+</script>
+
 [TikZ](https://github.com/pgf-tikz/pgf) is a powerful LaTeX package for creating vector graphics programmatically. It's widely used in academia for diagrams, plots, and technical illustrations because of its high quality and seamless LaTeX integration. Mastering TikZ can feel like learning a new language — TeXRA is here to help.
 
 TeXRA offers specialised features for TikZ, built around its tool-use agents — which write TikZ, compile it, and visually verify the result — together with dedicated extraction / compilation tools. This guide focuses on TikZ-specific workflows.
@@ -231,24 +235,11 @@ Maintain the same visual style and color scheme as the reference figure.
 
 ## <wa-icon library="texra" name="debug"></wa-icon> Troubleshooting TikZ Issues
 
-### <wa-icon library="texra" name="error"></wa-icon> Compilation Errors
+When a figure won't build, jump to the matching failure mode and work through its checks.
 
-1. Check the LaTeX log for specific error messages (build directory).
-2. Verify required TikZ libraries are in the template.
-3. Ensure your LaTeX distribution has the necessary packages.
-4. Simplify complex figures that might exceed compiler limits.
+<TikzTroubleshootCards />
 
-### <wa-icon library="texra" name="package"></wa-icon> Missing Packages
-
-1. Install the required packages through your LaTeX distribution manager.
-2. Add the packages to your TikZ template.
-3. Ensure package paths are in `TEXINPUTS`.
-
-### <wa-icon library="texra" name="symbol-ruler"></wa-icon> Figure Size Issues
-
-1. Adjust the `border` parameter in the standalone document class.
-2. Scale the figure using TikZ's `scale` option.
-3. Resize specific elements rather than the entire figure.
+<p class="hero-caption">Three failure modes, each with its quick remedies — find your symptom, fix it, recompile.</p>
 
 ## <wa-icon library="texra" name="lightbulb"></wa-icon> Best Practices
 

@@ -91,6 +91,18 @@ The **Research Access Program** provides access to specialized remote agents des
 - **Beta features**: Early access to experimental agents and capabilities
 - **Priority improvements**: Your feedback directly influences agent development
 
+<FeatureCards
+  min="220px"
+  :cards="[
+    { icon: 'mortar-board', title: 'Specialized domain agents', desc: 'Agents tailored for specific research fields.', chips: [{ text: 'mathematics', variant: 'info' }, { text: 'CS', variant: 'info' }, { text: 'physics', variant: 'info' }] },
+    { icon: 'pulse', title: 'Advanced reasoning', desc: 'Multi-step analysis and complex document processing.', chips: [{ text: 'multi-step', variant: 'neutral' }] },
+    { icon: 'sparkle', title: 'Beta features', tag: 'Early access', tagVariant: 'accent', desc: 'Early access to experimental agents and capabilities.' },
+    { icon: 'comment-discussion', title: 'Priority improvements', desc: 'Your feedback directly influences agent development.', chips: [{ text: 'your feedback', variant: 'neutral' }] }
+  ]"
+/>
+
+<p class="hero-caption">What Research Access Program members get: domain-specific agents, advanced multi-step reasoning, early access to beta agents, and a direct line into how agents evolve.</p>
+
 Current remote agents include `search` (literature discovery), `discuss` (academic brainstorming with literature), and `simplifier` (code and writing simplification). See [Built-in Agents — Remote Agents](./built-in-agents.md#remote-agents) for details on each.
 
 Different agents may be available to different research groups based on their domain and needs.
