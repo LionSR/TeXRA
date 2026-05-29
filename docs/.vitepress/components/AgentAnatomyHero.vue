@@ -206,7 +206,7 @@ const rounds = [
   font-family: var(--vp-font-family-mono);
   font-size: var(--mk-fs-66);
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: 1px var(--mk-space-5);
   flex-shrink: 0;
