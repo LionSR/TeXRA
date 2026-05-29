@@ -200,6 +200,47 @@
   --mk-ins-text: #b6f0c0;
 }
 
+/* ============================================
+   FRAMELESS CARD (shared shell + inline mono header)
+   The focused figure components (DoctorReportCard, AgentYamlHero,
+   ToolCategoriesHero, the tool-call logs, …) all paint the same lightweight
+   bordered card with an inline mono header (icon + title + optional sub-line,
+   under a hairline). Consolidated here so each stops re-rolling it. This is the
+   inline-header variant; MockupPanel is the header-strip variant.
+   ============================================ */
+.mockup .mk-card {
+  background: var(--mk-bg);
+  border: 1px solid var(--mk-border-soft);
+  border-radius: var(--mk-radius-lg);
+  padding: var(--mk-space-12) var(--mk-space-14);
+  margin: var(--mk-space-12) 0;
+  font-family: var(--vp-font-family-base);
+  overflow: hidden;
+}
+.mockup .mk-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--mk-space-7);
+  padding-bottom: var(--mk-space-8);
+  margin-bottom: var(--mk-space-8);
+  border-bottom: 1px solid var(--mk-border);
+  font-family: var(--vp-font-family-mono);
+}
+.mockup .mk-card-head-ic {
+  font-size: var(--mk-space-13);
+  color: var(--mk-syn-fn);
+  flex-shrink: 0;
+}
+.mockup .mk-card-title {
+  font-size: var(--mk-fs-76);
+  font-weight: 600;
+  color: var(--mk-text);
+}
+.mockup .mk-card-sub {
+  font-size: var(--mk-fs-70);
+  color: var(--mk-text-faint);
+}
+
 /* Sidebar shell (board). Width is set per hero (content differs). */
 .mockup .board {
   flex-shrink: 0;

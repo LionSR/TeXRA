@@ -261,6 +261,19 @@ const view = ref('search');
 .board {
   width: var(--mk-size-256);
 }
+/* This hero's header carries an extra Odyssey chip on top of the shared
+   name/badge/tools, which overflows the 256px sidebar. Let it wrap to a second
+   line instead of clipping (the shared .stream-head is nowrap + overflow:hidden,
+   sized for MockupSidebar's wider board). */
+.stream-head {
+  flex-wrap: wrap;
+  white-space: normal;
+  height: auto;
+  row-gap: var(--mk-space-4);
+}
+.stream-head .sh-tools {
+  margin-left: auto;
+}
 /* Three editor tabs are tight at content width — shrink them to fit. */
 .tabs .tab {
   font-size: var(--mk-fs-69);

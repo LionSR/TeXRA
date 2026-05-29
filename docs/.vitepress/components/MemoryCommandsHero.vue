@@ -41,11 +41,19 @@ const calls = [
 </script>
 
 <template>
-  <div class="mockup mem-cmds" role="group" aria-label="memory tool calls">
-    <div class="mc-head">
-      <wa-icon class="mc-head-ic" library="texra" name="database"></wa-icon>
-      <span class="mc-head-name">memory</span>
-      <span class="mc-head-sub">tool calls · this run</span>
+  <div
+    class="mockup mk-card mem-cmds"
+    role="group"
+    aria-label="memory tool calls"
+  >
+    <div class="mk-card-head mc-head">
+      <wa-icon
+        class="mk-card-head-ic"
+        library="texra"
+        name="database"
+      ></wa-icon>
+      <span class="mk-card-title">memory</span>
+      <span class="mk-card-sub">tool calls · this run</span>
     </div>
     <ul class="mc-list">
       <li
@@ -65,38 +73,11 @@ const calls = [
 </template>
 
 <style scoped>
-/* Standalone card. Tokens come from `.mockup` (theme/mockup.css). */
-.mem-cmds {
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-12) var(--mk-space-14);
-  margin: var(--mk-space-12) 0;
-  font-family: var(--vp-font-family-base);
-  overflow: hidden;
-}
-
+/* Standalone card shell + inline mono header come from the shared `.mk-card*`
+   family (theme/mockup.css). This card has no header margin-bottom — the list
+   sits directly under the divider — so trim that one declaration. */
 .mc-head {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-7);
-  padding-bottom: var(--mk-space-8);
-  border-bottom: 1px solid var(--mk-border);
-  font-family: var(--vp-font-family-mono);
-}
-.mc-head-ic {
-  font-size: var(--mk-space-13);
-  color: var(--mk-syn-fn);
-  flex-shrink: 0;
-}
-.mc-head-name {
-  font-size: var(--mk-fs-76);
-  font-weight: 600;
-  color: var(--mk-text);
-}
-.mc-head-sub {
-  font-size: var(--mk-fs-70);
-  color: var(--mk-text-faint);
+  margin-bottom: 0;
 }
 
 .mc-list {

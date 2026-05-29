@@ -34,14 +34,18 @@ const rows = [
 
 <template>
   <div
-    class="mockup dm-card"
+    class="mockup mk-card dm-card"
     role="group"
     aria-label="latexdiff markup mapping"
   >
-    <div class="dm-head">
-      <wa-icon class="dm-head-ic" library="texra" name="diff-single"></wa-icon>
-      <span class="dm-head-name">latexdiff markup</span>
-      <span class="dm-head-sub">source command · typeset result</span>
+    <div class="mk-card-head dm-head">
+      <wa-icon
+        class="mk-card-head-ic"
+        library="texra"
+        name="diff-single"
+      ></wa-icon>
+      <span class="mk-card-title">latexdiff markup</span>
+      <span class="mk-card-sub">source command · typeset result</span>
     </div>
 
     <ul class="dm-list">
@@ -88,38 +92,12 @@ const rows = [
 </template>
 
 <style scoped>
-/* Standalone card. Tokens come from `.mockup` (theme/mockup.css). */
-.dm-card {
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-12) var(--mk-space-14);
-  margin: var(--mk-space-12) 0;
-  font-family: var(--vp-font-family-base);
-  overflow: hidden;
-}
-
+/* Card shell + inline mono header come from the shared .mk-card* family
+   (theme/mockup.css). Only the deltas from those defaults live here. */
 .dm-head {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-7);
-  padding-bottom: var(--mk-space-8);
-  border-bottom: 1px solid var(--mk-border);
-  font-family: var(--vp-font-family-mono);
-}
-.dm-head-ic {
-  font-size: var(--mk-space-13);
-  color: var(--mk-syn-fn);
-  flex-shrink: 0;
-}
-.dm-head-name {
-  font-size: var(--mk-fs-76);
-  font-weight: 600;
-  color: var(--mk-text);
-}
-.dm-head-sub {
-  font-size: var(--mk-fs-70);
-  color: var(--mk-text-faint);
+  /* No gap between header and the first mapping row — drop the shared
+     .mk-card-head bottom margin (the .dm-row top borders supply separation). */
+  margin-bottom: 0;
 }
 
 .dm-list {

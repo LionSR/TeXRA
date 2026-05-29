@@ -28,13 +28,17 @@ const expected = ['chapter2.tex', 'appendixA.tex'];
 </script>
 
 <template>
-  <div class="mockup mo-hero" role="group" aria-label="document name matching">
+  <div
+    class="mockup mk-card mo-hero"
+    role="group"
+    aria-label="document name matching"
+  >
     <!-- Left: the agent's single XML response -->
     <div class="mo-col">
-      <div class="mo-head">
-        <wa-icon class="mo-head-ic" library="texra" name="robot"></wa-icon>
-        <span class="mo-head-name">agent response</span>
-        <span class="mo-head-sub">one XML message</span>
+      <div class="mk-card-head">
+        <wa-icon class="mk-card-head-ic" library="texra" name="robot"></wa-icon>
+        <span class="mk-card-title">agent response</span>
+        <span class="mk-card-sub">one XML message</span>
       </div>
       <div class="surface mo-surface">
         <div class="cl"><span class="kw">&lt;documents&gt;</span></div>
@@ -64,10 +68,14 @@ const expected = ['chapter2.tex', 'appendixA.tex'];
 
     <!-- Right: the expected output filenames + match verdict -->
     <div class="mo-col">
-      <div class="mo-head">
-        <wa-icon class="mo-head-ic" library="texra" name="file-code"></wa-icon>
-        <span class="mo-head-name">expected outputs</span>
-        <span class="mo-head-sub">selected input filenames</span>
+      <div class="mk-card-head">
+        <wa-icon
+          class="mk-card-head-ic"
+          library="texra"
+          name="file-code"
+        ></wa-icon>
+        <span class="mk-card-title">expected outputs</span>
+        <span class="mk-card-sub">selected input filenames</span>
       </div>
       <div class="flist mo-flist">
         <div v-for="(name, i) in expected" :key="i" class="fitem">
@@ -94,47 +102,19 @@ const expected = ['chapter2.tex', 'appendixA.tex'];
 </template>
 
 <style scoped>
-/* Standalone card. Tokens come from `.mockup` (theme/mockup.css). */
+/* Card shell + inline-mono header come from the shared `.mk-card*` family
+   (theme/mockup.css). Only the grid layout + the symmetric padding override
+   (the shell is a 3-column grid, not the default card body) stay scoped. */
 .mo-hero {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: var(--mk-space-12);
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
   padding: var(--mk-space-14);
-  margin: var(--mk-space-12) 0;
-  font-family: var(--vp-font-family-base);
-  overflow: hidden;
 }
 
 .mo-col {
   min-width: 0;
-}
-
-.mo-head {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-7);
-  padding-bottom: var(--mk-space-8);
-  margin-bottom: var(--mk-space-8);
-  border-bottom: 1px solid var(--mk-border);
-  font-family: var(--vp-font-family-mono);
-}
-.mo-head-ic {
-  font-size: var(--mk-space-13);
-  color: var(--mk-syn-fn);
-  flex-shrink: 0;
-}
-.mo-head-name {
-  font-size: var(--mk-fs-76);
-  font-weight: 600;
-  color: var(--mk-text);
-}
-.mo-head-sub {
-  font-size: var(--mk-fs-70);
-  color: var(--mk-text-faint);
 }
 
 /* Code surface (reuses .surface/.cl/.kw/.cmt/.indent tokens). */

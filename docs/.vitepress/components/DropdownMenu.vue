@@ -13,6 +13,9 @@ defineProps({
   // grouped menu: [{ label?, items: [{ name, icon, badge, badgeVariant, active, checkbox, checked }] }]
   groups: { type: Array, default: () => [] },
   maxWidth: { type: String, default: '340px' },
+  // lay the groups out side by side (each group = one column) to save height
+  // when there are many items, e.g. a Tool-use | Workflow split.
+  columns: { type: [String, Number], default: 1 },
 });
 </script>
 
@@ -29,8 +32,12 @@ defineProps({
       <span class="dm-value">{{ value }}</span>
       <wa-icon class="dm-caret" library="texra" name="chevron-down"></wa-icon>
     </div>
-    <div class="dm-menu">
-      <template v-for="(g, gi) in groups" :key="gi">
+    <div
+      class="dm-menu"
+      :class="{ 'dm-menu--cols': Number(columns) > 1 }"
+      :style="Number(columns) > 1 ? { '--dm-cols': String(columns) } : null"
+    >
+      <div v-for="(g, gi) in groups" :key="gi" class="dm-col">
         <div v-if="g.label" class="dm-group">{{ g.label }}</div>
         <div
           v-for="(it, ii) in g.items"
@@ -55,7 +62,7 @@ defineProps({
             >{{ it.badge }}</StatusPill
           >
         </div>
-      </template>
+      </div>
     </div>
   </div>
 </template>
@@ -104,6 +111,28 @@ defineProps({
   border-radius: var(--mk-radius-lg);
   padding: var(--mk-space-4);
   box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.55);
+}
+/* Single-column (default): the column wrapper is transparent so groups + items
+   flow exactly as before. Multi-column: each group becomes a side-by-side
+   column (e.g. a Tool-use | Workflow split) to save vertical space. */
+.dm-col {
+  display: contents;
+}
+.dm-menu--cols {
+  display: grid;
+  grid-template-columns: repeat(var(--dm-cols, 2), minmax(0, 1fr));
+  gap: var(--mk-space-2) var(--mk-space-12);
+  align-items: start;
+}
+.dm-menu--cols .dm-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+@media (max-width: 560px) {
+  .dm-menu--cols {
+    grid-template-columns: 1fr;
+  }
 }
 .dm-group {
   font-size: var(--mk-fs-62);

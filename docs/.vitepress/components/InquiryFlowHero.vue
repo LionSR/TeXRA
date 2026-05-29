@@ -17,7 +17,11 @@ const targets = [
 </script>
 
 <template>
-  <div class="mockup inq" role="group" aria-label="external inquiry flow">
+  <div
+    class="mockup mk-card inq"
+    role="group"
+    aria-label="external inquiry flow"
+  >
     <div class="inq-head">
       <wa-icon
         class="inq-head-ic"
@@ -83,18 +87,13 @@ const targets = [
 </template>
 
 <style scoped>
-/* Standalone card. Tokens come from `.mockup` (theme/mockup.css). */
+/* Card shell from shared `.mk-card`; here we stack the body as a flex column
+   and use a wider top/bottom margin than the shared default. */
 .inq {
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-12) var(--mk-space-14);
   margin: var(--mk-space-16) 0;
-  font-family: var(--vp-font-family-base);
   display: flex;
   flex-direction: column;
   gap: var(--mk-space-10);
-  overflow: hidden;
 }
 
 .inq-head {

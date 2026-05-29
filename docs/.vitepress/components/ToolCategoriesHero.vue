@@ -94,11 +94,11 @@ const categories = [
 </script>
 
 <template>
-  <div class="mockup tcats" role="group" aria-label="tool categories">
-    <div class="tcats-head">
-      <wa-icon class="tcats-head-ic" library="texra" name="tools"></wa-icon>
-      <span class="tcats-head-name">Dashboard → Tools</span>
-      <span class="tcats-head-sub">tools you can grant a tool-use agent</span>
+  <div class="mockup mk-card tcats" role="group" aria-label="tool categories">
+    <div class="mk-card-head tcats-head">
+      <wa-icon class="mk-card-head-ic" library="texra" name="tools"></wa-icon>
+      <span class="mk-card-title">Dashboard → Tools</span>
+      <span class="mk-card-sub">tools you can grant a tool-use agent</span>
     </div>
     <ul class="tcats-list">
       <li v-for="(c, i) in categories" :key="i" class="tcat">
@@ -118,38 +118,15 @@ const categories = [
 </template>
 
 <style scoped>
-/* Standalone card. Tokens come from `.mockup` (theme/mockup.css). */
+/* Card shell + inline mono header come from the shared `.mk-card*` family
+   (theme/mockup.css). Only the deltas from those defaults stay scoped: a wider
+   vertical margin, and no margin-bottom on the header (the list provides its
+   own top padding). */
 .tcats {
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-12) var(--mk-space-14);
   margin: var(--mk-space-16) 0;
-  font-family: var(--vp-font-family-base);
-  overflow: hidden;
 }
-
 .tcats-head {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-7);
-  padding-bottom: var(--mk-space-8);
-  border-bottom: 1px solid var(--mk-border);
-  font-family: var(--vp-font-family-mono);
-}
-.tcats-head-ic {
-  font-size: var(--mk-space-13);
-  color: var(--mk-syn-fn);
-  flex-shrink: 0;
-}
-.tcats-head-name {
-  font-size: var(--mk-fs-76);
-  font-weight: 600;
-  color: var(--mk-text);
-}
-.tcats-head-sub {
-  font-size: var(--mk-fs-70);
-  color: var(--mk-text-faint);
+  margin-bottom: 0;
 }
 
 .tcats-list {

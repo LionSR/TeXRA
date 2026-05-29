@@ -48,15 +48,19 @@ const icon = (kind) =>
 </script>
 
 <template>
-  <div class="mockup rot" role="group" aria-label="round output file tree">
-    <div class="rot-head">
+  <div
+    class="mockup mk-card rot"
+    role="group"
+    aria-label="round output file tree"
+  >
+    <div class="mk-card-head rot-head">
       <wa-icon
-        class="rot-head-ic"
+        class="mk-card-head-ic"
         library="texra"
         name="folder-opened"
       ></wa-icon>
-      <span class="rot-head-name">task storage</span>
-      <span class="rot-head-sub">one folder per round</span>
+      <span class="mk-card-title">task storage</span>
+      <span class="mk-card-sub">one folder per round</span>
     </div>
 
     <div class="rot-tree">
@@ -108,38 +112,10 @@ const icon = (kind) =>
 </template>
 
 <style scoped>
-.rot {
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-12) var(--mk-space-14);
-  margin: var(--mk-space-12) 0;
-  font-family: var(--vp-font-family-base);
-  overflow: hidden;
-}
-
+/* .rot card shell + .rot-head row inherit the shared .mk-card / .mk-card-head
+   family from theme/mockup.css. Only the header's larger margin-bottom differs. */
 .rot-head {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-7);
-  padding-bottom: var(--mk-space-8);
   margin-bottom: var(--mk-space-10);
-  border-bottom: 1px solid var(--mk-border);
-  font-family: var(--vp-font-family-mono);
-}
-.rot-head-ic {
-  font-size: var(--mk-space-13);
-  color: var(--mk-syn-fn);
-  flex-shrink: 0;
-}
-.rot-head-name {
-  font-size: var(--mk-fs-76);
-  font-weight: 600;
-  color: var(--mk-text);
-}
-.rot-head-sub {
-  font-size: var(--mk-fs-70);
-  color: var(--mk-text-faint);
 }
 
 .rot-tree {

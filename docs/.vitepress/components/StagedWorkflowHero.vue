@@ -47,15 +47,15 @@ const stages = [
 </script>
 
 <template>
-  <div class="mockup staged" role="group" aria-label="staged workflow">
-    <div class="sw-head">
+  <div class="mockup mk-card staged" role="group" aria-label="staged workflow">
+    <div class="mk-card-head sw-head">
       <wa-icon
-        class="sw-head-ic"
+        class="mk-card-head-ic"
         library="texra"
         name="diagram-project"
       ></wa-icon>
-      <span class="sw-head-name">Staged workflow</span>
-      <span class="sw-head-sub">research → finalization</span>
+      <span class="mk-card-title">Staged workflow</span>
+      <span class="mk-card-sub">research → finalization</span>
     </div>
     <ol class="sw-list">
       <li v-for="(s, i) in stages" :key="i" class="sw-row">
@@ -79,38 +79,11 @@ const stages = [
 </template>
 
 <style scoped>
-/* Standalone card. Tokens come from `.mockup` (theme/mockup.css). */
-.staged {
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-12) var(--mk-space-14);
-  margin: var(--mk-space-12) 0;
-  font-family: var(--vp-font-family-base);
-  overflow: hidden;
-}
-
+/* Card shell + inline mono header come from shared .mk-card* (theme/mockup.css).
+   This header sits directly above the stage list, so it drops the shared
+   header's margin-bottom. */
 .sw-head {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-7);
-  padding-bottom: var(--mk-space-8);
-  border-bottom: 1px solid var(--mk-border);
-  font-family: var(--vp-font-family-mono);
-}
-.sw-head-ic {
-  font-size: var(--mk-space-13);
-  color: var(--mk-syn-fn);
-  flex-shrink: 0;
-}
-.sw-head-name {
-  font-size: var(--mk-fs-76);
-  font-weight: 600;
-  color: var(--mk-text);
-}
-.sw-head-sub {
-  font-size: var(--mk-fs-70);
-  color: var(--mk-text-faint);
+  margin-bottom: 0;
 }
 
 .sw-list {

@@ -39,11 +39,17 @@ const checks = [
 </script>
 
 <template>
-  <div class="mockup crit" role="group" aria-label="Round 1 critique pass">
-    <div class="crit-head">
-      <wa-icon class="crit-head-ic" library="texra" name="search"></wa-icon>
-      <span class="crit-head-name">Round 1 — critique pass</span>
-      <span class="crit-head-sub">rereads r0/intro.tex, then revises</span>
+  <div
+    class="mockup mk-card crit"
+    role="group"
+    aria-label="Round 1 critique pass"
+  >
+    <div class="mk-card-head crit-head">
+      <wa-icon class="mk-card-head-ic" library="texra" name="search"></wa-icon>
+      <span class="mk-card-title crit-head-name">Round 1 — critique pass</span>
+      <span class="mk-card-sub crit-head-sub"
+        >rereads r0/intro.tex, then revises</span
+      >
     </div>
     <ul class="crit-list">
       <li v-for="(c, i) in checks" :key="i" class="crit-item">
@@ -65,37 +71,18 @@ const checks = [
 </template>
 
 <style scoped>
-/* Standalone frameless card. Tokens come from `.mockup` (theme/mockup.css). */
-.crit {
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-12) var(--mk-space-14);
-  margin: var(--mk-space-12) 0;
-  font-family: var(--vp-font-family-base);
-  overflow: hidden;
-}
-
+/* Card shell + inline mono header reuse the shared .mk-card* family
+   (theme/mockup.css on `.mockup`). Only the deltas stay here: this card's
+   header is base-font (mono lives only on the sub-line) with no bottom margin,
+   and the title runs one step larger than the shared default. */
 .crit-head {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-7);
-  padding-bottom: var(--mk-space-8);
-  border-bottom: 1px solid var(--mk-border);
-}
-.crit-head-ic {
-  font-size: var(--mk-space-13);
-  color: var(--mk-syn-fn);
-  flex-shrink: 0;
+  margin-bottom: 0;
+  font-family: var(--vp-font-family-base);
 }
 .crit-head-name {
   font-size: var(--mk-fs-78);
-  font-weight: 600;
-  color: var(--mk-text);
 }
 .crit-head-sub {
-  font-size: var(--mk-fs-70);
-  color: var(--mk-text-faint);
   font-family: var(--vp-font-family-mono);
 }
 

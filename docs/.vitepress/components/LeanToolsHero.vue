@@ -49,11 +49,15 @@ const tools = [
 </script>
 
 <template>
-  <div class="mockup lean-tools" role="group" aria-label="Lean tool calls">
-    <div class="lt-head">
-      <wa-icon class="lt-head-ic" library="texra" name="beaker"></wa-icon>
-      <span class="lt-head-name">lean</span>
-      <span class="lt-head-sub">tool calls · this run</span>
+  <div
+    class="mockup mk-card lean-tools"
+    role="group"
+    aria-label="Lean tool calls"
+  >
+    <div class="mk-card-head lt-head">
+      <wa-icon class="mk-card-head-ic" library="texra" name="beaker"></wa-icon>
+      <span class="mk-card-title">lean</span>
+      <span class="mk-card-sub">tool calls · this run</span>
     </div>
 
     <div class="lt-list">
@@ -117,40 +121,16 @@ const tools = [
 </template>
 
 <style scoped>
-/* Standalone card. Tool-card internals (.tcard / .tc-*) come from .mockup in
-   theme/mockup.css; this file adds only the frameless shell + the few extras
-   the inspect payload needs. */
-.lean-tools {
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-12) var(--mk-space-14);
-  margin: var(--mk-space-12) 0;
-  font-family: var(--vp-font-family-base);
-  overflow: hidden;
-}
+/* Standalone card. The frameless shell + inline mono header come from the
+   shared .mk-card / .mk-card-head family in theme/mockup.css; tool-card
+   internals (.tcard / .tc-*) also come from .mockup. This file adds only the
+   header spacing tweak + the few extras the inspect payload needs. */
 
-.lt-head {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-7);
-  padding-bottom: var(--mk-space-8);
-  border-bottom: 1px solid var(--mk-border);
-  font-family: var(--vp-font-family-mono);
-}
-.lt-head-ic {
-  font-size: var(--mk-space-13);
-  color: var(--mk-syn-fn);
-  flex-shrink: 0;
-}
-.lt-head-name {
-  font-size: var(--mk-fs-76);
-  font-weight: 600;
-  color: var(--mk-text);
-}
-.lt-head-sub {
-  font-size: var(--mk-fs-70);
-  color: var(--mk-text-faint);
+/* The header sits flush with the list (the .lt-list margin-top owns the gap),
+   so drop the shared .mk-card-head bottom margin. Matches the shared rule's
+   .mockup-scoped specificity so the override actually lands. */
+.mockup .lt-head {
+  margin-bottom: 0;
 }
 
 .lt-list {

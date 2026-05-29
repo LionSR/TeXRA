@@ -71,15 +71,19 @@ const groups = [
 </script>
 
 <template>
-  <div class="mockup tsp" role="group" aria-label="Dashboard Tools panel">
-    <div class="tsp-head">
+  <div
+    class="mockup mk-card tsp"
+    role="group"
+    aria-label="Dashboard Tools panel"
+  >
+    <div class="mk-card-head tsp-head">
       <wa-icon
-        class="tsp-head-ic"
+        class="mk-card-head-ic tsp-head-ic"
         library="texra"
         name="screwdriver-wrench"
       ></wa-icon>
-      <span class="tsp-head-name">Tools</span>
-      <span class="tsp-head-sub">Dashboard</span>
+      <span class="mk-card-title tsp-head-name">Tools</span>
+      <span class="mk-card-sub tsp-head-sub">Dashboard</span>
     </div>
 
     <div v-for="g in groups" :key="g.label" class="tsp-group">
@@ -113,38 +117,24 @@ const groups = [
 </template>
 
 <style scoped>
-/* Standalone card. Every token resolves from `.mockup` (theme/mockup.css). */
+/* Card shell + inline mono header inherit from the shared .mk-card* family
+   (theme/mockup.css). Only the values that diverge are overridden below. */
 .tsp {
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-12) var(--mk-space-14);
   margin: var(--mk-space-16) 0;
-  font-family: var(--vp-font-family-base);
-  overflow: hidden;
 }
 
 .tsp-head {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-7);
   padding-bottom: var(--mk-space-10);
-  border-bottom: 1px solid var(--mk-border);
-  font-family: var(--vp-font-family-mono);
+  margin-bottom: 0;
 }
 .tsp-head-ic {
   font-size: var(--mk-space-14);
-  color: var(--mk-syn-fn);
-  flex-shrink: 0;
 }
 .tsp-head-name {
   font-size: var(--mk-fs-84);
   font-weight: 700;
-  color: var(--mk-text);
 }
 .tsp-head-sub {
-  font-size: var(--mk-fs-70);
-  color: var(--mk-text-faint);
   margin-left: auto;
 }
 

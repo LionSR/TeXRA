@@ -54,11 +54,15 @@ const sevTag = {
 </script>
 
 <template>
-  <div class="mockup pblog" role="group" aria-label="ProgressBoard log">
-    <div class="pb-head">
-      <wa-icon class="pb-head-ic" library="texra" name="list-check"></wa-icon>
-      <span class="pb-head-name">ProgressBoard</span>
-      <span class="pb-head-sub">log</span>
+  <div class="mockup mk-card pblog" role="group" aria-label="ProgressBoard log">
+    <div class="mk-card-head pb-head">
+      <wa-icon
+        class="mk-card-head-ic"
+        library="texra"
+        name="list-check"
+      ></wa-icon>
+      <span class="mk-card-title">ProgressBoard</span>
+      <span class="mk-card-sub">log</span>
       <span class="pb-search">
         <wa-icon
           class="pb-search-ic"
@@ -115,38 +119,17 @@ const sevTag = {
 </template>
 
 <style scoped>
-/* Standalone card. All tokens resolve from `.mockup` (theme/mockup.css). */
+/* Card shell + inline mono header inherit the shared .mk-card* family
+   (theme/mockup.css). Only the values that differ are overridden below. */
 .pblog {
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-12) var(--mk-space-14);
   margin: var(--mk-space-16) 0;
-  font-family: var(--vp-font-family-base);
-  overflow: hidden;
 }
 
-/* Header strip: title + faux search input. */
+/* This header keeps the base font and has no bottom margin (the filter row
+   below already supplies its own top padding). */
 .pb-head {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-7);
-  padding-bottom: var(--mk-space-8);
-  border-bottom: 1px solid var(--mk-border);
-}
-.pb-head-ic {
-  font-size: var(--mk-space-13);
-  color: var(--mk-syn-fn);
-  flex-shrink: 0;
-}
-.pb-head-name {
-  font-size: var(--mk-fs-76);
-  font-weight: 600;
-  color: var(--mk-text);
-}
-.pb-head-sub {
-  font-size: var(--mk-fs-70);
-  color: var(--mk-text-faint);
+  margin-bottom: 0;
+  font-family: var(--vp-font-family-base);
 }
 .pb-search {
   margin-left: auto;

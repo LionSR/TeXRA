@@ -202,6 +202,40 @@ If you formalize mathematics in Lean 4, these skills let AI assistants search Ma
 
 ---
 
+## Zotero Cleanup (zotcleanup)
+
+**Point an AI agent at your Zotero library and let it fix the metadata — previewing every change before it writes.**
+
+[![GitHub](https://img.shields.io/github/stars/texra-ai/zotero-cleanup-skills)](https://github.com/texra-ai/zotero-cleanup-skills)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/texra-ai/zotero-cleanup-skills/blob/main/LICENSE)
+
+A working Zotero library accumulates rot. **zotcleanup** is a Claude Code / Codex skill plus independent, **dry-run-safe** scripts — built on [pyzotero](https://github.com/urschrei/pyzotero), arXiv, and Crossref — that fix it a reviewable pass at a time. Every value is looked up from a named authority (arXiv, Crossref, DBLP) above a match threshold; nothing is guessed, and nothing is written until you pass `--apply`.
+
+### What it fixes
+
+- **Stale item types** — arXiv preprints that were published long ago but are still typed `preprint`
+- **Inconsistent venues** — one journal under several names (`Phys Rev Lett`, `Physical Review Letters`, …)
+- **Import gunk** — `{{braces}}`, `&amp;`, all-caps names, and broken escapes in titles and authors
+- **Placeholder DOIs** — ResearchGate / DataCite stand-ins replaced with the real DOI
+- **Unfiled references** — hundreds of loose items organized
+
+### Quick Start
+
+```text
+# Claude Code
+/plugin marketplace add texra-ai/zotero-cleanup-skills
+```
+
+The scripts also run standalone with [uv](https://docs.astral.sh/uv/) (Python ≥ 3.10) and your Zotero credentials — every command defaults to a dry run that previews changes before `--apply` writes them.
+
+::: tip Use Case
+A messy library is where AI agents hallucinate citations. A verified, deduplicated Zotero library gives TeXRA's research agents real DOIs and venues to cite — keeping [Research Tools](./research-tools.md) grounded.
+:::
+
+[GitHub Repository](https://github.com/texra-ai/zotero-cleanup-skills)
+
+---
+
 ## Contributing
 
 All of these projects are MIT-licensed and welcome contributions. If you find a bug, want to add a model to llm-zoo, extend the Mathematica tools, or contribute a new agent skill — open an issue or submit a pull request on the respective GitHub repository.

@@ -12,11 +12,19 @@
 </script>
 
 <template>
-  <div class="mockup yaml-hero" role="group" aria-label="agent YAML structure">
-    <div class="yh-head">
-      <wa-icon class="yh-head-ic" library="texra" name="file-code"></wa-icon>
-      <span class="yh-head-name">polish.yaml</span>
-      <span class="yh-head-sub">agent definition</span>
+  <div
+    class="mockup mk-card yaml-hero"
+    role="group"
+    aria-label="agent YAML structure"
+  >
+    <div class="mk-card-head">
+      <wa-icon
+        class="mk-card-head-ic"
+        library="texra"
+        name="file-code"
+      ></wa-icon>
+      <span class="mk-card-title">polish.yaml</span>
+      <span class="mk-card-sub">agent definition</span>
     </div>
 
     <div class="yh-body">
@@ -92,41 +100,8 @@
 </template>
 
 <style scoped>
-/* Standalone card. Tokens come from `.mockup` (theme/mockup.css). */
-.yaml-hero {
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-12) var(--mk-space-14);
-  margin: var(--mk-space-12) 0;
-  font-family: var(--vp-font-family-base);
-  overflow: hidden;
-}
-
-.yh-head {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-7);
-  padding-bottom: var(--mk-space-8);
-  margin-bottom: var(--mk-space-8);
-  border-bottom: 1px solid var(--mk-border);
-  font-family: var(--vp-font-family-mono);
-}
-.yh-head-ic {
-  font-size: var(--mk-space-13);
-  color: var(--mk-syn-fn);
-  flex-shrink: 0;
-}
-.yh-head-name {
-  font-size: var(--mk-fs-76);
-  font-weight: 600;
-  color: var(--mk-text);
-}
-.yh-head-sub {
-  font-size: var(--mk-fs-70);
-  color: var(--mk-text-faint);
-}
-
+/* Standalone card. Shell + inline mono header come from the shared `.mk-card*`
+   family (theme/mockup.css); only the body styling is unique below. */
 .yh-body {
   display: flex;
   flex-direction: column;
