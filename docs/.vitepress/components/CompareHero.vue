@@ -11,11 +11,7 @@ import MockupFrame from './MockupFrame.vue';
     <div class="result diff">
       <div class="tabs">
         <button type="button" class="tab active">
-          <wa-icon
-            class="t-ic"
-            library="texra"
-            name="diff-multiple"
-          ></wa-icon
+          <wa-icon class="t-ic" library="texra" name="diff-multiple"></wa-icon
           >draft.tex (r0) — Compare
         </button>
       </div>
@@ -24,36 +20,78 @@ import MockupFrame from './MockupFrame.vue';
         <!-- Original -->
         <div class="pane">
           <div class="pane-head">
-            <wa-icon class="ph-ic t-tex" library="texra" name="file-code"></wa-icon>
+            <wa-icon
+              class="ph-ic t-tex"
+              library="texra"
+              name="file-code"
+            ></wa-icon>
             draft.tex
             <span class="ph-tag">Original</span>
           </div>
           <div class="surface">
-            <div class="dl"><span class="gut">12</span><span class="kw">\begin</span>{abstract}</div>
-            <div class="dl chg"><span class="gut">13</span>We present a <del>novel and efficient</del> method for the</div>
-            <div class="dl chg"><span class="gut">14</span>estimation of spectral gaps <del>in random regular graphs</del>.</div>
-            <div class="dl"><span class="gut">15</span><span class="kw">\end</span>{abstract}</div>
+            <div class="dl">
+              <span class="gut">12</span
+              ><span class="kw">\begin</span>{abstract}
+            </div>
+            <div class="dl chg">
+              <span class="gut">13</span>We present a
+              <del>novel and efficient</del> method for the
+            </div>
+            <div class="dl chg">
+              <span class="gut">14</span>estimation of spectral gaps
+              <del>in random regular graphs</del>.
+            </div>
+            <div class="dl">
+              <span class="gut">15</span><span class="kw">\end</span>{abstract}
+            </div>
             <div class="dl"><span class="gut">16</span></div>
-            <div class="dl"><span class="gut">17</span><span class="kw">\section</span>{Preliminaries}</div>
-            <div class="dl chg"><span class="gut">18</span>Let <span class="m">$G$</span> be a graph<del>.</del></div>
+            <div class="dl">
+              <span class="gut">17</span
+              ><span class="kw">\section</span>{Preliminaries}
+            </div>
+            <div class="dl chg">
+              <span class="gut">18</span>Let <span class="m">$G$</span> be a
+              graph<del>.</del>
+            </div>
           </div>
         </div>
 
         <!-- Revised -->
         <div class="pane">
           <div class="pane-head">
-            <wa-icon class="ph-ic t-tex" library="texra" name="file-code"></wa-icon>
+            <wa-icon
+              class="ph-ic t-tex"
+              library="texra"
+              name="file-code"
+            ></wa-icon>
             r0/draft.tex
             <span class="ph-tag ph-tag--new">TeXRA</span>
           </div>
           <div class="surface">
-            <div class="dl"><span class="gut">12</span><span class="kw">\begin</span>{abstract}</div>
-            <div class="dl add"><span class="gut">13</span>We present an <ins>efficient</ins> method for the</div>
-            <div class="dl add"><span class="gut">14</span>estimation of spectral gaps <ins>in random regular graphs</ins>.</div>
-            <div class="dl"><span class="gut">15</span><span class="kw">\end</span>{abstract}</div>
+            <div class="dl">
+              <span class="gut">12</span
+              ><span class="kw">\begin</span>{abstract}
+            </div>
+            <div class="dl add">
+              <span class="gut">13</span>We present an
+              <ins>efficient</ins> method for the
+            </div>
+            <div class="dl add">
+              <span class="gut">14</span>estimation of spectral gaps
+              <ins>in random regular graphs</ins>.
+            </div>
+            <div class="dl">
+              <span class="gut">15</span><span class="kw">\end</span>{abstract}
+            </div>
             <div class="dl"><span class="gut">16</span></div>
-            <div class="dl"><span class="gut">17</span><span class="kw">\section</span>{Preliminaries}</div>
-            <div class="dl add"><span class="gut">18</span>Let <span class="m">$G$</span> be a <ins>$d$-regular</ins> graph<ins> on $n$ vertices.</ins></div>
+            <div class="dl">
+              <span class="gut">17</span
+              ><span class="kw">\section</span>{Preliminaries}
+            </div>
+            <div class="dl add">
+              <span class="gut">18</span>Let <span class="m">$G$</span> be a
+              <ins>$d$-regular</ins> graph<ins> on $n$ vertices.</ins>
+            </div>
           </div>
         </div>
       </div>

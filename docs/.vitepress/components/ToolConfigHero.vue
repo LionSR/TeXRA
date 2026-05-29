@@ -121,8 +121,8 @@ import MockupFrame from './MockupFrame.vue';
         <div class="wl out">Words outside text (captions, etc.): 96</div>
         <div class="wl out">Number of floats/tables/figures: 3</div>
         <div class="term-note">
-          With <b>Attach TeX Count</b> on, this summary is fed to the agent so it
-          knows the document's size and structure before it edits.
+          With <b>Attach TeX Count</b> on, this summary is fed to the agent so
+          it knows the document's size and structure before it edits.
         </div>
       </div>
     </div>
