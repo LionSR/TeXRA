@@ -18,7 +18,7 @@ import {
   migrateLegacyContextFileFields,
   type AgentProposal,
 } from '@shared/schemas';
-import { isPlainObject } from '@shared/utils/string';
+import { isObject } from '@utils/core';
 
 import { hashString } from './hashUtils';
 
@@ -46,7 +46,7 @@ function parseProposalInput(
   input: unknown,
   toolName: string,
 ): AgentProposal | null {
-  const spread = isPlainObject(input) ? input : {};
+  const spread = isObject(input) ? input : {};
 
   if (toolName === 'delegate_agent' || toolName === 'propose_agent') {
     const result = LenientToolUseProposalSchema.safeParse({
@@ -72,7 +72,7 @@ function parseProposalInput(
         : undefined;
     const extractTikz =
       migrated.extractTikz != null ? Boolean(migrated.extractTikz) : undefined;
-    const existingToolConfig = isPlainObject(migrated.toolConfig)
+    const existingToolConfig = isObject(migrated.toolConfig)
       ? migrated.toolConfig
       : {};
     const toolConfig = {

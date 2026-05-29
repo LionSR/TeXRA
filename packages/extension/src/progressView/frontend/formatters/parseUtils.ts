@@ -11,7 +11,7 @@
 import yaml from 'yaml';
 
 // Local imports - shared utilities
-import { isPlainObject } from '@shared/utils/string';
+import { isObject } from '@utils/core';
 
 /**
  * Result of stringifying a value with language metadata.
@@ -53,7 +53,7 @@ export function extractCodeOnlyInput(value: unknown): {
   isCodeOnly: boolean;
   code: string;
 } {
-  if (!isPlainObject(value)) {
+  if (!isObject(value)) {
     return { isCodeOnly: false, code: '' };
   }
   // Support both 'code' (wolfram) and 'command' (bash) field names

@@ -5,7 +5,7 @@
 
 // Local imports - formatter helpers
 import type { LogMessageData, MessageType } from '@shared/schemas';
-import { isPlainObject } from '@shared/utils/string';
+import { isObject } from '@utils/core';
 import { safeFormat, type FormatOptions } from './baseLogFormatter';
 import {
   formatBannerContentTemplate,
@@ -72,7 +72,7 @@ function wrapWithErrorHandling(
 /** Name the tool in formatter errors so a bad card is actionable. */
 function getToolUseRenderLabel(message: LogMessageData): string {
   const data = message.data;
-  if (!isPlainObject(data)) return 'tool use';
+  if (!isObject(data)) return 'tool use';
   const toolName =
     typeof data.toolName === 'string'
       ? data.toolName
