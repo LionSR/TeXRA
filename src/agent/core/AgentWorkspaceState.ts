@@ -9,7 +9,7 @@ import {
   type FileLocation,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
-import { isPlainObject } from '@shared/utils/string';
+import { isObject } from '@utils/core';
 import { FlattenedEditRecordSchema } from '@tools/result';
 import { pathToLocation } from '@utils/files';
 
@@ -352,12 +352,12 @@ export class WorkPlanState {
 
 function unwrapLegacyStateValue(value: unknown, key: string): unknown {
   if (Array.isArray(value)) return value;
-  if (!isPlainObject(value)) return undefined;
+  if (!isObject(value)) return undefined;
   return value[key] ?? value;
 }
 
 function normalizeAgentWorkspaceSnapshot(input: unknown): unknown {
-  const record = isPlainObject(input) ? input : {};
+  const record = isObject(input) ? input : {};
   const workPlan = record.workPlan ?? {
     todos: unwrapLegacyStateValue(record.todos, 'todos'),
     plan: unwrapLegacyStateValue(record.plan, 'plan'),
