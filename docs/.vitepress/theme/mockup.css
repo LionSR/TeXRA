@@ -321,6 +321,121 @@
 }
 
 /* ============================================
+   LAUNCHER INSTRUCTION PANEL
+   Shared by QuickStartHero + ToolConfigHero — the Launcher's instruction
+   composer: session toggle, header actions, prompt, the agent/model select
+   footer, and the brand Run/Execute button. Each hero sets only its own
+   `.board` width and any panel-unique extras (e.g. the tool-config menus).
+   ============================================ */
+.mockup .lpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  flex: 1;
+  font-family: var(--vp-font-family-base);
+}
+.mockup .phead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mockup .seg {
+  display: inline-flex;
+  background: #2c2c2c;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 2px;
+  font-size: 0.72rem;
+}
+.mockup .seg-opt {
+  padding: 3px 9px;
+  border-radius: 4px;
+  color: var(--color-text-secondary);
+}
+.mockup .seg-on {
+  background: #3a3a3a;
+  color: #fff;
+  font-weight: 600;
+}
+.mockup .hactions {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+.mockup .iact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+.mockup .iact:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--wa-color-text-normal);
+}
+.mockup .prompt {
+  flex: 1;
+  min-height: 120px;
+  background: #181818;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  padding: 9px 10px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--wa-color-text-normal);
+}
+.mockup .caret-blink {
+  display: inline-block;
+  width: 1px;
+  height: 1em;
+  margin-left: 1px;
+  background: #c89be0;
+  vertical-align: text-bottom;
+  animation: mk-blink 1.1s step-end infinite;
+}
+.mockup .footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mockup .sgroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mockup .sgroup .select {
+  flex: 1;
+}
+.mockup .settings {
+  flex-shrink: 0;
+  color: #c89be0;
+}
+.mockup .run {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  border: none;
+  border-radius: 6px;
+  padding: 9px;
+  margin-top: 2px;
+  background: #8957b5;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--vp-font-family-base);
+}
+.mockup .run wa-icon {
+  font-size: 13px;
+}
+
+/* ============================================
    PROGRESS-BOARD SIDEBAR
    Shared by MockupSidebar (landing) and GuideIntroHero (guide). Each component
    adds only its own extras (background tasks, latexdiff result, BibTeX, etc.).

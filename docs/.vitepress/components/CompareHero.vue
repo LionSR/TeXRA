@@ -28,7 +28,7 @@ import MockupFrame from './MockupFrame.vue';
             draft.tex
             <span class="ph-tag">Original</span>
           </div>
-          <div class="surface">
+          <div class="diff-surface">
             <div class="dl">
               <span class="gut">12</span
               ><span class="kw">\begin</span>{abstract}
@@ -67,7 +67,7 @@ import MockupFrame from './MockupFrame.vue';
             r0/draft.tex
             <span class="ph-tag ph-tag--new">TeXRA</span>
           </div>
-          <div class="surface">
+          <div class="diff-surface">
             <div class="dl">
               <span class="gut">12</span
               ><span class="kw">\begin</span>{abstract}
@@ -149,8 +149,13 @@ import MockupFrame from './MockupFrame.vue';
   background: rgba(200, 155, 224, 0.14);
 }
 
-.surface {
+/* Diff body reuses .result/.tabs/.tab/.t-ic from mockup.css; the two-pane
+   gutter layout below is unique to the compare editor. */
+.diff-surface {
   padding: 8px 0;
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.82rem;
+  color: var(--wa-color-text-normal);
   line-height: 1.7;
 }
 .dl {

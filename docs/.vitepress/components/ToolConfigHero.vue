@@ -1,10 +1,12 @@
 <script setup>
 // Tool Config product slice: the Launcher's instruction footer with its two
 // per-run helper dropdowns open. Mirrors FileSelectGroup.ts — the "Tool
-// configuration options" menu (screwdriver-wrench) carries Attach TeX Count;
-// the "Auto-extract options" menu (wand) carries Figures / TikZ Figures /
-// Compile Input PDF. Both trigger buttons light up (has-options) while a
-// helper is enabled.
+// configuration options" menu (tools) carries Attach TeX Count; the
+// "Auto-extract options" menu (wand) carries Figures / TikZ Figures / Compile
+// Input PDF. Both trigger buttons light up while a helper is enabled.
+//
+// Reuses the shared launcher chrome (.lpanel/.footer/.sgroup/.settings/.run
+// from mockup.css); only the helper buttons + open menus are unique here.
 import MockupFrame from './MockupFrame.vue';
 </script>
 
@@ -21,12 +23,6 @@ import MockupFrame from './MockupFrame.vue';
       </div>
 
       <div class="lpanel">
-        <div class="prompt">
-          Improve the clarity and flow of this document; keep my notation.
-        </div>
-
-        <!-- Instruction footer: agent + model selects, then the two helper
-             dropdown buttons, then Run. -->
         <div class="footer">
           <div class="sgroup">
             <span class="iact settings" title="Agent settings"
@@ -55,7 +51,8 @@ import MockupFrame from './MockupFrame.vue';
             </div>
           </div>
 
-          <div class="toolbar">
+          <!-- Helper buttons + Execute. Both helpers active → buttons lit. -->
+          <div class="sgroup">
             <span class="cfg-btn on" title="Tool configuration options"
               ><wa-icon library="texra" name="tools"></wa-icon
             ></span>
@@ -70,37 +67,27 @@ import MockupFrame from './MockupFrame.vue';
         </div>
 
         <!-- The two open helper menus, focused on this step. -->
-        <div class="menus">
-          <div class="menu">
-            <div class="menu-head">
-              <wa-icon library="texra" name="tools"></wa-icon> Tool config
-            </div>
-            <div class="opt on">
-              <span class="ckbox"
-                ><wa-icon library="texra" name="check"></wa-icon
-              ></span>
-              Attach TeX Count
-            </div>
+        <div class="menu">
+          <div class="f-label"><wa-icon library="texra" name="tools"></wa-icon> Tool config</div>
+          <div class="opt on">
+            <span class="ckbox"><wa-icon library="texra" name="check"></wa-icon></span>
+            Attach TeX Count
           </div>
+        </div>
 
-          <div class="menu">
-            <div class="menu-head">
-              <wa-icon library="texra" name="sparkle"></wa-icon> Auto-extract
-            </div>
-            <div class="opt on">
-              <span class="ckbox"
-                ><wa-icon library="texra" name="check"></wa-icon
-              ></span>
-              Figures
-            </div>
-            <div class="opt">
-              <span class="ckbox"></span>
-              TikZ Figures
-            </div>
-            <div class="opt">
-              <span class="ckbox"></span>
-              Compile Input PDF
-            </div>
+        <div class="menu">
+          <div class="f-label"><wa-icon library="texra" name="sparkle"></wa-icon> Auto-extract</div>
+          <div class="opt on">
+            <span class="ckbox"><wa-icon library="texra" name="check"></wa-icon></span>
+            Figures
+          </div>
+          <div class="opt">
+            <span class="ckbox"></span>
+            TikZ Figures
+          </div>
+          <div class="opt">
+            <span class="ckbox"></span>
+            Compile Input PDF
           </div>
         </div>
       </div>
@@ -133,124 +120,45 @@ import MockupFrame from './MockupFrame.vue';
 .board {
   width: 320px;
 }
-.lpanel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  flex: 1;
-  font-family: var(--vp-font-family-base);
-}
-.prompt {
-  min-height: 60px;
-  background: #181818;
-  border: 1px solid #3a3a3a;
-  border-radius: 6px;
-  padding: 9px 10px;
-  font-size: 0.82rem;
-  line-height: 1.5;
-  color: var(--wa-color-text-normal);
-}
 
-.footer {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.sgroup {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.sgroup .select {
-  flex: 1;
-}
-.iact {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 5px;
-  font-size: 14px;
-}
-.settings {
-  flex-shrink: 0;
-  color: #c89be0;
-}
-
-/* Helper-button row + Execute */
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-}
+/* Helper trigger buttons (lit when a helper is on) — the only footer-control
+   variant unique to this slice; the rest of the footer is shared chrome. */
 .cfg-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 30px;
   height: 30px;
+  flex-shrink: 0;
   border-radius: 5px;
-  border: 1px solid var(--color-border);
-  background: #2c2c2c;
-  color: var(--color-text-secondary);
+  border: 1px solid rgba(200, 155, 224, 0.55);
+  background: rgba(200, 155, 224, 0.12);
+  color: #c89be0;
   font-size: 14px;
 }
-.cfg-btn.on {
-  color: #c89be0;
-  border-color: rgba(200, 155, 224, 0.55);
-  background: rgba(200, 155, 224, 0.12);
-}
-.run {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
+/* Execute shares .run but sits inline with the helper buttons here. */
+.sgroup .run {
   flex: 1;
-  border: none;
-  border-radius: 6px;
-  padding: 8px;
-  background: #8957b5;
-  color: #fff;
+  width: auto;
+  margin-top: 0;
+  padding: 7px;
   font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: var(--vp-font-family-base);
-}
-.run wa-icon {
-  font-size: 13px;
 }
 
-/* Open helper menus (popover cards) */
-.menus {
-  display: flex;
-  gap: 8px;
-}
+/* Open dropdown menu (checkbox list). Reuses .f-label for the header. */
 .menu {
-  flex: 1;
   background: #2a2a2a;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  padding: 5px;
+  padding: 6px;
   box-shadow: 0 6px 18px -8px rgba(0, 0, 0, 0.6);
 }
-.menu-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 6px 6px;
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-text-secondary);
-  border-bottom: 1px solid var(--color-border);
+.menu .f-label {
+  padding: 2px 4px 6px;
   margin-bottom: 4px;
+  border-bottom: 1px solid var(--color-border);
 }
-.menu-head wa-icon {
-  font-size: 11px;
+.menu .f-label wa-icon {
   color: #c89be0;
 }
 .opt {
