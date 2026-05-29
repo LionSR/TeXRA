@@ -477,8 +477,8 @@ export abstract class ModelHandler<
 
   /**
    * Returns the effective reasoning effort for the current user and model.
-   * On GPT-5 models accessed via included (server-side) keys, xhigh reasoning
-   * is capped: Max tier → high, free tier → medium.
+   * On GPT-5 models accessed via included (server-side) keys, the above-high
+   * tiers (xhigh and max) are capped: Max tier → high, free tier → medium.
    */
   protected getEffectiveReasoningEffort(): ReasoningEffort | null {
     const { supportsReasoningEffort, reasoningEffort } = this.capabilities;
@@ -493,7 +493,8 @@ export abstract class ModelHandler<
     const isGpt5 = this.config.name.startsWith('gpt5');
     if (
       isGpt5 &&
-      reasoningEffort === ReasoningEffort.XHIGH &&
+      (reasoningEffort === ReasoningEffort.XHIGH ||
+        reasoningEffort === ReasoningEffort.MAX) &&
       this.shouldUseServerSideKeys()
     ) {
       const userTier = getServerSideKeyService().getUserTier();

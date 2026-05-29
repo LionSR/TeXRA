@@ -223,6 +223,8 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
       case ReasoningEffort.HIGH:
       case ReasoningEffort.XHIGH:
+      case ReasoningEffort.MAX:
+        // Gemini tops out at HIGH thinking; xhigh/max both map to it.
         return ThinkingLevel.HIGH;
 
       default:
