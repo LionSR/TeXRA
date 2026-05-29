@@ -258,4 +258,24 @@ describe('task-group-list orphan re-rooting', () => {
     // The nested message is not mis-filed as ungrouped.
     expect(list.index.ungrouped).toHaveLength(0);
   });
+
+  it('renders a re-rooted orphan with the root-container layout, not nested', async () => {
+    // A group with a dangling parent is promoted to a tree root; the renderer
+    // must give it the root container (keyed on tree position), not the
+    // collapsible <details> layout it would get from its raw parentGroupId.
+    const run: TaskGroup = {
+      id: 'run',
+      name: 'Run: subagent',
+      startTime: 1,
+      status: STREAM_STATUS.RUNNING,
+      parentGroupId: 'phantom-orchestrator-stage',
+    };
+    const list = await renderList([run], []);
+
+    // Root layout emits a div.log-run with data-run-id; child groups never do
+    // (they render as <details> with summary/content ids only).
+    const rootEl = list.shadowRoot?.querySelector('[data-run-id="run"]');
+    expect(rootEl).not.toBeNull();
+    expect(rootEl?.classList.contains('log-run')).toBe(true);
+  });
 });

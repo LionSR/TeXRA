@@ -169,12 +169,13 @@ GROUP_START/GROUP_END with no guarantee the parent exists in the same snapshot �
 confirming transient orphans (child arrives before parent, or parent pruned) are
 real, so this is a correctness improvement, not dead defensiveness.
 
-**Render-side follow-up (not a blocker):** `TaskGroupList.renderGroupNode:474`
-selects layout via the raw `!group.parentGroupId` field, so a re-rooted orphan
-(which still has a dangling `parentGroupId`) would render in the nested/collapsible
-style rather than the root-container style — cosmetically inconsistent. If that
-matters, gate that branch on actual tree-root membership (a flag set by
-`rebuildTree`, or a `groupMap` check) rather than the raw field.
+**Render-side (done):** `TaskGroupList.renderGroupNode` previously selected layout
+via the raw `!group.parentGroupId` field, so a re-rooted orphan (which still has a
+dangling `parentGroupId`) would render in the nested/collapsible style rather than
+the root-container style. Fixed by passing an explicit `isRoot` flag down from the
+single top-level caller (the timeline render) and branching on that — layout now
+follows actual tree position, not the raw field. Covered by a render test in
+`TaskGroupListIndex.vitest.ts`.
 
 A dev-mode warning when re-rooting is optional; if added, it must respect the
 "stateless renderer / no render-time side effects" rule and live in the
