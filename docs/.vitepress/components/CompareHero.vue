@@ -74,7 +74,7 @@ import MockupFrame from './MockupFrame.vue';
             </div>
             <div class="dl add hunk-start">
               <button class="accept" title="Accept change">
-                <wa-icon library="texra" name="arrow-left"></wa-icon>
+                <wa-icon library="texra" name="arrow-right"></wa-icon>
               </button>
               <span class="gut">13</span>We present an
               <ins>efficient</ins> method for the
@@ -93,7 +93,7 @@ import MockupFrame from './MockupFrame.vue';
             </div>
             <div class="dl add hunk-start">
               <button class="accept" title="Accept change">
-                <wa-icon library="texra" name="arrow-left"></wa-icon>
+                <wa-icon library="texra" name="arrow-right"></wa-icon>
               </button>
               <span class="gut">18</span>Let <span class="m">$G$</span> be a
               <ins>$d$-regular</ins> graph.
@@ -202,8 +202,8 @@ import MockupFrame from './MockupFrame.vue';
 }
 
 /* Accept-change control in the central gutter: like VS Code's diff editor,
-   one arrow per hunk that applies the revision back into the original. It
-   straddles the divider at the revised pane's left edge. */
+   one arrow per hunk pointing left-to-right — from the draft (left) into the
+   current file (right). It straddles the divider at the right pane's edge. */
 .dl.hunk-start {
   position: relative;
 }
