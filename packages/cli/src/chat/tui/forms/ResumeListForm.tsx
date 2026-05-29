@@ -1,9 +1,8 @@
 // `/resume` form. It lists recent execution configurations that can be
 // restarted in the current chat TUI.
 
-import { Box, Text, useInput } from 'ink';
+import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
-import { useEffect, useState } from 'react';
 
 import {
   listCliHistoryEntries,
@@ -13,6 +12,12 @@ import type { ExecutionId } from '@shared/schemas';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
+import { FormFrame } from './_shared/FormFrame';
+import {
+  computeSelectWindowSize,
+  type SelectWindowSize,
+} from './_shared/selectWindow';
+import { useAsyncListForm } from './_shared/useAsyncListForm';
 
 export interface ResumeListFormProps {
   readonly availableRows?: number;
@@ -20,28 +25,11 @@ export interface ResumeListFormProps {
   readonly onClose: () => void;
 }
 
-export function resumeSelectWindow({
-  availableRows,
-  itemCount,
-}: {
+export function resumeSelectWindow(args: {
   readonly availableRows: number | undefined;
   readonly itemCount: number;
-}): {
-  readonly maxVisibleItems: number | undefined;
-  readonly showOverflow: boolean;
-} {
-  if (availableRows == null) {
-    return { maxVisibleItems: undefined, showOverflow: false };
-  }
-
-  const selectRows = Math.max(1, availableRows - 7);
-  if (itemCount <= selectRows) {
-    return { maxVisibleItems: itemCount, showOverflow: false };
-  }
-  if (selectRows < 3) {
-    return { maxVisibleItems: selectRows, showOverflow: false };
-  }
-  return { maxVisibleItems: Math.max(1, selectRows - 2), showOverflow: true };
+}): SelectWindowSize {
+  return computeSelectWindowSize({ ...args, chromeRows: 7 });
 }
 
 export function resumeEntryDescription(entry: CliHistoryEntry): string {
@@ -49,82 +37,37 @@ export function resumeEntryDescription(entry: CliHistoryEntry): string {
   return `${entry.timestamp}; ${entry.agent}; ${entry.status}; ${input}`;
 }
 
-function ResumeFrame(props: {
-  readonly color: string;
-  readonly title: string;
-  readonly children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <Box
-      borderStyle="round"
-      borderColor={props.color}
-      flexDirection="column"
-      paddingX={1}
-    >
-      <Text bold color={props.color}>
-        {props.title}
-      </Text>
-      {props.children}
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[{ key: 'Esc', action: 'close' }]}
-          confirmCancel={false}
-        />
-      </Box>
-    </Box>
-  );
-}
-
 export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
-  const [entries, setEntries] = useState<readonly CliHistoryEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | undefined>(undefined);
-
-  useInput((_input, key) => {
-    if ((loading || error || entries.length === 0) && key.escape) {
-      props.onClose();
-    }
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    void listCliHistoryEntries()
-      .then((nextEntries) => {
-        if (cancelled) return;
-        setEntries(nextEntries.slice(0, 50));
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(String(err));
-        setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { data, loading, error } = useAsyncListForm<readonly CliHistoryEntry[]>(
+    {
+      load: async () => (await listCliHistoryEntries()).slice(0, 50),
+      onClose: props.onClose,
+      isEmpty: (entries) => entries.length === 0,
+    },
+  );
 
   if (loading) {
     return (
-      <ResumeFrame color="cyan" title="/resume">
+      <FormFrame color="cyan" title="/resume">
         <Spinner label="Loading execution history..." />
-      </ResumeFrame>
+      </FormFrame>
     );
   }
 
   if (error) {
     return (
-      <ResumeFrame color="red" title="/resume - error">
+      <FormFrame color="red" title="/resume - error">
         <Text>{error}</Text>
-      </ResumeFrame>
+      </FormFrame>
     );
   }
 
+  const entries = data ?? [];
   if (entries.length === 0) {
     return (
-      <ResumeFrame color="yellow" title="/resume">
+      <FormFrame color="yellow" title="/resume">
         <Text>No execution history found.</Text>
-      </ResumeFrame>
+      </FormFrame>
     );
   }
 

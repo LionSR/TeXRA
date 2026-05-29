@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 
 // Local imports - log
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { FILE_SELECTION_COMMAND_IDS, getFilterExtensions } from '@common/files';
 import { getFileLister } from '@frontend/files';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -59,44 +60,38 @@ function createPicker<Many extends boolean>(options: PickerOptions<Many>) {
 export function registerFileSelectionCommands(
   context: vscode.ExtensionContext,
 ): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.selectInputFiles,
-      selectInputFiles,
-    ),
-    vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.selectContextFiles,
-      selectContextFiles,
-    ),
-    vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.selectMediaFiles,
-      selectMediaFiles,
-    ),
-    vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.selectOutputFiles,
-      selectOutputFiles,
-    ),
-    vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.selectEditedFile,
-      selectEditedFile,
-    ),
-    vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.getCurrentFile,
-      getCurrentFile,
-    ),
-    vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.selectBaseFile,
-      selectBaseFile,
-    ),
-    vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.refreshInputFiles,
-      () => getFileLister().list('input'),
-    ),
-    vscode.commands.registerCommand(
-      FILE_SELECTION_COMMAND_IDS.refreshBaseFiles,
-      () => getFileLister().list('input'),
-    ),
-  );
+  registerCommands(context, [
+    {
+      id: FILE_SELECTION_COMMAND_IDS.selectInputFiles,
+      handler: selectInputFiles,
+    },
+    {
+      id: FILE_SELECTION_COMMAND_IDS.selectContextFiles,
+      handler: selectContextFiles,
+    },
+    {
+      id: FILE_SELECTION_COMMAND_IDS.selectMediaFiles,
+      handler: selectMediaFiles,
+    },
+    {
+      id: FILE_SELECTION_COMMAND_IDS.selectOutputFiles,
+      handler: selectOutputFiles,
+    },
+    {
+      id: FILE_SELECTION_COMMAND_IDS.selectEditedFile,
+      handler: selectEditedFile,
+    },
+    { id: FILE_SELECTION_COMMAND_IDS.getCurrentFile, handler: getCurrentFile },
+    { id: FILE_SELECTION_COMMAND_IDS.selectBaseFile, handler: selectBaseFile },
+    {
+      id: FILE_SELECTION_COMMAND_IDS.refreshInputFiles,
+      handler: () => getFileLister().list('input'),
+    },
+    {
+      id: FILE_SELECTION_COMMAND_IDS.refreshBaseFiles,
+      handler: () => getFileLister().list('input'),
+    },
+  ]);
 }
 
 const selectInputFiles = createPicker({

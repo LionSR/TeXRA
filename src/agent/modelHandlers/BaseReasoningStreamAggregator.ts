@@ -1,4 +1,4 @@
-// Type imports
+import { ToolCallAccumulator } from './utils/toolCallAccumulator';
 import type {
   ChatCompletion,
   ChatCompletionChunk,
@@ -17,11 +17,6 @@ type ChatCompletionMessageWithReasoning = ChatCompletionMessage & {
   reasoning_content?: string;
 };
 
-interface AggregatedToolCall {
-  id: string;
-  function: ChatCompletionMessageFunctionToolCall['function'];
-}
-
 /**
  * Base class for streaming aggregators that support reasoning models.
  * Used by DeepSeek, Kimi, and other OpenAI-compatible reasoning models.
@@ -29,7 +24,7 @@ interface AggregatedToolCall {
 export class BaseReasoningStreamAggregator implements StreamingAggregator {
   private readonly contentParts: string[] = [];
   private readonly reasoningParts: string[] = [];
-  private readonly toolCalls = new Map<number, AggregatedToolCall>();
+  private readonly toolCalls = new ToolCallAccumulator();
   private lastChunkWithChoices: ChatCompletionChunk | undefined;
   private usageChunk: ChatCompletionChunk | undefined;
 
@@ -71,20 +66,12 @@ export class BaseReasoningStreamAggregator implements StreamingAggregator {
 
     if (Array.isArray(delta.tool_calls)) {
       for (const call of delta.tool_calls) {
-        const existing = this.toolCalls.get(call.index) ?? {
-          id: '',
-          function: { name: '', arguments: '' },
-        };
-        if (call.id) {
-          existing.id += call.id;
-        }
-        if (call.function?.name) {
-          existing.function.name += call.function.name;
-        }
-        if (call.function?.arguments) {
-          existing.function.arguments += call.function.arguments;
-        }
-        this.toolCalls.set(call.index, existing);
+        this.toolCalls.add({
+          index: call.index,
+          id: call.id,
+          name: call.function?.name,
+          arguments: call.function?.arguments,
+        });
       }
     }
   }
@@ -144,22 +131,11 @@ export class BaseReasoningStreamAggregator implements StreamingAggregator {
   }
 
   private buildToolCalls(): ChatCompletionMessageFunctionToolCall[] {
-    const result: ChatCompletionMessageFunctionToolCall[] = [];
-    for (const [callIndex, call] of this.toolCalls.entries()) {
-      // Skip empty tool calls (no id, name, or arguments)
-      if (!call.id && !call.function.name && !call.function.arguments) {
-        continue;
-      }
-      result.push({
-        id: call.id || `tool_call_${callIndex}`,
-        type: 'function',
-        function: {
-          name: call.function.name,
-          arguments: call.function.arguments,
-        },
-      });
-    }
-    return result;
+    return this.toolCalls.build(({ id, name, arguments: args }) => ({
+      id,
+      type: 'function',
+      function: { name, arguments: args },
+    }));
   }
 
   private buildFallbackResponse(): ChatCompletion {

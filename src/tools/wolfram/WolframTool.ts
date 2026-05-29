@@ -5,11 +5,29 @@ import { z } from 'zod';
 import { ToolResult, ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
+// Local imports - utils
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
+
 // Local file imports
 import {
   WOLFRAM_CODE_TIMEOUT_MS,
   executeWolframCode,
 } from './wolframScriptUtils';
+
+/**
+ * Build a content-bearing summary for a wolfram run so concurrent calls render
+ * as distinct rows instead of an indistinguishable wall of "wolfram (Executed)".
+ * Mirrors bash's `Executed: <preview>` convention; uses the first non-blank
+ * line of the code so multi-line scripts still get a meaningful header.
+ */
+export function wolframRunSummary(code: string): string {
+  const firstLine = code
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  const preview = firstLine ? truncateWithEllipsis(firstLine, 60) : '';
+  return preview ? `Executed: ${preview}` : 'Executed';
+}
 
 const WolframInputSchema = z.strictObject({
   code: z.string(),
@@ -37,7 +55,7 @@ export class WolframTool extends defineTool({
     });
     if (result.success) {
       return {
-        summary: 'Executed',
+        summary: wolframRunSummary(input.code),
         output: result.output ?? '',
       };
     }

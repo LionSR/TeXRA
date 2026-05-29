@@ -69,6 +69,16 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
     this.emitAction('reject', feedback);
   }
 
+  protected renderApproveButton(approveTitle: string): TemplateResult {
+    return renderLabeledActionButton({
+      icon: 'check',
+      text: 'Approve',
+      title: approveTitle,
+      action: 'approve',
+      onClick: () => this.emitAction('approve'),
+    });
+  }
+
   protected renderRejectButton(rejectTitle: string): TemplateResult {
     return renderLabeledActionButton({
       icon: this.showFeedback ? 'check' : 'close',

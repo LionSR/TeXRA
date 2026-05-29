@@ -1,7 +1,6 @@
 /**
  * No-op AgentTrace. Used as the default for SDK consumers who don't
- * subscribe and as a baseline for the TeXRA-extended noop in
- * `@logger/noopTexraTrace`.
+ * subscribe to the run's event stream.
  */
 import { randomUUID } from 'node:crypto';
 

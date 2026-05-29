@@ -3,14 +3,13 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { getHelperModelName } from '@agent/runtime/helperModel';
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 
 const CHANNEL = 'MergeCommands';
 
 export function registerMergeCommands(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand('texra.merge', handleMerge),
-  );
+  registerCommands(context, [{ id: 'texra.merge', handler: handleMerge }]);
 }
 
 async function handleMerge(

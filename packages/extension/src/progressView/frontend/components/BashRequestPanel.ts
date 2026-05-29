@@ -17,7 +17,6 @@ import {
 
 // Local imports - progress view styles
 import type { BashPermission } from '@shared/schemas';
-import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 import { codeBlockStyles } from '../styles/codeBlockStyles';
 
 // Local imports - progress view formatters
@@ -53,13 +52,7 @@ export class BashRequestPanel extends BaseFeedbackPanel {
           </div>
         </div>
         <div class="bash-approval-request__actions">
-          ${renderLabeledActionButton({
-            icon: 'check',
-            text: 'Approve',
-            title: 'Allow this command to execute (y)',
-            action: 'approve',
-            onClick: () => this.emitAction('approve'),
-          })}
+          ${this.renderApproveButton('Allow this command to execute (y)')}
           ${this.renderRejectButton('Reject this command (n)')}
         </div>
         ${this.renderFeedbackSection(

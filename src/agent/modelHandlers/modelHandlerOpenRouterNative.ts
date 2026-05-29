@@ -19,7 +19,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
-import { computeCachePercentage } from './utils/usageNormalization';
+import { normalizeUsage } from './support/UsageNormalizer';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports
@@ -32,6 +32,7 @@ import {
 } from './utils/toolAttachmentUtils';
 import { parseToolArguments } from './utils/parseArguments';
 import { extractTextFromReasoningDetails } from './utils/openRouterReasoning';
+import { ToolCallAccumulator } from './utils/toolCallAccumulator';
 import { ModelHandler } from './ModelHandler';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
@@ -90,14 +91,7 @@ class OpenRouterStreamAggregator {
   private content = '';
   private reasoning = '';
   private reasoningDetails: ReasoningDetailUnion[] = [];
-  private toolCallMap = new Map<
-    number,
-    {
-      id: string;
-      type: 'function';
-      function: { name: string; arguments: string };
-    }
-  >();
+  private toolCalls = new ToolCallAccumulator();
   private finishReason: ChatFinishReasonEnum | null = null;
   private usage: ChatUsage | null = null;
   private model = '';
@@ -146,27 +140,12 @@ class OpenRouterStreamAggregator {
     // Accumulate tool calls by index
     if (delta.toolCalls) {
       for (const tc of delta.toolCalls) {
-        const existing = this.toolCallMap.get(tc.index);
-        if (existing) {
-          if (tc.id && !existing.id) {
-            existing.id = tc.id;
-          }
-          if (tc.function?.arguments) {
-            existing.function.arguments += tc.function.arguments;
-          }
-          if (tc.function?.name) {
-            existing.function.name += tc.function.name;
-          }
-        } else {
-          this.toolCallMap.set(tc.index, {
-            id: tc.id ?? '',
-            type: 'function',
-            function: {
-              name: tc.function?.name ?? '',
-              arguments: tc.function?.arguments ?? '',
-            },
-          });
-        }
+        this.toolCalls.add({
+          index: tc.index,
+          id: tc.id,
+          name: tc.function?.name,
+          arguments: tc.function?.arguments,
+        });
       }
     }
 
@@ -174,16 +153,16 @@ class OpenRouterStreamAggregator {
   }
 
   buildResponse(): ChatResult {
-    const toolCalls: ChatToolCall[] = [];
-    // Sort by index to maintain order
-    const sorted = [...this.toolCallMap.entries()].sort(([a], [b]) => a - b);
-    for (const [, tc] of sorted) {
-      toolCalls.push({
-        id: tc.id,
+    // Preserve the original OpenRouter materialization: emit every accumulated
+    // entry with its raw id (no empty-dropping, no fallback id).
+    const toolCalls: ChatToolCall[] = this.toolCalls.build(
+      ({ id, name, arguments: args }) => ({
+        id,
         type: 'function',
-        function: { name: tc.function.name, arguments: tc.function.arguments },
-      });
-    }
+        function: { name, arguments: args },
+      }),
+      { dropEmpty: false, fallbackId: false },
+    );
 
     const message: ChatAssistantMessage & { role: 'assistant' } = {
       role: 'assistant',
@@ -793,31 +772,20 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     rawUsage: ChatUsage | null,
     responseTimeMs: number,
   ): NormalizedUsage {
-    if (!rawUsage) {
-      return {
-        inputTokens: 0,
-        outputTokens: 0,
-        cost: 0,
-        responseTimeMs,
+    return normalizeUsage(
+      {
         provider: this.usageProvider,
-      };
-    }
-
-    const inputTokens = rawUsage.promptTokens ?? 0;
-    const cachedTokens = rawUsage.promptTokensDetails?.cachedTokens ?? 0;
-
-    return {
-      inputTokens,
-      outputTokens: rawUsage.completionTokens ?? 0,
-      cost: this.computePrice(rawUsage),
+        computePrice: (usage) => this.computePrice(usage),
+        extract: (usage) => ({
+          inputTokens: usage.promptTokens ?? 0,
+          outputTokens: usage.completionTokens ?? 0,
+          cachedTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+          reasoningTokens: usage.completionTokensDetails?.reasoningTokens ?? 0,
+        }),
+      },
+      rawUsage,
       responseTimeMs,
-      provider: this.usageProvider,
-      cachedInputTokens: cachedTokens || undefined,
-      percentageCached: computeCachePercentage(cachedTokens, inputTokens),
-      reasoningTokens:
-        rawUsage.completionTokensDetails?.reasoningTokens || undefined,
-      _native: rawUsage,
-    };
+    );
   }
 
   // ---------------------------------------------------------------------------

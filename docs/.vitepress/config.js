@@ -184,6 +184,29 @@ const baseConfig = {
     },
   },
   ignoreDeadLinks: true,
+  markdown: {
+    // VitePress v2 alpha does NOT wrap inline code in v-pre, so Vue
+    // interpolates any `{{ ... }}` inside backticks — template-variable
+    // references like `{{ INPUT_CONTENT }}` would render empty (or break the
+    // build on filtered expressions like `{{ X | join(", ") }}`). Re-add
+    // v-pre to every inline code token so the braces are shown literally,
+    // matching how fenced code blocks already behave.
+    config: (md) => {
+      const defaultCodeInline =
+        md.renderer.rules.code_inline ||
+        ((tokens, idx, options, _env, self) =>
+          `<code${self.renderAttrs(tokens[idx])}>${md.utils.escapeHtml(
+            tokens[idx].content,
+          )}</code>`);
+      md.renderer.rules.code_inline = (tokens, idx, options, env, self) => {
+        const token = tokens[idx];
+        if (token.content.includes('{{') || token.content.includes('}}')) {
+          token.attrSet('v-pre', '');
+        }
+        return defaultCodeInline(tokens, idx, options, env, self);
+      };
+    },
+  },
   // Public site allowlist: only index.md, launch.md, terms.md, providers.md,
   // and everything under guide/ except the desktop pages, which stay internal
   // while the desktop app is in beta. Every other markdown file in this

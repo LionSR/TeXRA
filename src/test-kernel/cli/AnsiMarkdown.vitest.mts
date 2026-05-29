@@ -226,6 +226,22 @@ describe('renderAnsiMarkdown', () => {
     }
   });
 
+  it('sizes a small table to its content instead of stretching to full width', () => {
+    _resetAnsiMarkdownForTests();
+    const md = '| n | digits |\n|---|---|\n| 447 | 993.3 |';
+    const out = renderAnsiMarkdown(md, { width: 80 });
+    const widest = Math.max(
+      ...stripAnsi(out)
+        .split('\n')
+        .map((line) => displayWidthForTest(line)),
+    );
+    // Content needs only a handful of columns — it must not balloon to 80.
+    expect(widest).toBeLessThan(24);
+    expect(widest).toBeGreaterThan(0);
+    expect(stripAnsi(out)).toContain('447');
+    expect(stripAnsi(out)).toContain('993.3');
+  });
+
   it('memoises identical inputs (second call hits the cache)', () => {
     _resetAnsiMarkdownForTests();
     const first = renderAnsiMarkdown('# Title\n\nParagraph.');
