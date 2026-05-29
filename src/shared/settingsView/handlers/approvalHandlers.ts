@@ -7,7 +7,7 @@
  * which lives in `ConfigProvider` rather than workspace state.
  */
 import { WorkspaceStateKey } from '@common/state/stateKeys';
-import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import type { UpdateApprovalSettingsMessage } from '@shared/schemas/settingsViewMessages';
 import {
   parseCodexApprovalPolicy,

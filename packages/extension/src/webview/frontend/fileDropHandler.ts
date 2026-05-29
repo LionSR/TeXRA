@@ -1,5 +1,5 @@
 // Local imports - common webview
-import { MAIN_VIEW_COMMANDS } from '@common/webview/commands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - shared utilities
 import { postMessage } from '@shared/hostBridge';

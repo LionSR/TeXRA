@@ -1,5 +1,5 @@
 // Local imports - shared webview commands
-import { MAIN_VIEW_COMMANDS } from '@common/webview';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 
 export const FILE_SELECTION_COMMAND_IDS = {
   selectInputFiles: 'texra.selectInputFiles',
