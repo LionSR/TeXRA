@@ -374,6 +374,10 @@ export function renderAnsiMarkdown(
     cachedProcessor = createMarkdownProcessor({
       renderer,
       formatLatexReference: formatAnsiLatexReference,
+      // The CLI shows LaTeX source verbatim (math rendering is disabled), so
+      // shield `$…$` / `$$…$$` / `\(…\)` / `\[…\]` spans from markdown-it, which
+      // would otherwise strip `\(`→`(`, `\;`→`;` and eat `_{…}` subscripts.
+      protectLatexMath: true,
     });
     cachedWidth = options.width;
   }
