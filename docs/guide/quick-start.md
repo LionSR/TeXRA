@@ -30,11 +30,19 @@ available.
 
 Before you can use TeXRA's AI features, you need to provide API keys for the services you intend to use (like Anthropic, OpenAI, Google, etc.). TeXRA stores these keys securely using VS Code's secret storage.
 
-1.  **Open the Command Palette**: Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS).
-2.  **Run the Set API Key command**: Type `TeXRA: Set API Key` and select the command.
-3.  **Follow the prompts**: Select the API provider (e.g., Anthropic, OpenAI) and enter your key when prompted.
+1.  **Open the Settings Dashboard**: Click the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel, or run **TeXRA: Show Settings Dashboard** from the Command Palette.
+2.  **Go to the Models tab**: The **API Configuration** table lists every provider with its current key status (`Set`, `Env`, or `Not set`).
+3.  **Set the key**: Find your provider's row and click the <wa-icon library="texra" name="key"></wa-icon> **Set API key** button, then paste your key. Don't have one yet? Click the <wa-icon library="texra" name="arrow-up-right-from-square"></wa-icon> **Get** button to open the provider's API key page.
 
-Repeat this process for each AI provider you plan to use with TeXRA.
+The Status column shows `Set` once the key is stored. To replace a key, set it again; to remove one, click the <wa-icon library="texra" name="trash"></wa-icon> trash icon. Repeat for each provider you plan to use.
+
+<ApiKeysHero />
+
+<p class="hero-caption">The Models tab's API Configuration table: each provider shows its key status and Set / Get / Remove actions.</p>
+
+::: tip Per-provider settings
+Expand a provider's row (click the chevron) to toggle streaming or, for providers that support it, point requests at a custom endpoint.
+:::
 
 You can also place a `.env` file in your workspace with variables like `OPENAI_API_KEY`. TeXRA loads this automatically so you don't need to enter keys every time.
 
@@ -60,7 +68,7 @@ Let's go through an example to illustrate the basic workflow.
 3. Open or create a LaTeX document from the workspace you'd like to improve
 
 ::: tip Example
-Run **TeXRA: Create Sample Project** from the Command Palette to add a ready-made example to your workspace. This creates a `draft.tex` file under `texra-sample/`. Open it, run **TeXRA: Set API Key** to add your credentials, then select an agent and model in the TeXRA panel. Finally, write your instruction and execute the agent to see results.
+Run **TeXRA: Create Sample Project** from the Command Palette to add a ready-made example to your workspace. This creates a `draft.tex` file under `texra-sample/`. Open it, add your credentials in the Settings Dashboard's **Models** tab (see [Set Up API Keys](#set-up-api-keys) above), then select an agent and model in the TeXRA panel. Finally, write your instruction and execute the agent to see results.
 :::
 
 ### Step 2: Select Files
@@ -76,6 +84,10 @@ Select **Never remind again** to hide it permanently.
 ::: info Multiple Files
 Each category holds an ordered list — add as many files as the task needs and drag rows to reorder them.
 :::
+
+<FileSelectHero />
+
+<p class="hero-caption">The file selector: Input holds the document you're editing, Context holds references and preamble, and Media holds figures.</p>
 
 ### Step 3: Choose Agent and Model
 
@@ -104,17 +116,24 @@ Be specific about what you want! Vague instructions are like asking a genie for 
 
 ### Step 5: Configure Tools
 
-1. Click on the "Tool Config" dropdown
-2. (Optional) Enable helpers for this run:
-   - "Attach TeX Count" to include document statistics
-   - "Attach Diagnostics" to include LaTeX compilation logs and other troubleshooting details
-   - Reflection rounds are controlled by the selected agent—most writing agents already include a follow-up critique pass
+Two icon buttons sit in the file-group header rows of the file selector — one next to the **Input** label, one next to the **Media** label. They light up when a helper is active.
+
+1. Click the <wa-icon library="texra" name="tools"></wa-icon> **Tool configuration options** button to:
+   - **Attach TeX Count** — include document word-count statistics so the agent knows the document's size and structure
+2. Click the <wa-icon library="texra" name="wand"></wa-icon> **Auto-extract options** button to enable, for this run:
+   - **Figures** — pull figures out of the document automatically
+   - **TikZ Figures** — extract TikZ figures
+   - **Compile Input PDF** — compile the input to PDF first
+
+Reflection rounds are controlled by the selected agent—most writing agents already include a follow-up critique pass.
+
+<ToolConfigHero />
+
+<p class="hero-caption">The two helper menus in the Input and Media file-group headers. Active helpers tint their buttons; here Attach TeX Count and Figures are on.</p>
 
 ::: tip Save Prompts for Later
 Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the generated prompt alongside other debug artifacts.
 :::
-
-![Tool Configuration](/images/tool-config.png)
 
 ### Step 6: Execute the Agent
 
@@ -133,7 +152,9 @@ Enable the `texra.debug.saveInputPrompt` setting if you want TeXRA to store the 
 3. You can compare the original and modified versions using:
    - **ProgressBoard Diff**: Click the <wa-icon library="texra" name="diff-multiple"></wa-icon> Diff button on the completed stream to compare the original file against the generated task-storage output.
 
-     ![VS Code Compare View](/images/vscode-compare.png)
+     <CompareHero />
+
+     <p class="hero-caption">VS Code's diff editor opens with your original on the left and the round-0 output (<code>r0/draft.tex</code>) on the right — removed text in red, improved text in green.</p>
 
      You can accept reviewed outputs from the ProgressBoard after comparing the changes.
 
