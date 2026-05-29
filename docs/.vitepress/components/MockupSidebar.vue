@@ -196,12 +196,12 @@ const view = defineModel('view', { type: String, default: 'diff' });
 }
 .task-ic {
   display: inline-flex;
-  color: #75beff;
+  color: var(--mk-syn-fn);
   flex-shrink: 0;
   font-size: 13px;
 }
 .task-name {
-  color: #e0e0e0;
+  color: var(--mk-text-dim);
   flex-shrink: 0;
 }
 .task-desc {
@@ -255,7 +255,7 @@ const view = defineModel('view', { type: String, default: 'diff' });
   display: none;
 }
 .ldiff-ic {
-  color: #c89be0;
+  color: var(--mk-accent);
   display: inline-flex;
   font-size: 12px;
 }

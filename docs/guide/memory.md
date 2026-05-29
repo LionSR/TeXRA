@@ -42,6 +42,10 @@ Behind the scenes, agents work with memory through a small set of commands on th
 
 Every note is a Markdown file. Agents see them at `/memories/<name>.md`; on disk they live under your workspace's TeXRA storage folder. Each file carries a small YAML header that records which agent last modified it, when, and whether it's pinned — that's what powers the metadata strip in the Dashboard.
 
+<MemoryCommandsHero />
+
+<p class="hero-caption">A run's <code>memory</code> tool calls: the agent lists existing notes, writes a new one, edits another, then pins the convention note so it loads at every session start.</p>
+
 ## Pinned vs. unpinned
 
 Unpinned notes are searchable context — the agent can read them when it needs to, but they don't take up space in every prompt.
@@ -49,6 +53,10 @@ Unpinned notes are searchable context — the agent can read them when it needs 
 **Pinned notes are different.** They're loaded at the start of every session, so put only the highest-value insights there: conventions, hard-won techniques, recurring pitfalls. You can pin up to **10 notes**; if you hit the limit, unpin something stale before pinning the next one.
 
 The pinned indicator in the Dashboard is a blue left border plus a `Pinned` badge in the metadata strip.
+
+<MemoryPinHero />
+
+<p class="hero-caption">Pinned notes carry the blue left border and a <code>Pinned</code> badge and load every session; unpinned notes stay as searchable context the agent reads on demand.</p>
 
 ## Managing memories from the Dashboard
 
