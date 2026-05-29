@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import type { FileOpResult } from '@agent/types';
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { parseWithErrorDisplay } from '@frontend/ui/errorHandlingUtils';
 import {
   runCleanSingle,
@@ -56,11 +57,11 @@ export function registerCleanCommands(context: vscode.ExtensionContext): void {
   // `extensionCommandSurface` so the dispatch path matches the desktop
   // registry (see #3771). The remaining clean commands take typed
   // arguments and stay on per-command registration for now.
-  context.subscriptions.push(
-    vscode.commands.registerCommand('texra.clean', handleClean),
-    vscode.commands.registerCommand('texra.cleanSingle', handleCleanSingle),
-    vscode.commands.registerCommand('texra.cleanMultiple', handleCleanMultiple),
-  );
+  registerCommands(context, [
+    { id: 'texra.clean', handler: handleClean },
+    { id: 'texra.cleanSingle', handler: handleCleanSingle },
+    { id: 'texra.cleanMultiple', handler: handleCleanMultiple },
+  ]);
 }
 
 async function handleCleanSingle(

@@ -1,8 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { defineCommand } from 'citty';
-
 import { getAgent, loadAgents } from '@agent/index';
 import { writeTerminalStatus } from '@agent/storage';
 import {
@@ -11,7 +9,6 @@ import {
 } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { toErrorMessage } from '@common/errors/errorMessage';
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 
@@ -23,11 +20,10 @@ import {
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr } from '../runtime/logSinks';
+import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
 
-import { contextFromArgs } from './_helpers/context';
-import { setExitCode } from './_helpers/exitCode';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
   GLOBAL_ARGS,
   collectStringFlagValues,
@@ -137,7 +133,7 @@ async function runToolUseAgent(
     if (!(error instanceof CliUsageError)) {
       throw error;
     }
-    writeTextStderr(toErrorMessage(error));
+    writeErrorStderr(error);
     return CliExitCode.Usage;
   }
 
@@ -200,7 +196,7 @@ async function runToolUseAgent(
   return terminalStatusExitCode(terminalStatus, runContext);
 }
 
-export const agentsRunCommand = defineCommand({
+export const agentsRunCommand = defineCliCommand({
   meta: { name: 'run', description: 'Run a tool-use agent headlessly' },
   args: {
     ...GLOBAL_ARGS,
@@ -235,17 +231,13 @@ export const agentsRunCommand = defineCommand({
         'File whose contents are passed before --instruction when both are set',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(
-      await runToolUseAgent(context, {
-        agent: ctx.args.name,
-        inputFiles: collectStringFlagValues(ctx.rawArgs, 'input', 'i'),
-        contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
-        model: optString(ctx.args.model),
-        instruction: optString(ctx.args.instruction) ?? '',
-        instructionFile: optString(ctx.args['instruction-file']),
-      }),
-    );
-  },
+  run: (context, ctx) =>
+    runToolUseAgent(context, {
+      agent: ctx.args.name,
+      inputFiles: collectStringFlagValues(ctx.rawArgs, 'input', 'i'),
+      contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
+      model: optString(ctx.args.model),
+      instruction: optString(ctx.args.instruction) ?? '',
+      instructionFile: optString(ctx.args['instruction-file']),
+    }),
 });

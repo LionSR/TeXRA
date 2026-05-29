@@ -3,6 +3,7 @@ import { execa, execaSync } from 'execa';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
+import { registerCommands } from '@commands/_shared/registerCommands';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { getConfig } from '@utils/config';
@@ -31,27 +32,18 @@ export const gitCommands = {
 };
 
 export function registerGitCommands(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(
-    // `isGitRepository`, `getRecentCommits`, and `findCommitInHistory`
-    // return values to `executeCommand` callers (sync `boolean`,
-    // `string[] | null`, `string | null` respectively) and accept
-    // optional positional arguments — they keep their per-command
-    // registration. `texra.cloneOverleafProject` migrated through the
-    // shared command registry in #3781 batch 3 (see
-    // `extensionCommandSurface.ts`).
-    vscode.commands.registerCommand(
-      gitCommands.isGitRepository,
-      isGitRepository,
-    ),
-    vscode.commands.registerCommand(
-      gitCommands.getRecentCommits,
-      getRecentCommits,
-    ),
-    vscode.commands.registerCommand(
-      gitCommands.findCommitInHistory,
-      findCommitInHistory,
-    ),
-  );
+  // `isGitRepository`, `getRecentCommits`, and `findCommitInHistory`
+  // return values to `executeCommand` callers (sync `boolean`,
+  // `string[] | null`, `string | null` respectively) and accept
+  // optional positional arguments — they keep their per-command
+  // registration. `texra.cloneOverleafProject` migrated through the
+  // shared command registry in #3781 batch 3 (see
+  // `extensionCommandSurface.ts`).
+  registerCommands(context, [
+    { id: gitCommands.isGitRepository, handler: isGitRepository },
+    { id: gitCommands.getRecentCommits, handler: getRecentCommits },
+    { id: gitCommands.findCommitInHistory, handler: findCommitInHistory },
+  ]);
 }
 
 export { cloneOverleafProject };
