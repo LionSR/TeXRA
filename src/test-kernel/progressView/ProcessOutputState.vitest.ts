@@ -3,7 +3,6 @@ import { create } from 'mutative';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - common webview
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/commands';
 
 // Local imports - progress view frontend
 import { streamLifecycleHandlers } from '@progressView/frontend/slices/streamLifecycleSlice';
@@ -15,6 +14,7 @@ import {
   type StreamState,
 } from '@progressView/frontend/store';
 import type { MessageHandlerContext } from '@progressView/frontend/messageDispatcher';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - shared schemas
 import {

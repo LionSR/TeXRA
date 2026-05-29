@@ -1,9 +1,5 @@
-/**
- * Command constants for the profile view.
- */
 import { COMMON_COMMANDS } from './commonCommands';
 
-// Profile view specific commands
 export const PROFILE_VIEW_COMMANDS = {
   ...COMMON_COMMANDS,
   GET_PROFILE_DATA: 'getProfileData',

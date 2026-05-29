@@ -2,10 +2,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - webview command constants
-import { COMMON_COMMANDS } from '@common/webview/commonCommands';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
-import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
+import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 

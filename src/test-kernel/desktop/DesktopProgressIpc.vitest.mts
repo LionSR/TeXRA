@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - webview command constants
-import { PROGRESS_VIEW_COMMANDS } from '@common/webview/progressViewCommands';
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';

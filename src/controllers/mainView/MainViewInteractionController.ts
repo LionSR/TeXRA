@@ -1,9 +1,9 @@
-// Local imports - common
-import { COMMON_COMMANDS } from '@common/webview/commonCommands';
-import { MAIN_VIEW_COMMANDS } from '@common/webview/mainViewCommands';
-
 // Local imports - schemas
 import type { MainViewInboundMessage, MainViewMessage } from '@shared/schemas';
+
+// Local imports - IPC contracts
+import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 
 export interface MainViewCommandPlan {
   command: string;

@@ -1,10 +1,8 @@
-// Local imports - common
-import { SETTINGS_VIEW_COMMANDS } from '@common/webview/settingsViewCommands';
-
 // Local imports - hosts
 import type { PromptHost } from '@hosts/promptHost';
 
 // Local imports - shared
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import type {
   MemoryPreview,
   MemoryViewItem,
