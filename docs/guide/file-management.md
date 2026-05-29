@@ -66,7 +66,7 @@ You can also **drag-and-drop files** from the OS file manager (or from VS Code's
 Inside the list:
 
 - Each file row has a small trash icon to remove just that file.
-- Drag a row by its grip handle to reorder files. Input files are sent to the agent in this order.
+- Drag a row to reorder files. Input files are sent to the agent in this order.
 
 The list is the only mode — there is no separate "single file" view. To work with one file, just keep the list at length one.
 
