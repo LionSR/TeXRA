@@ -48,7 +48,7 @@ import MockCard from './MockCard.vue';
         </div>
       </section>
 
-      <wa-divider class="xr-div"></wa-divider>
+      <div class="xr-rule" role="separator" aria-hidden="true"></div>
 
       <!-- Fixed state -->
       <section class="xr-state">
@@ -121,8 +121,10 @@ import MockCard from './MockCard.vue';
   font-size: var(--mk-fs-74);
 }
 
-.xr-div {
-  --spacing: var(--mk-space-2);
+.xr-rule {
+  height: 1px;
+  background: var(--mk-border);
+  margin: var(--mk-space-2) 0;
 }
 
 /* Mono XML surface — mirrors CompareHero's .diff-surface / .dl token styling. */
