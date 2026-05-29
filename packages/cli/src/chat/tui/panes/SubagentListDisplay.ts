@@ -5,14 +5,10 @@ export function childStatusColor(status: string | undefined): string {
   return 'green';
 }
 
-export function childStatusPulses(status: string | undefined): boolean {
-  return !status || status === 'running' || status === 'in_progress';
-}
-
-export function childStatusMarker(
-  status: string | undefined,
-  pulseOn: boolean,
-): string {
-  if (!childStatusPulses(status)) return '● ';
-  return pulseOn ? '● ' : '○ ';
-}
+// A steady marker — intentionally NOT animated. A blinking dot forced the whole
+// live region (including the stable Todos/Plan panel below it) to repaint twice
+// a second for the entire lifetime of a long-running async subagent, and Ink's
+// non-alt-screen repaint can leave stale glyphs behind on those reprints. Status
+// is conveyed by `childStatusColor`, and liveness by the `running · Ns` text, so
+// the animation bought churn without information.
+export const CHILD_STATUS_MARKER = '● ';

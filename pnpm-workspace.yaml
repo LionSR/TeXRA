@@ -17,3 +17,5 @@ allowBuilds:
   esbuild: true
   keytar: true
   protobufjs: true
+patchedDependencies:
+  ink@7.0.4: patches/ink@7.0.4.patch
