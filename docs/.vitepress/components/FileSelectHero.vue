@@ -183,6 +183,6 @@ import MockupFrame from './MockupFrame.vue';
 /* File-selector vocabulary (.files/.flist/.fitem/.fi-*) lives in mockup.css,
    shared with ToolConfigHero. Only the sidebar width is unique here. */
 .board {
-  width: 320px;
+  width: var(--mk-size-320);
 }
 </style>

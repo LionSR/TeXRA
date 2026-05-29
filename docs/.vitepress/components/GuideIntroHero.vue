@@ -259,52 +259,52 @@ const view = ref('search');
 
 <style scoped>
 .board {
-  width: 256px;
+  width: var(--mk-size-256);
 }
 /* Three editor tabs are tight at content width — shrink them to fit. */
 .tabs .tab {
-  font-size: 0.69rem;
-  padding: 8px 8px;
+  font-size: var(--mk-fs-69);
+  padding: var(--mk-space-8) var(--mk-space-8);
 }
 
 /* Orchestrator Odyssey chip (header) */
 .odyssey {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.66rem;
-  color: #cda6e6;
+  gap: var(--mk-space-4);
+  font-size: var(--mk-fs-66);
+  color: var(--mk-accent);
   background: rgba(200, 155, 224, 0.12);
   border: 1px solid rgba(200, 155, 224, 0.3);
-  border-radius: 999px;
-  padding: 1px 7px;
+  border-radius: var(--mk-radius-pill);
+  padding: 1px var(--mk-space-7);
   flex-shrink: 0;
 }
 .ody-ic {
-  font-size: 10px;
+  font-size: var(--mk-space-10);
 }
 
 /* BibTeX result (search pane) — the rest of the terminal surface comes from
    theme/mockup.css. */
 .bib {
-  margin-top: 4px;
+  margin-top: var(--mk-space-4);
 }
 .bl {
   white-space: pre-wrap;
 }
 .bl.indent {
-  padding-left: 1.4em;
+  padding-left: var(--mk-space-1-4em);
 }
 .bk {
-  color: #c586c0;
+  color: var(--mk-syn-keyword);
 }
 .bid {
-  color: #9cdcfe;
+  color: var(--mk-syn-var);
 }
 .bok {
   display: inline-flex;
   color: var(--color-success);
-  font-size: 11px;
+  font-size: var(--mk-space-11);
   vertical-align: middle;
 }
 </style>
