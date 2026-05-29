@@ -34,14 +34,23 @@ import type {
   StreamOptions,
 } from './AgentTrace';
 
-const stageScope = new AsyncLocalStorage<string[]>();
-
-function currentStageStack(): string[] {
-  return stageScope.getStore() ?? [];
-}
-
 export class TraceEmitter implements AgentTrace {
   private readonly subscribers = new Set<AgentTraceSubscriber>();
+
+  /**
+   * Per-instance stage scope. Kept on the instance — NOT a module singleton —
+   * so a stage opened on one trace can never leak as the ambient parent of a
+   * DIFFERENT trace. Cross-trace inheritance is the bug class behind orphaned
+   * subagent transcripts (a child run's "Run:" stage inheriting the
+   * orchestrator's tool-use stage id, absent from the child's own stream).
+   * Within a single trace, ambient nesting works exactly as before.
+   * See docs/proposals/progress-grouping-refactor.md (R1).
+   */
+  private readonly stageScope = new AsyncLocalStorage<string[]>();
+
+  private currentStageStack(): string[] {
+    return this.stageScope.getStore() ?? [];
+  }
 
   // ─── SSoT primitives ───────────────────────────────────────────────
 
@@ -58,7 +67,10 @@ export class TraceEmitter implements AgentTrace {
     const stamped: AgentEvent =
       event.stageId !== undefined
         ? event
-        : ({ ...event, stageId: currentStageStack().at(-1) } as AgentEvent);
+        : ({
+            ...event,
+            stageId: this.currentStageStack().at(-1),
+          } as AgentEvent);
 
     for (const sub of this.subscribers) {
       try {
@@ -70,7 +82,7 @@ export class TraceEmitter implements AgentTrace {
   }
 
   activeStageId(): string | undefined {
-    return currentStageStack().at(-1);
+    return this.currentStageStack().at(-1);
   }
 
   withStage<T>(
@@ -78,8 +90,8 @@ export class TraceEmitter implements AgentTrace {
     fn: () => Promise<T> | T,
   ): Promise<T> {
     if (!stageId) return Promise.resolve(fn());
-    const nextStack = [...currentStageStack(), stageId];
-    return stageScope.run(nextStack, () => Promise.resolve(fn()));
+    const nextStack = [...this.currentStageStack(), stageId];
+    return this.stageScope.run(nextStack, () => Promise.resolve(fn()));
   }
 
   // ─── Plain logging ─────────────────────────────────────────────────
@@ -202,9 +214,9 @@ export class TraceEmitter implements AgentTrace {
     // Open inside the explicit stage scope so the start event carries the
     // right stageId without forcing the caller to await.
     if (options.stageId && options.stageId !== this.activeStageId()) {
-      const nextStack = [...currentStageStack(), options.stageId];
+      const nextStack = [...this.currentStageStack(), options.stageId];
       let handle!: StreamHandle;
-      stageScope.run(nextStack, () => {
+      this.stageScope.run(nextStack, () => {
         this.emit({ type: 'stream.start', id, kind });
         handle = new StreamHandleImpl(this, id);
       });

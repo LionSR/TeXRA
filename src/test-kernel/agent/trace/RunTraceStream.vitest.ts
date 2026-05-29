@@ -164,3 +164,35 @@ describe('openStage root option', () => {
     }
   });
 });
+
+describe('per-trace stage scope (cross-trace isolation)', () => {
+  it('a run stage opened on its own trace does not inherit an active stage from another trace', async () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      // Orchestrator trace with an active "Task:" stage — mirrors a subagent
+      // launched from inside a delegation tool's stage scope.
+      const orchestrator = createRunTrace('orchestrator').trace;
+      const taskStage = orchestrator.openStage('Task: orchestrator');
+
+      // Subagent run on a SEPARATE trace/stream, opened *inside* the
+      // orchestrator's stage scope but WITHOUT root: true. With a per-instance
+      // stage scope (R1) the orchestrator's active stage cannot leak across
+      // traces, so the subagent's run stage is a root on its own stream. (A
+      // module-level shared scope would orphan it under the cross-trace id.)
+      await taskStage.within(async () => {
+        const subagent = createRunTrace('subagent').trace;
+        subagent.openStage('Run: subagent');
+      });
+
+      const entries = store.get('subagent')?.getRange(0) ?? [];
+      const runStage = entries.find((e) => e.text === 'Run: subagent');
+      expect(runStage).toBeDefined();
+      expect(runStage?.groupId).toBeUndefined();
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+});
