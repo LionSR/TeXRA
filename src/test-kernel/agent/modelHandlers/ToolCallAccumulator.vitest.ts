@@ -70,13 +70,4 @@ describe('ToolCallAccumulator', () => {
       { id: 'tool_call_2', name: 'noId', arguments: '{}' },
     ]);
   });
-
-  it('reports the number of tracked indices via size', () => {
-    const acc = new ToolCallAccumulator();
-    acc.add({ index: 0, id: 'a' });
-    acc.add({ index: 0, name: 'x' });
-    acc.add({ index: 5, id: 'b' });
-
-    expect(acc.size).toBe(2);
-  });
 });

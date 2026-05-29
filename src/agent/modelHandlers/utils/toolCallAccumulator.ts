@@ -67,10 +67,6 @@ export class ToolCallAccumulator {
     this.calls.set(delta.index, existing);
   }
 
-  get size(): number {
-    return this.calls.size;
-  }
-
   /**
    * Materialize accumulated calls in index order. `map` converts each assembled
    * call into the caller's provider tool-call shape. By default fully-empty
