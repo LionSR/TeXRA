@@ -1,6 +1,5 @@
 // Local file imports
 import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
-import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
 
 /**
  * Handler for GLM (Zhipu AI / Z.AI) models using OpenAI-compatible API.
@@ -40,16 +39,7 @@ export class ModelHandlerGLM extends ModelHandlerOpenAI {
     return this.capabilities.supportsReasoning;
   }
 
-  /**
-   * GLM requires content to be converted to strings for non-vision models.
-   * Vision models (GLM-4.5v, GLM-4.6v) use standard OpenAI image_url format.
-   */
-  protected override getMessageNormalizationOptions():
-    | NormalizeOpenAIMessageContentOptions
-    | undefined {
-    if (this.capabilities.supportsVision) {
-      return undefined;
-    }
-    return { convertContentToString: true };
-  }
+  // GLM stringifies content for non-vision models; vision models (GLM-4.5v,
+  // GLM-4.6v) use the standard OpenAI image_url format.
+  protected override readonly convertContentToStringUnlessVision = true;
 }

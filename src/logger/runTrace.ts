@@ -1,5 +1,5 @@
 /**
- * Factories that produce ready-to-use {@link TexraTrace} instances with
+ * Factories that produce ready-to-use {@link AgentTrace} instances with
  * the standard TeXRA subscribers attached.
  *
  * - `createChannelTrace(name)` — for module-level singletons that just need
@@ -9,35 +9,30 @@
  *   channel-output subscriber AND the {@link attachTranscriptRecorder} that
  *   drives the webview transcript. Returns `{ trace, dispose }` so callers
  *   can release the subscribers when the run ends.
- *
- * The returned trace is `TexraTrace` (the host-extended surface). SDK
- * consumers that only care about agent-general events can still treat it
- * as `AgentTrace` — `TexraTrace extends AgentTrace`.
  */
 import {
   attachTranscriptRecorder,
   getDefaultStreamLogStore,
   type StreamLogStore,
 } from '@transcript';
+import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import type { StreamTabId } from '@shared/schemas';
 
 import { attachChannelSubscriber } from './logUtils';
-import { TexraTraceEmitter } from './TexraTraceEmitter';
-import type { TexraTrace } from './TexraTrace';
 
 /**
  * Produce a trace that writes log events to a per-channel output sink and
  * ignores everything else. Used by module-level singletons that exist
  * outside any agent run.
  */
-export function createChannelTrace(name: string): TexraTrace {
-  const trace = new TexraTraceEmitter();
+export function createChannelTrace(name: string): AgentTrace {
+  const trace = new TraceEmitter();
   attachChannelSubscriber(trace, { channel: name, isAgent: false });
   return trace;
 }
 
 export interface RunTrace {
-  readonly trace: TexraTrace;
+  readonly trace: AgentTrace;
   readonly dispose: () => void;
 }
 
@@ -51,7 +46,7 @@ export function createRunTrace(
   streamId: StreamTabId,
   store: StreamLogStore = getDefaultStreamLogStore(),
 ): RunTrace {
-  const trace = new TexraTraceEmitter();
+  const trace = new TraceEmitter();
   const unsubscribeChannel = attachChannelSubscriber(trace, {
     channel: streamId,
     isAgent: true,
