@@ -600,17 +600,41 @@ export class ModelHandlerOpenAI<
   }
 
   /**
-   * Returns message normalization options for this handler.
-   * Subclasses can override to specify provider-specific normalization
-   * (e.g., convertContentToString, mergeConsecutiveRoles) without
-   * overriding the entire createResponse method.
+   * Declarative message-normalization knobs for OpenAI-compatible providers.
+   * Subclasses set these instead of re-implementing
+   * {@link getMessageNormalizationOptions}; the base derives the options from
+   * them. Real OpenAI keeps all three off (array content sent as-is).
+   */
+  /** Collapse array message content into a newline-joined string. */
+  protected readonly convertContentToString: boolean = false;
+  /**
+   * Collapse content to a string only for non-vision models; vision models
+   * keep array content so image parts survive.
+   */
+  protected readonly convertContentToStringUnlessVision: boolean = false;
+  /** Merge consecutive messages that share the same role. */
+  protected readonly mergeConsecutiveRoles: boolean = false;
+
+  /**
+   * Returns message normalization options derived from the declarative knobs
+   * above. Subclasses can still override this directly for bespoke logic.
    *
    * @returns Normalization options, or undefined to skip normalization
    */
   protected getMessageNormalizationOptions():
     | NormalizeOpenAIMessageContentOptions
     | undefined {
-    return undefined; // Default: no normalization
+    const convertContentToString =
+      this.convertContentToString ||
+      (this.convertContentToStringUnlessVision &&
+        !this.capabilities.supportsVision);
+    if (!convertContentToString && !this.mergeConsecutiveRoles) {
+      return undefined;
+    }
+    return {
+      ...(convertContentToString ? { convertContentToString: true } : {}),
+      ...(this.mergeConsecutiveRoles ? { mergeConsecutiveRoles: true } : {}),
+    };
   }
 
   /** Creates a chat completion with model-specific parameters. */

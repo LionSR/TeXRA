@@ -22,8 +22,7 @@ export interface RunContext {
   /**
    * Discriminated-event SDK channel for this run. Subscribe with
    * `trace.subscribe(...)` to receive every event the run emits. Defaults
-   * to `noopTrace` when callers don't provide one. Hosts that need their
-   * own sugar (TeXRA's TexraTrace) may pass in a subtype.
+   * to `noopTrace` when callers don't provide one.
    */
   readonly trace: AgentTrace;
   readonly coordinators?: RunCoordinators;
