@@ -180,8 +180,8 @@ import MockupFrame from './MockupFrame.vue';
   align-self: flex-start;
   min-width: 180px;
   margin: 2px 0 2px 18px;
-  background: #2c2c2c;
-  border: 1px solid #3a3a3a;
+  background: var(--mk-bg-raised);
+  border: 1px solid var(--mk-border-soft);
   border-radius: 6px;
   padding: 4px;
   box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.75);
@@ -206,7 +206,7 @@ import MockupFrame from './MockupFrame.vue';
   width: 16px;
   flex-shrink: 0;
   font-size: 11px;
-  color: #c89be0;
+  color: var(--mk-accent);
   opacity: 0;
 }
 .wa-item.checked .wa-check {

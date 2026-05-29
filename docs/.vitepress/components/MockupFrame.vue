@@ -50,8 +50,9 @@ const LOGO = withBase('/logo-128x128.svg');
 </template>
 
 <style scoped>
-/* Tokens mirror the dark VS Code surface values the real webview gets from the
-   host theme; they inherit into slotted children. */
+/* These VS Code surface tokens are now aliases over the theme-adaptive
+   --mk-* palette (defined in mockup.css), so the slotted chrome flips with the
+   docs theme instead of being locked to the dark webview values. */
 .win {
   --wa-space-3xs: 2px;
   --wa-space-2xs: 4px;
@@ -65,24 +66,24 @@ const LOGO = withBase('/logo-128x128.svg');
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
-  --editor-bg: #1e1e1e;
-  --surface-bg: #181818;
-  --panel-bg: #252526;
-  --color-border: #2a2a2a;
-  --wa-color-text-normal: #cccccc;
-  --color-text-secondary: #8a8a8a;
-  --color-text-tertiary: #6f6f6f;
-  --color-text-link: #4daafc;
+  --editor-bg: var(--mk-bg);
+  --surface-bg: var(--mk-bg-deep);
+  --panel-bg: var(--mk-bg-soft);
+  --color-border: var(--mk-bg-raised);
+  --wa-color-text-normal: var(--mk-text-dim);
+  --color-text-secondary: var(--mk-text-faint);
+  --color-text-tertiary: var(--mk-text-faint);
+  --color-text-link: var(--mk-syn-fn);
   --color-success: #2ea043;
   --color-warning: #cca700;
   --color-error: #f14c4c;
-  --wa-color-icon-info: #75beff;
+  --wa-color-icon-info: var(--mk-syn-fn);
   --wa-color-debug-name: #4b9ef9;
-  --brand: #c89be0;
+  --brand: var(--mk-accent);
 
   text-align: left;
   background: var(--editor-bg);
-  border: 1px solid #000;
+  border: 1px solid var(--mk-border-strong);
   border-radius: 12px;
   overflow: hidden;
   position: relative;
@@ -97,8 +98,8 @@ const LOGO = withBase('/logo-128x128.svg');
   gap: 8px;
   height: 38px;
   padding: 0 14px;
-  background: #323233;
-  border-bottom: 1px solid #000;
+  background: var(--mk-bg-soft);
+  border-bottom: 1px solid var(--mk-border-strong);
 }
 .dot {
   width: 12px;
@@ -119,7 +120,7 @@ const LOGO = withBase('/logo-128x128.svg');
   flex: 1;
   text-align: center;
   font-size: 0.8rem;
-  color: #b4b4b4;
+  color: var(--mk-text-dim);
   font-family: var(--vp-font-family-mono);
   margin-right: 48px;
 }
@@ -137,8 +138,8 @@ const LOGO = withBase('/logo-128x128.svg');
 .act {
   flex-shrink: 0;
   width: 46px;
-  background: #2c2c2c;
-  border-right: 1px solid #000;
+  background: var(--mk-bg-raised);
+  border-right: 1px solid var(--mk-border-strong);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -146,7 +147,7 @@ const LOGO = withBase('/logo-128x128.svg');
   gap: 16px;
 }
 .act-i {
-  color: #858585;
+  color: var(--mk-text-faint);
   width: 100%;
   display: flex;
   align-items: center;
@@ -156,7 +157,7 @@ const LOGO = withBase('/logo-128x128.svg');
   font-size: 20px;
 }
 .act-on {
-  color: #fff;
+  color: var(--mk-text);
 }
 .act-on::before {
   content: '';
@@ -165,7 +166,7 @@ const LOGO = withBase('/logo-128x128.svg');
   top: -4px;
   bottom: -4px;
   width: 2px;
-  background: #c89be0;
+  background: var(--mk-accent);
 }
 .act-logo {
   width: 23px;
@@ -191,7 +192,7 @@ const LOGO = withBase('/logo-128x128.svg');
     padding: 0 12px;
     height: 40px;
     border-right: none;
-    border-bottom: 1px solid #000;
+    border-bottom: 1px solid var(--mk-border-strong);
   }
   .act-on::before {
     left: -2px;

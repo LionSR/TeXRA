@@ -143,7 +143,7 @@ const rows = [
 .api-pane {
   flex: 1;
   min-width: 0;
-  background: #1e1e1e;
+  background: var(--mk-bg);
   padding: 14px 18px;
   display: flex;
   flex-direction: column;
@@ -171,7 +171,7 @@ const rows = [
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  background: #252526;
+  background: var(--mk-bg-soft);
   border: 1px solid var(--color-border);
   border-radius: 6px;
 }
@@ -200,7 +200,7 @@ const rows = [
 }
 .api-table td {
   padding: 7px 8px;
-  border-bottom: 1px solid #232323;
+  border-bottom: 1px solid var(--mk-border);
 }
 
 .prov {

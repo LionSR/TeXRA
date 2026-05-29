@@ -4,11 +4,58 @@
    Each hero keeps only the markup unique to its panel; the sidebar shell,
    editor tab-strip, form controls, and animations live here. */
 
+/* Theme-adaptive palette. The mockups paint a VS Code editor surface; light
+   values are the base and the dark values (the original colors, so dark mode
+   is unchanged) come back under VitePress' `html.dark`. Every chrome / text /
+   syntax color below resolves to one of these vars so the whole mockup flips
+   with the docs theme. The printed-paper page (.page) and the macOS traffic
+   lights deliberately stay fixed — paper is white in both modes. */
+.mockup {
+  --mk-bg: #ffffff; /* editor body / sidebar / panes */
+  --mk-bg-soft: #f3f3f3; /* tab strips, headers, toolbars */
+  --mk-bg-raised: #e8e8e8; /* inactive tabs, chips, inputs, accept btn, tags */
+  --mk-bg-deep: #ececec; /* recessed panels */
+  --mk-border-strong: #cfcfcf;
+  --mk-border: #e0e0e0;
+  --mk-border-soft: #d4d4d4;
+  --mk-text: #1f1f1f;
+  --mk-text-dim: #3c3c3c;
+  --mk-text-faint: #6c6c6c;
+  --mk-accent: #8250df; /* brand purple */
+  --mk-syn-keyword: #af00db;
+  --mk-syn-var: #001080;
+  --mk-syn-comment: #008000;
+  --mk-syn-fn: #0070c1;
+  --mk-syn-tac: #0e7c6b; /* Lean tactic keyword (teal) */
+  --mk-del-text: #b42318; /* del text shown ON the editor surface */
+  --mk-ins-text: #15803d; /* ins text shown ON the editor surface */
+}
+:where(html.dark) .mockup {
+  --mk-bg: #1e1e1e;
+  --mk-bg-soft: #252526;
+  --mk-bg-raised: #2c2c2c;
+  --mk-bg-deep: #181818;
+  --mk-border-strong: #000000;
+  --mk-border: #1a1a1a;
+  --mk-border-soft: #3a3a3a;
+  --mk-text: #ffffff;
+  --mk-text-dim: #cccccc;
+  --mk-text-faint: #858585;
+  --mk-accent: #c89be0;
+  --mk-syn-keyword: #c586c0;
+  --mk-syn-var: #9cdcfe;
+  --mk-syn-comment: #6a9955;
+  --mk-syn-fn: #75beff;
+  --mk-syn-tac: #4ec9b0;
+  --mk-del-text: #ffb3b3;
+  --mk-ins-text: #b6f0c0;
+}
+
 /* Sidebar shell (board). Width is set per hero (content differs). */
 .mockup .board {
   flex-shrink: 0;
-  background: #1e1e1e;
-  border-right: 1px solid #000;
+  background: var(--mk-bg);
+  border-right: 1px solid var(--mk-border-strong);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -17,8 +64,8 @@
   display: flex;
   height: 36px;
   padding: 0 8px;
-  background: #252526;
-  border-bottom: 1px solid #000;
+  background: var(--mk-bg-soft);
+  border-bottom: 1px solid var(--mk-border-strong);
 }
 .mockup .bt {
   display: inline-flex;
@@ -33,9 +80,9 @@
   font-size: 12px;
 }
 .mockup .bt-on {
-  color: #fff;
+  color: var(--mk-text);
   font-weight: 600;
-  box-shadow: inset 0 -2px 0 #c89be0;
+  box-shadow: inset 0 -2px 0 var(--mk-accent);
 }
 
 /* Editor pane + tab strip */
@@ -43,21 +90,21 @@
   display: flex;
   flex-direction: column;
   flex: 1;
-  background: #1e1e1e;
+  background: var(--mk-bg);
   min-width: 0;
 }
 .mockup .tabs {
   display: flex;
-  background: #252526;
-  border-bottom: 1px solid #000;
+  background: var(--mk-bg-soft);
+  border-bottom: 1px solid var(--mk-border-strong);
 }
 .mockup .tab {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  background: #2d2d2d;
+  background: var(--mk-bg-raised);
   border: none;
-  border-right: 1px solid #1a1a1a;
+  border-right: 1px solid var(--mk-border);
   color: var(--color-text-secondary);
   font-size: 0.76rem;
   padding: 8px 14px;
@@ -69,9 +116,9 @@
   color: var(--wa-color-text-normal);
 }
 .mockup .tab.active {
-  background: #1e1e1e;
-  color: #fff;
-  box-shadow: inset 0 2px 0 #c89be0;
+  background: var(--mk-bg);
+  color: var(--mk-text);
+  box-shadow: inset 0 2px 0 var(--mk-accent);
 }
 .mockup .t-ic {
   display: inline-flex;
@@ -108,7 +155,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  background: #2c2c2c;
+  background: var(--mk-bg-raised);
   border: 1px solid var(--color-border);
   border-radius: 5px;
   padding: 6px 9px;
@@ -154,7 +201,7 @@
   color: var(--wa-color-text-normal);
 }
 .mockup .act-on {
-  color: #c89be0;
+  color: var(--mk-accent);
 }
 
 /* File-selector groups (Input / Context / Media). Shared by FileSelectHero +
@@ -171,7 +218,7 @@
   flex-direction: column;
   gap: 4px;
   padding: 6px;
-  background: #181818;
+  background: var(--mk-bg-deep);
   border: 1px solid var(--color-border);
   border-radius: 5px;
 }
@@ -181,7 +228,7 @@
   gap: 7px;
   padding: 3px 5px;
   border-radius: 4px;
-  background: #2c2c2c;
+  background: var(--mk-bg-raised);
 }
 /* Decorative only — the real file rows have no grip handle (the whole row is
    draggable). Kept here purely as a visual cue in these marketing mockups. */
@@ -217,13 +264,13 @@
   color: var(--wa-color-text-normal);
 }
 .mockup .cmt {
-  color: #6a9955;
+  color: var(--mk-syn-comment);
 }
 .mockup .kw {
-  color: #c586c0;
+  color: var(--mk-syn-keyword);
 }
 .mockup .m {
-  color: #9cdcfe;
+  color: var(--mk-syn-var);
 }
 
 /* Editor body — rendered diff "PDF" page (latexdiff preview) */
@@ -276,7 +323,7 @@
   overflow-y: auto;
   margin: 16px;
   padding: 16px 18px;
-  background: #141414;
+  background: var(--mk-bg-deep);
   border: 1px solid var(--color-border);
   border-radius: 6px;
   font-family: var(--vp-font-family-mono);
@@ -288,11 +335,11 @@
   color: var(--wa-color-text-normal);
 }
 .mockup .wl.out {
-  color: #9cdcfe;
+  color: var(--mk-syn-var);
   margin-top: 4px;
 }
 .mockup .tac {
-  color: #4ec9b0;
+  color: var(--mk-syn-tac);
 }
 .mockup .term-lean .ln {
   white-space: pre;
@@ -309,7 +356,7 @@
 .mockup .term-ok {
   display: inline-block;
   margin-top: 6px;
-  color: #6abf69;
+  color: var(--mk-ins-text);
   font-weight: 600;
 }
 .mockup .indent {
@@ -330,10 +377,10 @@
   color: #69b06a;
 }
 .mockup .t-tex {
-  color: #4daafc;
+  color: var(--mk-syn-fn);
 }
 .mockup .t-lean {
-  color: #b388e0;
+  color: var(--mk-accent);
   font-style: italic;
   font-weight: 700;
   font-size: 0.9rem;
@@ -359,7 +406,7 @@
 }
 .mockup .chev {
   display: inline-flex;
-  color: #7a7a7a;
+  color: var(--mk-text-faint);
   flex-shrink: 0;
   font-size: 11px;
 }
@@ -395,7 +442,7 @@
 }
 .mockup .seg {
   display: inline-flex;
-  background: #2c2c2c;
+  background: var(--mk-bg-raised);
   border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 2px;
@@ -407,8 +454,8 @@
   color: var(--color-text-secondary);
 }
 .mockup .seg-on {
-  background: #3a3a3a;
-  color: #fff;
+  background: var(--mk-border-soft);
+  color: var(--mk-text);
   font-weight: 600;
 }
 .mockup .hactions {
@@ -433,8 +480,8 @@
 .mockup .prompt {
   flex: 1;
   min-height: 120px;
-  background: #181818;
-  border: 1px solid #3a3a3a;
+  background: var(--mk-bg-deep);
+  border: 1px solid var(--mk-border-soft);
   border-radius: 6px;
   padding: 9px 10px;
   font-size: 0.82rem;
@@ -446,7 +493,7 @@
   width: 1px;
   height: 1em;
   margin-left: 1px;
-  background: #c89be0;
+  background: var(--mk-accent);
   vertical-align: text-bottom;
   animation: mk-blink 1.1s step-end infinite;
 }
@@ -465,7 +512,7 @@
 }
 .mockup .settings {
   flex-shrink: 0;
-  color: #c89be0;
+  color: var(--mk-accent);
 }
 .mockup .lpanel .run {
   display: inline-flex;
@@ -477,7 +524,9 @@
   border-radius: 6px;
   padding: 9px;
   margin-top: 2px;
-  background: #8957b5;
+  background: var(--mk-accent);
+  /* White text on the brand button reads in both themes (like the landing
+     primary CTA), so it stays fixed rather than following --mk-text. */
   color: #fff;
   font-size: 0.85rem;
   font-weight: 600;
@@ -525,7 +574,7 @@
   align-items: center;
   gap: 5px;
   font-size: 0.68rem;
-  color: #c89be0;
+  color: var(--mk-accent);
   background: rgba(200, 155, 224, 0.12);
   border-radius: 999px;
   padding: 1px 8px;
@@ -533,7 +582,7 @@
 }
 .mockup .sh-pulse {
   display: inline-flex;
-  color: #c89be0;
+  color: var(--mk-accent);
   font-size: 11px;
 }
 .mockup .sh-tools {
@@ -580,7 +629,7 @@
   padding: 2px 0;
 }
 .mockup .todo .td-tx {
-  color: #cccccc;
+  color: var(--mk-text-dim);
 }
 .mockup .todo.done {
   opacity: 0.55;
@@ -604,7 +653,7 @@
   height: 11px;
   flex-shrink: 0;
   border: 2px solid rgba(200, 155, 224, 0.3);
-  border-top-color: #c89be0;
+  border-top-color: var(--mk-accent);
   border-radius: 50%;
   animation: mk-spin 0.9s linear infinite;
 }
@@ -623,7 +672,7 @@
 .mockup .umsg {
   max-width: 88%;
   background: rgba(86, 110, 150, 0.22);
-  border: 1px solid #3a3f4a;
+  border: 1px solid var(--mk-border-soft);
   border-radius: 6px;
   padding: 6px 9px;
 }
@@ -647,7 +696,7 @@
   font-size: 0.77rem;
 }
 .mockup .reason {
-  color: #b9b9b9;
+  color: var(--mk-text-dim);
   line-height: 1.5;
   font-family: var(--vp-font-family-base);
   font-size: 0.78rem;
@@ -688,7 +737,7 @@
   gap: 7px;
 }
 .mockup .tc-ic {
-  color: #75beff;
+  color: var(--mk-syn-fn);
   flex-shrink: 0;
   display: inline-flex;
   font-size: 13px;
@@ -742,7 +791,7 @@
   font-family: var(--vp-font-family-base);
 }
 .mockup .tc-code {
-  color: #c89be0;
+  color: var(--mk-accent);
   background: rgba(200, 155, 224, 0.12);
   border-radius: 3px;
   padding: 0 5px;
@@ -795,7 +844,7 @@
   .mockup .board {
     width: auto !important;
     border-right: none;
-    border-bottom: 1px solid #000;
+    border-bottom: 1px solid var(--mk-border-strong);
   }
 }
 
@@ -830,7 +879,7 @@
   background: rgba(255, 255, 255, 0.03);
 }
 .mockup .dt-on {
-  color: #fff;
+  color: var(--mk-text);
   font-weight: 600;
   background: rgba(200, 155, 224, 0.08);
   border-left-color: var(--brand);
@@ -842,7 +891,9 @@
   align-items: center;
   width: 32px;
   height: 18px;
-  background: #444;
+  /* Off-state track — a medium grey so the white knob keeps contrast in both
+     themes. The on state swaps to the brand color. */
+  background: var(--mk-text-faint);
   border: none;
   border-radius: 10px;
   position: relative;
@@ -877,7 +928,7 @@
     width: auto;
     flex-direction: row;
     border-right: none;
-    border-bottom: 1px solid #000;
+    border-bottom: 1px solid var(--mk-border-strong);
     padding: 0;
     overflow-x: auto;
   }

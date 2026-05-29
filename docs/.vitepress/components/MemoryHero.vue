@@ -292,7 +292,7 @@ function toggle(id) {
 .mem-pane {
   flex: 1;
   min-width: 0;
-  background: #1e1e1e;
+  background: var(--mk-bg);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
@@ -343,14 +343,14 @@ function toggle(id) {
   gap: 5px;
   font-size: 0.7rem;
   color: var(--wa-color-text-normal);
-  background: #2c2c2c;
+  background: var(--mk-bg-raised);
   border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 4px 9px;
   cursor: pointer;
 }
 .r-btn:hover {
-  background: #3a3a3a;
+  background: var(--mk-border-soft);
 }
 .r-btn wa-icon {
   font-size: 11px;
@@ -372,7 +372,7 @@ function toggle(id) {
   gap: 8px;
 }
 .mem-item {
-  background: #252526;
+  background: var(--mk-bg-soft);
   border: 1px solid var(--color-border);
   border-radius: 6px;
   padding: 10px 12px;
@@ -464,7 +464,7 @@ function toggle(id) {
 .mem-preview {
   margin-top: 4px;
   padding: 8px 10px;
-  background: #1e1e1e;
+  background: var(--mk-bg);
   border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: 0.76rem;
@@ -485,9 +485,9 @@ function toggle(id) {
 .md-code {
   font-family: var(--vp-font-family-mono);
   font-size: 0.72rem;
-  background: #2a2a2a;
+  background: var(--mk-bg-raised);
   padding: 1px 4px;
   border-radius: 3px;
-  color: #d7baee;
+  color: var(--mk-accent);
 }
 </style>

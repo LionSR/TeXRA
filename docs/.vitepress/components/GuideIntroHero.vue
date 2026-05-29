@@ -273,7 +273,7 @@ const view = ref('search');
   align-items: center;
   gap: 4px;
   font-size: 0.66rem;
-  color: #cda6e6;
+  color: var(--mk-accent);
   background: rgba(200, 155, 224, 0.12);
   border: 1px solid rgba(200, 155, 224, 0.3);
   border-radius: 999px;
@@ -296,10 +296,10 @@ const view = ref('search');
   padding-left: 1.4em;
 }
 .bk {
-  color: #c586c0;
+  color: var(--mk-syn-keyword);
 }
 .bid {
-  color: #9cdcfe;
+  color: var(--mk-syn-var);
 }
 .bok {
   display: inline-flex;

@@ -168,7 +168,7 @@ import MockupFrame from './MockupFrame.vue';
 }
 .sec-ic {
   display: inline-flex;
-  color: #c89be0;
+  color: var(--mk-accent);
   font-size: 13px;
 }
 .s-mute {
