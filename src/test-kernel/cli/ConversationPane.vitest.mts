@@ -296,6 +296,7 @@ function sliceWithEntries(
   return {
     streamId,
     status: undefined,
+    runStartedAt: undefined,
     description: undefined,
     usage: undefined,
     conversation: undefined,

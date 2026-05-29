@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Features
+
+- **Live elapsed timer in the CLI chat** — the status bar now shows the seconds elapsed next to `running`, so a long "thinking" turn that streams no text still reads as alive instead of looking frozen.
+
 ## [0.38.2] - 2026-05-27
 
 ### Features
