@@ -1,0 +1,18 @@
+diff --git a/build/ink.js b/build/ink.js
+index b8fd45cc990adbc080eff28fc37463cd91337dff..5640b6159be1e6ababac8a77fbc9dcd45d209ce7 100644
+--- a/build/ink.js
++++ b/build/ink.js
+@@ -261,8 +261,11 @@ export default class Ink {
+     }
+     resized = () => {
+         const currentWidth = getWindowSize(this.options.stdout).columns;
+-        if (currentWidth < this.lastTerminalWidth) {
+-            // We clear the screen when decreasing terminal width to prevent duplicate overlapping re-renders.
++        if (currentWidth !== this.lastTerminalWidth) {
++            // Clear on ANY width change, not just a decrease. On widening, the
++            // previously soft-wrapped output occupies more physical rows than the
++            // new render, so without clearing first Ink redraws on top and leaves
++            // the old tail behind as scrollback residue (TeXRA patch).
+             this.log.clear();
+             this.lastOutput = '';
+             this.lastOutputToRender = '';
