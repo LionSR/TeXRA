@@ -12,6 +12,8 @@ import ApiKeysHero from '../components/ApiKeysHero.vue';
 import ToolConfigHero from '../components/ToolConfigHero.vue';
 import CompareHero from '../components/CompareHero.vue';
 import MemoryHero from '../components/MemoryHero.vue';
+import MemoryCommandsHero from '../components/MemoryCommandsHero.vue';
+import MemoryPinHero from '../components/MemoryPinHero.vue';
 
 // Web Awesome: load default theme tokens and the <wa-icon> custom element,
 // then register the texra icon library so codicon-style names work in
@@ -45,6 +47,8 @@ export default {
     app.component('ToolConfigHero', ToolConfigHero);
     app.component('CompareHero', CompareHero);
     app.component('MemoryHero', MemoryHero);
+    app.component('MemoryCommandsHero', MemoryCommandsHero);
+    app.component('MemoryPinHero', MemoryPinHero);
 
     // Side-effect: load WA icon component + register texra library on the
     // client. Skipped during SSR (build-time HTML generation).

@@ -240,7 +240,9 @@ TeXRA talks to model providers directly with an API key you supply. You need a k
 
 The friendliest path: open the TeXRA Dashboard, go to the **Models** tab, and click the provider you want. Paste the key and it's saved in VS Code's secret storage. You can also run **TeXRA: Set API Key** from the Command Palette, or drop the keys in a `.env` file in your project — the extension reads it on startup.
 
-![API Key Setup](/images/api-key-setup.png)
+<ApiKeysHero />
+
+<p class="hero-caption">The Dashboard's Models tab → API Configuration: each provider shows its key status (Set · Env · Not set) with Set, Get, and Remove actions.</p>
 
 ### In the CLI
 
