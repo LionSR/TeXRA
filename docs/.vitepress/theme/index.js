@@ -8,6 +8,8 @@ import GuideIntroHero from '../components/GuideIntroHero.vue';
 import QuickStartHero from '../components/QuickStartHero.vue';
 import LatexDiffHero from '../components/LatexDiffHero.vue';
 import FileSelectHero from '../components/FileSelectHero.vue';
+import ToolConfigHero from '../components/ToolConfigHero.vue';
+import CompareHero from '../components/CompareHero.vue';
 import MemoryHero from '../components/MemoryHero.vue';
 
 // Web Awesome: load default theme tokens and the <wa-icon> custom element,
@@ -38,6 +40,8 @@ export default {
     app.component('QuickStartHero', QuickStartHero);
     app.component('LatexDiffHero', LatexDiffHero);
     app.component('FileSelectHero', FileSelectHero);
+    app.component('ToolConfigHero', ToolConfigHero);
+    app.component('CompareHero', CompareHero);
     app.component('MemoryHero', MemoryHero);
 
     // Side-effect: load WA icon component + register texra library on the
