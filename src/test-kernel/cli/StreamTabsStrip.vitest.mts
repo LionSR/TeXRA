@@ -38,6 +38,7 @@ function slice(
   return {
     streamId: streamId(streamIdValue),
     status: undefined,
+    runStartedAt: undefined,
     description: undefined,
     usage: undefined,
     conversation: undefined,
