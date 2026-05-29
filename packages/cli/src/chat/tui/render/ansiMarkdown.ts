@@ -13,6 +13,7 @@ import Table from 'cli-table3';
 import { highlight, supportsLanguage } from 'cli-highlight';
 import Token from 'markdown-it/lib/token.mjs';
 import pico from 'picocolors';
+import stringWidth from 'string-width';
 
 import {
   createMarkdownProcessor,
@@ -58,19 +59,42 @@ const TABLE_MIN_COL_WIDTH = 5;
 // (the live region and Markdown component both pass one, so this is rare).
 const TABLE_FALLBACK_WIDTH = 80;
 
-// Distribute the available width across columns so the rendered table is never
-// wider than `width` — otherwise the trailing `wrapAnsiToWidth` hard-wrap would
-// shred the box-drawing borders. cli-table3's total width is the sum of the
-// column widths plus one border column per column boundary (numCols + 1).
-// Returns undefined when there isn't room to cap, letting cli-table3 size to
-// content instead.
+// cli-table3 pads every cell with one space on each side, so a column's total
+// width is its content width + 2.
+const TABLE_CELL_PADDING = 2;
+
+// Size each column to its widest cell (display width, ANSI-aware) so a compact
+// table stays compact instead of being stretched to fill the terminal. Only
+// when the content-sized layout would overflow `width` do we fall back to an
+// even split — capping the total so the trailing `wrapAnsiToWidth` hard-wrap
+// can't shred the box-drawing borders. cli-table3's total width is the sum of
+// the column widths plus one border column per boundary (numCols + 1). Returns
+// undefined when there isn't room to cap, letting cli-table3 size to content.
 function tableColWidths(
+  head: readonly string[],
+  rows: readonly (readonly string[])[],
   numCols: number,
   width: number | undefined,
 ): number[] | undefined {
   const total = Math.floor(width ?? TABLE_FALLBACK_WIDTH);
   const usable = total - (numCols + 1);
   if (usable < numCols * TABLE_MIN_COL_WIDTH) return undefined;
+
+  // Natural width per column = widest cell content + padding (clamped to the
+  // minimum). `stringWidth` strips ANSI and counts wide glyphs as 2 cells.
+  const natural = Array.from({ length: numCols }, (_, col) => {
+    let widest = head[col] === undefined ? 0 : stringWidth(head[col]);
+    for (const row of rows) {
+      const cell = row[col];
+      if (cell !== undefined) widest = Math.max(widest, stringWidth(cell));
+    }
+    return Math.max(TABLE_MIN_COL_WIDTH, widest + TABLE_CELL_PADDING);
+  });
+
+  // Content fits — keep the table compact (no full-width dead gaps).
+  if (natural.reduce((sum, w) => sum + w, 0) <= usable) return natural;
+
+  // Content overflows — distribute the usable width evenly and cap at `width`.
   const base = Math.floor(usable / numCols);
   const widths = Array.from({ length: numCols }, () => base);
   // Hand the floor remainder to the leftmost columns so the table fills `width`.
@@ -91,7 +115,7 @@ function renderAnsiTable(
   const numCols = Math.max(head.length, ...rows.map((row) => row.length), 1);
   const table = new Table({
     head: head.map((cell) => pico.bold(cell)),
-    colWidths: tableColWidths(numCols, width),
+    colWidths: tableColWidths(head, rows, numCols, width),
     colAligns: Array.from({ length: numCols }, (_, i) => aligns[i] ?? 'left'),
     wordWrap: true,
     // No cli-table3 colorizing — cell content already carries its own ANSI and
