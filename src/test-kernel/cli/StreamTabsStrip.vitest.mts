@@ -112,8 +112,33 @@ describe('CLI stream tabs strip', () => {
 
     expect(items.map(streamTabSegmentText)).toEqual([
       'main*',
-      'setup(idle)',
-      '[bash]*',
+      '1:setup(idle)',
+      '[2:bash]*',
+    ]);
+  });
+
+  it('keeps child shortcut labels aligned when the root stream is missing', () => {
+    const root = streamId('root');
+    const child1 = streamId('child-1');
+    const child2 = streamId('child-2');
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [child1, slice('child-1', { status: STREAM_STATUS.WAITING })],
+      [child2, slice('child-2', { status: STREAM_STATUS.WAITING })],
+    ]);
+
+    const items = streamTabsDisplayItems({
+      activeStreamId: child2,
+      streams,
+      parentStream: new Map([
+        [child1, root],
+        [child2, root],
+      ]),
+      width: 80,
+    });
+
+    expect(items.map(streamTabSegmentText)).toEqual([
+      '1:child-1(idle)',
+      '[2:child-2]',
     ]);
   });
 
@@ -144,7 +169,10 @@ describe('CLI stream tabs strip', () => {
       width: 80,
     });
 
-    expect(items.map(streamTabSegmentText)).toEqual(['[main]', 'polish(idle)']);
+    expect(items.map(streamTabSegmentText)).toEqual([
+      '[main]',
+      '1:polish(idle)',
+    ]);
   });
 
   it('labels the focused stopped stream in the tab strip', () => {
@@ -176,7 +204,7 @@ describe('CLI stream tabs strip', () => {
 
     expect(items.map(streamTabSegmentText)).toEqual([
       'main(stopped)',
-      '[strategy](stopped)',
+      '[1:strategy](stopped)',
     ]);
   });
 
@@ -225,7 +253,7 @@ describe('CLI stream tabs strip', () => {
 
     expect(items.map(streamTabSegmentText)).toEqual([
       'review*',
-      '[detail-review]*',
+      '[1:detail-review]*',
     ]);
   });
 
@@ -260,9 +288,9 @@ describe('CLI stream tabs strip', () => {
     expect(items.map(streamTabSegmentText)).toEqual([
       'main',
       '…',
-      '[subagent-3]',
+      '[3:subagent-3]',
       '…',
-      'subagent-5',
+      '5:subagent-5',
     ]);
   });
 });

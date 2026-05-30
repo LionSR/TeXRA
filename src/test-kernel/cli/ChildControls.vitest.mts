@@ -16,7 +16,7 @@ import {
   hasChildExecutionRows,
   liveChildExecutionElapsedKey,
   nextPickerIndex,
-  numericFocusTarget,
+  numericFocusTargetForActiveStream,
   resolveChildControlStreamTarget,
 } from '@cli/chat/tui/state/childControls';
 import { visibleSubagentRows } from '@cli/chat/tui/state/childStreamMerge';
@@ -60,8 +60,8 @@ function slice(
 }
 
 describe('CLI child execution controls', () => {
-  it('maps Alt-number focus jumps to listed descendant streams', () => {
-    const state = slice({
+  it('maps Alt-number focus jumps to visible descendant streams', () => {
+    const root = slice({
       activeSubagents: [
         {
           executionId: 'agent-1',
@@ -84,11 +84,76 @@ describe('CLI child execution controls', () => {
         },
       ],
     });
+    const streams = new Map<StreamSlice['streamId'], StreamSlice>([
+      ['root', root],
+      ['child-b', slice({ streamId: 'child-b' })],
+      ['child-c', slice({ streamId: 'child-c' })],
+    ]);
 
-    expect(numericFocusTarget(state, 0)).toBe('child-a');
-    expect(numericFocusTarget(state, 1)).toBe('child-c');
-    expect(numericFocusTarget(state, 2)).toBe('child-b');
-    expect(numericFocusTarget(state, 3)).toBeUndefined();
+    expect(
+      numericFocusTargetForActiveStream({
+        activeStreamId: 'root',
+        parentStream: new Map(),
+        streams,
+        zeroBasedIndex: 0,
+      }),
+    ).toBe('child-c');
+    expect(
+      numericFocusTargetForActiveStream({
+        activeStreamId: 'root',
+        parentStream: new Map(),
+        streams,
+        zeroBasedIndex: 1,
+      }),
+    ).toBe('child-b');
+    expect(
+      numericFocusTargetForActiveStream({
+        activeStreamId: 'root',
+        parentStream: new Map(),
+        streams,
+        zeroBasedIndex: 2,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('maps Alt-number focus jumps through the focused child stream tree', () => {
+    const root = slice({
+      activeSubagents: [
+        {
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: 'child-a',
+        },
+      ],
+      childStreams: [
+        {
+          executionId: 'agent-2',
+          agentName: 'reviewer',
+          childStreamId: 'child-b',
+        },
+      ],
+    });
+    const streams = new Map<StreamSlice['streamId'], StreamSlice>([
+      ['root', root],
+      ['child-a', slice({ streamId: 'child-a' })],
+      ['child-b', slice({ streamId: 'child-b' })],
+    ]);
+    const parentStream = new Map<
+      StreamSlice['streamId'],
+      StreamSlice['streamId']
+    >([
+      ['child-a', 'root'],
+      ['child-b', 'root'],
+    ]);
+
+    expect(
+      numericFocusTargetForActiveStream({
+        activeStreamId: 'child-a',
+        parentStream,
+        streams,
+        zeroBasedIndex: 1,
+      }),
+    ).toBe('child-b');
   });
 
   it('builds subagent and process picker items with stable labels and tails', () => {
