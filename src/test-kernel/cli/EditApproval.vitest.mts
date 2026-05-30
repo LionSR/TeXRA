@@ -50,10 +50,20 @@ describe('CLI edit approval layout', () => {
     ).toBe(3);
   });
 
-  it('keeps a usable one-line diff on very short terminals', () => {
+  it('uses compact diff rows on short terminals', () => {
     expect(
       editApprovalDiffRowsBudget({
-        availableRows: 8,
+        availableRows: 10,
+        columns: 80,
+        title: 'Apply edit to draft.tex?',
+      }),
+    ).toBe(3);
+  });
+
+  it('keeps a usable diff line on very short terminals', () => {
+    expect(
+      editApprovalDiffRowsBudget({
+        availableRows: 7,
         columns: 80,
         title: 'Apply edit to proof.tex?',
       }),
