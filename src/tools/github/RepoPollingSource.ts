@@ -489,18 +489,21 @@ function classifyTransition(
  * and canonical: `https://api.github.com/repos/o/r/issues/{number}`.
  */
 const ISSUE_URL_NUMBER_RE = /\/issues\/(\d+)(?:[?#]|$)/;
+
+/** Run a capture-group-1 regex against a URL and parse the match as a finite number. */
+function matchPositiveInt(re: RegExp, url: string): number | undefined {
+  const m = re.exec(url);
+  if (!m) return undefined;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 function parseTargetNumberFromIssueUrl(c: GhIssueComment): number | undefined {
   const url = c.issue_url ?? c.html_url;
-  const m = ISSUE_URL_NUMBER_RE.exec(url);
-  if (m) {
-    const n = Number(m[1]);
-    if (Number.isFinite(n)) return n;
-  }
+  const issueNumber = matchPositiveInt(ISSUE_URL_NUMBER_RE, url);
+  if (issueNumber !== undefined) return issueNumber;
   // Fallback: review comments and certain PR-only flows expose `/pull/{n}`.
-  const p = /\/pull\/(\d+)(?:[?#/]|$)/.exec(url);
-  if (!p) return undefined;
-  const n = Number(p[1]);
-  return Number.isFinite(n) ? n : undefined;
+  return matchPositiveInt(PR_NUMBER_RE, url);
 }
 
 /**
@@ -509,10 +512,7 @@ function parseTargetNumberFromIssueUrl(c: GhIssueComment): number | undefined {
  */
 const PR_NUMBER_RE = /\/pull\/(\d+)(?:[?#/]|$)/;
 function parsePRNumberFromReviewCommentUrl(url: string): number | undefined {
-  const m = PR_NUMBER_RE.exec(url);
-  if (!m) return undefined;
-  const n = Number(m[1]);
-  return Number.isFinite(n) ? n : undefined;
+  return matchPositiveInt(PR_NUMBER_RE, url);
 }
 
 /** Process-wide singleton. */
