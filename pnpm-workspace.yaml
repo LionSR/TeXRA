@@ -18,4 +18,4 @@ allowBuilds:
   keytar: true
   protobufjs: true
 patchedDependencies:
-  ink@7.0.4: patches/ink@7.0.4.patch
+  ink@7.0.5: patches/ink@7.0.5.patch
