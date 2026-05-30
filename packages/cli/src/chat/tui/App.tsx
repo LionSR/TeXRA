@@ -488,7 +488,10 @@ export function App(props: AppProps): React.JSX.Element {
           history={props.history}
         />
         <StreamTabsStrip width={columns} />
-        <StatusBar canStopActiveRun={canStopActiveRun} />
+        <StatusBar
+          canStopActiveRun={canStopActiveRun}
+          shortcutsActive={focusShortcutsActive}
+        />
       </Box>
     </>
   );
