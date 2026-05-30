@@ -137,6 +137,9 @@ function roundSegment(
 }
 
 const QUEUED_FOLLOW_UP_PREVIEW_LENGTH = 48;
+const QUEUED_FOLLOW_UP_PREVIEW_ITEMS = 2;
+const QUEUED_FOLLOW_UP_MIN_ITEM_PREVIEW = 8;
+const QUEUED_FOLLOW_UP_SEPARATOR = ' · ';
 const STATUS_BAR_HORIZONTAL_PADDING = 2;
 const STATUS_BAR_MIN_RIGHT_PREVIEW = 12;
 // Preserve a readable separator between the left status group and right preview.
@@ -159,6 +162,36 @@ function truncateSummaryToColumns(text: string, maxColumns: number): string {
   return `${truncated}${ellipsis}`;
 }
 
+function numberedQueuedFollowUpPreview(
+  message: string,
+  index: number,
+  maxColumns: number,
+): string {
+  const prefix = `${index + 1}. `;
+  const bodyColumns = Math.max(0, maxColumns - stringWidth(prefix));
+  return `${prefix}${truncateSummaryToColumns(message, bodyColumns)}`;
+}
+
+function queuedFollowUpsListSummary(
+  messages: readonly string[],
+  maxColumns: number,
+): string | undefined {
+  const previewItems = messages.slice(0, QUEUED_FOLLOW_UP_PREVIEW_ITEMS);
+  const separatorColumns =
+    Math.max(0, previewItems.length - 1) *
+    stringWidth(QUEUED_FOLLOW_UP_SEPARATOR);
+  const itemColumns = Math.floor(
+    (maxColumns - separatorColumns) / previewItems.length,
+  );
+  if (itemColumns < QUEUED_FOLLOW_UP_MIN_ITEM_PREVIEW) return undefined;
+
+  return previewItems
+    .map((message, index) =>
+      numberedQueuedFollowUpPreview(message, index, itemColumns),
+    )
+    .join(QUEUED_FOLLOW_UP_SEPARATOR);
+}
+
 export function queuedFollowUpsSummary(
   messages: readonly string[],
   maxColumns?: number,
@@ -169,6 +202,9 @@ export function queuedFollowUpsSummary(
       ? QUEUED_FOLLOW_UP_PREVIEW_LENGTH
       : Math.min(QUEUED_FOLLOW_UP_PREVIEW_LENGTH, Math.max(0, maxColumns));
   if (previewLength < STATUS_BAR_MIN_RIGHT_PREVIEW) return undefined;
+  if (messages.length > 1) {
+    return queuedFollowUpsListSummary(messages, previewLength);
+  }
   return truncateSummaryToColumns(messages[0] ?? '', previewLength);
 }
 

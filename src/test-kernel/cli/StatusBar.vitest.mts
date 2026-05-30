@@ -20,7 +20,7 @@ describe('CLI StatusBar display model', () => {
         'Keep the proof under one page.',
         'Also mention the finite monoid argument.',
       ]),
-    ).toBe('Keep the proof under one page.');
+    ).toBe('1. Keep the proof und… · 2. Also mention the f…');
   });
 
   it('hides queued follow-up previews when the right side has no safe width', () => {
@@ -165,7 +165,9 @@ describe('CLI StatusBar display model', () => {
       '1 proc',
       '3 approvals',
     ]);
-    expect(display.right).toBe('Keep the proof under one page.');
+    expect(display.right).toBe(
+      '1. Keep the proof und… · 2. Also mention the f…',
+    );
     expect(display.bindings).toContain('[Alt-s]subagents');
     expect(display.bindings).toContain('[Ctrl-C]stop');
     // Stream-navigation hints appear once more than one stream is live.
