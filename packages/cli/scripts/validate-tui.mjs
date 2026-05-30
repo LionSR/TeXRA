@@ -20,7 +20,8 @@
 // node-pty is unavailable (e.g. CI without build tools), the validator prints a
 // notice and exits 0 so it never breaks installs that opt out of the native dep.
 
-import { existsSync } from 'node:fs';
+import { chmodSync, existsSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -117,10 +118,32 @@ const scenarios = only.length
   ? SCENARIOS.filter((s) => only.includes(s.name))
   : SCENARIOS;
 
+function ensureNodePtySpawnHelperExecutable() {
+  if (process.platform === 'win32') return;
+
+  try {
+    const require = createRequire(import.meta.url);
+    const packageRoot = path.dirname(require.resolve('node-pty/package.json'));
+    const helperPath = path.join(
+      packageRoot,
+      'prebuilds',
+      `${process.platform}-${process.arch}`,
+      'spawn-helper',
+    );
+    if (!existsSync(helperPath)) return;
+
+    const mode = statSync(helperPath).mode;
+    if ((mode & 0o111) === 0) chmodSync(helperPath, mode | 0o755);
+  } catch {
+    // node-pty will report the underlying PTY load/spawn failure below.
+  }
+}
+
 // --- optional deps (guarded) ---------------------------------------------
 let ptySpawn;
 let Terminal;
 try {
+  ensureNodePtySpawnHelperExecutable();
   const ptyMod = await import('node-pty');
   ptySpawn = ptyMod.spawn ?? ptyMod.default?.spawn;
   const xtermMod = await import('@xterm/headless');
