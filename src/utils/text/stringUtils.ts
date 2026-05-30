@@ -85,3 +85,24 @@ export function collapseWhitespace(text: string): string {
 export function truncateSummary(text: string, maxLength: number): string {
   return truncateWithEllipsis(collapseWhitespace(text), maxLength);
 }
+
+/**
+ * Keep the last `maxLen` characters; prepend an ellipsis when truncated.
+ * Complement to `truncateWithEllipsis` for cases where the relevant content
+ * is at the end (e.g. terminal installer output where success/error appears last).
+ */
+export function tailWithEllipsis(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return `…${text.slice(-(maxLen - 1))}`;
+}
+
+/**
+ * Extract the subtype from a MIME type string (e.g. `'wav'` from `'audio/wav'`).
+ * Returns `fallback` (defaults to the original string) when no `/` is found.
+ */
+export function extractMimeSubtype(
+  mimeType: string,
+  fallback?: string,
+): string {
+  return mimeType.split('/').pop() ?? fallback ?? mimeType;
+}

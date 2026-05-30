@@ -10,7 +10,7 @@ import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/AgentState';
-import { formatProviderHttpError } from '@common/errors';
+import { ensureError, formatProviderHttpError } from '@common/errors';
 import type { AgentFileLocation } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -122,7 +122,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
       const formatted = formatProviderHttpError(error);
       return {
         outcome: 'failed',
-        error: error instanceof Error ? error : new Error(String(error)),
+        error: ensureError(error),
         userRetryable: formatted.userRetryable,
       };
     }

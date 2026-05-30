@@ -5,3 +5,8 @@ export function toErrorMessage(err: unknown): string {
   }
   return String(err);
 }
+
+/** Coerce any thrown value to an Error instance. */
+export function ensureError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(toErrorMessage(err));
+}

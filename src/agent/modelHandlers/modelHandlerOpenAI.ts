@@ -48,7 +48,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
-import { objectToLogString } from '@utils/text/stringUtils';
+import { extractMimeSubtype, objectToLogString } from '@utils/text/stringUtils';
 import { normalizeUsage } from './support/UsageNormalizer';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 import { tagOpenAISdkError, withSdkErrorTag } from './support/sdkErrorAdapters';
@@ -981,9 +981,7 @@ export class ModelHandlerOpenAI<
       ) {
         // Currently OpenRouter's OpenAI-compatible audio branch is the only consumer
         // Extract format from mime type (e.g., 'wav' from 'audio/wav')
-        const audioFormat = (
-          media.media_type.split('/').pop() ?? media.media_type
-        ).toLowerCase();
+        const audioFormat = extractMimeSubtype(media.media_type).toLowerCase();
         const supportedFormats = ['wav', 'mp3'] as const;
 
         if (

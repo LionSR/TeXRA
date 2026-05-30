@@ -7,6 +7,7 @@ import { isFile } from '@common/files/fsEntryType';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
 
 // Local imports - file utilities
+import { hasExtension } from '@utils/core/pathCore';
 import {
   createRunStorageLocation,
   getComparablePath,
@@ -38,9 +39,7 @@ function normalizePdfRelativePath(pdfPath: string): string {
     .split('/')
     .filter((part) => part && part !== '.' && part !== '..');
   const normalized = parts.length > 0 ? parts.join('/') : 'output.pdf';
-  return normalized.toLowerCase().endsWith('.pdf')
-    ? normalized
-    : `${normalized}.pdf`;
+  return hasExtension(normalized, '.pdf') ? normalized : `${normalized}.pdf`;
 }
 
 function stripRoundPrefix(relativePath: string, round: number): string {
