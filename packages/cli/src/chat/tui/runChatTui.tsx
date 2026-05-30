@@ -163,6 +163,16 @@ export function chatTuiActiveChildFollowUpTarget(): StreamTabId | undefined {
     : undefined;
 }
 
+export function chatTuiShouldAnnounceQueuedFollowUp(
+  targetStreamId: StreamTabId | undefined,
+): boolean {
+  if (!targetStreamId) return true;
+  const status =
+    cliState.streams.get().get(targetStreamId)?.status ??
+    StreamStatusService.get(targetStreamId);
+  return status !== STREAM_STATUS.WAITING;
+}
+
 interface SlashCommandContext {
   readonly session: TuiSession;
   readonly initialAgent: string;
@@ -882,10 +892,13 @@ export async function runChat(
     // user submits before `onStreamResolved` populates `session.streamId`.
     // p-queue serializes work but doesn't have an "await predicate" primitive,
     // so the task itself waits for the stream id via a tiny poll loop.
-    appendLocalAssistantTranscript(
-      formatQueuedFollowUpNotice(line),
-      childFollowUpTarget ?? session.streamId,
-    );
+    const initialFollowUpTarget = childFollowUpTarget ?? session.streamId;
+    if (chatTuiShouldAnnounceQueuedFollowUp(initialFollowUpTarget)) {
+      appendLocalAssistantTranscript(
+        formatQueuedFollowUpNotice(line),
+        initialFollowUpTarget,
+      );
+    }
     void followUpQueue.add(async () => {
       let followUpTarget = childFollowUpTarget;
       while (
