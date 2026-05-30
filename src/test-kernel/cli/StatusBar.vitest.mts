@@ -3,19 +3,33 @@ import { describe, expect, it } from 'vitest';
 import {
   buildStatusBarDisplay,
   defaultShortcutModifierLabel,
+  queuedFollowUpsSummary,
   statusBarSegmentText,
 } from '@cli/chat/tui/panes/StatusBar';
 import { NO_BYPASS } from '@cli/chat/tui/state/cliState';
 import { STREAM_STATUS } from '@shared/schemas';
 
 describe('CLI StatusBar display model', () => {
+  it('summarizes queued follow-up messages', () => {
+    expect(queuedFollowUpsSummary([])).toBeUndefined();
+    expect(queuedFollowUpsSummary(['Keep the proof under one page.'])).toBe(
+      'queued: Keep the proof under one page.',
+    );
+    expect(
+      queuedFollowUpsSummary([
+        'Keep the proof under one page.',
+        'Also mention the finite monoid argument.',
+      ]),
+    ).toBe('queued 2: Keep the proof under one page.');
+  });
+
   it('keeps idle state compact and omits static agent/model names', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.WAITING,
       pendingExitHint: false,
       pendingExitResumeId: undefined,
       bypass: NO_BYPASS,
-      queuedFollowUps: 0,
+      queuedFollowUpMessages: [],
       usage: undefined,
       conversation: undefined,
       activeSubagents: 0,
@@ -53,7 +67,7 @@ describe('CLI StatusBar display model', () => {
       pendingExitHint: false,
       pendingExitResumeId: undefined,
       bypass: NO_BYPASS,
-      queuedFollowUps: 0,
+      queuedFollowUpMessages: [],
       usage: undefined,
       conversation: undefined,
       activeSubagents: 0,
@@ -77,7 +91,10 @@ describe('CLI StatusBar display model', () => {
       pendingExitHint: false,
       pendingExitResumeId: undefined,
       bypass: NO_BYPASS,
-      queuedFollowUps: 2,
+      queuedFollowUpMessages: [
+        'Keep the proof under one page.',
+        'Also mention the finite monoid argument.',
+      ],
       usage: { inputTokens: 80_000, outputTokens: 25_000, cost: 0 },
       conversation: { conversationTurns: 2, toolCallCount: 7 },
       activeSubagents: 2,
@@ -100,7 +117,7 @@ describe('CLI StatusBar display model', () => {
       '1 proc',
       '3 approvals',
     ]);
-    expect(display.right).toBe('queued: 2');
+    expect(display.right).toBe('queued 2: Keep the proof under one page.');
     expect(display.bindings).toContain('[Alt-s]subagents');
     // Stream-navigation hints appear once more than one stream is live.
     expect(display.bindings).toContain('[Tab]streams');
@@ -108,13 +125,13 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('shows a live elapsed segment only while running', () => {
-    const running = buildStatusBarDisplay({
+    const runningInput = {
       status: STREAM_STATUS.RUNNING,
       elapsedMs: 110_000,
       pendingExitHint: false,
       pendingExitResumeId: undefined,
       bypass: NO_BYPASS,
-      queuedFollowUps: 0,
+      queuedFollowUpMessages: [],
       usage: undefined,
       conversation: undefined,
       activeSubagents: 0,
@@ -125,12 +142,24 @@ describe('CLI StatusBar display model', () => {
       model: 'deepseekT',
       apiMode: 'api',
       shortcutModifierLabel: 'Alt',
-    });
+    };
+    const running = buildStatusBarDisplay(runningInput);
 
     expect(running.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'running',
       '110s',
+      'api',
+    ]);
+
+    const justStarted = buildStatusBarDisplay({
+      ...runningInput,
+      elapsedMs: -20_000,
+    });
+    expect(justStarted.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'running',
+      '0s',
       'api',
     ]);
 
@@ -141,7 +170,7 @@ describe('CLI StatusBar display model', () => {
       pendingExitHint: false,
       pendingExitResumeId: undefined,
       bypass: NO_BYPASS,
-      queuedFollowUps: 0,
+      queuedFollowUpMessages: [],
       usage: undefined,
       conversation: undefined,
       activeSubagents: 0,
@@ -163,7 +192,7 @@ describe('CLI StatusBar display model', () => {
       pendingExitHint: false,
       pendingExitResumeId: undefined,
       bypass: { superYolo: true, toolEdit: true },
-      queuedFollowUps: 0,
+      queuedFollowUpMessages: [],
       usage: undefined,
       conversation: undefined,
       activeSubagents: 0,
@@ -199,7 +228,7 @@ describe('CLI StatusBar display model', () => {
       pendingExitHint: true,
       pendingExitResumeId: 'abc123',
       bypass: NO_BYPASS,
-      queuedFollowUps: 0,
+      queuedFollowUpMessages: [],
       usage: undefined,
       conversation: undefined,
       activeSubagents: 0,
@@ -228,7 +257,7 @@ describe('CLI StatusBar display model', () => {
       pendingExitHint: false,
       pendingExitResumeId: undefined,
       bypass: NO_BYPASS,
-      queuedFollowUps: 0,
+      queuedFollowUpMessages: [],
       usage: undefined,
       conversation: undefined,
       activeSubagents: 0,

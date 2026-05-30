@@ -25,6 +25,16 @@ type Emit = <K extends ProgressEvent>(
   payload: ProgressEventPayloads[K],
 ) => void;
 
+function sameQueuedFollowUps(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((item, index) => item === right[index])
+  );
+}
+
 /** Cap on per-process tail length held in the signal map (UTF-16 code
  *  units, not bytes — markdown-it / ink work in JS strings). Beyond this
  *  we truncate at the head via the shared `appendTail` helper so the live
@@ -170,10 +180,20 @@ function applyToState<K extends ProgressEvent>(
       // The event itself has no delta payload — re-read the queue directly so
       // the StatusBar pill stays accurate after both enqueue and drain.
       const p = payload as ProgressEventPayloads['updateQueuedFollowUps'];
-      const count = ToolUseFollowUpQueue.getAll(p.streamId).length;
-      patchStream(p.streamId, (s) =>
-        s.queuedFollowUps === count ? s : { ...s, queuedFollowUps: count },
-      );
+      const messages = ToolUseFollowUpQueue.getAll(p.streamId);
+      patchStream(p.streamId, (s) => {
+        if (
+          s.queuedFollowUps === messages.length &&
+          sameQueuedFollowUps(s.queuedFollowUpMessages, messages)
+        ) {
+          return s;
+        }
+        return {
+          ...s,
+          queuedFollowUps: messages.length,
+          queuedFollowUpMessages: messages,
+        };
+      });
       return;
     }
     default:
