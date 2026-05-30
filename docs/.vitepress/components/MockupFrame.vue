@@ -50,37 +50,12 @@ const LOGO = withBase('/logo-128x128.svg');
 </template>
 
 <style scoped>
-/* These VS Code surface tokens are now aliases over the theme-adaptive
-   --mk-* palette (defined in mockup.css), so the slotted chrome flips with the
-   docs theme instead of being locked to the dark webview values. */
+/* The VS Code surface tokens (--editor-bg, --color-*, --brand, the litStyles
+   aliases) now live on `.mockup` in theme/mockup.css — shared by both this
+   full-window frame and the frameless MockupPanel — so this scoped block keeps
+   only the window's own visual styling. `.win` always carries `.mockup`, so it
+   still inherits every alias. */
 .win {
-  --wa-space-3xs: 2px;
-  --wa-space-2xs: 4px;
-  --wa-space-xs: 8px;
-  --wa-space-s: 12px;
-  --border-thin: 1px;
-  --border-medium: 2px;
-  --border-radius-small: 2px;
-  --border-radius: 3px;
-  --border-radius-large: 6px;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-  --editor-bg: var(--mk-bg);
-  --surface-bg: var(--mk-bg-deep);
-  --panel-bg: var(--mk-bg-soft);
-  --color-border: var(--mk-bg-raised);
-  --wa-color-text-normal: var(--mk-text-dim);
-  --color-text-secondary: var(--mk-text-faint);
-  --color-text-tertiary: var(--mk-text-faint);
-  --color-text-link: var(--mk-syn-fn);
-  --color-success: #2ea043;
-  --color-warning: #cca700;
-  --color-error: #f14c4c;
-  --wa-color-icon-info: var(--mk-syn-fn);
-  --wa-color-debug-name: #4b9ef9;
-  --brand: var(--mk-accent);
-
   text-align: left;
   background: var(--editor-bg);
   border: 1px solid var(--mk-border-strong);

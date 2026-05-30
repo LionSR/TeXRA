@@ -6,6 +6,7 @@
 // stored); status is Set / Env / Not set. Tab order mirrors SettingsApp.ts.
 import { ref } from 'vue';
 import MockupFrame from './MockupFrame.vue';
+import MockSwitch from './MockSwitch.vue';
 
 const streaming = ref(true);
 
@@ -67,18 +68,11 @@ const rows = [
 
       <!-- Global streaming default (mirrors renderGlobalStreamingToggle). -->
       <div class="api-stream">
-        <button
-          type="button"
-          class="switch"
-          :class="{ on: streaming }"
-          role="switch"
-          :aria-checked="streaming"
-          @click="streaming = !streaming"
-        >
-          <span class="switch-knob"></span>
-        </button>
-        <span class="switch-label">Enable streaming</span>
-        <span class="api-stream-desc">Global default for all providers</span>
+        <MockSwitch
+          v-model="streaming"
+          label="Enable streaming"
+          description="Global default for all providers"
+        />
       </div>
 
       <table class="api-table">
@@ -175,10 +169,6 @@ const rows = [
   border: 1px solid var(--color-border);
   border-radius: var(--mk-radius-lg);
 }
-.api-stream-desc {
-  font-size: var(--mk-fs-72);
-  color: var(--color-text-secondary);
-}
 
 .api-table {
   width: 100%;
@@ -253,7 +243,7 @@ const rows = [
   cursor: pointer;
 }
 .key-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--mk-hover-bg);
   color: var(--wa-color-text-normal);
 }
 .key-btn--rm:hover {

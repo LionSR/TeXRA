@@ -1,5 +1,9 @@
 # Working with TikZ Figures
 
+<script setup>
+import TikzTroubleshootCards from '../.vitepress/components/TikzTroubleshootCards.vue';
+</script>
+
 [TikZ](https://github.com/pgf-tikz/pgf) is a powerful LaTeX package for creating vector graphics programmatically. It's widely used in academia for diagrams, plots, and technical illustrations because of its high quality and seamless LaTeX integration. Mastering TikZ can feel like learning a new language — TeXRA is here to help.
 
 TeXRA offers specialised features for TikZ, built around its tool-use agents — which write TikZ, compile it, and visually verify the result — together with dedicated extraction / compilation tools. This guide focuses on TikZ-specific workflows.
@@ -42,6 +46,20 @@ A tool-use agent (`research` or `presenter`) acts as your AI graphics assistant 
 4. <wa-icon library="texra" name="comment"></wa-icon> **Add annotations** or labels to diagrams.
 
 Because these are tool-use agents, they can compile the figure and inspect the rendered PDF, then refine the code until it compiles cleanly and looks correct.
+
+<ToolCallPanel
+  title="research"
+  icon="sparkle"
+  caption="drawing a TikZ figure · iterating · this run"
+  :calls="[
+    { state: 'done', verb: 'write_tikz', target: 'figures/ml-pipeline.tex', effect: 'Writes a first draft of the flowchart' },
+    { state: 'done', verb: 'compile_tikz', target: 'ml-pipeline.tex', effect: 'pdflatex OK → renders a PNG preview' },
+    { state: 'done', verb: 'read', target: 'ml-pipeline.png', effect: 'Sees nodes overlap, one arrow misaligned' },
+    { state: 'active', verb: 'write_tikz', target: 'ml-pipeline.tex', effect: 'Adjusts node spacing and arrow anchors, then recompiles' },
+  ]"
+/>
+
+<p class="hero-caption">The agent writes, compiles, looks at the rendered PNG, and loops back to fix what it sees — a self-correcting draw cycle, not a one-shot generation.</p>
 
 ![TikZ Figure Example](/images/tikz-figure-example.png)
 
@@ -89,6 +107,20 @@ TeXRA can pull TikZ figures out of your LaTeX source for separate processing.
 3. Select your input file(s) (<wa-icon library="texra" name="file-code"></wa-icon>).
 4. Execute your chosen agent (<wa-icon library="texra" name="play"></wa-icon>).
 
+<DropdownMenu
+  label="Media · Auto-extract"
+  value="Auto Extract"
+  valueIcon="wand"
+  maxWidth="320px"
+  :groups="[{ items: [
+    { name: 'Figures', checkbox: true, checked: false },
+    { name: 'TikZ Figures', checkbox: true, checked: true },
+    { name: 'Compile Input PDF', checkbox: true, checked: false },
+  ] }]"
+/>
+
+<p class="hero-caption">Open the wand <strong>Auto-extract</strong> menu in the Media group and check <strong>TikZ Figures</strong> — every <code>tikzpicture</code> in your selected files is then pulled out on the next run.</p>
+
 When automatic extraction is enabled, TeXRA will:
 
 1. <wa-icon library="texra" name="search"></wa-icon> Scan your LaTeX documents for `tikzpicture` environments.
@@ -128,11 +160,17 @@ Once extracted, TikZ figures can be compiled into viewable images.
 
 ### Automatic Compilation
 
-With automatic extraction on, TeXRA will:
+With automatic extraction on, one source file fans out into one standalone document, one PDF, and one PNG preview per figure — handed back to the agent:
 
-1. Create a standalone LaTeX document per TikZ figure.
-2. Compile it with your LaTeX distribution (`latexmk`/`pdflatex`).
-3. Convert the PDF to PNG for preview via GraphicsMagick / ImageMagick + Ghostscript.
+<FlowSteps :steps="[
+  { icon: 'file-code', title: 'Source', desc: 'One .tex file with several tikzpicture environments.', chips: [{ text: 'diagrams.tex', variant: 'info', icon: 'file-code' }] },
+  { icon: 'file-submodule', title: 'Extract', desc: 'A standalone LaTeX document per figure.', chips: [{ text: 'fig1.tex', variant: 'neutral' }, { text: 'fig2.tex', variant: 'neutral' }, { text: 'fig3.tex', variant: 'neutral' }] },
+  { icon: 'play-circle', title: 'Compile', desc: 'latexmk / pdflatex builds each standalone.', chips: [{ text: '3 PDFs', variant: 'warning', icon: 'file-pdf' }] },
+  { icon: 'output', title: 'Preview', desc: 'PDF → PNG via GraphicsMagick / ImageMagick + Ghostscript.', chips: [{ text: '3 PNGs', variant: 'success', icon: 'eye' }] },
+  { icon: 'robot', title: 'Agent', desc: 'Sees both the TikZ code and the rendered previews.', chips: [{ text: 'code + image', variant: 'accent' }] }
+]" />
+
+<p class="hero-caption">The extract → compile → preview pipeline: each <code>tikzpicture</code> becomes its own standalone document, PDF, and PNG. The last hop needs GraphicsMagick / ImageMagick + Ghostscript.</p>
 
 Missing system dependencies show <wa-icon library="texra" name="warning"></wa-icon> on **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>).
 
@@ -197,24 +235,11 @@ Maintain the same visual style and color scheme as the reference figure.
 
 ## <wa-icon library="texra" name="debug"></wa-icon> Troubleshooting TikZ Issues
 
-### <wa-icon library="texra" name="error"></wa-icon> Compilation Errors
+When a figure won't build, jump to the matching failure mode and work through its checks.
 
-1. Check the LaTeX log for specific error messages (build directory).
-2. Verify required TikZ libraries are in the template.
-3. Ensure your LaTeX distribution has the necessary packages.
-4. Simplify complex figures that might exceed compiler limits.
+<TikzTroubleshootCards />
 
-### <wa-icon library="texra" name="package"></wa-icon> Missing Packages
-
-1. Install the required packages through your LaTeX distribution manager.
-2. Add the packages to your TikZ template.
-3. Ensure package paths are in `TEXINPUTS`.
-
-### <wa-icon library="texra" name="symbol-ruler"></wa-icon> Figure Size Issues
-
-1. Adjust the `border` parameter in the standalone document class.
-2. Scale the figure using TikZ's `scale` option.
-3. Resize specific elements rather than the entire figure.
+<p class="hero-caption">Three failure modes, each with its quick remedies — find your symptom, fix it, recompile.</p>
 
 ## <wa-icon library="texra" name="lightbulb"></wa-icon> Best Practices
 

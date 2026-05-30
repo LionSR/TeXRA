@@ -7,6 +7,7 @@
 // SettingsApp.ts / SETTINGS_TAB_ORDER and the real tool-use agent roster.
 import { ref } from 'vue';
 import MockupFrame from './MockupFrame.vue';
+import MockSwitch from './MockSwitch.vue';
 
 const enabled = ref(true);
 const expanded = ref('pinned');
@@ -85,21 +86,9 @@ function toggle(id) {
         </div>
       </div>
 
-      <!-- Memory toggle (mirrors MemoryToggle). Implemented as a real <button>
-           so it's keyboard-focusable and Space/Enter activate it, per ARIA's
-           `role="switch"` contract. -->
+      <!-- Memory toggle (mirrors MemoryToggle), now a bridged wa-switch. -->
       <div class="mem-toggle">
-        <button
-          type="button"
-          class="switch"
-          :class="{ on: enabled }"
-          role="switch"
-          :aria-checked="enabled"
-          @click="enabled = !enabled"
-        >
-          <span class="switch-knob"></span>
-        </button>
-        <span class="switch-label">Enable memory for chat agents</span>
+        <MockSwitch v-model="enabled" label="Enable memory for chat agents" />
       </div>
 
       <!-- Memory list (mirrors MemoryList → MemoryItem). `by <agent>` uses
@@ -306,8 +295,8 @@ function toggle(id) {
   display: flex;
   gap: var(--mk-space-10);
   padding: var(--mk-space-10) var(--mk-space-12);
-  background: rgba(117, 190, 255, 0.06);
-  border: 1px solid rgba(117, 190, 255, 0.18);
+  background: color-mix(in srgb, var(--mk-syn-fn) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mk-syn-fn) 18%, transparent);
   border-radius: var(--mk-radius-lg);
 }
 .reminder-ic {
@@ -419,7 +408,7 @@ function toggle(id) {
   font-size: var(--mk-space-12);
 }
 .m-act:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--mk-hover-bg);
   color: var(--wa-color-text-normal);
 }
 .m-act-on {

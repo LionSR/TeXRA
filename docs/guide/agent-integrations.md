@@ -1,3 +1,8 @@
+<script setup>
+import IntegrationCard from '../.vitepress/components/IntegrationCard.vue';
+import DelegatedStreamHero from '../.vitepress/components/DelegatedStreamHero.vue';
+</script>
+
 # Agent Integrations
 
 TeXRA can hand off a task to a second coding agent that runs on your machine
@@ -22,6 +27,9 @@ Both integrations follow the same setup flow from the TeXRA Dashboard.
 2. Find the **OpenAI Codex CLI** or **Claude Code CLI** card. When it's **Not Found**, the setup actions expand automatically.
 3. Click <wa-icon library="texra" name="terminal"></wa-icon> **Install in Terminal**, then <wa-icon library="texra" name="sign-in"></wa-icon> **Sign in** to OAuth in your browser.
 4. Click **Recheck**. The status flips to <wa-icon library="texra" name="check"></wa-icon> **Available**.
+
+<IntegrationCard />
+<p class="hero-caption">Each integration has its own card: a <strong>Not Found</strong> card expands its setup actions, and <strong>Recheck</strong> flips it to <strong>Available</strong> with a settings summary.</p>
 
 Each integration's options live on its card and are scoped to the current workspace. Per-call approval prompts are governed by the global **Require approval for shell commands & agent sessions** switch under **Dashboard → Tools → Approval & Safety** (on by default); turn it off to let agents call Codex or Claude Code without confirming each time.
 
@@ -95,6 +103,9 @@ When the tool fires:
 2. You see the side agent's reasoning, the commands it runs, the file changes it makes, and any web searches (<wa-icon library="texra" name="globe"></wa-icon>) and todos — all live.
 3. When the turn ends, the tab shows **WAITING**. Type into it to send a follow-up, or press <wa-icon library="texra" name="debug-stop"></wa-icon> **Stop** to close the session.
 4. The result (final message and token cost) is handed back to the TeXRA agent that asked for it, which then continues its own work.
+
+<DelegatedStreamHero />
+<p class="hero-caption">The delegated session streams live in its own ProgressBoard tab — reasoning, commands, file changes, web searches, and todos — then shows <strong>WAITING</strong> and hands its result back to the calling agent.</p>
 
 ## Troubleshooting
 
