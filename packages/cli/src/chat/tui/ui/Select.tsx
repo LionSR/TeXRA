@@ -39,6 +39,72 @@ function clampIndex(index: number, length: number): number {
   return Math.min(Math.max(index, 0), length - 1);
 }
 
+function firstEnabledSelectIndex<T>(
+  items: ReadonlyArray<SelectItem<T>>,
+): number {
+  const index = items.findIndex((item) => !item.disabled);
+  return index >= 0 ? index : 0;
+}
+
+export function selectInitialHighlightIndex<T>({
+  activeValue,
+  initialIndex,
+  items,
+}: {
+  readonly activeValue?: T;
+  readonly initialIndex?: number;
+  readonly items: ReadonlyArray<SelectItem<T>>;
+}): number {
+  if (items.length === 0) return 0;
+  if (initialIndex != null) {
+    const clampedInitialIndex = clampIndex(initialIndex, items.length);
+    if (
+      !items[clampedInitialIndex]?.disabled ||
+      items.every((item) => item.disabled)
+    ) {
+      return clampedInitialIndex;
+    }
+    return firstEnabledSelectIndex(items);
+  }
+
+  const activeIndex = items.findIndex((it) => it.value === activeValue);
+  if (activeIndex >= 0 && !items[activeIndex]?.disabled) return activeIndex;
+  return firstEnabledSelectIndex(items);
+}
+
+export function nextSelectHighlightIndex<T>({
+  direction,
+  highlight,
+  items,
+}: {
+  readonly direction: -1 | 1;
+  readonly highlight: number;
+  readonly items: ReadonlyArray<SelectItem<T>>;
+}): number {
+  if (items.length === 0) return 0;
+
+  const clampedHighlight = clampIndex(highlight, items.length);
+  if (
+    items.every((item) => item.disabled) ||
+    items.every((item) => !item.disabled)
+  ) {
+    return direction === 1
+      ? (clampedHighlight + 1) % items.length
+      : clampedHighlight <= 0
+        ? items.length - 1
+        : clampedHighlight - 1;
+  }
+
+  for (
+    let next = clampedHighlight + direction;
+    next >= 0 && next < items.length;
+    next += direction
+  ) {
+    if (!items[next]?.disabled) return next;
+  }
+  return clampedHighlight;
+}
+
 export function visibleSelectRange({
   itemCount,
   highlight,
@@ -95,13 +161,11 @@ export function selectIndexForHotkey(input: string): number | undefined {
 }
 
 export function Select<T>(props: SelectProps<T>): React.JSX.Element {
-  const activeIndex = props.items.findIndex(
-    (it) => it.value === props.activeValue,
-  );
-  const initial = clampIndex(
-    props.initialIndex ?? (activeIndex >= 0 ? activeIndex : 0),
-    props.items.length,
-  );
+  const initial = selectInitialHighlightIndex({
+    activeValue: props.activeValue,
+    initialIndex: props.initialIndex,
+    items: props.items,
+  });
   const [highlight, setHighlight] = useState(initial);
 
   useEffect(() => {
@@ -124,13 +188,21 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
     }
     if (key.upArrow) {
       setHighlight((h) =>
-        clampIndex(h <= 0 ? props.items.length - 1 : h - 1, props.items.length),
+        nextSelectHighlightIndex({
+          direction: -1,
+          highlight: h,
+          items: props.items,
+        }),
       );
       return;
     }
     if (key.downArrow) {
       setHighlight((h) =>
-        props.items.length === 0 ? 0 : (h + 1) % props.items.length,
+        nextSelectHighlightIndex({
+          direction: 1,
+          highlight: h,
+          items: props.items,
+        }),
       );
       return;
     }
