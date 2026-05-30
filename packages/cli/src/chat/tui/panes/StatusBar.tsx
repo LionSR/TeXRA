@@ -251,6 +251,7 @@ export function statusBarBindingsText(
   modifierLabel = defaultShortcutModifierLabel(),
   shiftEnterNewline = false,
   ctrlCAction: CtrlCAction = 'exit',
+  maxColumns?: number,
 ): string {
   const bindings: string[] = [
     // Stream cycling / numeric focus only do something when there is more
@@ -274,7 +275,34 @@ export function statusBarBindingsText(
       `[${modifierLabel}-s]subagents`,
     );
   }
+  const fullBindings = joinStatusBindings(bindings);
+  if (fitsStatusBindings(fullBindings, maxColumns)) return fullBindings;
+
+  const compactBindings = joinStatusBindings([
+    ...(hasMultipleStreams ? ['[Tab]streams'] : []),
+    `[${modifierLabel}-p]tasks`,
+    ...(subagentControlsAvailable ? [`[${modifierLabel}-s]subagents`] : []),
+    '[/status]details',
+    `[Ctrl-C]${ctrlCAction}`,
+  ]);
+  if (fitsStatusBindings(compactBindings, maxColumns)) return compactBindings;
+
+  const minimalBindings = joinStatusBindings([
+    ...(hasMultipleStreams ? ['[Tab]streams'] : []),
+    `[${modifierLabel}-p]tasks`,
+    `[Ctrl-C]${ctrlCAction}`,
+  ]);
+  if (fitsStatusBindings(minimalBindings, maxColumns)) return minimalBindings;
+
+  return `[Ctrl-C]${ctrlCAction}`;
+}
+
+function joinStatusBindings(bindings: readonly string[]): string {
   return bindings.join('  ');
+}
+
+function fitsStatusBindings(text: string, maxColumns: number | undefined) {
+  return maxColumns === undefined || stringWidth(text) <= maxColumns;
 }
 
 function foregroundBindingsText(ctrlCAction: CtrlCAction): string {
@@ -350,6 +378,9 @@ export function buildStatusBarDisplay(
               input.shortcutModifierLabel,
               input.shiftEnterNewline,
               input.ctrlCAction,
+              input.width === undefined
+                ? undefined
+                : Math.max(0, input.width - STATUS_BAR_HORIZONTAL_PADDING),
             ),
   };
 }
