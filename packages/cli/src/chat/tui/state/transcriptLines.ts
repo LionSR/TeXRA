@@ -35,19 +35,59 @@ function entryLines(entry: ConversationEntry, cols: number): readonly string[] {
   }
 }
 
-/** Render the active slice into a flat line array with a blank separator
- *  between entries. Returns an empty array when there is nothing to show. */
+function isCompactToolEntry(
+  entry: ConversationEntry,
+  lines: readonly string[],
+): boolean {
+  return entry.role === 'tool' && lines.length <= 1;
+}
+
+function shouldSeparateEntries({
+  previousEntry,
+  previousLines,
+  nextEntry,
+  nextLines,
+}: {
+  readonly previousEntry: ConversationEntry | undefined;
+  readonly previousLines: readonly string[];
+  readonly nextEntry: ConversationEntry;
+  readonly nextLines: readonly string[];
+}): boolean {
+  if (!previousEntry) return false;
+  return !(
+    isCompactToolEntry(previousEntry, previousLines) &&
+    isCompactToolEntry(nextEntry, nextLines)
+  );
+}
+
+/** Render the active slice into a flat line array with blank separators between
+ *  substantial entries. Adjacent one-line tool calls stay stacked so compact
+ *  tool-heavy traces do not waste half the viewer on empty expansion space. */
 export function transcriptToLines(
   slice: StreamSlice | undefined,
   cols: number,
 ): readonly string[] {
   if (!slice) return [];
   const out: string[] = [];
+  let previousEntry: ConversationEntry | undefined;
+  let previousLines: readonly string[] = [];
   for (const entry of slice.entries) {
     const lines = entryLines(entry, cols);
     if (lines.length === 0) continue;
-    if (out.length > 0) out.push('');
+    if (
+      out.length > 0 &&
+      shouldSeparateEntries({
+        previousEntry,
+        previousLines,
+        nextEntry: entry,
+        nextLines: lines,
+      })
+    ) {
+      out.push('');
+    }
     out.push(...lines);
+    previousEntry = entry;
+    previousLines = lines;
   }
   return out;
 }
