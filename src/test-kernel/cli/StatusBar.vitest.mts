@@ -181,6 +181,36 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('[Alt-1..9]focus');
   });
 
+  it('hides inactive global bindings while a foreground panel owns input', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 2,
+      activeProcesses: 1,
+      approvalDepth: 1,
+      subagentControlsAvailable: true,
+      hasMultipleStreams: true,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      ctrlCAction: 'stop',
+      shortcutsActive: false,
+    });
+
+    expect(display.left.map(statusBarSegmentText)).toContain('1 approval');
+    expect(display.bindings).toBe(
+      'Use foreground panel shortcuts  [Ctrl-C]stop',
+    );
+    expect(display.bindings).not.toContain('[Tab]streams');
+    expect(display.bindings).not.toContain('[Alt-p]tasks');
+    expect(display.bindings).not.toContain('[/model]models');
+  });
+
   it('shows a live elapsed segment only while running', () => {
     const runningInput = {
       status: STREAM_STATUS.RUNNING,
