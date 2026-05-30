@@ -13,6 +13,7 @@ import {
 } from '@shared/schemas';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 
+import { formatCliStatusLabel } from '../sessionStatus';
 import { approvalQueueDepth } from '../state/approvalQueue';
 import { terminalCapabilities } from '../state/terminalCapabilities';
 import {
@@ -73,22 +74,7 @@ export interface StatusBarDisplay {
   readonly bindings: string;
 }
 
-export function statusLabel(status: string | undefined): string {
-  switch (status) {
-    case STREAM_STATUS.INITIALIZING:
-      return 'starting…';
-    case STREAM_STATUS.RUNNING:
-      return 'running';
-    case STREAM_STATUS.WAITING:
-      return 'idle';
-    case STREAM_STATUS.STOPPED:
-      return 'stopped';
-    case STREAM_STATUS.READY:
-      return 'ready';
-    default:
-      return status ?? '—';
-  }
-}
+export const statusLabel = formatCliStatusLabel;
 
 function compactScale(scaled: number, suffix: string): string {
   const rounded = Number.isInteger(scaled)
