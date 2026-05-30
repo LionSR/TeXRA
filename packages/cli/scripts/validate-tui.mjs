@@ -260,7 +260,7 @@ async function runScenario(scenario) {
     const ctrlcDeadline = Date.now() + 2500;
     while (!exited && Date.now() < ctrlcDeadline) await sleep(100);
   }
-  const exitedCleanly = !!exited;
+  const exitedCleanly = exited?.exitCode === 0 && !exited.signal;
   if (!exited) {
     try {
       child.kill();
@@ -275,8 +275,12 @@ async function runScenario(scenario) {
     failures.push(`expected text missing: ${JSON.stringify(t)}`);
   for (const t of present)
     failures.push(`unexpected text present: ${JSON.stringify(t)}`);
-  if (scenario.expectExit && !exitedCleanly)
-    failures.push('Ctrl-C did not exit the TUI');
+  if (scenario.expectExit && !exitedCleanly) {
+    const exitDetails = exited
+      ? ` (exitCode ${exited.exitCode}, signal ${exited.signal || 'none'})`
+      : '';
+    failures.push(`Ctrl-C did not exit the TUI cleanly${exitDetails}`);
+  }
 
   return { name: scenario.name, ok: failures.length === 0, failures, frame };
 }
