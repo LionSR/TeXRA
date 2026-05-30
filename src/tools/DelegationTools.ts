@@ -37,10 +37,7 @@ import * as logger from '@logger/logUtils';
 // Local imports - common
 
 // Local imports - model
-import {
-  getVisibleModels,
-  resolveVisibleModel,
-} from '@model/modelOptionsBasic';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   AGENT_CATEGORY,
   DEFAULT_TOOL_CONFIG,
@@ -77,8 +74,12 @@ import {
   SUBAGENT_DELIVERY_DECISION,
   type SubagentDeliveryState,
 } from '@tools/subagentDeliveryState';
-import { isWorktreeSupportEnabled } from '@tools/worktreeConfig';
+import {
+  availableModelNamesFromOptions,
+  resolveDelegationModelFromAvailableNames,
+} from '@tools/delegationModelAvailability';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { isWorktreeSupportEnabled } from '@tools/worktreeConfig';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - memory
@@ -508,6 +509,17 @@ function formatAgentList(
     .join('\n');
 }
 
+async function resolveAvailableDelegationModel(input: {
+  readonly requestedModel?: string | null;
+  readonly parentModel?: string | null;
+}): Promise<string> {
+  const modelOptions = await computeModelOptionsData();
+  return resolveDelegationModelFromAvailableNames({
+    ...input,
+    availableModels: availableModelNamesFromOptions(modelOptions),
+  });
+}
+
 /** Throw if no visible agent of the given category matches the name. */
 function assertVisibleAgent(
   category: 'workflow' | 'toolUse',
@@ -670,7 +682,7 @@ const WorkflowAgentInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe(
-      'Model short name (e.g., opus48T, sonnet46T, gpt55, gemini31p). Defaults to the current model if omitted.',
+      'Model short name from the Available models line. Omit unless the user explicitly requested a model; defaults to the current model when available.',
     ),
   instruction: z
     .string()
@@ -763,7 +775,7 @@ ${formatAgentList(getVisibleAgents('workflow'))}
 
 Pick the agent whose description matches the task — don't default to correct. correct is for proofreading only. For applying review suggestions use apply; for new derivations use devise; for instruction-driven rewriting use polish; for critical review use criticize.
 
-Available models: ${getVisibleModels().join(', ')}
+Available models: loaded from the active API mode at runtime.
 Largest models for deep reasoning; long-context for lengthy tedious work; cost-effective for parallel routine work.
 
 Optional auto-attach from the input LaTeX:
@@ -777,8 +789,10 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
     assertVisibleAgent('workflow', input.agent);
     const ctx = getRequiredContext();
 
-    // Resolve model: explicit input → parent model → first visible model
-    const model = resolveVisibleModel(input.model ?? ctx.model ?? '');
+    const model = await resolveAvailableDelegationModel({
+      requestedModel: input.model,
+      parentModel: ctx.model,
+    });
 
     // Validate at least one input file is provided
     if (input.inputFiles.length === 0) {
@@ -855,7 +869,7 @@ const DelegateAgentInputSchema = z.strictObject({
     .string()
     .nullish()
     .describe(
-      'Model short name (e.g., opus48T, sonnet46T, gpt55, gemini31p). Defaults to the current model if omitted.',
+      'Model short name from the Available models line. Omit unless the user explicitly requested a model; defaults to the current model when available.',
     ),
   instruction: z
     .string()
@@ -889,7 +903,7 @@ ${formatAgentList(getVisibleAgents('toolUse'))}
 
 Agent selection: choose the most specific agent whose description matches the task. Specialized agents have domain-specific tools and focused prompts that produce better results for matching tasks. Do not choose chat just because the task is a targeted edit, file operation, or mixed research/editing request; choose chat only when no listed specialized agent covers the work, and state that reason in the instruction.
 
-Available models: ${getVisibleModels().join(', ')}
+Available models: loaded from the active API mode at runtime.
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
 
 Example (new, specialized): agent=research, instruction="Derive the asymptotic expansion of the partition function in appendix_A.tex using saddle-point methods. Verify with Wolfram."
@@ -920,8 +934,10 @@ Git worktree support: ${
 
     const ctx = getRequiredContext();
 
-    // Resolve model: explicit input → parent model → first visible model
-    const model = resolveVisibleModel(input.model ?? ctx.model ?? '');
+    const model = await resolveAvailableDelegationModel({
+      requestedModel: input.model,
+      parentModel: ctx.model,
+    });
 
     // Construct tool-use proposal (no file fields)
     const proposal = ToolUseAgentProposalSchema.parse({
