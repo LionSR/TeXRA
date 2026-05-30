@@ -31,6 +31,7 @@ export interface DiffStats {
 const NO_NEWLINE_MARKER = '\\';
 const MIN_DIFF_WIDTH = 20;
 const DEFAULT_DIFF_WIDTH = 74;
+const COMPACT_DIFF_DISPLAY_LINES = 3;
 
 type OverflowMarkerKind = 'hidden' | 'more' | 'previous';
 
@@ -179,7 +180,12 @@ export function maxDiffScrollOffset(
   totalLines: number,
   maxDisplayLines: number,
 ): number {
-  if (maxDisplayLines <= 2 || totalLines <= maxDisplayLines) return 0;
+  if (
+    maxDisplayLines <= COMPACT_DIFF_DISPLAY_LINES ||
+    totalLines <= maxDisplayLines
+  ) {
+    return 0;
+  }
   return Math.max(0, totalLines - Math.max(1, maxDisplayLines - 1));
 }
 
@@ -212,6 +218,42 @@ function overflowMarkerText(
   );
 }
 
+function representativeDiffLineIndex(
+  lines: readonly DiffDisplayLine[],
+): number {
+  const changedIndex = lines.findIndex(
+    (line) => line.kind === 'added' || line.kind === 'removed',
+  );
+  if (changedIndex >= 0) return changedIndex;
+
+  const contentIndex = lines.findIndex((line) => line.kind !== 'overflow');
+  return Math.max(0, contentIndex);
+}
+
+function compactBoundedDiffDisplayLines(
+  lines: readonly DiffDisplayLine[],
+  maxDisplayLines: number,
+  width?: number,
+): DiffDisplayLine[] {
+  const visibleBudget = Math.max(1, maxDisplayLines);
+  const visibleCount = visibleBudget === 1 ? 1 : visibleBudget - 1;
+  const anchor = representativeDiffLineIndex(lines);
+  const start = Math.max(0, Math.min(anchor, lines.length - visibleCount));
+  const visibleLines = lines.slice(start, start + visibleCount);
+  if (visibleBudget === 1) return visibleLines;
+
+  const hiddenRows = Math.max(0, lines.length - visibleLines.length);
+  if (hiddenRows === 0) return visibleLines;
+
+  return [
+    ...visibleLines,
+    {
+      kind: 'overflow',
+      text: overflowMarkerText('hidden', hiddenRows, width),
+    },
+  ];
+}
+
 export function scrollBoundedDiffDisplayLines(
   hunks: readonly Hunk[],
   maxHunkLines = 0,
@@ -224,13 +266,8 @@ export function scrollBoundedDiffDisplayLines(
       ? diffDisplayLines(hunks, maxHunkLines)
       : wrappedDiffDisplayLines(hunks, width, maxHunkLines);
   if (maxDisplayLines <= 0 || lines.length <= maxDisplayLines) return lines;
-  if (maxDisplayLines === 1) {
-    return [
-      {
-        kind: 'overflow',
-        text: overflowMarkerText('hidden', lines.length, width),
-      },
-    ];
+  if (maxDisplayLines <= COMPACT_DIFF_DISPLAY_LINES) {
+    return compactBoundedDiffDisplayLines(lines, maxDisplayLines, width);
   }
 
   const offset = Math.max(
