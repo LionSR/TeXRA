@@ -43,6 +43,9 @@
       "@openrouter/sdk/models": [
         "node_modules/@openrouter/sdk/esm/models/index.d.ts"
       ],
+      "@openrouter/sdk/models/errors": [
+        "node_modules/@openrouter/sdk/esm/models/errors/index.d.ts"
+      ],
       "@controllers/*": ["src/controllers/*"],
       "@test/*": ["src/test/*"],
       "@cli/*": ["packages/cli/src/*"],

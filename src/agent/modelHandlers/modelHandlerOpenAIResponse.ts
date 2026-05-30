@@ -1596,7 +1596,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    *
    * @returns Result containing the response and optionally updated messages if compaction occurred
    */
-  async createResponse(
+  override async createResponse(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
     // Single-turn contract: concurrent callers would race on previousResponseId
@@ -1620,7 +1620,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
   }
 
-  private async createResponseImpl(
+  protected override async createResponseImpl(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
     // Clear any stale compaction result from previous attempts (ensures clean state on retries)

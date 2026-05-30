@@ -20,6 +20,7 @@ import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 import { normalizeUsage } from './support/UsageNormalizer';
+import { tagOpenRouterSdkError } from './support/sdkErrorAdapters';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
 
 // Local file imports
@@ -268,7 +269,12 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // createResponse
   // ---------------------------------------------------------------------------
 
-  async createResponse(
+  protected override get sdkErrorTagger() {
+    return tagOpenRouterSdkError;
+  }
+
+  /** Creates an OpenRouter response after SDK-boundary error tagging is installed. */
+  protected override async createResponseImpl(
     options: CreateResponseOptions<ChatMessages, OpenRouter>,
   ): Promise<CreateResponseResult<ChatResult, ChatMessages>> {
     const {
