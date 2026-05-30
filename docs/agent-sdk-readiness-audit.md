@@ -366,17 +366,19 @@ base `ModelHandler`:
   `supportsReasoning`.
 
 Both are exact equivalents of the prior expressions (verified by case analysis over
-all providers) and dispatch decisions no longer read provider identity. The
-`isGoogle`/`isDeepSeek`/`isKimi`/`isMiniMax` getters now have **only display-flag
-callers** (`AgentLaunchContext.ts:264`, `userVars.ts:169`), per the audit's intended
-end state. Verified: root + test-kernel `typecheck` green; ModelFactory routing and
+all providers) and dispatch decisions no longer read provider identity. Of the
+`isGoogle`/`isDeepSeek`/`isKimi`/`isMiniMax` getters, only `isGoogle` retains a
+caller (a display flag at `AgentLaunchContext.ts:264` → `userVars.ts:169`); the
+`isDeepSeek`/`isKimi`/`isMiniMax` getters now have **no remaining callers** and are
+retained interface surface (the `isOpenai`/`isAnthropic` display getters are
+unaffected). Verified: root + test-kernel `typecheck` green; ModelFactory routing and
 tool-use vitest suites (35 tests) green.
 
 **Pending items re-confirmed present (line numbers refreshed where drifted):**
 
 - **§2.6** — `src/agent/modelHandlers/modelHandlerValidation.ts` still sits in the
   dispatch dir, loaded behind `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL=1`
-  (`ModelFactory.ts:21-22`, dispatched at `:198-209`). Still recommended to relocate
+  (`ModelFactory.ts:21-22`, dispatched at `:195-207`). Still recommended to relocate
   to `test-kernel/` and inject.
 - **§3.1** — no `@agent/runtime` facade barrel yet (`src/agent/runtime/index.ts` absent).
   Deep-import leakage into `@agent/runtime/*` from the extension persists.
@@ -386,9 +388,10 @@ tool-use vitest suites (35 tests) green.
 - **§5** — no first-class `delegateTo(...)` primitive yet (`grep delegateTo src/**` empty);
   delegation remains a tool call inside the LLM loop. Subagent mechanism otherwise intact.
 - **§7** — **the two behavioral gates are now converted** (see "Applied in this PR"
-  above). The provider-identity getters `isAnthropic`/`isOpenai`/`isGoogle`/`isDeepSeek`/
-  `isKimi`/`isMiniMax` remain on `ModelHandler.ts` but are now used only as display
-  flags, which the audit explicitly endorsed keeping as an allow-list.
+  above). The provider-identity getters remain on `ModelHandler.ts` as an allow-list
+  the audit explicitly endorsed keeping; post-refactor only `isOpenai`/`isAnthropic`/
+  `isGoogle` are still consumed (display flags), while `isDeepSeek`/`isKimi`/`isMiniMax`
+  are retained interface surface with no callers.
 
 **Two false positives caught this pass (recorded so they are not re-flagged):**
 
