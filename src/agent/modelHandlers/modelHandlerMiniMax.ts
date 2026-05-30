@@ -38,6 +38,14 @@ function extractTextFromReasoningDetails(details: unknown): string | undefined {
 export class ModelHandlerMiniMax extends ModelHandlerOpenAI {
   protected override useReasoningStreamAggregator = true;
 
+  /**
+   * MiniMax emits reasoning alongside parallel tool calls, which must be
+   * preserved by batching the results into a single follow-up message.
+   */
+  override get requiresBatchedParallelToolResults(): boolean {
+    return true;
+  }
+
   protected override shouldIncludeReasoningInToolCalls(): boolean {
     return this.capabilities.supportsReasoning;
   }
