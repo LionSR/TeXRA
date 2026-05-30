@@ -8,8 +8,10 @@ import {
 } from '@cli/chat/tui/modals/ChildControlPicker';
 import {
   buildChildControlItems,
+  childElapsed,
   childPickerKeyAction,
   hasChildExecutionRows,
+  liveChildExecutionElapsedKey,
   nextPickerIndex,
   numericFocusTarget,
 } from '@cli/chat/tui/state/childControls';
@@ -134,6 +136,90 @@ describe('CLI child execution controls', () => {
         tailLines: ['first', 'second', 'warning'],
       },
     ]);
+  });
+
+  it('derives live elapsed text for running child executions', () => {
+    const state = slice({
+      activeSubagents: [
+        {
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: 'child-a',
+          status: 'running',
+          startedAt: 1_000,
+          elapsed: '1s',
+        },
+      ],
+      activeProcesses: [
+        {
+          executionId: 'proc-1',
+          agentName: 'latexmk',
+          status: 'waiting',
+          startedAt: 1_000,
+          elapsed: '1s',
+        },
+      ],
+    });
+
+    expect(
+      buildChildControlItems(state, 'subagents', new Map(), 62_000),
+    ).toMatchObject([
+      {
+        executionId: 'agent-1',
+        description: 'running · 1min, 1sec',
+        elapsed: '1min, 1sec',
+      },
+    ]);
+    expect(childElapsed(state.activeProcesses[0], 62_000)).toBe('1s');
+  });
+
+  it('keys live child elapsed timers by active execution identity', () => {
+    expect(liveChildExecutionElapsedKey(undefined)).toBeUndefined();
+
+    const state = slice({
+      activeSubagents: [
+        {
+          executionId: 'agent-2',
+          agentName: 'critic',
+          status: 'running',
+          startedAt: 2_000,
+        },
+        {
+          executionId: 'agent-1',
+          agentName: 'reviewer',
+          status: 'initializing',
+          startedAt: 1_000,
+        },
+      ],
+      activeProcesses: [
+        {
+          executionId: 'proc-1',
+          agentName: 'latexmk',
+          status: 'waiting',
+          startedAt: 500,
+          elapsed: '1s',
+        },
+      ],
+    });
+
+    expect(liveChildExecutionElapsedKey(state)).toBe(
+      'agent-1:1000,agent-2:2000',
+    );
+    expect(
+      liveChildExecutionElapsedKey(
+        slice({
+          activeSubagents: [
+            {
+              executionId: 'agent-1',
+              agentName: 'critic',
+              status: 'completed',
+              startedAt: 1_000,
+              elapsed: '1s',
+            },
+          ],
+        }),
+      ),
+    ).toBeUndefined();
   });
 
   it('uses stream descriptions as visible task commands', () => {
