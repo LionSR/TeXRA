@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   confirmCardKeyAction,
   confirmCardKeyHints,
+  confirmCardKeyHintsForWidth,
 } from '@cli/chat/tui/modals/ConfirmCardState';
 
 describe('CLI confirm-card key handling', () => {
@@ -41,5 +42,30 @@ describe('CLI confirm-card key handling', () => {
       .map((hint) => `${hint.key} ${hint.action}`)
       .join(' · ');
     expect(rendered.length).toBeLessThanOrEqual(72);
+  });
+
+  it('compacts long optional approval hints before hiding cancel', () => {
+    expect(
+      confirmCardKeyHintsForWidth({
+        alwaysAllowLabel: 'approve session',
+        maxColumns: 80,
+      }),
+    ).toEqual(confirmCardKeyHints({ alwaysAllowLabel: 'approve session' }));
+
+    const compact = confirmCardKeyHintsForWidth({
+      alwaysAllowLabel: 'approve session',
+      maxColumns: 56,
+    });
+
+    expect(compact).toEqual([
+      { key: 'y', action: 'approve' },
+      { key: 'n', action: 'reject' },
+      { key: 'a', action: 'session' },
+      { key: 'e', action: 'note' },
+      { key: 'Esc', action: 'cancel' },
+    ]);
+    expect(
+      compact.map((hint) => `${hint.key} ${hint.action}`).join(' · ').length,
+    ).toBeLessThanOrEqual(56);
   });
 });

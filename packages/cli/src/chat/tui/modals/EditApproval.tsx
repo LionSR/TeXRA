@@ -3,7 +3,7 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
-import { ConfirmCard } from './ConfirmCard';
+import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
 import {
   buildHunks,
   diffVisualRowCount,
@@ -17,7 +17,6 @@ import type { ApprovalDecision } from '../state/approvalQueue';
 
 const EDIT_DIFF_PADDING = 6;
 const EDIT_APPROVAL_FIXED_ROWS_EXCLUDING_TITLE = 8;
-const CONFIRM_CARD_HORIZONTAL_DECORATION = 4;
 const MIN_EDIT_DIFF_WIDTH = 20;
 
 export interface EditApprovalProps {
