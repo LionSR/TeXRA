@@ -13,11 +13,11 @@ import PQueue from 'p-queue';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type {
   AgentProposalPermission,
+  ApprovalDecision as SharedApprovalDecision,
   BashPermission,
   ExternalInquiryPermission,
   PlanApprovalPermission,
   RetryPermission,
-  UserQuestionAnswers,
   UserQuestionPermission,
 } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -33,16 +33,13 @@ export type ApprovalPayload =
   | { kind: 'externalInquiry'; payload: ExternalInquiryPermission }
   | { kind: 'userQuestion'; payload: UserQuestionPermission };
 
-export interface ApprovalDecision {
-  readonly accepted: boolean;
-  /**
-   * Free-text payload carried with the decision. For rejections this is the
-   * user's `e`-reject-with-feedback note; for the ExternalInquiry kind on
-   * accept, it's the answer the agent gets back.
-   */
-  readonly userMessage?: string;
-  /** Structured answers for an AskUserQuestion request. */
-  readonly userQuestionAnswers?: UserQuestionAnswers;
+/**
+ * The TUI decision = the host-neutral {@link SharedApprovalDecision}
+ * (accepted / userMessage / userQuestionAnswers) plus the CLI-only session
+ * bypass + credential mode applied before accepting. See
+ * docs/proposals/tui-extension-sharing.md (Rung 1).
+ */
+export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   /** Session bypass to activate before accepting this approval. */
   readonly bypass?: ApprovalBypassKind;
   /** Credential mode to apply before accepting this approval. */
