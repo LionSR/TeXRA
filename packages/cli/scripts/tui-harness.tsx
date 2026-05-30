@@ -11,9 +11,11 @@ import {
   patchStream,
   type ConversationEntry,
 } from '../src/chat/tui/state/cliState';
+import { enqueueApproval } from '../src/chat/tui/state/approvalQueue';
 
 const STREAM_ID = 'harness-stream-1';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
+const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 
 function makeEntries(count: number): ConversationEntry[] {
   const entries: ConversationEntry[] = [];
@@ -33,6 +35,34 @@ function makeEntries(count: number): ConversationEntry[] {
   return entries;
 }
 
+function makeEditApprovalRequest() {
+  const originalBody = Array.from(
+    { length: 24 },
+    (_, index) => `Line ${index + 1}: placeholder.`,
+  );
+  const proposedBody = Array.from(
+    { length: 24 },
+    (_, index) => `Line ${index + 1}: finite-domain proof step ${index + 1}.`,
+  );
+  return {
+    path: 'draft.tex',
+    originalContent: [
+      '\\documentclass{article}',
+      '\\begin{document}',
+      ...originalBody,
+      '\\end{document}',
+    ].join('\n'),
+    proposedContent: [
+      '\\documentclass{article}',
+      '\\begin{document}',
+      ...proposedBody,
+      '\\end{document}',
+    ].join('\n'),
+    sourceTool: 'harness',
+    streamId: STREAM_ID,
+  };
+}
+
 cliState.sessionMeta.set({
   agent: 'chat',
   model: 'harness-model',
@@ -47,6 +77,13 @@ patchStream(STREAM_ID, (slice) => ({
   status: undefined,
   entries: makeEntries(ENTRY_COUNT),
 }));
+
+if (SHOW_EDIT_APPROVAL) {
+  void enqueueApproval({
+    kind: 'toolEdit',
+    request: makeEditApprovalRequest(),
+  });
+}
 
 const ink = render(
   <App

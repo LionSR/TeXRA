@@ -5,6 +5,8 @@ import {
   buildHunks,
   DIFF_BAND_BG,
   fillRows,
+  maxDiffScrollOffset,
+  scrollBoundedDiffDisplayLines,
 } from '@cli/chat/tui/render/DiffView';
 
 describe('CLI diff display', () => {
@@ -22,6 +24,30 @@ describe('CLI diff display', () => {
       kind: 'overflow',
       text: expect.stringContaining('more diff rows'),
     });
+  });
+
+  it('renders scroll markers around the visible diff window', () => {
+    const hunks = buildHunks(
+      'draft.tex',
+      ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta'].join('\n'),
+      ['alpha', 'BETA', 'gamma', 'DELTA', 'epsilon', 'ZETA'].join('\n'),
+    );
+
+    const lines = scrollBoundedDiffDisplayLines(hunks, 0, 4, 2);
+
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toMatchObject({
+      kind: 'overflow',
+      text: '... 2 previous diff rows',
+    });
+    expect(lines.at(-1)).toMatchObject({
+      kind: 'overflow',
+      text: expect.stringContaining('more diff rows'),
+    });
+  });
+
+  it('clamps the bottom scroll offset so the last rows remain visible', () => {
+    expect(maxDiffScrollOffset(10, 4)).toBe(7);
   });
 });
 
