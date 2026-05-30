@@ -100,35 +100,28 @@ const PERMISSION_TITLES: Record<PermissionState['kind'], string> = {
   [PERMISSION_KIND.USER_QUESTION]: 'Question',
 };
 
+const APPROVE_REJECT: ActionConfig[] = [
+  { action: 'approve', label: 'Approve', icon: 'check', variant: 'approve' },
+  { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
+];
+
+const REJECT_ONLY: ActionConfig[] = [
+  { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
+];
+
 /** Primary actions (approve/reject) for each permission type */
 const PRIMARY_ACTIONS: Record<PermissionState['kind'], ActionConfig[]> = {
-  [PERMISSION_KIND.TOOL_EDIT]: [
-    { action: 'approve', label: 'Approve', icon: 'check', variant: 'approve' },
-    { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
-  ],
-  [PERMISSION_KIND.BASH]: [
-    { action: 'approve', label: 'Approve', icon: 'check', variant: 'approve' },
-    { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
-  ],
+  [PERMISSION_KIND.TOOL_EDIT]: APPROVE_REJECT,
+  [PERMISSION_KIND.BASH]: APPROVE_REJECT,
   [PERMISSION_KIND.RETRY]: [
     { action: 'retry', label: 'Retry', icon: 'refresh', variant: 'approve' },
     { action: 'cancel', label: 'Cancel', icon: 'x', variant: 'reject' },
   ],
-  [PERMISSION_KIND.PROPOSAL]: [
-    { action: 'approve', label: 'Approve', icon: 'check', variant: 'approve' },
-    { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
-  ],
-  [PERMISSION_KIND.PLAN_APPROVAL]: [
-    { action: 'approve', label: 'Approve', icon: 'check', variant: 'approve' },
-    { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
-  ],
+  [PERMISSION_KIND.PROPOSAL]: APPROVE_REJECT,
+  [PERMISSION_KIND.PLAN_APPROVAL]: APPROVE_REJECT,
   // External inquiry uses its own panel with answer textarea; only reject here as fallback.
-  [PERMISSION_KIND.EXTERNAL_INQUIRY]: [
-    { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
-  ],
-  [PERMISSION_KIND.USER_QUESTION]: [
-    { action: 'reject', label: 'Reject', icon: 'x', variant: 'reject' },
-  ],
+  [PERMISSION_KIND.EXTERNAL_INQUIRY]: REJECT_ONLY,
+  [PERMISSION_KIND.USER_QUESTION]: REJECT_ONLY,
 };
 
 /** Secondary actions for each permission type */

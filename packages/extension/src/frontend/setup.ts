@@ -25,7 +25,7 @@ import {
   type LatexConfigField,
 } from '@shared/constants/latex';
 import { EXTERNAL_TOOL_DEFS } from '@tools/externalToolDefs';
-import { isConfigExplicitlySet, updateConfig } from '@utils/config';
+import { updateConfig } from '@utils/config';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
@@ -103,6 +103,13 @@ export async function copyDefaultAgents(
   }
 }
 
+/** External-root registration options for the custom agents directory. */
+const CUSTOM_AGENT_ROOT_OPTIONS = {
+  kind: 'custom',
+  writable: true,
+  label: 'Custom agents',
+} as const;
+
 /**
  * Register agent directories + bundled reference docs with the external-roots
  * allowlist so the creator tool-use agent can read/write them through the
@@ -130,11 +137,10 @@ export async function registerAgentDirectoryRoots(
         label: 'Built-in tool-use agents',
       }),
     async () =>
-      registerExternalRoot(await agentDirectories.custom(), {
-        kind: 'custom',
-        writable: true,
-        label: 'Custom agents',
-      }),
+      registerExternalRoot(
+        await agentDirectories.custom(),
+        CUSTOM_AGENT_ROOT_OPTIONS,
+      ),
     () =>
       registerExternalRoot(
         path.join(context.extensionPath, 'resources', 'docs', 'agent-creation'),
@@ -168,11 +174,7 @@ export async function registerAgentDirectoryRoots(
 export async function refreshCustomAgentRoot(): Promise<void> {
   try {
     const custom = await agentDirectories.custom();
-    registerExternalRoot(custom, {
-      kind: 'custom',
-      writable: true,
-      label: 'Custom agents',
-    });
+    registerExternalRoot(custom, CUSTOM_AGENT_ROOT_OPTIONS);
   } catch (err) {
     logger.error(
       'extension',
@@ -240,18 +242,7 @@ export async function configureLatexSettings(): Promise<void> {
       await resetLegacyLatexSettings();
     }
 
-    const settings: Array<[string, unknown]> = [
-      [
-        '[latex]',
-        {
-          'editor.wordWrap': 'on',
-        },
-      ],
-    ];
-
-    for (const [key, value] of settings) {
-      await updateConfig(key, value, GLOBAL_IF_UNSET);
-    }
+    await updateConfig('[latex]', { 'editor.wordWrap': 'on' }, GLOBAL_IF_UNSET);
 
     if (!vscode.env.appName?.toLowerCase().includes('windsurf')) {
       await updateConfig(
@@ -386,38 +377,6 @@ async function promptLatexWorkshopInstall(): Promise<void> {
 }
 
 /**
- * One-shot per-workspace migration for LaTeX/compile/diff settings that moved
- * from `package.json` `contributes.configuration` to TeXRA workspace state.
- *
- * Gating: a single workspace-scoped marker (`LATEX_SETTINGS_MIGRATED`) is set
- * after the first run. Subsequent activations skip the entire pass. This is
- * essential for correctness — without a marker, a per-key "skip if storage has
- * any value" gate would re-import the legacy settings.json value the moment a
- * user resets a key to default via the LaTeX tab UI (`update(key, undefined)`
- * removes the key from storage; the next activation would read it back from
- * settings.json again). Marker prevents that footgun.
- *
- * Per-workspace, not per-user: workspace state is per-workspace and a global
- * once-per-user marker would let the first opened workspace consume the
- * migration and silently skip every other workspace.
- *
- * Source detection has two paths:
- * 1. `inspect()` — for keys that were declared in `contributes.configuration`
- *    at upgrade time. Considers only `workspaceFolderValue`, `workspaceValue`,
- *    `globalValue`, never `defaultValue` (avoids persisting VS Code's
- *    compiled-in defaults into workspace state, which would block future
- *    default changes).
- * 2. `get()` fallback — for users who upgrade directly past the package.json
- *    deregistration. VS Code may treat the now-unregistered keys' settings.json
- *    entries as opaque, so `inspect()` can return undefined or all-undefined.
- *    `get()` reads the merged config; for unregistered keys this is just the
- *    user's settings.json entry (no compiled-in default to confuse the result).
- *
- * Once migrated, the LaTeX tab UI writes to workspaceSM directly. A user who
- * later edits the legacy `texra.*` keys in settings.json sees no effect —
- * that path is no longer authoritative.
- */
-/**
  * Read an explicit legacy `texra.*` value from VS Code config, considering
  * only workspaceFolder/workspace/global (never default). For keys deregistered
  * from `package.json` `contributes.configuration`, VS Code may not surface
@@ -466,6 +425,38 @@ function validateLegacyLatexConfigValue(
   return undefined;
 }
 
+/**
+ * One-shot per-workspace migration for LaTeX/compile/diff settings that moved
+ * from `package.json` `contributes.configuration` to TeXRA workspace state.
+ *
+ * Gating: a single workspace-scoped marker (`LATEX_SETTINGS_MIGRATED`) is set
+ * after the first run. Subsequent activations skip the entire pass. This is
+ * essential for correctness — without a marker, a per-key "skip if storage has
+ * any value" gate would re-import the legacy settings.json value the moment a
+ * user resets a key to default via the LaTeX tab UI (`update(key, undefined)`
+ * removes the key from storage; the next activation would read it back from
+ * settings.json again). Marker prevents that footgun.
+ *
+ * Per-workspace, not per-user: workspace state is per-workspace and a global
+ * once-per-user marker would let the first opened workspace consume the
+ * migration and silently skip every other workspace.
+ *
+ * Source detection has two paths:
+ * 1. `inspect()` — for keys that were declared in `contributes.configuration`
+ *    at upgrade time. Considers only `workspaceFolderValue`, `workspaceValue`,
+ *    `globalValue`, never `defaultValue` (avoids persisting VS Code's
+ *    compiled-in defaults into workspace state, which would block future
+ *    default changes).
+ * 2. `get()` fallback — for users who upgrade directly past the package.json
+ *    deregistration. VS Code may treat the now-unregistered keys' settings.json
+ *    entries as opaque, so `inspect()` can return undefined or all-undefined.
+ *    `get()` reads the merged config; for unregistered keys this is just the
+ *    user's settings.json entry (no compiled-in default to confuse the result).
+ *
+ * Once migrated, the LaTeX tab UI writes to workspaceSM directly. A user who
+ * later edits the legacy `texra.*` keys in settings.json sees no effect —
+ * that path is no longer authoritative.
+ */
 export async function migrateLatexConfigToStorage(): Promise<void> {
   // One-shot gate. Once this workspace has been migrated, never run again —
   // post-migration the LaTeX tab UI is the only authoritative writer. Re-
