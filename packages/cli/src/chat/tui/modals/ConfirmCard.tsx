@@ -2,10 +2,13 @@
 // title, padded body slot, key handling, and KeyHints footer.
 
 import { useState } from 'react';
-import { Box, Text, type BoxProps } from 'ink';
+import { Box, Text, useWindowSize, type BoxProps } from 'ink';
 import { useInput } from 'ink';
 
-import { confirmCardKeyAction, confirmCardKeyHints } from './ConfirmCardState';
+import {
+  confirmCardKeyAction,
+  confirmCardKeyHintsForWidth,
+} from './ConfirmCardState';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { KeyHints } from '../ui/KeyHints';
 import type {
@@ -32,6 +35,8 @@ export interface ConfirmCardProps {
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
+export const CONFIRM_CARD_HORIZONTAL_DECORATION = 4;
+
 export function ConfirmCard({
   borderStyle,
   color,
@@ -45,6 +50,7 @@ export function ConfirmCard({
 }: ConfirmCardProps): React.JSX.Element {
   const [feedbackMode, setFeedbackMode] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const { columns } = useWindowSize();
 
   useInput(
     (input, key) => {
@@ -83,7 +89,7 @@ export function ConfirmCard({
     { isActive: true },
   );
 
-  const hints = confirmCardKeyHints({
+  const hints = confirmCardKeyHintsForWidth({
     approveLabel,
     rejectLabel,
     alwaysAllowLabel: alwaysAllow?.label,
@@ -91,6 +97,7 @@ export function ConfirmCard({
       key: action.key,
       action: action.label,
     })),
+    maxColumns: Math.max(0, columns - CONFIRM_CARD_HORIZONTAL_DECORATION),
   });
 
   return (

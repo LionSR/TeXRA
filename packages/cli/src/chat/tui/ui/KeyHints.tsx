@@ -22,7 +22,7 @@ export interface KeyHintsProps {
   readonly confirmCancel?: boolean;
 }
 
-const SEP = ' · ';
+export const KEY_HINT_SEPARATOR = ' · ';
 
 const DEFAULT_TAIL: readonly KeyHint[] = [
   { key: 'Enter', action: 'confirm' },
@@ -39,7 +39,7 @@ export function KeyHints(props: KeyHintsProps): React.JSX.Element {
       <Text dimColor wrap="truncate-end">
         {all.map((hint, index) => (
           <Text key={`${hint.key}-${hint.action}-${index}`}>
-            {index > 0 ? SEP : ''}
+            {index > 0 ? KEY_HINT_SEPARATOR : ''}
             <Text bold>{hint.key}</Text> {hint.action}
           </Text>
         ))}
