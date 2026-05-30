@@ -23,6 +23,35 @@ describe('CLI StatusBar display model', () => {
     ).toBe('queued 2: Keep the proof under one page.');
   });
 
+  it('keeps queued follow-up counts in the durable left status segments', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: ['Keep the proof under one page.'],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+    });
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'running',
+      'api',
+      'queued 1',
+    ]);
+    expect(display.left.at(-1)).toMatchObject({ color: 'yellow' });
+    expect(display.right).toBe('queued: Keep the proof under one page.');
+  });
+
   it('keeps idle state compact and omits static agent/model names', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.WAITING,
@@ -113,6 +142,7 @@ describe('CLI StatusBar display model', () => {
       'relay',
       'r2',
       '105k/1M (10%)',
+      'queued 2',
       '2 sub',
       '1 proc',
       '3 approvals',
