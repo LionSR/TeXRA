@@ -230,6 +230,20 @@ export interface IModelHandler<
   /** Whether the handler supports processing attachments in tool results. */
   readonly canProcessToolResultAttachments: boolean;
 
+  /**
+   * Whether parallel tool calls in a single turn must be batched into one
+   * follow-up message to preserve provider-side reasoning / thought signatures
+   * (e.g. Google, DeepSeek, Kimi, MiniMax).
+   */
+  readonly requiresBatchedParallelToolResults: boolean;
+
+  /**
+   * Whether a user-set reasoning-level override applies to this handler.
+   * Defaults to the model's configurable-effort capability; handlers whose
+   * provider honors a reasoning level without a granular effort flag override it.
+   */
+  readonly supportsReasoningLevelOverride: boolean;
+
   setLogger(logger: AgentTrace): void;
   setAgentCategory(agentCategory?: AgentCategory | null): void;
   getAgentCategory(): AgentCategory | undefined;
