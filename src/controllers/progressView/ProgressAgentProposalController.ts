@@ -77,24 +77,18 @@ export class ProgressAgentProposalController {
 
   private buildTaskState(proposal: AgentProposal): TaskState | null {
     const isWorkflow = proposal.agentCategory === AgentCategory.Workflow;
-    const activeFiles =
-      proposal.agentCategory === AgentCategory.Workflow
-        ? {
-            input: proposal.inputFiles.length > 0,
-            context: proposal.contextFiles.length > 0,
-            media: proposal.mediaFiles.length > 0,
-            output: proposal.outputFiles.length > 0,
-          }
-        : {
-            input: false,
-            context: false,
-            media: false,
-            output: false,
-          };
+    const activeFiles = isWorkflow
+      ? {
+          input: proposal.inputFiles.length > 0,
+          context: proposal.contextFiles.length > 0,
+          media: proposal.mediaFiles.length > 0,
+          output: proposal.outputFiles.length > 0,
+        }
+      : undefined;
 
     const result = AgentConfigSchema.safeParse({
       ...proposal,
-      ...(isWorkflow && {
+      ...(activeFiles && {
         inputFilesActive: activeFiles.input,
         contextFilesActive: activeFiles.context,
         mediaFilesActive: activeFiles.media,
@@ -108,7 +102,7 @@ export class ProgressAgentProposalController {
     }
 
     return (
-      isWorkflow
+      activeFiles
         ? { agentConfig: result.data, activeFiles }
         : { agentConfig: result.data }
     ) as TaskState & { agentConfig: AgentConfig };

@@ -40,37 +40,34 @@ export function buildApprovalSettingsMessage(
       workspaceState.get<string>(
         WorkspaceStateKey.CODEX_SANDBOX_MODE,
         'workspace-write',
-      ) ?? 'workspace-write',
+      ),
     ),
     codexReasoningEffort: parseCodexReasoningEffort(
       workspaceState.get<string>(
         WorkspaceStateKey.CODEX_REASONING_EFFORT,
         'high',
-      ) ?? 'high',
+      ),
     ),
     codexApprovalPolicy: parseCodexApprovalPolicy(
       workspaceState.get<string>(
         WorkspaceStateKey.CODEX_APPROVAL_POLICY,
         'never',
-      ) ?? 'never',
+      ),
     ),
     claudeAgentModel: parseClaudeAgentModel(
       workspaceState.get<string>(
         WorkspaceStateKey.CLAUDE_AGENT_MODEL,
         CLAUDE_AGENT_DEFAULT_MODEL,
-      ) ?? CLAUDE_AGENT_DEFAULT_MODEL,
+      ),
     ),
     claudeAgentPermissionMode: parseClaudeAgentPermissionMode(
       workspaceState.get<string>(
         WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
         'acceptEdits',
-      ) ?? 'acceptEdits',
+      ),
     ),
     claudeAgentEffort: parseClaudeAgentEffort(
-      workspaceState.get<string>(
-        WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-        'high',
-      ) ?? 'high',
+      workspaceState.get<string>(WorkspaceStateKey.CLAUDE_AGENT_EFFORT, 'high'),
     ),
   };
 }
