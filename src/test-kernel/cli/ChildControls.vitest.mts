@@ -14,6 +14,7 @@ import {
   liveChildExecutionElapsedKey,
   nextPickerIndex,
   numericFocusTarget,
+  resolveChildControlStreamTarget,
 } from '@cli/chat/tui/state/childControls';
 import { visibleSubagentRows } from '@cli/chat/tui/state/childStreamMerge';
 import { NO_BYPASS } from '@cli/chat/tui/state/cliState';
@@ -358,6 +359,115 @@ describe('CLI child execution controls', () => {
     });
 
     expect(hasChildExecutionRows(state)).toBe(true);
+  });
+
+  it('falls back to the parent subagent list when the focused child is a leaf', () => {
+    const parent = slice({
+      streamId: 'main',
+      activeSubagents: [
+        {
+          executionId: 'agent-1',
+          agentName: 'review',
+          childStreamId: 'review-stream',
+          status: 'running',
+        },
+      ],
+    });
+    const child = slice({ streamId: 'review-stream' });
+    const target = resolveChildControlStreamTarget({
+      activeStreamId: 'review-stream',
+      mode: 'subagents',
+      parentStream: new Map([['review-stream', 'main']]),
+      streams: new Map([
+        ['main', parent],
+        ['review-stream', child],
+      ]),
+    });
+
+    expect(target.streamId).toBe('main');
+    expect(buildChildControlItems(target.slice!, 'subagents')).toMatchObject([
+      {
+        executionId: 'agent-1',
+        childStreamId: 'review-stream',
+        kind: 'subagent',
+        label: 'review',
+      },
+    ]);
+  });
+
+  it('keeps subagent controls on the focused child when it has descendants', () => {
+    const child = slice({
+      streamId: 'review-stream',
+      activeSubagents: [
+        {
+          executionId: 'agent-2',
+          agentName: 'detail-review',
+          childStreamId: 'detail-stream',
+          status: 'running',
+        },
+      ],
+    });
+    const target = resolveChildControlStreamTarget({
+      activeStreamId: 'review-stream',
+      mode: 'subagents',
+      parentStream: new Map([['review-stream', 'main']]),
+      streams: new Map([['review-stream', child]]),
+    });
+
+    expect(target.streamId).toBe('review-stream');
+    expect(buildChildControlItems(target.slice!, 'subagents')).toMatchObject([
+      {
+        executionId: 'agent-2',
+        childStreamId: 'detail-stream',
+        kind: 'subagent',
+        label: 'detail-review',
+      },
+    ]);
+  });
+
+  it('keeps a leaf child selected when the parent has no visible subagents', () => {
+    const child = slice({ streamId: 'review-stream' });
+    const target = resolveChildControlStreamTarget({
+      activeStreamId: 'review-stream',
+      mode: 'subagents',
+      parentStream: new Map([['review-stream', 'main']]),
+      streams: new Map([
+        ['main', slice({ streamId: 'main' })],
+        ['review-stream', child],
+      ]),
+    });
+
+    expect(target.streamId).toBe('review-stream');
+    expect(target.slice).toBe(child);
+  });
+
+  it('keeps task controls scoped to the focused child stream', () => {
+    const child = slice({ streamId: 'review-stream' });
+    const target = resolveChildControlStreamTarget({
+      activeStreamId: 'review-stream',
+      mode: 'tasks',
+      parentStream: new Map([['review-stream', 'main']]),
+      streams: new Map([
+        [
+          'main',
+          slice({
+            streamId: 'main',
+            activeSubagents: [
+              {
+                executionId: 'agent-1',
+                agentName: 'review',
+                childStreamId: 'review-stream',
+                status: 'running',
+              },
+            ],
+          }),
+        ],
+        ['review-stream', child],
+      ]),
+    });
+
+    expect(target.streamId).toBe('review-stream');
+    expect(target.slice).toBe(child);
   });
 
   it('keeps picker key handling independent of Ink rendering', () => {
