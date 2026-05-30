@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-import { setDefaultStreamLogStore, StreamLogStore } from '@transcript';
+import {
+  flushPendingRunTraces,
+  setDefaultStreamLogStore,
+  StreamLogStore,
+} from '@transcript';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
@@ -8,7 +12,7 @@ import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { toErrorMessage } from '@common/errors';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { isInFlightStatus } from '@common/constants/streamStatus';
-import { createChannelTrace, flushPendingRunTraces } from '@logger';
+import { createChannelTrace } from '@logger';
 import { OutputFilesManager } from '@progressView/managers/OutputFilesManager';
 import { UsageStatsManager } from '@progressView/managers/UsageStatsManager';
 import { StreamMetaManager } from '@progressView/managers/StreamMetaManager';

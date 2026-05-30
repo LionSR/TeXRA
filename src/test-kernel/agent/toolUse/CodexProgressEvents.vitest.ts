@@ -3,12 +3,11 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - agent
 import {
+  createRunTrace,
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
-
-import { createRunTrace } from '@logger';
 
 // Local imports - shared
 import { MESSAGE_TYPES } from '@shared/schemas';
