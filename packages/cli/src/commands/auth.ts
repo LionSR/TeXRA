@@ -4,6 +4,7 @@ import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { isOAuthProvider } from '@auth/sharedConfig';
 import { isNonEmptyString } from '@utils/core/stringCore';
 
+import { formatCliAccountLabelForDisplay } from '../runtime/accountDisplay';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import {
@@ -184,7 +185,11 @@ const authStatusCommand = defineCommand({
       json: profile,
       ndjson: { kind: 'auth-status', ...profile },
       text: profile.authenticated
-        ? `Signed in as ${profile.accountLabel ?? 'unknown'} (${profile.tier ?? 'unknown'}).`
+        ? `Signed in as ${
+            profile.accountLabel
+              ? formatCliAccountLabelForDisplay(profile.accountLabel)
+              : 'unknown'
+          } (${profile.tier ?? 'unknown'}).`
         : 'Not signed in.',
     });
     setExitCode(CliExitCode.Success);
