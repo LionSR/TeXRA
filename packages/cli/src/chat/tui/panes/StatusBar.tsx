@@ -21,6 +21,7 @@ import {
   NO_BYPASS,
   type BypassState,
 } from '../state/cliState';
+import { resolveChildControlStreamTarget } from '../state/childControls';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 
@@ -378,6 +379,7 @@ export interface StatusBarProps {
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
+  const parentStream = useSignal(cliState.parentStream);
   const sessionMeta = useSignal(cliState.sessionMeta);
   const pendingExitHint = useSignal(cliState.pendingExitHint);
   const pendingExitResumeId = useSignal(cliState.pendingExitResumeId);
@@ -385,6 +387,12 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const caps = useSignal(terminalCapabilities);
   const { columns } = useWindowSize();
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  const subagentControlTarget = resolveChildControlStreamTarget({
+    activeStreamId,
+    mode: 'subagents',
+    parentStream,
+    streams,
+  });
 
   const runStartedAt =
     slice?.status === STREAM_STATUS.RUNNING ? slice.runStartedAt : undefined;
@@ -402,7 +410,10 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     activeSubagents: slice?.activeSubagents.length ?? 0,
     activeProcesses: slice?.activeProcesses.length ?? 0,
     approvalDepth: approvals,
-    subagentControlsAvailable: canShowSubagentControls(sessionMeta, slice),
+    subagentControlsAvailable: canShowSubagentControls(
+      sessionMeta,
+      subagentControlTarget.slice,
+    ),
     hasMultipleStreams: streams.size > 1,
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
