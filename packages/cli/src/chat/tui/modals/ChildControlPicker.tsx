@@ -19,7 +19,7 @@ import {
   type ChildControlMode,
 } from '../state/childControls';
 import { useLiveNowMs } from '../state/useLiveNowMs';
-import { KeyHints } from '../ui/KeyHints';
+import { KeyHints, type KeyHint } from '../ui/KeyHints';
 import { SELECT_LABEL_MAX_COLS } from '../ui/Select';
 import type { StreamSlice } from '../state/cliState';
 
@@ -38,6 +38,21 @@ export interface ChildControlPickerProps {
 
 function pickerTitle(mode: ChildControlMode): string {
   return mode === 'subagents' ? 'Subagents' : 'Background tasks';
+}
+
+export function pickerKeyHints(
+  mode: ChildControlMode,
+  itemCount: number,
+): readonly KeyHint[] {
+  if (itemCount <= 0) {
+    return [{ key: 'Esc', action: 'close' }];
+  }
+  return [
+    { key: '↑/↓', action: 'navigate' },
+    { key: 'Enter', action: mode === 'subagents' ? 'focus' : 'view' },
+    { key: 'k', action: 'kill' },
+    { key: 'Esc', action: 'close' },
+  ];
 }
 
 function renderItem(
@@ -483,12 +498,7 @@ export function ChildControlPicker({
       </Box>
       <Box marginTop={1}>
         <KeyHints
-          hints={[
-            { key: '↑/↓', action: 'navigate' },
-            { key: 'Enter', action: mode === 'subagents' ? 'focus' : 'view' },
-            { key: 'k', action: 'kill' },
-            { key: 'Esc', action: 'close' },
-          ]}
+          hints={pickerKeyHints(mode, items.length)}
           confirmCancel={false}
         />
       </Box>
