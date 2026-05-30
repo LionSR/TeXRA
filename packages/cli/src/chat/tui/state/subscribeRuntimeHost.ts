@@ -187,6 +187,15 @@ function applyToState<K extends ProgressEvent>(
       }));
       return;
     }
+    case 'updateBashApprovalBypassState': {
+      const p =
+        payload as ProgressEventPayloads['updateBashApprovalBypassState'];
+      patchStream(p.streamId, (s) => ({
+        ...s,
+        bypass: { ...s.bypass, bash: p.bypassActive },
+      }));
+      return;
+    }
     case 'updateSuperYoloBypassState': {
       const p = payload as ProgressEventPayloads['updateSuperYoloBypassState'];
       patchStream(p.streamId, (s) => ({
