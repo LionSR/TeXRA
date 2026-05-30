@@ -76,7 +76,14 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    expect: ['strategy', 'leanSolver', 'reviewer', '3 sub', '[Tab]streams'],
+    expect: [
+      'strategy',
+      'leanSolver',
+      'reviewer',
+      'main.tex: Proof sketch',
+      '3 sub',
+      '[Tab]streams',
+    ],
   },
   {
     name: 'task-picker',
