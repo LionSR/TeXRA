@@ -73,14 +73,27 @@ const SCENARIOS = [
     expect: ['/model', 'List available models', 'navigate', 'Tab complete'],
   },
   {
+    name: 'btw-palette',
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/bt'],
+    expect: [
+      '/btw',
+      'Queue a follow-up without interrupting the active run',
+      'Enter complete',
+      'Tab complete',
+    ],
+  },
+  {
     name: 'slash-palette-overflow',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/', DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN],
     frame: 'tail',
     expect: [
-      '… 6 earlier',
+      '… 7 earlier',
       '/status',
       'Open the session status tabs',
+      '/btw',
+      'Queue a follow-up without interrupting the active run',
       '/exit',
       'Exit the CLI session',
     ],

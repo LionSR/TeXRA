@@ -125,6 +125,12 @@ function formatQueuedFollowUpNotice(line: string): string {
   )}`;
 }
 
+export function parseBtwFollowUpMessage(line: string): string | undefined {
+  const parsed = parseSlashInput(line);
+  if (!parsed || parsed.name.toLowerCase() !== 'btw') return undefined;
+  return parsed.remainder.trim();
+}
+
 export interface ClearableTuiSessionState {
   streamId: StreamTabId | undefined;
   executionId: string | undefined;
@@ -962,9 +968,23 @@ export async function runChat(
   };
 
   const handleSubmittedLine = async (line: string): Promise<void> => {
+    const btwMessage = parseBtwFollowUpMessage(line);
+    if (btwMessage !== undefined) {
+      if (!btwMessage) {
+        appendLocalUserTranscript(line.trim());
+        appendLocalAssistantTranscript('Usage: /btw <message>');
+        return;
+      }
+      await submitChatMessage(btwMessage);
+      return;
+    }
     if (await handleTuiSlashCommand(line, slashCommandContext())) {
       return;
     }
+    await submitChatMessage(line);
+  };
+
+  const submitChatMessage = async (line: string): Promise<void> => {
     const childFollowUpTarget = chatTuiActiveChildFollowUpTarget();
     if (!childFollowUpTarget && chatTuiCanStartRootRun(session)) {
       startSession(line);

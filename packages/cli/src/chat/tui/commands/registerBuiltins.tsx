@@ -232,6 +232,11 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'Request context compaction',
   });
   registerSlashCommand({
+    name: 'btw',
+    description: 'Queue a follow-up without interrupting the active run',
+    takesArgs: true,
+  });
+  registerSlashCommand({
     name: 'exit',
     description: 'Exit the CLI session',
     aliases: ['quit'],

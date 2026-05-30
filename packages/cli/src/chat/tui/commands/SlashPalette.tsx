@@ -103,6 +103,14 @@ export function slashPaletteWindow({
   };
 }
 
+export function slashPaletteEnterHintAction(
+  command: SlashCommand | undefined,
+): string {
+  if (!command) return 'run';
+  if (command.formComponent) return 'open';
+  return slashPickIntent(command, 'enter') === 'submit' ? 'run' : 'complete';
+}
+
 export function SlashPalette(
   props: SlashPaletteProps,
 ): React.JSX.Element | null {
@@ -167,6 +175,7 @@ export function SlashPalette(
   if (matchCount === 0) return null;
   const window = slashPaletteWindow({ highlight, itemCount: matchCount });
   const visible = matches.slice(window.start, window.end);
+  const highlightedCommand = matches[highlight];
 
   return (
     <Box
@@ -196,7 +205,10 @@ export function SlashPalette(
         <KeyHints
           hints={[
             { key: '↑/↓', action: 'navigate' },
-            { key: 'Enter', action: 'run' },
+            {
+              key: 'Enter',
+              action: slashPaletteEnterHintAction(highlightedCommand),
+            },
             { key: 'Tab', action: 'complete' },
           ]}
           confirmCancel={false}
