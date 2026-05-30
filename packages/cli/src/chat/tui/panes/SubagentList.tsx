@@ -161,6 +161,7 @@ export function SubagentList(
         {hiddenCount > 0 ? (
           <Text
             dimColor
+            wrap="truncate-end"
           >{`   +${hiddenCount} more child execution${hiddenCount === 1 ? '' : 's'}`}</Text>
         ) : null}
       </Box>
