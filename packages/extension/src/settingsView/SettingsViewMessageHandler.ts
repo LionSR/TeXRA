@@ -1470,30 +1470,30 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   private async handleSetProviderKey(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_KEY>,
   ): Promise<void> {
-    const provider = data.provider;
-    try {
-      await this.profileKeyController.setProviderKey(provider);
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.channel,
-        `Failed to set ${PROVIDER_DISPLAY_NAMES[provider] ?? provider} API key`,
-        error,
-      );
-      // On error, still refresh settings view to reflect current key state.
-      await this.withActiveWebview((w) => this.sendProfileData(w));
-    }
+    await this.runProviderKeyAction(data.provider, 'set', (provider) =>
+      this.profileKeyController.setProviderKey(provider),
+    );
   }
 
   private async handleRemoveProviderKey(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.REMOVE_PROVIDER_KEY>,
   ): Promise<void> {
-    const provider = data.provider;
+    await this.runProviderKeyAction(data.provider, 'remove', (provider) =>
+      this.profileKeyController.removeProviderKey(provider),
+    );
+  }
+
+  private async runProviderKeyAction(
+    provider: string,
+    verb: 'set' | 'remove',
+    actionFn: (provider: string) => Promise<void>,
+  ): Promise<void> {
     try {
-      await this.profileKeyController.removeProviderKey(provider);
+      await actionFn(provider);
     } catch (error) {
       await showLoggedErrorMessage(
         this.channel,
-        `Failed to remove ${PROVIDER_DISPLAY_NAMES[provider] ?? provider} API key`,
+        `Failed to ${verb} ${PROVIDER_DISPLAY_NAMES[provider] ?? provider} API key`,
         error,
       );
       // On error, still refresh settings view to reflect current key state.
@@ -1517,6 +1517,11 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     ]);
   }
 
+  /** Re-send settings-view profile data to the active webview. */
+  private async refreshProfile(): Promise<void> {
+    await this.withActiveWebview((w) => this.sendProfileData(w));
+  }
+
   /** Refresh settings-view agent list and main-view dropdown after agent mutations. */
   private async refreshAfterAgentMutation(): Promise<void> {
     await Promise.all([
@@ -1537,21 +1542,21 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_STREAMING>,
   ): Promise<void> {
     await setProviderStreaming(data.provider, data.enabled);
-    await this.withActiveWebview((w) => this.sendProfileData(w));
+    await this.refreshProfile();
   }
 
   private async handleSetProviderEndpoint(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_PROVIDER_ENDPOINT>,
   ): Promise<void> {
     await setProviderEndpoint(data.provider, data.endpoint);
-    await this.withActiveWebview((w) => this.sendProfileData(w));
+    await this.refreshProfile();
   }
 
   private async handleSetGlobalStreaming(
     data: MessageFor<typeof SETTINGS_VIEW_CMD.SET_GLOBAL_STREAMING>,
   ): Promise<void> {
     await setGlobalStreaming(data.enabled);
-    await this.withActiveWebview((w) => this.sendProfileData(w));
+    await this.refreshProfile();
   }
 
   private async handleSetProviderVscodeSetting(
