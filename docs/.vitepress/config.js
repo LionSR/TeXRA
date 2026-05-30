@@ -214,6 +214,7 @@ const baseConfig = {
   // under public/ are served as-is and are fine to expose.
   srcExclude: [
     'README.md',
+    'agent-sdk-readiness-audit.md',
     'analysis-subagent-updates.md',
     'desktop-signing-ci.md',
     'electron-migration-plan.md',
