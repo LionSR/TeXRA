@@ -1,8 +1,9 @@
 import process from 'node:process';
 
-import { Box, Text } from 'ink';
+import { Box, Text, useWindowSize } from 'ink';
 import { Badge } from '@inkjs/ui';
 import { MODEL_CONFIGS } from 'llm-zoo';
+import stringWidth from 'string-width';
 
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
@@ -10,7 +11,7 @@ import {
   type ConversationProgress,
   type TokenUsageStats,
 } from '@shared/schemas';
-import { truncateSummary } from '@utils/text/stringUtils';
+import { collapseWhitespace } from '@utils/text/stringUtils';
 
 import { approvalQueueDepth } from '../state/approvalQueue';
 import { terminalCapabilities } from '../state/terminalCapabilities';
@@ -58,6 +59,9 @@ export interface StatusBarDisplayInput {
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
    *  active; otherwise the universal Ctrl-J is the only reliable binding. */
   readonly shiftEnterNewline?: boolean;
+  /** Terminal width in columns. Used to keep right-side previews from
+   *  colliding with durable left-side status segments. */
+  readonly width?: number;
 }
 
 export interface StatusBarDisplay {
@@ -131,18 +135,46 @@ function roundSegment(
 }
 
 const QUEUED_FOLLOW_UP_PREVIEW_LENGTH = 48;
+const STATUS_BAR_HORIZONTAL_PADDING = 2;
+const STATUS_BAR_MIN_RIGHT_PREVIEW = 12;
+// Preserve a readable separator between the left status group and right preview.
+const STATUS_BAR_RIGHT_PREVIEW_GAP = 2;
+
+function truncateSummaryToColumns(text: string, maxColumns: number): string {
+  const summary = collapseWhitespace(text);
+  if (stringWidth(summary) <= maxColumns) return summary;
+
+  const ellipsis = '…';
+  const contentColumns = Math.max(0, maxColumns - stringWidth(ellipsis));
+  let width = 0;
+  let truncated = '';
+  for (const char of summary) {
+    const charWidth = stringWidth(char);
+    if (width + charWidth > contentColumns) break;
+    truncated += char;
+    width += charWidth;
+  }
+  return `${truncated}${ellipsis}`;
+}
 
 export function queuedFollowUpsSummary(
   messages: readonly string[],
+  maxColumns?: number,
 ): string | undefined {
   if (messages.length === 0) return undefined;
-  const preview = truncateSummary(
-    messages[0] ?? '',
-    QUEUED_FOLLOW_UP_PREVIEW_LENGTH,
-  );
-  return messages.length === 1
-    ? `queued: ${preview}`
-    : `queued ${messages.length}: ${preview}`;
+  const prefix =
+    messages.length === 1 ? 'queued: ' : `queued ${messages.length}: `;
+  const prefixWidth = stringWidth(prefix);
+  const previewLength =
+    maxColumns === undefined
+      ? QUEUED_FOLLOW_UP_PREVIEW_LENGTH
+      : Math.min(
+          QUEUED_FOLLOW_UP_PREVIEW_LENGTH,
+          Math.max(0, maxColumns - prefixWidth),
+        );
+  if (previewLength < STATUS_BAR_MIN_RIGHT_PREVIEW) return undefined;
+  const preview = truncateSummaryToColumns(messages[0] ?? '', previewLength);
+  return `${prefix}${preview}`;
 }
 
 function queuedFollowUpsCountSegment(
@@ -151,6 +183,32 @@ function queuedFollowUpsCountSegment(
   return messages.length > 0
     ? { text: `queued ${messages.length}`, color: 'yellow' }
     : undefined;
+}
+
+function statusBarSegmentWidth(segment: StatusBarSegment): number {
+  return stringWidth(segment.text) + (segment.badge ? 2 : 0);
+}
+
+function statusBarSegmentsWidth(segments: readonly StatusBarSegment[]): number {
+  return segments.reduce(
+    (total, segment, index) =>
+      total + statusBarSegmentWidth(segment) + (index === 0 ? 0 : 1),
+    0,
+  );
+}
+
+function rightStatusBudget(
+  segments: readonly StatusBarSegment[],
+  width: number | undefined,
+): number | undefined {
+  if (width === undefined) return undefined;
+  const innerWidth = Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
+  return Math.max(
+    0,
+    innerWidth -
+      statusBarSegmentsWidth(segments) -
+      STATUS_BAR_RIGHT_PREVIEW_GAP,
+  );
 }
 
 export function defaultShortcutModifierLabel(
@@ -254,7 +312,10 @@ export function buildStatusBarDisplay(
 
   return {
     left,
-    right: queuedFollowUpsSummary(input.queuedFollowUpMessages),
+    right: queuedFollowUpsSummary(
+      input.queuedFollowUpMessages,
+      rightStatusBudget(left, input.width),
+    ),
     bindings:
       input.pendingExitHint && input.pendingExitResumeId
         ? `Resume this session with: texra --resume ${input.pendingExitResumeId}`
@@ -279,6 +340,7 @@ export function StatusBar(): React.JSX.Element {
   const pendingExitResumeId = useSignal(cliState.pendingExitResumeId);
   const approvals = useSignal(approvalQueueDepth);
   const caps = useSignal(terminalCapabilities);
+  const { columns } = useWindowSize();
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
 
   const runStartedAt =
@@ -302,6 +364,7 @@ export function StatusBar(): React.JSX.Element {
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
     shiftEnterNewline: caps.kittyKeyboard,
+    width: columns,
   });
 
   return (
