@@ -1,8 +1,9 @@
-// `/model` form. It shows the same registry used by `texra models list`.
-// Before the first message it can choose the root model; after that it is
-// read-only because an active conversation owns a concrete model handler.
+// `/model` form. It loads the same registry used by `texra models list`, then
+// shows only the entries that can run in the active API mode. Before the first
+// message it can choose the root model; after that it is read-only because an
+// active conversation owns a concrete model handler.
 
-import { Box, Text } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { Spinner } from '@inkjs/ui';
 
 import {
@@ -10,7 +11,7 @@ import {
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
 import { formatCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
-import { Select } from '../ui/Select';
+import { Select, type SelectItem } from '../ui/Select';
 import { KeyHints } from '../ui/KeyHints';
 import { FormFrame } from './_shared/FormFrame';
 import {
@@ -18,6 +19,7 @@ import {
   type SelectWindowSize,
 } from './_shared/selectWindow';
 import { useAsyncListForm } from './_shared/useAsyncListForm';
+import { isPlainReturnInput } from '../input/inputKeys';
 
 export interface ModelListFormProps {
   readonly currentModel: string;
@@ -60,10 +62,38 @@ export function modelSelectWindow(args: {
   return computeSelectWindowSize({ ...args, chromeRows: 5 });
 }
 
+export function modelSelectItemsForCliMode(
+  models: readonly CliModelAccess[],
+  apiMode: CliApiMode,
+): ReadonlyArray<SelectItem<string>> {
+  return models
+    .filter((m) => m.available)
+    .map((m) => ({
+      value: m.model.value,
+      label: m.model.label || m.model.value,
+      description: formatModelStatusForCliMode(m, apiMode),
+    }));
+}
+
+export function hasRunnableModelSelectItems(
+  models: readonly CliModelAccess[],
+): boolean {
+  return models.some((m) => m.available);
+}
+
+function EmptyModelListState(props: { readonly onClose: () => void }) {
+  useInput((input, key) => {
+    if (isPlainReturnInput(input, key)) props.onClose();
+  });
+
+  return <Text>No models are available in this API mode.</Text>;
+}
+
 export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   const { data, loading, error } = useAsyncListForm<readonly CliModelAccess[]>({
     load: getCliModelAccessList,
     onClose: props.onClose,
+    isEmpty: (models) => !hasRunnableModelSelectItems(models),
   });
 
   if (loading) {
@@ -82,12 +112,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   }
 
   const models = data ?? [];
-  const items = models.map((m) => ({
-    value: m.model.value,
-    label: m.model.label || m.model.value,
-    description: formatModelStatusForCliMode(m, props.apiMode),
-    disabled: props.selectable ? !m.available : false,
-  }));
+  const items = modelSelectItemsForCliMode(models, props.apiMode);
   const selectable = props.selectable === true;
   const selectWindow = modelSelectWindow({
     availableRows: props.availableRows,
@@ -109,34 +134,46 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
           ? 'Choose the root model for the first message.'
           : 'Available models. Start a new chat with texra --model=<name> to choose the root model.'}
       </Text>
-      <Box flexDirection="column">
-        <Select
-          items={items}
-          activeValue={props.currentModel}
-          maxVisibleItems={selectWindow.maxVisibleItems}
-          showOverflow={selectWindow.showOverflow}
-          onSelect={(value) => {
-            if (selectable) {
-              props.onSelect?.(value);
-              return;
-            }
-            props.onClose();
-          }}
-          onCancel={props.onClose}
-        />
-      </Box>
+      {items.length === 0 ? (
+        <EmptyModelListState onClose={props.onClose} />
+      ) : (
+        <Box flexDirection="column">
+          <Select
+            items={items}
+            activeValue={props.currentModel}
+            maxVisibleItems={selectWindow.maxVisibleItems}
+            showOverflow={selectWindow.showOverflow}
+            onSelect={(value) => {
+              if (selectable) {
+                props.onSelect?.(value);
+                return;
+              }
+              props.onClose();
+            }}
+            onCancel={props.onClose}
+          />
+        </Box>
+      )}
       <Box>
-        {selectable ? (
+        {selectable && items.length > 0 ? (
           <KeyHints
             hints={[
               { key: '↑/↓', action: 'navigate' },
               { key: '1-9/a-z', action: 'select' },
             ]}
           />
-        ) : (
+        ) : items.length > 0 ? (
           <KeyHints
             hints={[
               { key: '↑/↓', action: 'navigate' },
+              { key: 'Enter', action: 'close' },
+              { key: 'Esc', action: 'close' },
+            ]}
+            confirmCancel={false}
+          />
+        ) : (
+          <KeyHints
+            hints={[
               { key: 'Enter', action: 'close' },
               { key: 'Esc', action: 'close' },
             ]}
