@@ -36,13 +36,30 @@ function todoColor(status: TodoStatus): string | undefined {
   }
 }
 
-function TodoRow({ todo }: { todo: TodoItem }): React.JSX.Element {
+function TodoRow({
+  compact = false,
+  todo,
+}: {
+  readonly compact?: boolean;
+  readonly todo: TodoItem;
+}): React.JSX.Element {
   const label =
     todo.status === TODO_STATUS.IN_PROGRESS ? todo.activeForm : todo.content;
   return (
-    <Box>
-      <Text color={todoColor(todo.status)}>{todoMarker(todo.status)} </Text>
-      <Text dimColor={todo.status === TODO_STATUS.COMPLETED}>{label}</Text>
+    <Box
+      height={compact ? 1 : undefined}
+      minWidth={0}
+      overflowY={compact ? 'hidden' : undefined}
+    >
+      <Box flexShrink={0}>
+        <Text color={todoColor(todo.status)}>{todoMarker(todo.status)} </Text>
+      </Box>
+      <Text
+        dimColor={todo.status === TODO_STATUS.COMPLETED}
+        wrap={compact ? 'truncate-end' : undefined}
+      >
+        {label}
+      </Text>
     </Box>
   );
 }
@@ -145,16 +162,24 @@ export function compactTodosPlanRows({
 function CompactRow({ row }: { row: CompactTodosPlanRow }): React.JSX.Element {
   switch (row.kind) {
     case 'todo':
-      return <TodoRow todo={row.todo} />;
+      return <TodoRow compact todo={row.todo} />;
     case 'planSummary':
-      return <Text dimColor>{row.summary}</Text>;
+      return (
+        <Box height={1} minWidth={0} overflowY="hidden">
+          <Text dimColor wrap="truncate-end">
+            {row.summary}
+          </Text>
+        </Box>
+      );
     case 'planStep':
       return (
-        <Box>
-          <Text color={todoColor(row.step.status)}>
-            {todoMarker(row.step.status)}{' '}
-          </Text>
-          <Text>{`${row.stepIndex + 1}. ${row.step.title}`}</Text>
+        <Box height={1} minWidth={0} overflowY="hidden">
+          <Box flexShrink={0}>
+            <Text color={todoColor(row.step.status)}>
+              {todoMarker(row.step.status)}{' '}
+            </Text>
+          </Box>
+          <Text wrap="truncate-end">{`${row.stepIndex + 1}. ${row.step.title}`}</Text>
         </Box>
       );
   }
@@ -192,10 +217,12 @@ export function TodosPlanPanel(
           <CompactRow key={`${row.kind}:${row.sourceIndex}`} row={row} />
         ))}
         {hiddenCount > 0 && rows.length < props.maxRows ? (
-          <Text
-            dimColor
-            wrap="truncate-end"
-          >{`+${hiddenCount} more todo/plan item${hiddenCount === 1 ? '' : 's'}`}</Text>
+          <Box height={1} minWidth={0} overflowY="hidden">
+            <Text
+              dimColor
+              wrap="truncate-end"
+            >{`+${hiddenCount} more todo/plan item${hiddenCount === 1 ? '' : 's'}`}</Text>
+          </Box>
         ) : null}
       </Box>
     );
