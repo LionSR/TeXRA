@@ -9,9 +9,9 @@
 // the live-region / scrollback layout evolves.
 //
 // This is intentionally small: a handful of scenarios that exercise the
-// transcript, a slash command, an approval modal, the subagent panel + task
-// picker, and the Ctrl-C exit path. It is NOT a general terminal-automation
-// framework.
+// transcript, queued follow-ups, a slash command, an approval modal, the
+// subagent panel + task picker, and the Ctrl-C exit path. It is NOT a general
+// terminal-automation framework.
 //
 // Run:  node scripts/validate-tui.mjs        (from packages/cli)
 //   or: pnpm --filter @texra-ai/cli validate:tui
@@ -49,6 +49,16 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'queued-followups',
+    env: {
+      HARNESS_ENTRIES: '2',
+      HARNESS_QUEUED_FOLLOWUPS:
+        'First queued follow-up||Second queued follow-up',
+    },
+    frame: 'tail',
+    expect: ['queued 2', 'First queued', 'Second queued'],
+  },
+  {
     name: 'slash-palette',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/mo'],
@@ -83,6 +93,24 @@ const SCENARIOS = [
       'k kill',
       'Esc close',
     ],
+  },
+  {
+    name: 'empty-task-picker',
+    env: {
+      HARNESS_ENTRIES: '12',
+      HARNESS_CHILDREN: '1',
+      HARNESS_TODOS: '1',
+      HARNESS_CAN_DELEGATE: '1',
+    },
+    keys: [ESC + 'p', '\r', 'f', ESC + 'p'],
+    frame: 'tail',
+    expect: [
+      'Background tasks',
+      'Stream: strategy',
+      'No active background tasks.',
+      'Esc close',
+    ],
+    unexpect: ['Enter view', 'k kill', 'navigate'],
   },
   {
     name: 'todos',
@@ -209,33 +237,51 @@ async function runScenario(scenario) {
   const term = makeTerm();
   let lastData = Date.now();
   let exited = null;
+  let writeQueue = Promise.resolve();
+  const frameSnapshot = async () => {
+    await writeQueue;
+    return renderFrame(term);
+  };
+  const childEnv = {
+    ...process.env,
+    ...scenario.env,
+    TERM: 'xterm-256color',
+    FORCE_COLOR: '3',
+    COLUMNS: String(COLS),
+    LINES: String(ROWS),
+  };
+  // The validator intentionally exercises an interactive TTY. Inherited CI
+  // markers make Ink choose a non-interactive render mode and hide the live
+  // input/status surface this script is meant to inspect.
+  delete childEnv.CI;
+  delete childEnv.NO_COLOR;
   const child = ptySpawn(process.execPath, [HARNESS], {
     name: 'xterm-256color',
     cols: COLS,
     rows: ROWS,
     cwd: CLI_ROOT,
-    env: {
-      ...process.env,
-      ...scenario.env,
-      TERM: 'xterm-256color',
-      FORCE_COLOR: '3',
-      COLUMNS: String(COLS),
-      LINES: String(ROWS),
-    },
+    env: childEnv,
   });
   child.onExit((e) => (exited = e));
   child.onData((d) => {
     lastData = Date.now();
-    term.write(d);
+    writeQueue = writeQueue.then(
+      () => new Promise((resolve) => term.write(d, resolve)),
+    );
   });
 
-  // boot: wait for the input prompt to settle
+  // boot: wait for the interactive input/status area to settle. Static
+  // transcript user rows also contain "›", so use the status binding instead
+  // of the prompt glyph as the readiness sentinel.
   const bootDeadline = Date.now() + 15000;
   let booted = false;
   while (Date.now() < bootDeadline) {
     await sleep(150);
     if (exited) break;
-    if (renderFrame(term).includes('›') && Date.now() - lastData > 600) {
+    if (
+      (await frameSnapshot()).includes('[/status]details') &&
+      Date.now() - lastData > 600
+    ) {
       booted = true;
       break;
     }
@@ -252,7 +298,8 @@ async function runScenario(scenario) {
     await sleep(120);
   await sleep(250);
 
-  const frame = renderFrame(term);
+  const fullFrame = await frameSnapshot();
+  const frame = scenario.frame === 'tail' ? frameTail(fullFrame) : fullFrame;
 
   // exit cleanly: Ctrl-C (a second one if the first only interrupts a run)
   for (let attempt = 0; attempt < 2 && !exited; attempt += 1) {
