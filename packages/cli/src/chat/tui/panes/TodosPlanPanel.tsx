@@ -75,31 +75,34 @@ export type CompactTodosPlanRow =
     };
 
 function compactRowPriority(row: CompactTodosPlanRow): number {
-  if (row.kind === 'todo') {
-    switch (row.todo.status) {
-      case TODO_STATUS.IN_PROGRESS:
-        return 0;
-      case TODO_STATUS.PENDING:
-        return 1;
-      case TODO_STATUS.COMPLETED:
-        return 4;
-      default:
-        return 3;
-    }
+  switch (row.kind) {
+    case 'todo':
+      switch (row.todo.status) {
+        case TODO_STATUS.IN_PROGRESS:
+          return 0;
+        case TODO_STATUS.PENDING:
+          return 1;
+        case TODO_STATUS.COMPLETED:
+          return 4;
+        default:
+          return 3;
+      }
+    case 'planStep':
+      switch (row.step.status) {
+        case TODO_STATUS.IN_PROGRESS:
+          return 2;
+        case TODO_STATUS.PENDING:
+          return 3;
+        case TODO_STATUS.COMPLETED:
+          return 6;
+        default:
+          return 3;
+      }
+    case 'planSummary':
+      return 5;
   }
-  if (row.kind === 'planStep') {
-    switch (row.step.status) {
-      case TODO_STATUS.IN_PROGRESS:
-        return 2;
-      case TODO_STATUS.PENDING:
-        return 5;
-      case TODO_STATUS.COMPLETED:
-        return 6;
-      default:
-        return 5;
-    }
-  }
-  return 3;
+  const exhaustive: never = row;
+  return exhaustive;
 }
 
 export function compactTodosPlanRows({
@@ -143,6 +146,8 @@ export function compactTodosPlanRows({
     return { hiddenCount: allRows.length, rows: [] };
   }
 
+  // At one row, show the highest-signal item instead of spending the only row
+  // on the hidden-count marker.
   const visibleCount = rowBudget === 1 ? 1 : rowBudget - 1;
   const rows = [...allRows]
     .sort(
@@ -198,25 +203,29 @@ export function TodosPlanPanel(
   if (!slice) return null;
   const { todos, plan } = slice;
   if (todos.length === 0 && !plan) return null;
-  if (props.maxRows !== undefined && props.maxRows <= 0) return null;
+  const rowBudget =
+    props.maxRows === undefined
+      ? undefined
+      : Math.max(0, Math.floor(props.maxRows));
+  if (rowBudget !== undefined && rowBudget <= 0) return null;
 
-  if (props.maxRows !== undefined) {
+  if (rowBudget !== undefined) {
     const { hiddenCount, rows } = compactTodosPlanRows({
-      maxRows: props.maxRows,
+      maxRows: rowBudget,
       plan,
       todos,
     });
     return (
       <Box
         flexDirection="column"
-        height={props.maxRows}
+        height={rowBudget}
         overflowY="hidden"
         paddingX={1}
       >
         {rows.map((row) => (
           <CompactRow key={`${row.kind}:${row.sourceIndex}`} row={row} />
         ))}
-        {hiddenCount > 0 && rows.length < props.maxRows ? (
+        {hiddenCount > 0 && rows.length < rowBudget ? (
           <Box height={1} minWidth={0} overflowY="hidden">
             <Text
               dimColor
