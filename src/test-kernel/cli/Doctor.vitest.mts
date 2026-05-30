@@ -117,6 +117,80 @@ describe('CLI doctor', () => {
     expect(formatDoctorText(report)).toContain('Ignoring invalid model.');
   });
 
+  it('redacts email account labels in text output', async () => {
+    const report = await buildDoctorReport(context, {
+      nodeVersion: '24.0.0',
+      authProfile: async () => ({
+        authenticated: true,
+        accountLabel: 'user@example.edu',
+        tier: 'Max',
+      }),
+      modelAccessList: async () =>
+        [
+          {
+            available: true,
+            status: 'available',
+            model: { value: 'deepseekT', label: 'DeepSeek T' },
+          },
+        ] as never,
+      latexToolchain: async () => ({
+        ...latexProbe,
+        tools: latexProbe.tools.map((tool) => ({ ...tool, installed: true })),
+      }),
+      pathStat: async () => directory,
+      pathAccess: async () => undefined,
+    });
+
+    const text = formatDoctorText(report);
+    const authCheck = report.checks.find((check) => check.id === 'auth');
+    const records = doctorNdjsonRecords(report, '2026-05-18T00:00:00.000Z');
+
+    expect(authCheck?.message).toContain('user@example.edu');
+    expect(text).toContain('Stored sign-in found for u***@e***.edu, Max.');
+    expect(text).not.toContain('user@example.edu');
+    expect(records).toContainEqual(
+      expect.objectContaining({
+        id: 'auth',
+        message: 'Stored sign-in found for user@example.edu, Max.',
+      }),
+    );
+  });
+
+  it('keeps non-email account labels readable in text output', async () => {
+    const report = await buildDoctorReport(context, {
+      nodeVersion: '24.0.0',
+      authProfile: async () => ({
+        authenticated: true,
+        accountLabel: 'team@internal',
+      }),
+      modelAccessList: async () =>
+        [
+          {
+            available: true,
+            status: 'available',
+            model: { value: 'deepseekT', label: 'DeepSeek T' },
+          },
+        ] as never,
+      latexToolchain: async () => ({
+        ...latexProbe,
+        tools: latexProbe.tools.map((tool) => ({ ...tool, installed: true })),
+      }),
+      pathStat: async () => directory,
+      pathAccess: async () => undefined,
+    });
+
+    const text = formatDoctorText(report);
+    const records = doctorNdjsonRecords(report, '2026-05-18T00:00:00.000Z');
+
+    expect(text).toContain('Stored sign-in found for team@internal.');
+    expect(records).toContainEqual(
+      expect.objectContaining({
+        id: 'auth',
+        message: 'Stored sign-in found for team@internal.',
+      }),
+    );
+  });
+
   it('emits stable ndjson record kinds', async () => {
     const report = await buildDoctorReport(context, {
       nodeVersion: '24.0.0',
