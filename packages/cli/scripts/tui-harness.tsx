@@ -23,6 +23,7 @@ import {
   formatCliSessionStatus,
   readQueuedFollowUpMessagesForStatus,
 } from '../src/chat/tui/sessionStatus';
+import { notify } from '../src/chat/tui/notifications/terminalNotifier';
 import { enqueueApproval } from '../src/chat/tui/state/approvalQueue';
 
 const STREAM_ID = 'harness-stream-1';
@@ -272,10 +273,13 @@ if (SHOW_TODOS) {
 
 if (SHOW_EDIT_APPROVAL) {
   const showApproval = () =>
-    void enqueueApproval({
-      kind: 'toolEdit',
-      request: makeEditApprovalRequest(),
-    });
+    void enqueueApproval(
+      {
+        kind: 'toolEdit',
+        request: makeEditApprovalRequest(),
+      },
+      { onPresent: () => notify({ kind: 'approvalNeeded' }) },
+    );
 
   if (EDIT_APPROVAL_DELAY_MS > 0) {
     setTimeout(showApproval, EDIT_APPROVAL_DELAY_MS);
