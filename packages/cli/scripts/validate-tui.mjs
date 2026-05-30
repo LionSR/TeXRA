@@ -208,7 +208,14 @@ const SCENARIOS = [
       'k kill',
       'Esc close',
     ],
-    maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
+    maxBlankLinesBetween: [
+      {
+        from: 'entry-4 chat history line',
+        to: 'Tasks and sub-workflows',
+        max: 3,
+      },
+      { from: '╰', to: 'Tip:', max: 1 },
+    ],
   },
   {
     name: 'narrow-subagent-picker',
@@ -261,7 +268,14 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: ['Enter view', 'k kill', 'navigate'],
-    maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
+    maxBlankLinesBetween: [
+      {
+        from: 'entry-4 chat history line',
+        to: 'Tasks and sub-workflows',
+        max: 4,
+      },
+      { from: '╰', to: 'Tip:', max: 1 },
+    ],
   },
   {
     name: 'task-picker-parent-fallback',
