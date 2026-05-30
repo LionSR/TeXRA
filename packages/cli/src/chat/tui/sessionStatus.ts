@@ -1,5 +1,5 @@
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type { StreamTabId } from '@shared/schemas';
+import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 const QUEUED_FOLLOW_UP_STATUS_LENGTH = 160;
@@ -17,6 +17,23 @@ export function readQueuedFollowUpMessagesForStatus(
   streamId: StreamTabId | undefined,
 ): string[] {
   return streamId === undefined ? [] : ToolUseFollowUpQueue.getAll(streamId);
+}
+
+export function formatCliStatusLabel(status: string | undefined): string {
+  switch (status) {
+    case STREAM_STATUS.INITIALIZING:
+      return 'starting…';
+    case STREAM_STATUS.RUNNING:
+      return 'running';
+    case STREAM_STATUS.WAITING:
+      return 'idle';
+    case STREAM_STATUS.STOPPED:
+      return 'stopped';
+    case STREAM_STATUS.READY:
+      return 'ready';
+    default:
+      return status ?? '—';
+  }
 }
 
 function queuedFollowUpStatusLines(messages: readonly string[]): string[] {
@@ -37,7 +54,7 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
     `model: ${input.model}`,
     `api: ${input.api}`,
     `approval: ${input.approval}`,
-    `status: ${input.status}`,
+    `status: ${formatCliStatusLabel(input.status)}`,
     ...queuedFollowUpStatusLines(input.queuedFollowUpMessages),
   ].join('\n');
 }
