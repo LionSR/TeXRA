@@ -776,51 +776,41 @@ export class InstructionPanel extends LitElement {
                 className: 'settings-button',
                 onClick: this.handleAgentSettings,
               })}
-              ${session.sessionType === SESSION_TYPES.WORKFLOW
-                ? html`
-                    <wa-select
-                      id="workflowAgent"
-                      class="agent-select"
-                      data-session-type="workflow"
-                      aria-label="Workflow agent"
-                      title=${this.getAgentTooltip(
-                        session.workflowAgentOptions,
-                        session.workflowAgent,
-                      ) || nothing}
-                      placement="top"
-                      placeholder="Agent…"
-                      .value=${session.workflowAgent}
-                      @focus=${this.handleAgentFocus}
-                      @change=${this.handleAgentChange}
-                    >
-                      ${renderAgentOptions(
-                        session.workflowAgentOptions,
-                        session.workflowAgent,
-                      )}
-                    </wa-select>
-                  `
-                : html`
-                    <wa-select
-                      id="toolUseAgent"
-                      class="agent-select"
-                      data-session-type="toolUse"
-                      aria-label="Tool-use agent"
-                      title=${this.getAgentTooltip(
-                        session.toolUseAgentOptions,
-                        session.toolUseAgent,
-                      ) || nothing}
-                      placement="top"
-                      placeholder="Agent…"
-                      .value=${session.toolUseAgent}
-                      @focus=${this.handleAgentFocus}
-                      @change=${this.handleAgentChange}
-                    >
-                      ${renderAgentOptions(
-                        session.toolUseAgentOptions,
-                        session.toolUseAgent,
-                      )}
-                    </wa-select>
-                  `}
+              ${(() => {
+                const agent =
+                  session.sessionType === SESSION_TYPES.WORKFLOW
+                    ? {
+                        id: 'workflowAgent',
+                        sessionType: 'workflow',
+                        ariaLabel: 'Workflow agent',
+                        options: session.workflowAgentOptions,
+                        value: session.workflowAgent,
+                      }
+                    : {
+                        id: 'toolUseAgent',
+                        sessionType: 'toolUse',
+                        ariaLabel: 'Tool-use agent',
+                        options: session.toolUseAgentOptions,
+                        value: session.toolUseAgent,
+                      };
+                return html`
+                  <wa-select
+                    id=${agent.id}
+                    class="agent-select"
+                    data-session-type=${agent.sessionType}
+                    aria-label=${agent.ariaLabel}
+                    title=${this.getAgentTooltip(agent.options, agent.value) ||
+                    nothing}
+                    placement="top"
+                    placeholder="Agent…"
+                    .value=${agent.value}
+                    @focus=${this.handleAgentFocus}
+                    @change=${this.handleAgentChange}
+                  >
+                    ${renderAgentOptions(agent.options, agent.value)}
+                  </wa-select>
+                `;
+              })()}
             </div>
             <div
               class="select-group model-select-group agent-model-select-group"
