@@ -9,7 +9,6 @@ import { type ToolResult } from '@tools/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { createStreamApprovalController } from './streamApprovalQueue';
-import { isApprovalBypassedForStream } from './toolEditApproval';
 
 export const BashApprovalRequestSchema = z.object({
   command: z.string(),
@@ -36,6 +35,36 @@ export const bashApprovalController =
 
 let approvalCounter = 0;
 
+export function setBashApprovalSessionBypass(
+  streamId: StreamTabId,
+  enabled: boolean,
+  runtimeHost: AgentRuntimeHost,
+  options?: { silent?: boolean },
+): void {
+  bashApprovalController.setBypass(streamId, enabled);
+  if (!options?.silent) {
+    runtimeHost.emit('updateBashApprovalBypassState', {
+      streamId,
+      bypassActive: enabled,
+    });
+  }
+}
+
+export function toggleBashApprovalSessionBypass(
+  streamId: StreamTabId,
+  runtimeHost: AgentRuntimeHost,
+): boolean {
+  const next = !bashApprovalController.isBypassed(streamId);
+  setBashApprovalSessionBypass(streamId, next, runtimeHost);
+  return next;
+}
+
+export function isBashApprovalBypassedForStream(
+  streamId: StreamTabId,
+): boolean {
+  return bashApprovalController.isBypassed(streamId);
+}
+
 export async function requestBashApproval(
   request: BashApprovalRequest,
 ): Promise<BashApprovalResult> {
@@ -46,7 +75,7 @@ export async function requestBashApproval(
 
   if (
     !approvalsEnabled ||
-    (streamId && isApprovalBypassedForStream(streamId))
+    (streamId && isBashApprovalBypassedForStream(streamId))
   ) {
     return { accepted: true };
   }
@@ -63,7 +92,7 @@ async function showApprovalPrompt(
   streamId: StreamTabId | undefined,
   runtimeHost: AgentRuntimeHost,
 ): Promise<BashApprovalResult> {
-  if (streamId && isApprovalBypassedForStream(streamId)) {
+  if (streamId && isBashApprovalBypassedForStream(streamId)) {
     return { accepted: true };
   }
 

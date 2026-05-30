@@ -34,6 +34,7 @@ import type {
 } from '@eventBus/ProgressEventBus';
 import {
   handleProgressViewBashApprovalAction,
+  setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
   setToolEditApprovalHandler,
 } from '@tools/approval';
@@ -139,10 +140,10 @@ function routeApproval(
         (bashPayload, decision) => {
           if (
             decision.accepted &&
-            decision.bypass === 'toolEdit' &&
+            decision.bypass === 'bash' &&
             bashPayload.streamId
           ) {
-            setToolEditApprovalSessionBypass(bashPayload.streamId, true, host);
+            setBashApprovalSessionBypass(bashPayload.streamId, true, host);
           }
           dispatchBash(bashPayload, decision);
         },
