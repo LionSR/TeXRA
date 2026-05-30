@@ -79,6 +79,7 @@ export interface StreamSlice {
   readonly conversation: ConversationProgress | undefined;
   readonly entries: readonly ConversationEntry[];
   readonly queuedFollowUps: number;
+  readonly queuedFollowUpMessages: readonly string[];
   readonly activeSubagents: readonly ActiveChildInfo[];
   readonly activeProcesses: readonly ActiveChildInfo[];
   /** Child streams seen for this parent. This keeps completed/waiting
@@ -173,6 +174,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     conversation: undefined,
     entries: [],
     queuedFollowUps: 0,
+    queuedFollowUpMessages: [],
     activeSubagents: [],
     activeProcesses: [],
     childStreams: [],
