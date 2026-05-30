@@ -128,25 +128,16 @@ Prompts are processed using the Jinja2 templating engine, allowing you to insert
 
 This mechanism is sometimes referred to as **Variable Retrieval (VR)**—the extension loads your chosen inputs, references, figures, and any additional context, then exposes them as template variables. For example, the text content of your main file becomes `{{ INPUT_CONTENT }}` while the full list of selected files can be accessed through `{{ ALL_INPUTS }}`. When you run the agent these placeholders are replaced with real data.
 
-**Common Variables:**
+<TemplateVarsPalette />
 
-- &#123;&#123; INSTRUCTION &#125;&#125;: The text entered into the "Instruction" box in the UI.
-- &#123;&#123; INPUT_FILE &#125;&#125;: The path of the primary input file.
-- &#123;&#123; INPUT_CONTENT &#125;&#125;: The full text content of the primary input file.
-- &#123;&#123; CONTEXT_FILE &#125;&#125;: Path of the primary context file.
-- &#123;&#123; CONTEXT_CONTENT &#125;&#125;: Content of the primary context file.
-- &#123;&#123; EDITED_FILE &#125;&#125;: Path of the edited file (used in `merge`).
-- &#123;&#123; EDITED_CONTENT &#125;&#125;: Content of the edited file.
-- &#123;&#123; MEDIA_FILE &#125;&#125;: Path of the primary media file.
-  \_Note: Media content itself isn't directly inserted as text; it's handled separately for multimodal models. See [Working with Figures](./working-with-figures.md).\*
-
-**Multiple File Variables:**
-
-- &#123;&#123; ALL_INPUTS &#125;&#125;: XML string containing all selected input files (primary + multiple) wrapped in `<document name="...">...</document>` tags.
-- &#123;&#123; ALL_CONTEXTS &#125;&#125;: Similar XML string for all context files (the read-only context category that combines what used to be split into "reference" and "auxiliary").
-- &#123;&#123; LIST_OF_ALL_INPUTS &#125;&#125;: Simple comma-separated string listing all input file paths.
-- &#123;&#123; LIST_OF_ALL_CONTEXTS &#125;&#125;: Similar comma-separated list for context files.
-- Legacy custom agents can still read `REFERENCE_*` and `AUXILIARY_*` aliases, but new agents should use `CONTEXT_*`.
+The naming follows one rule: `*_FILE` gives you a path, `*_CONTENT` gives you
+that file's text, `ALL_*` bundles every selected file into one
+`<document name="...">…</document>` XML string, and `LIST_OF_*` gives the same
+set as a comma-separated path list. Media is the exception — `MEDIA_FILE` is a
+path, but the media itself is sent to multimodal models separately rather than
+inlined as text (see [Working with Figures](./working-with-figures.md)). Legacy
+custom agents can still read the `REFERENCE_*` and `AUXILIARY_*` aliases, but new
+agents should use `CONTEXT_*`.
 
 **Multiple Document Output:**
 
