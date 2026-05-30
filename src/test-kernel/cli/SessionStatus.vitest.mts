@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import {
+  formatCliStatusLabel,
   formatCliSessionStatus,
   readQueuedFollowUpMessagesForStatus,
 } from '@cli/chat/tui/sessionStatus';
+import { STREAM_STATUS } from '@shared/schemas';
 
 const STREAM_ID = 'status-queued-followups-test-stream';
 
@@ -67,6 +69,20 @@ describe('CLI session status formatter', () => {
         queuedFollowUpMessages: [],
       }),
     ).toContain('queued follow-ups: 0');
+  });
+
+  it('uses the footer label for an idle waiting stream', () => {
+    expect(formatCliStatusLabel(STREAM_STATUS.WAITING)).toBe('idle');
+    expect(
+      formatCliSessionStatus({
+        agent: 'research',
+        model: 'deepseekT',
+        api: 'included relay',
+        approval: 'ask before privileged actions',
+        status: STREAM_STATUS.WAITING,
+        queuedFollowUpMessages: [],
+      }),
+    ).toContain('status: idle');
   });
 
   it('reads queued follow-ups from the queue manager for status details', () => {
