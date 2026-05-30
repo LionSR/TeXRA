@@ -3,11 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
 import type { AgentTrace } from '@agent/trace';
-import {
-  getDefaultAgentRuntimeHost,
-  setDefaultAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
@@ -76,116 +72,98 @@ describe('runCoordinators', () => {
   });
 
   it('does not fall back to default coordinators when a run has none', async () => {
-    const previousDefault = getDefaultAgentRuntimeHost();
     const active = createRecordingHost();
-    const fallback = createRecordingHost();
 
-    try {
-      setDefaultAgentRuntimeHost(fallback.host);
+    await withRunContext(
+      createRunContext({ runtimeHost: active.host }),
+      async () => {
+        await expect(
+          waitForPlanApproval(streamId, {
+            approvalId: 'approval:missing-coordinators',
+            plan,
+          }),
+        ).rejects.toThrow(/active run coordinators/);
+        await expect(
+          waitForProposal(streamId, {
+            proposalId: 'proposal:missing-coordinators',
+            proposal,
+          }),
+        ).rejects.toThrow(/active run coordinators/);
+        await expect(
+          waitForRetry(streamId, {
+            operation: 'Model invocation',
+            logger: createLogger(),
+          }),
+        ).rejects.toThrow(/active run coordinators/);
+      },
+    );
 
-      await withRunContext(
-        createRunContext({ runtimeHost: active.host }),
-        async () => {
-          await expect(
-            waitForPlanApproval(streamId, {
-              approvalId: 'approval:missing-coordinators',
-              plan,
-            }),
-          ).rejects.toThrow(/active run coordinators/);
-          await expect(
-            waitForProposal(streamId, {
-              proposalId: 'proposal:missing-coordinators',
-              proposal,
-            }),
-          ).rejects.toThrow(/active run coordinators/);
-          await expect(
-            waitForRetry(streamId, {
-              operation: 'Model invocation',
-              logger: createLogger(),
-            }),
-          ).rejects.toThrow(/active run coordinators/);
-        },
-      );
-
-      expect(active.events).toEqual([]);
-      expect(fallback.events).toEqual([]);
-    } finally {
-      setDefaultAgentRuntimeHost(previousDefault);
-    }
+    expect(active.events).toEqual([]);
   });
 
   it('routes waits and resolver bridge events through active run coordinators', async () => {
-    const previousDefault = getDefaultAgentRuntimeHost();
     const active = createRecordingHost();
-    const fallback = createRecordingHost();
     const coordinators = createCoordinators(active.host);
     const context = createRunContext({
       runtimeHost: active.host,
       coordinators,
     });
 
-    try {
-      setDefaultAgentRuntimeHost(fallback.host);
+    const planResult = withRunContext(context, () =>
+      waitForPlanApproval(streamId, {
+        approvalId: 'approval:active-coordinator',
+        plan,
+      }),
+    );
+    expect(
+      resolvePlanApproval('approval:active-coordinator', {
+        action: 'approve',
+      }),
+    ).toBe(true);
+    await expect(planResult).resolves.toEqual({ action: 'approve' });
 
-      const planResult = withRunContext(context, () =>
-        waitForPlanApproval(streamId, {
-          approvalId: 'approval:active-coordinator',
-          plan,
-        }),
-      );
-      expect(
-        resolvePlanApproval('approval:active-coordinator', {
-          action: 'approve',
-        }),
-      ).toBe(true);
-      await expect(planResult).resolves.toEqual({ action: 'approve' });
-
-      const proposalResult = withRunContext(context, () =>
-        waitForProposal(streamId, {
-          proposalId: 'proposal:active-coordinator',
-          proposal,
-        }),
-      );
-      expect(
-        resolveProposal('proposal:active-coordinator', {
-          action: 'approve',
-          agent: 'reviewer',
-          model: 'test-model',
-        }),
-      ).toBe(true);
-      await expect(proposalResult).resolves.toEqual({
+    const proposalResult = withRunContext(context, () =>
+      waitForProposal(streamId, {
+        proposalId: 'proposal:active-coordinator',
+        proposal,
+      }),
+    );
+    expect(
+      resolveProposal('proposal:active-coordinator', {
         action: 'approve',
         agent: 'reviewer',
         model: 'test-model',
-      });
+      }),
+    ).toBe(true);
+    await expect(proposalResult).resolves.toEqual({
+      action: 'approve',
+      agent: 'reviewer',
+      model: 'test-model',
+    });
 
-      const retryResult = withRunContext(context, () =>
-        waitForRetry(streamId, {
-          operation: 'Model invocation',
-          logger: createLogger(),
-        }),
-      );
-      expect(triggerRetry(streamId, 'try the request again')).toBe(true);
-      await expect(retryResult).resolves.toEqual({
-        action: 'retry',
-        feedback: 'try the request again',
-      });
+    const retryResult = withRunContext(context, () =>
+      waitForRetry(streamId, {
+        operation: 'Model invocation',
+        logger: createLogger(),
+      }),
+    );
+    expect(triggerRetry(streamId, 'try the request again')).toBe(true);
+    await expect(retryResult).resolves.toEqual({
+      action: 'retry',
+      feedback: 'try the request again',
+    });
 
-      expect(active.events.map((entry) => entry.event)).toEqual([
-        'requestEnsureProgressView',
-        'setActiveStream',
-        'showPlanApproval',
-        'resolvePlanApproval',
-        'requestEnsureProgressView',
-        'setActiveStream',
-        'showAgentProposal',
-        'resolveAgentProposal',
-        'showRetryRequest',
-        'resolveRetryRequest',
-      ]);
-      expect(fallback.events).toEqual([]);
-    } finally {
-      setDefaultAgentRuntimeHost(previousDefault);
-    }
+    expect(active.events.map((entry) => entry.event)).toEqual([
+      'requestEnsureProgressView',
+      'setActiveStream',
+      'showPlanApproval',
+      'resolvePlanApproval',
+      'requestEnsureProgressView',
+      'setActiveStream',
+      'showAgentProposal',
+      'resolveAgentProposal',
+      'showRetryRequest',
+      'resolveRetryRequest',
+    ]);
   });
 });

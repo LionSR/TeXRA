@@ -17,7 +17,6 @@ import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import { initializeOdysseyPrompts } from '@agent/odyssey';
-import { setDefaultAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import {
@@ -216,7 +215,6 @@ export async function activate(context: vscode.ExtensionContext) {
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => disposeDiffRefresh());
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => statusBarItem?.dispose());
-  setDefaultAgentRuntimeHost(extensionAgentRuntimeHost);
   await StorageFS.ensureDir(TASK_RUNS_DIR);
   FileLister.initialize(context);
   initializeServerSideKeyAccess(

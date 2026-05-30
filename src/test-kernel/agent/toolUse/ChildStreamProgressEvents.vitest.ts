@@ -5,10 +5,6 @@ import { describe, expect, it } from 'vitest';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import {
-  getDefaultAgentRuntimeHost,
-  setDefaultAgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
-import {
   STREAM_STATUS,
   type ExecutionId,
   type StreamTabId,
@@ -28,38 +24,31 @@ const config = {
 describe('child stream progress events', () => {
   it('publishes child stream lifecycle events through the explicit runtime host', () => {
     const active = createRecordingHost();
-    const fallback = createRecordingHost();
-    const previousDefault = getDefaultAgentRuntimeHost();
-    setDefaultAgentRuntimeHost(fallback.host);
 
-    try {
-      const {
-        childStreamId: actualChildStreamId,
-        logger,
-        disposeTrace,
-      } = createChildStream(executionId, parentStreamId, {
-        runtimeHost: active.host,
-        streamPrefix: 'bash',
-        streamCategory: AgentCategory.ToolUse,
-        agentName: 'test-agent',
-        description: 'Run a background bash command',
-        config,
-        toolName: 'bash',
-      });
+    const {
+      childStreamId: actualChildStreamId,
+      logger,
+      disposeTrace,
+    } = createChildStream(executionId, parentStreamId, {
+      runtimeHost: active.host,
+      streamPrefix: 'bash',
+      streamCategory: AgentCategory.ToolUse,
+      agentName: 'test-agent',
+      description: 'Run a background bash command',
+      config,
+      toolName: 'bash',
+    });
 
-      expect(actualChildStreamId).toBe(childStreamId);
+    expect(actualChildStreamId).toBe(childStreamId);
 
-      finalizeChildStream({
-        childStreamId,
-        executionId,
-        logger,
-        disposeTrace,
-        runtimeHost: active.host,
-        options: { autoClose: true },
-      });
-    } finally {
-      setDefaultAgentRuntimeHost(previousDefault);
-    }
+    finalizeChildStream({
+      childStreamId,
+      executionId,
+      logger,
+      disposeTrace,
+      runtimeHost: active.host,
+      options: { autoClose: true },
+    });
 
     const { events } = active;
     expect(events.map((entry) => entry.event)).toEqual([
@@ -131,6 +120,5 @@ describe('child stream progress events', () => {
       event: 'removeStream',
       payload: { streamId: childStreamId },
     });
-    expect(fallback.events).toEqual([]);
   });
 });

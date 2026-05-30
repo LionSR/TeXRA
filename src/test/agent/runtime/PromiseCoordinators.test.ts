@@ -2,12 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports
-import {
-  getDefaultAgentRuntimeHost,
-  noopAgentRuntimeHost,
-  setDefaultAgentRuntimeHost,
-  type AgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
+import { type AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
@@ -32,13 +27,8 @@ function createRecordingHost(): {
 }
 
 describe('promise coordinators', () => {
-  afterEach(() => {
-    setDefaultAgentRuntimeHost(noopAgentRuntimeHost);
-  });
-
   it('uses the configured runtime host for approval show and resolve events', async () => {
     const { events, host } = createRecordingHost();
-    const defaultHost = createRecordingHost();
     const ambientHost = createRecordingHost();
     const coordinator = new PlanApprovalCoordinator(host);
     const plan: Plan = {
@@ -53,7 +43,6 @@ describe('promise coordinators', () => {
       ],
     };
 
-    setDefaultAgentRuntimeHost(defaultHost.host);
     const resultPromise = withRunContext(
       createRunContext({ runtimeHost: ambientHost.host }),
       () =>
@@ -66,7 +55,6 @@ describe('promise coordinators', () => {
     coordinator.resolveRequest('approval:runtime', { action: 'approve' });
 
     assert.deepEqual(await resultPromise, { action: 'approve' });
-    assert.deepEqual(defaultHost.events, []);
     assert.deepEqual(ambientHost.events, []);
     assert.deepEqual(events, [
       { event: 'requestEnsureProgressView', payload: {} },
@@ -86,17 +74,20 @@ describe('promise coordinators', () => {
     ]);
   });
 
-  it('keeps legacy singleton coordinators on the default host boundary', async () => {
-    const coordinator = new PlanApprovalCoordinator(getDefaultAgentRuntimeHost);
-    const defaultHost = createRecordingHost();
+  it('captures the provider-callback host at request time and ignores later rebinding', async () => {
+    const requestHost = createRecordingHost();
     const ambientHost = createRecordingHost();
     const replacementHost = createRecordingHost();
+    // A provider callback resolves the host lazily; the coordinator captures
+    // whatever it returns at waitForApproval() time and reuses that captured
+    // host when resolving, so rebinding afterwards must not redirect events.
+    let providerHost: AgentRuntimeHost = requestHost.host;
+    const coordinator = new PlanApprovalCoordinator(() => providerHost);
     const plan: Plan = {
       summary: 'Use the host boundary',
       steps: [],
     };
 
-    setDefaultAgentRuntimeHost(defaultHost.host);
     const resultPromise = withRunContext(
       createRunContext({ runtimeHost: ambientHost.host }),
       () =>
@@ -106,14 +97,14 @@ describe('promise coordinators', () => {
         }),
     );
 
-    setDefaultAgentRuntimeHost(replacementHost.host);
+    providerHost = replacementHost.host;
     coordinator.resolveRequest('approval:default', { action: 'approve' });
 
     assert.deepEqual(await resultPromise, { action: 'approve' });
     assert.deepEqual(ambientHost.events, []);
     assert.deepEqual(replacementHost.events, []);
     assert.deepEqual(
-      defaultHost.events.map((entry) => entry.event),
+      requestHost.events.map((entry) => entry.event),
       [
         'requestEnsureProgressView',
         'setActiveStream',
