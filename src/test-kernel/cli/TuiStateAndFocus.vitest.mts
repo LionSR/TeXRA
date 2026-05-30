@@ -1242,6 +1242,8 @@ describe('focusCycle', () => {
     cliState.activeStreamId.set(root);
     setParentStream(child1, root);
     setParentStream(child2, root);
+    patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    patchStream(child2, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
     patchStream(root, (s) => ({
       ...s,
       activeSubagents: [
