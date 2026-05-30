@@ -77,7 +77,7 @@ const items = [
 
 /* The row being dragged to reorder: lifted with the accent ring. */
 .fitem--drag {
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
   outline: 1px dashed var(--mk-accent);
   cursor: grabbing;
 }

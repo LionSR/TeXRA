@@ -221,7 +221,7 @@ const groups = [
 .da-tag--latexdiff {
   color: var(--mk-accent);
   border-color: color-mix(in srgb, var(--mk-accent) 45%, transparent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
 }
 .da-tag--latexdiff-vc {
   color: var(--mk-syn-fn);

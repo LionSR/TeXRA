@@ -130,7 +130,7 @@ const icon = (kind) =>
 }
 .rot-dot--active {
   background: var(--mk-accent);
-  box-shadow: 0 0 0 0 rgba(200, 155, 224, 0.6);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--mk-accent) 60%, transparent);
   animation: mk-shpulse 1.8s infinite;
 }
 .rot-fld-ic {
@@ -154,8 +154,8 @@ const icon = (kind) =>
 }
 .rot-tag--r0 {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.1);
-  border-color: rgba(200, 155, 224, 0.32);
+  background: color-mix(in srgb, var(--mk-accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--mk-accent) 32%, transparent);
 }
 
 .rot-files {
@@ -221,7 +221,7 @@ const icon = (kind) =>
 .rot-extract code {
   font-family: var(--vp-font-family-mono);
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: 0 var(--mk-space-4);
 }

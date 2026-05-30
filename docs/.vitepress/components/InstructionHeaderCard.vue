@@ -138,7 +138,7 @@ const actions = [
 }
 .ihc-lbl .act-on {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
 }
 
 /* The open checkbox dropdown (.wa-menu/.wa-item/.wa-check/.wa-lead) is shared

@@ -193,7 +193,7 @@ const loopSteps = ['read', 'edit', 'run tool'];
   border-radius: var(--mk-radius-md);
   padding: var(--mk-space-6) var(--mk-space-8);
   border: 1px dashed var(--mk-syn-fn);
-  background: rgba(117, 190, 255, 0.06);
+  background: color-mix(in srgb, var(--mk-syn-fn) 6%, transparent);
 }
 .ams-cycle-chips {
   display: flex;

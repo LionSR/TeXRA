@@ -150,7 +150,7 @@ const layers = [
 }
 .cps-layer--top {
   border-color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.07);
+  background: color-mix(in srgb, var(--mk-accent) 7%, transparent);
 }
 .cps-rank {
   flex-shrink: 0;
@@ -169,7 +169,7 @@ const layers = [
 .cps-layer--top .cps-rank {
   color: var(--mk-accent);
   border-color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
 }
 .cps-ic {
   flex-shrink: 0;

@@ -66,7 +66,7 @@ defineProps({
   line-height: 1.5;
 }
 .tcp-row.active {
-  background: rgba(200, 155, 224, 0.08);
+  background: color-mix(in srgb, var(--mk-accent) 8%, transparent);
 }
 .tcp-dot {
   align-self: center;

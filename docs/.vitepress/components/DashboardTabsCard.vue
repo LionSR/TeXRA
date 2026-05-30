@@ -138,7 +138,7 @@ const tabs = [
   background: var(--mk-hover-bg);
 }
 .dtc-on {
-  background: rgba(200, 155, 224, 0.08);
+  background: color-mix(in srgb, var(--mk-accent) 8%, transparent);
   border-left-color: var(--brand);
 }
 .dtc-ic {

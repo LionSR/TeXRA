@@ -135,7 +135,7 @@
   height: var(--mk-size-21);
   flex-shrink: 0;
   border-radius: var(--mk-radius-pill);
-  background: rgba(200, 155, 224, 0.14);
+  background: color-mix(in srgb, var(--mk-accent) 14%, transparent);
   color: var(--mk-accent);
   font-size: var(--mk-fs-70);
   font-weight: 700;

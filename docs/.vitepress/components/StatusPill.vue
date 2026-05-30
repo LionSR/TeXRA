@@ -56,7 +56,7 @@ defineProps({
    task-tag amber, link-blue, success green) so nothing shifts visually. */
 .mk-pill--accent {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
 }
 .mk-pill--success {
   color: var(--color-success);
@@ -68,7 +68,7 @@ defineProps({
 }
 .mk-pill--info {
   color: var(--mk-syn-fn);
-  background: rgba(117, 190, 255, 0.12);
+  background: color-mix(in srgb, var(--mk-syn-fn) 12%, transparent);
 }
 .mk-pill--neutral {
   color: var(--color-text-secondary);

@@ -99,7 +99,7 @@ const groups = [
   letter-spacing: 0;
   text-transform: none;
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.14);
+  background: color-mix(in srgb, var(--mk-accent) 14%, transparent);
   border-radius: var(--mk-radius-sm);
 }
 .lc-gate wa-icon {

@@ -129,7 +129,7 @@ const items = [
   color: var(--wa-color-text-normal);
 }
 .mp-item.active {
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
 }
 .mp-name {
   font-family: var(--vp-font-family-mono);

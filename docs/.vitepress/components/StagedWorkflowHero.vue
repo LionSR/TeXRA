@@ -104,7 +104,7 @@ const stages = [
   height: var(--mk-size-21);
   flex-shrink: 0;
   border-radius: var(--mk-radius-pill);
-  background: rgba(200, 155, 224, 0.14);
+  background: color-mix(in srgb, var(--mk-accent) 14%, transparent);
   color: var(--mk-accent);
   font-size: var(--mk-fs-72);
   font-weight: 700;
@@ -155,7 +155,7 @@ const stages = [
 }
 .sw-cmd {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: 0 var(--mk-space-6);
   font-family: var(--vp-font-family-mono);

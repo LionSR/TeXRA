@@ -159,8 +159,8 @@ const generator = {
   font-size: var(--mk-fs-66);
   font-weight: 600;
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
-  border: 1px solid rgba(200, 155, 224, 0.28);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mk-accent) 28%, transparent);
   border-radius: var(--mk-radius-pill);
   padding: var(--mk-space-2) var(--mk-space-9);
 }

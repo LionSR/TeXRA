@@ -169,7 +169,7 @@ const rows = [
   font-size: var(--mk-fs-74);
   font-weight: 600;
   color: var(--brand);
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
   border: 1px solid var(--mk-accent);
   border-radius: var(--mk-radius-pill);
   padding: 1px var(--mk-space-10);

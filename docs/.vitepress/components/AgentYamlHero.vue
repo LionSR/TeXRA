@@ -130,7 +130,7 @@ import MockCard from './MockCard.vue';
 }
 .yh-code .tag {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: 0 var(--mk-space-4);
 }
@@ -148,8 +148,8 @@ import MockCard from './MockCard.vue';
 }
 .yh-note.round {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.1);
-  border-color: rgba(200, 155, 224, 0.32);
+  background: color-mix(in srgb, var(--mk-accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--mk-accent) 32%, transparent);
 }
 
 /* Drop the annotation pills below the code on narrow screens. */

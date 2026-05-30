@@ -144,8 +144,8 @@ const icon = (kind) =>
 }
 .oat-tag--r0 {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.1);
-  border-color: rgba(200, 155, 224, 0.32);
+  background: color-mix(in srgb, var(--mk-accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--mk-accent) 32%, transparent);
 }
 
 .oat-files {
@@ -197,8 +197,8 @@ const icon = (kind) =>
   font-size: var(--mk-fs-68);
   font-weight: 600;
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.1);
-  border: 1px solid rgba(200, 155, 224, 0.32);
+  background: color-mix(in srgb, var(--mk-accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mk-accent) 32%, transparent);
   border-radius: var(--mk-radius);
   padding: var(--mk-space-2) var(--mk-space-6);
 }

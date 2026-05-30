@@ -152,7 +152,7 @@ defineProps({
   color: var(--wa-color-text-normal);
 }
 .dm-item.active {
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
 }
 .dm-item-ic {
   font-size: var(--mk-space-12);

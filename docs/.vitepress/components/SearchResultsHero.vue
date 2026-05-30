@@ -160,11 +160,11 @@ const results = [
 }
 .sr-src--arxiv {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.14);
+  background: color-mix(in srgb, var(--mk-accent) 14%, transparent);
 }
 .sr-src--crossref {
   color: var(--mk-syn-fn);
-  background: rgba(117, 190, 255, 0.12);
+  background: color-mix(in srgb, var(--mk-syn-fn) 12%, transparent);
 }
 
 /* Cite action chip */

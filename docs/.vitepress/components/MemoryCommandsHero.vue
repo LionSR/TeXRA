@@ -90,7 +90,7 @@ const calls = [
   line-height: 1.5;
 }
 .mc-row.active {
-  background: rgba(130, 80, 223, 0.08);
+  background: color-mix(in srgb, var(--mk-accent) 8%, transparent);
 }
 
 .mc-dot {
@@ -105,7 +105,7 @@ const calls = [
 }
 .mc-dot--active {
   background: var(--mk-accent);
-  box-shadow: 0 0 0 0 rgba(200, 155, 224, 0.6);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--mk-accent) 60%, transparent);
   animation: mk-shpulse 1.8s infinite;
 }
 
@@ -116,7 +116,7 @@ const calls = [
 }
 .mc-cmd {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: 0 var(--mk-space-5);
   font-size: var(--mk-fs-72);

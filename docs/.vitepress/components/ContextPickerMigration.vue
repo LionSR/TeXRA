@@ -188,7 +188,7 @@ import MockCard from './MockCard.vue';
 }
 .cpm-var {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: 0 var(--mk-space-4);
 }

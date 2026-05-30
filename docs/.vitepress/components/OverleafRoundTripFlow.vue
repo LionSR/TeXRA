@@ -133,7 +133,7 @@ const stages = [
 }
 .ort-node-local {
   border-color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.1);
+  background: color-mix(in srgb, var(--mk-accent) 10%, transparent);
 }
 .ort-node-ic {
   font-size: var(--mk-space-20);
@@ -170,11 +170,11 @@ const stages = [
 }
 .ort-dir-down {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.1);
+  background: color-mix(in srgb, var(--mk-accent) 10%, transparent);
 }
 .ort-dir-up {
   color: var(--mk-syn-fn);
-  background: rgba(130, 80, 223, 0.1);
+  background: color-mix(in srgb, var(--mk-accent) 10%, transparent);
 }
 .ort-dir-ic,
 .ort-dir-arrow {
@@ -207,7 +207,7 @@ const stages = [
   width: var(--mk-size-21);
   height: var(--mk-size-21);
   border-radius: var(--mk-radius-pill);
-  background: rgba(200, 155, 224, 0.14);
+  background: color-mix(in srgb, var(--mk-accent) 14%, transparent);
   color: var(--mk-accent);
   font-family: var(--vp-font-family-mono);
   font-size: var(--mk-fs-68);

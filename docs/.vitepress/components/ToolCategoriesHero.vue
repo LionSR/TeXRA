@@ -178,7 +178,7 @@ const categories = [
    name reads as a token to drop into the YAML `tools:` array. */
 .tcat-chip {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: 1px var(--mk-space-6);
   font-family: var(--vp-font-family-mono);

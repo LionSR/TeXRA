@@ -171,7 +171,7 @@ const sevTag = {
   padding: var(--mk-space-2) var(--mk-space-9);
 }
 .pb-filter.active {
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
   border-color: var(--mk-accent);
   color: var(--mk-text);
   font-weight: 600;
@@ -257,7 +257,7 @@ const sevTag = {
 }
 .pb-task {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: 0 var(--mk-space-5);
   font-size: var(--mk-fs-70);

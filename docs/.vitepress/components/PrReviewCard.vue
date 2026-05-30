@@ -128,7 +128,7 @@
   width: var(--mk-size-30);
   height: var(--mk-size-30);
   border-radius: var(--mk-radius-pill);
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
   color: var(--mk-accent);
   font-size: var(--mk-fs-82);
 }
@@ -290,7 +290,7 @@
   width: var(--mk-size-21);
   height: var(--mk-size-21);
   border-radius: var(--mk-radius-pill);
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
   color: var(--mk-accent);
   font-size: var(--mk-fs-70);
 }
@@ -319,7 +319,7 @@
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.14);
+  background: color-mix(in srgb, var(--mk-accent) 14%, transparent);
   border-radius: var(--mk-radius-pill);
   padding: 1px var(--mk-space-7);
 }

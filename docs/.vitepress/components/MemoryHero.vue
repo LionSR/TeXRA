@@ -295,8 +295,8 @@ function toggle(id) {
   display: flex;
   gap: var(--mk-space-10);
   padding: var(--mk-space-10) var(--mk-space-12);
-  background: rgba(117, 190, 255, 0.06);
-  border: 1px solid rgba(117, 190, 255, 0.18);
+  background: color-mix(in srgb, var(--mk-syn-fn) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mk-syn-fn) 18%, transparent);
   border-radius: var(--mk-radius-lg);
 }
 .reminder-ic {

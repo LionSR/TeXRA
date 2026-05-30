@@ -193,7 +193,7 @@ import StatusPill from './StatusPill.vue';
   text-align: center;
   flex: 0 0 auto;
   max-width: var(--mk-size-168);
-  background: rgba(200, 155, 224, 0.1);
+  background: color-mix(in srgb, var(--mk-accent) 10%, transparent);
   border: 1px solid var(--mk-accent);
   border-radius: var(--mk-radius-lg);
   padding: var(--mk-space-10) var(--mk-space-12);

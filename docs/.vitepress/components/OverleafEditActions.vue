@@ -135,7 +135,7 @@ const actions = [
   font-size: var(--mk-fs-74);
 }
 .oea-ic--accent {
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
   color: var(--mk-accent);
 }
 

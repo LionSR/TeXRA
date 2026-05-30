@@ -198,11 +198,11 @@ const calls = [
 }
 .cc-who--user {
   color: var(--color-text-secondary);
-  background: rgba(130, 80, 223, 0.05);
+  background: color-mix(in srgb, var(--mk-accent) 5%, transparent);
 }
 .cc-who--ai {
   color: var(--mk-syn-fn);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
 }
 .cc-msg {
   color: var(--mk-text);
@@ -242,7 +242,7 @@ const calls = [
   line-height: 1.5;
 }
 .cc-tool-row.active {
-  background: rgba(200, 155, 224, 0.08);
+  background: color-mix(in srgb, var(--mk-accent) 8%, transparent);
 }
 .cc-dot {
   align-self: center;
@@ -264,7 +264,7 @@ const calls = [
 }
 .cc-verb {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: 0 var(--mk-space-5);
   font-size: var(--mk-fs-72);
@@ -341,7 +341,7 @@ const calls = [
   font-family: var(--vp-font-family-mono);
   font-size: var(--mk-fs-72);
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border: 1px solid var(--mk-border-soft);
   border-radius: var(--mk-radius-pill);
   padding: 0 var(--mk-space-8);

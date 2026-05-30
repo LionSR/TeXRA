@@ -159,7 +159,7 @@ const envVars = [
   font-family: var(--vp-font-family-mono);
   font-size: var(--mk-fs-74);
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: var(--mk-space-2) var(--mk-space-7);
   align-self: flex-start;
@@ -232,7 +232,7 @@ const envVars = [
   font-family: var(--vp-font-family-mono);
   font-size: var(--mk-fs-74);
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: var(--mk-space-2) var(--mk-space-7);
 }

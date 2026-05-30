@@ -130,8 +130,8 @@ const rounds = [
 }
 .prt-tag--final {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.1);
-  border-color: rgba(200, 155, 224, 0.32);
+  background: color-mix(in srgb, var(--mk-accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--mk-accent) 32%, transparent);
 }
 
 .prt-files {
@@ -190,8 +190,8 @@ const rounds = [
 .prt-foot-tag {
   font-size: var(--mk-fs-68);
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.1);
-  border: 1px solid rgba(200, 155, 224, 0.32);
+  background: color-mix(in srgb, var(--mk-accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mk-accent) 32%, transparent);
   border-radius: var(--mk-radius);
   padding: var(--mk-space-2) var(--mk-space-7);
 }

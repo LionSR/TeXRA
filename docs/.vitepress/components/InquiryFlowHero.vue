@@ -152,7 +152,7 @@ const targets = [
 }
 .inq-tag--out {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
 }
 .inq-tag--in {
   color: var(--mk-syn-fn);
@@ -255,7 +255,7 @@ const targets = [
   height: var(--mk-space-8);
   border-radius: 50%;
   background: var(--mk-accent);
-  box-shadow: 0 0 0 0 rgba(200, 155, 224, 0.6);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--mk-accent) 60%, transparent);
   animation: mk-shpulse 1.8s infinite;
 }
 

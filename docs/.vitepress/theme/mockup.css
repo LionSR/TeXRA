@@ -842,7 +842,7 @@
   gap: var(--mk-space-5);
   font-size: var(--mk-fs-68);
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border-radius: var(--mk-radius-pill);
   padding: 1px var(--mk-space-8);
   flex-shrink: 0;
@@ -920,7 +920,7 @@
   width: var(--mk-space-11);
   height: var(--mk-space-11);
   flex-shrink: 0;
-  border: 2px solid rgba(200, 155, 224, 0.3);
+  border: 2px solid color-mix(in srgb, var(--mk-accent) 30%, transparent);
   border-top-color: var(--mk-accent);
   border-radius: 50%;
   animation: mk-spin 0.9s linear infinite;
@@ -990,14 +990,14 @@
   background: var(--mk-hover-bg);
 }
 .mockup .tcard.active {
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
 }
 .mockup .tcard.open {
   display: block;
   padding: var(--mk-space-4) var(--mk-space-6);
 }
 .mockup .tcard.open:hover {
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
 }
 .mockup .tcard-sum {
   display: flex;
@@ -1060,7 +1060,7 @@
 }
 .mockup .tc-code {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: 0 var(--mk-space-5);
 }
@@ -1149,7 +1149,7 @@
 .mockup .dt-on {
   color: var(--mk-text);
   font-weight: 600;
-  background: rgba(200, 155, 224, 0.08);
+  background: color-mix(in srgb, var(--mk-accent) 8%, transparent);
   border-left-color: var(--brand);
 }
 

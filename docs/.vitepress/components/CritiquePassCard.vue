@@ -111,7 +111,7 @@ const checks = [
   width: var(--mk-space-22);
   height: var(--mk-space-22);
   border-radius: var(--mk-radius-md);
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
   color: var(--mk-accent);
   font-size: var(--mk-fs-80);
 }

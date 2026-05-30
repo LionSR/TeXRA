@@ -125,7 +125,7 @@ import StatusPill from './StatusPill.vue';
   align-items: center;
   gap: var(--mk-space-6);
   padding: var(--mk-space-7) var(--mk-space-10);
-  background: rgba(200, 155, 224, 0.1);
+  background: color-mix(in srgb, var(--mk-accent) 10%, transparent);
   border-bottom: 1px solid var(--mk-border);
 }
 .sf-store-ic {

@@ -126,7 +126,7 @@ const cases = [
   font-family: var(--vp-font-family-mono);
   font-size: var(--mk-fs-70);
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: 0 var(--mk-space-4);
   white-space: nowrap;
