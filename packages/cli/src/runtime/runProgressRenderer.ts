@@ -15,7 +15,8 @@ interface RenderState {
   agent?: string;
   inputFile?: string;
   phase?: string;
-  activeWork?: string;
+  activeProcesses?: string;
+  activeSubagents?: string;
 }
 
 export interface RunProgressRenderer {
@@ -55,6 +56,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private lastRenderAt = 0;
   private lastLine = '';
   private liveLine = false;
+  private rootStreamId: string | undefined;
 
   constructor(init: RunProgressRendererInit) {
     this.write = init.write ?? writeRawStderr;
@@ -67,14 +69,20 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   handle(event: ProgressEvent, payload: unknown): boolean {
     switch (event) {
       case 'setTaskState':
-        this.applyTaskState(payload as ProgressEventPayloads['setTaskState']);
-        this.render(true);
+        if (
+          this.applyTaskState(payload as ProgressEventPayloads['setTaskState'])
+        ) {
+          this.render(true);
+        }
         return true;
       case 'updateConversationProgress':
-        this.applyConversationProgress(
-          payload as ProgressEventPayloads['updateConversationProgress'],
-        );
-        this.render();
+        if (
+          this.applyConversationProgress(
+            payload as ProgressEventPayloads['updateConversationProgress'],
+          )
+        ) {
+          this.render();
+        }
         return true;
       case 'updateActiveProcesses':
         this.applyActiveProcesses(
@@ -89,16 +97,29 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         this.render(true);
         return true;
       case 'updateStreamStatus':
-        this.state.phase = String(
-          (payload as ProgressEventPayloads['updateStreamStatus']).status,
-        );
-        this.render(true);
+        if (
+          this.isRootStream(
+            (payload as ProgressEventPayloads['updateStreamStatus']).streamId,
+          )
+        ) {
+          this.state.phase = String(
+            (payload as ProgressEventPayloads['updateStreamStatus']).status,
+          );
+          this.render(true);
+        }
         return true;
       case 'updateStreamDescription':
-        this.state.phase = (
-          payload as ProgressEventPayloads['updateStreamDescription']
-        ).description;
-        this.render(true);
+        if (
+          this.isRootStream(
+            (payload as ProgressEventPayloads['updateStreamDescription'])
+              .streamId,
+          )
+        ) {
+          this.state.phase = (
+            payload as ProgressEventPayloads['updateStreamDescription']
+          ).description;
+          this.render(true);
+        }
         return true;
       default:
         return false;
@@ -119,35 +140,60 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     }
   }
 
-  private applyTaskState(payload: ProgressEventPayloads['setTaskState']): void {
+  private applyTaskState(
+    payload: ProgressEventPayloads['setTaskState'],
+  ): boolean {
+    if (!this.claimRootStream(payload.streamId)) return false;
+
     const config = payload.taskState.agentConfig;
     this.state.agent = config.agent;
     this.state.inputFile = safeBasename(config.inputFiles.at(0));
     this.state.phase ??= 'running';
+    return true;
   }
 
   private applyConversationProgress(
     payload: ProgressEventPayloads['updateConversationProgress'],
-  ): void {
+  ): boolean {
+    if (!this.claimRootStream(payload.streamId)) return false;
+
     this.state.round = payload.progress.conversationTurns || undefined;
     this.state.toolCallCount = payload.progress.toolCallCount || undefined;
     this.state.phase ??= 'running';
+    return true;
   }
 
   private applyActiveProcesses(
     payload: ProgressEventPayloads['updateActiveProcesses'],
   ): void {
-    const activeProcess = payload.processes[0];
-    this.state.activeWork = activeProcess
-      ? `tool: ${activeProcess.toolName ?? activeProcess.agentName}`
-      : undefined;
+    if (!this.claimRootStream(payload.parentStreamId)) return;
+
+    this.state.activeProcesses = formatActiveChildren(
+      'tool',
+      payload.processes.map(
+        (activeProcess) => activeProcess.toolName ?? activeProcess.agentName,
+      ),
+    );
   }
 
   private applyActiveSubagents(
     payload: ProgressEventPayloads['updateActiveSubagents'],
   ): void {
-    const child = payload.children[0];
-    this.state.activeWork = child ? `subagent: ${child.agentName}` : undefined;
+    if (!this.claimRootStream(payload.parentStreamId)) return;
+
+    this.state.activeSubagents = formatActiveChildren(
+      'subagent',
+      payload.children.map((child) => child.agentName),
+    );
+  }
+
+  private claimRootStream(streamId: string): boolean {
+    this.rootStreamId ??= streamId;
+    return this.rootStreamId === streamId;
+  }
+
+  private isRootStream(streamId: string): boolean {
+    return this.rootStreamId === streamId;
   }
 
   private render(force = false): void {
@@ -178,8 +224,13 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     parts.push(subject || phase || 'running');
     if (subject && phase && phase !== 'running') parts.push(phase);
 
-    if (this.state.activeWork) parts.push(this.state.activeWork);
-    if (this.state.toolCallCount != null && !this.state.activeWork) {
+    if (this.state.activeSubagents) parts.push(this.state.activeSubagents);
+    if (this.state.activeProcesses) parts.push(this.state.activeProcesses);
+    if (
+      this.state.toolCallCount != null &&
+      !this.state.activeSubagents &&
+      !this.state.activeProcesses
+    ) {
       parts.push(`tools: ${this.state.toolCallCount}`);
     }
     parts.push(formatElapsed(now - this.startedAt));
@@ -189,6 +240,21 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
 function safeBasename(file: string | undefined): string | undefined {
   return file ? path.basename(file) : undefined;
+}
+
+function formatActiveChildren(
+  kind: 'subagent' | 'tool',
+  names: readonly (string | undefined)[],
+): string | undefined {
+  const namedChildren = names.filter((name): name is string => Boolean(name));
+  const first = namedChildren[0];
+  if (!first) return undefined;
+
+  const label =
+    namedChildren.length === 1 ? kind : kind === 'tool' ? 'tools' : 'subagents';
+  const suffix =
+    namedChildren.length > 1 ? ` +${namedChildren.length - 1}` : '';
+  return `${label}: ${first}${suffix}`;
 }
 
 function formatElapsed(ms: number): string {
