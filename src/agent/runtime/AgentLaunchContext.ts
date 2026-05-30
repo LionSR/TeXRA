@@ -3,6 +3,7 @@ import * as path from 'path';
 import { ZodError } from 'zod';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
+import { createRunTrace, type RunTrace } from '@transcript';
 import { isRemoteAgent, resolveAgent, type ResolvedAgent } from '@agent/index';
 import {
   logSdkError,
@@ -27,7 +28,6 @@ import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
-import { createRunTrace, type RunTrace } from '@logger';
 import {
   STREAM_STATUS,
   type ExecutionId,
