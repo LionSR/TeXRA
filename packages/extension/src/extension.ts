@@ -36,12 +36,7 @@ import { getAuthStatus } from '@auth/authCommands';
 import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
 import { toErrorMessage } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
-import {
-  globalSM,
-  initializeStateManagers,
-  workspaceSM,
-  WorkspaceStateKey,
-} from '@common/state';
+import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
 import { isTerminalStatus } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
 import { SecretManager } from '@frontend/secretManager';
@@ -371,6 +366,17 @@ export async function activate(context: vscode.ExtensionContext) {
       void vscode.commands.executeCommand(command, ...args);
     }
   });
+  // Defense in depth: the only consumers today validate keys before reaching
+  // the config adapter, but the adapter is documented as `texra.*`-scoped and a
+  // future tool wiring through `platform.config` should not be able to read or
+  // write arbitrary VS Code settings by accident.
+  const assertTexraScopedKey = (key: string): void => {
+    if (!key.startsWith('texra.')) {
+      throw new Error(
+        `Setup config adapter is scoped to texra.* keys; refused: ${key}`,
+      );
+    }
+  };
   setSetupPlatform({
     secrets: {
       providers: SecretManager.API_PROVIDERS,
@@ -420,23 +426,11 @@ export async function activate(context: vscode.ExtensionContext) {
     },
     config: {
       get: (key) => {
-        // Defense in depth: the only consumers today validate keys before
-        // reaching here, but the adapter is documented as `texra.*`-scoped
-        // and a future tool wiring through `platform.config` should not be
-        // able to read arbitrary VS Code settings by accident.
-        if (!key.startsWith('texra.')) {
-          throw new Error(
-            `Setup config adapter is scoped to texra.* keys; refused: ${key}`,
-          );
-        }
+        assertTexraScopedKey(key);
         return vscode.workspace.getConfiguration(undefined, null).get(key);
       },
       update: async (key, value, target) => {
-        if (!key.startsWith('texra.')) {
-          throw new Error(
-            `Setup config adapter is scoped to texra.* keys; refused: ${key}`,
-          );
-        }
+        assertTexraScopedKey(key);
         const scope =
           target === 'workspace'
             ? vscode.ConfigurationTarget.Workspace

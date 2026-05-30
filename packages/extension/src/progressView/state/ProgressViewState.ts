@@ -237,10 +237,6 @@ export class ProgressViewState {
     });
   }
 
-  getTodos(stream: StreamTabId): TodoItem[] {
-    return this._sessionState.get(stream)?.workPlan.todos ?? [];
-  }
-
   setPlan(stream: StreamTabId, plan: Plan | null): void {
     const state = this.getOrCreateSession(stream);
     state.workPlan = WorkPlanSnapshotSchema.parse({
@@ -248,10 +244,6 @@ export class ProgressViewState {
       plan,
       planSummary: plan?.summary ?? null,
     });
-  }
-
-  getPlan(stream: StreamTabId): Plan | null {
-    return this._sessionState.get(stream)?.workPlan.plan ?? null;
   }
 
   getWorkPlan(stream: StreamTabId): WorkPlanSnapshot {

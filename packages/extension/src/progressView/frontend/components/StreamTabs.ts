@@ -700,16 +700,10 @@ export class StreamTabs extends LitElement {
     const override = this.userOverride.get(parentId);
     if (override) return override === 'expanded';
 
-    let anyActive = false;
-    let anyUnknown = false;
-    for (const child of children) {
-      const activity = this.getBranchActivity(child.name, new Set([parentId]));
-      if (activity === 'active') anyActive = true;
-      else if (activity === 'unknown') anyUnknown = true;
-    }
-    if (anyActive) return true;
-    if (anyUnknown) return true;
-    return false;
+    return children.some(
+      (child) =>
+        this.getBranchActivity(child.name, new Set([parentId])) !== 'finished',
+    );
   }
 
   private getStatus(name: StreamTabId): string {

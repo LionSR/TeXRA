@@ -632,9 +632,9 @@ export class MainApp extends MainAppBase {
 
   private handleSetMultipleFiles(message: SetMultipleFilesMessage): void {
     const files = message.files ?? [];
-    const listId = this.extractFileKeyFromCommand(
-      message.command,
-    ) as keyof MultiFiles;
+    const listId = MULTI_FILE_COMMAND_TO_KEY[
+      message.command
+    ] as keyof MultiFiles;
     if (!listId) return;
 
     this.multiFiles.set({ ...this.multiFiles.get(), [listId]: files });
@@ -892,14 +892,6 @@ export class MainApp extends MainAppBase {
     this.saveState();
   }
 
-  /**
-   * Extracts the multi-list key from a SET_*_FILES command name.
-   * Compile-time verifiable via the `MULTI_FILE_COMMAND_TO_KEY` map.
-   */
-  private extractFileKeyFromCommand(command: string): string | undefined {
-    return MULTI_FILE_COMMAND_TO_KEY[command];
-  }
-
   private handleRemoveFile(listId: keyof MultiFiles, file: string): void {
     const files = (this.multiFiles.get()[listId] ?? []).filter(
       (f: string) => f !== file,
@@ -1096,14 +1088,12 @@ export class MainApp extends MainAppBase {
     return opt?.isOrchestrator ?? false;
   }
 
-  private getPlaceholderKey(): keyof typeof ONBOARDING_PLACEHOLDERS {
-    return this.isSelectedAgentOrchestrator()
-      ? 'orchestrator'
-      : this.sessionType.get();
-  }
-
   private refreshInstructionPlaceholder(advance: boolean): void {
-    const placeholders = ONBOARDING_PLACEHOLDERS[this.getPlaceholderKey()];
+    const placeholderKey: keyof typeof ONBOARDING_PLACEHOLDERS =
+      this.isSelectedAgentOrchestrator()
+        ? 'orchestrator'
+        : this.sessionType.get();
+    const placeholders = ONBOARDING_PLACEHOLDERS[placeholderKey];
     if (!placeholders.length) return;
     const current = this.instructionPlaceholder.get();
     const currentIndex = placeholders.indexOf(current);
