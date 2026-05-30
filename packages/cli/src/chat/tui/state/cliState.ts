@@ -64,6 +64,7 @@ export interface ProcessOutputTail {
 }
 
 export interface BypassState {
+  readonly bash: boolean;
   readonly toolEdit: boolean;
   readonly superYolo: boolean;
 }
@@ -163,7 +164,11 @@ export const cliState = {
   >,
 };
 
-export const NO_BYPASS: BypassState = { toolEdit: false, superYolo: false };
+export const NO_BYPASS: BypassState = {
+  bash: false,
+  toolEdit: false,
+  superYolo: false,
+};
 
 function emptySlice(streamId: StreamTabId): StreamSlice {
   return {
