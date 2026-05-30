@@ -47,6 +47,7 @@ interface InputEventEmitterLike {
 
 const MIN_TRANSCRIPT_WIDTH = 20;
 const FOREGROUND_TRANSCRIPT_ROWS = 1;
+const CHILD_CONTROL_FOREGROUND_MAX_ROWS = 12;
 // Cap the bottom subagent/todos panels so they never crowd out the
 // conversation or push the input bar off-screen.
 const BOTTOM_PANEL_MAX_ROWS = 10;
@@ -77,11 +78,13 @@ function pinnedChromeRows({
 }
 
 export function allocateMiddleRows({
+  foregroundMaxRows,
   foregroundOpen,
   reverseSearchOpen,
   rows,
   slashPaletteOpen,
 }: {
+  readonly foregroundMaxRows?: number;
   readonly foregroundOpen: boolean;
   readonly reverseSearchOpen: boolean;
   readonly rows: number;
@@ -108,8 +111,12 @@ export function allocateMiddleRows({
     FOREGROUND_TRANSCRIPT_ROWS,
     availableRows - 1,
   );
+  const foregroundRows = availableRows - transcriptRows;
   return {
-    foregroundRows: availableRows - transcriptRows,
+    foregroundRows:
+      foregroundMaxRows === undefined
+        ? foregroundRows
+        : Math.min(foregroundRows, Math.max(1, foregroundMaxRows)),
     transcriptRows,
   };
 }
@@ -281,7 +288,17 @@ export function App(props: AppProps): React.JSX.Element {
     activeSlice !== undefined &&
     (activeSlice.todos.length > 0 || activeSlice.plan !== null);
   const transcriptWidth = Math.max(MIN_TRANSCRIPT_WIDTH, columns);
+  const foregroundKind = foregroundSurfaceKind({
+    activeFormOpen: activeForm !== undefined,
+    childControlMode,
+    pendingApproval: pending !== undefined,
+    transcriptViewerOpen,
+  });
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
+    foregroundMaxRows:
+      foregroundKind === 'childControls'
+        ? CHILD_CONTROL_FOREGROUND_MAX_ROWS
+        : undefined,
     foregroundOpen,
     reverseSearchOpen,
     rows,
@@ -299,12 +316,6 @@ export function App(props: AppProps): React.JSX.Element {
     hasSubagentPanel,
     hasTodosPlanPanel,
     rows: bottomPanelBudget,
-  });
-  const foregroundKind = foregroundSurfaceKind({
-    activeFormOpen: activeForm !== undefined,
-    childControlMode,
-    pendingApproval: pending !== undefined,
-    transcriptViewerOpen,
   });
   function renderForegroundSurface(): React.ReactNode {
     switch (foregroundKind) {
