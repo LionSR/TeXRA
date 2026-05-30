@@ -52,8 +52,10 @@ defineProps({
   font-size: var(--mk-fs-72);
 }
 
-/* Tints mirror the existing pills verbatim (accent purple at 12-14% alpha, the
-   task-tag amber, link-blue, success green) so nothing shifts visually. */
+/* Tints mirror the existing pills (accent purple, task-tag amber, link-blue,
+   success green) — every variant reads its colour from a theme token through
+   color-mix so the whole set flips with the docs light / dark theme and there
+   are no hardcoded literals. */
 .mk-pill--accent {
   color: var(--mk-accent);
   background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
@@ -63,8 +65,8 @@ defineProps({
   background: color-mix(in srgb, var(--color-success) 14%, transparent);
 }
 .mk-pill--warning {
-  color: #e0b341;
-  background: rgba(215, 169, 62, 0.16);
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 16%, transparent);
 }
 .mk-pill--info {
   color: var(--mk-syn-fn);
