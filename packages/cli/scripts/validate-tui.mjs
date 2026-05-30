@@ -97,20 +97,32 @@ const SCENARIOS = [
   {
     name: 'empty-task-picker',
     env: {
-      HARNESS_ENTRIES: '12',
-      HARNESS_CHILDREN: '1',
-      HARNESS_TODOS: '1',
-      HARNESS_CAN_DELEGATE: '1',
+      HARNESS_ENTRIES: '4',
     },
-    keys: [ESC + 'p', '\r', 'f', ESC + 'p'],
+    keys: [ESC + 'p'],
     frame: 'tail',
     expect: [
-      'Background tasks',
-      'Stream: strategy',
-      'No active background tasks.',
+      'Tasks and sub-workflows',
+      'Stream: main',
+      'No active tasks or sub-workflows.',
       'Esc close',
     ],
     unexpect: ['Enter view', 'k kill', 'navigate'],
+  },
+  {
+    name: 'task-picker-parent-fallback',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    keys: [ESC + 's', '\r', ESC + 'p'],
+    expect: [
+      'Tasks and sub-workflows',
+      'Stream: main (strategy has no tasks or sub-workflows)',
+      'strategy',
+      'latex build',
+    ],
   },
   {
     name: 'todos',
