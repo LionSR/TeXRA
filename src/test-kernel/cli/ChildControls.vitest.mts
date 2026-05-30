@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - CLI TUI state
 import {
+  childControlPickerHints,
   computePickerListLayout,
   computeTaskDetailLayout,
 } from '@cli/chat/tui/modals/ChildControlPicker';
@@ -552,5 +553,25 @@ describe('CLI child execution controls', () => {
       start: 7,
       visibleCount: 3,
     });
+  });
+
+  it('only shows applicable picker hints for empty child execution lists', () => {
+    expect(childControlPickerHints({ hasItems: false, mode: 'tasks' })).toEqual(
+      [{ key: 'Esc', action: 'close' }],
+    );
+    expect(childControlPickerHints({ hasItems: true, mode: 'tasks' })).toEqual([
+      { key: '↑/↓', action: 'navigate' },
+      { key: 'Enter', action: 'view' },
+      { key: 'k', action: 'kill' },
+      { key: 'Esc', action: 'close' },
+    ]);
+    expect(
+      childControlPickerHints({ hasItems: true, mode: 'subagents' }),
+    ).toEqual([
+      { key: '↑/↓', action: 'navigate' },
+      { key: 'Enter', action: 'focus' },
+      { key: 'k', action: 'kill' },
+      { key: 'Esc', action: 'close' },
+    ]);
   });
 });
