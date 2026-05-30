@@ -25,7 +25,9 @@ import {
   chmodSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -170,6 +172,27 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'subagent-picker',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 's'], // Option/Alt-s
+    expect: [
+      'Subagents',
+      'Stream: main',
+      'strategy',
+      'leanSolver',
+      'reviewer',
+      'Enter focus',
+      'Esc close',
+    ],
+    unexpect: ['Tasks and sub-workflows', 'latex build'],
+    maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
+  },
+  {
     name: 'task-picker',
     env: {
       HARNESS_ENTRIES: '4',
@@ -185,6 +208,43 @@ const SCENARIOS = [
       'k kill',
       'Esc close',
     ],
+    maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
+  },
+  {
+    name: 'narrow-subagent-picker',
+    cols: 60,
+    rows: 18,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 's'], // Option/Alt-s
+    frame: 'tail',
+    expect: ['Subagents', 'Stream: main', 'strategy', 'Enter focus'],
+    unexpect: ['sub-workfl\now', '\n────╯'],
+    maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
+  },
+  {
+    name: 'narrow-task-picker',
+    cols: 60,
+    rows: 18,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 'p'], // Option/Alt-p
+    frame: 'tail',
+    expect: [
+      'Tasks and sub-workflows',
+      'Stream: main',
+      'strategy',
+      'Enter view',
+    ],
+    unexpect: ['sub-workfl\now', '\n────╯'],
     maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
   },
   {
@@ -363,14 +423,22 @@ if (process.env.TEXRA_TUI_HARNESS) {
   }
 }
 
-const COLS = Number(process.env.TUI_VALIDATE_COLS ?? '100');
-const ROWS = Number(process.env.TUI_VALIDATE_ROWS ?? '40');
+const DEFAULT_COLS = Number(process.env.TUI_VALIDATE_COLS ?? '100');
+const DEFAULT_ROWS = Number(process.env.TUI_VALIDATE_ROWS ?? '40');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function makeTerm() {
+function scenarioCols(scenario) {
+  return Number(scenario.cols ?? DEFAULT_COLS);
+}
+
+function scenarioRows(scenario) {
+  return Number(scenario.rows ?? DEFAULT_ROWS);
+}
+
+function makeTerm(scenario) {
   return new Terminal({
-    cols: COLS,
-    rows: ROWS,
+    cols: scenarioCols(scenario),
+    rows: scenarioRows(scenario),
     scrollback: 8000,
     allowProposedApi: true,
   });
@@ -389,9 +457,9 @@ function renderFrame(term) {
   return lines.join('\n');
 }
 
-function frameTail(frame) {
+function frameTail(frame, rows) {
   const lines = frame.split('\n');
-  return lines.slice(-Math.min(lines.length, ROWS)).join('\n');
+  return lines.slice(-Math.min(lines.length, rows)).join('\n');
 }
 
 function blankLinesBetween(frame, from, to) {
@@ -412,16 +480,27 @@ function snapshotFileName(index, name) {
   return `${prefix}-${name.replace(/[^a-z0-9._-]+/gi, '-')}.txt`;
 }
 
-function writeSnapshot(index, name, frame) {
+function resetSnapshotDir(dir) {
+  mkdirSync(dir, { recursive: true });
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isFile() || !/^\d+-[a-z0-9._-]+\.txt$/i.test(entry.name)) {
+      continue;
+    }
+    unlinkSync(path.join(dir, entry.name));
+  }
+}
+
+function writeSnapshot(index, name, frame, rows) {
   if (!snapshotDir) return;
-  mkdirSync(snapshotDir, { recursive: true });
   const file = path.join(snapshotDir, snapshotFileName(index, name));
-  const content = frameTail(frame);
+  const content = frameTail(frame, rows);
   writeFileSync(file, `${content}${content.endsWith('\n') ? '' : '\n'}`);
 }
 
 async function runScenario(scenario) {
-  const term = makeTerm();
+  const term = makeTerm(scenario);
+  const cols = scenarioCols(scenario);
+  const rows = scenarioRows(scenario);
   let lastData = Date.now();
   let exited = null;
   let writeQueue = Promise.resolve();
@@ -434,8 +513,8 @@ async function runScenario(scenario) {
     ...scenario.env,
     TERM: 'xterm-256color',
     FORCE_COLOR: '3',
-    COLUMNS: String(COLS),
-    LINES: String(ROWS),
+    COLUMNS: String(cols),
+    LINES: String(rows),
   };
   // The validator intentionally exercises an interactive TTY. Inherited CI
   // markers make Ink choose a non-interactive render mode and hide the live
@@ -444,8 +523,8 @@ async function runScenario(scenario) {
   delete childEnv.NO_COLOR;
   const child = ptySpawn(process.execPath, [HARNESS], {
     name: 'xterm-256color',
-    cols: COLS,
-    rows: ROWS,
+    cols,
+    rows,
     cwd: CLI_ROOT,
     env: childEnv,
   });
@@ -488,7 +567,8 @@ async function runScenario(scenario) {
   await sleep(250);
 
   const fullFrame = await frameSnapshot();
-  const frame = scenario.frame === 'tail' ? frameTail(fullFrame) : fullFrame;
+  const frame =
+    scenario.frame === 'tail' ? frameTail(fullFrame, rows) : fullFrame;
 
   // exit cleanly: Ctrl-C (a second one if the first only interrupts a run)
   for (let attempt = 0; attempt < 2 && !exited; attempt += 1) {
@@ -536,14 +616,17 @@ async function runScenario(scenario) {
     failures,
     frame,
     fullFrame,
+    rows,
   };
 }
+
+if (snapshotDir) resetSnapshotDir(snapshotDir);
 
 let failed = 0;
 for (const [index, scenario] of scenarios.entries()) {
   // eslint-disable-next-line no-await-in-loop
   const result = await runScenario(scenario);
-  writeSnapshot(index, result.name, result.fullFrame);
+  writeSnapshot(index, result.name, result.fullFrame, result.rows);
   if (result.ok) {
     console.log(`✓ ${result.name}`);
   } else {
@@ -552,7 +635,7 @@ for (const [index, scenario] of scenarios.entries()) {
     for (const f of result.failures) console.log(`    - ${f}`);
     console.log('    --- captured frame (tail) ---');
     console.log(
-      frameTail(result.frame)
+      frameTail(result.frame, result.rows)
         .split('\n')
         .map((l) => `    | ${l}`)
         .join('\n'),
