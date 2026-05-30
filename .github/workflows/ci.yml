@@ -120,8 +120,19 @@ jobs:
       - name: Compile
         run: pnpm run compile
 
-      - name: Build initial extension and desktop artifacts
-        run: pnpm run build:initial
+      - name: Build extension package
+        run: pnpm run build:fast
+
+      - name: Check extension VSIX contents
+        run: pnpm run check:vsix-contents
+
+      - name: Build desktop artifacts
+        if: github.event_name != 'pull_request'
+        run: pnpm run desktop:build
+
+      - name: Check desktop build artifacts
+        if: github.event_name != 'pull_request'
+        run: pnpm run check:desktop-build-artifacts
 
       - name: Package desktop app
         if: github.event_name != 'pull_request' && runner.os == 'macOS'
@@ -158,6 +169,7 @@ jobs:
           retention-days: 14
 
       - name: Upload desktop build artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
         with:
           name: texra-desktop-dist-${{ runner.os }}
