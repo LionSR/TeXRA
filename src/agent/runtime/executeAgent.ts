@@ -23,6 +23,7 @@ import {
   classifyAgentError,
   getSdkErrorMessage,
 } from '@common/errors';
+import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import {
   STREAM_STATUS,
@@ -236,12 +237,8 @@ async function runFlowWithLifecycle(
           message:
             'API key not found. Set your API key in the extension settings and run again.',
           actions: [
-            { title: 'Set API Key', command: 'texra.setApiKey' },
-            {
-              title: 'Open Settings Guide',
-              command: 'texra.openDoc',
-              args: ['configuration'],
-            },
+            INSTRUCTION_ACTION.SET_API_KEY,
+            INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE,
           ],
           showSuppress: false,
         });

@@ -1,6 +1,6 @@
 # Agent SDK Readiness — Findings & Refactoring Plan
 
-**Status:** Audit (2026-05-30). **Steps 1–2 landed**; Steps 3–7 pending.
+**Status:** Audit (2026-05-30). **Steps 1–3 landed**; Steps 4–7 pending.
 **Scope:** `src/agent/` core + runtime, `src/agent/modelHandlers/`, logger (`src/logger/` + `src/agent/trace/`), and the public/packaging surface (`packages/core`, `packages/cli` consumption, `@agent/*` aliases, `src/platform`).
 **Target:** Alignment with the **Claude Agent SDK** (`@anthropic-ai/claude-agent-sdk`) patterns — one curated package surface, a single `query()`-style entry returning a typed async stream, one structured `Options` object, a thin provider layer, tools-as-data, and subagents-as-config.
 **Related:** [`agent-trace-sdk-surface.md`](./agent-trace-sdk-surface.md), [`logger-simplification-feasibility.md`](./logger-simplification-feasibility.md), [`unified-output-protocol.md`](./unified-output-protocol.md).
@@ -143,7 +143,7 @@ Each step is independently shippable; later steps are additive so nothing breaks
 
 1. ✅ **Zero-risk cleanups (LANDED):** removed the dead `getDefaultAgentRuntimeHost` singleton (migrated ~9 tests to local hosts); collapsed `InterruptCallbacks` into `Pick<BaseFlowContextInit,…>`; deleted the unreachable `domainMessageType` arms; deleted the bypassed `core/index.ts` barrel (Item 4). Typecheck + vitest + eslint clean.
 2. ✅ **Break `@logger → @transcript` (LANDED):** relocated `createRunTrace`/`flushPendingRunTraces`/`RunTrace` into `@transcript` (the verifier's "move the two symbols" option — lower risk than parameterizing, since ~10 test callers depend on the default transcript behavior); `@logger` now imports nothing from `@transcript`, leaving `createChannelTrace` as its only run-trace factory. Pure relocation + import-path swaps, no behavior change. Typecheck (×4) + vitest (63 tests) + eslint clean.
-3. **Minimal host-command de-leak (1 PR):** swap the inline `texra.*` action literals for a typed action token keyed off the existing `AgentErrorKind`. No contract change.
+3. ✅ **Minimal host-command de-leak (LANDED):** the agent core no longer bakes `texra.*` command IDs / English button titles into `requestShowInstruction`. It emits host-agnostic `INSTRUCTION_ACTION` tokens (`@eventBus`); the VS Code extension maps each token → command + label in `agentEventListeners.ts`. Desktop/CLI already ignore these events (unchanged). Typecheck (×4) + vitest + eslint clean; no test changes needed (the `texra.*` IDs stay registered in the extension).
 4. **Barrels as packaging prep:** add curated `runtime/index.ts` and `toolUse/index.ts` re-exporting the host-facing surface; delete the half-used `core/index.ts`. Do **not** mass-migrate the 125+ deep imports (churn without a lint gate). These feed Step 5.
 5. **Populate `@texra/core`:** replace the stub with re-exports of the Step-4 barrels + `@platform` + registry + storage + config/validation + trace + result. Purely additive (aliases stay); add a _warn-only_ `no-restricted-imports` rule steering new host code to `@texra/core`.
 6. **Unify the run entry:** widen `RunExecutionRequestOptions` to the full option set so `runValidatedExecutionRequest` becomes the single entry; migrate the CLI chat path (`runChatTui.tsx:819`) and `DelegationTools.ts:365` onto it. Behavior-preserving per call site.

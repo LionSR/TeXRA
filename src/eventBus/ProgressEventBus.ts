@@ -59,6 +59,22 @@ interface SetTaskStatePayload {
 
 const MAX_BUFFER_SIZE = 1000;
 
+/**
+ * Host-agnostic action tokens for {@link ProgressEventPayloads.requestShowInstruction}.
+ * The agent core emits a token; each host maps it to its own UI affordance
+ * (the VS Code extension to a command + button title, other hosts as they see
+ * fit). This keeps host-specific command IDs and labels out of the VS Code-free
+ * agent core.
+ */
+export const INSTRUCTION_ACTION = {
+  SET_API_KEY: 'set-api-key',
+  OPEN_CONFIGURATION_GUIDE: 'open-configuration-guide',
+  OPEN_MODELS_DOC: 'open-models-doc',
+} as const;
+
+export type InstructionAction =
+  (typeof INSTRUCTION_ACTION)[keyof typeof INSTRUCTION_ACTION];
+
 export interface ProgressEventPayloads {
   setActiveStream: SetActiveStreamPayload;
   updateStreamStatus: {
@@ -216,8 +232,11 @@ export interface ProgressEventPayloads {
   requestShowInstruction: {
     key: string;
     message: string;
-    /** Actions rendered as buttons. Each maps to a VS Code command. */
-    actions?: { title: string; command: string; args?: unknown[] }[];
+    /**
+     * Host-agnostic action tokens rendered as buttons. The host maps each
+     * token to its own UI affordance (see {@link INSTRUCTION_ACTION}).
+     */
+    actions?: InstructionAction[];
     showSuppress?: boolean;
   };
   /** Request the frontend to show the agent-config banner in the main webview. */
