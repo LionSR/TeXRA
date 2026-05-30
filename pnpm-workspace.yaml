@@ -16,6 +16,7 @@ allowBuilds:
   electron-winstaller: true
   esbuild: true
   keytar: true
+  node-pty: true
   protobufjs: true
 patchedDependencies:
   ink@7.0.5: patches/ink@7.0.5.patch
