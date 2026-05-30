@@ -50,17 +50,16 @@ export function emptyPickerText(mode: ChildControlMode): string {
 export function pickerKeyHints(
   mode: ChildControlMode,
   itemCount: number,
+  canKill = itemCount > 0,
 ): readonly KeyHint[] {
   if (itemCount <= 0) {
     return [{ key: 'Esc', action: 'close' }];
   }
   const hints: KeyHint[] = [{ key: '↑/↓', action: 'navigate' }];
   if (itemCount > 1) hints.push({ key: '1-9', action: 'jump' });
-  hints.push(
-    { key: 'Enter', action: mode === 'subagents' ? 'focus' : 'view' },
-    { key: 'k', action: 'kill' },
-    { key: 'Esc', action: 'close' },
-  );
+  hints.push({ key: 'Enter', action: mode === 'subagents' ? 'focus' : 'view' });
+  if (canKill) hints.push({ key: 'k', action: 'kill' });
+  hints.push({ key: 'Esc', action: 'close' });
   return hints;
 }
 
@@ -285,7 +284,7 @@ function TaskDetailView({
       return: key.return,
     });
     if (action.kind === 'close') onBack();
-    if (action.kind === 'kill') onKill();
+    if (action.kind === 'kill' && item.killable) onKill();
     if (action.kind === 'up') {
       setScrollOffset((current) => Math.max(0, current - 1));
     }
@@ -345,7 +344,7 @@ function TaskDetailView({
               ...(item.childStreamId
                 ? [{ key: 'f', action: 'focus stream' }]
                 : []),
-              { key: 'k', action: 'kill' },
+              ...(item.killable ? [{ key: 'k', action: 'kill' }] : []),
               { key: 'Esc', action: 'back' },
             ]}
             confirmCancel={false}
@@ -445,7 +444,7 @@ export function ChildControlPicker({
         }
         case 'kill': {
           const item = items[highlight];
-          if (!item) return;
+          if (!item?.killable) return;
           onKillExecution(item.executionId);
           onClose();
           return;
@@ -513,7 +512,11 @@ export function ChildControlPicker({
       </Box>
       <Box marginTop={1}>
         <KeyHints
-          hints={pickerKeyHints(mode, items.length)}
+          hints={pickerKeyHints(
+            mode,
+            items.length,
+            items[highlight]?.killable ?? false,
+          )}
           confirmCancel={false}
         />
       </Box>
