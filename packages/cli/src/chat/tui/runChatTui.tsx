@@ -39,6 +39,7 @@ import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
+import { resolveCliRunnableModel } from '@cli/runtime/modelAccess';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import {
@@ -277,6 +278,25 @@ async function applyInitialCliModelSelection(
   }
 }
 
+async function reconcileRootModelAfterApiModeChange(
+  context: SlashCommandContext | undefined,
+): Promise<string | undefined> {
+  if (!context || !chatTuiCanStartRootRun(context.session)) return undefined;
+
+  const currentModel = cliState.sessionMeta.get().model;
+  const resolution = await resolveCliRunnableModel(currentModel, {
+    allowFallback: true,
+  });
+  if (resolution.model === currentModel) return undefined;
+
+  await setCliHelperModel(resolution.model);
+  cliState.sessionMeta.set({
+    ...cliState.sessionMeta.get(),
+    model: resolution.model,
+  });
+  return resolution.notice;
+}
+
 function openCliModelListForm(context: SlashCommandContext): void {
   const selectable = chatTuiCanStartRootRun(context.session);
   cliState.activeForm.set({
@@ -298,6 +318,7 @@ function openCliModelListForm(context: SlashCommandContext): void {
 
 async function applyCliApiModeSelection(
   mode: string | CliApiMode,
+  context?: SlashCommandContext,
 ): Promise<void> {
   const normalized = mode.trim().toLowerCase();
 
@@ -312,12 +333,21 @@ async function applyCliApiModeSelection(
   const apiMode = parseCliApiMode(normalized);
   if (apiMode) {
     await setCliApiMode(apiMode);
+    let modelNotice: string | undefined;
+    try {
+      modelNotice = await reconcileRootModelAfterApiModeChange(context);
+    } catch (error: unknown) {
+      modelNotice = toErrorMessage(error);
+    }
     cliState.sessionMeta.set({
       ...cliState.sessionMeta.get(),
       apiMode,
     });
     appendLocalAssistantTranscript(
-      `API mode set to ${formatCliApiMode(apiMode)}.`,
+      [
+        `API mode set to ${formatCliApiMode(apiMode)}.`,
+        ...(modelNotice ? [modelNotice] : []),
+      ].join('\n'),
     );
     return;
   }
@@ -539,11 +569,11 @@ async function handleTuiSlashCommand(
       return true;
     case 'api':
       if (!rest) {
-        openCliApiModeForm(applyCliApiModeSelection);
+        openCliApiModeForm((mode) => applyCliApiModeSelection(mode, context));
         return true;
       }
       try {
-        await applyCliApiModeSelection(rest);
+        await applyCliApiModeSelection(rest, context);
       } catch (error: unknown) {
         appendLocalAssistantTranscript(toErrorMessage(error));
       }
@@ -669,7 +699,20 @@ export async function runChat(
     envAgent: context.envAgent,
     envModel: context.envModel,
   });
-  const { agent, model } = defaults;
+  const explicitModelRequested = Boolean(
+    init.modelOverride?.trim() || context.envModel?.trim(),
+  );
+  let modelResolution: Awaited<ReturnType<typeof resolveCliRunnableModel>>;
+  try {
+    modelResolution = await resolveCliRunnableModel(defaults.model, {
+      allowFallback: !explicitModelRequested,
+    });
+  } catch (error: unknown) {
+    writeTextStderr(toErrorMessage(error));
+    return { exitCode: CliExitCode.Usage };
+  }
+  const { agent } = defaults;
+  const model = modelResolution.model;
   await setCliHelperModel(model);
   const version = await readCliVersion();
 
@@ -710,6 +753,9 @@ export async function runChat(
     teamName: init.teamName,
     version,
   });
+  if (modelResolution.notice) {
+    appendLocalAssistantTranscript(modelResolution.notice);
+  }
 
   const inputHistory = await loadInputHistory();
 
@@ -886,7 +932,8 @@ export async function runChat(
     canSelectModel: () => chatTuiCanStartRootRun(session),
     onModelSelect: (nextModel) =>
       applyInitialCliModelSelection(nextModel, slashCommandContext()),
-    onApiModeSelect: applyCliApiModeSelection,
+    onApiModeSelect: (nextMode) =>
+      applyCliApiModeSelection(nextMode, slashCommandContext()),
     onMemorySelect: showCliMemoryPreview,
     onMemoryError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));
