@@ -74,20 +74,15 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     [isControlled, value.length, onCursorChange],
   );
 
-  const replaceText = useCallback(
-    (nextValue: string, nextCursor: number) => {
-      const c = clampCursor(nextCursor, nextValue.length);
-      lastEmittedValueRef.current = nextValue;
-      onChange(nextValue);
+  const applyEdit = useCallback(
+    (edit: TextEdit) => {
+      const c = clampCursor(edit.cursor, edit.value.length);
+      lastEmittedValueRef.current = edit.value;
+      onChange(edit.value);
       if (!isControlled) setInternalCursor(c);
       onCursorChange?.(c);
     },
     [isControlled, onChange, onCursorChange],
-  );
-
-  const applyEdit = useCallback(
-    (edit: TextEdit) => replaceText(edit.value, edit.cursor),
-    [replaceText],
   );
 
   useInput(

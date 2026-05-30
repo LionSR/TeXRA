@@ -381,9 +381,11 @@ export function renderAnsiMarkdown(
     });
     cachedWidth = options.width;
   }
-  return wrapAnsiToWidth(cachedProcessor(content), options.width, {
-    preserveMarkdownPrefix: true,
-  }).trimEnd();
+  return wrapAnsiToWidth(
+    cachedProcessor(content),
+    options.width,
+    true,
+  ).trimEnd();
 }
 
 /** Test seam: drop the cached processor so tests can re-init cleanly. */

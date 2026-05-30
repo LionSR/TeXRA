@@ -4,10 +4,6 @@ const MIN_WRAP_WIDTH = 1;
 const ESC = String.fromCharCode(27);
 const BEL = String.fromCharCode(7);
 
-export interface WrapAnsiOptions {
-  readonly preserveMarkdownPrefix?: boolean;
-}
-
 function normalizedWidth(width: number | undefined): number | undefined {
   if (width == null || !Number.isFinite(width)) return undefined;
   return Math.max(MIN_WRAP_WIDTH, Math.floor(width));
@@ -130,7 +126,7 @@ function wrapLine(line: string, columns: number): string {
 export function wrapAnsiToWidth(
   text: string,
   width?: number,
-  options: WrapAnsiOptions = {},
+  preserveMarkdownPrefix = false,
 ): string {
   const columns = normalizedWidth(width);
   if (columns == null) return text;
@@ -138,7 +134,7 @@ export function wrapAnsiToWidth(
   return text
     .split('\n')
     .map((line) =>
-      options.preserveMarkdownPrefix
+      preserveMarkdownPrefix
         ? wrapMarkdownPrefixedLine(line, columns)
         : wrapLine(line, columns),
     )

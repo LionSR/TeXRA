@@ -109,7 +109,6 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const maxDiffLines = editApprovalDiffRowsBudget({
     availableRows: props.availableRows,
     columns,
-    feedbackPlaceholder: EDIT_APPROVAL_FEEDBACK_PLACEHOLDER,
     feedbackMode,
     feedbackValue,
     title,

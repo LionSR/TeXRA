@@ -59,15 +59,10 @@ export function registerBuiltinSlashCommands(options?: {
 }): void {
   const onAgentSelect: AgentSelectHandler =
     options?.onAgentSelect ?? ((value) => patchSessionMeta('agent', value));
-  const onApprovalPolicySelect = options?.onApprovalPolicySelect;
   const onModelSelect: ModelSelectHandler =
     options?.onModelSelect ?? ((value) => patchSessionMeta('model', value));
   const onApiModeSelect: ApiModeSelectHandler =
     options?.onApiModeSelect ?? ((value) => patchSessionMeta('apiMode', value));
-  const onMemorySelect = options?.onMemorySelect;
-  const onMemoryError = options?.onMemoryError;
-  const onResumeSelect = options?.onResumeSelect;
-  const onResumeError = options?.onResumeError;
 
   function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = cliState.sessionMeta.get().agent;
@@ -104,7 +99,11 @@ export function registerBuiltinSlashCommands(options?: {
       <ApprovalPolicyForm
         currentPolicy={current}
         onSelect={(value) =>
-          settleThenDone(onApprovalPolicySelect?.(value), value, props.onDone)
+          settleThenDone(
+            options?.onApprovalPolicySelect?.(value),
+            value,
+            props.onDone,
+          )
         }
         onCancel={() => props.onDone(undefined)}
       />
@@ -134,10 +133,10 @@ export function registerBuiltinSlashCommands(options?: {
         availableRows={props.availableRows}
         onSelect={(value) =>
           settleThenDone(
-            onMemorySelect?.(value),
+            options?.onMemorySelect?.(value),
             value,
             props.onDone,
-            onMemoryError,
+            options?.onMemoryError,
           )
         }
         onClose={() => props.onDone(undefined)}
@@ -150,7 +149,12 @@ export function registerBuiltinSlashCommands(options?: {
       <ResumeListForm
         availableRows={props.availableRows}
         onSelect={(id) =>
-          settleThenDone(onResumeSelect?.(id), id, props.onDone, onResumeError)
+          settleThenDone(
+            options?.onResumeSelect?.(id),
+            id,
+            props.onDone,
+            options?.onResumeError,
+          )
         }
         onClose={() => props.onDone(undefined)}
       />
