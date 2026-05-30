@@ -5,6 +5,8 @@ import {
   modelSelectWindow,
 } from '@cli/chat/tui/forms/ModelListForm';
 import {
+  nextSelectHighlightIndex,
+  selectInitialHighlightIndex,
   selectItemRenderKey,
   visibleSelectRange,
 } from '@cli/chat/tui/ui/Select';
@@ -114,6 +116,96 @@ describe('CLI Select visible range', () => {
         maxVisibleItems: 5,
       }),
     ).toEqual({ start: 3, end: 8 });
+  });
+});
+
+describe('CLI Select disabled-row focus', () => {
+  const items = [
+    { value: 'gemini', label: 'Gemini', disabled: true },
+    { value: 'sonnet', label: 'Sonnet' },
+    { value: 'opus', label: 'Opus' },
+    { value: 'deepseek', label: 'DeepSeek', disabled: true },
+  ];
+
+  it('starts on the active row when it is enabled', () => {
+    expect(
+      selectInitialHighlightIndex({
+        activeValue: 'sonnet',
+        items,
+      }),
+    ).toBe(1);
+  });
+
+  it('starts on the first enabled row when the active row is disabled', () => {
+    expect(
+      selectInitialHighlightIndex({
+        activeValue: 'deepseek',
+        items,
+      }),
+    ).toBe(1);
+  });
+
+  it('starts on the first enabled row when the requested initial row is disabled', () => {
+    expect(
+      selectInitialHighlightIndex({
+        initialIndex: 3,
+        items,
+      }),
+    ).toBe(1);
+  });
+
+  it('keeps arrow navigation directional around disabled rows', () => {
+    expect(
+      nextSelectHighlightIndex({
+        direction: 1,
+        highlight: 1,
+        items,
+      }),
+    ).toBe(2);
+    expect(
+      nextSelectHighlightIndex({
+        direction: 1,
+        highlight: 2,
+        items,
+      }),
+    ).toBe(2);
+    expect(
+      nextSelectHighlightIndex({
+        direction: -1,
+        highlight: 1,
+        items,
+      }),
+    ).toBe(1);
+    expect(
+      nextSelectHighlightIndex({
+        direction: -1,
+        highlight: 2,
+        items,
+      }),
+    ).toBe(1);
+  });
+
+  it('keeps wraparound navigation for all-enabled lists', () => {
+    const enabledItems = [
+      { value: 'gemini', label: 'Gemini' },
+      { value: 'sonnet', label: 'Sonnet' },
+      { value: 'opus', label: 'Opus' },
+    ];
+
+    expect(
+      nextSelectHighlightIndex({
+        direction: -1,
+        highlight: 0,
+        items: enabledItems,
+      }),
+    ).toBe(2);
+    expect(
+      nextSelectHighlightIndex({
+        direction: 1,
+        highlight: 2,
+        items: enabledItems,
+      }),
+    ).toBe(0);
   });
 });
 
