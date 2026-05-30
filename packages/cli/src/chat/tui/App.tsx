@@ -467,8 +467,10 @@ export function App(props: AppProps): React.JSX.Element {
           ) : null}
           {foregroundSurface ? (
             <Box
+              flexDirection="column"
               height={foregroundRows}
               alignItems="flex-start"
+              justifyContent="flex-end"
               overflowY="hidden"
             >
               {foregroundSurface}
