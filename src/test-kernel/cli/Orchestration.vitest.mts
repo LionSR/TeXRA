@@ -111,8 +111,29 @@ describe('CLI orchestration items', () => {
 
     expect(items.find((item) => item.label === 'Team Physicist')).toEqual(
       expect.objectContaining({
-        value: { kind: 'preset', preset: 'physicist' },
+        value: expect.objectContaining({
+          kind: 'preset',
+          preset: 'physicist',
+        }),
         description: 'built-in; workflow:1; tool-use:2',
+      }),
+    );
+  });
+
+  it('carries preset display names through team launch actions', () => {
+    const items = buildCliOrchestrationItems({
+      presets: [preset({ id: 'physicist', name: 'Physicist' })],
+      history: [],
+      toolUseAgents: [],
+    });
+
+    expect(items.find((item) => item.label === 'Team Physicist')).toEqual(
+      expect.objectContaining({
+        value: {
+          kind: 'preset',
+          preset: 'physicist',
+          presetName: 'Physicist',
+        },
       }),
     );
   });
