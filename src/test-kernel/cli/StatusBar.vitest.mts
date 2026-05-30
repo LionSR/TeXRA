@@ -273,7 +273,7 @@ describe('CLI StatusBar display model', () => {
     expect(idle.left.map(statusBarSegmentText)).toEqual(['◆', 'idle', 'api']);
   });
 
-  it('preserves YOLO and BYPASS badges without agent/model text', () => {
+  it('preserves YOLO and auto-approval badges without agent/model text', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,
       pendingExitHint: false,
@@ -297,7 +297,7 @@ describe('CLI StatusBar display model', () => {
       'running',
       'api',
       'YOLO',
-      'BYPASS',
+      'AUTO-APPROVE',
     ]);
     expect(display.left.at(-2)).toMatchObject({
       badge: true,
@@ -329,7 +329,7 @@ describe('CLI StatusBar display model', () => {
       width: 60,
     });
 
-    expect(display.right).toBe('Keep the proof un…');
+    expect(display.right).toBe('Keep the pr…');
     expect(display.bindings).toContain('[Ctrl-C]exit');
   });
 

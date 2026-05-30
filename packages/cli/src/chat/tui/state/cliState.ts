@@ -91,7 +91,7 @@ export interface StreamSlice {
   /** Tailed stdout/stderr per execution id; latest only — capped at
    *  `PROCESS_TAIL_CHARS_MAX` in subscribeRuntimeHost. */
   readonly processOutput: ReadonlyMap<string, ProcessOutputTail>;
-  /** YOLO / BYPASS state is stream-scoped upstream (see
+  /** YOLO / auto-approval state is stream-scoped upstream (see
    *  `permissionSlice.ts` in the extension), so concurrent parent/child
    *  sessions can show distinct badges. */
   readonly bypass: BypassState;
