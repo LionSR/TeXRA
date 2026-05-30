@@ -9,6 +9,7 @@ import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   STREAM_STATUS,
   type ConversationProgress,
+  type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
 import { collapseWhitespace } from '@utils/text/stringUtils';
@@ -27,7 +28,7 @@ import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 
 type StatusBarColor = 'cyan' | 'yellow' | 'red' | 'dim';
-export type CtrlCAction = 'exit' | 'stop';
+export type CtrlCAction = 'exit' | 'stop' | 'stop root';
 
 export interface StatusBarSegment {
   readonly text: string;
@@ -309,6 +310,21 @@ function foregroundBindingsText(ctrlCAction: CtrlCAction): string {
   return `Use foreground panel shortcuts  [Ctrl-C]${ctrlCAction}`;
 }
 
+export function ctrlCActionForFocus({
+  activeStreamId,
+  canStopActiveRun,
+  parentStream,
+}: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly canStopActiveRun: boolean;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+}): CtrlCAction {
+  if (!canStopActiveRun) return 'exit';
+  return activeStreamId && parentStream.has(activeStreamId)
+    ? 'stop root'
+    : 'stop';
+}
+
 export function buildStatusBarDisplay(
   input: StatusBarDisplayInput,
 ): StatusBarDisplay {
@@ -436,7 +452,11 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     apiMode: shortCliApiMode(sessionMeta.apiMode),
     shiftEnterNewline: caps.kittyKeyboard,
     width: columns,
-    ctrlCAction: props.canStopActiveRun?.() ? 'stop' : 'exit',
+    ctrlCAction: ctrlCActionForFocus({
+      activeStreamId,
+      canStopActiveRun: props.canStopActiveRun?.() === true,
+      parentStream,
+    }),
     shortcutsActive: props.shortcutsActive,
   });
 
