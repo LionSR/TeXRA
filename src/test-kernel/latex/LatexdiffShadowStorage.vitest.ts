@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import { createWorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import {
   createExternalLocation,
@@ -59,7 +59,7 @@ describe('LaTeXdiffService shadow output', () => {
         {
           fs: nodeFilesystem,
           workspace: createNodeWorkspace(() => workspaceDir),
-          storage: createWorkspaceStorageProvider(storageRoot, workspaceDir),
+          storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
           globalState: createMemoryStore(),
           workspaceState: createMemoryStore(),
         },

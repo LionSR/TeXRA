@@ -17,7 +17,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createMemoryStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import { createWorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import {
   AbsoluteFS,
@@ -46,7 +46,7 @@ async function installPlatform(
       {
         fs: nodeFilesystem,
         workspace: createNodeWorkspace(() => workspaceDir),
-        storage: createWorkspaceStorageProvider(storageRoot, workspaceDir),
+        storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
         globalState: createMemoryStore(),
         workspaceState: createMemoryStore(),
       },

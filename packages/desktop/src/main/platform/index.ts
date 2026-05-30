@@ -8,7 +8,7 @@ import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
-import { createWorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { registerAgentFeatures } from '@agent/features';
@@ -43,7 +43,7 @@ export async function initializeElectronPlatform(
       DESKTOP_WORKSPACE_PATH_STATE_KEY,
     ),
   });
-  const storage = createWorkspaceStorageProvider(userDataPath, workspacePath);
+  const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
   const workspaceStateStore = await JsonStore.open(
     join(storage.getStoragePath(), 'state.json'),
   );
