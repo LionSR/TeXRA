@@ -54,6 +54,7 @@ import {
   chatTuiActiveChildFollowUpTarget,
   chatTuiShouldAnnounceQueuedFollowUp,
   clearTuiSessionRunState,
+  parseBtwFollowUpMessage,
 } from '@cli/chat/tui/runChatTui';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
@@ -537,6 +538,16 @@ describe('CLI TUI row allocation', () => {
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
     setParentStream(child1, root);
     expect(chatTuiShouldAnnounceQueuedFollowUp(child1)).toBe(false);
+  });
+
+  it('parses /btw as an explicit follow-up message', () => {
+    expect(parseBtwFollowUpMessage('/btw keep this aside')).toBe(
+      'keep this aside',
+    );
+    expect(parseBtwFollowUpMessage('/BTW   Keep casing')).toBe('Keep casing');
+    expect(parseBtwFollowUpMessage('/btw')).toBe('');
+    expect(parseBtwFollowUpMessage('ordinary prompt')).toBeUndefined();
+    expect(parseBtwFollowUpMessage('/status')).toBeUndefined();
   });
 
   it('clears stale resume ids when clearing chat session run state', () => {

@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   nextSlashPaletteHighlight,
+  slashPaletteEnterHintAction,
   slashPaletteWindow,
 } from '@cli/chat/tui/commands/SlashPalette';
 
 describe('SlashPalette navigation', () => {
   it('continues down into commands hidden behind the overflow marker', () => {
-    const itemCount = 14;
+    const itemCount = 15;
     expect(
       slashPaletteWindow({
         highlight: 7,
@@ -18,7 +19,7 @@ describe('SlashPalette navigation', () => {
       start: 0,
       end: 8,
       hiddenBefore: 0,
-      hiddenAfter: 6,
+      hiddenAfter: 7,
     });
 
     const next = nextSlashPaletteHighlight({
@@ -35,9 +36,9 @@ describe('SlashPalette navigation', () => {
         maxVisibleCommands: 8,
       }),
     ).toEqual({
-      start: 6,
-      end: 14,
-      hiddenBefore: 6,
+      start: 7,
+      end: 15,
+      hiddenBefore: 7,
       hiddenAfter: 0,
     });
   });
@@ -46,16 +47,39 @@ describe('SlashPalette navigation', () => {
     expect(
       nextSlashPaletteHighlight({
         direction: 1,
-        highlight: 13,
-        itemCount: 14,
+        highlight: 14,
+        itemCount: 15,
       }),
     ).toBe(0);
     expect(
       nextSlashPaletteHighlight({
         direction: -1,
         highlight: 0,
-        itemCount: 14,
+        itemCount: 15,
       }),
-    ).toBe(13);
+    ).toBe(14);
+  });
+
+  it('describes what Enter does for the highlighted slash command', () => {
+    expect(
+      slashPaletteEnterHintAction({
+        name: 'help',
+        description: 'show help',
+      }),
+    ).toBe('run');
+    expect(
+      slashPaletteEnterHintAction({
+        name: 'btw',
+        description: 'queue follow-up',
+        takesArgs: true,
+      }),
+    ).toBe('complete');
+    expect(
+      slashPaletteEnterHintAction({
+        name: 'model',
+        description: 'choose model',
+        formComponent: () => null,
+      }),
+    ).toBe('open');
   });
 });
