@@ -267,7 +267,8 @@ export class DiffCommandExecutor {
     pictureEnvs: string;
     subtype?: string;
   } {
-    const changesOnly = getWorkspaceState().get<boolean>(
+    const state = getWorkspaceState();
+    const changesOnly = state.get<boolean>(
       WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
       LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
     );
@@ -275,7 +276,7 @@ export class DiffCommandExecutor {
     return {
       mathMarkup:
         options?.mathMarkup ??
-        getWorkspaceState().get<MathMarkupOption>(
+        state.get<MathMarkupOption>(
           WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
           LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup as MathMarkupOption,
         ),

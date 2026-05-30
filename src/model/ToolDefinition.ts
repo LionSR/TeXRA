@@ -29,7 +29,3 @@ export const ToolDefinitionSchema = z.looseObject({
 
 /** Tool definition type - derived from schema */
 export type ToolDefinition = z.infer<typeof ToolDefinitionSchema>;
-
-// ============================================================================
-// Type Guards and Utilities
-// ============================================================================

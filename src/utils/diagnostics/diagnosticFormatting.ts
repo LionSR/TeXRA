@@ -48,17 +48,16 @@ const SEVERITY_CONFIG: Record<
   [SEVERITY_HINT]: { label: 'hint', countKey: 'hints', plural: 'hints' },
 };
 
-/** Ordered formatting config for consistent output */
+/** Ordered formatting config for consistent output, derived from SEVERITY_CONFIG. */
 const COUNT_FORMAT_ORDER: Array<{
   key: keyof SeverityCounts;
   label: string;
   plural: string;
-}> = [
-  { key: 'errors', label: 'error', plural: 'errors' },
-  { key: 'warnings', label: 'warning', plural: 'warnings' },
-  { key: 'info', label: 'info', plural: 'info' },
-  { key: 'hints', label: 'hint', plural: 'hints' },
-];
+}> = Object.values(SEVERITY_CONFIG).map(({ countKey, label, plural }) => ({
+  key: countKey,
+  label,
+  plural,
+}));
 
 /** Get the string label for a severity level. */
 export function getSeverityLabel(severity: number): string {
