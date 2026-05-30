@@ -8,6 +8,7 @@ import { execaSync } from 'execa';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
+import { hasExtension } from '@utils/core/pathCore';
 import { AbsoluteFS } from '@utils/files';
 
 /** Whether the current platform is Windows (cached at module load). */
@@ -269,7 +270,7 @@ function findToolInCommonPathsUncached(tool: string): string | null {
     return null;
   }
   const candidates = [tool];
-  if (!tool.toLowerCase().endsWith('.pl')) {
+  if (!hasExtension(tool, '.pl')) {
     candidates.push(`${tool}.pl`);
   }
   if (IS_WINDOWS) {
@@ -277,7 +278,7 @@ function findToolInCommonPathsUncached(tool: string): string | null {
     if (tool === 'gs') {
       candidates.push('gswin64c', 'gswin32c');
       candidates.push('gswin64c.exe', 'gswin32c.exe');
-    } else if (!tool.toLowerCase().endsWith('.exe')) {
+    } else if (!hasExtension(tool, '.exe')) {
       candidates.unshift(`${tool}.exe`);
     }
   }
