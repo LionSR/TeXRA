@@ -225,10 +225,15 @@ export function setParentStream(
 
 export function removeStream(streamId: StreamTabId): void {
   const current = cliState.streams.get();
-  if (!current.has(streamId)) return;
   const out = new Map(current);
-  out.delete(streamId);
-  cliState.streams.set(out);
+  let changed = out.delete(streamId);
+  for (const [id, slice] of out) {
+    const next = scrubChildStreamReferences(slice, streamId);
+    if (next === slice) continue;
+    out.set(id, next);
+    changed = true;
+  }
+  if (changed) cliState.streams.set(out);
   if (cliState.activeStreamId.get() === streamId) {
     cliState.activeStreamId.set(undefined);
   }
@@ -242,6 +247,37 @@ export function removeStream(streamId: StreamTabId): void {
     nextParents.delete(child);
   }
   if (nextParents) cliState.parentStream.set(nextParents);
+}
+
+function scrubChildStreamReferences(
+  slice: StreamSlice,
+  streamId: StreamTabId,
+): StreamSlice {
+  const activeSubagents = removeChildStreamReference(
+    slice.activeSubagents,
+    streamId,
+  );
+  const activeProcesses = removeChildStreamReference(
+    slice.activeProcesses,
+    streamId,
+  );
+  const childStreams = removeChildStreamReference(slice.childStreams, streamId);
+  if (
+    activeSubagents === slice.activeSubagents &&
+    activeProcesses === slice.activeProcesses &&
+    childStreams === slice.childStreams
+  ) {
+    return slice;
+  }
+  return { ...slice, activeSubagents, activeProcesses, childStreams };
+}
+
+function removeChildStreamReference(
+  children: readonly ActiveChildInfo[],
+  streamId: StreamTabId,
+): readonly ActiveChildInfo[] {
+  const next = children.filter((child) => child.childStreamId !== streamId);
+  return next.length === children.length ? children : next;
 }
 
 function defaultSessionMeta(): SessionMeta {
