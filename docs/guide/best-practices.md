@@ -1,3 +1,9 @@
+<script setup>
+import StagedWorkflowHero from '../.vitepress/components/StagedWorkflowHero.vue';
+import QaChecklistCard from '../.vitepress/components/QaChecklistCard.vue';
+import ModelTierMatrixCard from '../.vitepress/components/ModelTierMatrixCard.vue';
+</script>
+
 # Best Practices
 
 ## Effective Prompting
@@ -33,9 +39,9 @@ For complex tasks:
 
 Match model capability to task complexity - overpowered models waste money, underpowered ones produce poor results.
 
-- **Simple tasks** (corrections): Use fast, cheap models (`qwenturbo`, `deepseek`, `haiku45`)
-- **Complex tasks** (transformations): Use powerful models (`opus48T`, `gpt55`, `gemini31p`)
-- **Reasoning-heavy**: Use thinking models (`sonnet46T`, `opus48T`, `deepseekT`)
+<ModelTierMatrixCard />
+
+<p class="hero-caption">Find the row that matches your task, then pick one of the recommended model handles.</p>
 
 See the [AI Models Guide](./models.md) for detailed comparisons.
 
@@ -63,21 +69,19 @@ project/
 
 ### Staged Approach
 
-1. **Research**: `search` or `research` to find papers and verify ideas
-2. **Writing**: `research` or `orchestrator` to draft LaTeX content interactively
-3. **Development**: `polish` for clarity and style
-4. **Visualization**: `research` or `presenter` for figures, `presenter` for slides
-5. **Finalization**: `correct` for proofreading
+A typical project moves through five stages, each owned by one or more agents:
+
+<StagedWorkflowHero />
+
+<p class="hero-caption">A typical project flows from research to finalization, with each stage handed to the agent best suited for it.</p>
 
 ### Quality Assurance
 
-Always review AI-generated content:
+Always review AI-generated content - tick through the same checks after every run:
 
-1. Compile to check for LaTeX errors
-2. Verify cross-references and citations
-3. Check figure and table numbering
-4. Review mathematical expressions
-5. Look for omissions or duplications
+<QaChecklistCard />
+
+<p class="hero-caption">A short review pass after each run catches the errors automation cannot see for itself.</p>
 
 Use [LaTeX Diff](./latex-diff.md) to visualize changes between versions.
 

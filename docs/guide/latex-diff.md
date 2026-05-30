@@ -1,3 +1,8 @@
+<script setup>
+import DiffMarkupHero from '../.vitepress/components/DiffMarkupHero.vue';
+import DiffArtifactsHero from '../.vitepress/components/DiffArtifactsHero.vue';
+</script>
+
 # LaTeX Diff
 
 A core design philosophy of TeXRA is transparency and control over the AI's modifications. You see and evaluate every change an agent suggests, in the typeset document, before deciding how to incorporate it.
@@ -61,15 +66,17 @@ The "Current" button (<wa-icon library="texra" name="file-code"></wa-icon>) allo
 
 ### Step 2: Generate the Diff
 
-Click the "latexdiff" button with the <wa-icon library="texra" name="diff-single"></wa-icon> icon.
+Click the "latexdiff" button with the <wa-icon library="texra" name="diff-single"></wa-icon> icon. TeXRA then runs the same five-stage pipeline for every diff route — only the tool and output name change:
 
-TeXRA will:
+<FlowSteps :steps="[
+  { n: 1, icon: 'diff-single', title: 'Run latexdiff', desc: 'Invokes the latexdiff tool on your selected base and edited files.' },
+  { n: 2, icon: 'file-code', title: 'Write diff .tex', desc: 'Produces a marked-up LaTeX document.', chips: [{ text: 'original_diff.tex', variant: 'info', icon: 'file-code' }] },
+  { n: 3, icon: 'edit', title: 'Open in editor', desc: 'Automatically opens the generated diff source.' },
+  { n: 4, icon: 'play', title: 'Trigger build', desc: 'Runs LaTeX Workshop\'s build command, if the extension is installed.', chips: [{ text: 'LaTeX Workshop', variant: 'neutral' }] },
+  { n: 5, icon: 'file-pdf', title: 'Open PDF', desc: 'After compilation, triggers the view command to show the diff PDF.', chips: [{ text: 'auto', variant: 'success', icon: 'check' }] }
+]" />
 
-1. Run the `latexdiff` tool on your selected files.
-2. Generate a new LaTeX document (e.g., `original_diff.tex`) with highlighted changes.
-3. **Automatically open** this generated `.tex` diff file in your editor.
-4. If the [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension is installed, TeXRA will then automatically trigger its **build** command for the diff file.
-5. After a short delay (to allow compilation), it will trigger LaTeX Workshop's **view** command to show the compiled PDF diff.
+<p class="hero-caption">After you press a diff button, TeXRA runs latexdiff, writes the marked-up <code>.tex</code>, opens it, then (with LaTeX Workshop installed) builds and views the compiled diff PDF.</p>
 
 ### Step 3: Review Changes
 
@@ -96,20 +103,17 @@ The commit dropdown shows recent commits. Click the refresh icon (<wa-icon libra
 
 Click the "latexdiff-vc" button (<wa-icon library="texra" name="diff-single"></wa-icon> icon) to compare your file with its version at the selected commit.
 
-TeXRA will:
-
-1. Run the `latexdiff-vc` tool using the selected file and commit.
-2. Generate a new LaTeX document (e.g., `original_diff_rev[commit_hash].tex`) with highlighted changes.
-3. **Automatically open** this generated `.tex` diff file in your editor.
-4. If the [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension is installed, TeXRA will then automatically trigger its **build** command for the diff file.
-5. After a short delay (to allow compilation), it will trigger LaTeX Workshop's **view** command to show the compiled PDF diff.
+TeXRA runs the same five-stage pipeline shown above — only this route uses the `latexdiff-vc` tool and names its output with the commit hash (e.g., `original_diff_rev[commit_hash].tex`).
 
 ### Step 3: Manage Diff Outputs
 
-After generating a Git-based diff using the "latexdiff-vc" button, you can:
+After generating a Git-based diff using the "latexdiff-vc" button, you can manage the resulting files from the Commit section's **Pack** (<wa-icon library="texra" name="archive"></wa-icon>) and **Clean** (<wa-icon library="texra" name="trash"></wa-icon>) buttons. Pack archives the diff files; Clean removes them.
 
-- **Pack** (<wa-icon library="texra" name="archive"></wa-icon>): Archive the diff files using the "Pack" button in the Commit section.
-- **Clean** (<wa-icon library="texra" name="trash"></wa-icon>): Remove the diff files using the "Clean" button in the Commit section.
+Each diff route writes its own predictably-named artifacts alongside the source pair — `latexdiff` produces `_diff.tex`, `latexdiff-vc` appends the commit hash (`_diff_rev<hash>.tex`), and between-round runs use `_diff_rN-rM.tex` — and every `.tex` compiles to a matching `.pdf`. Pack and Clean act on this whole set:
+
+<DiffArtifactsHero />
+
+<p class="hero-caption">The diff file-naming scheme grounded as one set — the base/edited source pair, then each generated diff (<code>latexdiff</code>, <code>latexdiff-vc</code> with its commit hash, and between-round) paired with its compiled PDF. The Pack and Clean buttons archive or remove the whole set.</p>
 
 ## Understanding Diff Output
 
@@ -117,15 +121,11 @@ The diff document uses a specialized markup to highlight changes:
 
 ### Default Markup
 
-By default, latexdiff uses the following markup:
+By default, latexdiff wraps each edit in a markup command that is defined in the preamble of the generated document and typesets the change inline:
 
-- **Additions**: `\DIFadd{Added text}`
-- **Deletions**: `\DIFdel{Deleted text}`
+<DiffMarkupHero />
 
-These commands are defined in the preamble of the generated document and typically render as:
-
-- Additions: <span style="color: blue; text-decoration: underline;">Blue underlined text</span>
-- Deletions: <span style="color: red; text-decoration: line-through;">Red struck-through text</span>
+<p class="hero-caption">latexdiff's source commands and how they typeset — <code>\DIFadd{…}</code> renders as a blue underlined addition, <code>\DIFdel{…}</code> as a red struck-through deletion, and adjacent del+add forms a change.</p>
 
 ### Interpreting Complex Changes
 

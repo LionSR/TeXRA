@@ -1,3 +1,9 @@
+<script setup>
+import LeanToolsHero from '../.vitepress/components/LeanToolsHero.vue';
+import LeanProofHero from '../.vitepress/components/LeanProofHero.vue';
+import LeanProjectCommands from '../.vitepress/components/LeanProjectCommands.vue';
+</script>
+
 # Lean 4 Proofs
 
 You're formalizing a theorem and Lean is fighting you: the proof state isn't what you expected, you can't remember the name of the Mathlib lemma you need, and the build cache is stale. TeXRA drives a real Lean 4 language server so its agents can read compiler diagnostics, inspect the proof state at any point, search Mathlib, and manage your build — all without leaving your editor.
@@ -64,7 +70,11 @@ Pick any agent from the **Agent** dropdown (<wa-icon library="texra" name="spark
 
 ## What You Can Do
 
-Just describe the task in plain language — the agent decides which tools to call. Here's what's happening under the hood.
+Just describe the task in plain language — the agent decides which tools to call. Here's what's happening under the hood: five Lean tools the agent reaches for, as they surface in the tool-call log.
+
+<LeanToolsHero />
+
+<p class="hero-caption">The agent picks the tool — read diagnostics, inspect the proof state, search Mathlib, refresh a file, or manage the build — and you watch each call land in the run log.</p>
 
 ### <wa-icon library="texra" name="alert"></wa-icon> Read Diagnostics
 
@@ -81,6 +91,10 @@ What's the goal state at line 42 of Analysis/Limits.lean?
 ```
 
 The `lean_inspect` tool reads the **tactic proof state** (`goal`), the **expected type** in term mode (`term_goal`), or the **type signature and docs** of an identifier (`hover`) at a given position — the same information Lean shows in its infoview.
+
+<LeanProofHero />
+
+<p class="hero-caption">The agent reads the unsolved-goals diagnostic, inspects the goal state, finds the right lemma, and iterates the proof until it compiles with 0 errors and 0 <code>sorry</code>.</p>
 
 ### <wa-icon library="texra" name="book"></wa-icon> Search Mathlib
 
@@ -104,11 +118,11 @@ The `lean_file` tool runs file-scoped commands: `restart` (reload the language s
 Download the Mathlib build cache, then build the project.
 ```
 
-The `lean_project` tool runs project-wide commands without a target file:
+The `lean_project` tool runs project-wide commands without a target file, grouped into server control, build operations, and toolchain setup:
 
-- **Server:** `restart_server`, `stop_server`
-- **Build:** `build`, `clean`, `fetch_cache` (whole project), `fetch_file_cache` (current file's imports — faster)
-- **Setup (VS Code only):** `install_elan`, `update_elan`, `install_deps`, `select_toolchain`
+<LeanProjectCommands />
+
+<p class="hero-caption">Server and build commands run everywhere; the Setup group drives the Lean 4 extension's installers, so it's gated to VS Code. <code>fetch_cache</code> pulls the whole project; <code>fetch_file_cache</code> covers just the current file's imports — faster.</p>
 
 ::: warning Setup commands are VS Code-only
 The setup commands drive the Lean 4 extension's installers, so they only work in the VS Code build. In the CLI they fail with a "run the shell command directly" message — manage your toolchain with `elan` and `lake` directly instead (for example `elan self update`, `elan toolchain install`, or `lake update`). See the [Lean install guide](https://leanprover-community.github.io/install/).

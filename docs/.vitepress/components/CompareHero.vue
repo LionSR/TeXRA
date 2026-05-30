@@ -154,7 +154,7 @@ import MockupFrame from './MockupFrame.vue';
 }
 .ph-tag--new {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.14);
+  background: color-mix(in srgb, var(--mk-accent) 14%, transparent);
 }
 
 /* Diff body reuses .result/.tabs/.tab/.t-ic from mockup.css; the two-pane
@@ -183,20 +183,20 @@ import MockupFrame from './MockupFrame.vue';
   user-select: none;
 }
 .dl.chg {
-  background: rgba(241, 76, 76, 0.1);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
 }
 .dl.add {
-  background: rgba(46, 160, 67, 0.12);
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
 }
 .dl del {
-  background: rgba(241, 76, 76, 0.28);
+  background: color-mix(in srgb, var(--color-error) 28%, transparent);
   color: var(--mk-del-text);
   text-decoration: line-through;
   border-radius: var(--mk-radius-xs);
   padding: 0 1px;
 }
 .dl ins {
-  background: rgba(46, 160, 67, 0.32);
+  background: color-mix(in srgb, var(--color-success) 32%, transparent);
   color: var(--mk-ins-text);
   text-decoration: none;
   border-radius: var(--mk-radius-xs);
@@ -230,8 +230,8 @@ import MockupFrame from './MockupFrame.vue';
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.45);
 }
 .accept:hover {
-  background: rgba(200, 155, 224, 0.18);
-  border-color: rgba(200, 155, 224, 0.6);
+  background: color-mix(in srgb, var(--mk-accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--mk-accent) 60%, transparent);
 }
 
 /* On narrow screens the two panes stack like VS Code's inline diff. */
