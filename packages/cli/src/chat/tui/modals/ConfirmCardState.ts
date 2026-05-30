@@ -65,6 +65,13 @@ export function confirmCardKeyHints({
   ];
 }
 
+export function confirmCardFeedbackHints(): ConfirmCardHintAction[] {
+  return [
+    { key: 'Enter', action: 'send note' },
+    { key: 'Esc', action: 'back' },
+  ];
+}
+
 function hintColumns(hints: readonly ConfirmCardHintAction[]): number {
   return hints.reduce(
     (width, hint, index) =>
