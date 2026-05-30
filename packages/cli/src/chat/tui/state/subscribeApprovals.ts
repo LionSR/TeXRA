@@ -41,6 +41,7 @@ import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
 import { assertNever } from '../assertNever';
+import { notify } from '../notifications/terminalNotifier';
 import { cliState } from './cliState';
 import {
   enqueueApproval,
@@ -245,7 +246,7 @@ export function approvalPayloadStreamId(
   }
 }
 
-function enqueueTuiApproval(
+export function enqueueTuiApproval(
   payload: ApprovalPayload,
   host: CliRuntimeHost,
 ): Promise<ApprovalDecision> {
@@ -253,6 +254,7 @@ function enqueueTuiApproval(
     onPresent: () => {
       const streamId = approvalPayloadStreamId(payload);
       if (streamId) host.emit('setActiveStream', { streamId });
+      notify({ kind: 'approvalNeeded' });
     },
   });
 }
