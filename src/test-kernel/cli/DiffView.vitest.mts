@@ -52,25 +52,40 @@ describe('CLI diff display', () => {
     expect(maxDiffScrollOffset(10, 4)).toBe(7);
   });
 
-  it('keeps one- and two-row diff windows static', () => {
+  it('keeps cramped diff windows static', () => {
     expect(maxDiffScrollOffset(10, 1)).toBe(0);
     expect(maxDiffScrollOffset(10, 2)).toBe(0);
+    expect(maxDiffScrollOffset(10, 3)).toBe(0);
   });
 
-  it('shows content plus an overflow marker in a two-row diff window', () => {
+  it('shows a changed line in a one-row diff window', () => {
     const hunks = buildHunks(
       'draft.tex',
       ['alpha', 'beta', 'gamma', 'delta'].join('\n'),
       ['alpha', 'BETA', 'gamma', 'DELTA'].join('\n'),
     );
 
-    const lines = scrollBoundedDiffDisplayLines(hunks, 0, 2, 1);
+    const lines = scrollBoundedDiffDisplayLines(hunks, 0, 1, 0);
 
-    expect(lines).toHaveLength(2);
-    expect(lines[0]?.kind).not.toBe('overflow');
-    expect(lines[1]).toMatchObject({
+    expect(lines).toHaveLength(1);
+    expect(['added', 'removed']).toContain(lines[0]?.kind);
+  });
+
+  it('prioritizes changed rows in a cramped diff window', () => {
+    const hunks = buildHunks(
+      'draft.tex',
+      ['alpha', 'beta', 'gamma', 'delta'].join('\n'),
+      ['alpha', 'BETA', 'gamma', 'DELTA'].join('\n'),
+    );
+
+    const lines = scrollBoundedDiffDisplayLines(hunks, 0, 3, 0);
+
+    expect(lines).toHaveLength(3);
+    expect(lines[0]?.kind).toBe('removed');
+    expect(lines[1]?.kind).toBe('added');
+    expect(lines[2]).toMatchObject({
       kind: 'overflow',
-      text: expect.stringContaining('more rows'),
+      text: expect.stringContaining('hidden'),
     });
   });
 
