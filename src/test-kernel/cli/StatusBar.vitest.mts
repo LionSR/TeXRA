@@ -23,6 +23,12 @@ describe('CLI StatusBar display model', () => {
     ).toBe('1. Keep the proof und… · 2. Also mention the f…');
   });
 
+  it('marks hidden queued follow-up previews', () => {
+    expect(queuedFollowUpsSummary(['first', 'second', 'third'])).toBe(
+      '1. first · 2. second · +1 more',
+    );
+  });
+
   it('hides queued follow-up previews when the right side has no safe width', () => {
     expect(queuedFollowUpsSummary(['Keep the proof under one page.'], 20)).toBe(
       'Keep the proof unde…',
