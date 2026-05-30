@@ -24,6 +24,13 @@ export const StreamStatusSchema = z.enum([
 ]);
 export type StreamStatus = z.infer<typeof StreamStatusSchema>;
 
+/** Statuses whose elapsed display should keep advancing while active. */
+export const LIVE_ELAPSED_STREAM_STATUSES: ReadonlySet<string> = new Set([
+  STREAM_STATUS.RUNNING,
+  STREAM_STATUS.INITIALIZING,
+  STREAM_STATUS.RESUMING,
+]);
+
 /** Subset of StreamStatus used for task groups */
 export const TaskGroupStatusSchema = z.enum([
   STREAM_STATUS.RUNNING,

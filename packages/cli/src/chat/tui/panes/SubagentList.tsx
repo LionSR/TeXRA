@@ -8,24 +8,31 @@ import { Box, Text } from 'ink';
 
 import type { ActiveChildInfo } from '@shared/schemas';
 
-import { processTailLines } from '../state/childControls';
+import {
+  childElapsed,
+  liveChildExecutionElapsedKey,
+  processTailLines,
+} from '../state/childControls';
 import { visibleSubagentRows } from '../state/childStreamMerge';
 import { cliState, type ProcessOutputTail } from '../state/cliState';
+import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 import { CHILD_STATUS_MARKER, childStatusColor } from './SubagentListDisplay';
 
 interface RowProps {
   readonly child: ActiveChildInfo;
   readonly index: number;
+  readonly nowMs: number;
   readonly tail?: ProcessOutputTail;
 }
 
 const TAIL_LINES = 4;
 
-function Row({ child, index, tail }: RowProps): React.JSX.Element {
+function Row({ child, index, nowMs, tail }: RowProps): React.JSX.Element {
   // The state layer already caps each stream at PROCESS_TAIL_CHARS_MAX, so
   // pulling the last `TAIL_LINES` non-blank lines is bounded work.
   const tailLines = processTailLines(tail).slice(-TAIL_LINES);
+  const elapsed = childElapsed(child, nowMs);
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">
@@ -35,7 +42,7 @@ function Row({ child, index, tail }: RowProps): React.JSX.Element {
         </Text>
         <Text>{child.agentName || child.toolName || child.executionId}</Text>
         {child.status ? <Text dimColor>{` ${child.status}`}</Text> : null}
-        {child.elapsed ? <Text dimColor>{` · ${child.elapsed}`}</Text> : null}
+        {elapsed ? <Text dimColor>{` · ${elapsed}`}</Text> : null}
       </Box>
       {tailLines.length > 0 ? (
         <Box flexDirection="column" marginLeft={4}>
@@ -63,6 +70,9 @@ export function SubagentList(
   const activeProcesses = slice?.activeProcesses ?? [];
   const processOutput = slice?.processOutput;
   const subagents = slice ? visibleSubagentRows(slice) : [];
+  const liveElapsedKey = liveChildExecutionElapsedKey(slice);
+  const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
+
   if (!slice) return null;
   if (subagents.length === 0 && activeProcesses.length === 0) return null;
   if (props.maxRows !== undefined && props.maxRows <= 0) return null;
@@ -81,7 +91,12 @@ export function SubagentList(
             Subagents
           </Text>
           {subagents.map((child, i) => (
-            <Row key={child.executionId} child={child} index={i} />
+            <Row
+              key={child.executionId}
+              child={child}
+              index={i}
+              nowMs={nowMs}
+            />
           ))}
         </Box>
       ) : null}
@@ -95,6 +110,7 @@ export function SubagentList(
               key={child.executionId}
               child={child}
               index={subagents.length + i}
+              nowMs={nowMs}
               tail={processOutput?.get(child.executionId)}
             />
           ))}

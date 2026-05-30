@@ -1,6 +1,5 @@
 import process from 'node:process';
 
-import { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
 import { Badge } from '@inkjs/ui';
 import { MODEL_CONFIGS } from 'llm-zoo';
@@ -21,6 +20,7 @@ import {
   NO_BYPASS,
   type BypassState,
 } from '../state/cliState';
+import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 
 type StatusBarColor = 'cyan' | 'yellow' | 'red' | 'dim';
@@ -281,19 +281,9 @@ export function StatusBar(): React.JSX.Element {
   const caps = useSignal(terminalCapabilities);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
 
-  // Re-render once a second while a turn is running so the elapsed segment
-  // ticks even when the model streams no tokens (the live region is otherwise
-  // only repainted by stream-log change events). The interval is armed only
-  // while `runStartedAt` is set, so an idle session adds no churn.
   const runStartedAt =
     slice?.status === STREAM_STATUS.RUNNING ? slice.runStartedAt : undefined;
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (runStartedAt === undefined) return;
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [runStartedAt]);
+  const now = useLiveNowMs(runStartedAt !== undefined, runStartedAt);
 
   const display = buildStatusBarDisplay({
     status: slice?.status,
