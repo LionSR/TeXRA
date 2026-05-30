@@ -931,6 +931,7 @@ export class DesktopProgressBridge {
       // TypeScript exhaustiveness.
       case 'odysseyStateChanged':
       case 'clearMissingOutputs':
+      case 'updateBashApprovalBypassState':
       case 'showRetryRequest':
       case 'resolveRetryRequest':
       case 'showExternalInquiry':

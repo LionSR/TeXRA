@@ -323,7 +323,7 @@ function sliceWithEntries(
     todos: [],
     plan: null,
     processOutput: new Map(),
-    bypass: { toolEdit: false, superYolo: false },
+    bypass: { bash: false, toolEdit: false, superYolo: false },
   };
 }
 

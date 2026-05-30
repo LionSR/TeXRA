@@ -105,8 +105,8 @@ const SCENARIOS = [
     bootExpect: 'Use foreground panel shortcuts',
     keys: ['a'],
     frame: 'tail',
-    expect: ['AUTO-APPROVE', '[/status]details', '[/model]models'],
-    unexpect: ['Run bash command?', '1 approval'],
+    expect: ['AUTO-BASH', '[/status]details', '[/model]models'],
+    unexpect: ['AUTO-APPROVE', 'Run bash command?', '1 approval'],
   },
   {
     name: 'edit-approval-reject',

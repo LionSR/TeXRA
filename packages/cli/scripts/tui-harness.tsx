@@ -173,6 +173,12 @@ function makeBashApprovalPayload() {
 }
 
 function applyHarnessApprovalDecision(decision: ApprovalDecision): void {
+  if (decision.accepted && decision.bypass === 'bash') {
+    patchStream(STREAM_ID, (slice) => ({
+      ...slice,
+      bypass: { ...slice.bypass, bash: true },
+    }));
+  }
   if (decision.accepted && decision.bypass === 'toolEdit') {
     patchStream(STREAM_ID, (slice) => ({
       ...slice,
