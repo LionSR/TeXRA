@@ -579,7 +579,7 @@ describe('CLI child execution controls', () => {
     expect(nextPickerIndex(2, 3, 'down')).toBe(0);
   });
 
-  it('advertises only applicable keys for empty child pickers', () => {
+  it('advertises only applicable keys for child pickers', () => {
     expect(pickerKeyHints('tasks', 0)).toEqual([
       { key: 'Esc', action: 'close' },
     ]);
@@ -589,6 +589,14 @@ describe('CLI child execution controls', () => {
       { key: 'k', action: 'kill' },
       { key: 'Esc', action: 'close' },
     ]);
+    expect(childPickerKeyAction({ input: '3' })).toEqual({
+      kind: 'jump',
+      index: 2,
+    });
+    expect(pickerKeyHints('tasks', 3)).toContainEqual({
+      key: '1-9',
+      action: 'jump',
+    });
     expect(pickerKeyHints('subagents', 1)).toContainEqual({
       key: 'Enter',
       action: 'focus',
