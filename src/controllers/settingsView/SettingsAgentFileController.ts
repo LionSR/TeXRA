@@ -95,17 +95,17 @@ export class SettingsAgentFileController {
       ? input.name
       : `${input.name}.yaml`;
     const baseName = input.name.replace(/\.yaml$/, '');
-    const description =
-      input.category === 'toolUse'
-        ? `${baseName} — interactive tool-use agent`
-        : `${baseName} — workflow agent`;
+    const isToolUse = input.category === 'toolUse';
+    const description = isToolUse
+      ? `${baseName} — interactive tool-use agent`
+      : `${baseName} — workflow agent`;
 
     return {
       fileName,
       filePath: path.join(input.customDir, fileName),
       baseName,
       description,
-      templateKind: input.category === 'toolUse' ? 'toolUse' : 'workflowSingle',
+      templateKind: isToolUse ? 'toolUse' : 'workflowSingle',
     };
   }
 
