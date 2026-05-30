@@ -16,32 +16,20 @@ paper folder, or Overleaf Git checkout in the desktop app, TeXRA can work with
 the same `.tex`, `.bib`, figure, and configuration files already in that
 workspace.
 
-These items usually carry over because they live outside the VS Code extension:
+The split below maps the boundary. Anything that lives in the project folder or
+on your machine follows you with no action; anything the VS Code extension host
+stored privately is re-entered, once, in the desktop app.
 
-- Manuscript source files and repository history.
-- Workspace-local `.env` files, if you already use them for provider API keys.
-- LaTeX, Perl, GraphicsMagick, ImageMagick, Ghostscript, Git, and other system
-  tools installed on your machine.
-- Custom agent YAML files that live inside the project folder.
-- Team-owned files such as `.latexindent.yaml`, `tex-fmt.toml`, or shared
-  `.vscode/settings.json` files committed to the repository.
+<DesktopMigrationSplit />
 
 After opening the project in the desktop app, verify the LaTeX tool paths and
 run a small agent task before relying on the migrated setup for production work.
 
 ## What To Reconfigure
 
-Re-enter credentials and preferences that were stored by the extension host:
-
-- Model provider API keys from the Models tab.
-- TeXRA account or remote-agent sign-in.
-- GitHub token for PR and issue subscription tools.
-- Agent visibility, custom agent directory, model list, and tool approval
-  preferences.
-- LaTeX formatting, diff, TikZ, file-extension, and ignored-path settings if
-  they were only stored in VS Code user settings.
-- Execution history and task-storage archives that lived in the extension's
-  global storage.
+The amber column above is the reconfiguration checklist — provider keys, account
+and GitHub sign-in, agent and tool preferences, any LaTeX settings that lived
+only in VS Code user settings, and your execution-history archives.
 
 If a setting was committed to the workspace, keep using the committed copy. If
 it was only a personal VS Code user setting, set it again in the desktop app.
