@@ -7,7 +7,7 @@ import { executeAgent } from './executeAgent';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
 
-export interface RunExecutionRequestOptions {
+export interface RunAgentOptions {
   runtimeHost: AgentRuntimeHost;
   openWorkflowOutput?: (result: WorkflowFlowResult) => Promise<void>;
   enforceCategory?: boolean;
@@ -15,9 +15,22 @@ export interface RunExecutionRequestOptions {
   stopAfterCycle?: boolean;
 }
 
-export async function runValidatedExecutionRequest(
+/**
+ * START HERE — the high-level entry every host uses to run an agent.
+ *
+ * Validates-then-runs: assigns an executionId when the request omits one (a
+ * fresh run), registers fresh runs in the execution store (resume reuses the
+ * record; override via `registerExecution`), runs the agent, and — for a
+ * workflow result — invokes `openWorkflowOutput` so the host can surface output.
+ *
+ * Use this unless you need per-chunk streaming/lifecycle callbacks or subagent
+ * lineage; for those, drop to the lower-level engine `executeAgent` (exported
+ * as `runAgentStream` from `@texra/core`), where the caller owns executionId
+ * generation and `registerExecution`.
+ */
+export async function runAgent(
   request: ValidatedExecutionRequest,
-  options: RunExecutionRequestOptions,
+  options: RunAgentOptions,
 ): Promise<AgentFlowResult> {
   const executionId =
     request.executionId ?? (generateExecutionId() as ExecutionId);

@@ -1,5 +1,5 @@
 import { writeTerminalStatus } from '@agent/storage';
-import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
+import { runAgent } from '@agent/runtime/runAgent';
 import type { ValidatedExecutionRequest } from '@agent/core/executionRequests';
 
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -12,7 +12,7 @@ import {
 } from './terminalStatus';
 
 export interface CliExecuteOptions {
-  /** Forwarded to `runValidatedExecutionRequest`. */
+  /** Forwarded to `runAgent`. */
   readonly enforceCategory?: boolean;
   readonly registerExecution?: boolean;
   /**
@@ -44,7 +44,7 @@ export async function executeCliRequest(
 ): Promise<{ result: ExecuteAgentResult; terminalStatus: ExecutionStatus }> {
   const runtimeHost = createCliRuntimeHost(runContext);
   const invoke = (): Promise<ExecuteAgentResult> =>
-    runValidatedExecutionRequest(request, {
+    runAgent(request, {
       runtimeHost,
       enforceCategory: options.enforceCategory,
       registerExecution: options.registerExecution,
