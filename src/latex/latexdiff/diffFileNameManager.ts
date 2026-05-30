@@ -42,8 +42,7 @@ export function generateDiffFileName(
     const sameModel = inputRoundMatch[2] === editedRoundMatch[2];
 
     // Extract base name from edited filename using round pattern
-    const name = path.parse(editedFileName).name;
-    const lastMatch = extractLastRoundMatch(name);
+    const lastMatch = extractLastRoundMatch(editedBaseName);
     if (lastMatch?.index == null) {
       throw new Error(
         `Failed to extract base name from edited file: ${editedFileName}`,
@@ -53,7 +52,7 @@ export function generateDiffFileName(
     // The -1 excludes the trailing underscore from _rN_ when includeRound is true
     const endIndex =
       lastMatch.index + (sameModel ? lastMatch[0].length - 1 : 0);
-    const baseName = name.slice(0, endIndex);
+    const baseName = editedBaseName.slice(0, endIndex);
     const modelSuffix = sameModel ? `_${editedRoundMatch[2]}` : '';
 
     return `${baseName}${modelSuffix}_diffr${secondRound}r${firstRound}.tex`;

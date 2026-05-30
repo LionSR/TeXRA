@@ -220,7 +220,7 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
 }
 
 /** Convert a single page of a PDF to a base64 encoded PNG image. */
-export async function singlePagePdf2Png(
+async function singlePagePdf2Png(
   pdfPath: string,
   pageNum: number = 1,
   quality: number = 300,
@@ -279,7 +279,7 @@ export async function singlePagePdf2Png(
 }
 
 /** Convert multiple pages of a PDF to base64 encoded PNG images. */
-export async function multiPagePdf2Png(
+async function multiPagePdf2Png(
   pdfPath: string,
   quality: number = 300,
   maxSize: [number, number] = [1024, 1024],
