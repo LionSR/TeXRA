@@ -172,14 +172,14 @@ const rows = [
   color: var(--color-text-secondary);
 }
 .dm-render ins {
-  background: rgba(46, 160, 67, 0.28);
+  background: color-mix(in srgb, var(--color-success) 28%, transparent);
   color: var(--mk-ins-text);
   text-decoration: underline;
   border-radius: var(--mk-radius-xs);
   padding: 0 1px;
 }
 .dm-render del {
-  background: rgba(241, 76, 76, 0.24);
+  background: color-mix(in srgb, var(--color-error) 24%, transparent);
   color: var(--mk-del-text);
   text-decoration: line-through;
   border-radius: var(--mk-radius-xs);

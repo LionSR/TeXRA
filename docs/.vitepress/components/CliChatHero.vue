@@ -298,10 +298,10 @@ const calls = [
   line-height: 1.7;
 }
 .cc-dl--del {
-  background: rgba(241, 76, 76, 0.1);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
 }
 .cc-dl--add {
-  background: rgba(46, 160, 67, 0.12);
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
 }
 .cc-gut {
   flex-shrink: 0;

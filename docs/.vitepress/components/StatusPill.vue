@@ -60,7 +60,7 @@ defineProps({
 }
 .mk-pill--success {
   color: var(--color-success);
-  background: rgba(46, 160, 67, 0.14);
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
 }
 .mk-pill--warning {
   color: #e0b341;

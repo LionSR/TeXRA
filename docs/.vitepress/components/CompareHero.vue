@@ -183,20 +183,20 @@ import MockupFrame from './MockupFrame.vue';
   user-select: none;
 }
 .dl.chg {
-  background: rgba(241, 76, 76, 0.1);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
 }
 .dl.add {
-  background: rgba(46, 160, 67, 0.12);
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
 }
 .dl del {
-  background: rgba(241, 76, 76, 0.28);
+  background: color-mix(in srgb, var(--color-error) 28%, transparent);
   color: var(--mk-del-text);
   text-decoration: line-through;
   border-radius: var(--mk-radius-xs);
   padding: 0 1px;
 }
 .dl ins {
-  background: rgba(46, 160, 67, 0.32);
+  background: color-mix(in srgb, var(--color-success) 32%, transparent);
   color: var(--mk-ins-text);
   text-decoration: none;
   border-radius: var(--mk-radius-xs);

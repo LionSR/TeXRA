@@ -117,7 +117,7 @@
 }
 .lp-cap-tag.ok {
   color: var(--mk-ins-text);
-  border-color: rgba(46, 160, 67, 0.4);
+  border-color: color-mix(in srgb, var(--color-success) 40%, transparent);
 }
 
 /* Tighten the bordered .term inside the captioned pane (no double frame). */

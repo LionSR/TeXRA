@@ -111,11 +111,11 @@ import MockCard from './MockCard.vue';
 }
 .xr-badge--bad {
   color: var(--mk-del-text);
-  background: rgba(241, 76, 76, 0.14);
+  background: color-mix(in srgb, var(--color-error) 14%, transparent);
 }
 .xr-badge--ok {
   color: var(--mk-ins-text);
-  background: rgba(46, 160, 67, 0.16);
+  background: color-mix(in srgb, var(--color-success) 16%, transparent);
 }
 .xr-badge wa-icon {
   font-size: var(--mk-fs-74);
@@ -155,7 +155,7 @@ import MockCard from './MockCard.vue';
 .dl-miss {
   align-items: center;
   gap: var(--mk-space-6);
-  background: rgba(241, 76, 76, 0.1);
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
 }
 .miss-mark {
   display: inline-flex;
@@ -171,10 +171,10 @@ import MockCard from './MockCard.vue';
 
 /* The restored tag in the fixed state — green ins, like CompareHero. */
 .dl-add {
-  background: rgba(46, 160, 67, 0.12);
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
 }
 .dl-add ins {
-  background: rgba(46, 160, 67, 0.32);
+  background: color-mix(in srgb, var(--color-success) 32%, transparent);
   color: var(--mk-ins-text);
   text-decoration: none;
   border-radius: var(--mk-radius-xs);

@@ -263,7 +263,7 @@
   user-select: none;
 }
 .dl.add {
-  background: rgba(46, 160, 67, 0.12);
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
 }
 .dl .kw {
   color: var(--mk-syn-fn);
