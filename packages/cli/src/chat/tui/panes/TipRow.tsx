@@ -4,7 +4,7 @@ const TIPS = [
   'Use /help to see available commands',
   'Press /model to switch models',
   'Press /agent to switch agents',
-  'Press Ctrl-C to interrupt',
+  'Ctrl-C exits idle chats; stops active responses',
   'Use /clear to start fresh',
   'Press /status to see session details',
   'Press /api to view or change API mode',

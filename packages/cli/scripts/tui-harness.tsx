@@ -19,6 +19,7 @@ const STREAM_ID = 'harness-stream-1';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
+let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
 const EDIT_APPROVAL_DELAY_MS = Number(
   process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
 );
@@ -111,21 +112,45 @@ if (SHOW_EDIT_APPROVAL) {
   }
 }
 
+function markHarnessInterrupted(): void {
+  canInterrupt = false;
+  patchStream(STREAM_ID, (slice) => ({
+    ...slice,
+    status: STREAM_STATUS.STOPPED,
+    runStartedAt: undefined,
+    entries: [
+      ...slice.entries,
+      {
+        id: 'harness-interrupted',
+        role: 'assistant',
+        text: 'Harness interrupt requested.',
+        finalized: true,
+      },
+    ],
+  }));
+}
+
 const ink = render(
   <App
     onSubmit={() => undefined}
     onKillExecution={() => undefined}
-    canInterruptActiveRun={() => false}
-    onInterruptActive={() => undefined}
+    canInterruptActiveRun={() => canInterrupt}
+    canStopActiveRun={() => canInterrupt}
+    onInterruptActive={markHarnessInterrupted}
   />,
   {
     stdout: process.stdout,
     stderr: process.stderr,
     stdin: process.stdin,
+    exitOnCtrlC: false,
   },
 );
 
 process.on('SIGINT', () => {
+  if (canInterrupt) {
+    markHarnessInterrupted();
+    return;
+  }
   ink.unmount();
   process.exit(0);
 });

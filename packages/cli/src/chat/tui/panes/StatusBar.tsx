@@ -25,6 +25,7 @@ import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 
 type StatusBarColor = 'cyan' | 'yellow' | 'red' | 'dim';
+export type CtrlCAction = 'exit' | 'stop';
 
 export interface StatusBarSegment {
   readonly text: string;
@@ -62,6 +63,7 @@ export interface StatusBarDisplayInput {
   /** Terminal width in columns. Used to keep right-side previews from
    *  colliding with durable left-side status segments. */
   readonly width?: number;
+  readonly ctrlCAction?: CtrlCAction;
 }
 
 export interface StatusBarDisplay {
@@ -214,6 +216,7 @@ function statusBarBindings(
   modifierLabel: string,
   hasMultipleStreams: boolean,
   shiftEnterNewline: boolean,
+  ctrlCAction: CtrlCAction,
 ): readonly string[] {
   return [
     // Stream cycling / numeric focus only do something when there is more
@@ -226,7 +229,7 @@ function statusBarBindings(
     '[/model]models',
     '[/api]api',
     shiftEnterNewline ? '[Shift-Enter]newline' : '[Ctrl-J]newline',
-    '[Ctrl-C]stop',
+    `[Ctrl-C]${ctrlCAction}`,
   ];
 }
 
@@ -235,9 +238,15 @@ export function statusBarBindingsText(
   hasMultipleStreams: boolean,
   modifierLabel = defaultShortcutModifierLabel(),
   shiftEnterNewline = false,
+  ctrlCAction: CtrlCAction = 'exit',
 ): string {
   const bindings: string[] = [
-    ...statusBarBindings(modifierLabel, hasMultipleStreams, shiftEnterNewline),
+    ...statusBarBindings(
+      modifierLabel,
+      hasMultipleStreams,
+      shiftEnterNewline,
+      ctrlCAction,
+    ),
   ];
   if (subagentControlsAvailable) {
     const tasksBinding = `[${modifierLabel}-p]tasks`;
@@ -317,6 +326,7 @@ export function buildStatusBarDisplay(
             input.hasMultipleStreams,
             input.shortcutModifierLabel,
             input.shiftEnterNewline,
+            input.ctrlCAction,
           ),
   };
 }
@@ -325,7 +335,11 @@ export function statusBarSegmentText(segment: StatusBarSegment): string {
   return segment.text;
 }
 
-export function StatusBar(): React.JSX.Element {
+export interface StatusBarProps {
+  readonly canStopActiveRun?: () => boolean;
+}
+
+export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
   const sessionMeta = useSignal(cliState.sessionMeta);
@@ -358,6 +372,7 @@ export function StatusBar(): React.JSX.Element {
     apiMode: shortCliApiMode(sessionMeta.apiMode),
     shiftEnterNewline: caps.kittyKeyboard,
     width: columns,
+    ctrlCAction: props.canStopActiveRun?.() ? 'stop' : 'exit',
   });
 
   return (

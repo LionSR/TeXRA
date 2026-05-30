@@ -98,6 +98,8 @@ describe('CLI StatusBar display model', () => {
     // (see #4399) but used to be discoverable only via source diving.
     expect(display.bindings).toContain('[Ctrl-J]newline');
     expect(display.bindings).not.toContain('[Shift-Enter]newline');
+    expect(display.bindings).toContain('[Ctrl-C]exit');
+    expect(display.bindings).not.toContain('[Ctrl-C]stop');
     expect(display.bindings).not.toContain('[Alt-s]subagents');
     // Stream-navigation hints stay hidden in a single-stream chat.
     expect(display.bindings).not.toContain('[Tab]streams');
@@ -149,6 +151,7 @@ describe('CLI StatusBar display model', () => {
       model: 'deepseekT',
       apiMode: 'relay',
       shortcutModifierLabel: 'Alt',
+      ctrlCAction: 'stop',
     });
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
@@ -164,6 +167,7 @@ describe('CLI StatusBar display model', () => {
     ]);
     expect(display.right).toBe('Keep the proof under one page.');
     expect(display.bindings).toContain('[Alt-s]subagents');
+    expect(display.bindings).toContain('[Ctrl-C]stop');
     // Stream-navigation hints appear once more than one stream is live.
     expect(display.bindings).toContain('[Tab]streams');
     expect(display.bindings).toContain('[Alt-1..9]focus');
@@ -288,6 +292,7 @@ describe('CLI StatusBar display model', () => {
     });
 
     expect(display.right).toBe('Keep the proof un…');
+    expect(display.bindings).toContain('[Ctrl-C]exit');
   });
 
   it('shows the resume command while exit confirmation is armed', () => {
