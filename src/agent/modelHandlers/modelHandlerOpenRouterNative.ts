@@ -220,6 +220,27 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     return this.isToolUseMode();
   }
 
+  /**
+   * OpenRouter proxies multiple underlying providers behind a single handler
+   * class (config.provider is preserved through routing), so batching must be
+   * decided by the routed-through provider rather than the handler class —
+   * mirroring the Google/DeepSeek/Kimi/MiniMax direct-handler overrides.
+   */
+  override get requiresBatchedParallelToolResults(): boolean {
+    return this.isGoogle || this.isDeepSeek || this.isKimi || this.isMiniMax;
+  }
+
+  /**
+   * DeepSeek (proxied via OpenRouter) honors a reasoning-level override whenever
+   * it supports reasoning, even without a granular configurable-effort capability.
+   */
+  override get supportsReasoningLevelOverride(): boolean {
+    return (
+      this.capabilities.supportsReasoningEffort ||
+      (this.isDeepSeek && this.capabilities.supportsReasoning)
+    );
+  }
+
   override requestCompaction(): void {
     this.compactionRequested = true;
   }

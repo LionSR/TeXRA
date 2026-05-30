@@ -388,6 +388,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
   }
 
   /**
+   * Gemini carries thought signatures across parallel function calls, which must
+   * be preserved by batching the results into a single follow-up message.
+   */
+  override get requiresBatchedParallelToolResults(): boolean {
+    return true;
+  }
+
+  /**
    * Estimates token count using Google's native countTokens API.
    *
    * @param messages - The Content array representing the conversation history
