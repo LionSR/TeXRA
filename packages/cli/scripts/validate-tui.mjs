@@ -201,7 +201,14 @@ try {
 }
 
 // --- harness bundle ------------------------------------------------------
-if (!existsSync(HARNESS)) {
+if (process.env.TEXRA_TUI_HARNESS) {
+  if (!existsSync(HARNESS)) {
+    console.error('[validate-tui] custom harness does not exist:', HARNESS);
+    process.exit(1);
+  }
+} else {
+  // Rebuild the committed harness on every run so local TUI source edits are
+  // tested against the current tree instead of a stale dist/bin artifact.
   console.error('[validate-tui] building tui-harness bundle…');
   const r = spawnSync(
     process.execPath,
