@@ -23,6 +23,21 @@ describe('CLI StatusBar display model', () => {
     ).toBe('queued 2: Keep the proof under one page.');
   });
 
+  it('hides queued follow-up previews when the right side has no safe width', () => {
+    expect(queuedFollowUpsSummary(['Keep the proof under one page.'], 20)).toBe(
+      'queued: Keep the pr…',
+    );
+    expect(
+      queuedFollowUpsSummary(['Keep the proof under one page.'], 19),
+    ).toBeUndefined();
+  });
+
+  it('truncates queued follow-up previews by display columns', () => {
+    expect(queuedFollowUpsSummary(['請補充一個單調有界證明。'], 20)).toBe(
+      'queued: 請補充一個…',
+    );
+  });
+
   it('keeps queued follow-up counts in the durable left status segments', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,
@@ -250,6 +265,29 @@ describe('CLI StatusBar display model', () => {
       badge: true,
       badgeColor: 'yellow',
     });
+  });
+
+  it('budgets queued follow-up previews with rendered badge padding', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: { superYolo: true, toolEdit: true },
+      queuedFollowUpMessages: ['Keep the proof under one page.'],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      width: 60,
+    });
+
+    expect(display.right).toBeUndefined();
   });
 
   it('shows the resume command while exit confirmation is armed', () => {
