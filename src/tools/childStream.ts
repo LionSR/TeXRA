@@ -1,4 +1,5 @@
 // Local imports - agent
+import { createRunTrace } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/AgentConfig';
 import type { AgentCategory } from '@agent/core/AgentDataclass';
@@ -13,7 +14,6 @@ import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
 // Local imports - errors
 import { toErrorMessage } from '@common/errors';
-import { createRunTrace } from '@logger';
 
 // Local imports - shared
 import type { ExecutionId, StreamTabId, StorageKey } from '@shared/schemas';
