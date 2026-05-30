@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatModelStatusForCliMode,
+  hasRunnableModelSelectItems,
+  modelSelectItemsForCliMode,
   modelSelectWindow,
 } from '@cli/chat/tui/forms/ModelListForm';
 import {
@@ -70,6 +72,62 @@ describe('CLI ModelListForm status text', () => {
         'included',
       ),
     ).toBe('relay: quota exhausted');
+  });
+});
+
+describe('CLI ModelListForm model visibility', () => {
+  it('shows only models runnable in the active API mode', () => {
+    const items = modelSelectItemsForCliMode(
+      [
+        access({
+          value: 'sonnet46T',
+          label: 'Sonnet',
+          availability: 'included-access',
+        }),
+        access(
+          {
+            value: 'opus48T',
+            label: 'Opus',
+            availability: 'not-included',
+            disabled: true,
+          },
+          'not included',
+        ),
+        access({
+          value: 'gpt54',
+          label: 'GPT-5.4',
+          availability: 'included-access',
+        }),
+      ],
+      'included',
+    );
+
+    expect(items.map((item) => item.value)).toEqual(['sonnet46T', 'gpt54']);
+    expect(items.map((item) => item.description)).toEqual([
+      'relay: included',
+      'relay: included',
+    ]);
+  });
+
+  it('treats filtered-empty lists as non-actionable', () => {
+    expect(
+      hasRunnableModelSelectItems([
+        access(
+          {
+            availability: 'missing-key',
+            requiresKey: true,
+          },
+          'missing api key',
+        ),
+        access(
+          {
+            availability: 'not-included',
+            disabled: true,
+          },
+          'not included',
+        ),
+      ]),
+    ).toBe(false);
   });
 });
 
