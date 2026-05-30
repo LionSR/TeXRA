@@ -1,8 +1,9 @@
 import { toErrorMessage } from '@common/errors/errorMessage';
 
+import { formatCliAccountLabelForDisplay } from './accountDisplay';
 import { formatCliApiMode, getCliApiMode } from './apiAccessMode';
 import { fetchRelayUsageSummary, type RelayUsageSummary } from './relayUsage';
-import { getCliAuthProfile } from './supabaseAuth';
+import { getCliAuthProfile, type CliAuthProfile } from './supabaseAuth';
 
 function formatPercent(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '0%';
@@ -16,14 +17,23 @@ export function formatRelayUsageStatus(summary: RelayUsageSummary): string {
   return `relay usage this month: ${used} used, ${remaining} remaining`;
 }
 
+export function formatCliAuthStatusLine(
+  profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel'>,
+): string {
+  if (!profile.authenticated) return 'auth: signed out';
+  return `auth: signed in${
+    profile.accountLabel
+      ? ` as ${formatCliAccountLabelForDisplay(profile.accountLabel)}`
+      : ''
+  }`;
+}
+
 export async function loadCliApiStatusLines(): Promise<string[]> {
   const mode = getCliApiMode();
   const profile = await getCliAuthProfile();
   const lines = [
     `api: ${formatCliApiMode(mode)}`,
-    profile.authenticated
-      ? `auth: signed in${profile.accountLabel ? ` as ${profile.accountLabel}` : ''}`
-      : 'auth: signed out',
+    formatCliAuthStatusLine(profile),
   ];
 
   if (profile.tier) lines.push(`tier: ${profile.tier}`);
