@@ -207,7 +207,9 @@ export interface AppProps {
   readonly onSubmit: (line: string) => void;
   readonly onKillExecution: (executionId: string) => void;
   readonly canInterruptActiveRun: () => boolean;
+  readonly canStopActiveRun?: () => boolean;
   readonly onInterruptActive: () => void;
+  readonly onCtrlC?: () => void;
   readonly inputDisabled?: boolean;
   readonly history?: InputHistory;
 }
@@ -229,6 +231,8 @@ export function App(props: AppProps): React.JSX.Element {
   const [childControlMode, setChildControlMode] = useState<
     ChildControlMode | undefined
   >(undefined);
+  const canStopActiveRun =
+    props.canStopActiveRun ?? props.canInterruptActiveRun;
 
   // Under the Kitty disambiguate flag (enabled in runChatTui for Shift+Enter),
   // keypad Enter becomes its own key (codepoint 57414) that Ink parses but
@@ -359,13 +363,20 @@ export function App(props: AppProps): React.JSX.Element {
   // handler (gating internally) is clearer than several hooks racing on the same
   // chord. Stays mounted so Ctrl+C works even while a modal/form owns the input.
   useInput((input, key) => {
-    // Ctrl+C exits, even over a foreground surface. We render with
+    // Ctrl+C is owned here even over foreground surfaces. We render with
     // exitOnCtrlC: false (see runChatTui), so Ink neither auto-exits nor filters
-    // Ctrl+C out of useInput — this handler is the single exit path. Ink decodes
-    // both the raw \x03 and the Kitty CSI-u form (ESC[99;5u, emitted under the
-    // disambiguate flag) to a ctrl+c key, so this one branch covers every
-    // terminal; exit() is Ink's app-level shutdown (≡ useApp().exit).
+    // Ctrl+C out of useInput. The full CLI wires onCtrlC to the same SIGINT
+    // path used by terminals that deliver a signal; harnesses can fall back to
+    // interrupt-then-exit behavior without duplicating that process lifecycle.
     if (key.ctrl && input === 'c') {
+      if (props.onCtrlC) {
+        props.onCtrlC();
+        return;
+      }
+      if (canStopActiveRun()) {
+        props.onInterruptActive();
+        return;
+      }
       exit();
       return;
     }
@@ -454,7 +465,7 @@ export function App(props: AppProps): React.JSX.Element {
           history={props.history}
         />
         <StreamTabsStrip width={columns} />
-        <StatusBar />
+        <StatusBar canStopActiveRun={canStopActiveRun} />
       </Box>
     </>
   );
