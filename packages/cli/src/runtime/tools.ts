@@ -25,6 +25,9 @@ export interface CliToolStatusRecord {
   readonly note?: string;
 }
 
+const dashboardToolDefs = (): ExternalToolDef[] =>
+  EXTERNAL_TOOL_DEFS.filter((def) => !def.hideFromDashboard);
+
 function detectedFromStatus(status: string): boolean | null {
   if (status === 'available') return true;
   if (status === 'not-found') return false;
@@ -41,29 +44,27 @@ export async function readCliToolStatuses(): Promise<CliToolStatusRecord[]> {
   const checks = new Map((await runExternalToolChecks()).map((r) => [r.id, r]));
   const disabledIds = getDisabledToolIds();
 
-  return EXTERNAL_TOOL_DEFS.filter((def) => !def.hideFromDashboard).map(
-    (def) => {
-      const check = checks.get(def.id);
-      const comingSoon = def.comingSoon === true;
-      const toggleable = def.toggleable === true;
-      const status = check?.status ?? (comingSoon ? 'coming-soon' : 'unknown');
-      return {
-        id: def.id,
-        name: def.name,
-        category: def.category,
-        enabled: toggleable ? !disabledIds.has(def.id) : null,
-        detected: detectedFromStatus(status),
-        status,
-        statusLabel: check?.statusLabel,
-        statusDetail: check?.statusDetail,
-        toggleable,
-        comingSoon,
-        installCommand: def.installCommand,
-        authCommand: def.authCommand,
-        note: noteForTool(def, check?.statusLabel),
-      };
-    },
-  );
+  return dashboardToolDefs().map((def) => {
+    const check = checks.get(def.id);
+    const comingSoon = def.comingSoon === true;
+    const toggleable = def.toggleable === true;
+    const status = check?.status ?? (comingSoon ? 'coming-soon' : 'unknown');
+    return {
+      id: def.id,
+      name: def.name,
+      category: def.category,
+      enabled: toggleable ? !disabledIds.has(def.id) : null,
+      detected: detectedFromStatus(status),
+      status,
+      statusLabel: check?.statusLabel,
+      statusDetail: check?.statusDetail,
+      toggleable,
+      comingSoon,
+      installCommand: def.installCommand,
+      authCommand: def.authCommand,
+      note: noteForTool(def, check?.statusLabel),
+    };
+  });
 }
 
 export async function readCliToolStatus(
@@ -77,9 +78,7 @@ export function findCliToolDef(id: string): ExternalToolDef | undefined {
 }
 
 export function cliToolIds(): string[] {
-  return EXTERNAL_TOOL_DEFS.filter((def) => !def.hideFromDashboard).map(
-    (def) => def.id,
-  );
+  return dashboardToolDefs().map((def) => def.id);
 }
 
 export async function setCliToolEnabled(

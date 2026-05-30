@@ -32,10 +32,7 @@ export interface RunProgressRendererInit {
 }
 
 export function shouldRenderRunProgress(
-  context: Pick<
-    CliContext,
-    'mode' | 'outputFormat' | 'quietLogs' | 'stderrIsTty'
-  >,
+  context: Pick<CliContext, 'outputFormat' | 'quietLogs'>,
 ): boolean {
   return context.quietLogs !== true && context.outputFormat === 'text';
 }
