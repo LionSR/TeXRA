@@ -519,6 +519,42 @@
   flex-shrink: 0;
 }
 
+/* ============================================
+   TERMINAL TITLEBAR (faux macOS window chrome)
+   Traffic-light dots + a mono window title, shared by the standalone terminal
+   cards (CliChatHero, CliToolsListHero) so the chrome is defined once. Consumers
+   keep only their own card shell (border / radius / body padding).
+   ============================================ */
+.mockup .mk-term-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--mk-space-6);
+  padding: var(--mk-space-7) var(--mk-space-12);
+  background: var(--mk-bg-soft);
+  border-bottom: 1px solid var(--mk-border);
+}
+.mockup .mk-term-light {
+  width: var(--mk-space-9);
+  height: var(--mk-space-9);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.mockup .mk-term-light--r {
+  background: var(--color-error);
+}
+.mockup .mk-term-light--y {
+  background: var(--color-warning);
+}
+.mockup .mk-term-light--g {
+  background: var(--color-success);
+}
+.mockup .mk-term-title {
+  margin-left: var(--mk-space-7);
+  font-family: var(--vp-font-family-mono);
+  font-size: var(--mk-fs-72);
+  color: var(--mk-text-faint);
+}
+
 /* Code / terminal output surface (editor body) */
 .mockup .surface {
   flex: 1;
@@ -833,7 +869,7 @@
   border-radius: 50%;
   background: var(--color-success);
   flex-shrink: 0;
-  box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.6);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-success) 60%, transparent);
   animation: mk-shpulse 1.8s infinite;
 }
 .mockup .sh-badge {
@@ -1086,13 +1122,15 @@
 }
 @keyframes mk-shpulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.5);
+    box-shadow: 0 0 0 0
+      color-mix(in srgb, var(--color-success) 50%, transparent);
   }
   70% {
-    box-shadow: 0 0 0 5px rgba(63, 185, 80, 0);
+    box-shadow: 0 0 0 5px
+      color-mix(in srgb, var(--color-success) 0%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(63, 185, 80, 0);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-success) 0%, transparent);
   }
 }
 @keyframes mk-blink {

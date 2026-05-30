@@ -34,11 +34,11 @@ const calls = [
 <template>
   <div class="mockup cli-chat" role="group" aria-label="texra chat session">
     <!-- Faux terminal titlebar: traffic-light dots + window title -->
-    <div class="cc-bar">
-      <span class="cc-light cc-light--r"></span>
-      <span class="cc-light cc-light--y"></span>
-      <span class="cc-light cc-light--g"></span>
-      <span class="cc-title">texra chat</span>
+    <div class="mk-term-bar">
+      <span class="mk-term-light mk-term-light--r"></span>
+      <span class="mk-term-light mk-term-light--y"></span>
+      <span class="mk-term-light mk-term-light--g"></span>
+      <span class="mk-term-title">texra chat</span>
     </div>
 
     <div class="cc-body">
@@ -123,36 +123,7 @@ const calls = [
   font-family: var(--vp-font-family-base);
 }
 
-/* Titlebar */
-.cc-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-6);
-  padding: var(--mk-space-7) var(--mk-space-12);
-  background: var(--mk-bg-soft);
-  border-bottom: 1px solid var(--mk-border);
-}
-.cc-light {
-  width: var(--mk-space-9);
-  height: var(--mk-space-9);
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.cc-light--r {
-  background: var(--color-error);
-}
-.cc-light--y {
-  background: var(--color-warning);
-}
-.cc-light--g {
-  background: var(--color-success);
-}
-.cc-title {
-  margin-left: var(--mk-space-7);
-  font-family: var(--vp-font-family-mono);
-  font-size: var(--mk-fs-72);
-  color: var(--mk-text-faint);
-}
+/* Titlebar comes from the shared `.mk-term-*` classes in theme/mockup.css. */
 
 /* Terminal body */
 .cc-body {
