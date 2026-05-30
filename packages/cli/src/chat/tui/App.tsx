@@ -32,6 +32,7 @@ import {
 } from './state/childControls';
 import { canShowSubagentControls, cliState } from './state/cliState';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
+import { streamScopeDisplayLabel } from './state/streamLabels';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
 
@@ -326,6 +327,15 @@ export function App(props: AppProps): React.JSX.Element {
         });
         return (
           <ChildControlPicker
+            activeStreamLabel={
+              target.streamId
+                ? streamScopeDisplayLabel({
+                    parentStream,
+                    streamId: target.streamId,
+                    streams,
+                  })
+                : undefined
+            }
             activeStreamId={target.streamId}
             availableRows={foregroundRows}
             mode={childControlMode}
