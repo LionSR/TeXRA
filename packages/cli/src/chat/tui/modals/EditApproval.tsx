@@ -6,6 +6,7 @@ import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
 import {
   buildHunks,
+  COMPACT_DIFF_DISPLAY_LINES,
   diffVisualRowCount,
   DiffView,
   maxDiffScrollOffset,
@@ -16,7 +17,8 @@ import { KeyHints } from '../ui/KeyHints';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 const EDIT_DIFF_PADDING = 6;
-const EDIT_APPROVAL_FIXED_ROWS_EXCLUDING_TITLE = 8;
+const EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE = 8;
+const EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE = 5;
 const EDIT_APPROVAL_FEEDBACK_MARGIN_ROWS = 1;
 const EDIT_APPROVAL_FEEDBACK_PREFIX_COLUMNS = 2;
 const MIN_EDIT_DIFF_WIDTH = 20;
@@ -58,13 +60,21 @@ export function editApprovalDiffRowsBudget({
           value: feedbackValue,
         })
       : 0;
-  return Math.max(
-    1,
+  const spaciousDiffRows =
     availableRows -
-      EDIT_APPROVAL_FIXED_ROWS_EXCLUDING_TITLE -
-      titleRows -
-      feedbackRows,
-  );
+    EDIT_APPROVAL_SPACIOUS_FIXED_ROWS_EXCLUDING_TITLE -
+    titleRows -
+    feedbackRows;
+  if (spaciousDiffRows > COMPACT_DIFF_DISPLAY_LINES) {
+    return spaciousDiffRows;
+  }
+
+  const compactDiffRows =
+    availableRows -
+    EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE -
+    titleRows -
+    feedbackRows;
+  return Math.max(1, Math.min(COMPACT_DIFF_DISPLAY_LINES, compactDiffRows));
 }
 
 export function editApprovalFeedbackRows({
@@ -127,6 +137,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const maxScrollOffset = maxDiffScrollOffset(diffRows, maxDiffLines);
   const diffScrollable = maxScrollOffset > 0;
   const pageRows = Math.max(1, maxDiffLines - 2);
+  const compactDiffLayout = maxDiffLines <= COMPACT_DIFF_DISPLAY_LINES;
 
   function scrollTo(next: number | ((currentOffset: number) => number)): void {
     setScrollOffset((current) => {
@@ -166,7 +177,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
         +{stats.added} / −{stats.removed} · {stats.hunks} hunks · source:{' '}
         {props.request.sourceTool}
       </Text>
-      <Box marginY={1} flexDirection="column">
+      <Box marginY={compactDiffLayout ? 0 : 1} flexDirection="column">
         <DiffView
           hunks={hunks}
           maxDisplayLines={maxDiffLines}
