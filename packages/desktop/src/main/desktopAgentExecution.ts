@@ -1216,9 +1216,8 @@ export class DesktopProgressBridge {
   }
 
   async runExecution(request: ValidatedExecutionRequest): Promise<void> {
-    const { runValidatedExecutionRequest } =
-      await import('@agent/runtime/runExecutionRequest');
-    await runValidatedExecutionRequest(request, {
+    const { runAgent } = await import('@agent/runtime/runAgent');
+    await runAgent(request, {
       runtimeHost: this.runtimeHost,
       openWorkflowOutput: async (result) => {
         const output = result.outputs.at(-1);

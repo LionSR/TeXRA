@@ -90,8 +90,8 @@ async function createBridge(messages: unknown[]): Promise<TestableBridge> {
   vi.doMock('@agent/runtime/RunStorageService', () => ({
     setRunStorageService: vi.fn(),
   }));
-  vi.doMock('@agent/runtime/runExecutionRequest', () => ({
-    runValidatedExecutionRequest: vi.fn(),
+  vi.doMock('@agent/runtime/runAgent', () => ({
+    runAgent: vi.fn(),
   }));
   vi.doMock('@common/storage/KVStore', () => ({
     KVStore: class {
@@ -206,15 +206,14 @@ async function createExecution(options: {
   };
   showErrorMessage?: (message: string) => Promise<void> | void;
   prepareMainViewExecutionRequest: (message: unknown) => unknown;
-  runValidatedExecutionRequest?: RunExecutionRequest;
+  runAgent?: RunExecutionRequest;
 }): Promise<DesktopExecution> {
   vi.resetModules();
   vi.doMock('@agent/runtime/RunStorageService', () => ({
     setRunStorageService: vi.fn(),
   }));
-  vi.doMock('@agent/runtime/runExecutionRequest', () => ({
-    runValidatedExecutionRequest:
-      options.runValidatedExecutionRequest ?? vi.fn(async () => {}),
+  vi.doMock('@agent/runtime/runAgent', () => ({
+    runAgent: options.runAgent ?? vi.fn(async () => {}),
   }));
   vi.doMock('@common/storage/KVStore', () => ({
     KVStore: class {
@@ -274,7 +273,7 @@ function progressMessages(
 describe('DesktopProgressBridge', () => {
   afterEach(() => {
     vi.doUnmock('@agent/runtime/RunStorageService');
-    vi.doUnmock('@agent/runtime/runExecutionRequest');
+    vi.doUnmock('@agent/runtime/runAgent');
     vi.doUnmock('@common/storage/KVStore');
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
     vi.doUnmock('@logger');
@@ -590,11 +589,11 @@ describe('DesktopProgressBridge', () => {
   it('surfaces invalid execution requests through the host error path', async () => {
     const postToRenderer = vi.fn();
     const showErrorMessage = vi.fn();
-    const runValidatedExecutionRequest = vi.fn(async () => {});
+    const runAgent = vi.fn(async () => {});
     const execution = await createExecution({
       postToRenderer,
       showErrorMessage,
-      runValidatedExecutionRequest,
+      runAgent,
       prepareMainViewExecutionRequest: vi.fn(() => ({
         valid: false,
         message: 'Select an input file first.',
@@ -607,7 +606,7 @@ describe('DesktopProgressBridge', () => {
         'Select an input file first.',
       );
       expect(postToRenderer).not.toHaveBeenCalled();
-      expect(runValidatedExecutionRequest).not.toHaveBeenCalled();
+      expect(runAgent).not.toHaveBeenCalled();
     } finally {
       execution.dispose();
     }
@@ -616,7 +615,7 @@ describe('DesktopProgressBridge', () => {
   it('lets runtime execution errors propagate to the IPC error handler', async () => {
     const failure = new Error('execution failed');
     const execution = await createExecution({
-      runValidatedExecutionRequest: vi.fn(async () => {
+      runAgent: vi.fn(async () => {
         throw failure;
       }),
       prepareMainViewExecutionRequest: vi.fn(() => ({
@@ -644,9 +643,9 @@ describe('DesktopProgressBridge', () => {
       filePath: 'main.tex',
       prompt: 'draft',
     };
-    const runValidatedExecutionRequest = vi.fn(async () => {});
+    const runAgent = vi.fn(async () => {});
     const execution = await createExecution({
-      runValidatedExecutionRequest,
+      runAgent,
       prepareMainViewExecutionRequest: vi.fn(() => ({
         valid: true,
         request,
@@ -655,7 +654,7 @@ describe('DesktopProgressBridge', () => {
 
     try {
       await execution.handleExecute({ command: 'execute' });
-      expect(runValidatedExecutionRequest).toHaveBeenCalledWith(
+      expect(runAgent).toHaveBeenCalledWith(
         request,
         expect.objectContaining({
           openWorkflowOutput: expect.any(Function),
@@ -668,14 +667,14 @@ describe('DesktopProgressBridge', () => {
 
   it('opens workflow outputs through the desktop preview host', async () => {
     const opener = { openPath: vi.fn(async (_filePath: string) => {}) };
-    const runValidatedExecutionRequest = vi.fn(async (_request, options) => {
+    const runAgent = vi.fn(async (_request, options) => {
       await options.openWorkflowOutput({
         outputs: [{ absolutePath: '/tmp/result.pdf' }],
       });
     });
     const execution = await createExecution({
       opener,
-      runValidatedExecutionRequest,
+      runAgent,
       prepareMainViewExecutionRequest: vi.fn(() => ({
         valid: true,
         request: {
