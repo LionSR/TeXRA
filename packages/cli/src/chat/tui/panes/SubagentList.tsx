@@ -46,16 +46,31 @@ function Row({
   // pulling the last `TAIL_LINES` non-blank lines is bounded work.
   const tailLines = compact ? [] : processTailLines(tail).slice(-TAIL_LINES);
   const elapsed = childElapsed(child, nowMs);
+  const label = child.agentName || child.toolName || child.executionId;
   return (
-    <Box flexDirection="column">
-      <Box flexDirection="row">
+    <Box
+      flexDirection="column"
+      height={compact ? 1 : undefined}
+      overflowY={compact ? 'hidden' : undefined}
+    >
+      <Box flexDirection="row" minWidth={0}>
         <Text dimColor>{index < 9 ? ` ${index + 1} ` : '   '}</Text>
         <Text color={childStatusColor(child.status)}>
           {CHILD_STATUS_MARKER}
         </Text>
-        <Text>{child.agentName || child.toolName || child.executionId}</Text>
-        {child.status ? <Text dimColor>{` ${child.status}`}</Text> : null}
-        {elapsed ? <Text dimColor>{` · ${elapsed}`}</Text> : null}
+        {compact ? (
+          <Text wrap="truncate-end">
+            {label}
+            {child.status ? ` ${child.status}` : ''}
+            {elapsed ? ` · ${elapsed}` : ''}
+          </Text>
+        ) : (
+          <>
+            <Text>{label}</Text>
+            {child.status ? <Text dimColor>{` ${child.status}`}</Text> : null}
+            {elapsed ? <Text dimColor>{` · ${elapsed}`}</Text> : null}
+          </>
+        )}
       </Box>
       {tailLines.length > 0 ? (
         <Box flexDirection="column" marginLeft={4}>
