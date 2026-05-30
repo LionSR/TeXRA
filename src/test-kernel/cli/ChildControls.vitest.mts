@@ -40,6 +40,7 @@ function slice(
     conversation: undefined,
     entries: [],
     queuedFollowUps: 0,
+    queuedFollowUpMessages: [],
     activeSubagents: [],
     activeProcesses: [],
     childStreams: [],
