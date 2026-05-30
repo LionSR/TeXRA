@@ -11,6 +11,7 @@ import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_RANGES,
 } from '@shared/constants/latex';
+import { hasExtension } from '@utils/core/pathCore';
 import {
   createRunStorageLocation,
   flexibleFS,
@@ -84,7 +85,7 @@ export async function runCompileCheck(
 
   const texOutputs = (
     getOutputFilesByRound(ctx.outputState)[currentRound] ?? []
-  ).filter((f) => f.location.absolutePath.toLowerCase().endsWith('.tex'));
+  ).filter((f) => hasExtension(f.location.absolutePath, '.tex'));
   if (texOutputs.length === 0) return { failures: [], artifacts: [] };
 
   // Skip gracefully when no LaTeX toolchain is installed so the run doesn't

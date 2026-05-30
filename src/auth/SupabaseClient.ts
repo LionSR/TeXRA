@@ -3,7 +3,7 @@ import {
   SupabaseClient as Client,
   User,
 } from '@supabase/supabase-js';
-import { toErrorMessage } from '@common/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@common/errors/errorMessage';
 import * as logger from '@logger/logUtils';
 import {
   type UserAuthContext,
@@ -105,8 +105,7 @@ export class SupabaseClient {
       this.readinessError = null;
       return true;
     } catch (error) {
-      this.readinessError =
-        error instanceof Error ? error : new Error(toErrorMessage(error));
+      this.readinessError = ensureError(error);
       logger.error(
         'SupabaseClient',
         `Auth provider not ready: ${toErrorMessage(error)}`,

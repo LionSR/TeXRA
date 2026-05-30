@@ -22,6 +22,7 @@ import {
   OFFICE_EXTENSIONS,
   OFFICE_MIME_TYPES,
 } from '@utils/files/mimeUtils';
+import { hasExtension, getExtensionLowercase } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local file imports
@@ -89,7 +90,7 @@ export class ReadFileTool extends defineTool({
     let emlImages: Awaited<ReturnType<typeof parseEml>>['images'] = [];
     let lines: string[];
 
-    if (path.extname(input.path).toLowerCase() === '.eml') {
+    if (hasExtension(input.path, '.eml')) {
       const stats = await WorkspaceFS.stat(filePath);
       if (stats.size > MAX_EML_BYTES) {
         throw new ToolError(
@@ -173,7 +174,7 @@ export class ReadFileTool extends defineTool({
   ): { kind: 'pdf' | 'image' | 'document'; label: string } | null {
     const mimeType = getMimeType(filePath)?.toLowerCase();
     // Keep extension detection case-insensitive so users can reference files regardless of casing.
-    const extension = path.extname(filePath.toLowerCase());
+    const extension = getExtensionLowercase(filePath);
 
     const isPdf = mimeType === 'application/pdf' || extension === '.pdf';
     if (isPdf) {
