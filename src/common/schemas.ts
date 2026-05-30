@@ -7,20 +7,6 @@
 import { z } from 'zod';
 
 // ============================================================================
-// Stream Config
-// ============================================================================
-
-/** Configuration for identifying a stream by agent/model/file. Schema is the single source of truth. */
-export const StreamConfigSchema = z.object({
-  agent: z.string(),
-  model: z.string(),
-  inputFile: z.string(),
-});
-
-/** Derived type from schema. */
-export type StreamConfig = z.infer<typeof StreamConfigSchema>;
-
-// ============================================================================
 // LaTeX Compile Options Schema
 // ============================================================================
 

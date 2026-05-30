@@ -21,7 +21,7 @@ import {
 import { countLines } from '@utils/text/stringUtils';
 
 import { traceFileLineage } from './lineageMapping';
-import { ensureRound, type OutputState } from './outputState';
+import { ensureRoundData, type OutputState } from './outputState';
 import type { RoundFileMapping } from './types';
 
 const CHANNEL = 'OutputDiffStats';
@@ -113,7 +113,7 @@ export async function computeOutputDiffStats(
   precomputedMapping?: RoundFileMapping,
   options?: { isRewrite?: boolean },
 ): Promise<OutputFileInfo[]> {
-  const roundOutputs = ensureRound(state, currRound);
+  const roundOutputs = ensureRoundData(state, currRound).outputs;
   const mapping =
     precomputedMapping ?? traceFileLineage(state, baseFiles, currRound);
   const suppressLineage = options?.isRewrite === false;

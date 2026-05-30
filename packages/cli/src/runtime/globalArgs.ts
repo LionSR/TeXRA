@@ -1,6 +1,6 @@
 import { isNonEmptyString } from '@utils/core/stringCore';
 
-import type { CliApprovalPolicy } from './approvalPolicy';
+import type { CliApprovalPolicy } from '../schemas/cliSettings';
 import type { CliApiMode } from './apiAccessMode';
 import type { CliOutputFormat } from './cliConfig';
 import type { CliGlobalArgs } from './cliContext';

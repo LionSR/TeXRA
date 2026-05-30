@@ -4,7 +4,7 @@
  */
 
 // Local imports - agent workspace
-import { logScratchpad, type AgentTrace } from '@agent/trace';
+import { type AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
 
 // Local imports - replacement
@@ -57,7 +57,7 @@ export async function prepareExistingOutputContent(
 
   // Extract any existing scratchpad content and log it
   const scratchpad = await extractScratchpad(content, 'scratchpad');
-  if (scratchpad) logScratchpad(logger, scratchpad);
+  if (scratchpad) logger.domain({ key: 'scratchpad', text: scratchpad });
 
   // Write cleaned content back to file
   await flexibleFS.write(outputLocation, content);
