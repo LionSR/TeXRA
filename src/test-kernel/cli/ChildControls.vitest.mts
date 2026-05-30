@@ -186,6 +186,7 @@ describe('CLI child execution controls', () => {
         label: 'critic',
         command: 'critic',
         description: 'running · 12s',
+        killable: true,
         tailLines: [],
       },
     ]);
@@ -196,6 +197,7 @@ describe('CLI child execution controls', () => {
         kind: 'subagent',
         label: 'critic',
         command: 'critic',
+        killable: true,
       },
       {
         executionId: 'proc-1',
@@ -203,6 +205,7 @@ describe('CLI child execution controls', () => {
         label: 'latexmk',
         command: 'latexmk',
         description: 'running · 3s · warning',
+        killable: true,
         tailLines: ['first', 'second', 'warning'],
       },
     ]);
@@ -363,6 +366,7 @@ describe('CLI child execution controls', () => {
         kind: 'subagent',
         label: 'polisher',
         description: 'running',
+        killable: true,
       },
       {
         executionId: 'agent-1',
@@ -370,6 +374,7 @@ describe('CLI child execution controls', () => {
         kind: 'subagent',
         label: 'critic',
         description: 'completed',
+        killable: false,
       },
     ]);
   });
@@ -665,6 +670,10 @@ describe('CLI child execution controls', () => {
     expect(pickerKeyHints('subagents', 1)).toContainEqual({
       key: 'Enter',
       action: 'focus',
+    });
+    expect(pickerKeyHints('subagents', 1, false)).not.toContainEqual({
+      key: 'k',
+      action: 'kill',
     });
   });
 
