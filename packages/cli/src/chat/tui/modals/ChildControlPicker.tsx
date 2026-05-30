@@ -53,12 +53,14 @@ export function pickerKeyHints(
   if (itemCount <= 0) {
     return [{ key: 'Esc', action: 'close' }];
   }
-  return [
-    { key: '↑/↓', action: 'navigate' },
+  const hints: KeyHint[] = [{ key: '↑/↓', action: 'navigate' }];
+  if (itemCount > 1) hints.push({ key: '1-9', action: 'jump' });
+  hints.push(
     { key: 'Enter', action: mode === 'subagents' ? 'focus' : 'view' },
     { key: 'k', action: 'kill' },
     { key: 'Esc', action: 'close' },
-  ];
+  );
+  return hints;
 }
 
 function renderItem(
