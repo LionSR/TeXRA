@@ -36,6 +36,7 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
   bashApprovalController.rejectPendingForStream(streamId);
   _rejectPendingUserQuestionsForStream(streamId);
   toolEditApprovalController.clearBypassForStream(streamId);
+  bashApprovalController.clearBypassForStream(streamId);
   _clearProposalBypassForStream(streamId);
   cleanupCoordinatorRequestsForStream(streamId);
 }
@@ -49,6 +50,7 @@ export function cleanupAllApprovals(): void {
   bashApprovalController.rejectAllPending();
   _rejectAllPendingUserQuestions();
   toolEditApprovalController.clearAllBypass();
+  bashApprovalController.clearAllBypass();
   _clearAllProposalBypass();
   cleanupAllCoordinatorRequests();
 }
@@ -61,6 +63,9 @@ export {
   requestBashApproval,
   buildBashApprovalRejectedResult,
   handleProgressViewBashApprovalAction,
+  setBashApprovalSessionBypass,
+  toggleBashApprovalSessionBypass,
+  isBashApprovalBypassedForStream,
   BASH_APPROVAL_CONFIG_KEY,
   BASH_APPROVAL_ACTIONS,
   type BashApprovalAction,

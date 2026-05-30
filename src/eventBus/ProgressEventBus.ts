@@ -105,6 +105,10 @@ export interface ProgressEventPayloads {
     streamId: StreamTabId;
     bypassActive: boolean;
   };
+  updateBashApprovalBypassState: {
+    streamId: StreamTabId;
+    bypassActive: boolean;
+  };
   updateSuperYoloBypassState: {
     streamId: StreamTabId;
     bypassActive: boolean;
