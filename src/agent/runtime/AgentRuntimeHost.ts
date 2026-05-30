@@ -10,13 +10,3 @@ export interface AgentRuntimeHost {
 export const noopAgentRuntimeHost: AgentRuntimeHost = {
   emit: () => {},
 };
-
-let defaultAgentRuntimeHost: AgentRuntimeHost = noopAgentRuntimeHost;
-
-export function setDefaultAgentRuntimeHost(host: AgentRuntimeHost): void {
-  defaultAgentRuntimeHost = host;
-}
-
-export function getDefaultAgentRuntimeHost(): AgentRuntimeHost {
-  return defaultAgentRuntimeHost;
-}

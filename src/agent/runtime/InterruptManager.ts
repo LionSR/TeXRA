@@ -1,15 +1,14 @@
+import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
+
 /**
- * Interrupt callbacks passed to flow execution.
- * Subset of InterruptManager used by BaseFlowContextInit.
+ * Interrupt callbacks passed to flow execution — the subset of
+ * `BaseFlowContextInit` that controls cancellation. Derived from that one
+ * source of truth rather than re-declared.
  */
-export interface InterruptCallbacks {
-  /** Check if interruption has been requested. */
-  checkInterruption: () => boolean;
-  /** Set the current abort controller for cancellation. */
-  setAbortController: (controller: AbortController | null) => void;
-  /** Request interruption - called when user stops the agent. */
-  onInterrupt: () => void;
-}
+type InterruptCallbacks = Pick<
+  BaseFlowContextInit,
+  'checkInterruption' | 'setAbortController' | 'onInterrupt'
+>;
 
 /**
  * Create interrupt callbacks for a single flow execution.

@@ -7,10 +7,6 @@ import {
   setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
-import {
-  getDefaultAgentRuntimeHost,
-  setDefaultAgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
 
 import { createRunTrace } from '@logger';
 
@@ -68,16 +64,9 @@ async function* streamEvents(
 describe('codex progress events', () => {
   it('publishes todos and usage through the explicit runtime host', () => {
     const active = createRecordingHost();
-    const fallback = createRecordingHost();
-    const previousDefault = getDefaultAgentRuntimeHost();
-    setDefaultAgentRuntimeHost(fallback.host);
 
-    try {
-      publishCodexTodos(streamId, todos, active.host);
-      publishCodexStreamUsage(streamId, executionId, usage, active.host);
-    } finally {
-      setDefaultAgentRuntimeHost(previousDefault);
-    }
+    publishCodexTodos(streamId, todos, active.host);
+    publishCodexStreamUsage(streamId, executionId, usage, active.host);
 
     expect(active.events).toEqual([
       {
@@ -94,7 +83,6 @@ describe('codex progress events', () => {
         },
       },
     ]);
-    expect(fallback.events).toEqual([]);
   });
 
   it('updates in-flight Codex command items in place', async () => {

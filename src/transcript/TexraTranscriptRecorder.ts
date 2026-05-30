@@ -357,10 +357,6 @@ function domainMessageType(key: string): MessageType {
       return MESSAGE_TYPES.WEB_FETCH;
     case 'contextManagement':
       return MESSAGE_TYPES.CONTEXT_MANAGEMENT;
-    case 'progressStatus':
-      return MESSAGE_TYPES.PROGRESS_STATUS;
-    case 'userMessage':
-      return MESSAGE_TYPES.USER_MESSAGE;
     default:
       return MESSAGE_TYPES.DEFAULT;
   }
