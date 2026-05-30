@@ -9,6 +9,7 @@ import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
+  LIVE_ELAPSED_STREAM_STATUSES,
   STREAM_STATUS,
   type ActiveChildInfo,
   type StreamTabId,
@@ -26,13 +27,6 @@ export const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
   STREAM_STATUS.INITIALIZING,
   STREAM_STATUS.RESUMING,
   STREAM_STATUS.WAITING,
-]);
-
-/** Statuses where the execution is actively processing (show elapsed time). */
-const PROCESSING_STATUSES: ReadonlySet<string> = new Set([
-  STREAM_STATUS.RUNNING,
-  STREAM_STATUS.INITIALIZING,
-  STREAM_STATUS.RESUMING,
 ]);
 
 export interface ExecutionHandle {
@@ -89,7 +83,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
   getStatus(): ExecutionStatusInfo {
     const status =
       StreamStatusService.get(this.childStreamId) ?? STREAM_STATUS.RUNNING;
-    if (!PROCESSING_STATUSES.has(status)) {
+    if (!LIVE_ELAPSED_STREAM_STATUSES.has(status)) {
       return { status, elapsed: null };
     }
     return {
@@ -208,6 +202,7 @@ export function collectChildSummary(
       executionId: handle.executionId,
       agentName: handle.agentName,
       status,
+      startedAt: handle.startedAt,
       elapsed: elapsed ?? null,
     };
     if (handle instanceof AgentExecutionHandle) {

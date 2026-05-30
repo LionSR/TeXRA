@@ -1,7 +1,13 @@
 // Pure state helpers for App-level child execution shortcuts and pickers.
 
 // Local imports - shared schemas
-import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
+import {
+  LIVE_ELAPSED_STREAM_STATUSES,
+  STREAM_STATUS,
+  type ActiveChildInfo,
+  type StreamTabId,
+} from '@shared/schemas';
+import { formatDuration } from '@utils/core';
 
 // Local imports - CLI state
 import { isPlainReturnInput } from '../input/inputKeys';
@@ -46,6 +52,26 @@ function compactParts(parts: readonly (string | null | undefined)[]): string {
   return parts.filter((part): part is string => Boolean(part)).join(' · ');
 }
 
+function hasLiveChildElapsed(
+  child: Pick<ActiveChildInfo, 'startedAt' | 'status'>,
+): boolean {
+  return (
+    child.startedAt !== undefined &&
+    LIVE_ELAPSED_STREAM_STATUSES.has(child.status ?? STREAM_STATUS.RUNNING)
+  );
+}
+
+export function childElapsed(
+  child: Pick<ActiveChildInfo, 'elapsed' | 'startedAt' | 'status'>,
+  nowMs = Date.now(),
+): string | null | undefined {
+  const startedAt = child.startedAt;
+  if (startedAt === undefined || !hasLiveChildElapsed(child)) {
+    return child.elapsed;
+  }
+  return formatDuration(Math.max(0, nowMs - startedAt));
+}
+
 function childLabel(child: {
   readonly agentName?: string;
   readonly toolName?: string;
@@ -84,18 +110,20 @@ function buildSubagentItem(
     StreamTabId,
     Pick<StreamSlice, 'description' | 'entries'>
   >,
+  nowMs?: number,
 ): ChildControlItem {
   const label = childLabel(child);
   const command = streamDescription(child, streamsById) ?? label;
+  const elapsed = childElapsed(child, nowMs);
   return {
     executionId: child.executionId,
     childStreamId: child.childStreamId,
     kind: 'subagent',
     label,
     command,
-    description: compactParts([child.status, child.elapsed ?? undefined]),
+    description: compactParts([child.status, elapsed ?? undefined]),
     status: child.status,
-    elapsed: child.elapsed,
+    elapsed,
     tailLines: streamTranscriptLines(child, streamsById),
   };
 }
@@ -103,23 +131,21 @@ function buildSubagentItem(
 function buildProcessItem(
   child: ActiveChildInfo,
   tail: ProcessOutputTail | undefined,
+  nowMs?: number,
 ): ChildControlItem {
   const tailLines = processTailLines(tail);
   const lastLine = tailLines.at(-1);
   const label = childLabel(child);
+  const elapsed = childElapsed(child, nowMs);
   return {
     executionId: child.executionId,
     childStreamId: child.childStreamId,
     kind: 'process',
     label,
     command: label,
-    description: compactParts([
-      child.status,
-      child.elapsed ?? undefined,
-      lastLine,
-    ]),
+    description: compactParts([child.status, elapsed ?? undefined, lastLine]),
     status: child.status,
-    elapsed: child.elapsed,
+    elapsed,
     tailLines,
   };
 }
@@ -144,21 +170,46 @@ export function buildChildControlItems(
     StreamTabId,
     Pick<StreamSlice, 'description' | 'entries'>
   > = new Map(),
+  nowMs?: number,
 ): readonly ChildControlItem[] {
   if (mode === 'subagents') {
     return visibleSubagentRows(slice).map((child) =>
-      buildSubagentItem(child, streamsById),
+      buildSubagentItem(child, streamsById, nowMs),
     );
   }
 
   return [
     ...slice.activeSubagents.map((child) =>
-      buildSubagentItem(child, streamsById),
+      buildSubagentItem(child, streamsById, nowMs),
     ),
     ...slice.activeProcesses.map((child) =>
-      buildProcessItem(child, slice.processOutput.get(child.executionId)),
+      buildProcessItem(
+        child,
+        slice.processOutput.get(child.executionId),
+        nowMs,
+      ),
     ),
   ];
+}
+
+export function liveChildExecutionElapsedKey(
+  slice: Pick<StreamSlice, 'activeProcesses' | 'activeSubagents'> | undefined,
+): string | undefined {
+  if (slice === undefined) return undefined;
+
+  const liveKeys: string[] = [];
+  for (const child of slice.activeSubagents) {
+    if (hasLiveChildElapsed(child)) {
+      liveKeys.push(`${child.executionId}:${child.startedAt}`);
+    }
+  }
+  for (const child of slice.activeProcesses) {
+    if (hasLiveChildElapsed(child)) {
+      liveKeys.push(`${child.executionId}:${child.startedAt}`);
+    }
+  }
+  liveKeys.sort();
+  return liveKeys.length > 0 ? liveKeys.join(',') : undefined;
 }
 
 export function hasChildExecutionRows(
