@@ -88,13 +88,12 @@ export function slashPickIntent(
 export function parseSlashInput(
   text: string,
 ): { name: string; remainder: string } | undefined {
-  const prefix = text.startsWith('/') ? '/' : '';
-  if (!prefix) {
+  if (!text.startsWith('/')) {
     const trimmed = text.trim();
     if (trimmed === '\\clear') return { name: 'clear', remainder: '' };
     return undefined;
   }
-  const body = text.slice(prefix.length);
+  const body = text.slice(1);
   const ws = body.search(/\s/);
   if (ws === -1) return { name: body, remainder: '' };
   return { name: body.slice(0, ws), remainder: body.slice(ws + 1) };

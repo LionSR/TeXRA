@@ -47,7 +47,7 @@ export function confirmCardKeyAction(
   }
 }
 
-export function confirmCardKeyHints({
+function confirmCardKeyHints({
   approveLabel = 'approve',
   rejectLabel = 'reject',
   alwaysAllowLabel,
