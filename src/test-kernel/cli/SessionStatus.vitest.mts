@@ -4,7 +4,6 @@ import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager
 import {
   formatCliStatusLabel,
   formatCliSessionStatus,
-  readQueuedFollowUpMessagesForStatus,
 } from '@cli/chat/tui/sessionStatus';
 import { STREAM_STATUS } from '@shared/schemas';
 
@@ -105,7 +104,7 @@ describe('CLI session status formatter', () => {
     try {
       queue.enqueue('Fresh queue message');
 
-      expect(readQueuedFollowUpMessagesForStatus(STREAM_ID)).toEqual([
+      expect(ToolUseFollowUpQueue.getAll(STREAM_ID)).toEqual([
         'Fresh queue message',
       ]);
     } finally {

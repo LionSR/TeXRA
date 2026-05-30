@@ -26,10 +26,7 @@ import {
   setParentStream,
   type ConversationEntry,
 } from '../src/chat/tui/state/cliState';
-import {
-  formatCliSessionStatus,
-  readQueuedFollowUpMessagesForStatus,
-} from '../src/chat/tui/sessionStatus';
+import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
 import {
   enqueueApproval,
@@ -38,7 +35,7 @@ import {
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
-} from '../src/runtime/approvalPolicy';
+} from '../src/schemas/cliSettings';
 
 const STREAM_ID = 'harness-stream-1';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
@@ -552,7 +549,8 @@ function appendHarnessStatus(): void {
       api: meta.apiMode,
       approval: formatApprovalPolicyForCli(harnessApprovalPolicy),
       status: slice?.status ?? 'not started',
-      queuedFollowUpMessages: readQueuedFollowUpMessagesForStatus(streamId),
+      queuedFollowUpMessages:
+        streamId === undefined ? [] : ToolUseFollowUpQueue.getAll(streamId),
     }),
   );
 }

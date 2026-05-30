@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
-import { createWorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
 import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
@@ -107,7 +107,7 @@ describe('desktop agent directory bootstrap', () => {
       import('@platform/platform'),
       import('@agent/index/agentDirectoriesRegistry'),
     ]);
-    const storage = createWorkspaceStorageProvider(userDataPath, workspacePath);
+    const storage = new WorkspaceStorageProvider(userDataPath, workspacePath);
     const globalStateStore = await JsonStore.open(
       join(userDataPath, 'state', 'global.json'),
     );
