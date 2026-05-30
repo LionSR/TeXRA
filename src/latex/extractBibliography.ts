@@ -175,9 +175,7 @@ export async function loadBibliographyEntries(
   const entries = new Map<string, string>();
   const hasWildcard = citationKeys.includes('*');
   const filteredKeys = citationKeys.filter((key) => key !== '*');
-  const normalizedRequestedKeys = new Set(
-    filteredKeys.map((key) => key.toLowerCase()),
-  );
+  const includeAll = hasWildcard || filteredKeys.length === 0;
   const parsedEntries = new Map<string, { key: string; value: string }>();
 
   for (const filePath of bibliographyFiles) {
@@ -191,7 +189,7 @@ export async function loadBibliographyEntries(
     }
   }
 
-  if (hasWildcard || normalizedRequestedKeys.size === 0) {
+  if (includeAll) {
     for (const { key, value } of parsedEntries.values()) {
       if (!entries.has(key)) {
         entries.set(key, value);
@@ -207,10 +205,9 @@ export async function loadBibliographyEntries(
     }
   }
 
-  const missingKeys =
-    hasWildcard || normalizedRequestedKeys.size === 0
-      ? []
-      : filteredKeys.filter((key) => !parsedEntries.has(key.toLowerCase()));
+  const missingKeys = includeAll
+    ? []
+    : filteredKeys.filter((key) => !parsedEntries.has(key.toLowerCase()));
 
   return {
     entries,
@@ -223,9 +220,6 @@ export function summarizeBibliographyEntries(
   limit: number,
 ): string[] {
   const values = [...entries.values()].slice(0, limit);
-  if (values.length === 0) {
-    return [];
-  }
   // Join entries with empty lines between them
   return values.flatMap((entry, i) =>
     i < values.length - 1 ? [entry, ''] : [entry],

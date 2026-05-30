@@ -7,12 +7,7 @@ import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 import { apiKeyExists, isApiProvider } from './apiProviders';
-import {
-  buildModelHint,
-  formatContext,
-  formatCost,
-  getVisibleModels,
-} from './modelOptionsBasic';
+import { buildBaseModelOption, getVisibleModels } from './modelOptionsBasic';
 import { shouldRouteModelThroughOpenRouter } from './openRouterRouting';
 
 type PersonalModelAccessKind = 'provider-key' | 'openrouter-key';
@@ -70,12 +65,7 @@ const AVAILABILITY_STATUS: Record<
 async function getPersonalAccessKindForModel(
   config: ModelConfig,
   hasOpenRouter: boolean,
-  useOpenRouter: boolean,
 ): Promise<PersonalModelAccessKind | null> {
-  if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
-    return hasOpenRouter ? 'openrouter-key' : null;
-  }
-
   const { provider } = config;
   if (!isApiProvider(provider)) {
     return 'provider-key';
@@ -146,7 +136,6 @@ async function resolveModelAvailability(
   const personalAccess = await getPersonalAccessKindForModel(
     config,
     ctx.hasOpenRouter,
-    ctx.useOpenRouter,
   );
   return personalAccess
     ? AVAILABILITY_STATUS[personalAccess]
@@ -215,12 +204,7 @@ async function buildModelOptionData(
 
   const availability = await resolveModelAvailability(model, config, ctx);
   return {
-    value: model,
-    label: config.label,
-    provider: config.provider,
-    context: formatContext(config.contextWindow),
-    cost: formatCost(config.inputPrice, config.outputPrice),
-    hint: buildModelHint(config),
+    ...buildBaseModelOption(model, config),
     availability: availability.kind,
     availabilityLabel: availability.label,
     requiresKey: availability.requiresKey,
