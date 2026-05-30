@@ -325,17 +325,29 @@ export function App(props: AppProps): React.JSX.Element {
           parentStream,
           streams,
         });
+        const targetStreamLabel = target.streamId
+          ? streamScopeDisplayLabel({
+              parentStream,
+              streamId: target.streamId,
+              streams,
+            })
+          : undefined;
+        const fallbackFromStreamLabel = target.fallbackFromStreamId
+          ? streamScopeDisplayLabel({
+              parentStream,
+              streamId: target.fallbackFromStreamId,
+              streams,
+            })
+          : undefined;
+        const streamScopeDetail =
+          childControlMode === 'subagents' &&
+          targetStreamLabel &&
+          fallbackFromStreamLabel
+            ? `${fallbackFromStreamLabel} has no subagents`
+            : undefined;
         return (
           <ChildControlPicker
-            activeStreamLabel={
-              target.streamId
-                ? streamScopeDisplayLabel({
-                    parentStream,
-                    streamId: target.streamId,
-                    streams,
-                  })
-                : undefined
-            }
+            activeStreamLabel={targetStreamLabel}
             activeStreamId={target.streamId}
             availableRows={foregroundRows}
             mode={childControlMode}
@@ -343,6 +355,7 @@ export function App(props: AppProps): React.JSX.Element {
             onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
             onKillExecution={props.onKillExecution}
             slice={target.slice}
+            streamScopeDetail={streamScopeDetail}
             streams={streams}
           />
         );

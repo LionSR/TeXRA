@@ -32,6 +32,7 @@ export interface ChildControlPickerProps {
   readonly onFocusStream: (streamId: StreamTabId) => void;
   readonly onKillExecution: (executionId: string) => void;
   readonly slice: StreamSlice | undefined;
+  readonly streamScopeDetail?: string;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }
 
@@ -139,20 +140,20 @@ export function computeTaskDetailLayout({
 
 export function computePickerListLayout({
   availableRows,
-  hasParentStream,
   highlight,
   itemCount,
+  scopeLineCount,
 }: {
   readonly availableRows?: number;
-  readonly hasParentStream: boolean;
   readonly highlight: number;
   readonly itemCount: number;
+  readonly scopeLineCount: number;
 }): PickerListLayout {
   const rows = Math.max(0, availableRows ?? 18);
   const fixedRows =
     2 + // border
     1 + // title
-    (hasParentStream ? 1 : 0) +
+    Math.max(0, scopeLineCount) +
     1 + // list top margin
     2; // hints margin + row
   const rowBudget = Math.max(1, rows - fixedRows);
@@ -337,6 +338,7 @@ export function ChildControlPicker({
   onFocusStream,
   onKillExecution,
   slice,
+  streamScopeDetail,
   streams,
 }: ChildControlPickerProps): React.JSX.Element {
   const liveElapsedKey = liveChildExecutionElapsedKey(slice);
@@ -355,11 +357,16 @@ export function ChildControlPicker({
     : undefined;
   const listLayout = computePickerListLayout({
     availableRows,
-    hasParentStream: streamScopeLabel !== undefined,
     highlight,
     itemCount: items.length,
+    scopeLineCount: streamScopeLabel !== undefined ? 1 : 0,
   });
   const visibleItems = items.slice(listLayout.start, listLayout.end);
+  const streamScopeText = streamScopeLabel
+    ? `Stream: ${streamScopeLabel}${
+        streamScopeDetail ? ` (${streamScopeDetail})` : ''
+      }`
+    : undefined;
 
   useEffect(() => {
     setHighlight((current) => clampPickerIndex(current, items.length));
@@ -451,8 +458,10 @@ export function ChildControlPicker({
       <Text bold color="cyan">
         {pickerTitle(mode)}
       </Text>
-      {streamScopeLabel ? (
-        <Text dimColor>{`Stream: ${streamScopeLabel}`}</Text>
+      {streamScopeText ? (
+        <Text dimColor wrap="truncate-end">
+          {streamScopeText}
+        </Text>
       ) : null}
       <Box flexDirection="column" marginTop={1}>
         {items.length > 0 ? (
