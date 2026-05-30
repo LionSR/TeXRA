@@ -711,6 +711,8 @@ export async function runChat(
   };
 
   const followUpQueue = new PQueue({ concurrency: 1 });
+  const canStopActiveRun = (): boolean =>
+    Boolean(session.runPromise && !session.runCompleted);
   const interruptActive = (): void => {
     clearApprovals();
     if (!session.streamId) return;
@@ -929,7 +931,9 @@ export async function runChat(
     <App
       onSubmit={handleSubmit}
       canInterruptActiveRun={() => chatTuiCanInterruptActiveRun(session)}
+      canStopActiveRun={canStopActiveRun}
       onInterruptActive={interruptActive}
+      onCtrlC={() => handleSigint()}
       onKillExecution={(executionId) => {
         clearApprovals();
         killExecution(executionId);
@@ -988,6 +992,10 @@ export async function runChat(
   };
   const handleSigint = (): void => {
     if (exitArmed) {
+      exitNow(130);
+      return;
+    }
+    if (!canStopActiveRun()) {
       exitNow(130);
       return;
     }
