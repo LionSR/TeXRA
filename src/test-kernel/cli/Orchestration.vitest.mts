@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/AgentDataclass';
+import { orchestrationKeyHints } from '@cli/orchestration/runOrchestrationTui';
 import { buildCliOrchestrationItems } from '@cli/runtime/orchestration';
 
 import type { CliHistoryEntry } from '@cli/runtime/history';
@@ -46,6 +47,24 @@ function preset(overrides: Partial<CliMultiAgentPreset>): CliMultiAgentPreset {
 }
 
 describe('CLI orchestration items', () => {
+  it('advertises the full direct-open hotkey range used by Select', () => {
+    expect(orchestrationKeyHints()).toContainEqual({
+      key: '1-9/a-z/Enter',
+      action: 'open',
+    });
+  });
+
+  it('keeps the exit hint out of the Select letter hotkey range', () => {
+    expect(orchestrationKeyHints()).toContainEqual({
+      key: 'Esc',
+      action: 'exit',
+    });
+    expect(orchestrationKeyHints()).not.toContainEqual({
+      key: 'q/Esc',
+      action: 'exit',
+    });
+  });
+
   it('starts with new chat and keeps help as the final active item', () => {
     const items = buildCliOrchestrationItems({
       presets: [],
