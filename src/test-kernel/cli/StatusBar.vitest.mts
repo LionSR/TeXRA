@@ -181,6 +181,57 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('[Alt-1..9]focus');
   });
 
+  it('keeps critical controls visible in narrow subagent sessions', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      elapsedMs: 88_000,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 3,
+      activeProcesses: 1,
+      approvalDepth: 0,
+      subagentControlsAvailable: true,
+      hasMultipleStreams: true,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      ctrlCAction: 'stop',
+      width: 60,
+    });
+
+    expect(display.bindings).toBe('[Tab]streams  [Alt-p]tasks  [Ctrl-C]stop');
+    expect(display.bindings).toContain('[Ctrl-C]stop');
+  });
+
+  it('keeps status discoverable in narrow single-stream sessions', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.WAITING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      width: 50,
+    });
+
+    expect(display.bindings).toBe(
+      '[Alt-p]tasks  [/status]details  [Ctrl-C]exit',
+    );
+  });
+
   it('hides inactive global bindings while a foreground panel owns input', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,
