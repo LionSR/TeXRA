@@ -1,4 +1,6 @@
 <script setup>
+import MockCard from './MockCard.vue';
+
 // Frameless memory-tool slice: how a tool-use agent actually drives the
 // `memory` tool over a run, as it surfaces in the ProgressBoard / CLI tool-call
 // log. Standalone (no MockupFrame / dash-nav) — just the focused tool-call
@@ -41,12 +43,12 @@ const calls = [
 </script>
 
 <template>
-  <div class="mockup mem-cmds" role="group" aria-label="memory tool calls">
-    <div class="mc-head">
-      <wa-icon class="mc-head-ic" library="texra" name="database"></wa-icon>
-      <span class="mc-head-name">memory</span>
-      <span class="mc-head-sub">tool calls · this run</span>
-    </div>
+  <MockCard
+    class="mem-cmds"
+    icon="database"
+    title="memory"
+    sub="tool calls · this run"
+  >
     <ul class="mc-list">
       <li
         v-for="(c, i) in calls"
@@ -61,44 +63,13 @@ const calls = [
         <span class="mc-effect">{{ c.effect }}</span>
       </li>
     </ul>
-  </div>
+  </MockCard>
 </template>
 
 <style scoped>
-/* Standalone card. Tokens come from `.mockup` (theme/mockup.css). */
-.mem-cmds {
-  background: var(--mk-bg);
-  border: 1px solid var(--mk-border-soft);
-  border-radius: var(--mk-radius-lg);
-  padding: var(--mk-space-12) var(--mk-space-14);
-  margin: var(--mk-space-12) 0;
-  font-family: var(--vp-font-family-base);
-  overflow: hidden;
-}
-
-.mc-head {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-7);
-  padding-bottom: var(--mk-space-8);
-  border-bottom: 1px solid var(--mk-border);
-  font-family: var(--vp-font-family-mono);
-}
-.mc-head-ic {
-  font-size: var(--mk-space-13);
-  color: var(--mk-syn-fn);
-  flex-shrink: 0;
-}
-.mc-head-name {
-  font-size: var(--mk-fs-76);
-  font-weight: 600;
-  color: var(--mk-text);
-}
-.mc-head-sub {
-  font-size: var(--mk-fs-70);
-  color: var(--mk-text-faint);
-}
-
+/* Card shell + inline mono header come from the shared <MockCard> primitive
+   (which composes the .mk-card* family from theme/mockup.css). Only the body —
+   the tool-call list rows below — is scoped here. */
 .mc-list {
   list-style: none;
   margin: 0;
@@ -119,7 +90,7 @@ const calls = [
   line-height: 1.5;
 }
 .mc-row.active {
-  background: rgba(130, 80, 223, 0.08);
+  background: color-mix(in srgb, var(--mk-accent) 8%, transparent);
 }
 
 .mc-dot {
@@ -134,7 +105,7 @@ const calls = [
 }
 .mc-dot--active {
   background: var(--mk-accent);
-  box-shadow: 0 0 0 0 rgba(200, 155, 224, 0.6);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--mk-accent) 60%, transparent);
   animation: mk-shpulse 1.8s infinite;
 }
 
@@ -145,7 +116,7 @@ const calls = [
 }
 .mc-cmd {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: 0 var(--mk-space-5);
   font-size: var(--mk-fs-72);

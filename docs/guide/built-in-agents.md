@@ -1,6 +1,50 @@
+<script setup>
+import DropdownMenu from '../.vitepress/components/DropdownMenu.vue';
+import AgentModeShapes from '../.vitepress/components/AgentModeShapes.vue';
+</script>
+
 # Built-in Agent Reference
 
 TeXRA ships with built-in agents for common research tasks—polishing prose, fixing errors, creating figures, converting formats, and more. Pick one from the dropdown in the TeXRA UI and you're ready to go.
+
+<DropdownMenu
+  label="Agent"
+  value="polish"
+  valueIcon="sparkle"
+  maxWidth="480px"
+  columns="2"
+  :groups="[
+    {
+      label: 'Tool-use',
+      items: [
+        { name: 'chat', icon: 'comment' },
+        { name: 'research', icon: 'robot' },
+        { name: 'numerics', icon: 'pulse' },
+        { name: 'review', icon: 'circle-check' },
+        { name: 'lean', icon: 'check' },
+        { name: 'presenter', icon: 'device-camera-video' },
+        { name: 'latexFixer', icon: 'screwdriver-wrench' },
+        { name: 'latexDiff', icon: 'diff' },
+        { name: 'setup', icon: 'settings-gear' },
+        { name: 'creator', icon: 'wand' },
+      ],
+    },
+    {
+      label: 'Workflow',
+      items: [
+        { name: 'correct', icon: 'check' },
+        { name: 'polish', icon: 'sparkle', active: true },
+        { name: 'paper2slide', icon: 'file-pdf' },
+        { name: 'paper2poster', icon: 'file-pdf' },
+        { name: 'ocr', icon: 'file-code' },
+        { name: 'transcribe_audio', icon: 'mic' },
+        { name: 'merge', icon: 'merge' },
+      ],
+    },
+  ]"
+/>
+
+<p class="hero-caption">The agent picker, split by the two agent classes — <code>tool-use</code> (left) and <code>workflow</code> (right) — with the selected agent (<code>polish</code>) highlighted.</p>
 
 ## Quick Reference
 
@@ -23,6 +67,12 @@ TeXRA ships with built-in agents for common research tasks—polishing prose, fi
 | `ocr`              | Workflow | Extract text from images/PDFs                                             |
 | `transcribe_audio` | Workflow | Transcribe audio to text                                                  |
 | `merge`            | Workflow | Intelligently merge document versions                                     |
+
+The **Type** column above splits every agent into one of two execution shapes:
+
+<AgentModeShapes />
+
+<p class="hero-caption">Tool-use agents loop — converse and call tools until done; workflow agents run a fixed input → edit → diff pipeline and hand back a versioned diff.</p>
 
 ::: warning Important Note
 The underlying prompts and specific behaviors of these built-in agents may change slightly between TeXRA versions as we continue to optimize them. If you require precise, unchanging behavior or wish to heavily customize the process, consider creating a [Custom Agent](./custom-agents.md) based on these examples.

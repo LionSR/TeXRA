@@ -1,3 +1,8 @@
+<script setup>
+import DoctorReportCard from '../.vitepress/components/DoctorReportCard.vue';
+import InstallTroubleshootCards from '../.vitepress/components/InstallTroubleshootCards.vue';
+</script>
+
 # Installation Guide
 
 This guide will walk you through the process of installing TeXRA and all its dependencies to ensure optimal performance.
@@ -56,11 +61,27 @@ See [TeXRA CLI](./texra-cli.md) for usage, shell completion, and workspace defau
 
 ## Installing Required Dependencies
 
-Now for the slightly less fun part – making sure TeXRA has the tools it needs. Only a **LaTeX distribution** is strictly required for core document processing; the other tools below unlock specific features (Perl for `latexindent`/`latexdiff`, GraphicsMagick/ImageMagick + Ghostscript for figure and image processing). Install the ones you need and follow the instructions for your operating system.
+Now for the slightly less fun part – making sure TeXRA has the tools it needs. Only a **LaTeX distribution** is strictly required for core document processing; the other tools below unlock specific features. Install the ones you need and follow the instructions for your operating system.
+
+<FeatureCards
+  min="220px"
+  :cards="[
+    { icon: 'file-code', title: 'LaTeX distribution', tag: 'Required', tagVariant: 'accent', desc: 'Core document processing — compiling and rendering .tex.', chips: [{ text: 'MiKTeX / TeX Live', variant: 'neutral' }] },
+    { icon: 'diff-multiple', title: 'Perl', tag: 'Optional', tagVariant: 'neutral', desc: 'Backs the latexindent and latexdiff scripts.', chips: [{ text: 'auto-format', variant: 'info' }, { text: 'LaTeX diffs', variant: 'info' }] },
+    { icon: 'image', title: 'GraphicsMagick / ImageMagick', tag: 'Optional', tagVariant: 'neutral', desc: 'Figure and image processing.', chips: [{ text: 'figures', variant: 'info' }] },
+    { icon: 'file-pdf', title: 'Ghostscript', tag: 'Optional', tagVariant: 'neutral', desc: 'Rasterizes PDF figures for the image tools above.', chips: [{ text: 'figures', variant: 'info' }] }
+  ]"
+/>
+
+<p class="hero-caption">Install only what you need: a LaTeX distribution is the one hard requirement; Perl, GraphicsMagick/ImageMagick, and Ghostscript each unlock a specific optional feature.</p>
 
 ::: tip Check what's detected with `texra doctor`
-Run `texra doctor` to see what TeXRA found. It reports the LaTeX toolchain (`latexmk`, `pdflatex`, `xelatex`, `lualatex`, `bibtex`, `biber`, `latexdiff`, `latexindent`) along with Node.js, authentication, and model availability. The optional image tools (GraphicsMagick/ImageMagick, Ghostscript) and Wolfram are checked on demand the first time you use a feature that needs them, rather than up front.
+Run `texra doctor` to see what TeXRA found — the LaTeX toolchain, runtime and authentication, and which optional tools are deferred until first use.
 :::
+
+<DoctorReportCard />
+
+<p class="hero-caption"><code>texra doctor</code> groups its findings: the full LaTeX toolchain and runtime/auth are verified up front, while the optional image tools and Wolfram are checked on demand the first time a feature needs them.</p>
 
 ### Homebrew (macOS only) {#homebrew}
 
@@ -299,26 +320,11 @@ If any component is missing, TeXRA will typically show an error message indicati
 
 ### Common Installation Issues
 
-1. **Extension Not Loading**:
-   - Check VS Code's minimum version requirement (1.105+)
-   - Look for errors in the Output panel (select "TeXRA" in the dropdown)
-   - Try reinstalling the extension
+Most installation problems fall into one of four categories. Find your symptom and work through its checks:
 
-2. **LaTeX Processing Errors**:
-   - Verify LaTeX is in your system PATH
+<InstallTroubleshootCards />
 
-- Run `latexmk --version` (or `pdflatex --version`) in terminal to confirm installation
-- Check if required LaTeX packages are installed
-
-3. **Image Processing Errors**:
-   - Confirm GraphicsMagick/ImageMagick is properly installed
-   - Verify Ghostscript is installed and accessible
-   - Check PATH environment variables
-
-4. **API Key Issues**:
-   - Verify API keys are entered correctly
-   - Check your usage limits
-   - Ensure your network allows connections to API endpoints
+<p class="hero-caption">Four common failure modes and the checks for each: a loading extension, LaTeX or image processing, and API keys.</p>
 
 ### Getting Help
 
