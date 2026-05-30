@@ -80,6 +80,7 @@ const SCENARIOS = [
   {
     name: 'edit-approval-approve',
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
+    bootExpect: 'Use foreground panel shortcuts',
     keys: ['y'],
     frame: 'tail',
     expect: ['[/status]details', '[/model]models'],
@@ -88,6 +89,7 @@ const SCENARIOS = [
   {
     name: 'edit-approval-reject',
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
+    bootExpect: 'Use foreground panel shortcuts',
     keys: ['n'],
     frame: 'tail',
     expect: ['[/status]details', '[/model]models'],
