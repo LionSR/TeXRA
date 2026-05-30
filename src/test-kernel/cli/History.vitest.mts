@@ -6,6 +6,7 @@ import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
+  readConversation: vi.fn(),
   readMeta: vi.fn(),
   readResultMeta: vi.fn(),
   readReport: vi.fn(),
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@agent/storage', () => ({
   getExecutionStore: vi.fn(() => ({
     readConfig: mocks.readConfig,
+    readConversation: mocks.readConversation,
     readMeta: mocks.readMeta,
     readResultMeta: mocks.readResultMeta,
     readReport: mocks.readReport,
@@ -37,6 +39,7 @@ vi.mock('@utils/files/taskRunStorage', () => ({
 import {
   cliHistoryNdjsonRecords,
   deleteCliHistory,
+  formatCliHistoryDetailsText,
   formatCliHistoryText,
   listCliHistoryEntries,
   parseCliHistoryId,
@@ -64,6 +67,7 @@ describe('CLI history runtime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.readConfig.mockResolvedValue(config);
+    mocks.readConversation.mockResolvedValue(null);
     mocks.readMeta.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readReport.mockResolvedValue(null);
@@ -112,6 +116,53 @@ describe('CLI history runtime', () => {
     await expect(readCliHistoryConfig('a1' as ExecutionId)).resolves.toEqual(
       config,
     );
+  });
+
+  it('shows a bounded final assistant preview when no report is stored', async () => {
+    mocks.readConversation.mockResolvedValue([
+      { role: 'user', content: 'Review the proof.' },
+      { role: 'assistant', content: '' },
+      { role: 'tool', content: 'problem.tex contents' },
+      { role: 'assistant', content: 'Final proof analysis.' },
+    ]);
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId);
+
+    expect(details?.conversationPreview).toEqual({
+      messageCount: 4,
+      messages: [
+        {
+          index: 4,
+          role: 'assistant',
+          content: 'Final proof analysis.',
+          truncated: false,
+        },
+      ],
+    });
+    expect(formatCliHistoryDetailsText(details!)).toContain(
+      [
+        'Conversation (4 messages; showing assistant message 4):',
+        '',
+        '[assistant #4]',
+        'Final proof analysis.',
+      ].join('\n'),
+    );
+    expect(formatCliHistoryDetailsText(details!)).not.toContain(
+      'problem.tex contents',
+    );
+  });
+
+  it('uses the stored report instead of duplicating conversation preview text', async () => {
+    mocks.readReport.mockResolvedValue('Structured report.');
+    mocks.readConversation.mockResolvedValue([
+      { role: 'assistant', content: 'Final proof analysis.' },
+    ]);
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId);
+    const text = formatCliHistoryDetailsText(details!);
+
+    expect(text).toContain('Report:\nStructured report.');
+    expect(text).not.toContain('Conversation (');
   });
 
   it('reports not-found deletion through the structured result', async () => {
