@@ -255,6 +255,28 @@ const SCENARIOS = [
     maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
   },
   {
+    name: 'stopped-subagent-picker',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 'p', 'k', ESC + 's', DOWN, DOWN, 'k'],
+    expect: [
+      'Subagents',
+      'Stream: main',
+      '› 3. strategy — stopped',
+      'Enter focus',
+      'Esc close',
+    ],
+    unexpect: [
+      'k kill',
+      'Harness kill requested for harness-child-strategy.\n\nHarness kill requested for harness-child-strategy.',
+    ],
+    maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
+  },
+  {
     name: 'empty-task-picker',
     env: {
       HARNESS_ENTRIES: '4',
