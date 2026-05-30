@@ -53,11 +53,11 @@ const rows = [
 <template>
   <div class="mockup ctl" role="group" aria-label="texra tools list output">
     <!-- Faux terminal titlebar -->
-    <div class="ctl-bar">
-      <span class="ctl-light ctl-light--r"></span>
-      <span class="ctl-light ctl-light--y"></span>
-      <span class="ctl-light ctl-light--g"></span>
-      <span class="ctl-title">texra tools list</span>
+    <div class="mk-term-bar">
+      <span class="mk-term-light mk-term-light--r"></span>
+      <span class="mk-term-light mk-term-light--y"></span>
+      <span class="mk-term-light mk-term-light--g"></span>
+      <span class="mk-term-title">texra tools list</span>
     </div>
 
     <div class="ctl-body">
@@ -113,36 +113,7 @@ const rows = [
   font-family: var(--vp-font-family-base);
 }
 
-/* Titlebar (mirrors CliChatHero) */
-.ctl-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--mk-space-6);
-  padding: var(--mk-space-7) var(--mk-space-12);
-  background: var(--mk-bg-soft);
-  border-bottom: 1px solid var(--mk-border);
-}
-.ctl-light {
-  width: var(--mk-space-9);
-  height: var(--mk-space-9);
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.ctl-light--r {
-  background: var(--color-error);
-}
-.ctl-light--y {
-  background: var(--color-warning);
-}
-.ctl-light--g {
-  background: var(--color-success);
-}
-.ctl-title {
-  margin-left: var(--mk-space-7);
-  font-family: var(--vp-font-family-mono);
-  font-size: var(--mk-fs-72);
-  color: var(--mk-text-faint);
-}
+/* Titlebar comes from the shared `.mk-term-*` classes in theme/mockup.css. */
 
 /* Body */
 .ctl-body {

@@ -32,6 +32,8 @@ import ToolCallPanel from '../components/ToolCallPanel.vue';
 import FeatureCards from '../components/FeatureCards.vue';
 import DropdownMenu from '../components/DropdownMenu.vue';
 import FlowSteps from '../components/FlowSteps.vue';
+import DesktopMigrationSplit from '../components/DesktopMigrationSplit.vue';
+import TemplateVarsPalette from '../components/TemplateVarsPalette.vue';
 
 let waRegistered = false;
 
@@ -107,6 +109,8 @@ export default {
     app.component('FeatureCards', FeatureCards);
     app.component('DropdownMenu', DropdownMenu);
     app.component('FlowSteps', FlowSteps);
+    app.component('DesktopMigrationSplit', DesktopMigrationSplit);
+    app.component('TemplateVarsPalette', TemplateVarsPalette);
 
     // Side-effects (client only): load WA components + register the texra icon
     // library, and keep the WA color scheme in sync with the docs theme.
