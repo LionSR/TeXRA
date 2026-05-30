@@ -6,6 +6,7 @@ import {
   triggerRetry,
 } from '@agent/runtime/runCoordinators';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ApprovalDecision as SharedApprovalDecision } from '@shared/schemas';
 
 // Local imports - tools
 import { handleUserQuestionAction } from '@tools/userQuestion';
@@ -22,10 +23,11 @@ import { type CliContext, type CliPromptRequest } from './cliContext';
 import { askCliQuestion, writeTextStderr } from './logSinks';
 import { parseUserQuestionAnswer } from './userQuestionAnswer';
 
-export interface ApprovalDecision {
-  readonly accepted: boolean;
-  readonly userMessage?: string;
-}
+// The headless adapter only ever sets accepted + userMessage, but reusing the
+// host-neutral shape (which also carries optional userQuestionAnswers) keeps a
+// single source of truth for the decision vocabulary across hosts. See
+// docs/proposals/tui-extension-sharing.md (Rung 1).
+export type ApprovalDecision = SharedApprovalDecision;
 
 const APPROVAL_EVENTS = [
   'showBashPermission',
