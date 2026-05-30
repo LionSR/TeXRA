@@ -67,7 +67,15 @@ const SCENARIOS = [
   {
     name: 'edit-approval',
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
-    expect: ['Apply edit to draft.tex?', 'y approve', 'n reject', 'approval'],
+    bootExpect: 'Use foreground panel shortcuts',
+    expect: [
+      'Apply edit to draft.tex?',
+      'y approve',
+      'n reject',
+      'approval',
+      'Use foreground panel shortcuts',
+    ],
+    unexpect: ['[Alt-p]tasks', '[Option-p]tasks', '[/model]models'],
   },
   {
     name: 'edit-approval-approve',
@@ -316,12 +324,13 @@ async function runScenario(scenario) {
   // transcript user rows also contain "›", so use the status binding instead
   // of the prompt glyph as the readiness sentinel.
   const bootDeadline = Date.now() + 15000;
+  const bootExpect = scenario.bootExpect ?? '[/status]details';
   let booted = false;
   while (Date.now() < bootDeadline) {
     await sleep(150);
     if (exited) break;
     if (
-      (await frameSnapshot()).includes('[/status]details') &&
+      (await frameSnapshot()).includes(bootExpect) &&
       Date.now() - lastData > 600
     ) {
       booted = true;
