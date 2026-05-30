@@ -155,7 +155,7 @@ export class SettingsModelSelectionController {
     if (!helperModel || helperModel === DEFAULT_HELPER_MODEL) {
       return DEFAULT_HELPER_MODEL;
     }
-    if (visibleModels.length === 0 || visibleModels.includes(helperModel)) {
+    if (visibleModels.includes(helperModel)) {
       return helperModel;
     }
     return visibleModels[0] ?? DEFAULT_HELPER_MODEL;

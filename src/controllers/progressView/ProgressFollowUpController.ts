@@ -230,10 +230,7 @@ export class ProgressFollowUpController {
     executionId: string | undefined,
   ): string {
     const executionHint = executionId ? `Execution: ${executionId}` : undefined;
-    const editableHint =
-      editableFiles.length > 0
-        ? `Editable workspace target${editableFiles.length === 1 ? '' : 's'}: ${editableFiles.join(', ')}`
-        : undefined;
+    const editableHint = `Editable workspace target${editableFiles.length === 1 ? '' : 's'}: ${editableFiles.join(', ')}`;
     const failureLines = compileFailures.map((failure) => {
       const outputPath =
         executionId && failure.output.kind === 'runStorage'
