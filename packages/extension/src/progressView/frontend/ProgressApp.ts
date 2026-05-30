@@ -58,11 +58,6 @@ import {
   tabStreams$,
 } from './progressState';
 
-/** Schema for persisted preferences. */
-const ProgressViewPrefsSchema = z.object({
-  streamFilter: AgentCategoryFilterSchema.catch('all'),
-});
-
 // Local imports - event handlers
 import {
   handleDeleteAll,
@@ -93,6 +88,11 @@ import './components/UserMessage';
 import './components/StatisticsPanel';
 import './components/LatexdiffResults';
 import './components/ContextManagement';
+
+/** Schema for persisted preferences. */
+const ProgressViewPrefsSchema = z.object({
+  streamFilter: AgentCategoryFilterSchema.catch('all'),
+});
 
 registerTeXRAWebAwesomeIcons();
 

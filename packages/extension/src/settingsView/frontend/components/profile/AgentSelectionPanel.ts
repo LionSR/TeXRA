@@ -563,9 +563,10 @@ export class AgentSelectionPanel extends LitElement {
         ${orderedSources.map((source) => {
           const agents = groups.get(source)!;
           const enabledInGroup = agents.filter((a) => a.enabled).length;
+          const sourceName = SOURCE_DISPLAY_NAMES[source] ?? source;
           return html`
             <div class="agent-list-section-header">
-              <span>${SOURCE_DISPLAY_NAMES[source] ?? source}</span>
+              <span>${sourceName}</span>
               <span class="agent-list-section-actions">
                 ${enabledInGroup < agents.length
                   ? html`<wa-button
@@ -573,8 +574,7 @@ export class AgentSelectionPanel extends LitElement {
                       appearance="plain"
                       size="small"
                       @click=${() => this.handleSetAllEnabled(source, true)}
-                      title="Show all ${SOURCE_DISPLAY_NAMES[source] ??
-                      source} agents"
+                      title="Show all ${sourceName} agents"
                     >
                       All
                     </wa-button>`
@@ -585,8 +585,7 @@ export class AgentSelectionPanel extends LitElement {
                       appearance="plain"
                       size="small"
                       @click=${() => this.handleSetAllEnabled(source, false)}
-                      title="Hide all ${SOURCE_DISPLAY_NAMES[source] ??
-                      source} agents"
+                      title="Hide all ${sourceName} agents"
                     >
                       None
                     </wa-button>`
