@@ -118,13 +118,9 @@ interface ConnectorResult {
  */
 async function checkZoteroRunning(port: number): Promise<void> {
   try {
-    const response = await axios.get(
-      `http://127.0.0.1:${port}/connector/ping`,
-      { timeout: ZOTERO_PING_TIMEOUT_MS },
-    );
-    if (response.status !== 200) {
-      throw new Error('Unexpected response');
-    }
+    await axios.get(`http://127.0.0.1:${port}/connector/ping`, {
+      timeout: ZOTERO_PING_TIMEOUT_MS,
+    });
   } catch {
     throw new ToolError(
       `Zotero is not reachable on port ${port}. ` +

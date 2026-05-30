@@ -49,18 +49,6 @@ export const RetryPermissionSchema = z.strictObject({
 });
 export type RetryPermission = z.infer<typeof RetryPermissionSchema>;
 
-export const AgentProposalActionSchema = z.enum(['approve', 'reject', 'setup']);
-export type AgentProposalAction = z.infer<typeof AgentProposalActionSchema>;
-
-export const AgentProposalActionMessageSchema = z.object({
-  proposalId: z.string(),
-  action: AgentProposalActionSchema,
-  feedback: z.string().optional(),
-});
-export type AgentProposalActionMessage = z.infer<
-  typeof AgentProposalActionMessageSchema
->;
-
 /** Workflow agent proposal - includes file fields for document processing */
 export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.merge(
   WorkflowSpecificFieldsSchema,

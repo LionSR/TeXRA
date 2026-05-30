@@ -387,14 +387,10 @@ const commandKeybindingOrder = [
 
 function keybindingForCommand(id: CommandId): CommandKeybinding {
   const entry = commandCatalogById.get(id);
-  if (!entry || !('keybinding' in entry)) {
+  if (!entry?.keybinding) {
     throw new Error(`Command has no keybinding: ${id}`);
   }
-  const keybinding = entry.keybinding;
-  if (keybinding == null) {
-    throw new Error(`Command has no keybinding: ${id}`);
-  }
-  return keybinding;
+  return entry.keybinding;
 }
 
 export const commandKeybindings = commandKeybindingOrder.map((id) => ({

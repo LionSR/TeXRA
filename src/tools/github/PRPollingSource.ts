@@ -297,18 +297,13 @@ export class PRPollingSource extends PollingSourceBase<
     runtimeHost: AgentRuntimeHost,
   ): Disposable {
     const key = prKeyToString(input);
-    const minAnnotationLevel =
-      input.minAnnotationLevel ?? DEFAULT_CHECK_ANNOTATION_LEVEL;
     const disposable = this.register(
       key,
       () => createInitialState(input),
       onEvent,
       runtimeHost,
     );
-    this.getSubscriptionState(key)?.annotationLevelByListener.set(
-      onEvent,
-      minAnnotationLevel,
-    );
+    this.setListenerAnnotationLevel(key, onEvent, input);
     return {
       dispose: () => {
         this.getSubscriptionState(key)?.annotationLevelByListener.delete(
@@ -325,13 +320,46 @@ export class PRPollingSource extends PollingSourceBase<
     runtimeHost: AgentRuntimeHost,
   ): void {
     const key = prKeyToString(input);
+    this.updateListenerRuntimeHost(key, onEvent, runtimeHost);
+    this.setListenerAnnotationLevel(key, onEvent, input);
+  }
+
+  /** Resolve the effective annotation level and record it per listener. */
+  private setListenerAnnotationLevel(
+    key: string,
+    onEvent: (text: string) => void,
+    input: PRSubscribeInput,
+  ): void {
     const minAnnotationLevel =
       input.minAnnotationLevel ?? DEFAULT_CHECK_ANNOTATION_LEVEL;
-    this.updateListenerRuntimeHost(key, onEvent, runtimeHost);
     this.getSubscriptionState(key)?.annotationLevelByListener.set(
       onEvent,
       minAnnotationLevel,
     );
+  }
+
+  /**
+   * Compute the CI-terminal status for a tick.
+   *
+   * `complete` is true only when we have the head SHA, a non-empty run set,
+   * the full set (length >= total_count — `fetchAllCheckRuns` dedupes by id and
+   * returns the latest total_count, so this is safe against mid-walk page
+   * shifts), and every run has completed. `passed` requires `complete` plus
+   * every run passing.
+   */
+  private static ciTerminalStatus(
+    headSha: string | undefined,
+    runs: GhCheckRun[],
+    totalCount: number,
+  ): { complete: boolean; passed: boolean } {
+    const complete =
+      !!headSha &&
+      runs.length > 0 &&
+      runs.length >= totalCount &&
+      runs.every((r) => r.status === 'completed');
+    const passed =
+      complete && runs.every((r) => isPassingConclusion(r.conclusion));
+    return { complete, passed };
   }
 
   protected emitKeysChangedEvent(
@@ -535,23 +563,17 @@ export class PRPollingSource extends PollingSourceBase<
           state.ciStartedSha = state.headSha;
         }
         // Seed so pre-existing terminal CI doesn't fire on the next tick —
-        // we only surface transitions that happen after subscribe. Gate on
-        // runs.length > 0: an empty array is ambiguous (no CI configured vs.
-        // runs not yet registered), so "done" isn't meaningful and seeding
-        // would suppress the real terminal event once runs appear. Also
-        // require we have the full set (length >= total_count). The runs
-        // array from fetchAllCheckRuns is deduped by id and total_count is
-        // the latest server-reported value, so this comparison is safe
-        // against mid-walk page shifts that would otherwise let a duplicate-
-        // padded array trip the gate before a newly-registered run was seen.
-        if (
-          state.headSha &&
-          runs.length > 0 &&
-          runs.length >= checksRes.data.total_count &&
-          runs.every((r) => r.status === 'completed')
-        ) {
+        // we only surface transitions that happen after subscribe. See
+        // `ciTerminalStatus` for the gating rationale (empty/partial run sets,
+        // page-shift safety).
+        const { complete, passed } = PRPollingSource.ciTerminalStatus(
+          state.headSha,
+          runs,
+          checksRes.data.total_count,
+        );
+        if (complete) {
           state.ciCompleteSha = state.headSha;
-          if (runs.every((r) => isPassingConclusion(r.conclusion))) {
+          if (passed) {
             state.ciPassedSha = state.headSha;
           }
         }
@@ -661,21 +683,14 @@ export class PRPollingSource extends PollingSourceBase<
       // deduped against its own marker so a rerun turning red→green still
       // emits "CI passed" even after "CI complete" already fired.
       //
-      // Gate on `runs.length > 0`: an empty array is ambiguous (no CI
-      // configured vs. runs not yet registered), so "done" isn't meaningful.
-      // Also require we have the full set (length >= total_count). The API
-      // caps at per_page=100; `fetchAllCheckRuns` walks pagination, dedupes
-      // runs by id (so page-shift duplicates can't pad the count), AND
-      // returns the latest `total_count` from this tick's 200 responses
-      // (not a stale page-1 snapshot or a stuck monotonic max from a prior
-      // mid-walk inflation). A duplicate-filled buffer can therefore never
-      // trick this gate into firing "CI complete" before every run is seen.
-      if (
-        state.headSha &&
-        runs.length > 0 &&
-        runs.length >= checksRes.data.total_count &&
-        runs.every((r) => r.status === 'completed')
-      ) {
+      // See `ciTerminalStatus` for the gating rationale (empty/partial run
+      // sets, page-shift safety).
+      const { complete, passed } = PRPollingSource.ciTerminalStatus(
+        state.headSha,
+        runs,
+        checksRes.data.total_count,
+      );
+      if (complete && state.headSha) {
         const headSha = state.headSha;
         if (state.ciCompleteSha !== headSha) {
           state.ciCompleteSha = headSha;
@@ -684,10 +699,7 @@ export class PRPollingSource extends PollingSourceBase<
             formatCIComplete(state.slug, pr.pullNumber, headSha, runs),
           );
         }
-        if (
-          state.ciPassedSha !== headSha &&
-          runs.every((r) => isPassingConclusion(r.conclusion))
-        ) {
+        if (state.ciPassedSha !== headSha && passed) {
           state.ciPassedSha = headSha;
           this.emit(
             state,

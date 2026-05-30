@@ -164,6 +164,13 @@ function describeAnnotationLevel(level: GitHubCheckAnnotationLevel): string {
   }
 }
 
+/** Shared body sentence describing what a PR subscription delivers. */
+function prSubscriptionActivitySentence(
+  annotationLevelDescription: string,
+): string {
+  return `New comments, reviews, line comments, failed CI checks, inline check annotations (${annotationLevelDescription} pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups.`;
+}
+
 async function execSubscribe(
   input: GitHubSubscriptionInput,
 ): Promise<ToolResult> {
@@ -200,7 +207,7 @@ async function execSubscribe(
         ? `Subscribed to ${slug}`
         : `Already subscribed to ${slug}`,
       output: created
-        ? `Subscribed to ${slug}. New comments, reviews, line comments, failed CI checks, inline check annotations (${annotationLevelDescription} pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on PR close/merge.`
+        ? `Subscribed to ${slug}. ${prSubscriptionActivitySentence(annotationLevelDescription)} Auto-unsubscribes on PR close/merge.`
         : `Already subscribed to ${slug}. Inline check annotation filter is now ${annotationLevelDescription}. Activity continues until command="unsubscribe" or the PR closes.`,
     };
   }
@@ -244,7 +251,7 @@ async function execSubscribe(
           : `Subscribed to ${prSlug}`
         : `Already subscribed to ${prSlug}`,
       output: created
-        ? `${prSlug} is a PR. New comments, reviews, line comments, failed CI checks, inline check annotations (${annotationLevelDescription} pinned to file:line), and mergeable_state transitions (merge conflict appeared / resolved) arrive as <github-webhook-activity> follow-ups. Auto-unsubscribes on close/merge.`
+        ? `${prSlug} is a PR. ${prSubscriptionActivitySentence(annotationLevelDescription)} Auto-unsubscribes on close/merge.`
         : `Already subscribed to ${prSlug}. Inline check annotation filter is now ${annotationLevelDescription}.`,
     };
   }
