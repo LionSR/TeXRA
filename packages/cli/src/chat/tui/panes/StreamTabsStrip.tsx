@@ -155,7 +155,9 @@ export function streamTabSegmentText(item: StreamTabDisplayItem): string {
   const label = item.active ? `[${item.label}]` : item.label;
   const running = item.running ? '*' : '';
   const status =
-    !item.active && item.status && item.status !== 'running'
+    item.status &&
+    item.status !== 'running' &&
+    (!item.active || item.status === 'stopped')
       ? `(${item.status})`
       : '';
   return `${label}${running}${status}`;
