@@ -425,6 +425,24 @@ export abstract class ModelHandler<
     return this.config.provider === ModelProvider.MINIMAX;
   }
 
+  /**
+   * Whether parallel tool calls in a single turn must be batched into one
+   * follow-up message to preserve provider-side reasoning / thought signatures.
+   * Override in handlers whose APIs require it (Google, DeepSeek, Kimi, MiniMax).
+   */
+  get requiresBatchedParallelToolResults(): boolean {
+    return false;
+  }
+
+  /**
+   * Whether a user-set reasoning-level override applies to this handler.
+   * Defaults to the model's configurable-effort capability; handlers that honor
+   * a reasoning level without a granular effort flag override this getter.
+   */
+  get supportsReasoningLevelOverride(): boolean {
+    return this.capabilities.supportsReasoningEffort;
+  }
+
   /** Whether this handler supports manual context compaction. Override in subclasses. */
   get supportsManualCompaction(): boolean {
     return false;

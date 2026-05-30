@@ -63,14 +63,12 @@ const PROVIDER_HANDLERS: Record<ModelProvider, ProviderHandlerLoader | null> = {
 
 /**
  * Apply the user's reasoning level override to a handler, returning it for chaining.
- * Only mutates capabilities when the model supports configurable effort and the
- * user has set an override.
+ * Only mutates capabilities when the handler reports `supportsReasoningLevelOverride`
+ * (configurable effort, or DeepSeek-style reasoning without a granular effort flag)
+ * and the user has set an override.
  */
 function withReasoningOverride<T extends ModelHandler>(handler: T): T {
-  const supportsReasoningOverride =
-    handler.capabilities.supportsReasoningEffort ||
-    (handler.isDeepSeek && handler.capabilities.supportsReasoning);
-  if (!supportsReasoningOverride) return handler;
+  if (!handler.supportsReasoningLevelOverride) return handler;
 
   const level = getGlobalState().get<Record<string, string>>(
     GlobalStateKey.REASONING_LEVELS,
