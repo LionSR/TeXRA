@@ -57,7 +57,6 @@ export {
   logUserMessage,
   logInternal,
   debugInternal,
-  logScratchpad,
   logContextManagementEvent,
   logWebSearch,
   logWebFetch,

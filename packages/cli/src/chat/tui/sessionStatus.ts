@@ -1,5 +1,4 @@
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { STREAM_STATUS } from '@shared/schemas';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 const QUEUED_FOLLOW_UP_STATUS_LENGTH = 160;
@@ -12,12 +11,6 @@ export interface CliSessionStatusInput {
   readonly approval: string;
   readonly status: string;
   readonly queuedFollowUpMessages: readonly string[];
-}
-
-export function readQueuedFollowUpMessagesForStatus(
-  streamId: StreamTabId | undefined,
-): string[] {
-  return streamId === undefined ? [] : ToolUseFollowUpQueue.getAll(streamId);
 }
 
 export function formatCliStatusLabel(status: string | undefined): string {

@@ -10,7 +10,7 @@ import { isNonEmptyString } from '@utils/core/stringCore';
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
-} from './approvalPolicy';
+} from '../schemas/cliSettings';
 import { parseCliApiMode, type CliApiMode } from './apiAccessMode';
 import {
   CLI_OUTPUT_FORMATS,

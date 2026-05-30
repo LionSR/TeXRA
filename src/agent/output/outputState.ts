@@ -98,13 +98,6 @@ export function hasCompileFailures(state: OutputState, round: number): boolean {
   return (state.rounds.get(round)?.compileFailures.length ?? 0) > 0;
 }
 
-export function ensureRound(
-  state: OutputState,
-  round: number,
-): OutputFileInfo[] {
-  return ensureRoundData(state, round).outputs;
-}
-
 export function getOutputFilesByRound(state: OutputState): {
   [key: number]: OutputFileInfo[];
 } {
