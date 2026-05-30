@@ -63,13 +63,9 @@ export class TikzPictureManager {
   /**
    * Extract TikZ pictures with their labels from a LaTeX file
    * @param latexFile FileLocation of the LaTeX file
-   * @param channel Optional channel for logging
    * @returns Array of [label, tikzpictures] tuples
    */
-  async extract(
-    latexFile: FileLocation,
-    channel: string = this.channel,
-  ): Promise<[string, string[]][]> {
+  async extract(latexFile: FileLocation): Promise<[string, string[]][]> {
     const content = await flexibleFS.read(latexFile);
 
     // Regular expressions to match figure environments and tikzpictures
@@ -90,7 +86,7 @@ export class TikzPictureManager {
 
       if (tikzMatches.length > 0) {
         labeledTikzPictures.push([label, tikzMatches]);
-        logger.debug(channel, `Found TikZ picture with label: ${label}`);
+        logger.debug(this.channel, `Found TikZ picture with label: ${label}`);
       }
     }
 
@@ -103,7 +99,6 @@ export class TikzPictureManager {
    * @param label Label for the figure
    * @param buildDirLocation Build directory FileLocation
    * @param suffix Optional suffix for multiple pictures with same label
-   * @param channel Optional channel for logging
    * @returns FileLocation of created LaTeX file
    */
   async createStandalone(
@@ -111,7 +106,6 @@ export class TikzPictureManager {
     label: string,
     buildDirLocation: FileLocation,
     suffix?: string,
-    channel: string = this.channel,
   ): Promise<FileLocation> {
     const standaloneContent = await renderPrompt(this.getTikzTemplate(), {
       tikzpicture: tikzpictures,
@@ -131,7 +125,7 @@ export class TikzPictureManager {
 
     await flexibleFS.write(texLocation, standaloneContent);
     logger.debug(
-      channel,
+      this.channel,
       `Created standalone LaTeX file: ${texLocation.absolutePath}`,
     );
 
@@ -141,13 +135,9 @@ export class TikzPictureManager {
   /**
    * Extract and compile TikZ pictures from a LaTeX file
    * @param latexFile Location of the LaTeX file
-   * @param channel Optional channel for logging
    * @returns Array of FileLocations for compiled PDF files
    */
-  async compile(
-    latexFile: FileLocation,
-    channel: string = this.channel,
-  ): Promise<FileLocation[]> {
+  async compile(latexFile: FileLocation): Promise<FileLocation[]> {
     const inputName = path.parse(path.basename(latexFile.absolutePath)).name;
     const inputDir = path.dirname(
       latexFile.kind !== 'external'
@@ -164,12 +154,12 @@ export class TikzPictureManager {
     await flexibleFS.ensureDir(buildDirLocation);
 
     logger.debug(
-      channel,
+      this.channel,
       `Extracting TikZ pictures from ${latexFile.absolutePath}`,
     );
-    const labeledTikzPictures = await this.extract(latexFile, channel);
+    const labeledTikzPictures = await this.extract(latexFile);
     logger.debug(
-      channel,
+      this.channel,
       `Found ${labeledTikzPictures.length} labeled TikZ pictures`,
     );
 
@@ -190,9 +180,11 @@ export class TikzPictureManager {
           label,
           buildDirLocation,
           suffix,
-          channel,
         );
-        await compileLatex2Pdf(texLocation, { channel, compiler: 'pdflatex' });
+        await compileLatex2Pdf(texLocation, {
+          channel: this.channel,
+          compiler: 'pdflatex',
+        });
 
         // Derive PDF location from tex location
         const pdfFilename = path
@@ -213,7 +205,7 @@ export class TikzPictureManager {
         if (await flexibleFS.exists(pdfLocation)) {
           compiledFiles.push(pdfLocation);
           logger.debug(
-            channel,
+            this.channel,
             `Successfully compiled: ${pdfLocation.absolutePath}`,
           );
         }
