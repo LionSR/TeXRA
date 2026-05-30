@@ -173,13 +173,14 @@ const SCENARIOS = [
   },
   {
     name: 'compact-long-bash-approval',
-    rows: 18,
+    rows: 14,
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
     },
     bootExpect: 'Use foreground panel shortcuts',
+    frame: 'tail',
     expect: [
       'Run bash command?',
       "$ python3 << 'EOF'",

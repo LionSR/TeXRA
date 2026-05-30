@@ -83,9 +83,8 @@ describe('CLI bash approval layout', () => {
     });
 
     expect(visible).toHaveLength(1);
-    expect(visible.at(0)).toEqual({
-      kind: 'command',
-      text: "$ python3 << 'EOF'",
-    });
+    expect(visible[0]?.text).toContain("$ python3 << 'EOF'");
+    expect(visible[0]?.text).toContain('rows hidden');
+    expect(visible[0]?.text.length).toBeLessThanOrEqual(76);
   });
 });

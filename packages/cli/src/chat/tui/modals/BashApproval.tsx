@@ -91,6 +91,22 @@ function overflowText(kind: 'more' | 'previous' | 'hidden', count: number) {
   return `... ${count} more rows`;
 }
 
+function compactHiddenCommandText({
+  firstLine,
+  hiddenLines,
+  width,
+}: {
+  readonly firstLine: string;
+  readonly hiddenLines: number;
+  readonly width: number;
+}): string {
+  const suffix = ` ${overflowText('hidden', hiddenLines)}`;
+  const prefixWidth = width - suffix.length;
+  if (prefixWidth <= 0) return overflowText('hidden', hiddenLines);
+
+  return `${firstLine.slice(0, prefixWidth).trimEnd()}${suffix}`;
+}
+
 export function boundedBashCommandDisplayLines({
   command,
   maxDisplayLines,
@@ -106,9 +122,21 @@ export function boundedBashCommandDisplayLines({
   if (maxDisplayLines <= 0 || lines.length <= maxDisplayLines) return lines;
 
   if (maxDisplayLines <= COMPACT_BASH_COMMAND_ROWS) {
+    if (maxDisplayLines === 1) {
+      return [
+        {
+          kind: 'overflow',
+          text: compactHiddenCommandText({
+            firstLine: lines[0]?.text ?? '',
+            hiddenLines: lines.length - 1,
+            width,
+          }),
+        },
+      ];
+    }
+
     const visibleCount = Math.max(1, maxDisplayLines - 1);
     const visible = lines.slice(0, visibleCount);
-    if (maxDisplayLines === 1) return visible;
     return [
       ...visible,
       {
