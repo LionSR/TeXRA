@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { editApprovalDiffRowsBudget } from '@cli/chat/tui/modals/EditApproval';
+import {
+  editApprovalDiffRowsBudget,
+  editApprovalFeedbackRows,
+} from '@cli/chat/tui/modals/EditApproval';
 
 describe('CLI edit approval layout', () => {
   it('reserves footer rows when the approval title wraps', () => {
@@ -14,6 +17,37 @@ describe('CLI edit approval layout', () => {
         title,
       }),
     ).toBe(6);
+  });
+
+  it('reserves feedback input rows while collecting a rejection note', () => {
+    expect(
+      editApprovalDiffRowsBudget({
+        availableRows: 16,
+        columns: 80,
+        feedbackMode: true,
+        title: 'Apply edit to proof.tex?',
+      }),
+    ).toBe(5);
+  });
+
+  it('accounts for wrapped feedback placeholders on narrow terminals', () => {
+    expect(
+      editApprovalFeedbackRows({
+        columns: 16,
+        placeholder: 'Needs a smaller proof step',
+        value: '',
+      }),
+    ).toBe(4);
+
+    expect(
+      editApprovalDiffRowsBudget({
+        availableRows: 16,
+        columns: 16,
+        feedbackMode: true,
+        feedbackPlaceholder: 'Needs a smaller proof step',
+        title: 'Edit?',
+      }),
+    ).toBe(3);
   });
 
   it('keeps a usable one-line diff on very short terminals', () => {
