@@ -25,15 +25,21 @@ function context(overrides: Partial<CliContext> = {}): CliContext {
   };
 }
 
-function workflowTaskState() {
+function workflowTaskState(
+  overrides: {
+    streamId?: string;
+    agent?: string;
+    inputFiles?: string[];
+  } = {},
+) {
   return {
-    streamId: 'stream-1',
+    streamId: overrides.streamId ?? 'stream-1',
     taskState: {
       agentConfig: {
-        agent: 'polish',
+        agent: overrides.agent ?? 'polish',
         agentCategory: AgentCategory.Workflow,
         model: 'deepseekT',
-        inputFiles: ['paper.tex'],
+        inputFiles: overrides.inputFiles ?? ['paper.tex'],
         contextFiles: [],
         mediaFiles: [],
         outputFiles: [],
@@ -121,6 +127,135 @@ describe('CLI run progress renderer', () => {
       'polish paper.tex · 0s\n' +
         'polish paper.tex · drafting · 0s\n' +
         'polish paper.tex · drafting · tool: Bash · 0s\n',
+    );
+  });
+
+  it('keeps the root run visible when child streams update progress', () => {
+    let output = '';
+    const renderer = createRunProgressRenderer(
+      context({ colorEnabled: false }),
+      {
+        colorEnabled: false,
+        write: (text) => {
+          output += text;
+        },
+        nowMs: () => 0,
+      },
+    );
+
+    renderer?.handle(
+      'setTaskState',
+      workflowTaskState({
+        streamId: 'root-stream',
+        agent: 'coordinator',
+        inputFiles: ['main.tex'],
+      }),
+    );
+    renderer?.handle(
+      'setTaskState',
+      workflowTaskState({
+        streamId: 'child-stream',
+        agent: 'reviewer',
+        inputFiles: ['chapter.tex'],
+      }),
+    );
+    renderer?.handle('updateStreamDescription', {
+      streamId: 'child-stream',
+      description: 'reviewing chapter.tex',
+    });
+    renderer?.handle('updateActiveSubagents', {
+      parentStreamId: 'root-stream',
+      children: [
+        {
+          executionId: 'child-1',
+          childStreamId: 'child-stream',
+          agentName: 'reviewer',
+          status: 'running',
+        },
+        {
+          executionId: 'child-2',
+          childStreamId: 'child-stream-2',
+          agentName: 'compiler',
+          status: 'running',
+        },
+        {
+          executionId: 'child-3',
+          childStreamId: 'child-stream-3',
+          agentName: 'proofreader',
+          status: 'running',
+        },
+      ],
+    });
+
+    expect(output).toBe(
+      'coordinator main.tex · 0s\n' +
+        'coordinator main.tex · subagents: reviewer +2 · 0s\n',
+    );
+  });
+
+  it('can claim the root stream from conversation progress', () => {
+    let output = '';
+    const renderer = createRunProgressRenderer(
+      context({ colorEnabled: false }),
+      {
+        colorEnabled: false,
+        write: (text) => {
+          output += text;
+        },
+        minIntervalMs: 0,
+        nowMs: () => 0,
+      },
+    );
+
+    renderer?.handle('updateConversationProgress', {
+      streamId: 'root-stream',
+      progress: { conversationTurns: 2, toolCallCount: 4 },
+    });
+    renderer?.handle(
+      'setTaskState',
+      workflowTaskState({
+        streamId: 'child-stream',
+        agent: 'reviewer',
+        inputFiles: ['chapter.tex'],
+      }),
+    );
+
+    expect(output).toBe('[r2] · running · tools: 4 · 0s\n');
+  });
+
+  it('keeps named active children visible when earlier entries are unnamed', () => {
+    let output = '';
+    const renderer = createRunProgressRenderer(
+      context({ colorEnabled: false }),
+      {
+        colorEnabled: false,
+        write: (text) => {
+          output += text;
+        },
+        nowMs: () => 0,
+      },
+    );
+
+    renderer?.handle('setTaskState', workflowTaskState());
+    renderer?.handle('updateActiveProcesses', {
+      parentStreamId: 'stream-1',
+      processes: [
+        {
+          executionId: 'process-1',
+          agentName: '',
+          toolName: '',
+          status: 'running',
+        },
+        {
+          executionId: 'process-2',
+          agentName: 'latexmk',
+          status: 'running',
+        },
+      ],
+    });
+
+    expect(output).toBe(
+      'polish paper.tex · 0s\npolish paper.tex · tool: latexmk · 0s\n',
     );
   });
 
