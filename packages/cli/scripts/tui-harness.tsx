@@ -5,7 +5,11 @@
 import { render } from 'ink';
 import React from 'react';
 
-import { STREAM_STATUS, TODO_STATUS } from '@shared/schemas';
+import {
+  STREAM_STATUS,
+  TODO_STATUS,
+  type ActiveChildInfo,
+} from '@shared/schemas';
 
 import { App } from '../src/chat/tui/App';
 import {
@@ -69,6 +73,14 @@ function makeChildEntries(agent: string, action: string): ConversationEntry[] {
       finalized: false,
     },
   ];
+}
+
+function stoppedChild(child: ActiveChildInfo): ActiveChildInfo {
+  return {
+    ...child,
+    status: STREAM_STATUS.STOPPED,
+    startedAt: undefined,
+  };
 }
 
 function makeEditApprovalRequest() {
@@ -181,7 +193,7 @@ if (SHOW_CHILDREN) {
       description: `${child.agentName} sub-workflow`,
       entries: makeChildEntries(child.agentName, child.executionId),
       runStartedAt:
-        child.status === STREAM_STATUS.RUNNING ? startedAt : undefined,
+        child.status === STREAM_STATUS.RUNNING ? child.startedAt : undefined,
     }));
   }
 }
@@ -242,10 +254,22 @@ if (SHOW_EDIT_APPROVAL) {
 
 function markHarnessInterrupted(): void {
   canInterrupt = false;
+  const parentSlice = cliState.streams.get().get(STREAM_ID);
+  const childStreamIds = new Set(
+    [
+      ...(parentSlice?.activeSubagents ?? []),
+      ...(parentSlice?.childStreams ?? []),
+    ]
+      .map((child) => child.childStreamId)
+      .filter((streamId): streamId is string => streamId !== undefined),
+  );
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
     status: STREAM_STATUS.STOPPED,
     runStartedAt: undefined,
+    activeSubagents: slice.activeSubagents.map(stoppedChild),
+    activeProcesses: slice.activeProcesses.map(stoppedChild),
+    childStreams: slice.childStreams.map(stoppedChild),
     entries: [
       ...slice.entries,
       {
@@ -256,6 +280,13 @@ function markHarnessInterrupted(): void {
       },
     ],
   }));
+  for (const streamId of childStreamIds) {
+    patchStream(streamId, (slice) => ({
+      ...slice,
+      status: STREAM_STATUS.STOPPED,
+      runStartedAt: undefined,
+    }));
+  }
 }
 
 const ink = render(
