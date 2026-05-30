@@ -1,4 +1,4 @@
-import { getAgent, loadAgents } from '@agent/index';
+import { loadAgents } from '@agent/index';
 import { writeTerminalStatus } from '@agent/storage';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
@@ -13,7 +13,7 @@ import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
-import { shouldHonorRemoteAgentPriority } from './_helpers/remoteAgents';
+import { resolveAgentWithRemoteFallback } from './_helpers/remoteAgents';
 import { executeCliRequest } from './_helpers/runExecution';
 import {
   terminalStatusExitCode,
@@ -46,12 +46,7 @@ export async function runResumeExecution(
   await initCliPlatform(runContext);
   installCliApprovalHandlers(runContext);
   await loadAgents({ includeRemote: false });
-  if (
-    !getAgent(config.agent) ||
-    (await shouldHonorRemoteAgentPriority(config.agent))
-  ) {
-    await loadAgents();
-  }
+  await resolveAgentWithRemoteFallback(config.agent);
 
   const { result, terminalStatus } = await executeCliRequest(
     { config, executionId: id },

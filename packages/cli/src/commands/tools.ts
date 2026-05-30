@@ -18,22 +18,14 @@ import {
   setCliToolEnabled,
 } from '../runtime/tools';
 
-import { contextFromArgs } from './_helpers/context';
-import { setExitCode } from './_helpers/exitCode';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
-async function withCliPlatform<T>(
-  context: CliContext,
-  work: () => Promise<T>,
-): Promise<T> {
-  await initCliPlatform({ ...context, quietLogs: true });
-  return work();
-}
-
 async function listTools(context: CliContext): Promise<number> {
-  const records = await withCliPlatform(context, readCliToolStatuses);
+  await initCliPlatform({ ...context, quietLogs: true });
+  const records = await readCliToolStatuses();
 
   emitCliResult(context, {
     json: records,
@@ -44,7 +36,8 @@ async function listTools(context: CliContext): Promise<number> {
 }
 
 async function showTool(context: CliContext, id: string): Promise<number> {
-  const record = await withCliPlatform(context, () => readCliToolStatus(id));
+  await initCliPlatform({ ...context, quietLogs: true });
+  const record = await readCliToolStatus(id);
   if (!record) {
     writeTextStderr(`Tool integration not found: ${id}`);
     return CliExitCode.Usage;
@@ -63,9 +56,8 @@ async function toggleTool(
   id: string,
   enabled: boolean,
 ): Promise<number> {
-  const ok = await withCliPlatform(context, () =>
-    setCliToolEnabled(id, enabled),
-  );
+  await initCliPlatform({ ...context, quietLogs: true });
+  const ok = await setCliToolEnabled(id, enabled);
   if (!ok) {
     writeTextStderr(`Tool integration is not toggleable: ${id}`);
     return CliExitCode.Usage;
@@ -147,19 +139,16 @@ async function authTool(context: CliContext, id: string): Promise<number> {
   }
 }
 
-const toolsListCommand = defineCommand({
+const toolsListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List external tool integrations' },
   args: { ...GLOBAL_ARGS },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(await listTools(context));
-  },
+  run: (context) => listTools(context),
 });
 
 // Built per key so the usage banner (citty reads `meta.name`) matches the
 // invoked alias: `texra tools status --help` prints `tools status`, not `show`.
 function toolsShowCommandNamed(name: 'show' | 'status') {
-  return defineCommand({
+  return defineCliCommand({
     meta: { name, description: 'Show one tool integration' },
     args: {
       ...GLOBAL_ARGS,
@@ -169,15 +158,12 @@ function toolsShowCommandNamed(name: 'show' | 'status') {
         description: 'Tool integration id from `texra tools list`',
       },
     },
-    async run(ctx) {
-      const context = await contextFromArgs(ctx.args);
-      setExitCode(await showTool(context, ctx.args.id));
-    },
+    run: (context, ctx) => showTool(context, ctx.args.id),
   });
 }
 
 function toggleCommand(name: 'enable' | 'disable', enabled: boolean) {
-  return defineCommand({
+  return defineCliCommand({
     meta: {
       name,
       description: `${enabled ? 'Enable' : 'Disable'} a tool integration`,
@@ -190,14 +176,11 @@ function toggleCommand(name: 'enable' | 'disable', enabled: boolean) {
         description: 'Tool integration id from `texra tools list`',
       },
     },
-    async run(ctx) {
-      const context = await contextFromArgs(ctx.args);
-      setExitCode(await toggleTool(context, ctx.args.id, enabled));
-    },
+    run: (context, ctx) => toggleTool(context, ctx.args.id, enabled),
   });
 }
 
-const toolsInstallCommand = defineCommand({
+const toolsInstallCommand = defineCliCommand({
   meta: { name: 'install', description: 'Show install help for a tool' },
   args: {
     ...GLOBAL_ARGS,
@@ -211,13 +194,11 @@ const toolsInstallCommand = defineCommand({
       description: 'Tool integration id from `texra tools list`',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(await installTool(context, ctx.args.id, ctx.args.run === true));
-  },
+  run: (context, ctx) =>
+    installTool(context, ctx.args.id, ctx.args.run === true),
 });
 
-const toolsAuthCommand = defineCommand({
+const toolsAuthCommand = defineCliCommand({
   meta: { name: 'auth', description: 'Run or show auth help for a tool' },
   args: {
     ...GLOBAL_ARGS,
@@ -227,10 +208,7 @@ const toolsAuthCommand = defineCommand({
       description: 'Tool integration id from `texra tools list`',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(await authTool(context, ctx.args.id));
-  },
+  run: (context, ctx) => authTool(context, ctx.args.id),
 });
 
 export const toolsCommand = defineCommand({
