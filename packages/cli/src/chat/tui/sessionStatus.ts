@@ -7,6 +7,7 @@ const QUEUED_FOLLOW_UP_STATUS_LENGTH = 160;
 export interface CliSessionStatusInput {
   readonly agent: string;
   readonly model: string;
+  readonly teamName?: string;
   readonly api: string;
   readonly approval: string;
   readonly status: string;
@@ -50,6 +51,7 @@ function queuedFollowUpStatusLines(messages: readonly string[]): string[] {
 
 export function formatCliSessionStatus(input: CliSessionStatusInput): string {
   return [
+    ...(input.teamName ? [`team: ${input.teamName}`] : []),
     `agent: ${input.agent}`,
     `model: ${input.model}`,
     `api: ${input.api}`,

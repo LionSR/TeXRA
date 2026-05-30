@@ -111,6 +111,8 @@ export interface RunChatInit {
   readonly agentOverride?: string;
   /** `--model` override from the CLI; falls through `resolveChatDefaults`. */
   readonly modelOverride?: string;
+  /** Visible team identity when chat was launched from a multi-agent preset. */
+  readonly teamName?: string;
 }
 
 const QUEUED_FOLLOW_UP_NOTICE_LENGTH = 96;
@@ -573,6 +575,7 @@ async function handleTuiSlashCommand(
         formatCliSessionStatus({
           agent: meta.agent || context.initialAgent,
           model: meta.model || context.initialModel,
+          teamName: meta.teamName,
           api: formatCliApiMode(getCliApiMode()),
           approval: formatApprovalPolicy(context.getApprovalPolicy()),
           status: slice?.status ?? 'not started',
@@ -704,6 +707,7 @@ export async function runChat(
     cwd: context.cwd,
     apiMode: getCliApiMode(),
     canDelegate: agentSupportsDelegation(agent),
+    teamName: init.teamName,
     version,
   });
 
