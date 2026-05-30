@@ -38,15 +38,6 @@ export function getVisibleModels(): string[] {
   );
 }
 
-/**
- * Resolve a model against the user's visible-models list.
- */
-export function resolveVisibleModel(model: string): string {
-  const visibleModels = getVisibleModels();
-  if (visibleModels.length === 0 || visibleModels.includes(model)) return model;
-  return visibleModels[0];
-}
-
 /** Return whether the registry marks a model as deprecated. */
 export function isDeprecatedModel(model: string): boolean {
   return MODEL_CONFIGS[model]?.deprecated ?? false;
@@ -85,6 +76,21 @@ export function buildModelHint(config: ModelConfig): string {
   return base;
 }
 
+/** Project a model config to the base option fields shared across views. */
+export function buildBaseModelOption(
+  model: string,
+  config: ModelConfig,
+): ModelOptionData {
+  return {
+    value: model,
+    label: config.label,
+    provider: config.provider,
+    context: formatContext(config.contextWindow),
+    cost: formatCost(config.inputPrice, config.outputPrice),
+    hint: buildModelHint(config),
+  };
+}
+
 /** Build model options from static config without provider availability checks. */
 export function buildBasicModelOptionsData(
   visibleModels: readonly string[] = getVisibleModels(),
@@ -92,13 +98,6 @@ export function buildBasicModelOptionsData(
   return visibleModels.map((model) => {
     const config = MODEL_CONFIGS[model];
     if (!config) return { value: model, label: model };
-    return {
-      value: model,
-      label: config.label,
-      provider: config.provider,
-      context: formatContext(config.contextWindow),
-      cost: formatCost(config.inputPrice, config.outputPrice),
-      hint: buildModelHint(config),
-    };
+    return buildBaseModelOption(model, config);
   });
 }

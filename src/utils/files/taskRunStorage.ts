@@ -6,11 +6,6 @@ import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
 import { isFileNotFoundError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import {
-  AgentFileLocationSchema,
-  ExternalFileLocationSchema,
-  FileLocationSchema,
-  RunStorageFileLocationSchema,
-  WorkspaceFileLocationSchema,
   type AgentFileLocation,
   type ExecutionId,
   type ExternalFileLocation,
@@ -146,16 +141,11 @@ export async function resolveRunDir(
 /**
  * @internal Used internally by TaskRunFileService
  */
-function getRunStoragePaths(
+function getRunStorageAbsolutePath(
   id: ExecutionId,
   workspaceRelative: string,
-): { absolute: string; storageRelative: string; runRelative: string } {
-  const storageRelative = path.join(TASK_RUNS_DIR, id, workspaceRelative);
-  return {
-    absolute: StorageFS.fullPath(storageRelative),
-    storageRelative,
-    runRelative: workspaceRelative,
-  };
+): string {
+  return StorageFS.fullPath(path.join(TASK_RUNS_DIR, id, workspaceRelative));
 }
 
 async function ensureParentDir(filePath: string): Promise<void> {
@@ -178,10 +168,9 @@ async function snapshotExists(absolutePath: string): Promise<boolean> {
 }
 
 async function createSymlink(
-  source: FileLocation,
+  sourceAbsolute: string,
   destination: string,
 ): Promise<void> {
-  const sourceAbsolute = source.absolutePath;
   await ensureParentDir(destination);
   try {
     await fs.symlink(sourceAbsolute, destination);
@@ -343,12 +332,15 @@ export class TaskRunFileService {
       if (!stats.isFile()) return;
 
       const snapshotRelative = path.join('original', target.relativePath);
-      const snapshotPaths = getRunStoragePaths(executionId, snapshotRelative);
+      const snapshotAbsolute = getRunStorageAbsolutePath(
+        executionId,
+        snapshotRelative,
+      );
 
-      if (await snapshotExists(snapshotPaths.absolute)) return;
+      if (await snapshotExists(snapshotAbsolute)) return;
 
-      await ensureParentDir(snapshotPaths.absolute);
-      await fs.copyFile(target.absolutePath, snapshotPaths.absolute);
+      await ensureParentDir(snapshotAbsolute);
+      await fs.copyFile(target.absolutePath, snapshotAbsolute);
     } catch (error) {
       if (isFileNotFoundError(error)) return;
       throw new Error(
@@ -424,10 +416,13 @@ export class TaskRunFileService {
     }
 
     await this.ensureRunDirectory();
-    const runPaths = getRunStoragePaths(executionId, location.relativePath);
+    const runAbsolute = getRunStorageAbsolutePath(
+      executionId,
+      location.relativePath,
+    );
 
     if (!this.mirroredDependencies.has(location.relativePath)) {
-      await createSymlink(location, runPaths.absolute);
+      await createSymlink(location.absolutePath, runAbsolute);
       this.mirroredDependencies.add(location.relativePath);
     }
 
@@ -436,8 +431,8 @@ export class TaskRunFileService {
     }
 
     return createRunStorageLocation(
-      runPaths.absolute,
-      runPaths.runRelative,
+      runAbsolute,
+      location.relativePath,
       executionId,
     );
   }
@@ -559,10 +554,7 @@ export class TaskRunFileService {
         }
 
         try {
-          await createSymlink(
-            createRunStorageLocation(sourceAbsolute, relativePath, executionId),
-            destinationAbsolute,
-          );
+          await createSymlink(sourceAbsolute, destinationAbsolute);
         } catch (error) {
           logger.debug(
             CHANNEL,

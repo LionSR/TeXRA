@@ -143,9 +143,6 @@ export const EQUATION_REPLACEMENTS: ReplacementCategory = {
     // Environment name fixes
     patterns['\\end{Galign}'] = '\\end{align}';
 
-    // Unusual line/paragraph separators (Gemini problem)
-    patterns['/[\u2028\u2029]/g'] = '\n';
-
     patterns[':\\colon'] = '\\colon';
     return patterns;
   })(),

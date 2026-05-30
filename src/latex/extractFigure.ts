@@ -73,8 +73,6 @@ async function resolveFigurePath(
 export async function extractFigurePathsFromLatex(
   latexFileLocation: FileLocation,
 ): Promise<string[]> {
-  const figurePaths: string[] = [];
-
   const latexDir = await resolveLatexDir(latexFileLocation.absolutePath);
   const graphicspaths = [latexDir]; // Start with the directory of the LaTeX file
 
@@ -108,12 +106,11 @@ export async function extractFigurePathsFromLatex(
         graphicspaths,
         latexDir,
       );
-      if (resolved && !discovered.has(resolved)) {
-        figurePaths.push(resolved);
+      if (resolved) {
         discovered.add(resolved);
       }
     }
   }
 
-  return figurePaths;
+  return [...discovered];
 }

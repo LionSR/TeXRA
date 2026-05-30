@@ -19,7 +19,7 @@ import { checkToolInstalled } from '@utils/system/toolUtils';
 // Format Detection (inlined from xmlFormatDetection.ts - only used here)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export enum OutputFormat {
+enum OutputFormat {
   HTML = 'html',
   LaTeX = 'latex',
   MARKDOWN = 'markdown',
@@ -36,14 +36,6 @@ function detectInputFormat(text: string): OutputFormat {
     return OutputFormat.HTML;
   }
   return OutputFormat.MARKDOWN;
-}
-
-function containsHtml(text: string): boolean {
-  return HTML_PATTERN.test(text);
-}
-
-function containsLatex(text: string): boolean {
-  return LATEX_PATTERN.test(text);
 }
 
 const CHANNEL = 'xmlConversion';
@@ -217,7 +209,7 @@ export async function formatContent(content: string): Promise<string> {
   if (pandocResult !== null) return pandocResult;
 
   let result = trimmed;
-  if (containsHtml(result)) result = convertHtmlToMarkdown(result);
-  if (containsLatex(result)) result = convertLatexToMarkdown(result);
+  if (HTML_PATTERN.test(result)) result = convertHtmlToMarkdown(result);
+  if (LATEX_PATTERN.test(result)) result = convertLatexToMarkdown(result);
   return result;
 }

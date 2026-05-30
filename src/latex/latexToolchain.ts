@@ -24,17 +24,6 @@ export interface LatexToolchainProbe {
   readonly hasLatexmk: boolean;
 }
 
-export const LATEX_TOOLCHAIN_TOOLS: readonly LatexToolName[] = [
-  'latexmk',
-  'pdflatex',
-  'xelatex',
-  'lualatex',
-  'bibtex',
-  'biber',
-  'latexdiff',
-  'latexindent',
-];
-
 const TOOL_PURPOSES: Record<LatexToolName, string> = {
   latexmk: 'LaTeX build orchestration',
   pdflatex: 'PDFLaTeX compiler',
@@ -57,10 +46,11 @@ const REQUIRED_TOOLS = new Set<LatexToolName>(['latexmk']);
 
 /** Probe the LaTeX tools used by both the extension and CLI surfaces. */
 export async function probeLatexToolchain(): Promise<LatexToolchainProbe> {
+  const toolNames = Object.keys(TOOL_PURPOSES) as LatexToolName[];
   const installed = await Promise.all(
-    LATEX_TOOLCHAIN_TOOLS.map((tool) => checkToolInstalled(tool, false)),
+    toolNames.map((tool) => checkToolInstalled(tool, false)),
   );
-  const tools = LATEX_TOOLCHAIN_TOOLS.map((name, index): LatexToolStatus => {
+  const tools = toolNames.map((name, index): LatexToolStatus => {
     return {
       name,
       installed: installed[index] ?? false,
