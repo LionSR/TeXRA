@@ -1,7 +1,7 @@
 import { render, Box, Text, useApp, useInput, useWindowSize } from 'ink';
 
 import { Select } from '../chat/tui/ui/Select';
-import { KeyHints } from '../chat/tui/ui/KeyHints';
+import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
 import { clearTerminalScrollback } from '../chat/tui/terminalCleanup';
 import type {
   CliOrchestrationAction,
@@ -11,6 +11,14 @@ import type {
 interface OrchestrationAppProps {
   readonly items: readonly CliOrchestrationItem[];
   readonly onResolve: (action: CliOrchestrationAction) => void;
+}
+
+export function orchestrationKeyHints(): readonly KeyHint[] {
+  return [
+    { key: '↑/↓', action: 'navigate' },
+    { key: '1-9/a-z/Enter', action: 'open' },
+    { key: 'Esc', action: 'exit' },
+  ];
 }
 
 function OrchestrationApp(props: OrchestrationAppProps): React.JSX.Element {
@@ -23,8 +31,8 @@ function OrchestrationApp(props: OrchestrationAppProps): React.JSX.Element {
     app.exit();
   };
 
-  useInput((input, key) => {
-    if (key.escape || input.toLowerCase() === 'q') {
+  useInput((_input, key) => {
+    if (key.escape) {
       finish({ kind: 'exit' });
     }
   });
@@ -45,14 +53,7 @@ function OrchestrationApp(props: OrchestrationAppProps): React.JSX.Element {
         />
       </Box>
       <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            { key: '↑/↓', action: 'navigate' },
-            { key: '1-9/Enter', action: 'open' },
-            { key: 'q/Esc', action: 'exit' },
-          ]}
-          confirmCancel={false}
-        />
+        <KeyHints hints={orchestrationKeyHints()} confirmCancel={false} />
       </Box>
     </Box>
   );
