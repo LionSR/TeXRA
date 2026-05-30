@@ -44,6 +44,7 @@ import { executeCliRequest } from './_helpers/runExecution';
 import {
   createCliRunResult,
   terminalStatusExitCode,
+  toolUseResultText,
   type CliRunResult,
 } from './_helpers/terminalStatus';
 import { expandRunInputs } from './_helpers/workflowInputs';
@@ -149,9 +150,7 @@ function writeMultiAgentRunResult(
   emitCliResult(context, {
     json: payload,
     ndjson: { kind: 'multi-agent-result', ...payload },
-    text:
-      result.lastResponse?.trim() ||
-      `${result.status}\nExecution: ${result.executionId}`,
+    text: toolUseResultText(result),
   });
 }
 
