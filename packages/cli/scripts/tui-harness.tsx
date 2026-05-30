@@ -45,6 +45,7 @@ const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
+const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
 let harnessApprovalPolicy: CliApprovalPolicy = 'ask';
 const EDIT_APPROVAL_DELAY_MS = Number(
@@ -164,6 +165,7 @@ cliState.sessionMeta.set({
   cwd: process.cwd(),
   apiMode: 'personal',
   canDelegate: CAN_DELEGATE,
+  teamName: TEAM_NAME,
   version: '0.0.0-harness',
 });
 cliState.activeStreamId.set(STREAM_ID);
@@ -508,6 +510,7 @@ function appendHarnessStatus(): void {
     formatCliSessionStatus({
       agent: meta.agent,
       model: meta.model,
+      teamName: meta.teamName,
       api: meta.apiMode,
       approval: formatApprovalPolicyForCli(harnessApprovalPolicy),
       status: slice?.status ?? 'not started',

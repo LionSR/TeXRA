@@ -54,6 +54,7 @@ export interface SessionMeta {
   readonly cwd: string;
   readonly apiMode: CliApiMode;
   readonly canDelegate: boolean;
+  readonly teamName?: string;
   readonly version: string;
 }
 
