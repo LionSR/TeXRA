@@ -100,6 +100,9 @@ export function tailWithEllipsis(text: string, maxLen: number): string {
  * Extract the subtype from a MIME type string (e.g. `'wav'` from `'audio/wav'`).
  * Returns `fallback` (defaults to the original string) when no `/` is found.
  */
-export function extractMimeSubtype(mimeType: string, fallback?: string): string {
+export function extractMimeSubtype(
+  mimeType: string,
+  fallback?: string,
+): string {
   return mimeType.split('/').pop() ?? fallback ?? mimeType;
 }

@@ -17,7 +17,6 @@ const DEFAULT_TIMEOUT_MS = 300_000;
 const OUTPUT_PREVIEW_MAX = 4_000;
 const TERMINAL_NAME_PREFIX = 'TeXRA: ';
 
-
 const SendToTerminalInputSchema = z.strictObject({
   // The single non-cosmetic guard: VS Code normalizes \n / \r when typed
   // into a terminal, so a multi-line input would smuggle a second
