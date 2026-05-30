@@ -179,6 +179,30 @@ export function appEscapeInterruptActive({
   );
 }
 
+export type ForegroundSurfaceKind =
+  | 'transcript'
+  | 'childControls'
+  | 'form'
+  | 'approval';
+
+export function foregroundSurfaceKind({
+  activeFormOpen,
+  childControlMode,
+  pendingApproval,
+  transcriptViewerOpen,
+}: {
+  readonly activeFormOpen: boolean;
+  readonly childControlMode?: ChildControlMode;
+  readonly pendingApproval: boolean;
+  readonly transcriptViewerOpen: boolean;
+}): ForegroundSurfaceKind | undefined {
+  if (transcriptViewerOpen) return 'transcript';
+  if (childControlMode !== undefined) return 'childControls';
+  if (activeFormOpen) return 'form';
+  if (pendingApproval) return 'approval';
+  return undefined;
+}
+
 export interface AppProps {
   readonly onSubmit: (line: string) => void;
   readonly onKillExecution: (executionId: string) => void;
@@ -271,47 +295,56 @@ export function App(props: AppProps): React.JSX.Element {
     hasTodosPlanPanel,
     rows: bottomPanelBudget,
   });
+  const foregroundKind = foregroundSurfaceKind({
+    activeFormOpen: activeForm !== undefined,
+    childControlMode,
+    pendingApproval: pending !== undefined,
+    transcriptViewerOpen,
+  });
   function renderForegroundSurface(): React.ReactNode {
-    if (pending) {
-      return <ApprovalModal pending={pending} availableRows={foregroundRows} />;
+    switch (foregroundKind) {
+      case 'transcript':
+        return (
+          <TranscriptViewer
+            availableRows={foregroundRows}
+            onClose={() => cliState.transcriptViewerOpen.set(false)}
+            slice={activeSlice}
+            width={transcriptWidth}
+          />
+        );
+      case 'childControls': {
+        if (!childControlMode) return null;
+        const target = resolveChildControlStreamTarget({
+          activeStreamId,
+          mode: childControlMode,
+          parentStream,
+          streams,
+        });
+        return (
+          <ChildControlPicker
+            activeStreamId={target.streamId}
+            availableRows={foregroundRows}
+            mode={childControlMode}
+            onClose={() => setChildControlMode(undefined)}
+            onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
+            onKillExecution={props.onKillExecution}
+            slice={target.slice}
+            streams={streams}
+          />
+        );
+      }
+      case 'form':
+        return activeForm?.render(
+          () => cliState.activeForm.set(undefined),
+          foregroundRows,
+        );
+      case 'approval':
+        return pending ? (
+          <ApprovalModal pending={pending} availableRows={foregroundRows} />
+        ) : null;
+      case undefined:
+        return null;
     }
-    if (transcriptViewerOpen) {
-      return (
-        <TranscriptViewer
-          availableRows={foregroundRows}
-          onClose={() => cliState.transcriptViewerOpen.set(false)}
-          slice={activeSlice}
-          width={transcriptWidth}
-        />
-      );
-    }
-    if (childControlMode) {
-      const target = resolveChildControlStreamTarget({
-        activeStreamId,
-        mode: childControlMode,
-        parentStream,
-        streams,
-      });
-      return (
-        <ChildControlPicker
-          activeStreamId={target.streamId}
-          availableRows={foregroundRows}
-          mode={childControlMode}
-          onClose={() => setChildControlMode(undefined)}
-          onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
-          onKillExecution={props.onKillExecution}
-          slice={target.slice}
-          streams={streams}
-        />
-      );
-    }
-    if (activeForm) {
-      return activeForm.render(
-        () => cliState.activeForm.set(undefined),
-        foregroundRows,
-      );
-    }
-    return null;
   }
   const foregroundSurface = renderForegroundSurface();
 
