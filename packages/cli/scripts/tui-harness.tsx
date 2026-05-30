@@ -16,6 +16,10 @@ import { enqueueApproval } from '../src/chat/tui/state/approvalQueue';
 const STREAM_ID = 'harness-stream-1';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
+const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
+const EDIT_APPROVAL_DELAY_MS = Number(
+  process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
+);
 
 function makeEntries(count: number): ConversationEntry[] {
   const entries: ConversationEntry[] = [];
@@ -68,7 +72,7 @@ cliState.sessionMeta.set({
   model: 'harness-model',
   cwd: process.cwd(),
   apiMode: 'personal',
-  canDelegate: false,
+  canDelegate: CAN_DELEGATE,
   version: '0.0.0-harness',
 });
 cliState.activeStreamId.set(STREAM_ID);
@@ -79,10 +83,17 @@ patchStream(STREAM_ID, (slice) => ({
 }));
 
 if (SHOW_EDIT_APPROVAL) {
-  void enqueueApproval({
-    kind: 'toolEdit',
-    request: makeEditApprovalRequest(),
-  });
+  const showApproval = () =>
+    void enqueueApproval({
+      kind: 'toolEdit',
+      request: makeEditApprovalRequest(),
+    });
+
+  if (EDIT_APPROVAL_DELAY_MS > 0) {
+    setTimeout(showApproval, EDIT_APPROVAL_DELAY_MS);
+  } else {
+    showApproval();
+  }
 }
 
 const ink = render(
