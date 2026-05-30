@@ -1,26 +1,28 @@
 /**
  * `@texra/core` — the curated public surface of the TeXRA agent core.
  *
- * This is the single entry point a host (the VS Code extension, the CLI, the
- * Electron desktop app, or a future embedder) should depend on, analogous to a
- * single SDK package: import the run entry, the typed config/result, the
- * injected host port, the telemetry channel, the agent registry, and the
- * platform composition root from here — not via deep `@agent/*` / `@platform`
- * path aliases into internals.
+ * Single entry point a host (the VS Code extension, the CLI, the Electron
+ * desktop app, or a future embedder) depends on — like one SDK package —
+ * instead of deep `@agent/*` / `@platform` imports into internals.
  *
- * Everything re-exported here is host-neutral (VS Code-free): this package
+ * Minimal usage:
+ *
+ *   import { initPlatform, validateExecutionRequest, runAgent } from '@texra/core';
+ *   initPlatform(services);                       // once, at startup
+ *   const v = validateExecutionRequest({ config });
+ *   if (v.valid) await runAgent(v.request, { runtimeHost });
+ *
+ * For per-chunk streaming/lifecycle callbacks or subagent lineage, use the
+ * lower-level `runAgentStream` engine instead of `runAgent`.
+ *
+ * Everything re-exported here is host-neutral (VS Code-free): the package
  * typechecks with only `@types/node`, so a `vscode` dependency leaking into the
- * surface fails the build. The set is a subset of what `@texra-ai/cli` already
- * imports, which is what guarantees it stays Node-importable.
- *
- * NOTE: deep `@agent/*` imports still work and are not being migrated in bulk
- * (that is intentionally out of scope). This module establishes the curated
- * surface; steering existing call sites onto it can follow incrementally.
+ * surface fails the build. Deep `@agent/*` imports still work and are not being
+ * migrated in bulk; this module is the curated entry, adopted incrementally.
  */
 
-// ── Platform composition root + service contract ──
-// Hosts call initPlatform() once at startup with their concrete services;
-// core code reads them via platform().
+// ── 1. Platform composition root ──
+// Hosts call initPlatform() once at startup; core reads services via platform().
 export {
   initPlatform,
   platform,
@@ -29,17 +31,19 @@ export {
   type Platform,
 } from '@platform/platform';
 
-// ── Agent configuration & category ──
+// ── 2. Agent configuration & identity ──
 export {
   AgentConfigSchema,
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/AgentConfig';
 export { AgentCategory } from '@agent/core/AgentDataclass';
+export type { ExecutionId } from '@shared/schemas';
 
-// ── Execution-request validation (host → core contract) ──
+// ── 3. Building a run request (host → core contract) ──
 // `validateExecutionRequest` is the non-throwing {valid,message} variant UI
-// hosts use; headless callers may parse with AgentConfigSchema directly.
+// hosts use; headless callers may AgentConfigSchema.parse(...) and build a
+// ValidatedExecutionRequest directly.
 export {
   validateExecutionRequest,
   type ExecutionRequest,
@@ -47,24 +51,37 @@ export {
   type ExecutionValidationResult,
 } from '@agent/core/executionRequests';
 
-// ── Run entry points ──
-export { executeAgent, getAgentPath } from '@agent/runtime/executeAgent';
+// ── 4. Running an agent ──  (the section to read first)
+/**
+ * START HERE. The high-level entry every host uses: defaults the executionId,
+ * applies register-on-fresh / reuse-on-resume, runs the agent, and (for a
+ * workflow result) invokes openWorkflowOutput. Use this unless you need
+ * streaming callbacks or subagent lineage.
+ */
+export { runAgent, type RunAgentOptions } from '@agent/runtime/runAgent';
+/**
+ * Lower-level streaming/lineage dispatcher behind runAgent. Use ONLY for
+ * per-chunk streaming/lifecycle callbacks (onStreamResolved/onProgress/
+ * onCompleted/onError) or subagent lineage (isSubagent/parentStreamId/
+ * delegationDepth) — the caller owns executionId and registerExecution.
+ */
 export {
-  runValidatedExecutionRequest,
-  type RunExecutionRequestOptions,
-} from '@agent/runtime/runExecutionRequest';
+  executeAgent as runAgentStream,
+  type ExecuteAgentOptions,
+} from '@agent/runtime/executeAgent';
 export {
   type AgentFlowResult,
   AgentFlowResultSchema,
+  type WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
 
-// ── Host port (injected by the consumer; receives progress events) ──
+// ── 5. Host port (consumer-injected progress-event sink) ──
 export {
   type AgentRuntimeHost,
   noopAgentRuntimeHost,
 } from '@agent/runtime/AgentRuntimeHost';
 
-// ── Telemetry: the AgentTrace discriminated-event channel ──
+// ── 6. Telemetry: the AgentTrace discriminated-event channel ──
 // SDK consumers attach their own subscriber via trace.subscribe(...).
 export {
   type AgentTrace,
@@ -74,7 +91,7 @@ export {
   noopTrace,
 } from '@agent/trace';
 
-// ── Agent registry (discover/resolve agent definitions) ──
+// ── 7. Agent registry (discover/resolve agent definitions) ──
 export {
   loadAgents,
   getAgent,
@@ -85,7 +102,9 @@ export {
   type ResolvedAgent,
 } from '@agent/index';
 
-// ── Execution storage (per-run KV + history) ──
+// ── 8. Execution storage (per-run KV + history) ──
+// registerExecution is normally handled by runAgent; call it directly only
+// when bypassing the wrapper (e.g. a custom streaming host on runAgentStream).
 export {
   getExecutionStore,
   registerExecution,
