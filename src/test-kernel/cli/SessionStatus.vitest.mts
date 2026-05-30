@@ -1,0 +1,85 @@
+import { describe, expect, it } from 'vitest';
+
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import {
+  formatCliSessionStatus,
+  readQueuedFollowUpMessagesForStatus,
+} from '@cli/chat/tui/sessionStatus';
+
+const STREAM_ID = 'status-queued-followups-test-stream';
+
+describe('CLI session status formatter', () => {
+  it('lists queued follow-up messages in the details output', () => {
+    expect(
+      formatCliSessionStatus({
+        agent: 'chat',
+        model: 'harness-model',
+        api: 'personal',
+        approval: 'ask',
+        status: 'running',
+        queuedFollowUpMessages: [
+          'First queued follow-up is to re-run the narrow layout proof check.',
+          'Second queued message asks for the theorem statement cleanup.',
+        ],
+      }),
+    ).toBe(
+      [
+        'agent: chat',
+        'model: harness-model',
+        'api: personal',
+        'approval: ask',
+        'status: running',
+        'queued follow-ups: 2',
+        '1. First queued follow-up is to re-run the narrow layout proof check.',
+        '2. Second queued message asks for the theorem statement cleanup.',
+      ].join('\n'),
+    );
+  });
+
+  it('keeps multiline queued follow-ups readable as one-line summaries', () => {
+    const status = formatCliSessionStatus({
+      agent: 'chat',
+      model: 'harness-model',
+      api: 'personal',
+      approval: 'ask',
+      status: 'running',
+      queuedFollowUpMessages: [
+        [
+          'Please inspect the generated diff.',
+          'Then report whether the queued edits should still run.',
+        ].join('\n'),
+      ],
+    });
+
+    expect(status).toContain(
+      '1. Please inspect the generated diff. Then report whether the queued edits should still run.',
+    );
+  });
+
+  it('reports an empty follow-up queue explicitly', () => {
+    expect(
+      formatCliSessionStatus({
+        agent: 'chat',
+        model: 'harness-model',
+        api: 'personal',
+        approval: 'ask',
+        status: 'waiting',
+        queuedFollowUpMessages: [],
+      }),
+    ).toContain('queued follow-ups: 0');
+  });
+
+  it('reads queued follow-ups from the queue manager for status details', () => {
+    const queue = ToolUseFollowUpQueue.acquire(STREAM_ID);
+    ToolUseFollowUpQueue.drain(STREAM_ID);
+    try {
+      queue.enqueue('Fresh queue message');
+
+      expect(readQueuedFollowUpMessagesForStatus(STREAM_ID)).toEqual([
+        'Fresh queue message',
+      ]);
+    } finally {
+      ToolUseFollowUpQueue.drain(STREAM_ID);
+    }
+  });
+});

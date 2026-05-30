@@ -5,6 +5,7 @@
 import { render } from 'ink';
 import React from 'react';
 
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import {
   STREAM_STATUS,
   TODO_STATUS,
@@ -18,6 +19,10 @@ import {
   setParentStream,
   type ConversationEntry,
 } from '../src/chat/tui/state/cliState';
+import {
+  formatCliSessionStatus,
+  readQueuedFollowUpMessagesForStatus,
+} from '../src/chat/tui/sessionStatus';
 import { enqueueApproval } from '../src/chat/tui/state/approvalQueue';
 
 const STREAM_ID = 'harness-stream-1';
@@ -31,6 +36,10 @@ const EDIT_APPROVAL_DELAY_MS = Number(
   process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
 );
 const QUEUED_FOLLOW_UPS = parseList(process.env.HARNESS_QUEUED_FOLLOWUPS);
+const HARNESS_FOLLOW_UP_QUEUE = ToolUseFollowUpQueue.acquire(STREAM_ID);
+for (const followUp of QUEUED_FOLLOW_UPS) {
+  HARNESS_FOLLOW_UP_QUEUE.enqueue(followUp);
+}
 
 function parseList(value: string | undefined): string[] {
   if (!value) return [];
@@ -289,9 +298,43 @@ function markHarnessInterrupted(): void {
   }
 }
 
+function appendHarnessAssistantTranscript(text: string): void {
+  const streamId = cliState.activeStreamId.get() ?? STREAM_ID;
+  patchStream(streamId, (slice) => ({
+    ...slice,
+    entries: [
+      ...slice.entries,
+      {
+        id: `harness-local-${Date.now()}-${slice.entries.length}`,
+        role: 'assistant',
+        text,
+        finalized: true,
+      },
+    ],
+  }));
+}
+
+function handleHarnessSubmit(line: string): void {
+  if (line.trim() !== '/status') return;
+
+  const meta = cliState.sessionMeta.get();
+  const streamId = cliState.activeStreamId.get() ?? STREAM_ID;
+  const slice = cliState.streams.get().get(streamId);
+  appendHarnessAssistantTranscript(
+    formatCliSessionStatus({
+      agent: meta.agent,
+      model: meta.model,
+      api: meta.apiMode,
+      approval: 'ask',
+      status: slice?.status ?? 'not started',
+      queuedFollowUpMessages: readQueuedFollowUpMessagesForStatus(streamId),
+    }),
+  );
+}
+
 const ink = render(
   <App
-    onSubmit={() => undefined}
+    onSubmit={handleHarnessSubmit}
     onKillExecution={() => undefined}
     canInterruptActiveRun={() => canInterrupt}
     canStopActiveRun={() => canInterrupt}
