@@ -124,6 +124,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
+    bootExpect: '[Tab]streams',
     expect: [
       'strategy',
       'leanSolver',
@@ -140,6 +141,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
+    bootExpect: '[Tab]streams',
     keys: [ESC + 'p'], // Option/Alt-p
     expect: [
       'Tasks and sub-workflows',
@@ -171,6 +173,7 @@ const SCENARIOS = [
       HARNESS_CHILDREN: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
+    bootExpect: '[Tab]streams',
     keys: [ESC + 's', '\r', ESC + 'p'],
     expect: [
       'Tasks and sub-workflows',
@@ -345,10 +348,11 @@ async function runScenario(scenario) {
   });
 
   // boot: wait for the interactive input/status area to settle. Static
-  // transcript user rows also contain "›", so use the status binding instead
-  // of the prompt glyph as the readiness sentinel.
+  // transcript user rows also contain "›", so use the status-bar marker
+  // instead of the prompt glyph as the readiness sentinel. Binding text is
+  // width-adaptive and may omit labels such as /status in narrow terminals.
   const bootDeadline = Date.now() + 15000;
-  const bootExpect = scenario.bootExpect ?? '[/status]details';
+  const bootExpect = scenario.bootExpect ?? '◆';
   let booted = false;
   while (Date.now() < bootDeadline) {
     await sleep(150);
