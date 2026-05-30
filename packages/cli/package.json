@@ -49,7 +49,8 @@
     "build": "npm run typecheck && npm run check:architecture && npm run smoke:react-compiler && npm run bundle && npm run copy:resources && npm run copy:docs",
     "prepack": "npm run build",
     "validate:run": "node scripts/validate-run.mjs",
-    "validate:pack": "node scripts/validate-pack.mjs"
+    "validate:pack": "node scripts/validate-pack.mjs",
+    "validate:tui": "node scripts/validate-tui.mjs"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
@@ -61,6 +62,7 @@
     "@types/markdown-it": "^14.1.2",
     "@types/react": "^19.2.15",
     "@types/semver": "^7.7.1",
+    "@xterm/headless": "^5.5.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "citty": "^0.2.2",
     "cli-highlight": "^2.1.11",
@@ -69,6 +71,7 @@
     "esbuild": "^0.28.0",
     "ink": "^7.0.5",
     "markdown-it": "^14.2.0",
+    "node-pty": "^1.0.0",
     "p-queue": "^9.3.0",
     "picocolors": "^1.1.1",
     "react": "^19.2.0",
