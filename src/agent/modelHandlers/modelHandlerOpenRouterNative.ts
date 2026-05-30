@@ -63,10 +63,13 @@ type OpenRouterReasoningEffort = NonNullable<
   NonNullable<ChatRequest['reasoning']>['effort']
 >;
 
-function toOpenRouterReasoningEffort(
+export function toOpenRouterReasoningEffort(
   effort: string,
 ): OpenRouterReasoningEffort {
   switch (effort) {
+    case 'max':
+      // OpenRouter has no 'max' tier; map to its top tier 'xhigh'.
+      return 'xhigh';
     case 'xhigh':
     case 'high':
     case 'medium':
