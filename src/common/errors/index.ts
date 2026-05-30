@@ -7,7 +7,7 @@
  * @common/errors/sdkErrorUtils - they are not part of the public barrel.
  */
 export { formatError, formatZodError } from './errorFormatUtils';
-export { toErrorMessage } from './errorMessage';
+export { toErrorMessage, ensureError } from './errorMessage';
 export {
   isDiskFullError,
   isFileNotFoundError,

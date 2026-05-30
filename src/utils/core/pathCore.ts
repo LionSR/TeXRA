@@ -38,11 +38,8 @@ export function normalizeLatexPath(value: string): string {
   return posix.startsWith('./') ? posix.slice(2) : posix;
 }
 
-/**
- * Get the file extension in lowercase.
- * Internal helper for hasExtension - not exported.
- */
-function getExtensionLowercase(filePath: string): string {
+/** Get the file extension in lowercase (e.g. `'.tex'` for `'Paper.TEX'`). */
+export function getExtensionLowercase(filePath: string): string {
   if (!filePath) return '';
   return path.extname(filePath).toLowerCase();
 }

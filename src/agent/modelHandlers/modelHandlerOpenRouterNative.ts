@@ -17,6 +17,7 @@ import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 // Local imports - tools and utils
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
+import { extractMimeSubtype } from '@utils/text/stringUtils';
 import type { FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 import { normalizeUsage } from './support/UsageNormalizer';
@@ -677,9 +678,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         media.media_category === 'audio' &&
         this.capabilities.supportsNativeAudio
       ) {
-        const audioFormat = (
-          media.media_type.split('/').pop() ?? media.media_type
-        ).toLowerCase();
+        const audioFormat = extractMimeSubtype(media.media_type).toLowerCase();
         return [
           { type: 'text', text: `Audio: ${media.file_name}` },
           {

@@ -52,6 +52,7 @@ import {
   evaluateDelegationGate,
   type NestedDelegationConfig,
 } from '@shared/constants/delegationPolicy';
+import { hasExtension } from '@utils/core/pathCore';
 import { getBasename } from '@shared/utils/path';
 import { formatBytes } from '@shared/utils/string';
 
@@ -728,7 +729,7 @@ const WorkflowAgentInputSchema = z.strictObject({
 export type WorkflowAgentInput = z.infer<typeof WorkflowAgentInputSchema>;
 
 function isBibFile(filePath: string): boolean {
-  return getBasename(filePath).toLowerCase().endsWith('.bib');
+  return hasExtension(filePath, '.bib');
 }
 
 /** Reject workflow proposals that attach oversized bibliography files. */

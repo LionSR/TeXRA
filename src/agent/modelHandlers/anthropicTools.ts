@@ -1,5 +1,7 @@
 import { Buffer } from 'node:buffer';
 
+import { extractMimeSubtype } from '@utils/text/stringUtils';
+
 // Third-party imports
 import { toFile } from '@anthropic-ai/sdk';
 
@@ -108,7 +110,7 @@ export async function uploadToolAttachments(
         attachment.path ??
           (isPdf
             ? 'document.pdf'
-            : `image.${normalized.split('/').pop() ?? 'png'}`),
+            : `image.${extractMimeSubtype(normalized, 'png')}`),
       );
 
       const base64Data = buffer.toString('base64');

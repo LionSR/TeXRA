@@ -2,6 +2,7 @@
 import * as path from 'path';
 
 // Local imports
+import { hasExtension } from '@utils/core/pathCore';
 import { IS_WINDOWS, findToolInCommonPaths } from './platformPaths';
 
 const WINDOWS_EXTENSIONLESS_PERL_TOOLS = new Set([
@@ -74,7 +75,7 @@ export class BinaryResolverService {
 
   private needsPerlLauncher(toolName: string, resolvedPath: string): boolean {
     return (
-      resolvedPath.toLowerCase().endsWith('.pl') ||
+      hasExtension(resolvedPath, '.pl') ||
       (this.options.isWindows &&
         path.extname(resolvedPath) === '' &&
         this.isKnownPerlScript(toolName))

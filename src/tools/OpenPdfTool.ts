@@ -18,6 +18,7 @@ import {
 import { ToolError, type ToolResult } from '@tools/result';
 
 // Local imports - utilities
+import { hasExtension } from '@utils/core/pathCore';
 import {
   AbsoluteFS,
   createRunStorageLocation,
@@ -70,7 +71,7 @@ export class OpenPdfTool extends defineTool({
     const location = resolvePdfLocation(input.path);
     const displayPath = displayPdfLocation(location);
 
-    if (path.extname(location.absolutePath).toLowerCase() !== '.pdf') {
+    if (!hasExtension(location.absolutePath, '.pdf')) {
       throw new ToolError(`open_pdf only opens PDF files: ${displayPath}`);
     }
     if (!(await AbsoluteFS.isFile(location.absolutePath))) {
