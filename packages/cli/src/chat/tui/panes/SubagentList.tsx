@@ -34,6 +34,27 @@ export interface ChildRow {
 
 const TAIL_LINES = 4;
 
+export function compactChildRowText({
+  child,
+  nowMs,
+  tail,
+}: {
+  readonly child: ActiveChildInfo;
+  readonly nowMs: number;
+  readonly tail?: ProcessOutputTail;
+}): string {
+  const tailSummary = processTailLines(tail).at(-1);
+  const elapsed = childElapsed(child, nowMs);
+  const label = child.agentName || child.toolName || child.executionId;
+  return [
+    `${label}${child.status ? ` ${child.status}` : ''}`,
+    elapsed,
+    tailSummary,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(' · ');
+}
+
 function Row({
   child,
   compact = false,
@@ -59,9 +80,7 @@ function Row({
         </Text>
         {compact ? (
           <Text wrap="truncate-end">
-            {label}
-            {child.status ? ` ${child.status}` : ''}
-            {elapsed ? ` · ${elapsed}` : ''}
+            {compactChildRowText({ child, nowMs, tail })}
           </Text>
         ) : (
           <>
@@ -156,6 +175,7 @@ export function SubagentList(
             compact
             index={index}
             nowMs={nowMs}
+            tail={processOutput?.get(child.executionId)}
           />
         ))}
         {hiddenCount > 0 ? (
