@@ -23,9 +23,7 @@ import {
   signOutCliSupabase,
 } from '../runtime/supabaseAuth';
 
-import { contextFromArgs } from './_helpers/context';
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { setExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
@@ -139,20 +137,18 @@ export const loginCommand = defineCliCommand({
   },
 });
 
-export const logoutCommand = defineCommand({
+export const logoutCommand = defineCliCommand({
   meta: { name: 'logout', description: 'Sign out of TeXRA' },
   args: {
     ...GLOBAL_ARGS,
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
+  async run(context) {
     await initCliPlatform({ ...context, quietLogs: true });
     try {
       await signOutCliSupabase();
     } catch (error) {
       writeErrorStderr(error);
-      setExitCode(CliExitCode.ModelOrNetworkError);
-      return;
+      return CliExitCode.ModelOrNetworkError;
     }
 
     emitCliResult(context, {
@@ -160,25 +156,23 @@ export const logoutCommand = defineCommand({
       ndjson: { kind: 'auth', authenticated: false },
       text: 'Signed out.',
     });
-    setExitCode(CliExitCode.Success);
+    return CliExitCode.Success;
   },
 });
 
-const authStatusCommand = defineCommand({
+const authStatusCommand = defineCliCommand({
   meta: { name: 'status', description: 'Show TeXRA sign-in status' },
   args: {
     ...GLOBAL_ARGS,
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
+  async run(context) {
     let profile: Awaited<ReturnType<typeof getCliAuthProfile>>;
     try {
       await initCliPlatform({ ...context, quietLogs: true });
       profile = await getCliAuthProfile();
     } catch (error) {
       writeErrorStderr(error);
-      setExitCode(CliExitCode.ModelOrNetworkError);
-      return;
+      return CliExitCode.ModelOrNetworkError;
     }
 
     emitCliResult(context, {
@@ -192,7 +186,7 @@ const authStatusCommand = defineCommand({
           } (${profile.tier ?? 'unknown'}).`
         : 'Not signed in.',
     });
-    setExitCode(CliExitCode.Success);
+    return CliExitCode.Success;
   },
 });
 
@@ -215,7 +209,7 @@ function writeRelayUsageSummary(
   });
 }
 
-const usageCommand = defineCommand({
+const usageCommand = defineCliCommand({
   meta: { name: 'usage', description: 'Show relay usage for this account' },
   args: {
     ...GLOBAL_ARGS,
@@ -224,8 +218,7 @@ const usageCommand = defineCommand({
       description: 'UTC month to show, formatted as YYYY-MM',
     },
   },
-  async run(ctx) {
-    const context = await contextFromArgs(ctx.args);
+  async run(context, ctx) {
     const month = optString(ctx.args.month);
     // Pre-validate `--month` before any network I/O so a malformed value
     // yields a Usage error (exit 2), not the catch-all ModelOrNetworkError
@@ -235,8 +228,7 @@ const usageCommand = defineCommand({
         parseUtcMonth(month);
       } catch (error) {
         writeErrorStderr(error);
-        setExitCode(CliExitCode.Usage);
-        return;
+        return CliExitCode.Usage;
       }
     }
     let summary: RelayUsageSummary;
@@ -245,8 +237,7 @@ const usageCommand = defineCommand({
       const profile = await getCliAuthProfile();
       if (!profile.authenticated) {
         writeTextStderr('Not signed in. Run `texra login` first.');
-        setExitCode(CliExitCode.ModelOrNetworkError);
-        return;
+        return CliExitCode.ModelOrNetworkError;
       }
       summary = await fetchRelayUsageSummary({
         tier: profile.tier ?? 'free',
@@ -254,12 +245,11 @@ const usageCommand = defineCommand({
       });
     } catch (error) {
       writeErrorStderr(error);
-      setExitCode(CliExitCode.ModelOrNetworkError);
-      return;
+      return CliExitCode.ModelOrNetworkError;
     }
 
     writeRelayUsageSummary(context, summary);
-    setExitCode(CliExitCode.Success);
+    return CliExitCode.Success;
   },
 });
 

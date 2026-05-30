@@ -26,14 +26,16 @@ export function zshCompletion(commands: readonly CompletionCommand[]): string {
       const subs = command.subcommands.length
         ? `_values 'subcommands' ${command.subcommands.map(shellQuote).join(' ')}`
         : 'true';
+      const positionalSpecs: Record<string, string> = {
+        completion: `1:shell:(${CLI_COMPLETION_SHELLS.join(' ')})`,
+        run: `1:agent:($(_texra_agents))`,
+        'agents show': `1:agent:($(_texra_agents))`,
+        'models show': `1:model:($(_texra_models))`,
+      };
+      const positionalSpec = positionalSpecs[key];
       const specs = [
         ...command.flags.flatMap(zshFlagSpec),
-        ...(key === 'completion'
-          ? [`1:shell:(${CLI_COMPLETION_SHELLS.join(' ')})`]
-          : []),
-        ...(key === 'run' ? [`1:agent:($(_texra_agents))`] : []),
-        ...(key === 'agents show' ? [`1:agent:($(_texra_agents))`] : []),
-        ...(key === 'models show' ? [`1:model:($(_texra_models))`] : []),
+        ...(positionalSpec ? [positionalSpec] : []),
       ];
       const args = specs.length
         ? `_arguments ${specs.map(shellQuote).join(' ')}`

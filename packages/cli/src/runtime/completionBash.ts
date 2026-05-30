@@ -39,15 +39,12 @@ function commandCaseBlock(command: CompletionCommand): string {
   return `${shellQuote(key)}) subcommands=${shellQuote(commands)}; flags=${shellQuote(flags)} ;;`;
 }
 
-function allCommandPaths(commands: readonly CompletionCommand[]): string[] {
-  return commands
+export function bashCompletion(commands: readonly CompletionCommand[]): string {
+  const root = commands.find((command) => command.path.length === 0);
+  const valueCases = flagValueCases(commands);
+  const allCommandPaths = commands
     .map((command) => commandKey(command.path))
     .filter((path) => path.length > 0);
-}
-
-export function bashCompletion(commands: readonly CompletionCommand[]): string {
-  const rootCommands = commands.find((command) => command.path.length === 0);
-  const valueCases = flagValueCases(commands);
   return `# bash completion for texra
 _texra_completion_dynamic() {
   [[ "\${TEXRA_COMPLETION_DYNAMIC:-1}" != "0" ]]
@@ -74,7 +71,7 @@ _texra_completion_path() {
     esac
     next="$token"
     [[ -n "$path" ]] && next="$path $token"
-    case " ${allCommandPaths(commands).join(' ')} " in
+    case " ${allCommandPaths.join(' ')} " in
       *" $next "*) path="$next"; ((i++)); continue ;;
     esac
     break
@@ -97,7 +94,7 @@ _texra() {
   path="$(_texra_completion_path)"
   case "$path" in
     ${commands.map(commandCaseBlock).join('\n    ')}
-    *) subcommands='${rootCommands?.subcommands.join(' ') ?? ''}'; flags='' ;;
+    *) subcommands='${root?.subcommands.join(' ') ?? ''}'; flags='' ;;
   esac
 
   if [[ "$path" == 'run' && "$cur" != -* ]]; then
