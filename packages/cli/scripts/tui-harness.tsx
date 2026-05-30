@@ -92,6 +92,22 @@ function stoppedChild(child: ActiveChildInfo): ActiveChildInfo {
   };
 }
 
+function stopMatchingChild(
+  child: ActiveChildInfo,
+  executionId: string,
+): ActiveChildInfo {
+  return child.executionId === executionId ? stoppedChild(child) : child;
+}
+
+function harnessMessageEntry(id: string, text: string): ConversationEntry {
+  return {
+    id,
+    role: 'assistant',
+    text,
+    finalized: true,
+  };
+}
+
 function makeEditApprovalRequest() {
   const originalBody = Array.from(
     { length: 24 },
@@ -304,12 +320,60 @@ function appendHarnessAssistantTranscript(text: string): void {
     ...slice,
     entries: [
       ...slice.entries,
-      {
-        id: `harness-local-${Date.now()}-${slice.entries.length}`,
-        role: 'assistant',
+      harnessMessageEntry(
+        `harness-local-${Date.now()}-${slice.entries.length}`,
         text,
-        finalized: true,
-      },
+      ),
+    ],
+  }));
+}
+
+function markHarnessExecutionStopped(executionId: string): void {
+  const parentSlice = cliState.streams.get().get(STREAM_ID);
+  if (!parentSlice) return;
+
+  const executionRows = [
+    ...parentSlice.activeSubagents,
+    ...parentSlice.activeProcesses,
+    ...parentSlice.childStreams,
+  ];
+  const executionRow = executionRows.find(
+    (child) => child.executionId === executionId,
+  );
+  if (!executionRow) return;
+
+  const messageId = `harness-killed-${executionId}-${Date.now()}`;
+  patchStream(STREAM_ID, (slice) => ({
+    ...slice,
+    activeSubagents: slice.activeSubagents.map((child) =>
+      stopMatchingChild(child, executionId),
+    ),
+    activeProcesses: slice.activeProcesses.map((child) =>
+      stopMatchingChild(child, executionId),
+    ),
+    childStreams: slice.childStreams.map((child) =>
+      stopMatchingChild(child, executionId),
+    ),
+    entries: [
+      ...slice.entries,
+      harnessMessageEntry(
+        messageId,
+        `Harness kill requested for ${executionId}.`,
+      ),
+    ],
+  }));
+
+  if (!executionRow.childStreamId) return;
+  patchStream(executionRow.childStreamId, (slice) => ({
+    ...slice,
+    status: STREAM_STATUS.STOPPED,
+    runStartedAt: undefined,
+    entries: [
+      ...slice.entries,
+      harnessMessageEntry(
+        `${messageId}-${executionRow.childStreamId}`,
+        'Harness kill requested for this sub-workflow.',
+      ),
     ],
   }));
 }
@@ -335,7 +399,7 @@ function handleHarnessSubmit(line: string): void {
 const ink = render(
   <App
     onSubmit={handleHarnessSubmit}
-    onKillExecution={() => undefined}
+    onKillExecution={markHarnessExecutionStopped}
     canInterruptActiveRun={() => canInterrupt}
     canStopActiveRun={() => canInterrupt}
     onInterruptActive={markHarnessInterrupted}
