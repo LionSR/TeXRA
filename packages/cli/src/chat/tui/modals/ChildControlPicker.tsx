@@ -349,13 +349,13 @@ export function ChildControlPicker({
   const [tailExecutionId, setTailExecutionId] = useState<string | undefined>(
     undefined,
   );
-  const parentStreamLabel = activeStreamLabel ?? activeStreamId;
+  const streamScopeLabel = activeStreamLabel ?? activeStreamId;
   const tailItem = tailExecutionId
     ? items.find((item) => item.executionId === tailExecutionId)
     : undefined;
   const listLayout = computePickerListLayout({
     availableRows,
-    hasParentStream: parentStreamLabel !== undefined,
+    hasParentStream: streamScopeLabel !== undefined,
     highlight,
     itemCount: items.length,
   });
@@ -451,8 +451,8 @@ export function ChildControlPicker({
       <Text bold color="cyan">
         {pickerTitle(mode)}
       </Text>
-      {parentStreamLabel ? (
-        <Text dimColor>{`Parent stream: ${parentStreamLabel}`}</Text>
+      {streamScopeLabel ? (
+        <Text dimColor>{`Stream: ${streamScopeLabel}`}</Text>
       ) : null}
       <Box flexDirection="column" marginTop={1}>
         {items.length > 0 ? (
