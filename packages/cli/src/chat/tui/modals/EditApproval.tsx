@@ -11,11 +11,13 @@ import {
   maxDiffScrollOffset,
   statsFromHunks,
 } from '../render/DiffView';
+import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { KeyHints } from '../ui/KeyHints';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 const EDIT_DIFF_PADDING = 6;
-const EDIT_APPROVAL_FIXED_ROWS = 8;
+const EDIT_APPROVAL_FIXED_ROWS_EXCLUDING_TITLE = 8;
+const CONFIRM_CARD_HORIZONTAL_DECORATION = 4;
 const MIN_EDIT_DIFF_WIDTH = 20;
 
 export interface EditApprovalProps {
@@ -24,14 +26,38 @@ export interface EditApprovalProps {
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
+export function editApprovalDiffRowsBudget({
+  availableRows,
+  columns,
+  title,
+}: {
+  readonly availableRows?: number;
+  readonly columns: number;
+  readonly title: string;
+}): number {
+  if (availableRows === undefined) return 30;
+
+  const titleWidth = Math.max(
+    MIN_EDIT_DIFF_WIDTH,
+    columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
+  );
+  const titleRows = wrapAnsiToWidth(title, titleWidth).split('\n').length;
+  return Math.max(
+    1,
+    availableRows - EDIT_APPROVAL_FIXED_ROWS_EXCLUDING_TITLE - titleRows,
+  );
+}
+
 export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const [scrollOffset, setScrollOffset] = useState(0);
+  const title = `Apply edit to ${props.request.path}?`;
   const diffWidth = Math.max(MIN_EDIT_DIFF_WIDTH, columns - EDIT_DIFF_PADDING);
-  const maxDiffLines =
-    props.availableRows === undefined
-      ? 30
-      : Math.max(1, props.availableRows - EDIT_APPROVAL_FIXED_ROWS);
+  const maxDiffLines = editApprovalDiffRowsBudget({
+    availableRows: props.availableRows,
+    columns,
+    title,
+  });
 
   // Single diff pass shared between the summary line and the inline view.
   const hunks = useMemo(
@@ -83,7 +109,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     <ConfirmCard
       borderStyle="double"
       color="cyan"
-      title={`Apply edit to ${props.request.path}?`}
+      title={title}
       alwaysAllow={{ kind: 'toolEdit', label: 'approve session' }}
       onDecide={props.onDecide}
     >
