@@ -97,8 +97,8 @@ export function compactRows(params: {
   }
   if (rowBudget <= 1) {
     return {
-      hiddenCount: Math.max(0, allRows.length - rowBudget),
-      rows: allRows.slice(0, rowBudget),
+      hiddenCount: allRows.length,
+      rows: [],
     };
   }
   const visibleRows = allRows.slice(0, rowBudget - 1);
