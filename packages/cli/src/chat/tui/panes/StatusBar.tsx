@@ -162,19 +162,12 @@ export function queuedFollowUpsSummary(
   maxColumns?: number,
 ): string | undefined {
   if (messages.length === 0) return undefined;
-  const prefix =
-    messages.length === 1 ? 'queued: ' : `queued ${messages.length}: `;
-  const prefixWidth = stringWidth(prefix);
   const previewLength =
     maxColumns === undefined
       ? QUEUED_FOLLOW_UP_PREVIEW_LENGTH
-      : Math.min(
-          QUEUED_FOLLOW_UP_PREVIEW_LENGTH,
-          Math.max(0, maxColumns - prefixWidth),
-        );
+      : Math.min(QUEUED_FOLLOW_UP_PREVIEW_LENGTH, Math.max(0, maxColumns));
   if (previewLength < STATUS_BAR_MIN_RIGHT_PREVIEW) return undefined;
-  const preview = truncateSummaryToColumns(messages[0] ?? '', previewLength);
-  return `${prefix}${preview}`;
+  return truncateSummaryToColumns(messages[0] ?? '', previewLength);
 }
 
 function queuedFollowUpsCountSegment(

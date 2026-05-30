@@ -10,31 +10,31 @@ import { NO_BYPASS } from '@cli/chat/tui/state/cliState';
 import { STREAM_STATUS } from '@shared/schemas';
 
 describe('CLI StatusBar display model', () => {
-  it('summarizes queued follow-up messages', () => {
+  it('previews queued follow-up messages without duplicating the count', () => {
     expect(queuedFollowUpsSummary([])).toBeUndefined();
     expect(queuedFollowUpsSummary(['Keep the proof under one page.'])).toBe(
-      'queued: Keep the proof under one page.',
+      'Keep the proof under one page.',
     );
     expect(
       queuedFollowUpsSummary([
         'Keep the proof under one page.',
         'Also mention the finite monoid argument.',
       ]),
-    ).toBe('queued 2: Keep the proof under one page.');
+    ).toBe('Keep the proof under one page.');
   });
 
   it('hides queued follow-up previews when the right side has no safe width', () => {
     expect(queuedFollowUpsSummary(['Keep the proof under one page.'], 20)).toBe(
-      'queued: Keep the pr…',
+      'Keep the proof unde…',
     );
     expect(
-      queuedFollowUpsSummary(['Keep the proof under one page.'], 19),
+      queuedFollowUpsSummary(['Keep the proof under one page.'], 11),
     ).toBeUndefined();
   });
 
   it('truncates queued follow-up previews by display columns', () => {
     expect(queuedFollowUpsSummary(['請補充一個單調有界證明。'], 20)).toBe(
-      'queued: 請補充一個…',
+      '請補充一個單調有界…',
     );
   });
 
@@ -64,7 +64,7 @@ describe('CLI StatusBar display model', () => {
       'queued 1',
     ]);
     expect(display.left.at(-1)).toMatchObject({ color: 'yellow' });
-    expect(display.right).toBe('queued: Keep the proof under one page.');
+    expect(display.right).toBe('Keep the proof under one page.');
   });
 
   it('keeps idle state compact and omits static agent/model names', () => {
@@ -162,7 +162,7 @@ describe('CLI StatusBar display model', () => {
       '1 proc',
       '3 approvals',
     ]);
-    expect(display.right).toBe('queued 2: Keep the proof under one page.');
+    expect(display.right).toBe('Keep the proof under one page.');
     expect(display.bindings).toContain('[Alt-s]subagents');
     // Stream-navigation hints appear once more than one stream is live.
     expect(display.bindings).toContain('[Tab]streams');
@@ -287,7 +287,7 @@ describe('CLI StatusBar display model', () => {
       width: 60,
     });
 
-    expect(display.right).toBeUndefined();
+    expect(display.right).toBe('Keep the proof un…');
   });
 
   it('shows the resume command while exit confirmation is armed', () => {
