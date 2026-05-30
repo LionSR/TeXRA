@@ -21,6 +21,7 @@ import {
   allocateSidePanelRows,
   appEscapeInterruptActive,
   appFocusShortcutsActive,
+  foregroundSurfaceKind,
 } from '@cli/chat/tui/App';
 import {
   nextFocusBack,
@@ -256,6 +257,55 @@ describe('CLI TUI row allocation', () => {
         slashPaletteOpen: true,
       }),
     ).toBe(false);
+  });
+
+  it('keeps user-opened foreground surfaces ahead of new approvals', () => {
+    expect(
+      foregroundSurfaceKind({
+        activeFormOpen: false,
+        childControlMode: 'subagents',
+        pendingApproval: true,
+        transcriptViewerOpen: false,
+      }),
+    ).toBe('childControls');
+
+    expect(
+      foregroundSurfaceKind({
+        activeFormOpen: false,
+        childControlMode: undefined,
+        pendingApproval: true,
+        transcriptViewerOpen: true,
+      }),
+    ).toBe('transcript');
+
+    expect(
+      foregroundSurfaceKind({
+        activeFormOpen: true,
+        childControlMode: undefined,
+        pendingApproval: true,
+        transcriptViewerOpen: false,
+      }),
+    ).toBe('form');
+  });
+
+  it('shows approvals when no existing foreground surface owns input', () => {
+    expect(
+      foregroundSurfaceKind({
+        activeFormOpen: false,
+        childControlMode: undefined,
+        pendingApproval: true,
+        transcriptViewerOpen: false,
+      }),
+    ).toBe('approval');
+
+    expect(
+      foregroundSurfaceKind({
+        activeFormOpen: false,
+        childControlMode: undefined,
+        pendingApproval: false,
+        transcriptViewerOpen: false,
+      }),
+    ).toBeUndefined();
   });
 
   it('only reports a chat run interruptible after stream resolution', () => {
