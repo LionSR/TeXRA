@@ -386,6 +386,7 @@ describe('CLI child execution controls', () => {
     });
 
     expect(target.streamId).toBe('main');
+    expect(target.fallbackFromStreamId).toBe('review-stream');
     expect(buildChildControlItems(target.slice!, 'subagents')).toMatchObject([
       {
         executionId: 'agent-1',
@@ -541,9 +542,9 @@ describe('CLI child execution controls', () => {
     expect(
       computePickerListLayout({
         availableRows: 12,
-        hasParentStream: true,
         highlight: 8,
         itemCount: 12,
+        scopeLineCount: 1,
       }),
     ).toMatchObject({
       hiddenAfter: 2,
