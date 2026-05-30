@@ -18,6 +18,7 @@ import {
 } from '@cli/chat/tui/state/childControls';
 import { visibleSubagentRows } from '@cli/chat/tui/state/childStreamMerge';
 import { NO_BYPASS } from '@cli/chat/tui/state/cliState';
+import { streamScopeDisplayLabel } from '@cli/chat/tui/state/streamLabels';
 import type {
   ProcessOutputTail,
   StreamSlice,
@@ -393,6 +394,41 @@ describe('CLI child execution controls', () => {
         label: 'review',
       },
     ]);
+  });
+
+  it('labels child-control stream scopes with friendly stream names', () => {
+    const parent = slice({
+      streamId: 'main',
+      activeSubagents: [
+        {
+          executionId: 'agent-1',
+          agentName: 'review',
+          childStreamId: 'review-stream',
+          status: 'running',
+        },
+      ],
+    });
+    const child = slice({ streamId: 'review-stream' });
+    const parentStream = new Map([['review-stream', 'main']] as const);
+    const streams = new Map([
+      ['main', parent],
+      ['review-stream', child],
+    ] as const);
+
+    expect(
+      streamScopeDisplayLabel({
+        parentStream,
+        streamId: 'main',
+        streams,
+      }),
+    ).toBe('main');
+    expect(
+      streamScopeDisplayLabel({
+        parentStream,
+        streamId: 'review-stream',
+        streams,
+      }),
+    ).toBe('review');
   });
 
   it('keeps subagent controls on the focused child when it has descendants', () => {
