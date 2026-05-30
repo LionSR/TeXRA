@@ -36,6 +36,17 @@ function isExecutionStatus(
   );
 }
 
+/** Display text for a finished tool-use run: the last response if present,
+ *  otherwise a terse status/execution-id summary. */
+export function toolUseResultText(
+  result: Extract<CliRunResult, { category: 'toolUse' }>,
+): string {
+  return (
+    result.lastResponse?.trim() ||
+    `${result.status}\nExecution: ${result.executionId}`
+  );
+}
+
 export function cliTerminalStatus(
   result: ExecuteAgentResult,
   storedTerminalStatus?: string,
