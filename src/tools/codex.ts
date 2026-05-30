@@ -51,7 +51,6 @@ import type {
   StreamTabId,
   ExecutionId,
   StorageKey,
-  StreamStatus,
   TodoItem,
   TokenUsageStats,
   ToolUseLog,
@@ -64,7 +63,6 @@ import {
   requestBashApproval,
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
-import { formatDuration } from '@utils/core';
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -73,6 +71,11 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { defineTool } from './core/define';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream } from './childStream';
+import {
+  isCleanInterruption,
+  isLoopOwnedStatus,
+  logTurnSummary,
+} from './agentCliShared';
 import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
@@ -215,22 +218,6 @@ class CodexFollowUpSession implements IInterruptible {
   }
 }
 
-function isAbortError(err: unknown): boolean {
-  return err instanceof Error && err.name === 'AbortError';
-}
-
-function isCleanCodexInterruption(
-  err: unknown,
-  signal: AbortSignal,
-  session: CodexFollowUpSession,
-): boolean {
-  return signal.aborted || session.isInterrupted() || isAbortError(err);
-}
-
-function isCodexLoopOwnedStatus(status: StreamStatus | undefined): boolean {
-  return status === STREAM_STATUS.WAITING || status === STREAM_STATUS.RUNNING;
-}
-
 /**
  * Clear the transient status owned by a Codex loop after the loop exits.
  * Explicit terminal statuses set by other runtime paths, such as STOPPED or
@@ -240,7 +227,7 @@ export function finalizeCodexLoopStatus(
   childStreamId: StreamTabId,
   runtimeHost: AgentRuntimeHost,
 ): void {
-  if (isCodexLoopOwnedStatus(StreamStatusService.get(childStreamId))) {
+  if (isLoopOwnedStatus(StreamStatusService.get(childStreamId))) {
     StreamStatusService.set(childStreamId, STREAM_STATUS.READY, {
       runtimeHost,
     });
@@ -432,20 +419,6 @@ function publishCodexItemProgress(params: {
   return true;
 }
 
-/** Log a turn summary to the child stream. */
-function logTurnSummary(
-  logger: AgentTrace,
-  wallTimeMs: number,
-  usage: RunResult['usage'],
-): void {
-  logger.info(`Turn completed in ${formatDuration(wallTimeMs)}`);
-  if (usage) {
-    logger.info(
-      `Tokens: ${usage.input_tokens} in / ${usage.output_tokens} out`,
-    );
-  }
-}
-
 // ============================================================================
 // Streaming helpers
 // ============================================================================
@@ -602,7 +575,7 @@ function startCodexLoop(params: {
           );
           logTurnSummary(logger, Date.now() - startedAt, turn.usage);
         } catch (caught) {
-          if (isCleanCodexInterruption(caught, signal, session)) break;
+          if (isCleanInterruption(caught, signal, session)) break;
           err = caught;
           logger.error(toErrorMessage(caught));
         } finally {
@@ -820,11 +793,11 @@ async function launchCodexSession(
   };
 }
 
-async function resumeCodexThread(
+function resumeCodexThread(
   threadId: string,
   prompt: string,
   callerStreamId: StreamTabId | undefined,
-): Promise<ToolResult> {
+): ToolResult {
   const stored = threadRegistry.get(threadId);
   if (!stored) {
     throw new ToolError(

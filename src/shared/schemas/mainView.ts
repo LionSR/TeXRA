@@ -347,9 +347,6 @@ export type ActionDetail = z.infer<typeof ActionDetailSchema>;
 const FileListSchema = z.array(z.string());
 const FilesPayloadSchema = z.object({ files: FileListSchema });
 const SingleFileSelectedSchema = z.object({ filePath: z.string() });
-const BaseFileOptionsSchema = z.object({
-  preserveBaseFile: z.boolean().nullish(),
-});
 
 export const SetModelOptionsMessageSchema = z.object({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS),
@@ -372,7 +369,7 @@ export const SetEditedFileMessageSchema = FilesPayloadSchema.extend({
 
 export const SetBaseFileMessageSchema = FilesPayloadSchema.extend({
   command: z.literal(MAIN_VIEW_COMMANDS.SET_BASE_FILE),
-  preserveBaseFile: BaseFileOptionsSchema.shape.preserveBaseFile,
+  preserveBaseFile: z.boolean().nullish(),
 });
 
 export const EditedFileSelectedMessageSchema = SingleFileSelectedSchema.extend({

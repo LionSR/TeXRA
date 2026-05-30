@@ -603,12 +603,10 @@ export type UpdateInlineCriticismEnabledMessage = z.infer<
 // Provider key inbound messages (settings-only)
 // Keep the outer optional: callers may omit apiKey so the host can prompt.
 const SubmittedApiKeySchema = z
-  .preprocess(
-    (value) =>
-      typeof value === 'string' && value.trim() === '' ? undefined : value,
-    z.string().trim().min(1).optional(),
-  )
-  .optional();
+  .string()
+  .trim()
+  .optional()
+  .transform((v) => (v ? v : undefined));
 
 const SetProviderKeyMessageSchema = z.object({
   command: z.literal(CMD.SET_PROVIDER_KEY),
@@ -914,15 +912,10 @@ const GetLatexConfigValuesMessageSchema = commandOnly(
  * using `LatexConfigValuesSchema.shape[field]`.
  */
 // Use the canonical field list from latex.ts as the schema source so it can
-// never drift from `LATEX_FIELD_TO_KEY`. The runtime tuple cast preserves the
-// literal types so `LatexConfigField` (re-exported above) stays as the same
-// union of string literals consumers already rely on.
-const LatexConfigFieldSchema = z.enum(
-  LATEX_CONFIG_FIELDS as readonly [
-    (typeof LATEX_CONFIG_FIELDS)[number],
-    ...(typeof LATEX_CONFIG_FIELDS)[number][],
-  ],
-);
+// never drift from `LATEX_FIELD_TO_KEY`. z.enum accepts the readonly array
+// directly and preserves the literal types so `LatexConfigField` (re-exported
+// above) stays as the same union of string literals consumers already rely on.
+const LatexConfigFieldSchema = z.enum(LATEX_CONFIG_FIELDS);
 
 const SetLatexConfigValueMessageSchema = z.object({
   command: z.literal(CMD.SET_LATEX_CONFIG_VALUE),
