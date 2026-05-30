@@ -20,11 +20,10 @@ import {
   type FileLocation,
 } from '@utils/files';
 
-type BuildDisplayFn = (
+export type BuildDisplayFn = (
   location: FileLocation,
   options?: { preserveFocus?: boolean },
 ) => Promise<void>;
-export type { BuildDisplayFn };
 
 interface LatexPreviewDisplayOptions {
   openBuildDisplay?: BuildDisplayFn;

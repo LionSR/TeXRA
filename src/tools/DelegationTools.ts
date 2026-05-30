@@ -620,14 +620,13 @@ async function proposeAndExecute(
   );
   if (nonApproveResult) return nonApproveResult;
 
-  // At this point result.action === 'approve' (all other cases returned above)
-  const modelOverride = result.action === 'approve' ? result.model : undefined;
+  // At this point result.action === 'approve' (all other cases returned above).
+  if (result.action !== 'approve') {
+    throw new Error(`Unexpected non-approve proposal result: ${result.action}`);
+  }
+  const modelOverride = result.model;
   const agentOverride =
-    result.action === 'approve' &&
-    result.agent &&
-    result.agent !== proposal.agent
-      ? result.agent
-      : undefined;
+    result.agent && result.agent !== proposal.agent ? result.agent : undefined;
 
   // Re-validate against the current registry — between proposal display and
   // approval the agent may have been removed/renamed, or the approval could
@@ -732,15 +731,13 @@ function isBibFile(filePath: string): boolean {
   return getBasename(filePath).toLowerCase().endsWith('.bib');
 }
 
-function getContextFiles(input: WorkflowAgentInput): string[] {
-  return input.contextFiles.filter(isNonEmptyString);
-}
-
 /** Reject workflow proposals that attach oversized bibliography files. */
 export async function rejectOversizedBibAttachments(
   input: WorkflowAgentInput,
 ): Promise<ToolResult | null> {
-  const bibFiles = getContextFiles(input).filter(isBibFile);
+  const bibFiles = input.contextFiles
+    .filter(isNonEmptyString)
+    .filter(isBibFile);
 
   for (const bibFile of bibFiles) {
     const stats = await WorkspaceFS.stat(bibFile);

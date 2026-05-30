@@ -17,6 +17,7 @@ import { platform } from '@platform/platform';
 import {
   getExecutionStore,
   type ChildRecord,
+  type TodoEntry,
   listExecutions,
 } from '@agent/storage';
 import { flowKey } from '@agent/node/persistedFlow';
@@ -467,23 +468,13 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         lines.push(`Parent: ${meta.parentExecutionId}`);
       }
 
-      await this.appendChildren(lines, children);
-
-      if (todos.length > 0) {
-        lines.push('', ...formatTodoSection(todos));
-      }
-
-      if (report) {
-        lines.push('', 'Result:', report);
-      }
-
-      const runningPaths = getAvailablePaths(
+      await this.appendSummaryTail(
+        lines,
+        executionId,
         handle.category,
-        children.length > 0,
-      );
-      lines.push(
-        '',
-        `Available paths: ${runningPaths.map((p) => `/executions/${executionId}/${p}`).join(', ')}`,
+        children,
+        todos,
+        report,
       );
 
       return { output: lines.join('\n') };
@@ -533,6 +524,30 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       lines.push(`Parent: ${meta.parentExecutionId}`);
     }
 
+    await this.appendSummaryTail(
+      lines,
+      executionId,
+      category,
+      children,
+      todos,
+      report,
+    );
+
+    return { output: lines.join('\n') };
+  }
+
+  /**
+   * Append the shared summary tail (children, todos, report, available paths)
+   * common to both the running-handle and completed-execution branches.
+   */
+  private async appendSummaryTail(
+    lines: string[],
+    executionId: ExecutionId,
+    category: string | undefined,
+    children: ChildRecord[],
+    todos: TodoEntry[],
+    report: string | null,
+  ): Promise<void> {
     await this.appendChildren(lines, children);
 
     if (todos.length > 0) {
@@ -543,13 +558,11 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       lines.push('', 'Result:', report);
     }
 
-    const completedPaths = getAvailablePaths(category, children.length > 0);
+    const paths = getAvailablePaths(category, children.length > 0);
     lines.push(
       '',
-      `Available paths: ${completedPaths.map((p) => `/executions/${executionId}/${p}`).join(', ')}`,
+      `Available paths: ${paths.map((p) => `/executions/${executionId}/${p}`).join(', ')}`,
     );
-
-    return { output: lines.join('\n') };
   }
 
   /** Fetch metas and format each child as a summary line. */
