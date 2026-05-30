@@ -17,11 +17,7 @@ import { visibleSubagentRows } from '../state/childStreamMerge';
 import { cliState, type ProcessOutputTail } from '../state/cliState';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
-import {
-  CHILD_STATUS_MARKER,
-  childStatusColor,
-  shouldShowChildSectionHeader,
-} from './SubagentListDisplay';
+import { CHILD_STATUS_MARKER, childStatusColor } from './SubagentListDisplay';
 
 interface RowProps {
   readonly child: ActiveChildInfo;
@@ -123,7 +119,6 @@ export function SubagentList(
   const subagents = slice ? visibleSubagentRows(slice) : [];
   const liveElapsedKey = liveChildExecutionElapsedKey(slice);
   const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
-  const showSectionHeader = shouldShowChildSectionHeader(props.maxRows);
 
   if (!slice) return null;
   if (subagents.length === 0 && activeProcesses.length === 0) return null;
@@ -172,11 +167,9 @@ export function SubagentList(
     >
       {subagents.length > 0 ? (
         <Box flexDirection="column">
-          {showSectionHeader ? (
-            <Text bold dimColor>
-              Subagents
-            </Text>
-          ) : null}
+          <Text bold dimColor>
+            Subagents
+          </Text>
           {subagents.map((child, i) => (
             <Row
               key={child.executionId}
@@ -189,11 +182,9 @@ export function SubagentList(
       ) : null}
       {activeProcesses.length > 0 ? (
         <Box flexDirection="column" marginTop={subagents.length > 0 ? 1 : 0}>
-          {showSectionHeader ? (
-            <Text bold dimColor>
-              Processes
-            </Text>
-          ) : null}
+          <Text bold dimColor>
+            Processes
+          </Text>
           {activeProcesses.map((child, i) => (
             <Row
               key={child.executionId}
