@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - platform
-import { createWorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
 import {
@@ -144,10 +144,10 @@ describe('desktop platform adapters', () => {
   it('creates stable global and workspace storage roots under userData', async () => {
     const root = await makeTempDir('texra-electron-storage-');
 
-    const first = createWorkspaceStorageProvider(root, '/workspace/a');
-    const same = createWorkspaceStorageProvider(root, '/workspace/a');
-    const other = createWorkspaceStorageProvider(root, '/workspace/b');
-    const noWorkspace = createWorkspaceStorageProvider(root, undefined);
+    const first = new WorkspaceStorageProvider(root, '/workspace/a');
+    const same = new WorkspaceStorageProvider(root, '/workspace/a');
+    const other = new WorkspaceStorageProvider(root, '/workspace/b');
+    const noWorkspace = new WorkspaceStorageProvider(root, undefined);
 
     expect(first.getGlobalStoragePath()).toBe(join(root, 'global-storage'));
     expect(first.getStoragePath()).toBe(same.getStoragePath());

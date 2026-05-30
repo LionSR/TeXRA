@@ -129,10 +129,3 @@ export class WorkspaceStorageProvider implements StorageProvider {
     return storagePath;
   }
 }
-
-export function createWorkspaceStorageProvider(
-  storageRoot: string,
-  workspacePath: WorkspacePathSource,
-): StorageProvider {
-  return new WorkspaceStorageProvider(storageRoot, workspacePath);
-}

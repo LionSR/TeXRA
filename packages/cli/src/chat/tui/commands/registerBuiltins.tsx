@@ -1,7 +1,7 @@
 // Registers the slash commands the input palette surfaces.
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
-import type { CliApprovalPolicy } from '@cli/runtime/approvalPolicy';
+import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { ExecutionId } from '@shared/schemas';
 
 import { ApiModeForm } from '../forms/ApiModeForm';

@@ -24,13 +24,6 @@ interface CliSkillRecord {
   readonly path: string;
 }
 
-export function cliSkillSources(
-  context: Pick<CliContext, 'cwd' | 'resourcesPath'>,
-  options: CliSkillDiscoveryOptions = {},
-): SkillSource[] {
-  return defaultSkillSources(context, options);
-}
-
 export function skillListRecord(entry: SourcedSkill): CliSkillRecord {
   return {
     name: entry.skill.name,
@@ -45,7 +38,7 @@ export async function readCliSkills(
   context: Pick<CliContext, 'cwd' | 'resourcesPath'>,
   options: CliSkillDiscoveryOptions = {},
 ): Promise<DiscoverSkillSourcesResult> {
-  return discoverSkillSources(cliSkillSources(context, options));
+  return discoverSkillSources(defaultSkillSources(context, options));
 }
 
 export function formatCliSkillIssue(issue: SkillLoadIssue): string {

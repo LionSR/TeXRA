@@ -4,8 +4,8 @@ import * as path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { defaultSkillSources } from '@skills/skillSources';
 import {
-  cliSkillSources,
   formatCliSkillList,
   readCliSkills,
   skillListRecord,
@@ -42,7 +42,7 @@ afterEach(async () => {
 
 describe('CLI skills runtime', () => {
   it('resolves default, interop, and custom skill sources in precedence order', () => {
-    const sources = cliSkillSources(
+    const sources = defaultSkillSources(
       {
         cwd: '/tmp/project',
         resourcesPath: '/tmp/resources',
