@@ -12,9 +12,7 @@ export interface PlanApprovalProps {
 }
 
 export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
-  const plan = props.payload.plan;
-  const summary = plan?.summary;
-  const steps = plan?.steps ?? [];
+  const { summary, steps } = props.payload.plan;
 
   return (
     <Box
