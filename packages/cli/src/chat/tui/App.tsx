@@ -26,7 +26,7 @@ import {
 } from './input/inputKeys';
 import {
   hasChildExecutionRows,
-  numericFocusTarget,
+  numericFocusTargetForActiveStream,
   resolveChildControlStreamTarget,
   type ChildControlMode,
 } from './state/childControls';
@@ -434,7 +434,12 @@ export function App(props: AppProps): React.JSX.Element {
       }
       const digit = metaChordDigit(input, key);
       if (digit !== undefined) {
-        const target = numericFocusTarget(activeSlice, digit - 1);
+        const target = numericFocusTargetForActiveStream({
+          activeStreamId,
+          parentStream,
+          streams,
+          zeroBasedIndex: digit - 1,
+        });
         if (target) cliState.activeStreamId.set(target);
       }
       return;
