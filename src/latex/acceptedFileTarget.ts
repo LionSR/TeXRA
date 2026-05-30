@@ -5,6 +5,7 @@ import path from 'path';
 import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
 
 // Local imports - utilities
+import { getExtensionLowercase } from '@utils/core/pathCore';
 import {
   createExternalLocation,
   createRunStorageLocation,
@@ -53,10 +54,9 @@ export function getAcceptedFileTarget(
   editedPath: string,
 ): AcceptedFileTarget {
   const basePath = baseLocation.absolutePath;
-  const baseExt = path.extname(basePath).toLowerCase();
-  const editedExt = path.extname(editedPath);
+  const baseExt = getExtensionLowercase(basePath);
 
-  if (baseExt === editedExt.toLowerCase()) {
+  if (baseExt === getExtensionLowercase(editedPath)) {
     return {
       targetLocation: baseLocation,
       targetFileName: path.basename(basePath),

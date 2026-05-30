@@ -7,6 +7,7 @@ import {
   buildBashApprovalRejectedResult,
   requestBashApproval,
 } from '@tools/approval/bashApproval';
+import { tailWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from '../core/define';
@@ -16,17 +17,6 @@ const DEFAULT_TIMEOUT_MS = 300_000;
 const OUTPUT_PREVIEW_MAX = 4_000;
 const TERMINAL_NAME_PREFIX = 'TeXRA: ';
 
-/**
- * Keep the last `maxLen` characters; prepend an ellipsis when
- * truncated. Mirrors the runner's sliding-window `tail` — for setup
- * installers the success / error line is at the *end* of the output,
- * so head-truncation (the codebase's default `truncateWithEllipsis`)
- * would discard exactly the lines the agent needs.
- */
-function tailWithEllipsis(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  return '…' + text.slice(-(maxLen - 1));
-}
 
 const SendToTerminalInputSchema = z.strictObject({
   // The single non-cosmetic guard: VS Code normalizes \n / \r when typed
