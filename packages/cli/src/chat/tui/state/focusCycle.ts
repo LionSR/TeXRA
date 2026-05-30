@@ -31,15 +31,36 @@ export function orderedDescendantsFromSlice(
   return [...new Set(out)];
 }
 
-export function orderedDescendants(parent: StreamTabId): StreamTabId[] {
-  const streams = cliState.streams.get();
-  const out = orderedDescendantsFromSlice(streams.get(parent));
-  for (const [child, recordedParent] of cliState.parentStream.get()) {
-    if (recordedParent !== parent || !streams.has(child) || out.includes(child))
+export function orderedDescendantsFromTree(init: {
+  readonly parent: StreamTabId;
+  readonly parentSlice: StreamSlice | undefined;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+}): StreamTabId[] {
+  const out = orderedDescendantsFromSlice(init.parentSlice).filter((id) =>
+    init.streams.has(id),
+  );
+  for (const [child, recordedParent] of init.parentStream) {
+    if (
+      recordedParent !== init.parent ||
+      !init.streams.has(child) ||
+      out.includes(child)
+    ) {
       continue;
+    }
     out.push(child);
   }
   return out;
+}
+
+export function orderedDescendants(parent: StreamTabId): StreamTabId[] {
+  const streams = cliState.streams.get();
+  return orderedDescendantsFromTree({
+    parent,
+    parentSlice: streams.get(parent),
+    parentStream: cliState.parentStream.get(),
+    streams,
+  });
 }
 
 /** Returns the next stream id the focus cycle should land on, or `undefined`
