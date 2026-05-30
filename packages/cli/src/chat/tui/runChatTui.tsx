@@ -77,6 +77,10 @@ import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { listSlashCommands, parseSlashInput } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
+import {
+  formatCliSessionStatus,
+  readQueuedFollowUpMessagesForStatus,
+} from './sessionStatus';
 import { clearApprovals } from './state/approvalQueue';
 import { cliState, resetCliState } from './state/cliState';
 import { installTuiApprovals } from './state/subscribeApprovals';
@@ -566,13 +570,15 @@ async function handleTuiSlashCommand(
         ? cliState.streams.get().get(activeStreamId)
         : undefined;
       appendLocalAssistantTranscript(
-        [
-          `agent: ${meta.agent || context.initialAgent}`,
-          `model: ${meta.model || context.initialModel}`,
-          `api: ${formatCliApiMode(getCliApiMode())}`,
-          `approval: ${formatApprovalPolicy(context.getApprovalPolicy())}`,
-          `status: ${slice?.status ?? 'not started'}`,
-        ].join('\n'),
+        formatCliSessionStatus({
+          agent: meta.agent || context.initialAgent,
+          model: meta.model || context.initialModel,
+          api: formatCliApiMode(getCliApiMode()),
+          approval: formatApprovalPolicy(context.getApprovalPolicy()),
+          status: slice?.status ?? 'not started',
+          queuedFollowUpMessages:
+            readQueuedFollowUpMessagesForStatus(activeStreamId),
+        }),
       );
       return true;
     }
