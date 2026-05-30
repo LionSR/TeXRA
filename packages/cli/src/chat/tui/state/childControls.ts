@@ -30,6 +30,7 @@ export interface ChildControlItem {
 }
 
 export interface ChildControlStreamTarget {
+  readonly fallbackFromStreamId?: StreamTabId;
   readonly slice: StreamSlice | undefined;
   readonly streamId: StreamTabId | undefined;
 }
@@ -227,6 +228,7 @@ export function resolveChildControlStreamTarget({
   const parentSlice = parentStreamId ? streams.get(parentStreamId) : undefined;
   if (hasVisibleSubagents(parentSlice)) {
     return {
+      fallbackFromStreamId: activeStreamId,
       streamId: parentStreamId,
       slice: parentSlice,
     };
