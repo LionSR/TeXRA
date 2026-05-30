@@ -38,6 +38,21 @@ import { spawnSync } from 'node:child_process';
 const ESC = String.fromCharCode(27);
 const ETX = String.fromCharCode(3); // Ctrl-C
 const DOWN = ESC + '[B';
+const LONG_BASH_APPROVAL_COMMAND = [
+  "python3 << 'EOF'",
+  'solutions = []',
+  'for y in range(1, 100):',
+  '    x2 = 1 + 2 * y * y',
+  '    x = int(x2 ** 0.5)',
+  '    if x * x == x2:',
+  '        solutions.append((x, y))',
+  '        if x != 0:',
+  '            solutions.append((-x, y))',
+  'solutions.sort()',
+  'print("All integer pairs (x,y) with 0<y<100:")',
+  'print(solutions)',
+  'EOF',
+].join('\n');
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');
@@ -134,6 +149,45 @@ const SCENARIOS = [
       'Use foreground panel shortcuts',
     ],
     unexpect: ['[Alt-p]tasks', '[Option-p]tasks', '[/model]models'],
+    maxBlankLinesBetween: [{ from: '╚', to: 'Tip:', max: 1 }],
+  },
+  {
+    name: 'long-bash-approval',
+    rows: 24,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_BASH_APPROVAL: '1',
+      HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
+    },
+    bootExpect: 'Use foreground panel shortcuts',
+    expect: [
+      'Run bash command?',
+      "$ python3 << 'EOF'",
+      'more rows',
+      'scroll command',
+      'y approve',
+      'Use foreground panel shortcuts',
+    ],
+    unexpect: ['╚═    print', '[Option-p]tasks'],
+    maxBlankLinesBetween: [{ from: '╚', to: 'Tip:', max: 1 }],
+  },
+  {
+    name: 'compact-long-bash-approval',
+    rows: 18,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_BASH_APPROVAL: '1',
+      HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
+    },
+    bootExpect: 'Use foreground panel shortcuts',
+    expect: [
+      'Run bash command?',
+      "$ python3 << 'EOF'",
+      'rows hidden',
+      'y approve',
+      'Use foreground panel shortcuts',
+    ],
+    unexpect: ['╚═    print', 'scroll command', '[Option-p]tasks'],
     maxBlankLinesBetween: [{ from: '╚', to: 'Tip:', max: 1 }],
   },
   {
