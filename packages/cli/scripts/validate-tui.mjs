@@ -77,7 +77,7 @@ const SCENARIOS = [
     },
     keys: [ESC + 'p'], // Option/Alt-p
     expect: [
-      'Background tasks',
+      'Tasks and sub-workflows',
       'Stream: main',
       'Enter view',
       'k kill',
