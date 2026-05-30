@@ -6,7 +6,7 @@ import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { ConfirmCard } from './ConfirmCard';
 import {
   buildHunks,
-  diffDisplayLines,
+  diffVisualRowCount,
   DiffView,
   maxDiffScrollOffset,
   statsFromHunks,
@@ -48,7 +48,10 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     ],
   );
   const stats = useMemo(() => statsFromHunks(hunks), [hunks]);
-  const diffRows = useMemo(() => diffDisplayLines(hunks).length, [hunks]);
+  const diffRows = useMemo(
+    () => diffVisualRowCount(hunks, diffWidth),
+    [diffWidth, hunks],
+  );
   const maxScrollOffset = maxDiffScrollOffset(diffRows, maxDiffLines);
   const diffScrollable = maxScrollOffset > 0;
   const pageRows = Math.max(1, maxDiffLines - 2);
