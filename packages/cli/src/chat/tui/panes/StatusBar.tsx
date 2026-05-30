@@ -164,19 +164,23 @@ function queuedFollowUpsListSummary(
   maxColumns: number,
 ): string | undefined {
   const previewItems = messages.slice(0, QUEUED_FOLLOW_UP_PREVIEW_ITEMS);
+  const overflowCount = messages.length - previewItems.length;
+  const overflowMarker =
+    overflowCount > 0 ? `+${overflowCount} more` : undefined;
   const separatorColumns =
-    Math.max(0, previewItems.length - 1) *
+    Math.max(0, previewItems.length - 1 + (overflowMarker ? 1 : 0)) *
     stringWidth(QUEUED_FOLLOW_UP_SEPARATOR);
+  const overflowColumns = overflowMarker ? stringWidth(overflowMarker) : 0;
   const itemColumns = Math.floor(
-    (maxColumns - separatorColumns) / previewItems.length,
+    (maxColumns - separatorColumns - overflowColumns) / previewItems.length,
   );
   if (itemColumns < QUEUED_FOLLOW_UP_MIN_ITEM_PREVIEW) return undefined;
 
-  return previewItems
-    .map((message, index) =>
-      numberedQueuedFollowUpPreview(message, index, itemColumns),
-    )
-    .join(QUEUED_FOLLOW_UP_SEPARATOR);
+  const previewParts = previewItems.map((message, index) =>
+    numberedQueuedFollowUpPreview(message, index, itemColumns),
+  );
+  if (overflowMarker) previewParts.push(overflowMarker);
+  return previewParts.join(QUEUED_FOLLOW_UP_SEPARATOR);
 }
 
 export function queuedFollowUpsSummary(
