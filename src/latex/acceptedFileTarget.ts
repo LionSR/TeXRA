@@ -71,7 +71,7 @@ export function getAcceptedFileTarget(
     editedNameWithoutExt,
   );
   const targetFileName = agentSuffix
-    ? `${baseNameWithoutExt}_${agentSuffix}${editedExt}`
+    ? `${baseNameWithoutExt}_${agentSuffix}${path.extname(editedPath)}`
     : path.basename(editedPath);
 
   return {
