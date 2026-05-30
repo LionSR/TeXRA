@@ -32,6 +32,8 @@ const NO_NEWLINE_MARKER = '\\';
 const MIN_DIFF_WIDTH = 20;
 const DEFAULT_DIFF_WIDTH = 74;
 
+type OverflowMarkerKind = 'hidden' | 'more' | 'previous';
+
 /** Compute hunks once; callers reuse for both stats and the renderer. */
 export function buildHunks(
   fileLabel: string,
@@ -144,6 +146,27 @@ export function diffDisplayLines(
   });
 }
 
+export function wrappedDiffDisplayLines(
+  hunks: readonly Hunk[],
+  width: number,
+  maxHunkLines = 0,
+): DiffDisplayLine[] {
+  const diffWidth = Math.max(MIN_DIFF_WIDTH, width);
+  return diffDisplayLines(hunks, maxHunkLines).flatMap((line) =>
+    wrapAnsiToWidth(line.text, diffWidth)
+      .split('\n')
+      .map((text): DiffDisplayLine => ({ ...line, text })),
+  );
+}
+
+export function diffVisualRowCount(
+  hunks: readonly Hunk[],
+  width: number,
+  maxHunkLines = 0,
+): number {
+  return wrappedDiffDisplayLines(hunks, width, maxHunkLines).length;
+}
+
 export function boundedDiffDisplayLines(
   hunks: readonly Hunk[],
   maxHunkLines = 0,
@@ -160,19 +183,64 @@ export function maxDiffScrollOffset(
   return Math.max(0, totalLines - Math.max(1, maxDisplayLines - 1));
 }
 
+function clipToWidth(text: string, width: number): string {
+  let clipped = '';
+  for (const char of text) {
+    if (stringWidth(clipped + char) > width) break;
+    clipped += char;
+  }
+  return clipped;
+}
+
+function overflowMarkerText(
+  kind: OverflowMarkerKind,
+  count: number,
+  width?: number,
+): string {
+  const candidates =
+    kind === 'hidden'
+      ? [
+          `... ${count} diff rows hidden`,
+          `... ${count} rows hidden`,
+          `... ${count} hidden`,
+        ]
+      : kind === 'previous'
+        ? [
+            `... ${count} previous diff rows`,
+            `... ${count} previous rows`,
+            `... ${count} prev rows`,
+          ]
+        : [
+            `... ${count} more diff rows`,
+            `... ${count} more rows`,
+            `... +${count} rows`,
+          ];
+  if (width === undefined) return candidates[0] ?? '';
+
+  const markerWidth = Math.max(MIN_DIFF_WIDTH, width);
+  return (
+    candidates.find((candidate) => stringWidth(candidate) <= markerWidth) ??
+    clipToWidth(candidates.at(-1) ?? '', markerWidth)
+  );
+}
+
 export function scrollBoundedDiffDisplayLines(
   hunks: readonly Hunk[],
   maxHunkLines = 0,
   maxDisplayLines = 0,
   scrollOffset = 0,
+  width?: number,
 ): DiffDisplayLine[] {
-  const lines = diffDisplayLines(hunks, maxHunkLines);
+  const lines =
+    width === undefined
+      ? diffDisplayLines(hunks, maxHunkLines)
+      : wrappedDiffDisplayLines(hunks, width, maxHunkLines);
   if (maxDisplayLines <= 0 || lines.length <= maxDisplayLines) return lines;
   if (maxDisplayLines === 1) {
     return [
       {
         kind: 'overflow',
-        text: `... ${lines.length} diff rows hidden`,
+        text: overflowMarkerText('hidden', lines.length, width),
       },
     ];
   }
@@ -196,7 +264,7 @@ export function scrollBoundedDiffDisplayLines(
       ? [
           {
             kind: 'overflow' as const,
-            text: `... ${hiddenBefore} previous diff rows`,
+            text: overflowMarkerText('previous', hiddenBefore, width),
           },
         ]
       : []),
@@ -205,7 +273,7 @@ export function scrollBoundedDiffDisplayLines(
       ? [
           {
             kind: 'overflow' as const,
-            text: `... ${hiddenAfter} more diff rows`,
+            text: overflowMarkerText('more', hiddenAfter, width),
           },
         ]
       : []),
@@ -232,17 +300,13 @@ export function DiffView(props: DiffViewProps): React.JSX.Element {
     max,
     maxDisplayLines,
     props.scrollOffset ?? 0,
+    width,
   );
 
   return (
     <Box flexDirection="column">
       {lines.map((line, li) => (
-        <DiffLine
-          key={li}
-          line={line}
-          truncate={maxDisplayLines > 0}
-          width={width}
-        />
+        <DiffLine key={li} line={line} width={width} />
       ))}
     </Box>
   );
@@ -273,27 +337,15 @@ export function fillRows(text: string, width: number): string {
 
 function DiffLine({
   line,
-  truncate = false,
   width,
 }: {
   readonly line: DiffDisplayLine;
-  readonly truncate?: boolean;
   readonly width: number;
 }): React.JSX.Element {
-  // Truncate mode keeps each entry on one row (clip the overflow); otherwise
-  // pre-wrap to the diff width so a banded line wraps as multiple full rows.
-  const content = truncate ? line.text : wrapAnsiToWidth(line.text, width);
+  const content = wrapAnsiToWidth(line.text, width);
   const bg = DIFF_BAND_BG[line.kind];
   if (bg) {
-    return (
-      <Text backgroundColor={bg} wrap={truncate ? 'truncate-end' : undefined}>
-        {fillRows(content, width)}
-      </Text>
-    );
+    return <Text backgroundColor={bg}>{fillRows(content, width)}</Text>;
   }
-  return (
-    <Text dimColor wrap={truncate ? 'truncate-end' : undefined}>
-      {content}
-    </Text>
-  );
+  return <Text dimColor>{content}</Text>;
 }
