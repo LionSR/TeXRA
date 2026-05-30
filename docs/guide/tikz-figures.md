@@ -52,14 +52,14 @@ Because these are tool-use agents, they can compile the figure and inspect the r
   icon="sparkle"
   caption="drawing a TikZ figure · iterating · this run"
   :calls="[
-    { state: 'done', verb: 'write_tikz', target: 'figures/ml-pipeline.tex', effect: 'Writes a first draft of the flowchart' },
-    { state: 'done', verb: 'compile_tikz', target: 'ml-pipeline.tex', effect: 'pdflatex OK → renders a PNG preview' },
-    { state: 'done', verb: 'read', target: 'ml-pipeline.png', effect: 'Sees nodes overlap, one arrow misaligned' },
-    { state: 'active', verb: 'write_tikz', target: 'ml-pipeline.tex', effect: 'Adjusts node spacing and arrow anchors, then recompiles' },
+    { state: 'done', verb: 'write_file', target: 'figures/ml-pipeline.tex', effect: 'Writes a first draft of the flowchart' },
+    { state: 'done', verb: 'bash', target: 'latexmk ml-pipeline.tex', effect: 'pdflatex OK → renders the standalone PDF' },
+    { state: 'done', verb: 'read_file', target: 'ml-pipeline.pdf', effect: 'Sees nodes overlap, one arrow misaligned' },
+    { state: 'active', verb: 'edit_file', target: 'figures/ml-pipeline.tex', effect: 'Adjusts node spacing and arrow anchors, then recompiles' },
   ]"
 />
 
-<p class="hero-caption">The agent writes, compiles, looks at the rendered PNG, and loops back to fix what it sees — a self-correcting draw cycle, not a one-shot generation.</p>
+<p class="hero-caption">The agent writes, compiles, looks at the rendered PDF, and loops back to fix what it sees — a self-correcting draw cycle, not a one-shot generation.</p>
 
 ![TikZ Figure Example](/images/tikz-figure-example.png)
 
