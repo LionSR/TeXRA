@@ -23,6 +23,7 @@ export const NON_REGEX_REPLACEMENT_CATEGORIES = [
   'sections',
   'latex_forbidden_commands',
   'characters',
+  'font_commands',
   'latex_xml',
   'latex_document',
   'unicode',
@@ -35,11 +36,13 @@ export const NON_REGEX_REPLACEMENT_CATEGORIES = [
 ] as const;
 
 export const REGEX_REPLACEMENT_CATEGORIES = [
+  'fenced_latex_blocks',
   'inline_math',
   'parentheses',
   'latexdiff_markup',
   'equation_style',
   'equation_macros',
+  'personal_style_contextual',
   'max_style_regex',
 ] as const;
 
