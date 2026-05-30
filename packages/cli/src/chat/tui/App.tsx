@@ -27,6 +27,7 @@ import {
 import {
   hasChildExecutionRows,
   numericFocusTarget,
+  resolveChildControlStreamTarget,
   type ChildControlMode,
 } from './state/childControls';
 import { canShowSubagentControls, cliState } from './state/cliState';
@@ -193,6 +194,7 @@ export function App(props: AppProps): React.JSX.Element {
   const pending = useSignal(currentApproval);
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
+  const parentStream = useSignal(cliState.parentStream);
   const sessionMeta = useSignal(cliState.sessionMeta);
   const activeForm = useSignal(cliState.activeForm);
   const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
@@ -233,9 +235,15 @@ export function App(props: AppProps): React.JSX.Element {
   const inputDisabled = props.inputDisabled === true || foregroundOpen;
 
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  const subagentControlTarget = resolveChildControlStreamTarget({
+    activeStreamId,
+    mode: 'subagents',
+    parentStream,
+    streams,
+  });
   const subagentControlsAvailable = canShowSubagentControls(
     sessionMeta,
-    activeSlice,
+    subagentControlTarget.slice,
   );
   const hasSubagentPanel =
     !foregroundOpen && hasChildExecutionRows(activeSlice);
@@ -278,15 +286,21 @@ export function App(props: AppProps): React.JSX.Element {
       );
     }
     if (childControlMode) {
+      const target = resolveChildControlStreamTarget({
+        activeStreamId,
+        mode: childControlMode,
+        parentStream,
+        streams,
+      });
       return (
         <ChildControlPicker
-          activeStreamId={activeStreamId}
+          activeStreamId={target.streamId}
           availableRows={foregroundRows}
           mode={childControlMode}
           onClose={() => setChildControlMode(undefined)}
           onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
           onKillExecution={props.onKillExecution}
-          slice={activeSlice}
+          slice={target.slice}
           streams={streams}
         />
       );
