@@ -51,4 +51,19 @@ describe('CLI SubagentList display model', () => {
     ]);
     expect(display.hiddenCount).toBe(2);
   });
+
+  it('reserves a single overflowing row for the overflow summary', () => {
+    const display = compactRows({
+      activeProcesses: [{ executionId: 'latexmk', agentName: 'latex build' }],
+      maxRows: 1,
+      processOutput: new Map(),
+      subagents: [
+        { executionId: 'strategy', agentName: 'strategy' },
+        { executionId: 'lean', agentName: 'leanSolver' },
+      ],
+    });
+
+    expect(display.rows).toEqual([]);
+    expect(display.hiddenCount).toBe(3);
+  });
 });
