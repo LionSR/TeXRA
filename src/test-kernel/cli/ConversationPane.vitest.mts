@@ -4,9 +4,9 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   appendStaticTranscriptItems,
-  selectPendingEntriesForViewport,
   sessionHeaderIdentityLine,
-} from '@cli/chat/tui/panes/ConversationPane';
+} from '@cli/chat/tui/panes/StaticConversationTranscript';
+import { selectPendingEntriesForViewport } from '@cli/chat/tui/panes/transcriptViewport';
 import {
   cliState,
   patchStream,

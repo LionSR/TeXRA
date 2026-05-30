@@ -78,8 +78,6 @@ export interface StatusBarDisplay {
   readonly bindings: string;
 }
 
-export const statusLabel = formatCliStatusLabel;
-
 function compactScale(scaled: number, suffix: string): string {
   const rounded = Number.isInteger(scaled)
     ? `${scaled}`
@@ -215,6 +213,10 @@ function statusBarSegmentWidth(segment: StatusBarSegment): number {
   return stringWidth(segment.text) + (segment.badge ? 2 : 0);
 }
 
+export function statusBarSegmentText(segment: StatusBarSegment): string {
+  return segment.text;
+}
+
 function statusBarSegmentsWidth(segments: readonly StatusBarSegment[]): number {
   return segments.reduce(
     (total, segment, index) =>
@@ -243,13 +245,14 @@ export function defaultShortcutModifierLabel(
   return platform === 'darwin' ? 'Option' : 'Alt';
 }
 
-function statusBarBindings(
-  modifierLabel: string,
+export function statusBarBindingsText(
+  subagentControlsAvailable: boolean,
   hasMultipleStreams: boolean,
-  shiftEnterNewline: boolean,
-  ctrlCAction: CtrlCAction,
-): readonly string[] {
-  return [
+  modifierLabel = defaultShortcutModifierLabel(),
+  shiftEnterNewline = false,
+  ctrlCAction: CtrlCAction = 'exit',
+): string {
+  const bindings: string[] = [
     // Stream cycling / numeric focus only do something when there is more
     // than one stream — hide the hints in a plain single-stream chat.
     ...(hasMultipleStreams
@@ -261,23 +264,6 @@ function statusBarBindings(
     '[/api]api',
     shiftEnterNewline ? '[Shift-Enter]newline' : '[Ctrl-J]newline',
     `[Ctrl-C]${ctrlCAction}`,
-  ];
-}
-
-export function statusBarBindingsText(
-  subagentControlsAvailable: boolean,
-  hasMultipleStreams: boolean,
-  modifierLabel = defaultShortcutModifierLabel(),
-  shiftEnterNewline = false,
-  ctrlCAction: CtrlCAction = 'exit',
-): string {
-  const bindings: string[] = [
-    ...statusBarBindings(
-      modifierLabel,
-      hasMultipleStreams,
-      shiftEnterNewline,
-      ctrlCAction,
-    ),
   ];
   if (subagentControlsAvailable) {
     const tasksBinding = `[${modifierLabel}-p]tasks`;
@@ -303,7 +289,7 @@ export function buildStatusBarDisplay(
   if (input.pendingExitHint) {
     left.push({ text: 'Press Ctrl-C again to exit', color: 'yellow' });
   } else {
-    left.push({ text: statusLabel(input.status), color: 'dim' });
+    left.push({ text: formatCliStatusLabel(input.status), color: 'dim' });
     if (
       input.status === STREAM_STATUS.RUNNING &&
       input.elapsedMs !== undefined
@@ -366,10 +352,6 @@ export function buildStatusBarDisplay(
               input.ctrlCAction,
             ),
   };
-}
-
-export function statusBarSegmentText(segment: StatusBarSegment): string {
-  return segment.text;
 }
 
 export interface StatusBarProps {

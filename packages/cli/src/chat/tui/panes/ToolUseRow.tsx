@@ -6,13 +6,7 @@
 
 import { type NormalizedToolUse } from '@shared/schemas';
 
-import {
-  pickToolRenderer,
-  toolUsePatchDisplayLines,
-  UniversalToolRow,
-} from './toolRenderers';
-
-export { toolUsePatchDisplayLines };
+import { pickToolRenderer, UniversalToolRow } from './toolRenderers';
 
 export function ToolUseRow({
   toolUse,

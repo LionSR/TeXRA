@@ -13,20 +13,6 @@ import { ToolUseRow } from './ToolUseRow';
 import { splitTranscriptEntries } from './transcriptEntries';
 import { selectPendingEntriesForViewport } from './transcriptViewport';
 
-// Re-exports for tests and downstream callers — keep this surface stable
-// even as the file is split into focused modules.
-export {
-  appendStaticTranscriptItems,
-  sessionHeaderIdentityLine,
-  StaticConversationTranscript,
-  type StaticTranscriptItem,
-} from './StaticConversationTranscript';
-export { splitTranscriptEntries } from './transcriptEntries';
-export {
-  estimateTranscriptEntryRows,
-  selectPendingEntriesForViewport,
-} from './transcriptViewport';
-
 const DEFAULT_TRANSCRIPT_ROWS = 24;
 const MIN_PENDING_ROWS = 1;
 
