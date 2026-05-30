@@ -344,7 +344,7 @@ export function buildStatusBarDisplay(
     left.push({ text: 'YOLO', badge: true, badgeColor: 'red' });
   }
   if (input.bypass.toolEdit) {
-    left.push({ text: 'BYPASS', badge: true, badgeColor: 'yellow' });
+    left.push({ text: 'AUTO-APPROVE', badge: true, badgeColor: 'yellow' });
   }
 
   return {
