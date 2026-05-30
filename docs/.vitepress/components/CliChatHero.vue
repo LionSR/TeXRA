@@ -23,7 +23,7 @@ const calls = [
   },
   {
     state: 'active',
-    tool: 'str_replace',
+    tool: 'edit_file',
     verb: 'edit',
     path: 'sections/intro.tex',
     effect: 'Tightens the motivating sentence',
@@ -87,7 +87,7 @@ const calls = [
         </li>
       </ul>
 
-      <!-- Inline diff hunk (the change str_replace is making) -->
+      <!-- Inline diff hunk (the change edit_file is making) -->
       <div class="cc-diff">
         <div class="cc-dl cc-dl--del">
           <span class="cc-gut">−</span>
