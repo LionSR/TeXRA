@@ -86,4 +86,25 @@ describe('CLI TodosPlanPanel display model', () => {
     ]);
     expect(display.hiddenCount).toBe(5);
   });
+
+  it('shows pending plan steps before completed context rows', () => {
+    const display = compactTodosPlanRows({
+      maxRows: 2,
+      plan: {
+        summary: 'Finish the remaining proof obligations.',
+        steps: [
+          {
+            title: 'Check the last lemma',
+            description: 'Verify the only unfinished plan item.',
+            files: [],
+            status: TODO_STATUS.PENDING,
+          },
+        ],
+      },
+      todos: [todos[0]],
+    });
+
+    expect(display.rows.map(rowKey)).toEqual(['plan:Check the last lemma']);
+    expect(display.hiddenCount).toBe(2);
+  });
 });
