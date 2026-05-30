@@ -99,6 +99,13 @@ function stopMatchingChild(
   return child.executionId === executionId ? stoppedChild(child) : child;
 }
 
+function isDifferentExecution(
+  child: ActiveChildInfo,
+  executionId: string,
+): boolean {
+  return child.executionId !== executionId;
+}
+
 function harnessMessageEntry(id: string, text: string): ConversationEntry {
   return {
     id,
@@ -292,8 +299,8 @@ function markHarnessInterrupted(): void {
     ...slice,
     status: STREAM_STATUS.STOPPED,
     runStartedAt: undefined,
-    activeSubagents: slice.activeSubagents.map(stoppedChild),
-    activeProcesses: slice.activeProcesses.map(stoppedChild),
+    activeSubagents: [],
+    activeProcesses: [],
     childStreams: slice.childStreams.map(stoppedChild),
     entries: [
       ...slice.entries,
@@ -345,11 +352,11 @@ function markHarnessExecutionStopped(executionId: string): void {
   const messageId = `harness-killed-${executionId}-${Date.now()}`;
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
-    activeSubagents: slice.activeSubagents.map((child) =>
-      stopMatchingChild(child, executionId),
+    activeSubagents: slice.activeSubagents.filter((child) =>
+      isDifferentExecution(child, executionId),
     ),
-    activeProcesses: slice.activeProcesses.map((child) =>
-      stopMatchingChild(child, executionId),
+    activeProcesses: slice.activeProcesses.filter((child) =>
+      isDifferentExecution(child, executionId),
     ),
     childStreams: slice.childStreams.map((child) =>
       stopMatchingChild(child, executionId),
