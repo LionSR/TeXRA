@@ -30,7 +30,6 @@ interface RowProps {
 export interface ChildRow {
   readonly child: ActiveChildInfo;
   readonly index: number;
-  readonly tail?: ProcessOutputTail;
 }
 
 const TAIL_LINES = 4;
@@ -88,7 +87,6 @@ function Row({
 export function compactRows(params: {
   readonly activeProcesses: readonly ActiveChildInfo[];
   readonly maxRows: number;
-  readonly processOutput: ReadonlyMap<string, ProcessOutputTail> | undefined;
   readonly subagents: readonly ActiveChildInfo[];
 }): {
   readonly hiddenCount: number;
@@ -100,7 +98,6 @@ export function compactRows(params: {
     ...params.activeProcesses.map((child, processIndex) => ({
       child,
       index: params.subagents.length + processIndex,
-      tail: params.processOutput?.get(child.executionId),
     })),
   ];
   if (allRows.length <= rowBudget) {
@@ -143,7 +140,6 @@ export function SubagentList(
     const { hiddenCount, rows } = compactRows({
       activeProcesses,
       maxRows: props.maxRows,
-      processOutput,
       subagents,
     });
     return (
@@ -153,14 +149,13 @@ export function SubagentList(
         overflowY="hidden"
         paddingX={1}
       >
-        {rows.map(({ child, index, tail }) => (
+        {rows.map(({ child, index }) => (
           <Row
             key={child.executionId}
             child={child}
             compact
             index={index}
             nowMs={nowMs}
-            tail={tail}
           />
         ))}
         {hiddenCount > 0 ? (
