@@ -59,6 +59,7 @@ import {
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 import { generateExecutionId } from '@utils/core/executionId';
+import { truncateSummary } from '@utils/text/stringUtils';
 
 import { App } from './App';
 import { AgentListForm } from './forms/AgentListForm';
@@ -104,6 +105,15 @@ export interface RunChatInit {
   readonly agentOverride?: string;
   /** `--model` override from the CLI; falls through `resolveChatDefaults`. */
   readonly modelOverride?: string;
+}
+
+const QUEUED_FOLLOW_UP_NOTICE_LENGTH = 96;
+
+function formatQueuedFollowUpNotice(line: string): string {
+  return `Queued follow-up: ${truncateSummary(
+    line,
+    QUEUED_FOLLOW_UP_NOTICE_LENGTH,
+  )}`;
 }
 
 export interface ClearableTuiSessionState {
@@ -872,6 +882,10 @@ export async function runChat(
     // user submits before `onStreamResolved` populates `session.streamId`.
     // p-queue serializes work but doesn't have an "await predicate" primitive,
     // so the task itself waits for the stream id via a tiny poll loop.
+    appendLocalAssistantTranscript(
+      formatQueuedFollowUpNotice(line),
+      childFollowUpTarget ?? session.streamId,
+    );
     void followUpQueue.add(async () => {
       let followUpTarget = childFollowUpTarget;
       while (

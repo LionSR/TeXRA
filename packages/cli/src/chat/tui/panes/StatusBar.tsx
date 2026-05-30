@@ -11,6 +11,7 @@ import {
   type ConversationProgress,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { truncateSummary } from '@utils/text/stringUtils';
 
 import { approvalQueueDepth } from '../state/approvalQueue';
 import { terminalCapabilities } from '../state/terminalCapabilities';
@@ -40,7 +41,7 @@ export interface StatusBarDisplayInput {
   readonly pendingExitHint: boolean;
   readonly pendingExitResumeId: string | undefined;
   readonly bypass: BypassState;
-  readonly queuedFollowUps: number;
+  readonly queuedFollowUpMessages: readonly string[];
   readonly usage: TokenUsageStats | undefined;
   readonly conversation: ConversationProgress | undefined;
   readonly activeSubagents: number;
@@ -129,6 +130,21 @@ function roundSegment(
   return turns > 0 ? { text: `r${turns}`, color: 'dim' } : undefined;
 }
 
+const QUEUED_FOLLOW_UP_PREVIEW_LENGTH = 48;
+
+export function queuedFollowUpsSummary(
+  messages: readonly string[],
+): string | undefined {
+  if (messages.length === 0) return undefined;
+  const preview = truncateSummary(
+    messages[0] ?? '',
+    QUEUED_FOLLOW_UP_PREVIEW_LENGTH,
+  );
+  return messages.length === 1
+    ? `queued: ${preview}`
+    : `queued ${messages.length}: ${preview}`;
+}
+
 export function defaultShortcutModifierLabel(
   platform: NodeJS.Platform = process.platform,
 ): string {
@@ -190,7 +206,7 @@ export function buildStatusBarDisplay(
       input.elapsedMs !== undefined
     ) {
       left.push({
-        text: `${Math.floor(input.elapsedMs / 1000)}s`,
+        text: `${Math.floor(Math.max(0, input.elapsedMs) / 1000)}s`,
         color: 'dim',
       });
     }
@@ -227,10 +243,7 @@ export function buildStatusBarDisplay(
 
   return {
     left,
-    right:
-      input.queuedFollowUps > 0
-        ? `queued: ${input.queuedFollowUps}`
-        : undefined,
+    right: queuedFollowUpsSummary(input.queuedFollowUpMessages),
     bindings:
       input.pendingExitHint && input.pendingExitResumeId
         ? `Resume this session with: texra --resume ${input.pendingExitResumeId}`
@@ -277,7 +290,7 @@ export function StatusBar(): React.JSX.Element {
     pendingExitHint,
     pendingExitResumeId,
     bypass: slice?.bypass ?? NO_BYPASS,
-    queuedFollowUps: slice?.queuedFollowUps ?? 0,
+    queuedFollowUpMessages: slice?.queuedFollowUpMessages ?? [],
     usage: slice?.usage,
     conversation: slice?.conversation,
     activeSubagents: slice?.activeSubagents.length ?? 0,
@@ -313,7 +326,11 @@ export function StatusBar(): React.JSX.Element {
             ),
           )}
         </Box>
-        {display.right ? <Text dimColor>{display.right}</Text> : null}
+        {display.right ? (
+          <Text dimColor wrap="truncate-end">
+            {display.right}
+          </Text>
+        ) : null}
       </Box>
       <Box paddingX={1}>
         <Text dimColor wrap="truncate-end">
