@@ -80,7 +80,7 @@ const LegacyManifestSchema = z
     turns: z.array(ExternalInquiryTurnRecordSchema),
   })
   .transform(
-    (raw): z.infer<typeof CanonicalManifestSchema> => ({
+    (raw): ExternalInquiryThreadManifest => ({
       threadId: raw.threadId,
       parentStreamId: null,
       status: 'answered' as const,
@@ -449,8 +449,7 @@ export async function recordAnswerForOpenTurn(params: {
     if (existing.status !== 'open') return null;
     if (existing.turns.length === 0) return null;
 
-    const lastTurn = existing.turns.at(-1);
-    if (!lastTurn) return null;
+    const lastTurn = existing.turns.at(-1)!;
     if (lastTurn.answer) return null;
 
     const timestamp = new Date().toISOString();
@@ -544,8 +543,7 @@ export async function persistOpenTurnDraft(params: {
     if (!existing || existing.status !== 'open' || existing.turns.length === 0)
       return;
 
-    const lastTurn = existing.turns.at(-1);
-    if (!lastTurn) return;
+    const lastTurn = existing.turns.at(-1)!;
     if (lastTurn.answer) return;
 
     const nextTurn: ExternalInquiryTurnRecord = {

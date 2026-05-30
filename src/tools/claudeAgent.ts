@@ -54,7 +54,6 @@ import type {
   StreamTabId,
   ExecutionId,
   StorageKey,
-  StreamStatus,
   TokenUsageStats,
   ToolUseLog,
 } from '@shared/schemas';
@@ -66,7 +65,6 @@ import {
   requestBashApproval,
   buildBashApprovalRejectedResult,
 } from '@tools/approval/bashApproval';
-import { formatDuration } from '@utils/core';
 import { generateExecutionId } from '@utils/core/executionId';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
@@ -78,6 +76,11 @@ import {
   findClaudeBinaryPath,
 } from './claudeAgentImport';
 import { createChildStream } from './childStream';
+import {
+  isCleanInterruption,
+  isLoopOwnedStatus,
+  logTurnSummary,
+} from './agentCliShared';
 import {
   buildClaudeToolUseLog,
   buildClaudeUsageStats,
@@ -198,22 +201,6 @@ class ClaudeAgentSession implements IInterruptible {
   }
 }
 
-function isAbortError(err: unknown): boolean {
-  return err instanceof Error && err.name === 'AbortError';
-}
-
-function isCleanInterruption(
-  err: unknown,
-  signal: AbortSignal,
-  session: ClaudeAgentSession,
-): boolean {
-  return signal.aborted || session.isInterrupted() || isAbortError(err);
-}
-
-function isLoopOwnedStatus(status: StreamStatus | undefined): boolean {
-  return status === STREAM_STATUS.WAITING || status === STREAM_STATUS.RUNNING;
-}
-
 function finalizeClaudeAgentLoopStatus(
   childStreamId: StreamTabId,
   runtimeHost: AgentRuntimeHost,
@@ -302,19 +289,6 @@ function publishClaudeAgentStreamUsage(
     executionId,
     usage,
   });
-}
-
-function logTurnSummary(
-  logger: AgentTrace,
-  wallTimeMs: number,
-  usage: TurnResult['usage'],
-): void {
-  logger.info(`Turn completed in ${formatDuration(wallTimeMs)}`);
-  if (usage) {
-    logger.info(
-      `Tokens: ${usage.input_tokens ?? 0} in / ${usage.output_tokens ?? 0} out`,
-    );
-  }
 }
 
 // ============================================================================

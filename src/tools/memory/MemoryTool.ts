@@ -111,21 +111,19 @@ Directory listings are paginated — use offset/limit to page through results (d
 Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies, pitfalls, best practices). Pinned memories are always loaded at session start. Use \`unpin\` to remove the pinned status. Maximum ${MAX_PINNED_MEMORIES} pinned memories allowed.`,
   schema: MemoryToolInputSchema,
 }) {
-  /**
-   * Normalize a raw display path into a `{ display, storage }` pair at the
-   * dispatch boundary so ops never need to call `resolveMemoryPath` themselves.
-   * Throws ToolError if the path is outside `/memories`.
-   */
-  private locate(rawPath: string): MemoryLocation {
-    const storage = this.resolveMemoryPath(rawPath);
-    return { display: toDisplayPath(storage), storage };
-  }
-
   protected async execute(input: MemoryToolInput): Promise<ToolResult> {
+    // Normalize a raw display path into a `{ display, storage }` pair at the
+    // dispatch boundary so ops never need to call `resolveMemoryPath`
+    // themselves. Throws ToolError if the path is outside `/memories`.
     const locate = (
       raw: string | undefined | null,
       field: string,
-    ): MemoryLocation => this.locate(requireField(raw, field, input.command));
+    ): MemoryLocation => {
+      const storage = this.resolveMemoryPath(
+        requireField(raw, field, input.command),
+      );
+      return { display: toDisplayPath(storage), storage };
+    };
 
     switch (input.command) {
       case 'view':
