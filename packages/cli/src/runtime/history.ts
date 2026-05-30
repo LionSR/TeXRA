@@ -22,6 +22,8 @@ import { StorageFS } from '@utils/files';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 
 const HISTORY_FILE_SCAN_DEPTH = 2;
+const CONVERSATION_PREVIEW_MESSAGE_LIMIT = 3;
+const CONVERSATION_PREVIEW_CONTENT_LIMIT = 4000;
 
 const KV_FILES = new Set([
   'meta.json',
@@ -49,8 +51,21 @@ export interface CliHistoryDetails {
   readonly config: AgentConfig | null;
   readonly resultMeta: ResultMeta | null;
   readonly report: string | null;
+  readonly conversationPreview: CliHistoryConversationPreview | null;
   readonly files: readonly CliHistoryFile[];
   readonly hasFlowRecord: boolean;
+}
+
+export interface CliHistoryConversationPreview {
+  readonly messageCount: number;
+  readonly messages: readonly CliHistoryConversationPreviewMessage[];
+}
+
+export interface CliHistoryConversationPreviewMessage {
+  readonly index: number;
+  readonly role: string;
+  readonly content: string;
+  readonly truncated: boolean;
 }
 
 export interface CliHistoryFile {
@@ -82,23 +97,26 @@ export async function readCliHistoryDetails(
   id: ExecutionId,
 ): Promise<CliHistoryDetails | null> {
   const store = getExecutionStore(id);
-  const [meta, config, resultMeta, report, files, hasFlowRecord] =
+  const [meta, config, resultMeta, report, conversation, files, hasFlowRecord] =
     await Promise.all([
       store.readMeta(),
       store.readConfig(),
       store.readResultMeta(),
       store.readReport(),
+      store.readConversation(),
       listGeneratedFiles(id),
       store.exists(flowKey(id)),
     ]);
+  const conversationPreview = createConversationPreview(conversation);
 
-  if (!meta && !config && !hasFlowRecord) return null;
+  if (!meta && !config && !conversationPreview && !hasFlowRecord) return null;
   return {
     id,
     meta,
     config,
     resultMeta,
     report,
+    conversationPreview,
     files,
     hasFlowRecord,
   };
@@ -195,6 +213,8 @@ export function formatCliHistoryDetailsText(
   }
   if (details.report) {
     lines.push('', 'Report:', details.report);
+  } else if (details.conversationPreview) {
+    lines.push('', formatConversationPreview(details.conversationPreview));
   }
   lines.push('', 'Config:', JSON.stringify(config ?? {}, null, 2));
   lines.push('', `Files (${details.files.length}):`);
@@ -235,6 +255,98 @@ function isHistoryKvFile(name: string): boolean {
 function formatCliHistoryFile(file: CliHistoryFile): string {
   const kind = file.isDirectory ? '<dir>' : `${file.size}`;
   return `${kind}\t${file.path}`;
+}
+
+function createConversationPreview(
+  conversation: readonly unknown[] | null,
+): CliHistoryConversationPreview | null {
+  if (!conversation?.length) return null;
+  const messages = conversation
+    .map((message, i) => toConversationPreviewMessage(message, i + 1))
+    .filter((message) => message.content.trim().length > 0);
+  if (!messages.length) return null;
+
+  const lastAssistant = messages.findLast(
+    (message) => message.role === 'assistant',
+  );
+  const selected = lastAssistant
+    ? [lastAssistant]
+    : messages.slice(-CONVERSATION_PREVIEW_MESSAGE_LIMIT);
+
+  return {
+    messageCount: conversation.length,
+    messages: selected,
+  };
+}
+
+function toConversationPreviewMessage(
+  message: unknown,
+  index: number,
+): CliHistoryConversationPreviewMessage {
+  const raw = isRecord(message) ? message : {};
+  const role = typeof raw.role === 'string' ? raw.role : 'unknown';
+  const content = formatConversationMessageContent(raw.content);
+  const truncated = content.length > CONVERSATION_PREVIEW_CONTENT_LIMIT;
+  return {
+    index,
+    role,
+    content: truncated
+      ? `${content.slice(0, CONVERSATION_PREVIEW_CONTENT_LIMIT).trimEnd()}\n...[truncated]`
+      : content,
+    truncated,
+  };
+}
+
+function formatConversationPreview(
+  preview: CliHistoryConversationPreview,
+): string {
+  const shown =
+    preview.messages.length === 1
+      ? `${preview.messages[0]?.role ?? 'message'} message ${preview.messages[0]?.index ?? '?'}`
+      : `${preview.messages.length} recent messages`;
+  const lines = [
+    `Conversation (${preview.messageCount} messages; showing ${shown}):`,
+  ];
+  for (const message of preview.messages) {
+    lines.push('', `[${message.role} #${message.index}]`, message.content);
+  }
+  return lines.join('\n');
+}
+
+function formatConversationMessageContent(content: unknown): string {
+  if (content == null) return '';
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content.map(formatConversationContentBlock).join('\n').trim();
+  }
+  return formatJsonish(content);
+}
+
+function formatConversationContentBlock(block: unknown): string {
+  if (typeof block === 'string') return block;
+  if (!isRecord(block)) return formatJsonish(block);
+  if (typeof block.text === 'string') return block.text;
+
+  switch (block.type) {
+    case 'tool_use':
+      return `[tool_use: ${String(block.name ?? 'unknown')}]`;
+    case 'tool_result':
+      return `[tool_result: ${formatConversationMessageContent(block.content)}]`;
+    default:
+      return formatJsonish(block);
+  }
+}
+
+function formatJsonish(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? '';
+  } catch {
+    return String(value);
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 async function listGeneratedFiles(id: ExecutionId): Promise<CliHistoryFile[]> {
