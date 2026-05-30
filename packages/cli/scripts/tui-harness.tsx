@@ -13,6 +13,13 @@ import {
 } from '@shared/schemas';
 
 import { App } from '../src/chat/tui/App';
+import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
+import {
+  listSlashCommands,
+  parseSlashInput,
+  type SlashCommand,
+} from '../src/chat/tui/commands/slashRegistry';
+import { formatApprovalPolicyForCli } from '../src/chat/tui/forms/ApprovalPolicyForm';
 import {
   cliState,
   patchStream,
@@ -25,14 +32,21 @@ import {
 } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
 import { enqueueApproval } from '../src/chat/tui/state/approvalQueue';
+import {
+  CLI_APPROVAL_POLICIES,
+  type CliApprovalPolicy,
+} from '../src/runtime/approvalPolicy';
 
 const STREAM_ID = 'harness-stream-1';
+const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
+const HARNESS_YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
+let harnessApprovalPolicy: CliApprovalPolicy = 'ask';
 const EDIT_APPROVAL_DELAY_MS = Number(
   process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
 );
@@ -339,6 +353,98 @@ function appendHarnessAssistantTranscript(text: string): void {
   }));
 }
 
+function findRegisteredSlashCommand(name: string): SlashCommand | undefined {
+  const lower = name.toLowerCase();
+  return listSlashCommands().find(
+    (command) =>
+      command.name.toLowerCase() === lower ||
+      command.aliases?.some((alias) => alias.toLowerCase() === lower) === true,
+  );
+}
+
+function formatHarnessSlashHelp(): string {
+  return listSlashCommands()
+    .map((command) => `/${command.name} - ${command.description}`)
+    .join('\n');
+}
+
+function parseHarnessApprovalPolicy(
+  input: string,
+): CliApprovalPolicy | undefined {
+  const normalized = input.trim().toLowerCase();
+  if ((CLI_APPROVAL_POLICIES as readonly string[]).includes(normalized)) {
+    return normalized as CliApprovalPolicy;
+  }
+  switch (normalized) {
+    case 'default':
+    case 'interactive':
+    case 'on':
+      return 'ask';
+    case 'off':
+    case 'deny':
+      return 'never';
+    case 'auto':
+    case 'full':
+    case 'danger':
+      return 'yolo';
+    default:
+      return undefined;
+  }
+}
+
+function setHarnessApprovalPolicy(policy: CliApprovalPolicy): void {
+  harnessApprovalPolicy = policy;
+  appendHarnessAssistantTranscript(
+    `Approval mode set to ${formatApprovalPolicyForCli(policy)}.`,
+  );
+}
+
+function openHarnessSlashForm(
+  command: SlashCommand,
+  remainder: string,
+): boolean {
+  const Form = command.formComponent;
+  if (!Form) return false;
+  cliState.activeForm.set({
+    commandName: command.name,
+    render: (close, availableRows) => (
+      <Form
+        availableRows={availableRows}
+        remainder={remainder.trimStart()}
+        onDone={() => close()}
+      />
+    ),
+  });
+  return true;
+}
+
+function openHarnessApprovalPolicyForm(remainder: string): boolean {
+  const command = findRegisteredSlashCommand('approval');
+  return command ? openHarnessSlashForm(command, remainder) : false;
+}
+
+function applyHarnessApprovalPolicySelection(
+  input: string,
+  usage: string,
+): void {
+  const normalized = input.trim().toLowerCase();
+  if (!normalized || normalized === 'status') {
+    if (openHarnessApprovalPolicyForm(input)) return;
+  }
+
+  const policy = parseHarnessApprovalPolicy(normalized);
+  if (!policy) {
+    appendHarnessAssistantTranscript(usage);
+    return;
+  }
+
+  setHarnessApprovalPolicy(policy);
+}
+
+function formatHarnessError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function markHarnessExecutionStopped(executionId: string): void {
   const parentSlice = cliState.streams.get().get(STREAM_ID);
   if (!parentSlice) return;
@@ -390,8 +496,11 @@ function markHarnessExecutionStopped(executionId: string): void {
 }
 
 function handleHarnessSubmit(line: string): void {
-  if (line.trim() !== '/status') return;
+  if (handleHarnessSlashCommand(line)) return;
+  appendHarnessAssistantTranscript(`Harness received: ${line}`);
+}
 
+function appendHarnessStatus(): void {
   const meta = cliState.sessionMeta.get();
   const streamId = cliState.activeStreamId.get() ?? STREAM_ID;
   const slice = cliState.streams.get().get(streamId);
@@ -400,12 +509,75 @@ function handleHarnessSubmit(line: string): void {
       agent: meta.agent,
       model: meta.model,
       api: meta.apiMode,
-      approval: 'ask',
+      approval: formatApprovalPolicyForCli(harnessApprovalPolicy),
       status: slice?.status ?? 'not started',
       queuedFollowUpMessages: readQueuedFollowUpMessagesForStatus(streamId),
     }),
   );
 }
+
+function handleHarnessSlashCommand(line: string): boolean {
+  const parsed = parseSlashInput(line);
+  if (!parsed) return false;
+
+  const commandName = parsed.name.toLowerCase();
+  const rest = parsed.remainder.trim();
+  switch (commandName) {
+    case 'help':
+      appendHarnessAssistantTranscript(formatHarnessSlashHelp());
+      return true;
+    case 'status':
+      appendHarnessStatus();
+      return true;
+    case 'approval':
+      applyHarnessApprovalPolicySelection(rest, HARNESS_APPROVAL_USAGE);
+      return true;
+    case 'yolo':
+      applyHarnessApprovalPolicySelection(rest || 'yolo', HARNESS_YOLO_USAGE);
+      return true;
+    default: {
+      const command = findRegisteredSlashCommand(commandName);
+      if (!command) {
+        appendHarnessAssistantTranscript(`Unknown command: /${parsed.name}`);
+        return true;
+      }
+      if (openHarnessSlashForm(command, rest)) return true;
+      appendHarnessAssistantTranscript(
+        `/${command.name} is registered but has no harness action.`,
+      );
+      return true;
+    }
+  }
+}
+
+registerBuiltinSlashCommands({
+  canSelectAgent: () => false,
+  canSelectModel: () => false,
+  getApprovalPolicy: () => harnessApprovalPolicy,
+  onApprovalPolicySelect: setHarnessApprovalPolicy,
+  onApiModeSelect: (apiMode) => {
+    cliState.sessionMeta.set({ ...cliState.sessionMeta.get(), apiMode });
+    appendHarnessAssistantTranscript(`API mode set to ${apiMode}.`);
+  },
+  onMemorySelect: (storagePath) => {
+    appendHarnessAssistantTranscript(
+      `Harness memory selected: ${storagePath}.`,
+    );
+  },
+  onMemoryError: (error) => {
+    appendHarnessAssistantTranscript(
+      `Memory command failed: ${formatHarnessError(error)}`,
+    );
+  },
+  onResumeSelect: (id) => {
+    appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
+  },
+  onResumeError: (error) => {
+    appendHarnessAssistantTranscript(
+      `Resume command failed: ${formatHarnessError(error)}`,
+    );
+  },
+});
 
 const ink = render(
   <App
