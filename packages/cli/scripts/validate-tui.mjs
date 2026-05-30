@@ -119,6 +119,7 @@ const SCENARIOS = [
       'Use foreground panel shortcuts',
     ],
     unexpect: ['[Alt-p]tasks', '[Option-p]tasks', '[/model]models'],
+    maxBlankLinesBetween: [{ from: '╚', to: 'Tip:', max: 1 }],
   },
   {
     name: 'bash-approval-approve-session',
@@ -171,6 +172,7 @@ const SCENARIOS = [
       'k kill',
       'Esc close',
     ],
+    maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
   },
   {
     name: 'empty-task-picker',
@@ -186,6 +188,7 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: ['Enter view', 'k kill', 'navigate'],
+    maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
   },
   {
     name: 'task-picker-parent-fallback',
@@ -378,6 +381,19 @@ function frameTail(frame) {
   return lines.slice(-Math.min(lines.length, ROWS)).join('\n');
 }
 
+function blankLinesBetween(frame, from, to) {
+  const lines = frame.split('\n');
+  const toIndex = lines.findLastIndex((line) => line.includes(to));
+  if (toIndex < 0) return undefined;
+  const fromIndex = lines
+    .slice(0, toIndex)
+    .findLastIndex((line) => line.includes(from));
+  if (fromIndex < 0) return undefined;
+  return lines
+    .slice(fromIndex + 1, toIndex)
+    .filter((line) => line.trim().length === 0).length;
+}
+
 function snapshotFileName(index, name) {
   const prefix = String(index + 1).padStart(2, '0');
   return `${prefix}-${name.replace(/[^a-z0-9._-]+/gi, '-')}.txt`;
@@ -482,6 +498,18 @@ async function runScenario(scenario) {
     failures.push(`expected text missing: ${JSON.stringify(t)}`);
   for (const t of present)
     failures.push(`unexpected text present: ${JSON.stringify(t)}`);
+  for (const check of scenario.maxBlankLinesBetween ?? []) {
+    const actual = blankLinesBetween(frame, check.from, check.to);
+    if (actual === undefined) {
+      failures.push(
+        `could not find compactness markers: ${JSON.stringify(check.from)} → ${JSON.stringify(check.to)}`,
+      );
+    } else if (actual > check.max) {
+      failures.push(
+        `too many blank lines between ${JSON.stringify(check.from)} and ${JSON.stringify(check.to)}: ${actual} > ${check.max}`,
+      );
+    }
+  }
   if (scenario.expectExit && !exitedCleanly) {
     const exitDetails = exited
       ? ` (exitCode ${exited.exitCode}, signal ${exited.signal || 'none'})`
