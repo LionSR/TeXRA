@@ -24,7 +24,7 @@ describe('CLI diff display', () => {
     expect(lines).toHaveLength(4);
     expect(lines.at(-1)).toMatchObject({
       kind: 'overflow',
-      text: expect.stringContaining('more diff rows'),
+      text: expect.stringContaining('more rows'),
     });
   });
 
@@ -40,11 +40,11 @@ describe('CLI diff display', () => {
     expect(lines).toHaveLength(4);
     expect(lines[0]).toMatchObject({
       kind: 'overflow',
-      text: '... 2 previous diff rows',
+      text: '... 2 previous rows',
     });
     expect(lines.at(-1)).toMatchObject({
       kind: 'overflow',
-      text: expect.stringContaining('more diff rows'),
+      text: expect.stringContaining('more rows'),
     });
   });
 
@@ -70,7 +70,7 @@ describe('CLI diff display', () => {
     expect(lines[0]?.kind).not.toBe('overflow');
     expect(lines[1]).toMatchObject({
       kind: 'overflow',
-      text: expect.stringContaining('more diff rows'),
+      text: expect.stringContaining('more rows'),
     });
   });
 
@@ -101,8 +101,9 @@ describe('CLI diff display', () => {
     expect(lines).toHaveLength(4);
     expect(lines.at(-1)).toMatchObject({
       kind: 'overflow',
-      text: expect.stringContaining('more diff rows'),
+      text: expect.stringContaining('more rows'),
     });
+    expect(lines.at(-1)?.text).not.toContain('diff rows');
   });
 
   it('keeps wrapped overflow markers to one visual row at narrow widths', () => {
