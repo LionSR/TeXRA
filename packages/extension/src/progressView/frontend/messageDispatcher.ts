@@ -91,15 +91,10 @@ const handlers: HandlerRegistry = {
 export function dispatchMessage(
   message: ProgressViewOutboundMessage,
   ctx: MessageHandlerContext,
-): boolean {
+): void {
   const handler = handlers[message.command] as
     | TypedHandler<typeof message>
     | undefined;
 
-  if (handler) {
-    handler(message, ctx);
-    return true;
-  }
-
-  return false;
+  handler?.(message, ctx);
 }

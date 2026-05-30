@@ -441,7 +441,7 @@ export class LaTeXTab extends LitElement {
    * manager is either detected on the system or is `null` (always available).
    */
   private getInstallCommand(dep: DependencyInfo): InstallCommand | null {
-    const platform = this.settings.platform as OSPlatform;
+    const platform = this.settings.platform;
     const commands = DEPENDENCY_INSTALL_COMMANDS[dep.key];
     if (!commands) return null;
     const options = commands[platform];
@@ -481,7 +481,7 @@ export class LaTeXTab extends LitElement {
   private renderDependencyCard(dep: DependencyInfo): TemplateResult {
     const installed = this.settings[dep.key];
     const expanded = this.expandedGuides.has(dep.key);
-    const platform = this.settings.platform as OSPlatform;
+    const platform = this.settings.platform;
     const guideText = dep.installGuide?.[platform] ?? dep.installGuide?.linux;
     const detectedPaths = installed ? this.getDetectedPaths(dep) : [];
     const installCmd = !installed ? this.getInstallCommand(dep) : null;
@@ -582,7 +582,7 @@ export class LaTeXTab extends LitElement {
    * that isn't installed yet (e.g. Homebrew on macOS, Scoop on Windows).
    */
   private renderPrerequisiteHint(): TemplateResult | typeof nothing {
-    const platform = this.settings.platform as OSPlatform;
+    const platform = this.settings.platform;
     const pm = this.settings.packageManager;
 
     // macOS without Homebrew — installing it unlocks every brew command
