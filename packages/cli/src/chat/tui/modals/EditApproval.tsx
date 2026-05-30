@@ -67,13 +67,11 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   }, [maxScrollOffset]);
 
   useInput(
-    (input, key) => {
-      if (key.downArrow || input === 'j') scrollTo((current) => current + 1);
-      else if (key.upArrow || input === 'k') scrollTo((current) => current - 1);
+    (_input, key) => {
+      if (key.downArrow) scrollTo((current) => current + 1);
+      else if (key.upArrow) scrollTo((current) => current - 1);
       else if (key.pageDown) scrollTo((current) => current + pageRows);
       else if (key.pageUp) scrollTo((current) => current - pageRows);
-      else if (input === 'g') scrollTo(0);
-      else if (input === 'G') scrollTo(maxScrollOffset);
     },
     { isActive: diffScrollable },
   );
@@ -104,7 +102,6 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
           hints={[
             { key: '↑/↓', action: 'scroll diff' },
             { key: 'PgUp/PgDn', action: 'page' },
-            { key: 'g/G', action: 'top/bottom' },
           ]}
         />
       ) : null}

@@ -156,7 +156,7 @@ export function maxDiffScrollOffset(
   totalLines: number,
   maxDisplayLines: number,
 ): number {
-  if (maxDisplayLines <= 0 || totalLines <= maxDisplayLines) return 0;
+  if (maxDisplayLines <= 2 || totalLines <= maxDisplayLines) return 0;
   return Math.max(0, totalLines - Math.max(1, maxDisplayLines - 1));
 }
 
@@ -183,12 +183,8 @@ export function scrollBoundedDiffDisplayLines(
   );
   const hiddenBefore = offset;
   const reserveBefore = hiddenBefore > 0 ? 1 : 0;
-  const provisionalVisible = Math.max(0, maxDisplayLines - reserveBefore);
-  const hiddenAfterProvisional = Math.max(
-    0,
-    lines.length - (offset + provisionalVisible),
-  );
-  const reserveAfter = hiddenAfterProvisional > 0 ? 1 : 0;
+  const contentSlotsWithoutAfter = Math.max(0, maxDisplayLines - reserveBefore);
+  const reserveAfter = offset + contentSlotsWithoutAfter < lines.length ? 1 : 0;
   const visibleCount = Math.max(
     0,
     maxDisplayLines - reserveBefore - reserveAfter,
