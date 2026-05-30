@@ -3,11 +3,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  createRunTrace,
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
-
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import {
   cliState,
@@ -62,7 +62,6 @@ import {
   moveLocalTranscriptToStream,
 } from '@cli/chat/tui/state/transcript';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
-import { createRunTrace } from '@logger';
 import {
   MESSAGE_TYPES,
   STREAM_STATUS,
