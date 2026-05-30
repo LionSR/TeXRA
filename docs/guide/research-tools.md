@@ -84,15 +84,14 @@ Add this arXiv paper to my Zotero library.
 <ToolCallPanel
   title="zotero"
   icon="book"
-  tool="zotero"
   :calls="[
-    { state: 'done', verb: 'search', target: 'graph neural networks', effect: 'Finds matching items in your library' },
-    { state: 'done', verb: 'add', target: 'arxiv:2401.12345', effect: 'Adds the paper to your Zotero library' },
-    { state: 'active', verb: 'export', target: 'references.bib', effect: 'Writes the selected items as BibTeX' },
+    { state: 'done', verb: 'zotero_search', target: 'graph neural networks', effect: 'Finds matching items in your library' },
+    { state: 'done', verb: 'zotero_add', target: 'arxiv:2401.12345', effect: 'Adds the paper to your Zotero library' },
+    { state: 'active', verb: 'zotero_export', target: 'references.bib', effect: 'Writes the selected items as BibTeX' },
   ]"
 />
 
-<p class="hero-caption">How the <code>search</code> agent drives the <code>zotero</code> tool across one conversation — search → add → export — as the calls surface in the Progress view.</p>
+<p class="hero-caption">How the <code>search</code> agent drives the <code>zotero_*</code> tools across one conversation — search → add → export — as the calls surface in the Progress view.</p>
 
 ::: tip Default Bibliography Path
 Set `texra.bib.defaultPath` in your VS Code settings (<wa-icon library="texra" name="gear"></wa-icon>) to specify where Zotero exports land by default, so agents always know where to save bibliography entries.
