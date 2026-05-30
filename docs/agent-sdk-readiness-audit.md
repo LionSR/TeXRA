@@ -349,6 +349,29 @@ hold without change.** TeXRA remains well-architected and SDK-aligned; no struct
 gaps surfaced. The applied items (§2.1, §2.2, §3.4, §3.2-partial, §7 `legacyCoordinators`)
 remain in place. Verification of the still-open items and two methodology corrections:
 
+**Applied in this PR — §7 behavioral gates → capability flags (behavior-preserving):**
+
+The two _behavioral_ provider-identity gates are now capability-driven, matching the
+existing handler-level boolean pattern (`canProcessToolResultAttachments`,
+`supportsManualCompaction`). Two readonly getters were added to `IModelHandler` /
+base `ModelHandler`:
+
+- `requiresBatchedParallelToolResults` — replaces the
+  `isGoogle || isDeepSeek || isKimi || isMiniMax` gate at `ToolUseCycleFlow.ts`
+  (was `:809-812`). Overridden `=> true` in the Google, DeepSeek, Kimi, and MiniMax
+  handlers; base returns `false`.
+- `supportsReasoningLevelOverride` — replaces
+  `supportsReasoningEffort || (isDeepSeek && supportsReasoning)` at `ModelFactory.ts:71-72`.
+  Base returns `capabilities.supportsReasoningEffort`; DeepSeek overrides to also honor
+  `supportsReasoning`.
+
+Both are exact equivalents of the prior expressions (verified by case analysis over
+all providers) and dispatch decisions no longer read provider identity. The
+`isGoogle`/`isDeepSeek`/`isKimi`/`isMiniMax` getters now have **only display-flag
+callers** (`AgentLaunchContext.ts:264`, `userVars.ts:169`), per the audit's intended
+end state. Verified: root + test-kernel `typecheck` green; ModelFactory routing and
+tool-use vitest suites (35 tests) green.
+
 **Pending items re-confirmed present (line numbers refreshed where drifted):**
 
 - **§2.6** — `src/agent/modelHandlers/modelHandlerValidation.ts` still sits in the
@@ -362,11 +385,10 @@ remain in place. Verification of the still-open items and two methodology correc
   at `:164`. The single-source-of-truth consolidation onto `AgentTrace` is still open.
 - **§5** — no first-class `delegateTo(...)` primitive yet (`grep delegateTo src/**` empty);
   delegation remains a tool call inside the LLM loop. Subagent mechanism otherwise intact.
-- **§7** — provider-identity getters `isAnthropic`/`isOpenai`/`isGoogle`/`isDeepSeek`/
-  `isKimi`/`isMiniMax` still on `ModelHandler.ts:399-426`, and the two **behavioral**
-  gates still dispatch on identity rather than capability: `ToolUseCycleFlow.ts:810-812`
-  (`isDeepSeek || … || isMiniMax`) and `ModelFactory.ts:72` (`isDeepSeek && …`). Converting
-  just those two to `capabilities.*` flags remains the low-risk SDK-alignment win.
+- **§7** — **the two behavioral gates are now converted** (see "Applied in this PR"
+  above). The provider-identity getters `isAnthropic`/`isOpenai`/`isGoogle`/`isDeepSeek`/
+  `isKimi`/`isMiniMax` remain on `ModelHandler.ts` but are now used only as display
+  flags, which the audit explicitly endorsed keeping as an allow-list.
 
 **Two false positives caught this pass (recorded so they are not re-flagged):**
 

@@ -67,10 +67,7 @@ const PROVIDER_HANDLERS: Record<ModelProvider, ProviderHandlerLoader | null> = {
  * user has set an override.
  */
 function withReasoningOverride<T extends ModelHandler>(handler: T): T {
-  const supportsReasoningOverride =
-    handler.capabilities.supportsReasoningEffort ||
-    (handler.isDeepSeek && handler.capabilities.supportsReasoning);
-  if (!supportsReasoningOverride) return handler;
+  if (!handler.supportsReasoningLevelOverride) return handler;
 
   const level = getGlobalState().get<Record<string, string>>(
     GlobalStateKey.REASONING_LEVELS,
