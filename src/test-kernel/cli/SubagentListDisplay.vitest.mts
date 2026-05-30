@@ -4,7 +4,10 @@ import {
   CHILD_STATUS_MARKER,
   childStatusColor,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
-import { compactRows } from '@cli/chat/tui/panes/SubagentList';
+import {
+  compactChildRowText,
+  compactRows,
+} from '@cli/chat/tui/panes/SubagentList';
 import type { ActiveChildInfo } from '@shared/schemas';
 
 describe('CLI SubagentList display model', () => {
@@ -79,5 +82,26 @@ describe('CLI SubagentList display model', () => {
       'latexmk',
     ]);
     expect(display.hiddenCount).toBe(0);
+  });
+
+  it('summarizes the latest process output in compact rows', () => {
+    expect(
+      compactChildRowText({
+        child: {
+          executionId: 'latexmk',
+          agentName: 'latex build',
+          status: 'running',
+          elapsed: '19sec',
+        },
+        nowMs: Date.now(),
+        tail: {
+          stdout:
+            'latexmk: applying rule pdflatex\nmain.tex: Proof sketch needs one missing reference',
+          stderr: '',
+        },
+      }),
+    ).toBe(
+      'latex build running · 19sec · main.tex: Proof sketch needs one missing reference',
+    );
   });
 });
