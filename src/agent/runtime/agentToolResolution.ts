@@ -97,29 +97,26 @@ export async function resolveAgentTools({
   const toolConfigs = Array.isArray(tools) ? tools : [];
   let delegationTrimmed = false;
 
-  const resolved = toolConfigs
-    .map((config) => (typeof config === 'string' ? { name: config } : config))
-    .filter((def) => {
-      if (DELEGATION_TOOLS.has(def.name) && delegationBlocked) {
-        delegationTrimmed = true;
-        return false;
-      }
-      if (
-        approvalPromptsUnavailable === true &&
-        isApprovalGatedToolName(def.name)
-      ) {
-        return false;
-      }
-      if (disabled.has(def.name)) return false;
-      if (unavailable.has(def.name)) {
-        missingDependency.push(def.name);
-        return false;
-      }
-      if (!effectiveRegistry.has(def.name)) return false;
-      return true;
-    });
-
-  const resolvedNames = new Set(resolved.map((d) => d.name));
+  const resolved: ToolDefinition[] = [];
+  const resolvedNames = new Set<string>();
+  for (const config of toolConfigs) {
+    const def = typeof config === 'string' ? { name: config } : config;
+    if (DELEGATION_TOOLS.has(def.name) && delegationBlocked) {
+      delegationTrimmed = true;
+      continue;
+    }
+    if (approvalPromptsUnavailable === true && isApprovalGatedToolName(def.name)) {
+      continue;
+    }
+    if (disabled.has(def.name)) continue;
+    if (unavailable.has(def.name)) {
+      missingDependency.push(def.name);
+      continue;
+    }
+    if (!effectiveRegistry.has(def.name)) continue;
+    resolved.push(def);
+    resolvedNames.add(def.name);
+  }
   for (const injection of listToolInjections()) {
     if (!injection.shouldInject()) continue;
     if (resolvedNames.has(injection.toolName)) continue;
