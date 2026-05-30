@@ -265,50 +265,41 @@ export function getAgent(
 }
 
 /**
- * Update an agent's description in the cache.
- * Used to populate descriptions for remote agents after YAML is loaded.
+ * Update a remote agent's metadata in the cache after its YAML is loaded.
+ *
+ * `description` is display-only and not persisted. `tools` and
+ * `defaultOutputFiles` are persisted so orchestrator agents can see them across
+ * reloads; passing an empty/undefined value clears stale entries. Fields absent
+ * from `meta` are left untouched.
  */
-export function updateAgentDescription(
+export function updateAgentMeta(
   identifier: string,
-  description: string | undefined,
+  meta: {
+    description?: string;
+    tools?: string[];
+    defaultOutputFiles?: string[];
+  },
 ): void {
   const entry = getAgent(identifier);
-  if (entry && description) {
-    entry.description = description;
+  if (!entry) return;
+
+  if (meta.description) {
+    entry.description = meta.description;
   }
-}
 
-/**
- * Update an agent's tool list in the cache.
- * Used to populate tools for remote agents after YAML is loaded,
- * so orchestrator agents can see what tools remote agents have.
- * Passing undefined/empty clears stale tools if the YAML removed them.
- */
-export function updateAgentTools(
-  identifier: string,
-  tools: string[] | undefined,
-): void {
-  const entry = getAgent(identifier);
-  if (!entry) return;
-  const value = tools?.length ? tools : undefined;
-  entry.tools = value;
-  persistRemoteAgentMeta(entry.name, { tools: value });
-}
-
-/**
- * Update an agent's default output files in the cache.
- * Used to populate defaultOutputFiles for remote agents after YAML is loaded.
- * Passing undefined/empty clears stale values.
- */
-export function updateAgentDefaultOutputFiles(
-  identifier: string,
-  defaultOutputFiles: string[] | undefined,
-): void {
-  const entry = getAgent(identifier);
-  if (!entry) return;
-  const value = defaultOutputFiles?.length ? defaultOutputFiles : undefined;
-  entry.defaultOutputFiles = value;
-  persistRemoteAgentMeta(entry.name, { defaultOutputFiles: value });
+  const persisted: { tools?: string[]; defaultOutputFiles?: string[] } = {};
+  if ('tools' in meta) {
+    entry.tools = persisted.tools = meta.tools?.length ? meta.tools : undefined;
+  }
+  if ('defaultOutputFiles' in meta) {
+    const value = meta.defaultOutputFiles?.length
+      ? meta.defaultOutputFiles
+      : undefined;
+    entry.defaultOutputFiles = persisted.defaultOutputFiles = value;
+  }
+  if ('tools' in meta || 'defaultOutputFiles' in meta) {
+    persistRemoteAgentMeta(entry.name, persisted);
+  }
 }
 
 /**
