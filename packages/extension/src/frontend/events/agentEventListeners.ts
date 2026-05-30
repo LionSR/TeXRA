@@ -10,8 +10,11 @@ import * as vscode from 'vscode';
 
 import { getRunStorageService } from '@agent/runtime/RunStorageService';
 import { toErrorMessage } from '@common/errors';
-import { bus } from '@eventBus/ProgressEventBus';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { bus, INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
+import type {
+  InstructionAction,
+  ProgressEventPayloads,
+} from '@eventBus/ProgressEventBus';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
@@ -33,14 +36,42 @@ function handleRequestOpenFile(
   );
 }
 
+/**
+ * Maps the host-agnostic action tokens the agent core emits to the VS Code
+ * command (and button label) this host invokes. Keeping this table here — not
+ * in the agent core — is what lets the core stay free of `texra.*` command IDs.
+ */
+const INSTRUCTION_ACTION_VIEW: Record<
+  InstructionAction,
+  { title: string; command: string; args?: unknown[] }
+> = {
+  [INSTRUCTION_ACTION.SET_API_KEY]: {
+    title: 'Set API Key',
+    command: 'texra.setApiKey',
+  },
+  [INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE]: {
+    title: 'Open Settings Guide',
+    command: 'texra.openDoc',
+    args: ['configuration'],
+  },
+  [INSTRUCTION_ACTION.OPEN_MODELS_DOC]: {
+    title: 'Model Documentation',
+    command: 'texra.openDoc',
+    args: ['models'],
+  },
+};
+
 function handleRequestShowInstruction(
   payload: ProgressEventPayloads['requestShowInstruction'],
 ): void {
-  const actions = (payload.actions ?? []).map((a) => ({
-    title: a.title,
-    callback: () =>
-      void vscode.commands.executeCommand(a.command, ...(a.args ?? [])),
-  }));
+  const actions = (payload.actions ?? []).map((token) => {
+    const view = INSTRUCTION_ACTION_VIEW[token];
+    return {
+      title: view.title,
+      callback: () =>
+        void vscode.commands.executeCommand(view.command, ...(view.args ?? [])),
+    };
+  });
 
   showInstructionWithSuppress(
     payload.key,

@@ -28,6 +28,7 @@ import { buildUserVars } from '@agent/utils/userVars';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import { AgentError, getSdkErrorMessage, toErrorMessage } from '@common/errors';
 import { normalizeRunId } from '@common/constants/runIds';
+import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import {
   STREAM_STATUS,
   type ExecutionId,
@@ -133,13 +134,7 @@ async function validateModelExists(
   runtimeHost.emit('requestShowInstruction', {
     key: 'modelNotRecognized',
     message: `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
-    actions: [
-      {
-        title: 'Model Documentation',
-        command: 'texra.openDoc',
-        args: ['models'],
-      },
-    ],
+    actions: [INSTRUCTION_ACTION.OPEN_MODELS_DOC],
     showSuppress: false,
   });
   throw new AgentError(`Model ${modelName} not found in MODEL_CONFIGS`);
