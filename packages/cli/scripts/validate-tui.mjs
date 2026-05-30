@@ -31,7 +31,91 @@ const ETX = String.fromCharCode(3); // Ctrl-C
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');
 const HARNESS =
-  process.env.TEXRA_TUI_HARNESS || path.join(CLI_ROOT, 'dist', 'bin', 'tui-harness.js');
+  process.env.TEXRA_TUI_HARNESS ||
+  path.join(CLI_ROOT, 'dist', 'bin', 'tui-harness.js');
+
+// --- scenarios (verified against the committed harness) ------------------
+const SCENARIOS = [
+  {
+    name: 'transcript',
+    env: { HARNESS_ENTRIES: '8' },
+    expect: [
+      'TeXRA',
+      'agent: chat · model: harness-model',
+      'chat history line to grow the transcript pane',
+      '◆',
+      '[Ctrl-C]exit',
+    ],
+  },
+  {
+    name: 'slash-palette',
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/mo'],
+    expect: ['/model', 'List available models', 'navigate', 'Tab complete'],
+  },
+  {
+    name: 'edit-approval',
+    env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
+    expect: ['Apply edit to draft.tex?', 'y approve', 'n reject', 'approval'],
+  },
+  {
+    name: 'subagents',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    expect: ['strategy', 'leanSolver', 'reviewer', '3 sub', '[Tab]streams'],
+  },
+  {
+    name: 'task-picker',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    keys: [ESC + 'p'], // Option/Alt-p
+    expect: [
+      'Background tasks',
+      'Stream: main',
+      'Enter view',
+      'k kill',
+      'Esc close',
+    ],
+  },
+  {
+    name: 'todos',
+    env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
+    expect: [
+      'Split theorem into algebraic and analytic checks',
+      'Route proof obligations',
+    ],
+  },
+  {
+    name: 'ctrl-c-exit',
+    env: { HARNESS_ENTRIES: '4' },
+    keys: [ETX],
+    expectExit: true,
+  },
+];
+
+const only = process.argv.slice(2);
+const scenarioNames = new Set(SCENARIOS.map((s) => s.name));
+const unknownScenarios = [
+  ...new Set(only.filter((name) => !scenarioNames.has(name))),
+];
+if (unknownScenarios.length > 0) {
+  console.error(
+    `[validate-tui] unknown scenario${unknownScenarios.length === 1 ? '' : 's'}: ${unknownScenarios.join(', ')}`,
+  );
+  console.error(
+    `[validate-tui] available scenarios: ${SCENARIOS.map((s) => s.name).join(', ')}`,
+  );
+  process.exit(1);
+}
+const scenarios = only.length
+  ? SCENARIOS.filter((s) => only.includes(s.name))
+  : SCENARIOS;
 
 // --- optional deps (guarded) ---------------------------------------------
 let ptySpawn;
@@ -72,7 +156,12 @@ const ROWS = Number(process.env.TUI_VALIDATE_ROWS ?? '40');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function makeTerm() {
-  return new Terminal({ cols: COLS, rows: ROWS, scrollback: 8000, allowProposedApi: true });
+  return new Terminal({
+    cols: COLS,
+    rows: ROWS,
+    scrollback: 8000,
+    allowProposedApi: true,
+  });
 }
 
 // Render the whole buffer (scrollback included) so finalized <Static> rows that
@@ -136,7 +225,8 @@ async function runScenario(scenario) {
 
   // settle after keystrokes
   const settleDeadline = Date.now() + 4000;
-  while (Date.now() < settleDeadline && Date.now() - lastData < 500) await sleep(120);
+  while (Date.now() < settleDeadline && Date.now() - lastData < 500)
+    await sleep(120);
   await sleep(250);
 
   const frame = renderFrame(term);
@@ -158,65 +248,15 @@ async function runScenario(scenario) {
   const present = (scenario.unexpect ?? []).filter((t) => frame.includes(t));
   const failures = [];
   if (!booted) failures.push('input prompt never rendered (boot timeout)');
-  for (const t of missing) failures.push(`expected text missing: ${JSON.stringify(t)}`);
-  for (const t of present) failures.push(`unexpected text present: ${JSON.stringify(t)}`);
-  if (scenario.expectExit && !exitedCleanly) failures.push('Ctrl-C did not exit the TUI');
+  for (const t of missing)
+    failures.push(`expected text missing: ${JSON.stringify(t)}`);
+  for (const t of present)
+    failures.push(`unexpected text present: ${JSON.stringify(t)}`);
+  if (scenario.expectExit && !exitedCleanly)
+    failures.push('Ctrl-C did not exit the TUI');
 
   return { name: scenario.name, ok: failures.length === 0, failures, frame };
 }
-
-// --- scenarios (verified against the committed harness) ------------------
-const SCENARIOS = [
-  {
-    name: 'transcript',
-    env: { HARNESS_ENTRIES: '8' },
-    expect: [
-      'TeXRA',
-      'agent: chat · model: harness-model',
-      'chat history line to grow the transcript pane',
-      '◆',
-      '[Ctrl-C]exit',
-    ],
-  },
-  {
-    name: 'slash-palette',
-    env: { HARNESS_ENTRIES: '4' },
-    keys: ['/mo'],
-    expect: ['/model', 'List available models', 'navigate', 'Tab complete'],
-  },
-  {
-    name: 'edit-approval',
-    env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
-    expect: ['Apply edit to draft.tex?', 'y approve', 'n reject', 'approval'],
-  },
-  {
-    name: 'subagents',
-    env: { HARNESS_ENTRIES: '4', HARNESS_CHILDREN: '1', HARNESS_CAN_INTERRUPT: '1' },
-    expect: ['strategy', 'leanSolver', 'reviewer', '3 sub', '[Tab]streams'],
-  },
-  {
-    name: 'task-picker',
-    env: { HARNESS_ENTRIES: '4', HARNESS_CHILDREN: '1', HARNESS_CAN_INTERRUPT: '1' },
-    keys: [ESC + 'p'], // Option/Alt-p
-    expect: ['Background tasks', 'Stream: main', 'Enter view', 'k kill', 'Esc close'],
-  },
-  {
-    name: 'todos',
-    env: { HARNESS_ENTRIES: '4', HARNESS_TODOS: '1' },
-    expect: ['Split theorem into algebraic and analytic checks', 'Route proof obligations'],
-  },
-  {
-    name: 'ctrl-c-exit',
-    env: { HARNESS_ENTRIES: '4' },
-    keys: [ETX],
-    expectExit: true,
-  },
-];
-
-const only = process.argv.slice(2);
-const scenarios = only.length
-  ? SCENARIOS.filter((s) => only.includes(s.name))
-  : SCENARIOS;
 
 let failed = 0;
 for (const scenario of scenarios) {
