@@ -1,5 +1,12 @@
 # Configuration
 
+<script setup>
+import DashboardTabsCard from '../.vitepress/components/DashboardTabsCard.vue';
+import InstructionHeaderCard from '../.vitepress/components/InstructionHeaderCard.vue';
+import AgentOutputToolbarCard from '../.vitepress/components/AgentOutputToolbarCard.vue';
+import GitTabCard from '../.vitepress/components/GitTabCard.vue';
+</script>
+
 TeXRA provides extensive configuration options that allow you to customize its behavior to match your workflow (don't worry, the defaults are sensible!). This guide explains the available settings and how to adjust them for optimal performance.
 
 ::: tip CLI
@@ -12,7 +19,11 @@ exposes models, tools, and agents through `texra models`, `texra tools`, and
 
 ## The TeXRA Dashboard
 
-The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard**.
+The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard**. Its ten tabs all live in one navigation rail:
+
+<DashboardTabsCard />
+
+<p class="hero-caption">The Dashboard navigation rail: ten tabs from Memory through Odyssey, each opening a focused configuration surface.</p>
 
 - **[Memory](./memory.md)** - See what your tool-use agents have remembered across sessions, pin core insights, and delete entries you no longer need.
 - **History** - Search and browse past runs. Handy for finding that polish job you ran last week.
@@ -119,6 +130,10 @@ reachable from the progress-view toolbar:
 - **Clean** — discard the run's folder entirely.
 - **Open in task storage** — reveal the folder so you can browse
   artifacts manually.
+
+<AgentOutputToolbarCard />
+
+<p class="hero-caption">The progress-view toolbar for one finished run: Accept, Pack, and Open in task storage, plus the destructive Clean, all acting on <code>executions/{id}/</code>.</p>
 
 When a workflow completes, the final revised file auto-opens in a new
 editor tab as a read-only preview so you don't feel the output
@@ -247,6 +262,10 @@ Configure how TikZ figures are extracted and compiled:
 ## Git Integration
 
 The **Git tab** in the TeXRA Dashboard (`TeXRA: Show Dashboard` → **Git**) covers two independent features: a GitHub token used by the PR-subscription tool, and optional TeXRA-branded commit authorship for agent-made commits.
+
+<GitTabCard />
+
+<p class="hero-caption">The Git tab: the GitHub token row (here picked up from <code>GITHUB_TOKEN</code>, shown as <strong>Env</strong>) with Create on GitHub and Set token, and the commit-author toggle.</p>
 
 ### GitHub personal access token
 
@@ -417,6 +436,10 @@ Now that you understand how to configure TeXRA, you may want to learn about:
 ## Agent Execution Settings (Webview Interface)
 
 These settings, accessible directly in the main TeXRA webview, control how agents run:
+
+<InstructionHeaderCard />
+
+<p class="hero-caption">The instruction-panel header: header actions (Settings, History, Pack, Clean, Magic Polish, Erase), the open Tool-configuration dropdown, and the agent and model selectors.</p>
 
 **Tool Configuration Dropdown** (<wa-icon library="texra" name="tools"></wa-icon> ○<wa-icon library="texra" name="chevron-down"></wa-icon> next to Instruction label):
 

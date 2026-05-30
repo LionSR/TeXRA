@@ -1,5 +1,10 @@
 # Working with Figures
 
+<script setup>
+import MediaSectionPanel from '../.vitepress/components/MediaSectionPanel.vue';
+import AutoExtractMenu from '../.vitepress/components/AutoExtractMenu.vue';
+</script>
+
 TeXRA lets AI agents analyse, reference, and generate figures inside your documents — from `.png` screenshots to embedded TikZ diagrams and PDFs.
 
 ::: tip CLI
@@ -19,7 +24,11 @@ agent in `texra chat`.
 
 ## <wa-icon library="texra" name="file-media"></wa-icon> The Media Section
 
-The main TeXRA panel includes a **Media** section for figure files:
+The main TeXRA panel includes a **Media** section for figure files. Its header carries the inline **Auto Extract** dropdown (<wa-icon library="texra" name="wand"></wa-icon>) plus a three-action toolbar, and each file is a row you can drag to reorder:
+
+<MediaSectionPanel />
+
+<p class="hero-caption">The Media group: the wand opens auto-extract options, the toolbar adds opened files / clears all / adds media files, and each row drags to reorder with a trailing trash icon.</p>
 
 - **Auto Extract Dropdown** (<wa-icon library="texra" name="wand"></wa-icon>): configure automatic figure extraction.
 - **Add opened files** (<wa-icon library="texra" name="folder-opened"></wa-icon>): append every open editor tab whose extension is a configured media type.
@@ -27,15 +36,53 @@ The main TeXRA panel includes a **Media** section for figure files:
 - **Add media files** (<wa-icon library="texra" name="add"></wa-icon>): open a file picker to append figures.
 - **Drag-and-drop** image, PDF, or audio files from anywhere onto the section.
 
-Each file appears as a row you can drag to reorder, with a small trash icon (to remove just that file).
-
 ## <wa-icon library="texra" name="file-symlink-file"></wa-icon> Supported File Types
 
 Configurable via `texra.files.included.mediaExtensions`:
 
-- **Images**: `.png`, `.jpeg`, `.jpg`, `.gif`, `.heic`, `.heif`, `.webp`
-- **Documents**: `.pdf` (native on Anthropic/Gemini/OpenAI, otherwise rasterised)
-- **Audio** (experimental): `.wav`, `.m4a`, `.mp3`, `.aiff`, `.aac`, `.ogg`, `.flac`
+<FeatureCards
+  min="220px"
+  :cards="[
+    {
+      icon: 'file-media',
+      title: 'Images',
+      desc: 'Encoded and attached for vision-capable models.',
+      chips: [
+        { text: '.png', variant: 'accent' },
+        { text: '.jpeg', variant: 'accent' },
+        { text: '.jpg', variant: 'accent' },
+        { text: '.gif', variant: 'accent' },
+        { text: '.heic', variant: 'accent' },
+        { text: '.heif', variant: 'accent' },
+        { text: '.webp', variant: 'accent' },
+      ],
+    },
+    {
+      icon: 'file-pdf',
+      title: 'Documents',
+      desc: 'Native multimodal on Anthropic / Gemini / OpenAI, otherwise rasterised.',
+      chips: [{ text: '.pdf', variant: 'info' }],
+    },
+    {
+      icon: 'unmute',
+      title: 'Audio',
+      tag: 'Experimental',
+      tagVariant: 'warning',
+      desc: 'Uploaded for transcription by audio-capable models.',
+      chips: [
+        { text: '.wav', variant: 'neutral' },
+        { text: '.m4a', variant: 'neutral' },
+        { text: '.mp3', variant: 'neutral' },
+        { text: '.aiff', variant: 'neutral' },
+        { text: '.aac', variant: 'neutral' },
+        { text: '.ogg', variant: 'neutral' },
+        { text: '.flac', variant: 'neutral' },
+      ],
+    },
+  ]"
+/>
+
+<p class="hero-caption">Three media categories with their accepted extensions — images and audio carry several formats, while PDFs lean on native multimodal support where the provider offers it.</p>
 
 PDFs use native multimodal support when the provider offers it. Otherwise TeXRA converts them via GraphicsMagick / ImageMagick + Ghostscript — status for those system dependencies lives on **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>).
 
@@ -54,12 +101,29 @@ Pasted images are stored temporarily and cleaned up after 3 days.
 
 Enable via the **Auto Extract** dropdown (<wa-icon library="texra" name="wand"></wa-icon>) near the Media label:
 
+<AutoExtractMenu />
+
+<p class="hero-caption">The lit wand button opens a checkbox menu — toggle Figures, TikZ Figures, and Compile Input PDF.</p>
+
 - **Figures** (<wa-icon library="texra" name="file-media"></wa-icon>): extracts images from `\includegraphics` commands.
 - **TikZ Figures** (<wa-icon library="texra" name="symbol-structure"></wa-icon>): extracts `tikzpicture` environments as `.tikz` files and compiles them.
 
 ## <wa-icon library="texra" name="tools"></wa-icon> Figure Extraction Tools
 
-Tool-use agents can extract figures programmatically. These are part of the **LaTeX Extraction** built-in tool group — always available.
+Tool-use agents can extract figures programmatically. These are part of the **LaTeX Extraction** built-in tool group — always available. In a run, an agent like `research` drives them one after another, attaching what it finds so a multimodal model can read it:
+
+<ToolCallPanel
+  title="research"
+  icon="sparkle"
+  caption="gathering a paper's figures · LaTeX Extraction · this run"
+  :calls="[
+    { state: 'done', verb: 'extract_figures', target: 'paper/main.tex', effect: 'Found 9 \\includegraphics — attached 9 files' },
+    { state: 'done', verb: 'extract_bib_entries', target: 'paper/main.tex', effect: 'Returned BibTeX for every \\cite key' },
+    { state: 'active', verb: 'extract_tikz_figures', target: 'paper/main.tex', effect: 'compile: true → latexmk renders 7 tikzpicture snippets, attaches 7 PDFs' },
+  ]"
+/>
+
+<p class="hero-caption">The three LaTeX Extraction tools as they surface in the Progress view — each returns referenced files, BibTeX records, or compiled TikZ PDFs the model can read directly. The raw request form for each is below.</p>
 
 ### `extract_figures`
 

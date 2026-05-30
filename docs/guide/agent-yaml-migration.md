@@ -4,6 +4,11 @@ This guide is for users with **custom agent YAMLs** (in their custom-agents dire
 
 If you've never written a custom agent, skip this guide.
 
+<script setup>
+import ContextPickerMigration from '../.vitepress/components/ContextPickerMigration.vue';
+import MigrationTroubleshooting from '../.vitepress/components/MigrationTroubleshooting.vue';
+</script>
+
 ## What changed and why
 
 Three rounds of cleanup landed across recent releases:
@@ -13,6 +18,12 @@ Three rounds of cleanup landed across recent releases:
 | **W2** (PR #4035, May 2026) | Merge `Reference` + `Auxiliary` file pickers into one **Context** picker                                                                                                                     | The two pickers had overlapping extensions (`.tex`, `.md`) and an invisible conceptual split that scared new users                                                            |
 | **W3** (PR #4035, May 2026) | Retire the `_multiple` agent YAML variants                                                                                                                                                   | Keeping `foo.yaml` and `foo_multiple.yaml` in sync by hand was a maintenance tax. One unified YAML now handles single- and multi-document output via `documentTag: documents` |
 | **W4** (this PR)            | Drop the **single-file slot** for input/context/media; retire `ADDITIONAL_INPUTS`; retire the separate output-order prompt variable; rewrite the prompt protocol as "one document per input" | The single-vs-multi distinction in the UI was extra cognitive load that newer models don't need                                                                               |
+
+The **W2** merge is the root cause of every rename below: two file pickers became one.
+
+<ContextPickerMigration />
+
+<p class="hero-caption" v-pre>Before W2 the Launcher exposed separate <strong>Reference</strong> and <strong>Auxiliary</strong> pickers; W2 folded them into one ordered <strong>Context</strong> group — which is why <code>{{ ALL_REFERENCES }}</code>/<code>{{ ALL_AUXILIARYS }}</code> collapse into <code>{{ ALL_CONTEXTS }}</code>.</p>
 
 ## Quick reference: old → new
 
@@ -213,6 +224,10 @@ prompts:
 The `_multiple` sibling is gone; this YAML works for one input or several.
 
 ## When something looks wrong
+
+<MigrationTroubleshooting />
+
+<p class="hero-caption">Four symptoms of a not-yet-migrated custom YAML, each with its cause and the canonical fix.</p>
 
 - **Empty context section in prompt** — your YAML uses an old alias like `{{ ALL_AUXILIARYS }}` that returns content but no UI exposes the "auxiliary" picker any more, so users have nothing to attach. Switch to `{{ ALL_CONTEXTS }}` and your users see the unified Context picker.
 - **Output file ends up named `output.tex` instead of the input filename** — your YAML has `<document name="output.tex">` hard-coded. Use `<document name="{{ INPUT_FILE }}">` (resolves to `inputFiles[0]`) or omit the inner `<document>` template and let the agent name files based on `{{ ALL_INPUTS }}` content.

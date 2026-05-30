@@ -1,6 +1,16 @@
+<script setup>
+import ModelPickerHero from '../.vitepress/components/ModelPickerHero.vue';
+import ProviderConfigRow from '../.vitepress/components/ProviderConfigRow.vue';
+import ModelChoiceMatrix from '../.vitepress/components/ModelChoiceMatrix.vue';
+</script>
+
 # AI Models
 
-TeXRA supports models from multiple providers. Select models from the dropdown in the TeXRA UI. Hover over options to see context window and cost estimates.
+TeXRA supports models from multiple providers. Select models from the dropdown in the TeXRA UI. Hover over an option to see its context window and cost estimate.
+
+<ModelPickerHero />
+
+<p class="hero-caption">The model picker: monospace model ids with a <code>T</code> badge on thinking variants, and a hover popover showing context window and per-1M token pricing.</p>
 
 **Model ID suffixes:**
 
@@ -104,11 +114,9 @@ GLM models support thinking mode (reasoning is shown inline). The API uses a non
 
 ## Choosing a Model
 
-- **Simple tasks**: Fast, cheap models (`qwenturbo`, `deepseek`, `haiku45`)
-- **Complex tasks**: Powerful models (`opus48`, `gpt55`, `gemini31p`)
-- **Code-heavy / LaTeX editing**: Strong editing models (`opus48T`, `sonnet46T`, `qwenplus`)
-- **Reasoning-heavy**: Thinking models (`opus48T`, `sonnet46T`, `deepseekT`, `kimi26T`)
-- **Large documents**: High-context models (`gemini31p`, `sonnet46`, `opus48`)
+<ModelChoiceMatrix />
+
+<p class="hero-caption">Pick a model by intent: each use case maps to a short list of recommended model ids.</p>
 
 ## Configuration
 
@@ -132,11 +140,17 @@ To access additional models or alternative pricing:
 2. Add via `TeXRA: Set API Key` command
 3. In the Dashboard → Models tab → API Configuration, expand the OpenRouter row and enable **"Use OpenRouter for All Models"**
 
+Expanding any provider's row in **API Configuration** reveals its key field plus the per-provider toggles described here and under [Streaming](#streaming):
+
+<ProviderConfigRow />
+
+<p class="hero-caption">Expand a provider's <strong>API Configuration</strong> row to reveal its masked key field, the per-provider <strong>Enable streaming</strong> toggle, and <strong>Use OpenRouter for All Models</strong>.</p>
+
 ## Streaming
 
 Streaming is configured per provider rather than through a single global
 setting. Open the **Dashboard → Models** tab, expand a provider's **API
-Configuration**, and toggle streaming there. Enabling it makes long responses
+Configuration**, and toggle streaming there (see the [expanded row above](#using-openrouter)). Enabling it makes long responses
 arrive incrementally instead of in one large reply.
 
 ## Next Steps

@@ -1,3 +1,8 @@
+<script setup>
+import TaskRecipeCards from '../.vitepress/components/TaskRecipeCards.vue';
+import OutputArtifactsTree from '../.vitepress/components/OutputArtifactsTree.vue';
+</script>
+
 # Quick Start Guide
 
 You have a paper draft and a deadline. Let's get TeXRA working for you in under five minutes.
@@ -286,40 +291,24 @@ sign-in, workspace defaults, and headless output formats.
 
 ## Common Quick Tasks
 
-Here are some common tasks you can try with TeXRA:
+Here are some common tasks you can try with TeXRA. Each is just an agent, a model, and a one-line instruction in the Launcher footer:
 
-### Fixing Grammar and Typos
+<TaskRecipeCards />
 
-- **Agent**: `correct`
-- **Model**: `qwenturbo`, `deepseek`, `gemini31p`, or `sonnet46`
-- **Instruction**: "Fix grammatical errors and typos without changing the content or technical terminology."
-
-### Converting a Paper to Slides
-
-- **Agent**: `paper2slide`
-- **Model**: `sonnet46T`, `opus48T`, or `gpt55`
-- **Instruction**: "Convert this paper into presentation slides using the beamer template. Create approximately 12-15 slides highlighting the key points, methodology, and results."
-
-### Improving Writing Style
-
-- **Agent**: `polish`
-- **Model**: `opus46` or `sonnet46T`
-- **Instruction**: "Improve the writing style to make it more engaging and clear. Enhance the flow between paragraphs while preserving all technical content."
+<p class="hero-caption">Three starter recipes — pick the agent and model, then paste the instruction. The first model listed is a good default; the others are interchangeable alternatives.</p>
 
 ## Understanding the Output
 
-When TeXRA completes a task, it produces:
+A completed run writes everything into the run's task storage folder, one
+folder per round. Each round holds three artifacts, and the document keeps your
+**input filename** (`draft.tex`, not `output.tex`):
 
-1. **Output File**: The main result with the requested changes
-2. **Log Files**: Detailed information about the process
-3. **Diff Files**: Visual comparison between original and modified versions (if applicable)
+<OutputArtifactsTree />
 
-Output files are saved in the run's task storage folder, one per
-round, using the **input filename** as the document name:
-`r{round}/<input-filename>`
+<p class="hero-caption">One folder per round under <code>r{round}/&lt;input-filename&gt;</code>: the revised <strong>Output</strong>, a <strong>Log</strong> of the run, and the <strong>Diff</strong> PDF. Round 1 (and any further reflection rounds) repeat the same trio.</p>
 
-For example, if your input file is `paper.tex` and the first round produces TeX, the output path inside task storage is:
-`r0/paper.tex`
+So if your input file is `paper.tex`, the first round's output lands at
+`r0/paper.tex` — the filename you started with, never `output.tex`.
 
 ## Next Steps
 
