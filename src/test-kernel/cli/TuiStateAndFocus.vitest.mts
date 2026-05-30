@@ -185,6 +185,19 @@ describe('CLI TUI row allocation', () => {
     expect(layout.foregroundRows).toBe(16);
   });
 
+  it('can cap compact foreground surfaces on tall terminals', () => {
+    const layout = allocateMiddleRows({
+      foregroundMaxRows: 12,
+      foregroundOpen: true,
+      reverseSearchOpen: false,
+      rows: 40,
+      slashPaletteOpen: false,
+    });
+
+    expect(layout.transcriptRows).toBe(1);
+    expect(layout.foregroundRows).toBe(12);
+  });
+
   it('uses the whole middle region for the transcript without foreground UI', () => {
     const layout = allocateMiddleRows({
       foregroundOpen: false,
