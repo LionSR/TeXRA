@@ -15,12 +15,19 @@
 //
 // Run:  node scripts/validate-tui.mjs        (from packages/cli)
 //   or: pnpm --filter @texra-ai/cli validate:tui
+//   or: node scripts/validate-tui.mjs --snapshot-dir /tmp/tui-frames slash-palette
 //
 // Deps: node-pty (PTY; optional — native) and @xterm/headless (pure JS). If
 // node-pty is unavailable (e.g. CI without build tools), the validator prints a
 // notice and exits 0 so it never breaks installs that opt out of the native dep.
 
-import { chmodSync, existsSync, statSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -212,7 +219,53 @@ const SCENARIOS = [
   },
 ];
 
-const only = process.argv.slice(2);
+function parseArgs(argv) {
+  const scenarios = [];
+  let snapshotDir;
+  let endOfOptions = false;
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (!endOfOptions && arg === '--') {
+      // pnpm forwards a leading separator to scripts (`pnpm run x -- --flag`).
+      // Treat only that package-manager separator as transparent; later `--`
+      // still follows normal end-of-options behavior.
+      if (index === 0 && argv[1]?.startsWith('--snapshot-dir')) continue;
+      endOfOptions = true;
+      continue;
+    }
+    if (!endOfOptions && arg === '--snapshot-dir') {
+      const value = argv[index + 1];
+      if (!value) {
+        console.error('[validate-tui] --snapshot-dir requires a directory');
+        process.exit(1);
+      }
+      snapshotDir = path.resolve(process.cwd(), value);
+      index += 1;
+      continue;
+    }
+    if (!endOfOptions && arg?.startsWith('--snapshot-dir=')) {
+      const value = arg.slice('--snapshot-dir='.length);
+      if (!value) {
+        console.error('[validate-tui] --snapshot-dir requires a directory');
+        process.exit(1);
+      }
+      snapshotDir = path.resolve(process.cwd(), value);
+      continue;
+    }
+    if (!endOfOptions && arg?.startsWith('--')) {
+      console.error(`[validate-tui] unknown option: ${arg}`);
+      console.error(
+        '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [scenario ...]',
+      );
+      process.exit(1);
+    }
+    scenarios.push(arg);
+  }
+  return { scenarios, snapshotDir };
+}
+
+const args = parseArgs(process.argv.slice(2));
+const only = args.scenarios;
 const scenarioNames = new Set(SCENARIOS.map((s) => s.name));
 const unknownScenarios = [
   ...new Set(only.filter((name) => !scenarioNames.has(name))),
@@ -229,6 +282,7 @@ if (unknownScenarios.length > 0) {
 const scenarios = only.length
   ? SCENARIOS.filter((s) => only.includes(s.name))
   : SCENARIOS;
+const snapshotDir = args.snapshotDir;
 
 function ensureNodePtySpawnHelperExecutable() {
   if (process.platform === 'win32') return;
@@ -322,6 +376,19 @@ function renderFrame(term) {
 function frameTail(frame) {
   const lines = frame.split('\n');
   return lines.slice(-Math.min(lines.length, ROWS)).join('\n');
+}
+
+function snapshotFileName(index, name) {
+  const prefix = String(index + 1).padStart(2, '0');
+  return `${prefix}-${name.replace(/[^a-z0-9._-]+/gi, '-')}.txt`;
+}
+
+function writeSnapshot(index, name, frame) {
+  if (!snapshotDir) return;
+  mkdirSync(snapshotDir, { recursive: true });
+  const file = path.join(snapshotDir, snapshotFileName(index, name));
+  const content = frameTail(frame);
+  writeFileSync(file, `${content}${content.endsWith('\n') ? '' : '\n'}`);
 }
 
 async function runScenario(scenario) {
@@ -422,13 +489,20 @@ async function runScenario(scenario) {
     failures.push(`Ctrl-C did not exit the TUI cleanly${exitDetails}`);
   }
 
-  return { name: scenario.name, ok: failures.length === 0, failures, frame };
+  return {
+    name: scenario.name,
+    ok: failures.length === 0,
+    failures,
+    frame,
+    fullFrame,
+  };
 }
 
 let failed = 0;
-for (const scenario of scenarios) {
+for (const [index, scenario] of scenarios.entries()) {
   // eslint-disable-next-line no-await-in-loop
   const result = await runScenario(scenario);
+  writeSnapshot(index, result.name, result.fullFrame);
   if (result.ok) {
     console.log(`✓ ${result.name}`);
   } else {
@@ -451,4 +525,5 @@ console.log(
     ? `validate-tui: all ${scenarios.length} scenarios passed`
     : `validate-tui: ${failed}/${scenarios.length} scenario(s) FAILED`,
 );
+if (snapshotDir) console.log(`validate-tui: wrote snapshots to ${snapshotDir}`);
 process.exit(failed === 0 ? 0 : 1);
