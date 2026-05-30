@@ -12,6 +12,7 @@ import { toErrorMessage } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Type imports
+import { getExtensionLowercase } from '@utils/core/pathCore';
 import {
   AbsoluteFS,
   getMimeType,
@@ -242,7 +243,7 @@ export class MediaAttachmentProcessor {
       return { result: { path: displayPath, ok: false } };
     }
 
-    const fileExtension = path.extname(absolutePath).toLowerCase();
+    const fileExtension = getExtensionLowercase(absolutePath);
 
     try {
       // Process as audio or image based on mime type

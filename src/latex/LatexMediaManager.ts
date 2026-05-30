@@ -15,7 +15,7 @@ import {
   pathToLocation,
   type FileLocation,
 } from '@utils/files';
-import { hasExtension } from '@utils/core/pathCore';
+import { getExtensionLowercase, hasExtension } from '@utils/core/pathCore';
 
 // Local file imports
 import { extractLatexFileDependencies } from './extractFileDependencies';
@@ -309,7 +309,7 @@ export class LatexMediaManager {
 
     const candidates: string[] = [];
     for (const name of entries) {
-      const ext = path.extname(name).toLowerCase();
+      const ext = getExtensionLowercase(name);
       if (
         PROJECT_SIBLING_EXTENSIONS.has(ext) ||
         PROJECT_SIBLING_NAMES.has(name)

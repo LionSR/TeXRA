@@ -16,7 +16,7 @@ import {
 } from '@agent/index/agentRegistry';
 import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
-import { toErrorMessage } from '@common/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@common/errors/errorMessage';
 import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions } from '@tools/registry';
 
@@ -155,8 +155,7 @@ export class RemoteAgentLoader {
         prompts: config.prompts,
       };
     } catch (error) {
-      const lastError =
-        error instanceof Error ? error : new Error(toErrorMessage(error));
+      const lastError = ensureError(error);
       logger.error(
         CHANNEL,
         `Failed to load remote agent "${agentName}": ${lastError.message}`,
