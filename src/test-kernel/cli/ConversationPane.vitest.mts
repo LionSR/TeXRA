@@ -5,6 +5,7 @@ import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   appendStaticTranscriptItems,
   selectPendingEntriesForViewport,
+  sessionHeaderIdentityLine,
 } from '@cli/chat/tui/panes/ConversationPane';
 import {
   cliState,
@@ -266,6 +267,19 @@ describe('CLI conversation transcript splitting', () => {
       meta: { ...SESSION_META, model: 'sonnet' },
     });
     expect(again).toHaveLength(1);
+  });
+
+  it('labels preset-launched sessions with team and root identity', () => {
+    expect(
+      sessionHeaderIdentityLine({
+        ...SESSION_META,
+        agent: 'orchestrator',
+        teamName: 'Physicist',
+      }),
+    ).toBe('team: Physicist · root: orchestrator · model: deepseekT');
+    expect(sessionHeaderIdentityLine(SESSION_META)).toBe(
+      'agent: research · model: deepseekT',
+    );
   });
 
   it('only feeds the active stream into scrollback, not background subagents', () => {

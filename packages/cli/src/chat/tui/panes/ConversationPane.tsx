@@ -17,6 +17,7 @@ import { selectPendingEntriesForViewport } from './transcriptViewport';
 // even as the file is split into focused modules.
 export {
   appendStaticTranscriptItems,
+  sessionHeaderIdentityLine,
   StaticConversationTranscript,
   type StaticTranscriptItem,
 } from './StaticConversationTranscript';
