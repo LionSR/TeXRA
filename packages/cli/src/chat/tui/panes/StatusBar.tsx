@@ -66,6 +66,10 @@ export interface StatusBarDisplayInput {
    *  colliding with durable left-side status segments. */
   readonly width?: number;
   readonly ctrlCAction?: CtrlCAction;
+  /** False while a foreground surface (approval, picker, form, transcript,
+   *  slash palette, or reverse search) owns input and global chat shortcuts are
+   *  intentionally inactive. */
+  readonly shortcutsActive?: boolean;
 }
 
 export interface StatusBarDisplay {
@@ -287,6 +291,10 @@ export function statusBarBindingsText(
   return bindings.join('  ');
 }
 
+function foregroundBindingsText(ctrlCAction: CtrlCAction): string {
+  return `Use foreground panel shortcuts  [Ctrl-C]${ctrlCAction}`;
+}
+
 export function buildStatusBarDisplay(
   input: StatusBarDisplayInput,
 ): StatusBarDisplay {
@@ -348,13 +356,15 @@ export function buildStatusBarDisplay(
     bindings:
       input.pendingExitHint && input.pendingExitResumeId
         ? `Resume this session with: texra --resume ${input.pendingExitResumeId}`
-        : statusBarBindingsText(
-            input.subagentControlsAvailable,
-            input.hasMultipleStreams,
-            input.shortcutModifierLabel,
-            input.shiftEnterNewline,
-            input.ctrlCAction,
-          ),
+        : input.shortcutsActive === false
+          ? foregroundBindingsText(input.ctrlCAction ?? 'exit')
+          : statusBarBindingsText(
+              input.subagentControlsAvailable,
+              input.hasMultipleStreams,
+              input.shortcutModifierLabel,
+              input.shiftEnterNewline,
+              input.ctrlCAction,
+            ),
   };
 }
 
@@ -364,6 +374,7 @@ export function statusBarSegmentText(segment: StatusBarSegment): string {
 
 export interface StatusBarProps {
   readonly canStopActiveRun?: () => boolean;
+  readonly shortcutsActive?: boolean;
 }
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
@@ -410,6 +421,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     shiftEnterNewline: caps.kittyKeyboard,
     width: columns,
     ctrlCAction: props.canStopActiveRun?.() ? 'stop' : 'exit',
+    shortcutsActive: props.shortcutsActive,
   });
 
   return (
