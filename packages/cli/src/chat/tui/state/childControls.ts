@@ -12,7 +12,7 @@ import { formatDuration } from '@utils/core';
 // Local imports - CLI state
 import { isPlainReturnInput } from '../input/inputKeys';
 import { visibleSubagentRows } from './childStreamMerge';
-import { orderedDescendantsFromSlice } from './focusCycle';
+import { orderedDescendantsFromTree } from './focusCycle';
 import type { ProcessOutputTail, StreamSlice } from './cliState';
 
 export type ChildControlMode = 'subagents' | 'tasks';
@@ -281,14 +281,21 @@ export function hasChildExecutionRows(
   );
 }
 
-export function numericFocusTarget(
-  slice:
-    | Pick<StreamSlice, 'activeProcesses' | 'activeSubagents' | 'childStreams'>
-    | undefined,
-  zeroBasedIndex: number,
-): StreamTabId | undefined {
-  if (!slice || zeroBasedIndex < 0) return undefined;
-  return orderedDescendantsFromSlice(slice)[zeroBasedIndex];
+export function numericFocusTargetForActiveStream(init: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+  readonly zeroBasedIndex: number;
+}): StreamTabId | undefined {
+  if (!init.activeStreamId || init.zeroBasedIndex < 0) return undefined;
+  const root =
+    init.parentStream.get(init.activeStreamId) ?? init.activeStreamId;
+  return orderedDescendantsFromTree({
+    parent: root,
+    parentSlice: init.streams.get(root),
+    parentStream: init.parentStream,
+    streams: init.streams,
+  })[init.zeroBasedIndex];
 }
 
 export function clampPickerIndex(index: number, length: number): number {
