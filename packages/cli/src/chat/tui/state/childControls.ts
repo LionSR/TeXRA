@@ -26,6 +26,7 @@ export interface ChildControlItem {
   readonly description: string;
   readonly status?: string;
   readonly elapsed?: string | null;
+  readonly killable: boolean;
   readonly tailLines: readonly string[];
 }
 
@@ -86,6 +87,12 @@ function childLabel(child: {
   return child.agentName || child.toolName || child.executionId;
 }
 
+function childKey(
+  child: Pick<ActiveChildInfo, 'childStreamId' | 'executionId'>,
+): string {
+  return child.childStreamId ?? child.executionId;
+}
+
 function streamDescription(
   child: Pick<ActiveChildInfo, 'childStreamId'>,
   streamsById: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'description'>>,
@@ -117,6 +124,7 @@ function buildSubagentItem(
     Pick<StreamSlice, 'description' | 'entries'>
   >,
   nowMs?: number,
+  killable = true,
 ): ChildControlItem {
   const label = childLabel(child);
   const command = streamDescription(child, streamsById) ?? label;
@@ -130,6 +138,7 @@ function buildSubagentItem(
     description: compactParts([child.status, elapsed ?? undefined]),
     status: child.status,
     elapsed,
+    killable,
     tailLines: streamTranscriptLines(child, streamsById),
   };
 }
@@ -152,6 +161,7 @@ function buildProcessItem(
     description: compactParts([child.status, elapsed ?? undefined, lastLine]),
     status: child.status,
     elapsed,
+    killable: true,
     tailLines,
   };
 }
@@ -179,8 +189,14 @@ export function buildChildControlItems(
   nowMs?: number,
 ): readonly ChildControlItem[] {
   if (mode === 'subagents') {
+    const activeKeys = new Set(slice.activeSubagents.map(childKey));
     return visibleSubagentRows(slice).map((child) =>
-      buildSubagentItem(child, streamsById, nowMs),
+      buildSubagentItem(
+        child,
+        streamsById,
+        nowMs,
+        activeKeys.has(childKey(child)),
+      ),
     );
   }
 
