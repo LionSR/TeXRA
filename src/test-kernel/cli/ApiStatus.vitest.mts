@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatRelayUsageStatus } from '@cli/runtime/apiStatus';
+import { formatCliAccountLabelForDisplay } from '@cli/runtime/accountDisplay';
+import {
+  formatCliAuthStatusLine,
+  formatRelayUsageStatus,
+} from '@cli/runtime/apiStatus';
 import type { RelayUsageSummary } from '@cli/runtime/relayUsage';
 
 describe('CLI API status text', () => {
@@ -25,6 +29,37 @@ describe('CLI API status text', () => {
 
     expect(formatRelayUsageStatus(summary)).toBe(
       'relay usage this month: 14.0% used, 86.0% remaining',
+    );
+  });
+
+  it('redacts email account labels before showing auth status in the TUI', () => {
+    expect(formatCliAccountLabelForDisplay('sirui.lu.phys@gmail.com')).toBe(
+      's***@g***.com',
+    );
+    expect(
+      formatCliAuthStatusLine({
+        authenticated: true,
+        accountLabel: 'user@example.edu',
+      }),
+    ).toBe('auth: signed in as u***@e***.edu');
+  });
+
+  it('keeps non-email account labels readable', () => {
+    expect(formatCliAccountLabelForDisplay('github-user')).toBe('github-user');
+    expect(formatCliAccountLabelForDisplay('team@internal')).toBe(
+      'team@internal',
+    );
+    expect(
+      formatCliAuthStatusLine({
+        authenticated: true,
+        accountLabel: 'team@internal',
+      }),
+    ).toBe('auth: signed in as team@internal');
+    expect(formatCliAuthStatusLine({ authenticated: true })).toBe(
+      'auth: signed in',
+    );
+    expect(formatCliAuthStatusLine({ authenticated: false })).toBe(
+      'auth: signed out',
     );
   });
 });

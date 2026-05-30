@@ -9,6 +9,7 @@ import {
 } from '@latex/latexToolchain';
 
 // Local imports - CLI runtime
+import { redactEmailAccountLabelsForDisplay } from './accountDisplay';
 import { workspaceCliConfigPath } from './cliConfig';
 import { CliExitCode } from './exitCodes';
 import {
@@ -333,8 +334,11 @@ export function formatDoctorText(
   };
   return report.checks
     .map((check) => {
-      const head = `${marker[check.status]} ${check.name}: ${check.message}`;
-      return check.hint ? `${head}\n     ${style.muted(check.hint)}` : head;
+      const message = redactEmailAccountLabelsForDisplay(check.message);
+      const head = `${marker[check.status]} ${check.name}: ${message}`;
+      return check.hint
+        ? `${head}\n     ${style.muted(redactEmailAccountLabelsForDisplay(check.hint))}`
+        : head;
     })
     .join('\n');
 }
