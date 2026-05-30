@@ -47,6 +47,7 @@ import {
   chatTuiCanInterruptActiveRun,
   chatTuiCanStartRootRun,
   chatTuiActiveChildFollowUpTarget,
+  chatTuiShouldAnnounceQueuedFollowUp,
   clearTuiSessionRunState,
 } from '@cli/chat/tui/runChatTui';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -322,6 +323,20 @@ describe('CLI TUI row allocation', () => {
 
     cliState.activeStreamId.set(child1);
     expect(chatTuiActiveChildFollowUpTarget()).toBe(child1);
+  });
+
+  it('announces queued follow-ups only when the target is not waiting', () => {
+    expect(chatTuiShouldAnnounceQueuedFollowUp(undefined)).toBe(true);
+
+    patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
+    expect(chatTuiShouldAnnounceQueuedFollowUp(root)).toBe(false);
+
+    patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    expect(chatTuiShouldAnnounceQueuedFollowUp(root)).toBe(true);
+
+    patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
+    setParentStream(child1, root);
+    expect(chatTuiShouldAnnounceQueuedFollowUp(child1)).toBe(false);
   });
 
   it('clears stale resume ids when clearing chat session run state', () => {
