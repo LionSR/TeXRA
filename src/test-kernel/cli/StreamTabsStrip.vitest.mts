@@ -180,6 +180,55 @@ describe('CLI stream tabs strip', () => {
     ]);
   });
 
+  it('labels nested child stream roots with their friendly stream name', () => {
+    const root = streamId('root');
+    const child1 = streamId('child-1');
+    const grandchild1 = streamId('grandchild-1');
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [
+        root,
+        slice('root', {
+          childStreams: [
+            child({
+              executionId: 'r1',
+              childStreamId: child1,
+              agentName: 'review',
+            }),
+          ],
+        }),
+      ],
+      [
+        child1,
+        slice('child-1', {
+          status: STREAM_STATUS.RUNNING,
+          activeSubagents: [
+            child({
+              executionId: 'r2',
+              childStreamId: grandchild1,
+              agentName: 'detail-review',
+            }),
+          ],
+        }),
+      ],
+      [grandchild1, slice('grandchild-1', { status: STREAM_STATUS.RUNNING })],
+    ]);
+
+    const items = streamTabsDisplayItems({
+      activeStreamId: grandchild1,
+      streams,
+      parentStream: new Map([
+        [child1, root],
+        [grandchild1, child1],
+      ]),
+      width: 80,
+    });
+
+    expect(items.map(streamTabSegmentText)).toEqual([
+      'review*',
+      '[detail-review]*',
+    ]);
+  });
+
   it('collapses the middle entries under narrow widths while preserving focus', () => {
     const root = streamId('root');
     const childIds = Array.from({ length: 5 }, (_, i) =>
