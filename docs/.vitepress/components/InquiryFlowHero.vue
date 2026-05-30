@@ -121,8 +121,8 @@ const targets = [
   font-size: var(--mk-fs-70);
   font-weight: 600;
   color: var(--color-success);
-  background: rgba(64, 160, 96, 0.13);
-  border-radius: var(--mk-radius-pill, 999px);
+  background: color-mix(in srgb, var(--color-success) 13%, transparent);
+  border-radius: var(--mk-radius-pill);
   padding: var(--mk-space-2) var(--mk-space-8);
 }
 
@@ -156,7 +156,7 @@ const targets = [
 }
 .inq-tag--in {
   color: var(--mk-syn-fn);
-  background: rgba(80, 130, 223, 0.12);
+  background: color-mix(in srgb, var(--mk-syn-fn) 12%, transparent);
 }
 
 .inq-prompt {

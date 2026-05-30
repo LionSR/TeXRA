@@ -10,6 +10,7 @@
 // mockup.css plus the StatusPill primitive for the WAITING tag; the root carries
 // `.mockup` so `--mk-*` tokens resolve and
 // the panel flips with the docs light / dark theme. Static strings only.
+import StatusPill from './StatusPill.vue';
 </script>
 
 <template>
