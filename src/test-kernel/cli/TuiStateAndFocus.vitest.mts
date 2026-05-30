@@ -86,7 +86,11 @@ describe('cliState Phase 4 fields', () => {
     expect(slice?.todos).toEqual([]);
     expect(slice?.plan).toBeNull();
     expect(slice?.processOutput.size).toBe(0);
-    expect(slice?.bypass).toEqual({ toolEdit: false, superYolo: false });
+    expect(slice?.bypass).toEqual({
+      bash: false,
+      toolEdit: false,
+      superYolo: false,
+    });
   });
 
   it('prunes parent edges when a stream is removed', () => {
