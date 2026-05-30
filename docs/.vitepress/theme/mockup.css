@@ -29,6 +29,10 @@
   --mk-syn-tac: #0e7c6b; /* Lean tactic keyword (teal) */
   --mk-del-text: #b42318; /* del text shown ON the editor surface */
   --mk-ins-text: #15803d; /* ins text shown ON the editor surface */
+  /* Hover overlay — theme-adaptive. The mockups were dark-first and used
+     rgba(255,255,255,…) hovers everywhere, which are invisible on the light
+     surface; this darkens in light, lightens in dark. */
+  --mk-hover-bg: rgba(0, 0, 0, 0.05);
 
   /* ---- Dimensional tokens (theme-independent) ----
      A maintainability indirection layer: every token equals the literal it
@@ -96,12 +100,16 @@
   --mk-size-46: 46px;
   --mk-size-48: 48px;
   --mk-size-64: 64px;
+  --mk-size-72: 72px;
   --mk-size-120: 120px;
   --mk-size-168: 168px;
   --mk-size-180: 180px;
+  --mk-size-220: 220px;
   --mk-size-256: 256px;
+  --mk-size-280: 280px;
   --mk-size-300: 300px;
   --mk-size-320: 320px;
+  --mk-size-420: 420px;
   --mk-size-470: 470px;
   --mk-size-520: 520px;
 
@@ -126,6 +134,59 @@
   --mk-fs-95: 0.95rem;
   --mk-fs-105: 1.05rem;
 }
+
+/* ---- litStyles alias bridge ----
+   These alias names (--color-*, --editor-bg, --brand, --wa-color-text-normal,
+   …) are what every shared rule below — and every hero body — references,
+   NOT the raw --mk-* tokens. They used to live only in MockupFrame's scoped
+   `.win` style, so they resolved only inside the full VS Code window. Lifting
+   them here onto `.mockup` lets FRAMELESS panels (MockupPanel) and any focused
+   figure resolve the same names. The var(--mk-*) aliases flip with the docs
+   theme automatically; the success/warning/error literals are sanctioned fixed
+   values (status colors read in both themes). */
+.mockup {
+  --wa-space-3xs: 2px;
+  --wa-space-2xs: 4px;
+  --wa-space-xs: 8px;
+  --wa-space-s: 12px;
+  --border-thin: 1px;
+  --border-medium: 2px;
+  --border-radius-small: 2px;
+  --border-radius: 3px;
+  --border-radius-large: 6px;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --editor-bg: var(--mk-bg);
+  --surface-bg: var(--mk-bg-deep);
+  --panel-bg: var(--mk-bg-soft);
+  --color-border: var(--mk-bg-raised);
+  --wa-color-text-normal: var(--mk-text-dim);
+  --color-text-secondary: var(--mk-text-faint);
+  --color-text-tertiary: var(--mk-text-faint);
+  --color-text-link: var(--mk-syn-fn);
+  --color-success: #2ea043;
+  --color-warning: #cca700;
+  --color-error: #f14c4c;
+  --wa-color-icon-info: var(--mk-syn-fn);
+  --wa-color-debug-name: #4b9ef9;
+  --brand: var(--mk-accent);
+
+  /* ---- WebAwesome bridge ----
+     Map the --wa-* design tokens that bridged Web Awesome components read
+     (wa-switch, wa-spinner, …) onto the --mk-* palette, so any wa-* element
+     placed inside a mockup themes to the editor surface and flips with
+     html.dark by construction — no per-instance overrides, no hardcoded
+     literals. CSS custom properties inherit through the shadow boundary, so
+     these reach each component's internal styles. */
+  --wa-color-surface-default: var(--mk-bg);
+  --wa-form-control-background-color: var(--mk-bg-raised);
+  --wa-form-control-border-color: var(--mk-border-soft);
+  --wa-form-control-activated-color: var(--mk-accent);
+  --wa-color-brand-fill-loud: var(--mk-accent);
+  --wa-color-brand-on-loud: #ffffff;
+  --wa-color-neutral-fill-normal: var(--mk-border-soft);
+}
 :where(html.dark) .mockup {
   --mk-bg: #1e1e1e;
   --mk-bg-soft: #252526;
@@ -145,6 +206,63 @@
   --mk-syn-tac: #4ec9b0;
   --mk-del-text: #ffb3b3;
   --mk-ins-text: #b6f0c0;
+  --mk-hover-bg: rgba(255, 255, 255, 0.06);
+}
+
+/* ============================================
+   FRAMELESS CARD (shared shell + inline mono header)
+   The focused figure components (DoctorReportCard, AgentYamlHero,
+   ToolCategoriesHero, the tool-call logs, …) all paint the same lightweight
+   bordered card with an inline mono header (icon + title + optional sub-line,
+   under a hairline). Consolidated here so each stops re-rolling it. This is the
+   inline-header variant; MockupPanel is the header-strip variant.
+   ============================================ */
+/* Match BOTH a same-element root (class="mockup mk-card", how MockCard and the
+   consolidated figures apply it) and a nested descendant — a plain
+   `.mockup .mk-card` descendant rule would NOT match the same-element case. */
+.mockup.mk-card,
+.mockup .mk-card {
+  background: var(--mk-bg);
+  border: 1px solid var(--mk-border-soft);
+  border-radius: var(--mk-radius-lg);
+  padding: var(--mk-space-12) var(--mk-space-14);
+  margin: var(--mk-space-12) 0;
+  font-family: var(--vp-font-family-base);
+  overflow: hidden;
+}
+.mockup .mk-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--mk-space-7);
+  padding-bottom: var(--mk-space-8);
+  margin-bottom: var(--mk-space-8);
+  border-bottom: 1px solid var(--mk-border);
+  font-family: var(--vp-font-family-mono);
+}
+.mockup .mk-card-head-ic {
+  font-size: var(--mk-space-13);
+  color: var(--mk-syn-fn);
+  flex-shrink: 0;
+}
+.mockup .mk-card-title {
+  font-size: var(--mk-fs-76);
+  font-weight: 600;
+  color: var(--mk-text);
+}
+.mockup .mk-card-sub {
+  font-size: var(--mk-fs-70);
+  color: var(--mk-text-faint);
+}
+
+/* Bridged Web Awesome spinner: maps wa-spinner's track/indicator to the accent,
+   so the in-flight spinners in the tool-call logs flip with the theme. Shared so
+   the bridge block isn't re-declared per component; consumers add their own size
+   (font-size) / layout (align-self) alongside this class. */
+.mockup .mk-spinner {
+  --track-width: 2px;
+  --track-color: color-mix(in srgb, var(--mk-accent) 30%, transparent);
+  --indicator-color: var(--mk-accent);
+  --speed: 0.9s;
 }
 
 /* Sidebar shell (board). Width is set per hero (content differs). */
@@ -293,7 +411,7 @@
   font-size: var(--mk-space-12);
 }
 .mockup .act:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--mk-hover-bg);
   color: var(--wa-color-text-normal);
 }
 .mockup .act-on {
@@ -346,6 +464,59 @@
 }
 .mockup .fi-rm:hover {
   color: var(--color-error);
+}
+
+/* ============================================
+   CHECKBOX DROPDOWN (open wa-dropdown popover)
+   The per-run helper menus that hang under a file-group header trigger
+   (FileSelectGroup.ts): Tool config (Attach TeX Count / Diagnostics) and Media
+   Auto-extract (Figures / TikZ / Compile PDF). Shared by ToolConfigHero,
+   AutoExtractMenu, and InstructionHeaderCard, which previously each re-rolled
+   this CSS. Each consumer keeps only its own `.wa-menu` margin (the popover's
+   position relative to its trigger). The leading check toggles via opacity so
+   every row's label stays left-aligned whether or not it is checked.
+   ============================================ */
+.mockup .wa-menu {
+  align-self: flex-start;
+  min-width: var(--mk-size-180);
+  background: var(--mk-bg-raised);
+  border: 1px solid var(--mk-border-soft);
+  border-radius: var(--mk-radius-lg);
+  padding: var(--mk-space-4);
+  box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.75);
+}
+.mockup .wa-item {
+  display: flex;
+  align-items: center;
+  gap: var(--mk-space-8);
+  padding: var(--mk-space-5) var(--mk-space-12) var(--mk-space-5)
+    var(--mk-space-6);
+  border-radius: var(--mk-radius);
+  font-size: var(--mk-fs-80);
+  color: var(--wa-color-text-normal);
+  white-space: nowrap;
+}
+.mockup .wa-item:hover {
+  background: var(--mk-hover-bg);
+}
+.mockup .wa-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--mk-space-16);
+  flex-shrink: 0;
+  font-size: var(--mk-space-11);
+  color: var(--mk-accent);
+  opacity: 0;
+}
+.mockup .wa-item.checked .wa-check {
+  opacity: 1;
+}
+/* Leading category icon before an item label (Tool config menu only). */
+.mockup .wa-lead {
+  font-size: var(--mk-space-12);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
 }
 
 /* Code / terminal output surface (editor body) */
@@ -570,7 +741,7 @@
   font-size: var(--mk-space-14);
 }
 .mockup .iact:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--mk-hover-bg);
   color: var(--wa-color-text-normal);
 }
 .mockup .prompt {
@@ -671,7 +842,7 @@
   gap: var(--mk-space-5);
   font-size: var(--mk-fs-68);
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border-radius: var(--mk-radius-pill);
   padding: 1px var(--mk-space-8);
   flex-shrink: 0;
@@ -749,7 +920,7 @@
   width: var(--mk-space-11);
   height: var(--mk-space-11);
   flex-shrink: 0;
-  border: 2px solid rgba(200, 155, 224, 0.3);
+  border: 2px solid color-mix(in srgb, var(--mk-accent) 30%, transparent);
   border-top-color: var(--mk-accent);
   border-radius: 50%;
   animation: mk-spin 0.9s linear infinite;
@@ -816,17 +987,17 @@
   color: inherit;
 }
 .mockup .tcard:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--mk-hover-bg);
 }
 .mockup .tcard.active {
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
 }
 .mockup .tcard.open {
   display: block;
   padding: var(--mk-space-4) var(--mk-space-6);
 }
 .mockup .tcard.open:hover {
-  background: rgba(200, 155, 224, 0.13);
+  background: color-mix(in srgb, var(--mk-accent) 13%, transparent);
 }
 .mockup .tcard-sum {
   display: flex;
@@ -889,7 +1060,7 @@
 }
 .mockup .tc-code {
   color: var(--mk-accent);
-  background: rgba(200, 155, 224, 0.12);
+  background: color-mix(in srgb, var(--mk-accent) 12%, transparent);
   border-radius: var(--mk-radius-sm);
   padding: 0 var(--mk-space-5);
 }
@@ -973,12 +1144,12 @@
 }
 .mockup .dt:hover {
   color: var(--wa-color-text-normal);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--mk-hover-bg);
 }
 .mockup .dt-on {
   color: var(--mk-text);
   font-weight: 600;
-  background: rgba(200, 155, 224, 0.08);
+  background: color-mix(in srgb, var(--mk-accent) 8%, transparent);
   border-left-color: var(--brand);
 }
 

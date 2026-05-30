@@ -1,3 +1,9 @@
+<script setup>
+import ToolStatusPanel from '../.vitepress/components/ToolStatusPanel.vue';
+import ToolConfigHero from '../.vitepress/components/ToolConfigHero.vue';
+import TikzDepsHero from '../.vitepress/components/TikzDepsHero.vue';
+</script>
+
 # LaTeX Tools
 
 TeXRA doesn't just send text to an AI and hope for the best. It plugs into battle-tested LaTeX tools so formatting, diffing, figure extraction, and citation lookup are handled by the right software — not by a language model guessing at syntax.
@@ -14,7 +20,11 @@ TeXRA doesn't just send text to an AI and hope for the best. It plugs into battl
 | <wa-icon library="texra" name="book"></wa-icon> Bibliography resolution       | Built-in                   |
 | <wa-icon library="texra" name="symbol-operator"></wa-icon> Symbolic math      | `wolfram`                  |
 
-All are configured from **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) or **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>). Missing dependencies show <wa-icon library="texra" name="warning"></wa-icon> **Not Found**; ready ones show <wa-icon library="texra" name="check"></wa-icon> **Available**.
+All are configured from **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) or **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>), where each tool shows its status at a glance.
+
+<ToolStatusPanel />
+
+<p class="hero-caption">Dashboard → Tools — ready tools show a green <strong>Available</strong> check; missing dependencies show an amber <strong>Not Found</strong> with a one-click <strong>Install</strong>.</p>
 
 ## <wa-icon library="texra" name="symbol-keyword"></wa-icon> Formatting Tools
 
@@ -71,13 +81,11 @@ The `extract_figures` tool finds `\includegraphics` references and returns the i
 
 ### TikZ Figures
 
-The `extract_tikz_figures` tool discovers `tikzpicture` environments, compiles them to standalone PDFs, and returns the rendered output.
+The `extract_tikz_figures` tool discovers `tikzpicture` environments, compiles them to standalone PDFs, and returns the rendered output. It depends on three binaries, all surfaced on **Dashboard → Tools**:
 
-**Requirements (all checked on Dashboard → Tools):**
+<TikzDepsHero />
 
-- `latexmk` (preferred) or `pdflatex`
-- `GraphicsMagick` or `ImageMagick` for conversion
-- `Ghostscript` for PDF processing
+<p class="hero-caption">TikZ extraction needs all three present. Here <code>Ghostscript</code> is <strong>Not Found</strong> — the <strong>Install guide</strong> link points at the setup steps for the missing dependency.</p>
 
 See the [TikZ Figures guide](./tikz-figures.md) for workflows and the [Installation guide](./installation.md) for dependency setup.
 
@@ -104,6 +112,12 @@ Control how TeXRA uses these tools from the UI:
 - **Tool Config Dropdown** (<wa-icon library="texra" name="tools"></wa-icon>): enable per-run helpers like **Attach TeX Count** (<wa-icon library="texra" name="symbol-numeric"></wa-icon>) or **Attach Diagnostics** (<wa-icon library="texra" name="tools"></wa-icon>). See [Configuration](./configuration.md#agent-execution-settings-webview-interface).
 - **Auto Extract Dropdown** (<wa-icon library="texra" name="wand"></wa-icon>): toggle automatic extraction of Figures or TikZ Figures. See [Working with Figures](./working-with-figures.md).
 - **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>): enable/disable whole tool groups, view install guides, and run one-click installers.
+
+Both per-run dropdowns live in the file-group headers, right next to your input and media files:
+
+<ToolConfigHero />
+
+<p class="hero-caption">The <strong>Tool Config</strong> menu (<wa-icon library="texra" name="tools"></wa-icon> on the Input header) toggles <strong>Attach TeX Count</strong>; the <strong>Auto Extract</strong> menu (<wa-icon library="texra" name="wand"></wa-icon> on the Media header) toggles <strong>Figures</strong>, <strong>TikZ Figures</strong>, and <strong>Compile Input PDF</strong>. Active helpers tint their buttons.</p>
 
 For detailed tool settings (formatter paths, TikZ processing options, etc.), see the [Configuration guide](./configuration.md).
 

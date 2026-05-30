@@ -1,3 +1,8 @@
+<script setup>
+import FlowSteps from '../.vitepress/components/FlowSteps.vue';
+import PolishRunTree from '../.vitepress/components/PolishRunTree.vue';
+</script>
+
 # First run
 
 You have TeXRA installed. This page walks you through running one
@@ -64,14 +69,12 @@ texra run polish \
 ```
 
 The run streams reasoning, tool calls, and the assembled output.
-When it completes, polish has written:
+When it completes, polish has written one folder per round under
+`.texra/runs/<run-id>/`:
 
-```
-.texra/runs/<run-id>/r0/draft.tex   # First revision
-.texra/runs/<run-id>/r1/draft.tex   # Critique pass
-```
+<PolishRunTree />
 
-(The input filename is preserved — not `output.tex`.)
+<p class="hero-caption">Each round lands in its own folder and keeps the input filename — <code>r0/draft.tex</code> is the first revision, <code>r1/draft.tex</code> the critique pass and final. Add <code>--output draft.polished.tex</code> to write the result next to your input instead.</p>
 
 To diff against your original:
 
@@ -79,18 +82,17 @@ To diff against your original:
 diff -u draft.tex .texra/runs/<run-id>/r1/draft.tex
 ```
 
-To write the final result next to your input instead of into task
-storage, add `--output draft.polished.tex` to the command.
-
 ## What just happened
 
-Polish ran two passes:
+Polish ran two passes: a first revision, then a critique pass that
+rereads its own output and revises again.
 
-- **Round 0** — read your file, applied your instruction, wrote the
-  first revision.
-- **Round 1** — reread its own Round 0 output, checked for missing
-  math, weakened sentences, generic filler, and out-of-scope changes,
-  then revised again.
+<FlowSteps :steps="[
+  { n: 1, icon: 'wand', title: 'Round 0 — draft', desc: 'Reads draft.tex, applies your instruction, writes the first revision.', chips: [{ text: 'r0/draft.tex', variant: 'info', icon: 'file-code' }] },
+  { n: 2, icon: 'search', title: 'Round 1 — critique', desc: 'Rereads its own Round 0 output, then revises again.', chips: [{ text: 'missing math', variant: 'warning' }, { text: 'weakened sentences', variant: 'warning' }, { text: 'generic filler', variant: 'warning' }, { text: 'out-of-scope edits', variant: 'warning' }, { text: 'r1/draft.tex', variant: 'info', icon: 'file-code' }] }
+]" />
+
+<p class="hero-caption">Polish is a two-pass workflow: Round 0 drafts from your instruction, Round 1 critiques its own output against a fixed checklist and revises into <code>r1/draft.tex</code>.</p>
 
 Workflow agents like `polish` do not call tools. They read input, run
 their pipeline, and write a diff. The next step up — tool-use agents

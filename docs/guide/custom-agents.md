@@ -1,5 +1,11 @@
 # Custom Agents
 
+<script setup>
+import ToolCategoriesHero from '../.vitepress/components/ToolCategoriesHero.vue';
+import AgentAnatomyHero from '../.vitepress/components/AgentAnatomyHero.vue';
+import OutputMappingHero from '../.vitepress/components/OutputMappingHero.vue';
+</script>
+
 Every lab has its own writing style, formatting quirks, and recurring tasks. Maybe your group always needs a "rewrite the abstract for a Nature-style letter" pass, or you want an agent that converts your internal notes into arXiv-ready LaTeX. Custom agents let you encode these workflows once and reuse them with a single click.
 
 This guide walks you through creating your own agent definition files (`.yaml`) so TeXRA does exactly what your research needs—no coding required.
@@ -41,7 +47,13 @@ If you'd like TeXRA to draft an agent for you, click **New Agent** (<wa-icon lib
 
 ### <wa-icon library="texra" name="edit"></wa-icon> Step 3 — Define the Agent
 
-Open the newly created `.yaml` file and you'll find a starter template already inserted. Customize it to define your agent's structure. Here are the key fields:
+Open the newly created `.yaml` file and you'll find a starter template already inserted. An agent is just three labelled sections plus one mapping you need to keep in mind:
+
+<AgentAnatomyHero />
+
+<p class="hero-caption">An agent file is <code>inherits</code> + <code>settings</code> + <code>prompts</code>; the <code>userRequest</code> array maps position-by-position onto rounds (item <code>[0]</code> is Round 0, item <code>[1]</code> the first reflection).</p>
+
+Customize it to define your agent's structure. Here are the key fields:
 
 ```yaml
 # --- Agent Inheritance (Optional) ---
@@ -189,17 +201,11 @@ Tool-use agents are interactive: instead of producing a single polished file, th
 
 **Typical user story:** You're writing up results for a conference submission and realise you need three new BibTeX entries, a TikZ architecture diagram, and a consistency pass across four `.tex` files. Rather than juggling browser tabs and terminal windows, you open a `research` agent (<wa-icon library="texra" name="sparkle"></wa-icon>) and describe what you need. The agent reads your project, searches arXiv for the missing references, drafts the TikZ code, and edits the files — all in one session.
 
-To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA groups tools by category (matching **Dashboard → Tools** <wa-icon library="texra" name="tools"></wa-icon>):
+To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA groups tools by category (matching **Dashboard → Tools** <wa-icon library="texra" name="tools"></wa-icon>) — each chip below is a token you can drop straight into your `tools:` array:
 
-| Category                                                                        | What it lets the agent do                                           | Example tool names                                                                                       |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| <wa-icon library="texra" name="files"></wa-icon> **File & Shell**               | Read, write, edit, search, list, and run commands in your project   | `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `ls`, `bash`                                     |
-| <wa-icon library="texra" name="file-code"></wa-icon> **LaTeX**                  | Extract figures, TikZ, and bibliography; report compile diagnostics | `extract_figures`, `extract_tikz_figures`, `extract_bib_entries`, `diagnostics`, `texcount`              |
-| <wa-icon library="texra" name="mortar-board"></wa-icon> **Academic Research**   | Search arXiv and Crossref, resolve DOIs, manage Zotero              | `arxiv_search`, `arxiv_metadata`, `download_arxiv_source`, `crossref_doi`, `crossref_search`, `zotero_*` |
-| <wa-icon library="texra" name="globe"></wa-icon> **Web**                        | Fetch pages and search the internet                                 | `web_search`, `web_fetch`                                                                                |
-| <wa-icon library="texra" name="symbol-operator"></wa-icon> **Computation**      | Run Wolfram Language, delegate to Codex, consult another chat model | `wolfram`, `codex`, `inquiry`                                                                            |
-| <wa-icon library="texra" name="beaker"></wa-icon> **Lean 4**                    | Check Lean proofs and search Mathlib                                | `lean_diagnostics`, `lean_inspect`, `lean_loogle`, `lean_file`, `lean_project`                           |
-| <wa-icon library="texra" name="type-hierarchy"></wa-icon> **Memory & Workflow** | Persistent memory, to-do lists, sub-agent delegation                | `memory`, `todo_write`, `plan`, `delegate_workflow`, `delegate_agent`, `executions`, `accept_run_files`  |
+<ToolCategoriesHero />
+
+<p class="hero-caption">The seven tool categories on <strong>Dashboard → Tools</strong>; every chip is a name you can list verbatim in your agent's <code>tools:</code> array.</p>
 
 For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `research`, `review`, `lean`, or `numerics`) in the **Agents** tab — their `tools:` array shows exactly which tools are wired up.
 
@@ -253,8 +259,13 @@ prompts:
 ```
 
 This structure lets TeXRA save each `<document>` block to the corresponding
-filename from the selected input list or from `settings.defaultOutputFiles`. See
-[Handling Multiple Files](./multiple-output.md) for more details.
+filename from the selected input list or from `settings.defaultOutputFiles`:
+
+<OutputMappingHero />
+
+<p class="hero-caption">Each <code>&lt;document name="…"&gt;</code> block is saved to the file whose name matches; a <code>name</code> that isn't in the declared list is skipped and nothing is written.</p>
+
+See [Handling Multiple Files](./multiple-output.md) for more details.
 
 ### <wa-icon library="texra" name="save"></wa-icon> Step 4 — Save and Reload
 

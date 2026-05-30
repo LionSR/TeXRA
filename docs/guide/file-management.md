@@ -1,10 +1,60 @@
+<script setup>
+import StorageLifecycleFlow from '../.vitepress/components/StorageLifecycleFlow.vue';
+</script>
+
 # File Management
 
 Academic projects often involve juggling numerous files – main documents, chapters, figures, references, auxiliary styles... TeXRA aims to make this less of a circus act with its comprehensive file management system. This guide explains how to effectively organize, select, and manage files when working with TeXRA.
 
 ## File Categories
 
-TeXRA organizes files into several categories:
+TeXRA organizes files into three categories, each with its own accepted file types and read/write role:
+
+<FeatureCards
+  min="220px"
+  :cards="[
+    {
+      icon: 'file-code',
+      title: 'Input',
+      tag: 'Read + edit',
+      tagVariant: 'success',
+      desc: 'Primary documents the agent reads and rewrites.',
+      chips: [
+        { text: '.tex', variant: 'accent' },
+        { text: '.txt', variant: 'accent' },
+        { text: '.md', variant: 'accent' },
+      ],
+    },
+    {
+      icon: 'book',
+      title: 'Context',
+      tag: 'Read-only',
+      tagVariant: 'info',
+      desc: 'Reference material the agent sees but never modifies.',
+      chips: [
+        { text: '.bib', variant: 'info' },
+        { text: '.bbl', variant: 'info' },
+        { text: '.sty', variant: 'info' },
+        { text: '.cls', variant: 'info' },
+        { text: 'reference papers', variant: 'neutral' },
+      ],
+    },
+    {
+      icon: 'device-camera-video',
+      title: 'Media',
+      tag: 'Visual / audio',
+      tagVariant: 'neutral',
+      desc: 'Figures and recordings handed to vision/audio models.',
+      chips: [
+        { text: 'images', variant: 'neutral' },
+        { text: 'PDF figures', variant: 'neutral' },
+        { text: 'audio', variant: 'neutral' },
+      ],
+    },
+  ]"
+/>
+
+<p class="hero-caption">Three categories: Input is read + edited, Context is read-only, Media carries visual and audio content.</p>
 
 ### Input Files
 
@@ -171,9 +221,13 @@ executions/<executionId>/
 ```
 
 Workflow outputs are written there first, not directly over your workspace
-files. Use **Accept** to copy reviewed outputs back into the workspace, **Pack**
-to archive the whole run, and **Clean** to remove the run folder when you no
-longer need it. The folder also stores intermediate artifacts such as optional
+files. Three commands then move that run's artifacts to three different places:
+
+<StorageLifecycleFlow />
+
+<p class="hero-caption">Accept copies reviewed outputs into the workspace, Pack archives the run into History, and Clean deletes the run folder — your input files are never touched.</p>
+
+The folder also stores intermediate artifacts such as optional
 debug JSON files written when `texra.debug.saveDebugObjects` is enabled.
 
 ## Working with LaTeX Projects

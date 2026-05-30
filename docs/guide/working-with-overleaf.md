@@ -1,3 +1,9 @@
+<script setup>
+import OverleafCloneFlow from '../.vitepress/components/OverleafCloneFlow.vue';
+import OverleafRoundTripFlow from '../.vitepress/components/OverleafRoundTripFlow.vue';
+import OverleafEditActions from '../.vitepress/components/OverleafEditActions.vue';
+</script>
+
 # Power Up Overleaf with TeXRA: A Git-Based Workflow
 
 Overleaf is the go-to platform for collaborative LaTeX writing. But what if you could combine its convenience with the advanced AI editing, local tool integration (like `latexdiff`), and VS Code power offered by TeXRA? You can, using Overleaf\'s Git integration!
@@ -30,6 +36,12 @@ and push as usual.
 
 ## Workflow Steps
 
+The whole loop is a round-trip: pull your project down from Overleaf, edit it locally with TeXRA, then push your commits back.
+
+<OverleafRoundTripFlow />
+
+<p class="hero-caption">Clone or pull brings the project into VS Code, where TeXRA's agents do the heavy lifting; <code>git push</code> sends your committed changes straight back to Overleaf for your collaborators.</p>
+
 ### 1. Clone Your Overleaf Project
 
 #### Option A: Use TeXRA's clone command (recommended)
@@ -38,6 +50,10 @@ and push as usual.
 2.  Paste the Overleaf project URL or 24-character project ID when prompted.
 3.  Enter your Overleaf Git token (it begins with `olp_`). TeXRA saves it to VS Code's secret storage so future clones can reuse it.
 4.  The command runs `git clone` directly into your workspace root so the cloned project becomes the repository you're working in. Make sure that folder is empty before starting.
+
+<OverleafCloneFlow />
+
+<p class="hero-caption">Three quick-input prompts: pick the command, paste the project URL or 24-character ID, then enter your <code>olp_</code> token — cached to VS Code secret storage for next time.</p>
 
 > **Token storage:** Reset the cached token anytime via the VS Code command **Developer: Clear Secret Storage**.
 
@@ -62,6 +78,10 @@ and push as usual.
     - Use `latexdiff` (<wa-icon library="texra" name="diff-single"></wa-icon>) or merge (<wa-icon library="texra" name="merge"></wa-icon>).
     - Leverage features like auto-extract (<wa-icon library="texra" name="wand"></wa-icon>) and tool options (<wa-icon library="texra" name="tools"></wa-icon>).
     - Optionally use LaTeX Workshop for local previews ([Setup](./latex-compilation.md)).
+
+<OverleafEditActions />
+
+<p class="hero-caption">Each toolbar action in the local edit loop, from selecting files and writing instructions through <code>Execute</code>, reviewing outputs, <code>latexdiff</code>/merge, and auto-extract.</p>
 
 ### 3. Commit Local Changes
 
