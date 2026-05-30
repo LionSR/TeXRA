@@ -14,10 +14,12 @@ import {
   type ConversationEntry,
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
+import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
 import { finalizeAssistantTranscriptEntries } from '@cli/chat/tui/state/transcript';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import {
   STREAM_STATUS,
+  TOOL_USE_STATUS,
   type NormalizedToolUse,
   type StreamTabId,
 } from '@shared/schemas';
@@ -61,6 +63,27 @@ function toolEntry(
       isUserFeedback: false,
       headerSummary: '',
       status,
+    },
+  };
+}
+
+function compactExecutionsEntry(id: string, path: string): ConversationEntry {
+  return {
+    id,
+    role: 'tool',
+    text: '',
+    finalized: true,
+    toolUse: {
+      parsed: {},
+      toolName: 'executions',
+      errorText: '',
+      outputText: '',
+      userInstructionText: '',
+      input: { path },
+      isError: false,
+      isUserFeedback: false,
+      headerSummary: '',
+      status: TOOL_USE_STATUS.COMPLETED,
     },
   };
 }
@@ -300,6 +323,41 @@ describe('CLI conversation transcript splitting', () => {
     });
 
     expect(items.slice(1).map((item) => item.id)).toEqual(['u1']);
+  });
+
+  it('compacts adjacent one-line tool rows in the transcript viewer', () => {
+    const lines = transcriptToLines(
+      sliceWithEntries(STREAM_ID, [
+        compactExecutionsEntry('t1', '/executions/3a780a389327/report'),
+        compactExecutionsEntry('t2', '/executions/3a780a389327/conversation'),
+      ]),
+      80,
+    );
+
+    expect(lines).toEqual([
+      '● executions (/executions/3a780a389327/report)',
+      '● executions (/executions/3a780a389327/conversation)',
+    ]);
+  });
+
+  it('keeps transcript viewer separators around prose and detailed tool rows', () => {
+    const lines = transcriptToLines(
+      sliceWithEntries(STREAM_ID, [
+        compactExecutionsEntry('t1', '/executions/3a780a389327/report'),
+        entry('a1', 'assistant', 'Read the report.', true),
+        toolEntry('t2', 'completed'),
+      ]),
+      80,
+    );
+
+    expect(lines).toEqual([
+      '● executions (/executions/3a780a389327/report)',
+      '',
+      'Read the report.',
+      '',
+      '● Bash (ls)',
+      '⎿ ok',
+    ]);
   });
 });
 
