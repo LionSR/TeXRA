@@ -400,9 +400,14 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
     visibleOutput.length === 0 &&
     !patchGroups &&
     !toolUse.isError;
+  const hasDetails =
+    visibleOutput.length > 0 ||
+    (patchGroups?.length ?? 0) > 0 ||
+    toolUse.isError ||
+    showNoOutput;
 
   return (
-    <Box flexDirection="column" marginBottom={1}>
+    <Box flexDirection="column" marginBottom={hasDetails ? 1 : 0}>
       <Box flexDirection="row" flexWrap="nowrap">
         <Text color={color} dimColor={!color}>
           {STATUS_DOT}{' '}
