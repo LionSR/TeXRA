@@ -91,11 +91,36 @@ adapt to intermediate results).
 
 ## Who uses TeXRA
 
-- **Mathematicians** — papers with complex theorem environments, notation consistency across long proofs, Lean 4 formalization.
-- **Theoretical physicists** — multi-file manuscripts with extensive equation environments, Feynman diagrams, large bibliographies.
-- **Computational scientists** — papers combining numerical methods, algorithm descriptions, convergence plots, reproducible workflows.
-- **PhD students** — thesis chapters with consistent notation, literature surveys in new subfields, seminar talks from written work.
-- **Research groups** — collaborations where every change is traceable and auditable by co-authors and referees.
+<FeatureCards
+  min="220px"
+  :cards="[
+    {
+      icon: 'book',
+      title: 'Mathematicians',
+      desc: 'Complex theorem environments, notation consistency across long proofs, Lean 4 formalization.',
+    },
+    {
+      icon: 'bolt',
+      title: 'Theoretical physicists',
+      desc: 'Multi-file manuscripts with heavy equation environments, Feynman diagrams, large bibliographies.',
+    },
+    {
+      icon: 'chart-line',
+      title: 'Computational scientists',
+      desc: 'Numerical methods, algorithm descriptions, convergence plots, reproducible workflows.',
+    },
+    {
+      icon: 'graduation-cap',
+      title: 'PhD students',
+      desc: 'Thesis chapters with consistent notation, literature surveys in new subfields, talks from written work.',
+    },
+    {
+      icon: 'users',
+      title: 'Research groups',
+      desc: 'Collaborations where every change is traceable and auditable by co-authors and referees.',
+    },
+  ]"
+/>
 
 ## Privacy and data handling
 
