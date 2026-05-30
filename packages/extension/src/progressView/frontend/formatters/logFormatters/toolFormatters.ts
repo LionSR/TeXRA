@@ -200,15 +200,15 @@ type ToolSectionOptions = {
   extraClass?: string;
 };
 
-/**
- * Build a tool section with appropriate code highlighting based on tool type.
- */
 function toolDisplayText(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value == null) return '';
   return String(value);
 }
 
+/**
+ * Build a tool section with appropriate code highlighting based on tool type.
+ */
 function buildToolSection(
   label: string,
   text: unknown,
@@ -259,7 +259,6 @@ type ToolSectionContext = {
   filePath: string;
   parsedOutput: unknown;
   outputText: string;
-  isInProgress: boolean;
 };
 
 function buildEditDiffInputSections(ctx: ToolSectionContext): TemplateResult[] {
@@ -767,7 +766,6 @@ export function formatToolUseTemplate(
     filePath,
     parsedOutput: parsed.output,
     outputText,
-    isInProgress,
   });
 
   // Show output if present

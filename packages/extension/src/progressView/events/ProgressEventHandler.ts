@@ -443,12 +443,7 @@ export class ProgressEventHandler {
         [opts.activeField]: opts.next,
         [opts.countField]: (prev[opts.countField] ?? 0) + newlyFinished,
       };
-      nextBadges = {
-        activeSubagents: updatedState.activeSubagents,
-        finishedSubagentCount: updatedState.finishedSubagentCount,
-        activeProcesses: updatedState.activeProcesses,
-        finishedProcessCount: updatedState.finishedProcessCount,
-      };
+      nextBadges = this.toBadgeSnapshot(updatedState);
       return updatedState;
     });
 
@@ -459,6 +454,15 @@ export class ProgressEventHandler {
     ) {
       this.webviewUpdater.updateStreamBadges(parentStreamId, nextBadges);
     }
+  }
+
+  private toBadgeSnapshot(state: StreamExecutionState): StreamBadgeSnapshot {
+    return {
+      activeSubagents: state.activeSubagents,
+      finishedSubagentCount: state.finishedSubagentCount,
+      activeProcesses: state.activeProcesses,
+      finishedProcessCount: state.finishedProcessCount,
+    };
   }
 
   private markAllRunningTasksAsCancelled(): void {
@@ -494,7 +498,7 @@ export class ProgressEventHandler {
 
     this.webviewBridge.syncStream(stream);
 
-    const { extras } = this.prepareStreamSyncExtras(stream);
+    const extras = this.buildStreamSyncExtras(stream);
     const { todos, plan } = this.state.getWorkPlan(stream);
     const queuedFollowUps = ToolUseFollowUpQueue.getAll(stream);
     const agentCategory = this.getStreamCategory(stream);
@@ -509,12 +513,7 @@ export class ProgressEventHandler {
       const streamState = this.state.getStreamState(stream);
       if (streamState) {
         conversationProgress = streamState.conversationProgress;
-        badges = {
-          activeSubagents: streamState.activeSubagents,
-          finishedSubagentCount: streamState.finishedSubagentCount,
-          activeProcesses: streamState.activeProcesses,
-          finishedProcessCount: streamState.finishedProcessCount,
-        };
+        badges = this.toBadgeSnapshot(streamState);
       }
       parentStreamId = this.state.meta.getParentStreamId(stream);
     }
@@ -544,9 +543,9 @@ export class ProgressEventHandler {
     });
   }
 
-  private prepareStreamSyncExtras(stream: StreamTabId): {
-    extras: import('@progressView/managers/WebviewUpdater').LogContentExtras;
-  } {
+  private buildStreamSyncExtras(
+    stream: StreamTabId,
+  ): import('@progressView/managers/WebviewUpdater').LogContentExtras {
     // Workflow files/missing outputs are flat (one run per tab).
     const workflowFiles = mapToRecord(this.state.outputFiles.getFiles(stream));
     const workflowMissingOutputs = mapToRecord(
@@ -565,13 +564,11 @@ export class ProgressEventHandler {
     const contextState = this.state.getContextState(stream);
 
     return {
-      extras: {
-        workflowFiles,
-        workflowMissingOutputs,
-        workflowCompileFailures,
-        runUsage,
-        contextState,
-      },
+      workflowFiles,
+      workflowMissingOutputs,
+      workflowCompileFailures,
+      runUsage,
+      contextState,
     };
   }
 

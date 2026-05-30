@@ -114,7 +114,7 @@ const UserPartSchema = z.discriminatedUnion('type', [
 ]);
 type UserPart = z.infer<typeof UserPartSchema>;
 
-export const ExportNodeSchema = z.discriminatedUnion('kind', [
+const ExportNodeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('user-message'), parts: z.array(UserPartSchema) }),
   z.object({ kind: z.literal('assistant-text'), text: z.string() }),
   z.object({
