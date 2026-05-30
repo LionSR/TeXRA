@@ -23,6 +23,7 @@ import { listToolInjections } from '@agent/runtime/toolInjection';
 import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import type { ToolDefinition } from '@model';
+import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   END_GROUP_STATUS,
   EXECUTION_STATUS,
@@ -38,6 +39,10 @@ import {
   getUnavailableToolNamesCached,
 } from '@tools/toolAvailability';
 import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
+import {
+  availableModelNamesFromOptions,
+  withDelegationModelAvailability,
+} from '@tools/delegationModelAvailability';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
@@ -97,12 +102,26 @@ export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
 const IMMEDIATE_COMPACTION_FOLLOW_UP =
   'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
 
-function resolveTools(
+async function availableDelegationModelNamesForTools(
+  tools: readonly ToolDefinition[],
+): Promise<readonly string[] | null | undefined> {
+  if (!tools.some((tool) => DELEGATION_TOOLS.has(tool.name))) {
+    return undefined;
+  }
+
+  try {
+    return availableModelNamesFromOptions(await computeModelOptionsData());
+  } catch {
+    return null;
+  }
+}
+
+async function resolveTools(
   tools: AgentToolUseSetting['tools'],
   registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
   delegationBlocked: boolean,
-): { tools: ToolDefinition[]; delegationTrimmed: boolean } {
+): Promise<{ tools: ToolDefinition[]; delegationTrimmed: boolean }> {
   const disabled = getDisabledToolNames();
   const unavailable = getUnavailableToolNamesCached();
   const missingDependency: string[] = [];
@@ -147,7 +166,17 @@ function resolveTools(
     notifyUnavailableTools(missingDependency);
   }
 
-  return { tools: resolved, delegationTrimmed };
+  const availableModelNames =
+    await availableDelegationModelNamesForTools(resolved);
+  return {
+    tools:
+      availableModelNames === undefined
+        ? resolved
+        : resolved.map((tool) =>
+            withDelegationModelAvailability(tool, availableModelNames),
+          ),
+    delegationTrimmed,
+  };
 }
 
 export async function runToolUseFlow<C = unknown>(
@@ -165,7 +194,7 @@ export async function runToolUseFlow<C = unknown>(
     delegationDepth,
     delegationConfig,
   );
-  const { tools: resolvedTools, delegationTrimmed } = resolveTools(
+  const { tools: resolvedTools, delegationTrimmed } = await resolveTools(
     setting.tools,
     registry,
     logger,
