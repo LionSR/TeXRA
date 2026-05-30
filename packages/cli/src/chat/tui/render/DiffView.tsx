@@ -31,7 +31,7 @@ export interface DiffStats {
 const NO_NEWLINE_MARKER = '\\';
 const MIN_DIFF_WIDTH = 20;
 const DEFAULT_DIFF_WIDTH = 74;
-const COMPACT_DIFF_DISPLAY_LINES = 3;
+export const COMPACT_DIFF_DISPLAY_LINES = 3;
 
 type OverflowMarkerKind = 'hidden' | 'more' | 'previous';
 
