@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computePickerListLayout,
   computeTaskDetailLayout,
+  pickerKeyHints,
 } from '@cli/chat/tui/modals/ChildControlPicker';
 import {
   buildChildControlItems,
@@ -521,6 +522,22 @@ describe('CLI child execution controls', () => {
     });
     expect(nextPickerIndex(0, 3, 'up')).toBe(2);
     expect(nextPickerIndex(2, 3, 'down')).toBe(0);
+  });
+
+  it('advertises only applicable keys for empty child pickers', () => {
+    expect(pickerKeyHints('tasks', 0)).toEqual([
+      { key: 'Esc', action: 'close' },
+    ]);
+    expect(pickerKeyHints('tasks', 1)).toEqual([
+      { key: '↑/↓', action: 'navigate' },
+      { key: 'Enter', action: 'view' },
+      { key: 'k', action: 'kill' },
+      { key: 'Esc', action: 'close' },
+    ]);
+    expect(pickerKeyHints('subagents', 1)).toContainEqual({
+      key: 'Enter',
+      action: 'focus',
+    });
   });
 
   it('preserves output rows in compact task detail views', () => {
