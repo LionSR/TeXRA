@@ -97,10 +97,6 @@ function outputCopyRelativePath(output: OutputFileSummary): string {
   return getSafeDocumentRelativePath(withoutRoundDir.join('/'));
 }
 
-function expectedOutputCopyRelativePath(outputFile: string): string {
-  return getSafeDocumentRelativePath(outputFile);
-}
-
 export function expectedOutputFilesForOutputDir(
   agent: AgentEntry | undefined,
   inputFiles: readonly string[],
@@ -188,7 +184,7 @@ export async function resolveWorkflowOutput(
 
     const expectedOutputFiles = options.expectedOutputFiles ?? [];
     const missing = expectedOutputFiles
-      .map(expectedOutputCopyRelativePath)
+      .map((f) => getSafeDocumentRelativePath(f))
       .filter((expected) => !outputsByRelativePath.has(expected));
     if (missing.length > 0) {
       throw new Error(

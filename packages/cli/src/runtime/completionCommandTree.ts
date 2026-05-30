@@ -94,12 +94,16 @@ export async function collectCommands(
     commandArgs(command),
     commandSubcommands(command),
   ]);
-  const flags = Object.entries(args)
-    .map(([name, arg]) => flagFromArg(name, arg))
-    .filter((flag): flag is CompletionFlag => flag !== undefined);
-  const positionals = Object.entries(args)
-    .filter(([, arg]) => arg.type === 'positional')
-    .map(([name]) => name);
+  const flags: CompletionFlag[] = [];
+  const positionals: string[] = [];
+  for (const [name, arg] of Object.entries(args)) {
+    if (arg.type === 'positional') {
+      positionals.push(name);
+    } else {
+      const flag = flagFromArg(name, arg);
+      if (flag !== undefined) flags.push(flag);
+    }
+  }
   const current: CompletionCommand = {
     path,
     description: meta.description ?? '',

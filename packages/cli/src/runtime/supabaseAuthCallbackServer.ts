@@ -55,15 +55,12 @@ export async function startLoopbackCallbackServer(
         if (session) resolveSession(session);
       })
       .catch((error: unknown) => {
+        const recoverable = isRecoverableCallbackRequestError(error);
         const message = toErrorMessage(error);
-        if (!isRecoverableCallbackRequestError(error)) {
+        if (!recoverable) {
           rejectSession(error instanceof Error ? error : new Error(message));
         }
-        writeHtml(
-          response,
-          isRecoverableCallbackRequestError(error) ? 400 : 500,
-          failureHtml(message),
-        );
+        writeHtml(response, recoverable ? 400 : 500, failureHtml(message));
       });
   });
 

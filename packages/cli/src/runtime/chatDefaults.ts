@@ -1,5 +1,3 @@
-import { MODEL_CONFIGS } from 'llm-zoo';
-
 import { getAgent, loadAgents } from '@agent/index';
 import { listExecutions } from '@agent/storage';
 import { AgentCategory } from '@agent/core/AgentDataclass';
@@ -7,6 +5,7 @@ import { isNonEmptyString } from '@utils/core/stringCore';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
+  isKnownCliModel,
   loadWorkspaceCliConfig,
   resolveConfiguredAgent,
   resolveConfiguredModel,
@@ -43,7 +42,7 @@ function pickDefaults(parsed: unknown): PartialDefaults {
   if (isNonEmptyString(record.agent)) out.agent = record.agent.trim();
   if (isNonEmptyString(record.model)) {
     const model = record.model.trim();
-    if (MODEL_CONFIGS[model]) out.model = model;
+    if (isKnownCliModel(model)) out.model = model;
   }
   return out;
 }

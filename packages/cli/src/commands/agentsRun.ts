@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { getAgent, loadAgents } from '@agent/index';
+import { loadAgents } from '@agent/index';
 import { writeTerminalStatus } from '@agent/storage';
 import {
   AgentConfigSchema,
@@ -29,11 +29,12 @@ import {
   resolveCliRunModel,
 } from './_helpers/modelArg';
 import { emitCliResult } from './_helpers/output';
-import { shouldHonorRemoteAgentPriority } from './_helpers/remoteAgents';
+import { resolveAgentWithRemoteFallback } from './_helpers/remoteAgents';
 import { executeCliRequest } from './_helpers/runExecution';
 import {
   createCliRunResult,
   terminalStatusExitCode,
+  toolUseResultText,
   type CliRunResult,
 } from './_helpers/terminalStatus';
 import { expandWorkflowInputSpecs } from './_helpers/workflowInputs';
@@ -90,9 +91,7 @@ function writeToolUseRunResult(
   emitCliResult(context, {
     json: result,
     ndjson: { kind: 'agent-result', result },
-    text:
-      result.lastResponse?.trim() ||
-      `${result.status}\nExecution: ${result.executionId}`,
+    text: toolUseResultText(result),
   });
 }
 
@@ -127,11 +126,7 @@ async function runToolUseAgent(
   await initCliPlatform(runContext);
   installCliApprovalHandlers(runContext);
   await loadAgents({ includeRemote: false });
-  let agent = getAgent(init.agent);
-  if (!agent || (await shouldHonorRemoteAgentPriority(init.agent))) {
-    await loadAgents();
-    agent = getAgent(init.agent);
-  }
+  const agent = await resolveAgentWithRemoteFallback(init.agent);
 
   if (!agent) {
     writeTextStderr(

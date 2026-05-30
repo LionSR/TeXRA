@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { getAgent, loadAgents } from '@agent/index';
+import { loadAgents } from '@agent/index';
 import { writeTerminalStatus } from '@agent/storage';
 import {
   AgentConfigSchema,
@@ -27,7 +27,7 @@ import {
   collectStringFlagValues,
   optString,
 } from './_helpers/globalArgs';
-import { shouldHonorRemoteAgentPriority } from './_helpers/remoteAgents';
+import { resolveAgentWithRemoteFallback } from './_helpers/remoteAgents';
 import { executeCliRequest } from './_helpers/runExecution';
 import {
   terminalStatusExitCode,
@@ -83,11 +83,7 @@ async function runWorkflowAgent(
   await initCliPlatform(runContext);
   installCliApprovalHandlers(runContext);
   await loadAgents({ includeRemote: false });
-  let agent = getAgent(init.agent);
-  if (!agent || (await shouldHonorRemoteAgentPriority(init.agent))) {
-    await loadAgents();
-    agent = getAgent(init.agent);
-  }
+  const agent = await resolveAgentWithRemoteFallback(init.agent);
   // Pre-validate the resolved agent so usage errors land before the runtime
   // host starts: an unknown name or wrong category should be exit 2 (Usage),
   // not exit 1 (AgentError) raised mid-run.
