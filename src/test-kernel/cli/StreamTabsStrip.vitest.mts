@@ -147,6 +147,39 @@ describe('CLI stream tabs strip', () => {
     expect(items.map(streamTabSegmentText)).toEqual(['[main]', 'polish(idle)']);
   });
 
+  it('labels the focused stopped stream in the tab strip', () => {
+    const root = streamId('root');
+    const child1 = streamId('child-1');
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [
+        root,
+        slice('root', {
+          status: STREAM_STATUS.STOPPED,
+          childStreams: [
+            child({
+              executionId: 'r1',
+              childStreamId: child1,
+              agentName: 'strategy',
+            }),
+          ],
+        }),
+      ],
+      [child1, slice('child-1', { status: STREAM_STATUS.STOPPED })],
+    ]);
+
+    const items = streamTabsDisplayItems({
+      activeStreamId: child1,
+      streams,
+      parentStream: new Map([[child1, root]]),
+      width: 80,
+    });
+
+    expect(items.map(streamTabSegmentText)).toEqual([
+      'main(stopped)',
+      '[strategy](stopped)',
+    ]);
+  });
+
   it('collapses the middle entries under narrow widths while preserving focus', () => {
     const root = streamId('root');
     const childIds = Array.from({ length: 5 }, (_, i) =>
