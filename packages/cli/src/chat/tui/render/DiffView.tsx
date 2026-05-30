@@ -199,22 +199,10 @@ function overflowMarkerText(
 ): string {
   const candidates =
     kind === 'hidden'
-      ? [
-          `... ${count} diff rows hidden`,
-          `... ${count} rows hidden`,
-          `... ${count} hidden`,
-        ]
+      ? [`... ${count} rows hidden`, `... ${count} hidden`]
       : kind === 'previous'
-        ? [
-            `... ${count} previous diff rows`,
-            `... ${count} previous rows`,
-            `... ${count} prev rows`,
-          ]
-        : [
-            `... ${count} more diff rows`,
-            `... ${count} more rows`,
-            `... +${count} rows`,
-          ];
+        ? [`... ${count} previous rows`, `... ${count} prev rows`]
+        : [`... ${count} more rows`, `... +${count} rows`];
   if (width === undefined) return candidates[0] ?? '';
 
   const markerWidth = Math.max(MIN_DIFF_WIDTH, width);
