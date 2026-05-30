@@ -5,12 +5,13 @@
 import { render } from 'ink';
 import React from 'react';
 
-import { STREAM_STATUS } from '@shared/schemas';
+import { STREAM_STATUS, TODO_STATUS } from '@shared/schemas';
 
 import { App } from '../src/chat/tui/App';
 import {
   cliState,
   patchStream,
+  setParentStream,
   type ConversationEntry,
 } from '../src/chat/tui/state/cliState';
 import { enqueueApproval } from '../src/chat/tui/state/approvalQueue';
@@ -19,6 +20,8 @@ const STREAM_ID = 'harness-stream-1';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
+const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
+const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
 const EDIT_APPROVAL_DELAY_MS = Number(
   process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
@@ -49,6 +52,23 @@ function makeEntries(count: number): ConversationEntry[] {
     });
   }
   return entries;
+}
+
+function makeChildEntries(agent: string, action: string): ConversationEntry[] {
+  return [
+    {
+      id: `${agent}-user`,
+      role: 'user',
+      text: `Please handle the ${action} sub-workflow.`,
+      finalized: true,
+    },
+    {
+      id: `${agent}-assistant`,
+      role: 'assistant',
+      text: `${agent} is checking the ${action} details and preparing a concise result.`,
+      finalized: false,
+    },
+  ];
 }
 
 function makeEditApprovalRequest() {
@@ -97,6 +117,114 @@ patchStream(STREAM_ID, (slice) => ({
   queuedFollowUps: QUEUED_FOLLOW_UPS.length,
   queuedFollowUpMessages: QUEUED_FOLLOW_UPS,
 }));
+
+if (SHOW_CHILDREN) {
+  const startedAt = Date.now() - 74_000;
+  const childStreams = [
+    {
+      executionId: 'harness-child-strategy',
+      agentName: 'strategy',
+      childStreamId: 'harness-child-strategy-stream',
+      status: STREAM_STATUS.RUNNING,
+      startedAt,
+    },
+    {
+      executionId: 'harness-child-lean',
+      agentName: 'leanSolver',
+      childStreamId: 'harness-child-lean-stream',
+      status: STREAM_STATUS.WAITING,
+      elapsed: '2m 03s',
+    },
+    {
+      executionId: 'harness-child-review',
+      agentName: 'reviewer',
+      childStreamId: 'harness-child-review-stream',
+      status: STREAM_STATUS.RUNNING,
+      startedAt: startedAt + 12_000,
+    },
+  ];
+  patchStream(STREAM_ID, (slice) => ({
+    ...slice,
+    status: STREAM_STATUS.RUNNING,
+    runStartedAt: startedAt,
+    activeSubagents: childStreams,
+    childStreams,
+    activeProcesses: [
+      {
+        executionId: 'harness-process-latexmk',
+        agentName: 'latex build',
+        toolName: 'bash',
+        status: STREAM_STATUS.RUNNING,
+        startedAt: Date.now() - 19_000,
+      },
+    ],
+    processOutput: new Map([
+      [
+        'harness-process-latexmk',
+        {
+          stdout: [
+            'latexmk: applying rule pdflatex',
+            'chapter1.tex:47: Overfull hbox',
+            'main.tex: Proof sketch needs one missing reference',
+          ].join('\n'),
+          stderr: '',
+        },
+      ],
+    ]),
+  }));
+  for (const child of childStreams) {
+    const streamId = child.childStreamId;
+    setParentStream(streamId, STREAM_ID);
+    patchStream(streamId, (slice) => ({
+      ...slice,
+      status: child.status,
+      description: `${child.agentName} sub-workflow`,
+      entries: makeChildEntries(child.agentName, child.executionId),
+      runStartedAt:
+        child.status === STREAM_STATUS.RUNNING ? startedAt : undefined,
+    }));
+  }
+}
+
+if (SHOW_TODOS) {
+  patchStream(STREAM_ID, (slice) => ({
+    ...slice,
+    todos: [
+      {
+        content: 'Split theorem into algebraic and analytic checks',
+        activeForm: 'Splitting theorem into checks',
+        status: TODO_STATUS.COMPLETED,
+      },
+      {
+        content: 'Ask leanSolver to verify the finite case',
+        activeForm: 'Waiting for leanSolver',
+        status: TODO_STATUS.IN_PROGRESS,
+      },
+      {
+        content: 'Merge subagent conclusions into final answer',
+        activeForm: 'Merging subagent conclusions',
+        status: TODO_STATUS.PENDING,
+      },
+    ],
+    plan: {
+      summary: 'Coordinate a small math proof through nested CLI work.',
+      steps: [
+        {
+          title: 'Route proof obligations',
+          description: 'Choose the right specialist for each proof branch.',
+          files: [],
+          status: TODO_STATUS.COMPLETED,
+        },
+        {
+          title: 'Check formalizable parts',
+          description: 'Have a subagent inspect the Lean-style finite case.',
+          files: [],
+          status: TODO_STATUS.IN_PROGRESS,
+        },
+      ],
+    },
+  }));
+}
 
 if (SHOW_EDIT_APPROVAL) {
   const showApproval = () =>
