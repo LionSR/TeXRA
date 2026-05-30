@@ -4,7 +4,7 @@
 // (init/runInitWizard) and the command (commands/init) build on these; keeping
 // the logic here makes it unit-testable without a TTY.
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { CLI_CONFIG_DIR, workspaceCliConfigPath } from './cliConfig';
@@ -53,7 +53,7 @@ export function serializeInitConfig(config: InitConfigShape): string {
 
 export async function configFileExists(filePath: string): Promise<boolean> {
   try {
-    await readFile(filePath, 'utf8');
+    await access(filePath);
     return true;
   } catch {
     return false;
