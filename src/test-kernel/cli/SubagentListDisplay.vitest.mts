@@ -34,7 +34,6 @@ describe('CLI SubagentList display model', () => {
     const display = compactRows({
       activeProcesses,
       maxRows: 3,
-      processOutput: new Map(),
       subagents,
     });
 
@@ -49,7 +48,6 @@ describe('CLI SubagentList display model', () => {
     const display = compactRows({
       activeProcesses: [{ executionId: 'latexmk', agentName: 'latex build' }],
       maxRows: 1,
-      processOutput: new Map(),
       subagents: [
         { executionId: 'strategy', agentName: 'strategy' },
         { executionId: 'lean', agentName: 'leanSolver' },
@@ -72,7 +70,6 @@ describe('CLI SubagentList display model', () => {
     const display = compactRows({
       activeProcesses,
       maxRows: 3,
-      processOutput: new Map(),
       subagents,
     });
 
