@@ -166,11 +166,6 @@ export class PersistedState<T extends Record<string, unknown>> {
     }
     this.storage.set(this.key, this.state);
   }
-
-  /** Reload from storage */
-  reload(): void {
-    this.state = this.load();
-  }
 }
 
 /**

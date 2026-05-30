@@ -248,7 +248,6 @@ export class TextEditorTool extends defineTool({
 
       if (viewRange) {
         if (
-          viewRange.length !== 2 ||
           !Number.isInteger(viewRange[0]) ||
           !Number.isInteger(viewRange[1])
         ) {
@@ -356,6 +355,28 @@ export class TextEditorTool extends defineTool({
     }
   }
 
+  /**
+   * Shared edit prelude for strReplace/insert: gate on read-before-edit, then
+   * read and tab-expand the file. Returns the read-gate ToolResult when the
+   * edit must be blocked, otherwise the file content and its tab-expanded form.
+   */
+  private async prepareEditContent(
+    filePath: string,
+  ): Promise<
+    | { readGate: ToolResult }
+    | { fileContent: string; expandedFileContent: string }
+  > {
+    const exists = await WorkspaceFS.exists(filePath);
+    const readGate = requireFileReadForEdit(filePath, exists);
+    if (readGate) {
+      return { readGate };
+    }
+    const fileContent = await WorkspaceFS.read(filePath);
+    // Expand tabs to 4 spaces for consistent display
+    const expandedFileContent = fileContent.replaceAll('\t', '    ');
+    return { fileContent, expandedFileContent };
+  }
+
   private async strReplace(
     filePath: string,
     displayPath: string,
@@ -363,15 +384,12 @@ export class TextEditorTool extends defineTool({
     newStr: string,
   ): Promise<ToolResult> {
     try {
-      const exists = await WorkspaceFS.exists(filePath);
-      const readGate = requireFileReadForEdit(filePath, exists);
-      if (readGate) {
-        return readGate;
+      const prepared = await this.prepareEditContent(filePath);
+      if ('readGate' in prepared) {
+        return prepared.readGate;
       }
-      const fileContent = await WorkspaceFS.read(filePath);
+      const { fileContent, expandedFileContent } = prepared;
 
-      // Expand tabs to 4 spaces for consistent display
-      const expandedFileContent = fileContent.replaceAll('\t', '    ');
       const expandedOldStr = oldStr.replaceAll('\t', '    ');
       const expandedNewStr = newStr.replaceAll('\t', '    ');
 
@@ -462,15 +480,12 @@ export class TextEditorTool extends defineTool({
     newStr: string,
   ): Promise<ToolResult> {
     try {
-      const exists = await WorkspaceFS.exists(filePath);
-      const readGate = requireFileReadForEdit(filePath, exists);
-      if (readGate) {
-        return readGate;
+      const prepared = await this.prepareEditContent(filePath);
+      if ('readGate' in prepared) {
+        return prepared.readGate;
       }
-      const fileContent = await WorkspaceFS.read(filePath);
+      const { fileContent, expandedFileContent } = prepared;
 
-      // Expand tabs to 4 spaces for consistent display
-      const expandedFileContent = fileContent.replaceAll('\t', '    ');
       const expandedNewStr = newStr.replaceAll('\t', '    ');
 
       const fileLines = expandedFileContent.split('\n');

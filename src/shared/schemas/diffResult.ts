@@ -67,9 +67,7 @@ function getDisplayName(
   return 'unknown';
 }
 
-export function transformDiffResultToDisplay(
-  entry: DiffResult,
-): DiffResultDisplay {
+function transformDiffResultToDisplay(entry: DiffResult): DiffResultDisplay {
   return {
     baseFile: getAbsolutePath(entry.baseLocation),
     revisedFile: getAbsolutePath(entry.revised.location),
@@ -162,7 +160,7 @@ export const LegacyDiffResultSchema = z
   });
 
 /** Parse a diff result entry from either new or legacy format */
-export function parseDiffResultEntry(
+function parseDiffResultEntry(
   data: unknown,
 ):
   | { success: true; data: DiffResultDisplay }
