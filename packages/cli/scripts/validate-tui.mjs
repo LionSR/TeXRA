@@ -70,6 +70,22 @@ const SCENARIOS = [
     expect: ['Apply edit to draft.tex?', 'y approve', 'n reject', 'approval'],
   },
   {
+    name: 'edit-approval-approve',
+    env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
+    keys: ['y'],
+    frame: 'tail',
+    expect: ['[/status]details', '[/model]models'],
+    unexpect: ['Apply edit to draft.tex?', '1 approval'],
+  },
+  {
+    name: 'edit-approval-reject',
+    env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
+    keys: ['n'],
+    frame: 'tail',
+    expect: ['[/status]details', '[/model]models'],
+    unexpect: ['Apply edit to draft.tex?', '1 approval'],
+  },
+  {
     name: 'subagents',
     env: {
       HARNESS_ENTRIES: '4',
