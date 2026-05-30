@@ -140,7 +140,7 @@ Three research agents, each tuned for a different stage of the work — pick one
       { text: 'bash', variant: 'neutral' },
       { text: 'file-edit', variant: 'neutral' },
       { text: 'texcount', variant: 'neutral' },
-      { text: 'arxiv_metadata', variant: 'neutral' },
+      { text: 'extract_figures', variant: 'neutral' },
     ] },
     { icon: 'comment-discussion', title: 'discuss', desc: 'Brainstorming research directions with literature context.', chips: [
       { text: 'web_search', variant: 'neutral' },
