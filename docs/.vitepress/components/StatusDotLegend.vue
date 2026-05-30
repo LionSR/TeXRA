@@ -79,7 +79,7 @@ const states = [
 }
 /* Only the Running dot animates — same intent as the live .sh-dot. */
 .sdl-dot.sdl-pulse {
-  box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.6);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-success) 60%, transparent);
   animation: mk-shpulse 1.8s infinite;
 }
 .sdl-label {
