@@ -21,7 +21,8 @@ export function estimateTranscriptEntryRows(
   width = 80,
 ): number {
   if (entry.role === 'tool' && entry.toolUse) {
-    return toolUseDisplayLines(entry.toolUse).length + 1;
+    const lines = toolUseDisplayLines(entry.toolUse);
+    return lines.length + (lines.length > 1 ? 1 : 0);
   }
   if (entry.role === 'process' && entry.process) {
     return Math.max(1, completedProcessDisplayLines(entry.process).length) + 1;

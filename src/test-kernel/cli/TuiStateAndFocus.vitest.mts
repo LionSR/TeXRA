@@ -912,6 +912,29 @@ describe('CLI transcript state', () => {
     expect(estimateTranscriptEntryRows(entry, width)).toBe(renderedRows + 1);
   });
 
+  it('does not reserve spacer rows for compact one-line tool calls', () => {
+    const entry = {
+      id: 'empty-tool',
+      role: 'tool',
+      text: '',
+      finalized: false,
+      toolUse: {
+        parsed: {},
+        toolName: 'executions',
+        errorText: '',
+        outputText: '',
+        userInstructionText: '',
+        input: { path: '/executions/3a780a389327/report' },
+        isError: false,
+        isUserFeedback: false,
+        headerSummary: '',
+        status: 'completed',
+      },
+    } as const;
+
+    expect(estimateTranscriptEntryRows(entry, 80)).toBe(1);
+  });
+
   it('keeps pending transcript rows within their viewport budget', () => {
     const pending = [
       {
