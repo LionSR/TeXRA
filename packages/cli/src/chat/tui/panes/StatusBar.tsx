@@ -145,6 +145,14 @@ export function queuedFollowUpsSummary(
     : `queued ${messages.length}: ${preview}`;
 }
 
+function queuedFollowUpsCountSegment(
+  messages: readonly string[],
+): StatusBarSegment | undefined {
+  return messages.length > 0
+    ? { text: `queued ${messages.length}`, color: 'yellow' }
+    : undefined;
+}
+
 export function defaultShortcutModifierLabel(
   platform: NodeJS.Platform = process.platform,
 ): string {
@@ -219,6 +227,9 @@ export function buildStatusBarDisplay(
 
   const usage = formatUsage(input.usage, input.model);
   if (usage) left.push(usage);
+
+  const queued = queuedFollowUpsCountSegment(input.queuedFollowUpMessages);
+  if (queued) left.push(queued);
 
   if (input.activeSubagents > 0) {
     left.push({ text: `${input.activeSubagents} sub`, color: 'dim' });
