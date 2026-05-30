@@ -366,13 +366,17 @@ base `ModelHandler`:
   `supportsReasoning`.
 
 Both are exact equivalents of the prior expressions (verified by case analysis over
-all providers) and dispatch decisions no longer read provider identity. Of the
-`isGoogle`/`isDeepSeek`/`isKimi`/`isMiniMax` getters, only `isGoogle` retains a
-caller (a display flag at `AgentLaunchContext.ts:264` → `userVars.ts:169`); the
-`isDeepSeek`/`isKimi`/`isMiniMax` getters now have **no remaining callers** and are
-retained interface surface (the `isOpenai`/`isAnthropic` display getters are
-unaffected). Verified: root + test-kernel `typecheck` green; ModelFactory routing and
-tool-use vitest suites (35 tests) green.
+all providers). The flow/factory **call sites** (`ToolUseCycleFlow`, `ModelFactory`)
+no longer read provider identity — it is now consulted only _inside_ the handler
+hierarchy. Direct provider handlers encode their need via the overrides above; the
+`ModelHandlerOpenRouterNative` handler, which proxies many providers behind one class
+(`config.provider` is preserved through routing), still maps `isGoogle`/`isDeepSeek`/
+`isKimi`/`isMiniMax` → capability internally (see §8 OpenRouter fix below). So the
+`isGoogle`/`isDeepSeek`/`isKimi`/`isMiniMax` getters have **no remaining callers
+outside the `IModelHandler` hierarchy** _except_ the one display flag on `isGoogle`
+(`AgentLaunchContext.ts:264` → `userVars.ts:169`); `isOpenai`/`isAnthropic` keep their
+display callers. Verified: root + test-kernel `typecheck` green; ModelFactory routing
+and tool-use vitest suites green.
 
 **Pending items re-confirmed present (line numbers refreshed where drifted):**
 
@@ -389,9 +393,11 @@ tool-use vitest suites (35 tests) green.
   delegation remains a tool call inside the LLM loop. Subagent mechanism otherwise intact.
 - **§7** — **the two behavioral gates are now converted** (see "Applied in this PR"
   above). The provider-identity getters remain on `ModelHandler.ts` as an allow-list
-  the audit explicitly endorsed keeping; post-refactor only `isOpenai`/`isAnthropic`/
-  `isGoogle` are still consumed (display flags), while `isDeepSeek`/`isKimi`/`isMiniMax`
-  are retained interface surface with no callers.
+  the audit explicitly endorsed keeping. Post-refactor they are consumed only by
+  display flags (`isOpenai`/`isAnthropic`/`isGoogle`) and _internally_ by
+  `ModelHandlerOpenRouterNative` (which maps `isGoogle`/`isDeepSeek`/`isKimi`/
+  `isMiniMax` → capability for the providers it proxies). No call site outside the
+  `IModelHandler` hierarchy dispatches on identity any longer.
 
 **Two false positives caught this pass (recorded so they are not re-flagged):**
 

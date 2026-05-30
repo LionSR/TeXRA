@@ -8,6 +8,30 @@ import {
 
 import { shouldUseResponsesAPI } from '@agent/runtime/ModelFactory';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/modelHandlerOpenRouterNative';
+import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
+import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
+import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
+import { ModelHandlerKimi } from '@agent/modelHandlers/modelHandlerKimi';
+import { ModelHandlerMiniMax } from '@agent/modelHandlers/modelHandlerMiniMax';
+
+function modelConfig(
+  provider: ModelProvider,
+  caps: Partial<ModelConfig['capabilities']> = {},
+): ModelConfig {
+  return {
+    name: `test-${provider}`,
+    label: `Test ${provider}`,
+    fullName: `${provider}-test`,
+    shortName: `${provider}-test`,
+    provider,
+    maxOutputTokens: 1024,
+    inputPrice: 0,
+    outputPrice: 0,
+    contextWindow: 128000,
+    capabilities: { ...DEFAULT_MODEL_CAPABILITIES, ...caps },
+    openRouterOnly: false,
+  };
+}
 
 describe('OpenAI model handler routing', () => {
   it('routes current GPT reasoning tool-use models to Responses by default', () => {
@@ -61,16 +85,7 @@ describe('OpenRouter-proxied provider capabilities', () => {
     caps: Partial<ModelConfig['capabilities']> = {},
   ): ModelHandlerOpenRouterNative {
     return new ModelHandlerOpenRouterNative({
-      name: `test-${provider}`,
-      label: `Test ${provider}`,
-      fullName: `${provider}-test`,
-      shortName: `${provider}-test`,
-      provider,
-      maxOutputTokens: 1024,
-      inputPrice: 0,
-      outputPrice: 0,
-      contextWindow: 128000,
-      capabilities: { ...DEFAULT_MODEL_CAPABILITIES, ...caps },
+      ...modelConfig(provider, caps),
       openRouterOnly: true,
     });
   }
@@ -113,5 +128,51 @@ describe('OpenRouter-proxied provider capabilities', () => {
       supportsReasoningEffort: false,
     });
     expect(handler.supportsReasoningLevelOverride).toBe(false);
+  });
+});
+
+describe('direct handler capability overrides', () => {
+  // Formal coverage of the per-handler `requiresBatchedParallelToolResults`
+  // overrides that replaced the inline isGoogle/isDeepSeek/isKimi/isMiniMax gate.
+  it('flags batching on the four reasoning-carrying providers and not on plain OpenAI', () => {
+    expect(
+      new ModelHandlerGoogleGenAI(modelConfig(ModelProvider.GOOGLE))
+        .requiresBatchedParallelToolResults,
+    ).toBe(true);
+    expect(
+      new ModelHandlerDeepSeek(modelConfig(ModelProvider.DEEPSEEK))
+        .requiresBatchedParallelToolResults,
+    ).toBe(true);
+    expect(
+      new ModelHandlerKimi(modelConfig(ModelProvider.MOONSHOT))
+        .requiresBatchedParallelToolResults,
+    ).toBe(true);
+    expect(
+      new ModelHandlerMiniMax(modelConfig(ModelProvider.MINIMAX))
+        .requiresBatchedParallelToolResults,
+    ).toBe(true);
+    expect(
+      new ModelHandlerOpenAI(modelConfig(ModelProvider.OPENAI))
+        .requiresBatchedParallelToolResults,
+    ).toBe(false);
+  });
+
+  it('grants a reasoning-level override to DeepSeek with reasoning but no granular effort', () => {
+    expect(
+      new ModelHandlerDeepSeek(
+        modelConfig(ModelProvider.DEEPSEEK, {
+          supportsReasoning: true,
+          supportsReasoningEffort: false,
+        }),
+      ).supportsReasoningLevelOverride,
+    ).toBe(true);
+    expect(
+      new ModelHandlerOpenAI(
+        modelConfig(ModelProvider.OPENAI, {
+          supportsReasoning: true,
+          supportsReasoningEffort: false,
+        }),
+      ).supportsReasoningLevelOverride,
+    ).toBe(false);
   });
 });
