@@ -52,7 +52,9 @@ import {
 } from '@cli/runtime/memory';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import {
+  LIVE_ELAPSED_STREAM_STATUSES,
   STREAM_STATUS,
+  type StreamStatus,
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
@@ -126,6 +128,14 @@ export interface ClearableTuiSessionState {
 }
 
 type TuiSession = ClearableTuiSessionState;
+type InterruptibleTuiSessionState = Pick<
+  ClearableTuiSessionState,
+  'streamId' | 'runPromise' | 'runCompleted'
+>;
+type PendingTuiRunSessionState = Pick<
+  ClearableTuiSessionState,
+  'runPromise' | 'runCompleted'
+>;
 
 export function clearTuiSessionRunState(
   session: ClearableTuiSessionState,
@@ -138,20 +148,26 @@ export function clearTuiSessionRunState(
   session.stopRequested = false;
 }
 
-export function chatTuiCanInterruptActiveRun(session: {
-  readonly streamId: StreamTabId | undefined;
-  readonly runPromise: Promise<unknown> | undefined;
-  readonly runCompleted: boolean;
-}): boolean {
+export function chatTuiCanInterruptActiveRun(
+  session: InterruptibleTuiSessionState,
+): boolean {
   return Boolean(
     session.streamId && session.runPromise && !session.runCompleted,
   );
 }
 
-export function chatTuiCanStartRootRun(session: {
-  readonly runPromise: Promise<unknown> | undefined;
-  readonly runCompleted: boolean;
-}): boolean {
+export function chatTuiCanStopActiveRun(
+  session: InterruptibleTuiSessionState,
+  status: StreamStatus | undefined,
+): boolean {
+  if (!session.runPromise || session.runCompleted) return false;
+  if (!session.streamId) return true;
+  return status === undefined || LIVE_ELAPSED_STREAM_STATUSES.has(status);
+}
+
+export function chatTuiCanStartRootRun(
+  session: PendingTuiRunSessionState,
+): boolean {
   return !session.runPromise || session.runCompleted;
 }
 
@@ -711,8 +727,15 @@ export async function runChat(
   };
 
   const followUpQueue = new PQueue({ concurrency: 1 });
+  const rootStreamStatus = (): StreamStatus | undefined =>
+    session.streamId
+      ? (cliState.streams.get().get(session.streamId)?.status ??
+        StreamStatusService.get(session.streamId))
+      : undefined;
+  const canInterruptActiveRun = (): boolean =>
+    chatTuiCanInterruptActiveRun(session);
   const canStopActiveRun = (): boolean =>
-    Boolean(session.runPromise && !session.runCompleted);
+    chatTuiCanStopActiveRun(session, rootStreamStatus());
   const interruptActive = (): void => {
     clearApprovals();
     if (!session.streamId) return;
@@ -930,7 +953,7 @@ export async function runChat(
   const ink = render(
     <App
       onSubmit={handleSubmit}
-      canInterruptActiveRun={() => chatTuiCanInterruptActiveRun(session)}
+      canInterruptActiveRun={canInterruptActiveRun}
       canStopActiveRun={canStopActiveRun}
       onInterruptActive={interruptActive}
       onCtrlC={() => handleSigint()}
@@ -996,6 +1019,10 @@ export async function runChat(
       return;
     }
     if (!canStopActiveRun()) {
+      if (canInterruptActiveRun()) {
+        session.stopRequested = true;
+        interruptActive();
+      }
       exitNow(130);
       return;
     }
