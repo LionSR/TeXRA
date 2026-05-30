@@ -36,8 +36,14 @@ export interface ChildControlPickerProps {
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }
 
-function pickerTitle(mode: ChildControlMode): string {
-  return mode === 'subagents' ? 'Subagents' : 'Background tasks';
+export function pickerTitle(mode: ChildControlMode): string {
+  return mode === 'subagents' ? 'Subagents' : 'Tasks and sub-workflows';
+}
+
+export function emptyPickerText(mode: ChildControlMode): string {
+  return mode === 'subagents'
+    ? 'No active subagents.'
+    : 'No active tasks or sub-workflows.';
 }
 
 export function pickerKeyHints(
@@ -493,7 +499,7 @@ export function ChildControlPicker({
             ) : null}
           </>
         ) : (
-          <Text dimColor>No active {pickerTitle(mode).toLowerCase()}.</Text>
+          <Text dimColor>{emptyPickerText(mode)}</Text>
         )}
       </Box>
       <Box marginTop={1}>
