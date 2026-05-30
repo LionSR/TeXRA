@@ -277,6 +277,18 @@ const SCENARIOS = [
     maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
   },
   {
+    name: 'focused-stopped-subagent',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 'p', 'k', ESC + 's', DOWN, DOWN, '\r'],
+    frame: 'tail',
+    expect: ['[3:strategy](stopped)', '◆ stopped api', '[Ctrl-C]stop root'],
+  },
+  {
     name: 'empty-task-picker',
     env: {
       HARNESS_ENTRIES: '4',
