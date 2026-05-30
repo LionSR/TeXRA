@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { toolUsePatchDisplayLines } from '@cli/chat/tui/panes/ToolUseRow';
+import { toolUsePatchDisplayLines } from '@cli/chat/tui/panes/toolRenderers';
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
 
 function toolUse(

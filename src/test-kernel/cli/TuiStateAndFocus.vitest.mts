@@ -42,8 +42,8 @@ import {
 import {
   estimateTranscriptEntryRows,
   selectPendingEntriesForViewport,
-  splitTranscriptEntries,
-} from '@cli/chat/tui/panes/ConversationPane';
+} from '@cli/chat/tui/panes/transcriptViewport';
+import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
 import { renderAnsiMarkdown } from '@cli/chat/tui/render/ansiMarkdown';
 import {
   chatTuiCanInterruptActiveRun,
