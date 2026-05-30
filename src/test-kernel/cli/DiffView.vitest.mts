@@ -4,9 +4,11 @@ import {
   boundedDiffDisplayLines,
   buildHunks,
   DIFF_BAND_BG,
+  diffVisualRowCount,
   fillRows,
   maxDiffScrollOffset,
   scrollBoundedDiffDisplayLines,
+  wrappedDiffDisplayLines,
 } from '@cli/chat/tui/render/DiffView';
 
 describe('CLI diff display', () => {
@@ -70,6 +72,53 @@ describe('CLI diff display', () => {
       kind: 'overflow',
       text: expect.stringContaining('more diff rows'),
     });
+  });
+
+  it('wraps long changed lines instead of replacing the tail with an ellipsis', () => {
+    const proposed =
+      'Here $2n+1$ is the $(n+1)$-st odd number, i.e., the next odd number after $2n-1$.';
+    const hunks = buildHunks('draft.tex', 'old sentence', proposed);
+
+    const lines = wrappedDiffDisplayLines(hunks, 36);
+    const rendered = lines.map((line) => line.text).join('\n');
+
+    expect(rendered).toContain('after $2n-1$.');
+    expect(rendered).not.toContain('…');
+    expect(diffVisualRowCount(hunks, 36)).toBeGreaterThan(
+      boundedDiffDisplayLines(hunks).length,
+    );
+  });
+
+  it('applies the display budget to wrapped visual diff rows', () => {
+    const hunks = buildHunks(
+      'draft.tex',
+      'old sentence',
+      'This is a deliberately long replacement sentence that needs multiple visual rows.',
+    );
+
+    const lines = scrollBoundedDiffDisplayLines(hunks, 0, 4, 0, 24);
+
+    expect(lines).toHaveLength(4);
+    expect(lines.at(-1)).toMatchObject({
+      kind: 'overflow',
+      text: expect.stringContaining('more diff rows'),
+    });
+  });
+
+  it('keeps wrapped overflow markers to one visual row at narrow widths', () => {
+    const hunks = buildHunks('draft.tex', 'old sentence', 'x'.repeat(220));
+
+    const lines = scrollBoundedDiffDisplayLines(hunks, 0, 4, 0, 20);
+    const marker = lines.at(-1);
+
+    expect(lines).toHaveLength(4);
+    expect(marker).toMatchObject({
+      kind: 'overflow',
+      text: expect.stringContaining('more rows'),
+    });
+    expect(marker?.text).not.toContain('diff rows');
+    expect(marker?.text).not.toContain('\n');
+    expect(marker?.text.length).toBeLessThanOrEqual(20);
   });
 });
 
