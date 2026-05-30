@@ -27,15 +27,8 @@ export function requestCliCompaction({
   notifyFollowUpSent,
   appendTranscript,
 }: CliCompactionRequestOptions): void {
-  if (!streamId) {
-    appendTranscript(
-      'No active tool-use session found for context compaction.',
-    );
-    return;
-  }
-
-  const flowContext = getFlowContext(streamId);
-  if (!flowContext) {
+  const flowContext = streamId ? getFlowContext(streamId) : undefined;
+  if (!streamId || !flowContext) {
     appendTranscript(
       'No active tool-use session found for context compaction.',
     );
