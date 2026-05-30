@@ -48,27 +48,12 @@ TeXRA ships with built-in agents for common research tasks—polishing prose, fi
 
 ## Quick Reference
 
-| Agent              | Type     | Purpose                                                                   |
-| ------------------ | -------- | ------------------------------------------------------------------------- |
-| `research`         | Tool-use | Analytical derivations and numerical programming with Wolfram             |
-| `review`           | Tool-use | Mathematical and manuscript verification                                  |
-| `numerics`         | Tool-use | Design, run, and validate computational experiments                       |
-| `lean`             | Tool-use | Lean 4 proof development                                                  |
-| `presenter`        | Tool-use | Interactive presentation and poster builder                               |
-| `latexFixer`       | Tool-use | Diagnose and fix LaTeX compilation errors, warnings, and bad boxes        |
-| `latexDiff`        | Tool-use | Generate a visual latexdiff PDF between two LaTeX versions                |
-| `creator`          | Tool-use | Design, write, and test new TeXRA agents                                  |
-| `setup`            | Tool-use | Setup wizard: diagnose environment, install dependencies, configure       |
-| `chat`             | Tool-use | General assistance, file editing (opt-in; not in any default team preset) |
-| `correct`          | Workflow | Fix errors without style changes                                          |
-| `polish`           | Workflow | Improve writing quality                                                   |
-| `paper2slide`      | Workflow | Convert papers to beamer slides                                           |
-| `paper2poster`     | Workflow | Create academic posters                                                   |
-| `ocr`              | Workflow | Extract text from images/PDFs                                             |
-| `transcribe_audio` | Workflow | Transcribe audio to text                                                  |
-| `merge`            | Workflow | Intelligently merge document versions                                     |
+Every built-in agent is one of two execution shapes — a tool-use loop or a
+workflow pipeline:
 
-The **Type** column above splits every agent into one of two execution shapes:
+<AgentCatalog />
+
+The two shapes behave differently once they run:
 
 <AgentModeShapes />
 
