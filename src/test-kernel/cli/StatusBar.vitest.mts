@@ -324,12 +324,12 @@ describe('CLI StatusBar display model', () => {
     expect(idle.left.map(statusBarSegmentText)).toEqual(['◆', 'idle', 'api']);
   });
 
-  it('preserves YOLO and auto-approval badges without agent/model text', () => {
+  it('preserves distinct YOLO and auto-approval badges', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,
       pendingExitHint: false,
       pendingExitResumeId: undefined,
-      bypass: { superYolo: true, toolEdit: true },
+      bypass: { bash: true, superYolo: true, toolEdit: true },
       queuedFollowUpMessages: [],
       usage: undefined,
       conversation: undefined,
@@ -348,11 +348,16 @@ describe('CLI StatusBar display model', () => {
       'running',
       'api',
       'YOLO',
+      'AUTO-BASH',
       'AUTO-APPROVE',
     ]);
-    expect(display.left.at(-2)).toMatchObject({
+    expect(display.left.at(-3)).toMatchObject({
       badge: true,
       badgeColor: 'red',
+    });
+    expect(display.left.at(-2)).toMatchObject({
+      badge: true,
+      badgeColor: 'yellow',
     });
     expect(display.left.at(-1)).toMatchObject({
       badge: true,
@@ -365,7 +370,7 @@ describe('CLI StatusBar display model', () => {
       status: STREAM_STATUS.RUNNING,
       pendingExitHint: false,
       pendingExitResumeId: undefined,
-      bypass: { superYolo: true, toolEdit: true },
+      bypass: { bash: false, superYolo: true, toolEdit: true },
       queuedFollowUpMessages: ['Keep the proof under one page.'],
       usage: undefined,
       conversation: undefined,

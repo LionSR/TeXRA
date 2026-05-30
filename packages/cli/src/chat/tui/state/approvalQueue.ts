@@ -22,7 +22,7 @@ import type {
 } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 
-export type ApprovalBypassKind = 'toolEdit' | 'superYolo';
+export type ApprovalBypassKind = 'bash' | 'toolEdit' | 'superYolo';
 
 export type ApprovalPayload =
   | { kind: 'bash'; payload: BashPermission }

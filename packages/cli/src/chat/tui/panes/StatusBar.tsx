@@ -357,6 +357,9 @@ export function buildStatusBarDisplay(
   if (input.bypass.superYolo) {
     left.push({ text: 'YOLO', badge: true, badgeColor: 'red' });
   }
+  if (input.bypass.bash) {
+    left.push({ text: 'AUTO-BASH', badge: true, badgeColor: 'yellow' });
+  }
   if (input.bypass.toolEdit) {
     left.push({ text: 'AUTO-APPROVE', badge: true, badgeColor: 'yellow' });
   }
