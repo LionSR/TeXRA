@@ -4,15 +4,6 @@ import * as vscode from 'vscode';
 // Local imports - state
 import { WorktreeMemento } from './worktreeMemento';
 
-// Re-export pure-data state keys so existing `@common/state/stateManager`
-// imports keep working. The actual definitions live in stateKeys.ts so
-// vscode-free zones can import them via `@common/state/stateKeys` without
-// loading this module (and therefore without pulling in vscode).
-export {
-  WorkspaceStateKey,
-  GlobalStateKey,
-  INSTRUCTION_PREFIX,
-} from './stateKeys';
 import { WorkspaceStateKey } from './stateKeys';
 
 /**

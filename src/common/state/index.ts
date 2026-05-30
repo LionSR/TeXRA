@@ -2,10 +2,8 @@ export {
   WorkspaceStateKey,
   GlobalStateKey,
   INSTRUCTION_PREFIX,
-  workspaceSM,
-  globalSM,
-  initializeStateManagers,
-} from './stateManager';
+} from './stateKeys';
+export { workspaceSM, globalSM, initializeStateManagers } from './stateManager';
 export {
   setPendingState,
   consumePendingState,

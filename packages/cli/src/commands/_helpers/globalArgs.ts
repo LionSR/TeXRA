@@ -5,7 +5,7 @@ import {
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
-} from '@cli/runtime/approvalPolicy';
+} from '@cli/schemas/cliSettings';
 import { CliUsageError } from '@cli/runtime/cliContext';
 
 /**

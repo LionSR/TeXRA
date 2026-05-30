@@ -13,8 +13,8 @@ import {
 } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
 
+import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
 import { cliState, patchStream, type ConversationEntry } from './cliState';
-import { summarizeSubagentFollowup } from './subagentFollowup';
 import { isFinalTranscriptStatus } from './transcript';
 
 const TRANSCRIPT_MESSAGE_TYPES = new Set<string>([
