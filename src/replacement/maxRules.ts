@@ -23,33 +23,21 @@ export const GREEK_LETTER_SHORTCUTS: { [key: string]: string } = {
   gamma: 'ga',
   delta: 'de',
   epsilon: 'eps',
-  varepsilon: 'varepsilon',
   zeta: 'ze',
-  eta: 'eta',
   theta: 'ta',
   Theta: 'Ta',
   iota: 'io',
   kappa: 'ka',
   lambda: 'la',
-  mu: 'mu',
-  nu: 'nu',
-  xi: 'xi',
   omicron: 'om',
-  pi: 'pi',
-  rho: 'rho',
   sigma: 'sg',
   Sigma: 'Sig',
-  tau: 'tau',
   upsilon: 'ups',
   phi: 'phi',
   varphi: 'vphi',
-  chi: 'chi',
-  psi: 'psi',
   omega: 'om',
   Omega: 'Om',
   Gamma: 'Ga',
-  Lambda: 'Lambda',
-  Delta: 'Delta',
 };
 
 // Automatically generated replacement patterns
@@ -588,11 +576,6 @@ export const MAX_STYLE_REPLACEMENTS: ReplacementCategory = {
   },
 };
 
-// Helper to create | separated regex part from a list of words
-function createWordRegexPart(words: string[]): string {
-  return words.join('|');
-}
-
 // prettier-ignore
 // Define the comprehensive list of all trigger words
 const _fullWordsArrayInternal = [
@@ -680,15 +663,9 @@ const _gepWordsArrayInternal = _fullWordsArrayInternal.filter(
 );
 
 // Create regex parts for use in the patterns object
-const SEP_WORDS_REGEX_PART_INTERNAL = createWordRegexPart(
-  _sepWordsArrayInternal,
-);
-const GEP_WORDS_REGEX_PART_INTERNAL = createWordRegexPart(
-  _gepWordsArrayInternal,
-);
-const FULL_WORDS_REGEX_PART_INTERNAL = createWordRegexPart(
-  _fullWordsArrayInternal,
-);
+const SEP_WORDS_REGEX_PART_INTERNAL = _sepWordsArrayInternal.join('|');
+const GEP_WORDS_REGEX_PART_INTERNAL = _gepWordsArrayInternal.join('|');
+const FULL_WORDS_REGEX_PART_INTERNAL = _fullWordsArrayInternal.join('|');
 
 // Pre-construct the regex patterns
 const SEP_WORDS_CREF_EQN_PATTERN = `(${SEP_WORDS_REGEX_PART_INTERNAL})(?:,)?\\s+\\\\cref\\{(eqn:[^,}]+)\\}`;

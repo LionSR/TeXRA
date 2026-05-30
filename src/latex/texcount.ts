@@ -47,16 +47,16 @@ async function hasChinesePackages(
 // Texcount Schemas
 // ============================================================================
 
-export const TexcountModeSchema = z.enum(['separate', 'include', 'sum']);
+const TexcountModeSchema = z.enum(['separate', 'include', 'sum']);
 export type TexcountMode = z.infer<typeof TexcountModeSchema>;
 
-export const TexcountOptionsSchema = z.object({
+const TexcountOptionsSchema = z.object({
   mode: TexcountModeSchema.optional(),
   channel: z.string().optional(),
 });
 export type TexcountOptions = z.infer<typeof TexcountOptionsSchema>;
 
-export const TexcountResultSchema = z.object({
+const TexcountResultSchema = z.object({
   output: z.string().nullable(),
   errors: z.array(z.string()),
 });

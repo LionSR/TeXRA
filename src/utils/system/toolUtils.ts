@@ -260,7 +260,8 @@ export async function checkToolInstalled(
 
     // Check if output contains version-like pattern (e.g., "3.7.1")
     const hasVersionOutput = (result: { stdout?: string; stderr?: string }) =>
-      result.stdout?.match(/\d+\.\d+/) || result.stderr?.match(/\d+\.\d+/);
+      /\d+\.\d+/.test(result.stdout ?? '') ||
+      /\d+\.\d+/.test(result.stderr ?? '');
 
     const executeWithFallback = async (
       cmd: string,
@@ -410,12 +411,12 @@ export async function runToolWithCheck(
 
 /**
  * Check if multiple tools are installed
- * @param configs Array of tool configurations
+ * @param configs Array of tool names
  * @param showError Whether to show error messages for missing tools
  * @returns Promise<boolean[]> Array of booleans indicating which tools are installed
  */
 export async function checkMultipleToolsInstalled(
-  configs: string[] | ToolConfig[],
+  configs: string[],
   showError: boolean = true,
 ): Promise<boolean[]> {
   return Promise.all(
