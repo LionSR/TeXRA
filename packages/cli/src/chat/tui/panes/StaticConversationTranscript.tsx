@@ -43,6 +43,14 @@ function shortenCwd(cwd: string): string {
   return cwd;
 }
 
+export function sessionHeaderIdentityLine(meta: SessionMeta): string {
+  const model = meta.model || '—';
+  if (meta.teamName) {
+    return `team: ${meta.teamName} · root: ${meta.agent || 'chat'} · model: ${model}`;
+  }
+  return `agent: ${meta.agent || 'chat'} · model: ${model}`;
+}
+
 function SessionHeaderBlock({
   meta,
   width,
@@ -65,9 +73,7 @@ function SessionHeaderBlock({
           <Text dimColor>{shortCliApiMode(meta.apiMode)}</Text>
         </Box>
         <Box>
-          <Text wrap="truncate-end">
-            agent: {meta.agent || 'chat'} · model: {meta.model || '—'}
-          </Text>
+          <Text wrap="truncate-end">{sessionHeaderIdentityLine(meta)}</Text>
         </Box>
         <Text dimColor wrap="truncate-end">
           {shortenCwd(meta.cwd)}
