@@ -5,12 +5,6 @@ export function childStatusColor(status: string | undefined): string {
   return 'green';
 }
 
-export function shouldShowChildSectionHeader(
-  maxRows: number | undefined,
-): boolean {
-  return maxRows === undefined;
-}
-
 // A steady marker — intentionally NOT animated. A blinking dot forced the whole
 // live region (including the stable Todos/Plan panel below it) to repaint twice
 // a second for the entire lifetime of a long-running async subagent, and Ink's

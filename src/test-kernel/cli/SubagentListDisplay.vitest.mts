@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   CHILD_STATUS_MARKER,
   childStatusColor,
-  shouldShowChildSectionHeader,
 } from '@cli/chat/tui/panes/SubagentListDisplay';
 import { compactRows } from '@cli/chat/tui/panes/SubagentList';
 import type { ActiveChildInfo } from '@shared/schemas';
@@ -20,12 +19,6 @@ describe('CLI SubagentList display model', () => {
     expect(childStatusColor('running')).toBe('green');
     expect(childStatusColor('waiting')).toBe('yellow');
     expect(childStatusColor('stopped')).toBe('red');
-  });
-
-  it('uses section headers only in the unbounded child list', () => {
-    expect(shouldShowChildSectionHeader(undefined)).toBe(true);
-    expect(shouldShowChildSectionHeader(2)).toBe(false);
-    expect(shouldShowChildSectionHeader(1)).toBe(false);
   });
 
   it('uses a compact child row budget instead of clipping nested sections', () => {
@@ -65,5 +58,29 @@ describe('CLI SubagentList display model', () => {
 
     expect(display.rows).toEqual([]);
     expect(display.hiddenCount).toBe(3);
+  });
+
+  it('keeps exact-fit compact rows without adding an overflow summary', () => {
+    const subagents: ActiveChildInfo[] = [
+      { executionId: 'strategy', agentName: 'strategy' },
+      { executionId: 'lean', agentName: 'leanSolver' },
+    ];
+    const activeProcesses: ActiveChildInfo[] = [
+      { executionId: 'latexmk', agentName: 'latex build' },
+    ];
+
+    const display = compactRows({
+      activeProcesses,
+      maxRows: 3,
+      processOutput: new Map(),
+      subagents,
+    });
+
+    expect(display.rows.map((row) => row.child.executionId)).toEqual([
+      'strategy',
+      'lean',
+      'latexmk',
+    ]);
+    expect(display.hiddenCount).toBe(0);
   });
 });
