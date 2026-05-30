@@ -24,3 +24,8 @@ export {
   attachTranscriptRecorder,
   type TranscriptRecorderHandle,
 } from './TexraTranscriptRecorder';
+export {
+  createRunTrace,
+  flushPendingRunTraces,
+  type RunTrace,
+} from './runTrace';
