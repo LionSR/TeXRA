@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildStatusBarDisplay,
+  ctrlCActionForFocus,
   defaultShortcutModifierLabel,
   queuedFollowUpsSummary,
   statusBarSegmentText,
@@ -205,6 +206,58 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.bindings).toBe('[Tab]streams  [Alt-p]tasks  [Ctrl-C]stop');
     expect(display.bindings).toContain('[Ctrl-C]stop');
+  });
+
+  it('scopes Ctrl-C stop to the root when focus is on a child stream', () => {
+    const parentStream = new Map([['child', 'root']]);
+
+    expect(
+      ctrlCActionForFocus({
+        activeStreamId: 'root',
+        canStopActiveRun: true,
+        parentStream,
+      }),
+    ).toBe('stop');
+    expect(
+      ctrlCActionForFocus({
+        activeStreamId: 'child',
+        canStopActiveRun: true,
+        parentStream,
+      }),
+    ).toBe('stop root');
+    expect(
+      ctrlCActionForFocus({
+        activeStreamId: 'child',
+        canStopActiveRun: false,
+        parentStream,
+      }),
+    ).toBe('exit');
+
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.STOPPED,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: true,
+      hasMultipleStreams: true,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      ctrlCAction: 'stop root',
+    });
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'stopped',
+      'api',
+    ]);
+    expect(display.bindings).toContain('[Ctrl-C]stop root');
   });
 
   it('keeps status discoverable in narrow single-stream sessions', () => {
