@@ -4,6 +4,10 @@ import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { cliState, type StreamSlice } from '../state/cliState';
 import { orderedDescendantsFromSlice } from '../state/focusCycle';
+import {
+  childStreamDisplayLabel,
+  streamScopeDisplayLabel,
+} from '../state/streamLabels';
 import { useSignal } from '../state/useSignal';
 
 export interface StreamTabDisplayItem {
@@ -37,15 +41,6 @@ function truncate(value: string, maxWidth: number): string {
   if (value.length <= maxWidth) return value;
   if (maxWidth <= 1) return '…';
   return `${value.slice(0, maxWidth - 1)}…`;
-}
-
-function childLabel(parent: StreamSlice | undefined, id: StreamTabId): string {
-  const child = [
-    ...(parent?.activeSubagents ?? []),
-    ...(parent?.activeProcesses ?? []),
-    ...(parent?.childStreams ?? []),
-  ].find((entry) => entry.childStreamId === id);
-  return child?.agentName || child?.toolName || child?.executionId || id;
 }
 
 function orderedStreamTree(init: {
@@ -139,7 +134,13 @@ export function streamTabsDisplayItems(init: {
     return {
       id,
       label: truncate(
-        id === root ? 'main' : childLabel(rootSlice, id),
+        id === root
+          ? streamScopeDisplayLabel({
+              parentStream: init.parentStream,
+              streamId: id,
+              streams: init.streams,
+            })
+          : childStreamDisplayLabel(rootSlice, id),
         MAX_LABEL_WIDTH,
       ),
       active: id === init.activeStreamId,
