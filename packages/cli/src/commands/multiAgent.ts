@@ -187,7 +187,7 @@ async function runMultiAgentShow(
   return CliExitCode.Success;
 }
 
-async function runMultiAgentPreset(
+export async function runMultiAgentPreset(
   context: CliContext,
   init: MultiAgentRunInit,
 ): Promise<number> {
@@ -234,6 +234,7 @@ async function runMultiAgentPreset(
       enforceCategory: true,
       registerExecution: true,
       markErrorOnThrow: true,
+      stopAfterCycle: true,
       wrap: (run) => withCliMultiAgentPresetVisibility(plan, run),
     },
   );
