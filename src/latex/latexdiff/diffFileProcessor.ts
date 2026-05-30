@@ -80,9 +80,15 @@ export class DiffFileProcessor {
         return [];
       }
 
-      const lineState = this.updateLineState(line, documentStarted);
-      documentStarted = lineState.documentStarted;
-      skippingPreambleBlock = lineState.skipBlock ?? skippingPreambleBlock;
+      if (DOCUMENT_START_MARKERS.some((marker) => line.includes(marker))) {
+        documentStarted = true;
+        skippingPreambleBlock = false;
+      } else if (
+        !documentStarted &&
+        PREAMBLE_SKIP_MARKERS.some((marker) => line.includes(marker))
+      ) {
+        skippingPreambleBlock = true;
+      }
 
       if (skippingPreambleBlock) {
         return [];
@@ -92,22 +98,6 @@ export class DiffFileProcessor {
     });
 
     return processedLines.join('\n') + '\n';
-  }
-
-  private updateLineState(
-    line: string,
-    documentStarted: boolean,
-  ): { documentStarted: boolean; skipBlock?: boolean } {
-    if (DOCUMENT_START_MARKERS.some((marker) => line.includes(marker))) {
-      return { documentStarted: true, skipBlock: false };
-    }
-    if (
-      !documentStarted &&
-      PREAMBLE_SKIP_MARKERS.some((marker) => line.includes(marker))
-    ) {
-      return { documentStarted, skipBlock: true };
-    }
-    return { documentStarted };
   }
 
   private formatLine(line: string): string[] {

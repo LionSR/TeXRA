@@ -36,6 +36,9 @@ export interface DownloadSourceOptions {
 const INVALID_ARXIV_INPUT_ERROR =
   'Invalid arXiv ID or URL. Please provide a valid arXiv ID (e.g., 2404.12175) or URL (e.g., https://arxiv.org/abs/2404.12175)';
 
+const PDF_ONLY_SUBMISSION_ERROR =
+  'This arXiv paper only has a PDF submission — no LaTeX source is available for download';
+
 function normalizeWorkspaceRelativeDirectory(candidate: string): string {
   return candidate
     .trim()
@@ -70,9 +73,7 @@ export class ArxivSourceProcessor {
    */
   private getExtensionFromContentType(contentType: string): string {
     if (contentType.includes('pdf')) {
-      throw new Error(
-        'This arXiv paper only has a PDF submission — no LaTeX source is available for download',
-      );
+      throw new Error(PDF_ONLY_SUBMISSION_ERROR);
     }
 
     const isTar = contentType.includes('tar');
@@ -282,9 +283,7 @@ export class ArxivSourceProcessor {
             () => undefined,
           );
         }
-        throw new Error(
-          'This arXiv paper only has a PDF submission — no LaTeX source is available for download',
-        );
+        throw new Error(PDF_ONLY_SUBMISSION_ERROR);
       }
 
       const isArchive =

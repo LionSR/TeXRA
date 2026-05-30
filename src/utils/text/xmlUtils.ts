@@ -17,7 +17,7 @@ export {
 } from './xmlCdata';
 
 // Re-export from conversion module
-export { OutputFormat, formatContent } from './xmlConversion';
+export { formatContent } from './xmlConversion';
 
 // Re-export from extraction module
 export {

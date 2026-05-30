@@ -8,7 +8,7 @@ import {
 const EQUATION_ENVIRONMENT_PATTERN =
   '(?:align\\*?|aligned\\*?|alignat\\*?|flalign\\*?|gather\\*?|multline\\*?|equation\\*?|eqnarray\\*?|split\\*?)';
 
-function getSafeString(value: string | number | undefined): string {
+function getSafeString(value: string | undefined): string {
   return typeof value === 'string' ? value : '';
 }
 
