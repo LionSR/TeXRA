@@ -2,10 +2,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import {
-  getDefaultAgentRuntimeHost,
-  setDefaultAgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type { StreamTabId } from '@shared/schemas';
@@ -43,108 +39,57 @@ describe('human prompt progress events', () => {
 
   it('publishes bash approval events through the tool runtime host', async () => {
     const explicit = createRecordingHost();
-    const fallback = createRecordingHost();
-    const previousDefault = getDefaultAgentRuntimeHost();
     const streamId = 'stream:bash-approval' as StreamTabId;
 
-    try {
-      setDefaultAgentRuntimeHost(fallback.host);
+    const approval = withRunContext(
+      createRunContext({ runtimeHost: explicit.host, streamId }),
+      () =>
+        withToolFileInteractionContext({ tracker: {} as never }, () =>
+          requestBashApproval({ command: 'echo hello' }),
+        ),
+    );
 
-      const approval = withRunContext(
-        createRunContext({ runtimeHost: explicit.host, streamId }),
-        () =>
-          withToolFileInteractionContext({ tracker: {} as never }, () =>
-            requestBashApproval({ command: 'echo hello' }),
-          ),
-      );
+    const show = await waitForRecordedEvent(
+      explicit.events,
+      'showBashPermission',
+    );
+    await handleProgressViewBashApprovalAction({
+      requestId: show.payload.requestId,
+      action: 'approve',
+    });
 
-      const show = await waitForRecordedEvent(
-        explicit.events,
-        'showBashPermission',
-      );
-      await handleProgressViewBashApprovalAction({
-        requestId: show.payload.requestId,
-        action: 'approve',
-      });
+    await expect(approval).resolves.toMatchObject({ accepted: true });
 
-      await expect(approval).resolves.toMatchObject({ accepted: true });
-
-      expect(explicit.events).toEqual([
-        { event: 'requestEnsureProgressView', payload: {} },
-        { event: 'setActiveStream', payload: { streamId } },
-        {
-          event: 'showBashPermission',
-          payload: {
-            requestId: show.payload.requestId,
-            command: 'echo hello',
-            allowBypass: true,
-            streamId,
-          },
+    expect(explicit.events).toEqual([
+      { event: 'requestEnsureProgressView', payload: {} },
+      { event: 'setActiveStream', payload: { streamId } },
+      {
+        event: 'showBashPermission',
+        payload: {
+          requestId: show.payload.requestId,
+          command: 'echo hello',
+          allowBypass: true,
+          streamId,
         },
-        {
-          event: 'resolveBashPermission',
-          payload: { requestId: show.payload.requestId },
-        },
-      ]);
-      expect(fallback.events).toEqual([]);
-    } finally {
-      setDefaultAgentRuntimeHost(previousDefault);
-    }
+      },
+      {
+        event: 'resolveBashPermission',
+        payload: { requestId: show.payload.requestId },
+      },
+    ]);
   });
 
   it('publishes user question events through the tool runtime host', async () => {
     const explicit = createRecordingHost();
-    const fallback = createRecordingHost();
-    const previousDefault = getDefaultAgentRuntimeHost();
     const streamId = 'stream:user-question' as StreamTabId;
     const tool = new AskUserQuestionTool();
 
-    try {
-      setDefaultAgentRuntimeHost(fallback.host);
-
-      const result = withRunContext(
-        createRunContext({ runtimeHost: explicit.host, streamId }),
-        () =>
-          withToolFileInteractionContext({ tracker: {} as never }, () =>
-            tool.call({
-              context: 'Choose the next step.',
-              questions: [
-                {
-                  question: 'Which path should the agent take?',
-                  header: 'Path',
-                  options: [
-                    { label: 'Inspect logs' },
-                    { label: 'Run the build' },
-                  ],
-                },
-              ],
-            }),
-          ),
-      );
-
-      const show = await waitForRecordedEvent(
-        explicit.events,
-        'showUserQuestion',
-      );
-      await handleUserQuestionAction({
-        requestId: show.payload.requestId,
-        action: 'submit',
-        answers: {
-          'Which path should the agent take?': 'Run the build',
-        },
-      });
-
-      await expect(result).resolves.toMatchObject({
-        summary: 'Answered 1 user question(s).',
-      });
-
-      expect(explicit.events).toEqual([
-        { event: 'requestEnsureProgressView', payload: {} },
-        { event: 'setActiveStream', payload: { streamId } },
-        {
-          event: 'showUserQuestion',
-          payload: {
-            requestId: show.payload.requestId,
+    const result = withRunContext(
+      createRunContext({ runtimeHost: explicit.host, streamId }),
+      () =>
+        withToolFileInteractionContext({ tracker: {} as never }, () =>
+          tool.call({
+            context: 'Choose the next step.',
             questions: [
               {
                 question: 'Which path should the agent take?',
@@ -155,70 +100,82 @@ describe('human prompt progress events', () => {
                 ],
               },
             ],
-            context: 'Choose the next step.',
-            allowBypass: false,
-            streamId,
-          },
+          }),
+        ),
+    );
+
+    const show = await waitForRecordedEvent(
+      explicit.events,
+      'showUserQuestion',
+    );
+    await handleUserQuestionAction({
+      requestId: show.payload.requestId,
+      action: 'submit',
+      answers: {
+        'Which path should the agent take?': 'Run the build',
+      },
+    });
+
+    await expect(result).resolves.toMatchObject({
+      summary: 'Answered 1 user question(s).',
+    });
+
+    expect(explicit.events).toEqual([
+      { event: 'requestEnsureProgressView', payload: {} },
+      { event: 'setActiveStream', payload: { streamId } },
+      {
+        event: 'showUserQuestion',
+        payload: {
+          requestId: show.payload.requestId,
+          questions: [
+            {
+              question: 'Which path should the agent take?',
+              header: 'Path',
+              options: [{ label: 'Inspect logs' }, { label: 'Run the build' }],
+            },
+          ],
+          context: 'Choose the next step.',
+          allowBypass: false,
+          streamId,
         },
-        {
-          event: 'resolveUserQuestion',
-          payload: { requestId: show.payload.requestId },
-        },
-      ]);
-      expect(fallback.events).toEqual([]);
-    } finally {
-      setDefaultAgentRuntimeHost(previousDefault);
-    }
+      },
+      {
+        event: 'resolveUserQuestion',
+        payload: { requestId: show.payload.requestId },
+      },
+    ]);
   });
 
   it('publishes tool-edit bypass changes through the explicit runtime host', () => {
     const explicit = createRecordingHost();
-    const fallback = createRecordingHost();
-    const previousDefault = getDefaultAgentRuntimeHost();
     const streamId = 'stream:tool-edit-bypass' as StreamTabId;
 
-    try {
-      setDefaultAgentRuntimeHost(fallback.host);
+    const enabled = toggleToolEditApprovalSessionBypass(
+      streamId,
+      explicit.host,
+    );
 
-      const enabled = toggleToolEditApprovalSessionBypass(
-        streamId,
-        explicit.host,
-      );
-
-      expect(enabled).toBe(true);
-      expect(explicit.events).toEqual([
-        {
-          event: 'updateToolEditApprovalBypassState',
-          payload: { streamId, bypassActive: true },
-        },
-      ]);
-      expect(fallback.events).toEqual([]);
-    } finally {
-      setDefaultAgentRuntimeHost(previousDefault);
-    }
+    expect(enabled).toBe(true);
+    expect(explicit.events).toEqual([
+      {
+        event: 'updateToolEditApprovalBypassState',
+        payload: { streamId, bypassActive: true },
+      },
+    ]);
   });
 
   it('publishes proposal bypass changes through the explicit runtime host', () => {
     const explicit = createRecordingHost();
-    const fallback = createRecordingHost();
-    const previousDefault = getDefaultAgentRuntimeHost();
     const streamId = 'stream:proposal-bypass' as StreamTabId;
 
-    try {
-      setDefaultAgentRuntimeHost(fallback.host);
+    const enabled = toggleProposalBypass(streamId, explicit.host);
 
-      const enabled = toggleProposalBypass(streamId, explicit.host);
-
-      expect(enabled).toBe(true);
-      expect(explicit.events).toEqual([
-        {
-          event: 'updateSuperYoloBypassState',
-          payload: { streamId, bypassActive: true },
-        },
-      ]);
-      expect(fallback.events).toEqual([]);
-    } finally {
-      setDefaultAgentRuntimeHost(previousDefault);
-    }
+    expect(enabled).toBe(true);
+    expect(explicit.events).toEqual([
+      {
+        event: 'updateSuperYoloBypassState',
+        payload: { streamId, bypassActive: true },
+      },
+    ]);
   });
 });
