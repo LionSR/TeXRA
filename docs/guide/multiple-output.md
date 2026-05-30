@@ -1,3 +1,9 @@
+<script setup>
+import MultiOutputMatchHero from '../.vitepress/components/MultiOutputMatchHero.vue'
+import MultiInputOrderHero from '../.vitepress/components/MultiInputOrderHero.vue'
+import MultiOutputModesHero from '../.vitepress/components/MultiOutputModesHero.vue'
+</script>
+
 # Handling Multiple Files (Inputs & Outputs)
 
 TeXRA excels at managing complex academic projects often split across multiple files, like a paper with several chapters or appendices. This guide explains how to work with multiple input files and how agents can generate multiple, distinct output files in a single run.
@@ -17,6 +23,10 @@ The TeXRA UI provides dedicated sections for managing multiple input files.
 
 - **Input Files**: Each Input row is an ordered list — use **Add files** (<wa-icon library="texra" name="add"></wa-icon>), **Add opened files** (<wa-icon library="texra" name="folder-opened"></wa-icon>), or drag-and-drop to append sources. They are concatenated and provided as context to the selected agent. For editing agents, the expected output filenames are the selected input filenames in the same order.
 - **Fixed Outputs**: Agents that create files with names not determined by the inputs declare those filenames in `settings.defaultOutputFiles`.
+
+<MultiInputOrderHero />
+
+<p class="hero-caption">The Input group is an ordered list — drag to reorder. For editing agents the row order is the output order, and each input filename is reused as its output filename.</p>
 
 _(See [File Management](./file-management.md) for general UI controls.)_
 
@@ -46,6 +56,10 @@ This is the crucial part for generating multiple distinct files:
 3. **TeXRA Extracts:** The TeXRA backend parses this XML response. It looks for `<document>` tags with a `name` attribute that **exactly matches** one of the expected output filenames.
 4. **Files Saved:** For each matching tag found, TeXRA extracts the content within that tag and saves it to the corresponding filename. If the agent's response doesn't include a `<document>` tag with a name matching one you specified, that file will not be created or updated.
 
+<MultiOutputMatchHero />
+
+<p class="hero-caption">Each <code>&lt;document name="…"&gt;</code> block is matched by name against the expected output filenames — matches are saved, a block with no matching name is skipped.</p>
+
 **Key Point:** The agent must be explicitly instructed via its prompts to
 generate the `<document name=\"...\">` structure matching the output filenames
 provided through `INPUT_FILES` for editing agents, or `OUTPUT_FILES` for agents
@@ -58,6 +72,10 @@ editing agents. Agents that generate files with fixed names can declare
 `defaultOutputFiles`; those names are exposed as `OUTPUT_FILES`. Prompt rendering
 and output extraction depend on these filename lists, not on a separate YAML flag
 or a `_multiple` filename convention.
+
+<MultiOutputModesHero />
+
+<p class="hero-caption">Two ways output filenames are determined: editing agents reuse the selected <code>INPUT_FILES</code>, while generator agents emit the fixed names declared in <code>defaultOutputFiles</code> (exposed as <code>OUTPUT_FILES</code>).</p>
 
 ### Declaring multi-output agents in YAML
 

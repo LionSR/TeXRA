@@ -1,3 +1,8 @@
+<script setup>
+import CritiquePassCard from '../../.vitepress/components/CritiquePassCard.vue';
+import PolishRoundsTree from '../../.vitepress/components/PolishRoundsTree.vue';
+</script>
+
 # Polish a draft
 
 Rewrite a LaTeX paper for clarity. Keeps math, citations, and structure
@@ -40,6 +45,10 @@ Each round writes its output into the run's task storage, using the
 .texra/runs/<run-id>/r1/intro.tex   # Round 1 — critique-and-revise pass
 ```
 
+<PolishRoundsTree />
+
+<p class="hero-caption">Both rounds reuse your input filename — <code>r0/</code> holds the first revision, <code>r1/</code> the critique-and-revise pass you usually keep.</p>
+
 To write the final revision next to your input instead:
 
 ```sh
@@ -69,6 +78,10 @@ diff -u .texra/runs/<run-id>/r0/intro.tex .texra/runs/<run-id>/r1/intro.tex
 VS Code — the Progress Board shows side-by-side diffs and lets you accept
 the output back into the workspace.
 
+<CompareHero />
+
+<p class="hero-caption">The Progress Board opens the polished round as a diff — accept each change back into your draft.</p>
+
 For a **compiled PDF comparison** (additions in blue, deletions in red),
 use the LaTeXdiff feature in the TeXRA panel. See
 [LaTeX Diff](../latex-diff.md).
@@ -78,11 +91,9 @@ use the LaTeXdiff feature in the TeXRA panel. See
 After Round 0 produces a revision, polish re-prompts itself to check
 for common failure modes:
 
-- Edits that weakened the original.
-- Mathematical content that went missing.
-- Notation used before being defined.
-- Generic filler ("provides crucial insights into…").
-- Changes outside the scope of your instruction.
+<CritiquePassCard />
+
+<p class="hero-caption">Round 1 rereads its own Round 0 output and scans for five regressions before revising again.</p>
 
 The result is written to `r1/`. Use **Round 0 alone** for fast
 iteration. Use **Round 1** when the draft is close to final.

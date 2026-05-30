@@ -1,3 +1,7 @@
+<script setup>
+import PrReviewCard from '../.vitepress/components/PrReviewCard.vue';
+</script>
+
 # Code Review
 
 The **TeXRA Code Review** GitHub Action posts a pull request review on each PR
@@ -10,12 +14,14 @@ TeXRA service.
 
 ## What you'll see on a PR
 
-Once installed, every PR gets a single review from `github-actions[bot]`:
+Once installed, every PR gets a single review from `github-actions[bot]`: a
+summary comment at the top with TeXRA's overall verdict, plus inline comments on
+the lines it wants to question. On the next push to the same PR, TeXRA updates
+those same threads instead of posting duplicates.
 
-- A summary comment at the top of the PR with TeXRA's overall verdict.
-- Inline comments on the lines TeXRA wants to question or suggest changes for.
-- On the next push to the same PR, TeXRA updates the same threads instead of
-  posting duplicates.
+<PrReviewCard />
+
+<p class="hero-caption">One review per PR — a top-level verdict plus inline comments pinned to the flagged lines, refreshed in place on the next push.</p>
 
 ## What you need
 

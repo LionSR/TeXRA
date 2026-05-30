@@ -77,15 +77,11 @@ graph TB
     Tools --> Shell[Shell Commands]
 ```
 
-**Workflow agents** (`polish`, `correct`, `merge`, `ocr`,
-`transcribe_audio`, `paper2slide`, `paper2poster`) run a structured
-pipeline and write task-scoped output files with diffs.
+TeXRA's agents come in two classes:
 
-**Tool-use agents** (`research`, `numerics`, `review`, `lean`,
-`presenter`, `latexFixer`, `creator`, `chat`, `setup`) work
-conversationally — they read and edit workspace files, search arXiv
-and Crossref, query Mathlib by type signature, compile LaTeX, and run
-WolframScript.
+<AgentClasses />
+
+<p class="hero-caption">Workflow agents run a structured pipeline and return a diff; tool-use agents work conversationally with grounded tools.</p>
 
 The system rests on three established AI design patterns: **reflection**
 (agents critique their own output and iterate), **tool use** (agents

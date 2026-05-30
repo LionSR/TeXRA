@@ -1,3 +1,8 @@
+<script setup>
+import MergeFlowHero from '../.vitepress/components/MergeFlowHero.vue';
+import MergePanelHero from '../.vitepress/components/MergePanelHero.vue';
+</script>
+
 # Intelligent Merge Workflow
 
 ## The Problem: Partial Agent Outputs
@@ -10,9 +15,17 @@ TeXRA's **Intelligent Merge** workflow solves this problem. It uses an LLM to co
 
 This generated _full_ document can then be cleanly compared against your original base file using `latexdiff`.
 
+<MergeFlowHero />
+
+<p class="hero-caption">The full <strong>Base File</strong> and the agent's partial <strong>Edited File</strong> both feed the <code>merge</code> agent, which emits a complete <code>_full.tex</code> — the valid <code>latexdiff</code> input.</p>
+
 ## The Merge Workflow
 
 Access the merge functionality via the "LaTeXdiffs" section (<wa-icon library="texra" name="chevron-down"></wa-icon> LaTeXDiffs) in the main TeXRA interface:
+
+<MergePanelHero />
+
+<p class="hero-caption">The LaTeXDiffs section: pick a <strong>Base File</strong>, pick an <strong>Edited File</strong>, choose a <strong>Model</strong>, then click the highlighted <wa-icon library="texra" name="merge"></wa-icon> <strong>Merge</strong> action in the Edited row.</p>
 
 1.  **Select Base File**: Choose the original document you want to merge changes _into_ using the "Base File" dropdown (<wa-icon library="texra" name="file"></wa-icon> Base).
 2.  **Select Edited File**: Choose the document containing the suggested changes using the "Edited File" dropdown (<wa-icon library="texra" name="edit"></wa-icon> Edited).

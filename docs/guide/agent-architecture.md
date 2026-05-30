@@ -1,3 +1,9 @@
+<script setup>
+import AgentYamlHero from '../.vitepress/components/AgentYamlHero.vue'
+import RoundOutputTree from '../.vitepress/components/RoundOutputTree.vue'
+import AgentModesCompare from '../.vitepress/components/AgentModesCompare.vue'
+</script>
+
 # Workflow Agents: How They Work
 
 Every time you click "Execute" in TeXRA, an **agent** takes your files and instructions, asks an AI model to do the work, and delivers the result. This page explains what happens under the hood—enough to understand the system, customize it, and troubleshoot when things go sideways.
@@ -8,6 +14,11 @@ Workflow agents are built for **deep, single-shot thinking**—things like rewri
 If you want a snappier turnaround (e.g. quick polishes, small corrections), pick a **smaller or faster model** in the model dropdown—output quality drops somewhat, but wall-clock time drops a lot. For short, conversational edits or read-only questions, use a **tool-use agent** (`chat`, `research`, `review`) instead: those stream back in seconds and don't go through the full workflow pipeline.
 :::
 
+The `settings.agentCategory` key decides which of these two modes an agent runs in:
+
+<AgentModesCompare />
+<p class="hero-caption">Workflow agents reason once and write a versioned, diffable file; tool-use agents converse and call tools turn by turn—it is the first thing to pick for any task.</p>
+
 ## Agent Definition Files (`.yaml`)
 
 Each agent is defined in a simple `.yaml` file that tells TeXRA what to say to the AI model and how to handle the response. You can browse and manage these files from the **Agents** tab in the TeXRA Dashboard, or create your own (see [Custom Agents](./custom-agents.md)).
@@ -15,6 +26,9 @@ Each agent is defined in a simple `.yaml` file that tells TeXRA what to say to t
 ## Understanding the YAML Structure
 
 These `.yaml` files have two main parts (and thankfully, YAML is usually less prickly than XML or JSON):
+
+<AgentYamlHero />
+<p class="hero-caption">A <code>settings</code> block defines how the agent runs; a <code>prompts</code> block holds the templates—a <code>userRequest</code> array drives Round 0 plus reflection rounds.</p>
 
 1.  **`settings`**: Define general operational parameters. For example:
     - `agentCategory`: Is it a `workflow` agent (structured Chain-of-Thought reasoning with XML-wrapped output) or a `toolUse` agent (interactive conversation that can call tools like file editing, web search, etc.)?
@@ -60,6 +74,11 @@ sequenceDiagram
 2.  **Prompt Construction:** It combines the agent's `systemPrompt`, `userPrefix` (filled with your files and instruction), and `userRequest` templates into a full prompt for the LLM.
 3.  **LLM Interaction (Round 0):** TeXRA sends the prompt to the selected LLM API. The LLM generates a response, typically including reasoning (`<scratchpad>`) and the final answer wrapped in XML tags (e.g., `<document>...</document>`).
 4.  **Processing:** TeXRA saves the raw LLM response (often as an `.xml` file internally, e.g., `r{round}/output.xml`). It then parses this file, extracts the content from the primary XML tag (defined by `settings.documentTag`), and saves _that extracted content_ to the final output file in task storage (e.g., `r{round}/output.tex`, so Round 0 is `r0/output.tex`, the first reflection is `r1/output.tex`, and so on). You can monitor this in the [ProgressBoard](./progress-board.md). For LaTeX files, TeXRA can also automatically generate a `latexdiff` file comparing the output to the input, enhancing observability. See the [LaTeX Diff guide](./latex-diff.md) for details.
+
+Each round lands in its own folder under task storage:
+
+<RoundOutputTree />
+<p class="hero-caption">Every round saves the raw <code>output.xml</code>, the extracted <code>output.tex</code>, and an optional <code>latexdiff</code> PDF—<code>r0/</code> is the draft; <code>r1/</code> and later are reflection passes.</p>
 
 **Continuation Handling:** If the LLM response gets cut off due to output token limits before generating the required `endTag`, TeXRA automatically sends a continuation prompt. This prompt asks the model to resume generating exactly where it left off, ensuring complete outputs even for very long tasks. This happens seamlessly within a processing round.
 
