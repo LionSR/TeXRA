@@ -28,6 +28,7 @@ import { spawnSync } from 'node:child_process';
 
 const ESC = String.fromCharCode(27);
 const ETX = String.fromCharCode(3); // Ctrl-C
+const DOWN = ESC + '[B';
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');
@@ -63,6 +64,19 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/mo'],
     expect: ['/model', 'List available models', 'navigate', 'Tab complete'],
+  },
+  {
+    name: 'slash-palette-overflow',
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/', DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN],
+    frame: 'tail',
+    expect: [
+      '… 6 earlier',
+      '/status',
+      'Open the session status tabs',
+      '/exit',
+      'Exit the CLI session',
+    ],
   },
   {
     name: 'edit-approval',
