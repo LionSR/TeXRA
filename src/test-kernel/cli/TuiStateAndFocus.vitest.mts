@@ -47,6 +47,7 @@ import {
 import { renderAnsiMarkdown } from '@cli/chat/tui/render/ansiMarkdown';
 import {
   chatTuiCanInterruptActiveRun,
+  chatTuiCanStopActiveRun,
   chatTuiCanStartRootRun,
   chatTuiActiveChildFollowUpTarget,
   chatTuiShouldAnnounceQueuedFollowUp,
@@ -362,6 +363,101 @@ describe('CLI TUI row allocation', () => {
         runPromise,
       }),
     ).toBe(true);
+  });
+
+  it('only reports Ctrl-C stoppable while the root stream is actively responding', () => {
+    const runPromise = Promise.resolve();
+
+    expect(
+      chatTuiCanStopActiveRun(
+        {
+          runCompleted: false,
+          runPromise,
+          streamId: undefined,
+        },
+        undefined,
+      ),
+    ).toBe(true);
+    expect(
+      chatTuiCanStopActiveRun(
+        {
+          runCompleted: false,
+          runPromise,
+          streamId: root,
+        },
+        STREAM_STATUS.RUNNING,
+      ),
+    ).toBe(true);
+    expect(
+      chatTuiCanStopActiveRun(
+        {
+          runCompleted: false,
+          runPromise,
+          streamId: root,
+        },
+        STREAM_STATUS.INITIALIZING,
+      ),
+    ).toBe(true);
+    expect(
+      chatTuiCanStopActiveRun(
+        {
+          runCompleted: false,
+          runPromise,
+          streamId: root,
+        },
+        STREAM_STATUS.RESUMING,
+      ),
+    ).toBe(true);
+    expect(
+      chatTuiCanStopActiveRun(
+        {
+          runCompleted: false,
+          runPromise,
+          streamId: root,
+        },
+        STREAM_STATUS.WAITING,
+      ),
+    ).toBe(false);
+    expect(
+      chatTuiCanStopActiveRun(
+        {
+          runCompleted: false,
+          runPromise,
+          streamId: root,
+        },
+        STREAM_STATUS.ERROR,
+      ),
+    ).toBe(false);
+    expect(
+      chatTuiCanStopActiveRun(
+        {
+          runCompleted: false,
+          runPromise,
+          streamId: root,
+        },
+        STREAM_STATUS.STOPPED,
+      ),
+    ).toBe(false);
+    expect(
+      chatTuiCanStopActiveRun(
+        {
+          runCompleted: false,
+          runPromise,
+          streamId: root,
+        },
+        STREAM_STATUS.READY,
+      ),
+    ).toBe(false);
+    expect(
+      chatTuiCanStopActiveRun(
+        {
+          runCompleted: true,
+          runPromise,
+          streamId: root,
+        },
+        STREAM_STATUS.RUNNING,
+      ),
+    ).toBe(false);
   });
 
   it('selects the focused child stream as a follow-up target', () => {
