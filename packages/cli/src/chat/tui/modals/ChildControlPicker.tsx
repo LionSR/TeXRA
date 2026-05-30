@@ -13,10 +13,12 @@ import {
   buildChildControlItems,
   childPickerKeyAction,
   clampPickerIndex,
+  liveChildExecutionElapsedKey,
   nextPickerIndex,
   type ChildControlItem,
   type ChildControlMode,
 } from '../state/childControls';
+import { useLiveNowMs } from '../state/useLiveNowMs';
 import { KeyHints } from '../ui/KeyHints';
 import { SELECT_LABEL_MAX_COLS } from '../ui/Select';
 import type { StreamSlice } from '../state/cliState';
@@ -335,9 +337,11 @@ export function ChildControlPicker({
   slice,
   streams,
 }: ChildControlPickerProps): React.JSX.Element {
+  const liveElapsedKey = liveChildExecutionElapsedKey(slice);
+  const nowMs = useLiveNowMs(liveElapsedKey !== undefined, liveElapsedKey);
   const items = useMemo(
-    () => (slice ? buildChildControlItems(slice, mode, streams) : []),
-    [mode, slice, streams],
+    () => (slice ? buildChildControlItems(slice, mode, streams, nowMs) : []),
+    [mode, nowMs, slice, streams],
   );
   const [highlight, setHighlight] = useState(0);
   const [tailExecutionId, setTailExecutionId] = useState<string | undefined>(
