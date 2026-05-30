@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { cliModelRecord } from '@cli/commands/models';
+import {
+  cliModelRecord,
+  listableModelAccessEntries,
+} from '@cli/commands/models';
+import type { CliModelAccess } from '@cli/runtime/modelAccess';
 import type { ModelOptionData } from '@shared/schemas';
 
 function model(overrides: Partial<ModelOptionData> = {}): ModelOptionData {
@@ -17,6 +21,18 @@ function model(overrides: Partial<ModelOptionData> = {}): ModelOptionData {
     disabled: false,
     ...overrides,
   } as ModelOptionData;
+}
+
+function access(
+  value: string,
+  overrides: Partial<CliModelAccess> = {},
+): CliModelAccess {
+  return {
+    model: model({ value, label: value }),
+    available: true,
+    status: 'included access',
+    ...overrides,
+  };
 }
 
 describe('CLI model JSON record', () => {
@@ -59,5 +75,32 @@ describe('CLI model JSON record', () => {
 
     expect(record.id).toBe('gpt55');
     expect(record.value).toBe('gpt55');
+  });
+});
+
+describe('CLI model list filtering', () => {
+  it('lists only currently runnable models by default', () => {
+    const entries = [
+      access('sonnet46T'),
+      access('opus48T', { available: false, status: 'not included' }),
+      access('deepseekT'),
+    ];
+
+    expect(
+      listableModelAccessEntries(entries).map((entry) => entry.model.value),
+    ).toEqual(['sonnet46T', 'deepseekT']);
+  });
+
+  it('keeps unavailable models for the explicit diagnostic view', () => {
+    const entries = [
+      access('sonnet46T'),
+      access('opus48T', { available: false, status: 'not included' }),
+    ];
+
+    expect(
+      listableModelAccessEntries(entries, { includeUnavailable: true }).map(
+        (entry) => entry.model.value,
+      ),
+    ).toEqual(['sonnet46T', 'opus48T']);
   });
 });
