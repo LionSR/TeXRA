@@ -71,6 +71,20 @@ describe('CLI session status formatter', () => {
     ).toContain('queued follow-ups: 0');
   });
 
+  it('includes team identity when a chat was launched from a preset', () => {
+    expect(
+      formatCliSessionStatus({
+        agent: 'orchestrator',
+        model: 'harness-model',
+        teamName: 'Physicist',
+        api: 'personal',
+        approval: 'ask',
+        status: 'running',
+        queuedFollowUpMessages: [],
+      }),
+    ).toContain(['team: Physicist', 'agent: orchestrator'].join('\n'));
+  });
+
   it('uses the footer label for an idle waiting stream', () => {
     expect(formatCliStatusLabel(STREAM_STATUS.WAITING)).toBe('idle');
     expect(
