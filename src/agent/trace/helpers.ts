@@ -92,14 +92,6 @@ export function debugInternal(
 
 // ─── Domain events ──────────────────────────────────────────────────────
 
-export function logScratchpad(
-  trace: AgentTrace,
-  content: string,
-  stageId?: string,
-): void {
-  trace.domain({ key: 'scratchpad', text: content, stageId });
-}
-
 export function logContextManagementEvent(
   trace: AgentTrace,
   text: string,

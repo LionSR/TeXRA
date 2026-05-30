@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { summarizeSubagentFollowup } from '@cli/chat/tui/state/subagentFollowup';
+import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
 
 describe('summarizeSubagentFollowup', () => {
   it('passes non-subagent text through unchanged', () => {

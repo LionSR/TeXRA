@@ -2,10 +2,8 @@ import * as path from 'path';
 
 import * as nunjucks from 'nunjucks';
 
-import { getAgentFirstNameChunk } from '@housekeeping/utils';
 import * as logger from '@logger/logUtils';
-import type { ExecutionId } from '@shared/schemas';
-import { StorageFS, TASK_RUNS_DIR, WorkspaceFS } from '@utils/files';
+import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'promptUtils';
 logger.initialize(CHANNEL);
@@ -99,51 +97,4 @@ export async function renderPrompt(
   const resolvedVariables = await resolveValue(variables);
   const env = nunjucks.configure({ autoescape: false });
   return env.renderString(prompt, resolvedVariables as Record<string, unknown>);
-}
-
-/**
- * Write the model's input prompt to an XML file
- * @param systemPrompt The system prompt
- * @param userPrefix The user prefix
- * @param userRequest The user request
- * @param inputFile Path to the input file
- * @param agent Name of the agent
- * @param executionId Optional execution identifier used to scope storage writes
- * @returns Absolute path to the created XML file
- */
-export async function writePromptToXml(
-  systemPrompt: string,
-  userPrefix: string,
-  userRequest: string,
-  inputFile: string,
-  agent: string,
-  executionId?: ExecutionId,
-): Promise<string> {
-  const { dir, name } = path.parse(inputFile);
-  const agentName = getAgentFirstNameChunk(agent);
-  const fullPrompt = `\n<system>${systemPrompt}</system>\n\n${userPrefix}\n${userRequest}\n`;
-  const fileName = `${name}_${agentName}_input.xml`;
-
-  // With an executionId, prompts are scoped to per-run storage; otherwise they
-  // land beside the input file in the workspace.
-  if (executionId) {
-    const runDir = path.join(TASK_RUNS_DIR, executionId);
-    const relativeOutputFile = path.join(runDir, fileName);
-
-    await StorageFS.ensureDir(TASK_RUNS_DIR);
-    await StorageFS.ensureDir(runDir);
-
-    const storagePath = StorageFS.fullPath(relativeOutputFile);
-    logger.debug(CHANNEL, `Writing input prompt to ${storagePath}`);
-    await StorageFS.write(relativeOutputFile, fullPrompt);
-
-    return storagePath;
-  }
-
-  const outputFile = path.join(dir, fileName);
-  const workspacePath = WorkspaceFS.fullPath(outputFile);
-  logger.debug(CHANNEL, `Writing input prompt to ${workspacePath}`);
-  await WorkspaceFS.write(outputFile, fullPrompt);
-
-  return workspacePath;
 }

@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 // Local imports - platform
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 import {
-  createWorkspaceStorageProvider,
+  WorkspaceStorageProvider,
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
   workspaceStorageId,
@@ -78,7 +78,7 @@ describe('workspace storage defaults', () => {
   it('creates workspace-scoped storage roots on demand', async () => {
     const root = await makeTempDir();
     let workspacePath: string | undefined = '/workspace/a';
-    const provider = createWorkspaceStorageProvider(root, () => workspacePath);
+    const provider = new WorkspaceStorageProvider(root, () => workspacePath);
     const firstStoragePath = provider.getStoragePath();
 
     workspacePath = '/workspace/b';
@@ -111,7 +111,7 @@ describe('workspace storage defaults', () => {
     await mkdir(legacyStoragePath, { recursive: true });
     await writeFile(legacyMarkerPath, 'legacy', 'utf8');
 
-    const provider = createWorkspaceStorageProvider(root, workspacePath);
+    const provider = new WorkspaceStorageProvider(root, workspacePath);
     const storagePath = provider.getStoragePath();
 
     expect(storagePath).toBe(

@@ -26,6 +26,7 @@ import {
   getInterruptible,
   getToolUseFlowContext,
 } from '@agent/toolUse/ToolUseAgentRegistry';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
 import {
@@ -45,7 +46,7 @@ import { writeTextStderr } from '@cli/runtime/logSinks';
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
-} from '@cli/runtime/approvalPolicy';
+} from '@cli/schemas/cliSettings';
 import { parseCliHistoryId, readCliHistoryConfig } from '@cli/runtime/history';
 import {
   formatCliMemoryList,
@@ -78,10 +79,7 @@ import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { listSlashCommands, parseSlashInput } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
-import {
-  formatCliSessionStatus,
-  readQueuedFollowUpMessagesForStatus,
-} from './sessionStatus';
+import { formatCliSessionStatus } from './sessionStatus';
 import { clearApprovals } from './state/approvalQueue';
 import { cliState, resetCliState } from './state/cliState';
 import { installTuiApprovals } from './state/subscribeApprovals';
@@ -616,7 +614,9 @@ async function handleTuiSlashCommand(
           approval: formatApprovalPolicy(context.getApprovalPolicy()),
           status: slice?.status ?? 'not started',
           queuedFollowUpMessages:
-            readQueuedFollowUpMessagesForStatus(activeStreamId),
+            activeStreamId === undefined
+              ? []
+              : ToolUseFollowUpQueue.getAll(activeStreamId),
         }),
       );
       return true;
