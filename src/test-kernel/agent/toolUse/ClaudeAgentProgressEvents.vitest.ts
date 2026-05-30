@@ -2,12 +2,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  createRunTrace,
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
-import { createRunTrace } from '@logger';
 
 // Local imports - shared
 import { MESSAGE_TYPES } from '@shared/schemas';

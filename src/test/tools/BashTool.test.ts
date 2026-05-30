@@ -7,6 +7,7 @@ import {
   type ModelConfig,
   ModelProvider,
 } from 'llm-zoo';
+import { createRunTrace } from '@transcript';
 import { AgentCategory } from '@agent/core/AgentDataclass';
 import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
 import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
@@ -27,7 +28,6 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 
 // Internal imports
 import { MapToolRegistry } from '@agent/core/ToolTypes';
-import { createRunTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 import { BashTool } from '@tools/bash';
 import * as execUtils from '@utils/system/execUtils';

@@ -3,12 +3,12 @@ import { strict as assert } from 'assert';
 
 // Local imports
 import {
+  createRunTrace,
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
 import { logFileCategory, type AgentTrace } from '@agent/trace';
-import { createRunTrace } from '@logger';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
 describe('logFileCategory', () => {
