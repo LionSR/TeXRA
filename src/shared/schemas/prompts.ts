@@ -147,6 +147,27 @@ export const UserQuestionAnswersSchema = z.record(
 );
 export type UserQuestionAnswers = z.infer<typeof UserQuestionAnswersSchema>;
 
+/**
+ * Host-neutral core of a resolved approval decision, shared by every host
+ * (CLI TUI, CLI headless, extension). Hosts that need extra host-specific
+ * fields (e.g. the CLI's session bypass / credential mode) extend this rather
+ * than redefining the common shape, so the accepted/feedback/answers vocabulary
+ * has a single source of truth. See docs/proposals/tui-extension-sharing.md
+ * (Rung 1).
+ */
+export const ApprovalDecisionSchema = z.object({
+  accepted: z.boolean(),
+  /**
+   * Free-text payload carried with the decision. For rejections this is the
+   * user's reject-with-feedback note; for an ExternalInquiry accept it is the
+   * answer the agent gets back.
+   */
+  userMessage: z.string().optional(),
+  /** Structured answers for an AskUserQuestion request. */
+  userQuestionAnswers: UserQuestionAnswersSchema.optional(),
+});
+export type ApprovalDecision = z.infer<typeof ApprovalDecisionSchema>;
+
 export const UserQuestionPermissionSchema = PermissionBaseSchema.extend({
   questions: z.array(UserQuestionPromptSchema).min(1).max(3),
   context: z.string().nullish(),
