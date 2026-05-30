@@ -149,15 +149,66 @@ export function boundedDiffDisplayLines(
   maxHunkLines = 0,
   maxDisplayLines = 0,
 ): DiffDisplayLine[] {
+  return scrollBoundedDiffDisplayLines(hunks, maxHunkLines, maxDisplayLines, 0);
+}
+
+export function maxDiffScrollOffset(
+  totalLines: number,
+  maxDisplayLines: number,
+): number {
+  if (maxDisplayLines <= 2 || totalLines <= maxDisplayLines) return 0;
+  return Math.max(0, totalLines - Math.max(1, maxDisplayLines - 1));
+}
+
+export function scrollBoundedDiffDisplayLines(
+  hunks: readonly Hunk[],
+  maxHunkLines = 0,
+  maxDisplayLines = 0,
+  scrollOffset = 0,
+): DiffDisplayLine[] {
   const lines = diffDisplayLines(hunks, maxHunkLines);
   if (maxDisplayLines <= 0 || lines.length <= maxDisplayLines) return lines;
-  const visibleLines = lines.slice(0, Math.max(0, maxDisplayLines - 1));
+  if (maxDisplayLines === 1) {
+    return [
+      {
+        kind: 'overflow',
+        text: `... ${lines.length} diff rows hidden`,
+      },
+    ];
+  }
+
+  const offset = Math.max(
+    0,
+    Math.min(scrollOffset, maxDiffScrollOffset(lines.length, maxDisplayLines)),
+  );
+  const hiddenBefore = offset;
+  const reserveBefore = hiddenBefore > 0 ? 1 : 0;
+  const contentSlotsWithoutAfter = Math.max(0, maxDisplayLines - reserveBefore);
+  const reserveAfter = offset + contentSlotsWithoutAfter < lines.length ? 1 : 0;
+  const visibleCount = Math.max(
+    0,
+    maxDisplayLines - reserveBefore - reserveAfter,
+  );
+  const visibleLines = lines.slice(offset, offset + visibleCount);
+  const hiddenAfter = Math.max(0, lines.length - (offset + visibleCount));
   return [
+    ...(hiddenBefore > 0
+      ? [
+          {
+            kind: 'overflow' as const,
+            text: `... ${hiddenBefore} previous diff rows`,
+          },
+        ]
+      : []),
     ...visibleLines,
-    {
-      kind: 'overflow',
-      text: `... ${lines.length - visibleLines.length} more diff rows`,
-    },
+    ...(hiddenAfter > 0
+      ? [
+          {
+            kind: 'overflow' as const,
+            text: `... ${hiddenAfter} more diff rows`,
+          },
+        ]
+      : []),
   ];
 }
 
@@ -167,6 +218,8 @@ export interface DiffViewProps {
   readonly maxDisplayLines?: number;
   /** Maximum context lines per hunk before truncating; 0 = no truncation. */
   readonly maxHunkLines?: number;
+  /** Starting diff row when maxDisplayLines truncates the display. */
+  readonly scrollOffset?: number;
   readonly width?: number;
 }
 
@@ -174,7 +227,12 @@ export function DiffView(props: DiffViewProps): React.JSX.Element {
   const maxDisplayLines = props.maxDisplayLines ?? 0;
   const max = props.maxHunkLines ?? 0;
   const width = Math.max(MIN_DIFF_WIDTH, props.width ?? DEFAULT_DIFF_WIDTH);
-  const lines = boundedDiffDisplayLines(props.hunks, max, maxDisplayLines);
+  const lines = scrollBoundedDiffDisplayLines(
+    props.hunks,
+    max,
+    maxDisplayLines,
+    props.scrollOffset ?? 0,
+  );
 
   return (
     <Box flexDirection="column">
