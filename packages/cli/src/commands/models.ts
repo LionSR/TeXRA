@@ -31,6 +31,14 @@ export function cliModelRecord(
   return { id: model.value, ...model };
 }
 
+export function listableModelAccessEntries(
+  models: ModelAccessList,
+  options: { readonly includeUnavailable?: boolean } = {},
+): ModelAccessList {
+  if (options.includeUnavailable === true) return models;
+  return models.filter(({ available }) => available);
+}
+
 async function loadModelAccessList(
   context: CliContext,
 ): Promise<ModelAccessList | { error: string }> {
@@ -44,20 +52,24 @@ async function loadModelAccessList(
   }
 }
 
-async function listModels(context: CliContext): Promise<number> {
+async function listModels(
+  context: CliContext,
+  options: { readonly includeUnavailable?: boolean } = {},
+): Promise<number> {
   const result = await loadModelAccessList(context);
   if ('error' in result) {
     writeTextStderr(result.error);
     return CliExitCode.ModelOrNetworkError;
   }
 
+  const listedModels = listableModelAccessEntries(result, options);
   emitCliResult(context, {
-    json: result.map(({ model }) => cliModelRecord(model)),
-    ndjson: result.map(({ model }) => ({
+    json: listedModels.map(({ model }) => cliModelRecord(model)),
+    ndjson: listedModels.map(({ model }) => ({
       kind: 'model',
       model: cliModelRecord(model),
     })),
-    text: result
+    text: listedModels
       .map(({ model, status }) => `${model.value}\t${model.label}\t${status}`)
       .join('\n'),
   });
@@ -117,8 +129,13 @@ const modelsListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List available models' },
   args: {
     ...GLOBAL_ARGS,
+    all: {
+      type: 'boolean',
+      description: 'Include unavailable models with their access status',
+    },
   },
-  run: (context) => listModels(context),
+  run: (context, ctx) =>
+    listModels(context, { includeUnavailable: ctx.args.all === true }),
 });
 
 const modelsShowCommand = defineCliCommand({
