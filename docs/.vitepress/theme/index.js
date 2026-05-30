@@ -34,6 +34,7 @@ import DropdownMenu from '../components/DropdownMenu.vue';
 import FlowSteps from '../components/FlowSteps.vue';
 import DesktopMigrationSplit from '../components/DesktopMigrationSplit.vue';
 import TemplateVarsPalette from '../components/TemplateVarsPalette.vue';
+import AgentCatalog from '../components/AgentCatalog.vue';
 
 let waRegistered = false;
 
@@ -111,6 +112,7 @@ export default {
     app.component('FlowSteps', FlowSteps);
     app.component('DesktopMigrationSplit', DesktopMigrationSplit);
     app.component('TemplateVarsPalette', TemplateVarsPalette);
+    app.component('AgentCatalog', AgentCatalog);
 
     // Side-effects (client only): load WA components + register the texra icon
     // library, and keep the WA color scheme in sync with the docs theme.
