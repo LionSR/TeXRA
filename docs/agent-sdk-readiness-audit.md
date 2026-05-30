@@ -338,3 +338,61 @@ display flags can keep an explicit allow-list. Complements §3.4. Low risk, ~1 d
 deep import, which is exactly why the `logger/index.ts` re-export exists. Methodology
 note: audits of `src/` must also grep `packages/**` (desktop, cli, extension) before
 declaring a symbol unused.
+
+---
+
+## 8. Re-verification addendum — 2026-05-30
+
+A third independent pass (agent core, model handlers, logger, and platform/surface)
+re-audited the same surfaces against the current tree. **The 2026-05-28/29 findings
+hold without change.** TeXRA remains well-architected and SDK-aligned; no structural
+gaps surfaced. The applied items (§2.1, §2.2, §3.4, §3.2-partial, §7 `legacyCoordinators`)
+remain in place. Verification of the still-open items and two methodology corrections:
+
+**Pending items re-confirmed present (line numbers refreshed where drifted):**
+
+- **§2.6** — `src/agent/modelHandlers/modelHandlerValidation.ts` still sits in the
+  dispatch dir, loaded behind `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL=1`
+  (`ModelFactory.ts:21-22`, dispatched at `:198-209`). Still recommended to relocate
+  to `test-kernel/` and inject.
+- **§3.1** — no `@agent/runtime` facade barrel yet (`src/agent/runtime/index.ts` absent).
+  Deep-import leakage into `@agent/runtime/*` from the extension persists.
+- **§4** — token usage is still double-emitted in `UsageMonitor.ts` (was `:173`/`:179`):
+  now `runtimeHost.emit('updateStreamUsage', …)` at `:155` and `logger.usage(payload, …)`
+  at `:164`. The single-source-of-truth consolidation onto `AgentTrace` is still open.
+- **§5** — no first-class `delegateTo(...)` primitive yet (`grep delegateTo src/**` empty);
+  delegation remains a tool call inside the LLM loop. Subagent mechanism otherwise intact.
+- **§7** — provider-identity getters `isAnthropic`/`isOpenai`/`isGoogle`/`isDeepSeek`/
+  `isKimi`/`isMiniMax` still on `ModelHandler.ts:399-426`, and the two **behavioral**
+  gates still dispatch on identity rather than capability: `ToolUseCycleFlow.ts:810-812`
+  (`isDeepSeek || … || isMiniMax`) and `ModelFactory.ts:72` (`isDeepSeek && …`). Converting
+  just those two to `capabilities.*` flags remains the low-risk SDK-alignment win.
+
+**Two false positives caught this pass (recorded so they are not re-flagged):**
+
+- The cycle-flow factories `createResponseCycleFlow` / `createToolUseCycleFlow`
+  (`core/flows/{ResponseCycleFlow,ToolUseCycleFlow}.ts`) are each called from exactly
+  one node `exec()` — `ResponseCycleNode.ts:91` and `ToolUseCycleNode.ts:73`. That is
+  the **prescribed** `Node.exec() → createFlow() → flow.run()` pattern in CLAUDE.md
+  ("Flattening Abstraction Layers"), the same shape the deleted `ResponseCycle.ts`/
+  `ToolUseCycle.ts` wrappers were refactored _into_. **Not** a wrapper to inline.
+- `src/utils/config/configUtils.ts` (107 LOC, 5 exports, ~70 callers) reads like a
+  thin façade over `platform().config` but carries real logic: `tryPlatform()`
+  null-safety at import-time facades plus the multi-namespace path resolution
+  (`path` → `texra.path` → explicit prefix). It is justified DRY, **not** removable
+  over-abstraction.
+
+**Surface/packaging note (unchanged recommendation, re-confirmed):** `packages/core`
+is still a stub — `packages/core/src/index.ts` exports only `corePackageReady = true`,
+and consumers reach core via path aliases (`@agent`, `@platform`, `@logger`, `@shared`)
+rather than `@texra/core`. This is harmless today but means there is no single
+versioned public surface to point an external SDK consumer at; either populate it as
+a barrel of the genuinely-public types or drop it. Low priority.
+
+**Scope note:** "Agent SDK readiness" here means aligning TeXRA's _own_ hand-rolled
+loop with Agent-SDK-shaped patterns. `@anthropic-ai/claude-agent-sdk` is depended on
+only as a **tool** (`src/tools/claudeAgent.ts` spins off Claude Code), not as the core
+engine — and it cannot replace the multi-provider model-handler layer, since that layer
+serves OpenAI/Google/OpenRouter/etc. that the Anthropic SDK does not abstract. The
+handler-layer cleanups (§3.3–§3.5, §7) are internal de-duplication wins, not "delete
+and adopt the SDK" swaps; treat any framing that says otherwise as over-optimistic.
