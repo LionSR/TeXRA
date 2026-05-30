@@ -135,16 +135,4 @@ export class CopyButtonController implements ReactiveController {
 
     return true;
   };
-
-  /**
-   * Update the default title (useful when text context changes).
-   */
-  setDefaultTitle(title: string): void {
-    if (this._config.defaultTitle !== title) {
-      this._config.defaultTitle = title;
-      if (!this._copied) {
-        this.host.requestUpdate();
-      }
-    }
-  }
 }

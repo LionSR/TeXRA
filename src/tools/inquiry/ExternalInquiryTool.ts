@@ -22,7 +22,7 @@ import { bus } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import {
   ExternalInquiryThreadIdSchema,
-  type ExternalInquiryThreadId,
+  type ExternalInquiryThreadSummary,
   type InquiryActionMessage,
   type StreamTabId,
 } from '@shared/schemas';
@@ -225,14 +225,7 @@ function buildReadOutput(manifest: ExternalInquiryThreadManifest): ToolResult {
 }
 
 function buildListOutput(
-  summaries: {
-    threadId: ExternalInquiryThreadId;
-    status: string;
-    lastQuestionPreview: string;
-    turnCount: number;
-    lastActivityIso: string;
-    parentStreamId: string | null;
-  }[],
+  summaries: ExternalInquiryThreadSummary[],
   filterStatus: string,
   scope: string,
 ): ToolResult {
