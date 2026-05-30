@@ -204,6 +204,15 @@ function hasVisibleSubagents(
   return slice !== undefined && visibleSubagentRows(slice).length > 0;
 }
 
+function hasVisibleTasks(
+  slice: Pick<StreamSlice, 'activeProcesses' | 'activeSubagents'> | undefined,
+): boolean {
+  return (
+    slice !== undefined &&
+    (slice.activeSubagents.length > 0 || slice.activeProcesses.length > 0)
+  );
+}
+
 export function resolveChildControlStreamTarget({
   activeStreamId,
   mode,
@@ -216,17 +225,21 @@ export function resolveChildControlStreamTarget({
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): ChildControlStreamTarget {
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  if (
-    mode !== 'subagents' ||
-    !activeStreamId ||
-    hasVisibleSubagents(activeSlice)
-  ) {
+  const activeHasRows =
+    mode === 'subagents'
+      ? hasVisibleSubagents(activeSlice)
+      : hasVisibleTasks(activeSlice);
+  if (!activeStreamId || activeHasRows) {
     return { streamId: activeStreamId, slice: activeSlice };
   }
 
   const parentStreamId = parentStream.get(activeStreamId);
   const parentSlice = parentStreamId ? streams.get(parentStreamId) : undefined;
-  if (hasVisibleSubagents(parentSlice)) {
+  const parentHasRows =
+    mode === 'subagents'
+      ? hasVisibleSubagents(parentSlice)
+      : hasVisibleTasks(parentSlice);
+  if (parentHasRows) {
     return {
       fallbackFromStreamId: activeStreamId,
       streamId: parentStreamId,

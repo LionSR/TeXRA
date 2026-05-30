@@ -340,10 +340,10 @@ export function App(props: AppProps): React.JSX.Element {
             })
           : undefined;
         const streamScopeDetail =
-          childControlMode === 'subagents' &&
-          targetStreamLabel &&
-          fallbackFromStreamLabel
-            ? `${fallbackFromStreamLabel} has no subagents`
+          targetStreamLabel && fallbackFromStreamLabel
+            ? childControlMode === 'subagents'
+              ? `${fallbackFromStreamLabel} has no subagents`
+              : `${fallbackFromStreamLabel} has no tasks or sub-workflows`
             : undefined;
         return (
           <ChildControlPicker
