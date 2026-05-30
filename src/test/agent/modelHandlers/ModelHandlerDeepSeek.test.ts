@@ -247,6 +247,54 @@ describe('ModelHandlerDeepSeek tool conversion', () => {
     assert.equal(capturedParams.reasoning_effort, 'max');
   });
 
+  it('maps max reasoning effort to DeepSeek max effort', async () => {
+    const handler = new ModelHandlerDeepSeek(
+      buildConfig({
+        fullName: 'deepseek-v4-pro',
+        capabilities: {
+          ...DEFAULT_MODEL_CAPABILITIES,
+          supportsReasoning: true,
+          supportsVision: false,
+          reasoningEffort: ReasoningEffort.MAX,
+        },
+      }),
+    );
+    handler.setLogger(createLoggerStub() as AgentTrace);
+    (handler as any).getStreamingConfig = () => false;
+
+    let capturedParams: any;
+    const client = {
+      chat: {
+        completions: {
+          create: async (params: any) => {
+            capturedParams = params;
+            return {
+              id: 'test-completion',
+              choices: [
+                {
+                  index: 0,
+                  message: { role: 'assistant', content: 'ok' },
+                  finish_reason: 'stop',
+                },
+              ],
+            };
+          },
+        },
+      },
+    };
+
+    await handler.createResponse({
+      client: client as any,
+      messages: [{ role: 'user', content: 'think hardest' }],
+      temperature: 0,
+    });
+
+    // The internal 'max' tier survives the shared OpenAI clamp (max -> xhigh)
+    // and DeepSeek's own validateReasoningEffort (xhigh -> max), landing on the
+    // 'max' effort its API accepts rather than leaking an invalid value.
+    assert.equal(capturedParams.reasoning_effort, 'max');
+  });
+
   it('passes back content and reasoning_content in tool-call messages', async () => {
     const handler = new ModelHandlerDeepSeek(
       buildConfig({
