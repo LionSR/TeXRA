@@ -5,6 +5,8 @@
 import { render } from 'ink';
 import React from 'react';
 
+import { STREAM_STATUS } from '@shared/schemas';
+
 import { App } from '../src/chat/tui/App';
 import {
   cliState,
@@ -20,6 +22,15 @@ const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
 const EDIT_APPROVAL_DELAY_MS = Number(
   process.env.HARNESS_EDIT_APPROVAL_DELAY_MS ?? '0',
 );
+const QUEUED_FOLLOW_UPS = parseList(process.env.HARNESS_QUEUED_FOLLOWUPS);
+
+function parseList(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split('||')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
 
 function makeEntries(count: number): ConversationEntry[] {
   const entries: ConversationEntry[] = [];
@@ -78,8 +89,12 @@ cliState.sessionMeta.set({
 cliState.activeStreamId.set(STREAM_ID);
 patchStream(STREAM_ID, (slice) => ({
   ...slice,
-  status: undefined,
+  status: QUEUED_FOLLOW_UPS.length > 0 ? STREAM_STATUS.RUNNING : slice.status,
+  runStartedAt:
+    QUEUED_FOLLOW_UPS.length > 0 ? Date.now() - 42_000 : slice.runStartedAt,
   entries: makeEntries(ENTRY_COUNT),
+  queuedFollowUps: QUEUED_FOLLOW_UPS.length,
+  queuedFollowUpMessages: QUEUED_FOLLOW_UPS,
 }));
 
 if (SHOW_EDIT_APPROVAL) {
