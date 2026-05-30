@@ -10,6 +10,7 @@ import type { AgentOptionData } from '@shared/schemas';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
 import { FormFrame } from './_shared/FormFrame';
+import { computeSelectWindowSize } from './_shared/selectWindow';
 import { useAsyncListForm } from './_shared/useAsyncListForm';
 
 export interface AgentListFormProps {
@@ -62,18 +63,8 @@ export function agentSelectWindow({
   // chrome for the primary selectable list.
   const selectRows = Math.max(1, availableRows - 8);
   if (itemCount > selectRows) {
-    if (selectRows < 3) {
-      return {
-        maxVisibleItems: selectRows,
-        showOverflow: false,
-        maxVisibleWorkflows: 0,
-        showWorkflowOverflow: false,
-      };
-    }
-
     return {
-      maxVisibleItems: Math.max(1, selectRows - 2),
-      showOverflow: true,
+      ...computeSelectWindowSize({ availableRows, itemCount, chromeRows: 8 }),
       maxVisibleWorkflows: 0,
       showWorkflowOverflow: false,
     };

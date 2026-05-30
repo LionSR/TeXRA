@@ -25,13 +25,6 @@ export interface UserQuestionProps {
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
-function submitDecision(
-  onDecide: (decision: ApprovalDecision) => void,
-  answers: UserQuestionAnswers,
-): void {
-  onDecide(userQuestionDecision(answers));
-}
-
 interface QuestionShellProps {
   readonly payload: UserQuestionPermission;
   readonly question: UserQuestionPrompt;
@@ -252,12 +245,12 @@ export function UserQuestion(props: UserQuestionProps): React.JSX.Element {
 
   const submitAnswer = (answer: string | string[] | undefined) => {
     if (!question) {
-      submitDecision(props.onDecide, answers);
+      props.onDecide(userQuestionDecision(answers));
       return;
     }
     const nextAnswers = updateUserQuestionAnswers(answers, question, answer);
     if (index + 1 >= props.payload.questions.length) {
-      submitDecision(props.onDecide, nextAnswers);
+      props.onDecide(userQuestionDecision(nextAnswers));
       return;
     }
     setAnswers(nextAnswers);

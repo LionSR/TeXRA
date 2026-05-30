@@ -23,13 +23,11 @@ function FileGroup(props: {
   const visible = props.files.slice(0, FILE_LIMIT);
   const hidden = props.files.length - visible.length;
   return (
-    <Box flexDirection="column">
-      <Text>
-        <Text bold>{props.label}: </Text>
-        {visible.join(', ')}
-        {hidden > 0 ? `, +${hidden} more` : ''}
-      </Text>
-    </Box>
+    <Text>
+      <Text bold>{props.label}: </Text>
+      {visible.join(', ')}
+      {hidden > 0 ? `, +${hidden} more` : ''}
+    </Text>
   );
 }
 

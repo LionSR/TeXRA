@@ -5,6 +5,8 @@
 // session reader skips malformed lines silently.
 
 // Local imports - filesystem
+import { z } from 'zod';
+
 import { GlobalStorageFS } from '@utils/files/storageFS';
 
 const HISTORY_DIR = 'tui';
@@ -12,14 +14,10 @@ const HISTORY_PATH = `${HISTORY_DIR}/input-history.jsonl`;
 const MAX_LINES = 1000;
 const MAX_LINE_CHARS = 4000;
 
-interface HistoryRecord {
-  readonly t: number;
-  readonly v: string;
-}
+const HistoryRecordSchema = z.object({ t: z.number().catch(0), v: z.string() });
+type HistoryRecord = z.infer<typeof HistoryRecordSchema>;
 
 export interface InputHistory {
-  /** All distinct entries, most-recent last. */
-  all(): readonly string[];
   /** Append a new entry. Duplicates of the most-recent entry are skipped. */
   push(line: string): Promise<void>;
   /** Reverse-incremental search: returns the most recent entry containing
@@ -31,21 +29,15 @@ export interface InputHistory {
 }
 
 function parseRecord(raw: string): HistoryRecord | undefined {
+  let obj: unknown;
   try {
-    const obj = JSON.parse(raw) as unknown;
-    if (
-      typeof obj === 'object' &&
-      obj !== null &&
-      typeof (obj as { v?: unknown }).v === 'string'
-    ) {
-      const v = (obj as { v: string }).v;
-      const t = (obj as { t?: unknown }).t;
-      return { t: typeof t === 'number' ? t : 0, v };
-    }
+    obj = JSON.parse(raw);
   } catch {
     // ignore malformed line
+    return undefined;
   }
-  return undefined;
+  const parsed = HistoryRecordSchema.safeParse(obj);
+  return parsed.success ? parsed.data : undefined;
 }
 
 /** Serialise the in-memory ring back to JSONL. Records keep their original
@@ -78,9 +70,6 @@ export async function loadInputHistory(): Promise<InputHistory> {
   const entries = records.map((r) => r.v);
 
   return {
-    all() {
-      return entries;
-    },
     async push(line: string) {
       const trimmed = line.trim();
       if (!trimmed) return;
