@@ -31,7 +31,10 @@ import {
   readQueuedFollowUpMessagesForStatus,
 } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
-import { enqueueApproval } from '../src/chat/tui/state/approvalQueue';
+import {
+  enqueueApproval,
+  type ApprovalDecision,
+} from '../src/chat/tui/state/approvalQueue';
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
@@ -42,6 +45,7 @@ const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 const HARNESS_YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
+const SHOW_BASH_APPROVAL = process.env.HARNESS_BASH_APPROVAL === '1';
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
@@ -157,6 +161,24 @@ function makeEditApprovalRequest() {
     sourceTool: 'harness',
     streamId: STREAM_ID,
   };
+}
+
+function makeBashApprovalPayload() {
+  return {
+    requestId: 'harness-bash-approval',
+    command: 'npm run compile:safe',
+    allowBypass: true,
+    streamId: STREAM_ID,
+  };
+}
+
+function applyHarnessApprovalDecision(decision: ApprovalDecision): void {
+  if (decision.accepted && decision.bypass === 'toolEdit') {
+    patchStream(STREAM_ID, (slice) => ({
+      ...slice,
+      bypass: { ...slice.bypass, toolEdit: true },
+    }));
+  }
 }
 
 cliState.sessionMeta.set({
@@ -295,13 +317,23 @@ if (SHOW_EDIT_APPROVAL) {
         request: makeEditApprovalRequest(),
       },
       { onPresent: () => notify({ kind: 'approvalNeeded' }) },
-    );
+    ).then(applyHarnessApprovalDecision);
 
   if (EDIT_APPROVAL_DELAY_MS > 0) {
     setTimeout(showApproval, EDIT_APPROVAL_DELAY_MS);
   } else {
     showApproval();
   }
+}
+
+if (SHOW_BASH_APPROVAL) {
+  void enqueueApproval(
+    {
+      kind: 'bash',
+      payload: makeBashApprovalPayload(),
+    },
+    { onPresent: () => notify({ kind: 'approvalNeeded' }) },
+  ).then(applyHarnessApprovalDecision);
 }
 
 function markHarnessInterrupted(): void {
