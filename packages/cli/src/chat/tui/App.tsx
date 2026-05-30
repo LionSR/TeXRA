@@ -347,6 +347,7 @@ export function App(props: AppProps): React.JSX.Element {
             : undefined;
         return (
           <ChildControlPicker
+            availableColumns={columns}
             activeStreamLabel={targetStreamLabel}
             activeStreamId={target.streamId}
             availableRows={foregroundRows}
