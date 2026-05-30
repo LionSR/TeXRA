@@ -27,6 +27,8 @@ import {
   nextFocusBack,
   nextFocusForward,
 } from '@cli/chat/tui/state/focusCycle';
+import { hasChildExecutionRows } from '@cli/chat/tui/state/childControls';
+import { visibleSubagentRows } from '@cli/chat/tui/state/childStreamMerge';
 import {
   finalizeSettledPrefix,
   stripOrchestratorFollowup,
@@ -109,6 +111,54 @@ describe('cliState Phase 4 fields', () => {
     patchStream(root, (s) => ({ ...s, status: 'running' }));
     removeStream(root);
     expect(cliState.parentStream.get().has(child2)).toBe(false);
+  });
+
+  it('removes stale child rows when a stream is removed', () => {
+    cliState.activeStreamId.set(root);
+    setParentStream(child1, root);
+    patchStream(root, (s) => ({
+      ...s,
+      childStreams: [
+        {
+          executionId: 'history-1',
+          agentName: 'critic',
+          childStreamId: child1,
+          status: 'completed',
+        },
+      ],
+      activeSubagents: [
+        {
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: child1,
+          status: STREAM_STATUS.RUNNING,
+        },
+      ],
+      activeProcesses: [
+        {
+          executionId: 'process-1',
+          agentName: 'bash',
+          childStreamId: child1,
+          status: STREAM_STATUS.RUNNING,
+        },
+      ],
+    }));
+    patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
+
+    expect(hasChildExecutionRows(cliState.streams.get().get(root))).toBe(true);
+    expect(nextFocusForward()).toBe(child1);
+
+    removeStream(child1);
+
+    const parent = cliState.streams.get().get(root);
+    expect(parent).toBeDefined();
+    if (!parent) throw new Error('missing parent stream');
+    expect(parent.childStreams).toEqual([]);
+    expect(parent.activeSubagents).toEqual([]);
+    expect(parent.activeProcesses).toEqual([]);
+    expect(visibleSubagentRows(parent)).toEqual([]);
+    expect(hasChildExecutionRows(parent)).toBe(false);
+    expect(nextFocusForward()).toBeUndefined();
   });
 
   it('treats a null-parent update as child promotion to top-level', () => {
