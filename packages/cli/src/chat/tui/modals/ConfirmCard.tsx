@@ -6,6 +6,7 @@ import { Box, Text, useWindowSize, type BoxProps } from 'ink';
 import { useInput } from 'ink';
 
 import {
+  confirmCardFeedbackHints,
   confirmCardKeyAction,
   confirmCardKeyHintsForWidth,
 } from './ConfirmCardState';
@@ -31,6 +32,9 @@ export interface ConfirmCardProps {
     readonly label: string;
     readonly decision: ApprovalDecision;
   }[];
+  readonly feedbackPlaceholder?: string;
+  readonly onFeedbackModeChange?: (active: boolean) => void;
+  readonly onFeedbackValueChange?: (value: string) => void;
   readonly children: React.ReactNode;
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
@@ -45,6 +49,9 @@ export function ConfirmCard({
   rejectLabel = 'reject',
   alwaysAllow,
   extraActions = [],
+  feedbackPlaceholder = 'Feedback to send with rejection',
+  onFeedbackModeChange,
+  onFeedbackValueChange,
   children,
   onDecide,
 }: ConfirmCardProps): React.JSX.Element {
@@ -52,12 +59,22 @@ export function ConfirmCard({
   const [feedback, setFeedback] = useState('');
   const { columns } = useWindowSize();
 
+  function setFeedbackActive(active: boolean): void {
+    setFeedbackMode(active);
+    onFeedbackModeChange?.(active);
+  }
+
+  function updateFeedback(value: string): void {
+    setFeedback(value);
+    onFeedbackValueChange?.(value);
+  }
+
   useInput(
     (input, key) => {
       if (feedbackMode) {
         if (key.escape) {
-          setFeedbackMode(false);
-          setFeedback('');
+          setFeedbackActive(false);
+          updateFeedback('');
         }
         return;
       }
@@ -74,7 +91,7 @@ export function ConfirmCard({
           }
           return;
         case 'feedback':
-          setFeedbackMode(true);
+          setFeedbackActive(true);
           return;
         case 'ignore':
           for (const action of extraActions) {
@@ -89,16 +106,18 @@ export function ConfirmCard({
     { isActive: true },
   );
 
-  const hints = confirmCardKeyHintsForWidth({
-    approveLabel,
-    rejectLabel,
-    alwaysAllowLabel: alwaysAllow?.label,
-    extraActions: extraActions.map((action) => ({
-      key: action.key,
-      action: action.label,
-    })),
-    maxColumns: Math.max(0, columns - CONFIRM_CARD_HORIZONTAL_DECORATION),
-  });
+  const hints = feedbackMode
+    ? confirmCardFeedbackHints()
+    : confirmCardKeyHintsForWidth({
+        approveLabel,
+        rejectLabel,
+        alwaysAllowLabel: alwaysAllow?.label,
+        extraActions: extraActions.map((action) => ({
+          key: action.key,
+          action: action.label,
+        })),
+        maxColumns: Math.max(0, columns - CONFIRM_CARD_HORIZONTAL_DECORATION),
+      });
 
   return (
     <Box
@@ -116,7 +135,8 @@ export function ConfirmCard({
           <Text>{'> '}</Text>
           <BaseTextInput
             value={feedback}
-            onChange={setFeedback}
+            placeholder={feedbackPlaceholder}
+            onChange={updateFeedback}
             onSubmit={(value) =>
               onDecide({ accepted: false, userMessage: value.trim() })
             }

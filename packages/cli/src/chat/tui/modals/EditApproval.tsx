@@ -17,7 +17,10 @@ import type { ApprovalDecision } from '../state/approvalQueue';
 
 const EDIT_DIFF_PADDING = 6;
 const EDIT_APPROVAL_FIXED_ROWS_EXCLUDING_TITLE = 8;
+const EDIT_APPROVAL_FEEDBACK_MARGIN_ROWS = 1;
+const EDIT_APPROVAL_FEEDBACK_PREFIX_COLUMNS = 2;
 const MIN_EDIT_DIFF_WIDTH = 20;
+const EDIT_APPROVAL_FEEDBACK_PLACEHOLDER = 'Why reject?';
 
 export interface EditApprovalProps {
   readonly availableRows?: number;
@@ -28,10 +31,16 @@ export interface EditApprovalProps {
 export function editApprovalDiffRowsBudget({
   availableRows,
   columns,
+  feedbackPlaceholder = EDIT_APPROVAL_FEEDBACK_PLACEHOLDER,
+  feedbackMode,
+  feedbackValue = '',
   title,
 }: {
   readonly availableRows?: number;
   readonly columns: number;
+  readonly feedbackPlaceholder?: string;
+  readonly feedbackMode?: boolean;
+  readonly feedbackValue?: string;
   readonly title: string;
 }): number {
   if (availableRows === undefined) return 30;
@@ -41,20 +50,58 @@ export function editApprovalDiffRowsBudget({
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
   const titleRows = wrapAnsiToWidth(title, titleWidth).split('\n').length;
+  const feedbackRows =
+    feedbackMode === true
+      ? editApprovalFeedbackRows({
+          columns,
+          placeholder: feedbackPlaceholder,
+          value: feedbackValue,
+        })
+      : 0;
   return Math.max(
     1,
-    availableRows - EDIT_APPROVAL_FIXED_ROWS_EXCLUDING_TITLE - titleRows,
+    availableRows -
+      EDIT_APPROVAL_FIXED_ROWS_EXCLUDING_TITLE -
+      titleRows -
+      feedbackRows,
+  );
+}
+
+export function editApprovalFeedbackRows({
+  columns,
+  placeholder,
+  value,
+}: {
+  readonly columns: number;
+  readonly placeholder: string;
+  readonly value: string;
+}): number {
+  const text = value.length > 0 ? value : placeholder;
+  const width = Math.max(
+    1,
+    columns -
+      CONFIRM_CARD_HORIZONTAL_DECORATION -
+      EDIT_APPROVAL_FEEDBACK_PREFIX_COLUMNS,
+  );
+  return (
+    EDIT_APPROVAL_FEEDBACK_MARGIN_ROWS +
+    Math.max(1, wrapAnsiToWidth(text, width).split('\n').length)
   );
 }
 
 export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const { columns } = useWindowSize();
+  const [feedbackMode, setFeedbackMode] = useState(false);
+  const [feedbackValue, setFeedbackValue] = useState('');
   const [scrollOffset, setScrollOffset] = useState(0);
   const title = `Apply edit to ${props.request.path}?`;
   const diffWidth = Math.max(MIN_EDIT_DIFF_WIDTH, columns - EDIT_DIFF_PADDING);
   const maxDiffLines = editApprovalDiffRowsBudget({
     availableRows: props.availableRows,
     columns,
+    feedbackPlaceholder: EDIT_APPROVAL_FEEDBACK_PLACEHOLDER,
+    feedbackMode,
+    feedbackValue,
     title,
   });
 
@@ -110,6 +157,9 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       color="cyan"
       title={title}
       alwaysAllow={{ kind: 'toolEdit', label: 'approve session' }}
+      feedbackPlaceholder={EDIT_APPROVAL_FEEDBACK_PLACEHOLDER}
+      onFeedbackModeChange={setFeedbackMode}
+      onFeedbackValueChange={setFeedbackValue}
       onDecide={props.onDecide}
     >
       <Text dimColor>
