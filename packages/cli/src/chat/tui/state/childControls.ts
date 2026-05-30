@@ -29,6 +29,11 @@ export interface ChildControlItem {
   readonly tailLines: readonly string[];
 }
 
+export interface ChildControlStreamTarget {
+  readonly slice: StreamSlice | undefined;
+  readonly streamId: StreamTabId | undefined;
+}
+
 export interface PickerKeyInput {
   readonly input: string;
   readonly upArrow?: boolean;
@@ -190,6 +195,44 @@ export function buildChildControlItems(
       ),
     ),
   ];
+}
+
+function hasVisibleSubagents(
+  slice: Pick<StreamSlice, 'activeSubagents' | 'childStreams'> | undefined,
+): boolean {
+  return slice !== undefined && visibleSubagentRows(slice).length > 0;
+}
+
+export function resolveChildControlStreamTarget({
+  activeStreamId,
+  mode,
+  parentStream,
+  streams,
+}: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly mode: ChildControlMode;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+}): ChildControlStreamTarget {
+  const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  if (
+    mode !== 'subagents' ||
+    !activeStreamId ||
+    hasVisibleSubagents(activeSlice)
+  ) {
+    return { streamId: activeStreamId, slice: activeSlice };
+  }
+
+  const parentStreamId = parentStream.get(activeStreamId);
+  const parentSlice = parentStreamId ? streams.get(parentStreamId) : undefined;
+  if (hasVisibleSubagents(parentSlice)) {
+    return {
+      streamId: parentStreamId,
+      slice: parentSlice,
+    };
+  }
+
+  return { streamId: activeStreamId, slice: activeSlice };
 }
 
 export function liveChildExecutionElapsedKey(
