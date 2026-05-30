@@ -23,6 +23,8 @@ export const ActiveChildInfoSchema = z.object({
   childStreamId: z.string().optional(),
   /** Current execution status (e.g. "running", "waiting"). Defaults to "running". */
   status: z.string().optional(),
+  /** Epoch milliseconds when the child execution began. */
+  startedAt: z.int().positive().optional(),
   /** Formatted elapsed time (e.g. "1m 23s"). */
   elapsed: z.string().nullable().optional(),
   /** Tool name that spawned this process (e.g. "bash", "codex"). Absent for subagents. */
