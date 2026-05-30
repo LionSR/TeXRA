@@ -481,8 +481,54 @@ describe('CLI child execution controls', () => {
     expect(target.slice).toBe(child);
   });
 
-  it('keeps task controls scoped to the focused child stream', () => {
+  it('falls back to the parent task list when the focused child is a leaf', () => {
     const child = slice({ streamId: 'review-stream' });
+    const target = resolveChildControlStreamTarget({
+      activeStreamId: 'review-stream',
+      mode: 'tasks',
+      parentStream: new Map([['review-stream', 'main']]),
+      streams: new Map([
+        [
+          'main',
+          slice({
+            streamId: 'main',
+            activeSubagents: [
+              {
+                executionId: 'agent-1',
+                agentName: 'review',
+                childStreamId: 'review-stream',
+                status: 'running',
+              },
+            ],
+          }),
+        ],
+        ['review-stream', child],
+      ]),
+    });
+
+    expect(target.streamId).toBe('main');
+    expect(target.fallbackFromStreamId).toBe('review-stream');
+    expect(buildChildControlItems(target.slice!, 'tasks')).toMatchObject([
+      {
+        executionId: 'agent-1',
+        childStreamId: 'review-stream',
+        kind: 'subagent',
+        label: 'review',
+      },
+    ]);
+  });
+
+  it('keeps task controls scoped to the focused child stream when it has work', () => {
+    const child = slice({
+      streamId: 'review-stream',
+      activeProcesses: [
+        {
+          executionId: 'proc-1',
+          agentName: 'latexmk',
+          status: 'running',
+        },
+      ],
+    });
     const target = resolveChildControlStreamTarget({
       activeStreamId: 'review-stream',
       mode: 'tasks',
@@ -508,6 +554,13 @@ describe('CLI child execution controls', () => {
 
     expect(target.streamId).toBe('review-stream');
     expect(target.slice).toBe(child);
+    expect(buildChildControlItems(target.slice!, 'tasks')).toMatchObject([
+      {
+        executionId: 'proc-1',
+        kind: 'process',
+        label: 'latexmk',
+      },
+    ]);
   });
 
   it('keeps picker key handling independent of Ink rendering', () => {
