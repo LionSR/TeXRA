@@ -4,7 +4,7 @@ import { ZodError } from 'zod';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/AgentConfig';
-import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
+import { runAgent } from '@agent/runtime/runAgent';
 import { formatZodError } from '@common/errors';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
@@ -41,7 +41,7 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
         : null;
     const config = AgentConfigSchema.parse(wrapped ? wrapped.config : input);
 
-    await runValidatedExecutionRequest(
+    await runAgent(
       { config, executionId: wrapped?.executionId },
       {
         runtimeHost: extensionAgentRuntimeHost,
