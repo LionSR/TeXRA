@@ -35,6 +35,25 @@ function sameQueuedFollowUps(
   );
 }
 
+function refreshQueuedFollowUps(
+  streamId: ProgressEventPayloads['updateQueuedFollowUps']['streamId'],
+): void {
+  const messages = ToolUseFollowUpQueue.getAll(streamId);
+  patchStream(streamId, (s) => {
+    if (
+      s.queuedFollowUps === messages.length &&
+      sameQueuedFollowUps(s.queuedFollowUpMessages, messages)
+    ) {
+      return s;
+    }
+    return {
+      ...s,
+      queuedFollowUps: messages.length,
+      queuedFollowUpMessages: messages,
+    };
+  });
+}
+
 /** Cap on per-process tail length held in the signal map (UTF-16 code
  *  units, not bytes — markdown-it / ink work in JS strings). Beyond this
  *  we truncate at the head via the shared `appendTail` helper so the live
@@ -177,23 +196,17 @@ function applyToState<K extends ProgressEvent>(
       return;
     }
     case 'updateQueuedFollowUps': {
-      // The event itself has no delta payload — re-read the queue directly so
-      // the StatusBar pill stays accurate after both enqueue and drain.
+      // The event itself has no delta payload, so re-read the queue directly.
       const p = payload as ProgressEventPayloads['updateQueuedFollowUps'];
-      const messages = ToolUseFollowUpQueue.getAll(p.streamId);
-      patchStream(p.streamId, (s) => {
-        if (
-          s.queuedFollowUps === messages.length &&
-          sameQueuedFollowUps(s.queuedFollowUpMessages, messages)
-        ) {
-          return s;
-        }
-        return {
-          ...s,
-          queuedFollowUps: messages.length,
-          queuedFollowUpMessages: messages,
-        };
-      });
+      refreshQueuedFollowUps(p.streamId);
+      return;
+    }
+    case 'followUpSent': {
+      // Active-session follow-ups enter the same queue before the wait node
+      // consumes them; refresh immediately so the status bar shows the pending
+      // message instead of only seeing the later drain event.
+      const p = payload as ProgressEventPayloads['followUpSent'];
+      refreshQueuedFollowUps(p.streamId);
       return;
     }
     default:
