@@ -24,6 +24,7 @@ import { SELECT_LABEL_MAX_COLS } from '../ui/Select';
 import type { StreamSlice } from '../state/cliState';
 
 export interface ChildControlPickerProps {
+  readonly availableColumns?: number;
   readonly activeStreamLabel: string | undefined;
   readonly activeStreamId: StreamTabId | undefined;
   readonly availableRows?: number;
@@ -237,12 +238,14 @@ function TaskOutput({
 }
 
 function TaskDetailView({
+  availableColumns,
   availableRows,
   item,
   onBack,
   onFocusStream,
   onKill,
 }: {
+  readonly availableColumns?: number;
   readonly availableRows?: number;
   readonly item: ChildControlItem;
   readonly onBack: () => void;
@@ -298,6 +301,7 @@ function TaskDetailView({
       borderColor="cyan"
       flexDirection="column"
       paddingX={1}
+      width={availableColumns}
     >
       <Text bold color="cyan">
         Task details
@@ -353,6 +357,7 @@ function TaskDetailView({
 }
 
 export function ChildControlPicker({
+  availableColumns,
   activeStreamLabel,
   activeStreamId,
   availableRows,
@@ -455,6 +460,7 @@ export function ChildControlPicker({
   if (tailItem) {
     return (
       <TaskDetailView
+        availableColumns={availableColumns}
         availableRows={availableRows}
         item={tailItem}
         onBack={() => setTailExecutionId(undefined)}
@@ -477,6 +483,7 @@ export function ChildControlPicker({
       borderColor="cyan"
       flexDirection="column"
       paddingX={1}
+      width={availableColumns}
     >
       <Text bold color="cyan">
         {pickerTitle(mode)}
