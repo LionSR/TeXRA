@@ -5,7 +5,9 @@ import { describe, expect, it } from 'vitest';
 import {
   computePickerListLayout,
   computeTaskDetailLayout,
+  emptyPickerText,
   pickerKeyHints,
+  pickerTitle,
 } from '@cli/chat/tui/modals/ChildControlPicker';
 import {
   buildChildControlItems,
@@ -538,6 +540,13 @@ describe('CLI child execution controls', () => {
       key: 'Enter',
       action: 'focus',
     });
+  });
+
+  it('labels the task picker as a combined task and sub-workflow view', () => {
+    expect(pickerTitle('subagents')).toBe('Subagents');
+    expect(pickerTitle('tasks')).toBe('Tasks and sub-workflows');
+    expect(emptyPickerText('subagents')).toBe('No active subagents.');
+    expect(emptyPickerText('tasks')).toBe('No active tasks or sub-workflows.');
   });
 
   it('preserves output rows in compact task detail views', () => {
