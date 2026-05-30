@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  confirmCardFeedbackHints,
   confirmCardKeyAction,
   confirmCardKeyHints,
   confirmCardKeyHintsForWidth,
@@ -42,6 +43,13 @@ describe('CLI confirm-card key handling', () => {
       .map((hint) => `${hint.key} ${hint.action}`)
       .join(' · ');
     expect(rendered.length).toBeLessThanOrEqual(72);
+  });
+
+  it('shows submit/back hints while collecting rejection feedback', () => {
+    expect(confirmCardFeedbackHints()).toEqual([
+      { key: 'Enter', action: 'send note' },
+      { key: 'Esc', action: 'back' },
+    ]);
   });
 
   it('compacts long optional approval hints before hiding cancel', () => {
