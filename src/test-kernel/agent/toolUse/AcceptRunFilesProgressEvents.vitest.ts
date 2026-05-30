@@ -2,10 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
-import {
-  getDefaultAgentRuntimeHost,
-  setDefaultAgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
@@ -69,54 +65,45 @@ describe('accept_run_files progress events', () => {
 
   it('publishes accepted workspace files through the tool runtime host', async () => {
     const explicit = createRecordingHost();
-    const fallback = createRecordingHost();
-    const previousDefault = getDefaultAgentRuntimeHost();
     const tool = new AcceptRunFilesTool();
 
-    try {
-      setDefaultAgentRuntimeHost(fallback.host);
+    StorageFS.exists = async (target) =>
+      target === `executions/${executionId}` ||
+      target === `executions/${executionId}/output.tex`;
+    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
+    WorkspaceFS.locatePath = (target) => ({
+      kind: 'workspace',
+      absolutePath: `${workspacePath}/${target}`,
+      relativePath: target,
+    });
+    WorkspaceFS.exists = async () => false;
+    WorkspaceFS.read = async () => '';
+    WorkspaceFS.write = async () => undefined;
+    WorkspaceFS.delete = async () => undefined;
+    flexibleFS.read = async () => 'accepted content';
 
-      StorageFS.exists = async (target) =>
-        target === `executions/${executionId}` ||
-        target === `executions/${executionId}/output.tex`;
-      StorageFS.fullPath = (target) => `${storagePath}/${target}`;
-      WorkspaceFS.locatePath = (target) => ({
-        kind: 'workspace',
-        absolutePath: `${workspacePath}/${target}`,
-        relativePath: target,
-      });
-      WorkspaceFS.exists = async () => false;
-      WorkspaceFS.read = async () => '';
-      WorkspaceFS.write = async () => undefined;
-      WorkspaceFS.delete = async () => undefined;
-      flexibleFS.read = async () => 'accepted content';
+    setToolEditApprovalHandler(async () => ({ accepted: true }));
 
-      setToolEditApprovalHandler(async () => ({ accepted: true }));
+    const result = await withRunContext(
+      createRunContext({
+        runtimeHost: explicit.host,
+        streamId,
+        executionId,
+      }),
+      () =>
+        withToolFileInteractionContext({ tracker: {} as never }, () =>
+          tool.call({
+            execution_id: executionId,
+            files: [{ path: 'output.tex', original: 'paper.tex' }],
+          }),
+        ),
+    );
 
-      const result = await withRunContext(
-        createRunContext({
-          runtimeHost: explicit.host,
-          streamId,
-          executionId,
-        }),
-        () =>
-          withToolFileInteractionContext({ tracker: {} as never }, () =>
-            tool.call({
-              execution_id: executionId,
-              files: [{ path: 'output.tex', original: 'paper.tex' }],
-            }),
-          ),
-      );
-
-      expect(result.isError).toBeUndefined();
-      expect(explicit.events).toContainEqual({
-        event: 'workspaceFilesWritten',
-        payload: { absolutePaths: [`${workspacePath}/paper.tex`] },
-      });
-      expect(fallback.events).toEqual([]);
-    } finally {
-      setDefaultAgentRuntimeHost(previousDefault);
-    }
+    expect(result.isError).toBeUndefined();
+    expect(explicit.events).toContainEqual({
+      event: 'workspaceFilesWritten',
+      payload: { absolutePaths: [`${workspacePath}/paper.tex`] },
+    });
   });
 
   it('fails before workspace writes when the tool runtime host is missing', async () => {
@@ -138,184 +125,163 @@ describe('accept_run_files progress events', () => {
   });
 
   it('uses the pre-run snapshot for same-path workspace outputs', async () => {
-    const previousDefault = getDefaultAgentRuntimeHost();
-    const fallback = createRecordingHost();
+    const explicit = createRecordingHost();
     const tool = new AcceptRunFilesTool();
     let approvalOriginal = '';
     let approvalProposed = '';
     let writes = 0;
 
-    try {
-      setDefaultAgentRuntimeHost(fallback.host);
-      StorageFS.exists = async (target) =>
-        target === `executions/${executionId}`;
-      StorageFS.fullPath = (target) => `${storagePath}/${target}`;
-      WorkspaceFS.locatePath = (target) => ({
-        kind: 'workspace',
-        absolutePath: `${workspacePath}/${target}`,
-        relativePath: target,
-      });
-      WorkspaceFS.exists = async () => true;
-      WorkspaceFS.read = async () => 'new content';
-      WorkspaceFS.write = async () => {
-        writes++;
-      };
-      WorkspaceFS.delete = async () => undefined;
-      AbsoluteFS.isFile = async (target) =>
-        target ===
-        `${storagePath}/executions/${executionId}/original/draft.tex`;
-      AbsoluteFS.read = async () => 'old content';
-      flexibleFS.read = async () => 'new content';
-      setToolEditApprovalHandler(async (request) => {
-        approvalOriginal = request.originalContent;
-        approvalProposed = request.proposedContent;
-        return { accepted: true };
-      });
+    StorageFS.exists = async (target) => target === `executions/${executionId}`;
+    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
+    WorkspaceFS.locatePath = (target) => ({
+      kind: 'workspace',
+      absolutePath: `${workspacePath}/${target}`,
+      relativePath: target,
+    });
+    WorkspaceFS.exists = async () => true;
+    WorkspaceFS.read = async () => 'new content';
+    WorkspaceFS.write = async () => {
+      writes++;
+    };
+    WorkspaceFS.delete = async () => undefined;
+    AbsoluteFS.isFile = async (target) =>
+      target === `${storagePath}/executions/${executionId}/original/draft.tex`;
+    AbsoluteFS.read = async () => 'old content';
+    flexibleFS.read = async () => 'new content';
+    setToolEditApprovalHandler(async (request) => {
+      approvalOriginal = request.originalContent;
+      approvalProposed = request.proposedContent;
+      return { accepted: true };
+    });
 
-      const result = await withRunContext(
-        createRunContext({
-          runtimeHost: fallback.host,
-          streamId,
-          executionId,
-        }),
-        () =>
-          withToolFileInteractionContext({ tracker: {} as never }, () =>
-            tool.call({
-              execution_id: executionId,
-              files: [{ path: 'draft.tex', original: 'draft.tex' }],
-            }),
-          ),
-      );
+    const result = await withRunContext(
+      createRunContext({
+        runtimeHost: explicit.host,
+        streamId,
+        executionId,
+      }),
+      () =>
+        withToolFileInteractionContext({ tracker: {} as never }, () =>
+          tool.call({
+            execution_id: executionId,
+            files: [{ path: 'draft.tex', original: 'draft.tex' }],
+          }),
+        ),
+    );
 
-      expect(result.isError).toBeUndefined();
-      expect(approvalOriginal).toBe('old content');
-      expect(approvalProposed).toBe('new content');
-      expect(result.edits?.[0]?.lineChanges).toEqual({
-        added: 1,
-        removed: 1,
-      });
-      expect(writes).toBe(0);
-    } finally {
-      setDefaultAgentRuntimeHost(previousDefault);
-    }
+    expect(result.isError).toBeUndefined();
+    expect(approvalOriginal).toBe('old content');
+    expect(approvalProposed).toBe('new content');
+    expect(result.edits?.[0]?.lineChanges).toEqual({
+      added: 1,
+      removed: 1,
+    });
+    expect(writes).toBe(0);
   });
 
   it('reports unchanged same-path fallbacks without approval', async () => {
-    const previousDefault = getDefaultAgentRuntimeHost();
-    const fallback = createRecordingHost();
+    const explicit = createRecordingHost();
     const tool = new AcceptRunFilesTool();
     let approvals = 0;
     let writes = 0;
 
-    try {
-      setDefaultAgentRuntimeHost(fallback.host);
-      StorageFS.exists = async (target) =>
-        target === `executions/${executionId}`;
-      StorageFS.fullPath = (target) => `${storagePath}/${target}`;
-      WorkspaceFS.locatePath = (target) => ({
-        kind: 'workspace',
-        absolutePath: `${workspacePath}/${target}`,
-        relativePath: target,
-      });
-      WorkspaceFS.exists = async () => true;
-      WorkspaceFS.read = async () => 'same content';
-      WorkspaceFS.write = async () => {
-        writes++;
-      };
-      WorkspaceFS.delete = async () => undefined;
-      AbsoluteFS.isFile = async () => false;
-      flexibleFS.read = async () => 'same content';
-      setToolEditApprovalHandler(async () => {
-        approvals++;
-        return { accepted: true };
-      });
+    StorageFS.exists = async (target) => target === `executions/${executionId}`;
+    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
+    WorkspaceFS.locatePath = (target) => ({
+      kind: 'workspace',
+      absolutePath: `${workspacePath}/${target}`,
+      relativePath: target,
+    });
+    WorkspaceFS.exists = async () => true;
+    WorkspaceFS.read = async () => 'same content';
+    WorkspaceFS.write = async () => {
+      writes++;
+    };
+    WorkspaceFS.delete = async () => undefined;
+    AbsoluteFS.isFile = async () => false;
+    flexibleFS.read = async () => 'same content';
+    setToolEditApprovalHandler(async () => {
+      approvals++;
+      return { accepted: true };
+    });
 
-      const result = await withRunContext(
-        createRunContext({
-          runtimeHost: fallback.host,
-          streamId,
-          executionId,
-        }),
-        () =>
-          withToolFileInteractionContext({ tracker: {} as never }, () =>
-            tool.call({
-              execution_id: executionId,
-              files: [{ path: 'draft.tex', original: 'draft.tex' }],
-            }),
-          ),
-      );
+    const result = await withRunContext(
+      createRunContext({
+        runtimeHost: explicit.host,
+        streamId,
+        executionId,
+      }),
+      () =>
+        withToolFileInteractionContext({ tracker: {} as never }, () =>
+          tool.call({
+            execution_id: executionId,
+            files: [{ path: 'draft.tex', original: 'draft.tex' }],
+          }),
+        ),
+    );
 
-      expect(result.isError).toBeUndefined();
-      expect(result.output).toContain('No changes to accept');
-      expect(result.output).toContain('unchanged: draft.tex');
-      expect(approvals).toBe(0);
-      expect(writes).toBe(0);
-      expect(fallback.events).toEqual([]);
-    } finally {
-      setDefaultAgentRuntimeHost(previousDefault);
-    }
+    expect(result.isError).toBeUndefined();
+    expect(result.output).toContain('No changes to accept');
+    expect(result.output).toContain('unchanged: draft.tex');
+    expect(approvals).toBe(0);
+    expect(writes).toBe(0);
+    expect(explicit.events).toEqual([]);
   });
 
   it('refuses symlinked run-storage entries so unemitted files cannot be accepted', async () => {
-    const previousDefault = getDefaultAgentRuntimeHost();
-    const fallback = createRecordingHost();
+    const explicit = createRecordingHost();
     const tool = new AcceptRunFilesTool();
     let approvals = 0;
     let writes = 0;
 
-    try {
-      setDefaultAgentRuntimeHost(fallback.host);
-      StorageFS.exists = async (target) =>
-        target === `executions/${executionId}` ||
-        target === `executions/${executionId}/r1/Draft/appendices.tex`;
-      StorageFS.fullPath = (target) => `${storagePath}/${target}`;
-      WorkspaceFS.locatePath = (target) => ({
-        kind: 'workspace',
-        absolutePath: `${workspacePath}/${target}`,
-        relativePath: target,
-      });
-      WorkspaceFS.exists = async () => true;
-      WorkspaceFS.read = async () => '';
-      WorkspaceFS.write = async () => {
-        writes++;
-      };
-      WorkspaceFS.delete = async () => undefined;
-      AbsoluteFS.isSymbolicLink = async (target) =>
-        target ===
-        `${storagePath}/executions/${executionId}/r1/Draft/appendices.tex`;
-      setToolEditApprovalHandler(async () => {
-        approvals++;
-        return { accepted: true };
-      });
+    StorageFS.exists = async (target) =>
+      target === `executions/${executionId}` ||
+      target === `executions/${executionId}/r1/Draft/appendices.tex`;
+    StorageFS.fullPath = (target) => `${storagePath}/${target}`;
+    WorkspaceFS.locatePath = (target) => ({
+      kind: 'workspace',
+      absolutePath: `${workspacePath}/${target}`,
+      relativePath: target,
+    });
+    WorkspaceFS.exists = async () => true;
+    WorkspaceFS.read = async () => '';
+    WorkspaceFS.write = async () => {
+      writes++;
+    };
+    WorkspaceFS.delete = async () => undefined;
+    AbsoluteFS.isSymbolicLink = async (target) =>
+      target ===
+      `${storagePath}/executions/${executionId}/r1/Draft/appendices.tex`;
+    setToolEditApprovalHandler(async () => {
+      approvals++;
+      return { accepted: true };
+    });
 
-      const result = await withRunContext(
-        createRunContext({
-          runtimeHost: fallback.host,
-          streamId,
-          executionId,
-        }),
-        () =>
-          withToolFileInteractionContext({ tracker: {} as never }, () =>
-            tool.call({
-              execution_id: executionId,
-              files: [
-                {
-                  path: 'r1/Draft/appendices.tex',
-                  original: 'Draft/appendices.tex',
-                },
-              ],
-            }),
-          ),
-      );
+    const result = await withRunContext(
+      createRunContext({
+        runtimeHost: explicit.host,
+        streamId,
+        executionId,
+      }),
+      () =>
+        withToolFileInteractionContext({ tracker: {} as never }, () =>
+          tool.call({
+            execution_id: executionId,
+            files: [
+              {
+                path: 'r1/Draft/appendices.tex',
+                original: 'Draft/appendices.tex',
+              },
+            ],
+          }),
+        ),
+    );
 
-      expect(result.isError).toBe(true);
-      expect(result.error).toContain('symlink');
-      expect(result.error).toContain('did not emit');
-      expect(approvals).toBe(0);
-      expect(writes).toBe(0);
-      expect(fallback.events).toEqual([]);
-    } finally {
-      setDefaultAgentRuntimeHost(previousDefault);
-    }
+    expect(result.isError).toBe(true);
+    expect(result.error).toContain('symlink');
+    expect(result.error).toContain('did not emit');
+    expect(approvals).toBe(0);
+    expect(writes).toBe(0);
+    expect(explicit.events).toEqual([]);
   });
 });

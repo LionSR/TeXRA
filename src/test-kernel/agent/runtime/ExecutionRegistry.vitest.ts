@@ -3,10 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import {
-  getDefaultAgentRuntimeHost,
-  setDefaultAgentRuntimeHost,
-} from '@agent/runtime/AgentRuntimeHost';
-import {
   AgentExecutionHandle,
   detachActiveChildren,
   trackExecution,
@@ -18,16 +14,12 @@ import { createRecordingHost } from '../progressTestUtils';
 
 describe('executionRegistry', () => {
   it('publishes handle updates through the handle runtime host', () => {
-    const previousDefault = getDefaultAgentRuntimeHost();
     const explicit = createRecordingHost();
-    const fallback = createRecordingHost();
     const executionId = 'exec-handle-runtime-host-test';
     const parentStreamId = 'parent-handle-runtime-host-test' as StreamTabId;
     const childStreamId = 'child-handle-runtime-host-test' as StreamTabId;
 
     try {
-      setDefaultAgentRuntimeHost(fallback.host);
-
       const handle = new AgentExecutionHandle(
         executionId,
         parentStreamId,
@@ -59,24 +51,18 @@ describe('executionRegistry', () => {
         parentStreamId,
         children: [],
       });
-      expect(fallback.events).toEqual([]);
     } finally {
       untrackExecution(executionId);
-      setDefaultAgentRuntimeHost(previousDefault);
     }
   });
 
   it('publishes detach updates through the caller runtime host', () => {
-    const previousDefault = getDefaultAgentRuntimeHost();
     const explicit = createRecordingHost();
-    const fallback = createRecordingHost();
     const executionId = 'exec-detach-runtime-host-test';
     const parentStreamId = 'parent-detach-runtime-host-test' as StreamTabId;
     const childStreamId = 'child-detach-runtime-host-test' as StreamTabId;
 
     try {
-      setDefaultAgentRuntimeHost(fallback.host);
-
       const handle = new AgentExecutionHandle(
         executionId,
         parentStreamId,
@@ -103,10 +89,8 @@ describe('executionRegistry', () => {
         parentStreamId,
         children: [],
       });
-      expect(fallback.events).toEqual([]);
     } finally {
       untrackExecution(executionId);
-      setDefaultAgentRuntimeHost(previousDefault);
     }
   });
 });

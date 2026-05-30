@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { ZodError } from 'zod';
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core';
+import { AgentConfigSchema } from '@agent/core/AgentConfig';
 import { runValidatedExecutionRequest } from '@agent/runtime/runExecutionRequest';
 import { formatZodError } from '@common/errors';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
