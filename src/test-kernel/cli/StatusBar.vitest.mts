@@ -209,7 +209,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('[Ctrl-C]stop');
   });
 
-  it('drops trailing status details before narrow footers lose separators', () => {
+  it('drops low-priority status details before narrow footers lose separators', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,
       elapsedMs: 75_000,
@@ -242,6 +242,96 @@ describe('CLI StatusBar display model', () => {
     expect(display.left.map(statusBarSegmentText).join(' ')).not.toContain(
       'api3',
     );
+  });
+
+  it('drops approval depth before returning an over-wide narrow status', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      elapsedMs: 75_000,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 3,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      ctrlCAction: 'stop',
+      width: 30,
+    });
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'running',
+      '75s',
+      'api',
+    ]);
+  });
+
+  it('drops elapsed before returning an over-wide critical-only status', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      elapsedMs: 75_000,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      ctrlCAction: 'stop',
+      width: 16,
+    });
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'running',
+      'api',
+    ]);
+  });
+
+  it('keeps queued follow-up previews aligned with visible queued counts', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      elapsedMs: 75_000,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: ['Keep the proof under one page.'],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 3,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      ctrlCAction: 'stop',
+      width: 30,
+    });
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'running',
+      '75s',
+      'api',
+    ]);
+    expect(display.right).toBeUndefined();
   });
 
   it('scopes Ctrl-C stop to the root when focus is on a child stream', () => {
