@@ -5,6 +5,11 @@
 import { Box, useApp, useInput, useStdin, useWindowSize } from 'ink';
 import { useEffect, useState } from 'react';
 
+import {
+  LIVE_ELAPSED_STREAM_STATUSES,
+  type StreamStatus,
+} from '@shared/schemas';
+
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
 import { ApprovalModal } from './modals/ApprovalModal';
@@ -156,6 +161,22 @@ export function allocateSidePanelRows({
   };
 }
 
+export function shouldShowTodosPlanPanel({
+  foregroundOpen,
+  hasPlan,
+  hasTodos,
+  status,
+}: {
+  readonly foregroundOpen: boolean;
+  readonly hasPlan: boolean;
+  readonly hasTodos: boolean;
+  readonly status: StreamStatus | undefined;
+}): boolean {
+  if (foregroundOpen) return false;
+  if (!hasTodos && !hasPlan) return false;
+  return status !== undefined && LIVE_ELAPSED_STREAM_STATUSES.has(status);
+}
+
 export function appFocusShortcutsActive({
   inputDisabled,
   reverseSearchOpen,
@@ -285,10 +306,12 @@ export function App(props: AppProps): React.JSX.Element {
   );
   const hasSubagentPanel =
     !foregroundOpen && hasChildExecutionRows(activeSlice);
-  const hasTodosPlanPanel =
-    !foregroundOpen &&
-    activeSlice !== undefined &&
-    (activeSlice.todos.length > 0 || activeSlice.plan !== null);
+  const hasTodosPlanPanel = shouldShowTodosPlanPanel({
+    foregroundOpen,
+    hasPlan: activeSlice?.plan != null,
+    hasTodos: (activeSlice?.todos.length ?? 0) > 0,
+    status: activeSlice?.status,
+  });
   const transcriptWidth = Math.max(MIN_TRANSCRIPT_WIDTH, columns);
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
