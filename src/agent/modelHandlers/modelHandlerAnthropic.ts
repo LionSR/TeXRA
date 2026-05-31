@@ -71,10 +71,7 @@ import {
   type ToolResultPayload,
 } from './utils/toolAttachmentUtils';
 import { normalizeUsage } from './support/UsageNormalizer';
-import {
-  tagAnthropicSdkError,
-  withSdkErrorTag,
-} from './support/sdkErrorAdapters';
+import { tagAnthropicSdkError } from './support/sdkErrorAdapters';
 import {
   FILES_API_BETA,
   CONTEXT_MANAGEMENT_BETA,
@@ -467,17 +464,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
     return responseTokenCount.input_tokens;
   }
 
-  /** Creates a chat completion response using Anthropic's API with specified parameters and optional system prompt. */
-  async createResponse(
-    requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
-  ): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
-    return withSdkErrorTag(tagAnthropicSdkError, this.config.provider, () =>
-      this.createResponseImpl(requestOptions),
-    );
+  protected override get sdkErrorTagger() {
+    return tagAnthropicSdkError;
   }
 
   /** Creates an Anthropic response after SDK-boundary error tagging is installed. */
-  private async createResponseImpl(
+  protected override async createResponseImpl(
     requestOptions: CreateResponseOptions<MessageParam, Anthropic>,
   ): Promise<CreateResponseResult<BetaMessage, MessageParam>> {
     const {
