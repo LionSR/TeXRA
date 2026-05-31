@@ -54,10 +54,6 @@ prompts:
         \item Be consistent in the level of mathematical detail across papers of similar type
     \end{itemize}
 
-    {% if IS_GOOGLE_MODEL %}
-    In your response, you should use XML tags instead of markdown syntax to organize the output files. NEVER use markdown tags like ```latex ''' nor ```xml to organize the output files.
-    {% endif %}
-
   userPrefix: |
     I am going to give you the LaTeX code of research paper draft(s) that need mathematical derivations and scientific revisions. Read the document(s) carefully before proceeding.
 
