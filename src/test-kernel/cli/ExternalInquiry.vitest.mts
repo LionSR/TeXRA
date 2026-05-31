@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   boundedExternalInquiryQuestionLines,
   externalInquiryAnswerRowsBudget,
+  externalInquiryKeyHintsForWidth,
   externalInquiryQuestionRowsBudget,
 } from '@cli/chat/tui/modals/ExternalInquiry';
 import { textInputDisplayWindow } from '@cli/chat/tui/input/BaseTextInput';
@@ -81,6 +82,43 @@ describe('CLI external inquiry modal', () => {
     expect(display.value.startsWith('…')).toBe(true);
     expect(display.cursor).toBeGreaterThan(0);
     expect(display.cursor).toBeLessThanOrEqual(display.value.length);
+  });
+
+  it('keeps Esc skip readable when scroll hints make the footer tight', () => {
+    expect(
+      externalInquiryKeyHintsForWidth({
+        maxColumns: 76,
+        questionScrollable: true,
+      }),
+    ).toEqual([
+      { key: 'PgUp/PgDn', action: 'scroll' },
+      { key: 'Enter', action: 'submit' },
+      { key: 'Ctrl-R', action: 'reject' },
+      { key: 'Esc', action: 'skip' },
+    ]);
+
+    expect(
+      externalInquiryKeyHintsForWidth({
+        maxColumns: 38,
+        questionScrollable: true,
+      }),
+    ).toEqual([
+      { key: 'Enter', action: 'submit' },
+      { key: 'Esc', action: 'skip' },
+    ]);
+  });
+
+  it('uses full external inquiry hints when the question is not scrollable', () => {
+    expect(
+      externalInquiryKeyHintsForWidth({
+        maxColumns: 76,
+        questionScrollable: false,
+      }),
+    ).toEqual([
+      { key: 'Enter', action: 'submit answer' },
+      { key: 'Ctrl-R', action: 'reject with note' },
+      { key: 'Esc', action: 'skip' },
+    ]);
   });
 
   it('counts literal newlines against the clipped input row budget', () => {
