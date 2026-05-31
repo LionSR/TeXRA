@@ -1111,6 +1111,18 @@ describe('CLI child execution controls', () => {
     });
     expect(
       moveTaskDetailScrollState(
+        { executionId: 'task-1', followsTail: false, offset: 5 },
+        9,
+        'up',
+        4,
+      ),
+    ).toEqual({
+      executionId: 'task-1',
+      followsTail: true,
+      offset: 4,
+    });
+    expect(
+      moveTaskDetailScrollState(
         { executionId: 'task-1', followsTail: false, offset: 8 },
         9,
         'down',

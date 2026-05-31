@@ -511,6 +511,14 @@ export function taskDetailVisibleScrollOffset(
   return Math.min(state.offset, maxOffset);
 }
 
+function taskDetailScrollOffsetFollowsTail(
+  offset: number,
+  maxOffset: number,
+  followOffset = maxOffset,
+): boolean {
+  return offset === Math.min(followOffset, maxOffset);
+}
+
 export function moveTaskDetailScrollState(
   state: TaskDetailScrollState,
   maxOffset: number,
@@ -519,17 +527,25 @@ export function moveTaskDetailScrollState(
 ): TaskDetailScrollState {
   const offset = taskDetailVisibleScrollOffset(state, maxOffset, followOffset);
   if (direction === 'up') {
+    const nextOffset = Math.max(0, offset - 1);
     return {
       ...state,
-      followsTail: false,
-      offset: Math.max(0, offset - 1),
+      followsTail: taskDetailScrollOffsetFollowsTail(
+        nextOffset,
+        maxOffset,
+        followOffset,
+      ),
+      offset: nextOffset,
     };
   }
   const nextOffset = Math.min(maxOffset, offset + 1);
-  const followsTail = nextOffset >= maxOffset && followOffset >= maxOffset;
   return {
     ...state,
-    followsTail,
+    followsTail: taskDetailScrollOffsetFollowsTail(
+      nextOffset,
+      maxOffset,
+      followOffset,
+    ),
     offset: nextOffset,
   };
 }
