@@ -10,7 +10,7 @@ import {
   maxScrollableRowOffset,
   scrollBoundedRows,
 } from '../render/scrollBounds';
-import { KeyHints } from '../ui/KeyHints';
+import { KEY_HINT_SEPARATOR, KeyHints, type KeyHint } from '../ui/KeyHints';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface ExternalInquiryProps {
@@ -28,6 +28,57 @@ const MIN_EXTERNAL_INQUIRY_WIDTH = 20;
 const DEFAULT_EXTERNAL_INQUIRY_QUESTION_ROWS = 16;
 const COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS = 3;
 const EXTERNAL_INQUIRY_FIXED_ROWS = 6;
+
+function keyHintsColumns(hints: readonly KeyHint[]): number {
+  return hints.reduce(
+    (width, hint, index) =>
+      width +
+      (index === 0 ? 0 : KEY_HINT_SEPARATOR.length) +
+      hint.key.length +
+      1 +
+      hint.action.length,
+    0,
+  );
+}
+
+export function externalInquiryKeyHintsForWidth({
+  maxColumns,
+  questionScrollable,
+}: {
+  readonly maxColumns: number;
+  readonly questionScrollable: boolean;
+}): readonly KeyHint[] {
+  const fullHints: readonly KeyHint[] = [
+    ...(questionScrollable ? [{ key: 'PgUp/PgDn', action: 'question' }] : []),
+    { key: 'Enter', action: 'submit answer' },
+    { key: 'Ctrl-R', action: 'reject with note' },
+    { key: 'Esc', action: 'skip' },
+  ];
+  if (keyHintsColumns(fullHints) <= maxColumns) return fullHints;
+
+  const compactHints: readonly KeyHint[] = [
+    ...(questionScrollable ? [{ key: 'PgUp/PgDn', action: 'scroll' }] : []),
+    { key: 'Enter', action: 'submit' },
+    { key: 'Ctrl-R', action: 'reject' },
+    { key: 'Esc', action: 'skip' },
+  ];
+  if (keyHintsColumns(compactHints) <= maxColumns) return compactHints;
+
+  const primaryHints: readonly KeyHint[] = [
+    { key: 'Enter', action: 'submit' },
+    { key: 'Ctrl-R', action: 'reject' },
+    { key: 'Esc', action: 'skip' },
+  ];
+  if (keyHintsColumns(primaryHints) <= maxColumns) return primaryHints;
+
+  const minimalHints: readonly KeyHint[] = [
+    { key: 'Enter', action: 'submit' },
+    { key: 'Esc', action: 'skip' },
+  ];
+  if (keyHintsColumns(minimalHints) <= maxColumns) return minimalHints;
+
+  return [{ key: 'Esc', action: 'skip' }];
+}
 
 export function externalInquiryAnswerRowsBudget(
   availableRows: number | undefined,
@@ -198,6 +249,10 @@ export function ExternalInquiry(
     scrollOffset: questionOffset,
     width: contentWidth,
   });
+  const keyHints = externalInquiryKeyHintsForWidth({
+    maxColumns: contentWidth,
+    questionScrollable,
+  });
 
   function scrollQuestion(
     next: number | ((currentOffset: number) => number),
@@ -279,17 +334,7 @@ export function ExternalInquiry(
         </Box>
       </Box>
       <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            ...(questionScrollable
-              ? [{ key: 'PgUp/PgDn', action: 'question' }]
-              : []),
-            { key: 'Enter', action: 'submit answer' },
-            { key: 'Ctrl-R', action: 'reject with note' },
-            { key: 'Esc', action: 'skip' },
-          ]}
-          confirmCancel={false}
-        />
+        <KeyHints hints={keyHints} confirmCancel={false} />
       </Box>
     </Box>
   );
