@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { formatToolDescriptionForTui } from '@cli/chat/tui/forms/ToolsListForm';
 import {
   cliToolIds,
   formatCliBoolean,
@@ -50,5 +51,41 @@ describe('CLI tools runtime', () => {
     expect(
       formatCliToolStatus(record({ statusDetail: 'Codex not found.' })),
     ).toContain('authCommand: codex login\n\nCodex not found.');
+  });
+
+  it('formats interactive tool descriptions with human state labels', () => {
+    expect(
+      formatToolDescriptionForTui(
+        record({
+          enabled: null,
+          detected: true,
+          toggleable: false,
+          status: 'available',
+        }),
+      ),
+    ).toBe('always on · detected · available');
+
+    expect(
+      formatToolDescriptionForTui(
+        record({
+          enabled: true,
+          detected: false,
+          status: 'not-found',
+          statusLabel: 'Needs setup',
+        }),
+      ),
+    ).toBe('enabled · not detected · Needs setup');
+
+    expect(
+      formatToolDescriptionForTui(
+        record({
+          enabled: null,
+          detected: true,
+          toggleable: false,
+          comingSoon: true,
+          status: 'coming-soon',
+        }),
+      ),
+    ).toBe('coming soon · detected · not yet usable');
   });
 });
