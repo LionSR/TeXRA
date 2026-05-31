@@ -137,6 +137,8 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   const diffScrollable = maxScrollOffset > 0;
   const pageRows = Math.max(1, maxDiffLines - 2);
   const compactDiffLayout = maxDiffLines <= COMPACT_DIFF_DISPLAY_LINES;
+  const compactCard =
+    props.availableRows !== undefined && props.availableRows <= 7;
 
   function scrollTo(next: number | ((currentOffset: number) => number)): void {
     setScrollOffset((current) => {
@@ -168,6 +170,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       title={title}
       alwaysAllow={{ kind: 'toolEdit', label: 'approve session' }}
       feedbackPlaceholder={EDIT_APPROVAL_FEEDBACK_PLACEHOLDER}
+      compact={compactCard}
       onFeedbackModeChange={setFeedbackMode}
       onFeedbackValueChange={setFeedbackValue}
       onDecide={props.onDecide}
