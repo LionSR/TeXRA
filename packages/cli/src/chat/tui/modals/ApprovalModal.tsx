@@ -50,7 +50,13 @@ export function ApprovalModal(
         />
       );
     case 'proposal':
-      return <AgentProposal payload={payload.payload} onDecide={decide} />;
+      return (
+        <AgentProposal
+          availableRows={props.availableRows}
+          payload={payload.payload}
+          onDecide={decide}
+        />
+      );
     case 'retry':
       return <RetryRequest payload={payload.payload} onDecide={decide} />;
     case 'externalInquiry':
