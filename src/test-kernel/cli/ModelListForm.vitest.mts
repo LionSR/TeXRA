@@ -7,6 +7,10 @@ import {
   modelSelectWindow,
 } from '@cli/chat/tui/forms/ModelListForm';
 import {
+  COMPACT_FORM_MAX_ROWS,
+  isCompactFormRows,
+} from '@cli/chat/tui/forms/_shared/selectWindow';
+import {
   nextSelectHighlightIndex,
   selectInlineOverflowText,
   selectInitialHighlightIndex,
@@ -305,6 +309,12 @@ describe('CLI Select disabled-row focus', () => {
 });
 
 describe('CLI ModelListForm row budget', () => {
+  it('uses compact slash forms before bordered content clips titles', () => {
+    expect(COMPACT_FORM_MAX_ROWS).toBe(8);
+    expect(isCompactFormRows(8)).toBe(true);
+    expect(isCompactFormRows(9)).toBe(false);
+  });
+
   it('removes the row floor on short terminals', () => {
     expect(modelSelectWindow({ availableRows: 6, itemCount: 8 })).toEqual({
       maxVisibleItems: 1,
