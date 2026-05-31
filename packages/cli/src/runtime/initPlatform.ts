@@ -47,6 +47,14 @@ let cliWorkspaceCwd = '';
 let quietPlatformLogs = false;
 let shutdownHandlersInstalled = false;
 
+type CliPlatformInitOptions = Pick<
+  CliContext,
+  'apiMode' | 'cwd' | 'resourcesPath' | 'helperModel'
+> & {
+  readonly installSignalHandlers?: boolean;
+  readonly storageRoot?: string;
+};
+
 function logAt(
   level: 'debug' | 'info' | 'warn',
   channel: string,
@@ -101,10 +109,7 @@ export async function setCliHelperModel(
  * no provider calls), not safety. Destructive local operations belong here.
  */
 export async function initLocalCliPlatform(
-  context: Pick<
-    CliContext,
-    'apiMode' | 'cwd' | 'resourcesPath' | 'helperModel'
-  >,
+  context: CliPlatformInitOptions,
 ): Promise<void> {
   await initCliPlatform({
     ...context,
@@ -114,10 +119,8 @@ export async function initLocalCliPlatform(
 }
 
 export async function initCliPlatform(
-  context: Pick<
-    CliContext,
-    'apiMode' | 'cwd' | 'resourcesPath' | 'helperModel' | 'quietLogs'
-  > & { skipIncludedModelAccess?: boolean },
+  context: CliPlatformInitOptions &
+    Pick<CliContext, 'quietLogs'> & { skipIncludedModelAccess?: boolean },
 ): Promise<void> {
   cliWorkspaceCwd = context.cwd;
   quietPlatformLogs = context.quietLogs ?? false;
@@ -130,6 +133,7 @@ export async function initCliPlatform(
       workspaceCliConfigPath(cliWorkspaceCwd),
     );
     const stateStores = await createCliStateStores({
+      storageRoot: context.storageRoot,
       workspacePath: () => cliWorkspaceCwd,
     });
     const lifecycle = createLifecycleHost({
@@ -153,7 +157,9 @@ export async function initCliPlatform(
       lifecycle,
       agentResume: { tryResumeStream: async () => false },
     });
-    installCliShutdownSignalHandlers(lifecycle);
+    if (context.installSignalHandlers !== false) {
+      installCliShutdownSignalHandlers(lifecycle);
+    }
     // Direct LSP adapter for Lean tools — spawns `lake env lean --server`
     // lazily, one server per Lake project root. Errors are surfaced via the
     // Tools dashboard if `lake` isn't on PATH; nothing happens at startup

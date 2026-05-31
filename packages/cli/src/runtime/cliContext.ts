@@ -1,7 +1,5 @@
-import { existsSync } from 'node:fs';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';
@@ -19,6 +17,7 @@ import {
   type CliConfigValues,
   type CliOutputFormat,
 } from './cliConfig';
+import { resolveCliResourcesPath } from './resourcesPath';
 
 export type CliMode = 'headless' | 'interactive';
 
@@ -124,17 +123,6 @@ async function resolveCliVersion(): Promise<string> {
     }
   }
   return 'unknown';
-}
-
-function resolveResourcesPath(): string {
-  const currentFile = fileURLToPath(import.meta.url);
-  const currentDir = path.dirname(currentFile);
-  const candidates = [
-    path.resolve(currentDir, '../resources'),
-    path.resolve(currentDir, '../../../extension/resources'),
-    path.resolve(currentDir, '../../extension/resources'),
-  ];
-  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
 export interface CliGlobalArgs {
@@ -290,7 +278,7 @@ export async function buildCliContext(
     stderrIsTty: ambient.stderrIsTty,
     colorEnabled: ambient.colorEnabled,
     version: await readCliVersion(),
-    resourcesPath: resolveResourcesPath(),
+    resourcesPath: resolveCliResourcesPath(),
     cliConfig: loadedConfig.values,
     configFilePath: loadedConfig.path,
     configWarnings,
