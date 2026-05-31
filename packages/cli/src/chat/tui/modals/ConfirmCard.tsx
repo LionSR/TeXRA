@@ -11,7 +11,7 @@ import {
   confirmCardKeyHintsForWidth,
 } from './ConfirmCardState';
 import { BaseTextInput } from '../input/BaseTextInput';
-import { KeyHints } from '../ui/KeyHints';
+import { KEY_HINT_SEPARATOR, KeyHints } from '../ui/KeyHints';
 import type {
   ApprovalBypassKind,
   ApprovalDecision,
@@ -33,6 +33,7 @@ export interface ConfirmCardProps {
     readonly decision: ApprovalDecision;
   }[];
   readonly feedbackPlaceholder?: string;
+  readonly compact?: boolean;
   readonly onFeedbackModeChange?: (active: boolean) => void;
   readonly onFeedbackValueChange?: (value: string) => void;
   readonly children: React.ReactNode;
@@ -50,6 +51,7 @@ export function ConfirmCard({
   alwaysAllow,
   extraActions = [],
   feedbackPlaceholder = 'Feedback to send with rejection',
+  compact = false,
   onFeedbackModeChange,
   onFeedbackValueChange,
   children,
@@ -117,8 +119,48 @@ export function ConfirmCard({
           key: action.key,
           action: action.label,
         })),
-        maxColumns: Math.max(0, columns - CONFIRM_CARD_HORIZONTAL_DECORATION),
+        maxColumns: Math.max(
+          0,
+          columns -
+            (compact
+              ? title.length + KEY_HINT_SEPARATOR.length
+              : CONFIRM_CARD_HORIZONTAL_DECORATION),
+        ),
       });
+
+  if (compact) {
+    return (
+      <Box flexDirection="column">
+        <Text bold color={color} wrap="truncate-end">
+          {title}
+          <Text dimColor>{KEY_HINT_SEPARATOR}</Text>
+          <Text dimColor>
+            {hints.map((hint, index) => (
+              <Text key={`${hint.key}-${hint.action}-${index}`}>
+                {index > 0 ? KEY_HINT_SEPARATOR : ''}
+                <Text bold>{hint.key}</Text> {hint.action}
+              </Text>
+            ))}
+          </Text>
+        </Text>
+        {feedbackMode ? (
+          <Box>
+            <Text>{'> '}</Text>
+            <BaseTextInput
+              value={feedback}
+              placeholder={feedbackPlaceholder}
+              onChange={updateFeedback}
+              onSubmit={(value) =>
+                onDecide({ accepted: false, userMessage: value.trim() })
+              }
+            />
+          </Box>
+        ) : (
+          children
+        )}
+      </Box>
+    );
+  }
 
   return (
     <Box
