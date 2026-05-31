@@ -8,6 +8,7 @@ import {
   emptyPickerText,
   isUltraCompactPickerRows,
   pickerKeyHints,
+  pickerKeyHintsForColumns,
   pickerTitle,
   TASK_DETAIL_LABEL_WIDTH,
   taskDetailCommandLabel,
@@ -763,6 +764,27 @@ describe('CLI child execution controls', () => {
       key: 'k',
       action: 'kill',
     });
+  });
+
+  it('keeps Esc close readable in narrow child picker hints', () => {
+    expect(pickerKeyHintsForColumns('subagents', 3, true, 60)).toEqual([
+      { key: '↑/↓', action: 'nav' },
+      { key: '1-9', action: 'jump' },
+      { key: 'Enter', action: 'focus' },
+      { key: 'k', action: 'kill' },
+      { key: 'Esc', action: 'close' },
+    ]);
+    expect(pickerKeyHintsForColumns('tasks', 3, true, 50)).toEqual([
+      { key: '↑/↓', action: 'nav' },
+      { key: 'Enter', action: 'view' },
+      { key: 'k', action: 'kill' },
+      { key: 'Esc', action: 'close' },
+    ]);
+    expect(pickerKeyHintsForColumns('tasks', 3, true, 40)).toEqual([
+      { key: '↑/↓', action: 'nav' },
+      { key: 'Enter', action: 'view' },
+      { key: 'Esc', action: 'close' },
+    ]);
   });
 
   it('labels the task picker as a combined task and sub-workflow view', () => {
