@@ -638,6 +638,13 @@ describe('runCli usage output stream routing', () => {
     expect(stderr).toBe('');
   });
 
+  it('accepts the documented multi-agent inspect command', async () => {
+    const result = await runCli(['multi-agent', 'inspect', 'mathematician']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('Mathematician (mathematician)');
+    expect(stderr).toBe('');
+  });
+
   it('reports unknown command paths passed to help', async () => {
     const result = await runCli(['help', 'bogus']);
     expect(result.exitCode).toBe(2);
