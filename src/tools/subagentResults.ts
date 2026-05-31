@@ -145,7 +145,7 @@ export function formatSubagentDelivery(
     }
   } else if (result.category === 'toolUse') {
     if (result.lastResponse) {
-      lines.push('<response>', result.lastResponse, '</response>');
+      lines.push('<response>', escapeText(result.lastResponse), '</response>');
     }
     if (result.touchedFiles && result.touchedFiles.length > 0) {
       lines.push(

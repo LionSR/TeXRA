@@ -82,7 +82,7 @@ export function summarizeSubagentFollowup(text: string): string {
     const wall = innerTag(trimmed, 'wall-time');
     const response = innerTag(trimmed, 'response');
     const head = `✓ ${agent} ${status}${wall ? ` · ${wall}` : ''}`;
-    return response ? `${head}\n${response}` : head;
+    return response ? `${head}\n${decodeXmlEntities(response)}` : head;
   }
 
   // <subagent-error>
