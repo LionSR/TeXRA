@@ -2,7 +2,7 @@ import { render, Box, Text, useApp, useInput, useWindowSize } from 'ink';
 
 import { Select } from '../chat/tui/ui/Select';
 import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
-import { clearTerminalScrollback } from '../chat/tui/terminalCleanup';
+import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import type {
   CliOrchestrationAction,
   CliOrchestrationItem,
@@ -78,11 +78,10 @@ export async function runOrchestrationTui(
       },
     );
 
-    // Wipe the picker out of primary-buffer scrollback once Ink has
-    // finished unmounting; the chat / resume / help screen that follows
-    // then starts on a clean buffer instead of stacking under the menu.
+    // Wipe the picker out of the visible screen once Ink has finished
+    // unmounting without erasing the user's primary-buffer scrollback.
     void instance.waitUntilExit().then(() => {
-      clearTerminalScrollback();
+      clearTerminalVisibleScreen();
       resolve(chosen ?? { kind: 'exit' });
     });
   });
