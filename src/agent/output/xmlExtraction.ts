@@ -9,11 +9,7 @@
 
 import type { StageHandle } from '@agent/trace';
 import { toErrorMessage } from '@common/errors';
-import {
-  MESSAGE_TYPES,
-  type FileLocation,
-  type StorageKey,
-} from '@shared/schemas';
+import { MESSAGE_TYPES, type FileLocation } from '@shared/schemas';
 
 import {
   OutputFileProcessor,
@@ -21,7 +17,6 @@ import {
 } from './OutputFileProcessor';
 import {
   ensureRoundData,
-  getStorageKey,
   withOutputStage,
   type OutputState,
   type OutputDependencies,
