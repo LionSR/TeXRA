@@ -43,7 +43,7 @@ jobs:
       - name: Detect non-docs changes
         id: detect
         run: |
-          # Heavy validation (compile/build/desktop) only runs when a PR touches
+          # Heavy validation (typecheck/lint/tests/build) only runs when a PR touches
           # something other than docs. Docs-only PRs fall through to the
           # lightweight docs-build job below, keeping CI spend down. Pushes to
           # main and manual dispatches always run the full matrix.
@@ -126,26 +126,6 @@ jobs:
       - name: Check extension VSIX contents
         run: pnpm run check:vsix-contents
 
-      - name: Build desktop artifacts
-        if: github.event_name != 'pull_request'
-        run: pnpm run desktop:build
-
-      - name: Check desktop build artifacts
-        if: github.event_name != 'pull_request'
-        run: pnpm run check:desktop-build-artifacts
-
-      - name: Package desktop app
-        if: github.event_name != 'pull_request' && runner.os == 'macOS'
-        run: pnpm run desktop:package:local
-
-      - name: Check desktop package
-        if: github.event_name != 'pull_request' && runner.os == 'macOS'
-        run: pnpm run check:desktop-package
-
-      - name: Smoke packaged desktop launch
-        if: github.event_name != 'pull_request' && runner.os == 'macOS'
-        run: pnpm run desktop:package:smoke
-
       - name: Smoke extension webviews in Electron
         if: runner.os == 'macOS'
         run: pnpm run smoke:webviews:run
@@ -165,15 +145,6 @@ jobs:
         with:
           name: texra-extension-vsix
           path: releases/*.vsix
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload desktop build artifact
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v7
-        with:
-          name: texra-desktop-dist-${{ runner.os }}
-          path: packages/desktop/dist/
           if-no-files-found: error
           retention-days: 14
 
@@ -207,7 +178,7 @@ jobs:
 
   desktop-macos-installer:
     name: desktop installer (macOS)
-    if: github.event_name == 'push' || inputs.run_desktop_installers
+    if: github.event_name == 'workflow_dispatch' && inputs.run_desktop_installers
     runs-on: macos-latest
     timeout-minutes: 45
     env:
@@ -299,7 +270,7 @@ jobs:
 
   desktop-linux-installer:
     name: desktop installer (Linux)
-    if: github.event_name == 'push' || inputs.run_desktop_installers
+    if: github.event_name == 'workflow_dispatch' && inputs.run_desktop_installers
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -349,7 +320,7 @@ jobs:
 
   desktop-windows-artifact:
     name: desktop artifact (Windows)
-    if: github.event_name == 'push' || inputs.run_windows_desktop
+    if: github.event_name == 'workflow_dispatch' && inputs.run_windows_desktop
     runs-on: windows-latest
     timeout-minutes: 30
     env:
