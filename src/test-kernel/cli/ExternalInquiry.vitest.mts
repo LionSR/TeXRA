@@ -43,4 +43,25 @@ describe('CLI external inquiry modal', () => {
     expect(display.cursor).toBeGreaterThan(0);
     expect(display.cursor).toBeLessThanOrEqual(display.value.length);
   });
+
+  it('counts literal newlines against the clipped input row budget', () => {
+    const value = [
+      'line one',
+      'line two',
+      'line three',
+      'line four',
+      'line five',
+    ].join('\n');
+    const display = textInputDisplayWindow({
+      cursor: value.length,
+      maxDisplayRows: 2,
+      value,
+      width: 80,
+    });
+
+    expect(display.clipped).toBe(true);
+    expect(display.value.split('\n')).toHaveLength(2);
+    expect(display.value.startsWith('…')).toBe(true);
+    expect(display.cursor).toBe(display.value.length);
+  });
 });
