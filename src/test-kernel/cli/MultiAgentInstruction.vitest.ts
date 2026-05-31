@@ -57,6 +57,25 @@ describe('formatUnavailableApprovalInstruction', () => {
 });
 
 describe('formatMultiAgentRunInstruction', () => {
+  it('reminds the orchestrator to check domain edge cases before claiming completeness', () => {
+    for (const mode of ['headless', 'interactive'] as const) {
+      for (const approvalPolicy of ['never', 'ask', 'yolo'] as const) {
+        const instruction = formatMultiAgentRunInstruction(preset, {
+          inputFiles: [],
+          instruction: 'Solve x^2 - 2y^2 = 1 for integer x and 0 < y < 20.',
+          approvalContext: { mode, approvalPolicy },
+        });
+
+        expect(instruction).toContain(
+          'check the full domain stated by the user',
+        );
+        expect(instruction).toContain('sign choices');
+        expect(instruction).toContain('zero and boundary cases');
+        expect(instruction).toContain('symmetry branches');
+      }
+    }
+  });
+
   it('warns the orchestrator when approval policy never denies tools', () => {
     const instruction = formatMultiAgentRunInstruction(preset, {
       inputFiles: ['problem.md'],
