@@ -41,6 +41,8 @@ export const TASK_DETAIL_LABEL_WIDTH = 13;
 export const ULTRA_COMPACT_PICKER_MAX_ROWS = 6;
 export const ULTRA_COMPACT_TASK_DETAIL_MAX_ROWS = 4;
 export const NARROW_PICKER_HINT_MAX_COLUMNS = 64;
+export const NARROW_TASK_DETAIL_HINT_MAX_COLUMNS = 48;
+export const TASK_DETAIL_HORIZONTAL_CHROME_COLUMNS = 4;
 export const MIN_COLUMNS_FOR_JUMP_HINT = 58;
 export const MIN_COLUMNS_FOR_KILL_HINT = 44;
 
@@ -111,6 +113,37 @@ export function pickerKeyHintsForColumns(
     hints.push({ key: 'k', action: 'kill' });
   }
   hints.push({ key: 'Esc', action: 'close' });
+  return hints;
+}
+
+export function taskDetailKeyHintsForColumns({
+  availableColumns,
+  canFocusStream,
+  canKill,
+  showScrollHint,
+}: {
+  readonly availableColumns?: number;
+  readonly canFocusStream: boolean;
+  readonly canKill: boolean;
+  readonly showScrollHint: boolean;
+}): readonly KeyHint[] {
+  const narrow =
+    availableColumns !== undefined &&
+    availableColumns <= NARROW_TASK_DETAIL_HINT_MAX_COLUMNS;
+  const hints: KeyHint[] = [];
+  if (showScrollHint) hints.push({ key: '↑/↓', action: 'scroll' });
+  if (canFocusStream) {
+    hints.push({ key: 'f', action: narrow ? 'focus' : 'focus stream' });
+  }
+  if (
+    canKill &&
+    (!narrow ||
+      availableColumns === undefined ||
+      availableColumns >= MIN_COLUMNS_FOR_KILL_HINT)
+  ) {
+    hints.push({ key: 'k', action: 'kill' });
+  }
+  hints.push({ key: 'Esc', action: 'back' });
   return hints;
 }
 
@@ -379,13 +412,11 @@ export function computePickerListLayout({
 function TaskOutput({
   childStreamId,
   tailLines,
-  truncateLines = false,
   visibleTail,
   visibleLineCount,
 }: {
   readonly childStreamId: StreamTabId | undefined;
   readonly tailLines: readonly string[];
-  readonly truncateLines?: boolean;
   readonly visibleTail: readonly string[];
   readonly visibleLineCount: number;
 }): React.JSX.Element | null {
@@ -394,11 +425,7 @@ function TaskOutput({
     return (
       <>
         {visibleTail.map((line, index) => (
-          <Text
-            key={`${index}:${line}`}
-            dimColor
-            wrap={truncateLines ? 'truncate-end' : undefined}
-          >
+          <Text key={`${index}:${line}`} dimColor>
             {line}
           </Text>
         ))}
@@ -440,7 +467,18 @@ function TaskDetailView({
     hasTailLines: item.tailLines.length > 0,
     metaRows: metaParts.length,
   });
-  const visibleLineCount = layout.visibleLineCount;
+  const shouldReserveWrappedOutputRow =
+    layout.compact &&
+    availableColumns !== undefined &&
+    availableColumns <= NARROW_TASK_DETAIL_HINT_MAX_COLUMNS &&
+    item.tailLines.some(
+      (line) =>
+        line.length >
+        Math.max(1, availableColumns - TASK_DETAIL_HORIZONTAL_CHROME_COLUMNS),
+    );
+  const visibleLineCount = shouldReserveWrappedOutputRow
+    ? Math.max(1, layout.visibleLineCount - 1)
+    : layout.visibleLineCount;
   const maxOffset = taskDetailInitialScrollOffset(
     item.tailLines.length,
     visibleLineCount,
@@ -457,12 +495,12 @@ function TaskDetailView({
   const ultraCompact = isUltraCompactTaskDetailRows(availableRows);
   const showScrollHint =
     item.tailLines.length > visibleLineCount && !ultraCompact;
-  const hints: KeyHint[] = [
-    ...(showScrollHint ? [{ key: '↑/↓', action: 'scroll' }] : []),
-    ...(item.childStreamId ? [{ key: 'f', action: 'focus stream' }] : []),
-    ...(item.killable ? [{ key: 'k', action: 'kill' }] : []),
-    { key: 'Esc', action: 'back' },
-  ];
+  const hints = taskDetailKeyHintsForColumns({
+    availableColumns,
+    canFocusStream: Boolean(item.childStreamId),
+    canKill: item.killable,
+    showScrollHint,
+  });
 
   useEffect(() => {
     setScrollState((current) =>
@@ -542,7 +580,6 @@ function TaskDetailView({
         <TaskOutput
           childStreamId={item.childStreamId}
           tailLines={item.tailLines}
-          truncateLines={layout.compact}
           visibleTail={visibleTail}
           visibleLineCount={visibleLineCount}
         />
