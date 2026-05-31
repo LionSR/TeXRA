@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  bashApprovalPageRows,
   bashApprovalCommandRowsBudget,
   bashCommandDisplayLines,
   boundedBashCommandDisplayLines,
@@ -74,6 +75,51 @@ describe('CLI bash approval layout', () => {
     });
     expect(visible.map((line) => line.text)).toContain('  print(solutions)');
     expect(visible.map((line) => line.text)).toContain('  EOF');
+  });
+
+  it('lets users scroll compact command previews', () => {
+    const budget = 3;
+    const allRows = bashCommandDisplayLines({
+      command: HEREDOC_COMMAND,
+      width: 76,
+    });
+    const offset = maxBashCommandScrollOffset(allRows.length, budget);
+    const visible = boundedBashCommandDisplayLines({
+      command: HEREDOC_COMMAND,
+      maxDisplayLines: budget,
+      scrollOffset: 3,
+      width: 76,
+    });
+
+    expect(offset).toBeGreaterThan(0);
+    expect(visible).toHaveLength(budget);
+    expect(visible.map((line) => line.text)).toContain(
+      '      x2 = 1 + 2 * y * y',
+    );
+    expect(visible.at(-1)).toEqual({
+      kind: 'overflow',
+      text: '... 3 previous, 8 more rows',
+    });
+  });
+
+  it('pages compact command previews by visible content rows', () => {
+    expect(bashApprovalPageRows(1)).toBe(1);
+    expect(bashApprovalPageRows(3)).toBe(2);
+    expect(bashApprovalPageRows(8)).toBe(6);
+  });
+
+  it('lets users scroll one-row compact previews', () => {
+    const visible = boundedBashCommandDisplayLines({
+      command: HEREDOC_COMMAND,
+      maxDisplayLines: 1,
+      scrollOffset: 2,
+      width: 76,
+    });
+
+    expect(maxBashCommandScrollOffset(13, 1)).toBe(12);
+    expect(visible).toHaveLength(1);
+    expect(visible[0]?.text).toContain('for y in range(1, 100):');
+    expect(visible[0]?.text).toContain('rows hidden');
   });
 
   it('keeps one-row compact previews within their row budget', () => {
