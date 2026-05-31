@@ -27,6 +27,10 @@ export interface BaseTextInputProps {
   readonly value: string;
   readonly placeholder?: string;
   readonly focus?: boolean;
+  /** Clamp the rendered value to this many terminal rows while preserving
+   *  the full editable value passed to onChange/onSubmit. */
+  readonly maxDisplayRows?: number;
+  readonly displayWidth?: number;
   /** Pin the caret externally. When omitted, the component tracks the caret
    *  internally so arrow keys / Home/End / Ctrl-A,E,U,K,W work out of the box. */
   readonly cursor?: number;
@@ -35,9 +39,58 @@ export interface BaseTextInputProps {
   readonly onChange: (value: string) => void;
 }
 
+export interface TextInputDisplayWindow {
+  readonly value: string;
+  readonly cursor: number;
+  readonly clipped: boolean;
+}
+
+export function textInputDisplayWindow({
+  cursor,
+  maxDisplayRows,
+  value,
+  width,
+}: {
+  readonly cursor: number;
+  readonly maxDisplayRows?: number;
+  readonly value: string;
+  readonly width?: number;
+}): TextInputDisplayWindow {
+  const rowCount = Math.max(1, maxDisplayRows ?? 0);
+  const columnCount = Math.max(1, width ?? 0);
+  if (maxDisplayRows === undefined || width === undefined) {
+    return { value, cursor: clampCursor(cursor, value.length), clipped: false };
+  }
+
+  const budget = Math.max(1, rowCount * columnCount - 1);
+  if (value.length <= budget) {
+    return { value, cursor: clampCursor(cursor, value.length), clipped: false };
+  }
+
+  const sourceCursor = clampCursor(cursor, value.length);
+  const keepAfterCursor = Math.min(
+    value.length - sourceCursor,
+    Math.floor(budget / 4),
+  );
+  const end = Math.min(value.length, sourceCursor + keepAfterCursor);
+  const start = Math.max(0, end - budget);
+  const prefix = start > 0 ? '…' : '';
+  const displayValue = `${prefix}${value.slice(start, end)}`;
+  return {
+    value: displayValue,
+    cursor: clampCursor(
+      sourceCursor - start + prefix.length,
+      displayValue.length,
+    ),
+    clipped: true,
+  };
+}
+
 export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   const {
+    displayWidth,
     value,
+    maxDisplayRows,
     placeholder,
     focus = true,
     onChange,
@@ -161,11 +214,18 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     );
   }
 
-  if (!focus) return <Text>{value}</Text>;
+  const display = textInputDisplayWindow({
+    cursor,
+    maxDisplayRows,
+    value,
+    width: displayWidth,
+  });
 
-  const before = value.slice(0, cursor);
-  const ch = value[cursor];
-  const after = value.slice(cursor + 1);
+  if (!focus) return <Text>{display.value}</Text>;
+
+  const before = display.value.slice(0, display.cursor);
+  const ch = display.value[display.cursor];
+  const after = display.value.slice(display.cursor + 1);
   // Inverse-on-newline collapses to nothing visible; render the caret as a
   // leading space and let the literal newline carry the line break.
   if (ch === '\n') {
