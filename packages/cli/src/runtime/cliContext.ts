@@ -100,6 +100,17 @@ export function readCliEntrypointPath(): string {
   return process.argv[1] ?? '';
 }
 
+export function isTexraCliEntrypointPath(entrypointPath: string): boolean {
+  const name = path.basename(entrypointPath).toLowerCase();
+  return (
+    name === 'texra' ||
+    name === 'texra-local' ||
+    name === 'texra.js' ||
+    name === 'texra.mjs' ||
+    name === 'texra.ts'
+  );
+}
+
 let cachedVersion: Promise<string> | undefined;
 
 export function readCliVersion(): Promise<string> {
