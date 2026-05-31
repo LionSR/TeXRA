@@ -48,6 +48,7 @@ interface InputEventEmitterLike {
 const MIN_TRANSCRIPT_WIDTH = 20;
 const FOREGROUND_TRANSCRIPT_ROWS = 1;
 const CHILD_CONTROL_FOREGROUND_MAX_ROWS = 12;
+const FORM_FOREGROUND_MAX_ROWS = 18;
 // Cap the bottom subagent/todos panels so they never crowd out the
 // conversation or push the input bar off-screen.
 const BOTTOM_PANEL_MAX_ROWS = 10;
@@ -298,7 +299,9 @@ export function App(props: AppProps): React.JSX.Element {
     foregroundMaxRows:
       foregroundKind === 'childControls'
         ? CHILD_CONTROL_FOREGROUND_MAX_ROWS
-        : undefined,
+        : foregroundKind === 'form'
+          ? FORM_FOREGROUND_MAX_ROWS
+          : undefined,
     foregroundOpen,
     reverseSearchOpen,
     rows,
