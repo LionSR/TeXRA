@@ -3,6 +3,51 @@ export interface ReturnKeyInput {
   readonly ctrl?: boolean;
   readonly meta?: boolean;
   readonly shift?: boolean;
+  readonly escape?: boolean;
+}
+
+const RAW_CONTROL_INPUTS = new Map<number, string>([
+  [1, 'a'],
+  [5, 'e'],
+  [7, 'g'],
+  [11, 'k'],
+  [18, 'r'],
+  [21, 'u'],
+  [23, 'w'],
+]);
+
+export function normalizedCtrlInput(
+  input: string,
+  key: Pick<ReturnKeyInput, 'ctrl' | 'meta'>,
+): string | undefined {
+  if (key.meta) return undefined;
+  if (input.length !== 1) return undefined;
+  return (
+    RAW_CONTROL_INPUTS.get(input.charCodeAt(0)) ??
+    (key.ctrl ? input.toLowerCase() : undefined)
+  );
+}
+
+export function isCtrlInput(
+  input: string,
+  key: Pick<ReturnKeyInput, 'ctrl' | 'meta'>,
+  expected: string,
+): boolean {
+  return normalizedCtrlInput(input, key) === expected.toLowerCase();
+}
+
+export function isEscapeInput(
+  input: string,
+  key: Pick<ReturnKeyInput, 'escape'>,
+): boolean {
+  return key.escape === true || input === '\u001B';
+}
+
+export function isUnhandledControlInput(input: string): boolean {
+  if (input.length !== 1) return false;
+  const code = input.charCodeAt(0);
+  if (input === '\r' || input === '\n' || input === '\t') return false;
+  return code < 32 || code === 127;
 }
 
 export function metaChordInput(
