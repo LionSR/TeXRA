@@ -1,3 +1,8 @@
+/* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -35,7 +40,6 @@ vi.mock('@utils/files/taskRunStorage', () => ({
 }));
 
 // Imported after vi.mock so the mocked dependencies are in place.
-// eslint-disable-next-line import/order
 import {
   cliHistoryNdjsonRecords,
   deleteCliHistory,
@@ -64,7 +68,14 @@ const config = {
 } as AgentConfig;
 
 describe('CLI history runtime', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
+      await Promise.all([
+        import('@platform/platform'),
+        import('@platform/defaults/nodeFilesystem'),
+        import('@test/support/FakePlatform'),
+      ]);
+    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
     vi.clearAllMocks();
     mocks.readConfig.mockResolvedValue(config);
     mocks.readConversation.mockResolvedValue(null);
@@ -163,6 +174,171 @@ describe('CLI history runtime', () => {
 
     expect(text).toContain('Report:\nStructured report.');
     expect(text).not.toContain('Conversation (');
+  });
+
+  it('surfaces workspace files written by tool-use calls', async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), 'texra-history-'));
+    try {
+      await writeFile(path.join(workspace, 'review.md'), '# report');
+      await writeFile(path.join(workspace, 'draft.tex'), 'old text');
+      mocks.readConfig.mockResolvedValue({
+        ...config,
+        agentCategory: 'toolUse',
+        workingDirectory: workspace,
+      });
+      mocks.readConversation.mockResolvedValue([
+        {
+          role: 'assistant',
+          tool_calls: [
+            {
+              type: 'function',
+              function: {
+                name: 'write_file',
+                arguments: JSON.stringify({
+                  path: 'review.md',
+                  content: '# report',
+                }),
+              },
+            },
+            {
+              type: 'function',
+              function: {
+                name: 'edit_file',
+                arguments: {
+                  path: 'draft.tex',
+                  old_str: 'old',
+                  new_str: 'new',
+                },
+              },
+            },
+          ],
+        },
+      ]);
+
+      const details = await readCliHistoryDetails('a1' as ExecutionId);
+
+      expect(details?.files).toEqual([
+        { path: 'workspace/draft.tex', size: 8, isDirectory: false },
+        { path: 'workspace/review.md', size: 8, isDirectory: false },
+      ]);
+      expect(formatCliHistoryDetailsText(details!)).toContain(
+        '8\tworkspace/review.md',
+      );
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it('surfaces workspace files from Responses function call records', async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), 'texra-history-'));
+    try {
+      await writeFile(path.join(workspace, 'response.md'), 'response');
+      mocks.readConfig.mockResolvedValue({
+        ...config,
+        agentCategory: 'toolUse',
+        workingDirectory: workspace,
+      });
+      mocks.readConversation.mockResolvedValue([
+        {
+          type: 'function_call',
+          call_id: 'call_1',
+          name: 'write_file',
+          arguments: JSON.stringify({ path: 'response.md' }),
+        },
+      ]);
+
+      const details = await readCliHistoryDetails('a1' as ExecutionId);
+
+      expect(details?.files).toEqual([
+        { path: 'workspace/response.md', size: 8, isDirectory: false },
+      ]);
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it('surfaces workspace files from Google functionCall parts', async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), 'texra-history-'));
+    try {
+      await mkdir(path.join(workspace, 'subdir'));
+      await writeFile(path.join(workspace, 'subdir', 'gemini.md'), 'gemini');
+      mocks.readConfig.mockResolvedValue({
+        ...config,
+        agentCategory: 'toolUse',
+        workingDirectory: workspace,
+      });
+      mocks.readConversation.mockResolvedValue([
+        {
+          role: 'model',
+          parts: [
+            {
+              functionCall: {
+                id: 'call_1',
+                name: 'edit_file',
+                args: { path: 'subdir/gemini.md' },
+              },
+            },
+          ],
+        },
+      ]);
+
+      const details = await readCliHistoryDetails('a1' as ExecutionId);
+
+      expect(details?.files).toEqual([
+        { path: 'workspace/subdir/gemini.md', size: 6, isDirectory: false },
+      ]);
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it('does not surface missing files or tool paths outside the workspace', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'texra-history-root-'));
+    const workspace = path.join(root, 'workspace');
+    const outsidePath = path.join(root, 'outside.md');
+    try {
+      await mkdir(workspace);
+      await writeFile(outsidePath, 'outside');
+      mocks.readConfig.mockResolvedValue({
+        ...config,
+        agentCategory: 'toolUse',
+        workingDirectory: workspace,
+      });
+      mocks.readConversation.mockResolvedValue([
+        {
+          role: 'assistant',
+          tool_calls: [
+            {
+              type: 'function',
+              function: {
+                name: 'write_file',
+                arguments: JSON.stringify({ path: '../outside.md' }),
+              },
+            },
+            {
+              type: 'function',
+              function: {
+                name: 'edit_file',
+                arguments: JSON.stringify({ path: outsidePath }),
+              },
+            },
+            {
+              type: 'function',
+              function: {
+                name: 'write_file',
+                arguments: JSON.stringify({ path: 'missing.md' }),
+              },
+            },
+          ],
+        },
+      ]);
+
+      const details = await readCliHistoryDetails('a1' as ExecutionId);
+
+      expect(details?.files).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('reports not-found deletion through the structured result', async () => {
