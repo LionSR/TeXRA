@@ -99,7 +99,7 @@ async function runToolUseAgent(
   context: CliContext,
   init: ToolUseAgentRunInit,
 ): Promise<number> {
-  const model = resolveCliRunModel(context, init.model, 'chat');
+  const model = await resolveCliRunModel(context, init.model, 'chat');
   const runContext = buildHeadlessRunContext(context, model);
 
   let inputFiles: string[];

@@ -92,7 +92,8 @@ vi.mock('@cli/commands/_helpers/modelArg', () => ({
     renderRunProgress: false,
   })),
   resolveCliRunModel: vi.fn(
-    (_context: CliContext, model: string | undefined) => model ?? 'deepseekT',
+    async (_context: CliContext, model: string | undefined) =>
+      model ?? 'deepseekT',
   ),
 }));
 
