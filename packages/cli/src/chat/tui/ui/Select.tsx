@@ -128,6 +128,25 @@ export function visibleSelectRange({
   return { start, end: start + visibleCount };
 }
 
+export function selectInlineOverflowText({
+  hiddenAfter,
+  hiddenBefore,
+  showOverflow,
+}: {
+  readonly hiddenAfter: number;
+  readonly hiddenBefore: number;
+  readonly showOverflow: boolean | undefined;
+}): string | undefined {
+  if (showOverflow || (hiddenBefore === 0 && hiddenAfter === 0)) {
+    return undefined;
+  }
+  if (hiddenBefore > 0 && hiddenAfter > 0) {
+    return `+${hiddenBefore} earlier, +${hiddenAfter} more`;
+  }
+  if (hiddenBefore > 0) return `+${hiddenBefore} earlier`;
+  return `+${hiddenAfter} more`;
+}
+
 export function selectItemRenderKey<T>(
   item: SelectItem<T>,
   index: number,
@@ -180,6 +199,14 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   const hiddenBefore = visibleRange.start;
   const hiddenAfter = props.items.length - visibleRange.end;
   const visibleItems = props.items.slice(visibleRange.start, visibleRange.end);
+  const inlineOverflowText =
+    visibleItems.length === 1
+      ? selectInlineOverflowText({
+          hiddenAfter,
+          hiddenBefore,
+          showOverflow: props.showOverflow,
+        })
+      : undefined;
 
   useInput((input, key) => {
     if (key.escape) {
@@ -256,11 +283,18 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
                 {item.label}
               </Text>
             </Box>
-            {item.description ? (
-              <Text
-                dimColor
-                wrap="truncate-end"
-              >{` — ${item.description}`}</Text>
+            {focused && inlineOverflowText ? (
+              <Box flexShrink={0}>
+                <Text dimColor>{` — ${inlineOverflowText}`}</Text>
+              </Box>
+            ) : null}
+            {item.description && !inlineOverflowText ? (
+              <Box minWidth={0} flexShrink={1}>
+                <Text
+                  dimColor
+                  wrap="truncate-end"
+                >{` — ${item.description}`}</Text>
+              </Box>
             ) : null}
           </Box>
         );
