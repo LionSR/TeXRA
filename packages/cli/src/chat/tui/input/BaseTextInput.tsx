@@ -62,6 +62,8 @@ export function textInputDisplayWindow({
     return { value, cursor: clampCursor(cursor, value.length), clipped: false };
   }
 
+  // Reserve one cell for the leading ellipsis so clipped text never exceeds
+  // the requested terminal row/column window.
   const budget = Math.max(1, rowCount * columnCount - 1);
   if (value.length <= budget) {
     return { value, cursor: clampCursor(cursor, value.length), clipped: false };

@@ -216,6 +216,7 @@ export function ExternalInquiry(
     }
     if (key.pageUp) {
       scrollQuestion((current) => current - pageRows);
+      return;
     }
   });
 
