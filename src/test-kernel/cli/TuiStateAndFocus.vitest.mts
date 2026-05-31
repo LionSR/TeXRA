@@ -22,6 +22,7 @@ import {
   appEscapeInterruptActive,
   appFocusShortcutsActive,
   foregroundSurfaceKind,
+  shouldShowTodosPlanPanel,
 } from '@cli/chat/tui/App';
 import {
   nextFocusBack,
@@ -259,6 +260,57 @@ describe('CLI TUI row allocation', () => {
         rows: 1,
       }),
     ).toEqual({ subagentRows: 1, todosPlanRows: 0 });
+  });
+
+  it('shows todo and plan chrome only while a stream is active', () => {
+    expect(
+      shouldShowTodosPlanPanel({
+        foregroundOpen: false,
+        hasPlan: false,
+        hasTodos: true,
+        status: STREAM_STATUS.RUNNING,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowTodosPlanPanel({
+        foregroundOpen: false,
+        hasPlan: true,
+        hasTodos: false,
+        status: STREAM_STATUS.RESUMING,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowTodosPlanPanel({
+        foregroundOpen: false,
+        hasPlan: false,
+        hasTodos: true,
+        status: STREAM_STATUS.WAITING,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowTodosPlanPanel({
+        foregroundOpen: false,
+        hasPlan: false,
+        hasTodos: true,
+        status: STREAM_STATUS.STOPPED,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowTodosPlanPanel({
+        foregroundOpen: true,
+        hasPlan: false,
+        hasTodos: true,
+        status: STREAM_STATUS.RUNNING,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowTodosPlanPanel({
+        foregroundOpen: false,
+        hasPlan: false,
+        hasTodos: false,
+        status: STREAM_STATUS.RUNNING,
+      }),
+    ).toBe(false);
   });
 
   it('lets input overlays own focus shortcuts', () => {
