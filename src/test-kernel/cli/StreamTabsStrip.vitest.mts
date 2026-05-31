@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
   streamTabSegmentText,
+  streamTabsLineSegments,
   streamTabsLineText,
   streamTabsDisplayItems,
 } from '@cli/chat/tui/panes/StreamTabsStrip';
@@ -351,5 +352,60 @@ describe('CLI stream tabs strip', () => {
       '3:reviewer*',
     ]);
     expect(line.length).toBeLessThanOrEqual(38);
+  });
+
+  it('truncates stream tab text at terminal row edges', () => {
+    const items = [
+      {
+        id: streamId('root'),
+        label: 'main',
+        active: true,
+        running: true,
+      },
+      {
+        id: streamId('strategy'),
+        label: 'strategy',
+        active: false,
+        running: true,
+        shortcutIndex: 1,
+      },
+    ];
+    const fullText = streamTabsLineText(items);
+
+    expect(streamTabsLineText(items, 0)).toBe('');
+    expect(streamTabsLineText(items, 1)).toBe('…');
+    expect(streamTabsLineText(items, fullText.length)).toBe(fullText);
+    expect(streamTabsLineText(items, fullText.length - 1)).toHaveLength(
+      fullText.length - 1,
+    );
+    expect(streamTabsLineText(items, fullText.length - 1)).toMatch(/…$/);
+  });
+
+  it('keeps truncation attached to styled tab segments', () => {
+    const active = {
+      id: streamId('root'),
+      label: 'main',
+      active: true,
+      running: true,
+    };
+    const running = {
+      id: streamId('strategy'),
+      label: 'strategy',
+      active: false,
+      running: true,
+      shortcutIndex: 1,
+    };
+    const segments = streamTabsLineSegments([active, running], 16);
+
+    expect(segments).toHaveLength(2);
+    expect(segments[0]).toMatchObject({
+      item: active,
+      leadingSpace: false,
+      text: '[main]*',
+    });
+    expect(segments[1]?.item).toBe(running);
+    expect(segments[1]?.leadingSpace).toBe(true);
+    expect(segments[1]?.text).toBe('1:strat…');
+    expect(streamTabsLineText([active, running], 16)).toBe('[main]* 1:strat…');
   });
 });

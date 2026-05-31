@@ -91,10 +91,44 @@ export function streamTabsLineText(
   items: readonly StreamTabDisplayItem[],
   width?: number,
 ): string {
-  const text = items.map(streamTabSegmentText).join(' ');
-  if (width === undefined || text.length <= width) return text;
-  if (width <= 1) return '…';
-  return `${text.slice(0, width - 1)}…`;
+  return streamTabsLineSegments(items, width)
+    .map((segment) => `${segment.leadingSpace ? ' ' : ''}${segment.text}`)
+    .join('');
+}
+
+export interface StreamTabLineSegment {
+  readonly item: StreamTabDisplayItem;
+  readonly leadingSpace: boolean;
+  readonly text: string;
+}
+
+export function streamTabsLineSegments(
+  items: readonly StreamTabDisplayItem[],
+  width?: number,
+): readonly StreamTabLineSegment[] {
+  let remaining = width === undefined ? Number.POSITIVE_INFINITY : width;
+  if (remaining <= 0) return [];
+  const segments: StreamTabLineSegment[] = [];
+  for (const [index, item] of items.entries()) {
+    const leadingSpace = index > 0;
+    const text = streamTabSegmentText(item);
+    const totalWidth = text.length + (leadingSpace ? 1 : 0);
+    if (totalWidth <= remaining) {
+      segments.push({ item, leadingSpace, text });
+      remaining -= totalWidth;
+      continue;
+    }
+
+    const textWidth = remaining - (leadingSpace ? 1 : 0);
+    if (textWidth <= 0) break;
+    segments.push({
+      item,
+      leadingSpace,
+      text: textWidth <= 1 ? '…' : `${text.slice(0, textWidth - 1)}…`,
+    });
+    break;
+  }
+  return segments;
 }
 
 function streamTabsTextLength(items: readonly StreamTabDisplayItem[]): number {
@@ -211,6 +245,7 @@ export function StreamTabsStrip(props: {
     width: props.width,
   });
   if (items.length === 0) return null;
+  const segments = streamTabsLineSegments(items, Math.max(0, props.width - 2));
 
   return (
     <Box
@@ -221,15 +256,21 @@ export function StreamTabsStrip(props: {
       overflowY="hidden"
       paddingX={1}
     >
-      {items.map((item, index) => (
+      {segments.map((segment, index) => (
         <Text
-          key={`${item.id}:${index}`}
-          bold={item.active}
-          dimColor={!item.active && !item.running}
-          color={item.active ? 'cyan' : item.running ? 'green' : undefined}
+          key={`${segment.item.id}:${index}`}
+          bold={segment.item.active}
+          dimColor={!segment.item.active && !segment.item.running}
+          color={
+            segment.item.active
+              ? 'cyan'
+              : segment.item.running
+                ? 'green'
+                : undefined
+          }
         >
-          {index === 0 ? '' : ' '}
-          {streamTabSegmentText(item)}
+          {segment.leadingSpace ? ' ' : ''}
+          {segment.text}
         </Text>
       ))}
     </Box>

@@ -816,7 +816,6 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'TeXRA',
-    bootQuietMs: 0,
     keys: [ESC + 's'], // Option/Alt-s
     frame: 'tail',
     expect: [
@@ -838,7 +837,6 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'TeXRA',
-    bootQuietMs: 0,
     keys: [ESC + 'p', '\r'],
     frame: 'tail',
     expect: [
@@ -859,7 +857,6 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'TeXRA',
-    bootQuietMs: 0,
     keys: [ESC + 'p', DOWN, DOWN, DOWN, '\r'],
     frame: 'tail',
     expect: ['Task details', 'Command: latex build', 'Esc back'],
@@ -1330,14 +1327,13 @@ async function runScenario(scenario) {
   // width-adaptive and may omit labels such as /status in narrow terminals.
   const bootDeadline = Date.now() + 15000;
   const bootExpect = scenario.bootExpect ?? '◆';
-  const bootQuietMs = scenario.bootQuietMs ?? 600;
   let booted = false;
   while (Date.now() < bootDeadline) {
     await sleep(150);
     if (exited) break;
     if (
       (await frameSnapshot()).includes(bootExpect) &&
-      Date.now() - lastData > bootQuietMs
+      Date.now() - lastData > 600
     ) {
       booted = true;
       break;
