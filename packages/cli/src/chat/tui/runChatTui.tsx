@@ -131,6 +131,9 @@ export function parseBtwFollowUpMessage(line: string): string | undefined {
   return parsed.remainder.trim();
 }
 
+export const BTW_IDLE_MESSAGE =
+  'No active run to attach a follow-up to. Send a normal message to start a run.';
+
 export interface ClearableTuiSessionState {
   streamId: StreamTabId | undefined;
   executionId: string | undefined;
@@ -248,6 +251,16 @@ export function chatTuiShouldAnnounceQueuedFollowUp(
 ): boolean {
   if (!targetStreamId) return true;
   return !chatTuiStreamStatuses(targetStreamId).includes(STREAM_STATUS.WAITING);
+}
+
+export function chatTuiCanSubmitBtwFollowUp(
+  session: PendingTuiRunSessionState,
+): boolean {
+  return (
+    !chatTuiCanStartRootRun(session) ||
+    chatTuiActiveChildFollowUpTarget() !== undefined ||
+    chatTuiRejectedChildFollowUpTarget() !== undefined
+  );
 }
 
 interface SlashCommandContext {
@@ -1023,6 +1036,11 @@ export async function runChat(
       if (!btwMessage) {
         appendLocalUserTranscript(line.trim());
         appendLocalAssistantTranscript('Usage: /btw <message>');
+        return;
+      }
+      if (!chatTuiCanSubmitBtwFollowUp(session)) {
+        appendLocalUserTranscript(line.trim());
+        appendLocalAssistantTranscript(BTW_IDLE_MESSAGE);
         return;
       }
       await submitChatMessage(btwMessage);
