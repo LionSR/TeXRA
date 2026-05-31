@@ -21,6 +21,8 @@ export interface InputBarProps {
   readonly onSubmit: (value: string) => void;
   /** Disable the input while an approval modal is owning the screen. */
   readonly disabled?: boolean;
+  /** Preserve component state while giving foreground panels the input rows. */
+  readonly collapseWhenDisabled?: boolean;
   /** Prompt prefix (e.g. `>`). */
   readonly prompt?: string;
   /** Persistent input history (optional — undefined disables Ctrl-R). */
@@ -143,6 +145,8 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     cliState.reverseSearchOpen.set(reverseSearchOpen);
     return () => cliState.reverseSearchOpen.set(false);
   }, [reverseSearchOpen]);
+
+  if (disabled && props.collapseWhenDisabled) return <></>;
 
   return (
     <Box flexDirection="column">
