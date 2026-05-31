@@ -45,7 +45,6 @@ import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
 import {
   getSdkErrorMessage,
@@ -62,7 +61,11 @@ import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
-import { normalizeUsage } from '../support/UsageNormalizer';
+import {
+  computeGooglePrice,
+  normalizeGoogleUsage,
+  type GooglePricingConfig,
+} from './googleUsage';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagGoogleSdkError } from '../support/sdkErrorAdapters';
 import { TOOL_USE_SAFETY_BUFFER } from '../contextManagementConstants';
@@ -923,68 +926,18 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return { text: responseText, usage, stopReason };
   }
 
-  /**
-   * Computes input and output token counts from Gemini usageMetadata.
-   *
-   * Google's formula: totalTokenCount = promptTokenCount + candidatesTokenCount
-   *                                   + toolUsePromptTokenCount + thoughtsTokenCount
-   *
-   * For output tokens, we prefer the sum of candidatesTokenCount + thoughtsTokenCount
-   * when available. When individual fields are unpopulated (which can happen in
-   * streaming mode for some models), we derive output from totalTokenCount using
-   * the documented formula.
-   *
-   * Note: candidatesTokenCount does NOT include thinking tokens per llm-gemini#75.
-   *
-   * TODO: Future work - extract per-modality token breakdown from promptTokensDetails[],
-   * candidatesTokensDetails[], cacheTokensDetails[], and toolUsePromptTokensDetails[].
-   * Each array contains ModalityTokenCount objects with modality (TEXT, IMAGE, VIDEO,
-   * AUDIO, DOCUMENT) and tokenCount. Note that PDF pages are currently reported under
-   * IMAGE modality, not DOCUMENT. This would enable modality-specific cost tracking
-   * and better insights into multimodal token consumption.
-   */
-  private computeTokenCounts(
-    usage: GenerateContentResponseUsageMetadata | null,
-  ): { inputTokens: number; outputTokens: number; reasoningTokens: number } {
-    if (!usage) {
-      return { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 };
-    }
-
-    const promptTokens = usage.promptTokenCount ?? 0;
-    const toolUseTokens = usage.toolUsePromptTokenCount ?? 0;
-    const candidatesTokens = usage.candidatesTokenCount ?? 0;
-    const reasoningTokens = usage.thoughtsTokenCount ?? 0;
-
-    const inputTokens = promptTokens + toolUseTokens;
-
-    // Per Google's formula: outputTokens = candidatesTokenCount + thoughtsTokenCount
-    // When these fields are populated, use them directly.
-    // When unpopulated (some models in streaming), derive from totalTokenCount.
-    const directOutput = candidatesTokens + reasoningTokens;
-    const derivedOutput =
-      usage.totalTokenCount !== undefined
-        ? Math.max(0, usage.totalTokenCount - inputTokens)
-        : 0;
-
-    // Use direct values when available; otherwise use derived calculation
-    const outputTokens = directOutput > 0 ? directOutput : derivedOutput;
-
-    return { inputTokens, outputTokens, reasoningTokens };
-  }
-
   computePrice(
     responseUsage: GenerateContentResponseUsageMetadata | null,
   ): number {
-    if (!responseUsage) return 0.0;
-    const { inputTokens, outputTokens } =
-      this.computeTokenCounts(responseUsage);
+    return computeGooglePrice(responseUsage, this.pricingConfig());
+  }
 
-    return calculateTokenPrice(
-      inputTokens,
-      outputTokens,
-      this.config.inputPrice,
-      this.config.outputPrice,
-    );
+  /** Pricing inputs for the extracted usage helpers. */
+  private pricingConfig(): GooglePricingConfig {
+    return {
+      inputPrice: this.config.inputPrice,
+      outputPrice: this.config.outputPrice,
+    };
   }
 
   /** Normalizes Google GenAI usage data into a unified format. */
@@ -992,25 +945,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     rawUsage: GenerateContentResponseUsageMetadata | null,
     responseTimeMs: number,
   ): NormalizedUsage {
-    return normalizeUsage(
-      {
-        provider: 'google',
-        computePrice: (usage) => this.computePrice(usage),
-        extract: (usage) => {
-          const { inputTokens, outputTokens, reasoningTokens } =
-            this.computeTokenCounts(usage);
-          return {
-            inputTokens,
-            outputTokens,
-            cachedTokens: usage.cachedContentTokenCount ?? 0,
-            reasoningTokens,
-            toolUsePromptTokens: usage.toolUsePromptTokenCount ?? 0,
-          };
-        },
-      },
-      rawUsage,
-      responseTimeMs,
-    );
+    return normalizeGoogleUsage(rawUsage, responseTimeMs, this.pricingConfig());
   }
 
   addContinueMessageWithPrefill(
