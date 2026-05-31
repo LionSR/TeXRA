@@ -605,4 +605,19 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('USAGE');
     expect(stderr).toBe('');
   });
+
+  it('documents interactive chat controls in chat --help', async () => {
+    const result = await runCli(['chat', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('INTERACTIVE CONTROLS');
+    expect(stdout).toContain('/help');
+    expect(stdout).toContain('/btw');
+    expect(stdout).toContain('/status');
+    expect(stdout).toContain('Ctrl-T');
+    expect(stdout).toContain('Option-p');
+    expect(stdout).toContain('Alt-p');
+    expect(stdout).toContain('approvals');
+    expect(stdout).toContain('Ctrl-C');
+    expect(stderr).toBe('');
+  });
 });
