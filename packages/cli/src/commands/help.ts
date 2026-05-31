@@ -1,9 +1,35 @@
-import { defineCommand, showUsage } from 'citty';
+import { defineCommand } from 'citty';
+
+import { CliUsageError } from '../runtime/cliContext';
+
+import {
+  detectUnknownCliCommand,
+  formatUnknownCliCommand,
+  resolveDeepestSubCommand,
+  showUsage,
+} from './_helpers/dispatch';
 
 export const helpCommand = defineCommand({
   meta: { name: 'help', description: 'Show TeXRA CLI commands' },
-  async run() {
+  async run(ctx) {
     const { rootCommand } = await import('./root');
-    await showUsage(rootCommand);
+    if (ctx.rawArgs.length === 0) {
+      await showUsage(rootCommand);
+      return;
+    }
+
+    const unknownCommand = await detectUnknownCliCommand(
+      rootCommand,
+      ctx.rawArgs,
+    );
+    if (unknownCommand) {
+      throw new CliUsageError(formatUnknownCliCommand(unknownCommand));
+    }
+
+    const [target, parent] = await resolveDeepestSubCommand(
+      rootCommand,
+      ctx.rawArgs,
+    );
+    await showUsage(target, parent);
   },
 });
