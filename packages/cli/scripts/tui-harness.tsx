@@ -2,10 +2,15 @@
 // to the real terminal. Used to verify the ConversationPane viewport without
 // needing API access. Exits on Ctrl-C.
 
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { render } from 'ink';
 import React from 'react';
 
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { tryPlatform } from '@platform/platform';
 import {
   STREAM_STATUS,
   TODO_STATUS,
@@ -36,10 +41,13 @@ import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
 } from '../src/schemas/cliSettings';
+import { initLocalCliPlatform } from '../src/runtime/initPlatform';
+import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
 
 const STREAM_ID = 'harness-stream-1';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 const HARNESS_YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
+const HARNESS_BTW_USAGE = 'Usage: /btw <message>';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const SHOW_BASH_APPROVAL = process.env.HARNESS_BASH_APPROVAL === '1';
@@ -70,6 +78,15 @@ const EDIT_APPROVAL_DELAY_MS = Number(
 );
 const QUEUED_FOLLOW_UPS = parseList(process.env.HARNESS_QUEUED_FOLLOWUPS);
 const HARNESS_FOLLOW_UP_QUEUE = ToolUseFollowUpQueue.acquire(STREAM_ID);
+const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
+// Keep platform state writes out of the repository unless a scenario opts in.
+const HARNESS_CWD =
+  HARNESS_CWD_INPUT || mkdtempSync(path.join(tmpdir(), 'texra-tui-harness-'));
+if (!HARNESS_CWD_INPUT && process.env.HARNESS_KEEP_CWD !== '1') {
+  process.once('exit', () => {
+    rmSync(HARNESS_CWD, { recursive: true, force: true });
+  });
+}
 for (const followUp of QUEUED_FOLLOW_UPS) {
   HARNESS_FOLLOW_UP_QUEUE.enqueue(followUp);
 }
@@ -81,6 +98,15 @@ function parseList(value: string | undefined): string[] {
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
 }
+
+await initLocalCliPlatform({
+  apiMode: 'personal',
+  cwd: HARNESS_CWD,
+  installSignalHandlers: false,
+  resourcesPath: resolveCliResourcesPath(),
+  storageRoot: path.join(HARNESS_CWD, '.texra-storage'),
+  helperModel: 'harness-model',
+});
 
 function makeEntries(count: number): ConversationEntry[] {
   const entries: ConversationEntry[] = [];
@@ -203,7 +229,7 @@ function applyHarnessApprovalDecision(decision: ApprovalDecision): void {
 cliState.sessionMeta.set({
   agent: 'chat',
   model: 'harness-model',
-  cwd: process.cwd(),
+  cwd: HARNESS_CWD,
   apiMode: 'personal',
   canDelegate: CAN_DELEGATE,
   teamName: TEAM_NAME,
@@ -422,6 +448,33 @@ function appendHarnessAssistantTranscript(text: string): void {
   }));
 }
 
+function refreshHarnessFollowUpState(streamId: string): void {
+  const messages = ToolUseFollowUpQueue.getAll(streamId);
+  patchStream(streamId, (slice) => ({
+    ...slice,
+    status: messages.length > 0 ? STREAM_STATUS.RUNNING : slice.status,
+    runStartedAt:
+      messages.length > 0 && slice.runStartedAt == null
+        ? Date.now()
+        : slice.runStartedAt,
+    queuedFollowUps: messages.length,
+    queuedFollowUpMessages: messages,
+  }));
+}
+
+function queueHarnessFollowUp(input: string): void {
+  const message = input.trim();
+  if (!message) {
+    appendHarnessAssistantTranscript(HARNESS_BTW_USAGE);
+    return;
+  }
+
+  const streamId = cliState.activeStreamId.get() ?? STREAM_ID;
+  ToolUseFollowUpQueue.enqueue(streamId, message, { force: true });
+  refreshHarnessFollowUpState(streamId);
+  appendHarnessAssistantTranscript(`Queued follow-up: ${message}`);
+}
+
 function findRegisteredSlashCommand(name: string): SlashCommand | undefined {
   const lower = name.toLowerCase();
   return listSlashCommands().find(
@@ -606,6 +659,9 @@ function handleHarnessSlashCommand(line: string): boolean {
     case 'yolo':
       applyHarnessApprovalPolicySelection(rest || 'yolo', HARNESS_YOLO_USAGE);
       return true;
+    case 'btw':
+      queueHarnessFollowUp(rest);
+      return true;
     default: {
       const command = findRegisteredSlashCommand(commandName);
       if (!command) {
@@ -650,13 +706,23 @@ registerBuiltinSlashCommands({
   },
 });
 
-const ink = render(
+let ink: ReturnType<typeof render>;
+function handleHarnessCtrlC(): void {
+  if (canInterrupt) {
+    markHarnessInterrupted();
+    return;
+  }
+  void exitHarness(0);
+}
+
+ink = render(
   <App
     onSubmit={handleHarnessSubmit}
     onKillExecution={markHarnessExecutionStopped}
     canInterruptActiveRun={() => canInterrupt}
     canStopActiveRun={() => canInterrupt}
     onInterruptActive={markHarnessInterrupted}
+    onCtrlC={handleHarnessCtrlC}
   />,
   {
     stdout: process.stdout,
@@ -666,11 +732,16 @@ const ink = render(
   },
 );
 
-process.on('SIGINT', () => {
-  if (canInterrupt) {
-    markHarnessInterrupted();
-    return;
-  }
+let harnessExiting = false;
+async function exitHarness(exitCode: number): Promise<void> {
+  if (harnessExiting) return;
+  harnessExiting = true;
   ink.unmount();
-  process.exit(0);
-});
+  try {
+    await tryPlatform()?.lifecycle.runShutdown();
+  } finally {
+    process.exit(exitCode);
+  }
+}
+
+process.on('SIGINT', handleHarnessCtrlC);
