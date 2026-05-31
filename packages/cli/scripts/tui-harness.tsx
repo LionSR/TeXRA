@@ -12,10 +12,14 @@ import React from 'react';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { tryPlatform } from '@platform/platform';
 import {
+  LOG_LEVELS,
+  MESSAGE_TYPES,
   STREAM_STATUS,
+  STREAM_LOG_ENTRY_TYPES,
   TODO_STATUS,
   type ActiveChildInfo,
 } from '@shared/schemas';
+import { getDefaultStreamLogStore } from '@transcript';
 
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
@@ -37,6 +41,7 @@ import {
   enqueueApproval,
   type ApprovalDecision,
 } from '../src/chat/tui/state/approvalQueue';
+import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
@@ -54,6 +59,7 @@ const SHOW_BASH_APPROVAL = process.env.HARNESS_BASH_APPROVAL === '1';
 const SHOW_EXTERNAL_INQUIRY = process.env.HARNESS_EXTERNAL_INQUIRY === '1';
 const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
 const PLAN_APPROVAL_ODYSSEY = process.env.HARNESS_PLAN_APPROVAL_ODYSSEY === '1';
+const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const EXTERNAL_INQUIRY_QUESTION =
@@ -126,6 +132,36 @@ function makeEntries(count: number): ConversationEntry[] {
     });
   }
   return entries;
+}
+
+function seedSubagentFollowupTranscript(): void {
+  const store = getDefaultStreamLogStore();
+  const timestamp = Date.now();
+  const followups = [
+    '<subagent-progress id="child-a" agent="strategy" type="round" current="2" total="3" />',
+    [
+      '<subagent-result id="child-b" agent="leanSolver" category="toolUse" status="completed">',
+      '<wall-time>2min, 3sec</wall-time>',
+      '<response>Proved &lt;/response> is escaped &amp; visible.</response>',
+      '</subagent-result>',
+    ].join('\n'),
+    [
+      '<subagent-error id="child-c" agent="reviewer" retryable="true">',
+      '<message>rate limit: &lt;tokens&gt; &amp; retries exhausted</message>',
+      '</subagent-error>',
+    ].join('\n'),
+  ];
+  for (const [index, text] of followups.entries()) {
+    store.append(STREAM_ID, {
+      id: `harness-subagent-followup-${index}`,
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: timestamp + index,
+      messageType: MESSAGE_TYPES.USER_MESSAGE,
+      text: `<orchestrator-followup>${text}</orchestrator-followup>`,
+    });
+  }
+  syncStreamLog(STREAM_ID);
 }
 
 function makeChildEntries(agent: string, action: string): ConversationEntry[] {
@@ -283,6 +319,10 @@ patchStream(STREAM_ID, (slice) => ({
   queuedFollowUps: QUEUED_FOLLOW_UPS.length,
   queuedFollowUpMessages: QUEUED_FOLLOW_UPS,
 }));
+
+if (SHOW_SUBAGENT_FOLLOWUPS) {
+  seedSubagentFollowupTranscript();
+}
 
 if (SHOW_CHILDREN) {
   const startedAt = Date.now() - 74_000;
