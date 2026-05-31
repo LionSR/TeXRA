@@ -18,6 +18,7 @@ import {
   taskDetailCommandLabel,
   taskDetailInitialScrollOffset,
   taskDetailKeyHintsForColumns,
+  taskDetailVisibleLineCountFromOffsetForColumns,
   taskDetailVisibleLineCountForColumns,
   taskDetailVisibleScrollOffset,
   taskDetailWrappedRowCount,
@@ -918,6 +919,24 @@ describe('CLI child execution controls', () => {
         visibleRowBudget: 0,
       }),
     ).toBe(0);
+    expect(
+      taskDetailVisibleLineCountFromOffsetForColumns({
+        availableColumns: 80,
+        compact: true,
+        tailLines: ['x'.repeat(180), 'short 1', 'short 2', 'short 3'],
+        visibleRowBudget: 3,
+        offset: 0,
+      }),
+    ).toBe(1);
+    expect(
+      taskDetailVisibleLineCountFromOffsetForColumns({
+        availableColumns: 80,
+        compact: true,
+        tailLines: ['x'.repeat(180), 'short 1', 'short 2', 'short 3'],
+        visibleRowBudget: 3,
+        offset: 1,
+      }),
+    ).toBe(3);
   });
 
   it('labels the task picker as a combined task and sub-workflow view', () => {
