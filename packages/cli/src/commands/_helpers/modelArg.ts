@@ -4,7 +4,11 @@ import {
   resolveConfiguredModel,
 } from '@cli/runtime/cliConfig';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
+import { initCliPlatform } from '@cli/runtime/initPlatform';
+import { writeTextStderr } from '@cli/runtime/logSinks';
+import { resolveCliRunnableModel } from '@cli/runtime/modelAccess';
 import { shouldRenderRunProgress } from '@cli/runtime/runProgressRenderer';
+import { toErrorMessage } from '@common/errors/errorMessage';
 
 /** Trim `-m`; throw a Usage error for unknown ids; undefined when absent. */
 export function assertExplicitModelKnown(
@@ -24,7 +28,7 @@ export function assertExplicitModelKnown(
  * Resolve the model for a headless runner with the shared precedence:
  * explicit `-m` > `TEXRA_MODEL` env > configured `chat`/`run` model > builtin.
  */
-export function resolveCliRunModel(
+export function resolveCliRunModelCandidate(
   context: CliContext,
   modelOverride: string | undefined,
   role: 'chat' | 'run',
@@ -36,6 +40,29 @@ export function resolveCliRunModel(
     resolveConfiguredModel(context.cliConfig, role) ||
     CLI_BUILTIN_DEFAULT_MODEL
   );
+}
+
+export async function resolveCliRunModel(
+  context: CliContext,
+  modelOverride: string | undefined,
+  role: 'chat' | 'run',
+): Promise<string> {
+  const model = resolveCliRunModelCandidate(context, modelOverride, role);
+  const explicitModelRequested = Boolean(
+    modelOverride?.trim() || context.envModel?.trim(),
+  );
+  await initCliPlatform({ ...context, quietLogs: true });
+  try {
+    const resolution = await resolveCliRunnableModel(model, {
+      allowFallback: !explicitModelRequested,
+    });
+    if (resolution.notice && context.quietLogs !== true) {
+      writeTextStderr(resolution.notice);
+    }
+    return resolution.model;
+  } catch (error: unknown) {
+    throw new CliUsageError(toErrorMessage(error));
+  }
 }
 
 /** Derive the headless run context shared by every CLI runner. */
