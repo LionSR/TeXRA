@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { AgentSetting } from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import { resolveOutputFiles } from '@agent/utils/userVars';
 
 describe('output file prompt variables', () => {

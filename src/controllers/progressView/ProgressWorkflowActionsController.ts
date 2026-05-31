@@ -1,11 +1,11 @@
 // Local imports - agent
-import type { ExecutionRequest } from '@agent/core/executionRequests';
+import type { ExecutionRequest } from '@agent/core/execution/executionRequests';
 
 import {
   isWorkflowTaskState,
   type TaskState,
   type WorkflowTaskState,
-} from '@agent/core/TaskState';
+} from '@agent/core/execution/TaskState';
 
 // Local imports - shared
 import type { OutputFileInfo, StreamTabId } from '@shared/schemas';

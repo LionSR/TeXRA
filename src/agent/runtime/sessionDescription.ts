@@ -9,7 +9,7 @@
 
 import { getAgent } from '@agent/index';
 import { writeSessionDescription } from '@agent/storage';
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { toErrorMessage } from '@common/errors/errorMessage';

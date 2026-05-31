@@ -6,7 +6,7 @@ import {
   StreamLogStore,
 } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { toErrorMessage } from '@common/errors';

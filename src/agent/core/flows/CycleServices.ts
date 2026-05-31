@@ -3,9 +3,9 @@
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
-} from '@agent/core/AgentState';
-import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { IToolRegistry } from '@agent/core/ToolTypes';
+} from '@agent/core/execution/AgentState';
+import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import type { TaskRunFileService } from '@utils/files';

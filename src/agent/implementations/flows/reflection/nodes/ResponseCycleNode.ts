@@ -1,7 +1,7 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { recordRound } from '@agent/core/AgentState';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { recordRound } from '@agent/core/execution/AgentState';
+import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import {
   createResponseCycleFlow,
   type ResponseCycleShared,
@@ -9,7 +9,7 @@ import {
 import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
-} from '@agent/core/AgentState';
+} from '@agent/core/execution/AgentState';
 import { ensureError, formatProviderHttpError } from '@common/errors';
 import type { AgentFileLocation } from '@utils/files';
 

@@ -2,12 +2,12 @@
 import { strict as assert } from 'assert';
 
 // Local imports - prompt utilities
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 // Type imports
 import type {
   AgentPrompt,
   AgentWorkflowSetting,
-} from '@agent/core/AgentDataclass';
+} from '@agent/core/definition/AgentDataclass';
 import { PromptBuilder } from '@utils/prompt';
 
 describe('PromptBuilder', () => {

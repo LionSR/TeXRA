@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { Plan, TodoItem } from '@shared/schemas';
 import { formatPostCompactionContext } from '@tools/subagentResults';
 

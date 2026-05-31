@@ -4,7 +4,7 @@ import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 
 // Local imports - agent state
 import * as agentConfig from '@agent/core/config';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 
 // Local imports - model handlers
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';

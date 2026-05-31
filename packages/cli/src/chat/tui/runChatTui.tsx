@@ -10,8 +10,8 @@ import PQueue from 'p-queue';
 
 import { getDefaultStreamLogStore } from '@transcript';
 import { getAgent, loadAgents } from '@agent/index';
-import { type AgentConfigPayload } from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { type AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   interruptActiveChildren,
   killExecution,

@@ -8,8 +8,8 @@
 import { z } from 'zod';
 
 import type { AgentTrace, StageHandle } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { normalizeRunId } from '@common/constants/runIds';
 import {

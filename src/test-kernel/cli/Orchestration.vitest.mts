@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AgentEntry } from '@agent/index';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { orchestrationKeyHints } from '@cli/orchestration/runOrchestrationTui';
 import { buildCliOrchestrationItems } from '@cli/runtime/orchestration';
 

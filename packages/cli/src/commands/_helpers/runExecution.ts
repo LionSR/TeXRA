@@ -1,6 +1,6 @@
 import { writeTerminalStatus } from '@agent/storage';
 import { runAgent } from '@agent/runtime/runAgent';
-import type { ValidatedExecutionRequest } from '@agent/core/executionRequests';
+import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
 
 import type { CliContext } from '@cli/runtime/cliContext';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';

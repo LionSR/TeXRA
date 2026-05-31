@@ -1,8 +1,8 @@
 // Local imports - agent
 import { createRunTrace } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { AgentCategory } from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {

@@ -8,8 +8,8 @@ import {
   logMissingOutputs,
   type AgentTrace,
 } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting } from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
 import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
 import { toErrorMessage } from '@common/errors';

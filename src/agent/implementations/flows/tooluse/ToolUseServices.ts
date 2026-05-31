@@ -1,6 +1,6 @@
-import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
+import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
-import type { IToolRegistry } from '@agent/core/ToolTypes';
+import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ToolDefinition } from '@model';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
 import type {

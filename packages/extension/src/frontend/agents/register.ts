@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { isValidAgentYaml } from '@agent/runtime/agentLoad';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import * as logger from '@logger/logUtils';
