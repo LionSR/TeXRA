@@ -369,11 +369,13 @@ export function computePickerListLayout({
 function TaskOutput({
   childStreamId,
   tailLines,
+  truncateLines = false,
   visibleTail,
   visibleLineCount,
 }: {
   readonly childStreamId: StreamTabId | undefined;
   readonly tailLines: readonly string[];
+  readonly truncateLines?: boolean;
   readonly visibleTail: readonly string[];
   readonly visibleLineCount: number;
 }): React.JSX.Element | null {
@@ -382,7 +384,11 @@ function TaskOutput({
     return (
       <>
         {visibleTail.map((line, index) => (
-          <Text key={`${index}:${line}`} dimColor>
+          <Text
+            key={`${index}:${line}`}
+            dimColor
+            wrap={truncateLines ? 'truncate-end' : undefined}
+          >
             {line}
           </Text>
         ))}
@@ -526,6 +532,7 @@ function TaskDetailView({
         <TaskOutput
           childStreamId={item.childStreamId}
           tailLines={item.tailLines}
+          truncateLines={layout.compact}
           visibleTail={visibleTail}
           visibleLineCount={visibleLineCount}
         />
