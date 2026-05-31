@@ -22,6 +22,7 @@ import {
   appEscapeInterruptActive,
   appFocusShortcutsActive,
   foregroundSurfaceKind,
+  shouldShowTipRow,
   shouldShowTodosPlanPanel,
 } from '@cli/chat/tui/App';
 import {
@@ -181,10 +182,16 @@ describe('CLI TUI row allocation', () => {
       reverseSearchOpen: false,
       rows: 24,
       slashPaletteOpen: false,
+      tipVisible: false,
     });
 
     expect(layout.transcriptRows).toBe(1);
-    expect(layout.foregroundRows).toBe(16);
+    expect(layout.foregroundRows).toBe(17);
+  });
+
+  it('hides the normal chat tip row while foreground surfaces own input', () => {
+    expect(shouldShowTipRow({ foregroundOpen: false })).toBe(true);
+    expect(shouldShowTipRow({ foregroundOpen: true })).toBe(false);
   });
 
   it('can cap compact foreground surfaces on tall terminals', () => {
