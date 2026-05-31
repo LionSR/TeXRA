@@ -37,6 +37,7 @@ import { spawnSync } from 'node:child_process';
 
 const ESC = String.fromCharCode(27);
 const ETX = String.fromCharCode(3); // Ctrl-C
+const DC2 = String.fromCharCode(18); // Ctrl-R
 const DOWN = ESC + '[B';
 const LONG_BASH_APPROVAL_COMMAND = [
   "python3 << 'EOF'",
@@ -261,6 +262,62 @@ const SCENARIOS = [
     ],
     unexpect: ['└─Degenerate triples', '[/model]models'],
     maxBlankLinesBetween: [{ from: '└', to: 'Tip:', max: 1 }],
+  },
+  {
+    name: 'plan-approval',
+    env: { HARNESS_ENTRIES: '4', HARNESS_PLAN_APPROVAL: '1' },
+    bootExpect: 'Use foreground panel shortcuts',
+    expect: [
+      'Approve plan?',
+      'Coordinate a short math proof through CLI chat.',
+      'y approve',
+      'n reject',
+    ],
+    unexpect: ['r approve & run', '[/model]models'],
+  },
+  {
+    name: 'plan-approval-odyssey',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_PLAN_APPROVAL: '1',
+      HARNESS_PLAN_APPROVAL_ODYSSEY: '1',
+    },
+    bootExpect: 'Use foreground panel shortcuts',
+    expect: [
+      'Approve plan?',
+      'Coordinate a short math proof through CLI chat.',
+      'Split the finite and symbolic cases',
+      'r approve & run',
+      'y approve',
+      'n reject',
+    ],
+    unexpect: ['[/model]models'],
+  },
+  {
+    name: 'plan-approval-approve-odyssey',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_PLAN_APPROVAL: '1',
+      HARNESS_PLAN_APPROVAL_ODYSSEY: '1',
+    },
+    bootExpect: 'Use foreground panel shortcuts',
+    keys: ['r'],
+    frame: 'tail',
+    expect: ['PLAN-ODYSSEY', '[/status]details', '[/model]models'],
+    unexpect: ['Approve plan?', '1 approval'],
+  },
+  {
+    name: 'plan-approval-ctrl-r-ignored',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_PLAN_APPROVAL: '1',
+      HARNESS_PLAN_APPROVAL_ODYSSEY: '1',
+    },
+    bootExpect: 'Use foreground panel shortcuts',
+    keys: [DC2],
+    frame: 'tail',
+    expect: ['Approve plan?', 'r approve & run', '1 approval'],
+    unexpect: ['PLAN-ODYSSEY', '[/model]models'],
   },
   {
     name: 'edit-approval-reject',

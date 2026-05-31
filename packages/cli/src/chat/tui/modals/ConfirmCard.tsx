@@ -94,6 +94,7 @@ export function ConfirmCard({
           setFeedbackActive(true);
           return;
         case 'ignore':
+          if (key.ctrl || key.meta) return;
           for (const action of extraActions) {
             if (input.toLowerCase() === action.key.toLowerCase()) {
               onDecide(action.decision);
