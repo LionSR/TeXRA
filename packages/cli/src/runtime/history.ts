@@ -18,12 +18,13 @@ import {
   ExecutionIdSchema,
   type ExecutionId,
 } from '@shared/schemas';
-import { StorageFS } from '@utils/files';
+import { AbsoluteFS, StorageFS } from '@utils/files';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 
 const HISTORY_FILE_SCAN_DEPTH = 2;
 const CONVERSATION_PREVIEW_MESSAGE_LIMIT = 3;
 const CONVERSATION_PREVIEW_CONTENT_LIMIT = 4000;
+const WORKSPACE_FILE_TOOL_NAMES = new Set(['write_file', 'edit_file']);
 
 const KV_FILES = new Set([
   'meta.json',
@@ -97,17 +98,26 @@ export async function readCliHistoryDetails(
   id: ExecutionId,
 ): Promise<CliHistoryDetails | null> {
   const store = getExecutionStore(id);
-  const [meta, config, resultMeta, report, conversation, files, hasFlowRecord] =
-    await Promise.all([
-      store.readMeta(),
-      store.readConfig(),
-      store.readResultMeta(),
-      store.readReport(),
-      store.readConversation(),
-      listGeneratedFiles(id),
-      store.exists(flowKey(id)),
-    ]);
+  const [
+    meta,
+    config,
+    resultMeta,
+    report,
+    conversation,
+    generatedFiles,
+    hasFlowRecord,
+  ] = await Promise.all([
+    store.readMeta(),
+    store.readConfig(),
+    store.readResultMeta(),
+    store.readReport(),
+    store.readConversation(),
+    listGeneratedFiles(id),
+    store.exists(flowKey(id)),
+  ]);
   const conversationPreview = createConversationPreview(conversation);
+  const workspaceFiles = await listWorkspaceToolFiles(config, conversation);
+  const files = mergeHistoryFiles(generatedFiles, workspaceFiles);
 
   if (!meta && !config && !conversationPreview && !hasFlowRecord) return null;
   return {
@@ -385,4 +395,163 @@ async function walkStorageDirectory(
     }
   }
   return files.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+async function listWorkspaceToolFiles(
+  config: AgentConfig | null,
+  conversation: readonly unknown[] | null,
+): Promise<CliHistoryFile[]> {
+  const workspaceRoot = config?.workingDirectory?.trim();
+  if (!workspaceRoot || !conversation?.length) return [];
+
+  const files = new Map<string, CliHistoryFile>();
+  for (const toolPath of extractWorkspaceFileToolPaths(conversation)) {
+    const resolved = resolveWorkspaceToolPath(workspaceRoot, toolPath);
+    if (!resolved || files.has(resolved.displayPath)) continue;
+
+    const stat = await AbsoluteFS.stat(resolved.absolutePath).catch(
+      () => undefined,
+    );
+    if (!stat) continue;
+
+    files.set(resolved.displayPath, {
+      path: resolved.displayPath,
+      size: stat.size,
+      isDirectory: isDirectory(stat.type),
+    });
+  }
+  return [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function extractWorkspaceFileToolPaths(
+  conversation: readonly unknown[],
+): string[] {
+  const paths: string[] = [];
+  for (const message of conversation) {
+    if (!isRecord(message)) continue;
+
+    const responseToolPath = extractResponseFunctionCallFilePath(message);
+    if (responseToolPath) paths.push(responseToolPath);
+
+    const toolCalls = Array.isArray(message.tool_calls)
+      ? message.tool_calls
+      : [];
+    for (const toolCall of toolCalls) {
+      const toolPath = extractOpenAiToolCallFilePath(toolCall);
+      if (toolPath) paths.push(toolPath);
+    }
+
+    const contentBlocks = Array.isArray(message.content) ? message.content : [];
+    for (const block of contentBlocks) {
+      const toolPath = extractContentToolUseFilePath(block);
+      if (toolPath) paths.push(toolPath);
+    }
+
+    const parts = Array.isArray(message.parts) ? message.parts : [];
+    for (const part of parts) {
+      const toolPath = extractGoogleFunctionCallFilePath(part);
+      if (toolPath) paths.push(toolPath);
+    }
+  }
+  return paths;
+}
+
+function extractResponseFunctionCallFilePath(
+  message: Record<string, unknown>,
+): string | undefined {
+  if (message.type !== 'function_call') return undefined;
+  if (
+    typeof message.name !== 'string' ||
+    !WORKSPACE_FILE_TOOL_NAMES.has(message.name)
+  ) {
+    return undefined;
+  }
+  return extractToolArgumentsFilePath(message.arguments);
+}
+
+function extractOpenAiToolCallFilePath(toolCall: unknown): string | undefined {
+  if (!isRecord(toolCall)) return undefined;
+  const fn = isRecord(toolCall.function) ? toolCall.function : {};
+  if (typeof fn.name !== 'string' || !WORKSPACE_FILE_TOOL_NAMES.has(fn.name)) {
+    return undefined;
+  }
+  return extractToolArgumentsFilePath(fn.arguments);
+}
+
+function extractContentToolUseFilePath(block: unknown): string | undefined {
+  if (!isRecord(block) || block.type !== 'tool_use') return undefined;
+  if (
+    typeof block.name !== 'string' ||
+    !WORKSPACE_FILE_TOOL_NAMES.has(block.name)
+  ) {
+    return undefined;
+  }
+  return extractToolArgumentsFilePath(block.input);
+}
+
+function extractGoogleFunctionCallFilePath(part: unknown): string | undefined {
+  if (!isRecord(part) || !isRecord(part.functionCall)) return undefined;
+  const { functionCall } = part;
+  if (
+    typeof functionCall.name !== 'string' ||
+    !WORKSPACE_FILE_TOOL_NAMES.has(functionCall.name)
+  ) {
+    return undefined;
+  }
+  return extractToolArgumentsFilePath(functionCall.args);
+}
+
+function extractToolArgumentsFilePath(
+  argumentsValue: unknown,
+): string | undefined {
+  const args = parseToolArguments(argumentsValue);
+  const toolPath = typeof args?.path === 'string' ? args.path.trim() : '';
+  return toolPath || undefined;
+}
+
+function parseToolArguments(
+  argumentsValue: unknown,
+): Record<string, unknown> | undefined {
+  if (isRecord(argumentsValue)) return argumentsValue;
+  if (typeof argumentsValue !== 'string') return undefined;
+  try {
+    const parsed: unknown = JSON.parse(argumentsValue);
+    return isRecord(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveWorkspaceToolPath(
+  workspaceRoot: string,
+  toolPath: string,
+): { readonly absolutePath: string; readonly displayPath: string } | undefined {
+  const absoluteRoot = path.resolve(workspaceRoot);
+  const absolutePath = path.isAbsolute(toolPath)
+    ? path.normalize(toolPath)
+    : path.resolve(absoluteRoot, toolPath);
+  const relativePath = path.relative(absoluteRoot, absolutePath);
+  if (
+    !relativePath ||
+    relativePath.startsWith('..') ||
+    path.isAbsolute(relativePath)
+  ) {
+    return undefined;
+  }
+  return {
+    absolutePath,
+    displayPath: `workspace/${relativePath.replaceAll('\\', '/')}`,
+  };
+}
+
+function mergeHistoryFiles(
+  ...fileGroups: readonly (readonly CliHistoryFile[])[]
+): CliHistoryFile[] {
+  const files = new Map<string, CliHistoryFile>();
+  for (const group of fileGroups) {
+    for (const file of group) {
+      if (!files.has(file.path)) files.set(file.path, file);
+    }
+  }
+  return [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
 }
