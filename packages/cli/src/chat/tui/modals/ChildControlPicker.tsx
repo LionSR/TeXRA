@@ -38,6 +38,7 @@ export interface ChildControlPickerProps {
 }
 
 export const TASK_DETAIL_LABEL_WIDTH = 13;
+export const ULTRA_COMPACT_PICKER_MAX_ROWS = 4;
 
 export function pickerTitle(mode: ChildControlMode): string {
   return mode === 'subagents' ? 'Subagents' : 'Tasks and sub-workflows';
@@ -47,6 +48,15 @@ export function emptyPickerText(mode: ChildControlMode): string {
   return mode === 'subagents'
     ? 'No active subagents.'
     : 'No active tasks or sub-workflows.';
+}
+
+export function isUltraCompactPickerRows(
+  availableRows: number | undefined,
+): boolean {
+  return (
+    availableRows !== undefined &&
+    availableRows <= ULTRA_COMPACT_PICKER_MAX_ROWS
+  );
 }
 
 export function pickerKeyHints(
@@ -386,12 +396,14 @@ export function ChildControlPicker({
     undefined,
   );
   const streamScopeLabel = activeStreamLabel ?? activeStreamId;
+  const selectedIndex = clampPickerIndex(highlight, items.length);
+  const selectedItem = items[selectedIndex];
   const tailItem = tailExecutionId
     ? items.find((item) => item.executionId === tailExecutionId)
     : undefined;
   const listLayout = computePickerListLayout({
     availableRows,
-    highlight,
+    highlight: selectedIndex,
     itemCount: items.length,
     scopeLineCount: streamScopeLabel !== undefined ? 1 : 0,
   });
@@ -439,20 +451,18 @@ export function ChildControlPicker({
           if (action.index < items.length) setHighlight(action.index);
           return;
         case 'select': {
-          const item = items[highlight];
-          if (!item) return;
-          if (mode === 'subagents' && item.childStreamId) {
-            onFocusStream(item.childStreamId);
+          if (!selectedItem) return;
+          if (mode === 'subagents' && selectedItem.childStreamId) {
+            onFocusStream(selectedItem.childStreamId);
             onClose();
             return;
           }
-          setTailExecutionId(item.executionId);
+          setTailExecutionId(selectedItem.executionId);
           return;
         }
         case 'kill': {
-          const item = items[highlight];
-          if (!item?.killable) return;
-          onKillExecution(item.executionId);
+          if (!selectedItem?.killable) return;
+          onKillExecution(selectedItem.executionId);
           onClose();
           return;
         }
@@ -483,6 +493,31 @@ export function ChildControlPicker({
     );
   }
 
+  if (isUltraCompactPickerRows(availableRows)) {
+    return (
+      <Box flexDirection="column" minWidth={0} width={availableColumns}>
+        <Text bold color="cyan" wrap="truncate-end">
+          {streamScopeText
+            ? `${pickerTitle(mode)} · ${streamScopeText}`
+            : pickerTitle(mode)}
+        </Text>
+        {selectedItem ? (
+          renderItem(selectedItem, selectedIndex, true)
+        ) : (
+          <Text dimColor>{emptyPickerText(mode)}</Text>
+        )}
+        <KeyHints
+          hints={pickerKeyHints(
+            mode,
+            items.length,
+            selectedItem?.killable ?? false,
+          )}
+          confirmCancel={false}
+        />
+      </Box>
+    );
+  }
+
   return (
     <Box
       borderStyle="round"
@@ -507,7 +542,7 @@ export function ChildControlPicker({
             ) : null}
             {visibleItems.map((item, offset) => {
               const index = listLayout.start + offset;
-              return renderItem(item, index, index === highlight);
+              return renderItem(item, index, index === selectedIndex);
             })}
             {listLayout.hiddenAfter > 0 ? (
               <Text dimColor>{`... ${listLayout.hiddenAfter} more`}</Text>
@@ -522,7 +557,7 @@ export function ChildControlPicker({
           hints={pickerKeyHints(
             mode,
             items.length,
-            items[highlight]?.killable ?? false,
+            selectedItem?.killable ?? false,
           )}
           confirmCancel={false}
         />
