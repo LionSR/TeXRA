@@ -29,7 +29,6 @@ import {
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@agent/core/constants';
 import { getConfig } from '@agent/core/config';
 import { toOpenAIReasoningEffort } from '@agent/runtime/reasoningEffort';
@@ -50,11 +49,15 @@ import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 import { extractMimeSubtype, objectToLogString } from '@utils/text/stringUtils';
-import { normalizeUsage } from '../support/UsageNormalizer';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagOpenAISdkError } from '../support/sdkErrorAdapters';
 
 // Local file imports
+import {
+  computeOpenAIPrice,
+  normalizeOpenAIUsage,
+  type OpenAIPricingConfig,
+} from './openAIUsage';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import {
   normalizeOpenAIMessageContent,
@@ -1213,40 +1216,16 @@ export class ModelHandlerOpenAI<
 
   /** Computes cost based on token usage and model pricing. */
   computePrice(responseUsage: ExtendedCompletionUsage | null): number {
-    if (!responseUsage) return 0;
+    return computeOpenAIPrice(responseUsage, this.pricingConfig());
+  }
 
-    const cachedTokens =
-      responseUsage.prompt_tokens_details?.cached_tokens ??
-      responseUsage.prompt_cache_hit_tokens ??
-      0;
-    const promptTokens =
-      responseUsage.prompt_tokens ??
-      cachedTokens + (responseUsage.prompt_cache_miss_tokens ?? 0);
-    const completionTokens = responseUsage.completion_tokens ?? 0;
-    // Note: OpenAI doesn't provide tool_use_tokens in their API response
-
-    let basePrice = calculateTokenPrice(
-      promptTokens,
-      completionTokens,
-      this.config.inputPrice,
-      this.config.outputPrice,
-    );
-
-    // Retrieve nested token details if present
-    const reasoningTokens =
-      responseUsage.completion_tokens_details?.reasoning_tokens ?? 0;
-    if (reasoningTokens) {
-      basePrice += (reasoningTokens * this.config.outputPrice) / 1e6;
-    }
-    if (cachedTokens) {
-      basePrice -=
-        (cachedTokens *
-          this.config.inputPrice *
-          (1 - this.capabilities.cacheDiscountFactor)) /
-        1e6;
-    }
-
-    return basePrice;
+  /** Pricing/caching inputs for the extracted usage helpers. */
+  private pricingConfig(): OpenAIPricingConfig {
+    return {
+      inputPrice: this.config.inputPrice,
+      outputPrice: this.config.outputPrice,
+      cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
+    };
   }
 
   /**
@@ -1263,39 +1242,11 @@ export class ModelHandlerOpenAI<
     rawUsage: ExtendedCompletionUsage | null,
     responseTimeMs: number,
   ): NormalizedUsage {
-    return normalizeUsage(
-      {
-        provider: this.usageProvider,
-        computePrice: (usage) => this.computePrice(usage),
-        extract: (usage) => {
-          // OpenAI: prompt_tokens_details.cached_tokens; DeepSeek: prompt_cache_hit_tokens
-          const cachedTokens =
-            usage.prompt_tokens_details?.cached_tokens ??
-            usage.prompt_cache_hit_tokens ??
-            0;
-          const cacheMissTokens = usage.prompt_cache_miss_tokens ?? 0;
-
-          // OpenAI's prompt_tokens is the TOTAL (includes cached tokens). DeepSeek
-          // also exposes cache hit/miss fields; use their sum as a fallback if
-          // prompt_tokens is absent from an OpenAI-compatible response.
-          const inputTokens =
-            usage.prompt_tokens ??
-            (cachedTokens > 0 || cacheMissTokens > 0
-              ? cachedTokens + cacheMissTokens
-              : 0);
-
-          return {
-            inputTokens,
-            outputTokens: usage.completion_tokens ?? 0,
-            cachedTokens,
-            cacheMissTokens,
-            reasoningTokens:
-              usage.completion_tokens_details?.reasoning_tokens ?? 0,
-          };
-        },
-      },
+    return normalizeOpenAIUsage(
       rawUsage,
       responseTimeMs,
+      this.usageProvider,
+      this.pricingConfig(),
     );
   }
 

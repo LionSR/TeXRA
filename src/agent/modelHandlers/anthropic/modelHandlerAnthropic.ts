@@ -25,7 +25,6 @@ import {
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import { calculateTokenPrice } from '@agent/utils/priceUtils';
 
 // Local imports - common
 import { getConfig } from '@agent/core/config';
@@ -47,6 +46,11 @@ import type { ToolFileAttachment } from '@tools/result';
 import { AbsoluteFS, flexibleFS, type FileLocation } from '@utils/files';
 import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
 import { objectToLogString } from '@utils/text/stringUtils';
+import {
+  computeAnthropicPrice,
+  normalizeAnthropicUsage,
+  type AnthropicPricingConfig,
+} from './anthropicUsage';
 
 // Local file imports
 import {
@@ -73,7 +77,6 @@ import {
   formatToolResultAsText,
   type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
-import { normalizeUsage } from '../support/UsageNormalizer';
 import { tagAnthropicSdkError } from '../support/sdkErrorAdapters';
 import {
   FILES_API_BETA,
@@ -83,8 +86,6 @@ import {
   SHORT_CACHE_CONTROL,
   LONG_CACHE_CONTROL,
   isLongCacheControl,
-  CACHE_CREATION_COST_MULTIPLIER_5M,
-  CACHE_CREATION_COST_MULTIPLIER_1H,
   ensureBeta,
   hasLongCacheControlMarker,
   setupContextManagement,
@@ -122,7 +123,6 @@ import type {
   BetaRedactedThinkingBlock,
   BetaRequestDocumentBlock,
   BetaThinkingBlock,
-  BetaUsage,
   MessageCountTokensParams,
   MessageCreateParams,
 } from '@anthropic-ai/sdk/resources/beta/messages';
@@ -1306,68 +1306,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
   /** Calculates API usage cost based on input/output tokens and cache usage if supported. */
   computePrice(responseUsage: AnthropicUsage): number {
-    if (!responseUsage) {
-      return 0;
-    }
-
-    // Note: Anthropic doesn't provide tool_use_tokens in their API response
-    const usageTotals = this.getUsageTokenTotals(responseUsage);
-
-    // Standard pricing applies across the full context window (no long-context premium).
-    const inputPrice = this.config.inputPrice;
-    const outputPrice = this.config.outputPrice;
-
-    let basePrice = calculateTokenPrice(
-      usageTotals.baseInputTokens,
-      usageTotals.outputTokens,
-      inputPrice,
-      outputPrice,
-    );
-
-    if (this.capabilities.supportsPromptCaching) {
-      if (usageTotals.cacheCreationTokens > 0) {
-        const pricedBreakdownTokens =
-          usageTotals.cacheCreation5mTokens + usageTotals.cacheCreation1hTokens;
-
-        if (pricedBreakdownTokens > 0) {
-          basePrice +=
-            (usageTotals.cacheCreation5mTokens *
-              inputPrice *
-              CACHE_CREATION_COST_MULTIPLIER_5M) /
-            1e6;
-          basePrice +=
-            (usageTotals.cacheCreation1hTokens *
-              inputPrice *
-              CACHE_CREATION_COST_MULTIPLIER_1H) /
-            1e6;
-
-          const unclassifiedCacheCreationTokens = Math.max(
-            usageTotals.cacheCreationTokens - pricedBreakdownTokens,
-            0,
-          );
-          basePrice +=
-            (unclassifiedCacheCreationTokens *
-              inputPrice *
-              CACHE_CREATION_COST_MULTIPLIER_5M) /
-            1e6;
-        } else {
-          basePrice +=
-            (usageTotals.cacheCreationTokens *
-              inputPrice *
-              CACHE_CREATION_COST_MULTIPLIER_5M) /
-            1e6;
-        }
-      }
-      if (usageTotals.cacheReadTokens > 0) {
-        basePrice +=
-          (usageTotals.cacheReadTokens *
-            inputPrice *
-            this.capabilities.cacheDiscountFactor) /
-          1e6;
-      }
-    }
-
-    return basePrice;
+    return computeAnthropicPrice(responseUsage, this.pricingConfig());
   }
 
   /** Normalizes Anthropic usage data into a unified format. */
@@ -1375,95 +1314,20 @@ export class ModelHandlerAnthropic extends ModelHandler<
     rawUsage: AnthropicUsage,
     responseTimeMs: number,
   ): NormalizedUsage {
-    return normalizeUsage(
-      {
-        provider: 'anthropic',
-        computePrice: (usage) => this.computePrice(usage),
-        extract: (usage) => {
-          const usageTotals = this.getUsageTokenTotals(usage);
-          // Anthropic bills cache-read and cache-creation tokens separately, so
-          // total input is base + read + creation (matches percentageCached).
-          const totalInput =
-            usageTotals.baseInputTokens +
-            usageTotals.cacheReadTokens +
-            usageTotals.cacheCreationTokens;
-
-          return {
-            inputTokens: totalInput,
-            outputTokens: usageTotals.outputTokens,
-            cachedTokens: usageTotals.cacheReadTokens,
-            cacheCreationTokens: usageTotals.cacheCreationTokens,
-            cachePercentageBasis:
-              usageTotals.cacheReadTokens + usageTotals.cacheCreationTokens,
-            // SDK 0.100.0 reports the thinking-token breakdown of output_tokens,
-            // so Anthropic surfaces reasoning tokens like OpenAI/Google/xAI. This
-            // is a subset of outputTokens (already billed), not an extra charge.
-            reasoningTokens: usage.output_tokens_details?.thinking_tokens ?? 0,
-            serverToolRequests:
-              (usage.server_tool_use?.web_search_requests ?? 0) +
-              (usage.server_tool_use?.web_fetch_requests ?? 0),
-          };
-        },
-      },
+    return normalizeAnthropicUsage(
       rawUsage,
       responseTimeMs,
+      this.pricingConfig(),
     );
   }
 
-  /**
-   * Gets Anthropic input/output/cache token totals.
-   * Uses per-iteration usage when available so compaction requests are fully billed.
-   */
-  private getUsageTokenTotals(responseUsage: AnthropicUsage): {
-    baseInputTokens: number;
-    outputTokens: number;
-    cacheReadTokens: number;
-    cacheCreationTokens: number;
-    cacheCreation5mTokens: number;
-    cacheCreation1hTokens: number;
-  } {
-    const usageWithIterations = responseUsage as AnthropicUsage & {
-      iterations?: BetaUsage['iterations'];
-    };
-    const iterations = usageWithIterations.iterations;
-    if (Array.isArray(iterations) && iterations.length > 0) {
-      let baseInputTokens = 0;
-      let outputTokens = 0;
-      let cacheReadTokens = 0;
-      let cacheCreationTokens = 0;
-      let cacheCreation5mTokens = 0;
-      let cacheCreation1hTokens = 0;
-
-      for (const iteration of iterations) {
-        baseInputTokens += iteration.input_tokens;
-        outputTokens += iteration.output_tokens;
-        cacheReadTokens += iteration.cache_read_input_tokens;
-        cacheCreationTokens += iteration.cache_creation_input_tokens;
-        cacheCreation5mTokens +=
-          iteration.cache_creation?.ephemeral_5m_input_tokens ?? 0;
-        cacheCreation1hTokens +=
-          iteration.cache_creation?.ephemeral_1h_input_tokens ?? 0;
-      }
-
-      return {
-        baseInputTokens,
-        outputTokens,
-        cacheReadTokens,
-        cacheCreationTokens,
-        cacheCreation5mTokens,
-        cacheCreation1hTokens,
-      };
-    }
-
+  /** Pricing/caching inputs for the extracted usage helpers. */
+  private pricingConfig(): AnthropicPricingConfig {
     return {
-      baseInputTokens: responseUsage.input_tokens ?? 0,
-      outputTokens: responseUsage.output_tokens ?? 0,
-      cacheReadTokens: responseUsage.cache_read_input_tokens ?? 0,
-      cacheCreationTokens: responseUsage.cache_creation_input_tokens ?? 0,
-      cacheCreation5mTokens:
-        responseUsage.cache_creation?.ephemeral_5m_input_tokens ?? 0,
-      cacheCreation1hTokens:
-        responseUsage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
+      inputPrice: this.config.inputPrice,
+      outputPrice: this.config.outputPrice,
+      supportsPromptCaching: this.capabilities.supportsPromptCaching,
+      cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
     };
   }
 
