@@ -9,13 +9,16 @@ import path from 'node:path';
 import { render } from 'ink';
 import React from 'react';
 
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { isInFlightStatus } from '@common/constants/streamStatus';
 import { tryPlatform } from '@platform/platform';
 import {
   AGENT_CATEGORY,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_STATUS,
+  StreamStatusSchema,
   STREAM_LOG_ENTRY_TYPES,
   TODO_STATUS,
   TOOL_USE_STATUS,
@@ -723,6 +726,39 @@ function queueHarnessFollowUp(input: string): void {
   appendHarnessAssistantTranscript(`Queued follow-up: ${message}`);
 }
 
+function harnessActiveChildStreamId(): string | undefined {
+  const activeStreamId = cliState.activeStreamId.get();
+  if (!activeStreamId) return undefined;
+  return cliState.parentStream.get().has(activeStreamId)
+    ? activeStreamId
+    : undefined;
+}
+
+function harnessStreamStatuses(streamId: string): readonly string[] {
+  const streams = cliState.streams.get();
+  const parentStreamId = cliState.parentStream.get().get(streamId);
+  const childStreamStatus = parentStreamId
+    ? streams
+        .get(parentStreamId)
+        ?.childStreams.find((child) => child.childStreamId === streamId)?.status
+    : undefined;
+  return [
+    childStreamStatus,
+    streams.get(streamId)?.status,
+    StreamStatusService.get(streamId),
+  ].filter((status): status is string => status !== undefined);
+}
+
+function harnessRejectsFocusedChildSubmit(): boolean {
+  const childStreamId = harnessActiveChildStreamId();
+  if (!childStreamId) return false;
+  const statuses = harnessStreamStatuses(childStreamId);
+  return statuses.some((status) => {
+    const parsed = StreamStatusSchema.safeParse(status);
+    return !parsed.success || !isInFlightStatus(parsed.data);
+  });
+}
+
 function findRegisteredSlashCommand(name: string): SlashCommand | undefined {
   const lower = name.toLowerCase();
   return listSlashCommands().find(
@@ -867,6 +903,12 @@ function markHarnessExecutionStopped(executionId: string): void {
 
 function handleHarnessSubmit(line: string): void {
   if (handleHarnessSlashCommand(line)) return;
+  if (harnessRejectsFocusedChildSubmit()) {
+    appendHarnessAssistantTranscript(
+      'The selected subagent is no longer accepting follow-ups.',
+    );
+    return;
+  }
   appendHarnessAssistantTranscript(`Harness received: ${line}`);
 }
 
