@@ -117,18 +117,6 @@ const STREAMS = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
  *  (Ctrl-A / Ctrl-B) walks this when stepping back to the parent. */
 const PARENT_STREAM = signal<ReadonlyMap<StreamTabId, StreamTabId>>(new Map());
 
-/** Derived: the active stream's slice (or `undefined`). Because `patchStream`
- *  rebuilds the streams map but keeps each untouched slice's reference, this
- *  returns the SAME `StreamSlice` when the active stream is unchanged — even
- *  while a *background* stream is streaming. Panes that only read the active
- *  slice subscribe here instead of the whole map, so a token on another stream
- *  no longer re-renders them: `useSignal`'s `useSyncExternalStore` bails via
- *  Object.is. Mirrors the webview's `activeStreamInfo$`. */
-const ACTIVE_SLICE = new Signal.Computed<StreamSlice | undefined>(() => {
-  const id = ACTIVE_STREAM_ID.get();
-  return id ? STREAMS.get().get(id) : undefined;
-});
-
 /** Active inline slash form, or `undefined` when the chat input owns the
  *  screen. The form's `onDone` clears this slot. Kept opaque (the form
  *  carries its own state) so the registry stays declarative. */
@@ -163,7 +151,6 @@ export const cliState = {
   sessionMeta: SESSION_META as Signal.State<SessionMeta>,
   activeStreamId: ACTIVE_STREAM_ID as Signal.State<StreamTabId | undefined>,
   streams: STREAMS as Signal.State<ReadonlyMap<StreamTabId, StreamSlice>>,
-  activeSlice: ACTIVE_SLICE as Signal.Computed<StreamSlice | undefined>,
   parentStream: PARENT_STREAM as Signal.State<
     ReadonlyMap<StreamTabId, StreamTabId>
   >,
