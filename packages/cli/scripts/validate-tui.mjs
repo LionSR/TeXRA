@@ -646,8 +646,14 @@ const SCENARIOS = [
     bootExpect: '[Tab]streams',
     keys: [ESC + 's'], // Option/Alt-s
     frame: 'tail',
-    expect: ['Subagents', 'Stream: main', 'strategy', 'Enter focus'],
-    unexpect: ['sub-workfl\now', '\n────╯'],
+    expect: [
+      'Subagents',
+      'Stream: main',
+      'strategy',
+      'Enter focus',
+      'Esc close',
+    ],
+    unexpect: ['sub-workfl\now', '\n────╯', 'Esc cl…'],
     maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
   },
   {
@@ -667,8 +673,9 @@ const SCENARIOS = [
       'Stream: main',
       'strategy',
       'Enter view',
+      'Esc close',
     ],
-    unexpect: ['sub-workfl\now', '\n────╯'],
+    unexpect: ['sub-workfl\now', '\n────╯', 'Esc cl…'],
     maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
   },
   {
