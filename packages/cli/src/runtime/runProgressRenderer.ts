@@ -3,6 +3,9 @@ import path from 'node:path';
 // Local imports - progress events
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
+// Local imports - shared schemas
+import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
+
 // Local imports - CLI runtime
 import { writeRawStderr } from './logSinks';
 import type { CliContext } from './cliContext';
@@ -57,6 +60,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private lastLine = '';
   private liveLine = false;
   private rootStreamId: string | undefined;
+  private rootStreamTerminal = false;
 
   constructor(init: RunProgressRendererInit) {
     this.write = init.write ?? writeRawStderr;
@@ -85,12 +89,14 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         }
         return true;
       case 'updateActiveProcesses':
+        if (this.rootStreamTerminal) return true;
         this.applyActiveProcesses(
           payload as ProgressEventPayloads['updateActiveProcesses'],
         );
         this.render(true);
         return true;
       case 'updateActiveSubagents':
+        if (this.rootStreamTerminal) return true;
         this.applyActiveSubagents(
           payload as ProgressEventPayloads['updateActiveSubagents'],
         );
@@ -102,13 +108,20 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
             (payload as ProgressEventPayloads['updateStreamStatus']).streamId,
           )
         ) {
-          this.state.phase = String(
-            (payload as ProgressEventPayloads['updateStreamStatus']).status,
-          );
+          const status = (
+            payload as ProgressEventPayloads['updateStreamStatus']
+          ).status;
+          this.state.phase = String(status);
+          this.rootStreamTerminal = isTerminalStreamStatus(status);
+          if (this.rootStreamTerminal) {
+            this.state.activeProcesses = undefined;
+            this.state.activeSubagents = undefined;
+          }
           this.render(true);
         }
         return true;
       case 'updateStreamDescription':
+        if (this.rootStreamTerminal) return true;
         if (
           this.isRootStream(
             (payload as ProgressEventPayloads['updateStreamDescription'])
@@ -236,6 +249,10 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     parts.push(formatElapsed(now - this.startedAt));
     return parts.join(' · ');
   }
+}
+
+function isTerminalStreamStatus(status: StreamStatus): boolean {
+  return status === STREAM_STATUS.STOPPED || status === STREAM_STATUS.ERROR;
 }
 
 function safeBasename(file: string | undefined): string | undefined {
