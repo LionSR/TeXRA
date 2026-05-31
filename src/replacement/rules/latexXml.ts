@@ -19,9 +19,6 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     const latexEnvironments = LATEX_ENVIRONMENTS;
 
     // Pure XML tags that should not be treated as LaTeX environments.
-    // Note: `latex_document` is intentionally NOT here — all of its
-    // normalization lives in `latex_document` (latexDocument.ts) so the
-    // legacy wrapper has a single owner.
     const pureXmlTags = [
       'revised_statement',
       'scratchpad',
@@ -42,7 +39,7 @@ export const LATEX_XML_REPLACEMENTS: ReplacementCategory = {
     // ===== LaTeX to XML conversions =====
     // Examples:
     // \begin{scratchpad} -> <scratchpad>
-    // \end{latex_document} -> </latex_document>
+    // \end{scratchpad} -> </scratchpad>
     const latexToXmlPatterns = generateLatexToXmlConversions(pureXmlTags);
 
     // Initialize patterns object with generated conversions

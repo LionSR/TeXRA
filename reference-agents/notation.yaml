@@ -79,10 +79,6 @@ prompts:
         \item Keep all comments that start with `\%'
     \end{itemize}
 
-    {% if IS_GOOGLE_MODEL %}
-    In your response, you should use XML tags instead of markdown syntax to organize the output files. NEVER use markdown tags like ```latex ''' nor ```xml to organize the output files.
-    {% endif %}
-
   userPrefix: |
     I am going to give you the \LaTeX code of a document (or collection of documents) that needs notation analysis. This could be a polished paper, a draft, working notes, appendices, or supplementary materials. Read the document(s) carefully to understand the notation system and conventions.
 
