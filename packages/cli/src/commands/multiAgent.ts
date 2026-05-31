@@ -254,16 +254,24 @@ const multiAgentListCommand = defineCliCommand({
   run: (context) => runMultiAgentList(context),
 });
 
+const multiAgentPresetArgs = {
+  ...GLOBAL_ARGS,
+  preset: {
+    type: 'positional',
+    required: true,
+    description: 'Preset id or name from `texra multi-agent list`',
+  },
+} as const;
+
 const multiAgentShowCommand = defineCliCommand({
   meta: { name: 'show', description: 'Show one multi-agent team preset' },
-  args: {
-    ...GLOBAL_ARGS,
-    preset: {
-      type: 'positional',
-      required: true,
-      description: 'Preset id or name from `texra multi-agent list`',
-    },
-  },
+  args: multiAgentPresetArgs,
+  run: (context, ctx) => runMultiAgentShow(context, ctx.args.preset),
+});
+
+const multiAgentInspectCommand = defineCliCommand({
+  meta: { name: 'inspect', description: 'Inspect one multi-agent team preset' },
+  args: multiAgentPresetArgs,
   run: (context, ctx) => runMultiAgentShow(context, ctx.args.preset),
 });
 
@@ -322,6 +330,7 @@ export const multiAgentCommand = defineCommand({
   subCommands: {
     list: multiAgentListCommand,
     show: multiAgentShowCommand,
+    inspect: multiAgentInspectCommand,
     run: multiAgentRunCommand,
   },
 });
