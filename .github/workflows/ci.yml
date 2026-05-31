@@ -101,9 +101,11 @@ jobs:
       - name: Compile
         run: pnpm run compile
 
-      - name: Build extension package
+      # Desktop app packaging is intentionally not part of PR CI. Keep this
+      # check scoped to the VS Code extension package.
+      - name: Build extension VSIX package
         if: runner.os == 'Linux'
-        run: pnpm run build:fast
+        run: pnpm --filter texra build:fast
 
       - name: Check extension VSIX contents
         if: runner.os == 'Linux'
