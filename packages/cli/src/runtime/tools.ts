@@ -4,7 +4,10 @@ import {
   findExternalToolDef,
   type ExternalToolDef,
 } from '@tools/externalToolDefs';
-import { runExternalToolChecks } from '@tools/toolAvailability';
+import {
+  runExternalToolChecks,
+  type ExternalToolCheckResult,
+} from '@tools/toolAvailability';
 
 // Local imports - config
 import { getDisabledToolIds, setToolEnabled } from '@utils/config/constants';
@@ -34,9 +37,20 @@ function detectedFromStatus(status: string): boolean | null {
   return null;
 }
 
-function noteForTool(def: ExternalToolDef, statusLabel?: string): string {
+function detectedForCheck(
+  check: ExternalToolCheckResult | undefined,
+): boolean | null {
+  return check?.detected ?? detectedFromStatus(check?.status ?? 'unknown');
+}
+
+function noteForTool(
+  def: ExternalToolDef,
+  detected: boolean | null,
+  statusLabel?: string,
+): string {
+  if (detected === false && def.installCommand) return def.installCommand;
   return (
-    statusLabel ?? def.authNote ?? def.installCommand ?? def.configNotes ?? ''
+    statusLabel ?? def.authNote ?? def.configNotes ?? def.installCommand ?? ''
   );
 }
 
@@ -49,12 +63,13 @@ export async function readCliToolStatuses(): Promise<CliToolStatusRecord[]> {
     const comingSoon = def.comingSoon === true;
     const toggleable = def.toggleable === true;
     const status = check?.status ?? (comingSoon ? 'coming-soon' : 'unknown');
+    const detected = detectedForCheck(check);
     return {
       id: def.id,
       name: def.name,
       category: def.category,
       enabled: toggleable ? !disabledIds.has(def.id) : null,
-      detected: detectedFromStatus(status),
+      detected,
       status,
       statusLabel: check?.statusLabel,
       statusDetail: check?.statusDetail,
@@ -62,7 +77,7 @@ export async function readCliToolStatuses(): Promise<CliToolStatusRecord[]> {
       comingSoon,
       installCommand: def.installCommand,
       authCommand: def.authCommand,
-      note: noteForTool(def, check?.statusLabel),
+      note: noteForTool(def, detected, check?.statusLabel),
     };
   });
 }
