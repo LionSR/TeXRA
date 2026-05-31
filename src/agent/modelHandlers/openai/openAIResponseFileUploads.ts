@@ -1,0 +1,287 @@
+// File and attachment upload helpers for the OpenAI Responses API.
+//
+// Infrastructure-side helpers that move file payloads to OpenAI's Files API
+// (or fall back to inline base64 when uploads are unavailable, e.g. OpenRouter
+// routing). They borrow only a logger and an OpenRouter-routing flag from the
+// caller, so they live outside the handler as stateless functions.
+
+import { Buffer } from 'node:buffer';
+import * as path from 'path';
+
+import OpenAI, {
+  APIConnectionTimeoutError,
+  APIError as OpenAIAPIError,
+  toFile,
+} from 'openai';
+
+import type { AgentTrace } from '@agent/trace';
+import { logSdkError } from '@agent/trace';
+import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import type { ToolFileAttachment } from '@tools/result';
+import { isNonEmptyString } from '@utils/core';
+import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
+
+import { loadAttachmentBuffer } from '../utils/toolAttachmentUtils';
+import { isInputFileContent, isMessageItem } from './openAIResponseContent';
+import type {
+  ResponseFunctionCallOutputItemList,
+  ResponseInputFile,
+  ResponseInputItem,
+} from 'openai/resources/responses/responses';
+
+/** An attachment that has been uploaded to OpenAI's Files API. */
+export interface UploadedOpenAIResponseAttachment {
+  attachment: ToolFileAttachment;
+  fileId: string;
+  isImage: boolean;
+}
+
+/**
+ * MIME types that the OpenAI Responses API accepts as `input_file` content.
+ * Composed from the shared OFFICE_MIME_TYPES plus PDF.
+ * Images are handled separately via `input_image`.
+ */
+export const INLINEABLE_FILE_MIME_TYPES: ReadonlySet<string> = new Set([
+  'application/pdf',
+  ...OFFICE_MIME_TYPES,
+]);
+
+/** Options shared by upload helpers that must bypass uploads on OpenRouter. */
+export interface FileUploadOptions {
+  /** Whether requests are routed through OpenRouter (uploads unavailable). */
+  openRouterRouting: boolean;
+  logger: AgentTrace;
+}
+
+/**
+ * Replace inline `file_data` payloads with uploaded `file_id` references for
+ * any input_file content parts in the given message items.
+ */
+export async function uploadInlineInputFiles(
+  client: OpenAI,
+  messageItems: ResponseInputItem[],
+  options: FileUploadOptions,
+): Promise<void> {
+  for (const item of messageItems) {
+    if (!isMessageItem(item)) {
+      continue;
+    }
+
+    const contentList = item.content;
+
+    if (!Array.isArray(contentList)) {
+      continue;
+    }
+
+    for (const content of contentList) {
+      if (
+        isInputFileContent(content) &&
+        content.file_data &&
+        !content.file_id
+      ) {
+        await replaceFileDataWithUpload(client, content, options);
+      }
+    }
+  }
+}
+
+async function replaceFileDataWithUpload(
+  client: OpenAI,
+  content: ResponseInputFile,
+  { openRouterRouting, logger }: FileUploadOptions,
+): Promise<void> {
+  if (openRouterRouting) {
+    logger.debug('OpenRouter routing active; skipping inline file upload.');
+    return;
+  }
+
+  const fileData = content.file_data;
+  if (!fileData) {
+    return;
+  }
+
+  const filename = content.filename ?? 'document.pdf';
+  let buffer: Buffer | undefined;
+
+  try {
+    const base64Separator = ';base64,';
+    const separatorIndex = fileData.indexOf(base64Separator);
+    const payload =
+      separatorIndex >= 0
+        ? fileData.slice(separatorIndex + base64Separator.length)
+        : fileData;
+
+    buffer = Buffer.from(payload, 'base64');
+    const uploadedFile = await client.files.create({
+      file: await toFile(buffer!, filename),
+      purpose: 'assistants',
+    });
+
+    content.file_id = uploadedFile.id;
+    delete content.file_data;
+    if ('filename' in content) {
+      delete content.filename;
+    }
+  } catch (err) {
+    // Two native SDK timeout signals: APIConnectionTimeoutError (client-side
+    // SDK timeout) and APIError with status 408 (server-side Request Timeout).
+    // Status 408 is NOT mapped to APIConnectionTimeoutError by the SDK —
+    // it falls through to a bare APIError — so both must be checked.
+    const isTimeout =
+      err instanceof APIConnectionTimeoutError ||
+      (err instanceof OpenAIAPIError && err.status === 408);
+    if (isTimeout) {
+      logger.warn(
+        `Timed out uploading file ${filename}. Falling back to inline payload.`,
+      );
+      return;
+    }
+
+    logSdkError(
+      logger,
+      `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
+      err,
+      { operation: 'upload file' },
+    );
+    throw err;
+  } finally {
+    if (buffer) {
+      buffer.fill(0);
+      buffer = undefined;
+    }
+  }
+}
+
+/** Upload tool-result attachments to OpenAI's Files API. */
+export async function uploadToolAttachments(
+  client: OpenAI,
+  attachments: ToolFileAttachment[],
+  { openRouterRouting, logger }: FileUploadOptions,
+): Promise<UploadedOpenAIResponseAttachment[]> {
+  if (openRouterRouting) {
+    logger.debug(
+      'OpenRouter routing active; skipping tool attachment uploads.',
+    );
+    return [];
+  }
+
+  const uploaded: UploadedOpenAIResponseAttachment[] = [];
+
+  for (const attachment of attachments) {
+    let buffer: Buffer | undefined;
+    try {
+      buffer = await loadAttachmentBuffer(attachment);
+    } catch (err) {
+      logger.warn(
+        `Unable to read attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+      );
+      continue;
+    }
+
+    try {
+      const filename = isNonEmptyString(attachment.path)
+        ? path.basename(attachment.path)
+        : 'attachment';
+      const mimeType = attachment.mimeType ?? 'application/octet-stream';
+
+      const uploadedFile = await client.files.create({
+        file: await toFile(buffer!, filename, { type: mimeType }),
+        purpose: 'assistants',
+      });
+
+      uploaded.push({
+        attachment,
+        fileId: uploadedFile.id,
+        isImage: mimeType.startsWith('image/'),
+      });
+    } catch (err) {
+      logger.warn(
+        `Failed to upload attachment to OpenAI: ${getSdkErrorMessage(err)}`,
+      );
+    } finally {
+      if (buffer) {
+        buffer.fill(0);
+        buffer = undefined;
+      }
+    }
+  }
+
+  return uploaded;
+}
+
+/**
+ * Build inline base64 content parts for tool attachments when file uploads
+ * are unavailable (e.g., OpenRouter routing). Images use data URI in
+ * `image_url`; PDFs and office documents use `file_data` in `input_file`.
+ * Unsupported MIME types are skipped.
+ */
+export async function buildInlineAttachmentParts(
+  attachments: ToolFileAttachment[],
+  logger: AgentTrace,
+): Promise<{
+  parts: ResponseFunctionCallOutputItemList;
+  inlined: ToolFileAttachment[];
+  skipped: ToolFileAttachment[];
+}> {
+  const MAX_INLINE_BYTES = 20 * 1024 * 1024; // 20 MiB cap per attachment
+  const parts: ResponseFunctionCallOutputItemList = [];
+  const inlined: ToolFileAttachment[] = [];
+  const skipped: ToolFileAttachment[] = [];
+
+  for (const attachment of attachments) {
+    const mimeType = attachment.mimeType ?? 'application/octet-stream';
+    const isImage = mimeType.startsWith('image/');
+    const isFileInput = INLINEABLE_FILE_MIME_TYPES.has(mimeType);
+
+    if (!isImage && !isFileInput) {
+      skipped.push(attachment);
+      continue;
+    }
+
+    let buffer: Buffer | undefined;
+    try {
+      buffer = await loadAttachmentBuffer(attachment);
+      if (buffer.length > MAX_INLINE_BYTES) {
+        logger.debug(
+          `Skipping inline attachment ${attachment.path ?? 'attachment'}: ${buffer.length} bytes exceeds limit`,
+        );
+        skipped.push(attachment);
+        continue;
+      }
+
+      const base64 = buffer.toString('base64');
+
+      if (isImage) {
+        parts.push({
+          type: 'input_image',
+          detail: 'auto',
+          image_url: `data:${mimeType};base64,${base64}`,
+        });
+      } else {
+        // PDF, office documents, and other file types accepted by input_file
+        const filename =
+          typeof attachment.path === 'string' && attachment.path.length > 0
+            ? path.basename(attachment.path)
+            : 'attachment';
+        parts.push({
+          type: 'input_file',
+          file_data: `data:${mimeType};base64,${base64}`,
+          filename,
+        });
+      }
+      inlined.push(attachment);
+    } catch (err) {
+      logger.debug(
+        `Unable to inline attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+      );
+      skipped.push(attachment);
+    } finally {
+      if (buffer) {
+        buffer.fill(0);
+        buffer = undefined;
+      }
+    }
+  }
+
+  return { parts, inlined, skipped };
+}
