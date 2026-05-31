@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - agent model handlers
 import type { AgentTrace } from '@agent/trace';
-import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
 
 // Type imports
 import type Anthropic from '@anthropic-ai/sdk';

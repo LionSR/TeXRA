@@ -8,7 +8,7 @@ import {
 
 // Local imports - agent model handlers
 import type { AgentTrace } from '@agent/trace';
-import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 
 // Type imports
 import type { ResponseInputItem } from 'openai/resources/responses/responses';

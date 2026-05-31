@@ -20,27 +20,27 @@ import { isNonEmptyString } from '@utils/core';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 import type { FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
-import { normalizeUsage } from './support/UsageNormalizer';
-import { tagOpenRouterSdkError } from './support/sdkErrorAdapters';
-import { prepareExistingOutputContent } from './utils/fileContentUtils';
+import { normalizeUsage } from '../support/UsageNormalizer';
+import { tagOpenRouterSdkError } from '../support/sdkErrorAdapters';
+import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 
 // Local file imports
-import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
-import { toOpenAITools } from './toolConversion';
+import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
+import { toOpenAITools } from '../toolConversion';
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
   type ToolResultPayload,
-} from './utils/toolAttachmentUtils';
-import { parseToolArguments } from './utils/parseArguments';
-import { extractTextFromReasoningDetails } from './utils/openRouterReasoning';
-import { ToolCallAccumulator } from './utils/toolCallAccumulator';
-import { ModelHandler } from './ModelHandler';
+} from '../utils/toolAttachmentUtils';
+import { parseToolArguments } from '../utils/parseArguments';
+import { extractTextFromReasoningDetails } from '../utils/openRouterReasoning';
+import { ToolCallAccumulator } from '../utils/toolCallAccumulator';
+import { ModelHandler } from '../ModelHandler';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_SYSTEM_PROMPT,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-} from './contextManagementConstants';
+} from '../contextManagementConstants';
 import type {
   ChatResult,
   ChatStreamChunk,
@@ -58,8 +58,8 @@ import type {
   CreateResponseResult,
   ExtractResponseResult,
   OpenRouterToolCall,
-} from './types/IModelHandler';
-import type { ProviderStopReason } from './types/StopReasonTypes';
+} from '../types/IModelHandler';
+import type { ProviderStopReason } from '../types/StopReasonTypes';
 
 type OpenRouterReasoningEffort = NonNullable<
   NonNullable<ChatRequest['reasoning']>['effort']
