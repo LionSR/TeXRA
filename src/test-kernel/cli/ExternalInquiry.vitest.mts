@@ -6,9 +6,98 @@ import {
   externalInquiryKeyHintsForWidth,
   externalInquiryQuestionRowsBudget,
 } from '@cli/chat/tui/modals/ExternalInquiry';
+import { KEY_HINT_SEPARATOR } from '@cli/chat/tui/ui/KeyHints';
 import { textInputDisplayWindow } from '@cli/chat/tui/input/BaseTextInput';
 
 describe('CLI external inquiry modal', () => {
+  function hintText(
+    hints: ReturnType<typeof externalInquiryKeyHintsForWidth>,
+  ): string {
+    return hints
+      .map((hint) => `${hint.key} ${hint.action}`)
+      .join(KEY_HINT_SEPARATOR);
+  }
+
+  it('preserves the skip hint when the full hint row is one column too wide', () => {
+    const text = hintText(
+      externalInquiryKeyHintsForWidth({
+        questionScrollable: true,
+        maxColumns: 76,
+      }),
+    );
+
+    expect(text).toBe(
+      'PgUp/PgDn scroll · Enter submit answer · Ctrl-R reject with note · Esc skip',
+    );
+    expect(text.length).toBeLessThan(76);
+  });
+
+  it('compacts before using a hint row that exactly matches the width', () => {
+    const text = hintText(
+      externalInquiryKeyHintsForWidth({
+        questionScrollable: true,
+        maxColumns: 77,
+      }),
+    );
+
+    expect(text).toBe(
+      'PgUp/PgDn scroll · Enter submit answer · Ctrl-R reject with note · Esc skip',
+    );
+    expect(text.length).toBeLessThan(77);
+  });
+
+  it('keeps the full scrollable hint row when there is spare width', () => {
+    const text = hintText(
+      externalInquiryKeyHintsForWidth({
+        questionScrollable: true,
+        maxColumns: 78,
+      }),
+    );
+
+    expect(text).toBe(
+      'PgUp/PgDn question · Enter submit answer · Ctrl-R reject with note · Esc skip',
+    );
+    expect(text.length).toBeLessThan(78);
+  });
+
+  it('preserves the scroll hint when compact action labels fit', () => {
+    const text = hintText(
+      externalInquiryKeyHintsForWidth({
+        questionScrollable: true,
+        maxColumns: 58,
+      }),
+    );
+
+    expect(text).toBe(
+      'PgUp/Dn scroll · Enter submit · Ctrl-R reject · Esc skip',
+    );
+    expect(text.length).toBeLessThan(58);
+  });
+
+  it('keeps core external inquiry actions visible in narrow modals', () => {
+    const text = hintText(
+      externalInquiryKeyHintsForWidth({
+        questionScrollable: true,
+        maxColumns: 56,
+      }),
+    );
+
+    expect(text).toBe('Enter submit · Ctrl-R reject · Esc skip');
+    expect(text.length).toBeLessThan(56);
+  });
+
+  it('continues shrinking non-scrollable hints when compact actions do not fit', () => {
+    const text = hintText(
+      externalInquiryKeyHintsForWidth({
+        questionScrollable: false,
+        maxColumns: 20,
+      }),
+    );
+
+    expect(text).toBe('Esc skip');
+    expect(text.length).toBeLessThan(20);
+  });
+
   it('bounds long question text to the foreground row budget', () => {
     const answerRows = externalInquiryAnswerRowsBudget(18);
     const questionRows = externalInquiryQuestionRowsBudget({
@@ -92,8 +181,8 @@ describe('CLI external inquiry modal', () => {
       }),
     ).toEqual([
       { key: 'PgUp/PgDn', action: 'scroll' },
-      { key: 'Enter', action: 'submit' },
-      { key: 'Ctrl-R', action: 'reject' },
+      { key: 'Enter', action: 'submit answer' },
+      { key: 'Ctrl-R', action: 'reject with note' },
       { key: 'Esc', action: 'skip' },
     ]);
 
