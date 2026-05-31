@@ -18,7 +18,7 @@ import {
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { isFileNotFoundError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';
-import { isDirectory } from '@common/files/fsEntryType';
+import { isDirectory } from '@utils/files/fsEntryType';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS, WorkspaceFS } from '@utils/files';

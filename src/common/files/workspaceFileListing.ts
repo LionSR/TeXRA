@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { isDirectory, isFile } from '@common/files/fsEntryType';
+import { isDirectory, isFile } from '@utils/files/fsEntryType';
 import { normalizeFilePath } from '@shared/utils/path';
 
 import {

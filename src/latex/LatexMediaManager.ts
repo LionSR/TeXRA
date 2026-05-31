@@ -7,7 +7,7 @@ import type { AgentTrace } from '@agent/trace';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 
 import { toErrorMessage } from '@common/errors';
-import { isFile } from '@common/files/fsEntryType';
+import { isFile } from '@utils/files/fsEntryType';
 import { ToolConfig } from '@shared/schemas/toolConfig';
 import {
   TaskRunFileService,

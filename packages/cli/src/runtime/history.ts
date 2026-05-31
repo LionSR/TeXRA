@@ -13,7 +13,7 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { flowKey } from '@agent/node/persistedFlow';
 import { isFileNotFoundError } from '@common/errors';
-import { isDirectory } from '@common/files/fsEntryType';
+import { isDirectory } from '@utils/files/fsEntryType';
 import {
   EXECUTION_STATUS,
   ExecutionIdSchema,

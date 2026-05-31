@@ -45,7 +45,7 @@ import { getWorkspaceState } from '@agent/core/stateStore';
 // Local imports - utils
 import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
-import { isDirectory } from '@common/files/fsEntryType';
+import { isDirectory } from '@utils/files/fsEntryType';
 import {
   STREAM_STATUS,
   ExecutionIdSchema,

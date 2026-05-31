@@ -3,7 +3,7 @@ import * as path from 'path';
 import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { getWorkspaceState } from '@agent/core/stateStore';
-import { isDirectory, isFile, isSymlink } from '@common/files/fsEntryType';
+import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 import { runLatexFormatter } from '@latex/texFormatter';
 import * as logger from '@logger/logUtils';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';

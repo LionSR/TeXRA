@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 // Local imports - tool definitions
 import { toErrorMessage } from '@common/errors';
-import { isDirectory } from '@common/files/fsEntryType';
+import { isDirectory } from '@utils/files/fsEntryType';
 import { isTexFile } from '@common/files/fileTypeUtils';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';

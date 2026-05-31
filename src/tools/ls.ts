@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { toErrorMessage } from '@common/errors';
-import { isFile, isDirectory } from '@common/files/fsEntryType';
+import { isFile, isDirectory } from '@utils/files/fsEntryType';
 import { ToolError, ToolResult } from '@tools/result';
 import { formatToolOutput, pluralize } from '@tools/formatting';
 import {

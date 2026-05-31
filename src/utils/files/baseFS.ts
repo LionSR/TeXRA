@@ -5,7 +5,7 @@ import * as path from 'path';
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';
 import { platform } from '@platform/platform';
-import { isFile, isDirectory } from '@common/files/fsEntryType';
+import { isFile, isDirectory } from './fsEntryType';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 /** Convert content to Buffer for writing. */

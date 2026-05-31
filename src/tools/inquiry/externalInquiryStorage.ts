@@ -3,7 +3,7 @@ import { randomBytes } from 'crypto';
 
 import { z } from 'zod';
 
-import { isDirectory, isFile } from '@common/files/fsEntryType';
+import { isDirectory, isFile } from '@utils/files/fsEntryType';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
   ExternalInquirySessionLinksSchema,

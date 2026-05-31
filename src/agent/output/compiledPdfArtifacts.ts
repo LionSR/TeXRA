@@ -3,7 +3,7 @@ import * as path from 'path';
 
 // Local imports - shared schemas
 import { platform } from '@platform/platform';
-import { isFile } from '@common/files/fsEntryType';
+import { isFile } from '@utils/files/fsEntryType';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
 
 // Local imports - file utilities

@@ -8,7 +8,7 @@
 
 import * as path from 'path';
 
-import { isDirectory } from '@common/files/fsEntryType';
+import { isDirectory } from '@utils/files/fsEntryType';
 import { StorageFS } from '@utils/files';
 
 import { MEMORY_STORAGE_ROOT, shouldSkipEntry } from './constants';
