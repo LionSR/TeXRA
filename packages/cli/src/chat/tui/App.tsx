@@ -69,14 +69,16 @@ const PINNED_CHROME_ROWS = {
 function pinnedChromeRows({
   reverseSearchOpen,
   slashPaletteOpen,
+  tipVisible = true,
 }: {
   readonly reverseSearchOpen: boolean;
   readonly slashPaletteOpen: boolean;
+  readonly tipVisible?: boolean;
 }): number {
-  const baseRows = Object.values(PINNED_CHROME_ROWS).reduce(
-    (sum, rows) => sum + rows,
-    0,
-  );
+  const { tip, ...alwaysVisibleRows } = PINNED_CHROME_ROWS;
+  const baseRows =
+    Object.values(alwaysVisibleRows).reduce((sum, rows) => sum + rows, 0) +
+    (tipVisible ? tip : 0);
   return (
     baseRows +
     (slashPaletteOpen ? SLASH_PALETTE_ROWS : 0) +
@@ -90,19 +92,26 @@ export function allocateMiddleRows({
   reverseSearchOpen,
   rows,
   slashPaletteOpen,
+  tipVisible = true,
 }: {
   readonly foregroundMaxRows?: number;
   readonly foregroundOpen: boolean;
   readonly reverseSearchOpen: boolean;
   readonly rows: number;
   readonly slashPaletteOpen: boolean;
+  readonly tipVisible?: boolean;
 }): {
   readonly foregroundRows: number;
   readonly transcriptRows: number;
 } {
   const availableRows = Math.max(
     0,
-    rows - pinnedChromeRows({ reverseSearchOpen, slashPaletteOpen }),
+    rows -
+      pinnedChromeRows({
+        reverseSearchOpen,
+        slashPaletteOpen,
+        tipVisible,
+      }),
   );
   if (!foregroundOpen) {
     return { foregroundRows: 0, transcriptRows: availableRows };
@@ -159,6 +168,14 @@ export function allocateSidePanelRows({
     subagentRows,
     todosPlanRows: availableRows - subagentRows,
   };
+}
+
+export function shouldShowTipRow({
+  foregroundOpen,
+}: {
+  readonly foregroundOpen: boolean;
+}): boolean {
+  return !foregroundOpen;
 }
 
 export function shouldShowTodosPlanPanel({
@@ -291,6 +308,7 @@ export function App(props: AppProps): React.JSX.Element {
     activeForm !== undefined ||
     childControlMode !== undefined ||
     transcriptViewerOpen;
+  const tipRowVisible = shouldShowTipRow({ foregroundOpen });
   const inputDisabled = props.inputDisabled === true || foregroundOpen;
 
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
@@ -330,6 +348,7 @@ export function App(props: AppProps): React.JSX.Element {
     reverseSearchOpen,
     rows,
     slashPaletteOpen,
+    tipVisible: tipRowVisible,
   });
   // The subagent/todos panels live at the bottom of the same vertical
   // column. Carve a bounded slice off the transcript area so the
@@ -529,7 +548,7 @@ export function App(props: AppProps): React.JSX.Element {
             <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>
         ) : null}
-        <TipRow />
+        {tipRowVisible ? <TipRow /> : null}
         <InputBar
           onSubmit={props.onSubmit}
           disabled={inputDisabled}

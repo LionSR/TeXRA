@@ -349,7 +349,7 @@ const SCENARIOS = [
       'Use foreground panel shortcuts',
     ],
     unexpect: ['[Alt-p]tasks', '[Option-p]tasks', '[/model]models'],
-    maxBlankLinesBetween: [{ from: '╚', to: 'Tip:', max: 1 }],
+    maxBlankLinesBetween: [{ from: '╚', to: '╭', max: 1 }],
   },
   {
     name: 'narrow-bash-approval',
@@ -366,7 +366,7 @@ const SCENARIOS = [
       'Esc cancel',
     ],
     unexpect: [' · …', 'a session'],
-    maxBlankLinesBetween: [{ from: '╚', to: 'Tip:', max: 1 }],
+    maxBlankLinesBetween: [{ from: '╚', to: '╭', max: 1 }],
   },
   {
     name: 'long-bash-approval',
@@ -386,7 +386,7 @@ const SCENARIOS = [
       'Use foreground panel shortcuts',
     ],
     unexpect: ['╚═    print', '[Option-p]tasks'],
-    maxBlankLinesBetween: [{ from: '╚', to: 'Tip:', max: 1 }],
+    maxBlankLinesBetween: [{ from: '╚', to: '╭', max: 1 }],
   },
   {
     name: 'compact-long-bash-approval',
@@ -406,7 +406,7 @@ const SCENARIOS = [
       'Use foreground panel shortcuts',
     ],
     unexpect: ['╚═    print', 'scroll command', '[Option-p]tasks'],
-    maxBlankLinesBetween: [{ from: '╚', to: 'Tip:', max: 1 }],
+    maxBlankLinesBetween: [{ from: '╚', to: '╭', max: 1 }],
   },
   {
     name: 'bash-approval-approve-session',
@@ -434,7 +434,7 @@ const SCENARIOS = [
       'n reject',
     ],
     unexpect: ['confirmation of correctness', '[Option-p]tasks'],
-    maxBlankLinesBetween: [{ from: '╚', to: 'Tip:', max: 1 }],
+    maxBlankLinesBetween: [{ from: '╚', to: '╭', max: 1 }],
   },
   {
     name: 'external-inquiry-long',
@@ -452,7 +452,7 @@ const SCENARIOS = [
       'Esc skip',
     ],
     unexpect: ['└─Degenerate triples', '[/model]models', 'Esc sk…'],
-    maxBlankLinesBetween: [{ from: '└', to: 'Tip:', max: 1 }],
+    maxBlankLinesBetween: [{ from: '└', to: '╭', max: 1 }],
   },
   {
     name: 'external-inquiry-long-80-cols',
@@ -471,7 +471,7 @@ const SCENARIOS = [
       'Esc skip',
     ],
     unexpect: ['└─Degenerate triples', '[/model]models', 'Esc sk…'],
-    maxBlankLinesBetween: [{ from: '└', to: 'Tip:', max: 1 }],
+    maxBlankLinesBetween: [{ from: '└', to: '╭', max: 1 }],
   },
   {
     name: 'plan-approval',
@@ -613,7 +613,7 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: ['Tasks and sub-workflows', 'latex build'],
-    maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
+    maxBlankLinesBetween: [{ from: '╰', to: '╭', max: 1 }],
   },
   {
     name: 'task-picker',
@@ -637,7 +637,7 @@ const SCENARIOS = [
         to: 'Tasks and sub-workflows',
         max: 3,
       },
-      { from: '╰', to: 'Tip:', max: 1 },
+      { from: '╰', to: '╭', max: 1 },
     ],
   },
   {
@@ -784,7 +784,7 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: ['strategy sub-wo…', 'sub-workfl\now', '\n────╯', 'Esc cl…'],
-    maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
+    maxBlankLinesBetween: [{ from: '╰', to: '╭', max: 1 }],
   },
   {
     name: 'narrow-subagent-picker-second',
@@ -807,7 +807,7 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: ['leanSolver sub-wor…', 'sub-workfl\now', '\n────╯', 'Esc cl…'],
-    maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
+    maxBlankLinesBetween: [{ from: '╰', to: '╭', max: 1 }],
   },
   {
     name: 'narrow-task-picker',
@@ -829,7 +829,7 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: ['sub-workfl\now', '\n────╯', 'Esc cl…'],
-    maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
+    maxBlankLinesBetween: [{ from: '╰', to: '╭', max: 1 }],
   },
   {
     name: 'tiny-subagent-picker',
@@ -907,7 +907,7 @@ const SCENARIOS = [
       'k kill',
       'Harness kill requested for harness-child-strategy.\n\nHarness kill requested for harness-child-strategy.',
     ],
-    maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
+    maxBlankLinesBetween: [{ from: '╰', to: '╭', max: 1 }],
   },
   {
     name: 'focused-stopped-subagent',
@@ -941,7 +941,7 @@ const SCENARIOS = [
         to: 'Tasks and sub-workflows',
         max: 4,
       },
-      { from: '╰', to: 'Tip:', max: 1 },
+      { from: '╰', to: '╭', max: 1 },
     ],
   },
   {
@@ -1405,6 +1405,15 @@ async function runScenario(scenario) {
     failures.push(`expected text missing: ${JSON.stringify(t)}`);
   for (const t of present)
     failures.push(`unexpected text present: ${JSON.stringify(t)}`);
+  const slashPaletteVisible =
+    frame.includes('Tab complete') && frame.includes('↑/↓ navigate');
+  if (
+    !slashPaletteVisible &&
+    frame.includes('Use foreground panel shortcuts') &&
+    frame.includes('Tip:')
+  ) {
+    failures.push('foreground panel rendered the normal chat tip row');
+  }
   for (const check of scenario.maxBlankLinesBetween ?? []) {
     const actual = blankLinesBetween(frame, check.from, check.to);
     if (actual === undefined) {
