@@ -281,20 +281,15 @@ export function streamTabsDisplayItems(init: {
   return collapseMiddle(items, init.width);
 }
 
-export function StreamTabsStrip(props: {
+function StreamTabsStripView(props: {
+  readonly items: readonly StreamTabDisplayItem[];
   readonly width: number;
 }): React.JSX.Element | null {
-  const activeStreamId = useSignal(cliState.activeStreamId);
-  const streams = useSignal(cliState.streams);
-  const parentStream = useSignal(cliState.parentStream);
-  const items = streamTabsDisplayItems({
-    activeStreamId,
-    streams,
-    parentStream,
-    width: props.width,
-  });
-  if (items.length === 0) return null;
-  const segments = streamTabsLineSegments(items, Math.max(0, props.width - 2));
+  if (props.items.length === 0) return null;
+  const segments = streamTabsLineSegments(
+    props.items,
+    Math.max(0, props.width - 2),
+  );
 
   return (
     <Box
@@ -324,4 +319,29 @@ export function StreamTabsStrip(props: {
       ))}
     </Box>
   );
+}
+
+function StreamTabsStripFromState(props: {
+  readonly width: number;
+}): React.JSX.Element | null {
+  const activeStreamId = useSignal(cliState.activeStreamId);
+  const streams = useSignal(cliState.streams);
+  const parentStream = useSignal(cliState.parentStream);
+  const items = streamTabsDisplayItems({
+    activeStreamId,
+    streams,
+    parentStream,
+    width: props.width,
+  });
+  return <StreamTabsStripView items={items} width={props.width} />;
+}
+
+export function StreamTabsStrip(props: {
+  readonly items?: readonly StreamTabDisplayItem[];
+  readonly width: number;
+}): React.JSX.Element | null {
+  if (props.items !== undefined) {
+    return <StreamTabsStripView items={props.items} width={props.width} />;
+  }
+  return <StreamTabsStripFromState width={props.width} />;
 }
