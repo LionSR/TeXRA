@@ -16,6 +16,7 @@ import { KeyHints } from '../ui/KeyHints';
 import { FormFrame } from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
+  isCompactFormRows,
   type SelectWindowSize,
 } from './_shared/selectWindow';
 import { useAsyncListForm } from './_shared/useAsyncListForm';
@@ -118,6 +119,32 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     availableRows: props.availableRows,
     itemCount: items.length,
   });
+
+  if (isCompactFormRows(props.availableRows) && items.length > 0) {
+    return (
+      <FormFrame
+        color="cyan"
+        title={`/model · ${formatCliApiMode(props.apiMode)} · Esc close`}
+        showCloseHint={false}
+      >
+        <Text dimColor>Available models</Text>
+        <Select
+          items={items}
+          activeValue={props.currentModel}
+          maxVisibleItems={1}
+          showOverflow={false}
+          onSelect={(value) => {
+            if (selectable) {
+              props.onSelect?.(value);
+              return;
+            }
+            props.onClose();
+          }}
+          onCancel={props.onClose}
+        />
+      </FormFrame>
+    );
+  }
 
   return (
     <Box
