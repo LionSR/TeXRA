@@ -103,6 +103,11 @@ import {
   uploadToolAttachments,
   type UploadedAnthropicAttachment,
 } from './anthropicTools';
+import {
+  buildThinkingConfig,
+  isCompactionEligibleModel,
+  supportsAdaptiveThinking,
+} from './anthropicThinking';
 
 // Type imports
 import type { ProviderStopReason } from '../types/StopReasonTypes';
@@ -175,25 +180,6 @@ const isBetaToolUseBlock = (block: BetaContentBlock): block is ToolUseBlock =>
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
 
-const OPUS_46_FULLNAME = 'claude-opus-4-6';
-const OPUS_47_FULLNAME = 'claude-opus-4-7';
-const OPUS_48_FULLNAME = 'claude-opus-4-8';
-const SONNET_46_FULLNAME = 'claude-sonnet-4-6';
-
-// 1M context window is available natively for Opus 4.6, Opus 4.7, Opus 4.8, and
-// Sonnet 4.6 at standard pricing (no beta header needed). Context window sizes
-// come from llm-zoo. Other Claude models use 200K.
-
-/**
- * Model patterns that require temperature removal when thinking is enabled.
- * Per Anthropic docs, Claude 4 models don't support temperature with thinking.
- */
-const THINKING_TEMPERATURE_EXCLUDED_PATTERNS = [
-  'claude-opus-4',
-  'claude-sonnet-4',
-  'claude-haiku-4',
-];
-
 export class ModelHandlerAnthropic extends ModelHandler<
   MessageParam,
   AnthropicUsage,
@@ -243,97 +229,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
     }
   }
 
-  private isClaudeOpus46(): boolean {
-    return this.config.fullName.startsWith(OPUS_46_FULLNAME);
-  }
-
-  private isClaudeOpus47(): boolean {
-    return this.config.fullName.startsWith(OPUS_47_FULLNAME);
-  }
-
-  private isClaudeOpus48(): boolean {
-    return this.config.fullName.startsWith(OPUS_48_FULLNAME);
-  }
-
-  private isClaudeSonnet46(): boolean {
-    return this.config.fullName.startsWith(SONNET_46_FULLNAME);
-  }
-
   /** Returns the PDF page limit based on the model's effective context window. */
   private getMaxPdfPages(): number {
     return getAnthropicMaxPdfPages(this.getEffectiveContextWindow());
   }
 
-  /**
-   * Whether this model supports adaptive thinking with the effort parameter.
-   * Per Anthropic docs, Opus 4.6, Opus 4.7, Opus 4.8, and Sonnet 4.6 support
-   * adaptive thinking. Opus 4.7+ only accepts adaptive thinking — manual
-   * budget_tokens returns 400.
-   */
-  private supportsAdaptiveThinking(): boolean {
-    return (
-      this.isClaudeOpus46() ||
-      this.isClaudeOpus47() ||
-      this.isClaudeOpus48() ||
-      this.isClaudeSonnet46()
-    );
-  }
-
-  /**
-   * Returns the Anthropic effort level for the current model.
-   * Maps the llm-zoo ReasoningEffort enum to Anthropic's effort levels.
-   * Falls back to 'high' (the API default) when no specific effort is configured.
-   * The above-'high' tiers are only valid for Opus-tier models: Opus 4.8 accepts
-   * both the distinct 'xhigh' ("extra") tier and the top 'max' tier, while Opus
-   * 4.6/4.7 predate that split and only accept 'max'.
-   */
-  private getAnthropicEffort(): BetaOutputConfig['effort'] {
-    const reasoningEffort = this.getEffectiveReasoningEffort();
-    if (!reasoningEffort) {
-      return 'high';
-    }
-
-    switch (reasoningEffort) {
-      case 'max':
-        // The top tier ("Max"). Opus 4.8/4.7/4.6 all accept Anthropic's 'max'
-        // effort; everything else caps at 'high'.
-        return this.isClaudeOpus48() ||
-          this.isClaudeOpus47() ||
-          this.isClaudeOpus46()
-          ? 'max'
-          : 'high';
-      case 'xhigh':
-        // Opus 4.8 exposes the distinct 'xhigh' ("extra") effort tier the SDK
-        // added in 0.100.0, which is exactly what TeXRA's "Extra High" selector
-        // means — map to it directly. Opus 4.6/4.7 predate the tier split and
-        // only accept 'max'; everything else caps at 'high'.
-        if (this.isClaudeOpus48()) return 'xhigh';
-        return this.isClaudeOpus46() || this.isClaudeOpus47() ? 'max' : 'high';
-      case 'high':
-        return 'high';
-      case 'medium':
-        return 'medium';
-      case 'low':
-      case 'none':
-        // Anthropic doesn't support fully disabling thinking; 'low' is the minimum.
-        return 'low';
-      default:
-        return 'high';
-    }
-  }
-
-  /** Whether this model supports Anthropic's native server-side context compaction. */
-  private isCompactionEligibleModel(): boolean {
-    return (
-      this.isClaudeOpus46() ||
-      this.isClaudeOpus47() ||
-      this.isClaudeOpus48() ||
-      this.isClaudeSonnet46()
-    );
-  }
-
   override get supportsManualCompaction(): boolean {
-    return this.isCompactionEligibleModel() && this.isToolUseMode();
+    return (
+      isCompactionEligibleModel(this.config.fullName) && this.isToolUseMode()
+    );
   }
 
   override requestCompaction(): void {
@@ -355,7 +259,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     const consumed = setupContextManagement(
       opts,
       this.isToolUseMode(),
-      this.isCompactionEligibleModel(),
+      isCompactionEligibleModel(this.config.fullName),
       this.compactionRequested,
     );
     if (consumed) {
@@ -564,7 +468,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
       // Only add the beta header for older models that need it explicitly.
       if (
         this.capabilities.supportsInterleavedThinking &&
-        !this.supportsAdaptiveThinking()
+        !supportsAdaptiveThinking(this.config.fullName)
       ) {
         ensureBeta(options, INTERLEAVED_THINKING_BETA);
       }
@@ -579,52 +483,30 @@ export class ModelHandlerAnthropic extends ModelHandler<
     if (this.capabilities.supportsReasoning) {
       this.logger.debug('Enabling thinking for model with reasoning support');
 
-      if (this.supportsAdaptiveThinking()) {
-        // Opus 4.6, Opus 4.7, Opus 4.8, and Sonnet 4.6: use adaptive thinking
-        // with the effort parameter. Adaptive thinking lets the model decide
-        // when and how much to think, and automatically enables interleaved
-        // thinking between tool calls. budget_tokens is deprecated on these
-        // models.
-        const effort = this.getAnthropicEffort();
-        // Opus 4.7+ defaults display to 'omitted', which suppresses reasoning
-        // output. Request 'summarized' so thinking tokens still stream to the
-        // user — older adaptive-thinking models already emit reasoning by
-        // default and are unaffected.
-        options.thinking =
-          this.isClaudeOpus47() || this.isClaudeOpus48()
-            ? { type: 'adaptive', display: 'summarized' }
-            : { type: 'adaptive' };
+      const thinkingConfig = buildThinkingConfig({
+        fullName: this.config.fullName,
+        reasoningEffort: this.getEffectiveReasoningEffort(),
+        maxTokens: options.max_tokens,
+        useStreaming,
+      });
+      options.thinking = thinkingConfig.thinking;
+
+      if (thinkingConfig.thinking.type === 'adaptive') {
         options.output_config = {
           ...options.output_config,
-          effort,
+          ...thinkingConfig.outputConfig,
         };
-
         this.logger.debug(
-          `Set adaptive thinking with effort: ${effort} (max_tokens: ${options.max_tokens})`,
+          `Set adaptive thinking with effort: ${thinkingConfig.outputConfig?.effort} (max_tokens: ${options.max_tokens})`,
         );
-      } else {
-        // Older models: use manual thinking with budget_tokens
-        // budget_tokens must be < max_tokens; use 50% to leave room for actual output
-        const maxBudget = Math.floor(options.max_tokens * 0.5);
-
-        const defaultBudget = useStreaming ? 32768 : 4096;
-        const thinkingBudget = Math.min(defaultBudget, maxBudget);
-
-        options.thinking = {
-          type: 'enabled',
-          budget_tokens: thinkingBudget,
-        };
-
+      } else if (thinkingConfig.thinking.type === 'enabled') {
         this.logger.debug(
-          `Set thinking budget: ${thinkingBudget} tokens (max_tokens: ${options.max_tokens}, streaming: ${useStreaming})`,
+          `Set thinking budget: ${thinkingConfig.thinking.budget_tokens} tokens (max_tokens: ${options.max_tokens}, streaming: ${useStreaming})`,
         );
       }
 
       // Remove temperature for Claude 4 models when thinking is enabled as per Anthropic docs
-      const requiresNoTemperature = THINKING_TEMPERATURE_EXCLUDED_PATTERNS.some(
-        (pattern) => this.config.fullName.includes(pattern),
-      );
-      if (requiresNoTemperature) {
+      if (thinkingConfig.removeTemperature) {
         delete options.temperature;
       }
     }
