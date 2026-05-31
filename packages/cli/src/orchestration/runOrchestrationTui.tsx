@@ -8,7 +8,7 @@ import type {
   CliOrchestrationItem,
 } from '../runtime/orchestration';
 
-interface OrchestrationAppProps {
+export interface OrchestrationAppProps {
   readonly items: readonly CliOrchestrationItem[];
   readonly onResolve: (action: CliOrchestrationAction) => void;
 }
@@ -21,7 +21,9 @@ export function orchestrationKeyHints(): readonly KeyHint[] {
   ];
 }
 
-function OrchestrationApp(props: OrchestrationAppProps): React.JSX.Element {
+export function OrchestrationApp(
+  props: OrchestrationAppProps,
+): React.JSX.Element {
   const app = useApp();
   const { rows } = useWindowSize();
   const maxVisibleItems = Math.max(4, rows - 8);
