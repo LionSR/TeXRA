@@ -89,10 +89,6 @@ prompts:
     Add this command to the preamble if not present:
     \usepackage{xcolor}\newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
-    {% if IS_GOOGLE_MODEL %}
-    In your response, you should use XML tags instead of markdown syntax to organize the output files. NEVER use markdown tags like ```latex ''' nor ```xml to organize the output files.
-    {% endif %}
-
   userPrefix: |
     I am going to give you LaTeX code for mathematical review and enhancement. Read the document(s) carefully, including appendices and supplementary materials. Your goal is to improve the mathematical substance across the entire collection, not writing style.
 
