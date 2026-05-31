@@ -57,7 +57,7 @@ async function runWorkflowAgent(
   context: CliContext,
   init: WorkflowRunInit,
 ): Promise<number> {
-  const model = resolveCliRunModel(context, init.model, 'run');
+  const model = await resolveCliRunModel(context, init.model, 'run');
   const runContext = buildHeadlessRunContext(context, model);
   if (init.output && init.outputDir) {
     throw new CliUsageError('Use either --output or --output-dir, not both.');
