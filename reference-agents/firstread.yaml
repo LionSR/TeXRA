@@ -99,10 +99,6 @@ prompts:
 
     {{ LATEX_STYLE_RULES }}
 
-    {% if IS_GOOGLE_MODEL %}
-    In your response, you should use XML tags instead of markdown syntax to organize the output files. NEVER use markdown tags like ```latex ''' nor ```xml to organize the output files.
-    {% endif %}
-
   userPrefix: |
     The LaTeX draft is below. Read from the beginning, in order.
 
