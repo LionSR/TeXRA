@@ -775,6 +775,8 @@ export async function runChat(
   try {
     modelResolution = await resolveCliRunnableModel(defaults.model, {
       allowFallback: !explicitModelRequested,
+      noAvailableModelsHint:
+        'Run `texra chat --api-mode included` to try included relay access',
     });
   } catch (error: unknown) {
     writeTextStderr(toErrorMessage(error));

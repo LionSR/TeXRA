@@ -16,6 +16,11 @@ export interface CliRunnableModelResolution {
   readonly notice?: string;
 }
 
+export interface CliRunnableModelOptions {
+  readonly allowFallback: boolean;
+  readonly noAvailableModelsHint?: string;
+}
+
 function formatModelAccessStatus(model: ModelOptionData): string {
   if (model.availabilityLabel) return model.availabilityLabel.toLowerCase();
   if (!model.disabled && !model.requiresKey) return 'available';
@@ -71,24 +76,31 @@ function getCanonicalModelConfigId(model: string): string | undefined {
   return Object.keys(MODEL_CONFIGS).find((id) => id.toLowerCase() === lower);
 }
 
-function formatAvailableModels(ids: readonly string[]): string {
+function formatAvailableModels(
+  ids: readonly string[],
+  noAvailableModelsHint?: string,
+): string {
   if (ids.length > 0) return `Available models: ${ids.join(', ')}.`;
-  return 'No models are currently available. Run `texra login`, switch API mode, or configure a provider API key.';
+  const modeHint =
+    noAvailableModelsHint ??
+    'Retry with `--api-mode included` to try included relay access';
+  return `No models are currently available. ${modeHint}, run \`texra login\`, or configure a provider API key.`;
 }
 
 function formatUnavailableModelMessage(
   model: string,
   entry: CliModelAccess | undefined,
   availableIds: readonly string[],
+  options: Pick<CliRunnableModelOptions, 'noAvailableModelsHint'>,
 ): string {
   const status = entry ? ` (${entry.status})` : '';
-  return `Model "${model}" is not available in the active API mode${status}. ${formatAvailableModels(availableIds)}`;
+  return `Model "${model}" is not available in the active API mode${status}. ${formatAvailableModels(availableIds, options.noAvailableModelsHint)}`;
 }
 
 export function resolveCliRunnableModelFromAccessList(
   models: readonly CliModelAccess[],
   model: string,
-  options: { readonly allowFallback: boolean },
+  options: CliRunnableModelOptions,
 ): CliRunnableModelResolution {
   const trimmed = model.trim();
   const entry = findModelAccess(models, trimmed);
@@ -99,6 +111,7 @@ export function resolveCliRunnableModelFromAccessList(
     trimmed,
     entry,
     availableIds,
+    options,
   );
   if (!options.allowFallback || availableIds.length === 0) {
     throw new Error(unavailableMessage);
@@ -113,7 +126,7 @@ export function resolveCliRunnableModelFromAccessList(
 
 export async function resolveCliRunnableModel(
   model: string,
-  options: { readonly allowFallback: boolean },
+  options: CliRunnableModelOptions,
 ): Promise<CliRunnableModelResolution> {
   const models = await getCliModelAccessList();
   const trimmed = model.trim();
