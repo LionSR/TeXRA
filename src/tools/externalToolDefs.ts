@@ -43,18 +43,28 @@ const TEXRA_CLI_CHECK = {
   command: 'texra --version',
   errorMessage: 'TeXRA CLI is not installed or not on PATH.',
 } as const;
+const TEXRA_LOCAL_CLI_CHECK = {
+  command: 'texra-local --version',
+  errorMessage: 'TeXRA local CLI is not installed or not on PATH.',
+} as const;
 
 /**
  * Pluggable check for VS Code extension availability.
  * Set by the extension host at activation; defaults to false (not available).
  */
 let extensionChecker: (extensionId: string) => boolean = () => false;
+let texraCliEntrypointChecker: () => boolean = () => false;
 
 /** Register a platform-specific extension availability checker. */
 export function setExtensionChecker(
   checker: (extensionId: string) => boolean,
 ): void {
   extensionChecker = checker;
+}
+
+/** Register a host-specific check for whether this process is already TeXRA CLI. */
+export function setTexraCliEntrypointChecker(checker: () => boolean): void {
+  texraCliEntrypointChecker = checker;
 }
 
 // ============================================================
@@ -170,7 +180,9 @@ async function resolveGitHubPRPrerequisites(
 }
 
 async function probeTexraCli(): Promise<boolean> {
-  return checkToolInstalled(TEXRA_CLI_CHECK, false);
+  if (texraCliEntrypointChecker()) return true;
+  if (await checkToolInstalled(TEXRA_CLI_CHECK, false)) return true;
+  return checkToolInstalled(TEXRA_LOCAL_CLI_CHECK, false);
 }
 
 interface Lean4Prerequisites {
@@ -447,6 +459,10 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     comingSoon: true,
     probe: probeTexraCli,
     check: async (probeResult) => resolveBooleanProbe(probeResult) ?? false,
+    statusLabel: async (probeResult) =>
+      resolveBooleanProbe(probeResult)
+        ? 'Detected; integration coming soon'
+        : undefined,
     detailCheck: async (probeResult) => {
       const installed = resolveBooleanProbe(probeResult) ?? false;
       return installed
