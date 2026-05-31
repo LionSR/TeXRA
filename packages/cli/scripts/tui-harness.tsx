@@ -12,6 +12,7 @@ import React from 'react';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { tryPlatform } from '@platform/platform';
 import {
+  AGENT_CATEGORY,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_STATUS,
@@ -62,6 +63,7 @@ const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const SHOW_BASH_APPROVAL = process.env.HARNESS_BASH_APPROVAL === '1';
 const SHOW_EXTERNAL_INQUIRY = process.env.HARNESS_EXTERNAL_INQUIRY === '1';
 const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
+const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
 const PLAN_APPROVAL_ODYSSEY = process.env.HARNESS_PLAN_APPROVAL_ODYSSEY === '1';
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
@@ -81,6 +83,18 @@ const EXTERNAL_INQUIRY_QUESTION =
     'Non-degenerate triples: (3,4,5), (5,12,13), (6,8,10), (7,24,25), (8,15,17), (9,12,15), (9,40,41), (10,24,26), (12,16,20), (12,35,37), (14,48,50), (15,20,25), (15,36,39), (16,30,34), (18,24,30), (20,21,29), (20,48,52), (21,28,35), (24,32,40), (24,45,51), (27,36,45), (30,40,50).',
     '',
     'Degenerate triples: (0,b,b) for 0 <= b <= 60.',
+  ].join('\n');
+const AGENT_PROPOSAL_INSTRUCTION =
+  process.env.HARNESS_AGENT_PROPOSAL_INSTRUCTION ??
+  [
+    'Review the mathematical proof in triangular_square_mod5.tex for correctness, completeness, and rigor.',
+    '',
+    '1. Check the reduction to the Pell equation and every hidden parity assumption.',
+    '2. Verify that the recurrence generates every positive solution below the bound.',
+    '3. Recompute every square triangular number and the mod 5 filter.',
+    '4. Inspect edge cases such as n=0, negative x, and duplicate Pell representatives.',
+    '5. Write a structured report with any gaps or a confirmation of correctness.',
+    '6. Include a short independent enumeration so the orchestrator can compare results.',
   ].join('\n');
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
@@ -389,6 +403,19 @@ function makePlanApprovalPayload() {
   };
 }
 
+function makeAgentProposalPayload() {
+  return {
+    proposalId: 'harness-agent-proposal',
+    streamId: STREAM_ID,
+    agentCategory: AGENT_CATEGORY.TOOL_USE,
+    agent: 'review',
+    model: 'deepseekT',
+    instruction: AGENT_PROPOSAL_INSTRUCTION,
+    memories: [],
+    workingDirectory: HARNESS_CWD,
+  };
+}
+
 function applyHarnessApprovalDecision(decision: ApprovalDecision): void {
   if (decision.accepted && decision.bypass === 'bash') {
     patchStream(STREAM_ID, (slice) => ({
@@ -606,6 +633,16 @@ if (SHOW_PLAN_APPROVAL) {
     },
     { onPresent: () => notify({ kind: 'approvalNeeded' }) },
   ).then(appendHarnessPlanDecision);
+}
+
+if (SHOW_AGENT_PROPOSAL) {
+  void enqueueApproval(
+    {
+      kind: 'proposal',
+      payload: makeAgentProposalPayload(),
+    },
+    { onPresent: () => notify({ kind: 'approvalNeeded' }) },
+  ).then(applyHarnessApprovalDecision);
 }
 
 function markHarnessInterrupted(): void {
