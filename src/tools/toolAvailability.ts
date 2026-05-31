@@ -28,6 +28,8 @@ export interface ExternalToolCheckResult {
   readonly tools: readonly RegisteredToolName[];
   readonly name: string;
   readonly status: 'available' | 'not-found' | 'unknown' | 'coming-soon';
+  /** Raw external dependency probe result, independent of presentation-only statuses. */
+  readonly detected: boolean | null;
   /** Short status label for the dashboard badge, when the default is too generic. */
   readonly statusLabel?: string;
   /** Human-readable status detail from the group's `detailCheck`, if any. */
@@ -134,6 +136,8 @@ async function runProbes(): Promise<ExternalToolCheckResult[]> {
           tools,
           name,
           status: comingSoon ? 'coming-soon' : probedStatus,
+          detected:
+            probedStatus === 'unknown' ? null : probedStatus === 'available',
           statusLabel,
           statusDetail,
         };
