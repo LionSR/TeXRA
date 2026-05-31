@@ -19,6 +19,11 @@ export {
   clearStoreCache,
 } from './ExecutionKVStore';
 export {
+  type ExecutionWorkspaceFile,
+  listExecutionWorkspaceFiles,
+  resolveExecutionWorkspaceFilePath,
+} from './executionWorkspaceFiles';
+export {
   detectWaitingStreams,
   hasPersistedFlowRecord,
 } from './detectWaitingStreams';

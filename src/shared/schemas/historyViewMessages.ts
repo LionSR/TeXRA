@@ -35,6 +35,7 @@ const WorkflowConfigSummarySchema = BaseConfigSummarySchema.extend({
 /** Tool-use agents only have the base fields. */
 const ToolUseConfigSummarySchema = BaseConfigSummarySchema.extend({
   agentCategory: z.literal(AGENT_CATEGORY.TOOL_USE),
+  editedFiles: z.array(z.string()).optional(),
 });
 
 const AgentConfigSummarySchema = z.discriminatedUnion('agentCategory', [
