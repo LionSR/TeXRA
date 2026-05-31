@@ -1,0 +1,71 @@
+import * as path from 'path';
+
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { isDirectory } from '@common/files/fsEntryType';
+import { AbsoluteFS } from '@utils/files';
+
+export interface ExecutionWorkspaceFile {
+  readonly path: string;
+  readonly displayPath: string;
+  readonly absolutePath: string;
+  readonly size: number;
+  readonly isDirectory: boolean;
+}
+
+export function resolveExecutionWorkspaceFilePath(
+  config: AgentConfig | null,
+  filePath: string,
+): { readonly absolutePath: string; readonly path: string } | undefined {
+  const workspaceRoot = executionWorkspaceRoot(config);
+  const cleanedPath = filePath.trim();
+  if (!workspaceRoot || !cleanedPath) return undefined;
+
+  const absoluteRoot = path.resolve(workspaceRoot);
+  const absolutePath = path.isAbsolute(cleanedPath)
+    ? path.normalize(cleanedPath)
+    : path.resolve(absoluteRoot, cleanedPath);
+  const relativePath = path.relative(absoluteRoot, absolutePath);
+  if (
+    !relativePath ||
+    relativePath.startsWith('..') ||
+    path.isAbsolute(relativePath)
+  ) {
+    return undefined;
+  }
+
+  return {
+    absolutePath,
+    path: relativePath.replaceAll('\\', '/'),
+  };
+}
+
+export async function listExecutionWorkspaceFiles(
+  config: AgentConfig | null,
+  filePaths: readonly string[],
+): Promise<ExecutionWorkspaceFile[]> {
+  const files = new Map<string, ExecutionWorkspaceFile>();
+  for (const filePath of filePaths) {
+    const resolved = resolveExecutionWorkspaceFilePath(config, filePath);
+    if (!resolved || files.has(resolved.path)) continue;
+
+    const stat = await AbsoluteFS.stat(resolved.absolutePath).catch(
+      () => undefined,
+    );
+    if (!stat) continue;
+
+    files.set(resolved.path, {
+      path: resolved.path,
+      displayPath: `workspace/${resolved.path}`,
+      absolutePath: resolved.absolutePath,
+      size: stat.size,
+      isDirectory: isDirectory(stat.type),
+    });
+  }
+  return [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function executionWorkspaceRoot(
+  config: AgentConfig | null,
+): string | undefined {
+  return config?.workingDirectory?.trim() || undefined;
+}

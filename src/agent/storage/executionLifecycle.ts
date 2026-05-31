@@ -12,6 +12,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getAgent, isAgentRegistryReady } from '@agent/index/agentRegistry';
 
 import type { ExecutionId } from '@shared/schemas';
+import { WorkspaceFS } from '@utils/files';
 import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
 import { invalidateListingCache } from './executionListing';
 
@@ -37,6 +38,12 @@ export function normalizeWriterCategory(
   if (!isAgentRegistryReady()) return config;
   if (getAgent(agentName)?.category === AgentCategory.ToolUse) return config;
   return { ...config, agentCategory: AgentCategory.Workflow };
+}
+
+function pinExecutionWorkingDirectory(config: AgentConfig): AgentConfig {
+  const workingDirectory =
+    config.workingDirectory?.trim() || WorkspaceFS.getPath()?.trim();
+  return workingDirectory ? { ...config, workingDirectory } : config;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,9 +101,13 @@ export async function registerExecution(
   const meta: ExecutionMeta = { timestamp, parentExecutionId };
   if (category) meta.category = category;
   if (delegationDepth !== undefined) meta.delegationDepth = delegationDepth;
+  const persistedConfig = normalizeWriterCategory(
+    pinExecutionWorkingDirectory(config),
+    agentName,
+  );
 
   const writes: Promise<void>[] = [
-    store.writeConfig(normalizeWriterCategory(config, agentName)),
+    store.writeConfig(persistedConfig),
     store.writeMeta(meta),
   ];
 

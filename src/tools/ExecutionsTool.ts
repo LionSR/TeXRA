@@ -16,10 +16,13 @@ import { platform } from '@platform/platform';
 // Local imports - agent
 import {
   getExecutionStore,
+  listExecutionWorkspaceFiles,
   type ChildRecord,
   type TodoEntry,
   listExecutions,
+  resolveExecutionWorkspaceFilePath,
 } from '@agent/storage';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { flowKey } from '@agent/node/persistedFlow';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import {
@@ -49,7 +52,7 @@ import {
   type ExecutionId,
 } from '@shared/schemas';
 import { requireRunStream } from '@tools/contextHelpers';
-import { StorageFS } from '@utils/files';
+import { AbsoluteFS, StorageFS } from '@utils/files';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
@@ -116,7 +119,7 @@ function listenForFollowUp(ac: AbortController): () => void {
 // ============================================================================
 
 const ExecutionsToolInputSchema = z.strictObject({
-  /** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/files/{path} */
+  /** Virtual path: /executions, /executions/{id}, /executions/{id}/files, /executions/{id}/workspace-files/{path} */
   path: z.string().describe('Path starting with /executions'),
 
   /** Action to perform. */
@@ -242,6 +245,8 @@ Paths:
 - /executions/{id}/output - stdout/stderr (background processes only)
 - /executions/{id}/files - Generated files (workflows only)
 - /executions/{id}/files/{path} - Read specific generated file (workflows only)
+- /executions/{id}/workspace-files - Workspace files edited by tool-use runs
+- /executions/{id}/workspace-files/{path} - Read a workspace file edited by a tool-use run
 
 Use "current" as {id} to access the active execution.
 Use offset/limit to paginate the /executions listing (default: offset 0, limit 100).
@@ -322,6 +327,15 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
           // Schema enforces length 2; cast since Zod infers number[]
           input.view_range as [number, number] | undefined,
         );
+      case 'workspace-files':
+        if (rest.length === 0) {
+          return this.listWorkspaceFiles(executionId);
+        }
+        return this.readWorkspaceFile(
+          executionId,
+          rest.join('/'),
+          input.view_range as [number, number] | undefined,
+        );
     }
 
     throw new ToolError(
@@ -334,7 +348,8 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         `- /executions/{id}/todos        - Task list (tool-use subagents)\n` +
         `- /executions/{id}/children     - Child executions\n` +
         `- /executions/{id}/output       - stdout/stderr (background processes)\n` +
-        `- /executions/{id}/files        - Generated files (workflows)`,
+        `- /executions/{id}/files        - Generated files (workflows)\n` +
+        `- /executions/{id}/workspace-files - Workspace files edited by tool-use runs`,
     );
   }
 
@@ -854,6 +869,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     'conversation.json',
     'todos.json',
     'report.json',
+    'workspace-files.json',
     'result-meta.json',
   ]);
 
@@ -960,6 +976,102 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       viewRange,
       maxLines: Infinity,
     });
+  }
+
+  private async listWorkspaceFiles(
+    executionId: ExecutionId,
+  ): Promise<ToolResult> {
+    const store = getExecutionStore(executionId);
+    const [config, paths] = await Promise.all([
+      store.readConfig(),
+      store.readWorkspaceFiles(),
+    ]);
+    const entries = await listExecutionWorkspaceFiles(config, paths);
+
+    if (entries.length === 0) {
+      return {
+        output: `No workspace files recorded for execution ${executionId}.`,
+      };
+    }
+
+    const lines = entries.map((entry) => {
+      const sizeStr = entry.isDirectory ? '<dir>' : this.formatSize(entry.size);
+      return `${sizeStr.padStart(8)}  ${entry.path}`;
+    });
+
+    return {
+      output:
+        `Workspace files for /executions/${executionId}/workspace-files:\n\n` +
+        lines.join('\n'),
+    };
+  }
+
+  private async readWorkspaceFile(
+    executionId: ExecutionId,
+    filePath: string,
+    viewRange?: [number, number],
+  ): Promise<ToolResult> {
+    const store = getExecutionStore(executionId);
+    const [config, paths] = await Promise.all([
+      store.readConfig(),
+      store.readWorkspaceFiles(),
+    ]);
+    const recordedPaths = this.recordedWorkspacePathSet(config, paths);
+    const resolved = this.resolveRecordedWorkspaceFile(
+      config,
+      recordedPaths,
+      filePath,
+    );
+    if (!resolved) {
+      throw new ToolError(
+        `Workspace file not found: /executions/${executionId}/workspace-files/${filePath}`,
+      );
+    }
+
+    const stats = await AbsoluteFS.stat(resolved.absolutePath);
+    if (isDirectory(stats.type)) {
+      throw new ToolError(
+        `Path is a directory: /executions/${executionId}/workspace-files/${filePath}. Use without trailing path to list.`,
+      );
+    }
+
+    const content = await AbsoluteFS.read(resolved.absolutePath);
+    return formatFileView({
+      path: `/executions/${executionId}/workspace-files/${resolved.path}`,
+      lines: splitContentLines(content),
+      viewRange,
+      maxLines: Infinity,
+    });
+  }
+
+  private resolveRecordedWorkspaceFile(
+    config: AgentConfig | null,
+    recordedPaths: ReadonlySet<string>,
+    filePath: string,
+  ): { readonly absolutePath: string; readonly path: string } | undefined {
+    const direct = resolveExecutionWorkspaceFilePath(config, filePath);
+    if (direct && recordedPaths.has(direct.path)) {
+      return direct;
+    }
+    const displayPrefix = 'workspace/';
+    if (!filePath.startsWith(displayPrefix)) return undefined;
+    const stripped = resolveExecutionWorkspaceFilePath(
+      config,
+      filePath.slice(displayPrefix.length),
+    );
+    return stripped && recordedPaths.has(stripped.path) ? stripped : undefined;
+  }
+
+  private recordedWorkspacePathSet(
+    config: AgentConfig | null,
+    paths: readonly string[],
+  ): Set<string> {
+    return new Set(
+      paths.flatMap((candidate) => {
+        const resolved = resolveExecutionWorkspaceFilePath(config, candidate);
+        return resolved ? [resolved.path] : [];
+      }),
+    );
   }
 
   private formatSize(bytes: number): string {
