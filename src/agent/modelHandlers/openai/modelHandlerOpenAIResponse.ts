@@ -1,13 +1,5 @@
-// Standard library imports
-import { Buffer } from 'node:buffer';
-import * as path from 'path';
-
 // Third-party imports
-import OpenAI, {
-  APIConnectionTimeoutError,
-  APIError as OpenAIAPIError,
-  toFile,
-} from 'openai';
+import OpenAI from 'openai';
 
 // Local imports - agent
 import {
@@ -42,14 +34,12 @@ import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
 import { delay } from '@utils/core';
-import { isNonEmptyString } from '@utils/core';
 import {
   getWebSocketEnabled,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
 import { flexibleFS } from '@utils/files/flexibleFS';
 import type { FileLocation } from '@utils/files/taskRunStorage';
-import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 import { normalizeUsage } from '../support/UsageNormalizer';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import {
@@ -67,7 +57,6 @@ import {
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
-  loadAttachmentBuffer,
   type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { parseToolArguments } from '../utils/parseArguments';
@@ -91,6 +80,19 @@ import {
 import { ResponseStreamProcessor } from './ResponseStreamProcessor';
 import { OpenAIResponseWebSocketTransport } from './OpenAIResponseWebSocketTransport';
 import { isResponseFunctionToolCallItem } from './responseStreamEvents';
+import {
+  createInputText,
+  extractTextContentPart,
+  isAssistantTextMessage,
+  isMessageItem,
+  isOutputMessage,
+} from './openAIResponseContent';
+import {
+  buildInlineAttachmentParts,
+  uploadInlineInputFiles,
+  uploadToolAttachments,
+  type UploadedOpenAIResponseAttachment,
+} from './openAIResponseFileUploads';
 import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 import type { ProviderStopReason } from '../types/StopReasonTypes';
 import type {
@@ -111,34 +113,15 @@ import type {
   ResponseCreateParamsBase,
   ResponseCreateParamsNonStreaming,
   ResponseReasoningItem,
-  ResponseFunctionToolCallItem,
   ResponseFunctionToolCall,
   ResponseInputItem,
   ResponseInputContent,
   ResponseInputMessageContentList,
-  ResponseInputFile,
   ResponseStatus,
   ResponseFunctionCallOutputItemList,
   ResponseOutputItem,
-  ResponseOutputMessage,
   ResponseFunctionWebSearch,
 } from 'openai/resources/responses/responses';
-
-interface UploadedOpenAIResponseAttachment {
-  attachment: ToolFileAttachment;
-  fileId: string;
-  isImage: boolean;
-}
-
-/**
- * MIME types that the OpenAI Responses API accepts as `input_file` content.
- * Composed from the shared OFFICE_MIME_TYPES plus PDF.
- * Images are handled separately via `input_image`.
- */
-const INLINEABLE_FILE_MIME_TYPES: ReadonlySet<string> = new Set([
-  'application/pdf',
-  ...OFFICE_MIME_TYPES,
-]);
 
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
@@ -887,7 +870,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const systemMessage: ResponseInputItem.Message = {
         type: 'message',
         role,
-        content: [this.createInputText(systemPrompt)],
+        content: [createInputText(systemPrompt)],
       };
       messages.push(systemMessage);
     }
@@ -895,7 +878,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const supportsMedia =
       this.capabilities.supportsVision || this.capabilities.supportsNativeAudio;
     const userContent: ResponseInputMessageContentList = [
-      this.createInputText(userPrefix),
+      createInputText(userPrefix),
     ];
 
     if (mediaFiles && mediaFiles.length > 0 && supportsMedia) {
@@ -931,7 +914,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const requestMessage: ResponseInputItem.Message = {
         type: 'message',
         role: requestRole,
-        content: [this.createInputText(userRequest)],
+        content: [createInputText(userRequest)],
       };
       messages.push(requestMessage);
     }
@@ -967,7 +950,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
     }
 
-    roundContent.push(this.createInputText(userMessage));
+    roundContent.push(createInputText(userMessage));
 
     const roundUserMessage: ResponseInputItem.Message = {
       type: 'message',
@@ -990,7 +973,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         mediaType.startsWith('image/')
       ) {
         return [
-          this.createInputText(`Image: ${media.file_name}`),
+          createInputText(`Image: ${media.file_name}`),
           {
             type: 'input_image',
             image_url: `data:${mediaType};base64,${media.data}`,
@@ -1012,7 +995,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       if (mediaType === 'application/pdf') {
         return [
-          this.createInputText(`Document: ${media.file_name}`),
+          createInputText(`Document: ${media.file_name}`),
           {
             type: 'input_file',
             file_data: media.data,
@@ -1031,107 +1014,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.logger.warn(`Unknown media category: ${media.media_category}`);
       return [];
     });
-  }
-
-  private isInputFileContent(
-    content: ResponseInputContent,
-  ): content is ResponseInputFile {
-    return content.type === 'input_file';
-  }
-
-  private async uploadInlineInputFiles(
-    client: OpenAI,
-    messageItems: ResponseInputItem[],
-  ): Promise<void> {
-    for (const item of messageItems) {
-      if (!this.isMessageItem(item)) {
-        continue;
-      }
-
-      const contentList = item.content;
-
-      if (!Array.isArray(contentList)) {
-        continue;
-      }
-
-      for (const content of contentList) {
-        if (
-          this.isInputFileContent(content) &&
-          content.file_data &&
-          !content.file_id
-        ) {
-          await this.replaceFileDataWithUpload(client, content);
-        }
-      }
-    }
-  }
-
-  private async replaceFileDataWithUpload(
-    client: OpenAI,
-    content: ResponseInputFile,
-  ): Promise<void> {
-    if (this.isOpenRouterRoutingEnabled()) {
-      this.logger.debug(
-        'OpenRouter routing active; skipping inline file upload.',
-      );
-      return;
-    }
-
-    const fileData = content.file_data;
-    if (!fileData) {
-      return;
-    }
-
-    const filename = content.filename ?? 'document.pdf';
-    let buffer: Buffer | undefined;
-
-    try {
-      const base64Separator = ';base64,';
-      const separatorIndex = fileData.indexOf(base64Separator);
-      const payload =
-        separatorIndex >= 0
-          ? fileData.slice(separatorIndex + base64Separator.length)
-          : fileData;
-
-      buffer = Buffer.from(payload, 'base64');
-      const uploadedFile = await client.files.create({
-        file: await toFile(buffer!, filename),
-        purpose: 'assistants',
-      });
-
-      content.file_id = uploadedFile.id;
-      delete content.file_data;
-      if ('filename' in content) {
-        delete content.filename;
-      }
-    } catch (err) {
-      // Two native SDK timeout signals: APIConnectionTimeoutError (client-side
-      // SDK timeout) and APIError with status 408 (server-side Request Timeout).
-      // Status 408 is NOT mapped to APIConnectionTimeoutError by the SDK —
-      // it falls through to a bare APIError — so both must be checked.
-      const isTimeout =
-        err instanceof APIConnectionTimeoutError ||
-        (err instanceof OpenAIAPIError && err.status === 408);
-      if (isTimeout) {
-        this.logger.warn(
-          `Timed out uploading file ${filename}. Falling back to inline payload.`,
-        );
-        return;
-      }
-
-      logSdkError(
-        this.logger,
-        `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'upload file' },
-      );
-      throw err;
-    } finally {
-      if (buffer) {
-        buffer.fill(0);
-        buffer = undefined;
-      }
-    }
   }
 
   /**
@@ -1312,7 +1194,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       ? effectiveMessages
       : effectiveMessages.slice(this.conversationState.sentMessages);
 
-    await this.uploadInlineInputFiles(client, newMessages);
+    await uploadInlineInputFiles(client, newMessages, {
+      openRouterRouting: this.isOpenRouterRoutingEnabled(),
+      logger: this.logger,
+    });
 
     // Build shared params used by both token counting and API call
 
@@ -1776,7 +1661,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const fallbackSegments: string[] = [];
 
       for (const item of responseObject.output) {
-        if (!this.isOutputMessage(item)) {
+        if (!isOutputMessage(item)) {
           continue;
         }
 
@@ -2060,7 +1945,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const continuationMessage: ResponseInputItem.Message = {
       type: 'message',
       role,
-      content: [this.createInputText(userMessageContinuation)],
+      content: [createInputText(userMessageContinuation)],
     };
     messages.push(continuationMessage);
   }
@@ -2091,7 +1976,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         const pseudoPrefillMessage: ResponseInputItem.Message = {
           type: 'message',
           role: 'user',
-          content: [this.createInputText(pseudoPrefill)],
+          content: [createInputText(pseudoPrefill)],
         };
         messages.push(pseudoPrefillMessage);
       }
@@ -2176,7 +2061,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const lastMessage = messages.at(-1);
     const secondLastMessage = messages.at(-2);
 
-    if (!this.isMessageItem(lastMessage)) {
+    if (!isMessageItem(lastMessage)) {
       this.logger.error(
         'Last message is not a message item - unexpected format',
       );
@@ -2196,7 +2081,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         );
         const trailingMessage = messages.at(-1);
         if (
-          this.isMessageItem(trailingMessage) &&
+          isMessageItem(trailingMessage) &&
           trailingMessage.role === 'user'
         ) {
           messages.pop();
@@ -2401,10 +2286,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     let uploadedAttachments: UploadedOpenAIResponseAttachment[] = [];
     if (canUploadFiles && attachments.length > 0 && client) {
-      uploadedAttachments = await this.uploadToolAttachments(
-        client,
-        attachments,
-      );
+      uploadedAttachments = await uploadToolAttachments(client, attachments, {
+        openRouterRouting: this.isOpenRouterRoutingEnabled(),
+        logger: this.logger,
+      });
       if (uploadedAttachments.length > 0) {
         finalResult.files = uploadedAttachments.map(
           ({ attachment, fileId }) => ({
@@ -2458,7 +2343,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         parts: inlineParts,
         inlined,
         skipped,
-      } = await this.buildInlineAttachmentParts(attachments);
+      } = await buildInlineAttachmentParts(attachments, this.logger);
       if (inlineParts.length > 0) {
         // Build summary that accurately reflects which attachments were inlined
         // vs. skipped, so the model only gets a read_file hint for skipped ones.
@@ -2497,137 +2382,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return messages;
   }
 
-  private async uploadToolAttachments(
-    client: OpenAI,
-    attachments: ToolFileAttachment[],
-  ): Promise<UploadedOpenAIResponseAttachment[]> {
-    if (this.isOpenRouterRoutingEnabled()) {
-      this.logger.debug(
-        'OpenRouter routing active; skipping tool attachment uploads.',
-      );
-      return [];
-    }
-
-    const uploaded: UploadedOpenAIResponseAttachment[] = [];
-
-    for (const attachment of attachments) {
-      let buffer: Buffer | undefined;
-      try {
-        buffer = await loadAttachmentBuffer(attachment);
-      } catch (err) {
-        this.logger.warn(
-          `Unable to read attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
-        );
-        continue;
-      }
-
-      try {
-        const filename = isNonEmptyString(attachment.path)
-          ? path.basename(attachment.path)
-          : 'attachment';
-        const mimeType = attachment.mimeType ?? 'application/octet-stream';
-
-        const uploadedFile = await client.files.create({
-          file: await toFile(buffer!, filename, { type: mimeType }),
-          purpose: 'assistants',
-        });
-
-        uploaded.push({
-          attachment,
-          fileId: uploadedFile.id,
-          isImage: mimeType.startsWith('image/'),
-        });
-      } catch (err) {
-        this.logger.warn(
-          `Failed to upload attachment to OpenAI: ${getSdkErrorMessage(err)}`,
-        );
-      } finally {
-        if (buffer) {
-          buffer.fill(0);
-          buffer = undefined;
-        }
-      }
-    }
-
-    return uploaded;
-  }
-
-  /**
-   * Build inline base64 content parts for tool attachments when file uploads
-   * are unavailable (e.g., OpenRouter routing). Images use data URI in
-   * `image_url`; PDFs and office documents use `file_data` in `input_file`.
-   * Unsupported MIME types are skipped.
-   */
-  private async buildInlineAttachmentParts(
-    attachments: ToolFileAttachment[],
-  ): Promise<{
-    parts: ResponseFunctionCallOutputItemList;
-    inlined: ToolFileAttachment[];
-    skipped: ToolFileAttachment[];
-  }> {
-    const MAX_INLINE_BYTES = 20 * 1024 * 1024; // 20 MiB cap per attachment
-    const parts: ResponseFunctionCallOutputItemList = [];
-    const inlined: ToolFileAttachment[] = [];
-    const skipped: ToolFileAttachment[] = [];
-
-    for (const attachment of attachments) {
-      const mimeType = attachment.mimeType ?? 'application/octet-stream';
-      const isImage = mimeType.startsWith('image/');
-      const isFileInput = INLINEABLE_FILE_MIME_TYPES.has(mimeType);
-
-      if (!isImage && !isFileInput) {
-        skipped.push(attachment);
-        continue;
-      }
-
-      let buffer: Buffer | undefined;
-      try {
-        buffer = await loadAttachmentBuffer(attachment);
-        if (buffer.length > MAX_INLINE_BYTES) {
-          this.logger.debug(
-            `Skipping inline attachment ${attachment.path ?? 'attachment'}: ${buffer.length} bytes exceeds limit`,
-          );
-          skipped.push(attachment);
-          continue;
-        }
-
-        const base64 = buffer.toString('base64');
-
-        if (isImage) {
-          parts.push({
-            type: 'input_image',
-            detail: 'auto',
-            image_url: `data:${mimeType};base64,${base64}`,
-          });
-        } else {
-          // PDF, office documents, and other file types accepted by input_file
-          const filename =
-            typeof attachment.path === 'string' && attachment.path.length > 0
-              ? path.basename(attachment.path)
-              : 'attachment';
-          parts.push({
-            type: 'input_file',
-            file_data: `data:${mimeType};base64,${base64}`,
-            filename,
-          });
-        }
-        inlined.push(attachment);
-      } catch (err) {
-        this.logger.debug(
-          `Unable to inline attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
-        );
-        skipped.push(attachment);
-      } finally {
-        if (buffer) {
-          buffer.fill(0);
-          buffer = undefined;
-        }
-      }
-    }
-
-    return { parts, inlined, skipped };
-  }
-
   async createUserFollowUpMessages(
     messages: ResponseInputItem[],
     userMessage: string,
@@ -2636,7 +2390,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       type: 'message',
       role: 'user',
       content: [
-        this.createInputText(userMessage),
+        createInputText(userMessage),
       ] as ResponseInputMessageContentList,
     } as ResponseInputItem);
     return messages;
@@ -2653,7 +2407,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   override extractAssistantText(
     message: ResponseInputItem,
   ): string | undefined {
-    if (!this.isAssistantTextMessage(message)) {
+    if (!isAssistantTextMessage(message)) {
       return undefined;
     }
 
@@ -2665,7 +2419,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Array content (input_text history or output_text response parts)
     if (Array.isArray(message.content)) {
       const texts = message.content
-        .map((part) => this.extractTextContentPart(part))
+        .map((part) => extractTextContentPart(part))
         .filter((text): text is string => text !== undefined);
       return texts.length > 0 ? texts.join('') : undefined;
     }
@@ -2673,91 +2427,43 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return undefined;
   }
 
-  private createInputText(text: string): ResponseInputContent {
-    return { type: 'input_text', text };
-  }
-
-  private isMessageItem(
-    item?: ResponseInputItem,
-  ): item is EasyInputMessage | ResponseInputItem.Message {
-    if (!item || typeof item !== 'object') return false;
-    if (!('role' in item) || typeof item.role !== 'string') return false;
-    if (
-      'type' in item &&
-      typeof item.type === 'string' &&
-      item.type !== 'message'
-    ) {
-      return false;
-    }
-    if (!('content' in item)) return false;
-    const { content } = item;
-    return typeof content === 'string' || Array.isArray(content);
-  }
-
-  private isAssistantTextMessage(
-    item?: ResponseInputItem,
-  ): item is EasyInputMessage | ResponseOutputMessage {
-    return (
-      item?.type === 'message' &&
-      item.role === 'assistant' &&
-      (typeof item.content === 'string' || Array.isArray(item.content))
-    );
-  }
-
-  private extractTextContentPart(part: unknown): string | undefined {
-    if (!part || typeof part !== 'object') return undefined;
-    const candidate = part as { type?: unknown; text?: unknown };
-    return (candidate.type === 'input_text' ||
-      candidate.type === 'output_text') &&
-      typeof candidate.text === 'string'
-      ? candidate.text
-      : undefined;
-  }
-
-  /** Type guard for ResponseOutputMessage items from the SDK. */
-  private isOutputMessage(
-    item: ResponseOutputItem,
-  ): item is ResponseOutputMessage {
-    return item.type === 'message';
-  }
-
   private getMessageContent(
     item?: ResponseInputItem,
   ): ResponseInputMessageContentList | string | undefined {
-    if (!this.isMessageItem(item)) {
+    if (!isMessageItem(item)) {
       return undefined;
     }
     return item.content;
   }
 
   private appendInputText(message: ResponseInputItem, text: string): void {
-    if (!this.isMessageItem(message)) {
+    if (!isMessageItem(message)) {
       return;
     }
 
     const content = message.content;
 
     if (Array.isArray(content)) {
-      content.push(this.createInputText(text));
+      content.push(createInputText(text));
       return;
     }
 
     if (typeof content === 'string') {
       message.content = [
-        this.createInputText(content),
-        this.createInputText(text),
+        createInputText(content),
+        createInputText(text),
       ];
       return;
     }
 
-    message.content = [this.createInputText(text)];
+    message.content = [createInputText(text)];
   }
 
   private appendAssistantText(
     message: ResponseInputItem,
     text: string,
   ): boolean {
-    if (!this.isMessageItem(message) || message.role !== 'assistant') {
+    if (!isMessageItem(message) || message.role !== 'assistant') {
       return false;
     }
 
@@ -2771,7 +2477,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let existingText = '';
     if (Array.isArray(content)) {
       existingText = content
-        .map((part) => this.extractTextContentPart(part) ?? '')
+        .map((part) => extractTextContentPart(part) ?? '')
         .join('');
     }
 
