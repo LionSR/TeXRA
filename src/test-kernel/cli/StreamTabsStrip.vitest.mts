@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
   streamTabSegmentText,
+  streamTabsLineText,
   streamTabsDisplayItems,
 } from '@cli/chat/tui/panes/StreamTabsStrip';
 import {
@@ -292,5 +293,63 @@ describe('CLI stream tabs strip', () => {
       '…',
       '5:subagent-5',
     ]);
+  });
+
+  it('keeps a four-stream child strip within one narrow terminal row', () => {
+    const root = streamId('root');
+    const strategy = streamId('strategy-stream');
+    const leanSolver = streamId('lean-stream');
+    const reviewer = streamId('reviewer-stream');
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [
+        root,
+        slice('root', {
+          status: STREAM_STATUS.RUNNING,
+          activeSubagents: [
+            child({
+              executionId: 'strategy',
+              childStreamId: strategy,
+              agentName: 'strategy',
+              status: STREAM_STATUS.RUNNING,
+            }),
+            child({
+              executionId: 'lean',
+              childStreamId: leanSolver,
+              agentName: 'leanSolver',
+              status: STREAM_STATUS.WAITING,
+            }),
+            child({
+              executionId: 'review',
+              childStreamId: reviewer,
+              agentName: 'reviewer',
+              status: STREAM_STATUS.RUNNING,
+            }),
+          ],
+        }),
+      ],
+      [strategy, slice('strategy-stream', { status: STREAM_STATUS.RUNNING })],
+      [leanSolver, slice('lean-stream', { status: STREAM_STATUS.WAITING })],
+      [reviewer, slice('reviewer-stream', { status: STREAM_STATUS.RUNNING })],
+    ]);
+
+    const items = streamTabsDisplayItems({
+      activeStreamId: root,
+      streams,
+      parentStream: new Map([
+        [strategy, root],
+        [leanSolver, root],
+        [reviewer, root],
+      ]),
+      width: 40,
+    });
+    const line = streamTabsLineText(items, 38);
+
+    expect(items.map(streamTabSegmentText)).toEqual([
+      '[main]*',
+      '1:strategy*',
+      '…',
+      '3:reviewer*',
+    ]);
+    expect(line.length).toBeLessThanOrEqual(38);
   });
 });

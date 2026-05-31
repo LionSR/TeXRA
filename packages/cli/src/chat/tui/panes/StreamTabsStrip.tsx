@@ -70,6 +70,37 @@ function orderedStreamTree(init: {
   return out;
 }
 
+export function streamTabSegmentText(item: StreamTabDisplayItem): string {
+  if (item.id === 'ellipsis') return '…';
+  const labeled =
+    item.shortcutIndex === undefined
+      ? item.label
+      : `${item.shortcutIndex}:${item.label}`;
+  const label = item.active ? `[${labeled}]` : labeled;
+  const running = item.running ? '*' : '';
+  const status =
+    item.status &&
+    item.status !== 'running' &&
+    (!item.active || item.status === 'stopped')
+      ? `(${item.status})`
+      : '';
+  return `${label}${running}${status}`;
+}
+
+export function streamTabsLineText(
+  items: readonly StreamTabDisplayItem[],
+  width?: number,
+): string {
+  const text = items.map(streamTabSegmentText).join(' ');
+  if (width === undefined || text.length <= width) return text;
+  if (width <= 1) return '…';
+  return `${text.slice(0, width - 1)}…`;
+}
+
+function streamTabsTextLength(items: readonly StreamTabDisplayItem[]): number {
+  return streamTabsLineText(items).length;
+}
+
 function activeTreeRoot(
   activeStreamId: StreamTabId | undefined,
   parentStream: ReadonlyMap<StreamTabId, StreamTabId>,
@@ -83,12 +114,10 @@ function collapseMiddle(
   items: readonly StreamTabDisplayItem[],
   width: number,
 ): readonly StreamTabDisplayItem[] {
-  const total = items.reduce(
-    (sum, item) =>
-      sum + item.label.length + (item.shortcutIndex !== undefined ? 2 : 0) + 8,
-    0,
-  );
-  if (total <= width || items.length <= 4) return items;
+  const usableWidth = Math.max(0, width - 2);
+  if (streamTabsTextLength(items) <= usableWidth || items.length <= 2) {
+    return items;
+  }
   const activeIndex = items.findIndex((item) => item.active);
   const keep = new Set([0, items.length - 1]);
   if (activeIndex > 0 && activeIndex < items.length - 1) {
@@ -169,23 +198,6 @@ export function streamTabsDisplayItems(init: {
   return collapseMiddle(items, init.width);
 }
 
-export function streamTabSegmentText(item: StreamTabDisplayItem): string {
-  if (item.id === 'ellipsis') return '…';
-  const labeled =
-    item.shortcutIndex === undefined
-      ? item.label
-      : `${item.shortcutIndex}:${item.label}`;
-  const label = item.active ? `[${labeled}]` : labeled;
-  const running = item.running ? '*' : '';
-  const status =
-    item.status &&
-    item.status !== 'running' &&
-    (!item.active || item.status === 'stopped')
-      ? `(${item.status})`
-      : '';
-  return `${label}${running}${status}`;
-}
-
 export function StreamTabsStrip(props: {
   readonly width: number;
 }): React.JSX.Element | null {
@@ -201,7 +213,14 @@ export function StreamTabsStrip(props: {
   if (items.length === 0) return null;
 
   return (
-    <Box paddingX={1}>
+    <Box
+      flexDirection="row"
+      flexWrap="nowrap"
+      height={1}
+      minWidth={0}
+      overflowY="hidden"
+      paddingX={1}
+    >
       {items.map((item, index) => (
         <Text
           key={`${item.id}:${index}`}
