@@ -5,6 +5,7 @@ import {
   ctrlCActionForFocus,
   defaultShortcutModifierLabel,
   queuedFollowUpsSummary,
+  statusBarCanStopVisibleRun,
   statusBarSegmentText,
 } from '@cli/chat/tui/panes/StatusBar';
 import { NO_BYPASS } from '@cli/chat/tui/state/cliState';
@@ -258,6 +259,42 @@ describe('CLI StatusBar display model', () => {
       'api',
     ]);
     expect(display.bindings).toContain('[Ctrl-C]stop root');
+  });
+
+  it('treats visible live stream status as stoppable', () => {
+    const root = 'root';
+    const child = 'child';
+    const streams = new Map([
+      [root, { streamId: root, status: STREAM_STATUS.RUNNING }],
+      [child, { streamId: child, status: STREAM_STATUS.STOPPED }],
+    ]);
+
+    expect(
+      statusBarCanStopVisibleRun({
+        activeStreamId: root,
+        parentStream: new Map([[child, root]]),
+        status: STREAM_STATUS.RUNNING,
+        streams,
+      }),
+    ).toBe(true);
+    expect(
+      statusBarCanStopVisibleRun({
+        activeStreamId: child,
+        parentStream: new Map([[child, root]]),
+        status: STREAM_STATUS.STOPPED,
+        streams,
+      }),
+    ).toBe(true);
+    expect(
+      statusBarCanStopVisibleRun({
+        activeStreamId: root,
+        parentStream: new Map([[child, root]]),
+        status: STREAM_STATUS.WAITING,
+        streams: new Map([
+          [root, { streamId: root, status: STREAM_STATUS.WAITING }],
+        ]),
+      }),
+    ).toBe(false);
   });
 
   it('keeps status discoverable in narrow single-stream sessions', () => {

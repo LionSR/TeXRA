@@ -90,7 +90,7 @@ const SCENARIOS = [
     },
     bootExpect: 'queued 2',
     frame: 'tail',
-    expect: ['queued 2', 'First queued', 'Second queued'],
+    expect: ['queued 2', 'First queued', 'Second queued', '[Ctrl-C]stop'],
   },
   {
     name: 'subagent-followup-summary',
