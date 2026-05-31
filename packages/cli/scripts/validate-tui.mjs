@@ -1355,6 +1355,23 @@ const SCENARIOS = [
   },
 ];
 
+function formatUsage() {
+  return [
+    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [scenario ...]',
+    '',
+    'Options:',
+    '  --snapshot-dir DIR  Write per-scenario .txt frames and an index.html report',
+    '  -h, --help          Show this help',
+    '',
+    'Available scenarios:',
+    `  ${SCENARIOS.map((s) => s.name).join('\n  ')}`,
+  ].join('\n');
+}
+
+function printUsage(stream = console.log) {
+  stream(formatUsage());
+}
+
 function parseArgs(argv) {
   const scenarios = [];
   let snapshotDir;
@@ -1363,11 +1380,15 @@ function parseArgs(argv) {
     const arg = argv[index];
     if (!endOfOptions && arg === '--') {
       // pnpm forwards a leading separator to scripts (`pnpm run x -- --flag`).
-      // Treat only that package-manager separator as transparent; later `--`
-      // still follows normal end-of-options behavior.
-      if (index === 0 && argv[1]?.startsWith('--snapshot-dir')) continue;
+      // Treat that package-manager separator as transparent when it precedes a
+      // script option; later `--` still follows normal end-of-options behavior.
+      if (index === 0 && argv[1]?.startsWith('-')) continue;
       endOfOptions = true;
       continue;
+    }
+    if (!endOfOptions && (arg === '--help' || arg === '-h')) {
+      printUsage();
+      process.exit(0);
     }
     if (!endOfOptions && arg === '--snapshot-dir') {
       const value = argv[index + 1];
@@ -1390,9 +1411,7 @@ function parseArgs(argv) {
     }
     if (!endOfOptions && arg?.startsWith('--')) {
       console.error(`[validate-tui] unknown option: ${arg}`);
-      console.error(
-        '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [scenario ...]',
-      );
+      printUsage(console.error);
       process.exit(1);
     }
     scenarios.push(arg);
