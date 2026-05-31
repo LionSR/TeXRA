@@ -18,6 +18,8 @@ webview-common/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 docs/.vitepress/.temp/core
+# Generated at build time by `sync-changelog` (mirror of root CHANGELOG.md)
+docs/changelog.md
 
 resources/poster
 resources/poster-app
