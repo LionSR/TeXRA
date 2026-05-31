@@ -24,9 +24,7 @@ export interface ConversationPaneProps {
 export function ConversationPane(
   props: ConversationPaneProps = {},
 ): React.JSX.Element {
-  const activeStreamId = useSignal(cliState.activeStreamId);
-  const streams = useSignal(cliState.streams);
-  const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  const slice = useSignal(cliState.activeSlice);
   const entries = slice?.entries ?? [];
   const { pending } = splitTranscriptEntries(entries, slice?.status);
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
