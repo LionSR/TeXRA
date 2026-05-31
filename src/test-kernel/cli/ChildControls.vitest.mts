@@ -200,6 +200,15 @@ describe('CLI child execution controls', () => {
           elapsed: '12s',
         },
       ],
+      childStreams: [
+        {
+          executionId: 'agent-2',
+          agentName: 'reviewer',
+          childStreamId: 'child-b',
+          status: 'stopped',
+          elapsed: '20s',
+        },
+      ],
       activeProcesses: [
         {
           executionId: 'proc-1',
@@ -222,6 +231,16 @@ describe('CLI child execution controls', () => {
         killable: true,
         tailLines: [],
       },
+      {
+        executionId: 'agent-2',
+        childStreamId: 'child-b',
+        kind: 'subagent',
+        label: 'reviewer',
+        command: 'reviewer',
+        description: 'stopped · 20s',
+        killable: false,
+        tailLines: [],
+      },
     ]);
     expect(buildChildControlItems(state, 'tasks')).toMatchObject([
       {
@@ -231,6 +250,15 @@ describe('CLI child execution controls', () => {
         label: 'critic',
         command: 'critic',
         killable: true,
+      },
+      {
+        executionId: 'agent-2',
+        childStreamId: 'child-b',
+        kind: 'subagent',
+        label: 'reviewer',
+        command: 'reviewer',
+        description: 'stopped · 20s',
+        killable: false,
       },
       {
         executionId: 'proc-1',
@@ -679,6 +707,45 @@ describe('CLI child execution controls', () => {
         childStreamId: 'review-stream',
         kind: 'subagent',
         label: 'review',
+      },
+    ]);
+  });
+
+  it('falls back to retained parent task rows when only stopped child streams remain', () => {
+    const child = slice({ streamId: 'review-stream' });
+    const target = resolveChildControlStreamTarget({
+      activeStreamId: 'review-stream',
+      mode: 'tasks',
+      parentStream: new Map([['review-stream', 'main']]),
+      streams: new Map([
+        [
+          'main',
+          slice({
+            streamId: 'main',
+            childStreams: [
+              {
+                executionId: 'agent-1',
+                agentName: 'review',
+                childStreamId: 'review-stream',
+                status: 'stopped',
+              },
+            ],
+          }),
+        ],
+        ['review-stream', child],
+      ]),
+    });
+
+    expect(target.streamId).toBe('main');
+    expect(target.fallbackFromStreamId).toBe('review-stream');
+    expect(buildChildControlItems(target.slice!, 'tasks')).toMatchObject([
+      {
+        executionId: 'agent-1',
+        childStreamId: 'review-stream',
+        kind: 'subagent',
+        label: 'review',
+        status: 'stopped',
+        killable: false,
       },
     ]);
   });
