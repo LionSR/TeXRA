@@ -1,6 +1,6 @@
-import { renderUsage, showUsage, type CommandDef } from 'citty';
+import { renderUsage, type CommandDef } from 'citty';
 
-import { writeRawStderr } from '@cli/runtime/logSinks';
+import { writeRawStderr, writeRawStdout } from '@cli/runtime/logSinks';
 
 import { GLOBAL_BOOL_FLAGS, GLOBAL_VALUE_FLAGS } from './globalArgs';
 
@@ -114,6 +114,43 @@ export function isCliError(error: unknown): error is Error & { code?: string } {
 
 export type AnyCommand = CommandDef<any>;
 
+export interface UsageSection {
+  readonly title: string;
+  readonly rows: readonly (readonly [label: string, description: string])[];
+}
+
+const usageSections = new WeakMap<AnyCommand, readonly UsageSection[]>();
+
+export function withUsageSections<T extends AnyCommand>(
+  command: T,
+  sections: readonly UsageSection[],
+): T {
+  usageSections.set(command, sections);
+  return command;
+}
+
+function formatUsageSection(section: UsageSection): string {
+  if (section.rows.length === 0) return section.title;
+  const labelWidth = Math.max(...section.rows.map(([label]) => label.length));
+  return [
+    section.title,
+    '',
+    ...section.rows.map(
+      ([label, description]) => `  ${label.padEnd(labelWidth)}  ${description}`,
+    ),
+  ].join('\n');
+}
+
+async function renderUsageWithSections(
+  cmd: AnyCommand,
+  parent?: AnyCommand,
+): Promise<string> {
+  const usage = await renderUsage(cmd, parent);
+  const sections = usageSections.get(cmd);
+  if (!sections?.length) return usage;
+  return `${usage}\n${sections.map(formatUsageSection).join('\n\n')}`;
+}
+
 async function commandSubCommands(
   cmd: AnyCommand,
 ): Promise<Record<string, AnyCommand> | undefined> {
@@ -226,7 +263,12 @@ export async function showUsageStderr(
   cmd: AnyCommand,
   parent?: AnyCommand,
 ): Promise<void> {
-  writeRawStderr(`${await renderUsage(cmd, parent)}\n`);
+  writeRawStderr(`${await renderUsageWithSections(cmd, parent)}\n`);
 }
 
-export { showUsage };
+export async function showUsage(
+  cmd: AnyCommand,
+  parent?: AnyCommand,
+): Promise<void> {
+  writeRawStdout(`${await renderUsageWithSections(cmd, parent)}\n\n`);
+}
