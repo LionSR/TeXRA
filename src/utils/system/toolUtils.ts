@@ -90,124 +90,72 @@ const PANDOC_INSTRUCTIONS = getInstallGuide(PANDOC_INSTALL_GUIDE, p);
 const PDFLATEX_INSTRUCTIONS = getInstallGuide(PDFLATEX_INSTALL_GUIDE, p);
 const LATEXMK_INSTRUCTIONS = getInstallGuide(LATEXMK_INSTALL_GUIDE, p);
 
+// Most tool entries share the same "open installation docs" link and the same
+// "<tool> is not installed…" phrasing; only the label, install guide, and the
+// occasional reason/command differ. These builders capture just that variance.
+const INSTALL_DOCS = 'texra.openDoc,installation';
+
+const featureTool = (name: string, guide: string): string =>
+  `${name} is not installed. Please install it to use this feature.\n${guide}`;
+const texTool = (name: string, guide: string): string =>
+  `${name} is not installed. Please install a TeX distribution to use this feature.\n${guide}`;
+
+/** Build a ToolConfig with the default install-docs link unless `docs: false`. */
+const withDocs = (
+  errorMessage: string,
+  extra: { command?: string | string[]; docs?: false } = {},
+): ToolConfig => ({
+  errorMessage,
+  ...(extra.command ? { command: extra.command } : {}),
+  ...(extra.docs === false ? {} : { openDocsCommand: INSTALL_DOCS }),
+});
+
 // All tool configurations in one place
 const TOOL_CONFIGS: Record<string, ToolConfig> = {
-  // ImageMagick tools
-  magick: {
-    errorMessage:
-      'ImageMagick is not installed. Please install ImageMagick to use PDF to PNG conversion.\n' +
+  // ImageMagick / GraphicsMagick / system dependencies
+  magick: withDocs(
+    'ImageMagick is not installed. Please install ImageMagick to use PDF to PNG conversion.\n' +
       MAGICK_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
-
-  // GraphicsMagick
-  gm: {
-    command: 'gm version',
-    errorMessage:
-      'GraphicsMagick is not installed. Please install GraphicsMagick to use PDF to PNG conversion.\n' +
+  ),
+  gm: withDocs(
+    'GraphicsMagick is not installed. Please install GraphicsMagick to use PDF to PNG conversion.\n' +
       GM_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
-
-  // System dependencies
-  perl: {
-    command: 'perl --version',
-    errorMessage:
-      'Perl is not installed. latexindent requires Perl.\n' + PERL_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
-  gs: {
-    command: IS_WINDOWS
-      ? ['gswin64c --version', 'gswin32c --version', 'gs --version']
-      : 'gs --version',
-    errorMessage:
-      'Ghostscript is not installed. Please install Ghostscript to use PDF to PNG conversion.\n' +
+    { command: 'gm version' },
+  ),
+  perl: withDocs(
+    'Perl is not installed. latexindent requires Perl.\n' + PERL_INSTRUCTIONS,
+    { command: 'perl --version' },
+  ),
+  gs: withDocs(
+    'Ghostscript is not installed. Please install Ghostscript to use PDF to PNG conversion.\n' +
       GHOSTSCRIPT_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
-
-  // Wolfram tools
-  wolframscript: {
-    command: 'wolframscript -version',
-    errorMessage:
-      '"wolframscript" is not installed or not in your PATH.\n' +
+    {
+      command: IS_WINDOWS
+        ? ['gswin64c --version', 'gswin32c --version', 'gs --version']
+        : 'gs --version',
+    },
+  ),
+  wolframscript: withDocs(
+    '"wolframscript" is not installed or not in your PATH.\n' +
       WOLFRAM_INSTRUCTIONS,
-  },
+    { command: 'wolframscript -version', docs: false },
+  ),
 
   // LaTeX tools
-  latexdiff: {
-    errorMessage:
-      'latexdiff is not installed. Please install it to use this feature.\n' +
-      LATEXDIFF_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
-  'latexdiff-vc': {
-    errorMessage:
-      'latexdiff-vc is not installed. Please install it to use this feature.\n' +
-      LATEXDIFF_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
-  latexindent: {
-    errorMessage:
-      'latexindent is not installed. Please install it to use this feature.\n' +
-      LATEXINDENT_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
-  'tex-fmt': {
-    errorMessage:
-      'tex-fmt is not installed. Please install it to use this feature.\n' +
-      TEXFMT_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
-  texcount: {
-    errorMessage:
-      'texcount is not installed. Please install it to use this feature.\n' +
-      TEXCOUNT_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
-  latexmk: {
-    errorMessage:
-      'latexmk is not installed. Please install it to use this feature.\n' +
-      LATEXMK_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
-  pdflatex: {
-    errorMessage:
-      'pdflatex is not installed. Please install it to use this feature.\n' +
-      PDFLATEX_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
-  xelatex: {
-    errorMessage:
-      'xelatex is not installed. Please install a TeX distribution to use this feature.\n' +
-      PDFLATEX_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
-  lualatex: {
-    errorMessage:
-      'lualatex is not installed. Please install a TeX distribution to use this feature.\n' +
-      PDFLATEX_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
-  bibtex: {
-    errorMessage:
-      'bibtex is not installed. Please install a TeX distribution to use this feature.\n' +
-      PDFLATEX_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
-  biber: {
-    errorMessage:
-      'biber is not installed. Please install a TeX distribution to use this feature.\n' +
-      PDFLATEX_INSTRUCTIONS,
-    openDocsCommand: 'texra.openDoc,installation',
-  },
+  latexdiff: withDocs(featureTool('latexdiff', LATEXDIFF_INSTRUCTIONS)),
+  'latexdiff-vc': withDocs(featureTool('latexdiff-vc', LATEXDIFF_INSTRUCTIONS)),
+  latexindent: withDocs(featureTool('latexindent', LATEXINDENT_INSTRUCTIONS)),
+  'tex-fmt': withDocs(featureTool('tex-fmt', TEXFMT_INSTRUCTIONS)),
+  texcount: withDocs(featureTool('texcount', TEXCOUNT_INSTRUCTIONS)),
+  latexmk: withDocs(featureTool('latexmk', LATEXMK_INSTRUCTIONS)),
+  pdflatex: withDocs(featureTool('pdflatex', PDFLATEX_INSTRUCTIONS)),
+  xelatex: withDocs(texTool('xelatex', PDFLATEX_INSTRUCTIONS)),
+  lualatex: withDocs(texTool('lualatex', PDFLATEX_INSTRUCTIONS)),
+  bibtex: withDocs(texTool('bibtex', PDFLATEX_INSTRUCTIONS)),
+  biber: withDocs(texTool('biber', PDFLATEX_INSTRUCTIONS)),
 
   // Document conversion tools
-  pandoc: {
-    errorMessage:
-      'pandoc is not installed. Please install it to use this feature.\n' +
-      PANDOC_INSTRUCTIONS,
-  },
+  pandoc: withDocs(featureTool('pandoc', PANDOC_INSTRUCTIONS), { docs: false }),
 };
 
 /**

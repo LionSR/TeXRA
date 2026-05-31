@@ -211,7 +211,7 @@ describe('TexraSettingsSchema', () => {
     );
     assert.throws(() =>
       TexraSettingsSchema.parse({
-        latex: { enabledReplacements: ['font_commands'] },
+        latex: { enabledReplacements: ['not_a_real_category'] },
       }),
     );
   });

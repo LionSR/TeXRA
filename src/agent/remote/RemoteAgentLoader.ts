@@ -10,9 +10,7 @@ import {
 import {
   getAgent,
   extractToolNames,
-  updateAgentDescription,
-  updateAgentTools,
-  updateAgentDefaultOutputFiles,
+  updateAgentMeta,
 } from '@agent/index/agentRegistry';
 import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -142,11 +140,11 @@ export class RemoteAgentLoader {
       const config = await fetchAgentConfig(agentName);
 
       const registryId = `remote:${agentName}`;
-      if (config.description) {
-        updateAgentDescription(registryId, config.description);
-      }
-      updateAgentTools(registryId, config.tools);
-      updateAgentDefaultOutputFiles(registryId, config.defaultOutputFiles);
+      updateAgentMeta(registryId, {
+        description: config.description,
+        tools: config.tools,
+        defaultOutputFiles: config.defaultOutputFiles,
+      });
 
       logger.info(CHANNEL, `Successfully loaded remote agent: ${agentName}`);
 
