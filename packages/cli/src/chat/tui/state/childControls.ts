@@ -251,6 +251,17 @@ function hasVisibleTasks(
   );
 }
 
+export function hasChildControlItems(
+  slice:
+    | Pick<StreamSlice, 'activeProcesses' | 'activeSubagents' | 'childStreams'>
+    | undefined,
+  mode: ChildControlMode,
+): boolean {
+  return mode === 'subagents'
+    ? hasVisibleSubagents(slice)
+    : hasVisibleTasks(slice);
+}
+
 export function resolveChildControlStreamTarget({
   activeStreamId,
   mode,
