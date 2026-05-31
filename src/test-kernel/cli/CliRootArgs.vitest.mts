@@ -620,4 +620,28 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('Ctrl-C');
     expect(stderr).toBe('');
   });
+
+  it('shows command-specific usage for help command paths', async () => {
+    const result = await runCli(['help', 'chat']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('Interactive tool-use chat session');
+    expect(stdout).toContain('USAGE texra chat');
+    expect(stdout).toContain('INTERACTIVE CONTROLS');
+    expect(stderr).toBe('');
+  });
+
+  it('shows nested command-specific usage for help command paths', async () => {
+    const result = await runCli(['help', 'multi-agent', 'run']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('Run a multi-agent team preset');
+    expect(stdout).toContain('USAGE multi-agent run');
+    expect(stderr).toBe('');
+  });
+
+  it('reports unknown command paths passed to help', async () => {
+    const result = await runCli(['help', 'bogus']);
+    expect(result.exitCode).toBe(2);
+    expect(stderr).toContain('Unknown command: texra bogus');
+    expect(stdout).toBe('');
+  });
 });
