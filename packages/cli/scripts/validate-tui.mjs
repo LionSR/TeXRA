@@ -204,6 +204,15 @@ const SCENARIOS = [
     unexpect: ['registered but has no harness action'],
   },
   {
+    name: 'plain-submit',
+    cols: 120,
+    env: { HARNESS_ENTRIES: '2' },
+    keys: ['prove the bounded case for n <= 20', '\r'],
+    frame: 'tail',
+    expect: ['Harness received: prove the bounded case for n <= 20'],
+    unexpect: ['signal read during notification phase', 'ERROR'],
+  },
+  {
     name: 'agent-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/agent', '\r'],
@@ -621,6 +630,24 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: ['Tasks and sub-workflows', 'latex build'],
+  },
+  {
+    name: 'subagent-focused-submit',
+    cols: 120,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 's', '\r', 'child follow-up on focused stream', '\r'],
+    frame: 'tail',
+    expect: [
+      'Please handle the harness-child-strategy sub-workflow.',
+      'strategy is checking the harness-child-strategy details',
+      'Harness received: child follow-up on focused stream',
+    ],
+    unexpect: ['signal read during notification phase', 'ERROR'],
   },
   {
     name: 'task-picker',
