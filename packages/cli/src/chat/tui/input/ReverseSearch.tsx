@@ -9,6 +9,7 @@ import { Box, Text, useInput } from 'ink';
 
 import { KeyHints } from '../ui/KeyHints';
 import { BaseTextInput } from './BaseTextInput';
+import { isCtrlInput } from './inputKeys';
 import type { InputHistory } from '../history/inputHistory';
 
 export interface ReverseSearchProps {
@@ -29,11 +30,11 @@ export function ReverseSearch(props: ReverseSearchProps): React.JSX.Element {
   const match = props.history.reverseFind(query, cursor);
 
   useInput((input, key) => {
-    if (key.escape || (key.ctrl && input.toLowerCase() === 'g')) {
+    if (key.escape || isCtrlInput(input, key, 'g')) {
       props.onCancel();
       return;
     }
-    if (key.upArrow || (key.ctrl && input.toLowerCase() === 'r')) {
+    if (key.upArrow || isCtrlInput(input, key, 'r')) {
       // Step to the next older match.
       if (!match) return;
       const next = props.history.reverseFind(query, match.index);

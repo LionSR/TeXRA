@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyTerminalInputChunk,
   deleteAtCursor,
   deleteBeforeCursor,
   deletePreviousWord,
@@ -9,11 +10,15 @@ import {
   insertText,
 } from '@cli/chat/tui/input/textInputEditing';
 import {
+  isCtrlInput,
+  isEscapeInput,
+  isUnhandledControlInput,
   isKittyKeypadEnter,
   isPlainReturnInput,
   isShiftReturnInput,
   metaChordDigit,
   metaChordInput,
+  normalizedCtrlInput,
 } from '@cli/chat/tui/input/inputKeys';
 
 const ESC = String.fromCharCode(27);
@@ -60,6 +65,29 @@ describe('CLI TUI text input editing', () => {
     expect(metaChordDigit('\u001B3', {})).toBe(3);
     expect(metaChordDigit('\u001Bp', {})).toBeUndefined();
     expect(metaChordDigit('\u001B0', {})).toBeUndefined();
+  });
+
+  it('normalizes raw terminal control bytes for readline-style shortcuts', () => {
+    expect(normalizedCtrlInput('\u0015', {})).toBe('u');
+    expect(isCtrlInput('\u0015', {}, 'u')).toBe(true);
+    expect(isCtrlInput('u', { ctrl: true }, 'u')).toBe(true);
+    expect(isCtrlInput('\u0015', { meta: true }, 'u')).toBe(false);
+    expect(isEscapeInput('\u001B', {})).toBe(true);
+    expect(isUnhandledControlInput('\u0006')).toBe(true);
+    expect(isUnhandledControlInput('\t')).toBe(false);
+  });
+
+  it('applies batched terminal input without leaking raw control bytes', () => {
+    expect(applyTerminalInputChunk('/', 1, '\u0015/model\r')).toEqual({
+      value: '/model',
+      cursor: 6,
+      submit: true,
+    });
+    expect(applyTerminalInputChunk('one two three', 8, '\u0017X')).toEqual({
+      value: 'one Xthree',
+      cursor: 5,
+      submit: false,
+    });
   });
 
   it('inserts pasted multi-line text without submitting embedded newlines', () => {
