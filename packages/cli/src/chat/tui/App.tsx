@@ -10,6 +10,7 @@ import {
   type StreamStatus,
 } from '@shared/schemas';
 
+import { assertNever } from './assertNever';
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
 import { ApprovalModal } from './modals/ApprovalModal';
@@ -27,7 +28,7 @@ import { StreamTabsStrip } from './panes/StreamTabsStrip';
 import { SubagentList } from './panes/SubagentList';
 import { TipRow } from './panes/TipRow';
 import { TodosPlanPanel } from './panes/TodosPlanPanel';
-import { currentApproval } from './state/approvalQueue';
+import { currentApproval, type PendingApproval } from './state/approvalQueue';
 import {
   isKittyKeypadEnter,
   metaChordDigit,
@@ -61,6 +62,8 @@ const MIN_FOREGROUND_ROWS_WITH_TRANSCRIPT = 6;
 const CHILD_CONTROL_FOREGROUND_MAX_ROWS = 12;
 const EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS = 6;
 const FORM_FOREGROUND_MAX_ROWS = 18;
+// Match form sizing for approval modals that already budget or scroll their
+// content. Natural-height approvals stay uncapped until they grow row budgets.
 const APPROVAL_FOREGROUND_MAX_ROWS = 18;
 // Cap the bottom subagent/todos panels so they never crowd out the
 // conversation or push the input bar off-screen.
@@ -282,10 +285,30 @@ export function childControlForegroundMaxRows({
     : EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS;
 }
 
-function foregroundSurfaceJustifyContent(
+export function foregroundSurfaceJustifyContent(
   kind: ForegroundSurfaceKind | undefined,
 ): 'flex-start' | 'flex-end' {
-  return kind === 'childControls' ? 'flex-end' : 'flex-start';
+  return kind === 'form' || kind === 'approval' ? 'flex-start' : 'flex-end';
+}
+
+export function approvalForegroundMaxRows(
+  pending: PendingApproval | undefined,
+): number | undefined {
+  if (pending === undefined) return undefined;
+
+  switch (pending.payload.kind) {
+    case 'bash':
+    case 'toolEdit':
+    case 'proposal':
+    case 'externalInquiry':
+      return APPROVAL_FOREGROUND_MAX_ROWS;
+    case 'plan':
+    case 'retry':
+    case 'userQuestion':
+      return undefined;
+    default:
+      return assertNever(pending.payload, 'Unhandled approval payload kind');
+  }
 }
 
 export interface AppProps {
@@ -403,7 +426,7 @@ export function App(props: AppProps): React.JSX.Element {
         : foregroundKind === 'form'
           ? FORM_FOREGROUND_MAX_ROWS
           : foregroundKind === 'approval'
-            ? APPROVAL_FOREGROUND_MAX_ROWS
+            ? approvalForegroundMaxRows(pending)
             : undefined,
     foregroundOpen,
     inputVisible: inputBarVisible,
