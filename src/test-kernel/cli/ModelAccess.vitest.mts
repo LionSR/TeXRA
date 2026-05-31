@@ -88,7 +88,23 @@ describe('CLI model access resolution', () => {
         { allowFallback: true },
       ),
     ).toThrow(
-      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available.',
+      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Retry with `--api-mode included` to try included relay access, run `texra login`, or configure a provider API key.',
+    );
+  });
+
+  it('can format command-specific recovery hints for interactive chat', () => {
+    expect(() =>
+      resolveCliRunnableModelFromAccessList(
+        [model('gemini31p', { available: false, status: 'missing api key' })],
+        'gemini31p',
+        {
+          allowFallback: true,
+          noAvailableModelsHint:
+            'Run `texra chat --api-mode included` to try included relay access',
+        },
+      ),
+    ).toThrow(
+      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra chat --api-mode included` to try included relay access, run `texra login`, or configure a provider API key.',
     );
   });
 
