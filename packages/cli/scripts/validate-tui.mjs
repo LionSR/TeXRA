@@ -101,6 +101,49 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'btw-submit',
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/btw check the finite case later', '\r'],
+    frame: 'tail',
+    expect: [
+      'Queued follow-up: check the finite case later',
+      'queued 1',
+      'check the finite case later',
+    ],
+    unexpect: ['registered but has no harness action'],
+  },
+  {
+    name: 'agent-form',
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/agent', '\r'],
+    expect: ['/agent', 'Tool-use agents', 'Esc close'],
+    unexpect: ['Platform not initialized', '/agent - error'],
+  },
+  {
+    name: 'model-form',
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/model', '\r'],
+    frame: 'tail',
+    expect: ['/model · personal API keys', 'Available models'],
+    unexpect: ['Platform not initialized', '/model - error'],
+  },
+  {
+    name: 'api-form',
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/api', '\r'],
+    frame: 'tail',
+    expect: ['/api', 'Personal API keys', 'Included relay'],
+    unexpect: ['ServerSideKeyService not initialized'],
+  },
+  {
+    name: 'tools-form',
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/tools', '\r'],
+    frame: 'tail',
+    expect: ['/tools', 'Toggle available external integrations'],
+    unexpect: ['[TeXRA]', 'toolUtils'],
+  },
+  {
     name: 'slash-palette-overflow',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/', DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN],
@@ -432,6 +475,22 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: [ETX],
     expectExit: true,
+  },
+  {
+    name: 'ctrl-c-interrupt-active',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ETX],
+    frame: 'tail',
+    expect: [
+      'Harness interrupt requested.',
+      '[main](stopped)',
+      '◆ stopped api',
+    ],
   },
 ];
 
