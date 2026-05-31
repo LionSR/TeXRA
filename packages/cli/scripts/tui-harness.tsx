@@ -43,8 +43,22 @@ const HARNESS_YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const SHOW_BASH_APPROVAL = process.env.HARNESS_BASH_APPROVAL === '1';
+const SHOW_EXTERNAL_INQUIRY = process.env.HARNESS_EXTERNAL_INQUIRY === '1';
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
+const EXTERNAL_INQUIRY_QUESTION =
+  process.env.HARNESS_EXTERNAL_INQUIRY_QUESTION ??
+  [
+    'I need an independent verification of an enumeration of Pythagorean triples.',
+    '',
+    'Problem: Find all integer triples (a,b,c) with 0 <= a <= b <= c <= 60 and a^2 + b^2 = c^2, whose perimeter is at most 120.',
+    '',
+    'Please enumerate them independently and verify these results:',
+    '',
+    'Non-degenerate triples: (3,4,5), (5,12,13), (6,8,10), (7,24,25), (8,15,17), (9,12,15), (9,40,41), (10,24,26), (12,16,20), (12,35,37), (14,48,50), (15,20,25), (15,36,39), (16,30,34), (18,24,30), (20,21,29), (20,48,52), (21,28,35), (24,32,40), (24,45,51), (27,36,45), (30,40,50).',
+    '',
+    'Degenerate triples: (0,b,b) for 0 <= b <= 60.',
+  ].join('\n');
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
@@ -336,6 +350,22 @@ if (SHOW_BASH_APPROVAL) {
     {
       kind: 'bash',
       payload: makeBashApprovalPayload(),
+    },
+    { onPresent: () => notify({ kind: 'approvalNeeded' }) },
+  ).then(applyHarnessApprovalDecision);
+}
+
+if (SHOW_EXTERNAL_INQUIRY) {
+  void enqueueApproval(
+    {
+      kind: 'externalInquiry',
+      payload: {
+        requestId: 'harness-external-inquiry',
+        question: EXTERNAL_INQUIRY_QUESTION,
+        threadId: 'ei_123456abcdef',
+        allowBypass: false,
+        streamId: STREAM_ID,
+      },
     },
     { onPresent: () => notify({ kind: 'approvalNeeded' }) },
   ).then(applyHarnessApprovalDecision);

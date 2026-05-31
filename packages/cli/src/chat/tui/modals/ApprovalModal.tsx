@@ -48,7 +48,13 @@ export function ApprovalModal(
     case 'retry':
       return <RetryRequest payload={payload.payload} onDecide={decide} />;
     case 'externalInquiry':
-      return <ExternalInquiry payload={payload.payload} onDecide={decide} />;
+      return (
+        <ExternalInquiry
+          availableRows={props.availableRows}
+          payload={payload.payload}
+          onDecide={decide}
+        />
+      );
     case 'userQuestion':
       return <UserQuestion payload={payload.payload} onDecide={decide} />;
   }
