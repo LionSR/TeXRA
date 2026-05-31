@@ -534,8 +534,8 @@ const SCENARIOS = [
     },
     bootExpect: 'Use foreground panel shortcuts',
     frame: 'tail',
-    expect: ['Run bash command?', 'rows hidden', 'y approve'],
-    unexpect: ['scroll command', '[Option-p]tasks'],
+    expect: ['Run bash command?', 'more rows', 'scroll command', 'y approve'],
+    unexpect: ['[Option-p]tasks'],
   },
   {
     name: 'bash-approval-approve-session',
