@@ -42,7 +42,13 @@ export function ApprovalModal(
         />
       );
     case 'plan':
-      return <PlanApproval payload={payload.payload} onDecide={decide} />;
+      return (
+        <PlanApproval
+          availableRows={props.availableRows}
+          payload={payload.payload}
+          onDecide={decide}
+        />
+      );
     case 'proposal':
       return <AgentProposal payload={payload.payload} onDecide={decide} />;
     case 'retry':
