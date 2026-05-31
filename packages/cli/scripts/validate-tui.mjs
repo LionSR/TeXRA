@@ -45,6 +45,7 @@ const DC4 = String.fromCharCode(20); // Ctrl-T
 const NAK = String.fromCharCode(21); // Ctrl-U
 const UP = ESC + '[A';
 const DOWN = ESC + '[B';
+const PAGE_DOWN = ESC + '[6~';
 const LONG_BASH_APPROVAL_COMMAND = [
   "python3 << 'EOF'",
   'solutions = []',
@@ -453,11 +454,67 @@ const SCENARIOS = [
     expect: [
       'Run bash command?',
       "$ python3 << 'EOF'",
-      'rows hidden',
+      'more rows',
+      'scroll command',
       'y approve',
       'Use foreground panel shortcuts',
     ],
-    unexpect: ['╚═    print', 'scroll command', '[Option-p]tasks'],
+    unexpect: ['╚═    print', '[Option-p]tasks'],
+  },
+  {
+    name: 'compact-long-bash-approval-scroll',
+    rows: 14,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_BASH_APPROVAL: '1',
+      HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
+    },
+    bootExpect: 'Use foreground panel shortcuts',
+    keys: [DOWN, DOWN, DOWN],
+    frame: 'tail',
+    expect: [
+      'Run bash command?',
+      'x2 = 1 + 2 * y * y',
+      'previous',
+      'more rows',
+      'scroll command',
+      'y approve',
+    ],
+    unexpect: ["$ python3 << 'EOF'", '[Option-p]tasks'],
+  },
+  {
+    name: 'compact-long-bash-approval-page',
+    rows: 14,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_BASH_APPROVAL: '1',
+      HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
+    },
+    bootExpect: 'Use foreground panel shortcuts',
+    keys: [PAGE_DOWN],
+    frame: 'tail',
+    expect: [
+      'Run bash command?',
+      'for y in range(1, 100):',
+      'x2 = 1 + 2 * y * y',
+      'previous',
+      'more rows',
+      'PgUp/PgDn page',
+    ],
+    unexpect: ["$ python3 << 'EOF'", 'solutions = []', '[Option-p]tasks'],
+  },
+  {
+    name: 'tiny-compact-long-bash-approval',
+    rows: 11,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_BASH_APPROVAL: '1',
+      HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
+    },
+    bootExpect: 'Use foreground panel shortcuts',
+    frame: 'tail',
+    expect: ['Run bash command?', 'rows hidden', 'y approve'],
+    unexpect: ['scroll command', '[Option-p]tasks'],
   },
   {
     name: 'bash-approval-approve-session',
