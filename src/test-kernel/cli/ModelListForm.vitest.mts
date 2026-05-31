@@ -8,6 +8,7 @@ import {
 } from '@cli/chat/tui/forms/ModelListForm';
 import {
   nextSelectHighlightIndex,
+  selectInlineOverflowText,
   selectInitialHighlightIndex,
   selectItemRenderKey,
   visibleSelectRange,
@@ -174,6 +175,42 @@ describe('CLI Select visible range', () => {
         maxVisibleItems: 5,
       }),
     ).toEqual({ start: 3, end: 8 });
+  });
+});
+
+describe('CLI Select inline overflow', () => {
+  it('summarizes hidden choices when separate overflow rows are disabled', () => {
+    expect(
+      selectInlineOverflowText({
+        hiddenBefore: 0,
+        hiddenAfter: 3,
+        showOverflow: false,
+      }),
+    ).toBe('+3 more');
+    expect(
+      selectInlineOverflowText({
+        hiddenBefore: 2,
+        hiddenAfter: 0,
+        showOverflow: false,
+      }),
+    ).toBe('+2 earlier');
+    expect(
+      selectInlineOverflowText({
+        hiddenBefore: 2,
+        hiddenAfter: 4,
+        showOverflow: false,
+      }),
+    ).toBe('+2 earlier, +4 more');
+  });
+
+  it('defers to separate overflow rows when they are enabled', () => {
+    expect(
+      selectInlineOverflowText({
+        hiddenBefore: 0,
+        hiddenAfter: 3,
+        showOverflow: true,
+      }),
+    ).toBeUndefined();
   });
 });
 
