@@ -1,0 +1,78 @@
+/**
+ * OpenRouter (native SDK) usage accounting & pricing.
+ *
+ * Pure functions extracted from `ModelHandlerOpenRouterNative` so token
+ * accounting and cache-aware price computation can be reasoned about and
+ * unit-tested without a live handler instance. The handler keeps thin
+ * `computePrice` / `normalizeUsage` overrides that delegate here with the
+ * model's pricing config and provider id.
+ */
+
+import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
+import { calculateTokenPrice } from '@agent/utils/priceUtils';
+
+import { normalizeUsage } from '../support/UsageNormalizer';
+import type { ChatUsage } from '@openrouter/sdk/models';
+
+/** Pricing inputs the handler supplies from its `config`/`capabilities`. */
+export interface OpenRouterPricingConfig {
+  inputPrice: number;
+  outputPrice: number;
+  cacheDiscountFactor: number;
+}
+
+/** Computes cost based on token usage and model pricing. */
+export function computeOpenRouterPrice(
+  responseUsage: ChatUsage | null,
+  config: OpenRouterPricingConfig,
+): number {
+  if (!responseUsage) return 0;
+
+  const promptTokens = responseUsage.promptTokens ?? 0;
+  const completionTokens = responseUsage.completionTokens ?? 0;
+
+  let basePrice = calculateTokenPrice(
+    promptTokens,
+    completionTokens,
+    config.inputPrice,
+    config.outputPrice,
+  );
+
+  const reasoningTokens =
+    responseUsage.completionTokensDetails?.reasoningTokens ?? 0;
+  const cachedTokens = responseUsage.promptTokensDetails?.cachedTokens ?? 0;
+
+  if (reasoningTokens) {
+    basePrice += (reasoningTokens * config.outputPrice) / 1e6;
+  }
+  if (cachedTokens) {
+    basePrice -=
+      (cachedTokens * config.inputPrice * (1 - config.cacheDiscountFactor)) /
+      1e6;
+  }
+
+  return basePrice;
+}
+
+/** Normalizes OpenRouter usage data into a unified format. */
+export function normalizeOpenRouterUsage(
+  rawUsage: ChatUsage | null,
+  responseTimeMs: number,
+  provider: NormalizedUsage['provider'],
+  config: OpenRouterPricingConfig,
+): NormalizedUsage {
+  return normalizeUsage(
+    {
+      provider,
+      computePrice: (usage) => computeOpenRouterPrice(usage, config),
+      extract: (usage) => ({
+        inputTokens: usage.promptTokens ?? 0,
+        outputTokens: usage.completionTokens ?? 0,
+        cachedTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+        reasoningTokens: usage.completionTokensDetails?.reasoningTokens ?? 0,
+      }),
+    },
+    rawUsage,
+    responseTimeMs,
+  );
+}
