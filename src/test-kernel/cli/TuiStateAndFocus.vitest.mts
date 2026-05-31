@@ -8,6 +8,7 @@ import {
   setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import {
   cliState,
@@ -59,6 +60,7 @@ import {
   chatTuiCanStopVisibleRun,
   chatTuiCanStartRootRun,
   chatTuiActiveChildFollowUpTarget,
+  chatTuiRejectedChildFollowUpTarget,
   chatTuiShouldAnnounceQueuedFollowUp,
   clearTuiSessionRunState,
   parseBtwFollowUpMessage,
@@ -83,6 +85,7 @@ const child1 = 'child-1' as StreamTabId;
 const child2 = 'child-2' as StreamTabId;
 
 afterEach(() => {
+  StreamStatusService.clearAll({ emit: false });
   resetCliState();
 });
 
@@ -685,9 +688,75 @@ describe('CLI TUI row allocation', () => {
 
     cliState.activeStreamId.set(root);
     expect(chatTuiActiveChildFollowUpTarget()).toBeUndefined();
+    expect(chatTuiRejectedChildFollowUpTarget()).toBeUndefined();
 
     cliState.activeStreamId.set(child1);
     expect(chatTuiActiveChildFollowUpTarget()).toBe(child1);
+    expect(chatTuiRejectedChildFollowUpTarget()).toBeUndefined();
+  });
+
+  it('rejects follow-ups to a focused stopped child stream', () => {
+    patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
+    patchStream(root, (s) => ({
+      ...s,
+      childStreams: [
+        {
+          executionId: 'child-exec-1',
+          agentName: 'critic',
+          childStreamId: child1,
+          status: STREAM_STATUS.STOPPED,
+        },
+      ],
+    }));
+    patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    setParentStream(child1, root);
+
+    cliState.activeStreamId.set(child1);
+    expect(chatTuiActiveChildFollowUpTarget()).toBeUndefined();
+    expect(chatTuiRejectedChildFollowUpTarget()).toBe(child1);
+  });
+
+  it('rejects focused children when any known status source is terminal', () => {
+    patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
+    patchStream(root, (s) => ({
+      ...s,
+      childStreams: [
+        {
+          executionId: 'child-exec-1',
+          agentName: 'critic',
+          childStreamId: child1,
+          status: STREAM_STATUS.RUNNING,
+        },
+      ],
+    }));
+    patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.STOPPED }));
+    setParentStream(child1, root);
+
+    cliState.activeStreamId.set(child1);
+    expect(chatTuiActiveChildFollowUpTarget()).toBeUndefined();
+    expect(chatTuiRejectedChildFollowUpTarget()).toBe(child1);
+  });
+
+  it('rejects focused children when only StreamStatusService is terminal', () => {
+    patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
+    patchStream(root, (s) => ({
+      ...s,
+      childStreams: [
+        {
+          executionId: 'child-exec-1',
+          agentName: 'critic',
+          childStreamId: child1,
+          status: STREAM_STATUS.RUNNING,
+        },
+      ],
+    }));
+    patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
+    StreamStatusService.set(child1, STREAM_STATUS.STOPPED, { emit: false });
+    setParentStream(child1, root);
+
+    cliState.activeStreamId.set(child1);
+    expect(chatTuiActiveChildFollowUpTarget()).toBeUndefined();
+    expect(chatTuiRejectedChildFollowUpTarget()).toBe(child1);
   });
 
   it('announces queued follow-ups only when the target is not waiting', () => {
