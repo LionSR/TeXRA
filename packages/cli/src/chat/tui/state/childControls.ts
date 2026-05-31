@@ -214,9 +214,15 @@ export function buildChildControlItems(
     );
   }
 
+  const activeKeys = new Set(slice.activeSubagents.map(childKey));
   return [
-    ...slice.activeSubagents.map((child) =>
-      buildSubagentItem(child, streamsById, nowMs),
+    ...visibleSubagentRows(slice).map((child) =>
+      buildSubagentItem(
+        child,
+        streamsById,
+        nowMs,
+        activeKeys.has(childKey(child)),
+      ),
     ),
     ...slice.activeProcesses.map((child) =>
       buildProcessItem(
@@ -235,11 +241,13 @@ function hasVisibleSubagents(
 }
 
 function hasVisibleTasks(
-  slice: Pick<StreamSlice, 'activeProcesses' | 'activeSubagents'> | undefined,
+  slice:
+    | Pick<StreamSlice, 'activeProcesses' | 'activeSubagents' | 'childStreams'>
+    | undefined,
 ): boolean {
   return (
     slice !== undefined &&
-    (slice.activeSubagents.length > 0 || slice.activeProcesses.length > 0)
+    (visibleSubagentRows(slice).length > 0 || slice.activeProcesses.length > 0)
   );
 }
 
