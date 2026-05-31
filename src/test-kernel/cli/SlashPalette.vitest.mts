@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   nextSlashPaletteHighlight,
+  slashPaletteCommandLabelWidth,
   slashPaletteEnterHintAction,
   slashPaletteWindow,
 } from '@cli/chat/tui/commands/SlashPalette';
@@ -81,5 +82,14 @@ describe('SlashPalette navigation', () => {
         formComponent: () => null,
       }),
     ).toBe('open');
+  });
+
+  it('reserves enough row width for full slash command names', () => {
+    expect(
+      slashPaletteCommandLabelWidth([
+        { name: 'api', description: 'Switch API mode' },
+        { name: 'yolo', description: 'Approve automatically' },
+      ]),
+    ).toBe('  /yolo  '.length);
   });
 });
