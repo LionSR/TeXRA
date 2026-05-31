@@ -66,6 +66,10 @@ export type MarkdownProcessor = ((content: string) => string) & {
   readonly stats: MarkdownProcessorStats;
 };
 
+export interface MarkdownProcessorRenderEnv {
+  readonly restoreProtectedLatex?: (content: string) => string;
+}
+
 interface ProtectedRef {
   readonly refType: string;
   readonly label: string;
@@ -217,13 +221,25 @@ export function createMarkdownProcessor(
     // heading mid-sentence (".**Heading**" → no break). Force one.
     const formatted = protectedContent.replaceAll(/\.(\*\*[A-Z])/g, '.\n$1');
 
-    const rendered = config.renderer.render(formatted);
+    const restoreProtectedLatex = (value: string): string => {
+      let restored = value;
+      if (config.protectLatexMath) {
+        restored = restoreLatexMacros(restored, macros);
+        restored = restoreLatexMath(restored, spans);
+      }
+      return restoreLatexReferences(restored, refs, format);
+    };
+
+    const renderWithEnv = config.renderer.render as unknown as (
+      this: MarkdownItInstance,
+      src: string,
+      env: MarkdownProcessorRenderEnv,
+    ) => string;
+    const rendered = renderWithEnv.call(config.renderer, formatted, {
+      restoreProtectedLatex,
+    });
     let result = rendered;
-    if (config.protectLatexMath) {
-      result = restoreLatexMacros(result, macros);
-      result = restoreLatexMath(result, spans);
-    }
-    result = restoreLatexReferences(result, refs, format);
+    result = restoreProtectedLatex(result);
 
     // lru-cache's `sizeCalculation` rejects zero, so skip caching the empty
     // render (e.g. content that's only a link-reference definition).
