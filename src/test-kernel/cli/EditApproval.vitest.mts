@@ -64,7 +64,7 @@ describe('CLI edit approval layout', () => {
     expect(
       editApprovalDiffRowsBudget({
         availableRows: 7,
-        columns: 80,
+        columns: 40,
         title: 'Apply edit to proof.tex?',
       }),
     ).toBe(1);

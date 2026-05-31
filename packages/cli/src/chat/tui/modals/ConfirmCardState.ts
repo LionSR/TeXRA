@@ -87,6 +87,13 @@ function hintColumns(hints: readonly ConfirmCardHintAction[]): number {
   );
 }
 
+function hintsFit(
+  hints: readonly ConfirmCardHintAction[],
+  maxColumns: number | undefined,
+): boolean {
+  return maxColumns === undefined || hintColumns(hints) <= maxColumns;
+}
+
 function compactHintAction(action: string): string {
   switch (action) {
     case 'approve session':
@@ -98,19 +105,39 @@ function compactHintAction(action: string): string {
   }
 }
 
+function isCoreApprovalHint(hint: ConfirmCardHintAction): boolean {
+  return hint.key === 'y' || hint.key === 'n' || hint.key === 'Esc';
+}
+
 export function confirmCardKeyHintsForWidth(
   options: ConfirmCardHintWidthOptions,
 ): ConfirmCardHintAction[] {
   const fullHints = confirmCardKeyHints(options);
-  if (
-    options.maxColumns === undefined ||
-    hintColumns(fullHints) <= options.maxColumns
-  ) {
-    return fullHints;
-  }
+  if (hintsFit(fullHints, options.maxColumns)) return fullHints;
 
-  return fullHints.map((hint) => ({
+  const compactHints = fullHints.map((hint) => ({
     ...hint,
     action: compactHintAction(hint.action),
   }));
+  if (hintsFit(compactHints, options.maxColumns)) return compactHints;
+
+  const withoutExtraActions = compactHints.filter(
+    (hint) => isCoreApprovalHint(hint) || hint.key === 'a' || hint.key === 'e',
+  );
+  if (hintsFit(withoutExtraActions, options.maxColumns)) {
+    return withoutExtraActions;
+  }
+
+  const withFeedback = compactHints.filter(
+    (hint) => isCoreApprovalHint(hint) || hint.key === 'e',
+  );
+  if (hintsFit(withFeedback, options.maxColumns)) return withFeedback;
+
+  const withoutFeedback = compactHints.filter((hint) => hint.key !== 'e');
+  if (hintsFit(withoutFeedback, options.maxColumns)) return withoutFeedback;
+
+  const coreHints = compactHints.filter(isCoreApprovalHint);
+  if (hintsFit(coreHints, options.maxColumns)) return coreHints;
+
+  return [{ key: 'Esc', action: 'cancel' }];
 }
