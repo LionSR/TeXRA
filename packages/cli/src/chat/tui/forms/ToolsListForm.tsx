@@ -12,6 +12,10 @@ import {
 } from '@cli/runtime/tools';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
+import {
+  CompactFormFrame,
+  shouldUseCompactForm,
+} from './_shared/CompactFormFrame';
 import { FormFrame } from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
@@ -76,6 +80,41 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
     description: toolDescription(tool),
     disabled: !tool.toggleable || tool.comingSoon,
   }));
+
+  if (shouldUseCompactForm(props.availableRows)) {
+    const compactItems = items.map((item) => ({
+      value: item.value,
+      label: item.label,
+      description: item.description,
+      disabled: item.disabled,
+    }));
+    return (
+      <CompactFormFrame
+        title="/tools"
+        description="Toggle available external integrations."
+        hints={[
+          { key: '↑/↓', action: 'navigate' },
+          { key: 'Enter', action: 'toggle' },
+          { key: 'Esc', action: 'close' },
+        ]}
+        confirmCancel={false}
+      >
+        <Select
+          items={compactItems}
+          maxVisibleItems={1}
+          showOverflow={false}
+          onSelect={(id) => {
+            const tool = tools.find((candidate) => candidate.id === id);
+            if (!tool || tool.enabled == null) return;
+            void setCliToolEnabled(id, !tool.enabled)
+              .then(() => readCliToolStatuses())
+              .then(setTools);
+          }}
+          onCancel={props.onClose}
+        />
+      </CompactFormFrame>
+    );
+  }
 
   return (
     <FormFrame color="cyan" title="/tools" showCloseHint={false}>

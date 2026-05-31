@@ -364,11 +364,12 @@ function openCliApiModeForm(
 ): void {
   cliState.activeForm.set({
     commandName: 'api',
-    render: (close) => {
+    render: (close, availableRows) => {
       const current = cliState.sessionMeta.get().apiMode;
       return (
         <ApiModeForm
           currentMode={current}
+          availableRows={availableRows}
           onSelect={(value) => {
             void (async () => {
               try {

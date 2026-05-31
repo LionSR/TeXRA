@@ -6,6 +6,7 @@ import { Box, useApp, useInput, useStdin, useWindowSize } from 'ink';
 import { useEffect, useState } from 'react';
 
 import { SLASH_PALETTE_ROWS } from './commands/SlashPalette';
+import { COMPACT_FORM_MAX_ROWS } from './forms/_shared/CompactFormFrame';
 import { REVERSE_SEARCH_ROWS } from './input/ReverseSearch';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { ChildControlPicker } from './modals/ChildControlPicker';
@@ -78,15 +79,35 @@ function pinnedChromeRows({
   );
 }
 
+export function shouldUseFullForegroundForForm({
+  reverseSearchOpen,
+  rows,
+  slashPaletteOpen,
+}: {
+  readonly reverseSearchOpen: boolean;
+  readonly rows: number;
+  readonly slashPaletteOpen: boolean;
+}): boolean {
+  const availableRows = Math.max(
+    0,
+    rows - pinnedChromeRows({ reverseSearchOpen, slashPaletteOpen }),
+  );
+  return (
+    Math.min(availableRows, FORM_FOREGROUND_MAX_ROWS) <= COMPACT_FORM_MAX_ROWS
+  );
+}
+
 export function allocateMiddleRows({
   foregroundMaxRows,
   foregroundOpen,
+  reserveTranscriptRows = true,
   reverseSearchOpen,
   rows,
   slashPaletteOpen,
 }: {
   readonly foregroundMaxRows?: number;
   readonly foregroundOpen: boolean;
+  readonly reserveTranscriptRows?: boolean;
   readonly reverseSearchOpen: boolean;
   readonly rows: number;
   readonly slashPaletteOpen: boolean;
@@ -108,10 +129,10 @@ export function allocateMiddleRows({
     return { foregroundRows: 1, transcriptRows: 0 };
   }
 
-  const transcriptRows = Math.min(
-    FOREGROUND_TRANSCRIPT_ROWS,
-    availableRows - 1,
-  );
+  const reservedTranscriptRows = reserveTranscriptRows
+    ? FOREGROUND_TRANSCRIPT_ROWS
+    : 0;
+  const transcriptRows = Math.min(reservedTranscriptRows, availableRows - 1);
   const foregroundRows = availableRows - transcriptRows;
   return {
     foregroundRows:
@@ -295,6 +316,13 @@ export function App(props: AppProps): React.JSX.Element {
     pendingApproval: pending !== undefined,
     transcriptViewerOpen,
   });
+  const useFullForegroundForForm =
+    foregroundKind === 'form' &&
+    shouldUseFullForegroundForForm({
+      reverseSearchOpen,
+      rows,
+      slashPaletteOpen,
+    });
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
     foregroundMaxRows:
       foregroundKind === 'childControls'
@@ -303,6 +331,7 @@ export function App(props: AppProps): React.JSX.Element {
           ? FORM_FOREGROUND_MAX_ROWS
           : undefined,
     foregroundOpen,
+    reserveTranscriptRows: !useFullForegroundForForm,
     reverseSearchOpen,
     rows,
     slashPaletteOpen,
@@ -490,7 +519,9 @@ export function App(props: AppProps): React.JSX.Element {
               flexDirection="column"
               height={foregroundRows}
               alignItems="flex-start"
-              justifyContent="flex-end"
+              justifyContent={
+                useFullForegroundForForm ? 'flex-start' : 'flex-end'
+              }
               overflowY="hidden"
             >
               {foregroundSurface}

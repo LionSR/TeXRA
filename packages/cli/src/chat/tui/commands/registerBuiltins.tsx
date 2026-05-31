@@ -85,6 +85,7 @@ export function registerBuiltinSlashCommands(options?: {
     return (
       <ApiModeForm
         currentMode={current}
+        availableRows={props.availableRows}
         onSelect={(value) =>
           settleThenDone(onApiModeSelect(value), value, props.onDone)
         }

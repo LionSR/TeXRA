@@ -22,6 +22,7 @@ import {
   appEscapeInterruptActive,
   appFocusShortcutsActive,
   foregroundSurfaceKind,
+  shouldUseFullForegroundForForm,
 } from '@cli/chat/tui/App';
 import {
   nextFocusBack,
@@ -196,6 +197,23 @@ describe('CLI TUI row allocation', () => {
 
     expect(layout.transcriptRows).toBe(1);
     expect(layout.foregroundRows).toBe(12);
+  });
+
+  it('only gives forms the whole foreground budget when the pre-reserve budget is compact', () => {
+    expect(
+      shouldUseFullForegroundForForm({
+        reverseSearchOpen: false,
+        rows: 12,
+        slashPaletteOpen: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldUseFullForegroundForForm({
+        reverseSearchOpen: false,
+        rows: 40,
+        slashPaletteOpen: false,
+      }),
+    ).toBe(false);
   });
 
   it('uses the whole middle region for the transcript without foreground UI', () => {

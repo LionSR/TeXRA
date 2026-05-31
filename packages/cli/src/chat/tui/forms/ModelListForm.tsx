@@ -13,6 +13,10 @@ import {
 import { formatCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
 import { Select, type SelectItem } from '../ui/Select';
 import { KeyHints } from '../ui/KeyHints';
+import {
+  CompactFormFrame,
+  shouldUseCompactForm,
+} from './_shared/CompactFormFrame';
 import { FormFrame } from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
@@ -118,6 +122,59 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     availableRows: props.availableRows,
     itemCount: items.length,
   });
+
+  if (shouldUseCompactForm(props.availableRows)) {
+    const compactItems = items.map((item) => ({
+      value: item.value,
+      label: item.label,
+      disabled: item.disabled,
+    }));
+    const populatedHints = selectable
+      ? [
+          { key: '↑/↓', action: 'navigate' },
+          { key: '1-9/a-z', action: 'select' },
+        ]
+      : [
+          { key: '↑/↓', action: 'navigate' },
+          { key: 'Enter', action: 'close' },
+          { key: 'Esc', action: 'close' },
+        ];
+    const emptyHints = [
+      { key: 'Enter', action: 'close' },
+      { key: 'Esc', action: 'close' },
+    ];
+    return (
+      <CompactFormFrame
+        title={`/model · ${formatCliApiMode(props.apiMode)}`}
+        description={
+          selectable
+            ? 'Choose the root model.'
+            : 'Available models for this API mode.'
+        }
+        hints={items.length > 0 ? populatedHints : emptyHints}
+        confirmCancel={selectable && items.length > 0 ? undefined : false}
+      >
+        {items.length === 0 ? (
+          <EmptyModelListState onClose={props.onClose} />
+        ) : (
+          <Select
+            items={compactItems}
+            activeValue={props.currentModel}
+            maxVisibleItems={1}
+            showOverflow={false}
+            onSelect={(value) => {
+              if (selectable) {
+                props.onSelect?.(value);
+                return;
+              }
+              props.onClose();
+            }}
+            onCancel={props.onClose}
+          />
+        )}
+      </CompactFormFrame>
+    );
+  }
 
   return (
     <Box

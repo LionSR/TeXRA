@@ -9,6 +9,10 @@ import type { AgentOptionData } from '@shared/schemas';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
+import {
+  CompactFormFrame,
+  shouldUseCompactForm,
+} from './_shared/CompactFormFrame';
 import { FormFrame } from './_shared/FormFrame';
 import { computeSelectWindowSize } from './_shared/selectWindow';
 import { useAsyncListForm } from './_shared/useAsyncListForm';
@@ -151,6 +155,50 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     0,
     selectWindow.maxVisibleWorkflows,
   );
+
+  if (shouldUseCompactForm(props.availableRows)) {
+    const compactItems = items.map((item) => ({
+      value: item.value,
+      label: item.label,
+    }));
+    const hints = selectable
+      ? [
+          { key: '↑/↓', action: 'navigate' },
+          { key: '1-9/a-z', action: 'select' },
+        ]
+      : [
+          { key: '↑/↓', action: 'navigate' },
+          { key: 'Enter', action: 'close' },
+          { key: 'Esc', action: 'close' },
+        ];
+    return (
+      <CompactFormFrame
+        title="/agent · Tool-use agents · Workflows"
+        description={
+          selectable
+            ? 'Choose the root tool-use agent.'
+            : 'Available tool-use agents; workflows run with texra run.'
+        }
+        hints={hints}
+        confirmCancel={selectable ? undefined : false}
+      >
+        <Select
+          items={compactItems}
+          activeValue={activeValue}
+          maxVisibleItems={1}
+          showOverflow={false}
+          onSelect={(value) => {
+            if (selectable) {
+              props.onSelect?.(value);
+              return;
+            }
+            props.onClose();
+          }}
+          onCancel={props.onClose}
+        />
+      </CompactFormFrame>
+    );
+  }
 
   return (
     <Box
