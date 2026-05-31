@@ -780,6 +780,20 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'idle-todos-hidden',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_TODOS: '1',
+      HARNESS_TODOS_IDLE: '1',
+    },
+    frame: 'tail',
+    expect: ['idle', '[Ctrl-C]exit'],
+    unexpect: [
+      'Split theorem into algebraic and analytic checks',
+      'Route proof obligations',
+    ],
+  },
+  {
     name: 'ctrl-c-exit',
     env: { HARNESS_ENTRIES: '4' },
     keys: [ETX],
