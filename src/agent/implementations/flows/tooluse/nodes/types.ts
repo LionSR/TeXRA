@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
-import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
+import type { AgentRunStateSnapshot } from '@agent/core/execution/AgentState';
 import type {
   AgentWorkspaceState,
   AgentWorkspaceSnapshot,
-} from '@agent/core/AgentWorkspaceState';
-import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
+} from '@agent/core/execution/AgentWorkspaceState';
+import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { RetryErrorInfo } from '@shared/schemas';
 

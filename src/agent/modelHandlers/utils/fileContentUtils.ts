@@ -5,7 +5,7 @@
 
 // Local imports - agent workspace
 import { type AgentTrace } from '@agent/trace';
-import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 
 // Local imports - replacement
 import { cleanFileContent } from '@replacement/engine';

@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
-import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
-import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
-import { UserVariableChannelsSchema } from '@agent/core/AgentCycleOptions';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
+import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/execution/AgentWorkspaceState';
+import { UserVariableChannelsSchema } from '@agent/core/definition/AgentCycleOptions';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
 import { ExecutionIdSchema, StreamTabIdSchema } from '@shared/schemas';
 

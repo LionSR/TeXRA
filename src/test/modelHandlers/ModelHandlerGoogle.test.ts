@@ -10,7 +10,7 @@ import {
 
 // Local imports - agent
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
-import type { AgentSetting } from '@agent/core/AgentDataclass';
+import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 // Internal imports
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
 

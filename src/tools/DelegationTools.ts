@@ -16,8 +16,8 @@ import { getVisibleAgents } from '@agent/index/agentRegistry';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
-} from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+} from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
 import { waitForProposal } from '@agent/runtime/runCoordinators';

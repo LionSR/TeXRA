@@ -2,8 +2,8 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   STREAM_STATUS,
   type ExecutionId,

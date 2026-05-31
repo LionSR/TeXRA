@@ -2,13 +2,13 @@ import * as path from 'path';
 
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { getVisibleAgents, type AgentEntry } from '@agent/index/agentRegistry';
 import {
   AgentSetting,
   AgentPrompt,
   AgentCategory,
-} from '@agent/core/AgentDataclass';
+} from '@agent/core/definition/AgentDataclass';
 import { getConfig } from '@agent/core/config';
 import type { FileListEntry } from '@shared/schemas';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';

@@ -6,7 +6,7 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
   AgentDefinitionSchema,
-} from '@agent/core/AgentDataclass';
+} from '@agent/core/definition/AgentDataclass';
 import {
   getAgent,
   extractToolNames,
