@@ -192,7 +192,7 @@ export async function runMultiAgentPreset(
 ): Promise<number> {
   // A team run drives a tool-use orchestrator, so it follows the `chat`
   // (tool-use) model config rather than `run` (workflow agents).
-  const model = resolveCliRunModel(context, init.model, 'chat');
+  const model = await resolveCliRunModel(context, init.model, 'chat');
   const runContext = buildHeadlessRunContext(context, model);
   const { inputFiles, contextFiles } = await expandRunInputs(
     init.inputFiles,
