@@ -102,10 +102,16 @@ jobs:
         run: pnpm run compile
 
       - name: Build extension package
+        if: runner.os == 'Linux'
         run: pnpm run build:fast
 
       - name: Check extension VSIX contents
+        if: runner.os == 'Linux'
         run: pnpm run check:vsix-contents
+
+      - name: Build webview smoke assets
+        if: runner.os == 'macOS'
+        run: pnpm run vite:webviews
 
       - name: Smoke extension webviews in Electron
         if: runner.os == 'macOS'
