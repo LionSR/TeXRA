@@ -304,6 +304,13 @@ describe('CLI run progress renderer', () => {
       streamId: 'root-stream',
       description: 'Running Mathematician multi-agent preset',
     });
+    renderer?.handle('updateConversationProgress', {
+      streamId: 'root-stream',
+      progress: {
+        conversationTurns: 3,
+        toolCallCount: 9,
+      },
+    });
     renderer?.handle('updateActiveProcesses', {
       parentStreamId: 'root-stream',
       processes: [
