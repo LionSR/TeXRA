@@ -50,6 +50,7 @@ import { renderAnsiMarkdown } from '@cli/chat/tui/render/ansiMarkdown';
 import {
   chatTuiCanInterruptActiveRun,
   chatTuiCanStopActiveRun,
+  chatTuiCanStopVisibleRun,
   chatTuiCanStartRootRun,
   chatTuiActiveChildFollowUpTarget,
   chatTuiShouldAnnounceQueuedFollowUp,
@@ -523,6 +524,49 @@ describe('CLI TUI row allocation', () => {
           streamId: root,
         },
         STREAM_STATUS.RUNNING,
+      ),
+    ).toBe(false);
+  });
+
+  it('keeps Ctrl-C stoppable when the visible stream is already live', () => {
+    expect(
+      chatTuiCanStopVisibleRun(
+        {
+          runCompleted: false,
+          runPromise: undefined,
+          streamId: root,
+        },
+        STREAM_STATUS.RUNNING,
+      ),
+    ).toBe(true);
+    expect(
+      chatTuiCanStopVisibleRun(
+        {
+          runCompleted: true,
+          runPromise: undefined,
+          streamId: root,
+        },
+        STREAM_STATUS.INITIALIZING,
+      ),
+    ).toBe(true);
+    expect(
+      chatTuiCanStopVisibleRun(
+        {
+          runCompleted: false,
+          runPromise: undefined,
+          streamId: undefined,
+        },
+        STREAM_STATUS.RUNNING,
+      ),
+    ).toBe(false);
+    expect(
+      chatTuiCanStopVisibleRun(
+        {
+          runCompleted: false,
+          runPromise: undefined,
+          streamId: root,
+        },
+        STREAM_STATUS.WAITING,
       ),
     ).toBe(false);
   });
