@@ -235,7 +235,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/agent', '\r'],
     frame: 'tail',
-    expect: ['/agent', 'Tool-use agents', 'Esc close'],
+    expect: ['/agent', 'Tool-use agents', '+4 earlier, +13 more', 'Esc close'],
     unexpect: ['Platform not initialized', '/agent - error'],
   },
   {
@@ -245,7 +245,12 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/model', '\r'],
     frame: 'tail',
-    expect: ['/model · personal API keys', 'Available models', 'Esc close'],
+    expect: [
+      '/model · personal API keys',
+      'Available models',
+      '+3 more',
+      'Esc close',
+    ],
     unexpect: ['Platform not initialized', '/model - error'],
   },
   {
@@ -265,7 +270,12 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/tools', '\r'],
     frame: 'tail',
-    expect: ['/tools', 'Toggle available external integrations', 'Esc close'],
+    expect: [
+      '/tools',
+      'Toggle available external integrations',
+      '+1 earlier, +6 more',
+      'Esc close',
+    ],
     unexpect: ['[TeXRA]', 'toolUtils'],
     maxBlankLinesBetween: [
       { from: 'entry-4 chat history line', to: '/tools', max: 2 },
