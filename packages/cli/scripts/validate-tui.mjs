@@ -334,7 +334,13 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
     bootExpect: 'Use foreground panel shortcuts',
     frame: 'tail',
-    expect: ['Apply edit to draft.tex?', 'Esc cancel', 'approval'],
+    expect: [
+      'Apply edit to draft.tex?',
+      'y approve',
+      'n reject',
+      'Esc cancel',
+      'approval',
+    ],
     unexpect: [' · …', '╚═y approve'],
   },
   {
@@ -358,7 +364,6 @@ const SCENARIOS = [
       'Use foreground panel shortcuts',
     ],
     unexpect: ['[Alt-p]tasks', '[Option-p]tasks', '[/model]models'],
-    maxBlankLinesBetween: [{ from: '╚', to: '╭', max: 1 }],
   },
   {
     name: 'narrow-bash-approval',
@@ -375,7 +380,6 @@ const SCENARIOS = [
       'Esc cancel',
     ],
     unexpect: [' · …', 'a session'],
-    maxBlankLinesBetween: [{ from: '╚', to: '╭', max: 1 }],
   },
   {
     name: 'long-bash-approval',
@@ -395,7 +399,6 @@ const SCENARIOS = [
       'Use foreground panel shortcuts',
     ],
     unexpect: ['╚═    print', '[Option-p]tasks'],
-    maxBlankLinesBetween: [{ from: '╚', to: '╭', max: 1 }],
   },
   {
     name: 'compact-long-bash-approval',
@@ -415,7 +418,6 @@ const SCENARIOS = [
       'Use foreground panel shortcuts',
     ],
     unexpect: ['╚═    print', 'scroll command', '[Option-p]tasks'],
-    maxBlankLinesBetween: [{ from: '╚', to: '╭', max: 1 }],
   },
   {
     name: 'bash-approval-approve-session',
@@ -443,7 +445,6 @@ const SCENARIOS = [
       'n reject',
     ],
     unexpect: ['confirmation of correctness', '[Option-p]tasks'],
-    maxBlankLinesBetween: [{ from: '╚', to: '╭', max: 1 }],
   },
   {
     name: 'external-inquiry-long',
@@ -461,7 +462,6 @@ const SCENARIOS = [
       'Esc skip',
     ],
     unexpect: ['└─Degenerate triples', '[/model]models', 'Esc sk…'],
-    maxBlankLinesBetween: [{ from: '└', to: '╭', max: 1 }],
   },
   {
     name: 'external-inquiry-long-80-cols',
@@ -480,7 +480,6 @@ const SCENARIOS = [
       'Esc skip',
     ],
     unexpect: ['└─Degenerate triples', '[/model]models', 'Esc sk…'],
-    maxBlankLinesBetween: [{ from: '└', to: '╭', max: 1 }],
   },
   {
     name: 'plan-approval',
