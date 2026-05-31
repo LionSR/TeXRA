@@ -958,6 +958,42 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'stopped-task-picker',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 'p', 'k', ESC + 'p', DOWN, DOWN],
+    expect: [
+      'Tasks and sub-workflows',
+      'Stream: main',
+      '› 3. strategy — stopped',
+      'Enter view',
+      'Esc close',
+    ],
+    unexpect: ['k kill'],
+  },
+  {
+    name: 'stopped-task-subworkflow-detail',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 'p', 'k', ESC + 'p', DOWN, DOWN, '\r'],
+    expect: [
+      'Task details',
+      'stream · strategy · stopped',
+      'Please handle the harness-child-strategy sub-workflow.',
+      'f focus stream',
+      'Esc back',
+    ],
+    unexpect: ['k kill'],
+  },
+  {
     name: 'focused-stopped-subagent',
     env: {
       HARNESS_ENTRIES: '4',
