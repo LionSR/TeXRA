@@ -209,6 +209,41 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('[Ctrl-C]stop');
   });
 
+  it('drops trailing status details before narrow footers lose separators', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      elapsedMs: 75_000,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 3,
+      activeProcesses: 1,
+      approvalDepth: 0,
+      subagentControlsAvailable: true,
+      hasMultipleStreams: true,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      ctrlCAction: 'stop',
+      width: 30,
+      shortcutsActive: false,
+    });
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'running',
+      '75s',
+      'api',
+      '3 sub',
+    ]);
+    expect(display.left.map(statusBarSegmentText).join(' ')).not.toContain(
+      'api3',
+    );
+  });
+
   it('scopes Ctrl-C stop to the root when focus is on a child stream', () => {
     const parentStream = new Map([['child', 'root']]);
 
@@ -502,6 +537,35 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'Press Ctrl-C again to exit',
       'api',
+    ]);
+    expect(display.bindings).toBe(
+      'Resume this session with: texra --resume abc123',
+    );
+  });
+
+  it('keeps the exit confirmation visible in very narrow footers', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      pendingExitHint: true,
+      pendingExitResumeId: 'abc123',
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      width: 29,
+    });
+
+    expect(display.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'Press Ctrl-C again to ex…',
     ]);
     expect(display.bindings).toBe(
       'Resume this session with: texra --resume abc123',
