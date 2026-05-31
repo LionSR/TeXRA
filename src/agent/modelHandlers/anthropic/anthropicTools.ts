@@ -18,7 +18,7 @@ import {
   countPdfPagesFromBuffer,
   sanitizeAnthropicFilename,
 } from './anthropicDocumentHandling';
-import { loadAttachmentBuffer } from './utils/toolAttachmentUtils';
+import { loadAttachmentBuffer } from '../utils/toolAttachmentUtils';
 
 // Type imports - Anthropic SDK
 import type { Base64ImageSource } from '@anthropic-ai/sdk/resources/messages';

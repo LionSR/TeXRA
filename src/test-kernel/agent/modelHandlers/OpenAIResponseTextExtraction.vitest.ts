@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
-import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import type { ModelConfig } from 'llm-zoo';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
 
