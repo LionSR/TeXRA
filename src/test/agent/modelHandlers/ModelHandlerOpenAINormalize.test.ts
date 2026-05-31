@@ -10,9 +10,9 @@ import {
   ModelProvider,
 } from 'llm-zoo';
 import type { AgentTrace } from '@agent/trace';
-import { ModelHandlerDashScope } from '@agent/modelHandlers/modelHandlerDashScope';
-import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
-import { ModelHandlerKimi } from '@agent/modelHandlers/modelHandlerKimi';
+import { ModelHandlerDashScope } from '@agent/modelHandlers/openai/modelHandlerDashScope';
+import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
+import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 
 // Type imports
 

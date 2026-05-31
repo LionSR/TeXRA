@@ -23,7 +23,7 @@ import {
 import type { ToolUseCycleServices } from '@agent/core/flows/CycleServices';
 
 // Local imports - agent runtime
-import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';

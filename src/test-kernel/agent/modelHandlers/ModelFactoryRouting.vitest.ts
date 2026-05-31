@@ -7,12 +7,12 @@ import {
 } from 'llm-zoo';
 
 import { shouldUseResponsesAPI } from '@agent/runtime/ModelFactory';
-import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/modelHandlerOpenRouterNative';
-import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
-import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
-import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
-import { ModelHandlerKimi } from '@agent/modelHandlers/modelHandlerKimi';
-import { ModelHandlerMiniMax } from '@agent/modelHandlers/modelHandlerMiniMax';
+import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
+import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
+import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
+import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
+import { ModelHandlerMiniMax } from '@agent/modelHandlers/openai/modelHandlerMiniMax';
 
 function modelConfig(
   provider: ModelProvider,
