@@ -46,6 +46,17 @@ describe('CLI queued follow-up panel display model', () => {
     expect(display.hiddenCount).toBe(2);
   });
 
+  it('uses an overflow row when only one message slot fits', () => {
+    const display = queuedFollowUpPanelDisplay({
+      messages: ['first', 'second'],
+      maxRows: 2,
+      width: 80,
+    });
+
+    expect(display.rows.map((row) => row.text)).toEqual(['… 2 more queued']);
+    expect(display.hiddenCount).toBe(2);
+  });
+
   it('keeps hidden count nonnegative when callers pass extra rows', () => {
     const display = queuedFollowUpPanelDisplay({
       messages: ['only queued follow-up'],

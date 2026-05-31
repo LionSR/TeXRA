@@ -28,6 +28,7 @@ import {
   foregroundSurfaceJustifyContent,
   shouldShowTipRow,
   shouldShowTodosPlanPanel,
+  staticTranscriptRowBudget,
 } from '@cli/chat/tui/App';
 import {
   nextFocusBack,
@@ -391,6 +392,75 @@ describe('CLI TUI row allocation', () => {
 
     expect(layout.transcriptRows).toBe(15);
     expect(layout.foregroundRows).toBe(0);
+  });
+
+  it('accounts for capped static transcript rows above the stable input chrome', () => {
+    const layout = allocateMiddleRows({
+      foregroundOpen: false,
+      queuedFollowUpPanelRows: 3,
+      reverseSearchOpen: false,
+      rows: 10,
+      slashPaletteOpen: false,
+      staticTranscriptRows: 2,
+      tipVisible: false,
+    });
+
+    expect(layout.transcriptRows).toBe(0);
+    expect(layout.foregroundRows).toBe(0);
+  });
+
+  it('caps static transcript rows only in compact layouts', () => {
+    expect(
+      staticTranscriptRowBudget({
+        footerRows: 5,
+        foregroundOpen: false,
+        queuedFollowUpPanelRows: 3,
+        rows: 10,
+        tipVisible: false,
+      }),
+    ).toBe(0);
+    expect(
+      staticTranscriptRowBudget({
+        footerRows: 5,
+        foregroundOpen: false,
+        queuedFollowUpPanelRows: 3,
+        rows: 14,
+        tipVisible: false,
+      }),
+    ).toBe(4);
+    expect(
+      staticTranscriptRowBudget({
+        footerRows: 5,
+        foregroundOpen: false,
+        queuedFollowUpPanelRows: 3,
+        rows: 24,
+        tipVisible: false,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('keeps the compact live reserve aligned with stream tab visibility', () => {
+    const staticRows = staticTranscriptRowBudget({
+      footerRows: 5,
+      foregroundOpen: false,
+      queuedFollowUpPanelRows: 3,
+      rows: 14,
+      tipVisible: false,
+    });
+
+    expect(staticRows).toBe(4);
+    expect(
+      allocateMiddleRows({
+        foregroundOpen: false,
+        queuedFollowUpPanelRows: 3,
+        reverseSearchOpen: false,
+        rows: 14,
+        slashPaletteOpen: false,
+        staticTranscriptRows: staticRows,
+        streamTabsVisible: false,
+        tipVisible: false,
+      }).transcriptRows,
+    ).toBe(2);
   });
 
   it('reserves rows for reverse-search input chrome', () => {
