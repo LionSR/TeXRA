@@ -225,6 +225,99 @@ export function taskDetailVisibleLineCountFromOffsetForColumns({
   return Math.max(1, visibleLines);
 }
 
+export function taskDetailScrollableOutputRowCountForColumns({
+  availableColumns,
+  compact,
+  tailLines,
+}: {
+  readonly availableColumns?: number;
+  readonly compact: boolean;
+  readonly tailLines: readonly string[];
+}): number {
+  if (!compact) return tailLines.length;
+
+  const outputColumns = taskDetailOutputColumnCount(availableColumns);
+  if (outputColumns === undefined) return tailLines.length;
+
+  return tailLines.reduce(
+    (total, line) => total + taskDetailWrappedRowCount(line, outputColumns),
+    0,
+  );
+}
+
+export function taskDetailFollowTailScrollOffsetForColumns({
+  availableColumns,
+  compact,
+  tailLines,
+  visibleRowBudget,
+}: {
+  readonly availableColumns?: number;
+  readonly compact: boolean;
+  readonly tailLines: readonly string[];
+  readonly visibleRowBudget: number;
+}): number {
+  const scrollableRows = taskDetailScrollableOutputRowCountForColumns({
+    availableColumns,
+    compact,
+    tailLines,
+  });
+  const maxOffset = taskDetailInitialScrollOffset(
+    scrollableRows,
+    visibleRowBudget,
+  );
+  if (!compact || visibleRowBudget <= 0 || tailLines.length === 0) {
+    return maxOffset;
+  }
+
+  const outputColumns = taskDetailOutputColumnCount(availableColumns);
+  if (outputColumns === undefined) return maxOffset;
+
+  const visibleLineCount = taskDetailVisibleLineCountForColumns({
+    availableColumns,
+    compact,
+    tailLines,
+    visibleRowBudget,
+  });
+  const firstTailLine = Math.max(0, tailLines.length - visibleLineCount);
+  let offset = 0;
+  for (let index = 0; index < firstTailLine; index += 1) {
+    offset += taskDetailWrappedRowCount(tailLines[index], outputColumns);
+  }
+  return Math.min(offset, maxOffset);
+}
+
+export function taskDetailVisibleOutputRowsFromOffsetForColumns({
+  availableColumns,
+  compact,
+  offset,
+  tailLines,
+  visibleRowBudget,
+}: {
+  readonly availableColumns?: number;
+  readonly compact: boolean;
+  readonly offset: number;
+  readonly tailLines: readonly string[];
+  readonly visibleRowBudget: number;
+}): readonly string[] {
+  if (visibleRowBudget <= 0) return [];
+  if (!compact) return tailLines.slice(offset, offset + visibleRowBudget);
+
+  const outputColumns = taskDetailOutputColumnCount(availableColumns);
+  const start = Math.max(0, offset);
+  if (outputColumns === undefined) {
+    return tailLines.slice(start, start + visibleRowBudget);
+  }
+
+  const rows: string[] = [];
+  for (let index = 0; index < tailLines.length; index += 1) {
+    const wrappedRows = wrapAnsiToWidth(tailLines[index], outputColumns).split(
+      '\n',
+    );
+    rows.push(...wrappedRows);
+  }
+  return rows.slice(start, start + visibleRowBudget);
+}
+
 function renderItem(
   item: ChildControlItem,
   index: number,
@@ -397,12 +490,14 @@ export function syncTaskDetailScrollState(
   state: TaskDetailScrollState,
   executionId: string,
   maxOffset: number,
+  followOffset = maxOffset,
 ): TaskDetailScrollState {
+  const clampedFollowOffset = Math.min(followOffset, maxOffset);
   if (state.executionId !== executionId) {
-    return { executionId, followsTail: true, offset: maxOffset };
+    return { executionId, followsTail: true, offset: clampedFollowOffset };
   }
   if (state.followsTail) {
-    return { ...state, offset: maxOffset };
+    return { ...state, offset: clampedFollowOffset };
   }
   return { ...state, offset: Math.min(state.offset, maxOffset) };
 }
@@ -410,8 +505,9 @@ export function syncTaskDetailScrollState(
 export function taskDetailVisibleScrollOffset(
   state: TaskDetailScrollState,
   maxOffset: number,
+  followOffset = maxOffset,
 ): number {
-  if (state.followsTail) return maxOffset;
+  if (state.followsTail) return Math.min(followOffset, maxOffset);
   return Math.min(state.offset, maxOffset);
 }
 
@@ -419,8 +515,9 @@ export function moveTaskDetailScrollState(
   state: TaskDetailScrollState,
   maxOffset: number,
   direction: 'down' | 'up',
+  followOffset = maxOffset,
 ): TaskDetailScrollState {
-  const offset = taskDetailVisibleScrollOffset(state, maxOffset);
+  const offset = taskDetailVisibleScrollOffset(state, maxOffset, followOffset);
   if (direction === 'up') {
     return {
       ...state,
@@ -490,11 +587,13 @@ export function computePickerListLayout({
 function TaskOutput({
   childStreamId,
   tailLines,
+  truncateTailRows = false,
   visibleTail,
   visibleLineCount,
 }: {
   readonly childStreamId: StreamTabId | undefined;
   readonly tailLines: readonly string[];
+  readonly truncateTailRows?: boolean;
   readonly visibleTail: readonly string[];
   readonly visibleLineCount: number;
 }): React.JSX.Element | null {
@@ -503,7 +602,11 @@ function TaskOutput({
     return (
       <>
         {visibleTail.map((line, index) => (
-          <Text key={`${index}:${line}`} dimColor>
+          <Text
+            key={`${index}:${line}`}
+            dimColor
+            wrap={truncateTailRows ? 'truncate-end' : undefined}
+          >
             {line}
           </Text>
         ))}
@@ -545,35 +648,44 @@ function TaskDetailView({
     hasTailLines: item.tailLines.length > 0,
     metaRows: metaParts.length,
   });
-  const tailVisibleLineCount = taskDetailVisibleLineCountForColumns({
+  const scrollableOutputRows = taskDetailScrollableOutputRowCountForColumns({
+    availableColumns,
+    compact: layout.compact,
+    tailLines: item.tailLines,
+  });
+  const maxOffset = taskDetailInitialScrollOffset(
+    scrollableOutputRows,
+    layout.visibleLineCount,
+  );
+  const followOffset = taskDetailFollowTailScrollOffsetForColumns({
     availableColumns,
     compact: layout.compact,
     tailLines: item.tailLines,
     visibleRowBudget: layout.visibleLineCount,
   });
-  const maxOffset = taskDetailInitialScrollOffset(
-    item.tailLines.length,
-    tailVisibleLineCount,
-  );
   const [scrollState, setScrollState] = useState<TaskDetailScrollState>(() => ({
     executionId: item.executionId,
     followsTail: true,
-    offset: maxOffset,
+    offset: followOffset,
   }));
-  const offset = taskDetailVisibleScrollOffset(scrollState, maxOffset);
-  const visibleLineCount = taskDetailVisibleLineCountFromOffsetForColumns({
+  const offset = taskDetailVisibleScrollOffset(
+    scrollState,
+    maxOffset,
+    followOffset,
+  );
+  const visibleLineCount = layout.visibleLineCount;
+  const visibleTail = taskDetailVisibleOutputRowsFromOffsetForColumns({
     availableColumns,
     compact: layout.compact,
+    offset,
     tailLines: item.tailLines,
     visibleRowBudget: layout.visibleLineCount,
-    offset,
   });
-  const visibleTail = item.tailLines.slice(offset, offset + visibleLineCount);
+  const truncateTailRows = layout.compact;
   const compactMeta = metaParts.join(' · ');
   const commandLabel = taskDetailCommandLabel(item.kind);
   const ultraCompact = isUltraCompactTaskDetailRows(availableRows);
-  const showScrollHint =
-    item.tailLines.length > visibleLineCount && !ultraCompact;
+  const showScrollHint = maxOffset > 0 && !ultraCompact;
   const hints = taskDetailKeyHintsForColumns({
     availableColumns,
     canFocusStream: Boolean(item.childStreamId),
@@ -583,9 +695,14 @@ function TaskDetailView({
 
   useEffect(() => {
     setScrollState((current) =>
-      syncTaskDetailScrollState(current, item.executionId, maxOffset),
+      syncTaskDetailScrollState(
+        current,
+        item.executionId,
+        maxOffset,
+        followOffset,
+      ),
     );
-  }, [item.executionId, maxOffset]);
+  }, [item.executionId, followOffset, maxOffset]);
 
   useInput((input, key) => {
     const action = childPickerKeyAction({
@@ -601,12 +718,12 @@ function TaskDetailView({
     if (action.kind === 'kill' && item.killable) onKill();
     if (action.kind === 'up') {
       setScrollState((current) =>
-        moveTaskDetailScrollState(current, maxOffset, 'up'),
+        moveTaskDetailScrollState(current, maxOffset, 'up', followOffset),
       );
     }
     if (action.kind === 'down') {
       setScrollState((current) =>
-        moveTaskDetailScrollState(current, maxOffset, 'down'),
+        moveTaskDetailScrollState(current, maxOffset, 'down', followOffset),
       );
     }
     if (input.toLowerCase() === 'f' && item.childStreamId) onFocusStream();
@@ -659,6 +776,7 @@ function TaskDetailView({
         <TaskOutput
           childStreamId={item.childStreamId}
           tailLines={item.tailLines}
+          truncateTailRows={truncateTailRows}
           visibleTail={visibleTail}
           visibleLineCount={visibleLineCount}
         />

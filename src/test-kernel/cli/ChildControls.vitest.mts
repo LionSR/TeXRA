@@ -16,10 +16,13 @@ import {
   syncTaskDetailScrollState,
   TASK_DETAIL_LABEL_WIDTH,
   taskDetailCommandLabel,
+  taskDetailFollowTailScrollOffsetForColumns,
   taskDetailInitialScrollOffset,
   taskDetailKeyHintsForColumns,
+  taskDetailScrollableOutputRowCountForColumns,
   taskDetailVisibleLineCountFromOffsetForColumns,
   taskDetailVisibleLineCountForColumns,
+  taskDetailVisibleOutputRowsFromOffsetForColumns,
   taskDetailVisibleScrollOffset,
   taskDetailWrappedRowCount,
 } from '@cli/chat/tui/modals/ChildControlPicker';
@@ -937,6 +940,51 @@ describe('CLI child execution controls', () => {
         offset: 1,
       }),
     ).toBe(3);
+    const wrappedRows = taskDetailVisibleOutputRowsFromOffsetForColumns({
+      availableColumns: 48,
+      compact: true,
+      tailLines: [
+        'strategy detail line 01 wide output wraps wide output wraps wide output wraps',
+      ],
+      visibleRowBudget: 2,
+      offset: 0,
+    });
+    expect(wrappedRows).toHaveLength(2);
+    expect(wrappedRows.join('\n')).toContain('wide output wraps');
+    const singleLongLine = ['abcdefghijklmnop'];
+    expect(
+      taskDetailScrollableOutputRowCountForColumns({
+        availableColumns: 10,
+        compact: true,
+        tailLines: singleLongLine,
+      }),
+    ).toBe(3);
+    expect(
+      taskDetailFollowTailScrollOffsetForColumns({
+        availableColumns: 10,
+        compact: true,
+        tailLines: singleLongLine,
+        visibleRowBudget: 1,
+      }),
+    ).toBe(0);
+    expect(
+      taskDetailVisibleOutputRowsFromOffsetForColumns({
+        availableColumns: 10,
+        compact: true,
+        tailLines: singleLongLine,
+        visibleRowBudget: 1,
+        offset: 0,
+      }),
+    ).toEqual(['abcdef']);
+    expect(
+      taskDetailVisibleOutputRowsFromOffsetForColumns({
+        availableColumns: 10,
+        compact: true,
+        tailLines: singleLongLine,
+        visibleRowBudget: 1,
+        offset: 2,
+      }),
+    ).toEqual(['mnop']);
   });
 
   it('labels the task picker as a combined task and sub-workflow view', () => {
@@ -1018,6 +1066,12 @@ describe('CLI child execution controls', () => {
       offset: 8,
     });
     expect(taskDetailVisibleScrollOffset(tailing, 8)).toBe(8);
+    expect(syncTaskDetailScrollState(tailing, 'task-1', 8, 4)).toEqual({
+      executionId: 'task-1',
+      followsTail: true,
+      offset: 4,
+    });
+    expect(taskDetailVisibleScrollOffset(tailing, 8, 4)).toBe(4);
 
     const scrolled = moveTaskDetailScrollState(tailing, 7, 'up');
     expect(scrolled).toEqual({
@@ -1049,6 +1103,11 @@ describe('CLI child execution controls', () => {
       executionId: 'task-1',
       followsTail: true,
       offset: 9,
+    });
+    expect(moveTaskDetailScrollState(tailing, 9, 'down', 4)).toEqual({
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 5,
     });
   });
 
