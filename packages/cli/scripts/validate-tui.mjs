@@ -862,6 +862,21 @@ const SCENARIOS = [
     unexpect: ['*    y*', 'dle)          r*'],
   },
   {
+    name: 'tiny-status-separators',
+    cols: 30,
+    rows: 10,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: 'TeXRA',
+    keys: [ESC + 's'], // Option/Alt-s
+    frame: 'tail',
+    expect: ['◆ running 75s api 3 sub'],
+    unexpect: ['◆running', 'api3', '3 sub 1 proc'],
+  },
+  {
     name: 'tiny-task-subworkflow-detail',
     cols: 40,
     rows: 10,
