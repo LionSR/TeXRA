@@ -42,6 +42,7 @@ const ESC = String.fromCharCode(27);
 const ETX = String.fromCharCode(3); // Ctrl-C
 const DC2 = String.fromCharCode(18); // Ctrl-R
 const DC4 = String.fromCharCode(20); // Ctrl-T
+const NAK = String.fromCharCode(21); // Ctrl-U
 const DOWN = ESC + '[B';
 const LONG_BASH_APPROVAL_COMMAND = [
   "python3 << 'EOF'",
@@ -170,6 +171,14 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/mo'],
     expect: ['/model', 'List available models', 'navigate', 'Tab complete'],
+  },
+  {
+    name: 'slash-palette-ctrl-u-clears-raw-control',
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/', `${NAK}/model\r`],
+    frame: 'tail',
+    expect: ['/model · personal API keys', 'Available models'],
+    unexpect: ['/\u0015/model', '/model - error'],
   },
   {
     name: 'btw-palette',
