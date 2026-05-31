@@ -85,6 +85,7 @@ const EXTERNAL_INQUIRY_QUESTION =
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
+const SHOW_IDLE_TODOS = process.env.HARNESS_TODOS_IDLE === '1';
 const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
 let harnessApprovalPolicy: CliApprovalPolicy = 'ask';
@@ -425,9 +426,16 @@ cliState.sessionMeta.set({
 cliState.activeStreamId.set(STREAM_ID);
 patchStream(STREAM_ID, (slice) => ({
   ...slice,
-  status: QUEUED_FOLLOW_UPS.length > 0 ? STREAM_STATUS.RUNNING : slice.status,
+  status:
+    QUEUED_FOLLOW_UPS.length > 0 || (SHOW_TODOS && !SHOW_IDLE_TODOS)
+      ? STREAM_STATUS.RUNNING
+      : SHOW_TODOS && SHOW_IDLE_TODOS
+        ? STREAM_STATUS.WAITING
+        : slice.status,
   runStartedAt:
-    QUEUED_FOLLOW_UPS.length > 0 ? Date.now() - 42_000 : slice.runStartedAt,
+    QUEUED_FOLLOW_UPS.length > 0 || (SHOW_TODOS && !SHOW_IDLE_TODOS)
+      ? Date.now() - 42_000
+      : slice.runStartedAt,
   entries: SHOW_LONG_TOOL_OUTPUT
     ? makeLongToolOutputEntries()
     : makeEntries(ENTRY_COUNT),
