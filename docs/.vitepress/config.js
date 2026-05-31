@@ -103,6 +103,7 @@ const baseConfig = {
         activeMatch: '/guide/built-in-agents',
       },
       { text: 'Launch', link: '/launch' },
+      { text: 'Changelog', link: '/changelog', activeMatch: '/changelog' },
       { text: 'GitHub', link: 'https://github.com/texra-ai/texra-issues' },
     ],
     sidebar: {
@@ -179,7 +180,7 @@ const baseConfig = {
       provider: 'local',
     },
     footer: {
-      message: `<a href="${base}terms">Terms of Service</a> · <a href="${base}providers">Providers</a> · <a href="${base}guide/open-source">Open Source</a>`,
+      message: `<a href="${base}changelog">Changelog</a> · <a href="${base}terms">Terms of Service</a> · <a href="${base}providers">Providers</a> · <a href="${base}guide/open-source">Open Source</a>`,
       copyright: 'Copyright © 2024-2026 TeXRA Team. All rights reserved.',
     },
   },
