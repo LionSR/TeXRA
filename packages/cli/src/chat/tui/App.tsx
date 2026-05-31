@@ -47,6 +47,7 @@ interface InputEventEmitterLike {
 
 const MIN_TRANSCRIPT_WIDTH = 20;
 const FOREGROUND_TRANSCRIPT_ROWS = 1;
+const MIN_FOREGROUND_ROWS_WITH_TRANSCRIPT = 6;
 const CHILD_CONTROL_FOREGROUND_MAX_ROWS = 12;
 const FORM_FOREGROUND_MAX_ROWS = 18;
 // Cap the bottom subagent/todos panels so they never crowd out the
@@ -108,10 +109,10 @@ export function allocateMiddleRows({
     return { foregroundRows: 1, transcriptRows: 0 };
   }
 
-  const transcriptRows = Math.min(
-    FOREGROUND_TRANSCRIPT_ROWS,
-    availableRows - 1,
-  );
+  const transcriptRows =
+    availableRows >= MIN_FOREGROUND_ROWS_WITH_TRANSCRIPT
+      ? Math.min(FOREGROUND_TRANSCRIPT_ROWS, availableRows - 1)
+      : 0;
   const foregroundRows = availableRows - transcriptRows;
   return {
     foregroundRows:
@@ -490,7 +491,9 @@ export function App(props: AppProps): React.JSX.Element {
               flexDirection="column"
               height={foregroundRows}
               alignItems="flex-start"
-              justifyContent="flex-end"
+              justifyContent={
+                foregroundKind === 'form' ? 'flex-start' : 'flex-end'
+              }
               overflowY="hidden"
             >
               {foregroundSurface}

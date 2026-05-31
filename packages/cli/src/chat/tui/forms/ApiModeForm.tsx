@@ -5,9 +5,12 @@ import { type CliApiMode } from '@cli/runtime/apiAccessMode';
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
+import { FormFrame } from './_shared/FormFrame';
+import { isCompactFormRows } from './_shared/selectWindow';
 
 export interface ApiModeFormProps {
   readonly currentMode: CliApiMode;
+  readonly availableRows?: number;
   readonly onSelect: (value: CliApiMode) => void;
   readonly onCancel: () => void;
 }
@@ -31,6 +34,34 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
     };
   }, []);
 
+  const items = [
+    {
+      value: 'personal' as const,
+      label: 'Personal API keys',
+      description: 'use provider keys from env or TeXRA secrets',
+    },
+    {
+      value: 'included' as const,
+      label: 'Included relay',
+      description: 'use TeXRA included access',
+    },
+  ];
+
+  if (isCompactFormRows(props.availableRows)) {
+    return (
+      <FormFrame color="cyan" title="/api · Esc close" showCloseHint={false}>
+        <Select
+          items={items}
+          activeValue={props.currentMode}
+          maxVisibleItems={items.length}
+          showOverflow={false}
+          onSelect={props.onSelect}
+          onCancel={props.onCancel}
+        />
+      </FormFrame>
+    );
+  }
+
   return (
     <Box
       borderStyle="round"
@@ -53,18 +84,7 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
       </Box>
       <Box marginTop={1} flexDirection="column">
         <Select
-          items={[
-            {
-              value: 'personal',
-              label: 'Personal API keys',
-              description: 'use provider keys from env or TeXRA secrets',
-            },
-            {
-              value: 'included',
-              label: 'Included relay',
-              description: 'use TeXRA included access',
-            },
-          ]}
+          items={items}
           activeValue={props.currentMode}
           onSelect={props.onSelect}
           onCancel={props.onCancel}

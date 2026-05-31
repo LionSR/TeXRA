@@ -10,7 +10,10 @@ import type { AgentOptionData } from '@shared/schemas';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
 import { FormFrame } from './_shared/FormFrame';
-import { computeSelectWindowSize } from './_shared/selectWindow';
+import {
+  computeSelectWindowSize,
+  isCompactFormRows,
+} from './_shared/selectWindow';
 import { useAsyncListForm } from './_shared/useAsyncListForm';
 
 export interface AgentListFormProps {
@@ -151,6 +154,28 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     0,
     selectWindow.maxVisibleWorkflows,
   );
+
+  if (isCompactFormRows(props.availableRows)) {
+    return (
+      <FormFrame color="cyan" title="/agent · Esc close" showCloseHint={false}>
+        <Text bold>Tool-use agents</Text>
+        <Select
+          items={items.map(({ value, label }) => ({ value, label }))}
+          activeValue={activeValue}
+          maxVisibleItems={1}
+          showOverflow={false}
+          onSelect={(value) => {
+            if (selectable) {
+              props.onSelect?.(value);
+              return;
+            }
+            props.onClose();
+          }}
+          onCancel={props.onClose}
+        />
+      </FormFrame>
+    );
+  }
 
   return (
     <Box
