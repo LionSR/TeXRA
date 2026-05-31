@@ -18,6 +18,10 @@ import { TranscriptViewer } from './modals/TranscriptViewer';
 import { ConversationPane } from './panes/ConversationPane';
 import { StaticConversationTranscript } from './panes/StaticConversationTranscript';
 import { InputBar } from './panes/InputBar';
+import {
+  QueuedFollowUpsPanel,
+  queuedFollowUpPanelRowCount,
+} from './panes/QueuedFollowUpsPanel';
 import { StatusBar } from './panes/StatusBar';
 import { StreamTabsStrip } from './panes/StreamTabsStrip';
 import { SubagentList } from './panes/SubagentList';
@@ -70,11 +74,13 @@ const PINNED_CHROME_ROWS = {
 
 function pinnedChromeRows({
   inputVisible = true,
+  queuedFollowUpPanelRows = 0,
   reverseSearchOpen,
   slashPaletteOpen,
   tipVisible = true,
 }: {
   readonly inputVisible?: boolean;
+  readonly queuedFollowUpPanelRows?: number;
   readonly reverseSearchOpen: boolean;
   readonly slashPaletteOpen: boolean;
   readonly tipVisible?: boolean;
@@ -83,6 +89,7 @@ function pinnedChromeRows({
     PINNED_CHROME_ROWS.streamTabsWorstCase +
     PINNED_CHROME_ROWS.status +
     (inputVisible ? PINNED_CHROME_ROWS.input : 0) +
+    queuedFollowUpPanelRows +
     (tipVisible ? PINNED_CHROME_ROWS.tip : 0);
   return (
     baseRows +
@@ -95,6 +102,7 @@ export function allocateMiddleRows({
   foregroundMaxRows,
   foregroundOpen,
   inputVisible = true,
+  queuedFollowUpPanelRows = 0,
   reverseSearchOpen,
   rows,
   slashPaletteOpen,
@@ -103,6 +111,7 @@ export function allocateMiddleRows({
   readonly foregroundMaxRows?: number;
   readonly foregroundOpen: boolean;
   readonly inputVisible?: boolean;
+  readonly queuedFollowUpPanelRows?: number;
   readonly reverseSearchOpen: boolean;
   readonly rows: number;
   readonly slashPaletteOpen: boolean;
@@ -116,6 +125,7 @@ export function allocateMiddleRows({
     rows -
       pinnedChromeRows({
         inputVisible,
+        queuedFollowUpPanelRows,
         reverseSearchOpen,
         slashPaletteOpen,
         tipVisible,
@@ -180,10 +190,12 @@ export function allocateSidePanelRows({
 
 export function shouldShowTipRow({
   foregroundOpen,
+  hasQueuedFollowUps = false,
 }: {
   readonly foregroundOpen: boolean;
+  readonly hasQueuedFollowUps?: boolean;
 }): boolean {
-  return !foregroundOpen;
+  return !foregroundOpen && !hasQueuedFollowUps;
 }
 
 export function shouldShowTodosPlanPanel({
@@ -326,11 +338,20 @@ export function App(props: AppProps): React.JSX.Element {
     activeForm !== undefined ||
     childControlMode !== undefined ||
     transcriptViewerOpen;
-  const tipRowVisible = shouldShowTipRow({ foregroundOpen });
   const inputDisabled = props.inputDisabled === true || foregroundOpen;
   const inputBarVisible = !foregroundOpen;
 
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  const queuedFollowUpMessages = activeSlice?.queuedFollowUpMessages ?? [];
+  const queuedFollowUpPanelVisible =
+    !foregroundOpen && queuedFollowUpMessages.length > 0;
+  const queuedFollowUpPanelRows = queuedFollowUpPanelVisible
+    ? queuedFollowUpPanelRowCount(queuedFollowUpMessages)
+    : 0;
+  const tipRowVisible = shouldShowTipRow({
+    foregroundOpen,
+    hasQueuedFollowUps: queuedFollowUpPanelVisible,
+  });
   const subagentControlTarget = resolveChildControlStreamTarget({
     activeStreamId,
     mode: 'subagents',
@@ -377,6 +398,7 @@ export function App(props: AppProps): React.JSX.Element {
           : undefined,
     foregroundOpen,
     inputVisible: inputBarVisible,
+    queuedFollowUpPanelRows,
     reverseSearchOpen,
     rows,
     slashPaletteOpen,
@@ -577,6 +599,13 @@ export function App(props: AppProps): React.JSX.Element {
           </Box>
         ) : null}
         {tipRowVisible ? <TipRow /> : null}
+        {queuedFollowUpPanelVisible ? (
+          <QueuedFollowUpsPanel
+            maxRows={queuedFollowUpPanelRows}
+            messages={queuedFollowUpMessages}
+            width={columns}
+          />
+        ) : null}
         <InputBar
           onSubmit={props.onSubmit}
           collapseWhenDisabled={!inputBarVisible}
@@ -586,6 +615,7 @@ export function App(props: AppProps): React.JSX.Element {
         <StreamTabsStrip width={columns} />
         <StatusBar
           canStopActiveRun={canStopActiveRun}
+          queuedFollowUpPreview={!queuedFollowUpPanelVisible}
           shortcutsActive={focusShortcutsActive}
         />
       </Box>
