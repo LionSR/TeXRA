@@ -257,8 +257,13 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/tools', '\r'],
     frame: 'tail',
-    expect: ['/tools', 'Toggle available external integrations'],
-    unexpect: ['[TeXRA]', 'toolUtils'],
+    expect: [
+      '/tools',
+      'Toggle available external integrations',
+      'always on ·',
+      'enabled · detected · available',
+    ],
+    unexpect: ['[TeXRA]', 'toolUtils', 'enabled -'],
     maxBlankLinesBetween: [
       { from: 'entry-4 chat history line', to: '/tools', max: 8 },
     ],
@@ -311,7 +316,7 @@ const SCENARIOS = [
       '+1 earlier, +6 more',
       'Esc close',
     ],
-    unexpect: ['[TeXRA]', 'toolUtils'],
+    unexpect: ['[TeXRA]', 'toolUtils', 'enabled -'],
     maxBlankLinesBetween: [
       { from: 'entry-4 chat history line', to: '/tools', max: 2 },
     ],
