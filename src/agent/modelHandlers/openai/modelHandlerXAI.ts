@@ -5,7 +5,7 @@ import type { ChatCompletion } from 'openai/resources/chat/completions';
 // Local file imports
 
 // Type imports
-import type { ExtractResponseResult } from './types/IModelHandler';
+import type { ExtractResponseResult } from '../types/IModelHandler';
 
 /**
  * Handler for xAI models using OpenAI-compatible API.

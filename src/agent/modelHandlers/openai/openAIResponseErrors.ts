@@ -9,7 +9,7 @@ import {
 import type { ProviderError } from '@shared/schemas';
 
 // Local imports - model handlers
-import { tagOpenAISdkError } from './support/sdkErrorAdapters';
+import { tagOpenAISdkError } from '../support/sdkErrorAdapters';
 
 export interface OpenAIBackgroundResumeError {
   providerError: ProviderError;

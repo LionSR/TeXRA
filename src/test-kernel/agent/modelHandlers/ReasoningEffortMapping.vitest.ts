@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { ReasoningEffort } from 'llm-zoo';
 
 // Local imports - mappings under test
-import { toOpenRouterReasoningEffort } from '@agent/modelHandlers/modelHandlerOpenRouterNative';
+import { toOpenRouterReasoningEffort } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { toOpenAIReasoningEffort } from '@agent/runtime/reasoningEffort';
 
 // Regression coverage for the SDK-vocabulary mismatch that produced

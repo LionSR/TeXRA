@@ -50,24 +50,24 @@ import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
 import { extractMimeSubtype, objectToLogString } from '@utils/text/stringUtils';
-import { normalizeUsage } from './support/UsageNormalizer';
-import { prepareExistingOutputContent } from './utils/fileContentUtils';
-import { tagOpenAISdkError } from './support/sdkErrorAdapters';
+import { normalizeUsage } from '../support/UsageNormalizer';
+import { prepareExistingOutputContent } from '../utils/fileContentUtils';
+import { tagOpenAISdkError } from '../support/sdkErrorAdapters';
 
 // Local file imports
-import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
+import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
 import {
   normalizeOpenAIMessageContent,
   NormalizeOpenAIMessageContentOptions,
 } from './openAIMessageUtils';
-import { toOpenAITools } from './toolConversion';
+import { toOpenAITools } from '../toolConversion';
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
   type ToolResultPayload,
-} from './utils/toolAttachmentUtils';
-import { parseToolArguments } from './utils/parseArguments';
-import { ModelHandler } from './ModelHandler';
+} from '../utils/toolAttachmentUtils';
+import { parseToolArguments } from '../utils/parseArguments';
+import { ModelHandler } from '../ModelHandler';
 import {
   BaseReasoningStreamAggregator,
   type StreamingAggregator,
@@ -77,15 +77,15 @@ import {
   COMPACTION_SYSTEM_PROMPT,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   TOOL_USE_SAFETY_BUFFER,
-} from './contextManagementConstants';
+} from '../contextManagementConstants';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
   ExtractResponseResult,
   DeepSeekToolCall,
   OpenAIToolCall,
-} from './types/IModelHandler';
-import type { ProviderStopReason } from './types/StopReasonTypes';
+} from '../types/IModelHandler';
+import type { ProviderStopReason } from '../types/StopReasonTypes';
 import type { ContentDeltaEvent } from 'openai/lib/ChatCompletionStream';
 
 type ChatCompletionRequestBase = Omit<
