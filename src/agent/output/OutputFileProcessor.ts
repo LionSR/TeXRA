@@ -72,6 +72,7 @@ export class OutputFileProcessor {
         logger.debug(
           `No processed files were generated from ${outputLocation.absolutePath}`,
         );
+        this.emitMissingOutputs(currRound, outputLocation);
         await this.handleEmptyOutput(currRound, rawLocation);
       },
       {
@@ -79,19 +80,27 @@ export class OutputFileProcessor {
         level: 'debug',
         label: 'Error processing output file',
         recover: async () => {
-          logMissingOutputs(logger, {
-            missing: [] as string[],
-            xmlFile: outputLocation.absolutePath,
-            documentTag: this.ctx.agentSetting.documentTag,
-          });
-          this.ctx.runtimeHost.emit('updateMissingOutputs', {
-            streamId: this.ctx.streamId,
-            filesByRound: { [currRound]: [] },
-          });
+          this.emitMissingOutputs(currRound, outputLocation);
           await this.handleEmptyOutput(currRound, rawLocation);
         },
       },
     );
+  }
+
+  /** Logs and signals the UI that a round produced no extractable output files. */
+  private emitMissingOutputs(
+    currRound: number,
+    outputLocation: FileLocation,
+  ): void {
+    logMissingOutputs(this.ctx.logger, {
+      missing: [] as string[],
+      xmlFile: outputLocation.absolutePath,
+      documentTag: this.ctx.agentSetting.documentTag,
+    });
+    this.ctx.runtimeHost.emit('updateMissingOutputs', {
+      streamId: this.ctx.streamId,
+      filesByRound: { [currRound]: [] },
+    });
   }
 
   private handleEmptyOutput(
