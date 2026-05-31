@@ -44,12 +44,14 @@ import {
   type ApprovalDecision,
 } from '../src/chat/tui/state/approvalQueue';
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
+import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
 } from '../src/schemas/cliSettings';
 import { initLocalCliPlatform } from '../src/runtime/initPlatform';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
+import type { CliOrchestrationItem } from '../src/runtime/orchestration';
 
 const STREAM_ID = 'harness-stream-1';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
@@ -63,6 +65,7 @@ const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
 const PLAN_APPROVAL_ODYSSEY = process.env.HARNESS_PLAN_APPROVAL_ODYSSEY === '1';
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
+const SHOW_ORCHESTRATION = process.env.HARNESS_ORCHESTRATION === '1';
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const EXTERNAL_INQUIRY_QUESTION =
@@ -108,6 +111,67 @@ function parseList(value: string | undefined): string[] {
     .split('||')
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
+}
+
+const HARNESS_ORCHESTRATION_ITEMS: readonly CliOrchestrationItem[] = [
+  {
+    value: { kind: 'chat' },
+    label: 'New chat',
+    description: 'Start the default tool-use chat',
+  },
+  {
+    value: {
+      kind: 'preset',
+      preset: 'lean-project',
+      presetName: 'Lean Project',
+    },
+    label: 'Team Lean Project',
+    description: 'built-in; workflow:0; tool-use:7',
+  },
+  {
+    value: { kind: 'preset', preset: 'physicist', presetName: 'Physicist' },
+    label: 'Team Physicist',
+    description: 'built-in; workflow:4; tool-use:9',
+  },
+  {
+    value: {
+      kind: 'preset',
+      preset: 'mathematician',
+      presetName: 'Mathematician',
+    },
+    label: 'Team Mathematician',
+    description: 'built-in; workflow:5; tool-use:7',
+  },
+  {
+    value: {
+      kind: 'preset',
+      preset: 'computer-scientist',
+      presetName: 'Computer Scientist',
+    },
+    label: 'Team Computer Scientist',
+    description: 'built-in; workflow:5; tool-use:8',
+  },
+  {
+    value: { kind: 'help' },
+    label: 'Help',
+    description: 'Show CLI commands',
+  },
+];
+
+if (SHOW_ORCHESTRATION) {
+  const instance = render(
+    <OrchestrationApp
+      items={HARNESS_ORCHESTRATION_ITEMS}
+      onResolve={() => undefined}
+    />,
+    {
+      stdout: process.stdout,
+      stderr: process.stderr,
+      stdin: process.stdin,
+    },
+  );
+  await instance.waitUntilExit();
+  process.exit(0);
 }
 
 await initLocalCliPlatform({

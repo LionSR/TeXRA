@@ -128,6 +128,44 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'orchestrate-launcher',
+    env: { HARNESS_ORCHESTRATION: '1' },
+    bootExpect: 'Choose how to start this CLI session.',
+    exitKeys: [ESC],
+    expectExit: true,
+    expect: [
+      'TeXRA',
+      'Choose how to start this CLI session.',
+      'New chat',
+      'Team Lean Project',
+      'Team Physicist',
+      'Help',
+      '1-9/a-z/Enter open',
+      'Esc exit',
+    ],
+    unexpect: ['[/model]models', 'Tip:'],
+  },
+  {
+    name: 'compact-orchestrate-launcher',
+    rows: 10,
+    cols: 80,
+    env: { HARNESS_ORCHESTRATION: '1' },
+    bootExpect: 'Choose how to start this CLI session.',
+    exitKeys: [ESC],
+    expectExit: true,
+    frame: 'tail',
+    expect: [
+      'TeXRA',
+      'Choose how to start this CLI session.',
+      'New chat',
+      'Team Lean Project',
+      '... 2 more',
+      '1-9/a-z/Enter open',
+      'Esc exit',
+    ],
+    unexpect: ['[/model]models', 'Tip:'],
+  },
+  {
     name: 'slash-palette',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/mo'],
@@ -1108,11 +1146,15 @@ async function runScenario(scenario) {
   const frame =
     scenario.frame === 'tail' ? frameTail(fullFrame, rows) : fullFrame;
 
-  // exit cleanly: Ctrl-C (a second one if the first only interrupts a run)
-  for (let attempt = 0; attempt < 2 && !exited; attempt += 1) {
-    child.write(ETX);
-    const ctrlcDeadline = Date.now() + 2500;
-    while (!exited && Date.now() < ctrlcDeadline) await sleep(100);
+  // exit cleanly: Ctrl-C by default (a second one if the first only
+  // interrupts a run). Some surfaces, such as the orchestration launcher,
+  // specifically own Esc as their exit affordance.
+  const exitKeys = scenario.exitKeys ?? [ETX, ETX];
+  for (const exitKey of exitKeys) {
+    if (exited) break;
+    child.write(exitKey);
+    const exitDeadline = Date.now() + 2500;
+    while (!exited && Date.now() < exitDeadline) await sleep(100);
   }
   const exitedCleanly = exited?.exitCode === 0 && !exited.signal;
   if (!exited) {
@@ -1145,7 +1187,7 @@ async function runScenario(scenario) {
     const exitDetails = exited
       ? ` (exitCode ${exited.exitCode}, signal ${exited.signal || 'none'})`
       : '';
-    failures.push(`Ctrl-C did not exit the TUI cleanly${exitDetails}`);
+    failures.push(`exit keys did not close the TUI cleanly${exitDetails}`);
   }
 
   return {
