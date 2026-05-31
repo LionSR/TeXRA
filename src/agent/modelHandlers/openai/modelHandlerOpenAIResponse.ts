@@ -2080,10 +2080,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           `${bestConnector}${newResponse}`,
         );
         const trailingMessage = messages.at(-1);
-        if (
-          isMessageItem(trailingMessage) &&
-          trailingMessage.role === 'user'
-        ) {
+        if (isMessageItem(trailingMessage) && trailingMessage.role === 'user') {
           messages.pop();
         } else if (!appended) {
           messages.push(
@@ -2449,10 +2446,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     }
 
     if (typeof content === 'string') {
-      message.content = [
-        createInputText(content),
-        createInputText(text),
-      ];
+      message.content = [createInputText(content), createInputText(text)];
       return;
     }
 

@@ -159,7 +159,9 @@ export async function uploadToolAttachments(
   { openRouterRouting, logger }: FileUploadOptions,
 ): Promise<UploadedOpenAIResponseAttachment[]> {
   if (openRouterRouting) {
-    logger.debug('OpenRouter routing active; skipping tool attachment uploads.');
+    logger.debug(
+      'OpenRouter routing active; skipping tool attachment uploads.',
+    );
     return [];
   }
 
