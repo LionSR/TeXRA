@@ -81,11 +81,25 @@ export function maxBashCommandScrollOffset(
   totalLines: number,
   maxDisplayLines: number,
 ): number {
+  if (
+    maxDisplayLines <= COMPACT_BASH_COMMAND_ROWS &&
+    totalLines > maxDisplayLines
+  ) {
+    const contentRows = Math.max(1, maxDisplayLines - 1);
+    return Math.max(0, totalLines - contentRows);
+  }
+
   return maxScrollableRowOffset({
     compactRows: COMPACT_BASH_COMMAND_ROWS,
     maxDisplayLines,
     totalLines,
   });
+}
+
+export function bashApprovalPageRows(maxCommandRows: number): number {
+  return maxCommandRows <= COMPACT_BASH_COMMAND_ROWS
+    ? Math.max(1, maxCommandRows - 1)
+    : Math.max(1, maxCommandRows - 2);
 }
 
 function overflowText(kind: 'more' | 'previous' | 'hidden', count: number) {
@@ -111,6 +125,24 @@ function compactHiddenCommandText({
   return `${clipToWidth(firstLine, prefixWidth).trimEnd()}${suffix}`;
 }
 
+function compactScrollStatusText({
+  hiddenAfter,
+  hiddenBefore,
+  width,
+}: {
+  readonly hiddenAfter: number;
+  readonly hiddenBefore: number;
+  readonly width: number;
+}): string {
+  const text =
+    hiddenBefore > 0 && hiddenAfter > 0
+      ? `... ${hiddenBefore} previous, ${hiddenAfter} more rows`
+      : hiddenBefore > 0
+        ? overflowText('previous', hiddenBefore)
+        : overflowText('more', hiddenAfter);
+  return clipToWidth(text, width);
+}
+
 export function boundedBashCommandDisplayLines({
   command,
   maxDisplayLines,
@@ -126,12 +158,21 @@ export function boundedBashCommandDisplayLines({
   if (maxDisplayLines <= 0 || lines.length <= maxDisplayLines) return lines;
 
   if (maxDisplayLines <= COMPACT_BASH_COMMAND_ROWS) {
+    const contentRows = Math.max(1, maxDisplayLines - 1);
+    const offset = Math.max(
+      0,
+      Math.min(
+        scrollOffset,
+        maxBashCommandScrollOffset(lines.length, maxDisplayLines),
+      ),
+    );
+
     if (maxDisplayLines === 1) {
       return [
         {
           kind: 'overflow',
           text: compactHiddenCommandText({
-            firstLine: lines[0]?.text ?? '',
+            firstLine: lines[offset]?.text ?? '',
             hiddenLines: lines.length - 1,
             width,
           }),
@@ -139,13 +180,18 @@ export function boundedBashCommandDisplayLines({
       ];
     }
 
-    const visibleCount = Math.max(1, maxDisplayLines - 1);
-    const visible = lines.slice(0, visibleCount);
+    const visible = lines.slice(offset, offset + contentRows);
+    const hiddenBefore = offset;
+    const hiddenAfter = Math.max(0, lines.length - (offset + visible.length));
     return [
       ...visible,
       {
         kind: 'overflow',
-        text: overflowText('hidden', lines.length - visible.length),
+        text: compactScrollStatusText({
+          hiddenAfter,
+          hiddenBefore,
+          width,
+        }),
       },
     ];
   }
@@ -202,8 +248,9 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
     maxCommandRows,
   );
   const scrollable = maxScrollOffset > 0;
-  const pageRows = Math.max(1, maxCommandRows - 2);
+  const pageRows = bashApprovalPageRows(maxCommandRows);
   const compactCommandLayout = maxCommandRows <= COMPACT_BASH_COMMAND_ROWS;
+  const showScrollHints = scrollable && maxCommandRows > 1;
   const displayLines = boundedBashCommandDisplayLines({
     command: props.payload.command,
     maxDisplayLines: maxCommandRows,
@@ -252,7 +299,7 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
           </Text>
         ))}
       </Box>
-      {scrollable ? (
+      {showScrollHints ? (
         <KeyHints
           confirmCancel={false}
           hints={[
