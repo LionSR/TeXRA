@@ -18,7 +18,10 @@ function wrap(text: string, cols: number, prefix = ''): string[] {
     );
 }
 
-function entryLines(entry: ConversationEntry, cols: number): readonly string[] {
+export function transcriptEntryLines(
+  entry: ConversationEntry,
+  cols: number,
+): readonly string[] {
   switch (entry.role) {
     case 'tool':
       return entry.toolUse
@@ -72,7 +75,7 @@ export function transcriptToLines(
   let previousEntry: ConversationEntry | undefined;
   let previousLines: readonly string[] = [];
   for (const entry of slice.entries) {
-    const lines = entryLines(entry, cols);
+    const lines = transcriptEntryLines(entry, cols);
     if (lines.length === 0) continue;
     if (
       out.length > 0 &&

@@ -13,7 +13,12 @@ import { formatDuration } from '@utils/core';
 import { isPlainReturnInput } from '../input/inputKeys';
 import { visibleSubagentRows } from './childStreamMerge';
 import { orderedDescendantsFromTree } from './focusCycle';
-import type { ProcessOutputTail, StreamSlice } from './cliState';
+import { transcriptEntryLines } from './transcriptLines';
+import type {
+  ConversationEntry,
+  ProcessOutputTail,
+  StreamSlice,
+} from './cliState';
 
 export type ChildControlMode = 'subagents' | 'tasks';
 
@@ -102,6 +107,18 @@ function streamDescription(
     : undefined;
 }
 
+const TASK_DETAIL_TRANSCRIPT_COLUMNS = 120;
+
+function streamEntryTailLines(entry: ConversationEntry): readonly string[] {
+  if (entry.role === 'tool' || entry.role === 'process') {
+    return transcriptEntryLines(entry, TASK_DETAIL_TRANSCRIPT_COLUMNS);
+  }
+  return entry.text
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0);
+}
+
 function streamTranscriptLines(
   child: Pick<ActiveChildInfo, 'childStreamId'>,
   streamsById: ReadonlyMap<StreamTabId, Pick<StreamSlice, 'entries'>>,
@@ -110,10 +127,7 @@ function streamTranscriptLines(
   const stream = streamsById.get(child.childStreamId);
   if (!stream) return [];
   return stream.entries.flatMap((entry) =>
-    entry.text
-      .split('\n')
-      .map((line) => line.trimEnd())
-      .filter((line) => line.length > 0),
+    streamEntryTailLines(entry).filter((line) => line.trim().length > 0),
   );
 }
 
