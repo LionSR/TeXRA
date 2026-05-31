@@ -409,6 +409,81 @@ function validateToolUseAgentRunCommand() {
   }
 }
 
+function validateMultiAgentRunCommand() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-multi-agent-run-'));
+  try {
+    const inputPath = path.join(cwd, 'math-problem.md');
+    const validationFlagPath = path.join(
+      cwd,
+      '.texra-internal-validation-model-handler',
+    );
+    writeFileSync(
+      inputPath,
+      'Problem: Prove that if n is odd, then n^2 is congruent to 1 modulo 8.\n',
+    );
+    writeFileSync(validationFlagPath, validationFlagContent);
+
+    const baseArgs = [
+      binaryPath,
+      'multi-agent',
+      'run',
+      'mathematician',
+      '--input',
+      'math-problem.md',
+      '--cwd',
+      cwd,
+      '--approval-policy',
+      'never',
+      '--print',
+    ];
+
+    const json = run(
+      process.execPath,
+      [...baseArgs, '--output-format', 'json'],
+      { cwd: repoRoot, validationModel: true, validationFlagPath },
+    );
+    assertSuccess(json, 'texra multi-agent run JSON');
+    const jsonResult = JSON.parse(json.stdout);
+    assert(
+      jsonResult.preset?.id === 'mathematician',
+      'multi-agent JSON output should identify the preset',
+    );
+    assert(
+      typeof jsonResult.rootAgent === 'string' &&
+        jsonResult.rootAgent.length > 0,
+      'multi-agent run should select an available preset root agent',
+    );
+    assert(
+      jsonResult.result?.category === 'toolUse',
+      'multi-agent JSON output should serialize the tool-use result',
+    );
+    assert(
+      String(jsonResult.result?.lastResponse ?? '').includes(
+        'Validated CLI Runtime',
+      ),
+      'multi-agent run should return the validation model response',
+    );
+
+    const ndjson = run(
+      process.execPath,
+      [...baseArgs, '--output-format', 'ndjson'],
+      { cwd: repoRoot, validationModel: true, validationFlagPath },
+    );
+    assertSuccess(ndjson, 'texra multi-agent run NDJSON');
+    assert(
+      parseNdjson(ndjson.stdout, 'multi-agent run NDJSON').some(
+        (record) =>
+          record.kind === 'multi-agent-result' &&
+          record.preset?.id === 'mathematician' &&
+          record.rootAgent === jsonResult.rootAgent,
+      ),
+      'multi-agent run NDJSON should include a preset result record with the selected root agent',
+    );
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
 async function validateCodeReviewActionHelpers() {
   assert(
     parseModelJson('{"body":"direct"}').body === 'direct',
@@ -921,6 +996,7 @@ async function validateCliRunArtifacts() {
   await validateOrchestratePreservesScrollback();
   validateRunCommand();
   validateToolUseAgentRunCommand();
+  validateMultiAgentRunCommand();
   await validateCodeReviewActionHelpers();
   console.log('CLI run validation passed');
 }
