@@ -19,6 +19,7 @@ import {
   type ChildControlMode,
 } from '../state/childControls';
 import { useLiveNowMs } from '../state/useLiveNowMs';
+import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { KeyHints, type KeyHint } from '../ui/KeyHints';
 import { SELECT_LABEL_MAX_COLS } from '../ui/Select';
 import type { StreamSlice } from '../state/cliState';
@@ -145,6 +146,51 @@ export function taskDetailKeyHintsForColumns({
   }
   hints.push({ key: 'Esc', action: 'back' });
   return hints;
+}
+
+export function taskDetailOutputColumnCount(
+  availableColumns: number | undefined,
+): number | undefined {
+  return availableColumns === undefined
+    ? undefined
+    : Math.max(1, availableColumns - TASK_DETAIL_HORIZONTAL_CHROME_COLUMNS);
+}
+
+export function taskDetailWrappedRowCount(
+  line: string,
+  outputColumns: number | undefined,
+): number {
+  if (outputColumns === undefined) return 1;
+  return Math.max(1, wrapAnsiToWidth(line, outputColumns).split('\n').length);
+}
+
+export function taskDetailVisibleLineCountForColumns({
+  availableColumns,
+  compact,
+  tailLines,
+  visibleRowBudget,
+}: {
+  readonly availableColumns?: number;
+  readonly compact: boolean;
+  readonly tailLines: readonly string[];
+  readonly visibleRowBudget: number;
+}): number {
+  if (visibleRowBudget <= 0) return 0;
+  if (!compact || tailLines.length === 0) return visibleRowBudget;
+
+  const outputColumns = taskDetailOutputColumnCount(availableColumns);
+  if (outputColumns === undefined) return visibleRowBudget;
+
+  let usedRows = 0;
+  let visibleLines = 0;
+  for (let index = tailLines.length - 1; index >= 0; index -= 1) {
+    const rowCount = taskDetailWrappedRowCount(tailLines[index], outputColumns);
+    if (visibleLines > 0 && usedRows + rowCount > visibleRowBudget) break;
+    visibleLines += 1;
+    usedRows += rowCount;
+    if (usedRows >= visibleRowBudget) break;
+  }
+  return Math.max(1, visibleLines);
 }
 
 function renderItem(
@@ -467,18 +513,12 @@ function TaskDetailView({
     hasTailLines: item.tailLines.length > 0,
     metaRows: metaParts.length,
   });
-  const shouldReserveWrappedOutputRow =
-    layout.compact &&
-    availableColumns !== undefined &&
-    availableColumns <= NARROW_TASK_DETAIL_HINT_MAX_COLUMNS &&
-    item.tailLines.some(
-      (line) =>
-        line.length >
-        Math.max(1, availableColumns - TASK_DETAIL_HORIZONTAL_CHROME_COLUMNS),
-    );
-  const visibleLineCount = shouldReserveWrappedOutputRow
-    ? Math.max(1, layout.visibleLineCount - 1)
-    : layout.visibleLineCount;
+  const visibleLineCount = taskDetailVisibleLineCountForColumns({
+    availableColumns,
+    compact: layout.compact,
+    tailLines: item.tailLines,
+    visibleRowBudget: layout.visibleLineCount,
+  });
   const maxOffset = taskDetailInitialScrollOffset(
     item.tailLines.length,
     visibleLineCount,
