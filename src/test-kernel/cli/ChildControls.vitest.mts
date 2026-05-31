@@ -8,6 +8,7 @@ import {
   emptyPickerText,
   pickerKeyHints,
   pickerTitle,
+  taskDetailCommandLabel,
 } from '@cli/chat/tui/modals/ChildControlPicker';
 import {
   buildChildControlItems,
@@ -682,6 +683,11 @@ describe('CLI child execution controls', () => {
     expect(pickerTitle('tasks')).toBe('Tasks and sub-workflows');
     expect(emptyPickerText('subagents')).toBe('No active subagents.');
     expect(emptyPickerText('tasks')).toBe('No active tasks or sub-workflows.');
+  });
+
+  it('labels task detail metadata by execution type', () => {
+    expect(taskDetailCommandLabel('process')).toBe('Command');
+    expect(taskDetailCommandLabel('subagent')).toBe('Description');
   });
 
   it('preserves output rows in compact task detail views', () => {
