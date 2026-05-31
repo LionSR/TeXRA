@@ -1269,6 +1269,14 @@ function frameTail(frame, rows) {
   return lines.slice(-Math.min(lines.length, rows)).join('\n');
 }
 
+function scenarioFrame(scenario, fullFrame, rows) {
+  return scenario.frame === 'tail' ? frameTail(fullFrame, rows) : fullFrame;
+}
+
+function expectedFrameTextVisible(scenario, frame) {
+  return (scenario.expect ?? []).every((text) => frame.includes(text));
+}
+
 function blankLinesBetween(frame, from, to) {
   const lines = frame.split('\n');
   const toIndex = lines.findLastIndex((line) => line.includes(to));
@@ -1466,15 +1474,23 @@ async function runScenario(scenario) {
     await sleep(500);
   }
 
-  // settle after keystrokes
+  // Settle after keystrokes. A quiet PTY is not quite enough: under a full
+  // suite, Ink/xterm can occasionally pause between chunks of the final frame,
+  // which used to snapshot partial lines such as a task detail output row
+  // ending at `Ple`. Prefer a frame where the scenario's expected visible text
+  // is present, but still time out with the best frame if the UI regresses.
   const settleDeadline = Date.now() + 4000;
-  while (Date.now() < settleDeadline && Date.now() - lastData < 500)
+  let fullFrame = await frameSnapshot();
+  let frame = scenarioFrame(scenario, fullFrame, rows);
+  while (Date.now() < settleDeadline) {
+    const quiet = Date.now() - lastData >= 500;
+    fullFrame = await frameSnapshot();
+    frame = scenarioFrame(scenario, fullFrame, rows);
+    if (quiet && expectedFrameTextVisible(scenario, frame)) break;
     await sleep(120);
-  await sleep(250);
-
-  const fullFrame = await frameSnapshot();
-  const frame =
-    scenario.frame === 'tail' ? frameTail(fullFrame, rows) : fullFrame;
+  }
+  fullFrame = await frameSnapshot();
+  frame = scenarioFrame(scenario, fullFrame, rows);
 
   // exit cleanly: Ctrl-C by default (a second one if the first only
   // interrupts a run). Some surfaces, such as the orchestration launcher,
