@@ -38,7 +38,8 @@ export interface ChildControlPickerProps {
 }
 
 export const TASK_DETAIL_LABEL_WIDTH = 13;
-export const ULTRA_COMPACT_PICKER_MAX_ROWS = 4;
+export const ULTRA_COMPACT_PICKER_MAX_ROWS = 6;
+export const ULTRA_COMPACT_TASK_DETAIL_MAX_ROWS = 4;
 export const NARROW_PICKER_HINT_MAX_COLUMNS = 64;
 export const MIN_COLUMNS_FOR_JUMP_HINT = 58;
 export const MIN_COLUMNS_FOR_KILL_HINT = 44;
@@ -59,6 +60,15 @@ export function isUltraCompactPickerRows(
   return (
     availableRows !== undefined &&
     availableRows <= ULTRA_COMPACT_PICKER_MAX_ROWS
+  );
+}
+
+export function isUltraCompactTaskDetailRows(
+  availableRows: number | undefined,
+): boolean {
+  return (
+    availableRows !== undefined &&
+    availableRows <= ULTRA_COMPACT_TASK_DETAIL_MAX_ROWS
   );
 }
 
@@ -444,7 +454,7 @@ function TaskDetailView({
   const visibleTail = item.tailLines.slice(offset, offset + visibleLineCount);
   const compactMeta = metaParts.join(' · ');
   const commandLabel = taskDetailCommandLabel(item.kind);
-  const ultraCompact = isUltraCompactPickerRows(availableRows);
+  const ultraCompact = isUltraCompactTaskDetailRows(availableRows);
   const showScrollHint =
     item.tailLines.length > visibleLineCount && !ultraCompact;
   const hints: KeyHint[] = [
