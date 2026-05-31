@@ -173,6 +173,43 @@ source. Each was independently verified as a non-issue.
 
 ---
 
+## What shipped on this branch
+
+The adversarial pass showed the naive fixes for #1/#2/#4 were no-ops because the
+data path hands fresh array/object identities every render. The clean fix is one
+structural change at the *source* rather than memo boilerplate at every consumer:
+
+**`cliState.activeSlice` — a `Signal.Computed` for the active stream's slice**
+(`state/cliState.ts`). `patchStream` rebuilds the streams Map but keeps every
+*untouched* slice's reference (`new Map(current)` + `out.set(id, next)`), so the
+computed returns the **same `StreamSlice`** whenever the active stream is
+unchanged — even while a *background* stream streams tokens. `useSignal` is built
+on `useSyncExternalStore`, and `Signal.Computed` skips propagation via `Object.is`
+(same trick the webview's `activeStreamInfo$` uses), so subscribers don't re-render
+on unrelated streams.
+
+Three panes that only read the active slice now subscribe to it instead of the
+whole Map — and each got *shorter* (3 lines → 1):
+
+- `panes/ConversationPane.tsx` (the hot streaming pane)
+- `panes/TodosPlanPanel.tsx`
+- `panes/SubagentList.tsx`
+
+Net **+16 / −11** across 4 files. This addresses the *real* form of #1 (the active
+pane no longer re-renders on background-stream tokens) and makes #2/#4 moot for
+those panes (they now re-render only when their own data's identity changes — the
+correct granularity, achieved at the source, no `useMemo`/`React.memo` needed).
+
+Deliberately left alone: `App.tsx` and `StatusBar.tsx` still read the full
+`streams` Map because they genuinely need cross-stream data (child-control
+resolution, focus targets). #3 (cross-stream batching), #5, #6 remain unaddressed
+per the verdicts above — measurement-gated or skip.
+
+Verification: `compile:fast` builds clean; CLI `tsc -p packages/cli/tsconfig.json`
+typechecks clean (the only error in this sandbox is a missing `@types/node`
+type-lib, unrelated to the change). Behavior unchanged — same slice value reaches
+each pane; only the *subscription granularity* narrowed.
+
 ## Meta-conclusion
 
 After the adversarial pass, the audit's own headline shrinks: nothing here is a
