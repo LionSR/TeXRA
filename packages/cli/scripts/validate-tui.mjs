@@ -517,6 +517,49 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'compact-subagent-picker',
+    rows: 10,
+    cols: 80,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 's'], // Option/Alt-s
+    frame: 'tail',
+    expect: [
+      'Subagents',
+      'Stream: main',
+      'strategy',
+      'Enter focus',
+      'Esc close',
+    ],
+    unexpect: ['Tasks and sub-workflows'],
+  },
+  {
+    name: 'compact-task-picker',
+    rows: 10,
+    cols: 80,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 'p'], // Option/Alt-p
+    frame: 'tail',
+    expect: [
+      'Tasks and sub-workflows',
+      'Stream: main',
+      'strategy',
+      'Enter view',
+      'k kill',
+      'Esc close',
+    ],
+    unexpect: ['Subagents'],
+  },
+  {
     name: 'task-subworkflow-detail',
     env: {
       HARNESS_ENTRIES: '4',
