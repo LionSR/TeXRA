@@ -110,7 +110,7 @@ describe('output progress events', () => {
       domain: () => {},
     } as unknown as AgentTrace;
     const xmlManager = {
-      processSingleXmlOutput: async () => {
+      splitScratchpadMultipleOutputXml: async () => {
         throw new Error('invalid xml');
       },
     } as unknown as XmlOutputManager;
@@ -134,7 +134,7 @@ describe('output progress events', () => {
     const context: ProcessingContext = {
       agentSetting: {
         agentCategory: AgentCategory.Workflow,
-        documentTag: 'latex_document',
+        documentTag: 'documents',
       } as ProcessingContext['agentSetting'],
       baseFiles: [],
       streamId: 'stream:processor',
@@ -145,7 +145,7 @@ describe('output progress events', () => {
       ensureRoundData: ensureRound,
     };
 
-    await new OutputFileProcessor(context).processSingleOutput(
+    await new OutputFileProcessor(context).processMultipleOutputs(
       createLocation('/tmp/broken-output.xml'),
       3,
       createLocation('/tmp/raw-output.xml'),

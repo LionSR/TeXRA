@@ -13,7 +13,7 @@ import {
   extractTextFromTag,
 } from '@utils/text/xmlUtils';
 
-import { indentLatexFile, indentLatexFiles } from './LatexOutputUtils';
+import { indentLatexFiles } from './LatexOutputUtils';
 import { tryOperation } from './outputOperations';
 import type { XmlOutputManager } from './XmlOutputManager';
 
@@ -78,7 +78,18 @@ export class OutputFileProcessor {
         logger,
         level: 'debug',
         label: 'Error processing output file',
-        recover: () => this.handleEmptyOutput(currRound, rawLocation),
+        recover: async () => {
+          logMissingOutputs(logger, {
+            missing: [] as string[],
+            xmlFile: outputLocation.absolutePath,
+            documentTag: this.ctx.agentSetting.documentTag,
+          });
+          this.ctx.runtimeHost.emit('updateMissingOutputs', {
+            streamId: this.ctx.streamId,
+            filesByRound: { [currRound]: [] },
+          });
+          await this.handleEmptyOutput(currRound, rawLocation);
+        },
       },
     );
   }
@@ -89,66 +100,6 @@ export class OutputFileProcessor {
   ): Promise<void> {
     this.ctx.setRoundOutputs(round, []);
     return this.captureXmlSummary(round, rawLocation, []);
-  }
-
-  async processSingleOutput(
-    outputLocation: FileLocation,
-    currRound: number,
-    rawLocation: FileLocation,
-  ): Promise<void> {
-    const { agentSetting, logger } = this.ctx;
-
-    logger.debug(`Processing single output for ${outputLocation.absolutePath}`);
-
-    await tryOperation(
-      async () => {
-        const processed = await this.ctx.xmlManager.processSingleXmlOutput(
-          outputLocation,
-          currRound,
-        );
-
-        if (!processed.location.absolutePath) {
-          logger.debug(
-            `No processed file was generated from ${outputLocation.absolutePath}`,
-          );
-          await this.handleEmptyOutput(currRound, rawLocation);
-          return;
-        }
-
-        await indentLatexFile(processed.location, logger);
-        logger.debug(
-          `Indented single output file: ${processed.location.absolutePath}`,
-        );
-
-        if (this.ctx.baseFiles.length > 0) {
-          await replaceInputCommands(
-            this.ctx.baseFiles,
-            [processed.location],
-            logger,
-          );
-        }
-
-        this.ctx.setRoundOutputs(currRound, [processed]);
-        await this.captureXmlSummary(currRound, rawLocation, [processed]);
-      },
-      {
-        logger,
-        level: 'debug',
-        label: 'Error processing output file',
-        recover: async () => {
-          logMissingOutputs(logger, {
-            missing: [] as string[],
-            xmlFile: outputLocation.absolutePath,
-            documentTag: agentSetting.documentTag,
-          });
-          this.ctx.runtimeHost.emit('updateMissingOutputs', {
-            streamId: this.ctx.streamId,
-            filesByRound: { [currRound]: [] },
-          });
-          await this.handleEmptyOutput(currRound, rawLocation);
-        },
-      },
-    );
   }
 
   private async captureXmlSummary(

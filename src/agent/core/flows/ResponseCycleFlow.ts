@@ -17,11 +17,8 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/ResponseUsage';
 
-import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
-import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';
-
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
-import { K_SLICE, REPETITION_DETECTION_THRESHOLD } from '@agent/core/constants';
+import { K_SLICE } from '@agent/core/constants';
 import { bestConnectionMethod } from '@latex';
 import replacementEngine from '@replacement/engine';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
@@ -171,7 +168,6 @@ interface ProcessResult {
   useStreaming: boolean;
   responseUsage: ProviderUsage;
   normalizedUsage?: NormalizedUsage;
-  repetitionDetected: boolean;
   updatedLastResponse?: string;
   updatedAccumulatedOutput?: string;
 }
@@ -272,28 +268,6 @@ class ResponseProcessNode<C> extends BaseNode<
         });
       }
 
-      const repetitionResult = checkForMassiveRepetition(
-        prepRes.lastResponse,
-        newResponse,
-      );
-
-      if (repetitionResult.massiveRepetitionDetected && newResponse) {
-        const preview = newResponse.substring(
-          0,
-          REPETITION_DETECTION_THRESHOLD,
-        );
-        const skeleton = JSON.stringify(
-          messageToSkeleton(prepRes.messages),
-          null,
-          2,
-        );
-        logger.error(
-          `Massive repetition detected - skipping this response\n` +
-            `First ${REPETITION_DETECTION_THRESHOLD} chars: ${preview}\n` +
-            `Message structure:\n${skeleton}`,
-        );
-      }
-
       let processedResponse: string | undefined;
       let bestConnector: string | undefined;
       let updatedLastResponse: string | undefined;
@@ -302,18 +276,14 @@ class ResponseProcessNode<C> extends BaseNode<
       if (newResponse) {
         processedResponse = replacementEngine.applyAll(newResponse);
 
-        if (!repetitionResult.massiveRepetitionDetected) {
-          const connector = await bestConnectionMethod(
-            prepRes.lastResponse.slice(-K_SLICE),
-            processedResponse.slice(0, K_SLICE),
-          );
-          bestConnector = connector.connector;
-          updatedLastResponse = processedResponse;
-          updatedAccumulatedOutput =
-            prepRes.accumulatedOutput +
-            (bestConnector ?? '') +
-            processedResponse;
-        }
+        const connector = await bestConnectionMethod(
+          prepRes.lastResponse.slice(-K_SLICE),
+          processedResponse.slice(0, K_SLICE),
+        );
+        bestConnector = connector.connector;
+        updatedLastResponse = processedResponse;
+        updatedAccumulatedOutput =
+          prepRes.accumulatedOutput + (bestConnector ?? '') + processedResponse;
       }
 
       return {
@@ -327,7 +297,6 @@ class ResponseProcessNode<C> extends BaseNode<
           useStreaming,
           responseUsage,
           normalizedUsage,
-          repetitionDetected: repetitionResult.massiveRepetitionDetected,
           updatedLastResponse,
           updatedAccumulatedOutput,
         },
@@ -368,7 +337,7 @@ class ResponseProcessNode<C> extends BaseNode<
     shared.stopReason = result.stopReason;
     shared.processedResponse = result.processedResponse;
 
-    if (result.repetitionDetected || !result.processedResponse) {
+    if (!result.processedResponse) {
       shared.endTurn = false;
       shared.shouldStop = true;
       return FlowTransition.COMPLETE;

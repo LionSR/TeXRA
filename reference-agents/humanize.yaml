@@ -3,8 +3,8 @@ description: Removes LLM stylistic tells from research prose. Phase 1 annotates 
 
 settings:
   agentCategory: workflow
-  documentTag: latex_document
-  endTag: </latex_document>
+  documentTag: documents
+  endTag: </documents>
   outputExt: tex
   prefills:
     - <scratchpad>
@@ -554,9 +554,13 @@ prompts:
       \usepackage{xcolor}
       \newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\textit{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else gray\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
 
-      <latex_document>
-      % LATEX_DOCUMENT_WITH_LLM_TELL_ANNOTATIONS HERE
-      </latex_document>
+      <documents>
+      {% for output in INPUT_FILES %}
+      <document name="{{ output }}">
+      % LATEX_DOCUMENT_WITH_LLM_TELL_ANNOTATIONS_FOR_{{ output }} HERE
+      </document>
+      {% endfor %}
+      </documents>
 
     - |
       Phase 2 of 2. Directly rewrite. Implement the fixes from your Phase 1 annotations inline. Produce a clean revised document, not a document of comments.
@@ -654,6 +658,10 @@ prompts:
 
       Final output:
 
-      <latex_document>
-      % COMPLETE_REVISED_LATEX_DOCUMENT_WITH_FIXES_APPLIED HERE
-      </latex_document>
+      <documents>
+      {% for output in INPUT_FILES %}
+      <document name="{{ output }}">
+      % COMPLETE_REVISED_LATEX_DOCUMENT_WITH_FIXES_APPLIED_FOR_{{ output }} HERE
+      </document>
+      {% endfor %}
+      </documents>
