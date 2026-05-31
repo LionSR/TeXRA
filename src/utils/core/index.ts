@@ -14,5 +14,5 @@ export {
   serializeError,
   type SerializedError,
 } from './stringCore';
-export { isObject } from './typeGuards';
+export { isObject, isFiniteNumber } from './typeGuards';
 export { debounce, delay } from './async';
