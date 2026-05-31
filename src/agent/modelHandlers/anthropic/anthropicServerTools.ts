@@ -23,30 +23,29 @@ import {
 } from '../types/ServerToolTypes';
 
 // Type imports - Anthropic SDK
-import type {
-  BetaContentBlock,
-  BetaMessage,
-} from '@anthropic-ai/sdk/resources/beta/messages';
-import type {
-  ServerToolUseBlock,
-  WebSearchToolResultBlock,
-  WebFetchToolResultBlock,
-} from '@anthropic-ai/sdk/resources/messages';
+import type { BetaMessage } from '@anthropic-ai/sdk/resources/beta/messages';
 
 /**
  * Partitions content blocks, dropping `server_tool_use` blocks (web_search /
  * web_fetch) that have no matching result block. Returns the kept blocks plus
  * the IDs of the stripped orphans (for diagnostics).
+ *
+ * Guards are applied via `if` narrowing (not `array.filter(guard)`) so the
+ * element type is preserved for any caller-supplied block array.
  */
-export function stripOrphanedServerToolUse<T extends BetaContentBlock>(
-  blocks: readonly T[],
-): { kept: T[]; orphanedIds: string[] } {
-  const searchResultIds = new Set(
-    blocks.filter(isAnthropicWebSearchResult).map((b) => b.tool_use_id),
-  );
-  const fetchResultIds = new Set(
-    blocks.filter(isAnthropicWebFetchResult).map((b) => b.tool_use_id),
-  );
+export function stripOrphanedServerToolUse<T>(blocks: readonly T[]): {
+  kept: T[];
+  orphanedIds: string[];
+} {
+  const searchResultIds = new Set<string>();
+  const fetchResultIds = new Set<string>();
+  for (const block of blocks) {
+    if (isAnthropicWebSearchResult(block)) {
+      searchResultIds.add(block.tool_use_id);
+    } else if (isAnthropicWebFetchResult(block)) {
+      fetchResultIds.add(block.tool_use_id);
+    }
+  }
 
   const orphanedIds: string[] = [];
   const kept = blocks.filter((block) => {
@@ -79,23 +78,19 @@ export function extractAnthropicServerToolData(
     return { webSearchResults: [], webFetchResults: [], contentBlocks: [] };
   }
 
-  // Filter for server tool content (server_tool_use, web_search_tool_result,
-  // web_fetch_tool_result). Cast needed because BetaContentBlock has slightly
-  // different types than the regular API.
+  // Keep only server tool content (server_tool_use, web_search_tool_result,
+  // web_fetch_tool_result), then drop orphaned calls.
   const serverToolBlocks = responseObject.content.filter(
     isAnthropicServerToolContent,
-  ) as (
-    | ServerToolUseBlock
-    | WebSearchToolResultBlock
-    | WebFetchToolResultBlock
-  )[];
-
-  const { kept: contentBlocks } = stripOrphanedServerToolUse(serverToolBlocks);
+  );
+  const { kept } = stripOrphanedServerToolUse(serverToolBlocks);
 
   return {
     webSearchResults: extractAnthropicWebSearchResults(responseObject.content),
     webFetchResults: extractAnthropicWebFetchResults(responseObject.content),
-    contentBlocks,
+    // Cast needed because BetaContentBlock has slightly different types than the
+    // regular API; the runtime filter guarantees these are server-tool blocks.
+    contentBlocks: kept as ServerToolExtractionResult['contentBlocks'],
   };
 }
 
