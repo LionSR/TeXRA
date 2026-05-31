@@ -169,7 +169,6 @@ const isAnyThinkingBlockParam = (
 const isBetaToolUseBlock = (block: BetaContentBlock): block is ToolUseBlock =>
   block.type === 'tool_use';
 
-const SONNET_37_OUTPUT_BETA: AnthropicBeta = 'output-128k-2025-02-19';
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
 
@@ -184,13 +183,12 @@ const SONNET_46_FULLNAME = 'claude-sonnet-4-6';
 
 /**
  * Model patterns that require temperature removal when thinking is enabled.
- * Per Anthropic docs, Claude 4 and Claude 3.7 Sonnet models don't support temperature with thinking.
+ * Per Anthropic docs, Claude 4 models don't support temperature with thinking.
  */
 const THINKING_TEMPERATURE_EXCLUDED_PATTERNS = [
   'claude-opus-4',
   'claude-sonnet-4',
   'claude-haiku-4',
-  'claude-3-7-sonnet',
 ];
 
 export class ModelHandlerAnthropic extends ModelHandler<
@@ -626,15 +624,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
       if (requiresNoTemperature) {
         delete options.temperature;
       }
-    }
-
-    // Add beta features for Claude 3.7 Sonnet to increase max output to 128k tokens and enable thinking
-    if (this.config.fullName === 'claude-3-7-sonnet-20250219') {
-      // Add the output beta while preserving existing betas (e.g., interleaved thinking, context management)
-      ensureBeta(options, SONNET_37_OUTPUT_BETA);
-      // Update max tokens to use the higher limit when streaming
-      options.max_tokens = useStreaming ? 64000 : this.config.maxOutputTokens;
-      // The thinking configuration is now handled above for all reasoning models
     }
 
     // Set up context management before token counting so estimates use matching options.
