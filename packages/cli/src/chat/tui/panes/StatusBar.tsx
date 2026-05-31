@@ -9,6 +9,7 @@ import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
   STREAM_STATUS,
   type ConversationProgress,
+  type StreamStatus,
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
@@ -325,6 +326,36 @@ export function ctrlCActionForFocus({
     : 'stop';
 }
 
+function statusBarCanStopStatus(status: StreamStatus | undefined): boolean {
+  return (
+    status === STREAM_STATUS.INITIALIZING ||
+    status === STREAM_STATUS.RUNNING ||
+    status === STREAM_STATUS.RESUMING
+  );
+}
+
+interface StatusBarVisibleStream {
+  readonly status: StreamStatus | undefined;
+}
+
+export function statusBarCanStopVisibleRun({
+  activeStreamId,
+  parentStream,
+  status,
+  streams,
+}: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly status: StreamStatus | undefined;
+  readonly streams: ReadonlyMap<StreamTabId, StatusBarVisibleStream>;
+}): boolean {
+  if (statusBarCanStopStatus(status)) return true;
+  const parentStreamId =
+    activeStreamId === undefined ? undefined : parentStream.get(activeStreamId);
+  if (parentStreamId === undefined) return false;
+  return statusBarCanStopStatus(streams.get(parentStreamId)?.status);
+}
+
 export function buildStatusBarDisplay(
   input: StatusBarDisplayInput,
 ): StatusBarDisplay {
@@ -454,7 +485,14 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     width: columns,
     ctrlCAction: ctrlCActionForFocus({
       activeStreamId,
-      canStopActiveRun: props.canStopActiveRun?.() === true,
+      canStopActiveRun:
+        props.canStopActiveRun?.() === true ||
+        statusBarCanStopVisibleRun({
+          activeStreamId,
+          parentStream,
+          status: slice?.status,
+          streams,
+        }),
       parentStream,
     }),
     shortcutsActive: props.shortcutsActive,
