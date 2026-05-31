@@ -807,6 +807,62 @@ const SCENARIOS = [
     maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
   },
   {
+    name: 'tiny-subagent-picker',
+    cols: 40,
+    rows: 10,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: 'TeXRA',
+    keys: [ESC + 's'], // Option/Alt-s
+    frame: 'tail',
+    expect: [
+      'strategy',
+      '+2 more',
+      'Enter focus',
+      'Esc close',
+      '[main]* 1:strategy*',
+    ],
+    unexpect: ['*    y*', 'dle)          r*'],
+  },
+  {
+    name: 'tiny-task-subworkflow-detail',
+    cols: 40,
+    rows: 10,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: 'TeXRA',
+    keys: [ESC + 'p', '\r'],
+    frame: 'tail',
+    expect: [
+      'Task details',
+      'Task details · Description',
+      'Esc back',
+      '[main]* 1:strategy*',
+    ],
+    unexpect: ['╰─Output:', '*    y*'],
+  },
+  {
+    name: 'tiny-task-process-detail',
+    cols: 40,
+    rows: 10,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: 'TeXRA',
+    keys: [ESC + 'p', DOWN, DOWN, DOWN, '\r'],
+    frame: 'tail',
+    expect: ['Task details', 'Command: latex build', 'Esc back'],
+    unexpect: ['╰─Output:', '*    y*'],
+  },
+  {
     name: 'stopped-subagent-picker',
     env: {
       HARNESS_ENTRIES: '4',

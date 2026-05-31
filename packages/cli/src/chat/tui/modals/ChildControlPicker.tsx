@@ -399,6 +399,15 @@ function TaskDetailView({
   const visibleTail = item.tailLines.slice(offset, offset + visibleLineCount);
   const compactMeta = metaParts.join(' · ');
   const commandLabel = taskDetailCommandLabel(item.kind);
+  const ultraCompact = isUltraCompactPickerRows(availableRows);
+  const showScrollHint =
+    item.tailLines.length > visibleLineCount && !ultraCompact;
+  const hints: KeyHint[] = [
+    ...(showScrollHint ? [{ key: '↑/↓', action: 'scroll' }] : []),
+    ...(item.childStreamId ? [{ key: 'f', action: 'focus stream' }] : []),
+    ...(item.killable ? [{ key: 'k', action: 'kill' }] : []),
+    { key: 'Esc', action: 'back' },
+  ];
 
   useEffect(() => {
     setScrollState((current) =>
@@ -430,6 +439,17 @@ function TaskDetailView({
     }
     if (input.toLowerCase() === 'f' && item.childStreamId) onFocusStream();
   });
+
+  if (ultraCompact) {
+    return (
+      <Box flexDirection="column" minWidth={0} width={availableColumns}>
+        <Text bold color="cyan" wrap="truncate-end">
+          {`Task details · ${commandLabel}: ${item.command}`}
+        </Text>
+        <KeyHints hints={hints} confirmCancel={false} />
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -473,19 +493,7 @@ function TaskDetailView({
       </Box>
       {layout.showHints ? (
         <Box marginTop={layout.compact ? 0 : 1}>
-          <KeyHints
-            hints={[
-              ...(item.tailLines.length > visibleLineCount
-                ? [{ key: '↑/↓', action: 'scroll' }]
-                : []),
-              ...(item.childStreamId
-                ? [{ key: 'f', action: 'focus stream' }]
-                : []),
-              ...(item.killable ? [{ key: 'k', action: 'kill' }] : []),
-              { key: 'Esc', action: 'back' },
-            ]}
-            confirmCancel={false}
-          />
+          <KeyHints hints={hints} confirmCancel={false} />
         </Box>
       ) : null}
     </Box>
