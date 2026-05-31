@@ -169,5 +169,53 @@ describe('CLI multi-agent run command', () => {
       markErrorOnThrow: true,
       stopAfterCycle: true,
     });
+    expect(mocks.expandRunInputs).toHaveBeenCalledWith(
+      ['problem.tex'],
+      [],
+      '/tmp/project',
+      { allowEmptyInput: true },
+    );
+  });
+
+  it('allows instruction-only team runs without input files', async () => {
+    mocks.expandRunInputs.mockResolvedValue({
+      inputFiles: [],
+      contextFiles: [],
+    });
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    const exitCode = await runMultiAgentPreset(cliContext(), {
+      preset: 'mathematician',
+      inputFiles: [],
+      contextFiles: [],
+      model: 'deepseekT',
+      instruction: 'Prove that every odd square is congruent to 1 modulo 8.',
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.expandRunInputs).toHaveBeenCalledWith([], [], '/tmp/project', {
+      allowEmptyInput: true,
+    });
+    const request = mocks.executeCliRequest.mock.calls[0]?.[0];
+    expect(request?.config.inputFiles).toEqual([]);
+    expect(request?.config.instruction).toContain('User instruction:');
+    expect(request?.config.instruction).toContain(
+      'Prove that every odd square is congruent to 1 modulo 8.',
+    );
+  });
+
+  it('still requires either an input file or an inline instruction', async () => {
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    await expect(
+      runMultiAgentPreset(cliContext(), {
+        preset: 'mathematician',
+        inputFiles: [],
+        contextFiles: [],
+        model: 'deepseekT',
+        instruction: '',
+      }),
+    ).rejects.toThrow(/Provide --input or --instruction/);
+    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
   });
 });
