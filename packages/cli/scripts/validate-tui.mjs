@@ -53,6 +53,8 @@ const LONG_BASH_APPROVAL_COMMAND = [
   'print(solutions)',
   'EOF',
 ].join('\n');
+const LONG_EXTERNAL_INQUIRY_ANSWER =
+  'Independent check agrees: there are 22 non-degenerate triples in the displayed list, plus exactly 61 degenerate triples of the form (0,b,b), and the bounded search over integer pairs proves completeness.';
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');
@@ -199,6 +201,23 @@ const SCENARIOS = [
     frame: 'tail',
     expect: ['AUTO-BASH', '[/status]details', '[/model]models'],
     unexpect: ['AUTO-APPROVE', 'Run bash command?', '1 approval'],
+  },
+  {
+    name: 'external-inquiry-long',
+    rows: 24,
+    env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
+    bootExpect: 'Use foreground panel shortcuts',
+    keys: [LONG_EXTERNAL_INQUIRY_ANSWER],
+    frame: 'tail',
+    expect: [
+      'Agent asks:',
+      'more rows',
+      'PgUp/PgDn question',
+      'Enter submit answer',
+      'Ctrl-R reject with note',
+    ],
+    unexpect: ['└─Degenerate triples', '[/model]models'],
+    maxBlankLinesBetween: [{ from: '└', to: 'Tip:', max: 1 }],
   },
   {
     name: 'edit-approval-reject',
