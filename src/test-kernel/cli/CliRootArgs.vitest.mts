@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { detectUnknownCliCommand, runCli } from '@cli/commands/root';
 import { resolveLoginProvider } from '@cli/commands/auth';
 import { doctorPlatformInitContext } from '@cli/commands/doctor';

@@ -3,8 +3,8 @@ import { strict as assert } from 'assert';
 
 // Local imports - agent
 import { ProgressFollowUpController } from '@controllers/progressView/ProgressFollowUpController';
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
 // Local imports - shared
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';

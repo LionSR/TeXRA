@@ -2,9 +2,9 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   AgentExecutionHandle,

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { OutputNode } from '@agent/implementations/flows/reflection/nodes/OutputNode';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
 import { createOutputState, type RoundData } from '@agent/output/outputState';

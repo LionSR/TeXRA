@@ -35,13 +35,13 @@ import {
   logSdkError,
   type AgentTrace,
 } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentSetting, hasEndTag } from '@agent/core/definition/AgentDataclass';
 import {
   OpenAIAPIResponseUsage,
   GenerateContentResponseUsageMetadata,
-} from '@agent/core/ResponseUsage';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+} from '@agent/core/usage/ResponseUsage';
+import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';

@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 // Local imports
 import { loadAgents } from '@agent/index';
 import { registerExecution } from '@agent/storage';
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';

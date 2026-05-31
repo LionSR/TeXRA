@@ -4,7 +4,10 @@
  */
 
 import type { AgentTrace } from '@agent/trace';
-import { TaskStateSchema, type TaskState } from '@agent/core/TaskState';
+import {
+  TaskStateSchema,
+  type TaskState,
+} from '@agent/core/execution/TaskState';
 import { WorkspaceStateKey } from '@common/state';
 import { normalizeRunId } from '@common/constants/runIds';
 import {

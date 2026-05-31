@@ -2,8 +2,8 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import type { AgentEntry } from '@agent/index';
-import type { AgentConfigPayload } from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
 import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';

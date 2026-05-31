@@ -17,8 +17,8 @@ import {
   unregisterInterruptible,
   type IInterruptible,
 } from '@agent/toolUse/ToolUseAgentRegistry';
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 
 // Local imports - tools

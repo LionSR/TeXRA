@@ -23,7 +23,10 @@ import {
   deleteExecution,
   deleteAllExecutions,
 } from '@agent/storage';
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { SupabaseClient } from '@auth/SupabaseClient';

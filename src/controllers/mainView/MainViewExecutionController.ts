@@ -1,12 +1,12 @@
 // Third-party imports
 
 // Local imports - agent
-import type { AgentConfigInput } from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import type { AgentConfigInput } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   validateExecutionRequest,
   type ValidatedExecutionRequest,
-} from '@agent/core/executionRequests';
+} from '@agent/core/execution/executionRequests';
 
 // Local imports - shared schemas
 import {

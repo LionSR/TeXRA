@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import { createKey, getAgent, type AgentSource } from '@agent/index';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getMainWebview } from '@frontend/system/commandUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';

@@ -1,5 +1,5 @@
 import { Node } from '@agent/node';
-import { ConversationRoundStateSnapshotSchema } from '@agent/core/AgentState';
+import { ConversationRoundStateSnapshotSchema } from '@agent/core/execution/AgentState';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 

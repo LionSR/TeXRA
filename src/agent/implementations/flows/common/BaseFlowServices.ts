@@ -4,9 +4,12 @@ import type {
   SdkToolCall,
 } from '@agent/modelHandlers/types/IModelHandler';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
-import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type {
+  AgentPrompt,
+  AgentSetting,
+} from '@agent/core/definition/AgentDataclass';
+import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';

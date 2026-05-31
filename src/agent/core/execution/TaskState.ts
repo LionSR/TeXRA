@@ -5,8 +5,8 @@ import {
   type MultipleDocumentFileType,
 } from '@shared/schemas/mainView';
 
-import { AgentCategory } from './AgentDataclass';
-import { AgentConfigSchema, type AgentConfig } from './AgentConfig';
+import { AgentCategory } from '../definition/AgentDataclass';
+import { AgentConfigSchema, type AgentConfig } from '../definition/AgentConfig';
 
 const ToolSessionStateSchema = z.object({
   lastFollowUpAt: z.number().optional(),
