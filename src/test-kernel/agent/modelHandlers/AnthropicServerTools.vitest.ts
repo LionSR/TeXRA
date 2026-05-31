@@ -40,7 +40,7 @@ const asBlocks = (blocks: unknown[]): BetaContentBlock[] =>
   blocks as BetaContentBlock[];
 
 const asMessage = (blocks: unknown[]): BetaMessage =>
-  ({ content: blocks } as unknown as BetaMessage);
+  ({ content: blocks }) as unknown as BetaMessage;
 
 const typesOf = (blocks: unknown[]): string[] =>
   blocks.map((b) => (b as { type: string }).type);
@@ -127,7 +127,10 @@ describe('buildAnthropicAssistantContent', () => {
   });
 
   it('tags the compaction block with a cache breakpoint when caching is on', () => {
-    const message = asMessage([textBlock, { type: 'compaction', content: 'x' }]);
+    const message = asMessage([
+      textBlock,
+      { type: 'compaction', content: 'x' },
+    ]);
     const out = buildAnthropicAssistantContent(
       message,
       { supportsPromptCaching: true },

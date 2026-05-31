@@ -84,7 +84,11 @@ export function extractAnthropicServerToolData(
   // different types than the regular API.
   const serverToolBlocks = responseObject.content.filter(
     isAnthropicServerToolContent,
-  ) as (ServerToolUseBlock | WebSearchToolResultBlock | WebFetchToolResultBlock)[];
+  ) as (
+    | ServerToolUseBlock
+    | WebSearchToolResultBlock
+    | WebFetchToolResultBlock
+  )[];
 
   const { kept: contentBlocks } = stripOrphanedServerToolUse(serverToolBlocks);
 
