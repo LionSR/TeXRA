@@ -29,8 +29,31 @@ import type {
   StreamSlice,
 } from '@cli/chat/tui/state/cliState';
 
+// Local imports - shared schemas
+import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
+
 function tail(stdout: string, stderr = ''): ProcessOutputTail {
   return { stdout, stderr };
+}
+
+function toolUse(
+  toolName: string,
+  input: unknown,
+  overrides: Partial<NormalizedToolUse> = {},
+): NormalizedToolUse {
+  return {
+    parsed: {},
+    toolName,
+    errorText: '',
+    outputText: '',
+    userInstructionText: '',
+    input,
+    isError: false,
+    isUserFeedback: false,
+    headerSummary: '',
+    status: TOOL_USE_STATUS.COMPLETED,
+    ...overrides,
+  };
 }
 
 function slice(
@@ -331,6 +354,68 @@ describe('CLI child execution controls', () => {
         label: 'bash',
         command: 'timeout 1800 texra run paper',
         tailLines: ['line one', 'line two'],
+      },
+    ]);
+  });
+
+  it('includes tool and process transcript rows in task details', () => {
+    const state = slice({
+      activeSubagents: [
+        {
+          executionId: 'agent-1',
+          agentName: 'bash',
+          childStreamId: 'child-a',
+          status: 'completed',
+        },
+      ],
+    });
+    const streams = new Map([
+      [
+        'child-a',
+        slice({
+          entries: [
+            {
+              id: 'tool-1',
+              role: 'tool',
+              text: '',
+              finalized: true,
+              toolUse: toolUse(
+                'bash',
+                { command: 'pnpm test' },
+                {
+                  headerSummary: 'pnpm test',
+                  outputText: 'ok\nsecond line',
+                },
+              ),
+            },
+            {
+              id: 'process-1',
+              role: 'process',
+              text: '',
+              finalized: true,
+              process: {
+                executionId: 'proc-1',
+                title: 'latexmk',
+                status: 'completed',
+                isError: false,
+                tailLines: ['built pdf'],
+              },
+            },
+          ],
+        }),
+      ],
+    ]);
+
+    expect(buildChildControlItems(state, 'tasks', streams)).toMatchObject([
+      {
+        executionId: 'agent-1',
+        tailLines: [
+          '● bash (pnpm test)',
+          '⎿ ok',
+          '  second line',
+          'latexmk · completed',
+          '⎿ built pdf',
+        ],
       },
     ]);
   });
