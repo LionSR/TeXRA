@@ -145,6 +145,9 @@ const SCENARIOS = [
     frame: 'tail',
     expect: ['/tools', 'Toggle available external integrations'],
     unexpect: ['[TeXRA]', 'toolUtils'],
+    maxBlankLinesBetween: [
+      { from: 'entry-4 chat history line', to: '/tools', max: 8 },
+    ],
   },
   {
     name: 'slash-palette-overflow',
