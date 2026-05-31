@@ -7,7 +7,18 @@ export * from './agent';
 export * from './fileFields';
 export * from './proposalFields';
 export * from './toolConfig';
-export * from './settingsConfiguration';
+export {
+  CoreSettingsSchema,
+  CoreSettingsShape,
+  DEFAULT_CORE_SETTINGS,
+  LATEXDIFF_TEMP_FILE_LOCATIONS,
+  NON_REGEX_REPLACEMENT_CATEGORIES,
+  REGEX_REPLACEMENT_CATEGORIES,
+  type CoreSettings,
+  type LatexdiffTempFileLocation,
+  type NonRegexReplacementCategory,
+  type RegexReplacementCategory,
+} from './coreSettings';
 export * from './errors';
 export * from './usage';
 export * from './contextManagement';
