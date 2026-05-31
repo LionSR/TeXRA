@@ -71,6 +71,8 @@ const PLAN_APPROVAL_ODYSSEY = process.env.HARNESS_PLAN_APPROVAL_ODYSSEY === '1';
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
 const SHOW_LONG_CHILD_OUTPUT = process.env.HARNESS_LONG_CHILD_OUTPUT === '1';
+const SHOW_WIDE_FIRST_CHILD_LINE =
+  process.env.HARNESS_WIDE_FIRST_CHILD_LINE === '1';
 const SHOW_ORCHESTRATION = process.env.HARNESS_ORCHESTRATION === '1';
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
@@ -290,10 +292,10 @@ function seedSubagentFollowupTranscript(): void {
 function makeChildEntries(agent: string, action: string): ConversationEntry[] {
   const assistantText =
     SHOW_LONG_CHILD_OUTPUT && agent === 'strategy'
-      ? Array.from(
-          { length: 18 },
-          (_, index) =>
-            `strategy detail line ${String(index + 1).padStart(2, '0')}${index === 17 ? ' final contradiction found' : ''}`,
+      ? Array.from({ length: 18 }, (_, index) =>
+          index === 0 && SHOW_WIDE_FIRST_CHILD_LINE
+            ? `strategy detail line 01 ${'wide output wraps '.repeat(10)}`
+            : `strategy detail line ${String(index + 1).padStart(2, '0')}${index === 17 ? ' final contradiction found' : ''}`,
         ).join('\n')
       : `${agent} is checking the ${action} details and preparing a concise result.`;
   return [
