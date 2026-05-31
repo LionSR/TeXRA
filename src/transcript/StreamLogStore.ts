@@ -11,7 +11,7 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
-import { isObject } from '@utils/core';
+import { isFiniteNumber, isObject } from '@utils/core';
 
 import {
   isRunningGroupEntry,
@@ -592,9 +592,7 @@ export class StreamLogStore {
   }
 
   private parseTimestamp(value: unknown): number | undefined {
-    return typeof value === 'number' && Number.isFinite(value)
-      ? value
-      : undefined;
+    return isFiniteNumber(value) ? value : undefined;
   }
 
   private async writeStream(
