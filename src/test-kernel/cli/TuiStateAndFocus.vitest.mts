@@ -203,6 +203,9 @@ describe('CLI TUI row allocation', () => {
 
   it('hides the normal chat tip row while foreground surfaces own input', () => {
     expect(shouldShowTipRow({ foregroundOpen: false })).toBe(true);
+    expect(
+      shouldShowTipRow({ foregroundOpen: false, hasQueuedFollowUps: true }),
+    ).toBe(false);
     expect(shouldShowTipRow({ foregroundOpen: true })).toBe(false);
   });
 
@@ -247,6 +250,20 @@ describe('CLI TUI row allocation', () => {
     });
 
     expect(layout.transcriptRows).toBe(17);
+    expect(layout.foregroundRows).toBe(0);
+  });
+
+  it('reserves queued follow-up panel rows above the stable input chrome', () => {
+    const layout = allocateMiddleRows({
+      foregroundOpen: false,
+      queuedFollowUpPanelRows: 3,
+      reverseSearchOpen: false,
+      rows: 24,
+      slashPaletteOpen: false,
+      tipVisible: false,
+    });
+
+    expect(layout.transcriptRows).toBe(15);
     expect(layout.foregroundRows).toBe(0);
   });
 

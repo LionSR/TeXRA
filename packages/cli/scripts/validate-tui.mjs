@@ -91,7 +91,14 @@ const SCENARIOS = [
     },
     bootExpect: 'queued 2',
     frame: 'tail',
-    expect: ['queued 2', 'First queued', 'Second queued', '[Ctrl-C]stop'],
+    expect: [
+      'Queued follow-ups (2)',
+      '1. First queued follow-up',
+      '2. Second queued follow-up',
+      'queued 2',
+      '[Ctrl-C]stop',
+    ],
+    unexpect: ['Tip: Ctrl-C exits idle chats', 'First queued follo…'],
   },
   {
     name: 'subagent-followup-summary',
