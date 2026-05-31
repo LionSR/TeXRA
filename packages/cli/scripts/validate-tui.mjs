@@ -43,6 +43,7 @@ const ETX = String.fromCharCode(3); // Ctrl-C
 const DC2 = String.fromCharCode(18); // Ctrl-R
 const DC4 = String.fromCharCode(20); // Ctrl-T
 const NAK = String.fromCharCode(21); // Ctrl-U
+const UP = ESC + '[A';
 const DOWN = ESC + '[B';
 const LONG_BASH_APPROVAL_COMMAND = [
   "python3 << 'EOF'",
@@ -786,6 +787,29 @@ const SCENARIOS = [
       'Esc back',
     ],
     unexpect: ['strategy detail line 01', 'final contr…'],
+  },
+  {
+    name: 'task-subworkflow-detail-wide-line-scroll',
+    rows: 12,
+    cols: 48,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+      HARNESS_LONG_CHILD_OUTPUT: '1',
+      HARNESS_WIDE_FIRST_CHILD_LINE: '1',
+    },
+    bootExpect: 'TeXRA',
+    keys: [ESC + 'p', '\r', ...Array.from({ length: 17 }, () => UP)],
+    frame: 'tail',
+    expect: [
+      'stream · strategy',
+      'strategy detail line 01',
+      'wide output wraps',
+      'f focus',
+      'Esc back',
+    ],
+    unexpect: ['strategy detail line 18', 'final contr…'],
   },
   {
     name: 'task-process-detail',
