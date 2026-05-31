@@ -106,6 +106,7 @@ const AGENT_PROPOSAL_INSTRUCTION =
   ].join('\n');
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
+const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
 const SHOW_IDLE_TODOS = process.env.HARNESS_TODOS_IDLE === '1';
 const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
@@ -484,6 +485,21 @@ if (SHOW_SUBAGENT_FOLLOWUPS) {
 
 if (SHOW_CHILDREN) {
   const startedAt = Date.now() - 74_000;
+  const nestedStartedAt = startedAt + 24_000;
+  const nestedStrategyChild = {
+    executionId: 'harness-nested-local-checker',
+    agentName: 'localChecker',
+    childStreamId: 'harness-nested-local-checker-stream',
+    status: STREAM_STATUS.RUNNING,
+    startedAt: nestedStartedAt,
+  };
+  const nestedStrategyProcess = {
+    executionId: 'harness-nested-proof-audit',
+    agentName: 'proof audit',
+    toolName: 'bash',
+    status: STREAM_STATUS.RUNNING,
+    startedAt: Date.now() - 9_000,
+  };
   const childStreams = [
     {
       executionId: 'harness-child-strategy',
@@ -538,14 +554,52 @@ if (SHOW_CHILDREN) {
   }));
   for (const child of childStreams) {
     const streamId = child.childStreamId;
+    const addNestedChildren =
+      SHOW_NESTED_CHILDREN && child.agentName === 'strategy';
     setParentStream(streamId, STREAM_ID);
     patchStream(streamId, (slice) => ({
       ...slice,
       status: child.status,
       description: `${child.agentName} sub-workflow`,
+      activeSubagents: addNestedChildren
+        ? [nestedStrategyChild]
+        : slice.activeSubagents,
+      childStreams: addNestedChildren
+        ? [nestedStrategyChild]
+        : slice.childStreams,
+      activeProcesses: addNestedChildren
+        ? [nestedStrategyProcess]
+        : slice.activeProcesses,
+      processOutput: addNestedChildren
+        ? new Map([
+            [
+              'harness-nested-proof-audit',
+              {
+                stdout: [
+                  'proof-audit: checking nested child result',
+                  'nested-checker: verified lemma bound',
+                ].join('\n'),
+                stderr: '',
+              },
+            ],
+          ])
+        : slice.processOutput,
       entries: makeChildEntries(child.agentName, child.executionId),
       runStartedAt:
         child.status === STREAM_STATUS.RUNNING ? child.startedAt : undefined,
+    }));
+  }
+  if (SHOW_NESTED_CHILDREN) {
+    setParentStream(
+      'harness-nested-local-checker-stream',
+      'harness-child-strategy-stream',
+    );
+    patchStream('harness-nested-local-checker-stream', (slice) => ({
+      ...slice,
+      status: STREAM_STATUS.RUNNING,
+      description: 'localChecker nested proof check',
+      entries: makeChildEntries('localChecker', 'nested proof check'),
+      runStartedAt: nestedStartedAt,
     }));
   }
 }
