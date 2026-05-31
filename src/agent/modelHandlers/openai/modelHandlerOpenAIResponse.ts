@@ -1,15 +1,5 @@
-// Standard library imports
-import { Buffer } from 'node:buffer';
-import * as path from 'path';
-
 // Third-party imports
-import OpenAI, {
-  APIConnectionTimeoutError,
-  APIError as OpenAIAPIError,
-  toFile,
-} from 'openai';
-import { ResponsesWS } from 'openai/resources/responses/ws';
-import { WebSocketError } from 'openai/resources/responses/internal-base';
+import OpenAI from 'openai';
 
 // Local imports - agent
 import {
@@ -44,14 +34,12 @@ import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
 import { delay } from '@utils/core';
-import { isNonEmptyString } from '@utils/core';
 import {
   getWebSocketEnabled,
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
 import { flexibleFS } from '@utils/files/flexibleFS';
 import type { FileLocation } from '@utils/files/taskRunStorage';
-import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 import { normalizeUsage } from '../support/UsageNormalizer';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import {
@@ -69,7 +57,6 @@ import {
 import {
   formatAttachmentSummary,
   formatToolResultAsText,
-  loadAttachmentBuffer,
   type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { parseToolArguments } from '../utils/parseArguments';
@@ -84,14 +71,28 @@ import {
   TOOL_USE_SAFETY_BUFFER,
 } from '../contextManagementConstants';
 import {
-  buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
-  hasOpenAIWebSearchData,
   isOpenAIReasoningItem,
   isOpenAIServerToolContent,
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
 } from '../types/ServerToolTypes';
+import { ResponseStreamProcessor } from './ResponseStreamProcessor';
+import { OpenAIResponseWebSocketTransport } from './OpenAIResponseWebSocketTransport';
+import { isResponseFunctionToolCallItem } from './responseStreamEvents';
+import {
+  createInputText,
+  extractTextContentPart,
+  isAssistantTextMessage,
+  isMessageItem,
+  isOutputMessage,
+} from './openAIResponseContent';
+import {
+  buildInlineAttachmentParts,
+  uploadInlineInputFiles,
+  uploadToolAttachments,
+  type UploadedOpenAIResponseAttachment,
+} from './openAIResponseFileUploads';
 import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
 import type { ProviderStopReason } from '../types/StopReasonTypes';
 import type {
@@ -112,73 +113,15 @@ import type {
   ResponseCreateParamsBase,
   ResponseCreateParamsNonStreaming,
   ResponseReasoningItem,
-  ResponseFunctionToolCallItem,
   ResponseFunctionToolCall,
   ResponseInputItem,
   ResponseInputContent,
   ResponseInputMessageContentList,
-  ResponseInputFile,
-  ResponseStreamEvent,
-  ResponsesClientEvent,
-  ResponsesServerEvent,
-  ResponseCompletedEvent,
-  ResponseFailedEvent,
-  ResponseIncompleteEvent,
   ResponseStatus,
   ResponseFunctionCallOutputItemList,
   ResponseOutputItem,
-  ResponseOutputMessage,
   ResponseFunctionWebSearch,
-  // Streaming event types
-  ResponseTextDeltaEvent,
-  ResponseReasoningTextDeltaEvent,
-  ResponseReasoningSummaryTextDeltaEvent,
-  ResponseOutputItemDoneEvent,
-  ResponseWebSearchCallInProgressEvent,
-  ResponseFunctionCallArgumentsDoneEvent,
 } from 'openai/resources/responses/responses';
-
-interface UploadedOpenAIResponseAttachment {
-  attachment: ToolFileAttachment;
-  fileId: string;
-  isImage: boolean;
-}
-
-/** Shared state for streaming event processing (WebSocket and HTTP paths). */
-interface StreamingEventState {
-  thinkingStream: {
-    append(delta: string): void;
-    finalize(finalText?: string): void;
-  };
-  outputStream: {
-    append(delta: string): void;
-    finalize(finalText?: string): void;
-  } | null;
-  emittedWebSearchIds: Set<string>;
-  hasThinkingContent: boolean;
-}
-
-/** Result of executeViaWebSocket: the API response plus streaming state for deferred finalization. */
-interface WebSocketExecutionResult {
-  response: Response;
-  state: StreamingEventState;
-}
-
-function isResponseFunctionToolCallItem(
-  item: ResponseOutputItem | undefined,
-): item is ResponseFunctionToolCallItem {
-  return item?.type === 'function_call';
-}
-
-/**
- * MIME types that the OpenAI Responses API accepts as `input_file` content.
- * Composed from the shared OFFICE_MIME_TYPES plus PDF.
- * Images are handled separately via `input_image`.
- */
-const INLINEABLE_FILE_MIME_TYPES: ReadonlySet<string> = new Set([
-  'application/pdf',
-  ...OFFICE_MIME_TYPES,
-]);
 
 /**
  * Handler for OpenAI's Responses API. This implementation works directly with
@@ -204,12 +147,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
   private isOpenRouterRoutingEnabled(): boolean {
     return this.config.openRouterOnly || getUseOpenRouter();
-  }
-
-  private getEventResponseId(event: ResponseStreamEvent): string | undefined {
-    return 'response_id' in event && typeof event.response_id === 'string'
-      ? event.response_id
-      : undefined;
   }
 
   /**
@@ -310,18 +247,37 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   // WebSocket transport
   // =========================================================================
 
-  /** WebSocket connection for persistent transport mode. */
-  private wsConnection: ResponsesWS | null = null;
-  /** Timestamp when the WebSocket connection was created (for 60-min limit). */
-  private wsConnectionCreatedAt = 0;
-  /** Keepalive interval for the WebSocket connection. */
-  private wsKeepaliveInterval: ReturnType<typeof setInterval> | null = null;
-  /** Maximum WebSocket connection age before reconnecting (55 min, 5-min buffer before 60-min server limit). */
-  private static readonly WS_MAX_AGE_MS = 55 * 60 * 1000;
-  /** Keepalive ping interval to prevent idle timeouts (30 seconds). */
-  private static readonly WS_KEEPALIVE_INTERVAL_MS = 30_000;
-  /** WebSocket readyState value for an open connection. */
-  private static readonly WS_OPEN = 1;
+  /**
+   * Persistent WebSocket transport, created lazily on first use. The connection
+   * lifecycle (open, keepalive, reconnect, close) lives in the collaborator;
+   * the handler only decides when WebSocket mode applies.
+   */
+  private wsTransport: OpenAIResponseWebSocketTransport | null = null;
+
+  private getWebSocketTransport(): OpenAIResponseWebSocketTransport {
+    if (!this.wsTransport) {
+      this.wsTransport = new OpenAIResponseWebSocketTransport({
+        logger: this.logger,
+        createStreamProcessor: () => this.createStreamProcessor(),
+      });
+    }
+    return this.wsTransport;
+  }
+
+  /**
+   * Create a stream processor bound to this handler's streaming collaborators.
+   * Shared by the WebSocket transport and the HTTP streaming loop.
+   */
+  private createStreamProcessor(): ResponseStreamProcessor {
+    return new ResponseStreamProcessor({
+      createThinkingStream: () => this.createThinkingStream(),
+      createOutputStream: () => this.createOutputStream(),
+      outputStreamingEnabled: this.isOutputStreamingEnabled(),
+      extractText: (response) => this.extractResponse(response, '').text,
+      emitWebSearchResult: (result) => this.emitWebSearchResult(result),
+      logger: this.logger,
+    });
+  }
 
   /**
    * Whether WebSocket transport is enabled for this handler.
@@ -340,389 +296,9 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return getWebSocketEnabled() && this.getBaseUrl() === null;
   }
 
-  /**
-   * Get or create a WebSocket connection, reusing an existing one if still valid.
-   * Reconnects if the connection is approaching the 60-minute server limit.
-   */
-  private async getOrCreateWebSocket(
-    client: OpenAI,
-    signal?: AbortSignal,
-  ): Promise<ResponsesWS> {
-    // Check if existing connection is still valid
-    if (this.wsConnection) {
-      const age = Date.now() - this.wsConnectionCreatedAt;
-      const socketReady =
-        this.wsConnection.socket.readyState ===
-        ModelHandlerOpenAIResponse.WS_OPEN;
-      if (age < ModelHandlerOpenAIResponse.WS_MAX_AGE_MS && socketReady) {
-        return this.wsConnection;
-      }
-      // Connection expired or closed — reconnect
-      this.logger.debug(
-        `WebSocket connection stale (age: ${Math.round(age / 1000)}s, ready: ${socketReady}) — reconnecting`,
-      );
-      this.closeWebSocket();
-    }
-
-    if (signal?.aborted) {
-      throw new DOMException('The operation was aborted', 'AbortError');
-    }
-
-    this.logger.debug('Opening WebSocket connection to Responses API');
-    const ws = new ResponsesWS(client);
-
-    // Wait for the socket to open, fail on error, or abort on signal.
-    // If the handshake fails or is aborted, close the orphaned socket
-    // to prevent resource leaks (it hasn't been assigned to wsConnection yet).
-    await new Promise<void>((resolve, reject) => {
-      if (ws.socket.readyState === ModelHandlerOpenAIResponse.WS_OPEN) {
-        resolve();
-        return;
-      }
-
-      const cleanup = (): void => {
-        ws.socket.off('open', onOpen);
-        ws.socket.off('error', onError);
-        signal?.removeEventListener('abort', onAbort);
-      };
-      const onOpen = (): void => {
-        cleanup();
-        resolve();
-      };
-      const onError = (err: Error): void => {
-        cleanup();
-        try {
-          ws.close();
-        } catch {
-          /* ignore */
-        }
-        reject(err);
-      };
-      const onAbort = (): void => {
-        cleanup();
-        try {
-          ws.close();
-        } catch {
-          /* ignore */
-        }
-        reject(new DOMException('The operation was aborted', 'AbortError'));
-      };
-
-      ws.socket.once('open', onOpen);
-      ws.socket.once('error', onError);
-      signal?.addEventListener('abort', onAbort, { once: true });
-    });
-
-    this.wsConnection = ws;
-    this.wsConnectionCreatedAt = Date.now();
-    this.startWsKeepalive(ws);
-
-    this.logger.debug('WebSocket connection established');
-    return ws;
-  }
-
-  /**
-   * Finalize and reset the thinking stream if it has content.
-   * Extracted as a method to avoid recreating a closure on every streaming event.
-   */
-  private rotateThinkingStream(state: StreamingEventState): void {
-    if (!state.hasThinkingContent) return;
-    state.thinkingStream.finalize();
-    state.hasThinkingContent = false;
-    state.thinkingStream = this.createThinkingStream();
-  }
-
-  /**
-   * Process a single streaming event, updating the shared streaming state.
-   * Used by both WebSocket and HTTP streaming paths for consistent behavior.
-   */
-  private processStreamingEvent(
-    event: ResponseStreamEvent,
-    state: StreamingEventState,
-  ): void {
-    if (this.isReasoningDeltaEvent(event)) {
-      state.thinkingStream.append(event.delta);
-      state.hasThinkingContent = true;
-    } else if (this.isTextDeltaEvent(event)) {
-      state.outputStream?.append(event.delta);
-    } else if (this.isWebSearchInProgressEvent(event)) {
-      this.rotateThinkingStream(state);
-    } else if (this.isFunctionCallArgumentsDoneEvent(event)) {
-      // Function call arguments complete - finalize streams since no more
-      // text/thinking deltas will arrive after tool calls begin.
-      this.rotateThinkingStream(state);
-      this.logger.debug(`Tool call ready during streaming: ${event.name}`);
-    } else if (this.isOutputItemDoneEvent(event)) {
-      const item = event.item;
-      if (
-        this.isWebSearchItem(item) &&
-        !state.emittedWebSearchIds.has(item.id) &&
-        hasOpenAIWebSearchData(item)
-      ) {
-        this.rotateThinkingStream(state);
-        this.emitOpenAIWebSearch(item);
-        state.emittedWebSearchIds.add(item.id);
-      }
-    }
-  }
-
-  /** Create a fresh streaming event state for a new request. */
-  private createStreamingEventState(): StreamingEventState {
-    return {
-      thinkingStream: this.createThinkingStream(),
-      outputStream: this.isOutputStreamingEnabled()
-        ? this.createOutputStream()
-        : null,
-      emittedWebSearchIds: new Set<string>(),
-      hasThinkingContent: false,
-    };
-  }
-
-  /**
-   * Finalize thinking/output streams and emit remaining web searches.
-   * Shared by both WebSocket and HTTP streaming paths after background
-   * polling completes.
-   */
-  private finalizeStreams(
-    response: Response,
-    state: StreamingEventState,
-  ): void {
-    if (state.hasThinkingContent) {
-      state.thinkingStream.finalize();
-    }
-    const { text: finalText } = this.extractResponse(response, '');
-    if (state.outputStream) state.outputStream.finalize(finalText);
-    this.emitWebSearchesFromResponse(response, state.emittedWebSearchIds);
-  }
-
-  /**
-   * Execute a response request via WebSocket transport.
-   * Sends a response.create event and collects streaming events until
-   * a terminal event (completed, failed, incomplete) is received.
-   *
-   * Completed and incomplete responses are resolved so the caller's
-   * `finalizeResponse()` can handle non-completed statuses consistently
-   * with the HTTP streaming path. Failed responses are rejected so the
-   * caller's catch block can apply recovery logic.
-   */
-  private async executeViaWebSocket(
-    ws: ResponsesWS,
-    params: ResponseCreateParamsBase,
-    signal?: AbortSignal,
-  ): Promise<WebSocketExecutionResult> {
-    // Short-circuit if already aborted before sending the request
-    if (signal?.aborted) {
-      throw new DOMException('The operation was aborted', 'AbortError');
-    }
-
-    const state = this.createStreamingEventState();
-    // Accumulate text deltas so we can attach a tail to the error on reject,
-    // mirroring the HTTP streaming path. Without this, a WebSocket failure
-    // mid-response would lose any text that had already been generated.
-    let streamedText = '';
-
-    return new Promise<WebSocketExecutionResult>((resolve, reject) => {
-      let settled = false;
-      // Track the response ID for this request so we only process events
-      // belonging to it (important when abort-and-retry reuses the connection).
-      // Starts as null — terminal events are ignored until response.created sets it,
-      // preventing stale events from a previous request from being accepted.
-      let currentResponseId: string | null = null;
-
-      /** Check whether a terminal event belongs to the current request. */
-      const isCurrentResponse = (response: Response): boolean =>
-        currentResponseId !== null && response.id === currentResponseId;
-
-      const onAbort = (): void => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        // Close the WebSocket on abort to prevent cross-talk on retry.
-        // The server runs responses sequentially, so after client-side abort
-        // it continues finishing the current response. If we reuse the socket,
-        // the new executeViaWebSocket call's listeners would receive stale
-        // events (including response.created) from the prior response, causing
-        // the new request to resolve with the wrong response.
-        this.closeWebSocket();
-        rejectWithPartial(
-          new DOMException('The operation was aborted', 'AbortError'),
-        );
-      };
-      signal?.addEventListener('abort', onAbort, { once: true });
-
-      // Process streaming events, filtering by response ID.
-      const onEvent = (event: ResponsesServerEvent): void => {
-        const e = event as ResponseStreamEvent;
-
-        // Capture the response ID from the first response.created event
-        if (e.type === 'response.created') {
-          currentResponseId = e.response.id;
-          return;
-        }
-
-        // Discard any events that arrive before response.created identifies
-        // the current request. This guards against out-of-order delivery and
-        // prevents processing stale events on a reused connection.
-        if (!currentResponseId) return;
-
-        // Filter events by response ID: skip events from stale responses
-        const eventResponseId = this.getEventResponseId(e);
-        if (eventResponseId && eventResponseId !== currentResponseId) {
-          return;
-        }
-
-        this.processStreamingEvent(e, state);
-        if (this.isTextDeltaEvent(e)) {
-          streamedText += e.delta;
-        }
-      };
-
-      /** Attach partial-text tail to an error before rejecting with it. */
-      const rejectWithPartial = (err: unknown): void => {
-        if (streamedText) {
-          attachPartialText(err, takeTail(streamedText, PARTIAL_TEXT_TAIL_MAX));
-        }
-        reject(err);
-      };
-
-      const finalizeSuccess = (response: Response): void => {
-        if (settled || !isCurrentResponse(response)) return;
-        settled = true;
-        cleanup();
-        // Stream finalization is deferred to the caller so that background
-        // polling (if needed) can replace the response before streams close.
-        resolve({ response, state });
-      };
-
-      const onCompleted = (event: ResponseCompletedEvent): void =>
-        finalizeSuccess(event.response);
-
-      // Failed responses must be rejected so the caller's catch block can
-      // run error recovery (e.g., context-window compaction).
-      const onFailed = (event: ResponseFailedEvent): void => {
-        if (settled || !isCurrentResponse(event.response)) return;
-        settled = true;
-        cleanup();
-        const errorMsg =
-          event.response.error?.message ?? 'Response failed without details';
-        rejectWithPartial(
-          new Error(`OpenAI WebSocket response failed: ${errorMsg}`),
-        );
-      };
-
-      // Incomplete responses are resolved (not rejected) to match the HTTP
-      // streaming path behavior. The caller's finalizeResponse() handles
-      // non-completed statuses (e.g., max_output_tokens truncation) by
-      // clearing previousResponseId and logging a warning.
-      const onIncomplete = (event: ResponseIncompleteEvent): void =>
-        finalizeSuccess(event.response);
-
-      const onWsError = (error: WebSocketError): void => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        // Invalidate the connection on error events (e.g., websocket_connection_limit_reached).
-        // The server may close the socket after sending the error, but the close event
-        // fires after this handler and would be a no-op (settled=true).
-        this.closeWebSocket();
-        rejectWithPartial(error);
-      };
-
-      // Handle unexpected socket close during a request
-      const onSocketClose = (code: number, reason: Buffer): void => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        this.closeWebSocket();
-        rejectWithPartial(
-          new Error(
-            `WebSocket closed unexpectedly (code: ${code}, reason: ${reason.toString()})`,
-          ),
-        );
-      };
-
-      const cleanup = (): void => {
-        signal?.removeEventListener('abort', onAbort);
-        ws.off('event', onEvent);
-        ws.off('response.completed', onCompleted);
-        // Type assertion needed: the EventEmitter generic maps event names to
-        // handler signatures via Extract<ResponsesServerEvent, {type?: EventType}>.
-        // Our handler types are compatible but TS can't prove it through the indirection.
-        ws.off('response.failed', onFailed as Parameters<typeof ws.off>[1]);
-        ws.off(
-          'response.incomplete',
-          onIncomplete as Parameters<typeof ws.off>[1],
-        );
-        ws.off('error', onWsError);
-        ws.socket.off('close', onSocketClose);
-      };
-
-      ws.on('event', onEvent);
-      ws.on('response.completed', onCompleted);
-      ws.on('response.failed', onFailed as Parameters<typeof ws.on>[1]);
-      ws.on('response.incomplete', onIncomplete as Parameters<typeof ws.on>[1]);
-      ws.on('error', onWsError);
-      ws.socket.on('close', onSocketClose);
-
-      // Build and send the WebSocket client event.
-      // ResponsesClientEvent mirrors ResponseCreateParamsBase fields with type: 'response.create'.
-      // Transport-specific fields (stream, background) are included but ignored by the server.
-      try {
-        ws.send({
-          type: 'response.create',
-          ...params,
-        } as ResponsesClientEvent);
-      } catch (sendError) {
-        // If send() throws synchronously, clean up listeners to prevent leaks
-        // on the reused WebSocket connection.
-        settled = true;
-        cleanup();
-        reject(sendError);
-      }
-    });
-  }
-
   /** Release all resources held by this handler (WebSocket, keepalive). */
   override dispose(): void {
-    this.closeWebSocket();
-  }
-
-  /** Close the WebSocket connection and clean up resources. */
-  private closeWebSocket(): void {
-    this.stopWsKeepalive();
-    const wsConnection = this.wsConnection;
-    if (wsConnection) {
-      try {
-        wsConnection.close();
-      } catch {
-        // Cleanup must not mask the original failure path.
-      }
-      this.wsConnection = null;
-      this.wsConnectionCreatedAt = 0;
-      this.logger.debug('WebSocket connection closed');
-    }
-  }
-
-  /** Start keepalive pings on the WebSocket connection. */
-  private startWsKeepalive(ws: ResponsesWS): void {
-    this.stopWsKeepalive();
-    this.wsKeepaliveInterval = setInterval(() => {
-      try {
-        if (ws.socket.readyState === ModelHandlerOpenAIResponse.WS_OPEN) {
-          ws.socket.platformSocket.ping();
-        }
-      } catch {
-        // Ignore ping errors
-      }
-    }, ModelHandlerOpenAIResponse.WS_KEEPALIVE_INTERVAL_MS);
-  }
-
-  /** Stop keepalive pings. */
-  private stopWsKeepalive(): void {
-    if (this.wsKeepaliveInterval) {
-      clearInterval(this.wsKeepaliveInterval);
-      this.wsKeepaliveInterval = null;
-    }
+    this.wsTransport?.dispose();
   }
 
   /**
@@ -1285,7 +861,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.previousResponseId = null;
     this.resetConversationState();
     this.clearPendingBackgroundResponse();
-    this.closeWebSocket();
+    this.wsTransport?.dispose();
 
     const messages: ResponseInputItem[] = [];
 
@@ -1294,7 +870,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const systemMessage: ResponseInputItem.Message = {
         type: 'message',
         role,
-        content: [this.createInputText(systemPrompt)],
+        content: [createInputText(systemPrompt)],
       };
       messages.push(systemMessage);
     }
@@ -1302,7 +878,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const supportsMedia =
       this.capabilities.supportsVision || this.capabilities.supportsNativeAudio;
     const userContent: ResponseInputMessageContentList = [
-      this.createInputText(userPrefix),
+      createInputText(userPrefix),
     ];
 
     if (mediaFiles && mediaFiles.length > 0 && supportsMedia) {
@@ -1338,7 +914,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const requestMessage: ResponseInputItem.Message = {
         type: 'message',
         role: requestRole,
-        content: [this.createInputText(userRequest)],
+        content: [createInputText(userRequest)],
       };
       messages.push(requestMessage);
     }
@@ -1374,7 +950,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       }
     }
 
-    roundContent.push(this.createInputText(userMessage));
+    roundContent.push(createInputText(userMessage));
 
     const roundUserMessage: ResponseInputItem.Message = {
       type: 'message',
@@ -1397,7 +973,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         mediaType.startsWith('image/')
       ) {
         return [
-          this.createInputText(`Image: ${media.file_name}`),
+          createInputText(`Image: ${media.file_name}`),
           {
             type: 'input_image',
             image_url: `data:${mediaType};base64,${media.data}`,
@@ -1419,7 +995,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       if (mediaType === 'application/pdf') {
         return [
-          this.createInputText(`Document: ${media.file_name}`),
+          createInputText(`Document: ${media.file_name}`),
           {
             type: 'input_file',
             file_data: media.data,
@@ -1438,107 +1014,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       this.logger.warn(`Unknown media category: ${media.media_category}`);
       return [];
     });
-  }
-
-  private isInputFileContent(
-    content: ResponseInputContent,
-  ): content is ResponseInputFile {
-    return content.type === 'input_file';
-  }
-
-  private async uploadInlineInputFiles(
-    client: OpenAI,
-    messageItems: ResponseInputItem[],
-  ): Promise<void> {
-    for (const item of messageItems) {
-      if (!this.isMessageItem(item)) {
-        continue;
-      }
-
-      const contentList = item.content;
-
-      if (!Array.isArray(contentList)) {
-        continue;
-      }
-
-      for (const content of contentList) {
-        if (
-          this.isInputFileContent(content) &&
-          content.file_data &&
-          !content.file_id
-        ) {
-          await this.replaceFileDataWithUpload(client, content);
-        }
-      }
-    }
-  }
-
-  private async replaceFileDataWithUpload(
-    client: OpenAI,
-    content: ResponseInputFile,
-  ): Promise<void> {
-    if (this.isOpenRouterRoutingEnabled()) {
-      this.logger.debug(
-        'OpenRouter routing active; skipping inline file upload.',
-      );
-      return;
-    }
-
-    const fileData = content.file_data;
-    if (!fileData) {
-      return;
-    }
-
-    const filename = content.filename ?? 'document.pdf';
-    let buffer: Buffer | undefined;
-
-    try {
-      const base64Separator = ';base64,';
-      const separatorIndex = fileData.indexOf(base64Separator);
-      const payload =
-        separatorIndex >= 0
-          ? fileData.slice(separatorIndex + base64Separator.length)
-          : fileData;
-
-      buffer = Buffer.from(payload, 'base64');
-      const uploadedFile = await client.files.create({
-        file: await toFile(buffer!, filename),
-        purpose: 'assistants',
-      });
-
-      content.file_id = uploadedFile.id;
-      delete content.file_data;
-      if ('filename' in content) {
-        delete content.filename;
-      }
-    } catch (err) {
-      // Two native SDK timeout signals: APIConnectionTimeoutError (client-side
-      // SDK timeout) and APIError with status 408 (server-side Request Timeout).
-      // Status 408 is NOT mapped to APIConnectionTimeoutError by the SDK —
-      // it falls through to a bare APIError — so both must be checked.
-      const isTimeout =
-        err instanceof APIConnectionTimeoutError ||
-        (err instanceof OpenAIAPIError && err.status === 408);
-      if (isTimeout) {
-        this.logger.warn(
-          `Timed out uploading file ${filename}. Falling back to inline payload.`,
-        );
-        return;
-      }
-
-      logSdkError(
-        this.logger,
-        `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
-        err,
-        { operation: 'upload file' },
-      );
-      throw err;
-    } finally {
-      if (buffer) {
-        buffer.fill(0);
-        buffer = undefined;
-      }
-    }
   }
 
   /**
@@ -1719,7 +1194,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       ? effectiveMessages
       : effectiveMessages.slice(this.conversationState.sentMessages);
 
-    await this.uploadInlineInputFiles(client, newMessages);
+    await uploadInlineInputFiles(client, newMessages, {
+      openRouterRouting: this.isOpenRouterRoutingEnabled(),
+      logger: this.logger,
+    });
 
     // Build shared params used by both token counting and API call
 
@@ -1928,10 +1406,13 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
       // WebSocket transport: persistent connection for lower-latency tool-use loops
       if (useWebSocket) {
-        const ws = await this.getOrCreateWebSocket(client, signal);
-        const wsResult = await this.executeViaWebSocket(ws, params, signal);
+        const wsResult = await this.getWebSocketTransport().execute(
+          client,
+          params,
+          signal,
+        );
         let response = wsResult.response;
-        const state = wsResult.state;
+        const processor = wsResult.processor;
 
         // Safety net: handle unexpected pending status (shouldn't happen without background mode)
         if (this.isBackgroundPending(response)) {
@@ -1947,7 +1428,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
         // Finalize streams after background polling so the final text
         // reflects the completed response, not the pre-poll snapshot.
-        this.finalizeStreams(response, state);
+        processor.finalize(response);
 
         this.finalizeResponse(
           response,
@@ -1965,12 +1446,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         const streamParams: ResponseStreamParams = { ...rest, stream: true };
         const stream = await client.responses.stream(streamParams, { signal });
 
-        // State for handling interleaved thinking and web search
+        // Processor handles interleaved thinking and web search
         // GPT can: think → web_search → think more → web_search → text
-        const state = this.createStreamingEventState();
+        const processor = this.createStreamProcessor();
 
         for await (const event of stream) {
-          this.processStreamingEvent(event, state);
+          processor.process(event);
           if (event.type === 'response.output_text.delta') {
             streamedText += event.delta;
           }
@@ -1992,7 +1473,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           );
         }
 
-        this.finalizeStreams(response, state);
+        processor.finalize(response);
 
         this.finalizeResponse(
           response,
@@ -2180,7 +1661,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       const fallbackSegments: string[] = [];
 
       for (const item of responseObject.output) {
-        if (!this.isOutputMessage(item)) {
+        if (!isOutputMessage(item)) {
           continue;
         }
 
@@ -2464,7 +1945,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const continuationMessage: ResponseInputItem.Message = {
       type: 'message',
       role,
-      content: [this.createInputText(userMessageContinuation)],
+      content: [createInputText(userMessageContinuation)],
     };
     messages.push(continuationMessage);
   }
@@ -2495,7 +1976,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         const pseudoPrefillMessage: ResponseInputItem.Message = {
           type: 'message',
           role: 'user',
-          content: [this.createInputText(pseudoPrefill)],
+          content: [createInputText(pseudoPrefill)],
         };
         messages.push(pseudoPrefillMessage);
       }
@@ -2580,7 +2061,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     const lastMessage = messages.at(-1);
     const secondLastMessage = messages.at(-2);
 
-    if (!this.isMessageItem(lastMessage)) {
+    if (!isMessageItem(lastMessage)) {
       this.logger.error(
         'Last message is not a message item - unexpected format',
       );
@@ -2599,10 +2080,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           `${bestConnector}${newResponse}`,
         );
         const trailingMessage = messages.at(-1);
-        if (
-          this.isMessageItem(trailingMessage) &&
-          trailingMessage.role === 'user'
-        ) {
+        if (isMessageItem(trailingMessage) && trailingMessage.role === 'user') {
           messages.pop();
         } else if (!appended) {
           messages.push(
@@ -2805,10 +2283,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     let uploadedAttachments: UploadedOpenAIResponseAttachment[] = [];
     if (canUploadFiles && attachments.length > 0 && client) {
-      uploadedAttachments = await this.uploadToolAttachments(
-        client,
-        attachments,
-      );
+      uploadedAttachments = await uploadToolAttachments(client, attachments, {
+        openRouterRouting: this.isOpenRouterRoutingEnabled(),
+        logger: this.logger,
+      });
       if (uploadedAttachments.length > 0) {
         finalResult.files = uploadedAttachments.map(
           ({ attachment, fileId }) => ({
@@ -2862,7 +2340,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         parts: inlineParts,
         inlined,
         skipped,
-      } = await this.buildInlineAttachmentParts(attachments);
+      } = await buildInlineAttachmentParts(attachments, this.logger);
       if (inlineParts.length > 0) {
         // Build summary that accurately reflects which attachments were inlined
         // vs. skipped, so the model only gets a read_file hint for skipped ones.
@@ -2901,137 +2379,6 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return messages;
   }
 
-  private async uploadToolAttachments(
-    client: OpenAI,
-    attachments: ToolFileAttachment[],
-  ): Promise<UploadedOpenAIResponseAttachment[]> {
-    if (this.isOpenRouterRoutingEnabled()) {
-      this.logger.debug(
-        'OpenRouter routing active; skipping tool attachment uploads.',
-      );
-      return [];
-    }
-
-    const uploaded: UploadedOpenAIResponseAttachment[] = [];
-
-    for (const attachment of attachments) {
-      let buffer: Buffer | undefined;
-      try {
-        buffer = await loadAttachmentBuffer(attachment);
-      } catch (err) {
-        this.logger.warn(
-          `Unable to read attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
-        );
-        continue;
-      }
-
-      try {
-        const filename = isNonEmptyString(attachment.path)
-          ? path.basename(attachment.path)
-          : 'attachment';
-        const mimeType = attachment.mimeType ?? 'application/octet-stream';
-
-        const uploadedFile = await client.files.create({
-          file: await toFile(buffer!, filename, { type: mimeType }),
-          purpose: 'assistants',
-        });
-
-        uploaded.push({
-          attachment,
-          fileId: uploadedFile.id,
-          isImage: mimeType.startsWith('image/'),
-        });
-      } catch (err) {
-        this.logger.warn(
-          `Failed to upload attachment to OpenAI: ${getSdkErrorMessage(err)}`,
-        );
-      } finally {
-        if (buffer) {
-          buffer.fill(0);
-          buffer = undefined;
-        }
-      }
-    }
-
-    return uploaded;
-  }
-
-  /**
-   * Build inline base64 content parts for tool attachments when file uploads
-   * are unavailable (e.g., OpenRouter routing). Images use data URI in
-   * `image_url`; PDFs and office documents use `file_data` in `input_file`.
-   * Unsupported MIME types are skipped.
-   */
-  private async buildInlineAttachmentParts(
-    attachments: ToolFileAttachment[],
-  ): Promise<{
-    parts: ResponseFunctionCallOutputItemList;
-    inlined: ToolFileAttachment[];
-    skipped: ToolFileAttachment[];
-  }> {
-    const MAX_INLINE_BYTES = 20 * 1024 * 1024; // 20 MiB cap per attachment
-    const parts: ResponseFunctionCallOutputItemList = [];
-    const inlined: ToolFileAttachment[] = [];
-    const skipped: ToolFileAttachment[] = [];
-
-    for (const attachment of attachments) {
-      const mimeType = attachment.mimeType ?? 'application/octet-stream';
-      const isImage = mimeType.startsWith('image/');
-      const isFileInput = INLINEABLE_FILE_MIME_TYPES.has(mimeType);
-
-      if (!isImage && !isFileInput) {
-        skipped.push(attachment);
-        continue;
-      }
-
-      let buffer: Buffer | undefined;
-      try {
-        buffer = await loadAttachmentBuffer(attachment);
-        if (buffer.length > MAX_INLINE_BYTES) {
-          this.logger.debug(
-            `Skipping inline attachment ${attachment.path ?? 'attachment'}: ${buffer.length} bytes exceeds limit`,
-          );
-          skipped.push(attachment);
-          continue;
-        }
-
-        const base64 = buffer.toString('base64');
-
-        if (isImage) {
-          parts.push({
-            type: 'input_image',
-            detail: 'auto',
-            image_url: `data:${mimeType};base64,${base64}`,
-          });
-        } else {
-          // PDF, office documents, and other file types accepted by input_file
-          const filename =
-            typeof attachment.path === 'string' && attachment.path.length > 0
-              ? path.basename(attachment.path)
-              : 'attachment';
-          parts.push({
-            type: 'input_file',
-            file_data: `data:${mimeType};base64,${base64}`,
-            filename,
-          });
-        }
-        inlined.push(attachment);
-      } catch (err) {
-        this.logger.debug(
-          `Unable to inline attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
-        );
-        skipped.push(attachment);
-      } finally {
-        if (buffer) {
-          buffer.fill(0);
-          buffer = undefined;
-        }
-      }
-    }
-
-    return { parts, inlined, skipped };
-  }
-
   async createUserFollowUpMessages(
     messages: ResponseInputItem[],
     userMessage: string,
@@ -3040,7 +2387,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       type: 'message',
       role: 'user',
       content: [
-        this.createInputText(userMessage),
+        createInputText(userMessage),
       ] as ResponseInputMessageContentList,
     } as ResponseInputItem);
     return messages;
@@ -3057,7 +2404,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
   override extractAssistantText(
     message: ResponseInputItem,
   ): string | undefined {
-    if (!this.isAssistantTextMessage(message)) {
+    if (!isAssistantTextMessage(message)) {
       return undefined;
     }
 
@@ -3069,7 +2416,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // Array content (input_text history or output_text response parts)
     if (Array.isArray(message.content)) {
       const texts = message.content
-        .map((part) => this.extractTextContentPart(part))
+        .map((part) => extractTextContentPart(part))
         .filter((text): text is string => text !== undefined);
       return texts.length > 0 ? texts.join('') : undefined;
     }
@@ -3077,178 +2424,40 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     return undefined;
   }
 
-  private createInputText(text: string): ResponseInputContent {
-    return { type: 'input_text', text };
-  }
-
-  private isMessageItem(
-    item?: ResponseInputItem,
-  ): item is EasyInputMessage | ResponseInputItem.Message {
-    if (!item || typeof item !== 'object') return false;
-    if (!('role' in item) || typeof item.role !== 'string') return false;
-    if (
-      'type' in item &&
-      typeof item.type === 'string' &&
-      item.type !== 'message'
-    ) {
-      return false;
-    }
-    if (!('content' in item)) return false;
-    const { content } = item;
-    return typeof content === 'string' || Array.isArray(content);
-  }
-
-  private isAssistantTextMessage(
-    item?: ResponseInputItem,
-  ): item is EasyInputMessage | ResponseOutputMessage {
-    return (
-      item?.type === 'message' &&
-      item.role === 'assistant' &&
-      (typeof item.content === 'string' || Array.isArray(item.content))
-    );
-  }
-
-  private extractTextContentPart(part: unknown): string | undefined {
-    if (!part || typeof part !== 'object') return undefined;
-    const candidate = part as { type?: unknown; text?: unknown };
-    return (candidate.type === 'input_text' ||
-      candidate.type === 'output_text') &&
-      typeof candidate.text === 'string'
-      ? candidate.text
-      : undefined;
-  }
-
-  /** Type guard for ResponseOutputMessage items from the SDK. */
-  private isOutputMessage(
-    item: ResponseOutputItem,
-  ): item is ResponseOutputMessage {
-    return item.type === 'message';
-  }
-
-  /** Type alias for reasoning delta events (both raw and summary). */
-  private isReasoningDeltaEvent(
-    event: ResponseStreamEvent,
-  ): event is
-    | ResponseReasoningTextDeltaEvent
-    | ResponseReasoningSummaryTextDeltaEvent {
-    return (
-      event.type === 'response.reasoning_text.delta' ||
-      event.type === 'response.reasoning_summary_text.delta'
-    );
-  }
-
-  /** Type guard for web search in_progress events. */
-  private isWebSearchInProgressEvent(
-    event: ResponseStreamEvent,
-  ): event is ResponseWebSearchCallInProgressEvent {
-    return event.type === 'response.web_search_call.in_progress';
-  }
-
-  /** Type guard for text output delta events. */
-  private isTextDeltaEvent(
-    event: ResponseStreamEvent,
-  ): event is ResponseTextDeltaEvent {
-    return event.type === 'response.output_text.delta';
-  }
-
-  /** Type guard for output item done events. */
-  private isOutputItemDoneEvent(
-    event: ResponseStreamEvent,
-  ): event is ResponseOutputItemDoneEvent {
-    return event.type === 'response.output_item.done';
-  }
-
-  /** Type guard for function call arguments done events. */
-  private isFunctionCallArgumentsDoneEvent(
-    event: ResponseStreamEvent,
-  ): event is ResponseFunctionCallArgumentsDoneEvent {
-    return event.type === 'response.function_call_arguments.done';
-  }
-
-  /** Type guard for web search output items. */
-  private isWebSearchItem(
-    item: ResponseOutputItem,
-  ): item is ResponseFunctionWebSearch {
-    return item.type === 'web_search_call';
-  }
-
-  /**
-   * Emit web search result to progress view during streaming.
-   * Uses shared helper for consistent WebSearchResult construction.
-   */
-  private emitOpenAIWebSearch(item: ResponseFunctionWebSearch): void {
-    this.emitWebSearchResult(buildOpenAIWebSearchResult(item));
-  }
-
-  /**
-   * Emit web searches from the final response that weren't already emitted during streaming.
-   *
-   * This fallback ensures web searches are displayed even if streaming events are missed:
-   * - Network interruptions may cause output_item.done events to be lost
-   * - Some edge cases in the SDK may not emit all streaming events
-   * - Non-streaming responses need this path entirely
-   *
-   * The `alreadyEmitted` set prevents duplicates when streaming worked correctly.
-   * During normal streaming, this method typically does nothing (all IDs already emitted).
-   */
-  private emitWebSearchesFromResponse(
-    response: Response,
-    alreadyEmitted: Set<string>,
-  ): void {
-    const output = response?.output;
-    if (!Array.isArray(output)) {
-      return;
-    }
-
-    for (const item of output) {
-      if (
-        this.isWebSearchItem(item) &&
-        !alreadyEmitted.has(item.id) &&
-        hasOpenAIWebSearchData(item)
-      ) {
-        this.emitOpenAIWebSearch(item);
-        alreadyEmitted.add(item.id);
-      }
-    }
-  }
-
   private getMessageContent(
     item?: ResponseInputItem,
   ): ResponseInputMessageContentList | string | undefined {
-    if (!this.isMessageItem(item)) {
+    if (!isMessageItem(item)) {
       return undefined;
     }
     return item.content;
   }
 
   private appendInputText(message: ResponseInputItem, text: string): void {
-    if (!this.isMessageItem(message)) {
+    if (!isMessageItem(message)) {
       return;
     }
 
     const content = message.content;
 
     if (Array.isArray(content)) {
-      content.push(this.createInputText(text));
+      content.push(createInputText(text));
       return;
     }
 
     if (typeof content === 'string') {
-      message.content = [
-        this.createInputText(content),
-        this.createInputText(text),
-      ];
+      message.content = [createInputText(content), createInputText(text)];
       return;
     }
 
-    message.content = [this.createInputText(text)];
+    message.content = [createInputText(text)];
   }
 
   private appendAssistantText(
     message: ResponseInputItem,
     text: string,
   ): boolean {
-    if (!this.isMessageItem(message) || message.role !== 'assistant') {
+    if (!isMessageItem(message) || message.role !== 'assistant') {
       return false;
     }
 
@@ -3262,7 +2471,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     let existingText = '';
     if (Array.isArray(content)) {
       existingText = content
-        .map((part) => this.extractTextContentPart(part) ?? '')
+        .map((part) => extractTextContentPart(part) ?? '')
         .join('');
     }
 
