@@ -36,6 +36,7 @@ export interface StatusBarSegment {
   readonly color?: StatusBarColor;
   readonly badge?: boolean;
   readonly badgeColor?: 'red' | 'yellow';
+  readonly compactPriority?: number;
 }
 
 export interface StatusBarDisplayInput {
@@ -101,9 +102,10 @@ function formatUsage(
   const total = usage.inputTokens + usage.outputTokens;
   if (total <= 0) return undefined;
 
+  const base = { compactPriority: STATUS_BAR_COMPACT_PRIORITY.usage };
   const contextWindow = MODEL_CONFIGS[model]?.contextWindow;
   if (!contextWindow || contextWindow <= 0) {
-    return { text: formatCompactNumber(total), color: 'dim' };
+    return { ...base, text: formatCompactNumber(total), color: 'dim' };
   }
 
   const ratio = total / contextWindow;
@@ -113,6 +115,7 @@ function formatUsage(
   else if (ratio >= 0.6) color = 'yellow';
   else color = 'dim';
   return {
+    ...base,
     text: `${formatCompactNumber(total)}/${formatCompactNumber(
       contextWindow,
     )} (${percent}%)`,
@@ -124,7 +127,13 @@ function roundSegment(
   conversation: ConversationProgress | undefined,
 ): StatusBarSegment | undefined {
   const turns = conversation?.conversationTurns ?? 0;
-  return turns > 0 ? { text: `r${turns}`, color: 'dim' } : undefined;
+  return turns > 0
+    ? {
+        text: `r${turns}`,
+        color: 'dim',
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.round,
+      }
+    : undefined;
 }
 
 const QUEUED_FOLLOW_UP_PREVIEW_LENGTH = 48;
@@ -136,6 +145,16 @@ const STATUS_BAR_HORIZONTAL_PADDING = 2;
 const STATUS_BAR_MIN_RIGHT_PREVIEW = 12;
 // Preserve a readable separator between the left status group and right preview.
 const STATUS_BAR_RIGHT_PREVIEW_GAP = 2;
+// Lower values are removed first when the left status group exceeds the row.
+const STATUS_BAR_COMPACT_PRIORITY = {
+  activeProcess: 10,
+  activeSubagent: 20,
+  round: 30,
+  usage: 40,
+  queuedFollowUp: 50,
+  approvalDepth: 60,
+  elapsed: 70,
+} as const;
 
 function truncateSummaryToColumns(text: string, maxColumns: number): string {
   const summary = collapseWhitespace(text);
@@ -208,7 +227,11 @@ function queuedFollowUpsCountSegment(
   messages: readonly string[],
 ): StatusBarSegment | undefined {
   return messages.length > 0
-    ? { text: `queued ${messages.length}`, color: 'yellow' }
+    ? {
+        text: `queued ${messages.length}`,
+        color: 'yellow',
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.queuedFollowUp,
+      }
     : undefined;
 }
 
@@ -226,20 +249,6 @@ function statusBarSegmentsWidth(segments: readonly StatusBarSegment[]): number {
       total + statusBarSegmentWidth(segment) + (index === 0 ? 0 : 1),
     0,
   );
-}
-
-function fitStatusBarLeftSegments(
-  segments: readonly StatusBarSegment[],
-  width: number | undefined,
-): readonly StatusBarSegment[] {
-  if (width === undefined) return segments;
-
-  const innerWidth = Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
-  const fitted = [...segments];
-  while (fitted.length > 1 && statusBarSegmentsWidth(fitted) > innerWidth) {
-    fitted.pop();
-  }
-  return fitted;
 }
 
 function fitPendingExitStatusBarLeftSegments(
@@ -282,6 +291,34 @@ function rightStatusBudget(
       statusBarSegmentsWidth(segments) -
       STATUS_BAR_RIGHT_PREVIEW_GAP,
   );
+}
+
+function fitStatusBarLeftSegments(
+  segments: readonly StatusBarSegment[],
+  width: number | undefined,
+): readonly StatusBarSegment[] {
+  if (width === undefined) return segments;
+  const innerWidth = Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
+  if (statusBarSegmentsWidth(segments) <= innerWidth) return segments;
+
+  const compacted = [...segments];
+  const priorities = [
+    ...new Set(
+      compacted
+        .map((segment) => segment.compactPriority)
+        .filter((priority): priority is number => priority !== undefined),
+    ),
+  ].sort((a, b) => a - b);
+
+  for (const priority of priorities) {
+    for (let index = compacted.length - 1; index >= 0; index -= 1) {
+      if (compacted[index]?.compactPriority !== priority) continue;
+      compacted.splice(index, 1);
+      if (statusBarSegmentsWidth(compacted) <= innerWidth) return compacted;
+    }
+  }
+
+  return compacted;
 }
 
 export function defaultShortcutModifierLabel(
@@ -415,6 +452,7 @@ export function buildStatusBarDisplay(
       left.push({
         text: `${Math.floor(Math.max(0, input.elapsedMs) / 1000)}s`,
         color: 'dim',
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.elapsed,
       });
     }
   }
@@ -431,10 +469,18 @@ export function buildStatusBarDisplay(
   if (queued) left.push(queued);
 
   if (input.activeSubagents > 0) {
-    left.push({ text: `${input.activeSubagents} sub`, color: 'dim' });
+    left.push({
+      text: `${input.activeSubagents} sub`,
+      color: 'dim',
+      compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeSubagent,
+    });
   }
   if (input.activeProcesses > 0) {
-    left.push({ text: `${input.activeProcesses} proc`, color: 'dim' });
+    left.push({
+      text: `${input.activeProcesses} proc`,
+      color: 'dim',
+      compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeProcess,
+    });
   }
   if (input.approvalDepth > 0) {
     left.push({
@@ -442,6 +488,7 @@ export function buildStatusBarDisplay(
         input.approvalDepth === 1 ? '' : 's'
       }`,
       color: 'yellow',
+      compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalDepth,
     });
   }
   if (input.bypass.superYolo) {
@@ -453,7 +500,6 @@ export function buildStatusBarDisplay(
   if (input.bypass.toolEdit) {
     left.push({ text: 'AUTO-APPROVE', badge: true, badgeColor: 'yellow' });
   }
-
   const fittedLeft = input.pendingExitHint
     ? fitPendingExitStatusBarLeftSegments(left, input.width)
     : fitStatusBarLeftSegments(left, input.width);
