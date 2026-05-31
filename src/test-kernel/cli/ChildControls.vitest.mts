@@ -9,6 +9,7 @@ import {
   isUltraCompactPickerRows,
   pickerKeyHints,
   pickerTitle,
+  shouldUseCompactPickerKeyHints,
   TASK_DETAIL_LABEL_WIDTH,
   taskDetailCommandLabel,
 } from '@cli/chat/tui/modals/ChildControlPicker';
@@ -747,6 +748,12 @@ describe('CLI child execution controls', () => {
       { key: 'k', action: 'kill' },
       { key: 'Esc', action: 'close' },
     ]);
+    expect(pickerKeyHints('tasks', 1, true, true)).toEqual([
+      { key: '↑/↓', action: 'nav' },
+      { key: 'Enter', action: 'view' },
+      { key: 'k', action: 'kill' },
+      { key: 'Esc', action: 'close' },
+    ]);
     expect(childPickerKeyAction({ input: '3' })).toEqual({
       kind: 'jump',
       index: 2,
@@ -763,6 +770,8 @@ describe('CLI child execution controls', () => {
       key: 'k',
       action: 'kill',
     });
+    expect(shouldUseCompactPickerKeyHints(64)).toBe(true);
+    expect(shouldUseCompactPickerKeyHints(65)).toBe(false);
   });
 
   it('labels the task picker as a combined task and sub-workflow view', () => {

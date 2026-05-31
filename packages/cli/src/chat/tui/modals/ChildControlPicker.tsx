@@ -39,6 +39,7 @@ export interface ChildControlPickerProps {
 
 export const TASK_DETAIL_LABEL_WIDTH = 13;
 export const ULTRA_COMPACT_PICKER_MAX_ROWS = 4;
+export const COMPACT_PICKER_HINT_COLUMNS = 64;
 
 export function pickerTitle(mode: ChildControlMode): string {
   return mode === 'subagents' ? 'Subagents' : 'Tasks and sub-workflows';
@@ -59,15 +60,27 @@ export function isUltraCompactPickerRows(
   );
 }
 
+export function shouldUseCompactPickerKeyHints(
+  availableColumns: number | undefined,
+): boolean {
+  return (
+    availableColumns !== undefined &&
+    availableColumns <= COMPACT_PICKER_HINT_COLUMNS
+  );
+}
+
 export function pickerKeyHints(
   mode: ChildControlMode,
   itemCount: number,
   canKill = itemCount > 0,
+  compact = false,
 ): readonly KeyHint[] {
   if (itemCount <= 0) {
     return [{ key: 'Esc', action: 'close' }];
   }
-  const hints: KeyHint[] = [{ key: '↑/↓', action: 'navigate' }];
+  const hints: KeyHint[] = [
+    { key: '↑/↓', action: compact ? 'nav' : 'navigate' },
+  ];
   if (itemCount > 1) hints.push({ key: '1-9', action: 'jump' });
   hints.push({ key: 'Enter', action: mode === 'subagents' ? 'focus' : 'view' });
   if (canKill) hints.push({ key: 'k', action: 'kill' });
@@ -511,6 +524,7 @@ export function ChildControlPicker({
             mode,
             items.length,
             selectedItem?.killable ?? false,
+            shouldUseCompactPickerKeyHints(availableColumns),
           )}
           confirmCancel={false}
         />
@@ -558,6 +572,7 @@ export function ChildControlPicker({
             mode,
             items.length,
             selectedItem?.killable ?? false,
+            shouldUseCompactPickerKeyHints(availableColumns),
           )}
           confirmCancel={false}
         />

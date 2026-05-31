@@ -60,6 +60,7 @@ const LONG_BASH_APPROVAL_COMMAND = [
 ].join('\n');
 const LONG_EXTERNAL_INQUIRY_ANSWER =
   'Independent check agrees: there are 22 non-degenerate triples in the displayed list, plus exactly 61 degenerate triples of the form (0,b,b), and the bounded search over integer pairs proves completeness.';
+const TRUNCATED_ESC_CLOSE_HINTS = ['Esc cl…', 'Esc clo…'];
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');
@@ -646,8 +647,14 @@ const SCENARIOS = [
     bootExpect: '[Tab]streams',
     keys: [ESC + 's'], // Option/Alt-s
     frame: 'tail',
-    expect: ['Subagents', 'Stream: main', 'strategy', 'Enter focus'],
-    unexpect: ['sub-workfl\now', '\n────╯'],
+    expect: [
+      'Subagents',
+      'Stream: main',
+      'strategy',
+      'Enter focus',
+      'Esc close',
+    ],
+    unexpect: ['sub-workfl\now', '\n────╯', ...TRUNCATED_ESC_CLOSE_HINTS],
     maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
   },
   {
@@ -667,8 +674,9 @@ const SCENARIOS = [
       'Stream: main',
       'strategy',
       'Enter view',
+      'Esc close',
     ],
-    unexpect: ['sub-workfl\now', '\n────╯'],
+    unexpect: ['sub-workfl\now', '\n────╯', ...TRUNCATED_ESC_CLOSE_HINTS],
     maxBlankLinesBetween: [{ from: '╰', to: 'Tip:', max: 1 }],
   },
   {
