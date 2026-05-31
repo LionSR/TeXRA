@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
 import {
+  chmodSync,
+  existsSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -56,6 +59,7 @@ const { collectTexraThreads } = require(
 const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
 const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
 const validationFlagContent = 'texra-cli-run-validation\n';
+const ESC = String.fromCharCode(27);
 
 function run(command, args, options = {}) {
   const env = {
@@ -140,6 +144,118 @@ function validateBinarySmoke() {
       (record) => record.kind === 'agent',
     ),
     'agents list NDJSON records should have kind=agent',
+  );
+}
+
+function ensureNodePtySpawnHelperExecutable() {
+  if (process.platform === 'win32') return;
+
+  try {
+    const packageRoot = path.dirname(require.resolve('node-pty/package.json'));
+    const helperPath = path.join(
+      packageRoot,
+      'prebuilds',
+      `${process.platform}-${process.arch}`,
+      'spawn-helper',
+    );
+    if (!existsSync(helperPath)) return;
+
+    const mode = statSync(helperPath).mode;
+    if ((mode & 0o111) === 0) chmodSync(helperPath, mode | 0o755);
+  } catch {
+    // node-pty will report the underlying PTY load/spawn failure below.
+  }
+}
+
+async function validateOrchestratePreservesScrollback() {
+  ensureNodePtySpawnHelperExecutable();
+  const ptyMod = await import('node-pty');
+  const ptySpawn = ptyMod.spawn ?? ptyMod.default?.spawn;
+  assert(
+    typeof ptySpawn === 'function',
+    'node-pty should expose spawn for orchestration validation',
+  );
+
+  const env = {
+    ...process.env,
+    TERM: 'xterm-256color',
+    FORCE_COLOR: '3',
+    TEXRA_NO_UPDATE_CHECK: '1',
+  };
+  // Exercise the same interactive path a real terminal uses. CI markers make
+  // Ink switch render modes, which hides the behavior this PTY check covers.
+  delete env.CI;
+  delete env.NO_COLOR;
+
+  const result = await new Promise((resolve, reject) => {
+    let output = '';
+    let exitSent = false;
+    let exited = false;
+    let fallbackExitTimer;
+    let promptExitTimer;
+
+    const child = ptySpawn(process.execPath, [binaryPath, 'orchestrate'], {
+      name: 'xterm-256color',
+      cols: 100,
+      rows: 30,
+      cwd: cliRoot,
+      env,
+    });
+
+    const sendExit = () => {
+      if (exitSent || exited) return;
+      exitSent = true;
+      try {
+        child.write(ESC);
+      } catch (err) {
+        if (!exited) reject(err);
+      }
+    };
+
+    const timeout = setTimeout(() => {
+      if (!exited) {
+        try {
+          child.kill();
+        } catch {}
+      }
+      clearTimeout(fallbackExitTimer);
+      clearTimeout(promptExitTimer);
+      reject(new Error(`texra orchestrate did not exit\noutput:\n${output}`));
+    }, 12_000);
+
+    child.onData((data) => {
+      output += data;
+      if (
+        !exitSent &&
+        promptExitTimer == null &&
+        output.includes('Choose how to start this CLI session')
+      ) {
+        promptExitTimer = setTimeout(sendExit, 100);
+      }
+    });
+
+    fallbackExitTimer = setTimeout(sendExit, 4_000);
+
+    child.onExit((exit) => {
+      exited = true;
+      clearTimeout(timeout);
+      clearTimeout(fallbackExitTimer);
+      clearTimeout(promptExitTimer);
+      resolve({ output, exit });
+    });
+  });
+
+  assert(
+    result.exit.exitCode === 0 && !result.exit.signal,
+    `texra orchestrate Esc exit should succeed (exit ${result.exit.exitCode}, signal ${result.exit.signal || 'none'})`,
+  );
+  assert(
+    result.output.includes(`${ESC}[2J`),
+    'texra orchestrate should clear the visible launcher screen on exit',
+  );
+  assert(
+    !result.output.includes(`${ESC}[3J`),
+    'texra orchestrate should not erase terminal scrollback on exit',
   );
 }
 
@@ -802,6 +918,7 @@ async function validateCliRunArtifacts() {
   });
   assertSuccess(buildResult, 'pnpm run build');
   validateBinarySmoke();
+  await validateOrchestratePreservesScrollback();
   validateRunCommand();
   validateToolUseAgentRunCommand();
   await validateCodeReviewActionHelpers();
