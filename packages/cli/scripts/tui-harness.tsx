@@ -676,13 +676,23 @@ registerBuiltinSlashCommands({
   },
 });
 
-const ink = render(
+let ink: ReturnType<typeof render>;
+function handleHarnessCtrlC(): void {
+  if (canInterrupt) {
+    markHarnessInterrupted();
+    return;
+  }
+  void exitHarness(0);
+}
+
+ink = render(
   <App
     onSubmit={handleHarnessSubmit}
     onKillExecution={markHarnessExecutionStopped}
     canInterruptActiveRun={() => canInterrupt}
     canStopActiveRun={() => canInterrupt}
     onInterruptActive={markHarnessInterrupted}
+    onCtrlC={handleHarnessCtrlC}
   />,
   {
     stdout: process.stdout,
@@ -704,10 +714,4 @@ async function exitHarness(exitCode: number): Promise<void> {
   }
 }
 
-process.on('SIGINT', () => {
-  if (canInterrupt) {
-    markHarnessInterrupted();
-    return;
-  }
-  void exitHarness(0);
-});
+process.on('SIGINT', handleHarnessCtrlC);
