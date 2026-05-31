@@ -131,6 +131,7 @@ const QUEUED_FOLLOW_UP_PREVIEW_LENGTH = 48;
 const QUEUED_FOLLOW_UP_PREVIEW_ITEMS = 2;
 const QUEUED_FOLLOW_UP_MIN_ITEM_PREVIEW = 8;
 const QUEUED_FOLLOW_UP_SEPARATOR = ' · ';
+const PENDING_EXIT_HINT_TEXT = 'Press Ctrl-C again to exit';
 const STATUS_BAR_HORIZONTAL_PADDING = 2;
 const STATUS_BAR_MIN_RIGHT_PREVIEW = 12;
 // Preserve a readable separator between the left status group and right preview.
@@ -225,6 +226,48 @@ function statusBarSegmentsWidth(segments: readonly StatusBarSegment[]): number {
       total + statusBarSegmentWidth(segment) + (index === 0 ? 0 : 1),
     0,
   );
+}
+
+function fitStatusBarLeftSegments(
+  segments: readonly StatusBarSegment[],
+  width: number | undefined,
+): readonly StatusBarSegment[] {
+  if (width === undefined) return segments;
+
+  const innerWidth = Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
+  const fitted = [...segments];
+  while (fitted.length > 1 && statusBarSegmentsWidth(fitted) > innerWidth) {
+    fitted.pop();
+  }
+  return fitted;
+}
+
+function fitPendingExitStatusBarLeftSegments(
+  segments: readonly StatusBarSegment[],
+  width: number | undefined,
+): readonly StatusBarSegment[] {
+  if (width === undefined) return segments;
+
+  const innerWidth = Math.max(0, width - STATUS_BAR_HORIZONTAL_PADDING);
+  const fitted = [...segments];
+  while (fitted.length > 2 && statusBarSegmentsWidth(fitted) > innerWidth) {
+    fitted.pop();
+  }
+
+  const icon = fitted[0];
+  const prompt = fitted[1];
+  if (icon && prompt && statusBarSegmentsWidth(fitted) > innerWidth) {
+    const iconAndGapWidth = statusBarSegmentWidth(icon) + 1;
+    fitted[1] = {
+      ...prompt,
+      text: truncateSummaryToColumns(
+        prompt.text,
+        Math.max(0, innerWidth - iconAndGapWidth),
+      ),
+    };
+  }
+
+  return fitted;
 }
 
 function rightStatusBudget(
@@ -362,7 +405,7 @@ export function buildStatusBarDisplay(
   const left: StatusBarSegment[] = [{ text: '◆', color: 'cyan' }];
 
   if (input.pendingExitHint) {
-    left.push({ text: 'Press Ctrl-C again to exit', color: 'yellow' });
+    left.push({ text: PENDING_EXIT_HINT_TEXT, color: 'yellow' });
   } else {
     left.push({ text: formatCliStatusLabel(input.status), color: 'dim' });
     if (
@@ -411,12 +454,20 @@ export function buildStatusBarDisplay(
     left.push({ text: 'AUTO-APPROVE', badge: true, badgeColor: 'yellow' });
   }
 
+  const fittedLeft = input.pendingExitHint
+    ? fitPendingExitStatusBarLeftSegments(left, input.width)
+    : fitStatusBarLeftSegments(left, input.width);
+  const queuedCountVisible =
+    queued === undefined || fittedLeft.includes(queued);
+
   return {
-    left,
-    right: queuedFollowUpsSummary(
-      input.queuedFollowUpMessages,
-      rightStatusBudget(left, input.width),
-    ),
+    left: fittedLeft,
+    right: queuedCountVisible
+      ? queuedFollowUpsSummary(
+          input.queuedFollowUpMessages,
+          rightStatusBudget(fittedLeft, input.width),
+        )
+      : undefined,
     bindings:
       input.pendingExitHint && input.pendingExitResumeId
         ? `Resume this session with: texra --resume ${input.pendingExitResumeId}`
