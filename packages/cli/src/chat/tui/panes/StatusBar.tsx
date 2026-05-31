@@ -49,6 +49,7 @@ export interface StatusBarDisplayInput {
   readonly pendingExitResumeId: string | undefined;
   readonly bypass: BypassState;
   readonly queuedFollowUpMessages: readonly string[];
+  readonly queuedFollowUpPreview?: boolean;
   readonly usage: TokenUsageStats | undefined;
   readonly conversation: ConversationProgress | undefined;
   readonly activeSubagents: number;
@@ -505,10 +506,12 @@ export function buildStatusBarDisplay(
     : fitStatusBarLeftSegments(left, input.width);
   const queuedCountVisible =
     queued === undefined || fittedLeft.includes(queued);
+  const queuedPreviewVisible =
+    input.queuedFollowUpPreview !== false && queuedCountVisible;
 
   return {
     left: fittedLeft,
-    right: queuedCountVisible
+    right: queuedPreviewVisible
       ? queuedFollowUpsSummary(
           input.queuedFollowUpMessages,
           rightStatusBudget(fittedLeft, input.width),
@@ -534,6 +537,7 @@ export function buildStatusBarDisplay(
 
 export interface StatusBarProps {
   readonly canStopActiveRun?: () => boolean;
+  readonly queuedFollowUpPreview?: boolean;
   readonly shortcutsActive?: boolean;
 }
 
@@ -566,6 +570,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     pendingExitResumeId,
     bypass: slice?.bypass ?? NO_BYPASS,
     queuedFollowUpMessages: slice?.queuedFollowUpMessages ?? [],
+    queuedFollowUpPreview: props.queuedFollowUpPreview,
     usage: slice?.usage,
     conversation: slice?.conversation,
     activeSubagents: slice?.activeSubagents.length ?? 0,
