@@ -427,3 +427,106 @@ engine — and it cannot replace the multi-provider model-handler layer, since t
 serves OpenAI/Google/OpenRouter/etc. that the Anthropic SDK does not abstract. The
 handler-layer cleanups (§3.3–§3.5, §7) are internal de-duplication wins, not "delete
 and adopt the SDK" swaps; treat any framing that says otherwise as over-optimistic.
+
+---
+
+## 9. Re-verification addendum — 2026-05-31
+
+A fourth independent pass (four parallel audits: agent core/runtime, model handlers,
+logger/trace/eventBus, and the platform/packaging surface + subagent boundaries) re-ran
+against current `main`. **All 2026-05-28/29/30 findings hold without change.** TeXRA
+remains well-architected and SDK-aligned; the four passes surfaced **no new structural
+over-abstraction** — they independently re-confirmed the prior conclusions.
+
+**Landed since the 2026-05-30 pass — Step 6 (run-entry naming/curation, behavior-neutral):**
+
+The proposal's refined Step 6 (`docs/proposals/agent-sdk-readiness.md` §6) is **now in
+tree** (commit `da131dc`, PR #4781):
+
+- `runtime/runExecutionRequest.ts` → **`runtime/runAgent.ts`**; `runValidatedExecutionRequest`
+  → **`runAgent`**, `RunExecutionRequestOptions` → `RunAgentOptions` (body byte-identical,
+  verified — the "START HERE" doc comment is present at `runAgent.ts`).
+- `@texra/core` is **no longer the `corePackageReady` stub** flagged through §8: it is a
+  curated 8-section surface (`packages/core/src/index.ts`, 115 LOC) exporting the platform
+  composition root, `AgentConfig`/`AgentCategory`, execution-request validation, `runAgent`
+  + `runAgentStream` (the `executeAgent` alias), `AgentRuntimeHost`, the `AgentTrace` channel,
+  the agent registry, and execution storage. `ExecutionId`/`ExecuteAgentOptions`/
+  `WorkflowFlowResult` are exported; `getAgentPath` is dropped from the surface — exactly the
+  Step 6 spec. This resolves the §8 "no single versioned public surface" packaging note.
+
+**Independently re-confirmed by the four parallel passes (no action — recorded so they
+are not re-flagged):**
+
+- **Agent core/runtime is clean.** The coordinator hierarchy (`BasePromiseCoordinator` +
+  `AgentProposalCoordinator`/`RetryRequestCoordinator`/`PlanApprovalCoordinator`) is genuinely
+  distinct shared logic, not redundant wrappers; `runFlowWithLifecycle` and
+  `buildAgentLaunchContext`'s two-layer assembly are load-bearing (saga-style compensation,
+  error classification, disposal), not the "wrapper to inline" anti-pattern; PocketFlow nodes
+  create+run flows directly (`ResponseCycleNode.exec` → `createResponseCycleFlow().run`,
+  `runToolUseFlow` inline node graph). Zero core abstractions recommended for removal.
+- **`runCoordinators.bridgeState` is load-bearing** (re-confirmed, consistent with §7/Step 7c):
+  the resolve-side UI callers run outside the run's `AsyncLocalStorage` and key by
+  `approvalId`/`proposalId`/`streamId`. Relocate onto a per-run handle (Step 7); never delete.
+- **Logger/trace/eventBus are lean and SDK-ready.** `@logger` is decoupled from `platform()`
+  by design (hosts wire `logUtils.setOutputChannelFactory` directly); `createChannelTrace`
+  stays host-neutral while `createRunTrace` carries the transcript recorder (the Step 2
+  layering split holds); `redaction.ts` is centralized; `ProgressEventBus` is a clean
+  buffered pub/sub. The three deprecated logger facades (original §2.1) remain gone.
+- **Model-handler factory + shared utilities are correctly factored.** `PROVIDER_HANDLERS`
+  is exhaustive over `ModelProvider`; `toolConversion`, `UsageNormalizer`,
+  `MediaAttachmentProcessor`, `sdkErrorAdapters`, `BaseReasoningStreamAggregator` are genuinely
+  shared. The §3.4 normalization collapse holds (only base `modelHandlerOpenAI` retains
+  `getMessageNormalizationOptions`).
+- **Subagent boundaries unchanged.** The §5 / proposal split candidates remain accurate:
+  config-driven YAML agents over two flows + the `delegate_*` tools are the existing subagent
+  mechanism; `executeAgent`'s `agentCategory` dispatch is the cleanest internal seam.
+
+**Still-open items re-confirmed present (line numbers refreshed against current `main`):**
+
+- **§2.6** — `src/agent/modelHandlers/modelHandlerValidation.ts` still sits in the dispatch
+  dir, gated behind `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL=1`. Still recommended to
+  relocate to `test-kernel/` and inject.
+- **§4** — token usage is still double-emitted in `UsageMonitor.ts`: `runtimeHost.emit('updateStreamUsage', …)`
+  at `:155` and `logger.usage(payload, …)` at `:164`. Single-source-of-truth consolidation
+  onto `AgentTrace` remains open.
+- **§5 / proposal Step 7** — no first-class `delegateTo(...)` primitive (`grep delegateTo`
+  empty); delegation remains a tool call. The three module-global registries
+  (`executionRegistry` — module Maps; `runCoordinators.bridgeState` — 8 Maps; the tool-use
+  interrupt registry still named `ToolUseAgentRegistry`, not the proposed `SessionInterruptRegistry`)
+  are **unchanged**: Step 7a–7d has not landed. These are the gating blocker for concurrent
+  in-process sessions; relocate-onto-a-handle (never delete) is still the prescription.
+
+**Two genuinely new minor findings (low/medium, recorded for the backlog — not blockers):**
+
+1. **Redaction is host-side-optional, not enforced at emit (low–medium, security hygiene).**
+   `redactSecrets()` (`logger/redaction.ts`) is applied only by hosts that opt in (desktop
+   app log, CLI log sinks); the trace/logger core does **not** redact on `logAt()`. A new SDK
+   consumer that forgets to wire it can leak secrets into logs. Additionally the three regex
+   patterns are module constants with no extension hook. **Suggested:** document the host
+   redaction responsibility in `logUtils` TSDoc, and (optionally) expose the pattern set as a
+   configurable hook for SDK consumers. Deliberately not auto-redacting at emit is defensible
+   (cost/flexibility) — the fix is a documented contract, not forced redaction.
+
+2. **Thin OpenAI-compatible handler proliferation (low, judgment call — leans _keep_).**
+   `modelHandlerDashScope` (14 LOC), `modelHandlerXAI` (38), `modelHandlerGLM` (45),
+   plus the slightly larger `Kimi`/`MiniMax`/`DeepSeek` (≈130 each) are mostly capability/config
+   deltas over `modelHandlerOpenAI`. A config-driven collapse is _conceivable_ (~250 LOC), **but
+   this is in direct tension with the §3.4 decision to keep them as "good thin wrappers"**: each
+   maps 1:1 to a `ModelProvider` enum arm in the exhaustive `PROVIDER_HANDLERS` record, several
+   carry genuine deltas (Kimi's token-count API, MiniMax's `reasoning_details`, DeepSeek's
+   content-format + effort validation), and the prior OpenRouter merge of the same flavor was
+   _deliberately reverted_ (proposal "Rejected findings"). **Verdict: do not pursue as a quick
+   win** — the registry still needs a class per provider, so the collapse trades small LOC for a
+   less-obvious dispatch table. Recorded only so it is not re-discovered as "new."
+
+**False positives re-confirmed (do not re-flag):** the cycle-flow factories
+(`createResponseCycleFlow`/`createToolUseCycleFlow`) are the prescribed `Node.exec()→createFlow()→run()`
+shape (§8); `configUtils.ts` is justified DRY (§8); `IModelHandler` is **not** a redundant duplicate
+of `ModelHandler` (proposal "Rejected findings"); the two run entries (`runAgent` vs `runAgentStream`)
+serve different consumer classes and must not be merged (proposal "Rejected findings").
+
+**Net for 2026-05-31:** the structural surface is done (Steps 1–6 landed). What remains is the
+**multi-session-isolation work** (Step 7a–7d: relocate the three module-global registries onto a
+per-run/session handle) and three small, independently-shippable tidies (§2.6 relocate,
+§4 usage de-dup, redaction-contract doc). No rewrite warranted; the codebase has the structure it
+would have had if designed with these hosts in mind.
