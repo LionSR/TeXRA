@@ -35,6 +35,18 @@ const minimalWorkflowHistoryItem: HistoryItem = {
   },
 };
 
+const toolUseHistoryItem: HistoryItem = {
+  id: 'execution-3',
+  timestamp: '2026-01-03T00:00:00.000Z',
+  agentConfig: {
+    agentCategory: 'toolUse',
+    agent: 'researcher',
+    model: 'test-model',
+    instruction: 'Check the lemma.',
+    editedFiles: ['proofs/lemma.md'],
+  },
+};
+
 describe('history search prefilter', () => {
   it('matches rendered history fields without requiring DOM construction', () => {
     const searchText = getHistorySearchText(workflowHistoryItem);
@@ -71,6 +83,20 @@ describe('history search prefilter', () => {
       historySearchTextMatches(
         searchText,
         getHistorySearchTokens('missing variational'),
+      ),
+    ).toBe(true);
+  });
+
+  it('matches edited files rendered for tool-use history items', () => {
+    const searchText = getHistorySearchText(toolUseHistoryItem);
+
+    expect(
+      historySearchTextMatches(searchText, getHistorySearchTokens('lemma.md')),
+    ).toBe(true);
+    expect(
+      historySearchTextMatches(
+        searchText,
+        getHistorySearchTokens('more details'),
       ),
     ).toBe(true);
   });

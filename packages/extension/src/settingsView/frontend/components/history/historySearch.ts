@@ -111,6 +111,14 @@ export function getHistorySearchText(item: HistoryItem): string {
     if (hasMoreDetails) {
       parts.push('More details');
     }
+  } else if (config.agentCategory === 'toolUse') {
+    const hasMoreDetails = addConfigSection(parts, 'Edited Files', [
+      ['Files', config.editedFiles],
+    ]);
+
+    if (hasMoreDetails) {
+      parts.push('More details');
+    }
   }
 
   return normalizeSearchText(parts.join('\n'));

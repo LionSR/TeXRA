@@ -5,7 +5,7 @@
  * `HistoryItem` shape for the settings UI. Action handlers (delete, rerun,
  * export) remain host-specific because they touch host-only UI surfaces.
  */
-import { listExecutions } from '@agent/storage';
+import { getExecutionStore, listExecutions } from '@agent/storage';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import type {
   HistoryItem,
@@ -14,23 +14,31 @@ import type {
 
 export async function buildHistoryMessage(): Promise<UpdateHistoryMessage> {
   const entries = await listExecutions();
-  const historyItems = entries
-    .filter(
-      (entry) => entry.agentConfig !== null && entry.category !== 'process',
-    )
-    .map((entry): HistoryItem => {
+  const visibleEntries = entries.filter(
+    (entry) => entry.agentConfig !== null && entry.category !== 'process',
+  );
+  const historyItems = await Promise.all(
+    visibleEntries.map(async (entry): Promise<HistoryItem> => {
       const cfg = entry.agentConfig!;
       const base = {
         agent: cfg.agent,
         model: cfg.model,
         instruction: cfg.instruction,
       };
+      const editedFiles =
+        cfg.agentCategory === 'toolUse'
+          ? await getExecutionStore(entry.id).readWorkspaceFiles()
+          : [];
       return {
         id: entry.id,
         timestamp: entry.timestamp,
         agentConfig:
           cfg.agentCategory === 'toolUse'
-            ? { agentCategory: 'toolUse' as const, ...base }
+            ? {
+                agentCategory: 'toolUse' as const,
+                ...base,
+                editedFiles,
+              }
             : {
                 agentCategory: 'workflow' as const,
                 ...base,
@@ -42,7 +50,8 @@ export async function buildHistoryMessage(): Promise<UpdateHistoryMessage> {
               },
         description: entry.description,
       };
-    });
+    }),
+  );
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_HISTORY,
     historyItems,
