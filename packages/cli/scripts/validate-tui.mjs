@@ -78,6 +78,7 @@ const SCENARIOS = [
   },
   {
     name: 'queued-followups',
+    cols: 120,
     env: {
       HARNESS_ENTRIES: '2',
       HARNESS_QUEUED_FOLLOWUPS:
@@ -85,6 +86,18 @@ const SCENARIOS = [
     },
     frame: 'tail',
     expect: ['queued 2', 'First queued', 'Second queued'],
+  },
+  {
+    name: 'subagent-followup-summary',
+    env: { HARNESS_ENTRIES: '0', HARNESS_SUBAGENT_FOLLOWUPS: '1' },
+    expect: [
+      '⟳ strategy · round 2/3',
+      '✓ leanSolver completed · 2min, 3sec',
+      'Proved </response> is escaped & visible.',
+      '✗ reviewer failed (retryable)',
+      'rate limit: <tokens> & retries exhausted',
+    ],
+    unexpect: ['<subagent-progress', '<subagent-result', '<subagent-error'],
   },
   {
     name: 'slash-palette',
