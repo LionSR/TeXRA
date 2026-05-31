@@ -18,7 +18,9 @@ import {
   taskDetailCommandLabel,
   taskDetailInitialScrollOffset,
   taskDetailKeyHintsForColumns,
+  taskDetailVisibleLineCountForColumns,
   taskDetailVisibleScrollOffset,
+  taskDetailWrappedRowCount,
 } from '@cli/chat/tui/modals/ChildControlPicker';
 import {
   buildChildControlItems,
@@ -887,6 +889,35 @@ describe('CLI child execution controls', () => {
       { key: 'k', action: 'kill' },
       { key: 'Esc', action: 'back' },
     ]);
+  });
+
+  it('budgets compact task detail output by wrapped terminal rows', () => {
+    expect(taskDetailWrappedRowCount('abcd', 4)).toBe(1);
+    expect(taskDetailWrappedRowCount('abcde', 4)).toBe(2);
+    expect(
+      taskDetailVisibleLineCountForColumns({
+        availableColumns: 80,
+        compact: true,
+        tailLines: ['x'.repeat(100), 'final line'],
+        visibleRowBudget: 3,
+      }),
+    ).toBe(2);
+    expect(
+      taskDetailVisibleLineCountForColumns({
+        availableColumns: 80,
+        compact: true,
+        tailLines: ['x'.repeat(100), 'final line'],
+        visibleRowBudget: 2,
+      }),
+    ).toBe(1);
+    expect(
+      taskDetailVisibleLineCountForColumns({
+        availableColumns: 48,
+        compact: true,
+        tailLines: ['final output wraps at this width'],
+        visibleRowBudget: 0,
+      }),
+    ).toBe(0);
   });
 
   it('labels the task picker as a combined task and sub-workflow view', () => {
