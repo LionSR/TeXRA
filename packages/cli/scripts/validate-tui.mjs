@@ -202,6 +202,15 @@ const SCENARIOS = [
     unexpect: ['Platform not initialized', '/agent - error'],
   },
   {
+    name: 'agent-form-80-cols',
+    cols: 80,
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/agent', '\r'],
+    expect: ['/agent', 'Tool-use agents', 'Esc close'],
+    unexpect: ['Platform not initialized', '/agent - error'],
+    maxLineColumns: 80,
+  },
+  {
     name: 'model-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/model', '\r'],
@@ -1096,6 +1105,10 @@ function blankLinesBetween(frame, from, to) {
     .filter((line) => line.trim().length === 0).length;
 }
 
+function lineColumns(line) {
+  return [...line].length;
+}
+
 function snapshotFileName(index, name, extension = 'txt') {
   const prefix = String(index + 1).padStart(2, '0');
   return `${prefix}-${name.replace(/[^a-z0-9._-]+/gi, '-')}.${extension}`;
@@ -1320,6 +1333,23 @@ async function runScenario(scenario) {
     } else if (actual > check.max) {
       failures.push(
         `too many blank lines between ${JSON.stringify(check.from)} and ${JSON.stringify(check.to)}: ${actual} > ${check.max}`,
+      );
+    }
+  }
+  if (scenario.maxLineColumns != null) {
+    const maxColumns = Number(scenario.maxLineColumns);
+    const tooWide = frame
+      .split('\n')
+      .map((line, index) => ({
+        index: index + 1,
+        columns: lineColumns(line),
+        line,
+      }))
+      .filter((line) => line.columns > maxColumns);
+    if (tooWide.length > 0) {
+      const first = tooWide[0];
+      failures.push(
+        `line ${first.index} exceeds ${maxColumns} columns: ${first.columns} (${JSON.stringify(first.line)})`,
       );
     }
   }
