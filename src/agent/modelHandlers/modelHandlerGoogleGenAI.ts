@@ -623,7 +623,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             }
           }
 
-          const chunkText = chunk.text ?? '';
+          const chunkText = candidate
+            ? extractNonThinkingText(candidate.content?.parts ?? [])
+            : '';
           if (chunkText) {
             aggregatedText += chunkText;
             output?.append(chunkText);
@@ -681,15 +683,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         const finalReasoning = this.processThinkingBlock(baseResponse);
         thinking.finalize(finalReasoning ?? undefined);
 
-        const nonThinkingText = extractNonThinkingText(aggregatedParts);
-
-        let finalOutputText = aggregatedText || nonThinkingText;
-        if (!finalOutputText && baseResponse.text) {
-          finalOutputText = baseResponse.text;
-          this.logger.warn(
-            'Finalizing Google stream with base response text fallback; no chunk text aggregated.',
-          );
-        }
+        const responseParts =
+          baseResponse.candidates?.[0]?.content?.parts ?? [];
+        const finalOutputText =
+          aggregatedText || extractNonThinkingText(responseParts);
         output?.finalize(finalOutputText);
 
         // Ensure text field excludes thinking content
