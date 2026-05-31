@@ -15,6 +15,7 @@ import { buildCliOrchestrationItems } from '../runtime/orchestration';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 
 import { contextFromArgs } from './_helpers/context';
+import { withUsageSections } from './_helpers/dispatch';
 import { setExitCode } from './_helpers/exitCode';
 import {
   INTERACTIVE_GLOBAL_ARGS,
@@ -95,18 +96,31 @@ async function runOrchestration(context: CliContext): Promise<number> {
   }
 }
 
-export const orchestrationCommand = defineCommand({
-  meta: {
-    name: 'orchestrate',
-    description:
-      'Interactive launcher (runs by default on bare `texra` in a TTY): pick a chat, resume, or team preset',
-  },
-  args: {
-    ...INTERACTIVE_GLOBAL_ARGS,
-  },
-  async run(ctx) {
-    rejectHeadlessOnlyFlags(ctx.rawArgs, 'orchestrate');
-    const context = await contextFromArgs(ctx.args);
-    setExitCode(await runOrchestration(context));
-  },
-});
+export const orchestrationCommand = withUsageSections(
+  defineCommand({
+    meta: {
+      name: 'orchestrate',
+      description:
+        'Interactive launcher (runs by default on bare `texra` in a TTY): pick a chat, resume, or team preset',
+    },
+    args: {
+      ...INTERACTIVE_GLOBAL_ARGS,
+    },
+    async run(ctx) {
+      rejectHeadlessOnlyFlags(ctx.rawArgs, 'orchestrate');
+      const context = await contextFromArgs(ctx.args);
+      setExitCode(await runOrchestration(context));
+    },
+  }),
+  [
+    {
+      title: 'INTERACTIVE CONTROLS',
+      rows: [
+        ['↑/↓', 'navigate launcher items'],
+        ['1-9/a-z', 'open an item directly'],
+        ['Enter', 'open the selected item'],
+        ['Esc', 'exit the launcher'],
+      ],
+    },
+  ],
+);

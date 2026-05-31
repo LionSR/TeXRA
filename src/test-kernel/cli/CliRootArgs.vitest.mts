@@ -621,12 +621,36 @@ describe('runCli usage output stream routing', () => {
     expect(stderr).toBe('');
   });
 
+  it('documents launcher controls in orchestrate --help', async () => {
+    const result = await runCli(['orchestrate', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('INTERACTIVE CONTROLS');
+    expect(stdout).toContain('↑/↓');
+    expect(stdout).toContain('1-9/a-z');
+    expect(stdout).toContain('open an item directly');
+    expect(stdout).toContain('Enter');
+    expect(stdout).toContain('Esc');
+    expect(stderr).toBe('');
+  });
+
   it('shows command-specific usage for help command paths', async () => {
     const result = await runCli(['help', 'chat']);
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('Interactive tool-use chat session');
     expect(stdout).toContain('USAGE texra chat');
     expect(stdout).toContain('INTERACTIVE CONTROLS');
+    expect(stderr).toBe('');
+  });
+
+  it('shows orchestrate controls for help command paths', async () => {
+    const result = await runCli(['help', 'orchestrate']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('Interactive launcher');
+    expect(stdout).toContain('USAGE texra orchestrate');
+    expect(stdout).toContain('INTERACTIVE CONTROLS');
+    expect(stdout).toContain('1-9/a-z');
+    expect(stdout).toContain('open an item directly');
+    expect(stdout).toContain('Esc');
     expect(stderr).toBe('');
   });
 
