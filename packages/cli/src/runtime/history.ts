@@ -4,6 +4,7 @@ import {
   deleteAllExecutions,
   deleteExecution,
   getExecutionStore,
+  listExecutionWorkspaceFiles,
   listExecutions,
   type ExecutionListingEntry,
   type ExecutionMeta,
@@ -18,7 +19,7 @@ import {
   ExecutionIdSchema,
   type ExecutionId,
 } from '@shared/schemas';
-import { AbsoluteFS, StorageFS } from '@utils/files';
+import { StorageFS } from '@utils/files';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 
 const HISTORY_FILE_SCAN_DEPTH = 2;
@@ -32,6 +33,7 @@ const KV_FILES = new Set([
   'conversation.json',
   'todos.json',
   'report.json',
+  'workspace-files.json',
   'result-meta.json',
 ]);
 
@@ -104,6 +106,7 @@ export async function readCliHistoryDetails(
     resultMeta,
     report,
     conversation,
+    persistedWorkspaceFilePaths,
     generatedFiles,
     hasFlowRecord,
   ] = await Promise.all([
@@ -112,11 +115,16 @@ export async function readCliHistoryDetails(
     store.readResultMeta(),
     store.readReport(),
     store.readConversation(),
+    store.readWorkspaceFiles(),
     listGeneratedFiles(id),
     store.exists(flowKey(id)),
   ]);
   const conversationPreview = createConversationPreview(conversation);
-  const workspaceFiles = await listWorkspaceToolFiles(config, conversation);
+  const workspaceFiles = await listWorkspaceToolFiles(
+    config,
+    persistedWorkspaceFilePaths,
+    conversation,
+  );
   const files = mergeHistoryFiles(generatedFiles, workspaceFiles);
 
   if (!meta && !config && !conversationPreview && !hasFlowRecord) return null;
@@ -399,28 +407,20 @@ async function walkStorageDirectory(
 
 async function listWorkspaceToolFiles(
   config: AgentConfig | null,
+  persistedPaths: readonly string[],
   conversation: readonly unknown[] | null,
 ): Promise<CliHistoryFile[]> {
-  const workspaceRoot = config?.workingDirectory?.trim();
-  if (!workspaceRoot || !conversation?.length) return [];
-
-  const files = new Map<string, CliHistoryFile>();
-  for (const toolPath of extractWorkspaceFileToolPaths(conversation)) {
-    const resolved = resolveWorkspaceToolPath(workspaceRoot, toolPath);
-    if (!resolved || files.has(resolved.displayPath)) continue;
-
-    const stat = await AbsoluteFS.stat(resolved.absolutePath).catch(
-      () => undefined,
-    );
-    if (!stat) continue;
-
-    files.set(resolved.displayPath, {
-      path: resolved.displayPath,
-      size: stat.size,
-      isDirectory: isDirectory(stat.type),
-    });
-  }
-  return [...files.values()].sort((a, b) => a.path.localeCompare(b.path));
+  const filePaths = persistedPaths.length
+    ? persistedPaths
+    : conversation?.length
+      ? extractWorkspaceFileToolPaths(conversation)
+      : [];
+  const workspaceFiles = await listExecutionWorkspaceFiles(config, filePaths);
+  return workspaceFiles.map((file) => ({
+    path: file.displayPath,
+    size: file.size,
+    isDirectory: file.isDirectory,
+  }));
 }
 
 function extractWorkspaceFileToolPaths(
@@ -520,28 +520,6 @@ function parseToolArguments(
   } catch {
     return undefined;
   }
-}
-
-function resolveWorkspaceToolPath(
-  workspaceRoot: string,
-  toolPath: string,
-): { readonly absolutePath: string; readonly displayPath: string } | undefined {
-  const absoluteRoot = path.resolve(workspaceRoot);
-  const absolutePath = path.isAbsolute(toolPath)
-    ? path.normalize(toolPath)
-    : path.resolve(absoluteRoot, toolPath);
-  const relativePath = path.relative(absoluteRoot, absolutePath);
-  if (
-    !relativePath ||
-    relativePath.startsWith('..') ||
-    path.isAbsolute(relativePath)
-  ) {
-    return undefined;
-  }
-  return {
-    absolutePath,
-    displayPath: `workspace/${relativePath.replaceAll('\\', '/')}`,
-  };
 }
 
 function mergeHistoryFiles(
