@@ -52,9 +52,12 @@ import {
 import { flexibleFS } from '@utils/files/flexibleFS';
 import type { FileLocation } from '@utils/files/taskRunStorage';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
-import { normalizeUsage } from './support/UsageNormalizer';
-import { prepareExistingOutputContent } from './utils/fileContentUtils';
-import { tagOpenAISdkError, withSdkErrorTag } from './support/sdkErrorAdapters';
+import { normalizeUsage } from '../support/UsageNormalizer';
+import { prepareExistingOutputContent } from '../utils/fileContentUtils';
+import {
+  tagOpenAISdkError,
+  withSdkErrorTag,
+} from '../support/sdkErrorAdapters';
 import {
   classifyOpenAIBackgroundResumeError,
   createOpenAIBackgroundPollingError,
@@ -68,18 +71,18 @@ import {
   formatToolResultAsText,
   loadAttachmentBuffer,
   type ToolResultPayload,
-} from './utils/toolAttachmentUtils';
-import { parseToolArguments } from './utils/parseArguments';
-import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
-import { toOpenAIResponseTools } from './toolConversion';
-import { ModelHandler } from './ModelHandler';
+} from '../utils/toolAttachmentUtils';
+import { parseToolArguments } from '../utils/parseArguments';
+import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
+import { toOpenAIResponseTools } from '../toolConversion';
+import { ModelHandler } from '../ModelHandler';
 import {
   CHAINED_RESPONSE_MAX_OUTPUT_FACTOR,
   CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   TOKEN_SAFETY_BUFFER,
   TOOL_USE_SAFETY_BUFFER,
-} from './contextManagementConstants';
+} from '../contextManagementConstants';
 import {
   buildOpenAIWebSearchResult,
   extractOpenAIWebSearchResults,
@@ -88,16 +91,16 @@ import {
   isOpenAIServerToolContent,
   isOpenAIWebSearchCall,
   type ServerToolExtractionResult,
-} from './types/ServerToolTypes';
+} from '../types/ServerToolTypes';
 import type { InputTokenCountParams } from 'openai/resources/responses/input-tokens';
-import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { ProviderStopReason } from '../types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
   ExtractResponseResult,
   OpenAIResponseToolCall,
   TokenCountOptions,
-} from './types/IModelHandler';
+} from '../types/IModelHandler';
 import type { ResponseStreamParams } from 'openai/lib/responses/ResponseStream';
 import type { Reasoning } from 'openai/resources/shared';
 import type {

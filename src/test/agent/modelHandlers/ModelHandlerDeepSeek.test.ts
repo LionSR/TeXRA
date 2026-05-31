@@ -11,7 +11,7 @@ import {
 
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace';
-import { ModelHandlerDeepSeek } from '@agent/modelHandlers/modelHandlerDeepSeek';
+import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
 
 // Type imports
 import type { ToolDefinition } from '@model';
