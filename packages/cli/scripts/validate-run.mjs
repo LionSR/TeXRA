@@ -464,6 +464,42 @@ function validateMultiAgentRunCommand() {
       'multi-agent run should return the validation model response',
     );
 
+    const inlineInstruction = run(
+      process.execPath,
+      [
+        binaryPath,
+        'multi-agent',
+        'run',
+        'mathematician',
+        '--instruction',
+        'Prove that every odd square is congruent to 1 modulo 8.',
+        '--cwd',
+        cwd,
+        '--approval-policy',
+        'never',
+        '--print',
+        '--output-format',
+        'json',
+      ],
+      { cwd: repoRoot, validationModel: true, validationFlagPath },
+    );
+    assertSuccess(inlineInstruction, 'texra multi-agent instruction-only JSON');
+    const inlineJsonResult = JSON.parse(inlineInstruction.stdout);
+    assert(
+      inlineJsonResult.preset?.id === 'mathematician',
+      'instruction-only multi-agent JSON output should identify the preset',
+    );
+    assert(
+      inlineJsonResult.result?.category === 'toolUse',
+      'instruction-only multi-agent JSON output should serialize the tool-use result',
+    );
+    assert(
+      String(inlineJsonResult.result?.lastResponse ?? '').includes(
+        'Validated CLI Runtime',
+      ),
+      'instruction-only multi-agent run should return the validation model response',
+    );
+
     const ndjson = run(
       process.execPath,
       [...baseArgs, '--output-format', 'ndjson'],
