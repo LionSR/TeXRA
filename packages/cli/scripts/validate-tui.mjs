@@ -38,6 +38,7 @@ import { spawnSync } from 'node:child_process';
 const ESC = String.fromCharCode(27);
 const ETX = String.fromCharCode(3); // Ctrl-C
 const DC2 = String.fromCharCode(18); // Ctrl-R
+const DC4 = String.fromCharCode(20); // Ctrl-T
 const DOWN = ESC + '[B';
 const LONG_BASH_APPROVAL_COMMAND = [
   "python3 << 'EOF'",
@@ -84,6 +85,7 @@ const SCENARIOS = [
       HARNESS_QUEUED_FOLLOWUPS:
         'First queued follow-up||Second queued follow-up',
     },
+    bootExpect: 'queued 2',
     frame: 'tail',
     expect: ['queued 2', 'First queued', 'Second queued'],
   },
@@ -98,6 +100,29 @@ const SCENARIOS = [
       'rate limit: <tokens> & retries exhausted',
     ],
     unexpect: ['<subagent-progress', '<subagent-result', '<subagent-error'],
+  },
+  {
+    name: 'long-tool-output-elided',
+    env: { HARNESS_ENTRIES: '0', HARNESS_LONG_TOOL_OUTPUT: '1' },
+    expect: [
+      '● bash (python3 enumerate_triples.py)',
+      'tool-output-line-01',
+      '… +9 lines (ctrl + t to view transcript)',
+      'tool-output-line-18',
+    ],
+    unexpect: ['tool-output-line-10 hidden-middle'],
+  },
+  {
+    name: 'transcript-viewer-long-tool-output',
+    env: { HARNESS_ENTRIES: '0', HARNESS_LONG_TOOL_OUTPUT: '1' },
+    keys: [DC4],
+    frame: 'tail',
+    expect: [
+      'tool-output-line-10 hidden-middle',
+      'tool-output-line-18',
+      'PgUp/PgDn page',
+      'Esc close',
+    ],
   },
   {
     name: 'slash-palette',
