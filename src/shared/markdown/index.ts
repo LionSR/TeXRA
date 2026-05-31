@@ -15,4 +15,5 @@ export {
   type LatexReferenceFormatter,
   type MarkdownProcessor,
   type MarkdownProcessorConfig,
+  type MarkdownProcessorRenderEnv,
 } from './createMarkdownProcessor';
