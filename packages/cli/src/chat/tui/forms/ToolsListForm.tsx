@@ -5,7 +5,6 @@ import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
 
 import {
-  formatCliBoolean,
   readCliToolStatuses,
   setCliToolEnabled,
   type CliToolStatusRecord,
@@ -25,11 +24,31 @@ export interface ToolsListFormProps {
   readonly onClose: () => void;
 }
 
-function toolDescription(tool: CliToolStatusRecord): string {
-  const enabled = `enabled ${formatCliBoolean(tool.enabled)}`;
-  const detected = `detected ${formatCliBoolean(tool.detected)}`;
-  const status = tool.statusLabel ?? tool.status;
-  return `${enabled}; ${detected}; ${status}`;
+function formatToolEnablementForTui(tool: CliToolStatusRecord): string {
+  if (tool.comingSoon) return 'coming soon';
+  if (!tool.toggleable) return 'always on';
+  return tool.enabled === false ? 'disabled' : 'enabled';
+}
+
+function formatToolDetectionForTui(
+  detected: CliToolStatusRecord['detected'],
+): string {
+  if (detected === true) return 'detected';
+  if (detected === false) return 'not detected';
+  return 'detection unknown';
+}
+
+function formatToolStatusForTui(tool: CliToolStatusRecord): string {
+  if (tool.comingSoon) return 'not yet usable';
+  return tool.statusLabel ?? tool.status;
+}
+
+export function formatToolDescriptionForTui(tool: CliToolStatusRecord): string {
+  return [
+    formatToolEnablementForTui(tool),
+    formatToolDetectionForTui(tool.detected),
+    formatToolStatusForTui(tool),
+  ].join(' · ');
 }
 
 function toolsSelectWindow(args: {
@@ -74,7 +93,7 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
   const items = tools.map((tool) => ({
     value: tool.id,
     label: tool.name,
-    description: toolDescription(tool),
+    description: formatToolDescriptionForTui(tool),
     disabled: !tool.toggleable || tool.comingSoon,
   }));
 
