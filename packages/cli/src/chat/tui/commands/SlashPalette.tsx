@@ -23,6 +23,8 @@ export interface SlashPaletteProps {
 const MAX_VISIBLE_COMMANDS = 8;
 export const SLASH_PALETTE_ROWS = 13;
 
+const COMMAND_DESCRIPTION_GAP = 2;
+
 export interface SlashPaletteWindow {
   readonly start: number;
   readonly end: number;
@@ -111,6 +113,16 @@ export function slashPaletteEnterHintAction(
   return slashPickIntent(command, 'enter') === 'submit' ? 'run' : 'complete';
 }
 
+export function slashPaletteCommandLabelWidth(
+  commands: readonly SlashCommand[],
+): number {
+  return commands.reduce(
+    (width, command) =>
+      Math.max(width, `  /${command.name}`.length + COMMAND_DESCRIPTION_GAP),
+    0,
+  );
+}
+
 export function SlashPalette(
   props: SlashPaletteProps,
 ): React.JSX.Element | null {
@@ -176,6 +188,7 @@ export function SlashPalette(
   const window = slashPaletteWindow({ highlight, itemCount: matchCount });
   const visible = matches.slice(window.start, window.end);
   const highlightedCommand = matches[highlight];
+  const commandLabelWidth = slashPaletteCommandLabelWidth(visible);
 
   return (
     <Box
@@ -190,11 +203,17 @@ export function SlashPalette(
       {visible.map((cmd, offset) => {
         const i = window.start + offset;
         return (
-          <Box key={cmd.name}>
-            <Text color={i === highlight ? 'cyan' : undefined}>
-              {i === highlight ? '›' : ' '} /{cmd.name}
-            </Text>
-            <Text dimColor>{`  ${cmd.description}`}</Text>
+          <Box key={cmd.name} flexDirection="row">
+            <Box flexShrink={0} width={commandLabelWidth}>
+              <Text color={i === highlight ? 'cyan' : undefined}>
+                {i === highlight ? '›' : ' '} /{cmd.name}
+              </Text>
+            </Box>
+            <Box flexShrink={1}>
+              <Text dimColor wrap="truncate-end">
+                {cmd.description}
+              </Text>
+            </Box>
           </Box>
         );
       })}
