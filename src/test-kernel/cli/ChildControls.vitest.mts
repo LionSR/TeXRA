@@ -17,6 +17,7 @@ import {
   TASK_DETAIL_LABEL_WIDTH,
   taskDetailCommandLabel,
   taskDetailInitialScrollOffset,
+  taskDetailKeyHintsForColumns,
   taskDetailVisibleScrollOffset,
 } from '@cli/chat/tui/modals/ChildControlPicker';
 import {
@@ -857,6 +858,34 @@ describe('CLI child execution controls', () => {
       { key: '↑/↓', action: 'nav' },
       { key: 'Enter', action: 'view' },
       { key: 'Esc', action: 'close' },
+    ]);
+  });
+
+  it('keeps Esc back readable in narrow task detail hints', () => {
+    expect(
+      taskDetailKeyHintsForColumns({
+        availableColumns: 40,
+        canFocusStream: true,
+        canKill: true,
+        showScrollHint: true,
+      }),
+    ).toEqual([
+      { key: '↑/↓', action: 'scroll' },
+      { key: 'f', action: 'focus' },
+      { key: 'Esc', action: 'back' },
+    ]);
+    expect(
+      taskDetailKeyHintsForColumns({
+        availableColumns: 60,
+        canFocusStream: true,
+        canKill: true,
+        showScrollHint: true,
+      }),
+    ).toEqual([
+      { key: '↑/↓', action: 'scroll' },
+      { key: 'f', action: 'focus stream' },
+      { key: 'k', action: 'kill' },
+      { key: 'Esc', action: 'back' },
     ]);
   });
 
