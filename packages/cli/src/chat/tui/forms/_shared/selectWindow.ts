@@ -8,6 +8,10 @@ export interface SelectWindowSize {
   readonly showOverflow: boolean;
 }
 
+export function isCompactFormRows(availableRows: number | undefined): boolean {
+  return availableRows !== undefined && availableRows <= 6;
+}
+
 /**
  * Decide how many list rows a form's `Select` may show and whether to spend
  * rows on overflow markers.

@@ -15,6 +15,7 @@ import { Select } from '../ui/Select';
 import { FormFrame } from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
+  isCompactFormRows,
   type SelectWindowSize,
 } from './_shared/selectWindow';
 import { useAsyncListForm } from './_shared/useAsyncListForm';
@@ -76,6 +77,29 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
     description: toolDescription(tool),
     disabled: !tool.toggleable || tool.comingSoon,
   }));
+
+  if (isCompactFormRows(props.availableRows)) {
+    return (
+      <FormFrame color="cyan" title="/tools · Esc close" showCloseHint={false}>
+        <Text dimColor wrap="truncate-end">
+          Toggle available external integrations.
+        </Text>
+        <Select
+          items={items}
+          maxVisibleItems={1}
+          showOverflow={false}
+          onSelect={(id) => {
+            const tool = tools.find((candidate) => candidate.id === id);
+            if (!tool || tool.enabled == null) return;
+            void setCliToolEnabled(id, !tool.enabled)
+              .then(() => readCliToolStatuses())
+              .then(setTools);
+          }}
+          onCancel={props.onClose}
+        />
+      </FormFrame>
+    );
+  }
 
   return (
     <FormFrame color="cyan" title="/tools" showCloseHint={false}>
