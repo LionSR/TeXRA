@@ -14,12 +14,16 @@ import {
   deletePreviousWord,
   deleteToEnd,
   deleteToStart,
+  applyTerminalInputChunk,
   insertText,
   type TextEdit,
 } from './textInputEditing';
 import {
   isPlainReturnInput,
   isShiftReturnInput,
+  isCtrlInput,
+  isEscapeInput,
+  isUnhandledControlInput,
   metaChordInput,
 } from './inputKeys';
 
@@ -36,6 +40,7 @@ export interface BaseTextInputProps {
   readonly cursor?: number;
   readonly onCursorChange?: (cursor: number) => void;
   readonly onSubmit: (value: string) => void;
+  readonly onInputChunkSubmit?: (value: string) => void;
   readonly onChange: (value: string) => void;
 }
 
@@ -175,6 +180,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     placeholder,
     focus = true,
     onChange,
+    onInputChunkSubmit,
     onSubmit,
     onCursorChange,
   } = props;
@@ -221,7 +227,9 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
 
   useInput(
     (input, key) => {
-      if ((key.ctrl && input === 'j') || isShiftReturnInput(input, key)) {
+      if (isEscapeInput(input, key)) return;
+
+      if (isCtrlInput(input, key, 'j') || isShiftReturnInput(input, key)) {
         // Ctrl-J (universal) or Shift+Enter (Kitty-protocol terminals) →
         // literal newline. Kills the legacy `/multi` ceremony.
         applyEdit(insertText(value, cursor, '\n'));
@@ -247,29 +255,43 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         moveCursor(cursor + 1);
         return;
       }
-      if (key.home || (key.ctrl && input === 'a')) {
+      if (key.home || isCtrlInput(input, key, 'a')) {
         moveCursor(0);
         return;
       }
-      if (key.end || (key.ctrl && input === 'e')) {
+      if (key.end || isCtrlInput(input, key, 'e')) {
         moveCursor(value.length);
         return;
       }
-      if (key.ctrl && input === 'u') {
+      if (isCtrlInput(input, key, 'u')) {
         applyEdit(deleteToStart(value, cursor));
         return;
       }
-      if (key.ctrl && input === 'k') {
+      if (isCtrlInput(input, key, 'k')) {
         applyEdit(deleteToEnd(value, cursor));
         return;
       }
-      if (key.ctrl && input === 'w') {
+      if (isCtrlInput(input, key, 'w')) {
         applyEdit(deletePreviousWord(value, cursor));
         return;
       }
       // Drop unhandled control/meta combos; pass printable input through.
-      if (key.ctrl || key.meta || metaChordInput(input, key) || !input) return;
-      applyEdit(insertText(value, cursor, input));
+      if (
+        key.meta ||
+        metaChordInput(input, key) ||
+        (key.ctrl && input.length === 1) ||
+        isUnhandledControlInput(input) ||
+        !input
+      ) {
+        return;
+      }
+      const edit = applyTerminalInputChunk(value, cursor, input);
+      if (edit.submit) {
+        (onInputChunkSubmit ?? onSubmit)(edit.value);
+        return;
+      }
+      if (edit.value === value && edit.cursor === cursor) return;
+      applyEdit(edit);
     },
     { isActive: focus },
   );
