@@ -8,6 +8,7 @@ import {
 } from '@cli/runtime/runProgressRenderer';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { STREAM_STATUS } from '@shared/schemas';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   return {
@@ -256,6 +257,69 @@ describe('CLI run progress renderer', () => {
 
     expect(output).toBe(
       'polish paper.tex · 0s\npolish paper.tex · tool: latexmk · 0s\n',
+    );
+  });
+
+  it('does not overwrite a terminal status with late root descriptions', () => {
+    let now = 0;
+    let output = '';
+    const renderer = createRunProgressRenderer(
+      context({ colorEnabled: false }),
+      {
+        colorEnabled: false,
+        write: (text) => {
+          output += text;
+        },
+        minIntervalMs: 0,
+        nowMs: () => now,
+      },
+    );
+
+    renderer?.handle(
+      'setTaskState',
+      workflowTaskState({
+        streamId: 'root-stream',
+        agent: 'orchestrator',
+        inputFiles: [],
+      }),
+    );
+    renderer?.handle('updateActiveProcesses', {
+      parentStreamId: 'root-stream',
+      processes: [
+        {
+          executionId: 'tool-1',
+          agentName: 'bash',
+          toolName: 'Bash',
+          status: 'running',
+        },
+      ],
+    });
+    now = 11000;
+    renderer?.handle('updateStreamStatus', {
+      streamId: 'root-stream',
+      status: STREAM_STATUS.STOPPED,
+      previousStatus: STREAM_STATUS.RUNNING,
+    });
+    renderer?.handle('updateStreamDescription', {
+      streamId: 'root-stream',
+      description: 'Running Mathematician multi-agent preset',
+    });
+    renderer?.handle('updateActiveProcesses', {
+      parentStreamId: 'root-stream',
+      processes: [
+        {
+          executionId: 'tool-2',
+          agentName: 'late-tool',
+          toolName: 'LateTool',
+          status: 'running',
+        },
+      ],
+    });
+
+    expect(output).toBe(
+      'orchestrator · 0s\n' +
+        'orchestrator · tool: Bash · 0s\n' +
+        'orchestrator · stopped · 11s\n',
     );
   });
 
