@@ -165,6 +165,12 @@ export interface PickerListLayout {
   readonly visibleCount: number;
 }
 
+export interface TaskDetailScrollState {
+  readonly executionId: string;
+  readonly followsTail: boolean;
+  readonly offset: number;
+}
+
 export function taskDetailCommandLabel(kind: ChildControlItem['kind']): string {
   return kind === 'process' ? 'Command' : 'Description';
 }
@@ -203,6 +209,56 @@ export function computeTaskDetailLayout({
       hasTailLines && rows >= fixedRows + 1
         ? Math.max(1, availableOutputRows)
         : availableOutputRows,
+  };
+}
+
+export function taskDetailInitialScrollOffset(
+  tailLineCount: number,
+  visibleLineCount: number,
+): number {
+  return Math.max(0, tailLineCount - Math.max(0, visibleLineCount));
+}
+
+export function syncTaskDetailScrollState(
+  state: TaskDetailScrollState,
+  executionId: string,
+  maxOffset: number,
+): TaskDetailScrollState {
+  if (state.executionId !== executionId) {
+    return { executionId, followsTail: true, offset: maxOffset };
+  }
+  if (state.followsTail) {
+    return { ...state, offset: maxOffset };
+  }
+  return { ...state, offset: Math.min(state.offset, maxOffset) };
+}
+
+export function taskDetailVisibleScrollOffset(
+  state: TaskDetailScrollState,
+  maxOffset: number,
+): number {
+  if (state.followsTail) return maxOffset;
+  return Math.min(state.offset, maxOffset);
+}
+
+export function moveTaskDetailScrollState(
+  state: TaskDetailScrollState,
+  maxOffset: number,
+  direction: 'down' | 'up',
+): TaskDetailScrollState {
+  const offset = taskDetailVisibleScrollOffset(state, maxOffset);
+  if (direction === 'up') {
+    return {
+      ...state,
+      followsTail: false,
+      offset: Math.max(0, offset - 1),
+    };
+  }
+  const nextOffset = Math.min(maxOffset, offset + 1);
+  return {
+    ...state,
+    followsTail: nextOffset >= maxOffset,
+    offset: nextOffset,
   };
 }
 
@@ -296,7 +352,6 @@ function TaskDetailView({
   readonly onFocusStream: () => void;
   readonly onKill: () => void;
 }): React.JSX.Element {
-  const [scrollOffset, setScrollOffset] = useState(0);
   const metaParts = [
     item.kind === 'process' ? 'shell' : 'stream',
     item.label,
@@ -309,15 +364,25 @@ function TaskDetailView({
     metaRows: metaParts.length,
   });
   const visibleLineCount = layout.visibleLineCount;
-  const maxOffset = Math.max(0, item.tailLines.length - visibleLineCount);
-  const offset = Math.min(scrollOffset, maxOffset);
+  const maxOffset = taskDetailInitialScrollOffset(
+    item.tailLines.length,
+    visibleLineCount,
+  );
+  const [scrollState, setScrollState] = useState<TaskDetailScrollState>(() => ({
+    executionId: item.executionId,
+    followsTail: true,
+    offset: maxOffset,
+  }));
+  const offset = taskDetailVisibleScrollOffset(scrollState, maxOffset);
   const visibleTail = item.tailLines.slice(offset, offset + visibleLineCount);
   const compactMeta = metaParts.join(' · ');
   const commandLabel = taskDetailCommandLabel(item.kind);
 
   useEffect(() => {
-    setScrollOffset((current) => Math.min(current, maxOffset));
-  }, [maxOffset]);
+    setScrollState((current) =>
+      syncTaskDetailScrollState(current, item.executionId, maxOffset),
+    );
+  }, [item.executionId, maxOffset]);
 
   useInput((input, key) => {
     const action = childPickerKeyAction({
@@ -332,10 +397,14 @@ function TaskDetailView({
     if (action.kind === 'close') onBack();
     if (action.kind === 'kill' && item.killable) onKill();
     if (action.kind === 'up') {
-      setScrollOffset((current) => Math.max(0, current - 1));
+      setScrollState((current) =>
+        moveTaskDetailScrollState(current, maxOffset, 'up'),
+      );
     }
     if (action.kind === 'down') {
-      setScrollOffset((current) => Math.min(maxOffset, current + 1));
+      setScrollState((current) =>
+        moveTaskDetailScrollState(current, maxOffset, 'down'),
+      );
     }
     if (input.toLowerCase() === 'f' && item.childStreamId) onFocusStream();
   });

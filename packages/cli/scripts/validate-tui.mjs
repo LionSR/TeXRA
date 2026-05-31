@@ -617,6 +617,26 @@ const SCENARIOS = [
     unexpect: ['Command:  strategy sub-workflow'],
   },
   {
+    name: 'task-subworkflow-detail-long-output',
+    rows: 16,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+      HARNESS_LONG_CHILD_OUTPUT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 'p', '\r'],
+    expect: [
+      'Task details',
+      'stream · strategy',
+      'strategy detail line 18 final contradiction found',
+      'f focus stream',
+      'Esc back',
+    ],
+    unexpect: ['strategy detail line 01'],
+  },
+  {
     name: 'task-process-detail',
     env: {
       HARNESS_ENTRIES: '4',
