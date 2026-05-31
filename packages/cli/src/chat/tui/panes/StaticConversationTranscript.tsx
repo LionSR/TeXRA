@@ -17,6 +17,7 @@ import {
   type SessionMeta,
   type StreamSlice,
 } from '../state/cliState';
+import { transcriptEntryLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 import { TranscriptEntry } from './TranscriptEntry';
 
@@ -24,6 +25,7 @@ export type StaticTranscriptItem =
   | {
       readonly id: string;
       readonly kind: 'header';
+      readonly compact: boolean;
       readonly meta: SessionMeta;
     }
   | {
@@ -52,13 +54,30 @@ export function sessionHeaderIdentityLine(meta: SessionMeta): string {
 }
 
 function SessionHeaderBlock({
+  compact,
   meta,
   width,
 }: {
+  readonly compact: boolean;
   readonly meta: SessionMeta;
   readonly width?: number;
 }): React.JSX.Element {
   const columns = Math.max(1, Math.floor(width ?? 80));
+  if (compact) {
+    return (
+      <Box paddingX={1}>
+        <Text wrap="truncate-end">
+          <Text bold color="cyan">
+            TeXRA
+          </Text>{' '}
+          <Text dimColor>v{meta.version}</Text>{' '}
+          <Text dimColor>{shortCliApiMode(meta.apiMode)}</Text>{' '}
+          <Text>{sessionHeaderIdentityLine(meta)}</Text>
+        </Text>
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column">
       <Box>
@@ -90,23 +109,80 @@ function SessionHeaderBlock({
 // stream-scoped key would treat the moved rows as new and print them
 // twice.
 const SESSION_HEADER_ID = 'session-header';
+const FULL_SESSION_HEADER_ROWS = 4;
+const COMPACT_SESSION_HEADER_ROWS = 1;
+
+function staticTranscriptItemRowCount(
+  item: StaticTranscriptItem,
+  width?: number,
+): number {
+  if (item.kind === 'header') {
+    return item.compact
+      ? COMPACT_SESSION_HEADER_ROWS
+      : FULL_SESSION_HEADER_ROWS;
+  }
+  // Compact budgeting can over-count tool rows because the transcript viewer
+  // keeps full tool output while the static scrollback renderer elides it.
+  return transcriptEntryLines(item.entry, Math.max(1, Math.floor(width ?? 80)))
+    .length;
+}
+
+function canAppendStaticTranscriptItem({
+  currentRows,
+  item,
+  maxRows,
+  width,
+}: {
+  readonly currentRows: number;
+  readonly item: StaticTranscriptItem;
+  readonly maxRows?: number;
+  readonly width?: number;
+}): boolean {
+  if (maxRows === undefined) return true;
+  return currentRows + staticTranscriptItemRowCount(item, width) <= maxRows;
+}
 
 export function appendStaticTranscriptItems({
   activeStreamId,
   currentItems,
   streams,
   meta,
+  maxRows,
+  width,
 }: {
   readonly activeStreamId: string | undefined;
   readonly currentItems: readonly StaticTranscriptItem[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly meta: SessionMeta;
+  readonly maxRows?: number;
+  readonly width?: number;
 }): readonly StaticTranscriptItem[] {
   const seen = new Set(currentItems.map((item) => item.id));
   const nextItems: StaticTranscriptItem[] = [...currentItems];
+  let currentRows = nextItems.reduce(
+    (total, item) => total + staticTranscriptItemRowCount(item, width),
+    0,
+  );
   if (!seen.has(SESSION_HEADER_ID)) {
-    nextItems.push({ id: SESSION_HEADER_ID, kind: 'header', meta });
-    seen.add(SESSION_HEADER_ID);
+    const header: StaticTranscriptItem = {
+      id: SESSION_HEADER_ID,
+      kind: 'header',
+      compact: maxRows !== undefined && maxRows < FULL_SESSION_HEADER_ROWS,
+      meta,
+    };
+    if (
+      maxRows === undefined ||
+      canAppendStaticTranscriptItem({
+        currentRows,
+        item: header,
+        maxRows,
+        width,
+      })
+    ) {
+      nextItems.push(header);
+      currentRows += staticTranscriptItemRowCount(header, width);
+      seen.add(SESSION_HEADER_ID);
+    }
   }
 
   // Only the active stream feeds the shared `<Static>` scrollback. Dumping
@@ -119,7 +195,19 @@ export function appendStaticTranscriptItems({
   for (const entry of slice?.entries ?? []) {
     if (!entry.finalized) continue;
     if (seen.has(entry.id)) continue;
-    nextItems.push({ id: entry.id, kind: 'entry', entry });
+    const item: StaticTranscriptItem = { id: entry.id, kind: 'entry', entry };
+    if (
+      !canAppendStaticTranscriptItem({
+        currentRows,
+        item,
+        maxRows,
+        width,
+      })
+    ) {
+      break;
+    }
+    nextItems.push(item);
+    currentRows += staticTranscriptItemRowCount(item, width);
     seen.add(entry.id);
   }
   // Same reference when nothing was appended so the `setItems` functional
@@ -128,8 +216,10 @@ export function appendStaticTranscriptItems({
 }
 
 export function StaticConversationTranscript({
+  maxRows,
   width,
 }: {
+  readonly maxRows?: number;
   readonly width?: number;
 }): React.JSX.Element {
   const activeStreamId = useSignal(cliState.activeStreamId);
@@ -149,16 +239,22 @@ export function StaticConversationTranscript({
         currentItems: isHardReset ? [] : currentItems,
         streams,
         meta: sessionMeta,
+        maxRows,
+        width,
       }),
     );
-  }, [activeStreamId, streams, sessionMeta]);
+  }, [activeStreamId, maxRows, streams, sessionMeta, width]);
 
   return (
     <Static items={[...items]}>
       {(item: StaticTranscriptItem) => (
         <Box key={item.id} flexDirection="column">
           {item.kind === 'header' ? (
-            <SessionHeaderBlock meta={item.meta} width={width} />
+            <SessionHeaderBlock
+              compact={item.compact}
+              meta={item.meta}
+              width={width}
+            />
           ) : (
             <TranscriptEntry entry={item.entry} width={width} />
           )}
