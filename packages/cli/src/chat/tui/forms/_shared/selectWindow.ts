@@ -8,8 +8,10 @@ export interface SelectWindowSize {
   readonly showOverflow: boolean;
 }
 
+export const COMPACT_FORM_MAX_ROWS = 8;
+
 export function isCompactFormRows(availableRows: number | undefined): boolean {
-  return availableRows !== undefined && availableRows <= 6;
+  return availableRows !== undefined && availableRows <= COMPACT_FORM_MAX_ROWS;
 }
 
 /**

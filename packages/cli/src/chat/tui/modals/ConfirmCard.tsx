@@ -127,22 +127,48 @@ export function ConfirmCard({
               : CONFIRM_CARD_HORIZONTAL_DECORATION),
         ),
       });
+  const stackedCompactHints = feedbackMode
+    ? hints
+    : confirmCardKeyHintsForWidth({
+        approveLabel,
+        rejectLabel,
+        alwaysAllowLabel: alwaysAllow?.label,
+        extraActions: extraActions.map((action) => ({
+          key: action.key,
+          action: action.label,
+        })),
+        maxColumns: columns,
+      });
+  const stackCompactHints =
+    compact &&
+    !feedbackMode &&
+    hints.some((hint) => hint.key === 'Esc') &&
+    stackedCompactHints.length > hints.length;
 
   if (compact) {
     return (
       <Box flexDirection="column">
-        <Text bold color={color} wrap="truncate-end">
-          {title}
-          <Text dimColor>{KEY_HINT_SEPARATOR}</Text>
-          <Text dimColor>
-            {hints.map((hint, index) => (
-              <Text key={`${hint.key}-${hint.action}-${index}`}>
-                {index > 0 ? KEY_HINT_SEPARATOR : ''}
-                <Text bold>{hint.key}</Text> {hint.action}
-              </Text>
-            ))}
+        {stackCompactHints ? (
+          <>
+            <Text bold color={color} wrap="truncate-end">
+              {title}
+            </Text>
+            <KeyHints hints={stackedCompactHints} confirmCancel={false} />
+          </>
+        ) : (
+          <Text bold color={color} wrap="truncate-end">
+            {title}
+            <Text dimColor>{KEY_HINT_SEPARATOR}</Text>
+            <Text dimColor>
+              {hints.map((hint, index) => (
+                <Text key={`${hint.key}-${hint.action}-${index}`}>
+                  {index > 0 ? KEY_HINT_SEPARATOR : ''}
+                  <Text bold>{hint.key}</Text> {hint.action}
+                </Text>
+              ))}
+            </Text>
           </Text>
-        </Text>
+        )}
         {feedbackMode ? (
           <Box>
             <Text>{'> '}</Text>
