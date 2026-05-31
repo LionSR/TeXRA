@@ -66,6 +66,6 @@ export {
   isRemoteAgent,
   // Visible agents (for dropdowns and tools)
   getVisibleAgents,
-  // Description update (for remote agent loading)
-  updateAgentDescription,
+  // Metadata update (for remote agent loading)
+  updateAgentMeta,
 } from './agentRegistry';

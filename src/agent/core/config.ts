@@ -1,9 +1,8 @@
 /**
- * Configuration facade — convenience wrapper over platform().config.
+ * Configuration facade for the agent layer.
+ *
+ * `getConfig` is a thin wrapper over `platform().config`; the single
+ * implementation lives in `@utils/config`. This module re-exports it so agent
+ * code can keep importing from `@agent/core/config`.
  */
-import { tryPlatform } from '@platform/platform';
-
-export function getConfig<T>(key: string, defaultValue?: T): T {
-  const p = tryPlatform();
-  return p ? p.config.get(key, defaultValue) : (defaultValue as T);
-}
+export { getConfig } from '@utils/config/configUtils';

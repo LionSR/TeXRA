@@ -49,6 +49,10 @@ import {
   shouldUseOpenRouter,
 } from './support/ProxyConfigResolver';
 import {
+  withSdkErrorTag,
+  type SdkErrorTagger,
+} from './support/sdkErrorAdapters';
+import {
   ANTHROPIC_STOP,
   OPENAI_CHAT_FINISH,
   MCP_STOP,
@@ -633,13 +637,49 @@ export abstract class ModelHandler<
   abstract getClient(): Promise<C>;
 
   /**
+   * Provider-specific SDK error tagger. The base {@link createResponse}
+   * template wraps {@link createResponseImpl} with this tagger so every thrown
+   * error is tagged with structured metadata at the SDK boundary. Override in
+   * subclasses that talk to a provider SDK (e.g. `tagOpenAISdkError`).
+   * Defaults to a no-op for handlers that don't hit a provider SDK.
+   */
+  protected get sdkErrorTagger(): SdkErrorTagger {
+    return () => {};
+  }
+
+  /**
    * Generates a model response using the provider's API.
+   *
+   * Template method: installs SDK-boundary error tagging via
+   * {@link sdkErrorTagger}, then delegates to {@link createResponseImpl}.
+   * Subclasses normally override {@link createResponseImpl} (and
+   * {@link sdkErrorTagger}); only override this method when a guard must wrap
+   * the call (e.g. OpenAIResponse's single-turn `inFlight` assertion).
+   *
    * @param options Options for creating the response
    * @returns Promise resolving to result containing response and optionally updated messages
    */
-  abstract createResponse(
+  createResponse(
     options: CreateResponseOptions<M, C>,
-  ): Promise<CreateResponseResult<Resp, M>>;
+  ): Promise<CreateResponseResult<Resp, M>> {
+    return withSdkErrorTag(this.sdkErrorTagger, this.config.provider, () =>
+      this.createResponseImpl(options),
+    );
+  }
+
+  /**
+   * Provider-specific response generation, invoked by the {@link createResponse}
+   * template after error tagging is installed. Subclasses that rely on the base
+   * template must override this. Handlers that override {@link createResponse}
+   * directly (e.g. the validation stub) never reach this default.
+   */
+  protected createResponseImpl(
+    _options: CreateResponseOptions<M, C>,
+  ): Promise<CreateResponseResult<Resp, M>> {
+    throw new Error(
+      `createResponseImpl not implemented for provider: ${this.config.provider}`,
+    );
+  }
 
   /**
    * Creates initial message array for conversation with optional images and system prompt.
