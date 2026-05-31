@@ -135,6 +135,21 @@ export function selectItemRenderKey<T>(
   return `${index}:${item.label}`;
 }
 
+export function selectInlineOverflowText({
+  hiddenBefore,
+  hiddenAfter,
+}: {
+  readonly hiddenBefore: number;
+  readonly hiddenAfter: number;
+}): string | undefined {
+  const earlier = Math.max(0, hiddenBefore);
+  const more = Math.max(0, hiddenAfter);
+  if (earlier > 0 && more > 0) return `+${earlier} earlier, +${more} more`;
+  if (earlier > 0) return `+${earlier} earlier`;
+  if (more > 0) return `+${more} more`;
+  return undefined;
+}
+
 /**
  * Single-key shortcut for a row: `1`-`9` for the first nine, then `a`-`z` for
  * rows 10-35. Rows beyond that have no shortcut (undefined).
@@ -180,6 +195,10 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   const hiddenBefore = visibleRange.start;
   const hiddenAfter = props.items.length - visibleRange.end;
   const visibleItems = props.items.slice(visibleRange.start, visibleRange.end);
+  const inlineOverflowText =
+    props.showOverflow !== true && props.maxVisibleItems === 1
+      ? selectInlineOverflowText({ hiddenBefore, hiddenAfter })
+      : undefined;
 
   useInput((input, key) => {
     if (key.escape) {
@@ -256,11 +275,18 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
                 {item.label}
               </Text>
             </Box>
-            {item.description ? (
-              <Text
-                dimColor
-                wrap="truncate-end"
-              >{` — ${item.description}`}</Text>
+            {focused && inlineOverflowText ? (
+              <Box flexShrink={0}>
+                <Text dimColor>{` ${inlineOverflowText}`}</Text>
+              </Box>
+            ) : null}
+            {item.description && !(focused && inlineOverflowText) ? (
+              <Box flexShrink={1} minWidth={0}>
+                <Text
+                  dimColor
+                  wrap="truncate-end"
+                >{` — ${item.description}`}</Text>
+              </Box>
             ) : null}
           </Box>
         );

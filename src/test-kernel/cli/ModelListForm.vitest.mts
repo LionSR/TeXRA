@@ -8,6 +8,7 @@ import {
 } from '@cli/chat/tui/forms/ModelListForm';
 import {
   nextSelectHighlightIndex,
+  selectInlineOverflowText,
   selectInitialHighlightIndex,
   selectItemRenderKey,
   visibleSelectRange,
@@ -174,6 +175,23 @@ describe('CLI Select visible range', () => {
         maxVisibleItems: 5,
       }),
     ).toEqual({ start: 3, end: 8 });
+  });
+});
+
+describe('CLI Select compact inline overflow text', () => {
+  it('summarizes hidden rows around the compact selected row', () => {
+    expect(selectInlineOverflowText({ hiddenBefore: 0, hiddenAfter: 3 })).toBe(
+      '+3 more',
+    );
+    expect(selectInlineOverflowText({ hiddenBefore: 2, hiddenAfter: 0 })).toBe(
+      '+2 earlier',
+    );
+    expect(selectInlineOverflowText({ hiddenBefore: 2, hiddenAfter: 4 })).toBe(
+      '+2 earlier, +4 more',
+    );
+    expect(
+      selectInlineOverflowText({ hiddenBefore: 0, hiddenAfter: 0 }),
+    ).toBeUndefined();
   });
 });
 
