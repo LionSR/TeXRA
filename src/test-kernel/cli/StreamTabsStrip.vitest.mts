@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
   streamTabSegmentText,
+  streamTabsLineSegments,
+  streamTabsLineText,
   streamTabsDisplayItems,
 } from '@cli/chat/tui/panes/StreamTabsStrip';
 import {
@@ -291,6 +293,202 @@ describe('CLI stream tabs strip', () => {
       '[3:subagent-3]',
       '…',
       '5:subagent-5',
+    ]);
+  });
+
+  it('keeps a four-stream child strip within one narrow terminal row', () => {
+    const root = streamId('root');
+    const strategy = streamId('strategy-stream');
+    const leanSolver = streamId('lean-stream');
+    const reviewer = streamId('reviewer-stream');
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [
+        root,
+        slice('root', {
+          status: STREAM_STATUS.RUNNING,
+          activeSubagents: [
+            child({
+              executionId: 'strategy',
+              childStreamId: strategy,
+              agentName: 'strategy',
+              status: STREAM_STATUS.RUNNING,
+            }),
+            child({
+              executionId: 'lean',
+              childStreamId: leanSolver,
+              agentName: 'leanSolver',
+              status: STREAM_STATUS.WAITING,
+            }),
+            child({
+              executionId: 'review',
+              childStreamId: reviewer,
+              agentName: 'reviewer',
+              status: STREAM_STATUS.RUNNING,
+            }),
+          ],
+        }),
+      ],
+      [strategy, slice('strategy-stream', { status: STREAM_STATUS.RUNNING })],
+      [leanSolver, slice('lean-stream', { status: STREAM_STATUS.WAITING })],
+      [reviewer, slice('reviewer-stream', { status: STREAM_STATUS.RUNNING })],
+    ]);
+
+    const items = streamTabsDisplayItems({
+      activeStreamId: root,
+      streams,
+      parentStream: new Map([
+        [strategy, root],
+        [leanSolver, root],
+        [reviewer, root],
+      ]),
+      width: 40,
+    });
+    const line = streamTabsLineText(items, 38);
+
+    expect(items.map(streamTabSegmentText)).toEqual([
+      '[main]*',
+      '1:strategy*',
+      '…',
+      '3:reviewer*',
+    ]);
+    expect(line.length).toBeLessThanOrEqual(38);
+  });
+
+  it('truncates stream tab text at terminal row edges', () => {
+    const items = [
+      {
+        id: streamId('root'),
+        label: 'main',
+        active: true,
+        running: true,
+      },
+      {
+        id: streamId('strategy'),
+        label: 'strategy',
+        active: false,
+        running: true,
+        shortcutIndex: 1,
+      },
+    ];
+    const fullText = streamTabsLineText(items);
+
+    expect(streamTabsLineText(items, 0)).toBe('');
+    expect(streamTabsLineText(items, 1)).toBe('…');
+    expect(streamTabsLineText(items, fullText.length)).toBe(fullText);
+    expect(streamTabsLineText(items, fullText.length - 1)).toHaveLength(
+      fullText.length - 1,
+    );
+    expect(streamTabsLineText(items, fullText.length - 1)).toMatch(/…$/);
+  });
+
+  it('keeps truncation attached to styled tab segments', () => {
+    const active = {
+      id: streamId('root'),
+      label: 'main',
+      active: true,
+      running: true,
+    };
+    const running = {
+      id: streamId('strategy'),
+      label: 'strategy',
+      active: false,
+      running: true,
+      shortcutIndex: 1,
+    };
+    const segments = streamTabsLineSegments([active, running], 16);
+
+    expect(segments).toHaveLength(2);
+    expect(segments[0]).toMatchObject({
+      item: active,
+      leadingSpace: false,
+      text: '[main]*',
+    });
+    expect(segments[1]?.item).toBe(running);
+    expect(segments[1]?.leadingSpace).toBe(true);
+    expect(segments[1]?.text).toBe('1:strat…');
+    expect(streamTabsLineText([active, running], 16)).toBe('[main]* 1:strat…');
+  });
+
+  it('keeps the active tab visible when earlier tabs fill the row', () => {
+    const active = {
+      id: streamId('active'),
+      label: 'active-target',
+      active: true,
+      running: true,
+      shortcutIndex: 2,
+    };
+    const segments = streamTabsLineSegments(
+      [
+        {
+          id: streamId('root'),
+          label: 'main',
+          active: false,
+          running: true,
+        },
+        {
+          id: streamId('middle'),
+          label: 'very-long-middle',
+          active: false,
+          running: true,
+          shortcutIndex: 1,
+        },
+        active,
+      ],
+      20,
+    );
+    const line = segments
+      .map((segment) => `${segment.leadingSpace ? ' ' : ''}${segment.text}`)
+      .join('');
+
+    expect(segments.some((segment) => segment.item === active)).toBe(true);
+    expect(line).toHaveLength(20);
+    expect(line).toContain('[2:active');
+    expect(line).toContain('…');
+  });
+
+  it('collapses a middle tab before an active last tab in tight rows', () => {
+    const root = streamId('root');
+    const middle = streamId('middle-stream');
+    const active = streamId('active-stream');
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [
+        root,
+        slice('root', {
+          status: STREAM_STATUS.RUNNING,
+          activeSubagents: [
+            child({
+              executionId: 'middle',
+              childStreamId: middle,
+              agentName: 'veryLongMiddleAgent',
+              status: STREAM_STATUS.RUNNING,
+            }),
+            child({
+              executionId: 'active',
+              childStreamId: active,
+              agentName: 'activeTarget',
+              status: STREAM_STATUS.RUNNING,
+            }),
+          ],
+        }),
+      ],
+      [middle, slice('middle-stream', { status: STREAM_STATUS.RUNNING })],
+      [active, slice('active-stream', { status: STREAM_STATUS.RUNNING })],
+    ]);
+
+    const items = streamTabsDisplayItems({
+      activeStreamId: active,
+      streams,
+      parentStream: new Map([
+        [middle, root],
+        [active, root],
+      ]),
+      width: 28,
+    });
+
+    expect(items.map(streamTabSegmentText)).toEqual([
+      'main*',
+      '…',
+      '[2:activeTarget]*',
     ]);
   });
 });
