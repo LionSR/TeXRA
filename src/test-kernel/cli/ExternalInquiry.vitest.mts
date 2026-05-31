@@ -30,6 +30,27 @@ describe('CLI external inquiry modal', () => {
     });
   });
 
+  it('keeps compact long questions scrollable', () => {
+    const question = Array.from(
+      { length: 8 },
+      (_, index) => `Question detail row ${index + 1}`,
+    ).join('\n');
+    const lines = boundedExternalInquiryQuestionLines({
+      maxDisplayLines: 3,
+      question,
+      scrollOffset: 3,
+      width: 80,
+    });
+
+    expect(lines).toHaveLength(3);
+    expect(lines[0]?.text).toBe('Question detail row 4');
+    expect(lines.at(-1)).toMatchObject({
+      kind: 'overflow',
+      text: expect.stringContaining('previous'),
+    });
+    expect(lines.at(-1)?.text).toContain('more rows');
+  });
+
   it('keeps the answer caret in the visible clipped input window', () => {
     const display = textInputDisplayWindow({
       cursor: 170,

@@ -55,6 +55,17 @@ function overflowText(kind: 'previous' | 'more' | 'hidden', count: number) {
   return `... ${count} more rows`;
 }
 
+function compactOverflowText(
+  hiddenBefore: number,
+  hiddenAfter: number,
+): string {
+  if (hiddenBefore > 0 && hiddenAfter > 0) {
+    return `... ${hiddenBefore} previous, ${hiddenAfter} more rows`;
+  }
+  if (hiddenBefore > 0) return overflowText('previous', hiddenBefore);
+  return overflowText('more', hiddenAfter);
+}
+
 export function externalInquiryQuestionLines({
   question,
   width,
@@ -74,6 +85,10 @@ export function maxExternalInquiryQuestionScrollOffset(
   totalLines: number,
   maxDisplayLines: number,
 ): number {
+  if (totalLines <= maxDisplayLines) return 0;
+  if (maxDisplayLines <= COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS) {
+    return Math.max(0, totalLines - Math.max(1, maxDisplayLines - 1));
+  }
   return maxScrollableRowOffset({
     compactRows: COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS,
     maxDisplayLines,
@@ -96,21 +111,25 @@ export function boundedExternalInquiryQuestionLines({
   if (maxDisplayLines <= 0 || lines.length <= maxDisplayLines) return lines;
 
   if (maxDisplayLines <= COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS) {
-    if (maxDisplayLines === 1) {
-      return [
-        {
-          kind: 'overflow',
-          text: overflowText('hidden', lines.length),
-        },
-      ];
-    }
-    const visible = lines.slice(0, Math.max(1, maxDisplayLines - 1));
+    const visibleCount = Math.max(1, maxDisplayLines - 1);
+    const offset = Math.max(
+      0,
+      Math.min(scrollOffset, Math.max(0, lines.length - visibleCount)),
+    );
+    const visible = lines.slice(offset, offset + visibleCount);
+    const hiddenBefore = offset;
+    const hiddenAfter = Math.max(0, lines.length - (offset + visible.length));
+    if (maxDisplayLines === 1) return visible;
     return [
       ...visible,
-      {
-        kind: 'overflow',
-        text: overflowText('hidden', lines.length - visible.length),
-      },
+      ...(hiddenBefore > 0 || hiddenAfter > 0
+        ? [
+            {
+              kind: 'overflow' as const,
+              text: compactOverflowText(hiddenBefore, hiddenAfter),
+            },
+          ]
+        : []),
     ];
   }
 
@@ -231,7 +250,7 @@ export function ExternalInquiry(
       <Text bold color="green">
         Agent asks:
       </Text>
-      <Box marginY={questionScrollable ? 0 : 1} flexDirection="column">
+      <Box flexDirection="column">
         {questionDisplayLines.map((line, index) => (
           <Text key={index} dimColor={line.kind === 'overflow'}>
             {line.text || ' '}
