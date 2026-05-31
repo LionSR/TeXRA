@@ -242,6 +242,20 @@ describe('renderAnsiMarkdown', () => {
     expect(stripAnsi(out)).toContain('993.3');
   });
 
+  it('does not leak protected LaTeX placeholders from wrapped table cells', () => {
+    _resetAnsiMarkdownForTests();
+    const md = [
+      '| Seed | n=0 | n=1 | Next exceeds bound? |',
+      '|---|---|---|---|',
+      '| $3+\\sqrt{5}$ | \\((3,1)\\) | \\((47,21)\\) | $123 > 100$ (stop) |',
+    ].join('\n');
+    const out = renderAnsiMarkdown(md, { width: 52 });
+    const plain = stripAnsi(out);
+    expect(plain).not.toContain('@@LATEX');
+    expect(plain).toContain('$3+\\sqrt{');
+    expect(plain).toContain('\\((47,21)');
+  });
+
   it('memoises identical inputs (second call hits the cache)', () => {
     _resetAnsiMarkdownForTests();
     const first = renderAnsiMarkdown('# Title\n\nParagraph.');
