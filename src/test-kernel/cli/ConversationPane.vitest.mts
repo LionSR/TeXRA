@@ -292,6 +292,71 @@ describe('CLI conversation transcript splitting', () => {
     expect(again).toHaveLength(1);
   });
 
+  it('caps static transcript rows for short terminal layouts', () => {
+    const user = entry('u1', 'user', 'What is a tensor network?', true);
+    const assistant = entry('a1', 'assistant', 'A decomposition.', true);
+
+    const compact = appendStaticTranscriptItems({
+      activeStreamId: STREAM_ID,
+      currentItems: [],
+      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
+      meta: SESSION_META,
+      maxRows: 2,
+      width: 80,
+    });
+
+    expect(compact).toHaveLength(2);
+    expect(compact[0]).toMatchObject({
+      id: 'session-header',
+      kind: 'header',
+      compact: true,
+    });
+    expect(compact[1]?.id).toBe('u1');
+
+    expect(
+      appendStaticTranscriptItems({
+        activeStreamId: STREAM_ID,
+        currentItems: [],
+        streams: streamsFromEntries(STREAM_ID, [user, assistant]),
+        meta: SESSION_META,
+        maxRows: 0,
+        width: 80,
+      }),
+    ).toEqual([]);
+  });
+
+  it('preserves static transcript order when one entry does not fit', () => {
+    const first = entry('u1', 'user', 'first', true);
+    const large = entry('a1', 'assistant', 'line 1\nline 2\nline 3', true);
+    const later = entry('u2', 'user', 'later', true);
+
+    const compact = appendStaticTranscriptItems({
+      activeStreamId: STREAM_ID,
+      currentItems: [],
+      streams: streamsFromEntries(STREAM_ID, [first, large, later]),
+      meta: SESSION_META,
+      maxRows: 2,
+      width: 80,
+    });
+
+    expect(compact.map((item) => item.id)).toEqual(['session-header', 'u1']);
+
+    const expanded = appendStaticTranscriptItems({
+      activeStreamId: STREAM_ID,
+      currentItems: compact,
+      streams: streamsFromEntries(STREAM_ID, [first, large, later]),
+      meta: SESSION_META,
+      width: 80,
+    });
+
+    expect(expanded.map((item) => item.id)).toEqual([
+      'session-header',
+      'u1',
+      'a1',
+      'u2',
+    ]);
+  });
+
   it('labels preset-launched sessions with team and root identity', () => {
     expect(
       sessionHeaderIdentityLine({
