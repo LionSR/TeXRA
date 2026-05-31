@@ -285,7 +285,7 @@ function dispatchPlan(
 ): void {
   const feedback = feedbackOnReject(decision);
   resolvePlanApproval(payload.approvalId, {
-    action: decision.accepted ? 'approve' : 'reject',
+    action: decision.accepted ? (decision.planAction ?? 'approve') : 'reject',
     ...(feedback ? { feedback } : {}),
   });
 }

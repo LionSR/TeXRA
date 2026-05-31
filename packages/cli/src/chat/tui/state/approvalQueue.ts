@@ -16,6 +16,7 @@ import type {
   ApprovalDecision as SharedApprovalDecision,
   BashPermission,
   ExternalInquiryPermission,
+  PlanApprovalAction,
   PlanApprovalPermission,
   RetryPermission,
   UserQuestionPermission,
@@ -44,6 +45,8 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   readonly bypass?: ApprovalBypassKind;
   /** Credential mode to apply before accepting this approval. */
   readonly apiMode?: CliApiMode;
+  /** Plan-only approval action when plain approve/reject is not specific enough. */
+  readonly planAction?: Extract<PlanApprovalAction, 'approve_and_odyssey'>;
 }
 
 export interface PendingApproval {
