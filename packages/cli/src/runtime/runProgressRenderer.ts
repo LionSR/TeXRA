@@ -80,6 +80,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         }
         return true;
       case 'updateConversationProgress':
+        if (this.rootStreamTerminal) return true;
         if (
           this.applyConversationProgress(
             payload as ProgressEventPayloads['updateConversationProgress'],
