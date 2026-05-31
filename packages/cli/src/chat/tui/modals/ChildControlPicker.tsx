@@ -526,9 +526,10 @@ export function moveTaskDetailScrollState(
     };
   }
   const nextOffset = Math.min(maxOffset, offset + 1);
+  const followsTail = nextOffset >= maxOffset && followOffset >= maxOffset;
   return {
     ...state,
-    followsTail: nextOffset >= maxOffset,
+    followsTail,
     offset: nextOffset,
   };
 }

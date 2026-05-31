@@ -1109,6 +1109,25 @@ describe('CLI child execution controls', () => {
       followsTail: false,
       offset: 5,
     });
+    expect(
+      moveTaskDetailScrollState(
+        { executionId: 'task-1', followsTail: false, offset: 8 },
+        9,
+        'down',
+        4,
+      ),
+    ).toEqual({
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 9,
+    });
+    expect(
+      taskDetailVisibleScrollOffset(
+        { executionId: 'task-1', followsTail: false, offset: 9 },
+        9,
+        4,
+      ),
+    ).toBe(9);
   });
 
   it('clamps task detail scroll movement at output boundaries', () => {
