@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   cliModelRecord,
+  formatNoListableModelsMessage,
   listableModelAccessEntries,
 } from '@cli/commands/models';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
@@ -102,5 +103,44 @@ describe('CLI model list filtering', () => {
         (entry) => entry.model.value,
       ),
     ).toEqual(['sonnet46T', 'opus48T']);
+  });
+});
+
+describe('CLI model list empty-state text', () => {
+  it('points personal-key users at included access and model status diagnostics', () => {
+    expect(formatNoListableModelsMessage('personal')).toBe(
+      [
+        'No models are currently available.',
+        'Run `texra models list --all` to see unavailable models and access status.',
+        'Retry with `--api-mode included` to try included relay access, run `texra login`, or configure a provider API key.',
+      ].join('\n'),
+    );
+  });
+
+  it('points included-mode users at login or personal API key setup', () => {
+    expect(formatNoListableModelsMessage('included')).toContain(
+      'Run `texra login`, or retry with `--api-mode personal` after configuring a provider API key.',
+    );
+  });
+
+  it('uses a combined hint when no API mode was explicitly selected', () => {
+    expect(formatNoListableModelsMessage(undefined)).toBe(
+      [
+        'No models are currently available.',
+        'Run `texra models list --all` to see unavailable models and access status.',
+        'Run `texra login` for included relay access, retry with `--api-mode included`, or configure a provider API key.',
+      ].join('\n'),
+    );
+  });
+
+  it('does not suggest --all when unavailable models were already requested', () => {
+    const text = formatNoListableModelsMessage('personal', {
+      includeUnavailable: true,
+    });
+
+    expect(text).toContain(
+      'No model records were returned for this installation.',
+    );
+    expect(text).not.toContain('models list --all');
   });
 });
