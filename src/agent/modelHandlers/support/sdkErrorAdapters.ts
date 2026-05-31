@@ -14,6 +14,7 @@ import {
   UnprocessableEntityError as AnthropicUnprocessableEntityError,
 } from '@anthropic-ai/sdk';
 import { ApiError as GoogleApiError } from '@google/genai';
+import { OpenRouterError } from '@openrouter/sdk/models/errors';
 import {
   APIConnectionError as OpenAIAPIConnectionError,
   APIConnectionTimeoutError as OpenAIAPIConnectionTimeoutError,
@@ -146,6 +147,32 @@ export function tagGoogleSdkError(err: unknown, provider = 'google'): void {
 }
 
 /**
+ * Tags OpenRouter SDK errors. The OpenRouter SDK uses a single base error class
+ * (`OpenRouterError`) carrying the HTTP `statusCode`, plus subclasses per status.
+ * Derive the kind from the status code so the shared metadata pipeline can
+ * classify and surface them like the other providers.
+ */
+export function tagOpenRouterSdkError(
+  err: unknown,
+  provider = 'openrouter',
+): void {
+  if (err instanceof OpenRouterError) {
+    tagSdkError(
+      err,
+      provider,
+      sdkErrorKindFromStatusCode(err.statusCode),
+      err.statusCode,
+    );
+  }
+}
+
+/**
+ * Tags a thrown SDK error with structured metadata (provider, kind, status
+ * code) so downstream formatting can classify it without importing SDK classes.
+ */
+export type SdkErrorTagger = (err: unknown, provider: string) => void;
+
+/**
  * Wraps a promise so that any rejection is tagged via the supplied tagger
  * before being re-thrown. Centralizes the common `try { return await impl() }
  * catch (err) { tagSdkError(err, provider); throw err; }` pattern at SDK
@@ -153,7 +180,7 @@ export function tagGoogleSdkError(err: unknown, provider = 'google'): void {
  * exact metadata semantics of an inline catch block.
  */
 export async function withSdkErrorTag<T>(
-  tagger: (err: unknown, provider: string) => void,
+  tagger: SdkErrorTagger,
   provider: string,
   fn: () => Promise<T>,
 ): Promise<T> {

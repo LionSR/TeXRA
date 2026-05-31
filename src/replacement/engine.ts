@@ -8,6 +8,7 @@
 import { getConfig } from '@agent/core/config';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
 
 const CHANNEL = 'ReplacementEngine';
 logger.initialize(CHANNEL);
@@ -144,21 +145,10 @@ function shouldWrapCritiqueInAlign(): boolean {
  * These replacements are subject to user configuration via enabledReplacements.
  */
 export function getAllReplacements(): ReplacementCategory {
-  const enabledCategoryNames = getConfig('texra.latex.enabledReplacements', [
-    'latex_spacing',
-    'equations',
-    'sections',
-    'latex_forbidden_commands',
-    'characters',
-    'font_commands',
-    'latex_xml',
-    'latex_document',
-    'unicode',
-    'html_entities',
-    'scratchpad_xml',
-    'gptness',
-    'latexdiff',
-  ]);
+  const enabledCategoryNames = getConfig<string[]>(
+    'texra.latex.enabledReplacements',
+    DEFAULT_CORE_SETTINGS.latex.enabledReplacements,
+  );
   const customReplacements = getConfig('texra.latex.customReplacements', {});
 
   // Filter predefined categories based on user configuration
@@ -188,17 +178,9 @@ export function getAllReplacements(): ReplacementCategory {
  * custom regex replacements from settings.
  */
 export function getAllReplacementsRegex(): ReplacementCategory[] {
-  const enabledCategoryNames = getConfig(
+  const enabledCategoryNames = getConfig<string[]>(
     'texra.latex.enabledReplacementsRegex',
-    [
-      'fenced_latex_blocks',
-      'inline_math',
-      'tikz',
-      'parentheses',
-      'latexdiff_markup',
-      'equation_style',
-      'personal_style_contextual',
-    ],
+    DEFAULT_CORE_SETTINGS.latex.enabledReplacementsRegex,
   );
   const customReplacements = getConfig(
     'texra.latex.customReplacementsRegex',
