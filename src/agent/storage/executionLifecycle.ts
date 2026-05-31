@@ -7,8 +7,8 @@
  * no cache side effects, no error-swallowing policies.
  */
 
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getAgent, isAgentRegistryReady } from '@agent/index/agentRegistry';
 
 import type { ExecutionId } from '@shared/schemas';

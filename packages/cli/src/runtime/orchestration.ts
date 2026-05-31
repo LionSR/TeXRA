@@ -1,5 +1,5 @@
 import type { AgentEntry } from '@agent/index';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ExecutionId } from '@shared/schemas';
 
 import type { CliHistoryEntry } from './history';

@@ -11,13 +11,16 @@ import {
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace';
 import { logWebFetch, logWebSearch } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import { AgentCategory, type AgentSetting } from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  AgentCategory,
+  type AgentSetting,
+} from '@agent/core/definition/AgentDataclass';
 import type {
   ConversationRoundStateSnapshot,
   AgentRunStateSnapshot,
-} from '@agent/core/AgentState';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+} from '@agent/core/execution/AgentState';
+import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@agent/core/constants';

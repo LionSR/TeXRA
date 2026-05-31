@@ -1,4 +1,4 @@
-import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { OutputState } from '@agent/output/outputState';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';

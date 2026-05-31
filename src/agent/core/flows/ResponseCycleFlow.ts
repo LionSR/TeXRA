@@ -3,7 +3,7 @@ import { dirname } from 'path';
 import { z } from 'zod';
 
 import { BaseNode, Flow } from '@agent/node';
-import { recordRound } from '@agent/core/AgentState';
+import { recordRound } from '@agent/core/execution/AgentState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   BaseCycleFieldsSchema,
@@ -15,7 +15,7 @@ import {
 } from '@agent/core/flows/CommonCycleTypes';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
-import type { ProviderUsage } from '@agent/core/ResponseUsage';
+import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 
 import { messageToSkeleton } from '@agent/utils/messageSkeletonUtils';
 import { checkForMassiveRepetition } from '@agent/utils/text/repetitionUtils';

@@ -6,8 +6,8 @@ import { writeTerminalStatus } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
-} from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+} from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';

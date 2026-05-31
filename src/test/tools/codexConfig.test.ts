@@ -3,7 +3,7 @@ import { strict as assert } from 'assert';
 import * as path from 'path';
 
 // Local imports
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   buildCodexConfig,
   buildCodexWorkspaceOptions,

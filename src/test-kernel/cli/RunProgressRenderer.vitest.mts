@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import {
   createRunProgressRenderer,

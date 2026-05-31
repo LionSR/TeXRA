@@ -2,7 +2,7 @@ import * as path from 'path';
 
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   AgentCategory,
   StreamTabInfo,
