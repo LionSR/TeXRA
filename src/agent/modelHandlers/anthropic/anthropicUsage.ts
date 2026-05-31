@@ -39,7 +39,7 @@ interface AnthropicUsageTokenTotals {
  * Gets Anthropic input/output/cache token totals.
  * Uses per-iteration usage when available so compaction requests are fully billed.
  */
-export function getAnthropicUsageTokenTotals(
+function getAnthropicUsageTokenTotals(
   responseUsage: AnthropicUsage,
 ): AnthropicUsageTokenTotals {
   const usageWithIterations = responseUsage as AnthropicUsage & {
