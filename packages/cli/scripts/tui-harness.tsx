@@ -61,6 +61,8 @@ const STREAM_ID = 'harness-stream-1';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
 const HARNESS_YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 const HARNESS_BTW_USAGE = 'Usage: /btw <message>';
+const HARNESS_BTW_IDLE_MESSAGE =
+  'No active run to attach a follow-up to. Send a normal message to start a run.';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const SHOW_BASH_APPROVAL = process.env.HARNESS_BASH_APPROVAL === '1';
@@ -69,6 +71,7 @@ const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
 const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
 const PLAN_APPROVAL_ODYSSEY = process.env.HARNESS_PLAN_APPROVAL_ODYSSEY === '1';
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
+const BTW_IDLE = process.env.HARNESS_BTW_IDLE === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
 const SHOW_LONG_CHILD_OUTPUT = process.env.HARNESS_LONG_CHILD_OUTPUT === '1';
 const SHOW_WIDE_FIRST_CHILD_LINE =
@@ -719,6 +722,10 @@ function queueHarnessFollowUp(input: string): void {
   const message = input.trim();
   if (!message) {
     appendHarnessAssistantTranscript(HARNESS_BTW_USAGE);
+    return;
+  }
+  if (BTW_IDLE) {
+    appendHarnessAssistantTranscript(HARNESS_BTW_IDLE_MESSAGE);
     return;
   }
 

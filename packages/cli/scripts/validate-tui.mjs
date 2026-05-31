@@ -212,6 +212,21 @@ const SCENARIOS = [
     unexpect: ['registered but has no harness action'],
   },
   {
+    name: 'btw-idle-warning',
+    env: { HARNESS_ENTRIES: '0', HARNESS_BTW_IDLE: '1' },
+    keys: ['/btw check the finite case later', '\r'],
+    frame: 'tail',
+    expect: [
+      'No active run to attach a follow-up to.',
+      'Send a normal message to start a run.',
+    ],
+    unexpect: [
+      'Queued follow-up: check the finite case later',
+      'queued 1',
+      'Harness received',
+    ],
+  },
+  {
     name: 'plain-submit',
     cols: 120,
     env: { HARNESS_ENTRIES: '2' },
