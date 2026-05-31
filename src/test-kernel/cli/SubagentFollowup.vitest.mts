@@ -58,6 +58,17 @@ describe('summarizeSubagentFollowup', () => {
     );
   });
 
+  it('decodes escaped result responses for display', () => {
+    const xml = [
+      '<subagent-result id="abc" agent="research" category="toolUse" status="completed">',
+      '<response>Keep &lt;/response> literal &amp; inspect &lt;file&gt;</response>',
+      '</subagent-result>',
+    ].join('\n');
+    expect(summarizeSubagentFollowup(xml)).toBe(
+      '✓ research completed\nKeep </response> literal & inspect <file>',
+    );
+  });
+
   it('summarizes a result without a response body', () => {
     expect(
       summarizeSubagentFollowup(
