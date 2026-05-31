@@ -18,7 +18,7 @@ import {
 import {
   validateExecutionRequest,
   type ExecutionRequest,
-} from '@agent/core/executionRequests';
+} from '@agent/core/execution/executionRequests';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { toErrorMessage } from '@common/errors';

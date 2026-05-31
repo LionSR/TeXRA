@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
 // Stub the registry so the writer guard is hermetic: `research` is a real
 // tool-use agent; `bash` (a process-tracking name) is not. `ready` flips the

@@ -15,7 +15,7 @@ import {
   AgentSettingSchema,
   type AgentSetting,
   type AgentPrompt,
-} from '@agent/core/AgentDataclass';
+} from '@agent/core/definition/AgentDataclass';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';

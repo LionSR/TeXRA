@@ -3,8 +3,8 @@ import { strict as assert } from 'assert';
 
 // Local imports - agent core
 
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { MainViewPersistedStateSchema } from '@shared/schemas/mainView';
 import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 

@@ -4,7 +4,7 @@ import * as path from 'path';
 
 // Local imports - agent runtime
 import type { ResolvedAgent } from '@agent/index';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { AbsoluteFS } from '@utils/files';
 

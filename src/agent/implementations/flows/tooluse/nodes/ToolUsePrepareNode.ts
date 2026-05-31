@@ -1,7 +1,7 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
+import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { buildInitialToolUsePrompts } from '@utils/prompt';

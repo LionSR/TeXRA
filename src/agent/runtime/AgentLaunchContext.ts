@@ -16,9 +16,9 @@ import {
   AgentConfigSchema,
   type AgentConfig,
   type AgentConfigPayload,
-} from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { UserVariableChannels } from '@agent/core/AgentCycleOptions';
+} from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import {
   ensureAgentCategoryForSource,
   loadAgentSettingAndPrompts,

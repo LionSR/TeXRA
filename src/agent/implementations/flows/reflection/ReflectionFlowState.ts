@@ -5,8 +5,8 @@ import { z } from 'zod';
 import {
   AgentRunStateSnapshotSchema,
   ConversationRoundStateSnapshotSchema,
-} from '@agent/core/AgentState';
-import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
+} from '@agent/core/execution/AgentState';
+import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/execution/AgentWorkspaceState';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
 import {
   AgentFileLocationSchema,

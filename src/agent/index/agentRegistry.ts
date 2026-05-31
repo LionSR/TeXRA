@@ -7,7 +7,7 @@ import * as yaml from 'yaml';
 import {
   AgentCategory,
   AgentDefinitionSchema,
-} from '@agent/core/AgentDataclass';
+} from '@agent/core/definition/AgentDataclass';
 import { getGlobalState, getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
 import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';

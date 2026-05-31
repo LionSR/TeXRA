@@ -13,7 +13,7 @@ import {
   startToolUseCard,
   type AgentTrace,
 } from '@agent/trace';
-import { recordCycleMetrics } from '@agent/core/AgentState';
+import { recordCycleMetrics } from '@agent/core/execution/AgentState';
 import {
   BaseCycleFieldsSchema,
   defaultPostCompactionContext,
@@ -38,8 +38,8 @@ import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteracti
 import type {
   FileInteractionState,
   WorkPlanState,
-} from '@agent/core/AgentWorkspaceState';
-import type { ToolResult } from '@agent/core/ToolTypes';
+} from '@agent/core/execution/AgentWorkspaceState';
+import type { ToolResult } from '@agent/core/tools/ToolTypes';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging

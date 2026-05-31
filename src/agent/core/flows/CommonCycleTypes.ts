@@ -4,14 +4,14 @@ import { z } from 'zod';
 
 import { logContextStateSnapshot, type AgentTrace } from '@agent/trace';
 import { isRemoteAgent } from '@agent/index/agentRegistry';
-import type { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { AgentCore } from '@agent/implementations/flows/common/BaseFlowServices';
 import {
   ProviderMessageSchema,
   type ProviderMessage,
 } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
-import type { ProviderUsage } from '@agent/core/ResponseUsage';
+import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import { getActiveChildren } from '@agent/runtime/executionRegistry';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
