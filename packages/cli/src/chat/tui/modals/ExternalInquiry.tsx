@@ -41,6 +41,10 @@ function keyHintsColumns(hints: readonly KeyHint[]): number {
   );
 }
 
+function keyHintsFit(hints: readonly KeyHint[], maxColumns: number): boolean {
+  return keyHintsColumns(hints) < maxColumns;
+}
+
 export function externalInquiryKeyHintsForWidth({
   maxColumns,
   questionScrollable,
@@ -48,36 +52,49 @@ export function externalInquiryKeyHintsForWidth({
   readonly maxColumns: number;
   readonly questionScrollable: boolean;
 }): readonly KeyHint[] {
-  const fullHints: readonly KeyHint[] = [
-    ...(questionScrollable ? [{ key: 'PgUp/PgDn', action: 'question' }] : []),
+  const tailHints: readonly KeyHint[] = [
     { key: 'Enter', action: 'submit answer' },
     { key: 'Ctrl-R', action: 'reject with note' },
     { key: 'Esc', action: 'skip' },
   ];
-  if (keyHintsColumns(fullHints) <= maxColumns) return fullHints;
+  const fullHints = [
+    ...(questionScrollable ? [{ key: 'PgUp/PgDn', action: 'question' }] : []),
+    ...tailHints,
+  ];
+  if (keyHintsFit(fullHints, maxColumns)) return fullHints;
 
-  const compactHints: readonly KeyHint[] = [
+  const compactScrollHints = [
     ...(questionScrollable ? [{ key: 'PgUp/PgDn', action: 'scroll' }] : []),
+    ...tailHints,
+  ];
+  if (keyHintsFit(compactScrollHints, maxColumns)) return compactScrollHints;
+
+  const compactTailHints: readonly KeyHint[] = [
     { key: 'Enter', action: 'submit' },
     { key: 'Ctrl-R', action: 'reject' },
     { key: 'Esc', action: 'skip' },
   ];
-  if (keyHintsColumns(compactHints) <= maxColumns) return compactHints;
+  const compactAllHints = [
+    ...(questionScrollable ? [{ key: 'PgUp/PgDn', action: 'scroll' }] : []),
+    ...compactTailHints,
+  ];
+  if (keyHintsFit(compactAllHints, maxColumns)) return compactAllHints;
 
-  const primaryHints: readonly KeyHint[] = [
+  const shortScrollHints = [
+    ...(questionScrollable ? [{ key: 'PgUp/Dn', action: 'scroll' }] : []),
+    ...compactTailHints,
+  ];
+  if (keyHintsFit(shortScrollHints, maxColumns)) return shortScrollHints;
+
+  if (keyHintsFit(compactTailHints, maxColumns)) return compactTailHints;
+
+  const minimumHints: readonly KeyHint[] = [
     { key: 'Enter', action: 'submit' },
-    { key: 'Ctrl-R', action: 'reject' },
     { key: 'Esc', action: 'skip' },
   ];
-  if (keyHintsColumns(primaryHints) <= maxColumns) return primaryHints;
-
-  const minimalHints: readonly KeyHint[] = [
-    { key: 'Enter', action: 'submit' },
-    { key: 'Esc', action: 'skip' },
-  ];
-  if (keyHintsColumns(minimalHints) <= maxColumns) return minimalHints;
-
-  return [{ key: 'Esc', action: 'skip' }];
+  return keyHintsFit(minimumHints, maxColumns)
+    ? minimumHints
+    : [{ key: 'Esc', action: 'skip' }];
 }
 
 export function externalInquiryAnswerRowsBudget(
