@@ -8,6 +8,7 @@ import {
   computeTaskDetailLayout,
   emptyPickerText,
   isUltraCompactPickerRows,
+  isUltraCompactTaskDetailRows,
   moveTaskDetailScrollState,
   pickerKeyHints,
   pickerKeyHintsForColumns,
@@ -799,11 +800,15 @@ describe('CLI child execution controls', () => {
     expect(emptyPickerText('tasks')).toBe('No active tasks or sub-workflows.');
   });
 
-  it('switches child pickers to ultra-compact rendering only at very small budgets', () => {
+  it('switches child pickers to ultra-compact rendering before bordered content clips', () => {
     expect(isUltraCompactPickerRows(3)).toBe(true);
     expect(isUltraCompactPickerRows(4)).toBe(true);
-    expect(isUltraCompactPickerRows(5)).toBe(false);
+    expect(isUltraCompactPickerRows(5)).toBe(true);
+    expect(isUltraCompactPickerRows(6)).toBe(true);
+    expect(isUltraCompactPickerRows(7)).toBe(false);
     expect(isUltraCompactPickerRows(undefined)).toBe(false);
+    expect(isUltraCompactTaskDetailRows(4)).toBe(true);
+    expect(isUltraCompactTaskDetailRows(5)).toBe(false);
     expect(
       compactPickerOverflowText({
         itemCount: 3,
