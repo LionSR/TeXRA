@@ -142,9 +142,7 @@ export interface SubagentListProps {
 export function SubagentList(
   props: SubagentListProps = {},
 ): React.JSX.Element | null {
-  const activeStreamId = useSignal(cliState.activeStreamId);
-  const streams = useSignal(cliState.streams);
-  const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  const slice = useSignal(cliState.activeSlice);
   const activeProcesses = slice?.activeProcesses ?? [];
   const processOutput = slice?.processOutput;
   const subagents = slice ? visibleSubagentRows(slice) : [];
