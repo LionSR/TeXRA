@@ -32,6 +32,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@agent/core/constants';
 import { getConfig } from '@agent/core/config';
+import { toOpenAIReasoningEffort } from '@agent/runtime/reasoningEffort';
 import {
   getSdkErrorMessage,
   isContextWindowError,
@@ -404,10 +405,8 @@ export class ModelHandlerOpenAI<
 
     const reasoningEffort = this.getEffectiveReasoningEffort();
     if (this.capabilities.supportsReasoning && reasoningEffort) {
-      // OpenAI doesn't support 'none'; clamp to 'low' (the minimum).
-      const effective = reasoningEffort === 'none' ? 'low' : reasoningEffort;
       baseParams.reasoning_effort = this.validateReasoningEffort(
-        effective,
+        toOpenAIReasoningEffort(reasoningEffort),
       ) as ChatCompletionRequestBase['reasoning_effort'];
     }
 

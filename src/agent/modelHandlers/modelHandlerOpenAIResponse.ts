@@ -26,6 +26,7 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
 import { getConfig } from '@agent/core/config';
+import { toOpenAIReasoningEffort } from '@agent/runtime/reasoningEffort';
 import {
   getSdkErrorMessage,
   isContextWindowError,
@@ -1716,17 +1717,12 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // Build shared params used by both token counting and API call
 
-    // OpenAI Responses API doesn't support 'none' (clamp to 'low') or
-    // Anthropic's top 'max' tier (clamp to OpenAI's 'xhigh' ceiling).
     const rawEffort = this.capabilities.supportsReasoning
       ? this.getEffectiveReasoningEffort()
       : undefined;
-    const reasoningEffort =
-      rawEffort === 'none'
-        ? ('low' as const)
-        : rawEffort === 'max'
-          ? ('xhigh' as const)
-          : rawEffort;
+    const reasoningEffort = rawEffort
+      ? toOpenAIReasoningEffort(rawEffort)
+      : undefined;
 
     // Phase 1: BUILD - Construct provider-specific request parameters
     const baseParams = {
