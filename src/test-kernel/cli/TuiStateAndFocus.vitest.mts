@@ -22,8 +22,10 @@ import {
   allocateSidePanelRows,
   appEscapeInterruptActive,
   appFocusShortcutsActive,
+  approvalForegroundMaxRows,
   childControlForegroundMaxRows,
   foregroundSurfaceKind,
+  foregroundSurfaceJustifyContent,
   shouldShowTipRow,
   shouldShowTodosPlanPanel,
 } from '@cli/chat/tui/App';
@@ -76,6 +78,7 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import {
+  AGENT_CATEGORY,
   MESSAGE_TYPES,
   STREAM_STATUS,
   type StreamTabId,
@@ -243,6 +246,125 @@ describe('CLI TUI row allocation', () => {
   it('uses a smaller row cap for empty child-control pickers', () => {
     expect(childControlForegroundMaxRows({ hasItems: false })).toBe(6);
     expect(childControlForegroundMaxRows({ hasItems: true })).toBe(12);
+  });
+
+  it('does not cap natural-height approval prompts that lack row budgeting', () => {
+    const decide = () => {};
+
+    expect(
+      approvalForegroundMaxRows({
+        payload: {
+          kind: 'plan',
+          payload: {
+            approvalId: 'plan-1',
+            streamId: root,
+            odysseyEnabled: false,
+            plan: {
+              summary: 'Coordinate a proof.',
+              steps: [],
+            },
+          },
+        },
+        decide,
+      }),
+    ).toBeUndefined();
+    expect(
+      approvalForegroundMaxRows({
+        payload: {
+          kind: 'retry',
+          payload: { streamId: root, operation: 'Model invocation' },
+        },
+        decide,
+      }),
+    ).toBeUndefined();
+    expect(
+      approvalForegroundMaxRows({
+        payload: {
+          kind: 'userQuestion',
+          payload: {
+            requestId: 'question-1',
+            allowBypass: false,
+            streamId: root,
+            context: 'Pick a proof style.',
+            questions: [
+              {
+                question: 'Which style?',
+                options: [{ label: 'direct' }, { label: 'detailed' }],
+              },
+            ],
+          },
+        },
+        decide,
+      }),
+    ).toBeUndefined();
+    expect(
+      approvalForegroundMaxRows({
+        payload: {
+          kind: 'bash',
+          payload: {
+            requestId: 'bash-1',
+            allowBypass: true,
+            streamId: root,
+            command: 'echo ok',
+          },
+        },
+        decide,
+      }),
+    ).toBe(18);
+    expect(
+      approvalForegroundMaxRows({
+        payload: {
+          kind: 'toolEdit',
+          request: {
+            path: 'draft.tex',
+            originalContent: 'old',
+            proposedContent: 'new',
+            sourceTool: 'test',
+            streamId: root,
+          },
+        },
+        decide,
+      }),
+    ).toBe(18);
+    expect(
+      approvalForegroundMaxRows({
+        payload: {
+          kind: 'proposal',
+          payload: {
+            proposalId: 'proposal-1',
+            streamId: root,
+            agentCategory: AGENT_CATEGORY.TOOL_USE,
+            agent: 'review',
+            model: 'harness-model',
+            instruction: 'Review the proof.',
+            memories: [],
+            workingDirectory: '/tmp',
+          },
+        },
+        decide,
+      }),
+    ).toBe(18);
+    expect(
+      approvalForegroundMaxRows({
+        payload: {
+          kind: 'externalInquiry',
+          payload: {
+            requestId: 'inquiry-1',
+            allowBypass: false,
+            streamId: root,
+            question: 'Can you check this claim?',
+          },
+        },
+        decide,
+      }),
+    ).toBe(18);
+  });
+
+  it('top-aligns forms and approvals without moving transcript viewer', () => {
+    expect(foregroundSurfaceJustifyContent('form')).toBe('flex-start');
+    expect(foregroundSurfaceJustifyContent('approval')).toBe('flex-start');
+    expect(foregroundSurfaceJustifyContent('childControls')).toBe('flex-end');
+    expect(foregroundSurfaceJustifyContent('transcript')).toBe('flex-end');
   });
 
   it('uses the whole middle region for the transcript without foreground UI', () => {
