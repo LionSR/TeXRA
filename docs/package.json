@@ -4,8 +4,10 @@
   "main": "index.js",
   "scripts": {
     "sync-legal": "cp ../TERMS_OF_SERVICE.md terms.md",
-    "dev": "npm run sync-legal && vitepress dev .",
-    "docs:build": "npm run sync-legal && vitepress build .",
+    "sync-changelog": "cp ../CHANGELOG.md changelog.md",
+    "sync-content": "npm run sync-legal && npm run sync-changelog",
+    "dev": "npm run sync-content && vitepress dev .",
+    "docs:build": "npm run sync-content && vitepress build .",
     "docs:serve": "vitepress serve .",
     "docs:deploy": "npm run docs:build && gh-pages --cname texra.ai -d .vitepress/dist -m \"Deploy docs [ci skip]\""
   },

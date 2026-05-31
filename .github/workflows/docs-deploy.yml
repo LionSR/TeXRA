@@ -6,6 +6,7 @@ on:
     paths:
       - 'docs/**'
       - 'TERMS_OF_SERVICE.md'
+      - 'CHANGELOG.md'
       - '.github/workflows/docs-deploy.yml'
   workflow_dispatch:
 
@@ -60,6 +61,7 @@ jobs:
             404.html
             CNAME
             assets
+            changelog.html
             examples
             guide
             hashmap.json
@@ -87,7 +89,7 @@ jobs:
           done
 
           # Sanity: required public pages must actually exist.
-          for required in index.html launch.html terms.html providers.html guide/index.html; do
+          for required in index.html launch.html terms.html providers.html changelog.html guide/index.html; do
             if [ ! -f "$dist/$required" ]; then
               echo "::error::Expected public page missing from build: $required"
               fail=1
