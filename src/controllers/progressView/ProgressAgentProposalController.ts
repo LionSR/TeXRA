@@ -1,9 +1,9 @@
 // Local imports - agent
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentConfigSchema, type AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 
-import type { TaskState } from '@agent/core/TaskState';
+import type { TaskState } from '@agent/core/execution/TaskState';
 
 // Local imports - shared
 import type { AgentProposal, AgentProposalPermission } from '@shared/schemas';

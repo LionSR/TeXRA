@@ -1,8 +1,8 @@
 import { UsageLogService } from '@telemetry/UsageLogService';
 import type { AgentTrace } from '@agent/trace';
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentRunStateSnapshot } from '@agent/core/AgentState';
-import type { RunUsageTotals } from '@agent/core/RunUsageAccumulator';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { AgentRunStateSnapshot } from '@agent/core/execution/AgentState';
+import type { RunUsageTotals } from '@agent/core/usage/RunUsageAccumulator';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { UsageProviderSchema } from '@agent/types/NormalizedUsage';
 import { shouldUseOpenRouter } from '@agent/modelHandlers/support/ProxyConfigResolver';

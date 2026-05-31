@@ -1,6 +1,6 @@
 // Local imports - agent config
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentConfigSchema, type AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   buildAgentWorkspaceOptions,
   type AgentWorkspaceOptions,

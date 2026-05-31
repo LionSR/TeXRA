@@ -17,7 +17,7 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { platform } from '@platform/platform';
-import type { WorkPlanState } from '@agent/core/AgentWorkspaceState';
+import type { WorkPlanState } from '@agent/core/execution/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import { waitForPlanApproval } from '@agent/runtime/runCoordinators';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';

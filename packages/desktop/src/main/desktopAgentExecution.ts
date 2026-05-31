@@ -18,7 +18,7 @@ import {
   resolveWorktreeInfo,
 } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
-import type { ValidatedExecutionRequest } from '@agent/core/executionRequests';
+import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
 import {
   clearRetryRequest,
   resolvePlanApproval,
@@ -1252,7 +1252,7 @@ export class DesktopProgressBridge {
     const [{ getHelperModelName }, { validateExecutionRequest }] =
       await Promise.all([
         import('@agent/runtime/helperModel'),
-        import('@agent/core/executionRequests'),
+        import('@agent/core/execution/executionRequests'),
       ]);
     const validation = validateExecutionRequest({
       config: {

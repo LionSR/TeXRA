@@ -3,7 +3,7 @@ import * as path from 'path';
 import { platform } from '@platform/platform';
 import type { StageHandle } from '@agent/trace';
 import { logLatexdiff, type AgentTrace } from '@agent/trace';
-import { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';

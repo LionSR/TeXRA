@@ -9,16 +9,16 @@ import {
 
 // Local imports - agent
 import { logContextManagementEvent, logSdkError } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import { type AgentSetting, hasEndTag } from '@agent/core/AgentDataclass';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import { type AgentSetting, hasEndTag } from '@agent/core/definition/AgentDataclass';
 import {
   AnthropicAPIResponseUsage,
   AnthropicUsage,
-} from '@agent/core/ResponseUsage';
+} from '@agent/core/usage/ResponseUsage';
 import {
   AgentWorkspaceState,
   ThinkingBlock,
-} from '@agent/core/AgentWorkspaceState';
+} from '@agent/core/execution/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';

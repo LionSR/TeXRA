@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { listExecutions } from '@agent/storage';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   BUILTIN_DEFAULT_CHAT_MODEL,
   resolveChatDefaults,

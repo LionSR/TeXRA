@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { AgentCategory, AgentSettingSchema } from '@agent/core/AgentDataclass';
+import { AgentCategory, AgentSettingSchema } from '@agent/core/definition/AgentDataclass';
 
 describe('AgentSettingSchema', () => {
   it('strips legacy workflow outputExt without exposing it in settings', () => {

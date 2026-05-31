@@ -4,7 +4,7 @@ import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 
 import { toErrorMessage } from '@common/errors';
 import { isFile } from '@common/files/fsEntryType';

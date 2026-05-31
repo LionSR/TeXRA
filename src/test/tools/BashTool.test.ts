@@ -8,10 +8,10 @@ import {
   ModelProvider,
 } from 'llm-zoo';
 import { createRunTrace } from '@transcript';
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentPrompt, AgentSetting } from '@agent/core/AgentDataclass';
-import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { AgentPrompt, AgentSetting } from '@agent/core/definition/AgentDataclass';
+import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
+import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import {
   createToolUseCycleFlow,
   type ToolUseCycleShared,
@@ -27,7 +27,7 @@ import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage
 import type { ExecResult } from '@agent/types/ResultTypes';
 
 // Internal imports
-import { MapToolRegistry } from '@agent/core/ToolTypes';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { StreamTabId } from '@shared/schemas';
 import { BashTool } from '@tools/bash';
 import * as execUtils from '@utils/system/execUtils';

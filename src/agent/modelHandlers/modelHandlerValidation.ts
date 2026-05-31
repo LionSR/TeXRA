@@ -1,9 +1,9 @@
 // Third-party imports
 
 // Local imports - agent
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import type { AgentSetting } from '@agent/core/AgentDataclass';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
+import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 

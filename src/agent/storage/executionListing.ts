@@ -11,7 +11,7 @@
 
 import pMap from 'p-map';
 
-import { type AgentConfig, AgentConfigSchema } from '@agent/core/AgentConfig';
+import { type AgentConfig, AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { isFileNotFoundError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';

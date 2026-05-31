@@ -5,7 +5,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 import type {
   FileInteractionState,
   WorkPlanState,
-} from '@agent/core/AgentWorkspaceState';
+} from '@agent/core/execution/AgentWorkspaceState';
 import {
   createRunContext,
   tryUseRunContext,

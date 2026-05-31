@@ -1,5 +1,5 @@
 import { getVisibleAgents, loadAgents } from '@agent/index';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';
 import { BUILTIN_DEFAULT_CHAT_AGENT } from '../runtime/chatDefaults';

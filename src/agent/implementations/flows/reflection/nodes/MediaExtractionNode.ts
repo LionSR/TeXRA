@@ -1,6 +1,6 @@
 import { Node } from '@agent/node';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { FileLocation } from '@utils/files';
 
 import { getFilesForRound } from '../helpers';

@@ -2,10 +2,10 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
-import type { TaskState } from '@agent/core/TaskState';
+import type { TaskState } from '@agent/core/execution/TaskState';
 
 // Local imports - test support
 import {

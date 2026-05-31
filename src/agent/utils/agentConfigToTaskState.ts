@@ -1,10 +1,10 @@
-import { type AgentConfig } from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { type AgentConfig } from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   type TaskState,
   type ToolUseTaskState,
   type WorkflowTaskState,
-} from '@agent/core/TaskState';
+} from '@agent/core/execution/TaskState';
 import {
   MULTIPLE_DOCUMENT_FILE_TYPES,
   type MultipleDocumentFileType,

@@ -14,8 +14,8 @@ import {
 import {
   type AgentConfig,
   type AgentConfigPayload,
-} from '@agent/core/AgentConfig';
-import { AgentCategory, isWorkflowSetting } from '@agent/core/AgentDataclass';
+} from '@agent/core/definition/AgentConfig';
+import { AgentCategory, isWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import {
