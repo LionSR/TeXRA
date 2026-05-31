@@ -26,7 +26,13 @@ export function ApprovalModal(
   const { payload, decide } = props.pending;
   switch (payload.kind) {
     case 'bash':
-      return <BashApproval payload={payload.payload} onDecide={decide} />;
+      return (
+        <BashApproval
+          availableRows={props.availableRows}
+          payload={payload.payload}
+          onDecide={decide}
+        />
+      );
     case 'toolEdit':
       return (
         <EditApproval

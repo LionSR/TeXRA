@@ -43,6 +43,8 @@ const HARNESS_YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const SHOW_BASH_APPROVAL = process.env.HARNESS_BASH_APPROVAL === '1';
+const BASH_APPROVAL_COMMAND =
+  process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
@@ -163,7 +165,7 @@ function makeEditApprovalRequest() {
 function makeBashApprovalPayload() {
   return {
     requestId: 'harness-bash-approval',
-    command: 'npm run compile:safe',
+    command: BASH_APPROVAL_COMMAND,
     allowBypass: true,
     streamId: STREAM_ID,
   };
