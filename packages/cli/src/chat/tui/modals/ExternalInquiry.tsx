@@ -27,7 +27,7 @@ export interface ExternalInquiryDisplayLine {
 const MIN_EXTERNAL_INQUIRY_WIDTH = 20;
 const DEFAULT_EXTERNAL_INQUIRY_QUESTION_ROWS = 16;
 const COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS = 3;
-const EXTERNAL_INQUIRY_FIXED_ROWS = 7;
+const EXTERNAL_INQUIRY_FIXED_ROWS = 6;
 
 export function externalInquiryAnswerRowsBudget(
   availableRows: number | undefined,
@@ -46,7 +46,7 @@ export function externalInquiryQuestionRowsBudget({
 }): number {
   if (availableRows === undefined)
     return DEFAULT_EXTERNAL_INQUIRY_QUESTION_ROWS;
-  return Math.max(1, availableRows - EXTERNAL_INQUIRY_FIXED_ROWS - answerRows);
+  return Math.max(0, availableRows - EXTERNAL_INQUIRY_FIXED_ROWS - answerRows);
 }
 
 function overflowText(kind: 'previous' | 'more' | 'hidden', count: number) {
@@ -85,6 +85,7 @@ export function maxExternalInquiryQuestionScrollOffset(
   totalLines: number,
   maxDisplayLines: number,
 ): number {
+  if (maxDisplayLines <= 0) return 0;
   if (totalLines <= maxDisplayLines) return 0;
   if (maxDisplayLines <= COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS) {
     return Math.max(0, totalLines - Math.max(1, maxDisplayLines - 1));
@@ -108,7 +109,8 @@ export function boundedExternalInquiryQuestionLines({
   readonly width: number;
 }): ExternalInquiryDisplayLine[] {
   const lines = externalInquiryQuestionLines({ question, width });
-  if (maxDisplayLines <= 0 || lines.length <= maxDisplayLines) return lines;
+  if (maxDisplayLines <= 0) return [];
+  if (lines.length <= maxDisplayLines) return lines;
 
   if (maxDisplayLines <= COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS) {
     const visibleCount = Math.max(1, maxDisplayLines - 1);

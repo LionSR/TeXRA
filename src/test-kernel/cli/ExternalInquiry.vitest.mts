@@ -51,6 +51,24 @@ describe('CLI external inquiry modal', () => {
     expect(lines.at(-1)?.text).toContain('more rows');
   });
 
+  it('does not exceed tiny foreground row budgets with question rows', () => {
+    const answerRows = externalInquiryAnswerRowsBudget(7);
+    const questionRows = externalInquiryQuestionRowsBudget({
+      answerRows,
+      availableRows: 7,
+    });
+
+    expect(answerRows).toBe(1);
+    expect(questionRows).toBe(0);
+    expect(
+      boundedExternalInquiryQuestionLines({
+        maxDisplayLines: questionRows,
+        question: 'hidden question',
+        width: 80,
+      }),
+    ).toEqual([]);
+  });
+
   it('keeps the answer caret in the visible clipped input window', () => {
     const display = textInputDisplayWindow({
       cursor: 170,
