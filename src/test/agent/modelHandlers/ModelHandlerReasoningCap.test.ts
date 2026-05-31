@@ -11,7 +11,7 @@ import {
 
 // Local imports - handler under test (concrete subclass exercising base-class
 // `getEffectiveReasoningEffort` — OpenRouterNative does not override it)
-import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/modelHandlerOpenRouterNative';
+import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { FREE_TIER, MAX_TIER, ULTRA_TIER } from '@auth/config';
 
 // Modules to monkey-patch

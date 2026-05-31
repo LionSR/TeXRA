@@ -1,4 +1,4 @@
-import { ToolCallAccumulator } from './utils/toolCallAccumulator';
+import { ToolCallAccumulator } from '../utils/toolCallAccumulator';
 import type {
   ChatCompletion,
   ChatCompletionChunk,

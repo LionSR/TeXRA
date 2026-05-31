@@ -22,7 +22,7 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
-import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
 
 // Type imports
 

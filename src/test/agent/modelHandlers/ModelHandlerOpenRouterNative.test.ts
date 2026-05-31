@@ -9,7 +9,7 @@ import {
 } from 'llm-zoo';
 
 // Local imports - handler under test
-import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/modelHandlerOpenRouterNative';
+import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 
 // Modules to monkey-patch
 import * as serverKeysModule from '@auth/serverKeys';

@@ -12,7 +12,7 @@ import {
 } from 'llm-zoo';
 
 import type { AgentTrace } from '@agent/trace';
-import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
+import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 
 type StreamRecord = {
   appends: string[];

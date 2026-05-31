@@ -19,7 +19,7 @@ import type { AgentTrace } from '@agent/trace';
 import {
   ModelHandlerGoogleGenAI,
   validateGoogleMessageHistory,
-} from '@agent/modelHandlers/modelHandlerGoogleGenAI';
+} from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Type imports

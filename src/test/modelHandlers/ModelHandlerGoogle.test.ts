@@ -12,7 +12,7 @@ import {
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
 // Internal imports
-import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/modelHandlerGoogleGenAI';
+import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 
 // Type imports
 import type { Content } from '@google/genai';

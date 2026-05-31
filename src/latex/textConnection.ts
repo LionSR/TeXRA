@@ -3,8 +3,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
-import { ModelHandlerOpenAI } from '@agent/modelHandlers/modelHandlerOpenAI';
-import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
+import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
 import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
