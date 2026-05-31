@@ -622,7 +622,6 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: ['Tasks and sub-workflows', 'latex build'],
-    maxBlankLinesBetween: [{ from: '╰', to: '╭', max: 1 }],
   },
   {
     name: 'task-picker',
@@ -646,7 +645,6 @@ const SCENARIOS = [
         to: 'Tasks and sub-workflows',
         max: 3,
       },
-      { from: '╰', to: '╭', max: 1 },
     ],
   },
   {
@@ -793,7 +791,6 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: ['strategy sub-wo…', 'sub-workfl\now', '\n────╯', 'Esc cl…'],
-    maxBlankLinesBetween: [{ from: '╰', to: '╭', max: 1 }],
   },
   {
     name: 'narrow-subagent-picker-second',
@@ -816,7 +813,6 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: ['leanSolver sub-wor…', 'sub-workfl\now', '\n────╯', 'Esc cl…'],
-    maxBlankLinesBetween: [{ from: '╰', to: '╭', max: 1 }],
   },
   {
     name: 'narrow-task-picker',
@@ -838,7 +834,6 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: ['sub-workfl\now', '\n────╯', 'Esc cl…'],
-    maxBlankLinesBetween: [{ from: '╰', to: '╭', max: 1 }],
   },
   {
     name: 'tiny-subagent-picker',
@@ -890,11 +885,11 @@ const SCENARIOS = [
     frame: 'tail',
     expect: [
       'Task details',
-      'Task details · Description',
-      'Esc back',
+      'stream · strategy',
+      'strategy is checking the harness',
       '[main]* 1:strategy*',
     ],
-    unexpect: ['╰─Output:', '*    y*'],
+    unexpect: ['│ ›', 'Task details · Description', '*    y*'],
   },
   {
     name: 'tiny-task-process-detail',
@@ -908,8 +903,12 @@ const SCENARIOS = [
     bootExpect: 'TeXRA',
     keys: [ESC + 'p', DOWN, DOWN, DOWN, '\r'],
     frame: 'tail',
-    expect: ['Task details', 'Command: latex build', 'Esc back'],
-    unexpect: ['╰─Output:', '*    y*'],
+    expect: [
+      'Task details',
+      'shell · latex build',
+      'main.tex: Proof sketch needs one',
+    ],
+    unexpect: ['│ ›', 'Task details · Command', '*    y*'],
   },
   {
     name: 'stopped-subagent-picker',
@@ -931,7 +930,6 @@ const SCENARIOS = [
       'k kill',
       'Harness kill requested for harness-child-strategy.\n\nHarness kill requested for harness-child-strategy.',
     ],
-    maxBlankLinesBetween: [{ from: '╰', to: '╭', max: 1 }],
   },
   {
     name: 'focused-stopped-subagent',
@@ -965,7 +963,6 @@ const SCENARIOS = [
         to: 'Tasks and sub-workflows',
         max: 4,
       },
-      { from: '╰', to: '╭', max: 1 },
     ],
   },
   {

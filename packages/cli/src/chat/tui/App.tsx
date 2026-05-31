@@ -67,18 +67,21 @@ const PINNED_CHROME_ROWS = {
 } as const;
 
 function pinnedChromeRows({
+  inputVisible = true,
   reverseSearchOpen,
   slashPaletteOpen,
   tipVisible = true,
 }: {
+  readonly inputVisible?: boolean;
   readonly reverseSearchOpen: boolean;
   readonly slashPaletteOpen: boolean;
   readonly tipVisible?: boolean;
 }): number {
-  const { tip, ...alwaysVisibleRows } = PINNED_CHROME_ROWS;
   const baseRows =
-    Object.values(alwaysVisibleRows).reduce((sum, rows) => sum + rows, 0) +
-    (tipVisible ? tip : 0);
+    PINNED_CHROME_ROWS.streamTabsWorstCase +
+    PINNED_CHROME_ROWS.status +
+    (inputVisible ? PINNED_CHROME_ROWS.input : 0) +
+    (tipVisible ? PINNED_CHROME_ROWS.tip : 0);
   return (
     baseRows +
     (slashPaletteOpen ? SLASH_PALETTE_ROWS : 0) +
@@ -89,6 +92,7 @@ function pinnedChromeRows({
 export function allocateMiddleRows({
   foregroundMaxRows,
   foregroundOpen,
+  inputVisible = true,
   reverseSearchOpen,
   rows,
   slashPaletteOpen,
@@ -96,6 +100,7 @@ export function allocateMiddleRows({
 }: {
   readonly foregroundMaxRows?: number;
   readonly foregroundOpen: boolean;
+  readonly inputVisible?: boolean;
   readonly reverseSearchOpen: boolean;
   readonly rows: number;
   readonly slashPaletteOpen: boolean;
@@ -108,6 +113,7 @@ export function allocateMiddleRows({
     0,
     rows -
       pinnedChromeRows({
+        inputVisible,
         reverseSearchOpen,
         slashPaletteOpen,
         tipVisible,
@@ -310,6 +316,7 @@ export function App(props: AppProps): React.JSX.Element {
     transcriptViewerOpen;
   const tipRowVisible = shouldShowTipRow({ foregroundOpen });
   const inputDisabled = props.inputDisabled === true || foregroundOpen;
+  const inputBarVisible = !foregroundOpen;
 
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const subagentControlTarget = resolveChildControlStreamTarget({
@@ -345,6 +352,7 @@ export function App(props: AppProps): React.JSX.Element {
           ? FORM_FOREGROUND_MAX_ROWS
           : undefined,
     foregroundOpen,
+    inputVisible: inputBarVisible,
     reverseSearchOpen,
     rows,
     slashPaletteOpen,
@@ -551,6 +559,7 @@ export function App(props: AppProps): React.JSX.Element {
         {tipRowVisible ? <TipRow /> : null}
         <InputBar
           onSubmit={props.onSubmit}
+          collapseWhenDisabled={!inputBarVisible}
           disabled={inputDisabled}
           history={props.history}
         />
