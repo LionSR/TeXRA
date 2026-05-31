@@ -17,7 +17,9 @@ import {
   STREAM_STATUS,
   STREAM_LOG_ENTRY_TYPES,
   TODO_STATUS,
+  TOOL_USE_STATUS,
   type ActiveChildInfo,
+  type NormalizedToolUse,
 } from '@shared/schemas';
 import { getDefaultStreamLogStore } from '@transcript';
 
@@ -60,6 +62,7 @@ const SHOW_EXTERNAL_INQUIRY = process.env.HARNESS_EXTERNAL_INQUIRY === '1';
 const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
 const PLAN_APPROVAL_ODYSSEY = process.env.HARNESS_PLAN_APPROVAL_ODYSSEY === '1';
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
+const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const EXTERNAL_INQUIRY_QUESTION =
@@ -132,6 +135,43 @@ function makeEntries(count: number): ConversationEntry[] {
     });
   }
   return entries;
+}
+
+function makeLongToolOutput(): NormalizedToolUse {
+  return {
+    parsed: {},
+    toolName: 'bash',
+    errorText: '',
+    outputText: Array.from(
+      { length: 18 },
+      (_, index) =>
+        `tool-output-line-${String(index + 1).padStart(2, '0')}${index === 9 ? ' hidden-middle' : ''}`,
+    ).join('\n'),
+    userInstructionText: '',
+    input: { command: 'python3 enumerate_triples.py' },
+    isError: false,
+    isUserFeedback: false,
+    headerSummary: 'python3 enumerate_triples.py',
+    status: TOOL_USE_STATUS.COMPLETED,
+  };
+}
+
+function makeLongToolOutputEntries(): ConversationEntry[] {
+  return [
+    {
+      id: 'long-tool-user',
+      role: 'user',
+      text: 'Enumerate Pythagorean triples and show the complete output.',
+      finalized: true,
+    },
+    {
+      id: 'long-tool-output',
+      role: 'tool',
+      text: '',
+      finalized: true,
+      toolUse: makeLongToolOutput(),
+    },
+  ];
 }
 
 function seedSubagentFollowupTranscript(): void {
@@ -315,7 +355,9 @@ patchStream(STREAM_ID, (slice) => ({
   status: QUEUED_FOLLOW_UPS.length > 0 ? STREAM_STATUS.RUNNING : slice.status,
   runStartedAt:
     QUEUED_FOLLOW_UPS.length > 0 ? Date.now() - 42_000 : slice.runStartedAt,
-  entries: makeEntries(ENTRY_COUNT),
+  entries: SHOW_LONG_TOOL_OUTPUT
+    ? makeLongToolOutputEntries()
+    : makeEntries(ENTRY_COUNT),
   queuedFollowUps: QUEUED_FOLLOW_UPS.length,
   queuedFollowUpMessages: QUEUED_FOLLOW_UPS,
 }));
