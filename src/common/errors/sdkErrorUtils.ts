@@ -5,7 +5,12 @@ import {
   type ProviderError,
   type StreamDiagnostics,
 } from '@shared/schemas';
-import { extractErrorMessage, isObject, isString } from '@utils/core';
+import {
+  extractErrorMessage,
+  isFiniteNumber,
+  isObject,
+  isString,
+} from '@utils/core';
 
 import { toErrorMessage } from './errorMessage';
 import { isDiskFullError } from './errorPredicates';
@@ -319,9 +324,7 @@ type StatusCarrier = {
 };
 
 function pickStatus(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? value
-    : undefined;
+  return isFiniteNumber(value) ? value : undefined;
 }
 
 function detectStatusCode(err: unknown): number | undefined {
