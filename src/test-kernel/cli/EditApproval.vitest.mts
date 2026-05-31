@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  COMPACT_EDIT_APPROVAL_MAX_ROWS,
   editApprovalDiffRowsBudget,
   editApprovalFeedbackRows,
 } from '@cli/chat/tui/modals/EditApproval';
@@ -51,13 +52,14 @@ describe('CLI edit approval layout', () => {
   });
 
   it('uses compact diff rows on short terminals', () => {
+    expect(COMPACT_EDIT_APPROVAL_MAX_ROWS).toBe(8);
     expect(
       editApprovalDiffRowsBudget({
-        availableRows: 10,
+        availableRows: 8,
         columns: 80,
         title: 'Apply edit to draft.tex?',
       }),
-    ).toBe(3);
+    ).toBe(2);
   });
 
   it('keeps a usable diff line on very short terminals', () => {
