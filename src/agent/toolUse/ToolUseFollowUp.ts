@@ -14,6 +14,7 @@ import { getActiveChildren } from '@agent/runtime/executionRegistry';
 import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
@@ -71,6 +72,21 @@ export async function sendFollowUp(
   streamId: StreamTabId,
   text: string,
 ): Promise<SendFollowUpResult> {
+  const status = StreamStatusService.get(streamId);
+  const activeChildren = getActiveChildren(streamId);
+  const hasActiveChildren =
+    activeChildren.subagents.length > 0 || activeChildren.processes.length > 0;
+  if (status !== undefined && !isInFlightStatus(status)) {
+    if (hasActiveChildren) {
+      ToolUseFollowUpQueue.enqueue(streamId, text, { force: true });
+      return { status: 'queued', reason: 'children_running' };
+    }
+    logger.warn(
+      `No active session for follow-up on stream ${streamId}. Status: ${status}`,
+    );
+    return { status: 'no_session', streamStatus: status };
+  }
+
   // Try active flow context first
   const flowContext = getToolUseFlowContext(streamId);
   if (flowContext) {
@@ -86,14 +102,12 @@ export async function sendFollowUp(
   }
 
   // Queue if session is waiting (paused, can be resumed)
-  const status = StreamStatusService.get(streamId);
   if (status === STREAM_STATUS.WAITING) {
     ToolUseFollowUpQueue.enqueue(streamId, text);
     return { status: 'queued', reason: 'waiting' };
   }
 
-  const { subagents, processes } = getActiveChildren(streamId);
-  if (subagents.length > 0 || processes.length > 0) {
+  if (hasActiveChildren) {
     // force:true reopens a queue sealed by sessionLifecycle disposal — the
     // caller must auto-resume the parent or re-release, or late child
     // deliveries will leak into the next run on this stream.
