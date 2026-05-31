@@ -334,6 +334,32 @@ describe('CLI StatusBar display model', () => {
     expect(display.right).toBeUndefined();
   });
 
+  it('can hide queued follow-up previews while keeping the durable count', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: ['Keep the proof under one page.'],
+      queuedFollowUpPreview: false,
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      ctrlCAction: 'stop',
+      width: 80,
+    });
+
+    expect(display.left.map(statusBarSegmentText)).toContain('queued 1');
+    expect(display.right).toBeUndefined();
+  });
+
   it('scopes Ctrl-C stop to the root when focus is on a child stream', () => {
     const parentStream = new Map([['child', 'root']]);
 
