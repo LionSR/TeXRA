@@ -4,8 +4,15 @@ import { Box, Text, useInput } from 'ink';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { BaseTextInput } from '../input/BaseTextInput';
 import { ReverseSearch } from '../input/ReverseSearch';
+import { isCtrlInput } from '../input/inputKeys';
 import { SlashPalette } from '../commands/SlashPalette';
-import { matchSlashCommands, parseSlashInput } from '../commands/slashRegistry';
+import {
+  matchSlashCommands,
+  parseSlashInput,
+  slashPickIntent,
+  type SlashCommand,
+  type SlashPickIntent,
+} from '../commands/slashRegistry';
 import { cliState } from '../state/cliState';
 import type { InputHistory } from '../history/inputHistory';
 
@@ -32,7 +39,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   // chords so this handler still fires.
   useInput((input, key) => {
     if (disabled) return;
-    if (key.ctrl && input.toLowerCase() === 'r' && historyRef.current) {
+    if (isCtrlInput(input, key, 'r') && historyRef.current) {
       setReverseSearchOpen(true);
     }
   });
@@ -54,6 +61,55 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       onSubmit(trimmed);
     },
     [onSubmit],
+  );
+
+  const acceptSlashCommand = useCallback(
+    (cmd: SlashCommand, intent: SlashPickIntent, remainder: string): void => {
+      if (cmd.formComponent) {
+        // Structured forms own the screen — clear the input and let
+        // the active-form signal mount the component (see App.tsx).
+        const Form = cmd.formComponent;
+        setValue('');
+        cliState.activeForm.set({
+          commandName: cmd.name,
+          render: (close, availableRows) => (
+            <Form
+              remainder={remainder.trimStart()}
+              availableRows={availableRows}
+              onDone={() => close()}
+            />
+          ),
+        });
+        return;
+      }
+      if (intent === 'submit') {
+        handleSubmit(
+          `/${cmd.name}${remainder ? ` ${remainder.trimStart()}` : ''}`,
+        );
+        return;
+      }
+      setValue(`/${cmd.name}${remainder ? ` ${remainder.trimStart()}` : ' '}`);
+    },
+    [handleSubmit],
+  );
+
+  const handleInputChunkSubmit = useCallback(
+    (submitted: string) => {
+      const slash = parseSlashInput(submitted);
+      if (slash !== undefined && !/\s/.test(submitted.slice(1))) {
+        const chosen = matchSlashCommands(slash.name)[0];
+        if (chosen !== undefined) {
+          acceptSlashCommand(
+            chosen,
+            slashPickIntent(chosen, 'enter'),
+            slash.remainder,
+          );
+          return;
+        }
+      }
+      handleSubmit(submitted);
+    },
+    [acceptSlashCommand, handleSubmit],
   );
 
   // Slash palette pops up while typing /…
@@ -94,36 +150,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         <SlashPalette
           query={parsed.name}
           onPick={(cmd, intent) => {
-            if (cmd.formComponent) {
-              // Structured forms own the screen — clear the input and let
-              // the active-form signal mount the component (see App.tsx).
-              const Form = cmd.formComponent;
-              setValue('');
-              cliState.activeForm.set({
-                commandName: cmd.name,
-                render: (close, availableRows) => (
-                  <Form
-                    remainder={parsed.remainder.trimStart()}
-                    availableRows={availableRows}
-                    onDone={() => close()}
-                  />
-                ),
-              });
-              return;
-            }
-            if (intent === 'submit') {
-              handleSubmit(
-                `/${cmd.name}${
-                  parsed.remainder ? ` ${parsed.remainder.trimStart()}` : ''
-                }`,
-              );
-              return;
-            }
-            setValue(
-              `/${cmd.name}${
-                parsed.remainder ? ` ${parsed.remainder.trimStart()}` : ' '
-              }`,
-            );
+            acceptSlashCommand(cmd, intent, parsed.remainder);
           }}
           onCancel={() => {
             /* Esc clears the slash — caller can re-open by typing again. */
@@ -147,6 +174,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           value={value}
           focus={!disabled && !reverseSearchOpen}
           onChange={setValue}
+          onInputChunkSubmit={handleInputChunkSubmit}
           onSubmit={showPalette ? () => undefined : handleSubmit}
         />
       </Box>

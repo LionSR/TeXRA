@@ -1,6 +1,16 @@
+import {
+  isEscapeInput,
+  isUnhandledControlInput,
+  normalizedCtrlInput,
+} from './inputKeys';
+
 export interface TextEdit {
   readonly value: string;
   readonly cursor: number;
+}
+
+export interface TextInputChunkEdit extends TextEdit {
+  readonly submit: boolean;
 }
 
 export function clampCursor(cursor: number, length: number): number {
@@ -61,4 +71,49 @@ export function deletePreviousWord(value: string, cursor: number): TextEdit {
     value: trimmed + value.slice(c),
     cursor: trimmed.length,
   };
+}
+
+export function applyTerminalInputChunk(
+  value: string,
+  cursor: number,
+  input: string,
+): TextInputChunkEdit {
+  let edit: TextEdit = { value, cursor: clampCursor(cursor, value.length) };
+  let submit = false;
+
+  for (const ch of input) {
+    if (ch === '\r' || ch === '\n') {
+      submit = true;
+      break;
+    }
+
+    const ctrl = normalizedCtrlInput(ch, {});
+    if (ctrl === 'a') {
+      edit = { value: edit.value, cursor: 0 };
+      continue;
+    }
+    if (ctrl === 'e') {
+      edit = { value: edit.value, cursor: edit.value.length };
+      continue;
+    }
+    if (ctrl === 'u') {
+      edit = deleteToStart(edit.value, edit.cursor);
+      continue;
+    }
+    if (ctrl === 'k') {
+      edit = deleteToEnd(edit.value, edit.cursor);
+      continue;
+    }
+    if (ctrl === 'w') {
+      edit = deletePreviousWord(edit.value, edit.cursor);
+      continue;
+    }
+    if (ctrl || isEscapeInput(ch, {}) || isUnhandledControlInput(ch)) {
+      continue;
+    }
+
+    edit = insertText(edit.value, edit.cursor, ch);
+  }
+
+  return { ...edit, submit };
 }
