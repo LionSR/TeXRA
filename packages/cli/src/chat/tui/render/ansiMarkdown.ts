@@ -18,6 +18,7 @@ import stringWidth from 'string-width';
 import {
   createMarkdownProcessor,
   createMarkdownRenderer,
+  type MarkdownProcessorRenderEnv,
   type MarkdownItInstance,
   type MarkdownProcessor,
 } from '@shared/markdown';
@@ -124,6 +125,12 @@ function renderAnsiTable(
   });
   for (const row of rows) table.push([...row]);
   return table.toString();
+}
+
+function restoreProtectedLatexInCell(cell: string, env: unknown): string {
+  const restore = (env as MarkdownProcessorRenderEnv | undefined)
+    ?.restoreProtectedLatex;
+  return restore ? restore(cell) : cell;
 }
 
 function configureAnsi(
@@ -324,7 +331,12 @@ function configureAnsi(
             break;
           }
           case 'inline':
-            cells.push(renderInline(token.children ?? [], options, env));
+            cells.push(
+              restoreProtectedLatexInCell(
+                renderInline(token.children ?? [], options, env),
+                env,
+              ),
+            );
             break;
         }
       }
