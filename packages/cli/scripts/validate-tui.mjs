@@ -1018,7 +1018,13 @@ const SCENARIOS = [
       'No active tasks or sub-workflows.',
       'Esc close',
     ],
-    unexpect: ['Enter view', 'k kill', 'navigate'],
+    unexpect: [
+      'Enter view',
+      'k kill',
+      'navigate',
+      '│                                                                                                  │\n│ No active tasks or sub-workflows.',
+      '│ No active tasks or sub-workflows.                                                                │\n│                                                                                                  │',
+    ],
     maxBlankLinesBetween: [
       {
         from: 'entry-4 chat history line',
