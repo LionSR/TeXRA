@@ -76,4 +76,36 @@ describe('CLI confirm-card key handling', () => {
       compact.map((hint) => `${hint.key} ${hint.action}`).join(' · ').length,
     ).toBeLessThanOrEqual(56);
   });
+
+  it('drops optional approval hints before hiding cancel on narrow terminals', () => {
+    expect(
+      confirmCardKeyHintsForWidth({
+        alwaysAllowLabel: 'approve session',
+        maxColumns: 42,
+      }),
+    ).toEqual([
+      { key: 'y', action: 'approve' },
+      { key: 'n', action: 'reject' },
+      { key: 'e', action: 'note' },
+      { key: 'Esc', action: 'cancel' },
+    ]);
+
+    expect(
+      confirmCardKeyHintsForWidth({
+        alwaysAllowLabel: 'approve session',
+        maxColumns: 36,
+      }),
+    ).toEqual([
+      { key: 'y', action: 'approve' },
+      { key: 'n', action: 'reject' },
+      { key: 'Esc', action: 'cancel' },
+    ]);
+
+    expect(
+      confirmCardKeyHintsForWidth({
+        alwaysAllowLabel: 'approve session',
+        maxColumns: 10,
+      }),
+    ).toEqual([{ key: 'Esc', action: 'cancel' }]);
+  });
 });
