@@ -10,11 +10,17 @@ import {
   type WorkflowFileOperation,
   type WorkflowFileOperationRequest,
 } from '@controllers/progressView/ProgressWorkflowActionsController';
-import { AgentCategory } from '@agent/core/AgentDataclass';
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import type { ExecutionRequest } from '@agent/core/executionRequests';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
+import type { ExecutionRequest } from '@agent/core/execution/executionRequests';
 
-import type { TaskState, WorkflowTaskState } from '@agent/core/TaskState';
+import type {
+  TaskState,
+  WorkflowTaskState,
+} from '@agent/core/execution/TaskState';
 
 // Local imports - shared
 import type { OutputFileInfo, StreamTabId } from '@shared/schemas';

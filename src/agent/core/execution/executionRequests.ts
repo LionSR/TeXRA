@@ -3,7 +3,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
   type AgentConfigInput,
-} from './AgentConfig';
+} from '../definition/AgentConfig';
 
 import type { z } from 'zod';
 

@@ -36,8 +36,8 @@ export {
   AgentConfigSchema,
   type AgentConfig,
   type AgentConfigPayload,
-} from '@agent/core/AgentConfig';
-export { AgentCategory } from '@agent/core/AgentDataclass';
+} from '@agent/core/definition/AgentConfig';
+export { AgentCategory } from '@agent/core/definition/AgentDataclass';
 export type { ExecutionId } from '@shared/schemas';
 
 // ── 3. Building a run request (host → core contract) ──
@@ -49,7 +49,7 @@ export {
   type ExecutionRequest,
   type ValidatedExecutionRequest,
   type ExecutionValidationResult,
-} from '@agent/core/executionRequests';
+} from '@agent/core/execution/executionRequests';
 
 // ── 4. Running an agent ──  (the section to read first)
 /**

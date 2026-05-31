@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import * as agentRegistry from '@agent/index/agentRegistry';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { SupabaseSession } from '@auth/SupabaseSession';

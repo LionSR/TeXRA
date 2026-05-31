@@ -1,6 +1,6 @@
 // Local imports - core types
-import type { ITool, IToolRegistry } from '@agent/core/ToolTypes';
-import { MapToolRegistry } from '@agent/core/ToolTypes';
+import type { ITool, IToolRegistry } from '@agent/core/tools/ToolTypes';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 
 // Local imports - model types
 import {

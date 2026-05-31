@@ -20,9 +20,9 @@ import {
   clearRetryRequest,
 } from '@agent/runtime/runCoordinators';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
-import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
-import type { AgentWorkflowSetting } from '@agent/core/AgentDataclass';
+import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
+import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import { RoundPersistedFlow } from '@agent/node/roundPersistedFlow';
 import {

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExecutionId } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 

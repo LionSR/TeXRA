@@ -1,7 +1,7 @@
 import { defineCommand, showUsage } from 'citty';
 
 import { getVisibleAgents, loadAgents } from '@agent/index';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { listCliHistoryEntries } from '../runtime/history';

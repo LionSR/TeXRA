@@ -3,7 +3,7 @@ import type { AgentTrace } from '@agent/trace';
 import type {
   AgentPrompt,
   AgentWorkflowSetting,
-} from '@agent/core/AgentDataclass';
+} from '@agent/core/definition/AgentDataclass';
 import { loadTexraRules } from '@utils/files/rulesUtils';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 

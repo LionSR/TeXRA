@@ -1,6 +1,6 @@
 import { loadAgents } from '@agent/index';
 import { writeTerminalStatus } from '@agent/storage';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';

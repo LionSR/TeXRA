@@ -17,10 +17,13 @@ import {
   logProgressStatus,
   logSdkError,
 } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/AgentConfig';
-import { hasEndTag, type AgentSetting } from '@agent/core/AgentDataclass';
-import { type OpenAIAPIResponseUsage } from '@agent/core/ResponseUsage';
-import { AgentWorkspaceState } from '@agent/core/AgentWorkspaceState';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  hasEndTag,
+  type AgentSetting,
+} from '@agent/core/definition/AgentDataclass';
+import { type OpenAIAPIResponseUsage } from '@agent/core/usage/ResponseUsage';
+import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';

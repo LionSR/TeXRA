@@ -1,6 +1,6 @@
 import { getAgent, loadAgents } from '@agent/index';
 import { listExecutions } from '@agent/storage';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { isNonEmptyString } from '@utils/core/stringCore';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import {

@@ -11,7 +11,7 @@ import {
   AgentWorkflowSettingSchema,
   AgentToolUseSettingSchema,
   AgentPromptSchema,
-} from '@agent/core/AgentDataclass';
+} from '@agent/core/definition/AgentDataclass';
 import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { validateAgentYamlContent } from '@agent/runtime/agentLoad';
 import { renderAgentTemplateString } from '@commands/agent/agentTemplateRenderer';

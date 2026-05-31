@@ -7,7 +7,7 @@ import {
 import {
   RunUsageAccumulatorJSONSchema,
   recordNormalizedUsage,
-} from './RunUsageAccumulator';
+} from '../usage/RunUsageAccumulator';
 export const ConversationRoundStateSnapshotSchema = z.object({
   roundIndex: z.int().nonnegative(),
   continuationCount: z.int().nonnegative().prefault(0),

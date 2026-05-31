@@ -12,11 +12,11 @@
 import { z } from 'zod';
 
 import { getExecutionStore } from '@agent/storage';
-import { AgentConfigSchema } from '@agent/core/AgentConfig';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
-import { AgentRunStateSnapshotSchema } from '@agent/core/AgentState';
-import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/AgentWorkspaceState';
-import { UserVariableChannelsSchema } from '@agent/core/AgentCycleOptions';
+import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
+import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/execution/AgentWorkspaceState';
+import { UserVariableChannelsSchema } from '@agent/core/definition/AgentCycleOptions';
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
 import {
   TOOL_USE_SNAPSHOT_VERSION,
@@ -26,7 +26,7 @@ import {
   isToolUseTaskState,
   isWorkflowTaskState,
   type TaskState,
-} from '@agent/core/TaskState';
+} from '@agent/core/execution/TaskState';
 import { createChannelTrace } from '@logger';
 import {
   ExecutionIdSchema,

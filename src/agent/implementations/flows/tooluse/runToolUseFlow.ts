@@ -15,8 +15,8 @@ import {
   flowKey,
   type FlowRecord,
 } from '@agent/node/persistedFlow';
-import type { AgentToolUseSetting } from '@agent/core/AgentDataclass';
-import type { IToolRegistry } from '@agent/core/ToolTypes';
+import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
+import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { listToolInjections } from '@agent/runtime/toolInjection';

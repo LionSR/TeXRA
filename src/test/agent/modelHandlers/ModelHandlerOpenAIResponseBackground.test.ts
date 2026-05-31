@@ -9,7 +9,7 @@ import {
 } from 'llm-zoo';
 
 // Local imports - agent
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import * as configModule from '@agent/core/config';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
 

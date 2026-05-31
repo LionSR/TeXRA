@@ -9,7 +9,7 @@ import {
   type ExecutionMeta,
   type ResultMeta,
 } from '@agent/storage';
-import type { AgentConfig } from '@agent/core/AgentConfig';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { flowKey } from '@agent/node/persistedFlow';
 import { isFileNotFoundError } from '@common/errors';
 import { isDirectory } from '@common/files/fsEntryType';

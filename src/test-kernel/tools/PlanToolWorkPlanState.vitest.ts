@@ -9,7 +9,7 @@ import {
 import {
   FileInteractionState,
   WorkPlanState,
-} from '@agent/core/AgentWorkspaceState';
+} from '@agent/core/execution/AgentWorkspaceState';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { type RunCoordinators } from '@agent/runtime/RunContext';
 import { withToolEnvironment } from '@agent/toolUse/ToolFileInteractionContext';

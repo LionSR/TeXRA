@@ -2,10 +2,16 @@
 import { strict as assert } from 'assert';
 
 // Local imports - agent components
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/AgentConfig';
-import { AgentCategory } from '@agent/core/AgentDataclass';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 // Type imports
-import type { AgentSetting, AgentPrompt } from '@agent/core/AgentDataclass';
+import type {
+  AgentSetting,
+  AgentPrompt,
+} from '@agent/core/definition/AgentDataclass';
 // Internal imports
 import { buildUserVars, getToolFlags } from '@agent/utils/userVars';
 import * as configModule from '@utils/config';
