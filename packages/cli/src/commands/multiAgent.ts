@@ -24,7 +24,6 @@ import {
   planCliMultiAgentPresetRun,
   readCliMultiAgentPresets,
   withCliMultiAgentPresetVisibility,
-  type CliMultiAgentPreset,
   type CliMultiAgentPresetRunPlan,
 } from '../runtime/multiAgentPresets';
 import { getCliAuthProvider } from '../runtime/supabaseAuth';
@@ -34,6 +33,7 @@ import {
   buildHeadlessRunContext,
   resolveCliRunModel,
 } from './_helpers/modelArg';
+import { formatMultiAgentRunInstruction } from './_helpers/multiAgentInstruction';
 import { emitCliResult } from './_helpers/output';
 import {
   GLOBAL_ARGS,
@@ -114,27 +114,6 @@ export function writeMissingPresetAgents(
   writeTextStderr(
     `WARN preset ${plan.preset.id} references unavailable agents: ${missing.join(', ')}`,
   );
-}
-
-function formatMultiAgentRunInstruction(
-  preset: CliMultiAgentPreset,
-  init: Pick<MultiAgentRunInit, 'inputFiles' | 'instruction'>,
-): string {
-  const parts = [
-    `Run the "${preset.name}" multi-agent team preset.`,
-    preset.description,
-    'Use the visible workflow and tool-use agents as the team available for delegation.',
-  ];
-  const instruction = init.instruction.trim();
-  if (instruction) {
-    parts.push(
-      init.inputFiles.length > 0
-        ? 'Additional user instruction:'
-        : 'User instruction:',
-      instruction,
-    );
-  }
-  return parts.join('\n\n');
 }
 
 function writeMultiAgentRunResult(
@@ -231,6 +210,7 @@ export async function runMultiAgentPreset(
     instruction: formatMultiAgentRunInstruction(plan.preset, {
       inputFiles,
       instruction: init.instruction,
+      approvalContext: runContext,
     }),
     workingDirectory: runContext.cwd,
     agentCategory: AgentCategory.ToolUse,
