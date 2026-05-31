@@ -27,6 +27,10 @@ export interface BaseTextInputProps {
   readonly value: string;
   readonly placeholder?: string;
   readonly focus?: boolean;
+  /** Clamp the rendered value to this many terminal rows while preserving
+   *  the full editable value passed to onChange/onSubmit. */
+  readonly maxDisplayRows?: number;
+  readonly displayWidth?: number;
   /** Pin the caret externally. When omitted, the component tracks the caret
    *  internally so arrow keys / Home/End / Ctrl-A,E,U,K,W work out of the box. */
   readonly cursor?: number;
@@ -35,9 +39,139 @@ export interface BaseTextInputProps {
   readonly onChange: (value: string) => void;
 }
 
+export interface TextInputDisplayWindow {
+  readonly value: string;
+  readonly cursor: number;
+  readonly clipped: boolean;
+}
+
+interface TextInputDisplayRow {
+  readonly start: number;
+  readonly end: number;
+  readonly breakKind: 'soft' | 'hard' | 'end';
+}
+
+function textInputDisplayRows(
+  value: string,
+  width: number,
+): TextInputDisplayRow[] {
+  const rows: TextInputDisplayRow[] = [];
+  let rowStart = 0;
+  let column = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const ch = value[index];
+    if (ch === '\n') {
+      rows.push({ start: rowStart, end: index, breakKind: 'hard' });
+      rowStart = index + 1;
+      column = 0;
+      continue;
+    }
+    if (column === width) {
+      rows.push({ start: rowStart, end: index, breakKind: 'soft' });
+      rowStart = index;
+      column = 0;
+    }
+    column += 1;
+  }
+
+  rows.push({ start: rowStart, end: value.length, breakKind: 'end' });
+  return rows;
+}
+
+function cursorDisplayRowIndex(
+  rows: readonly TextInputDisplayRow[],
+  cursor: number,
+): number {
+  const rowIndex = rows.findIndex((row, index) => {
+    if (cursor < row.start || cursor > row.end) return false;
+    if (cursor === row.end && row.breakKind === 'soft') {
+      return index === rows.length - 1;
+    }
+    return true;
+  });
+  return rowIndex < 0 ? Math.max(0, rows.length - 1) : rowIndex;
+}
+
+function leadingEllipsisText(text: string, width: number): string {
+  if (width <= 1) return '…';
+  return text.length >= width ? `…${text.slice(1)}` : `…${text}`;
+}
+
+export function textInputDisplayWindow({
+  cursor,
+  maxDisplayRows,
+  value,
+  width,
+}: {
+  readonly cursor: number;
+  readonly maxDisplayRows?: number;
+  readonly value: string;
+  readonly width?: number;
+}): TextInputDisplayWindow {
+  const rowCount = Math.max(1, maxDisplayRows ?? 0);
+  const columnCount = Math.max(1, width ?? 0);
+  if (maxDisplayRows === undefined || width === undefined) {
+    return { value, cursor: clampCursor(cursor, value.length), clipped: false };
+  }
+
+  const sourceCursor = clampCursor(cursor, value.length);
+  const rows = textInputDisplayRows(value, columnCount);
+  const cursorRowIndex = cursorDisplayRowIndex(rows, sourceCursor);
+  const keepRowsAfterCursor =
+    rows.length <= rowCount
+      ? rows.length - cursorRowIndex - 1
+      : Math.min(rows.length - cursorRowIndex - 1, Math.floor(rowCount / 4));
+  const endRow =
+    rows.length <= rowCount
+      ? rows.length
+      : Math.min(rows.length, cursorRowIndex + keepRowsAfterCursor + 1);
+  const startRow = rows.length <= rowCount ? 0 : Math.max(0, endRow - rowCount);
+  const visibleRows = rows.slice(startRow, endRow);
+  const clipped = startRow > 0 || endRow < rows.length;
+  const firstRowOriginalLength =
+    visibleRows[0] === undefined
+      ? 0
+      : visibleRows[0].end - visibleRows[0].start;
+  const rowTexts = visibleRows.map((row) => value.slice(row.start, row.end));
+  if (clipped && startRow > 0) {
+    rowTexts[0] = leadingEllipsisText(rowTexts[0] ?? '', columnCount);
+  }
+  const displayValue = rowTexts.join('\n');
+  const displayCursorRow = Math.max(0, cursorRowIndex - startRow);
+  const cursorRow = visibleRows[displayCursorRow] ?? visibleRows.at(-1);
+  const cursorColumn =
+    cursorRow === undefined
+      ? 0
+      : clampCursor(
+          sourceCursor - cursorRow.start,
+          rowTexts[displayCursorRow]?.length ?? 0,
+        );
+  const ellipsisCursorColumn =
+    clipped && startRow > 0 && displayCursorRow === 0
+      ? firstRowOriginalLength >= columnCount
+        ? Math.max(1, cursorColumn)
+        : cursorColumn + 1
+      : cursorColumn;
+  const cursorPrefixLength = rowTexts
+    .slice(0, displayCursorRow)
+    .reduce((sum, row) => sum + row.length + 1, 0);
+
+  return {
+    value: displayValue,
+    cursor: clampCursor(
+      cursorPrefixLength + ellipsisCursorColumn,
+      displayValue.length,
+    ),
+    clipped,
+  };
+}
+
 export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   const {
+    displayWidth,
     value,
+    maxDisplayRows,
     placeholder,
     focus = true,
     onChange,
@@ -161,11 +295,18 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     );
   }
 
-  if (!focus) return <Text>{value}</Text>;
+  const display = textInputDisplayWindow({
+    cursor,
+    maxDisplayRows,
+    value,
+    width: displayWidth,
+  });
 
-  const before = value.slice(0, cursor);
-  const ch = value[cursor];
-  const after = value.slice(cursor + 1);
+  if (!focus) return <Text>{display.value}</Text>;
+
+  const before = display.value.slice(0, display.cursor);
+  const ch = display.value[display.cursor];
+  const after = display.value.slice(display.cursor + 1);
   // Inverse-on-newline collapses to nothing visible; render the caret as a
   // leading space and let the literal newline carry the line break.
   if (ch === '\n') {
