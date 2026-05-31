@@ -44,9 +44,11 @@ const PROVIDER_HANDLERS: Record<ModelProvider, ProviderHandlerLoader | null> = {
     (await import('@agent/modelHandlers/openai/modelHandlerDeepSeek'))
       .ModelHandlerDeepSeek,
   [ModelProvider.XAI]: async () =>
-    (await import('@agent/modelHandlers/openai/modelHandlerXAI')).ModelHandlerXAI,
+    (await import('@agent/modelHandlers/openai/modelHandlerXAI'))
+      .ModelHandlerXAI,
   [ModelProvider.MOONSHOT]: async () =>
-    (await import('@agent/modelHandlers/openai/modelHandlerKimi')).ModelHandlerKimi,
+    (await import('@agent/modelHandlers/openai/modelHandlerKimi'))
+      .ModelHandlerKimi,
   [ModelProvider.DASHSCOPE]: async () =>
     (await import('@agent/modelHandlers/openai/modelHandlerDashScope'))
       .ModelHandlerDashScope,
@@ -54,10 +56,12 @@ const PROVIDER_HANDLERS: Record<ModelProvider, ProviderHandlerLoader | null> = {
     (await import('@agent/modelHandlers/openai/modelHandlerMiniMax'))
       .ModelHandlerMiniMax,
   [ModelProvider.GLM]: async () =>
-    (await import('@agent/modelHandlers/openai/modelHandlerGLM')).ModelHandlerGLM,
+    (await import('@agent/modelHandlers/openai/modelHandlerGLM'))
+      .ModelHandlerGLM,
   [ModelProvider.OTHERS]: async () =>
-    (await import('@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative'))
-      .ModelHandlerOpenRouterNative,
+    (
+      await import('@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative')
+    ).ModelHandlerOpenRouterNative,
   [ModelProvider.COPILOT]: null,
 };
 

@@ -54,7 +54,10 @@ import type { FileLocation } from '@utils/files/taskRunStorage';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
 import { normalizeUsage } from '../support/UsageNormalizer';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
-import { tagOpenAISdkError, withSdkErrorTag } from '../support/sdkErrorAdapters';
+import {
+  tagOpenAISdkError,
+  withSdkErrorTag,
+} from '../support/sdkErrorAdapters';
 import {
   classifyOpenAIBackgroundResumeError,
   createOpenAIBackgroundPollingError,
