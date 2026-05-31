@@ -456,6 +456,7 @@
               "sections",
               "latex_forbidden_commands",
               "characters",
+              "font_commands",
               "latex_xml",
               "latex_document",
               "unicode",
@@ -483,10 +484,12 @@
               ]
             },
             "default": [
+              "fenced_latex_blocks",
               "inline_math",
               "parentheses",
               "latexdiff_markup",
-              "equation_style"
+              "equation_style",
+              "personal_style_contextual"
             ],
             "description": "List of enabled regex LaTeX replacement categories",
             "order": 9
