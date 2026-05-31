@@ -118,8 +118,16 @@ export async function expandRunInputs(
   inputSpecs: readonly string[],
   contextSpecs: readonly string[],
   cwd: string,
+  options: { readonly allowEmptyInput?: boolean } = {},
 ): Promise<{ inputFiles: string[]; contextFiles: string[] }> {
-  const inputFiles = await expandWorkflowInputSpecs(inputSpecs, cwd);
+  const inputFiles = await expandWorkflowInputSpecs(
+    inputSpecs,
+    cwd,
+    '--input',
+    {
+      allowEmpty: options.allowEmptyInput,
+    },
+  );
   const contextFiles = (
     await Promise.all(
       contextSpecs.map((spec) =>
