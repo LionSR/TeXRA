@@ -9,6 +9,8 @@ export type ConfirmCardKeyAction =
 
 export interface ConfirmCardKey {
   readonly escape?: boolean;
+  readonly ctrl?: boolean;
+  readonly meta?: boolean;
 }
 
 export interface ConfirmCardHintAction {
@@ -33,6 +35,7 @@ export function confirmCardKeyAction(
   allowAlways: boolean,
 ): ConfirmCardKeyAction {
   if (key.escape) return 'reject';
+  if (key.ctrl || key.meta) return 'ignore';
   switch (input.toLowerCase()) {
     case 'y':
       return 'approve';
