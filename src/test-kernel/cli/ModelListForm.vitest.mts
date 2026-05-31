@@ -310,9 +310,9 @@ describe('CLI Select disabled-row focus', () => {
 
 describe('CLI ModelListForm row budget', () => {
   it('uses compact slash forms before bordered content clips titles', () => {
-    expect(COMPACT_FORM_MAX_ROWS).toBe(8);
-    expect(isCompactFormRows(8)).toBe(true);
-    expect(isCompactFormRows(9)).toBe(false);
+    expect(COMPACT_FORM_MAX_ROWS).toBe(9);
+    expect(isCompactFormRows(9)).toBe(true);
+    expect(isCompactFormRows(10)).toBe(false);
   });
 
   it('removes the row floor on short terminals', () => {
