@@ -889,9 +889,11 @@ export class ModelHandlerOpenAI<
         const formattedMediaContent = await this.createMediaMessage(mediaFiles);
         roundContent.push(...formattedMediaContent);
       } catch (err) {
-        this.logger.error(
+        logSdkError(
+          this.logger,
           `Error processing media files for follow-up round: ${getSdkErrorMessage(err)}`,
-          { data: err },
+          err,
+          { operation: 'process media files' },
         );
       }
     }
