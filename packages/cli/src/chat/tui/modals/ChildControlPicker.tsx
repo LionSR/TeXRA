@@ -37,6 +37,8 @@ export interface ChildControlPickerProps {
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }
 
+export const TASK_DETAIL_LABEL_WIDTH = 13;
+
 export function pickerTitle(mode: ChildControlMode): string {
   return mode === 'subagents' ? 'Subagents' : 'Tasks and sub-workflows';
 }
@@ -100,7 +102,7 @@ function metaLine(
   if (!value) return null;
   return (
     <Box>
-      <Box width={10}>
+      <Box width={TASK_DETAIL_LABEL_WIDTH}>
         <Text bold>{label}:</Text>
       </Box>
       <Text>{value}</Text>
@@ -324,7 +326,7 @@ function TaskDetailView({
       )}
       {layout.showCommand ? (
         <Box marginTop={layout.compact ? 0 : 1}>
-          <Box width={13}>
+          <Box width={TASK_DETAIL_LABEL_WIDTH}>
             <Text bold>{`${commandLabel}:`}</Text>
           </Box>
           <Text wrap="truncate-end">{item.command}</Text>

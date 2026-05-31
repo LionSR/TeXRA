@@ -8,6 +8,7 @@ import {
   emptyPickerText,
   pickerKeyHints,
   pickerTitle,
+  TASK_DETAIL_LABEL_WIDTH,
   taskDetailCommandLabel,
 } from '@cli/chat/tui/modals/ChildControlPicker';
 import {
@@ -688,6 +689,9 @@ describe('CLI child execution controls', () => {
   it('labels task detail metadata by execution type', () => {
     expect(taskDetailCommandLabel('process')).toBe('Command');
     expect(taskDetailCommandLabel('subagent')).toBe('Description');
+    expect(TASK_DETAIL_LABEL_WIDTH).toBeGreaterThanOrEqual(
+      'Description:'.length,
+    );
   });
 
   it('preserves output rows in compact task detail views', () => {
