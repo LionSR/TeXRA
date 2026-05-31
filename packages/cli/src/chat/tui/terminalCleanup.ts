@@ -7,6 +7,7 @@ const CLEAR_ITERM_PROGRESS = '\x1b]9;4;0\x07';
 // `/clear` since the TUI no longer uses the alternate screen, so prior
 // `<Static>` transcript lines persist in the primary-buffer scrollback.
 const CLEAR_SCREEN_AND_SCROLLBACK = '\x1b[2J\x1b[3J\x1b[H';
+const CLEAR_VISIBLE_SCREEN = '\x1b[2J\x1b[H';
 
 export interface CleanupTerminalModesOptions {
   readonly clearItermProgress?: boolean;
@@ -26,6 +27,14 @@ export function cleanupTerminalModes(
 export function clearTerminalScrollback(): void {
   try {
     writeSync(1, CLEAR_SCREEN_AND_SCROLLBACK);
+  } catch {
+    // The terminal may have been closed mid-clear; nothing to do.
+  }
+}
+
+export function clearTerminalVisibleScreen(): void {
+  try {
+    writeSync(1, CLEAR_VISIBLE_SCREEN);
   } catch {
     // The terminal may have been closed mid-clear; nothing to do.
   }
