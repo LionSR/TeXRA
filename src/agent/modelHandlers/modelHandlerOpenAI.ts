@@ -52,7 +52,7 @@ import { flexibleFS } from '@utils/files';
 import { extractMimeSubtype, objectToLogString } from '@utils/text/stringUtils';
 import { normalizeUsage } from './support/UsageNormalizer';
 import { prepareExistingOutputContent } from './utils/fileContentUtils';
-import { tagOpenAISdkError, withSdkErrorTag } from './support/sdkErrorAdapters';
+import { tagOpenAISdkError } from './support/sdkErrorAdapters';
 
 // Local file imports
 import { OPENAI_CHAT_FINISH } from './types/StopReasonTypes';
@@ -636,17 +636,12 @@ export class ModelHandlerOpenAI<
     };
   }
 
-  /** Creates a chat completion with model-specific parameters. */
-  async createResponse(
-    options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
-  ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
-    return withSdkErrorTag(tagOpenAISdkError, this.config.provider, () =>
-      this.createResponseImpl(options),
-    );
+  protected override get sdkErrorTagger() {
+    return tagOpenAISdkError;
   }
 
   /** Creates a chat completion after SDK-boundary error tagging is installed. */
-  private async createResponseImpl(
+  protected override async createResponseImpl(
     options: CreateResponseOptions<ChatCompletionMessageParam, OpenAI>,
   ): Promise<CreateResponseResult<ChatCompletion, ChatCompletionMessageParam>> {
     const {
