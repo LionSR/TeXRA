@@ -8,6 +8,9 @@ interface MultiAgentInstructionPreset {
   readonly description: string;
 }
 
+const COMPLETENESS_GUIDANCE =
+  'Before claiming a result is complete, check the full domain stated by the user, including sign choices, zero and boundary cases, and symmetry branches.';
+
 export function formatMultiAgentRunInstruction(
   preset: MultiAgentInstructionPreset,
   init: {
@@ -20,6 +23,7 @@ export function formatMultiAgentRunInstruction(
     `Run the "${preset.name}" multi-agent team preset.`,
     preset.description,
     'Use the visible workflow and tool-use agents as the team available for delegation.',
+    COMPLETENESS_GUIDANCE,
   ];
   const approvalInstruction = formatUnavailableApprovalInstruction(
     init.approvalContext,
