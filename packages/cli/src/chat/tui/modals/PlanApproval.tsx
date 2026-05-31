@@ -11,7 +11,7 @@ export interface PlanApprovalProps {
   readonly onDecide: (decision: ApprovalDecision) => void;
 }
 
-export const COMPACT_PLAN_APPROVAL_MAX_ROWS = 6;
+export const COMPACT_PLAN_APPROVAL_MAX_ROWS = 7;
 
 export function isCompactPlanApprovalRows(
   availableRows: number | undefined,
