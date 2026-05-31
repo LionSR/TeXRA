@@ -118,7 +118,7 @@ export function writeMissingPresetAgents(
 
 function formatMultiAgentRunInstruction(
   preset: CliMultiAgentPreset,
-  init: Pick<MultiAgentRunInit, 'instruction'>,
+  init: Pick<MultiAgentRunInit, 'inputFiles' | 'instruction'>,
 ): string {
   const parts = [
     `Run the "${preset.name}" multi-agent team preset.`,
@@ -127,7 +127,12 @@ function formatMultiAgentRunInstruction(
   ];
   const instruction = init.instruction.trim();
   if (instruction) {
-    parts.push('Additional user instruction:', instruction);
+    parts.push(
+      init.inputFiles.length > 0
+        ? 'Additional user instruction:'
+        : 'User instruction:',
+      instruction,
+    );
   }
   return parts.join('\n\n');
 }
@@ -194,10 +199,15 @@ export async function runMultiAgentPreset(
   // (tool-use) model config rather than `run` (workflow agents).
   const model = await resolveCliRunModel(context, init.model, 'chat');
   const runContext = buildHeadlessRunContext(context, model);
+  const hasInlineInstruction = init.instruction.trim().length > 0;
+  if (init.inputFiles.length === 0 && !hasInlineInstruction) {
+    throw new CliUsageError('Provide --input or --instruction.');
+  }
   const { inputFiles, contextFiles } = await expandRunInputs(
     init.inputFiles,
     init.contextFiles,
     runContext.cwd,
+    { allowEmptyInput: hasInlineInstruction },
   );
 
   await initCliPlatform(runContext);
@@ -218,7 +228,10 @@ export async function runMultiAgentPreset(
     model,
     inputFiles,
     contextFiles,
-    instruction: formatMultiAgentRunInstruction(plan.preset, init),
+    instruction: formatMultiAgentRunInstruction(plan.preset, {
+      inputFiles,
+      instruction: init.instruction,
+    }),
     workingDirectory: runContext.cwd,
     agentCategory: AgentCategory.ToolUse,
     cliMultiAgentPresetId: plan.preset.id,
@@ -286,8 +299,8 @@ const multiAgentRunCommand = defineCliCommand({
     input: {
       type: 'string',
       alias: 'i',
-      required: true,
-      description: 'Input file passed to the team orchestrator (repeatable)',
+      description:
+        'Input file passed to the team orchestrator (repeatable; optional when --instruction is provided)',
     },
     context: {
       type: 'string',
