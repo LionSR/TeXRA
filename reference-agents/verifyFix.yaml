@@ -49,10 +49,6 @@ prompts:
 
     \end{itemize}
 
-    {% if IS_GOOGLE_MODEL %}
-    In your response, you should use XML tags instead of markdown syntax to organize the output files. NEVER use markdown tags like ```latex ''' nor ```xml to organize the output files.
-    {% endif %}
-
   userPrefix: |
     I am going to give you the LaTeX code of a document (or collection of documents) that requires review and correction. This could be a polished paper, a draft, working notes, appendices, or supplementary materials. Read the document(s) including appendices carefully before proceeding. If any document appears to be notes or an early draft, focus on mathematical correctness and helping develop ideas rather than criticizing missing polish.
 

@@ -1,5 +1,3 @@
-import * as path from 'path';
-
 import { XMLParser } from 'fast-xml-parser';
 
 import {
@@ -11,7 +9,6 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import { getExtractedDocOutputFileName } from '@agent/utils/outputFileUtils';
-import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
 import { toErrorMessage } from '@common/errors';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
@@ -24,12 +21,9 @@ import {
   type FileLocation,
 } from '@utils/files';
 import {
-  addCdataToTags,
   addCdataToTagsMultiple,
   DOCUMENT_NAME_REGEX,
-  extractContentFromXMLbyTag,
   extractContentFromXMLbyTagMultiple,
-  extractDocument,
   extractDocuments,
 } from '@utils/text/xmlUtils';
 
@@ -76,7 +70,7 @@ export class XmlOutputManager {
 
   async processXmlContent(content: string): Promise<string> {
     // applyNonRegex already applies all enabled non-regex categories
-    // (including latex_xml and scratchpad_xml), so no need to re-apply them.
+    // (including latex_xml), so no need to re-apply them.
     content = replacementEngine.applyNonRegex(content);
     content = applyReplacements(content, FENCED_LATEX_BLOCK_REPLACEMENTS);
 
@@ -105,75 +99,6 @@ export class XmlOutputManager {
       `No ${documentTag} found in output file using fallback method`,
     );
     return null;
-  }
-
-  async splitScratchpadOutputXml(
-    outputLocation: FileLocation,
-    documentTag: string,
-    thinkingTag: string = 'scratchpad',
-  ): Promise<{ location: FileLocation; sourceName: string }> {
-    const { name: rawStem } = path.parse(outputLocation.absolutePath);
-    const outputDir = getFileDirectory(outputLocation);
-
-    // Read content first so we can derive the destination name from the
-    // XML document-name attribute before creating the output location.
-    let outputContent = await AbsoluteFS.read(outputLocation.absolutePath);
-    const sourceName =
-      outputContent.match(DOCUMENT_NAME_REGEX)?.[1]?.trim() ?? '';
-
-    // Name the extracted .tex after: primary input file stem → first XML
-    // document name → raw output stem. The primary input takes priority
-    // because extractDocument() also uses inputFiles[0] as its matching hint,
-    // so the destination name and the extracted content stay in sync. For
-    // agents without an input, the XML document name is a human-readable
-    // fallback.
-    const primaryInput = this.agentConfig.inputFiles[0] ?? '';
-    const inputFileStem = primaryInput ? path.parse(primaryInput).name : '';
-    // sourceName comes from model XML and may carry path components or a .tex
-    // extension — strip both.  inputFileStem and rawStem are already clean stems.
-    const safeSourceName = sourceName
-      ? path.parse(path.basename(sourceName)).name
-      : '';
-    const stemCandidate = inputFileStem || safeSourceName || rawStem;
-    // Guard: don't write the extracted .tex to the same path as the raw output.
-    const texStem =
-      stemCandidate === WORKFLOW_OUTPUT_BASENAME
-        ? `${WORKFLOW_OUTPUT_BASENAME}_extracted`
-        : stemCandidate;
-    const texRelativePath = outputDir
-      ? path.join(outputDir, `${texStem}.tex`)
-      : `${texStem}.tex`;
-
-    const texLocation = this.fileService.createLocation(texRelativePath);
-
-    const tagsToWrap = [documentTag, thinkingTag];
-    outputContent = addCdataToTags(outputContent, tagsToWrap);
-
-    const filename = primaryInput ? path.basename(primaryInput) : '';
-    const regexResult = extractDocument(outputContent, documentTag, filename);
-    if (regexResult.content) {
-      const suffix = EXTRACTION_METHOD_MESSAGES[regexResult.method];
-      if (suffix)
-        logInternal(this.logger, `Recovered ${documentTag} ${suffix}`);
-      await writeRoundOutput(texLocation.absolutePath, regexResult.content);
-      return { location: texLocation, sourceName };
-    }
-    debugInternal(
-      this.logger,
-      `No ${documentTag} found in output file using fallback method`,
-    );
-
-    const parser = new XMLParser(XML_PARSER_OPTIONS);
-    const root = parser.parse(outputContent);
-
-    const latexDocument = extractContentFromXMLbyTag(root, documentTag);
-    if (latexDocument) {
-      await writeRoundOutput(texLocation.absolutePath, latexDocument);
-      return { location: texLocation, sourceName };
-    }
-    throw new Error(
-      `Failed to extract <${documentTag}> from ${path.basename(outputLocation.absolutePath)}`,
-    );
   }
 
   /** Count document tag occurrences with name attributes (case-sensitive to match extraction). */
@@ -314,28 +239,6 @@ export class XmlOutputManager {
     }
 
     return outputFiles;
-  }
-
-  async processSingleXmlOutput(
-    outputLocation: FileLocation,
-    round: number,
-  ): Promise<OutputFileInfo> {
-    this.logger.debug(
-      `Splitting scratchpad output XML: ${outputLocation.absolutePath}`,
-    );
-
-    const { location, sourceName } = await this.splitScratchpadOutputXml(
-      outputLocation,
-      this.agentSetting.documentTag,
-    );
-
-    return {
-      source: sourceName || (this.agentConfig.inputFiles[0] ?? ''),
-      round,
-      location,
-      lineage: null,
-      diff: null,
-    };
   }
 
   async ensureCorrectXmlStructure(

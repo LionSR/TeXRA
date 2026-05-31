@@ -110,7 +110,7 @@ describe('output progress events', () => {
       domain: () => {},
     } as unknown as AgentTrace;
     const xmlManager = {
-      processSingleXmlOutput: async () => {
+      splitScratchpadMultipleOutputXml: async () => {
         throw new Error('invalid xml');
       },
     } as unknown as XmlOutputManager;
@@ -134,7 +134,7 @@ describe('output progress events', () => {
     const context: ProcessingContext = {
       agentSetting: {
         agentCategory: AgentCategory.Workflow,
-        documentTag: 'latex_document',
+        documentTag: 'documents',
       } as ProcessingContext['agentSetting'],
       baseFiles: [],
       streamId: 'stream:processor',
@@ -145,7 +145,7 @@ describe('output progress events', () => {
       ensureRoundData: ensureRound,
     };
 
-    await new OutputFileProcessor(context).processSingleOutput(
+    await new OutputFileProcessor(context).processMultipleOutputs(
       createLocation('/tmp/broken-output.xml'),
       3,
       createLocation('/tmp/raw-output.xml'),
@@ -161,5 +161,64 @@ describe('output progress events', () => {
       },
     ]);
     expect(roundData.get(3)?.outputs).toEqual([]);
+  });
+
+  it('emits missing-output events when extraction yields no files (no exception)', async () => {
+    const { events, host } = createRecordingHost();
+    const roundData = new Map<number, RoundData>();
+    const logger = {
+      debug: () => {},
+      domain: () => {},
+    } as unknown as AgentTrace;
+    const xmlManager = {
+      splitScratchpadMultipleOutputXml: async () => [],
+    } as unknown as XmlOutputManager;
+    const ensureRound = (round: number): RoundData => {
+      let data = roundData.get(round);
+      if (!data) {
+        data = {
+          outputs: [],
+          compileFailures: [],
+          rawOutput: null,
+          xmlSummary: emptyXmlSummary,
+        };
+        roundData.set(round, data);
+      }
+      return data;
+    };
+    const setRoundOutputs = (round: number, outputs: OutputFileInfo[]) => {
+      const data = ensureRound(round);
+      data.outputs = outputs;
+    };
+    const context: ProcessingContext = {
+      agentSetting: {
+        agentCategory: AgentCategory.Workflow,
+        documentTag: 'documents',
+      } as ProcessingContext['agentSetting'],
+      baseFiles: [],
+      streamId: 'stream:processor',
+      runtimeHost: host,
+      logger,
+      xmlManager,
+      setRoundOutputs,
+      ensureRoundData: ensureRound,
+    };
+
+    await new OutputFileProcessor(context).processMultipleOutputs(
+      createLocation('/tmp/empty-output.xml'),
+      4,
+      createLocation('/tmp/raw-output.xml'),
+    );
+
+    expect(events).toEqual([
+      {
+        event: 'updateMissingOutputs',
+        payload: {
+          streamId: 'stream:processor',
+          filesByRound: { 4: [] },
+        },
+      },
+    ]);
+    expect(roundData.get(4)?.outputs).toEqual([]);
   });
 });
