@@ -194,6 +194,20 @@ describe('CLI TUI row allocation', () => {
     expect(shouldShowTipRow({ foregroundOpen: true })).toBe(false);
   });
 
+  it('returns disabled input rows to tiny foreground surfaces', () => {
+    const layout = allocateMiddleRows({
+      foregroundOpen: true,
+      inputVisible: false,
+      reverseSearchOpen: false,
+      rows: 10,
+      slashPaletteOpen: false,
+      tipVisible: false,
+    });
+
+    expect(layout.transcriptRows).toBe(1);
+    expect(layout.foregroundRows).toBe(6);
+  });
+
   it('can cap compact foreground surfaces on tall terminals', () => {
     const layout = allocateMiddleRows({
       foregroundMaxRows: 12,
