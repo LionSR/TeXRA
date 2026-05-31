@@ -197,7 +197,9 @@ export interface TodosPlanPanelProps {
 export function TodosPlanPanel(
   props: TodosPlanPanelProps = {},
 ): React.JSX.Element | null {
-  const slice = useSignal(cliState.activeSlice);
+  const activeStreamId = useSignal(cliState.activeStreamId);
+  const streams = useSignal(cliState.streams);
+  const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   if (!slice) return null;
   const { todos, plan } = slice;
   if (todos.length === 0 && !plan) return null;
