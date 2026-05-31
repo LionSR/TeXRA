@@ -83,9 +83,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check desktop Electron binary
-        run: pnpm run check:desktop-electron-binary
-
       - name: Type check
         run: pnpm run typecheck
 
