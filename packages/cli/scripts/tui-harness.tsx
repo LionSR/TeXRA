@@ -52,6 +52,8 @@ const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const SHOW_BASH_APPROVAL = process.env.HARNESS_BASH_APPROVAL === '1';
 const SHOW_EXTERNAL_INQUIRY = process.env.HARNESS_EXTERNAL_INQUIRY === '1';
+const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
+const PLAN_APPROVAL_ODYSSEY = process.env.HARNESS_PLAN_APPROVAL_ODYSSEY === '1';
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const EXTERNAL_INQUIRY_QUESTION =
@@ -211,6 +213,32 @@ function makeBashApprovalPayload() {
   };
 }
 
+function makePlanApprovalPayload() {
+  return {
+    approvalId: 'harness-plan-approval',
+    streamId: STREAM_ID,
+    odysseyEnabled: PLAN_APPROVAL_ODYSSEY,
+    plan: {
+      summary: 'Coordinate a short math proof through CLI chat.',
+      steps: [
+        {
+          title: 'Split the finite and symbolic cases',
+          description:
+            'Separate the bounded search from the algebraic simplification.',
+          files: ['proof.md'],
+          status: TODO_STATUS.PENDING,
+        },
+        {
+          title: 'Ask a checker to verify the enumeration',
+          description: 'Use a delegated agent before writing the final answer.',
+          files: [],
+          status: TODO_STATUS.PENDING,
+        },
+      ],
+    },
+  };
+}
+
 function applyHarnessApprovalDecision(decision: ApprovalDecision): void {
   if (decision.accepted && decision.bypass === 'bash') {
     patchStream(STREAM_ID, (slice) => ({
@@ -224,6 +252,16 @@ function applyHarnessApprovalDecision(decision: ApprovalDecision): void {
       bypass: { ...slice.bypass, toolEdit: true },
     }));
   }
+}
+
+function appendHarnessPlanDecision(decision: ApprovalDecision): void {
+  if (decision.planAction === 'approve_and_odyssey') {
+    appendHarnessAssistantTranscript('PLAN-ODYSSEY');
+    return;
+  }
+  appendHarnessAssistantTranscript(
+    decision.accepted ? 'PLAN-APPROVED' : 'PLAN-REJECTED',
+  );
 }
 
 cliState.sessionMeta.set({
@@ -395,6 +433,16 @@ if (SHOW_EXTERNAL_INQUIRY) {
     },
     { onPresent: () => notify({ kind: 'approvalNeeded' }) },
   ).then(applyHarnessApprovalDecision);
+}
+
+if (SHOW_PLAN_APPROVAL) {
+  void enqueueApproval(
+    {
+      kind: 'plan',
+      payload: makePlanApprovalPayload(),
+    },
+    { onPresent: () => notify({ kind: 'approvalNeeded' }) },
+  ).then(appendHarnessPlanDecision);
 }
 
 function markHarnessInterrupted(): void {

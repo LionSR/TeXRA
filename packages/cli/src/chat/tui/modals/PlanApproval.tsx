@@ -1,9 +1,8 @@
 import { Box, Text } from 'ink';
-import { ConfirmInput } from '@inkjs/ui';
 
 import type { PlanApprovalPermission } from '@shared/schemas';
 
-import { KeyHints } from '../ui/KeyHints';
+import { ConfirmCard } from './ConfirmCard';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
 export interface PlanApprovalProps {
@@ -15,15 +14,27 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
   const { summary, steps } = props.payload.plan;
 
   return (
-    <Box
+    <ConfirmCard
       borderStyle="double"
-      borderColor="blue"
-      flexDirection="column"
-      paddingX={1}
+      color="blue"
+      title="Approve plan?"
+      extraActions={
+        props.payload.odysseyEnabled
+          ? [
+              {
+                key: 'r',
+                label: 'approve & run',
+                decision: {
+                  accepted: true,
+                  planAction: 'approve_and_odyssey',
+                },
+              },
+            ]
+          : []
+      }
+      feedbackPlaceholder="Feedback to send with rejection"
+      onDecide={props.onDecide}
     >
-      <Text bold color="blue">
-        Approve plan?
-      </Text>
       {summary ? (
         <Box marginY={1}>
           <Text>{summary}</Text>
@@ -37,21 +48,6 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
           </Text>
         ))}
       </Box>
-      <Box marginTop={1}>
-        <ConfirmInput
-          onConfirm={() => props.onDecide({ accepted: true })}
-          onCancel={() => props.onDecide({ accepted: false })}
-        />
-      </Box>
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            { key: 'y', action: 'approve' },
-            { key: 'n', action: 'reject' },
-          ]}
-          confirmCancel={false}
-        />
-      </Box>
-    </Box>
+    </ConfirmCard>
   );
 }
