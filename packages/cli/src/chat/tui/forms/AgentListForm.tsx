@@ -1,7 +1,7 @@
 // `/agent` form. It lists visible tool-use agents and workflows. Before the
 // first message, tool-use agents can be chosen as the root chat agent.
 
-import { Box, Text } from 'ink';
+import { Box, Text, useWindowSize } from 'ink';
 import { Spinner } from '@inkjs/ui';
 
 import { computeAgentOptionsData } from '@agent/index';
@@ -27,6 +27,16 @@ export interface AgentListFormProps {
 interface AgentGroups {
   readonly toolUse: readonly AgentOptionData[];
   readonly workflow: readonly AgentOptionData[];
+}
+
+const AGENT_FORM_MAX_WIDTH = 80;
+
+export function agentFormWidth(columns: number | undefined): number {
+  const normalized =
+    columns != null && Number.isFinite(columns) && columns > 0
+      ? Math.floor(columns)
+      : AGENT_FORM_MAX_WIDTH;
+  return Math.max(1, Math.min(normalized, AGENT_FORM_MAX_WIDTH));
 }
 
 function agentDescription(agent: AgentOptionData): string {
@@ -102,6 +112,7 @@ export function agentSelectWindow({
 }
 
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
+  const { columns } = useWindowSize();
   const { data, loading, error } = useAsyncListForm<AgentGroups>({
     load: async () => {
       const options = await computeAgentOptionsData();
@@ -183,11 +194,12 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
       borderColor="cyan"
       flexDirection="column"
       paddingX={1}
+      width={agentFormWidth(columns)}
     >
       <Text bold color="cyan">
         /agent
       </Text>
-      <Text dimColor>
+      <Text dimColor wrap="truncate-end">
         {selectable
           ? 'Choose the root tool-use agent for the first message.'
           : 'Available agents. Start a new chat with texra --agent=<name> to choose the root tool-use agent.'}
