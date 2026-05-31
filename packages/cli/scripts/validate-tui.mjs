@@ -273,6 +273,43 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'task-subworkflow-detail',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 'p', '\r'],
+    expect: [
+      'Task details',
+      'stream · strategy',
+      'Description: strategy sub-workflow',
+      'Please handle the harness-child-strategy sub-workflow.',
+      'f focus stream',
+      'Esc back',
+    ],
+    unexpect: ['Command:  strategy sub-workflow'],
+  },
+  {
+    name: 'task-process-detail',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 'p', DOWN, DOWN, DOWN, '\r'],
+    expect: [
+      'Task details',
+      'shell · latex build',
+      'Command:     latex build',
+      'main.tex: Proof sketch needs one missing reference',
+      'k kill',
+      'Esc back',
+    ],
+  },
+  {
     name: 'narrow-subagent-picker',
     cols: 60,
     rows: 18,
