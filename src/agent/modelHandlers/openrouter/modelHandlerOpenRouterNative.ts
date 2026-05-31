@@ -9,7 +9,6 @@ import { AgentSetting, hasEndTag } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
-import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
 import { getConfig } from '@agent/core/config';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
@@ -17,10 +16,14 @@ import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 // Local imports - tools and utils
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
-import { extractMimeSubtype } from '@utils/text/stringUtils';
 import type { FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
-import { normalizeUsage } from '../support/UsageNormalizer';
+import { extractMimeSubtype } from '@utils/text/stringUtils';
+import {
+  computeOpenRouterPrice,
+  normalizeOpenRouterUsage,
+  type OpenRouterPricingConfig,
+} from './openRouterUsage';
 import { tagOpenRouterSdkError } from '../support/sdkErrorAdapters';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 
@@ -767,53 +770,27 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
   // ---------------------------------------------------------------------------
 
   computePrice(responseUsage: ChatUsage | null): number {
-    if (!responseUsage) return 0;
+    return computeOpenRouterPrice(responseUsage, this.pricingConfig());
+  }
 
-    const promptTokens = responseUsage.promptTokens ?? 0;
-    const completionTokens = responseUsage.completionTokens ?? 0;
-
-    let basePrice = calculateTokenPrice(
-      promptTokens,
-      completionTokens,
-      this.config.inputPrice,
-      this.config.outputPrice,
-    );
-
-    const reasoningTokens =
-      responseUsage.completionTokensDetails?.reasoningTokens ?? 0;
-    const cachedTokens = responseUsage.promptTokensDetails?.cachedTokens ?? 0;
-
-    if (reasoningTokens) {
-      basePrice += (reasoningTokens * this.config.outputPrice) / 1e6;
-    }
-    if (cachedTokens) {
-      basePrice -=
-        (cachedTokens *
-          this.config.inputPrice *
-          (1 - this.capabilities.cacheDiscountFactor)) /
-        1e6;
-    }
-
-    return basePrice;
+  /** Pricing/caching inputs for the extracted usage helpers. */
+  private pricingConfig(): OpenRouterPricingConfig {
+    return {
+      inputPrice: this.config.inputPrice,
+      outputPrice: this.config.outputPrice,
+      cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
+    };
   }
 
   normalizeUsage(
     rawUsage: ChatUsage | null,
     responseTimeMs: number,
   ): NormalizedUsage {
-    return normalizeUsage(
-      {
-        provider: this.usageProvider,
-        computePrice: (usage) => this.computePrice(usage),
-        extract: (usage) => ({
-          inputTokens: usage.promptTokens ?? 0,
-          outputTokens: usage.completionTokens ?? 0,
-          cachedTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
-          reasoningTokens: usage.completionTokensDetails?.reasoningTokens ?? 0,
-        }),
-      },
+    return normalizeOpenRouterUsage(
       rawUsage,
       responseTimeMs,
+      this.usageProvider,
+      this.pricingConfig(),
     );
   }
 
