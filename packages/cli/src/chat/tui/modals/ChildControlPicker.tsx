@@ -109,13 +109,44 @@ function renderItem(
   index: number,
   highlighted: boolean,
   extraDetail?: string,
+  stackedDetail = false,
 ): React.JSX.Element {
-  const detail = [
-    item.description,
-    item.command !== item.label ? item.command : '',
-  ]
-    .filter(Boolean)
-    .join(' — ');
+  const commandDetail = item.command !== item.label ? item.command : '';
+  if (stackedDetail) {
+    return (
+      <Box key={item.executionId} flexDirection="column" minWidth={0}>
+        <Box minWidth={0}>
+          <Box flexShrink={0}>
+            <Text color={highlighted ? 'cyan' : undefined}>
+              {highlighted ? '›' : ' '} {index + 1}.{' '}
+            </Text>
+          </Box>
+          <Box flexShrink={0} maxWidth={SELECT_LABEL_MAX_COLS}>
+            <Text color={highlighted ? 'cyan' : undefined} wrap="truncate-end">
+              {item.label}
+            </Text>
+          </Box>
+          {extraDetail ? (
+            <Box flexShrink={0}>
+              <Text dimColor>{` — ${extraDetail}`}</Text>
+            </Box>
+          ) : null}
+          {item.description ? (
+            <Text dimColor wrap="truncate-end">{` — ${item.description}`}</Text>
+          ) : null}
+        </Box>
+        {commandDetail ? (
+          <Box marginLeft={4} minWidth={0}>
+            <Text dimColor wrap="truncate-end">
+              {commandDetail}
+            </Text>
+          </Box>
+        ) : null}
+      </Box>
+    );
+  }
+
+  const detail = [item.description, commandDetail].filter(Boolean).join(' — ');
   return (
     <Box key={item.executionId} minWidth={0}>
       <Box flexShrink={0}>
@@ -286,13 +317,19 @@ export function moveTaskDetailScrollState(
 
 export function computePickerListLayout({
   availableRows,
+  extraListRowCount = 0,
   highlight,
+  hintsMarginRows = 1,
   itemCount,
+  listMarginRows = 1,
   scopeLineCount,
 }: {
   readonly availableRows?: number;
+  readonly extraListRowCount?: number;
   readonly highlight: number;
+  readonly hintsMarginRows?: number;
   readonly itemCount: number;
+  readonly listMarginRows?: number;
   readonly scopeLineCount: number;
 }): PickerListLayout {
   const rows = Math.max(0, availableRows ?? 18);
@@ -300,8 +337,10 @@ export function computePickerListLayout({
     2 + // border
     1 + // title
     Math.max(0, scopeLineCount) +
-    1 + // list top margin
-    2; // hints margin + row
+    Math.max(0, listMarginRows) +
+    Math.max(0, extraListRowCount) +
+    Math.max(0, hintsMarginRows) +
+    1; // hints row
   const rowBudget = Math.max(1, rows - fixedRows);
   const windowStart = (count: number): number => {
     const lastStart = Math.max(0, itemCount - count);
@@ -529,10 +568,14 @@ export function ChildControlPicker({
   const tailItem = tailExecutionId
     ? items.find((item) => item.executionId === tailExecutionId)
     : undefined;
+  const stackSelectedSubagent = mode === 'subagents' && items.length > 0;
   const listLayout = computePickerListLayout({
     availableRows,
+    extraListRowCount: stackSelectedSubagent ? 1 : 0,
     highlight: selectedIndex,
+    hintsMarginRows: stackSelectedSubagent ? 0 : 1,
     itemCount: items.length,
+    listMarginRows: stackSelectedSubagent ? 0 : 1,
     scopeLineCount: streamScopeLabel !== undefined ? 1 : 0,
   });
   const visibleItems = items.slice(listLayout.start, listLayout.end);
@@ -667,7 +710,7 @@ export function ChildControlPicker({
           {streamScopeText}
         </Text>
       ) : null}
-      <Box flexDirection="column" marginTop={1}>
+      <Box flexDirection="column" marginTop={stackSelectedSubagent ? 0 : 1}>
         {items.length > 0 ? (
           <>
             {listLayout.hiddenBefore > 0 ? (
@@ -675,7 +718,13 @@ export function ChildControlPicker({
             ) : null}
             {visibleItems.map((item, offset) => {
               const index = listLayout.start + offset;
-              return renderItem(item, index, index === selectedIndex);
+              return renderItem(
+                item,
+                index,
+                index === selectedIndex,
+                undefined,
+                stackSelectedSubagent && index === selectedIndex,
+              );
             })}
             {listLayout.hiddenAfter > 0 ? (
               <Text dimColor>{`... ${listLayout.hiddenAfter} more`}</Text>
@@ -685,7 +734,7 @@ export function ChildControlPicker({
           <Text dimColor>{emptyPickerText(mode)}</Text>
         )}
       </Box>
-      <Box marginTop={1}>
+      <Box marginTop={stackSelectedSubagent ? 0 : 1}>
         <KeyHints
           hints={pickerKeyHintsForColumns(
             mode,

@@ -932,4 +932,23 @@ describe('CLI child execution controls', () => {
       visibleCount: 3,
     });
   });
+
+  it('reserves extra list rows while allowing dense picker spacing', () => {
+    expect(
+      computePickerListLayout({
+        availableRows: 10,
+        extraListRowCount: 1,
+        hintsMarginRows: 0,
+        highlight: 0,
+        itemCount: 3,
+        listMarginRows: 0,
+        scopeLineCount: 1,
+      }),
+    ).toMatchObject({
+      hiddenAfter: 0,
+      hiddenBefore: 0,
+      start: 0,
+      visibleCount: 3,
+    });
+  });
 });
