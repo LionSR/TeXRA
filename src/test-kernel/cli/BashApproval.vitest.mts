@@ -6,6 +6,7 @@ import {
   boundedBashCommandDisplayLines,
   maxBashCommandScrollOffset,
 } from '@cli/chat/tui/modals/BashApproval';
+import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
 
 const HEREDOC_COMMAND = [
   "python3 << 'EOF'",
@@ -86,5 +87,16 @@ describe('CLI bash approval layout', () => {
     expect(visible[0]?.text).toContain("$ python3 << 'EOF'");
     expect(visible[0]?.text).toContain('rows hidden');
     expect(visible[0]?.text.length).toBeLessThanOrEqual(76);
+  });
+
+  it('clips one-row compact previews by terminal column width', () => {
+    const visible = boundedBashCommandDisplayLines({
+      command: `echo ${'界'.repeat(20)}`,
+      maxDisplayLines: 1,
+      width: 24,
+    });
+
+    expect(visible).toHaveLength(1);
+    expect(textDisplayWidth(visible[0]?.text ?? '')).toBeLessThanOrEqual(24);
   });
 });

@@ -1,10 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import type { BashPermission } from '@shared/schemas';
 
 import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
+import {
+  maxScrollableRowOffset,
+  scrollBoundedRows,
+} from '../render/scrollBounds';
+import { clipToWidth, textDisplayWidth } from '../render/terminalText';
 import { KeyHints } from '../ui/KeyHints';
 import type { ApprovalDecision } from '../state/approvalQueue';
 
@@ -76,13 +81,11 @@ export function maxBashCommandScrollOffset(
   totalLines: number,
   maxDisplayLines: number,
 ): number {
-  if (
-    maxDisplayLines <= COMPACT_BASH_COMMAND_ROWS ||
-    totalLines <= maxDisplayLines
-  ) {
-    return 0;
-  }
-  return Math.max(0, totalLines - Math.max(1, maxDisplayLines - 1));
+  return maxScrollableRowOffset({
+    compactRows: COMPACT_BASH_COMMAND_ROWS,
+    maxDisplayLines,
+    totalLines,
+  });
 }
 
 function overflowText(kind: 'more' | 'previous' | 'hidden', count: number) {
@@ -101,10 +104,11 @@ function compactHiddenCommandText({
   readonly width: number;
 }): string {
   const suffix = ` ${overflowText('hidden', hiddenLines)}`;
-  const prefixWidth = width - suffix.length;
-  if (prefixWidth <= 0) return overflowText('hidden', hiddenLines);
+  const prefixWidth = width - textDisplayWidth(suffix);
+  if (prefixWidth <= 0)
+    return clipToWidth(overflowText('hidden', hiddenLines), width);
 
-  return `${firstLine.slice(0, prefixWidth).trimEnd()}${suffix}`;
+  return `${clipToWidth(firstLine, prefixWidth).trimEnd()}${suffix}`;
 }
 
 export function boundedBashCommandDisplayLines({
@@ -146,23 +150,12 @@ export function boundedBashCommandDisplayLines({
     ];
   }
 
-  const offset = Math.max(
-    0,
-    Math.min(
-      scrollOffset,
-      maxBashCommandScrollOffset(lines.length, maxDisplayLines),
-    ),
-  );
-  const hiddenBefore = offset;
-  const reserveBefore = hiddenBefore > 0 ? 1 : 0;
-  const contentSlotsWithoutAfter = Math.max(0, maxDisplayLines - reserveBefore);
-  const reserveAfter = offset + contentSlotsWithoutAfter < lines.length ? 1 : 0;
-  const visibleCount = Math.max(
-    0,
-    maxDisplayLines - reserveBefore - reserveAfter,
-  );
-  const visible = lines.slice(offset, offset + visibleCount);
-  const hiddenAfter = Math.max(0, lines.length - (offset + visibleCount));
+  const { hiddenAfter, hiddenBefore, visibleRows } = scrollBoundedRows({
+    compactRows: COMPACT_BASH_COMMAND_ROWS,
+    maxDisplayLines,
+    rows: lines,
+    scrollOffset,
+  });
 
   return [
     ...(hiddenBefore > 0
@@ -173,7 +166,7 @@ export function boundedBashCommandDisplayLines({
           },
         ]
       : []),
-    ...visible,
+    ...visibleRows,
     ...(hiddenAfter > 0
       ? [
           {
@@ -210,8 +203,6 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
   );
   const scrollable = maxScrollOffset > 0;
   const pageRows = Math.max(1, maxCommandRows - 2);
-  const maxScrollOffsetRef = useRef(maxScrollOffset);
-  const pageRowsRef = useRef(pageRows);
   const compactCommandLayout = maxCommandRows <= COMPACT_BASH_COMMAND_ROWS;
   const displayLines = boundedBashCommandDisplayLines({
     command: props.payload.command,
@@ -223,28 +214,22 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
   function scrollTo(next: number | ((currentOffset: number) => number)): void {
     setScrollOffset((current) => {
       const requested = typeof next === 'function' ? next(current) : next;
-      return Math.max(0, Math.min(maxScrollOffsetRef.current, requested));
+      return Math.max(0, Math.min(maxScrollOffset, requested));
     });
   }
 
   useEffect(() => {
-    maxScrollOffsetRef.current = maxScrollOffset;
     setScrollOffset((current) =>
       Math.max(0, Math.min(maxScrollOffset, current)),
     );
   }, [maxScrollOffset]);
 
-  useEffect(() => {
-    pageRowsRef.current = pageRows;
-  }, [pageRows]);
-
   useInput(
     (_input, key) => {
       if (key.downArrow) scrollTo((current) => current + 1);
       else if (key.upArrow) scrollTo((current) => current - 1);
-      else if (key.pageDown)
-        scrollTo((current) => current + pageRowsRef.current);
-      else if (key.pageUp) scrollTo((current) => current - pageRowsRef.current);
+      else if (key.pageDown) scrollTo((current) => current + pageRows);
+      else if (key.pageUp) scrollTo((current) => current - pageRows);
     },
     { isActive: scrollable },
   );
