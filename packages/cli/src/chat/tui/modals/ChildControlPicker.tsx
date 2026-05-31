@@ -39,6 +39,9 @@ export interface ChildControlPickerProps {
 
 export const TASK_DETAIL_LABEL_WIDTH = 13;
 export const ULTRA_COMPACT_PICKER_MAX_ROWS = 4;
+export const NARROW_PICKER_HINT_MAX_COLUMNS = 64;
+export const MIN_COLUMNS_FOR_JUMP_HINT = 58;
+export const MIN_COLUMNS_FOR_KILL_HINT = 44;
 
 export function pickerTitle(mode: ChildControlMode): string {
   return mode === 'subagents' ? 'Subagents' : 'Tasks and sub-workflows';
@@ -71,6 +74,32 @@ export function pickerKeyHints(
   if (itemCount > 1) hints.push({ key: '1-9', action: 'jump' });
   hints.push({ key: 'Enter', action: mode === 'subagents' ? 'focus' : 'view' });
   if (canKill) hints.push({ key: 'k', action: 'kill' });
+  hints.push({ key: 'Esc', action: 'close' });
+  return hints;
+}
+
+export function pickerKeyHintsForColumns(
+  mode: ChildControlMode,
+  itemCount: number,
+  canKill = itemCount > 0,
+  availableColumns?: number,
+): readonly KeyHint[] {
+  if (
+    availableColumns === undefined ||
+    availableColumns > NARROW_PICKER_HINT_MAX_COLUMNS ||
+    itemCount <= 0
+  ) {
+    return pickerKeyHints(mode, itemCount, canKill);
+  }
+
+  const hints: KeyHint[] = [{ key: '↑/↓', action: 'nav' }];
+  if (itemCount > 1 && availableColumns >= MIN_COLUMNS_FOR_JUMP_HINT) {
+    hints.push({ key: '1-9', action: 'jump' });
+  }
+  hints.push({ key: 'Enter', action: mode === 'subagents' ? 'focus' : 'view' });
+  if (canKill && availableColumns >= MIN_COLUMNS_FOR_KILL_HINT) {
+    hints.push({ key: 'k', action: 'kill' });
+  }
   hints.push({ key: 'Esc', action: 'close' });
   return hints;
 }
@@ -507,10 +536,11 @@ export function ChildControlPicker({
           <Text dimColor>{emptyPickerText(mode)}</Text>
         )}
         <KeyHints
-          hints={pickerKeyHints(
+          hints={pickerKeyHintsForColumns(
             mode,
             items.length,
             selectedItem?.killable ?? false,
+            availableColumns,
           )}
           confirmCancel={false}
         />
@@ -554,10 +584,11 @@ export function ChildControlPicker({
       </Box>
       <Box marginTop={1}>
         <KeyHints
-          hints={pickerKeyHints(
+          hints={pickerKeyHintsForColumns(
             mode,
             items.length,
             selectedItem?.killable ?? false,
+            availableColumns,
           )}
           confirmCancel={false}
         />
