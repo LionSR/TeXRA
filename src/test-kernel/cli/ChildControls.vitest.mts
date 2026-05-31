@@ -6,6 +6,7 @@ import {
   computePickerListLayout,
   computeTaskDetailLayout,
   emptyPickerText,
+  isUltraCompactPickerRows,
   pickerKeyHints,
   pickerTitle,
   TASK_DETAIL_LABEL_WIDTH,
@@ -769,6 +770,13 @@ describe('CLI child execution controls', () => {
     expect(pickerTitle('tasks')).toBe('Tasks and sub-workflows');
     expect(emptyPickerText('subagents')).toBe('No active subagents.');
     expect(emptyPickerText('tasks')).toBe('No active tasks or sub-workflows.');
+  });
+
+  it('switches child pickers to ultra-compact rendering only at very small budgets', () => {
+    expect(isUltraCompactPickerRows(3)).toBe(true);
+    expect(isUltraCompactPickerRows(4)).toBe(true);
+    expect(isUltraCompactPickerRows(5)).toBe(false);
+    expect(isUltraCompactPickerRows(undefined)).toBe(false);
   });
 
   it('labels task detail metadata by execution type', () => {
