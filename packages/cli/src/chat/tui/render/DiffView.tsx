@@ -9,6 +9,8 @@ import { structuredPatch, type StructuredPatchHunk } from 'diff';
 import stringWidth from 'string-width';
 
 import { wrapAnsiToWidth } from './ansiWrap';
+import { maxScrollableRowOffset, scrollBoundedRows } from './scrollBounds';
+import { clipToWidth } from './terminalText';
 
 export type Hunk = StructuredPatchHunk;
 
@@ -180,22 +182,11 @@ export function maxDiffScrollOffset(
   totalLines: number,
   maxDisplayLines: number,
 ): number {
-  if (
-    maxDisplayLines <= COMPACT_DIFF_DISPLAY_LINES ||
-    totalLines <= maxDisplayLines
-  ) {
-    return 0;
-  }
-  return Math.max(0, totalLines - Math.max(1, maxDisplayLines - 1));
-}
-
-function clipToWidth(text: string, width: number): string {
-  let clipped = '';
-  for (const char of text) {
-    if (stringWidth(clipped + char) > width) break;
-    clipped += char;
-  }
-  return clipped;
+  return maxScrollableRowOffset({
+    compactRows: COMPACT_DIFF_DISPLAY_LINES,
+    maxDisplayLines,
+    totalLines,
+  });
 }
 
 function overflowMarkerText(
@@ -270,20 +261,12 @@ export function scrollBoundedDiffDisplayLines(
     return compactBoundedDiffDisplayLines(lines, maxDisplayLines, width);
   }
 
-  const offset = Math.max(
-    0,
-    Math.min(scrollOffset, maxDiffScrollOffset(lines.length, maxDisplayLines)),
-  );
-  const hiddenBefore = offset;
-  const reserveBefore = hiddenBefore > 0 ? 1 : 0;
-  const contentSlotsWithoutAfter = Math.max(0, maxDisplayLines - reserveBefore);
-  const reserveAfter = offset + contentSlotsWithoutAfter < lines.length ? 1 : 0;
-  const visibleCount = Math.max(
-    0,
-    maxDisplayLines - reserveBefore - reserveAfter,
-  );
-  const visibleLines = lines.slice(offset, offset + visibleCount);
-  const hiddenAfter = Math.max(0, lines.length - (offset + visibleCount));
+  const { hiddenAfter, hiddenBefore, visibleRows } = scrollBoundedRows({
+    compactRows: COMPACT_DIFF_DISPLAY_LINES,
+    maxDisplayLines,
+    rows: lines,
+    scrollOffset,
+  });
   return [
     ...(hiddenBefore > 0
       ? [
@@ -293,7 +276,7 @@ export function scrollBoundedDiffDisplayLines(
           },
         ]
       : []),
-    ...visibleLines,
+    ...visibleRows,
     ...(hiddenAfter > 0
       ? [
           {
