@@ -17,6 +17,9 @@
 //   or: pnpm --filter @texra-ai/cli validate:tui
 //   or: node scripts/validate-tui.mjs --snapshot-dir /tmp/tui-frames slash-palette
 //
+// `--snapshot-dir` writes both per-scenario `.txt` frames and an `index.html`
+// report for quick visual review in a browser.
+//
 // Deps: node-pty (PTY; optional — native) and @xterm/headless (pure JS). If
 // node-pty is unavailable (e.g. CI without build tools), the validator prints a
 // notice and exits 0 so it never breaks installs that opt out of the native dep.
@@ -791,17 +794,19 @@ function blankLinesBetween(frame, from, to) {
     .filter((line) => line.trim().length === 0).length;
 }
 
-function snapshotFileName(index, name) {
+function snapshotFileName(index, name, extension = 'txt') {
   const prefix = String(index + 1).padStart(2, '0');
-  return `${prefix}-${name.replace(/[^a-z0-9._-]+/gi, '-')}.txt`;
+  return `${prefix}-${name.replace(/[^a-z0-9._-]+/gi, '-')}.${extension}`;
 }
 
 function resetSnapshotDir(dir) {
   mkdirSync(dir, { recursive: true });
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (!entry.isFile() || !/^\d+-[a-z0-9._-]+\.txt$/i.test(entry.name)) {
+    if (!entry.isFile()) {
       continue;
     }
+    const generatedFrame = /^\d+-[a-z0-9._-]+\.(?:html|txt)$/i.test(entry.name);
+    if (!generatedFrame && entry.name !== 'index.html') continue;
     unlinkSync(path.join(dir, entry.name));
   }
 }
@@ -811,6 +816,99 @@ function writeSnapshot(index, name, frame, rows) {
   const file = path.join(snapshotDir, snapshotFileName(index, name));
   const content = frameTail(frame, rows);
   writeFileSync(file, `${content}${content.endsWith('\n') ? '' : '\n'}`);
+}
+
+function escapeHtml(value) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+function snapshotHtmlDocument(results) {
+  const generatedAt = new Date().toISOString();
+  const entries = results
+    .map((result, index) => {
+      const textFile = snapshotFileName(index, result.name);
+      const frame = frameTail(result.fullFrame, result.rows);
+      const statusClass = result.ok ? 'ok' : 'failed';
+      const failures = result.failures.length
+        ? `<ul>${result.failures
+            .map((failure) => `<li>${escapeHtml(failure)}</li>`)
+            .join('')}</ul>`
+        : '';
+      return `<section class="scenario ${statusClass}">
+  <header>
+    <h2>${escapeHtml(result.name)}</h2>
+    <a href="${escapeHtml(textFile)}">text frame</a>
+  </header>
+  ${failures}
+  <pre>${escapeHtml(frame)}</pre>
+</section>`;
+    })
+    .join('\n');
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>TeXRA TUI snapshots</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      background: #101216;
+      color: #e8e4d8;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 20px; margin: 0 0 6px; }
+    .meta { color: #a8a293; margin: 0 0 24px; }
+    .scenario {
+      border: 1px solid #3d424d;
+      border-radius: 8px;
+      margin: 0 0 24px;
+      overflow: hidden;
+      background: #171a20;
+    }
+    .scenario.failed { border-color: #a95b5b; }
+    header {
+      align-items: center;
+      border-bottom: 1px solid #303540;
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 14px;
+    }
+    h2 { font-size: 14px; margin: 0; }
+    a { color: #8cc8ff; text-decoration: none; }
+    ul { color: #ffb4a8; margin: 12px 14px 0; }
+    pre {
+      line-height: 1.22;
+      margin: 0;
+      overflow: auto;
+      padding: 14px;
+      tab-size: 2;
+      white-space: pre;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>TeXRA TUI snapshots</h1>
+    <p class="meta">Generated ${escapeHtml(generatedAt)} from ${results.length} scenario${results.length === 1 ? '' : 's'}.</p>
+    ${entries}
+  </main>
+</body>
+</html>
+`;
+}
+
+function writeSnapshotReport(results) {
+  if (!snapshotDir) return;
+  writeFileSync(
+    path.join(snapshotDir, 'index.html'),
+    snapshotHtmlDocument(results),
+  );
 }
 
 async function runScenario(scenario) {
@@ -939,9 +1037,11 @@ async function runScenario(scenario) {
 if (snapshotDir) resetSnapshotDir(snapshotDir);
 
 let failed = 0;
+const results = [];
 for (const [index, scenario] of scenarios.entries()) {
   // eslint-disable-next-line no-await-in-loop
   const result = await runScenario(scenario);
+  results.push(result);
   writeSnapshot(index, result.name, result.fullFrame, result.rows);
   if (result.ok) {
     console.log(`✓ ${result.name}`);
@@ -958,6 +1058,7 @@ for (const [index, scenario] of scenarios.entries()) {
     );
   }
 }
+writeSnapshotReport(results);
 
 console.log('');
 console.log(
@@ -965,5 +1066,10 @@ console.log(
     ? `validate-tui: all ${scenarios.length} scenarios passed`
     : `validate-tui: ${failed}/${scenarios.length} scenario(s) FAILED`,
 );
-if (snapshotDir) console.log(`validate-tui: wrote snapshots to ${snapshotDir}`);
+if (snapshotDir) {
+  console.log(`validate-tui: wrote snapshots to ${snapshotDir}`);
+  console.log(
+    `validate-tui: wrote snapshot report to ${path.join(snapshotDir, 'index.html')}`,
+  );
+}
 process.exit(failed === 0 ? 0 : 1);
