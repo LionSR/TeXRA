@@ -30,6 +30,7 @@ import {
   metaChordInput,
 } from './input/inputKeys';
 import {
+  hasChildControlItems,
   hasChildExecutionRows,
   numericFocusTargetForActiveStream,
   resolveChildControlStreamTarget,
@@ -54,6 +55,7 @@ const MIN_TRANSCRIPT_WIDTH = 20;
 const FOREGROUND_TRANSCRIPT_ROWS = 1;
 const MIN_FOREGROUND_ROWS_WITH_TRANSCRIPT = 6;
 const CHILD_CONTROL_FOREGROUND_MAX_ROWS = 12;
+const EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS = 6;
 const FORM_FOREGROUND_MAX_ROWS = 18;
 // Cap the bottom subagent/todos panels so they never crowd out the
 // conversation or push the input bar off-screen.
@@ -257,6 +259,16 @@ export function foregroundSurfaceKind({
   return undefined;
 }
 
+export function childControlForegroundMaxRows({
+  hasItems,
+}: {
+  readonly hasItems: boolean;
+}): number {
+  return hasItems
+    ? CHILD_CONTROL_FOREGROUND_MAX_ROWS
+    : EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS;
+}
+
 export interface AppProps {
   readonly onSubmit: (line: string) => void;
   readonly onKillExecution: (executionId: string) => void;
@@ -344,10 +356,22 @@ export function App(props: AppProps): React.JSX.Element {
     pendingApproval: pending !== undefined,
     transcriptViewerOpen,
   });
+  const childControlTarget =
+    childControlMode !== undefined
+      ? resolveChildControlStreamTarget({
+          activeStreamId,
+          mode: childControlMode,
+          parentStream,
+          streams,
+        })
+      : undefined;
+  const childControlHasItems =
+    childControlMode !== undefined &&
+    hasChildControlItems(childControlTarget?.slice, childControlMode);
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
     foregroundMaxRows:
       foregroundKind === 'childControls'
-        ? CHILD_CONTROL_FOREGROUND_MAX_ROWS
+        ? childControlForegroundMaxRows({ hasItems: childControlHasItems })
         : foregroundKind === 'form'
           ? FORM_FOREGROUND_MAX_ROWS
           : undefined,
@@ -384,12 +408,8 @@ export function App(props: AppProps): React.JSX.Element {
         );
       case 'childControls': {
         if (!childControlMode) return null;
-        const target = resolveChildControlStreamTarget({
-          activeStreamId,
-          mode: childControlMode,
-          parentStream,
-          streams,
-        });
+        const target = childControlTarget;
+        if (!target) return null;
         const targetStreamLabel = target.streamId
           ? streamScopeDisplayLabel({
               parentStream,
