@@ -108,6 +108,10 @@ import {
   isCompactionEligibleModel,
   supportsAdaptiveThinking,
 } from './anthropicThinking';
+import {
+  buildAnthropicAssistantContent,
+  extractAnthropicServerToolData,
+} from './anthropicServerTools';
 
 // Type imports
 import type { ProviderStopReason } from '../types/StopReasonTypes';
@@ -1461,48 +1465,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
   override extractServerToolData(
     responseObject: BetaMessage,
   ): ServerToolExtractionResult {
-    if (!Array.isArray(responseObject?.content)) {
-      return { webSearchResults: [], webFetchResults: [], contentBlocks: [] };
-    }
-
-    // Extract content blocks that need to be preserved
-    // Filter for server tool content (server_tool_use, web_search_tool_result, web_fetch_tool_result)
-    // Cast needed because BetaContentBlock has slightly different types than the regular API
-    let contentBlocks = responseObject.content.filter(
-      isAnthropicServerToolContent,
-    ) as (
-      | ServerToolUseBlock
-      | WebSearchToolResultBlock
-      | WebFetchToolResultBlock
-    )[];
-
-    // Collect IDs of result blocks that have matching server_tool_use calls.
-    const searchResultIds = new Set(
-      contentBlocks
-        .filter(isAnthropicWebSearchResult)
-        .map((b) => b.tool_use_id),
-    );
-    const fetchResultIds = new Set(
-      contentBlocks.filter(isAnthropicWebFetchResult).map((b) => b.tool_use_id),
-    );
-
-    // Strip orphaned server_tool_use blocks that lack a matching result.
-    contentBlocks = contentBlocks.filter((block) => {
-      if (!isAnthropicServerToolUse(block)) return true;
-      if (block.name === 'web_search') return searchResultIds.has(block.id);
-      if (block.name === 'web_fetch') return fetchResultIds.has(block.id);
-      return true;
-    });
-
-    // Extract normalized results for display
-    const webSearchResults = extractAnthropicWebSearchResults(
-      responseObject.content,
-    );
-    const webFetchResults = extractAnthropicWebFetchResults(
-      responseObject.content,
-    );
-
-    return { webSearchResults, webFetchResults, contentBlocks };
+    return extractAnthropicServerToolData(responseObject);
   }
 
   /**
@@ -1515,55 +1478,10 @@ export class ModelHandlerAnthropic extends ModelHandler<
    * on the next API call.
    */
   override extractAssistantContent(responseObject: BetaMessage): unknown[] {
-    if (!Array.isArray(responseObject?.content)) {
-      return [];
-    }
-
-    let assistantContent = responseObject.content.filter(
-      (block) => block.type !== 'tool_use',
-    );
-
-    // Validate server_tool_use / result block pairing.
-    // The API rejects messages where a server_tool_use block exists
-    // without its corresponding result block.
-    const searchResultIds = new Set(
-      assistantContent
-        .filter(isAnthropicWebSearchResult)
-        .map((b) => b.tool_use_id),
-    );
-    const fetchResultIds = new Set(
-      assistantContent
-        .filter(isAnthropicWebFetchResult)
-        .map((b) => b.tool_use_id),
-    );
-    const orphanedIds: string[] = [];
-    for (const block of assistantContent) {
-      if (!isAnthropicServerToolUse(block)) continue;
-      if (block.name === 'web_search' && !searchResultIds.has(block.id)) {
-        orphanedIds.push(block.id);
-      } else if (block.name === 'web_fetch' && !fetchResultIds.has(block.id)) {
-        orphanedIds.push(block.id);
-      }
-    }
-    if (orphanedIds.length > 0) {
-      const orphanSet = new Set(orphanedIds);
-      this.logger.debug(
-        `Stripping ${orphanedIds.length} orphaned server_tool_use block(s) without matching result: ${orphanedIds.join(', ')}. ` +
-          `Response content types: [${responseObject.content.map((b) => b.type).join(', ')}]`,
-      );
-      assistantContent = assistantContent.filter(
-        (block) => !isAnthropicServerToolUse(block) || !orphanSet.has(block.id),
-      );
-    }
-
-    if (!this.capabilities.supportsPromptCaching) {
-      return assistantContent;
-    }
-
-    return assistantContent.map((block) =>
-      block.type === 'compaction'
-        ? { ...block, cache_control: LONG_CACHE_CONTROL }
-        : block,
+    return buildAnthropicAssistantContent(
+      responseObject,
+      { supportsPromptCaching: this.capabilities.supportsPromptCaching },
+      this.logger,
     );
   }
 
