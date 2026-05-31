@@ -108,6 +108,7 @@ function renderItem(
   item: ChildControlItem,
   index: number,
   highlighted: boolean,
+  extraDetail?: string,
 ): React.JSX.Element {
   const detail = [
     item.description,
@@ -127,6 +128,11 @@ function renderItem(
           {item.label}
         </Text>
       </Box>
+      {extraDetail ? (
+        <Box flexShrink={0}>
+          <Text dimColor>{` — ${extraDetail}`}</Text>
+        </Box>
+      ) : null}
       {detail ? (
         <Text dimColor wrap="truncate-end">{` — ${detail}`}</Text>
       ) : null}
@@ -163,6 +169,22 @@ export interface PickerListLayout {
   readonly hiddenBefore: number;
   readonly start: number;
   readonly visibleCount: number;
+}
+
+export function compactPickerOverflowText({
+  itemCount,
+  selectedIndex,
+}: {
+  readonly itemCount: number;
+  readonly selectedIndex: number;
+}): string | undefined {
+  if (itemCount <= 1) return undefined;
+
+  const earlier = Math.max(0, selectedIndex);
+  const more = Math.max(0, itemCount - selectedIndex - 1);
+  if (earlier > 0 && more > 0) return `+${earlier} earlier, +${more} more`;
+  if (earlier > 0) return `+${earlier} earlier`;
+  return `+${more} more`;
 }
 
 export interface TaskDetailScrollState {
@@ -511,6 +533,10 @@ export function ChildControlPicker({
         streamScopeDetail ? ` (${streamScopeDetail})` : ''
       }`
     : undefined;
+  const compactOverflowText = compactPickerOverflowText({
+    itemCount: items.length,
+    selectedIndex,
+  });
 
   useEffect(() => {
     setHighlight((current) => clampPickerIndex(current, items.length));
@@ -600,7 +626,7 @@ export function ChildControlPicker({
             : pickerTitle(mode)}
         </Text>
         {selectedItem ? (
-          renderItem(selectedItem, selectedIndex, true)
+          renderItem(selectedItem, selectedIndex, true, compactOverflowText)
         ) : (
           <Text dimColor>{emptyPickerText(mode)}</Text>
         )}

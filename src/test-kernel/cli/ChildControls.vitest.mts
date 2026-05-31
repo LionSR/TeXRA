@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports - CLI TUI state
 import {
+  compactPickerOverflowText,
   computePickerListLayout,
   computeTaskDetailLayout,
   emptyPickerText,
@@ -803,6 +804,30 @@ describe('CLI child execution controls', () => {
     expect(isUltraCompactPickerRows(4)).toBe(true);
     expect(isUltraCompactPickerRows(5)).toBe(false);
     expect(isUltraCompactPickerRows(undefined)).toBe(false);
+    expect(
+      compactPickerOverflowText({
+        itemCount: 3,
+        selectedIndex: 0,
+      }),
+    ).toBe('+2 more');
+    expect(
+      compactPickerOverflowText({
+        itemCount: 3,
+        selectedIndex: 2,
+      }),
+    ).toBe('+2 earlier');
+    expect(
+      compactPickerOverflowText({
+        itemCount: 5,
+        selectedIndex: 2,
+      }),
+    ).toBe('+2 earlier, +2 more');
+    expect(
+      compactPickerOverflowText({
+        itemCount: 1,
+        selectedIndex: 0,
+      }),
+    ).toBeUndefined();
   });
 
   it('labels task detail metadata by execution type', () => {
