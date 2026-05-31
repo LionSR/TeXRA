@@ -27,6 +27,7 @@ const KEYS = {
   REPORT: 'report',
   TODOS: 'todos',
   CONVERSATION: 'conversation',
+  WORKSPACE_FILES: 'workspace-files',
   RESULT_META: 'result-meta',
   child: (id: string) => `child-${id}`,
 } as const;
@@ -63,6 +64,7 @@ export const TodoEntrySchema = z.object({
 export type TodoEntry = z.infer<typeof TodoEntrySchema>;
 
 const TodoArraySchema = z.array(TodoEntrySchema);
+const WorkspaceFilePathArraySchema = z.array(z.string()).catch([]);
 
 /** Parse a raw array into validated TodoEntry[]. Returns empty on failure. */
 function parseTodoArray(raw: unknown[]): TodoEntry[] {
@@ -121,6 +123,7 @@ export interface ExecutionKVStore {
   readReport(): Promise<string | null>;
   readTodos(): Promise<TodoEntry[]>;
   readConversation(): Promise<unknown[] | null>;
+  readWorkspaceFiles(): Promise<string[]>;
   readChildren(): Promise<ChildRecord[]>;
   readResultMeta(): Promise<ResultMeta | null>;
 
@@ -130,6 +133,7 @@ export interface ExecutionKVStore {
   writeReport(report: string): Promise<void>;
   writeTodos(todos: TodoEntry[]): Promise<void>;
   writeConversation(messages: unknown[]): Promise<void>;
+  writeWorkspaceFiles(paths: readonly string[]): Promise<void>;
   writeChild(childId: ExecutionId, data: ChildRecordData): Promise<void>;
   writeResultMeta(data: ResultMeta): Promise<void>;
 }
@@ -194,6 +198,11 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     return Array.isArray(raw) && raw.length > 0 ? raw : null;
   }
 
+  async readWorkspaceFiles(): Promise<string[]> {
+    const raw = await this.read(KEYS.WORKSPACE_FILES);
+    return normalizeWorkspaceFilePaths(WorkspaceFilePathArraySchema.parse(raw));
+  }
+
   /** Read children: per-child KV keys with schema validation. */
   async readChildren(): Promise<ChildRecord[]> {
     const childKeys = await this.listKeys('child-');
@@ -240,6 +249,10 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
     await this.write(KEYS.CONVERSATION, messages);
   }
 
+  async writeWorkspaceFiles(paths: readonly string[]): Promise<void> {
+    await this.write(KEYS.WORKSPACE_FILES, normalizeWorkspaceFilePaths(paths));
+  }
+
   async writeChild(childId: ExecutionId, data: ChildRecordData): Promise<void> {
     await this.write(KEYS.child(childId), data);
   }
@@ -247,6 +260,15 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   async writeResultMeta(data: ResultMeta): Promise<void> {
     await this.write(KEYS.RESULT_META, data);
   }
+}
+
+function normalizeWorkspaceFilePaths(paths: readonly string[]): string[] {
+  const normalized = new Set<string>();
+  for (const rawPath of paths) {
+    const pathValue = rawPath.trim().replaceAll('\\', '/');
+    if (pathValue) normalized.add(pathValue);
+  }
+  return [...normalized].sort((a, b) => a.localeCompare(b));
 }
 
 // ============================================================================

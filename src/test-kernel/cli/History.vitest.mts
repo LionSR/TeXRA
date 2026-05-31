@@ -12,6 +12,7 @@ import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
   readConversation: vi.fn(),
+  readWorkspaceFiles: vi.fn(),
   readMeta: vi.fn(),
   readResultMeta: vi.fn(),
   readReport: vi.fn(),
@@ -21,19 +22,25 @@ const mocks = vi.hoisted(() => ({
   deleteAllExecutions: vi.fn(),
 }));
 
-vi.mock('@agent/storage', () => ({
-  getExecutionStore: vi.fn(() => ({
-    readConfig: mocks.readConfig,
-    readConversation: mocks.readConversation,
-    readMeta: mocks.readMeta,
-    readResultMeta: mocks.readResultMeta,
-    readReport: mocks.readReport,
-    exists: mocks.exists,
-  })),
-  listExecutions: mocks.listExecutions,
-  deleteExecution: mocks.deleteExecution,
-  deleteAllExecutions: mocks.deleteAllExecutions,
-}));
+vi.mock('@agent/storage', async () => {
+  const actual =
+    await vi.importActual<typeof import('@agent/storage')>('@agent/storage');
+  return {
+    ...actual,
+    getExecutionStore: vi.fn(() => ({
+      readConfig: mocks.readConfig,
+      readConversation: mocks.readConversation,
+      readWorkspaceFiles: mocks.readWorkspaceFiles,
+      readMeta: mocks.readMeta,
+      readResultMeta: mocks.readResultMeta,
+      readReport: mocks.readReport,
+      exists: mocks.exists,
+    })),
+    listExecutions: mocks.listExecutions,
+    deleteExecution: mocks.deleteExecution,
+    deleteAllExecutions: mocks.deleteAllExecutions,
+  };
+});
 
 vi.mock('@utils/files/taskRunStorage', () => ({
   resolveStoragePath: vi.fn(async () => undefined),
@@ -79,6 +86,7 @@ describe('CLI history runtime', () => {
     vi.clearAllMocks();
     mocks.readConfig.mockResolvedValue(config);
     mocks.readConversation.mockResolvedValue(null);
+    mocks.readWorkspaceFiles.mockResolvedValue([]);
     mocks.readMeta.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readReport.mockResolvedValue(null);
@@ -174,6 +182,64 @@ describe('CLI history runtime', () => {
 
     expect(text).toContain('Report:\nStructured report.');
     expect(text).not.toContain('Conversation (');
+  });
+
+  it('surfaces persisted workspace files without parsing provider messages', async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), 'texra-history-'));
+    try {
+      await writeFile(path.join(workspace, 'durable.md'), '# durable');
+      mocks.readConfig.mockResolvedValue({
+        ...config,
+        agentCategory: 'toolUse',
+        workingDirectory: workspace,
+      });
+      mocks.readWorkspaceFiles.mockResolvedValue(['durable.md']);
+      mocks.readConversation.mockResolvedValue([
+        {
+          role: 'assistant',
+          tool_calls: [
+            {
+              type: 'function',
+              function: {
+                name: 'write_file',
+                arguments: JSON.stringify({ path: 'legacy.md' }),
+              },
+            },
+          ],
+        },
+      ]);
+
+      const details = await readCliHistoryDetails('a1' as ExecutionId);
+
+      expect(details?.files).toEqual([
+        { path: 'workspace/durable.md', size: 9, isDirectory: false },
+      ]);
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves persisted paths inside a top-level workspace directory', async () => {
+    const workspace = await mkdtemp(path.join(tmpdir(), 'texra-history-'));
+    try {
+      await mkdir(path.join(workspace, 'workspace'));
+      await writeFile(path.join(workspace, 'review.md'), 'wrong');
+      await writeFile(path.join(workspace, 'workspace', 'review.md'), 'nested');
+      mocks.readConfig.mockResolvedValue({
+        ...config,
+        agentCategory: 'toolUse',
+        workingDirectory: workspace,
+      });
+      mocks.readWorkspaceFiles.mockResolvedValue(['workspace/review.md']);
+
+      const details = await readCliHistoryDetails('a1' as ExecutionId);
+
+      expect(details?.files).toEqual([
+        { path: 'workspace/workspace/review.md', size: 6, isDirectory: false },
+      ]);
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
   });
 
   it('surfaces workspace files written by tool-use calls', async () => {

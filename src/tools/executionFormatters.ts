@@ -28,13 +28,20 @@ export function getAvailablePaths(
   if (hasChildren) common.push('children');
   switch (category) {
     case 'toolUse':
-      return [...common, 'conversation', 'todos'];
+      return [...common, 'conversation', 'todos', 'workspace-files'];
     case 'workflow':
       return [...common, 'files'];
     case 'process':
       return [...common, 'output'];
     default:
-      return [...common, 'conversation', 'todos', 'files', 'output'];
+      return [
+        ...common,
+        'conversation',
+        'todos',
+        'files',
+        'workspace-files',
+        'output',
+      ];
   }
 }
 

@@ -276,7 +276,6 @@ export class HistoryItemElement extends LitElement {
 
     const extraDetails: Array<TemplateResult> = [];
 
-    // File fields only exist on workflow configs (discriminated union)
     if (config.agentCategory === AGENT_CATEGORY.WORKFLOW) {
       const contextSection = this.renderConfigSection('Context', [
         ['ContextFiles', config.contextFiles],
@@ -298,6 +297,11 @@ export class HistoryItemElement extends LitElement {
         );
         if (toolSection) extraDetails.push(toolSection);
       }
+    } else if (config.agentCategory === AGENT_CATEGORY.TOOL_USE) {
+      const editedSection = this.renderConfigSection('Edited Files', [
+        ['Files', config.editedFiles],
+      ]);
+      if (editedSection) extraDetails.push(editedSection);
     }
 
     const titleText = instructionText ?? descriptionText ?? '(no instruction)';
