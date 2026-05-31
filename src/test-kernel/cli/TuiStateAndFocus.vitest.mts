@@ -21,6 +21,7 @@ import {
   allocateSidePanelRows,
   appEscapeInterruptActive,
   appFocusShortcutsActive,
+  childControlForegroundMaxRows,
   foregroundSurfaceKind,
   shouldShowTipRow,
   shouldShowTodosPlanPanel,
@@ -29,7 +30,10 @@ import {
   nextFocusBack,
   nextFocusForward,
 } from '@cli/chat/tui/state/focusCycle';
-import { hasChildExecutionRows } from '@cli/chat/tui/state/childControls';
+import {
+  hasChildControlItems,
+  hasChildExecutionRows,
+} from '@cli/chat/tui/state/childControls';
 import { visibleSubagentRows } from '@cli/chat/tui/state/childStreamMerge';
 import {
   finalizeSettledPrefix,
@@ -150,6 +154,12 @@ describe('cliState Phase 4 fields', () => {
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
 
     expect(hasChildExecutionRows(cliState.streams.get().get(root))).toBe(true);
+    expect(
+      hasChildControlItems(cliState.streams.get().get(root), 'tasks'),
+    ).toBe(true);
+    expect(
+      hasChildControlItems(cliState.streams.get().get(root), 'subagents'),
+    ).toBe(true);
     expect(nextFocusForward()).toBe(child1);
 
     removeStream(child1);
@@ -162,6 +172,8 @@ describe('cliState Phase 4 fields', () => {
     expect(parent.activeProcesses).toEqual([]);
     expect(visibleSubagentRows(parent)).toEqual([]);
     expect(hasChildExecutionRows(parent)).toBe(false);
+    expect(hasChildControlItems(parent, 'tasks')).toBe(false);
+    expect(hasChildControlItems(parent, 'subagents')).toBe(false);
     expect(nextFocusForward()).toBeUndefined();
   });
 
@@ -219,6 +231,11 @@ describe('CLI TUI row allocation', () => {
 
     expect(layout.transcriptRows).toBe(1);
     expect(layout.foregroundRows).toBe(12);
+  });
+
+  it('uses a smaller row cap for empty child-control pickers', () => {
+    expect(childControlForegroundMaxRows({ hasItems: false })).toBe(6);
+    expect(childControlForegroundMaxRows({ hasItems: true })).toBe(12);
   });
 
   it('uses the whole middle region for the transcript without foreground UI', () => {

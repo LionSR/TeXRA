@@ -582,17 +582,19 @@ export function ChildControlPicker({
   const streamScopeLabel = activeStreamLabel ?? activeStreamId;
   const selectedIndex = clampPickerIndex(highlight, items.length);
   const selectedItem = items[selectedIndex];
+  const hasItems = items.length > 0;
   const tailItem = tailExecutionId
     ? items.find((item) => item.executionId === tailExecutionId)
     : undefined;
-  const stackSelectedSubagent = mode === 'subagents' && items.length > 0;
+  const stackSelectedSubagent = mode === 'subagents' && hasItems;
+  const compactEmptyPicker = !hasItems;
   const listLayout = computePickerListLayout({
     availableRows,
     extraListRowCount: stackSelectedSubagent ? 1 : 0,
     highlight: selectedIndex,
-    hintsMarginRows: stackSelectedSubagent ? 0 : 1,
+    hintsMarginRows: stackSelectedSubagent || compactEmptyPicker ? 0 : 1,
     itemCount: items.length,
-    listMarginRows: stackSelectedSubagent ? 0 : 1,
+    listMarginRows: stackSelectedSubagent || compactEmptyPicker ? 0 : 1,
     scopeLineCount: streamScopeLabel !== undefined ? 1 : 0,
   });
   const visibleItems = items.slice(listLayout.start, listLayout.end);
@@ -727,8 +729,11 @@ export function ChildControlPicker({
           {streamScopeText}
         </Text>
       ) : null}
-      <Box flexDirection="column" marginTop={stackSelectedSubagent ? 0 : 1}>
-        {items.length > 0 ? (
+      <Box
+        flexDirection="column"
+        marginTop={stackSelectedSubagent || compactEmptyPicker ? 0 : 1}
+      >
+        {hasItems ? (
           <>
             {listLayout.hiddenBefore > 0 ? (
               <Text dimColor>{`... ${listLayout.hiddenBefore} earlier`}</Text>
@@ -751,7 +756,7 @@ export function ChildControlPicker({
           <Text dimColor>{emptyPickerText(mode)}</Text>
         )}
       </Box>
-      <Box marginTop={stackSelectedSubagent ? 0 : 1}>
+      <Box marginTop={stackSelectedSubagent || compactEmptyPicker ? 0 : 1}>
         <KeyHints
           hints={pickerKeyHintsForColumns(
             mode,
