@@ -401,6 +401,9 @@ const SCENARIOS = [
       'Use foreground panel shortcuts',
     ],
     unexpect: ['[Alt-p]tasks', '[Option-p]tasks', '[/model]models'],
+    maxBlankLinesBetween: [
+      { from: 'entry-4 chat history line', to: 'Run bash command?', max: 3 },
+    ],
   },
   {
     name: 'narrow-bash-approval',
@@ -529,6 +532,9 @@ const SCENARIOS = [
       'n reject',
     ],
     unexpect: ['r approve & run', '[/model]models'],
+    maxBlankLinesBetween: [
+      { from: 'entry-4 chat history line', to: 'Approve plan?', max: 3 },
+    ],
   },
   {
     name: 'plan-approval-odyssey',

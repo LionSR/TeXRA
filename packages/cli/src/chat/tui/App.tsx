@@ -61,6 +61,7 @@ const MIN_FOREGROUND_ROWS_WITH_TRANSCRIPT = 6;
 const CHILD_CONTROL_FOREGROUND_MAX_ROWS = 12;
 const EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS = 6;
 const FORM_FOREGROUND_MAX_ROWS = 18;
+const APPROVAL_FOREGROUND_MAX_ROWS = 18;
 // Cap the bottom subagent/todos panels so they never crowd out the
 // conversation or push the input bar off-screen.
 const BOTTOM_PANEL_MAX_ROWS = 10;
@@ -281,6 +282,12 @@ export function childControlForegroundMaxRows({
     : EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS;
 }
 
+function foregroundSurfaceJustifyContent(
+  kind: ForegroundSurfaceKind | undefined,
+): 'flex-start' | 'flex-end' {
+  return kind === 'childControls' ? 'flex-end' : 'flex-start';
+}
+
 export interface AppProps {
   readonly onSubmit: (line: string) => void;
   readonly onKillExecution: (executionId: string) => void;
@@ -395,7 +402,9 @@ export function App(props: AppProps): React.JSX.Element {
         ? childControlForegroundMaxRows({ hasItems: childControlHasItems })
         : foregroundKind === 'form'
           ? FORM_FOREGROUND_MAX_ROWS
-          : undefined,
+          : foregroundKind === 'approval'
+            ? APPROVAL_FOREGROUND_MAX_ROWS
+            : undefined,
     foregroundOpen,
     inputVisible: inputBarVisible,
     queuedFollowUpPanelRows,
@@ -583,9 +592,7 @@ export function App(props: AppProps): React.JSX.Element {
               flexDirection="column"
               height={foregroundRows}
               alignItems="flex-start"
-              justifyContent={
-                foregroundKind === 'form' ? 'flex-start' : 'flex-end'
-              }
+              justifyContent={foregroundSurfaceJustifyContent(foregroundKind)}
               overflowY="hidden"
             >
               {foregroundSurface}
