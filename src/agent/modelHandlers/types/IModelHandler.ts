@@ -1,7 +1,10 @@
 // Local imports - agent components
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentCategory, type AgentSetting } from '@agent/core/definition/AgentDataclass';
+import {
+  AgentCategory,
+  type AgentSetting,
+} from '@agent/core/definition/AgentDataclass';
 import type {
   ConversationRoundStateSnapshot,
   AgentRunStateSnapshot,

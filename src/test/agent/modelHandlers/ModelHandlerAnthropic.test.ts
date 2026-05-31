@@ -17,7 +17,10 @@ import {
 } from 'llm-zoo';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentCategory, AgentSettingSchema } from '@agent/core/definition/AgentDataclass';
+import {
+  AgentCategory,
+  AgentSettingSchema,
+} from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
 

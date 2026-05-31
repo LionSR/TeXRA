@@ -9,7 +9,10 @@ import {
 } from 'llm-zoo';
 import { createRunTrace } from '@transcript';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import type { AgentPrompt, AgentSetting } from '@agent/core/definition/AgentDataclass';
+import type {
+  AgentPrompt,
+  AgentSetting,
+} from '@agent/core/definition/AgentDataclass';
 import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import {

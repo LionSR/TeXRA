@@ -1,5 +1,8 @@
 // Local imports - agent
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 

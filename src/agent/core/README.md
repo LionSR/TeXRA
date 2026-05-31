@@ -5,13 +5,13 @@
 ubiquitous language is visible in the directory layout rather than buried in a
 flat folder.
 
-| Module        | Concern                          | Contents |
-| ------------- | -------------------------------- | -------- |
+| Module        | Concern                          | Contents                                                                                                                                                                       |
+| ------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `definition/` | What an agent **is** (configure) | `AgentDataclass` (settings, prompts, `AgentDefinition`, `AgentCategory`), `AgentConfig` (launch/run configuration + payload), `AgentCycleOptions` (template variable channels) |
-| `execution/`  | A **running** agent (run state)  | `AgentWorkspaceState`, `AgentState` (run/round snapshots + metrics), `TaskState` (workflow vs tool-use), `executionRequests` (request validation) |
-| `usage/`      | Usage value objects              | `ResponseUsage`, `RunUsageAccumulator` |
-| `tools/`      | Tool contracts                   | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`) |
-| `flows/`      | Reusable cycle primitives        | `ResponseCycleFlow`, `ToolUseCycleFlow`, and their shared services/types |
+| `execution/`  | A **running** agent (run state)  | `AgentWorkspaceState`, `AgentState` (run/round snapshots + metrics), `TaskState` (workflow vs tool-use), `executionRequests` (request validation)                              |
+| `usage/`      | Usage value objects              | `ResponseUsage`, `RunUsageAccumulator`                                                                                                                                         |
+| `tools/`      | Tool contracts                   | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`)                                                                                                                      |
+| `flows/`      | Reusable cycle primitives        | `ResponseCycleFlow`, `ToolUseCycleFlow`, and their shared services/types                                                                                                       |
 
 ## Dependency direction
 

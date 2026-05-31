@@ -10,7 +10,10 @@ import {
 // Local imports - agent
 import { logContextManagementEvent, logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { type AgentSetting, hasEndTag } from '@agent/core/definition/AgentDataclass';
+import {
+  type AgentSetting,
+  hasEndTag,
+} from '@agent/core/definition/AgentDataclass';
 import {
   AnthropicAPIResponseUsage,
   AnthropicUsage,

@@ -12,7 +12,10 @@ import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace';
 import { logWebFetch, logWebSearch } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentCategory, type AgentSetting } from '@agent/core/definition/AgentDataclass';
+import {
+  AgentCategory,
+  type AgentSetting,
+} from '@agent/core/definition/AgentDataclass';
 import type {
   ConversationRoundStateSnapshot,
   AgentRunStateSnapshot,

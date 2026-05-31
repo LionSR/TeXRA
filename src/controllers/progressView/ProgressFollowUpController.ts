@@ -1,6 +1,9 @@
 // Local imports - agent
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import type { ExecutionRequest } from '@agent/core/execution/executionRequests';
 
 import {

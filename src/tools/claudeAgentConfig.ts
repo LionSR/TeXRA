@@ -1,6 +1,9 @@
 // Local imports - agent config
 import { platform } from '@platform/platform';
-import { AgentConfigSchema, type AgentConfig } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+} from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
