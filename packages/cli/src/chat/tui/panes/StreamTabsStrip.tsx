@@ -102,7 +102,36 @@ export interface StreamTabLineSegment {
   readonly text: string;
 }
 
-export function streamTabsLineSegments(
+function ellipsisTabItem(): StreamTabDisplayItem {
+  return {
+    id: 'ellipsis',
+    label: '…',
+    active: false,
+    running: false,
+  };
+}
+
+function activeAnchoredItems(
+  items: readonly StreamTabDisplayItem[],
+  activeIndex: number,
+): readonly StreamTabDisplayItem[] {
+  const activeItem = items[activeIndex];
+  const lastItem = items.at(-1);
+  if (!activeItem) return items;
+  const out: StreamTabDisplayItem[] = [];
+  if (activeIndex > 0) {
+    out.push(items[0]);
+    if (activeIndex > 1) out.push(ellipsisTabItem());
+  }
+  out.push(activeItem);
+  if (lastItem && activeIndex < items.length - 1) {
+    if (activeIndex < items.length - 2) out.push(ellipsisTabItem());
+    out.push(lastItem);
+  }
+  return out;
+}
+
+function buildLineSegments(
   items: readonly StreamTabDisplayItem[],
   width?: number,
 ): readonly StreamTabLineSegment[] {
@@ -131,6 +160,31 @@ export function streamTabsLineSegments(
   return segments;
 }
 
+export function streamTabsLineSegments(
+  items: readonly StreamTabDisplayItem[],
+  width?: number,
+): readonly StreamTabLineSegment[] {
+  const segments = buildLineSegments(items, width);
+  const activeIndex = items.findIndex((item) => item.active);
+  const activeItem = activeIndex === -1 ? undefined : items[activeIndex];
+  if (
+    width === undefined ||
+    !activeItem ||
+    segments.some((segment) => segment.item === activeItem)
+  ) {
+    return segments;
+  }
+
+  const activeSegments = buildLineSegments(
+    activeAnchoredItems(items, activeIndex),
+    width,
+  );
+  if (activeSegments.some((segment) => segment.item === activeItem)) {
+    return activeSegments;
+  }
+  return buildLineSegments([activeItem], width);
+}
+
 function streamTabsTextLength(items: readonly StreamTabDisplayItem[]): number {
   return streamTabsLineText(items).length;
 }
@@ -156,7 +210,7 @@ function collapseMiddle(
   const keep = new Set([0, items.length - 1]);
   if (activeIndex > 0 && activeIndex < items.length - 1) {
     keep.add(activeIndex);
-  } else {
+  } else if (activeIndex <= 0) {
     keep.add(1);
   }
 
@@ -166,12 +220,7 @@ function collapseMiddle(
     const item = items[i];
     if (keep.has(i)) {
       if (elided) {
-        out.push({
-          id: 'ellipsis',
-          label: '…',
-          active: false,
-          running: false,
-        });
+        out.push(ellipsisTabItem());
         elided = false;
       }
       out.push(item);

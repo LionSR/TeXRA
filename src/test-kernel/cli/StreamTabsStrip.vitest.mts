@@ -408,4 +408,87 @@ describe('CLI stream tabs strip', () => {
     expect(segments[1]?.text).toBe('1:strat…');
     expect(streamTabsLineText([active, running], 16)).toBe('[main]* 1:strat…');
   });
+
+  it('keeps the active tab visible when earlier tabs fill the row', () => {
+    const active = {
+      id: streamId('active'),
+      label: 'active-target',
+      active: true,
+      running: true,
+      shortcutIndex: 2,
+    };
+    const segments = streamTabsLineSegments(
+      [
+        {
+          id: streamId('root'),
+          label: 'main',
+          active: false,
+          running: true,
+        },
+        {
+          id: streamId('middle'),
+          label: 'very-long-middle',
+          active: false,
+          running: true,
+          shortcutIndex: 1,
+        },
+        active,
+      ],
+      20,
+    );
+    const line = segments
+      .map((segment) => `${segment.leadingSpace ? ' ' : ''}${segment.text}`)
+      .join('');
+
+    expect(segments.some((segment) => segment.item === active)).toBe(true);
+    expect(line).toHaveLength(20);
+    expect(line).toContain('[2:active');
+    expect(line).toContain('…');
+  });
+
+  it('collapses a middle tab before an active last tab in tight rows', () => {
+    const root = streamId('root');
+    const middle = streamId('middle-stream');
+    const active = streamId('active-stream');
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [
+        root,
+        slice('root', {
+          status: STREAM_STATUS.RUNNING,
+          activeSubagents: [
+            child({
+              executionId: 'middle',
+              childStreamId: middle,
+              agentName: 'veryLongMiddleAgent',
+              status: STREAM_STATUS.RUNNING,
+            }),
+            child({
+              executionId: 'active',
+              childStreamId: active,
+              agentName: 'activeTarget',
+              status: STREAM_STATUS.RUNNING,
+            }),
+          ],
+        }),
+      ],
+      [middle, slice('middle-stream', { status: STREAM_STATUS.RUNNING })],
+      [active, slice('active-stream', { status: STREAM_STATUS.RUNNING })],
+    ]);
+
+    const items = streamTabsDisplayItems({
+      activeStreamId: active,
+      streams,
+      parentStream: new Map([
+        [middle, root],
+        [active, root],
+      ]),
+      width: 28,
+    });
+
+    expect(items.map(streamTabSegmentText)).toEqual([
+      'main*',
+      '…',
+      '[2:activeTarget]*',
+    ]);
+  });
 });
