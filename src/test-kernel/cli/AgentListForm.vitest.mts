@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { agentSelectWindow } from '@cli/chat/tui/forms/AgentListForm';
+import {
+  agentFormWidth,
+  agentSelectWindow,
+} from '@cli/chat/tui/forms/AgentListForm';
 
 describe('CLI AgentListForm row budget', () => {
+  it('clamps the regular form width to the terminal columns', () => {
+    expect(agentFormWidth(120)).toBe(80);
+    expect(agentFormWidth(80)).toBe(80);
+    expect(agentFormWidth(60)).toBe(60);
+  });
+
   it('windows long agent lists inside the available foreground rows', () => {
     expect(
       agentSelectWindow({
