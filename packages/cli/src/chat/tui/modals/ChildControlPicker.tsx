@@ -124,6 +124,10 @@ export interface PickerListLayout {
   readonly visibleCount: number;
 }
 
+export function taskDetailCommandLabel(kind: ChildControlItem['kind']): string {
+  return kind === 'process' ? 'Command' : 'Description';
+}
+
 export function computeTaskDetailLayout({
   availableRows,
   hasTailLines,
@@ -268,6 +272,7 @@ function TaskDetailView({
   const offset = Math.min(scrollOffset, maxOffset);
   const visibleTail = item.tailLines.slice(offset, offset + visibleLineCount);
   const compactMeta = metaParts.join(' · ');
+  const commandLabel = taskDetailCommandLabel(item.kind);
 
   useEffect(() => {
     setScrollOffset((current) => Math.min(current, maxOffset));
@@ -319,8 +324,8 @@ function TaskDetailView({
       )}
       {layout.showCommand ? (
         <Box marginTop={layout.compact ? 0 : 1}>
-          <Box width={10}>
-            <Text bold>Command:</Text>
+          <Box width={13}>
+            <Text bold>{`${commandLabel}:`}</Text>
           </Box>
           <Text wrap="truncate-end">{item.command}</Text>
         </Box>
