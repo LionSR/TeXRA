@@ -2,7 +2,10 @@
 import * as assert from 'assert';
 
 // Local imports - tools
-import { findExternalToolDef } from '@tools/externalToolDefs';
+import {
+  findExternalToolDef,
+  setTexraCliEntrypointChecker,
+} from '@tools/externalToolDefs';
 
 describe('external tool definitions', () => {
   it('keeps Zotero visible as a user-toggleable tool group', () => {
@@ -26,5 +29,24 @@ describe('external tool definitions', () => {
     assert.strictEqual(texraCli.comingSoon, true);
     assert.strictEqual(texraCli.toggleable, undefined);
     assert.deepStrictEqual(texraCli.tools, []);
+  });
+
+  it('detects the current TeXRA CLI process through the host checker', async () => {
+    const texraCli = findExternalToolDef('texra-cli');
+    assert.ok(texraCli, 'TeXRA CLI tool definition should exist');
+    setTexraCliEntrypointChecker(() => true);
+
+    try {
+      const probeResult = await texraCli.probe?.();
+
+      assert.strictEqual(probeResult, true);
+      assert.strictEqual(await texraCli.check(probeResult), true);
+      assert.strictEqual(
+        await texraCli.statusLabel?.(probeResult),
+        'Detected; integration coming soon',
+      );
+    } finally {
+      setTexraCliEntrypointChecker(() => false);
+    }
   });
 });

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCliContext,
   CliUsageError,
+  isTexraCliEntrypointPath,
   resolveCliCwd,
 } from '@cli/runtime/cliContext';
 import { loadWorkspaceCliConfig } from '@cli/runtime/cliConfig';
@@ -25,6 +26,20 @@ async function workspaceWithConfig(config: string): Promise<string> {
   await writeFile(join(workspace, '.texra', 'config.json'), config);
   return workspace;
 }
+
+describe('CLI entrypoint detection', () => {
+  it('recognizes published and local TeXRA launchers', () => {
+    expect(isTexraCliEntrypointPath('/usr/local/bin/texra')).toBe(true);
+    expect(isTexraCliEntrypointPath('/tmp/bin/texra-local')).toBe(true);
+    expect(
+      isTexraCliEntrypointPath('/repo/packages/cli/dist/bin/texra.js'),
+    ).toBe(true);
+    expect(
+      isTexraCliEntrypointPath('/repo/packages/cli/src/bin/texra.ts'),
+    ).toBe(true);
+    expect(isTexraCliEntrypointPath('/usr/local/bin/vitest')).toBe(false);
+  });
+});
 
 describe('CLI context config defaults', () => {
   it('applies flag over env over workspace config over built-in defaults', async () => {

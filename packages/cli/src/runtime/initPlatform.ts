@@ -24,13 +24,15 @@ import { GlobalStateKey } from '@common/state/stateKeys';
 // Local imports - logger
 import { setOutputChannelFactory } from '@logger/logUtils';
 
-// Local imports - Lean direct LSP adapter
+// Local imports - tool integrations
+import { setTexraCliEntrypointChecker } from '@tools/externalToolDefs';
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 
 // Local imports - CLI runtime
 import { applyCliGitAuthorConfig } from './gitAuthor';
 import { getCliSecrets } from './cliSecrets';
+import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
 import { writeTextStderr } from './logSinks';
 import { workspaceCliConfigPath } from './cliConfig';
 import { getCliAuthProvider, initializeCliSupabaseAuth } from './supabaseAuth';
@@ -124,6 +126,9 @@ export async function initCliPlatform(
 ): Promise<void> {
   cliWorkspaceCwd = context.cwd;
   quietPlatformLogs = context.quietLogs ?? false;
+  setTexraCliEntrypointChecker(() =>
+    isTexraCliEntrypointPath(readCliEntrypointPath()),
+  );
   setOutputChannelFactory(
     quietPlatformLogs ? () => ({ appendLine: () => undefined }) : null,
   );
