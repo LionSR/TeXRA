@@ -176,6 +176,16 @@ export function chatTuiCanStopActiveRun(
   return status === undefined || LIVE_ELAPSED_STREAM_STATUSES.has(status);
 }
 
+export function chatTuiCanStopVisibleRun(
+  session: InterruptibleTuiSessionState,
+  status: StreamStatus | undefined,
+): boolean {
+  return (
+    chatTuiCanStopActiveRun(session, status) ||
+    Boolean(session.streamId && LIVE_ELAPSED_STREAM_STATUSES.has(status ?? ''))
+  );
+}
+
 export function chatTuiCanStartRootRun(
   session: PendingTuiRunSessionState,
 ): boolean {
@@ -797,7 +807,7 @@ export async function runChat(
   const canInterruptActiveRun = (): boolean =>
     chatTuiCanInterruptActiveRun(session);
   const canStopActiveRun = (): boolean =>
-    chatTuiCanStopActiveRun(session, rootStreamStatus());
+    chatTuiCanStopVisibleRun(session, rootStreamStatus());
   const interruptActive = (): void => {
     clearApprovals();
     if (!session.streamId) return;
