@@ -103,6 +103,27 @@ const SCENARIOS = [
     unexpect: ['Tip: Ctrl-C exits idle chats', 'First queued follo…'],
   },
   {
+    name: 'compact-queued-followups',
+    rows: 8,
+    cols: 60,
+    env: {
+      HARNESS_ENTRIES: '2',
+      HARNESS_QUEUED_FOLLOWUPS:
+        'First queued follow-up||Second queued follow-up',
+    },
+    bootExpect: 'queued 2',
+    frame: 'tail',
+    expect: [
+      'Queued follow-ups (2)',
+      '1. First queued follow-up',
+      '2. Second queued follow-up',
+      '│ ›',
+      'queued 2',
+      '[Ctrl-C]stop',
+    ],
+    unexpect: ['Tip: Ctrl-C exits idle chats', 'agent: chat · model'],
+  },
+  {
     name: 'subagent-followup-summary',
     env: { HARNESS_ENTRIES: '0', HARNESS_SUBAGENT_FOLLOWUPS: '1' },
     expect: [

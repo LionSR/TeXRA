@@ -24,7 +24,10 @@ import {
   queuedFollowUpPanelRowCount,
 } from './panes/QueuedFollowUpsPanel';
 import { StatusBar } from './panes/StatusBar';
-import { StreamTabsStrip } from './panes/StreamTabsStrip';
+import {
+  StreamTabsStrip,
+  streamTabsDisplayItems,
+} from './panes/StreamTabsStrip';
 import { SubagentList } from './panes/SubagentList';
 import { TipRow } from './panes/TipRow';
 import { TodosPlanPanel } from './panes/TodosPlanPanel';
@@ -68,6 +71,8 @@ const APPROVAL_FOREGROUND_MAX_ROWS = 18;
 // Cap the bottom subagent/todos panels so they never crowd out the
 // conversation or push the input bar off-screen.
 const BOTTOM_PANEL_MAX_ROWS = 10;
+const COMPACT_STATIC_TRANSCRIPT_MAX_ROWS = 14;
+const COMPACT_LIVE_TRANSCRIPT_RESERVE_ROWS = 2;
 
 const PINNED_CHROME_ROWS = {
   tip: 1,
@@ -81,19 +86,24 @@ function pinnedChromeRows({
   queuedFollowUpPanelRows = 0,
   reverseSearchOpen,
   slashPaletteOpen,
+  streamTabsVisible = true,
+  staticTranscriptRows = 0,
   tipVisible = true,
 }: {
   readonly inputVisible?: boolean;
   readonly queuedFollowUpPanelRows?: number;
   readonly reverseSearchOpen: boolean;
   readonly slashPaletteOpen: boolean;
+  readonly streamTabsVisible?: boolean;
+  readonly staticTranscriptRows?: number;
   readonly tipVisible?: boolean;
 }): number {
   const baseRows =
-    PINNED_CHROME_ROWS.streamTabsWorstCase +
     PINNED_CHROME_ROWS.status +
     (inputVisible ? PINNED_CHROME_ROWS.input : 0) +
+    (streamTabsVisible ? PINNED_CHROME_ROWS.streamTabsWorstCase : 0) +
     queuedFollowUpPanelRows +
+    staticTranscriptRows +
     (tipVisible ? PINNED_CHROME_ROWS.tip : 0);
   return (
     baseRows +
@@ -110,6 +120,8 @@ export function allocateMiddleRows({
   reverseSearchOpen,
   rows,
   slashPaletteOpen,
+  streamTabsVisible = true,
+  staticTranscriptRows = 0,
   tipVisible = true,
 }: {
   readonly foregroundMaxRows?: number;
@@ -119,6 +131,8 @@ export function allocateMiddleRows({
   readonly reverseSearchOpen: boolean;
   readonly rows: number;
   readonly slashPaletteOpen: boolean;
+  readonly streamTabsVisible?: boolean;
+  readonly staticTranscriptRows?: number;
   readonly tipVisible?: boolean;
 }): {
   readonly foregroundRows: number;
@@ -132,6 +146,8 @@ export function allocateMiddleRows({
         queuedFollowUpPanelRows,
         reverseSearchOpen,
         slashPaletteOpen,
+        streamTabsVisible,
+        staticTranscriptRows,
         tipVisible,
       }),
   );
@@ -190,6 +206,34 @@ export function allocateSidePanelRows({
     subagentRows,
     todosPlanRows: availableRows - subagentRows,
   };
+}
+
+export function staticTranscriptRowBudget({
+  footerRows,
+  foregroundOpen,
+  queuedFollowUpPanelRows = 0,
+  rows,
+  tipVisible = true,
+}: {
+  readonly footerRows: number;
+  readonly foregroundOpen: boolean;
+  readonly queuedFollowUpPanelRows?: number;
+  readonly rows: number;
+  readonly tipVisible?: boolean;
+}): number | undefined {
+  if (foregroundOpen || rows > COMPACT_STATIC_TRANSCRIPT_MAX_ROWS) {
+    return undefined;
+  }
+  const optionalRows =
+    rows -
+    footerRows -
+    queuedFollowUpPanelRows -
+    (tipVisible ? PINNED_CHROME_ROWS.tip : 0);
+  const liveTranscriptReserveRows = Math.min(
+    COMPACT_LIVE_TRANSCRIPT_RESERVE_ROWS,
+    Math.max(0, optionalRows),
+  );
+  return Math.max(0, optionalRows - liveTranscriptReserveRows);
 }
 
 export function shouldShowTipRow({
@@ -373,14 +417,36 @@ export function App(props: AppProps): React.JSX.Element {
 
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const queuedFollowUpMessages = activeSlice?.queuedFollowUpMessages ?? [];
-  const queuedFollowUpPanelVisible =
+  const queuedFollowUpPanelWanted =
     !foregroundOpen && queuedFollowUpMessages.length > 0;
-  const queuedFollowUpPanelRows = queuedFollowUpPanelVisible
+  const streamTabItems = streamTabsDisplayItems({
+    activeStreamId,
+    parentStream,
+    streams,
+    width: columns,
+  });
+  const streamTabsVisible = streamTabItems.length > 0;
+  const footerRows =
+    PINNED_CHROME_ROWS.status +
+    (inputBarVisible ? PINNED_CHROME_ROWS.input : 0) +
+    (streamTabsVisible ? PINNED_CHROME_ROWS.streamTabsWorstCase : 0);
+  const requestedQueuedFollowUpPanelRows = queuedFollowUpPanelWanted
     ? queuedFollowUpPanelRowCount(queuedFollowUpMessages)
     : 0;
+  const queuedFollowUpPanelRows = queuedFollowUpPanelWanted
+    ? Math.min(requestedQueuedFollowUpPanelRows, Math.max(0, rows - footerRows))
+    : 0;
+  const queuedFollowUpPanelVisible = queuedFollowUpPanelRows > 0;
   const tipRowVisible = shouldShowTipRow({
     foregroundOpen,
-    hasQueuedFollowUps: queuedFollowUpPanelVisible,
+    hasQueuedFollowUps: queuedFollowUpPanelWanted,
+  });
+  const staticTranscriptRows = staticTranscriptRowBudget({
+    footerRows,
+    foregroundOpen,
+    queuedFollowUpPanelRows,
+    rows,
+    tipVisible: tipRowVisible,
   });
   const subagentControlTarget = resolveChildControlStreamTarget({
     activeStreamId,
@@ -434,6 +500,8 @@ export function App(props: AppProps): React.JSX.Element {
     reverseSearchOpen,
     rows,
     slashPaletteOpen,
+    streamTabsVisible,
+    staticTranscriptRows: staticTranscriptRows ?? 0,
     tipVisible: tipRowVisible,
   });
   // The subagent/todos panels live at the bottom of the same vertical
@@ -601,7 +669,10 @@ export function App(props: AppProps): React.JSX.Element {
 
   return (
     <>
-      <StaticConversationTranscript width={transcriptWidth} />
+      <StaticConversationTranscript
+        maxRows={staticTranscriptRows}
+        width={transcriptWidth}
+      />
       <Box flexDirection="column">
         <Box flexDirection="column" overflowY="hidden">
           {conversationRows > 0 ? (
@@ -642,7 +713,7 @@ export function App(props: AppProps): React.JSX.Element {
           disabled={inputDisabled}
           history={props.history}
         />
-        <StreamTabsStrip width={columns} />
+        <StreamTabsStrip items={streamTabItems} width={columns} />
         <StatusBar
           canStopActiveRun={canStopActiveRun}
           queuedFollowUpPreview={!queuedFollowUpPanelVisible}
