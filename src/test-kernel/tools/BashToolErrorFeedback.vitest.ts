@@ -7,7 +7,7 @@ import * as agentConfig from '@agent/core/config';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 
 // Local imports - model handlers
-import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/modelHandlerOpenAIResponse';
+import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { extractToolAttachments } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import type { OpenAIResponseToolCall } from '@agent/modelHandlers/types/IModelHandler';
 

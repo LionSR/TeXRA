@@ -3,7 +3,7 @@ import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - agent model handlers
-import { ModelHandlerAnthropic } from '@agent/modelHandlers/modelHandlerAnthropic';
+import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
 
 function createHandler(): ModelHandlerAnthropic {
   return new ModelHandlerAnthropic({

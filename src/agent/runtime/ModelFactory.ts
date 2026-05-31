@@ -32,32 +32,36 @@ const INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT =
 // `null` marks providers that have no direct handler (routed elsewhere or unsupported).
 const PROVIDER_HANDLERS: Record<ModelProvider, ProviderHandlerLoader | null> = {
   [ModelProvider.ANTHROPIC]: async () =>
-    (await import('@agent/modelHandlers/modelHandlerAnthropic'))
+    (await import('@agent/modelHandlers/anthropic/modelHandlerAnthropic'))
       .ModelHandlerAnthropic,
   [ModelProvider.OPENAI]: async () =>
-    (await import('@agent/modelHandlers/modelHandlerOpenAI'))
+    (await import('@agent/modelHandlers/openai/modelHandlerOpenAI'))
       .ModelHandlerOpenAI,
   [ModelProvider.GOOGLE]: async () =>
-    (await import('@agent/modelHandlers/modelHandlerGoogleGenAI'))
+    (await import('@agent/modelHandlers/google/modelHandlerGoogleGenAI'))
       .ModelHandlerGoogleGenAI,
   [ModelProvider.DEEPSEEK]: async () =>
-    (await import('@agent/modelHandlers/modelHandlerDeepSeek'))
+    (await import('@agent/modelHandlers/openai/modelHandlerDeepSeek'))
       .ModelHandlerDeepSeek,
   [ModelProvider.XAI]: async () =>
-    (await import('@agent/modelHandlers/modelHandlerXAI')).ModelHandlerXAI,
+    (await import('@agent/modelHandlers/openai/modelHandlerXAI'))
+      .ModelHandlerXAI,
   [ModelProvider.MOONSHOT]: async () =>
-    (await import('@agent/modelHandlers/modelHandlerKimi')).ModelHandlerKimi,
+    (await import('@agent/modelHandlers/openai/modelHandlerKimi'))
+      .ModelHandlerKimi,
   [ModelProvider.DASHSCOPE]: async () =>
-    (await import('@agent/modelHandlers/modelHandlerDashScope'))
+    (await import('@agent/modelHandlers/openai/modelHandlerDashScope'))
       .ModelHandlerDashScope,
   [ModelProvider.MINIMAX]: async () =>
-    (await import('@agent/modelHandlers/modelHandlerMiniMax'))
+    (await import('@agent/modelHandlers/openai/modelHandlerMiniMax'))
       .ModelHandlerMiniMax,
   [ModelProvider.GLM]: async () =>
-    (await import('@agent/modelHandlers/modelHandlerGLM')).ModelHandlerGLM,
+    (await import('@agent/modelHandlers/openai/modelHandlerGLM'))
+      .ModelHandlerGLM,
   [ModelProvider.OTHERS]: async () =>
-    (await import('@agent/modelHandlers/modelHandlerOpenRouterNative'))
-      .ModelHandlerOpenRouterNative,
+    (
+      await import('@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative')
+    ).ModelHandlerOpenRouterNative,
   [ModelProvider.COPILOT]: null,
 };
 
@@ -214,7 +218,7 @@ export async function createModelHandler(
   if (shouldUseResponsesAPI(config, useOpenRouter)) {
     logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
     const { ModelHandlerOpenAIResponse } =
-      await import('@agent/modelHandlers/modelHandlerOpenAIResponse');
+      await import('@agent/modelHandlers/openai/modelHandlerOpenAIResponse');
     return withReasoningOverride(new ModelHandlerOpenAIResponse(config));
   }
 
@@ -223,7 +227,7 @@ export async function createModelHandler(
     const openrouterFullName =
       config.openrouterFullName ?? `${config.provider}/${config.fullName}`;
     const { ModelHandlerOpenRouterNative } =
-      await import('@agent/modelHandlers/modelHandlerOpenRouterNative');
+      await import('@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative');
     return withReasoningOverride(
       new ModelHandlerOpenRouterNative({ ...config, openrouterFullName }),
     );

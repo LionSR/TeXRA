@@ -4,7 +4,7 @@ import { strict as assert } from 'assert';
 // (none needed)
 
 // Local imports - agent
-import { normalizeOpenAIMessageContent } from '@agent/modelHandlers/openAIMessageUtils';
+import { normalizeOpenAIMessageContent } from '@agent/modelHandlers/openai/openAIMessageUtils';
 
 describe('normalizeOpenAIMessageContent', () => {
   it('merges consecutive roles when requested', () => {

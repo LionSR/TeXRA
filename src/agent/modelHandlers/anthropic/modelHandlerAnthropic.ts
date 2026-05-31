@@ -53,10 +53,10 @@ import {
   getAnthropicMaxPdfPages,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
   TOOL_USE_SAFETY_BUFFER,
-} from './contextManagementConstants';
-import { AnthropicStreamHandler } from './support/AnthropicStreamHandler';
-import { toAnthropicTools } from './toolConversion';
-import { ANTHROPIC_STOP } from './types/StopReasonTypes';
+} from '../contextManagementConstants';
+import { AnthropicStreamHandler } from '../support/AnthropicStreamHandler';
+import { toAnthropicTools } from '../toolConversion';
+import { ANTHROPIC_STOP } from '../types/StopReasonTypes';
 import {
   extractAnthropicWebFetchResults,
   extractAnthropicWebSearchResults,
@@ -65,16 +65,16 @@ import {
   isAnthropicWebFetchResult,
   isAnthropicWebSearchResult,
   type ServerToolExtractionResult,
-} from './types/ServerToolTypes';
-import { prepareExistingOutputContent } from './utils/fileContentUtils';
+} from '../types/ServerToolTypes';
+import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import {
   describeAttachments,
   formatAttachmentSummaryFromNotes,
   formatToolResultAsText,
   type ToolResultPayload,
-} from './utils/toolAttachmentUtils';
-import { normalizeUsage } from './support/UsageNormalizer';
-import { tagAnthropicSdkError } from './support/sdkErrorAdapters';
+} from '../utils/toolAttachmentUtils';
+import { normalizeUsage } from '../support/UsageNormalizer';
+import { tagAnthropicSdkError } from '../support/sdkErrorAdapters';
 import {
   FILES_API_BETA,
   CONTEXT_MANAGEMENT_BETA,
@@ -104,14 +104,14 @@ import {
 } from './anthropicTools';
 
 // Type imports
-import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { ProviderStopReason } from '../types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
   ExtractResponseResult,
   AnthropicToolCall,
   TokenCountOptions,
-} from './types/IModelHandler';
+} from '../types/IModelHandler';
 import type { AnthropicBeta } from '@anthropic-ai/sdk/resources/beta/beta';
 import type {
   BetaContentBlock,

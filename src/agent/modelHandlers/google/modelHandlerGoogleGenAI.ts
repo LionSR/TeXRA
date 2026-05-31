@@ -62,10 +62,10 @@ import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
-import { normalizeUsage } from './support/UsageNormalizer';
-import { prepareExistingOutputContent } from './utils/fileContentUtils';
-import { tagGoogleSdkError } from './support/sdkErrorAdapters';
-import { TOOL_USE_SAFETY_BUFFER } from './contextManagementConstants';
+import { normalizeUsage } from '../support/UsageNormalizer';
+import { prepareExistingOutputContent } from '../utils/fileContentUtils';
+import { tagGoogleSdkError } from '../support/sdkErrorAdapters';
+import { TOOL_USE_SAFETY_BUFFER } from '../contextManagementConstants';
 
 // Local file imports
 import {
@@ -74,19 +74,19 @@ import {
   formatToolResultAsText,
   loadAttachmentBuffer,
   type ToolResultPayload,
-} from './utils/toolAttachmentUtils';
-import { toGoogleTools } from './toolConversion';
+} from '../utils/toolAttachmentUtils';
+import { toGoogleTools } from '../toolConversion';
 
 // Type imports
-import type { MediaFileResult } from './support/MediaAttachmentProcessor';
-import type { ProviderStopReason } from './types/StopReasonTypes';
+import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
+import type { ProviderStopReason } from '../types/StopReasonTypes';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
   ExtractResponseResult,
   GoogleToolCall,
   TokenCountOptions,
-} from './types/IModelHandler';
+} from '../types/IModelHandler';
 
 function isTextPart(part: Part): part is Part & { text: string } {
   return typeof part.text === 'string';

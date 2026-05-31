@@ -8,7 +8,7 @@ import {
   createOpenAIBackgroundPollingError,
   createOpenAIBackgroundTerminalError,
   normalizeOpenAIResponseError,
-} from '@agent/modelHandlers/openAIResponseErrors';
+} from '@agent/modelHandlers/openai/openAIResponseErrors';
 
 // Local imports - common errors
 import { formatProviderHttpError } from '@common/errors/sdkErrorUtils';
