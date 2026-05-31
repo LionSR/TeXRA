@@ -65,6 +65,7 @@ const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
 const PLAN_APPROVAL_ODYSSEY = process.env.HARNESS_PLAN_APPROVAL_ODYSSEY === '1';
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
+const SHOW_LONG_CHILD_OUTPUT = process.env.HARNESS_LONG_CHILD_OUTPUT === '1';
 const SHOW_ORCHESTRATION = process.env.HARNESS_ORCHESTRATION === '1';
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
@@ -269,6 +270,14 @@ function seedSubagentFollowupTranscript(): void {
 }
 
 function makeChildEntries(agent: string, action: string): ConversationEntry[] {
+  const assistantText =
+    SHOW_LONG_CHILD_OUTPUT && agent === 'strategy'
+      ? Array.from(
+          { length: 18 },
+          (_, index) =>
+            `strategy detail line ${String(index + 1).padStart(2, '0')}${index === 17 ? ' final contradiction found' : ''}`,
+        ).join('\n')
+      : `${agent} is checking the ${action} details and preparing a concise result.`;
   return [
     {
       id: `${agent}-user`,
@@ -279,7 +288,7 @@ function makeChildEntries(agent: string, action: string): ConversationEntry[] {
     {
       id: `${agent}-assistant`,
       role: 'assistant',
-      text: `${agent} is checking the ${action} details and preparing a concise result.`,
+      text: assistantText,
       finalized: false,
     },
   ];
