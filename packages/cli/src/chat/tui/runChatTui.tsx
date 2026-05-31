@@ -52,10 +52,12 @@ import {
   formatCliMemoryList,
   formatCliMemoryPreview,
 } from '@cli/runtime/memory';
+import { isInFlightStatus } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   LIVE_ELAPSED_STREAM_STATUSES,
   STREAM_STATUS,
+  StreamStatusSchema,
   type StreamStatus,
   type ExecutionId,
   type StreamTabId,
@@ -192,7 +194,7 @@ export function chatTuiCanStartRootRun(
   return !session.runPromise || session.runCompleted;
 }
 
-export function chatTuiActiveChildFollowUpTarget(): StreamTabId | undefined {
+function chatTuiActiveChildStreamId(): StreamTabId | undefined {
   const activeStreamId = cliState.activeStreamId.get();
   if (!activeStreamId) return undefined;
   return cliState.parentStream.get().has(activeStreamId)
@@ -200,14 +202,52 @@ export function chatTuiActiveChildFollowUpTarget(): StreamTabId | undefined {
     : undefined;
 }
 
+function chatTuiStreamStatuses(streamId: StreamTabId): readonly string[] {
+  const streams = cliState.streams.get();
+  const parentStreamId = cliState.parentStream.get().get(streamId);
+  const childStreamStatus = parentStreamId
+    ? streams
+        .get(parentStreamId)
+        ?.childStreams.find((child) => child.childStreamId === streamId)?.status
+    : undefined;
+  return [
+    childStreamStatus,
+    streams.get(streamId)?.status,
+    StreamStatusService.get(streamId),
+  ].filter((status): status is string => status !== undefined);
+}
+
+function chatTuiCanAcceptFollowUp(statuses: readonly string[]): boolean {
+  // A focused child normally has at least one status source. Keep the previous
+  // permissive behavior during the brief edge where parent focus arrives first.
+  if (statuses.length === 0) return true;
+  return statuses.every((status) => {
+    const parsed = StreamStatusSchema.safeParse(status);
+    return parsed.success && isInFlightStatus(parsed.data);
+  });
+}
+
+export function chatTuiActiveChildFollowUpTarget(): StreamTabId | undefined {
+  const activeStreamId = chatTuiActiveChildStreamId();
+  if (!activeStreamId) return undefined;
+  return chatTuiCanAcceptFollowUp(chatTuiStreamStatuses(activeStreamId))
+    ? activeStreamId
+    : undefined;
+}
+
+export function chatTuiRejectedChildFollowUpTarget(): StreamTabId | undefined {
+  const activeStreamId = chatTuiActiveChildStreamId();
+  if (!activeStreamId) return undefined;
+  return chatTuiCanAcceptFollowUp(chatTuiStreamStatuses(activeStreamId))
+    ? undefined
+    : activeStreamId;
+}
+
 export function chatTuiShouldAnnounceQueuedFollowUp(
   targetStreamId: StreamTabId | undefined,
 ): boolean {
   if (!targetStreamId) return true;
-  const status =
-    cliState.streams.get().get(targetStreamId)?.status ??
-    StreamStatusService.get(targetStreamId);
-  return status !== STREAM_STATUS.WAITING;
+  return !chatTuiStreamStatuses(targetStreamId).includes(STREAM_STATUS.WAITING);
 }
 
 interface SlashCommandContext {
@@ -995,6 +1035,14 @@ export async function runChat(
   };
 
   const submitChatMessage = async (line: string): Promise<void> => {
+    const rejectedChildFollowUpTarget = chatTuiRejectedChildFollowUpTarget();
+    if (rejectedChildFollowUpTarget) {
+      appendLocalAssistantTranscript(
+        'The selected subagent is no longer accepting follow-ups.',
+        rejectedChildFollowUpTarget,
+      );
+      return;
+    }
     const childFollowUpTarget = chatTuiActiveChildFollowUpTarget();
     if (!childFollowUpTarget && chatTuiCanStartRootRun(session)) {
       startSession(line);
