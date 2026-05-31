@@ -7,11 +7,15 @@ import {
   computeTaskDetailLayout,
   emptyPickerText,
   isUltraCompactPickerRows,
+  moveTaskDetailScrollState,
   pickerKeyHints,
   pickerKeyHintsForColumns,
   pickerTitle,
+  syncTaskDetailScrollState,
   TASK_DETAIL_LABEL_WIDTH,
   taskDetailCommandLabel,
+  taskDetailInitialScrollOffset,
+  taskDetailVisibleScrollOffset,
 } from '@cli/chat/tui/modals/ChildControlPicker';
 import {
   buildChildControlItems,
@@ -821,6 +825,70 @@ describe('CLI child execution controls', () => {
       showCommand: true,
       showHints: true,
       visibleLineCount: 5,
+    });
+  });
+
+  it('opens long task detail output at the latest visible tail', () => {
+    expect(taskDetailInitialScrollOffset(2, 5)).toBe(0);
+    expect(taskDetailInitialScrollOffset(12, 5)).toBe(7);
+    expect(taskDetailInitialScrollOffset(12, 0)).toBe(12);
+  });
+
+  it('preserves manual task detail scrolling while new output arrives', () => {
+    const tailing = { executionId: 'task-1', followsTail: true, offset: 7 };
+    expect(syncTaskDetailScrollState(tailing, 'task-1', 8)).toEqual({
+      executionId: 'task-1',
+      followsTail: true,
+      offset: 8,
+    });
+    expect(taskDetailVisibleScrollOffset(tailing, 8)).toBe(8);
+
+    const scrolled = moveTaskDetailScrollState(tailing, 7, 'up');
+    expect(scrolled).toEqual({
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 6,
+    });
+    expect(taskDetailVisibleScrollOffset(scrolled, 8)).toBe(6);
+    expect(syncTaskDetailScrollState(scrolled, 'task-1', 8)).toEqual({
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 6,
+    });
+    expect(syncTaskDetailScrollState(scrolled, 'task-2', 3)).toEqual({
+      executionId: 'task-2',
+      followsTail: true,
+      offset: 3,
+    });
+  });
+
+  it('moves task detail scroll from the visible tail position', () => {
+    const tailing = { executionId: 'task-1', followsTail: true, offset: 7 };
+    expect(moveTaskDetailScrollState(tailing, 9, 'up')).toEqual({
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 8,
+    });
+    expect(moveTaskDetailScrollState(tailing, 9, 'down')).toEqual({
+      executionId: 'task-1',
+      followsTail: true,
+      offset: 9,
+    });
+  });
+
+  it('clamps task detail scroll movement at output boundaries', () => {
+    const top = { executionId: 'task-1', followsTail: false, offset: 0 };
+    expect(moveTaskDetailScrollState(top, 9, 'up')).toEqual({
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 0,
+    });
+
+    const bottom = { executionId: 'task-1', followsTail: true, offset: 9 };
+    expect(moveTaskDetailScrollState(bottom, 9, 'down')).toEqual({
+      executionId: 'task-1',
+      followsTail: true,
+      offset: 9,
     });
   });
 
