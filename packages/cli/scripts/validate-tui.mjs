@@ -203,6 +203,27 @@ const SCENARIOS = [
     expect: ['/model', 'List available models', 'navigate', 'Tab complete'],
   },
   {
+    name: 'narrow-slash-palette-command-names',
+    rows: 16,
+    cols: 52,
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/'],
+    frame: 'tail',
+    expect: [
+      '/api',
+      'Switch between included relay',
+      '/yolo',
+      'Approve privileged actions',
+    ],
+    unexpect: [
+      '/ap  Switch',
+      '/yol  Approve',
+      'personal API keys',
+      'automatically',
+    ],
+    maxLineColumns: 52,
+  },
+  {
     name: 'slash-palette-ctrl-u-clears-raw-control',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/', `${NAK}/model\r`],
