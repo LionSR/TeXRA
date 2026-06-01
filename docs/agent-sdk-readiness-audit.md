@@ -554,11 +554,14 @@ would have had if designed with these hosts in mind.
 A fifth independent pass (agent core/runtime, model handlers, logger/trace, and
 platform/surface, fanned out across four parallel explorers) re-audited the same
 surfaces against the current tree. **The 2026-05-28/29/30/31 findings hold; no new
-structural gaps surfaced.** TeXRA remains well-architected and SDK-aligned. The
-notable change since 2026-05-30 is that the top open surface item has been
-**resolved**, plus one entrypoint rename that dated the §1 diagram.
+structural gaps surfaced.** TeXRA remains well-architected and SDK-aligned. As
+already documented in §9 (2026-05-31), the top open surface item (the §8
+`packages/core` packaging note) was resolved and the run entrypoint was renamed
+between the 2026-05-30 and 2026-05-31 passes; this fifth pass re-confirms both
+remain in place as of 2026-06-01 (and is what dated the original §1 diagram, now
+corrected).
 
-**Resolved since last pass — §8 `packages/core` surface (was a stub, now a real barrel):**
+**§8 `packages/core` surface — resolved (landed by §9's pass, re-confirmed here; was a stub, now a real barrel):**
 
 `packages/core/src/index.ts` is no longer `corePackageReady = true`. It is now a
 curated **`@texra/core` barrel** (~115 lines, 8 labeled sections:
