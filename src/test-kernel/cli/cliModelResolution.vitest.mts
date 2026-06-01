@@ -119,7 +119,7 @@ describe('resolveCliRunModel precedence', () => {
     );
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith(
       'staleConfiguredModel',
-      { allowFallback: true },
+      expect.objectContaining({ allowFallback: true }),
     );
     expect(mocks.initCliPlatform).toHaveBeenCalledWith({
       ...context,
@@ -145,6 +145,8 @@ describe('resolveCliRunModel precedence', () => {
     );
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith('opus48T', {
       allowFallback: false,
+      apiMode: undefined,
+      noAvailableModelsMessage: undefined,
     });
   });
 
@@ -158,6 +160,8 @@ describe('resolveCliRunModel precedence', () => {
 
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith('opus48T', {
       allowFallback: false,
+      apiMode: undefined,
+      noAvailableModelsMessage: undefined,
     });
   });
 });

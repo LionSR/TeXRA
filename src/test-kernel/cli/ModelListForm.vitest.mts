@@ -78,6 +78,22 @@ describe('CLI ModelListForm status text', () => {
       ),
     ).toBe('relay: quota exhausted');
   });
+
+  it('shows signed-out included mode as a relay login requirement', () => {
+    expect(
+      formatModelStatusForCliMode(
+        access(
+          {
+            availability: 'included-login-required',
+            availabilityLabel: 'Login required',
+            disabled: true,
+          },
+          'login required',
+        ),
+        'included',
+      ),
+    ).toBe('relay: login required');
+  });
 });
 
 describe('CLI ModelListForm model visibility', () => {

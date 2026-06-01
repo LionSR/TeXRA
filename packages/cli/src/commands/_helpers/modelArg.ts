@@ -55,6 +55,11 @@ export async function resolveCliRunModel(
   try {
     const resolution = await resolveCliRunnableModel(model, {
       allowFallback: !explicitModelRequested,
+      apiMode: context.apiMode,
+      noAvailableModelsMessage:
+        context.apiMode === 'included'
+          ? 'Run `texra login` for included relay access, or retry with `--api-mode personal` after configuring a provider API key.'
+          : undefined,
     });
     if (resolution.notice && context.quietLogs !== true) {
       writeTextStderr(resolution.notice);

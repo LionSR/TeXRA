@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  getCliModelAccessList,
   resolveCliRunnableModel,
   resolveCliRunnableModelFromAccessList,
   type CliModelAccess,
@@ -8,8 +9,18 @@ import {
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { ModelOptionData } from '@shared/schemas';
 
+const mocks = vi.hoisted(() => ({
+  authProvider: {
+    isAuthenticated: vi.fn(),
+  },
+}));
+
 vi.mock('@model/computeModelOptions', () => ({
   computeModelOptionsData: vi.fn(),
+}));
+
+vi.mock('@cli/runtime/supabaseAuth', () => ({
+  getCliAuthProvider: () => mocks.authProvider,
 }));
 
 vi.mock('llm-zoo', () => ({
@@ -35,6 +46,8 @@ function model(
 describe('CLI model access resolution', () => {
   beforeEach(() => {
     computeModelOptionsDataMock.mockReset();
+    mocks.authProvider.isAuthenticated.mockReset();
+    mocks.authProvider.isAuthenticated.mockResolvedValue(true);
   });
 
   it('keeps the requested model when it is currently runnable', () => {
@@ -99,13 +112,67 @@ describe('CLI model access resolution', () => {
         'gemini31p',
         {
           allowFallback: true,
-          noAvailableModelsHint:
-            'Run `texra chat --api-mode included` to try included relay access',
+          noAvailableModelsMessage:
+            'Run `texra login` for included relay access.',
         },
       ),
     ).toThrow(
-      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra chat --api-mode included` to try included relay access, run `texra login`, or configure a provider API key.',
+      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra login` for included relay access.',
     );
+  });
+
+  it('marks explicitly included-mode models as login-required when signed out', async () => {
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('deepseekT', {
+        availability: 'missing-key',
+        availabilityLabel: 'Missing API key',
+        requiresKey: true,
+        disabled: true,
+      }),
+    ]);
+    mocks.authProvider.isAuthenticated.mockResolvedValueOnce(false);
+
+    await expect(
+      getCliModelAccessList({ apiMode: 'included' }),
+    ).resolves.toMatchObject([
+      {
+        available: false,
+        status: 'login required',
+        model: {
+          value: 'deepseekT',
+          availability: 'included-login-required',
+          availabilityLabel: 'Login required',
+          requiresKey: false,
+          disabled: true,
+        },
+      },
+    ]);
+  });
+
+  it('preserves relay quota status for signed-in included-mode users', async () => {
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('deepseekT', {
+        availability: 'relay-quota-exhausted',
+        availabilityLabel: 'Relay quota exhausted',
+        requiresKey: false,
+        disabled: true,
+      }),
+    ]);
+    mocks.authProvider.isAuthenticated.mockResolvedValueOnce(true);
+
+    await expect(
+      getCliModelAccessList({ apiMode: 'included' }),
+    ).resolves.toMatchObject([
+      {
+        available: false,
+        status: 'relay quota exhausted',
+        model: {
+          value: 'deepseekT',
+          availability: 'relay-quota-exhausted',
+          availabilityLabel: 'Relay quota exhausted',
+        },
+      },
+    ]);
   });
 
   it('checks access for explicit models hidden from the visible model list', async () => {
