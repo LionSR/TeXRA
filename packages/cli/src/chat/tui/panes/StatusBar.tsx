@@ -25,7 +25,10 @@ import {
   type BypassState,
   type StreamSlice,
 } from '../state/cliState';
-import { resolveChildControlStreamTarget } from '../state/childControls';
+import {
+  hasChildControlItems,
+  resolveChildControlStreamTarget,
+} from '../state/childControls';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 
@@ -56,6 +59,7 @@ export interface StatusBarDisplayInput {
   readonly activeSubagents: number;
   readonly activeProcesses: number;
   readonly approvalDepth: number;
+  readonly taskControlsAvailable?: boolean;
   readonly subagentControlsAvailable: boolean;
   /** True when more than the root stream exists, i.e. a subagent or
    *  child stream is live. Gates the stream-navigation hints, which are
@@ -335,6 +339,7 @@ function metaShortcutLabel(modifierLabel: string, key: string): string {
 }
 
 export function statusBarBindingsText(
+  taskControlsAvailable = true,
   subagentControlsAvailable: boolean,
   hasMultipleStreams: boolean,
   modifierLabel = defaultShortcutModifierLabel(),
@@ -349,7 +354,7 @@ export function statusBarBindingsText(
     // Stream cycling / numeric focus only do something when there is more
     // than one stream — hide the hints in a plain single-stream chat.
     ...(hasMultipleStreams ? ['[Tab]streams', `${focusBinding}focus`] : []),
-    `${tasksBinding}tasks`,
+    ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
     '[/status]details',
     '[/model]models',
     '[/api]api',
@@ -358,18 +363,18 @@ export function statusBarBindingsText(
   ];
   if (subagentControlsAvailable) {
     const tasksIndex = bindings.indexOf(`${tasksBinding}tasks`);
-    bindings.splice(
-      tasksIndex >= 0 ? tasksIndex + 1 : bindings.length,
-      0,
-      `${subagentsBinding}subagents`,
-    );
+    const statusIndex = bindings.indexOf('[/status]details');
+    let insertSubagentsAt = bindings.length;
+    if (tasksIndex >= 0) insertSubagentsAt = tasksIndex + 1;
+    else if (statusIndex >= 0) insertSubagentsAt = statusIndex;
+    bindings.splice(insertSubagentsAt, 0, `${subagentsBinding}subagents`);
   }
   const fullBindings = joinStatusBindings(bindings);
   if (fitsStatusBindings(fullBindings, maxColumns)) return fullBindings;
 
   const compactBindings = joinStatusBindings([
     ...(hasMultipleStreams ? ['[Tab]streams'] : []),
-    `${tasksBinding}tasks`,
+    ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
     ...(subagentControlsAvailable ? [`${subagentsBinding}subagents`] : []),
     '[/status]details',
     `[Ctrl-C]${ctrlCAction}`,
@@ -378,13 +383,13 @@ export function statusBarBindingsText(
 
   const minimalBindings = joinStatusBindings([
     ...(hasMultipleStreams ? ['[Tab]streams'] : []),
-    `${tasksBinding}tasks`,
+    ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
     ...(subagentControlsAvailable ? [`${subagentsBinding}subagents`] : []),
     `[Ctrl-C]${ctrlCAction}`,
   ]);
   if (fitsStatusBindings(minimalBindings, maxColumns)) return minimalBindings;
 
-  if (hasMultipleStreams) {
+  if (hasMultipleStreams && taskControlsAvailable) {
     const taskFocusedBindings = joinStatusBindings([
       '[Tab]streams',
       `${tasksBinding}tasks`,
@@ -395,12 +400,14 @@ export function statusBarBindingsText(
     }
   }
 
-  const bareTaskBindings = joinStatusBindings([
-    `${tasksBinding}tasks`,
-    `[Ctrl-C]${ctrlCAction}`,
-  ]);
-  if (fitsStatusBindings(bareTaskBindings, maxColumns)) {
-    return bareTaskBindings;
+  if (taskControlsAvailable) {
+    const bareTaskBindings = joinStatusBindings([
+      `${tasksBinding}tasks`,
+      `[Ctrl-C]${ctrlCAction}`,
+    ]);
+    if (fitsStatusBindings(bareTaskBindings, maxColumns)) {
+      return bareTaskBindings;
+    }
   }
 
   if (subagentControlsAvailable) {
@@ -644,6 +651,7 @@ export function buildStatusBarDisplay(
         : input.shortcutsActive === false
           ? foregroundBindingsText(input.ctrlCAction ?? 'exit')
           : statusBarBindingsText(
+              input.taskControlsAvailable ?? true,
               input.subagentControlsAvailable,
               input.hasMultipleStreams,
               input.shortcutModifierLabel,
@@ -684,6 +692,12 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     parentStream,
     streams,
   });
+  const taskControlTarget = resolveChildControlStreamTarget({
+    activeStreamId,
+    mode: 'tasks',
+    parentStream,
+    streams,
+  });
 
   const runStartedAt =
     statusSlice?.status === STREAM_STATUS.RUNNING
@@ -704,6 +718,10 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     activeSubagents: statusSlice?.activeSubagents.length ?? 0,
     activeProcesses: statusSlice?.activeProcesses.length ?? 0,
     approvalDepth: approvals,
+    taskControlsAvailable: hasChildControlItems(
+      taskControlTarget.slice,
+      'tasks',
+    ),
     subagentControlsAvailable: canShowSubagentControls(
       sessionMeta,
       subagentControlTarget.slice,
