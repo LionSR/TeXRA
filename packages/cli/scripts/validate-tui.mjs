@@ -801,6 +801,41 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'subagents-with-todos-compact',
+    rows: 14,
+    cols: 80,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_TODOS: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    expect: [
+      '+4 more child executions',
+      '3 sub',
+      '1 proc',
+      '[Tab]streams',
+      ']subagents',
+      ']tasks',
+      '[Ctrl-C]stop',
+    ],
+  },
+  {
+    name: 'subagents-with-todos-narrow-status',
+    rows: 14,
+    cols: 44,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_TODOS: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: ']subagents',
+    expect: [']subagents', '[Ctrl-C]stop'],
+    unexpect: [']tasks'],
+  },
+  {
     name: 'subagent-picker',
     env: {
       HARNESS_ENTRIES: '4',

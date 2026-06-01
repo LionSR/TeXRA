@@ -205,7 +205,9 @@ describe('CLI StatusBar display model', () => {
       width: 60,
     });
 
-    expect(display.bindings).toBe('[Tab]streams  [Alt-p]tasks  [Ctrl-C]stop');
+    expect(display.bindings).toBe(
+      '[Tab]streams  [Alt-p]tasks  [Alt-s]subagents  [Ctrl-C]stop',
+    );
     expect(display.bindings).toContain('[Ctrl-C]stop');
   });
 
