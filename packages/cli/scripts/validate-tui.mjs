@@ -873,6 +873,13 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: ['Tasks and sub-workflows', 'latex build'],
+    maxBlankLinesBetween: [
+      {
+        from: 'entry-4 chat history line',
+        to: 'Subagents',
+        max: 0,
+      },
+    ],
   },
   {
     name: 'subagent-focused-submit',
@@ -963,7 +970,7 @@ const SCENARIOS = [
       {
         from: 'entry-4 chat history line',
         to: 'Tasks and sub-workflows',
-        max: 3,
+        max: 0,
       },
     ],
   },
@@ -988,6 +995,13 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: ['Tasks and sub-workflows'],
+    maxBlankLinesBetween: [
+      {
+        from: 'entry-4 chat history line',
+        to: 'Subagents',
+        max: 0,
+      },
+    ],
   },
   {
     name: 'compact-task-picker',
@@ -1011,6 +1025,13 @@ const SCENARIOS = [
       'Esc close',
     ],
     unexpect: ['Subagents'],
+    maxBlankLinesBetween: [
+      {
+        from: 'entry-4 chat history line',
+        to: 'Tasks and sub-workflows',
+        max: 0,
+      },
+    ],
   },
   {
     name: 'compact-task-picker-process-overflow',
@@ -1408,7 +1429,7 @@ const SCENARIOS = [
       {
         from: 'entry-4 chat history line',
         to: 'Tasks and sub-workflows',
-        max: 4,
+        max: 0,
       },
     ],
   },
