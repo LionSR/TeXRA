@@ -70,6 +70,23 @@ describe('CLI session status formatter', () => {
     ).toContain('queued follow-ups: 0');
   });
 
+  it('reports active session approval bypasses', () => {
+    const status = formatCliSessionStatus({
+      agent: 'chat',
+      model: 'harness-model',
+      api: 'personal',
+      approval: 'ask before privileged actions',
+      approvalBypasses: { superYolo: true, bash: true, toolEdit: true },
+      status: 'waiting',
+      queuedFollowUpMessages: [],
+    });
+
+    expect(status).toContain(
+      'auto-approvals: delegated tasks, bash commands, file edits',
+    );
+    expect(status).not.toContain('all privileged actions');
+  });
+
   it('includes team identity when a chat was launched from a preset', () => {
     expect(
       formatCliSessionStatus({
