@@ -298,6 +298,62 @@ The `texra` CLI ships an Ink (React) TUI under `packages/cli/src/chat/tui/`. It 
 - **Headless parity is sacred.** The TUI runs only on an interactive TTY. `texra run`, `--print/-p`, and `--output-format json|ndjson` must stay byte-identical — never let Ink rendering, ANSI chrome, or spinners leak into the piped / non-TTY path.
 - **Width changes invalidate wrapped lines.** Soft-wrap is width-dependent: recompute live-region layout from `useWindowSize()` columns on every render; never cache wrapped output across a width change. Already-printed `<Static>` lines keep their original wrap — that is an accepted scrollback tradeoff, not a bug to "fix" by repainting history.
 
+### CLI design (clig.dev)
+
+The `texra` CLI (`packages/cli/`) is reviewed against the [Command Line Interface
+Guidelines](https://clig.dev). Most of the guide is already honored — preserve
+these invariants, and treat the numbered list as the open backlog.
+
+**Invariants to preserve (don't regress):**
+
+- **Streams.** stdout carries primary/parseable output; stderr carries logs,
+  progress, and diagnostics. Usage shown *on error* goes to stderr
+  (`showUsageStderr`) so `--output-format json|ndjson` stays parseable; explicit
+  `--help` prints to stdout. Don't move usage-on-error to stdout.
+- **Exit codes.** Use the canonical `CliExitCode` (`runtime/exitCodes.ts`):
+  `0` success, `1` agent error, `2` usage, `3` model/network, `4` approval-denied,
+  `124` cancelled, `130` interrupted. Usage errors stay `2` (never citty's `1`).
+- **Color gating.** Route every plain-text styled surface through `createCliStyle`
+  (`runtime/style.ts`); never branch on color at call sites. Gating honors
+  `NO_COLOR`, `TERM=dumb`, and TTY (`readCliAmbientState`).
+- **Config precedence.** flags > env (`TEXRA_*`) > workspace config file; invalid
+  values warn (non-fatal) rather than throw (`buildCliContext`).
+- **Headless detection.** `--print/-p`, `CI`, or non-TTY stdin ⇒ headless; the
+  update-checker prompt requires all three streams to be a TTY. Don't prompt when
+  stdin isn't interactive.
+- **Destructive guardrails.** Irreversible actions require an explicit opt-in
+  (`history delete --all` needs `--yes`; `init` needs `--force`). Keep new
+  destructive paths behind a confirm flag.
+
+**Open issues (backlog):**
+
+1. **[bug] Color gate keyed to stderr leaks ANSI into piped stdout.**
+   `colorEnabled = stderrIsTty && …` (`runtime/cliContext.ts`), but `doctor`'s
+   styled text is written to **stdout** (`runtime/doctor.ts` `writeDoctorReport`).
+   So `texra doctor | cat` (stderr still a TTY) emits raw ANSI, and
+   `texra doctor 2>/dev/null` strips color from a TTY stdout. Track stdout/stderr
+   color independently and gate primary-output color on the *destination* stream.
+   `doctor` is currently the only styled-stdout path (progress + update-checker
+   correctly write to stderr).
+2. **[ux] No "did you mean …" for mistyped subcommands.** `formatUnknownCliCommand`
+   (`commands/_helpers/dispatch.ts`) only points at `--help`. Add a Levenshtein
+   suggestion over the sibling command names (already walkable via
+   `commandSubCommands`).
+3. **[feature] `texra run` isn't pipe-composable on input.** `--input` requires a
+   file path; `expandWorkflowInputSpec` (`commands/_helpers/workflowInputs.ts`)
+   treats `-` as a literal path. Support `-`-means-stdin (and/or reading
+   `--instruction` from stdin) so `cat draft.tex | texra run …` works.
+4. **[ux] Top-level crash doesn't point at the issue tracker.** `bin/texra.ts`
+   prints `TeXRA CLI failed: <msg>` with no link, though `package.json` declares
+   `bugs.url`. Append a "report at …" line on unexpected errors.
+5. **[docs] Root/`help` usage has no EXAMPLES block or docs link.** Subcommands add
+   `INTERACTIVE CONTROLS` sections via `withUsageSections`; the root has neither
+   examples nor a `Learn more: https://texra.ai` footer.
+6. **[minor] Conventional knobs absent.** No `FORCE_COLOR` override (only the
+   `NO_COLOR` opt-out exists), no canonical `--no-input` alias (functionally
+   covered by headless detection + `--approval-policy never`), and no pager for
+   long lists (`history`, `agents list`). Low priority.
+
 ### Separation of Concerns: VS Code Coupling
 
 For good separation of concerns, testability, and platform independence, core business logic should not depend on the `vscode` module. Keeping domain logic free of host-specific imports makes the code easier to test, reason about, and reuse.
