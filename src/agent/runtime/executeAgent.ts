@@ -367,6 +367,8 @@ export interface ExecuteAgentOptions {
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Stop a tool-use execution after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
+  /** Hide tools whose approval prompts cannot be answered in this host mode. */
+  approvalPromptsUnavailable?: boolean;
   /** Fires after flow completes but BEFORE untrackExecution, so follow-ups are enqueued before waiters resolve. */
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   /** Fires when a subagent fails and should report the failure to its orchestrator. */
@@ -449,6 +451,7 @@ export async function executeAgent(
             onRoundFinalized: (run) => ctx.usageMonitor.recordUsage(run),
             setting,
             isSubagent,
+            approvalPromptsUnavailable: options.approvalPromptsUnavailable,
             onBeforeWaiting: options.onBeforeWaiting,
             stopAfterCycle: options.stopAfterCycle,
             onProgress: (update) => {
