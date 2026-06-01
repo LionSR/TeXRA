@@ -10,7 +10,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
-import { CliUsageError } from '../runtime/cliContext';
+import { CliUsageError, readCliStdinText } from '../runtime/cliContext';
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, initLocalCliPlatform } from '../runtime/initPlatform';
@@ -47,7 +47,10 @@ import {
   toolUseResultText,
   type CliRunResult,
 } from './_helpers/terminalStatus';
-import { expandRunInputs } from './_helpers/workflowInputs';
+import {
+  createStdinWorkflowInputMaterializer,
+  expandRunInputs,
+} from './_helpers/workflowInputs';
 import type { CliContext } from '../runtime/cliContext';
 
 type CliToolUseRunResult = Extract<CliRunResult, { category: 'toolUse' }>;
@@ -178,12 +181,6 @@ export async function runMultiAgentPreset(
   if (init.inputFiles.length === 0 && !hasInlineInstruction) {
     throw new CliUsageError('Provide --input or --instruction.');
   }
-  const { inputFiles, contextFiles } = await expandRunInputs(
-    init.inputFiles,
-    init.contextFiles,
-    context.cwd,
-    { allowEmptyInput: hasInlineInstruction },
-  );
 
   await initCliPlatform({ ...context, quietLogs: true });
   await loadAgents({ includeRemote: false });
@@ -207,51 +204,67 @@ export async function runMultiAgentPreset(
   // model after agent validation so usage errors stay focused on bad agents.
   const model = await resolveCliRunModel(context, init.model, 'chat');
   const runContext = buildHeadlessRunContext(context, model);
-  await initCliPlatform(runContext);
-  installCliApprovalHandlers(runContext);
-
-  const config: AgentConfigPayload = {
-    agent: plan.rootAgent.name,
-    model,
-    inputFiles,
-    contextFiles,
-    instruction: formatMultiAgentRunInstruction(plan.preset, {
-      inputFiles,
-      instruction: init.instruction,
-      approvalContext: runContext,
-    }),
-    workingDirectory: runContext.cwd,
-    agentCategory: AgentCategory.ToolUse,
-    cliMultiAgentPresetId: plan.preset.id,
-  };
-
-  const executionId = generateExecutionId();
-  const registeredConfig = AgentConfigSchema.parse(config);
-  const { result, terminalStatus } = await executeCliRequest(
-    { config: registeredConfig, executionId },
-    runContext,
-    {
-      enforceCategory: true,
-      registerExecution: true,
-      markErrorOnThrow: true,
-      stopAfterCycle: true,
-      wrap: (run) => withCliMultiAgentPresetVisibility(plan, run),
-    },
-  );
-  if (result.category !== AgentCategory.ToolUse) {
-    await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
-    writeTextStderr(
-      `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,
+  const stdinInputFile = createStdinWorkflowInputMaterializer({
+    readStdinText: readCliStdinText,
+  });
+  try {
+    const { inputFiles, contextFiles } = await expandRunInputs(
+      init.inputFiles,
+      init.contextFiles,
+      runContext.cwd,
+      {
+        allowEmptyInput: hasInlineInstruction,
+        stdinInputFile,
+      },
     );
-    return CliExitCode.AgentError;
-  }
-  const displayResult: CliToolUseRunResult = createCliRunResult(
-    result,
-    terminalStatus,
-  );
-  writeMultiAgentRunResult(runContext, plan, displayResult);
+    await initCliPlatform(runContext);
+    installCliApprovalHandlers(runContext);
 
-  return terminalStatusExitCode(terminalStatus, runContext);
+    const config: AgentConfigPayload = {
+      agent: plan.rootAgent.name,
+      model,
+      inputFiles,
+      contextFiles,
+      instruction: formatMultiAgentRunInstruction(plan.preset, {
+        inputFiles,
+        instruction: init.instruction,
+        approvalContext: runContext,
+      }),
+      workingDirectory: runContext.cwd,
+      agentCategory: AgentCategory.ToolUse,
+      cliMultiAgentPresetId: plan.preset.id,
+    };
+
+    const executionId = generateExecutionId();
+    const registeredConfig = AgentConfigSchema.parse(config);
+    const { result, terminalStatus } = await executeCliRequest(
+      { config: registeredConfig, executionId },
+      runContext,
+      {
+        enforceCategory: true,
+        registerExecution: true,
+        markErrorOnThrow: true,
+        stopAfterCycle: true,
+        wrap: (run) => withCliMultiAgentPresetVisibility(plan, run),
+      },
+    );
+    if (result.category !== AgentCategory.ToolUse) {
+      await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
+      writeTextStderr(
+        `Multi-agent preset "${init.preset}" resolved to a non tool-use execution.`,
+      );
+      return CliExitCode.AgentError;
+    }
+    const displayResult: CliToolUseRunResult = createCliRunResult(
+      result,
+      terminalStatus,
+    );
+    writeMultiAgentRunResult(runContext, plan, displayResult);
+
+    return terminalStatusExitCode(terminalStatus, runContext);
+  } finally {
+    await stdinInputFile.cleanup();
+  }
 }
 
 const multiAgentListCommand = defineCliCommand({
