@@ -919,6 +919,9 @@ describe('runCli usage output stream routing', () => {
     const result = await runCli(['multi-agent', 'inspect', 'mathematician']);
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('Mathematician (mathematician)');
+    expect(stdout).toContain('Root tool-use agent:');
+    expect(stdout).toContain('Available workflow agents:');
+    expect(stdout).toContain('Missing tool-use agents:');
     expect(stderr).toBe('');
   });
 
