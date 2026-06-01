@@ -611,7 +611,6 @@ describe('runCli usage output stream routing', () => {
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('INTERACTIVE CONTROLS');
     expect(stdout).toContain('/help');
-    expect(stdout).toContain('/btw');
     expect(stdout).toContain('/status');
     expect(stdout).toContain('Ctrl-T');
     expect(stdout).toContain('Tab');

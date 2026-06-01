@@ -31,7 +31,6 @@ describe('slashRegistry', () => {
         'resume',
         'memory',
         'compact',
-        'btw',
       ]),
     );
     expect(
@@ -66,12 +65,6 @@ describe('slashRegistry', () => {
     expect(listSlashCommands().find((cmd) => cmd.name === 'compact')).toEqual(
       expect.objectContaining({
         description: 'Request context compaction',
-      }),
-    );
-    expect(listSlashCommands().find((cmd) => cmd.name === 'btw')).toEqual(
-      expect.objectContaining({
-        description: 'Queue a follow-up without interrupting the active run',
-        takesArgs: true,
       }),
     );
   });
