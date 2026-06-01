@@ -42,7 +42,6 @@ export const chatCommand = withUsageSections(
       title: 'INTERACTIVE CONTROLS',
       rows: [
         ['/help', 'show slash commands inside chat'],
-        ['/btw', 'ask a side question without interrupting the main task'],
         ['/status', 'show session state'],
         ['Ctrl-T', 'open the transcript viewer'],
         ['Tab', 'cycle visible streams when subagents are active'],
