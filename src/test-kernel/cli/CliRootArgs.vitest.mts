@@ -683,11 +683,18 @@ describe('CLI root argument routing', () => {
 
 describe('CLI global color/input flags', () => {
   it('maps CLI color and no-input flags to canonical knobs', () => {
-    // `--no-input` is direct so it does not collide with the run commands'
-    // command-specific `--input <file>` flag.
     expect(pickGlobalArgs({ color: false, 'no-input': true })).toMatchObject({
       noColor: true,
       noInput: true,
+    });
+  });
+
+  it('maps citty negated input output to --no-input', () => {
+    expect(pickGlobalArgs({ input: false })).toMatchObject({
+      noInput: true,
+    });
+    expect(pickGlobalArgs({ input: 'file.tex' })).toMatchObject({
+      noInput: false,
     });
   });
 
