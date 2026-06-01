@@ -378,6 +378,25 @@ export function statusBarBindingsText(
   ]);
   if (fitsStatusBindings(minimalBindings, maxColumns)) return minimalBindings;
 
+  if (hasMultipleStreams) {
+    const taskFocusedBindings = joinStatusBindings([
+      '[Tab]streams',
+      `[${modifierLabel}-p]tasks`,
+      `[Ctrl-C]${ctrlCAction}`,
+    ]);
+    if (fitsStatusBindings(taskFocusedBindings, maxColumns)) {
+      return taskFocusedBindings;
+    }
+  }
+
+  const bareTaskBindings = joinStatusBindings([
+    `[${modifierLabel}-p]tasks`,
+    `[Ctrl-C]${ctrlCAction}`,
+  ]);
+  if (fitsStatusBindings(bareTaskBindings, maxColumns)) {
+    return bareTaskBindings;
+  }
+
   if (subagentControlsAvailable) {
     const subagentFocusedBindings = joinStatusBindings([
       ...(hasMultipleStreams ? ['[Tab]streams'] : []),
