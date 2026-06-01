@@ -3,16 +3,16 @@ import * as path from 'path';
 
 // Local imports - shared schemas
 import { platform } from '@platform/platform';
-import { isFile } from '@common/files/fsEntryType';
 import type { ExecutionId, FileLocation } from '@shared/schemas';
-
-// Local imports - file utilities
-import { hasExtension } from '@utils/core/pathCore';
 import {
   createRunStorageLocation,
   getComparablePath,
   type RunStorageFileLocation,
 } from '@utils/files';
+import { isFile } from '@utils/files/fsEntryType';
+
+// Local imports - file utilities
+import { hasExtension } from '@utils/core/pathCore';
 
 export interface CompiledPdfArtifact {
   round: number;
