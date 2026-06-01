@@ -63,6 +63,7 @@ vi.mock('@cli/runtime/multiAgentPresets', () => ({
     source: 'built-in',
   })),
   formatCliMultiAgentPresetDetails: vi.fn(() => ''),
+  formatCliMultiAgentPresetInspection: vi.fn(() => ''),
   formatCliMultiAgentPresetList: vi.fn(() => ''),
   planCliMultiAgentPresetRun: vi.fn(() => ({
     preset: {
