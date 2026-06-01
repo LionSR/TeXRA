@@ -559,7 +559,7 @@ notable change since 2026-05-30 is that the top open surface item has been
 **Resolved since last pass — §8 `packages/core` surface (was a stub, now a real barrel):**
 
 `packages/core/src/index.ts` is no longer `corePackageReady = true`. It is now a
-curated **115-line `@texra/core` barrel** (29 export lines, 8 labeled sections:
+curated **`@texra/core` barrel** (~115 lines, 8 labeled sections:
 platform composition root → config/identity → request building → running an agent
 → host port → `AgentTrace` telemetry → agent registry → execution storage). It is
 the single host-neutral public surface §8 asked for — the package typechecks with
