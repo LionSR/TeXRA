@@ -137,6 +137,14 @@ describe('CLI root argument routing', () => {
     });
   });
 
+  it('suggests close command names for mistyped top-level commands', async () => {
+    await expect(detectUnknownCliCommand(['chatt'])).resolves.toEqual({
+      typedCommand: 'texra chatt',
+      helpCommand: 'texra',
+      suggestedCommand: 'texra chat',
+    });
+  });
+
   it('detects unknown command-group children', async () => {
     await expect(detectUnknownCliCommand(['agents', 'bogus'])).resolves.toEqual(
       {
@@ -172,6 +180,16 @@ describe('CLI root argument routing', () => {
     });
   });
 
+  it('suggests close command names inside command groups', async () => {
+    await expect(
+      detectUnknownCliCommand(['multi-agent', 'rn']),
+    ).resolves.toEqual({
+      typedCommand: 'texra multi-agent rn',
+      helpCommand: 'texra multi-agent',
+      suggestedCommand: 'texra multi-agent run',
+    });
+  });
+
   it('formats unknown command usage guidance', () => {
     expect(
       formatUnknownCliCommand({
@@ -180,6 +198,18 @@ describe('CLI root argument routing', () => {
       }),
     ).toBe(
       'Unknown command: texra agents bogus. Run `texra agents --help` for usage.',
+    );
+  });
+
+  it('formats typo suggestions for unknown commands', () => {
+    expect(
+      formatUnknownCliCommand({
+        typedCommand: 'texra chatt',
+        helpCommand: 'texra',
+        suggestedCommand: 'texra chat',
+      }),
+    ).toBe(
+      'Unknown command: texra chatt. Did you mean `texra chat`? Run `texra --help` for usage.',
     );
   });
 
