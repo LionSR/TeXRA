@@ -282,13 +282,19 @@ export function resolveChildControlStreamTarget({
     return { streamId: activeStreamId, slice: activeSlice };
   }
 
-  const parentStreamId = parentStream.get(activeStreamId);
-  const parentSlice = parentStreamId ? streams.get(parentStreamId) : undefined;
-  const parentHasRows =
-    mode === 'subagents'
-      ? hasVisibleSubagents(parentSlice)
-      : hasVisibleTasks(parentSlice);
-  if (parentHasRows) {
+  const visited = new Set<StreamTabId>([activeStreamId]);
+  let parentStreamId = parentStream.get(activeStreamId);
+  while (parentStreamId && !visited.has(parentStreamId)) {
+    visited.add(parentStreamId);
+    const parentSlice = streams.get(parentStreamId);
+    const parentHasRows =
+      mode === 'subagents'
+        ? hasVisibleSubagents(parentSlice)
+        : hasVisibleTasks(parentSlice);
+    if (!parentHasRows) {
+      parentStreamId = parentStream.get(parentStreamId);
+      continue;
+    }
     return {
       fallbackFromStreamId: activeStreamId,
       streamId: parentStreamId,
