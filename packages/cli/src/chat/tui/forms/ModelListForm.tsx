@@ -168,7 +168,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
       <Text dimColor>
         {selectable
           ? 'Choose the root model for the first message.'
-          : 'Available models. Start a new chat with texra --model=<name> to choose the root model.'}
+          : 'Available models. Start a new chat with texra chat --model=<name> to choose the root model.'}
       </Text>
       {items.length === 0 ? (
         <EmptyModelListState onClose={props.onClose} />
