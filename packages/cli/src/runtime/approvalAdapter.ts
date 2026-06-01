@@ -9,7 +9,12 @@ import {
   triggerRetry,
 } from '@agent/runtime/runCoordinators';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import type { ApprovalDecision as SharedApprovalDecision } from '@shared/schemas';
+import {
+  agentProposalCategoryLabel,
+  getProposalFileGroups,
+  type AgentProposalPermission,
+  type ApprovalDecision as SharedApprovalDecision,
+} from '@shared/schemas';
 
 // Local imports - tools
 import { handleUserQuestionAction } from '@tools/userQuestion';
@@ -44,6 +49,10 @@ const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
 const TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS = 12_000;
 const TOOL_EDIT_APPROVAL_DIFF_MAX_LINES = 80;
 const TOOL_EDIT_APPROVAL_DIFF_MAX_LINE_CHARS = 240;
+const AGENT_PROPOSAL_INSTRUCTION_MAX_CHARS = 6_000;
+const AGENT_PROPOSAL_INSTRUCTION_MAX_LINES = 40;
+const AGENT_PROPOSAL_INSTRUCTION_MAX_LINE_CHARS = 240;
+const AGENT_PROPOSAL_FILE_GROUP_MAX_FILES = 10;
 
 export const CLI_PERSONAL_API_RETRY_HINT =
   'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to personal API keys.';
@@ -192,6 +201,94 @@ async function askApproval(
   };
 }
 
+function truncateAgentProposalInstructionLine(line: string): string {
+  if (line.length <= AGENT_PROPOSAL_INSTRUCTION_MAX_LINE_CHARS) return line;
+  const prefixLength = Math.max(
+    0,
+    AGENT_PROPOSAL_INSTRUCTION_MAX_LINE_CHARS -
+      TRUNCATED_DIFF_LINE_MARKER.length,
+  );
+  return `${line.slice(0, prefixLength)}${TRUNCATED_DIFF_LINE_MARKER}`;
+}
+
+function boundedAgentProposalInstructionLines(
+  instruction: string,
+): readonly string[] {
+  const instructionLines = instruction
+    .replaceAll('\r\n', '\n')
+    .replaceAll('\r', '\n')
+    .split('\n');
+  const visibleLines: string[] = [];
+  let visibleChars = 0;
+  let hiddenLineCount = 0;
+
+  for (let index = 0; index < instructionLines.length; index++) {
+    const line = truncateAgentProposalInstructionLine(instructionLines[index]!);
+    const separatorLength = visibleLines.length === 0 ? 0 : 1;
+    const nextVisibleChars = visibleChars + separatorLength + line.length;
+    if (
+      visibleLines.length >= AGENT_PROPOSAL_INSTRUCTION_MAX_LINES ||
+      nextVisibleChars > AGENT_PROPOSAL_INSTRUCTION_MAX_CHARS
+    ) {
+      hiddenLineCount = instructionLines.length - index;
+      break;
+    }
+
+    visibleLines.push(line);
+    visibleChars = nextVisibleChars;
+  }
+
+  if (hiddenLineCount > 0) {
+    visibleLines.push(`… +${hiddenLineCount} instruction lines hidden`);
+  }
+
+  return visibleLines;
+}
+
+function optionalAgentProposalLine(label: string, value: string | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? [`${label}: ${trimmed}`] : [];
+}
+
+function formatAgentProposalFileGroup(
+  label: string,
+  files: readonly string[],
+): string {
+  const visibleFiles = files.slice(0, AGENT_PROPOSAL_FILE_GROUP_MAX_FILES);
+  const hiddenCount = files.length - visibleFiles.length;
+  const suffix = hiddenCount > 0 ? `, +${hiddenCount} more` : '';
+  return `${label}: ${visibleFiles.join(', ')}${suffix}`;
+}
+
+function agentProposalFileGroupLines(
+  proposal: AgentProposalPermission,
+): string[] {
+  return getProposalFileGroups(proposal).map((group) =>
+    formatAgentProposalFileGroup(group.label, group.files),
+  );
+}
+
+export function formatAgentProposalApprovalSummary(
+  proposal: AgentProposalPermission,
+): string {
+  const instructionLines = boundedAgentProposalInstructionLines(
+    proposal.instruction,
+  );
+  return [
+    `Agent proposal requested: ${proposal.agent} (${agentProposalCategoryLabel(
+      proposal.agentCategory,
+    )})`,
+    `Model: ${proposal.model}`,
+    ...optionalAgentProposalLine(
+      'Working directory',
+      proposal.workingDirectory ?? undefined,
+    ),
+    ...agentProposalFileGroupLines(proposal),
+    'Instruction:',
+    ...instructionLines.map((line) => `  ${line}`),
+  ].join('\n');
+}
+
 function summarizeApprovalEvent<K extends ApprovalEvent>(
   event: K,
   payload: ProgressEventPayloads[K],
@@ -207,7 +304,7 @@ function summarizeApprovalEvent<K extends ApprovalEvent>(
     }
     case 'showAgentProposal': {
       const data = payload as ProgressEventPayloads['showAgentProposal'];
-      return `Agent proposal requested:\n${JSON.stringify(data, null, 2)}`;
+      return formatAgentProposalApprovalSummary(data);
     }
     case 'showRetryRequest': {
       const data = payload as ProgressEventPayloads['showRetryRequest'];
