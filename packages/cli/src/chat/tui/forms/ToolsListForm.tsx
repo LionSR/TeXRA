@@ -11,7 +11,7 @@ import {
 } from '@cli/runtime/tools';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
-import { FormFrame } from './_shared/FormFrame';
+import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
@@ -99,7 +99,7 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
 
   if (isCompactFormRows(props.availableRows)) {
     return (
-      <FormFrame color="cyan" title="/tools · Esc close" showCloseHint={false}>
+      <FormFrame color="cyan" title="/tools" showCloseHint={false}>
         <Text dimColor wrap="truncate-end">
           Toggle available external integrations.
         </Text>
@@ -115,6 +115,9 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
               .then(setTools);
           }}
           onCancel={props.onClose}
+        />
+        <CompactFormKeyHints
+          primary={{ key: '1-9/a-z/Enter', action: 'toggle' }}
         />
       </FormFrame>
     );
