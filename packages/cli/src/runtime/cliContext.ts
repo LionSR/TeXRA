@@ -148,6 +148,15 @@ export function readCliEnv(): Record<string, string | undefined> {
   return { ...process.env };
 }
 
+export async function readCliStdinText(): Promise<string> {
+  process.stdin.setEncoding('utf8');
+  const chunks: string[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(String(chunk));
+  }
+  return chunks.join('');
+}
+
 /** Raw CLI argv (post `node texra` slice). Allowlisted file for `process.argv`. */
 export function readCliArgv(): string[] {
   return process.argv.slice(2);

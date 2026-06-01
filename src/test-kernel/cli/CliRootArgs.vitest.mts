@@ -23,7 +23,12 @@ import {
   rejectHeadlessOnlyFlags,
 } from '@cli/commands/_helpers/globalArgs';
 import { cliTerminalStatus } from '@cli/commands/_helpers/terminalStatus';
-import { expandWorkflowInputSpecs } from '@cli/commands/_helpers/workflowInputs';
+import {
+  createStdinWorkflowInputMaterializer,
+  expandRunInputs,
+  expandWorkflowInputSpecs,
+  hasMixedStdinWorkflowInputSpecs,
+} from '@cli/commands/_helpers/workflowInputs';
 import {
   resolveWorkflowOutput,
   resumeWorkflowOutputFile,
@@ -315,6 +320,132 @@ describe('CLI root argument routing', () => {
       await expect(expandWorkflowInputSpecs([missing], root)).rejects.toThrow(
         /--input: file not found/,
       );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('materializes stdin when --input - is passed', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      const tempDir = path.join(root, '.tmp');
+      await fs.mkdir(tempDir);
+      let readCount = 0;
+      const stdinInputFile = createStdinWorkflowInputMaterializer({
+        tempDir,
+        readStdinText: async () => {
+          readCount += 1;
+          return '\\documentclass{article}\n\\begin{document}Hi\\end{document}\n';
+        },
+      });
+
+      const expanded = await expandWorkflowInputSpecs(
+        ['-', '-'],
+        root,
+        '--input',
+        {
+          stdinInputFile,
+        },
+      );
+
+      expect(expanded).toHaveLength(1);
+      expect(readCount).toBe(1);
+      expect(path.basename(expanded[0])).toBe('stdin.tex');
+      await expect(
+        fs.readFile(path.resolve(root, expanded[0]), 'utf8'),
+      ).resolves.toContain('\\begin{document}Hi');
+      await stdinInputFile.cleanup();
+      await expect(fs.stat(path.resolve(root, expanded[0]))).rejects.toThrow();
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves stdin position when mixed with file inputs', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      await fs.writeFile(path.join(root, 'paper.tex'), 'paper');
+      const tempDir = path.join(root, '.tmp');
+      await fs.mkdir(tempDir);
+      const stdinInputFile = createStdinWorkflowInputMaterializer({
+        tempDir,
+        readStdinText: async () =>
+          '\\documentclass{article}\\begin{document}Hi\\end{document}',
+      });
+
+      const expanded = await expandWorkflowInputSpecs(
+        ['-', 'paper.tex'],
+        root,
+        '--input',
+        {
+          stdinInputFile,
+        },
+      );
+
+      expect(path.basename(expanded[0])).toBe('stdin.tex');
+      expect(expanded[1]).toBe('paper.tex');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('detects stdin mixed with other raw workflow input specs', () => {
+    expect(hasMixedStdinWorkflowInputSpecs(['-'])).toBe(false);
+    expect(hasMixedStdinWorkflowInputSpecs(['-', '-'])).toBe(false);
+    expect(hasMixedStdinWorkflowInputSpecs(['-', 'paper.tex'])).toBe(true);
+    expect(hasMixedStdinWorkflowInputSpecs(['  -  ', 'paper.tex'])).toBe(true);
+  });
+
+  it('does not read stdin before later --input validation errors', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      let readCount = 0;
+      const stdinInputFile = createStdinWorkflowInputMaterializer({
+        readStdinText: async () => {
+          readCount += 1;
+          return '\\documentclass{article}\\begin{document}Hi\\end{document}';
+        },
+      });
+
+      await expect(
+        expandWorkflowInputSpecs(['-', 'missing.tex'], root, '--input', {
+          stdinInputFile,
+        }),
+      ).rejects.toThrow(/--input: file not found: missing\.tex/);
+      expect(readCount).toBe(0);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not read stdin before --context validation errors', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      let readCount = 0;
+      const stdinInputFile = createStdinWorkflowInputMaterializer({
+        readStdinText: async () => {
+          readCount += 1;
+          return '\\documentclass{article}\\begin{document}Hi\\end{document}';
+        },
+      });
+
+      await expect(
+        expandRunInputs(['-'], ['missing-context.tex'], root, {
+          stdinInputFile,
+        }),
+      ).rejects.toThrow(/--context: file not found: missing-context\.tex/);
+      expect(readCount).toBe(0);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects stdin sentinel for non-input workflow specs', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      await expect(
+        expandWorkflowInputSpecs(['-'], root, '--context'),
+      ).rejects.toThrow(/--context: '-' is only supported/);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }

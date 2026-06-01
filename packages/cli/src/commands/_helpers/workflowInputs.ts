@@ -1,4 +1,5 @@
 import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { glob, hasMagic } from 'glob';
@@ -25,6 +26,70 @@ function normalizeCliInputPath(candidate: string, cwd: string): string {
   return absolutePath;
 }
 
+export interface WorkflowInputExpansionOptions {
+  readonly allowEmpty?: boolean;
+  readonly stdinInputFile?: () => Promise<string>;
+}
+
+export type StdinWorkflowInputMaterializer = (() => Promise<string>) & {
+  cleanup: () => Promise<void>;
+};
+
+export function hasMixedStdinWorkflowInputSpecs(
+  inputSpecs: readonly string[],
+): boolean {
+  const distinctSpecs = new Set(
+    inputSpecs.map((spec) => spec.trim()).filter(Boolean),
+  );
+  return distinctSpecs.has('-') && distinctSpecs.size > 1;
+}
+
+export function createStdinWorkflowInputMaterializer(options: {
+  readonly readStdinText: () => Promise<string>;
+  readonly tempDir?: string;
+}): StdinWorkflowInputMaterializer {
+  let materialized:
+    | Promise<{ readonly directory: string; readonly inputFile: string }>
+    | undefined;
+  const inputFile = (() => {
+    materialized ??= materializeStdinWorkflowInput(options);
+    return materialized.then((result) => result.inputFile);
+  }) as StdinWorkflowInputMaterializer;
+  inputFile.cleanup = async () => {
+    if (!materialized) return;
+    const result = await materialized.catch(() => undefined);
+    if (result) {
+      await fs.rm(result.directory, { recursive: true, force: true });
+    }
+  };
+  return inputFile;
+}
+
+async function materializeStdinWorkflowInput(options: {
+  readonly readStdinText: () => Promise<string>;
+  readonly tempDir?: string;
+}): Promise<{ readonly directory: string; readonly inputFile: string }> {
+  const text = await options.readStdinText();
+  const directory = await fs.mkdtemp(
+    path.join(options.tempDir ?? os.tmpdir(), 'texra-stdin-'),
+  );
+  const inputFile = path.join(directory, 'stdin.tex');
+  await fs.writeFile(inputFile, text, 'utf8');
+  return { directory, inputFile };
+}
+
+function requireStdinWorkflowInputFile(
+  flagLabel: string,
+  options: WorkflowInputExpansionOptions,
+): () => Promise<string> {
+  if (flagLabel !== '--input' || !options.stdinInputFile) {
+    throw new CliUsageError(
+      `${flagLabel}: '-' is only supported for stdin workflow input`,
+    );
+  }
+  return options.stdinInputFile;
+}
+
 /**
  * Expand a single user-supplied path spec into the absolute / cwd-relative
  * paths it resolves to.
@@ -38,9 +103,15 @@ export async function expandWorkflowInputSpec(
   inputSpec: string,
   cwd: string,
   flagLabel: string = '--input',
+  options: WorkflowInputExpansionOptions = {},
 ): Promise<string[]> {
   const trimmed = inputSpec.trim();
   if (!trimmed) return [];
+
+  if (trimmed === '-') {
+    const stdinInputFile = requireStdinWorkflowInputFile(flagLabel, options);
+    return [normalizeCliInputPath(await stdinInputFile(), cwd)];
+  }
 
   if (hasMagic(trimmed)) {
     const isAbsolute = path.isAbsolute(trimmed);
@@ -93,13 +164,29 @@ export async function expandWorkflowInputSpecs(
   inputSpecs: readonly string[],
   cwd: string,
   flagLabel: string = '--input',
-  options: { readonly allowEmpty?: boolean } = {},
+  options: WorkflowInputExpansionOptions = {},
 ): Promise<string[]> {
-  const expanded = (
-    await Promise.all(
-      inputSpecs.map((spec) => expandWorkflowInputSpec(spec, cwd, flagLabel)),
-    )
-  ).flat();
+  const entries: Array<readonly string[] | 'stdin'> = [];
+  let stdinInputFile: (() => Promise<string>) | undefined;
+  for (const spec of inputSpecs) {
+    if (spec.trim() === '-') {
+      stdinInputFile = requireStdinWorkflowInputFile(flagLabel, options);
+      entries.push('stdin');
+      continue;
+    }
+    entries.push(await expandWorkflowInputSpec(spec, cwd, flagLabel));
+  }
+  const expanded: string[] = [];
+  const stdinPath = stdinInputFile
+    ? normalizeCliInputPath(await stdinInputFile(), cwd)
+    : undefined;
+  for (const entry of entries) {
+    if (entry === 'stdin') {
+      if (stdinPath) expanded.push(stdinPath);
+      continue;
+    }
+    expanded.push(...entry);
+  }
   const unique = [...new Set(expanded)];
   if (unique.length === 0 && options.allowEmpty !== true) {
     throw new CliUsageError('At least one workflow input file is required.');
@@ -119,16 +206,11 @@ export async function expandRunInputs(
   inputSpecs: readonly string[],
   contextSpecs: readonly string[],
   cwd: string,
-  options: { readonly allowEmptyInput?: boolean } = {},
+  options: {
+    readonly allowEmptyInput?: boolean;
+    readonly stdinInputFile?: () => Promise<string>;
+  } = {},
 ): Promise<{ inputFiles: string[]; contextFiles: string[] }> {
-  const inputFiles = await expandWorkflowInputSpecs(
-    inputSpecs,
-    cwd,
-    '--input',
-    {
-      allowEmpty: options.allowEmptyInput,
-    },
-  );
   const contextFiles = (
     await Promise.all(
       contextSpecs.map((spec) =>
@@ -136,5 +218,14 @@ export async function expandRunInputs(
       ),
     )
   ).flat();
+  const inputFiles = await expandWorkflowInputSpecs(
+    inputSpecs,
+    cwd,
+    '--input',
+    {
+      allowEmpty: options.allowEmptyInput,
+      stdinInputFile: options.stdinInputFile,
+    },
+  );
   return { inputFiles, contextFiles };
 }
