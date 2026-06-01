@@ -301,33 +301,34 @@ The `texra` CLI ships an Ink (React) TUI under `packages/cli/src/chat/tui/`. It 
 ### CLI design (clig.dev)
 
 The `texra` CLI (`packages/cli/`) follows the [Command Line Interface
-Guidelines](https://clig.dev). Follow these conventions:
+Guidelines](https://clig.dev). When working on it, design to the guide's
+philosophy and guidelines rather than ad-hoc choices.
 
-- **Don't reinvent the wheel.** Lean on the arg parser (`citty`) and existing
-  libraries rather than hand-rolling flag/help parsing or color-support
-  detection — `picocolors` already gates color. If you add paging or "did you
-  mean" suggestions (neither exists yet), reach for `$PAGER`/`less -FIRX` or a
-  small distance lib instead of writing your own.
-- **Streams.** stdout carries primary/parseable output; stderr carries logs,
-  progress, and diagnostics. Usage shown _on error_ goes to stderr
-  (`showUsageStderr`) so `--output-format json|ndjson` stays parseable; explicit
-  `--help` prints to stdout. Don't move usage-on-error to stdout.
-- **Exit codes.** Use the canonical `CliExitCode` (`runtime/exitCodes.ts`):
-  `0` success, `1` agent error, `2` usage, `3` model/network, `4` approval-denied,
-  `124` cancelled, `130` interrupted, `143` terminated. Usage errors stay `2`
-  (never citty's `1`).
-- **Color gating.** Route every plain-text styled surface through `createCliStyle`
-  (`runtime/style.ts`); never branch on color at call sites. Gating honors
-  `NO_COLOR`, `TERM=dumb`, and TTY (`readCliAmbientState`). Gate each styled
-  surface's color on the stream it writes to, so stdout color doesn't hinge on
-  stderr being a TTY.
-- **Config precedence.** flags > env (`TEXRA_*`) > workspace config file; invalid
-  values warn (non-fatal) rather than throw (`buildCliContext`).
-- **Headless detection.** `--print/-p`, `CI`, or non-TTY stdin ⇒ headless; only
-  prompt (e.g. the update-checker) when all three streams are a TTY.
-- **Destructive guardrails.** Irreversible actions require an explicit opt-in
-  (`history delete --all` needs `--yes`; `init` needs `--force`). Keep new
-  destructive paths behind a confirm flag.
+**Philosophy.** Human-first design; simple parts that work together (composable
+via stdin/stdout, exit codes, and signals); consistency across programs; saying
+(just) enough; ease of discovery; conversation as the norm; robustness; empathy.
+
+**Guidelines.** Apply the relevant section of the guide:
+
+- _The basics_ — use the arg-parsing library; zero exit on success, non-zero on
+  failure; primary/machine-readable output to stdout, logs and errors to stderr.
+- _Help & documentation_ — `-h`/`--help` everywhere, concise by default and
+  full on request; lead with examples; link to web docs; suggest a command when
+  the user mistypes.
+- _Output & errors_ — human-readable by default, machine-readable (JSON) where
+  it doesn't hurt usability; rewrite errors for humans; make bug reports easy;
+  use color with intention and disable it off-TTY / `NO_COLOR` / `TERM=dumb`.
+- _Arguments & flags_ — prefer flags to args; full-length plus short forms;
+  standard names; `-` for stdin/stdout; confirm destructive actions.
+- _Interactivity_ — only prompt on a TTY; honor `--no-input`; never require a
+  prompt.
+- _Subcommands, robustness, future-proofing, signals_ — consistent naming;
+  validate input and stay responsive; keep changes additive; handle Ctrl-C.
+- _Configuration & environment_ — precedence flags > env > project > user >
+  system; honor general-purpose vars (`NO_COLOR`/`FORCE_COLOR`, `PAGER`, …).
+
+Don't reinvent the wheel: lean on `citty` (parsing/help) and `picocolors`
+(color), and reach for existing libraries over bespoke implementations.
 
 ### Separation of Concerns: VS Code Coupling
 
