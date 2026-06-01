@@ -290,7 +290,7 @@ function applyInitialCliAgentSelection(
 ): void {
   if (!chatTuiCanStartRootRun(context.session)) {
     appendLocalAssistantTranscript(
-      'Agent changes are only available before the first message. Start a new chat with texra --agent=<name> to choose a different root agent.',
+      'Agent changes are only available before the first message. Start a new chat with texra chat --agent=<name> to choose a different root agent.',
     );
     return;
   }
@@ -329,7 +329,7 @@ async function applyInitialCliModelSelection(
 ): Promise<void> {
   if (!chatTuiCanStartRootRun(context.session)) {
     appendLocalAssistantTranscript(
-      'Model changes are only available before the first message. Start a new chat with texra --model=<name> to choose a different root model.',
+      'Model changes are only available before the first message. Start a new chat with texra chat --model=<name> to choose a different root model.',
     );
     return;
   }
