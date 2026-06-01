@@ -310,21 +310,22 @@ via stdin/stdout, exit codes, and signals); consistency across programs; saying
 
 **Guidelines.** Apply the relevant section of the guide:
 
-- _The basics_ — use the arg-parsing library; zero exit on success, non-zero on
-  failure; primary/machine-readable output to stdout, logs and errors to stderr.
-- _Help & documentation_ — `-h`/`--help` everywhere, concise by default and
+- **The basics.** Use the arg-parsing library; zero exit on success, non-zero
+  on failure; primary/machine-readable output to stdout, logs and errors to
+  stderr.
+- **Help & documentation.** `-h`/`--help` everywhere, concise by default and
   full on request; lead with examples; link to web docs; suggest a command when
   the user mistypes.
-- _Output & errors_ — human-readable by default, machine-readable (JSON) where
+- **Output & errors.** Human-readable by default, machine-readable (JSON) where
   it doesn't hurt usability; rewrite errors for humans; make bug reports easy;
   use color with intention and disable it off-TTY / `NO_COLOR` / `TERM=dumb`.
-- _Arguments & flags_ — prefer flags to args; full-length plus short forms;
+- **Arguments & flags.** Prefer flags to args; full-length plus short forms;
   standard names; `-` for stdin/stdout; confirm destructive actions.
-- _Interactivity_ — only prompt on a TTY; honor `--no-input`; never require a
+- **Interactivity.** Only prompt on a TTY; honor `--no-input`; never require a
   prompt.
-- _Subcommands, robustness, future-proofing, signals_ — consistent naming;
+- **Subcommands, robustness, future-proofing, signals.** Consistent naming;
   validate input and stay responsive; keep changes additive; handle Ctrl-C.
-- _Configuration & environment_ — precedence flags > env > project > user >
+- **Configuration & environment.** Precedence flags > env > project > user >
   system; honor general-purpose vars (`NO_COLOR`/`FORCE_COLOR`, `PAGER`, …).
 
 Don't reinvent the wheel: lean on `citty` (parsing/help) and `picocolors`
