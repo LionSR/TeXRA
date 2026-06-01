@@ -69,7 +69,7 @@ export function pageStdout(
     env: options.env ? { ...process.env, ...options.env } : undefined,
   });
 
-  if (result.error || result.status === null || result.status !== 0) {
+  if (result.error || result.status === 126 || result.status === 127) {
     // The pager could not be launched (e.g. `less` not installed). Don't lose
     // the content: write it straight to stdout instead.
     writeTextStdout(text);

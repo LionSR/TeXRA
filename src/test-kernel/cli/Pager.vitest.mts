@@ -107,6 +107,20 @@ describe('pageStdout', () => {
     expect(stdout).toBe('row\n');
   });
 
+  it('does not duplicate output when a launched pager exits nonzero', () => {
+    spawnSyncMock.mockReturnValue({ status: 1 });
+    pageStdout('row', { stdoutIsTty: true, env: { PAGER: 'less' } });
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1);
+    expect(stdout).toBe('');
+  });
+
+  it('does not duplicate output when a launched pager is interrupted', () => {
+    spawnSyncMock.mockReturnValue({ status: null, signal: 'SIGINT' });
+    pageStdout('row', { stdoutIsTty: true, env: { PAGER: 'less' } });
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1);
+    expect(stdout).toBe('');
+  });
+
   it('never pages empty text', () => {
     pageStdout('', { stdoutIsTty: true });
     expect(spawnSyncMock).not.toHaveBeenCalled();

@@ -31,19 +31,17 @@ type CliGlobalArgsDef = {
     options: CliApprovalPolicy[];
     description: string;
   };
-  // Positively-named booleans defaulting to `true`: citty parses `--no-color` /
-  // `--no-input` into `color: false` / `input: false` and renders the negative
-  // variant in usage from `negativeDescription` (see citty's `parseRawArgs`).
+  // Positively-named boolean defaulting to `true`: citty parses `--no-color`
+  // into `color: false` and renders the negative variant in usage from
+  // `negativeDescription` (see citty's `parseRawArgs`).
   color: {
     type: 'boolean';
     default: true;
     negativeDescription: string;
     description: string;
   };
-  input: {
+  'no-input': {
     type: 'boolean';
-    default: true;
-    negativeDescription: string;
     description: string;
   };
 };
@@ -85,12 +83,9 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
     description: 'Emit ANSI color (also honors NO_COLOR / FORCE_COLOR / TERM)',
     negativeDescription: 'Disable ANSI color on every stream',
   },
-  input: {
+  'no-input': {
     type: 'boolean',
-    default: true,
-    description: 'Allow interactive prompts',
-    negativeDescription:
-      'Disable all prompts (headless + deny privileged actions)',
+    description: 'Disable all prompts (headless + deny privileged actions)',
   },
 };
 
@@ -103,7 +98,7 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
  */
 export const INTERACTIVE_GLOBAL_ARGS: Omit<
   CliGlobalArgsDef,
-  'print' | 'output-format' | 'input'
+  'print' | 'output-format' | 'no-input'
 > = {
   quiet: GLOBAL_ARGS.quiet,
   cwd: GLOBAL_ARGS.cwd,
@@ -127,7 +122,7 @@ export const GLOBAL_BOOL_FLAGS = new Set<string>(
     const alias = 'alias' in def ? def.alias : undefined;
     const flags = alias ? [long, `-${alias}`] : [long];
     // Booleans defaulting to `true` are passed by their negated form
-    // (`--no-color`, `--no-input`); citty rewrites those to `<name>: false`.
+    // (`--no-color`); citty rewrites those to `<name>: false`.
     // Register the negated spelling so leading-flag reordering and unknown-
     // command detection recognize `texra --no-color agents list`.
     if ('default' in def && def.default === true) flags.push(`--no-${name}`);

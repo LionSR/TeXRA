@@ -548,17 +548,17 @@ describe('CLI root argument routing', () => {
 });
 
 describe('CLI global color/input flags', () => {
-  it('maps citty negated booleans to noColor/noInput', () => {
-    // citty parses `--no-color` / `--no-input` into `color: false` /
-    // `input: false`; pickGlobalArgs lifts those onto the canonical knobs.
-    expect(pickGlobalArgs({ color: false, input: false })).toMatchObject({
+  it('maps CLI color and no-input flags to canonical knobs', () => {
+    // `--no-input` is direct so it does not collide with the run commands'
+    // command-specific `--input <file>` flag.
+    expect(pickGlobalArgs({ color: false, 'no-input': true })).toMatchObject({
       noColor: true,
       noInput: true,
     });
   });
 
-  it('treats present-but-true (default) color/input as not negated', () => {
-    expect(pickGlobalArgs({ color: true, input: true })).toMatchObject({
+  it('treats absent/default color and no-input flags as not negated', () => {
+    expect(pickGlobalArgs({ color: true, 'no-input': false })).toMatchObject({
       noColor: false,
       noInput: false,
     });
@@ -569,10 +569,18 @@ describe('CLI global color/input flags', () => {
     });
   });
 
-  it('registers the negated spellings as leading global flags', () => {
-    // Needed so `texra --no-color agents list` reorders/dispatches correctly.
+  it('registers global boolean spellings without stealing --input', () => {
+    // Needed so `texra --no-color agents list` and
+    // `texra --no-input agents list` reorder/dispatch correctly.
     expect(GLOBAL_BOOL_FLAGS.has('--no-color')).toBe(true);
     expect(GLOBAL_BOOL_FLAGS.has('--no-input')).toBe(true);
+    expect(GLOBAL_BOOL_FLAGS.has('--input')).toBe(false);
+  });
+
+  it('does not treat command-specific --input as a leading global flag', () => {
+    expect(
+      reorderGlobalFlags(['--input', 'file.tex', 'run', 'polish']),
+    ).toEqual(['--input', 'file.tex', 'run', 'polish']);
   });
 });
 
