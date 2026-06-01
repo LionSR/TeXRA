@@ -24,6 +24,7 @@ import {
   appFocusShortcutsActive,
   approvalForegroundMaxRows,
   childControlForegroundMaxRows,
+  foregroundSurfaceContainerHeight,
   foregroundSurfaceKind,
   foregroundSurfaceJustifyContent,
   shouldShowTipRow,
@@ -366,6 +367,27 @@ describe('CLI TUI row allocation', () => {
     expect(foregroundSurfaceJustifyContent('approval')).toBe('flex-start');
     expect(foregroundSurfaceJustifyContent('childControls')).toBe('flex-end');
     expect(foregroundSurfaceJustifyContent('transcript')).toBe('flex-end');
+  });
+
+  it('lets child-control foregrounds shrink to their rendered height', () => {
+    expect(
+      foregroundSurfaceContainerHeight({
+        kind: 'childControls',
+        rows: 12,
+      }),
+    ).toBeUndefined();
+    expect(
+      foregroundSurfaceContainerHeight({
+        kind: 'childControls',
+        rows: 2,
+      }),
+    ).toBe(2);
+    expect(
+      foregroundSurfaceContainerHeight({
+        kind: 'approval',
+        rows: 12,
+      }),
+    ).toBe(12);
   });
 
   it('uses the whole middle region for the transcript without foreground UI', () => {
