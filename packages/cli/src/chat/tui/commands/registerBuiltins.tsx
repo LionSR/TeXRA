@@ -64,6 +64,22 @@ export function registerBuiltinSlashCommands(options?: {
   const onApiModeSelect: ApiModeSelectHandler =
     options?.onApiModeSelect ?? ((value) => patchSessionMeta('apiMode', value));
 
+  // Picking the root agent and the root model is a single up-front choice
+  // before the first message, so advance straight from the agent picker into
+  // the model picker instead of closing — the user chooses both in one flow.
+  function openModelSelectionForm(): void {
+    cliState.activeForm.set({
+      commandName: 'model',
+      render: (close, availableRows) => (
+        <ModelListFormAdapter
+          remainder=""
+          availableRows={availableRows}
+          onDone={() => close()}
+        />
+      ),
+    });
+  }
+
   function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = cliState.sessionMeta.get().agent;
     const selectable = options?.canSelectAgent?.() ?? true;
@@ -72,9 +88,19 @@ export function registerBuiltinSlashCommands(options?: {
         currentAgent={current}
         availableRows={props.availableRows}
         selectable={selectable}
-        onSelect={(value) =>
-          settleThenDone(onAgentSelect(value), value, props.onDone)
-        }
+        onSelect={(value) => {
+          // Chain into the model picker only while still choosing the root
+          // (before the first message) and model selection is available.
+          // Mirror ModelListFormAdapter's own default (`?? true`) so the two
+          // agree on what "model selection available" means; otherwise close.
+          const advanceToModel =
+            selectable && (options?.canSelectModel?.() ?? true);
+          settleThenDone(
+            onAgentSelect(value),
+            value,
+            advanceToModel ? () => openModelSelectionForm() : props.onDone,
+          );
+        }}
         onClose={() => props.onDone(undefined)}
       />
     );
