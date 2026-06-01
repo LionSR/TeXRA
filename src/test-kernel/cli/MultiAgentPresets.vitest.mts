@@ -181,8 +181,41 @@ describe('CLI multi-agent presets', () => {
       ],
       agentOverride: 'review',
     });
+    const sourceQualifiedPlan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('lean', AgentCategory.ToolUse),
+        agent('review', AgentCategory.ToolUse, ['delegate_agent']),
+      ],
+      agentOverride: 'builtInToolUse:review',
+    });
 
     expect(plan.rootAgent?.name).toBe('review');
     expect(plan.toolUseAgentKeys).toContain('builtInToolUse:review');
+    expect(sourceQualifiedPlan.missingAgentOverride).toBeUndefined();
+    expect(sourceQualifiedPlan.rootAgent?.name).toBe('review');
+  });
+
+  it('tracks a missing root override as a plan gap', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'lean-project',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: preset.toolUseAgents.map((name) =>
+        agent(
+          name,
+          AgentCategory.ToolUse,
+          name === 'leanOrchestrator' ? ['delegate_agent'] : [],
+        ),
+      ),
+      agentOverride: 'definitely-not-real',
+    });
+
+    expect(plan.missingAgentOverride).toBe('definitely-not-real');
+    expect(plan.rootAgent?.name).toBe('leanOrchestrator');
+    expect(plan.missingToolUseAgents).toEqual([]);
+    expect(cliMultiAgentPlanHasGaps(plan)).toBe(true);
   });
 });
