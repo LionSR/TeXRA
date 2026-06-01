@@ -25,6 +25,12 @@ describe('formatUnavailableApprovalInstruction', () => {
     ).toBe(true);
     expect(
       approvalPromptsUnavailable({
+        mode: 'interactive',
+        approvalPolicy: 'never',
+      }),
+    ).toBe(true);
+    expect(
+      approvalPromptsUnavailable({
         mode: 'headless',
         approvalPolicy: 'ask',
       }),

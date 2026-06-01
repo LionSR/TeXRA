@@ -369,6 +369,7 @@ async function executeSubagent(
     enforceCategory: true,
     parentStreamId: orchestratorStreamId,
     delegationDepth: parentDelegationDepth + 1,
+    approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
       if (options?.enableYoloOnChild) {
