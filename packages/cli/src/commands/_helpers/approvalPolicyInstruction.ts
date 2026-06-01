@@ -4,7 +4,7 @@ export type ApprovalInstructionContext = {
 };
 
 const PRIVILEGED_ACTION_GUIDANCE =
-  'Do not call approval-gated tools such as bash/shell commands, file edits, retry/plan approvals, or new subagent delegations; solve from the provided context or state what approval is needed.';
+  'Do not call approval-gated tools such as bash/shell commands, file edits, setup/config updates, user questions, retry/plan approvals, or new subagent delegations; solve from the provided context or state what approval is needed.';
 
 export function approvalPromptsUnavailable(
   context: ApprovalInstructionContext,

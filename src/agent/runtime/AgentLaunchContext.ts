@@ -55,6 +55,8 @@ export interface AgentLaunchContext extends AgentCore {
   storageKey: StorageKey;
   parentStage: StageHandle;
   coordinators: RunCoordinators;
+  /** Whether approval or user prompts cannot be answered by the current host. */
+  approvalPromptsUnavailable?: boolean;
   /**
    * Dispose the run-trace subscribers (channel sink + transcript recorder)
    * registered by {@link createRunTrace}. Must be called once at end-of-run
@@ -102,6 +104,7 @@ export async function withExecutionRunContext<T>(
     workingDirectory: ctx.workingDirectory,
     delegationDepth: ctx.delegationDepth,
     delegationConfig: ctx.delegationConfig,
+    approvalPromptsUnavailable: ctx.approvalPromptsUnavailable,
   });
   const release = retainRunCoordinatorsForStream(
     ctx.streamId,
