@@ -196,18 +196,7 @@ export function appendStaticTranscriptItems({
     if (!entry.finalized) continue;
     if (seen.has(entry.id)) continue;
     const item: StaticTranscriptItem = { id: entry.id, kind: 'entry', entry };
-    if (
-      !canAppendStaticTranscriptItem({
-        currentRows,
-        item,
-        maxRows,
-        width,
-      })
-    ) {
-      break;
-    }
     nextItems.push(item);
-    currentRows += staticTranscriptItemRowCount(item, width);
     seen.add(entry.id);
   }
   // Same reference when nothing was appended so the `setItems` functional
