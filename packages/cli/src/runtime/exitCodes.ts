@@ -9,6 +9,7 @@ export const CliExitCode = {
   ApprovalDenied: 4,
   Cancelled: 124,
   Interrupted: 130,
+  Terminated: 143,
 } as const;
 
 export type CliExitCode = (typeof CliExitCode)[keyof typeof CliExitCode];
