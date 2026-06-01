@@ -9,7 +9,7 @@ The full zone list lives in `CLAUDE.md` → "Separation of Concerns: VS Code Cou
 - **`grep -nE "from ['\"]vscode['\"]"`** in `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/shared/`, `src/replacement/`, `src/eventBus/`, or any webview `frontend/`. Any hit is a finding.
 - **Direct `vscode.workspace.getConfiguration` / `workspace.fs` / `secrets`** in agnostic code → use `platform().config`, `platform().fs`, `platform().secrets` (see `src/platform/platform.ts`). Note: `@utils/config` is the VS Code-allowed wrapper; agnostic code goes through `platform()`.
 - **`instanceof vscode.FileSystemError`** → `isFileNotFoundError(err)` from `@common/errors`.
-- **`vscode.FileType.File` / `.Directory`** → `isFile()` / `isDirectory()` from `@common/files/fsEntryType`.
+- **`vscode.FileType.File` / `.Directory`** → `isFile()` / `isDirectory()` from `@utils/files/fsEntryType`.
 - **`vscode.window.show*Message()` in business logic** → return error results; let the command/frontend layer handle UI.
 - **`process.env`, `os.homedir()`, raw `fs/promises`, `child_process.exec`** in agnostic zones → platform interfaces or `executeCommand` from `@utils/system/execUtils`.
 - **`initPlatform()`** called outside the host entry point (`packages/extension/src/extension.ts`) → bug. Read access uses `platform()`; module-init facades use `tryPlatform()`.
