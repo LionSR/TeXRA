@@ -21,9 +21,10 @@ vi.mock('@utils/files', async () => {
   };
 });
 
-// Imported after vi.mock so the mocked WorkspaceFS is in place.
-// eslint-disable-next-line import/order
-import { getXmlFormatFromFiles } from '@utils/prompt';
+import {
+  getXmlFormatFromFiles,
+  getXmlFormatFromReadableFiles,
+} from '@utils/prompt';
 
 beforeEach(() => {
   mocks.read.mockReset();
@@ -48,19 +49,46 @@ describe('getXmlFormatFromFiles', () => {
   it('skips a file that cannot be read instead of rejecting the batch', async () => {
     mocks.read.mockImplementation(async (file: string) => {
       if (file === 'missing.tex') {
-        throw new Error("ENOENT: no such file or directory, open 'missing.tex'");
+        throw new Error(
+          "ENOENT: no such file or directory, open 'missing.tex'",
+        );
       }
       return `body of ${file}`;
     });
 
     const xml = await getXmlFormatFromFiles(['missing.tex', 'present.tex']);
 
-    expect(xml).toBe('<document name="present.tex">\nbody of present.tex\n</document>');
+    expect(xml).toBe(
+      '<document name="present.tex">\nbody of present.tex\n</document>',
+    );
+  });
+
+  it('reports the same readable file set used to build XML', async () => {
+    mocks.read.mockImplementation(async (file: string) => {
+      if (file === 'missing.tex') {
+        throw new Error(
+          "ENOENT: no such file or directory, open 'missing.tex'",
+        );
+      }
+      return `body of ${file}`;
+    });
+
+    const result = await getXmlFormatFromReadableFiles([
+      'missing.tex',
+      'present.tex',
+    ]);
+
+    expect(result).toEqual({
+      xml: '<document name="present.tex">\nbody of present.tex\n</document>',
+      readableFiles: ['present.tex'],
+    });
   });
 
   it('returns null when none of the files are readable', async () => {
     mocks.read.mockRejectedValue(new Error('ENOENT'));
 
-    expect(await getXmlFormatFromFiles(['gone-1.tex', 'gone-2.tex'])).toBeNull();
+    expect(
+      await getXmlFormatFromFiles(['gone-1.tex', 'gone-2.tex']),
+    ).toBeNull();
   });
 });

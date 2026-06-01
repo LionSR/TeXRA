@@ -8,6 +8,11 @@ import { WorkspaceFS } from '@utils/files';
 const CHANNEL = 'promptUtils';
 logger.initialize(CHANNEL);
 
+export interface XmlFormatFromFilesResult {
+  readonly xml: string | null;
+  readonly readableFiles: string[];
+}
+
 /**
  * File name exposed to prompt XML and workflow output instructions.
  *
@@ -45,18 +50,21 @@ export function getPromptFileName(file: string): string {
  * @param files List of file paths
  * @returns XML formatted string of the readable files, or null if none are readable
  */
-export async function getXmlFormatFromFiles(
+export async function getXmlFormatFromReadableFiles(
   files: string[],
-): Promise<string | null> {
+): Promise<XmlFormatFromFilesResult> {
   if (files.length === 0) {
-    return null;
+    return { xml: null, readableFiles: [] };
   }
 
   const xmlContents = await Promise.all(
     files.map(async (file) => {
       try {
         const content = await WorkspaceFS.read(file);
-        return `<document name="${getPromptFileName(file)}">\n${content}\n</document>`;
+        return {
+          file,
+          xml: `<document name="${getPromptFileName(file)}">\n${content}\n</document>`,
+        };
       } catch (err) {
         logger.warn(
           CHANNEL,
@@ -66,8 +74,19 @@ export async function getXmlFormatFromFiles(
       }
     }),
   );
-  const readable = xmlContents.filter((doc): doc is string => doc !== null);
-  return readable.length > 0 ? readable.join('\n') : null;
+  const readable = xmlContents.filter(
+    (doc): doc is { file: string; xml: string } => doc !== null,
+  );
+  return {
+    xml: readable.length > 0 ? readable.map((doc) => doc.xml).join('\n') : null,
+    readableFiles: readable.map((doc) => doc.file),
+  };
+}
+
+export async function getXmlFormatFromFiles(
+  files: string[],
+): Promise<string | null> {
+  return (await getXmlFormatFromReadableFiles(files)).xml;
 }
 
 /**
