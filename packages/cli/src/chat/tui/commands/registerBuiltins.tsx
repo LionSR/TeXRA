@@ -228,6 +228,14 @@ export function registerBuiltinSlashCommands(options?: {
     description: 'Show TeXRA login status',
   });
   registerSlashCommand({
+    name: 'login',
+    description: 'Sign in to TeXRA included access',
+  });
+  registerSlashCommand({
+    name: 'logout',
+    description: 'Sign out of TeXRA',
+  });
+  registerSlashCommand({
     name: 'approval',
     description: 'Switch approval policy',
     formComponent: ApprovalPolicyFormAdapter,
