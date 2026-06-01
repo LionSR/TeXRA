@@ -23,6 +23,9 @@ export interface ParsedGlobalArgs {
   // when the user passes `--no-color`.
   readonly color?: boolean;
   readonly 'no-input'?: boolean;
+  // citty treats every `--no-*` token as a negated positive flag before it
+  // applies aliases, so `--no-input` can arrive as `input: false`.
+  readonly input?: unknown;
 }
 
 export function pickGlobalArgs(args: ParsedGlobalArgs): CliGlobalArgs {
@@ -35,9 +38,11 @@ export function pickGlobalArgs(args: ParsedGlobalArgs): CliGlobalArgs {
     apiMode: isNonEmptyString(args['api-mode'])
       ? args['api-mode'].trim()
       : undefined,
-    // `--no-input` is direct so it does not collide with command-specific
-    // `--input <file>` flags on run-style commands.
+    // `--no-input` is intentionally not registered as `input` so it does not
+    // become a leading global `--input <file>` flag. citty still parses the
+    // negative spelling as `input: false`, which is safe to recognize here
+    // because command-specific `--input <file>` arrives as a string/array.
     noColor: args.color === false,
-    noInput: args['no-input'] === true,
+    noInput: args['no-input'] === true || args.input === false,
   };
 }
