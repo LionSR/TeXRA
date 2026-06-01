@@ -3,7 +3,9 @@
  * - delegate_workflow: For workflow agents (structured file I/O, fixed-round full-document rewrite)
  * - delegate_agent: For tool-use agents (new delegation or resume via execution_id)
  *
- * All subagents execute asynchronously — result delivered via follow-up queue.
+ * Interactive subagents execute asynchronously — result delivered via follow-up
+ * queue. One-shot/headless parent runs execute subagents in-band because there
+ * is no later interactive follow-up turn to consume async delivery.
  */
 
 // Third-party imports
@@ -26,6 +28,7 @@ import {
   getHandle,
   AgentExecutionHandle,
 } from '@agent/runtime/executionRegistry';
+import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
@@ -52,7 +55,6 @@ import {
   evaluateDelegationGate,
   type NestedDelegationConfig,
 } from '@shared/constants/delegationPolicy';
-import { hasExtension } from '@utils/core/pathCore';
 import { getBasename } from '@shared/utils/path';
 import { formatBytes } from '@shared/utils/string';
 
@@ -91,6 +93,7 @@ import { displayToStoragePath } from '@tools/memory/memoryUtils';
 // Local imports - utils
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { generateExecutionId } from '@utils/core/executionId';
+import { hasExtension } from '@utils/core/pathCore';
 import { isNonEmptyString } from '@utils/core/stringCore';
 
 // ============================================================================
@@ -230,6 +233,47 @@ interface ApprovalMeta {
   requestedAgent?: string;
 }
 
+async function subagentDeliveryMessage(
+  executionId: string,
+  agentName: string,
+  result: AgentFlowResult,
+  options: {
+    readonly startedAt: number;
+    readonly workingDirectory?: string;
+  },
+): Promise<string> {
+  let diffInfos:
+    | Awaited<ReturnType<typeof computeAndWriteWorkflowDiffs>>
+    | undefined;
+  if (result.category === 'workflow' && result.outputs.length > 0) {
+    try {
+      diffInfos = await computeAndWriteWorkflowDiffs(
+        executionId,
+        result.outputs,
+      );
+    } catch {
+      // Diff computation failure is non-fatal — deliver without diffs.
+    }
+  }
+
+  return formatSubagentDelivery(agentName, result, {
+    diffInfos,
+    wallTimeMs: Date.now() - options.startedAt,
+    workingDirectory: options.workingDirectory,
+  });
+}
+
+async function writeSubagentReport(
+  executionId: string,
+  message: string,
+): Promise<void> {
+  try {
+    await getExecutionStore(executionId).writeReport(message);
+  } catch {
+    /* storage failure is non-fatal */
+  }
+}
+
 /**
  * Runtime depth gate shared by fresh delegations and resumes.
  * Tool-use flows pass the same max-depth snapshot used for tool resolution so
@@ -335,6 +379,75 @@ async function executeSubagent(
     undefined,
     parentDelegationDepth + 1,
   );
+
+  if (parentContext.stopAfterCycle) {
+    try {
+      let subagentError: unknown;
+      const result = await executeAgent(configPayload, executionId, {
+        runtimeHost,
+        isSubagent: true,
+        enforceCategory: true,
+        parentStreamId: orchestratorStreamId,
+        delegationDepth: parentDelegationDepth + 1,
+        approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
+        stopAfterCycle: true,
+        onStreamResolved: (resolvedStreamId) => {
+          if (options?.enableYoloOnChild) {
+            enableYoloOnChildStream(resolvedStreamId);
+          }
+        },
+        onError: (err) => {
+          subagentError = err;
+        },
+      });
+      if (result.status === 'error') {
+        const msg = formatSubagentError(
+          executionId,
+          agentName,
+          subagentError ?? 'Subagent ended with error status.',
+          {
+            wallTimeMs: Date.now() - startedAt,
+            workingDirectory: configPayload.workingDirectory ?? undefined,
+          },
+        );
+        await writeSubagentReport(executionId, msg);
+        return {
+          summary: `Subagent '${agentName}' failed`,
+          output: msg,
+          error: toErrorMessage(
+            subagentError ?? 'Subagent ended with error status.',
+          ),
+          isError: true,
+        };
+      }
+      const msg = await subagentDeliveryMessage(
+        executionId,
+        agentName,
+        result,
+        {
+          startedAt,
+          workingDirectory: configPayload.workingDirectory ?? undefined,
+        },
+      );
+      await writeSubagentReport(executionId, msg);
+      return {
+        summary: `Completed '${agentName}'`,
+        output: msg,
+      };
+    } catch (err) {
+      const msg = formatSubagentError(executionId, agentName, err, {
+        wallTimeMs: Date.now() - startedAt,
+        workingDirectory: configPayload.workingDirectory ?? undefined,
+      });
+      await writeSubagentReport(executionId, msg);
+      return {
+        summary: `Subagent '${agentName}' failed`,
+        output: msg,
+        error: toErrorMessage(err),
+        isError: true,
+      };
+    }
+  }
 
   // Track delivery state in the module-level map so delegate_agent (resume)
   // can find live subagents and enqueue follow-up instructions.
