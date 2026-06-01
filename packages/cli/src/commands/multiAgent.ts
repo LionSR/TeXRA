@@ -9,6 +9,8 @@ import {
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { EXECUTION_STATUS } from '@shared/schemas';
+import { agentKey } from '@shared/schemas/agent';
+import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { generateExecutionId } from '@utils/core/executionId';
 import { CliUsageError, readCliStdinText } from '../runtime/cliContext';
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
@@ -117,6 +119,37 @@ export function writeMissingPresetAgents(
   if (missing.length === 0) return;
   writeTextStderr(
     `WARN preset ${plan.preset.id} references unavailable agents: ${missing.join(', ')}`,
+  );
+  if (!plan.rootAgent) return;
+
+  const availableTeamAgents = new Set([
+    ...plan.workflowAgentKeys,
+    ...plan.toolUseAgentKeys,
+  ]);
+  availableTeamAgents.delete(
+    agentKey(plan.rootAgent.source, plan.rootAgent.name),
+  );
+  const rootCanDelegate =
+    plan.rootAgent.tools?.some((tool) => DELEGATION_TOOLS.has(tool)) ?? false;
+  if (!rootCanDelegate) {
+    writeTextStderr(
+      `WARN team delegation unavailable for preset ${plan.preset.id}; running only root agent ${plan.rootAgent.name}. Enable a delegating team root or pass --agent to choose one.`,
+    );
+    return;
+  }
+  if (availableTeamAgents.size === 0) {
+    writeTextStderr(
+      `WARN preset ${plan.preset.id} is missing team agents; running delegating root agent ${plan.rootAgent.name}.`,
+    );
+    return;
+  }
+
+  const availableText =
+    availableTeamAgents.size === 1
+      ? '1 available team agent'
+      : `${availableTeamAgents.size} available team agents`;
+  writeTextStderr(
+    `WARN preset ${plan.preset.id} is degraded; running root agent ${plan.rootAgent.name} with ${availableText}.`,
   );
 }
 
