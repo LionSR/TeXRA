@@ -394,6 +394,7 @@ export async function executeAgent(
     suppressErrorNotification: options.isSubagent,
   });
   ctx.delegationDepth = options.delegationDepth ?? 0;
+  ctx.approvalPromptsUnavailable = options.approvalPromptsUnavailable;
   return withExecutionRunContext(ctx, async () => {
     const { setting, streamId, config } = ctx;
     const { agent: agentName } = config;
