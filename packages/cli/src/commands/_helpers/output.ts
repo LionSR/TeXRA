@@ -1,4 +1,5 @@
 import { writeNdjsonStdout, writeTextStdout } from '@cli/runtime/logSinks';
+import { pageStdout } from '@cli/runtime/pager';
 import type { CliContext } from '@cli/runtime/cliContext';
 
 export type CliNdjsonRecord = object;
@@ -12,14 +13,22 @@ export type CliNdjsonRecord = object;
  *
  * Values are eager: a one-shot command renders a single result, so formatting
  * the unused branches is negligible and keeps call sites flat.
+ *
+ * `paged: true` routes the **text** branch (only) through `$PAGER` when stdout
+ * is an interactive TTY and the context is not headless — for list commands
+ * that can exceed a screen. It is a strict no-op on non-TTY or headless
+ * contexts (`--print`, `--no-input`, piped / `--output-format json|ndjson`), so
+ * scriptable byte output is unchanged. JSON/NDJSON are never paged.
  */
 export function emitCliResult(
-  context: Pick<CliContext, 'outputFormat'>,
+  context: Pick<CliContext, 'outputFormat'> &
+    Partial<Pick<CliContext, 'stdoutIsTty' | 'mode'>>,
   result: {
     readonly json: unknown;
     readonly ndjson: CliNdjsonRecord | readonly CliNdjsonRecord[];
     readonly text: string;
   },
+  options: { readonly paged?: boolean } = {},
 ): void {
   if (context.outputFormat === 'json') {
     writeTextStdout(JSON.stringify(result.json, null, 2));
@@ -40,5 +49,13 @@ export function emitCliResult(
   }
   // Skip the write for empty text so list commands print nothing (not a bare
   // newline) when there are no rows — matching the pre-helper per-row loops.
-  if (result.text) writeTextStdout(result.text);
+  if (!result.text) return;
+  if (options.paged === true) {
+    pageStdout(result.text, {
+      stdoutIsTty: context.stdoutIsTty,
+      headless: context.mode === 'headless',
+    });
+    return;
+  }
+  writeTextStdout(result.text);
 }

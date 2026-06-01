@@ -39,8 +39,11 @@ export interface CliContext {
   readonly stdoutIsTty?: boolean;
   readonly termIsDumb?: boolean;
   readonly stderrIsTty?: boolean;
+  /** Color allowed when writing to stdout. */
   readonly stdoutColorEnabled?: boolean;
+  /** Color allowed when writing to stderr. */
   readonly stderrColorEnabled?: boolean;
+  /** Back-compat alias for `stderrColorEnabled`. */
   readonly colorEnabled: boolean;
   readonly version: string;
   readonly resourcesPath: string;
@@ -65,9 +68,53 @@ export interface CliAmbientState {
   readonly stdoutIsTty: boolean;
   readonly stderrIsTty: boolean;
   readonly termIsDumb?: boolean;
+  /** Color is allowed on stdout. */
   readonly stdoutColorEnabled: boolean;
+  /** Color is allowed on stderr. */
   readonly stderrColorEnabled: boolean;
+  /** Back-compat alias for `stderrColorEnabled`. */
   readonly colorEnabled: boolean;
+}
+
+/**
+ * Resolve whether ANSI color may be emitted on a given stream, reusing the
+ * conventional override precedence picocolors' own `isColorSupported` honors:
+ *
+ * - `forceDisable` ⇒ never color.
+ * - `NO_COLOR` (any value) or `TERM=dumb` ⇒ never color.
+ * - `FORCE_COLOR` nonzero/truthy values ⇒ always color, ignoring TTY
+ *   detection; `0`/`false`/`no` disable color; empty is ignored.
+ * - otherwise color only when the destination stream is itself a TTY.
+ *
+ * `buildCliContext` applies `--no-color` after ambient stream detection so
+ * injected ambient gates keep their already-resolved stream decisions.
+ *
+ * We keep our own per-stream TTY check rather than delegating wholesale to
+ * picocolors because picocolors only inspects
+ * `process.stdout.isTTY` (and treats `win32`/`CI` as color-on), which can't
+ * answer "is color OK on *stderr*" — the gate `doctor` and the progress
+ * renderer each need for their own destination.
+ */
+export function resolveStreamColor(
+  streamIsTty: boolean,
+  options: {
+    forceDisable?: boolean;
+    env?: Record<string, string | undefined>;
+  } = {},
+): boolean {
+  const env = options.env ?? process.env;
+  if (options.forceDisable === true) return false;
+  if (env.NO_COLOR != null || env.TERM === 'dumb') return false;
+  const forceColor = parseForceColor(env.FORCE_COLOR);
+  if (forceColor != null) return forceColor;
+  return streamIsTty;
+}
+
+function parseForceColor(value: string | undefined): boolean | undefined {
+  if (value == null) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === '') return undefined;
+  return !['0', 'false', 'no'].includes(normalized);
 }
 
 let cachedAmbient: CliAmbientState | undefined;
@@ -77,11 +124,9 @@ export function readCliAmbientState(): CliAmbientState {
   const stderrIsTty = process.stderr.isTTY === true;
   const stdinIsTty = process.stdin.isTTY === true;
   const stdoutIsTty = process.stdout.isTTY === true;
-  const noColor = process.env.NO_COLOR != null;
   const dumbTerm = process.env.TERM === 'dumb';
-  const colorAllowed = !noColor && !dumbTerm;
-  const stdoutColorEnabled = stdoutIsTty && colorAllowed;
-  const stderrColorEnabled = stderrIsTty && colorAllowed;
+  const stdoutColorEnabled = resolveStreamColor(stdoutIsTty);
+  const stderrColorEnabled = resolveStreamColor(stderrIsTty);
   cachedAmbient = {
     isCi: Boolean(process.env.CI),
     stdinIsTty,
@@ -190,15 +235,27 @@ export interface CliGlobalArgs {
   readonly outputFormat?: CliOutputFormat;
   readonly approvalPolicy?: CliApprovalPolicy;
   readonly apiMode?: string;
+  /** `--no-color`: force-disable ANSI color on every stream. */
+  readonly noColor?: boolean;
+  /**
+   * `--no-input`: the conventional "disable all prompts" switch. Maps onto the
+   * existing mechanism — forces headless mode and an implicit
+   * `--approval-policy never` (deny anything that would otherwise prompt).
+   */
+  readonly noInput?: boolean;
 }
 
 function cliMode(globalArgs: CliGlobalArgs, ambient: CliAmbientState): CliMode {
-  // Headless trigger: explicit --print/-p, CI=1, or stdin non-TTY. Piping
-  // stdout/stderr alone doesn't force headless here — `texra chat` hard-errors
-  // on its own TTY-stdout check (see `chat/tui/runChatTui.tsx`), and `texra
-  // run` is happy with piped output.
+  // Headless trigger: explicit --print/-p, --no-input, CI=1, or stdin non-TTY.
+  // Piping stdout/stderr alone doesn't force headless here — `texra chat`
+  // hard-errors on its own TTY-stdout check (see `chat/tui/runChatTui.tsx`),
+  // and `texra run` is happy with piped output. `--no-input` is the canonical
+  // "disable all prompts" switch, so it forces headless like `--print`.
   const headless =
-    globalArgs.print === true || ambient.isCi || !ambient.stdinIsTty;
+    globalArgs.print === true ||
+    globalArgs.noInput === true ||
+    ambient.isCi ||
+    !ambient.stdinIsTty;
   return headless ? 'headless' : 'interactive';
 }
 
@@ -301,6 +358,17 @@ export async function buildCliContext(
     ],
     configWarnings,
   );
+  // `--no-color` is an explicit force-disable: layer it onto the ambient
+  // per-stream gates rather than recomputing them, so `NO_COLOR`/`FORCE_COLOR`/
+  // TTY precedence stays in one place (`resolveStreamColor`).
+  const noColor = init.globalArgs.noColor === true;
+  const stdoutColorEnabled = noColor ? false : ambient.stdoutColorEnabled;
+  const stderrColorEnabled = noColor ? false : ambient.stderrColorEnabled;
+  // `--no-input` implies "deny anything that would prompt": pin the approval
+  // policy to `never` (overriding flag/env/config) — the same headless behavior
+  // `--approval-policy never` already provides, surfaced under the conventional
+  // alias scripts expect.
+  const noInput = init.globalArgs.noInput === true;
   return {
     cwd,
     mode: cliMode(init.globalArgs, ambient),
@@ -315,28 +383,30 @@ export async function buildCliContext(
       configWarnings,
       'TEXRA_OUTPUT_FORMAT',
     ),
-    approvalPolicy: pickEnum(
-      [
-        init.globalArgs.approvalPolicy,
-        envValue(env, 'TEXRA_APPROVAL_POLICY'),
-        loadedConfig.values.approvalPolicy,
-      ],
-      CLI_APPROVAL_POLICIES,
-      // Default to prompting. The interactive TUI surfaces a prompt; in
-      // headless mode `ask` has no TTY to prompt on and falls through to
-      // denial (see approvalAdapter), so this is safe for `run` too.
-      'ask',
-      configWarnings,
-      'TEXRA_APPROVAL_POLICY',
-    ),
+    approvalPolicy: noInput
+      ? 'never'
+      : pickEnum(
+          [
+            init.globalArgs.approvalPolicy,
+            envValue(env, 'TEXRA_APPROVAL_POLICY'),
+            loadedConfig.values.approvalPolicy,
+          ],
+          CLI_APPROVAL_POLICIES,
+          // Default to prompting. The interactive TUI surfaces a prompt; in
+          // headless mode `ask` has no TTY to prompt on and falls through to
+          // denial (see approvalAdapter), so this is safe for `run` too.
+          'ask',
+          configWarnings,
+          'TEXRA_APPROVAL_POLICY',
+        ),
     apiMode,
     quietLogs: init.globalArgs.quiet === true,
     stdoutIsTty: ambient.stdoutIsTty,
     termIsDumb: ambient.termIsDumb === true,
     stderrIsTty: ambient.stderrIsTty,
-    stdoutColorEnabled: ambient.stdoutColorEnabled,
-    stderrColorEnabled: ambient.stderrColorEnabled,
-    colorEnabled: ambient.colorEnabled,
+    stdoutColorEnabled,
+    stderrColorEnabled,
+    colorEnabled: stderrColorEnabled,
     version: await readCliVersion(),
     resourcesPath: resolveCliResourcesPath(),
     cliConfig: loadedConfig.values,

@@ -371,6 +371,10 @@ export function writeDoctorReport(
     }
     return;
   }
+  // Gate color on the stream the report is actually written to: a passing
+  // report goes to stdout, a failing one to stderr (clig.dev). Using a single
+  // stderr-keyed gate leaked ANSI into `doctor | cat` and stripped color from
+  // `doctor 2>/dev/null` on a TTY.
   const stdoutColorEnabled =
     context.stdoutColorEnabled ??
     (context.colorEnabled && context.stdoutIsTty === true);
