@@ -44,6 +44,7 @@ import {
   handleProgressViewBashApprovalAction,
   toggleToolEditApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
+  setBashApprovalSessionBypass,
   isApprovalBypassedForStream,
   toggleProposalBypass,
 } from '@tools/approval';
@@ -241,9 +242,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           data.stream,
           extensionAgentRuntimeHost,
         );
+        // Keep bash approval symmetric with tool edits: the single YOLO shield
+        // covers both. Bash gained an independent per-stream flag in #4739 and
+        // the extension has no separate bash toggle, so mirror it here. Silent
+        // because the shield's active state renders from the tool-edit flag.
+        setBashApprovalSessionBypass(
+          data.stream,
+          isNowEnabled,
+          extensionAgentRuntimeHost,
+          { silent: true },
+        );
         const msg = isNowEnabled
-          ? 'YOLO mode enabled: Tool actions will be auto-approved for this stream.'
-          : 'YOLO mode disabled: Tool actions will prompt for approval.';
+          ? 'YOLO mode enabled: Tool actions and bash commands will be auto-approved for this stream.'
+          : 'YOLO mode disabled: Tool actions and bash commands will prompt for approval.';
         await vscode.window.showInformationMessage(msg);
       },
       [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: async (data) => {
@@ -268,6 +279,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             extensionAgentRuntimeHost,
           );
         }
+        // Bash bypass stays symmetric with the tool-edit bypass above.
+        setBashApprovalSessionBypass(
+          data.stream,
+          isNowEnabled,
+          extensionAgentRuntimeHost,
+          { silent: true },
+        );
         const msg = isNowEnabled
           ? 'Delegated task auto-approval enabled for this stream.'
           : 'Delegated task auto-approval disabled for this stream.';
