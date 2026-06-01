@@ -11,7 +11,7 @@ const REVIEW_PROVIDER_CONFIGS = [
     provider: 'anthropic',
     keyEnv: 'ANTHROPIC_API_KEY',
     modelEnv: 'TEXRA_REVIEW_ANTHROPIC_MODEL',
-    defaultModel: 'opus47T',
+    defaultModel: 'opus48T',
   },
   {
     provider: 'openai',
