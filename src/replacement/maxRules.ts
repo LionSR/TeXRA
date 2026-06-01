@@ -46,17 +46,9 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
   description: 'Automatically generated maximum style replacements for LaTeX',
   isRegex: false,
   patterns: (() => {
-    // Initialize patterns object
-    const patterns: { [key: string]: string } = {};
-
     // ====================================================================
     // Backslash and command fixes
     // ====================================================================
-
-    // Fix for double backslashes in various commands
-    // Examples: \\alpha -> \alpha, \\mathbf -> \mathbf
-
-    // Math Operators, Greek Letters, Symbols, and common commands
     // prettier-ignore
     const backslashFixCommands = [
       // Common custom shortcuts (max-specific only)
@@ -66,9 +58,6 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       'effH', 'ceffH', 'peq', 'qeq', 'rhoeq', 'rhost', 'nimplies', 'bna', 'bdiv',
       'ddt', 'dddt', 'nn', 'da', 'bksl', 'Ra', 'tauf', 'beps'
     ];
-
-    // Generate backslash fixes for all the above commands
-    Object.assign(patterns, generateBackslashFixes(backslashFixCommands));
 
     // ====================================================================
     // Specialized handling for math operators and text commands
@@ -81,44 +70,10 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       'argmin','argmax','tr','Tr','sign','sort','argsort','Cov','Cat','Bern','Unif','ReLU','Concat','Skip','Upsample','Softmax','Conv','BatchNorm','LayerNorm','MaxPool','Dropout','TransformerEncoder','Attention','MultiHead','AdaLN',
     ];
 
-    // Direct mapping: \mathrm{op} -> \op and \text{op} -> \op
-    Object.assign(
-      patterns,
-      Object.fromEntries(
-        mathOperators.flatMap((op) => [
-          [`\\mathrm{${op}}`, `\\${op}`],
-          [`\\text{${op}}`, `\\${op}`],
-          [`\\mbox{${op}}`, `\\${op}`],
-          [`\\textrm{${op}}`, `\\${op}`],
-          [`{\\rm ${op}}`, `\\${op}`],
-          [`_\\op`, `_{\\${op}}`],
-          [`^\\op`, `^{\\${op}}`],
-        ]),
-      ),
-    );
-
     // 2. Text Commands (defined with \newcommand{\cmd}{{\text{name}}})
     // These allow direct subscript/superscript like P_\cmd
     // prettier-ignore
     const textCommands = ['sys', 'bath', 'tot', 'const', 'discrete', 'decoder', 'encoder', 'pool', 'data', 'mar', 'model', 'prior', 'target', 'full', 'observed', 'accept', 'aux', 'eq', 'st', 'nc', 'irr', 'rev', 'hkp', 'adi', 'nadi', 'exc', 'pos', 'head', 'PE', 'class', 'window', 'Output', 'FFN', 'Strat', 'Ito', 'diss'];
-
-    // Direct mapping: \text{cmd} -> \cmd
-    Object.assign(
-      patterns,
-      Object.fromEntries(
-        textCommands.flatMap((cmd) => [
-          [`\\text{${cmd}}`, `\\${cmd}`],
-          [`\\mathrm{${cmd}}`, `\\${cmd}`],
-          [`\\mbox{${cmd}}`, `\\${cmd}`],
-          [`\\textrm{${cmd}}`, `\\${cmd}`],
-          [`{\\rm ${cmd}}`, `\\${cmd}`],
-          [`_{\\${cmd}}`, `_\\${cmd}`],
-          [`^{\\${cmd}}`, `^\\${cmd}`],
-          [`_{${cmd}}`, `_\\${cmd}`],
-          [`^{${cmd}}`, `^\\${cmd}`],
-        ]),
-      ),
-    );
 
     // prettier-ignore
     const symbolOperators = [
@@ -128,53 +83,14 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       'tit', 'wtit', 'tif', 'ttf', 'ttauf', 'tze', 'tzero', 'tone', 'tauf', 'tf', 'ttau', 'tau', 'ttf',
       'bu', 'ta'
     ];
-    // these variables might occur as lower indices, but they do not need {..}
-    Object.assign(
-      patterns,
-      Object.fromEntries(
-        symbolOperators.flatMap((op) => [
-          [`_{\\${op}}`, `_\\${op}`],
-          [`^{\\${op}}`, `^\\${op}`],
-        ]),
-      ),
-    );
 
     // ====================================================================
     // Auto-generated differential notation patterns
     // ====================================================================
-
-    // Variables that need differential spacing
     // prettier-ignore
     const differentialVariables = ['x', 't', 'tau', 'ttau', 'beta', 'bx', 'bz', 'bze', 'bxi', 'tbx'];
-
-    // Generate differential spacing patterns
-    Object.assign(
-      patterns,
-      generateDifferentialSpacing(differentialVariables, '~'),
-    );
-
-    // Variables that need differential replacement in fractions and integrals
     // prettier-ignore
     const fractionDiffVariables = ['t', 'x', 'tau', 'ttau', 'beta', 'bx', 'bz', 'bze', 'bxi', 'S'];
-
-    // Generate patterns for each variable
-    Object.assign(
-      patterns,
-      Object.fromEntries(
-        fractionDiffVariables.flatMap((variable) => [
-          // Handle cases like {dx} -> {\\dd x}
-          [`{d${variable}}`, `{\\dd${variable}}`],
-          // Handle cases like \\frac{dx} -> \\frac{\\dd x}
-          [`\\frac{d${variable}`, `\\frac{\\dd${variable}`],
-          // Handle cases like \\frac{d}{dx} -> \\frac{\\dd}{\\dd x}
-          [`\\frac{d}{d${variable}}`, `\\frac{\\dd}{\\dd${variable}}`],
-        ]),
-      ),
-    );
-
-    // Integration patterns
-    patterns['\\int d\\'] = '\\int \\dd\\';
-    patterns['\\int \\dd \\bx \\'] = '\\int \\dd \\bx~ \\';
 
     // Arrows and Relations
     // Examples: \rightarrow -> \ra, \Leftrightarrow -> \LRa
@@ -187,248 +103,210 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       Leftrightarrow: 'LRa',
       Longleftrightarrow: 'LRa',
     };
-    Object.assign(patterns, generateArrowRelationShortcuts(arrowRelationMap));
 
-    // Calculus command shortcuts
-    // Examples: \partial -> \der, \nabla -> \na
+    // Calculus command shortcuts: \partial -> \der, \nabla -> \na
     const calculusCommandMap = {
       partial: 'der',
       nabla: 'na',
     };
-    Object.assign(patterns, generateCommandShortcuts(calculusCommandMap));
 
-    // Vector Variables
-    // Examples:
-    // \vec{p} -> \vp (momentum vector)
-    // \vec{x} -> \vx (position vector)
+    // Vector Variables: \vec{p} -> \vp, \vec{x} -> \vx
     const vectorLetters = [...'pqvxyz'];
-    Object.assign(patterns, generateVectorShortcuts(vectorLetters));
 
-    // Greek Letters (Regular)
-    // Map full Greek letter names to shorter versions
-    // Examples:
-    // \alpha -> \al
-    // \theta -> \ta
-
-    // Exclude Delta to prevent it from being shortened to De
+    // Greek Letters (Regular): exclude Delta to prevent it from being shortened to De
     const { Delta: _, ...greekShortcuts } = GREEK_LETTER_SHORTCUTS;
 
-    Object.assign(patterns, generateMathCommandShortcuts(greekShortcuts));
-
-    // Greek Letters (Bold)
-    // Generate patterns for bold Greek letters with \b prefix
+    // Greek Letters (Bold): bold Greek letters with \b prefix
     // prettier-ignore
     const commonGreekSet = new Set(['alpha', 'beta', 'gamma', 'epsilon', 'eta', 'theta', 'mu', 'nu', 'omega', 'phi', 'sigma', 'xi', 'zeta']);
     const commonGreekLetters = GREEK_LETTERS.filter((letter) =>
       commonGreekSet.has(letter),
     );
-
     // prettier-ignore
     const greekBoldLetters = [...commonGreekLetters, 'chi', 'pi', 'varphi', 'Sigma', 'lambda', 'Gamma', 'Lambda'];
-    Object.assign(
-      patterns,
-      generateDecoratedMathShortcuts(['boldsymbol'], greekBoldLetters, 'b'),
-    );
 
-    // Mathcal Letters
-    // Map \mathcal{X} to shorter \cX versions for all uppercase letters
+    // Math font letter sets
     const upperLetters = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
-    Object.assign(
-      patterns,
-      generateMathFontShortcuts(upperLetters, 'mathcal', 'c'),
-    );
-
-    // Mathbb Letters
-    // Map \mathbb{X} to shorter \eX versions for specific letters
     const mathbbLetters = [...'CEINPQRTV'];
-    Object.assign(
-      patterns,
-      generateMathFontShortcuts(mathbbLetters, 'mathbb', 'e'),
-    );
-
-    // Mathbf Letters (Lowercase)
-    // Map \mathbf{x} to shorter \bx versions
     const lowerLetters = [...'abcdefghjnpqrsuvwxyz'];
-    Object.assign(
-      patterns,
-      generateMathFontShortcuts(lowerLetters, 'mathbf', 'b'),
-    );
-
-    // Mathbf Letters (Uppercase)
-    // Map \mathbf{X} to shorter \bX versions for uppercase letters
     const mathbfUpperLetters = [...'ABCDEFGIJKMQRUVWXYZ'];
-    Object.assign(
-      patterns,
-      generateMathFontShortcuts(mathbfUpperLetters, 'mathbf', 'b'),
-    );
-
-    // Normalize legacy font commands {\rm X}, {\bf X} and {\cal X}
     const alphabetLetters = [
       ...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
     ];
-    Object.assign(
-      patterns,
-      generateLegacyTextCommandNormalization(alphabetLetters, 'mathrm', 'rm'),
-    );
-    Object.assign(
-      patterns,
-      generateLegacyTextCommandNormalization(alphabetLetters, 'mathbf', 'bf'),
-    );
-    Object.assign(
-      patterns,
-      generateLegacyTextCommandNormalization(alphabetLetters, 'mathcal', 'cal'),
-    );
 
-    // Tilde variables - simple letters
-    // Examples: \tilde{x} -> \tx, \tilde{B} -> \tB
+    // Tilde variables
     const tildeLetters = [...'xzpqBFJMPTZ'];
-    Object.assign(
-      patterns,
-      generateDecoratorShortcuts('tilde', tildeLetters, 't'),
+    const tildeLettersMathbf = [...'axpvwz'];
+    const tildeLettersMathbfUppercase = [...'MTX'];
+    const tildeLettersMathcal = [...'HQSW'];
+    const tildeGreekLetters = 'gamma lambda phi psi rho Sigma mu tau'.split(
+      ' ',
+    );
+    const tildeGreekBoldLetters = 'zeta gamma lambda pi xi eta Gamma'.split(
+      ' ',
     );
 
-    // Tilde with mathbf - lowercase
-    // Example: \tilde{\mathbf{x}} -> \tbx
-    const tildeLettersMathbf = [...'axpvwz'];
-    Object.assign(
-      patterns,
-      generateNestedDecoratorShortcuts(
+    // Hat variables
+    const hatLetters = [...'HFP'];
+    const hatGreekLetters = 'sigma Sigma pi rho'.split(' ');
+    const hatMathbfLetters = [...'nv'];
+    const hatBoldsymbolLetters = ['zeta'];
+
+    // Function names: \F_ -> F_, \G( -> G(
+    const functionNames = ['F', 'G'];
+
+    return {
+      ...generateBackslashFixes(backslashFixCommands),
+      // Math Operators: \mathrm{op} -> \op and \text{op} -> \op
+      ...Object.fromEntries(
+        mathOperators.flatMap((op) => [
+          [`\\mathrm{${op}}`, `\\${op}`],
+          [`\\text{${op}}`, `\\${op}`],
+          [`\\mbox{${op}}`, `\\${op}`],
+          [`\\textrm{${op}}`, `\\${op}`],
+          [`{\\rm ${op}}`, `\\${op}`],
+          [`_\\op`, `_{\\${op}}`],
+          [`^\\op`, `^{\\${op}}`],
+        ]),
+      ),
+      // Text Commands: \text{cmd} -> \cmd
+      ...Object.fromEntries(
+        textCommands.flatMap((cmd) => [
+          [`\\text{${cmd}}`, `\\${cmd}`],
+          [`\\mathrm{${cmd}}`, `\\${cmd}`],
+          [`\\mbox{${cmd}}`, `\\${cmd}`],
+          [`\\textrm{${cmd}}`, `\\${cmd}`],
+          [`{\\rm ${cmd}}`, `\\${cmd}`],
+          [`_{\\${cmd}}`, `_\\${cmd}`],
+          [`^{\\${cmd}}`, `^\\${cmd}`],
+          [`_{${cmd}}`, `_\\${cmd}`],
+          [`^{${cmd}}`, `^\\${cmd}`],
+        ]),
+      ),
+      // Symbol operators: _{op} -> _\op (no braces needed)
+      ...Object.fromEntries(
+        symbolOperators.flatMap((op) => [
+          [`_{\\${op}}`, `_\\${op}`],
+          [`^{\\${op}}`, `^\\${op}`],
+        ]),
+      ),
+      ...generateDifferentialSpacing(differentialVariables, '~'),
+      ...Object.fromEntries(
+        fractionDiffVariables.flatMap((variable) => [
+          // Handle cases like {dx} -> {\\dd x}
+          [`{d${variable}}`, `{\\dd${variable}}`],
+          // Handle cases like \\frac{dx} -> \\frac{\\dd x}
+          [`\\frac{d${variable}`, `\\frac{\\dd${variable}`],
+          // Handle cases like \\frac{d}{dx} -> \\frac{\\dd}{\\dd x}
+          [`\\frac{d}{d${variable}}`, `\\frac{\\dd}{\\dd${variable}}`],
+        ]),
+      ),
+      '\\int d\\': '\\int \\dd\\',
+      '\\int \\dd \\bx \\': '\\int \\dd \\bx~ \\',
+      ...generateArrowRelationShortcuts(arrowRelationMap),
+      ...generateCommandShortcuts(calculusCommandMap),
+      ...generateVectorShortcuts(vectorLetters),
+      ...generateMathCommandShortcuts(greekShortcuts),
+      ...generateDecoratedMathShortcuts(['boldsymbol'], greekBoldLetters, 'b'),
+      // Mathcal: \mathcal{X} -> \cX
+      ...generateMathFontShortcuts(upperLetters, 'mathcal', 'c'),
+      // Mathbb: \mathbb{X} -> \eX
+      ...generateMathFontShortcuts(mathbbLetters, 'mathbb', 'e'),
+      // Mathbf lowercase: \mathbf{x} -> \bx
+      ...generateMathFontShortcuts(lowerLetters, 'mathbf', 'b'),
+      // Mathbf uppercase: \mathbf{X} -> \bX
+      ...generateMathFontShortcuts(mathbfUpperLetters, 'mathbf', 'b'),
+      // Normalize legacy font commands {\rm X}, {\bf X}, {\cal X}
+      ...generateLegacyTextCommandNormalization(
+        alphabetLetters,
+        'mathrm',
+        'rm',
+      ),
+      ...generateLegacyTextCommandNormalization(
+        alphabetLetters,
+        'mathbf',
+        'bf',
+      ),
+      ...generateLegacyTextCommandNormalization(
+        alphabetLetters,
+        'mathcal',
+        'cal',
+      ),
+      // Tilde variables: \tilde{x} -> \tx, \tilde{B} -> \tB
+      ...generateDecoratorShortcuts('tilde', tildeLetters, 't'),
+      // Tilde with mathbf lowercase: \tilde{\mathbf{x}} -> \tbx
+      ...generateNestedDecoratorShortcuts(
         'tilde',
         'mathbf',
         tildeLettersMathbf,
         't',
         'b',
       ),
-    );
-
-    // Tilde with mathbf - uppercase
-    // Example: \tilde{\mathbf{M}} -> \tbM
-    const tildeLettersMathbfUppercase = [...'MTX'];
-    Object.assign(
-      patterns,
-      generateNestedDecoratorShortcuts(
+      // Tilde with mathbf uppercase: \tilde{\mathbf{M}} -> \tbM
+      ...generateNestedDecoratorShortcuts(
         'tilde',
         'mathbf',
         tildeLettersMathbfUppercase,
         't',
         'b',
       ),
-    );
-
-    // Tilde with mathcal - uppercase
-    // Example: \tilde{\mathcal{H}} -> \tcH
-    const tildeLettersMathcal = [...'HQSW'];
-    Object.assign(
-      patterns,
-      generateNestedDecoratorShortcuts(
+      // Tilde with mathcal: \tilde{\mathcal{H}} -> \tcH
+      ...generateNestedDecoratorShortcuts(
         'tilde',
         'mathcal',
         tildeLettersMathcal,
         't',
         'c',
       ),
-    );
-
-    // Tilde with Greek letters
-    // Example: \tilde{\gamma} -> \tga
-    const tildeGreekLetters = 'gamma lambda phi psi rho Sigma mu tau'.split(
-      ' ',
-    );
-    Object.assign(
-      patterns,
-      Object.fromEntries(
+      // Tilde with Greek: \tilde{\gamma} -> \tga
+      ...Object.fromEntries(
         tildeGreekLetters.map((letter) => [
           `\\tilde{\\${letter}}`,
           `\\t${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
         ]),
       ),
-    );
-
-    // Tilde with boldsymbol+Greek
-    // Example: \tilde{\boldsymbol{\zeta}} -> \tbze
-    const tildeGreekBoldLetters = 'zeta gamma lambda pi xi eta Gamma'.split(
-      ' ',
-    );
-    Object.assign(
-      patterns,
-      Object.fromEntries(
+      // Tilde with boldsymbol+Greek: \tilde{\boldsymbol{\zeta}} -> \tbze
+      ...Object.fromEntries(
         tildeGreekBoldLetters.map((letter) => [
           `\\tilde{\\boldsymbol{\\${letter}}}`,
           `\\tb${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
         ]),
       ),
-    );
-
-    // Hat variables
-    // Example: \hat{H} -> \hH
-    const hatLetters = [...'HFP'];
-    Object.assign(patterns, generateDecoratorShortcuts('hat', hatLetters, 'h'));
-
-    // Hat with Greek letters
-    // Example: \hat{\sigma} -> \hsg
-    const hatGreekLetters = 'sigma Sigma pi rho'.split(' ');
-    Object.assign(
-      patterns,
-      Object.fromEntries(
+      // Hat variables: \hat{H} -> \hH
+      ...generateDecoratorShortcuts('hat', hatLetters, 'h'),
+      // Hat with Greek: \hat{\sigma} -> \hsg
+      ...Object.fromEntries(
         hatGreekLetters.map((letter) => [
           `\\hat{\\${letter}}`,
           `\\h${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
         ]),
       ),
-    );
-
-    // Hat with mathbf
-    // Example: \hat{\mathbf{n}} -> \hbn
-    const hatMathbfLetters = [...'nv'];
-    Object.assign(
-      patterns,
-      generateNestedDecoratorShortcuts(
+      // Hat with mathbf: \hat{\mathbf{n}} -> \hbn
+      ...generateNestedDecoratorShortcuts(
         'hat',
         'mathbf',
         hatMathbfLetters,
         'h',
         'b',
       ),
-    );
-
-    // Hat with boldsymbol+Greek
-    // Example: \hat{\boldsymbol{\zeta}} -> \hbze
-    const hatBoldsymbolLetters = ['zeta'];
-    Object.assign(
-      patterns,
-      Object.fromEntries(
+      // Hat with boldsymbol+Greek: \hat{\boldsymbol{\zeta}} -> \hbze
+      ...Object.fromEntries(
         hatBoldsymbolLetters.map((letter) => [
           `\\hat{\\boldsymbol{\\${letter}}}`,
           `\\hb${GREEK_LETTER_SHORTCUTS[letter] ?? letter}`,
         ]),
       ),
-    );
-
-    // Fix for extra backslashes in bold symbols
-    // Automatically generate fixes for lowercase bold letters (e.g., \\ba -> \ba)
-    Object.assign(patterns, generateBoldBackslashFixes('b', lowerLetters));
-
-    // Automatically generate fixes for uppercase bold letters (e.g., \\bA -> \bA)
-    Object.assign(
-      patterns,
-      generateBoldBackslashFixes('b', mathbfUpperLetters),
-    );
-
-    // Convert functions to simpler forms (e.g., F_/G_)
-    // Examples: \F_ -> F_, \G( -> G(
-    const functionNames = ['F', 'G'];
-    Object.assign(
-      patterns,
-      Object.fromEntries(
+      // Bold backslash fixes: \\ba -> \ba (lowercase), \\bA -> \bA (uppercase)
+      ...generateBoldBackslashFixes('b', lowerLetters),
+      ...generateBoldBackslashFixes('b', mathbfUpperLetters),
+      ...Object.fromEntries(
         functionNames.flatMap((name) => [
           [`\\${name}_`, `${name}_`],
           [`\\${name}^`, `${name}^`],
           [`\\${name}(`, `${name}(`],
         ]),
       ),
-    );
-
-    return patterns;
+    };
   })(),
 };
 
