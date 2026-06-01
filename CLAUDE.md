@@ -307,7 +307,7 @@ For good separation of concerns, testability, and platform independence, core bu
 - `src/agent/` (core logic, model handlers, PocketFlow flows)
 - `src/model/` (model registry, capabilities, pricing)
 - `src/latex/` (LaTeX processing, formatting, diff)
-- `src/tools/` (tool implementations — use `@common/files/fsEntryType` instead of `vscode.FileType`)
+- `src/tools/` (tool implementations — use `@utils/files/fsEntryType` instead of `vscode.FileType`)
 - `src/controllers/` (host-neutral orchestration behind injected ports)
 - `src/shared/` (IPC schemas, message types)
 - `src/replacement/` (text cleanup rules)
@@ -330,7 +330,7 @@ For good separation of concerns, testability, and platform independence, core bu
 **Patterns for keeping code platform-agnostic:**
 
 - Reach host services through `platform()` from `@platform` (config, state, log, fs, workspace, storage, secrets) — never import `vscode` in agnostic zones.
-- Use `isFile()` / `isDirectory()` from `@common/files/fsEntryType` instead of `vscode.FileType`
+- Use `isFile()` / `isDirectory()` from `@utils/files/fsEntryType` instead of `vscode.FileType`
 - Use `isFileNotFoundError()` from `@common/errors` instead of `instanceof vscode.FileSystemError`
 - Return error results instead of calling `vscode.window.show*Message()` from business logic — let the caller (command layer) handle UI
 - Use injectable callbacks (like `setExtensionChecker()` in `externalToolDefs.ts`) for platform-specific capabilities needed in agnostic code
