@@ -27,10 +27,15 @@ async function readJsonRecord(filePath: string): Promise<JsonRecord> {
  * Shared building block for non-VS-Code platform implementations (Electron,
  * CLI). Writes go through `write-file-atomic`, which stages to a sibling temp
  * path, `fsync`s, then renames — so a crash mid-flush leaves the previous file
- * intact rather than corrupting the snapshot. It also serializes concurrent
- * writes to the same path internally, so no caller-side write queue is needed.
+ * intact rather than corrupting the snapshot. Flushes are chained on
+ * {@link writeChain} so they persist in `set()` call order: `write-file-atomic`
+ * only guarantees same-path writes don't clobber each other's temp files, not
+ * that they land in call order (the per-flush `mkdir` await could otherwise let
+ * an earlier snapshot overtake a later one and silently revert it).
  */
 export class JsonStore {
+  private writeChain = Promise.resolve();
+
   private constructor(
     private readonly filePath: string,
     private data: JsonRecord,
@@ -56,11 +61,23 @@ export class JsonStore {
     } else {
       this.data[key] = value;
     }
-    await this.flush(this.snapshot());
+    await this.enqueueFlush(this.snapshot());
   }
 
   snapshot(): JsonRecord {
     return { ...this.data };
+  }
+
+  /**
+   * Chain the flush onto {@link writeChain} so flushes run in `set()` call
+   * order. The link is established synchronously, before any await, so order is
+   * captured at call time rather than racing on `mkdir`/`write-file-atomic`
+   * timing. A failed flush doesn't break the chain (`.then(flush, flush)`).
+   */
+  private enqueueFlush(snapshot: JsonRecord): Promise<void> {
+    const flush = () => this.flush(snapshot);
+    this.writeChain = this.writeChain.then(flush, flush);
+    return this.writeChain;
   }
 
   private async flush(snapshot: JsonRecord): Promise<void> {
