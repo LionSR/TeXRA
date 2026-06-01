@@ -5,8 +5,8 @@ import * as path from 'path';
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';
 import { platform } from '@platform/platform';
-import { isFile, isDirectory } from '@common/files/fsEntryType';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
+import { isFile, isDirectory } from './fsEntryType';
 
 /** Convert content to Buffer for writing. */
 function toBuffer(content: string | Uint8Array): Uint8Array {

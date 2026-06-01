@@ -1,5 +1,5 @@
 // Barrel export for common file utilities
-export { isFile, isDirectory } from './fsEntryType';
+export { isFile, isDirectory, isSymlink } from '@utils/files/fsEntryType';
 export {
   ExtensionCategory,
   getFilterExtensions,
