@@ -52,6 +52,11 @@ export function appendAssistantTranscriptIfMissing(
         entry.id === entryId ||
         (!entry.synthetic &&
           entry.role === 'assistant' &&
+          normalizeTranscriptText(entry.text) === normalized) ||
+        (entry.synthetic &&
+          entry.syntheticKind === 'final' &&
+          entry.syntheticAfterSeq === syntheticAfterSeq &&
+          entry.role === 'assistant' &&
           normalizeTranscriptText(entry.text) === normalized),
     );
     if (alreadyRendered) return slice;
