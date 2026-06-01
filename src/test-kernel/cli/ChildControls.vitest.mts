@@ -1052,6 +1052,35 @@ describe('CLI child execution controls', () => {
     });
   });
 
+  it('spends tiny task detail rows on output instead of labels', () => {
+    expect(
+      computeTaskDetailLayout({
+        availableRows: 6,
+        hasTailLines: true,
+        metaRows: 4,
+      }),
+    ).toMatchObject({
+      compact: true,
+      showHints: false,
+      showOutputLabel: false,
+      showTitle: false,
+      visibleLineCount: 3,
+    });
+  });
+
+  it('does not lose compact task detail output rows as height grows', () => {
+    const outputRowsByHeight = [6, 7, 8, 9, 10, 11, 12].map(
+      (availableRows) =>
+        computeTaskDetailLayout({
+          availableRows,
+          hasTailLines: true,
+          metaRows: 4,
+        }).visibleLineCount,
+    );
+
+    expect(outputRowsByHeight).toEqual([3, 4, 4, 4, 4, 5, 5]);
+  });
+
   it('opens long task detail output at the latest visible tail', () => {
     expect(taskDetailInitialScrollOffset(2, 5)).toBe(0);
     expect(taskDetailInitialScrollOffset(12, 5)).toBe(7);
