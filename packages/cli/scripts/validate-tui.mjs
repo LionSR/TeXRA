@@ -820,7 +820,7 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     expect: [
-      '+4 more child executions',
+      'Waiting for leanSolver',
       '3 sub',
       '1 proc',
       '[Tab]streams',
@@ -840,7 +840,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: ']tasks',
-    expect: [']tasks', '[Ctrl-C]stop'],
+    expect: ['Waiting for leanSolver', ']tasks', '[Ctrl-C]stop'],
     unexpect: [']subagents', '[Option-p]tasks'],
   },
   {

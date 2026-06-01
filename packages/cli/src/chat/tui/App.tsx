@@ -200,6 +200,9 @@ export function allocateSidePanelRows({
   if (availableRows === 0) {
     return { subagentRows: 0, todosPlanRows: 0 };
   }
+  if (availableRows === 1) {
+    return { subagentRows: 0, todosPlanRows: 1 };
+  }
 
   const subagentRows = Math.max(1, Math.floor(availableRows / 2));
   return {

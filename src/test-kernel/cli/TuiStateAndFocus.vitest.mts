@@ -530,7 +530,7 @@ describe('CLI TUI row allocation', () => {
         hasTodosPlanPanel: true,
         rows: 1,
       }),
-    ).toEqual({ subagentRows: 1, todosPlanRows: 0 });
+    ).toEqual({ subagentRows: 0, todosPlanRows: 1 });
   });
 
   it('shows todo and plan chrome only while a stream is active', () => {
