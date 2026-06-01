@@ -1612,6 +1612,7 @@ function formatUsage() {
     '',
     'Options:',
     '  --snapshot-dir DIR  Write per-scenario .txt/.svg frames and an index.html report',
+    '  --list              Print available scenario names and exit',
     '  -h, --help          Show this help',
     '',
     'Available scenarios:',
@@ -1621,6 +1622,10 @@ function formatUsage() {
 
 function printUsage(stream = console.log) {
   stream(formatUsage());
+}
+
+function printScenarioList() {
+  console.log(SCENARIOS.map((scenario) => scenario.name).join('\n'));
 }
 
 function parseArgs(argv) {
@@ -1639,6 +1644,10 @@ function parseArgs(argv) {
     }
     if (!endOfOptions && (arg === '--help' || arg === '-h')) {
       printUsage();
+      process.exit(0);
+    }
+    if (!endOfOptions && arg === '--list') {
+      printScenarioList();
       process.exit(0);
     }
     if (!endOfOptions && arg === '--snapshot-dir') {
