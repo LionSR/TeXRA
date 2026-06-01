@@ -19,31 +19,18 @@ import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass'
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { listToolInjections } from '@agent/runtime/toolInjection';
+import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
 import { executionToEndStatus } from '@common/constants/streamStatus';
-import type { ToolDefinition } from '@model';
-import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
   END_GROUP_STATUS,
   EXECUTION_STATUS,
   type EndGroupStatus,
 } from '@shared/schemas';
 import type { SubagentProgressUpdate } from '@shared/schemas';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { evaluateDelegationGate } from '@shared/constants/delegationPolicy';
 
 import { getDefaultToolRegistry } from '@tools/registry';
-import {
-  getDisabledToolNames,
-  getUnavailableToolNamesCached,
-} from '@tools/toolAvailability';
-import { notifyUnavailableTools } from '@tools/toolUnavailableNotification';
-import {
-  availableModelNamesFromOptions,
-  withDelegationModelAvailability,
-} from '@tools/delegationModelAvailability';
-import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
@@ -105,102 +92,6 @@ export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
 const IMMEDIATE_COMPACTION_FOLLOW_UP =
   'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
 
-async function availableDelegationModelNamesForTools(
-  tools: readonly ToolDefinition[],
-): Promise<readonly string[] | null | undefined> {
-  if (!tools.some((tool) => DELEGATION_TOOLS.has(tool.name))) {
-    return undefined;
-  }
-
-  try {
-    return availableModelNamesFromOptions(await computeModelOptionsData());
-  } catch {
-    return null;
-  }
-}
-
-export async function resolveToolUseTools(
-  tools: AgentToolUseSetting['tools'],
-  registry: IToolRegistry,
-  logger: { warn: (msg: string) => void },
-  options: {
-    readonly approvalPromptsUnavailable?: boolean;
-    readonly delegationBlocked: boolean;
-  },
-): Promise<{ tools: ToolDefinition[]; delegationTrimmed: boolean }> {
-  const disabled = getDisabledToolNames();
-  const unavailable = getUnavailableToolNamesCached();
-  const missingDependency: string[] = [];
-
-  // Don't warn on routine filtering outcomes (user-disabled, unavailable,
-  // not in registry): they fire on every tool-use cycle and drown out real
-  // issues. Agent YAML typos are surfaced once at load time by
-  // `resolveToolDefinitions`; missing external deps are surfaced via
-  // `notifyUnavailableTools` below.
-  const toolConfigs = Array.isArray(tools) ? tools : [];
-  let delegationTrimmed = false;
-  const resolved = toolConfigs
-    .map((config) => (typeof config === 'string' ? { name: config } : config))
-    .filter((def) => {
-      if (DELEGATION_TOOLS.has(def.name) && options.delegationBlocked) {
-        delegationTrimmed = true;
-        return false;
-      }
-      if (
-        options.approvalPromptsUnavailable === true &&
-        isApprovalGatedToolName(def.name)
-      ) {
-        return false;
-      }
-      if (disabled.has(def.name)) return false;
-      if (unavailable.has(def.name)) {
-        missingDependency.push(def.name);
-        return false;
-      }
-      if (!registry.has(def.name)) return false;
-      return true;
-    });
-
-  const resolvedNames = new Set(resolved.map((d) => d.name));
-  for (const injection of listToolInjections()) {
-    if (!injection.shouldInject()) continue;
-    if (resolvedNames.has(injection.toolName)) continue;
-    if (DELEGATION_TOOLS.has(injection.toolName) && options.delegationBlocked) {
-      delegationTrimmed = true;
-      continue;
-    }
-    if (
-      options.approvalPromptsUnavailable === true &&
-      isApprovalGatedToolName(injection.toolName)
-    ) {
-      continue;
-    }
-    const tool = registry.get(injection.toolName);
-    if (tool) {
-      resolved.push(tool.definition);
-      resolvedNames.add(injection.toolName);
-    } else {
-      logger.warn(`Injected tool not found in registry: ${injection.toolName}`);
-    }
-  }
-
-  if (missingDependency.length) {
-    notifyUnavailableTools(missingDependency);
-  }
-
-  const availableModelNames =
-    await availableDelegationModelNamesForTools(resolved);
-  return {
-    tools:
-      availableModelNames === undefined
-        ? resolved
-        : resolved.map((tool) =>
-            withDelegationModelAvailability(tool, availableModelNames),
-          ),
-    delegationTrimmed,
-  };
-}
-
 export async function runToolUseFlow<C = unknown>(
   input: RunToolUseFlowInput<C>,
   toolRegistry?: IToolRegistry,
@@ -216,15 +107,13 @@ export async function runToolUseFlow<C = unknown>(
     delegationDepth,
     delegationConfig,
   );
-  const { tools: resolvedTools, delegationTrimmed } = await resolveToolUseTools(
-    setting.tools,
+  const { tools: resolvedTools, delegationTrimmed } = await resolveAgentTools({
+    tools: setting.tools,
     registry,
     logger,
-    {
-      approvalPromptsUnavailable: input.approvalPromptsUnavailable,
-      delegationBlocked: !delegationGate.allowed,
-    },
-  );
+    delegationBlocked: !delegationGate.allowed,
+    approvalPromptsUnavailable: input.approvalPromptsUnavailable,
+  });
 
   const kv = getExecutionStore(executionId);
 
