@@ -39,6 +39,8 @@ export interface CliContext {
   readonly stdoutIsTty?: boolean;
   readonly termIsDumb?: boolean;
   readonly stderrIsTty?: boolean;
+  readonly stdoutColorEnabled?: boolean;
+  readonly stderrColorEnabled?: boolean;
   readonly colorEnabled: boolean;
   readonly version: string;
   readonly resourcesPath: string;
@@ -63,6 +65,8 @@ export interface CliAmbientState {
   readonly stdoutIsTty: boolean;
   readonly stderrIsTty: boolean;
   readonly termIsDumb?: boolean;
+  readonly stdoutColorEnabled: boolean;
+  readonly stderrColorEnabled: boolean;
   readonly colorEnabled: boolean;
 }
 
@@ -75,13 +79,18 @@ export function readCliAmbientState(): CliAmbientState {
   const stdoutIsTty = process.stdout.isTTY === true;
   const noColor = process.env.NO_COLOR != null;
   const dumbTerm = process.env.TERM === 'dumb';
+  const colorAllowed = !noColor && !dumbTerm;
+  const stdoutColorEnabled = stdoutIsTty && colorAllowed;
+  const stderrColorEnabled = stderrIsTty && colorAllowed;
   cachedAmbient = {
     isCi: Boolean(process.env.CI),
     stdinIsTty,
     stdoutIsTty,
     stderrIsTty,
     termIsDumb: dumbTerm,
-    colorEnabled: stderrIsTty && !noColor && !dumbTerm,
+    stdoutColorEnabled,
+    stderrColorEnabled,
+    colorEnabled: stderrColorEnabled,
   };
   return cachedAmbient;
 }
@@ -287,6 +296,8 @@ export async function buildCliContext(
     stdoutIsTty: ambient.stdoutIsTty,
     termIsDumb: ambient.termIsDumb === true,
     stderrIsTty: ambient.stderrIsTty,
+    stdoutColorEnabled: ambient.stdoutColorEnabled,
+    stderrColorEnabled: ambient.stderrColorEnabled,
     colorEnabled: ambient.colorEnabled,
     version: await readCliVersion(),
     resourcesPath: resolveCliResourcesPath(),
