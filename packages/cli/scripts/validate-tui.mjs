@@ -17,8 +17,8 @@
 //   or: pnpm --filter @texra-ai/cli validate:tui
 //   or: node scripts/validate-tui.mjs --snapshot-dir /tmp/tui-frames slash-palette
 //
-// `--snapshot-dir` writes both per-scenario `.txt` frames and an `index.html`
-// report for quick visual review in a browser.
+// `--snapshot-dir` writes per-scenario `.txt` and `.svg` frames plus an
+// `index.html` report for quick visual review in a browser or GitHub issue.
 //
 // Deps: node-pty (PTY; optional — native) and @xterm/headless (pure JS). If
 // node-pty is unavailable (e.g. CI without build tools), the validator prints a
@@ -1360,7 +1360,7 @@ function formatUsage() {
     '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [scenario ...]',
     '',
     'Options:',
-    '  --snapshot-dir DIR  Write per-scenario .txt frames and an index.html report',
+    '  --snapshot-dir DIR  Write per-scenario .txt/.svg frames and an index.html report',
     '  -h, --help          Show this help',
     '',
     'Available scenarios:',
@@ -1577,17 +1577,12 @@ function resetSnapshotDir(dir) {
     if (!entry.isFile()) {
       continue;
     }
-    const generatedFrame = /^\d+-[a-z0-9._-]+\.(?:html|txt)$/i.test(entry.name);
+    const generatedFrame = /^\d+-[a-z0-9._-]+\.(?:html|svg|txt)$/i.test(
+      entry.name,
+    );
     if (!generatedFrame && entry.name !== 'index.html') continue;
     unlinkSync(path.join(dir, entry.name));
   }
-}
-
-function writeSnapshot(index, name, frame, rows) {
-  if (!snapshotDir) return;
-  const file = path.join(snapshotDir, snapshotFileName(index, name));
-  const content = frameTail(frame, rows);
-  writeFileSync(file, `${content}${content.endsWith('\n') ? '' : '\n'}`);
 }
 
 function escapeHtml(value) {
@@ -1598,11 +1593,48 @@ function escapeHtml(value) {
     .replaceAll('"', '&quot;');
 }
 
+function snapshotSvgDocument(name, frame) {
+  const lines = frame.split('\n');
+  const charWidth = 8.4;
+  const fontSize = 14;
+  const lineHeight = 18;
+  const paddingX = 16;
+  const paddingY = 16;
+  const maxColumns = Math.max(1, ...lines.map(lineColumns));
+  const width = Math.ceil(maxColumns * charWidth + paddingX * 2);
+  const height = Math.ceil(lines.length * lineHeight + paddingY * 2);
+  const tspans = lines
+    .map(
+      (line, index) =>
+        `<tspan x="${paddingX}" y="${paddingY + fontSize + index * lineHeight}">${escapeHtml(line || ' ')}</tspan>`,
+    )
+    .join('\n    ');
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title">
+  <title id="title">${escapeHtml(name)} TUI snapshot</title>
+  <rect width="100%" height="100%" fill="#101216"/>
+  <text fill="#e8e4d8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="${fontSize}" xml:space="preserve">
+    ${tspans}
+  </text>
+</svg>
+`;
+}
+
+function writeSnapshot(index, name, frame, rows) {
+  if (!snapshotDir) return;
+  const content = frameTail(frame, rows);
+  const textFile = path.join(snapshotDir, snapshotFileName(index, name));
+  const svgFile = path.join(snapshotDir, snapshotFileName(index, name, 'svg'));
+  writeFileSync(textFile, `${content}${content.endsWith('\n') ? '' : '\n'}`);
+  writeFileSync(svgFile, snapshotSvgDocument(name, content));
+}
+
 function snapshotHtmlDocument(results) {
   const generatedAt = new Date().toISOString();
   const entries = results
     .map((result, index) => {
       const textFile = snapshotFileName(index, result.name);
+      const svgFile = snapshotFileName(index, result.name, 'svg');
       const frame = frameTail(result.fullFrame, result.rows);
       const statusClass = result.ok ? 'ok' : 'failed';
       const failures = result.failures.length
@@ -1613,7 +1645,10 @@ function snapshotHtmlDocument(results) {
       return `<section class="scenario ${statusClass}">
   <header>
     <h2>${escapeHtml(result.name)}</h2>
-    <a href="${escapeHtml(textFile)}">text frame</a>
+    <nav>
+      <a href="${escapeHtml(textFile)}">text frame</a>
+      <a href="${escapeHtml(svgFile)}">svg frame</a>
+    </nav>
   </header>
   ${failures}
   <pre>${escapeHtml(frame)}</pre>
@@ -1652,6 +1687,7 @@ function snapshotHtmlDocument(results) {
       padding: 10px 14px;
     }
     h2 { font-size: 14px; margin: 0; }
+    nav { display: flex; gap: 14px; }
     a { color: #8cc8ff; text-decoration: none; }
     ul { color: #ffb4a8; margin: 12px 14px 0; }
     pre {
