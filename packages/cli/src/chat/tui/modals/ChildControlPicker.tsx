@@ -164,35 +164,6 @@ export function taskDetailWrappedRowCount(
   return Math.max(1, wrapAnsiToWidth(line, outputColumns).split('\n').length);
 }
 
-export function taskDetailVisibleLineCountForColumns({
-  availableColumns,
-  compact,
-  tailLines,
-  visibleRowBudget,
-}: {
-  readonly availableColumns?: number;
-  readonly compact: boolean;
-  readonly tailLines: readonly string[];
-  readonly visibleRowBudget: number;
-}): number {
-  if (visibleRowBudget <= 0) return 0;
-  if (!compact || tailLines.length === 0) return visibleRowBudget;
-
-  const outputColumns = taskDetailOutputColumnCount(availableColumns);
-  if (outputColumns === undefined) return visibleRowBudget;
-
-  let usedRows = 0;
-  let visibleLines = 0;
-  for (let index = tailLines.length - 1; index >= 0; index -= 1) {
-    const rowCount = taskDetailWrappedRowCount(tailLines[index], outputColumns);
-    if (visibleLines > 0 && usedRows + rowCount > visibleRowBudget) break;
-    visibleLines += 1;
-    usedRows += rowCount;
-    if (usedRows >= visibleRowBudget) break;
-  }
-  return Math.max(1, visibleLines);
-}
-
 export function taskDetailVisibleLineCountFromOffsetForColumns({
   availableColumns,
   compact,
@@ -265,25 +236,7 @@ export function taskDetailFollowTailScrollOffsetForColumns({
     scrollableRows,
     visibleRowBudget,
   );
-  if (!compact || visibleRowBudget <= 0 || tailLines.length === 0) {
-    return maxOffset;
-  }
-
-  const outputColumns = taskDetailOutputColumnCount(availableColumns);
-  if (outputColumns === undefined) return maxOffset;
-
-  const visibleLineCount = taskDetailVisibleLineCountForColumns({
-    availableColumns,
-    compact,
-    tailLines,
-    visibleRowBudget,
-  });
-  const firstTailLine = Math.max(0, tailLines.length - visibleLineCount);
-  let offset = 0;
-  for (let index = 0; index < firstTailLine; index += 1) {
-    offset += taskDetailWrappedRowCount(tailLines[index], outputColumns);
-  }
-  return Math.min(offset, maxOffset);
+  return maxOffset;
 }
 
 export function taskDetailVisibleOutputRowsFromOffsetForColumns({
