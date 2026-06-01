@@ -816,7 +816,9 @@ const SCENARIOS = [
       'main.tex: Proof sketch',
       '3 sub',
       '[Tab]streams',
+      ']tasks',
     ],
+    unexpect: ['[Option-p]tasks', '[Option-s]subagents'],
   },
   {
     name: 'subagents-with-todos-compact',
@@ -851,7 +853,7 @@ const SCENARIOS = [
     },
     bootExpect: ']tasks',
     expect: [']tasks', '[Ctrl-C]stop'],
-    unexpect: [']subagents'],
+    unexpect: [']subagents', '[Option-p]tasks'],
   },
   {
     name: 'subagent-picker',
@@ -861,7 +863,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: '[Tab]streams',
-    keys: [ESC + 's'], // Option/Alt-s
+    keys: [ESC + 's'], // Esc/Alt-s
     expect: [
       'Subagents',
       'Stream: main',
@@ -958,7 +960,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: '[Tab]streams',
-    keys: [ESC + 'p'], // Option/Alt-p
+    keys: [ESC + 'p'], // Esc/Alt-p
     expect: [
       'Tasks and sub-workflows',
       'Stream: main',
@@ -984,7 +986,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: '[Tab]streams',
-    keys: [ESC + 's'], // Option/Alt-s
+    keys: [ESC + 's'], // Esc/Alt-s
     frame: 'tail',
     expect: [
       'Subagents',
@@ -1013,7 +1015,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: '[Tab]streams',
-    keys: [ESC + 'p'], // Option/Alt-p
+    keys: [ESC + 'p'], // Esc/Alt-p
     frame: 'tail',
     expect: [
       'Tasks and sub-workflows',
@@ -1043,7 +1045,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: '[Tab]streams',
-    keys: [ESC + 'p', DOWN, DOWN, DOWN], // Option/Alt-p, select process row
+    keys: [ESC + 'p', DOWN, DOWN, DOWN], // Esc/Alt-p, select process row
     frame: 'tail',
     expect: [
       'Tasks and sub-workflows',
@@ -1157,7 +1159,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: '[Tab]streams',
-    keys: [ESC + 's'], // Option/Alt-s
+    keys: [ESC + 's'], // Esc/Alt-s
     frame: 'tail',
     expect: [
       'Subagents',
@@ -1179,7 +1181,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: '[Tab]streams',
-    keys: [ESC + 's', DOWN], // Option/Alt-s, select second subagent
+    keys: [ESC + 's', DOWN], // Esc/Alt-s, select second subagent
     frame: 'tail',
     expect: [
       'Subagents',
@@ -1201,7 +1203,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: '[Tab]streams',
-    keys: [ESC + 'p'], // Option/Alt-p
+    keys: [ESC + 'p'], // Esc/Alt-p
     frame: 'tail',
     expect: [
       'Tasks and sub-workflows',
@@ -1222,7 +1224,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'TeXRA',
-    keys: [ESC + 's'], // Option/Alt-s
+    keys: [ESC + 's'], // Esc/Alt-s
     frame: 'tail',
     expect: [
       'strategy',
@@ -1243,7 +1245,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'TeXRA',
-    keys: [ESC + 's'], // Option/Alt-s
+    keys: [ESC + 's'], // Esc/Alt-s
     frame: 'tail',
     expect: ['◆ running 75s api 3 sub'],
     unexpect: ['◆running', 'api3', '3 sub 1 proc'],
