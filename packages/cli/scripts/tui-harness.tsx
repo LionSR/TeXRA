@@ -986,6 +986,7 @@ function appendHarnessStatus(): void {
       teamName: meta.teamName,
       api: meta.apiMode,
       approval: formatApprovalPolicyForCli(harnessApprovalPolicy),
+      approvalBypasses: slice?.bypass,
       status: slice?.status ?? 'not started',
       queuedFollowUpMessages:
         streamId === undefined ? [] : ToolUseFollowUpQueue.getAll(streamId),

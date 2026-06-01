@@ -568,6 +568,19 @@ const SCENARIOS = [
     unexpect: ['AUTO-APPROVE', 'Run bash command?', '1 approval'],
   },
   {
+    name: 'bash-approval-session-status',
+    env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
+    bootExpect: 'Use foreground panel shortcuts',
+    keys: ['a', '/status', '\r'],
+    frame: 'tail',
+    expect: [
+      'approval: ask before privileged actions',
+      'auto-approvals: bash commands',
+      'AUTO-BASH',
+    ],
+    unexpect: ['Run bash command?', '1 approval'],
+  },
+  {
     name: 'agent-proposal-long',
     rows: 24,
     cols: 80,
