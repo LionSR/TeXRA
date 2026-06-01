@@ -413,7 +413,9 @@ and tool-use vitest suites green.
   (`path` → `texra.path` → explicit prefix). It is justified DRY, **not** removable
   over-abstraction.
 
-**Surface/packaging note (unchanged recommendation, re-confirmed):** `packages/core`
+**Surface/packaging note (unchanged recommendation, re-confirmed):** _[SUPERSEDED —
+resolved by Step 6 / PR #4781; see §9. The state described below is as of 2026-05-30 and
+is retained as a dated record.]_ `packages/core`
 is still a stub — `packages/core/src/index.ts` exports only `corePackageReady = true`,
 and consumers reach core via path aliases (`@agent`, `@platform`, `@logger`, `@shared`)
 rather than `@texra/core`. This is harmless today but means there is no single
