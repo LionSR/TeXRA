@@ -128,8 +128,9 @@ async function readCliPackageManifest(): Promise<
       const pkg = JSON.parse(
         await readFile(candidate, 'utf8'),
       ) as CliPackageManifest;
-      // The source layout nests under `../../`; the bundled layout under `../`.
-      // Either way the first manifest with a version is the CLI's own.
+      // Source and bundled `dist/bin` layouts both reach the CLI manifest via
+      // `../../`; keep the fallback for build layouts that place runtime files
+      // one level below the package root.
       if (pkg.version) return pkg;
     } catch {
       // Try the next source/build-layout candidate.
