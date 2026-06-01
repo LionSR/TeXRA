@@ -444,10 +444,11 @@ function foregroundBindingsText(
   maxColumns?: number,
 ): string {
   const ctrlCBinding = `[Ctrl-C]${ctrlCAction}`;
-  const full = `Use foreground panel shortcuts  ${ctrlCBinding}`;
+  const escBinding = '[Esc]panel';
+  const full = `Use foreground panel shortcuts  ${escBinding}  ${ctrlCBinding}`;
   if (fitsStatusBindings(full, maxColumns)) return full;
 
-  const compact = `Panel shortcuts  ${ctrlCBinding}`;
+  const compact = `${escBinding}  ${ctrlCBinding}`;
   if (fitsStatusBindings(compact, maxColumns)) return compact;
 
   return ctrlCBinding;
