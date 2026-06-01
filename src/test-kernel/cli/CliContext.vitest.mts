@@ -288,6 +288,23 @@ describe('CLI per-stream color resolution', () => {
 
   it('FORCE_COLOR enables color even off a TTY', () => {
     expect(resolveStreamColor(false, { env: { FORCE_COLOR: '1' } })).toBe(true);
+    expect(resolveStreamColor(false, { env: { FORCE_COLOR: 'true' } })).toBe(
+      true,
+    );
+  });
+
+  it('FORCE_COLOR=0 disables color even on a TTY', () => {
+    expect(resolveStreamColor(true, { env: { FORCE_COLOR: '0' } })).toBe(false);
+    expect(resolveStreamColor(true, { env: { FORCE_COLOR: 'false' } })).toBe(
+      false,
+    );
+    expect(resolveStreamColor(true, { env: { FORCE_COLOR: 'no' } })).toBe(
+      false,
+    );
+  });
+
+  it('empty FORCE_COLOR does not force color off a TTY', () => {
+    expect(resolveStreamColor(false, { env: { FORCE_COLOR: '' } })).toBe(false);
   });
 
   it('NO_COLOR wins over FORCE_COLOR', () => {

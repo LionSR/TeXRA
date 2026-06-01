@@ -82,7 +82,8 @@ export interface CliAmbientState {
  *
  * - `forceDisable` ⇒ never color.
  * - `NO_COLOR` (any value) or `TERM=dumb` ⇒ never color.
- * - `FORCE_COLOR` (any value) ⇒ always color, ignoring TTY detection.
+ * - `FORCE_COLOR` nonzero/truthy values ⇒ always color, ignoring TTY
+ *   detection; `0`/`false`/`no` disable color; empty is ignored.
  * - otherwise color only when the destination stream is itself a TTY.
  *
  * `buildCliContext` applies `--no-color` after ambient stream detection so
@@ -104,8 +105,16 @@ export function resolveStreamColor(
   const env = options.env ?? process.env;
   if (options.forceDisable === true) return false;
   if (env.NO_COLOR != null || env.TERM === 'dumb') return false;
-  if (env.FORCE_COLOR != null) return true;
+  const forceColor = parseForceColor(env.FORCE_COLOR);
+  if (forceColor != null) return forceColor;
   return streamIsTty;
+}
+
+function parseForceColor(value: string | undefined): boolean | undefined {
+  if (value == null) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === '') return undefined;
+  return !['0', 'false', 'no'].includes(normalized);
 }
 
 let cachedAmbient: CliAmbientState | undefined;
