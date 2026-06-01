@@ -303,6 +303,10 @@ The `texra` CLI ships an Ink (React) TUI under `packages/cli/src/chat/tui/`. It 
 The `texra` CLI (`packages/cli/`) follows the [Command Line Interface
 Guidelines](https://clig.dev). Preserve these invariants:
 
+- **Don't reinvent the wheel.** Lean on the arg parser (`citty`) and existing
+  libraries — `picocolors` for color detection, `$PAGER`/`less -FIRX` for
+  paging, a small distance lib for spelling suggestions. Don't hand-roll
+  flag/help parsing, color support detection, or paging.
 - **Streams.** stdout carries primary/parseable output; stderr carries logs,
   progress, and diagnostics. Usage shown _on error_ goes to stderr
   (`showUsageStderr`) so `--output-format json|ndjson` stays parseable; explicit
