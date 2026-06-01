@@ -25,7 +25,7 @@ settings:
     - claude_code
     # GitHub subscription (repos, PRs, issues) — opt-in. Disabled by default;
     # enable in Dashboard → Tools and configure a GitHub token in Dashboard →
-    # Git. When disabled by the user, resolveTools() strips this from the
+    # Git. When disabled by the user, resolveAgentTools() strips this from the
     # model's tool list. When enabled but the token/git-repo check has not yet
     # populated the availability cache (i.e. before the Tools dashboard has
     # run its checks), the tool may still appear and calls will fail at
