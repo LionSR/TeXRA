@@ -23,6 +23,7 @@ import {
   cliState,
   NO_BYPASS,
   type BypassState,
+  type StreamSlice,
 } from '../state/cliState';
 import { resolveChildControlStreamTarget } from '../state/childControls';
 import { useLiveNowMs } from '../state/useLiveNowMs';
@@ -454,8 +455,56 @@ function statusBarCanStopStatus(status: StreamStatus | undefined): boolean {
   );
 }
 
+function statusBarCanRepresentFocusedSlice(
+  status: StreamStatus | undefined,
+): boolean {
+  return (
+    status === undefined ||
+    status === STREAM_STATUS.INITIALIZING ||
+    status === STREAM_STATUS.RUNNING ||
+    status === STREAM_STATUS.RESUMING ||
+    status === STREAM_STATUS.WAITING
+  );
+}
+
+function statusBarCanRepresentLiveAncestor(
+  status: StreamStatus | undefined,
+): boolean {
+  return (
+    status === STREAM_STATUS.INITIALIZING ||
+    status === STREAM_STATUS.RUNNING ||
+    status === STREAM_STATUS.RESUMING
+  );
+}
+
 interface StatusBarVisibleStream {
   readonly status: StreamStatus | undefined;
+}
+
+function statusBarFindAncestorStream<T extends StatusBarVisibleStream>({
+  activeStreamId,
+  parentStream,
+  streams,
+  canUseStream,
+}: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly streams: ReadonlyMap<StreamTabId, T>;
+  readonly canUseStream: (stream: T) => boolean;
+}): T | undefined {
+  if (activeStreamId === undefined) return undefined;
+
+  const visited = new Set<StreamTabId>([activeStreamId]);
+  let parentStreamId = parentStream.get(activeStreamId);
+  while (parentStreamId && !visited.has(parentStreamId)) {
+    visited.add(parentStreamId);
+    const parentStreamSlice = streams.get(parentStreamId);
+    if (parentStreamSlice && canUseStream(parentStreamSlice)) {
+      return parentStreamSlice;
+    }
+    parentStreamId = parentStream.get(parentStreamId);
+  }
+  return undefined;
 }
 
 export function statusBarCanStopVisibleRun({
@@ -470,10 +519,38 @@ export function statusBarCanStopVisibleRun({
   readonly streams: ReadonlyMap<StreamTabId, StatusBarVisibleStream>;
 }): boolean {
   if (statusBarCanStopStatus(status)) return true;
-  const parentStreamId =
-    activeStreamId === undefined ? undefined : parentStream.get(activeStreamId);
-  if (parentStreamId === undefined) return false;
-  return statusBarCanStopStatus(streams.get(parentStreamId)?.status);
+  return (
+    statusBarFindAncestorStream({
+      activeStreamId,
+      parentStream,
+      streams,
+      canUseStream: (stream) => statusBarCanStopStatus(stream.status),
+    }) !== undefined
+  );
+}
+
+export function statusBarDisplaySlice({
+  activeStreamId,
+  parentStream,
+  streams,
+}: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+}): StreamSlice | undefined {
+  const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  if (activeSlice && statusBarCanRepresentFocusedSlice(activeSlice.status)) {
+    return activeSlice;
+  }
+  return (
+    statusBarFindAncestorStream({
+      activeStreamId,
+      parentStream,
+      streams,
+      canUseStream: (stream) =>
+        statusBarCanRepresentLiveAncestor(stream.status),
+    }) ?? activeSlice
+  );
 }
 
 export function buildStatusBarDisplay(
@@ -591,6 +668,11 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const caps = useSignal(terminalCapabilities);
   const { columns } = useWindowSize();
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
+  const statusSlice = statusBarDisplaySlice({
+    activeStreamId,
+    parentStream,
+    streams,
+  });
   const subagentControlTarget = resolveChildControlStreamTarget({
     activeStreamId,
     mode: 'subagents',
@@ -599,21 +681,23 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   });
 
   const runStartedAt =
-    slice?.status === STREAM_STATUS.RUNNING ? slice.runStartedAt : undefined;
+    statusSlice?.status === STREAM_STATUS.RUNNING
+      ? statusSlice.runStartedAt
+      : undefined;
   const now = useLiveNowMs(runStartedAt !== undefined, runStartedAt);
 
   const display = buildStatusBarDisplay({
-    status: slice?.status,
+    status: statusSlice?.status,
     elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
     pendingExitHint,
     pendingExitResumeId,
-    bypass: slice?.bypass ?? NO_BYPASS,
-    queuedFollowUpMessages: slice?.queuedFollowUpMessages ?? [],
+    bypass: statusSlice?.bypass ?? NO_BYPASS,
+    queuedFollowUpMessages: statusSlice?.queuedFollowUpMessages ?? [],
     queuedFollowUpPreview: props.queuedFollowUpPreview,
-    usage: slice?.usage,
-    conversation: slice?.conversation,
-    activeSubagents: slice?.activeSubagents.length ?? 0,
-    activeProcesses: slice?.activeProcesses.length ?? 0,
+    usage: statusSlice?.usage,
+    conversation: statusSlice?.conversation,
+    activeSubagents: statusSlice?.activeSubagents.length ?? 0,
+    activeProcesses: statusSlice?.activeProcesses.length ?? 0,
     approvalDepth: approvals,
     subagentControlsAvailable: canShowSubagentControls(
       sessionMeta,
