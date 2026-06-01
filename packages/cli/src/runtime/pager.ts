@@ -67,7 +67,7 @@ export function pageStdout(
     input: `${text}\n`,
     stdio: ['pipe', 'inherit', 'inherit'],
     shell: true,
-    env: options.env ?? readCliEnv(),
+    env: options.env ? { ...readCliEnv(), ...options.env } : readCliEnv(),
   });
 
   if (result.error || result.status === 126 || result.status === 127) {

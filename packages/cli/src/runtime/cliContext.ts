@@ -145,7 +145,7 @@ export function cliEnvValue(key: string): string | undefined {
 }
 
 export function readCliEnv(): Record<string, string | undefined> {
-  return process.env;
+  return { ...process.env };
 }
 
 /** Raw CLI argv (post `node texra` slice). Allowlisted file for `process.argv`. */
