@@ -2,18 +2,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CliContext } from '@cli/runtime/cliContext';
 
-const mocks = vi.hoisted(() => ({
-  executeCliRequest: vi.fn(),
-  expandRunInputs: vi.fn(),
-  getToolUseAgents: vi.fn(),
-  getWorkflowAgents: vi.fn(),
-  initCliPlatform: vi.fn(),
-  installCliApprovalHandlers: vi.fn(),
-  isAuthenticated: vi.fn(),
-  loadAgents: vi.fn(),
-  writeTextStderr: vi.fn(),
-  writeTextStdout: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const stdinInputFile = Object.assign(vi.fn(), { cleanup: vi.fn() });
+  return {
+    executeCliRequest: vi.fn(),
+    expandRunInputs: vi.fn(),
+    getToolUseAgents: vi.fn(),
+    getWorkflowAgents: vi.fn(),
+    initCliPlatform: vi.fn(),
+    installCliApprovalHandlers: vi.fn(),
+    isAuthenticated: vi.fn(),
+    loadAgents: vi.fn(),
+    stdinInputFile,
+    writeTextStderr: vi.fn(),
+    writeTextStdout: vi.fn(),
+  };
+});
 
 vi.mock('@agent/index', () => ({
   getToolUseAgents: mocks.getToolUseAgents,
@@ -102,6 +106,7 @@ vi.mock('@cli/commands/_helpers/runExecution', () => ({
 }));
 
 vi.mock('@cli/commands/_helpers/workflowInputs', () => ({
+  createStdinWorkflowInputMaterializer: vi.fn(() => mocks.stdinInputFile),
   expandRunInputs: mocks.expandRunInputs,
 }));
 
@@ -175,11 +180,15 @@ describe('CLI multi-agent run command', () => {
       ['problem.tex'],
       [],
       '/tmp/project',
-      { allowEmptyInput: true },
+      {
+        allowEmptyInput: true,
+        stdinInputFile: mocks.stdinInputFile,
+      },
     );
     const request = mocks.executeCliRequest.mock.calls[0]?.[0];
     expect(request?.config.instruction).toContain('Primary user input files:');
     expect(request?.config.instruction).toContain('- "problem.tex"');
+    expect(mocks.stdinInputFile.cleanup).toHaveBeenCalledTimes(1);
   });
 
   it('allows instruction-only team runs without input files', async () => {
@@ -200,6 +209,7 @@ describe('CLI multi-agent run command', () => {
     expect(exitCode).toBe(0);
     expect(mocks.expandRunInputs).toHaveBeenCalledWith([], [], '/tmp/project', {
       allowEmptyInput: true,
+      stdinInputFile: mocks.stdinInputFile,
     });
     const request = mocks.executeCliRequest.mock.calls[0]?.[0];
     expect(request?.config.inputFiles).toEqual([]);
@@ -207,6 +217,7 @@ describe('CLI multi-agent run command', () => {
     expect(request?.config.instruction).toContain(
       'Prove that every odd square is congruent to 1 modulo 8.',
     );
+    expect(mocks.stdinInputFile.cleanup).toHaveBeenCalledTimes(1);
   });
 
   it('still requires either an input file or an inline instruction', async () => {
