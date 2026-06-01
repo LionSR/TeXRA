@@ -253,7 +253,7 @@ For good separation of concerns and platform independence, core business logic s
 1. **Never import `vscode` in VS Code-free zones.** See CLAUDE.md "Separation of Concerns: VS Code Coupling" for the full list. The key ones: `src/agent/`, `src/model/`, `src/latex/`, `src/tools/`, `src/controllers/`, `src/shared/`.
 
 2. **Use platform-agnostic helpers instead of VS Code types:**
-   - `isFile(type)` / `isDirectory(type)` from `@common/files/fsEntryType` — not `vscode.FileType.File` / `vscode.FileType.Directory`
+   - `isFile(type)` / `isDirectory(type)` from `@utils/files/fsEntryType` — not `vscode.FileType.File` / `vscode.FileType.Directory`
    - `isFileNotFoundError(err)` from `@common/errors` — not `instanceof vscode.FileSystemError`
    - Use `number` for file type annotations instead of `vscode.FileType` — the numeric values are compatible
 

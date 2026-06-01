@@ -6,9 +6,9 @@ import { z } from 'zod';
 
 // Local imports
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { isDirectory } from '@common/files/fsEntryType';
 import { formatRelativeTime } from '@shared/utils/string';
 import { StorageFS } from '@utils/files';
+import { isDirectory } from '@utils/files/fsEntryType';
 import { splitContentLines } from '@utils/text/stringUtils';
 
 // Local imports - tool core

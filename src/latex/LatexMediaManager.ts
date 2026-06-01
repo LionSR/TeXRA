@@ -7,7 +7,6 @@ import type { AgentTrace } from '@agent/trace';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 
 import { toErrorMessage } from '@common/errors';
-import { isFile } from '@common/files/fsEntryType';
 import { ToolConfig } from '@shared/schemas/toolConfig';
 import {
   TaskRunFileService,
@@ -15,6 +14,7 @@ import {
   pathToLocation,
   type FileLocation,
 } from '@utils/files';
+import { isFile } from '@utils/files/fsEntryType';
 import { getExtensionLowercase, hasExtension } from '@utils/core/pathCore';
 
 // Local file imports

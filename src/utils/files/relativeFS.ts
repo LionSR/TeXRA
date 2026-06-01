@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Platform imports
-import { isFile } from '@common/files/fsEntryType';
+import { isFile } from './fsEntryType';
 
 // Local imports - filesystem
 import { BaseFS } from './baseFS';
