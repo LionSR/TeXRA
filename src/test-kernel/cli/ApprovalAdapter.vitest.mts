@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   appendCliApiSwitchHint,
+  formatAgentProposalApprovalSummary,
   formatRetryRequestMessage,
   formatToolEditApprovalSummary,
   immediateDecisionForApproval,
@@ -10,6 +11,7 @@ import {
 } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import { AGENT_CATEGORY, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import {
   requestToolEditApproval,
   setToolEditApprovalHandler,
@@ -163,6 +165,81 @@ describe('formatToolEditApprovalSummary', () => {
       accepted: true,
       appliedContent: '\\section{Auto-approved}\n',
     });
+  });
+});
+
+describe('formatAgentProposalApprovalSummary', () => {
+  it('formats subagent approvals without raw JSON internals', () => {
+    const summary = formatAgentProposalApprovalSummary({
+      proposalId: 'proposal-1',
+      streamId: 'root@deepseekT#abc',
+      agent: 'review',
+      model: 'deepseekT',
+      instruction:
+        'Please verify the proof carefully.\nReport any gaps or hidden cases.',
+      memories: [],
+      agentCategory: AGENT_CATEGORY.TOOL_USE,
+    });
+
+    expect(summary).toContain(
+      'Agent proposal requested: review (tool-use agent)',
+    );
+    expect(summary).toContain('Model: deepseekT');
+    expect(summary).toContain('Instruction:');
+    expect(summary).toContain('  Please verify the proof carefully.');
+    expect(summary).not.toContain('proposalId');
+    expect(summary).not.toContain('streamId');
+    expect(summary).not.toContain('{');
+  });
+
+  it('bounds long subagent instructions before prompting', () => {
+    const longLine = 'verify '.repeat(200);
+    const instruction = Array.from(
+      { length: 60 },
+      (_, index) => `${index + 1}. ${longLine}`,
+    ).join('\n');
+
+    const summary = formatAgentProposalApprovalSummary({
+      proposalId: 'proposal-1',
+      streamId: 'root@deepseekT#abc',
+      agent: 'review',
+      model: 'deepseekT',
+      instruction,
+      memories: ['/memories/proof-style.md'],
+      workingDirectory: '/tmp/project',
+      agentCategory: AGENT_CATEGORY.TOOL_USE,
+    });
+
+    expect(summary).toContain('Working directory: /tmp/project');
+    expect(summary).toContain('Memories: /memories/proof-style.md');
+    expect(summary).toContain('[line truncated]');
+    expect(summary).toContain('instruction lines hidden');
+    expect(summary).not.toContain(longLine);
+  });
+
+  it('includes workflow proposal file groups', () => {
+    const summary = formatAgentProposalApprovalSummary({
+      proposalId: 'proposal-1',
+      streamId: 'root@deepseekT#abc',
+      agent: 'polish',
+      model: 'deepseekT',
+      instruction: 'Polish the draft and write the revised file.',
+      memories: [],
+      inputFiles: ['draft.tex'],
+      contextFiles: ['notes.md'],
+      mediaFiles: ['figure.png'],
+      outputFiles: ['draft-polished.tex'],
+      toolConfig: DEFAULT_TOOL_CONFIG,
+      agentCategory: AGENT_CATEGORY.WORKFLOW,
+    });
+
+    expect(summary).toContain(
+      'Agent proposal requested: polish (workflow agent)',
+    );
+    expect(summary).toContain('Input: draft.tex');
+    expect(summary).toContain('Context: notes.md');
+    expect(summary).toContain('Media: figure.png');
+    expect(summary).toContain('Output: draft-polished.tex');
   });
 });
 
