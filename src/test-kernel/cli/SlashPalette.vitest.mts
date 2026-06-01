@@ -70,8 +70,8 @@ describe('SlashPalette navigation', () => {
     ).toBe('run');
     expect(
       slashPaletteEnterHintAction({
-        name: 'btw',
-        description: 'queue follow-up',
+        name: 'foo',
+        description: 'takes an argument',
         takesArgs: true,
       }),
     ).toBe('complete');

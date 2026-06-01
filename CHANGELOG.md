@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Improvements
+
+- **Dropped the redundant `/btw` chat command** — queuing a follow-up never needed its own command. Just type your message while a run is active and it's queued automatically; the command only duplicated that path with extra error states.
+
 ### Bug Fixes
 
 - **Progress board never silently hides a run's groups** — if a stage group's parent is missing from a stream (e.g. a stale cross-trace id), the group and everything under it now render at the top of the transcript instead of vanishing. Paired with giving each run its own private stage scope so a stage from one run can no longer leak as the parent of another.

@@ -126,15 +126,6 @@ function formatQueuedFollowUpNotice(line: string): string {
   )}`;
 }
 
-export function parseBtwFollowUpMessage(line: string): string | undefined {
-  const parsed = parseSlashInput(line);
-  if (!parsed || parsed.name.toLowerCase() !== 'btw') return undefined;
-  return parsed.remainder.trim();
-}
-
-export const BTW_IDLE_MESSAGE =
-  'No active run to attach a follow-up to. Send a normal message to start a run.';
-
 export interface ClearableTuiSessionState {
   streamId: StreamTabId | undefined;
   executionId: string | undefined;
@@ -252,16 +243,6 @@ export function chatTuiShouldAnnounceQueuedFollowUp(
 ): boolean {
   if (!targetStreamId) return true;
   return !chatTuiStreamStatuses(targetStreamId).includes(STREAM_STATUS.WAITING);
-}
-
-export function chatTuiCanSubmitBtwFollowUp(
-  session: PendingTuiRunSessionState,
-): boolean {
-  return (
-    !chatTuiCanStartRootRun(session) ||
-    chatTuiActiveChildFollowUpTarget() !== undefined ||
-    chatTuiRejectedChildFollowUpTarget() !== undefined
-  );
 }
 
 interface SlashCommandContext {
@@ -1064,21 +1045,6 @@ export async function runChat(
   };
 
   const handleSubmittedLine = async (line: string): Promise<void> => {
-    const btwMessage = parseBtwFollowUpMessage(line);
-    if (btwMessage !== undefined) {
-      if (!btwMessage) {
-        appendLocalUserTranscript(line.trim());
-        appendLocalAssistantTranscript('Usage: /btw <message>');
-        return;
-      }
-      if (!chatTuiCanSubmitBtwFollowUp(session)) {
-        appendLocalUserTranscript(line.trim());
-        appendLocalAssistantTranscript(BTW_IDLE_MESSAGE);
-        return;
-      }
-      await submitChatMessage(btwMessage);
-      return;
-    }
     if (await handleTuiSlashCommand(line, slashCommandContext())) {
       return;
     }
