@@ -472,8 +472,9 @@ const YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 function openCliApprovalPolicyForm(context: SlashCommandContext): void {
   cliState.activeForm.set({
     commandName: 'approval',
-    render: (close) => (
+    render: (close, availableRows) => (
       <ApprovalPolicyForm
+        availableRows={availableRows}
         currentPolicy={context.getApprovalPolicy()}
         onSelect={(policy) => {
           context.setApprovalPolicy(policy);
