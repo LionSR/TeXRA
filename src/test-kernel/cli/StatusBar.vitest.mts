@@ -584,6 +584,56 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('[/model]models');
   });
 
+  it('keeps the Ctrl-C action visible in narrow foreground panels', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 3,
+      activeProcesses: 1,
+      approvalDepth: 0,
+      subagentControlsAvailable: true,
+      hasMultipleStreams: true,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      ctrlCAction: 'stop',
+      shortcutsActive: false,
+      width: 40,
+    });
+
+    expect(display.bindings).toBe('Panel shortcuts  [Ctrl-C]stop');
+  });
+
+  it('falls back to the bare Ctrl-C action in tiny foreground panels', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 3,
+      activeProcesses: 1,
+      approvalDepth: 0,
+      subagentControlsAvailable: true,
+      hasMultipleStreams: true,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      ctrlCAction: 'stop',
+      shortcutsActive: false,
+      width: 15,
+    });
+
+    expect(display.bindings).toBe('[Ctrl-C]stop');
+  });
+
   it('shows a live elapsed segment only while running', () => {
     const runningInput = {
       status: STREAM_STATUS.RUNNING,
