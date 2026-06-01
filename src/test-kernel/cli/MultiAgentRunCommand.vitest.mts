@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     installCliApprovalHandlers: vi.fn(),
     isAuthenticated: vi.fn(),
     loadAgents: vi.fn(),
+    planCliMultiAgentPresetRun: vi.fn(),
     stdinInputFile,
     writeTextStderr: vi.fn(),
     writeTextStdout: vi.fn(),
@@ -65,24 +66,7 @@ vi.mock('@cli/runtime/multiAgentPresets', () => ({
   formatCliMultiAgentPresetDetails: vi.fn(() => ''),
   formatCliMultiAgentPresetInspection: vi.fn(() => ''),
   formatCliMultiAgentPresetList: vi.fn(() => ''),
-  planCliMultiAgentPresetRun: vi.fn(() => ({
-    preset: {
-      id: 'mathematician',
-      name: 'Mathematician',
-      source: 'built-in',
-    },
-    rootAgent: {
-      name: 'orchestrator',
-      category: 'toolUse',
-      source: 'builtInToolUse',
-      path: '/agents/orchestrator.yaml',
-      tools: ['delegate_agent'],
-    },
-    missingWorkflowAgents: [],
-    missingToolUseAgents: [],
-    workflowAgentKeys: [],
-    toolUseAgentKeys: ['builtInToolUse:orchestrator'],
-  })),
+  planCliMultiAgentPresetRun: mocks.planCliMultiAgentPresetRun,
   readCliMultiAgentPresets: vi.fn(() => []),
   withCliMultiAgentPresetVisibility: vi.fn(
     (_plan: unknown, run: () => Promise<unknown>) => run(),
@@ -146,6 +130,24 @@ describe('CLI multi-agent run command', () => {
         tools: ['delegate_agent'],
       },
     ]);
+    mocks.planCliMultiAgentPresetRun.mockReturnValue({
+      preset: {
+        id: 'mathematician',
+        name: 'Mathematician',
+        source: 'built-in',
+      },
+      rootAgent: {
+        name: 'orchestrator',
+        category: 'toolUse',
+        source: 'builtInToolUse',
+        path: '/agents/orchestrator.yaml',
+        tools: ['delegate_agent'],
+      },
+      missingWorkflowAgents: [],
+      missingToolUseAgents: [],
+      workflowAgentKeys: [],
+      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+    });
     mocks.isAuthenticated.mockResolvedValue(false);
     mocks.executeCliRequest.mockResolvedValue({
       result: {
@@ -234,5 +236,116 @@ describe('CLI multi-agent run command', () => {
       }),
     ).rejects.toThrow(/Provide --input or --instruction/);
     expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+  });
+
+  it('makes signed-out preset fallback to one root agent explicit', async () => {
+    mocks.planCliMultiAgentPresetRun.mockReturnValue({
+      preset: {
+        id: 'mathematician',
+        name: 'Mathematician',
+        source: 'built-in',
+      },
+      rootAgent: {
+        name: 'lean',
+        category: 'toolUse',
+        source: 'builtInToolUse',
+        path: '/agents/lean.yaml',
+        tools: [],
+      },
+      missingWorkflowAgents: ['generic', 'devise', 'apply'],
+      missingToolUseAgents: ['simplifier', 'progressCheck', 'orchestrator'],
+      workflowAgentKeys: [],
+      toolUseAgentKeys: ['builtInToolUse:lean'],
+    });
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    const exitCode = await runMultiAgentPreset(cliContext(), {
+      preset: 'mathematician',
+      inputFiles: [],
+      contextFiles: [],
+      model: 'deepseekT',
+      instruction: 'Solve a short math problem.',
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'WARN preset mathematician references unavailable agents: workflow:generic, workflow:devise, workflow:apply, tool-use:simplifier, tool-use:progressCheck, tool-use:orchestrator',
+    );
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'WARN team delegation unavailable for preset mathematician; running only root agent lean. Enable a delegating team root or pass --agent to choose one.',
+    );
+  });
+
+  it('keeps degraded-team wording when the root can delegate', async () => {
+    mocks.planCliMultiAgentPresetRun.mockReturnValue({
+      preset: {
+        id: 'mathematician',
+        name: 'Mathematician',
+        source: 'built-in',
+      },
+      rootAgent: {
+        name: 'orchestrator',
+        category: 'toolUse',
+        source: 'builtInToolUse',
+        path: '/agents/orchestrator.yaml',
+        tools: ['delegate_agent'],
+      },
+      missingWorkflowAgents: ['generic'],
+      missingToolUseAgents: ['simplifier'],
+      workflowAgentKeys: ['builtIn:devise'],
+      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+    });
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    const exitCode = await runMultiAgentPreset(cliContext(), {
+      preset: 'mathematician',
+      inputFiles: [],
+      contextFiles: [],
+      model: 'deepseekT',
+      instruction: 'Solve a short math problem.',
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'WARN preset mathematician is degraded; running root agent orchestrator with 1 available team agent.',
+    );
+  });
+
+  it('does not show non-delegating fallback text for a delegating root', async () => {
+    mocks.planCliMultiAgentPresetRun.mockReturnValue({
+      preset: {
+        id: 'mathematician',
+        name: 'Mathematician',
+        source: 'built-in',
+      },
+      rootAgent: {
+        name: 'orchestrator',
+        category: 'toolUse',
+        source: 'builtInToolUse',
+        path: '/agents/orchestrator.yaml',
+        tools: ['delegate_agent'],
+      },
+      missingWorkflowAgents: ['generic'],
+      missingToolUseAgents: ['simplifier'],
+      workflowAgentKeys: [],
+      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+    });
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    const exitCode = await runMultiAgentPreset(cliContext(), {
+      preset: 'mathematician',
+      inputFiles: [],
+      contextFiles: [],
+      model: 'deepseekT',
+      instruction: 'Solve a short math problem.',
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'WARN preset mathematician is missing team agents; running delegating root agent orchestrator.',
+    );
+    expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
+      expect.stringContaining('Enable a delegating team root'),
+    );
   });
 });
