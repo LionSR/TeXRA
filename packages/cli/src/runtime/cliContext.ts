@@ -111,29 +111,66 @@ export function isTexraCliEntrypointPath(entrypointPath: string): boolean {
   );
 }
 
-let cachedVersion: Promise<string> | undefined;
-
-export function readCliVersion(): Promise<string> {
-  cachedVersion ??= resolveCliVersion();
-  return cachedVersion;
+interface CliPackageManifest {
+  readonly version?: string;
+  readonly bugs?: { readonly url?: string };
 }
 
-async function resolveCliVersion(): Promise<string> {
+async function readCliPackageManifest(): Promise<
+  CliPackageManifest | undefined
+> {
   const candidates = [
     new URL('../../package.json', import.meta.url),
     new URL('../package.json', import.meta.url),
   ];
   for (const candidate of candidates) {
     try {
-      const pkg = JSON.parse(await readFile(candidate, 'utf8')) as {
-        version?: string;
-      };
-      if (pkg.version) return pkg.version;
+      const pkg = JSON.parse(
+        await readFile(candidate, 'utf8'),
+      ) as CliPackageManifest;
+      // The source layout nests under `../../`; the bundled layout under `../`.
+      // Either way the first manifest with a version is the CLI's own.
+      if (pkg.version) return pkg;
     } catch {
       // Try the next source/build-layout candidate.
     }
   }
-  return 'unknown';
+  return undefined;
+}
+
+let cachedVersion: Promise<string> | undefined;
+
+export function readCliVersion(): Promise<string> {
+  cachedVersion ??= readCliPackageManifest().then(
+    (pkg) => pkg?.version ?? 'unknown',
+  );
+  return cachedVersion;
+}
+
+let cachedBugsUrl: Promise<string | undefined> | undefined;
+
+/**
+ * The issue-tracker URL declared in the CLI's `package.json` (`bugs.url`), used
+ * to point users at the bug tracker on an unexpected crash. Read from the
+ * manifest rather than hard-coded so it tracks the published metadata.
+ */
+export function readCliBugsUrl(): Promise<string | undefined> {
+  cachedBugsUrl ??= readCliPackageManifest().then((pkg) => pkg?.bugs?.url);
+  return cachedBugsUrl;
+}
+
+/**
+ * The follow-up line appended to the top-level crash message pointing users at
+ * the issue tracker. Returns `undefined` for usage errors (so the exit-2 path
+ * stays clean) or when no tracker URL is configured — only an UNEXPECTED crash
+ * with a known `bugs.url` gets the report prompt.
+ */
+export function formatCrashReportLine(
+  error: unknown,
+  bugsUrl: string | undefined,
+): string | undefined {
+  if (error instanceof CliUsageError || !bugsUrl) return undefined;
+  return `This looks like a bug — please report it at ${bugsUrl} (include the command and the message above).`;
 }
 
 export interface CliGlobalArgs {

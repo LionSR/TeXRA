@@ -13,6 +13,7 @@ import {
   normalizeRootShortcuts,
   reorderGlobalFlags,
 } from '@cli/commands/_helpers/dispatch';
+import { CliUsageError, formatCrashReportLine } from '@cli/runtime/cliContext';
 import {
   formatCliModelListError,
   isCliFetchStackLog,
@@ -554,6 +555,26 @@ describe('CLI model flag validation contract', () => {
 describe('CLI login arguments', () => {
   it('prefers explicit provider flags over positional providers', () => {
     expect(resolveLoginProvider('google', 'github')).toBe('github');
+  });
+});
+
+describe('CLI crash report line', () => {
+  const bugsUrl = 'https://github.com/texra-ai/texra-issues/issues';
+
+  it('points unexpected crashes at the issue tracker', () => {
+    expect(formatCrashReportLine(new Error('boom'), bugsUrl)).toBe(
+      `This looks like a bug — please report it at ${bugsUrl} (include the command and the message above).`,
+    );
+  });
+
+  it('does not append a report link for usage errors', () => {
+    expect(
+      formatCrashReportLine(new CliUsageError('bad flag'), bugsUrl),
+    ).toBeUndefined();
+  });
+
+  it('omits the report link when no tracker URL is configured', () => {
+    expect(formatCrashReportLine(new Error('boom'), undefined)).toBeUndefined();
   });
 });
 
