@@ -18,6 +18,31 @@ function wrap(text: string, cols: number, prefix = ''): string[] {
     );
 }
 
+function leadingWhitespacePrefix(line: string): string {
+  return line.match(/^\s+/)?.[0] ?? '';
+}
+
+function wrapDisplayLine(line: string, cols: number): string[] {
+  if (line.startsWith('⎿ ')) {
+    const width = Math.max(1, cols - 2);
+    return wrapAnsiToWidth(line.slice(2), width)
+      .split('\n')
+      .map((part, index) => `${index === 0 ? '⎿ ' : '  '}${part}`);
+  }
+
+  const prefix = leadingWhitespacePrefix(line);
+  if (!prefix) return wrapAnsiToWidth(line, cols).split('\n');
+
+  const width = Math.max(1, cols - prefix.length);
+  return wrapAnsiToWidth(line.slice(prefix.length), width)
+    .split('\n')
+    .map((part) => `${prefix}${part}`);
+}
+
+function wrapLines(lines: readonly string[], cols: number): string[] {
+  return lines.flatMap((line) => wrapDisplayLine(line, cols));
+}
+
 export function transcriptEntryLines(
   entry: ConversationEntry,
   cols: number,
@@ -25,10 +50,12 @@ export function transcriptEntryLines(
   switch (entry.role) {
     case 'tool':
       return entry.toolUse
-        ? toolUseDisplayLines(entry.toolUse, { elide: false })
+        ? wrapLines(toolUseDisplayLines(entry.toolUse, { elide: false }), cols)
         : [];
     case 'process':
-      return entry.process ? completedProcessDisplayLines(entry.process) : [];
+      return entry.process
+        ? wrapLines(completedProcessDisplayLines(entry.process), cols)
+        : [];
     case 'user':
       return wrap(entry.text, cols, '› ');
     case 'error':
