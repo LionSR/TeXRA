@@ -63,12 +63,10 @@ import {
   chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
   chatTuiCanStartRootRun,
-  chatTuiCanSubmitBtwFollowUp,
   chatTuiActiveChildFollowUpTarget,
   chatTuiRejectedChildFollowUpTarget,
   chatTuiShouldAnnounceQueuedFollowUp,
   clearTuiSessionRunState,
-  parseBtwFollowUpMessage,
 } from '@cli/chat/tui/runChatTui';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
@@ -986,50 +984,6 @@ describe('CLI TUI row allocation', () => {
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
     setParentStream(child1, root);
     expect(chatTuiShouldAnnounceQueuedFollowUp(child1)).toBe(false);
-  });
-
-  it('parses /btw as an explicit follow-up message', () => {
-    expect(parseBtwFollowUpMessage('/btw keep this aside')).toBe(
-      'keep this aside',
-    );
-    expect(parseBtwFollowUpMessage('/BTW   Keep casing')).toBe('Keep casing');
-    expect(parseBtwFollowUpMessage('/btw')).toBe('');
-    expect(parseBtwFollowUpMessage('ordinary prompt')).toBeUndefined();
-    expect(parseBtwFollowUpMessage('/status')).toBeUndefined();
-  });
-
-  it('does not treat idle /btw input as a new root run', () => {
-    const runPromise = Promise.resolve();
-
-    expect(
-      chatTuiCanSubmitBtwFollowUp({
-        runCompleted: false,
-        runPromise: undefined,
-      }),
-    ).toBe(false);
-    expect(
-      chatTuiCanSubmitBtwFollowUp({
-        runCompleted: false,
-        runPromise,
-      }),
-    ).toBe(true);
-    expect(
-      chatTuiCanSubmitBtwFollowUp({
-        runCompleted: true,
-        runPromise,
-      }),
-    ).toBe(false);
-
-    cliState.activeStreamId.set(child1);
-    setParentStream(child1, root);
-    patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
-
-    expect(
-      chatTuiCanSubmitBtwFollowUp({
-        runCompleted: true,
-        runPromise,
-      }),
-    ).toBe(true);
   });
 
   it('clears stale resume ids when clearing chat session run state', () => {
