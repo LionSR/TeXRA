@@ -307,7 +307,7 @@ these invariants, and treat the numbered list as the open backlog.
 **Invariants to preserve (don't regress):**
 
 - **Streams.** stdout carries primary/parseable output; stderr carries logs,
-  progress, and diagnostics. Usage shown *on error* goes to stderr
+  progress, and diagnostics. Usage shown _on error_ goes to stderr
   (`showUsageStderr`) so `--output-format json|ndjson` stays parseable; explicit
   `--help` prints to stdout. Don't move usage-on-error to stdout.
 - **Exit codes.** Use the canonical `CliExitCode` (`runtime/exitCodes.ts`):
@@ -332,7 +332,7 @@ these invariants, and treat the numbered list as the open backlog.
    styled text is written to **stdout** (`runtime/doctor.ts` `writeDoctorReport`).
    So `texra doctor | cat` (stderr still a TTY) emits raw ANSI, and
    `texra doctor 2>/dev/null` strips color from a TTY stdout. Track stdout/stderr
-   color independently and gate primary-output color on the *destination* stream.
+   color independently and gate primary-output color on the _destination_ stream.
    `doctor` is currently the only styled-stdout path (progress + update-checker
    correctly write to stderr).
 2. **[ux] No "did you mean …" for mistyped subcommands.** `formatUnknownCliCommand`
