@@ -35,8 +35,15 @@ export function getPromptFileName(file: string): string {
 
 /**
  * Get XML formatted string from multiple files
+ *
+ * Best-effort: a file that cannot be read (moved, renamed, or deleted since the
+ * config was saved) is skipped with a warning rather than rejecting the whole
+ * batch. This mirrors {@link setVarFromFile}, which already tolerates missing
+ * files, and keeps prompt-var assembly from hard-failing an agent launch/resume
+ * when an input no longer exists on disk.
+ *
  * @param files List of file paths
- * @returns XML formatted string containing all file contents, or null if no files
+ * @returns XML formatted string of the readable files, or null if none are readable
  */
 export async function getXmlFormatFromFiles(
   files: string[],
@@ -47,11 +54,20 @@ export async function getXmlFormatFromFiles(
 
   const xmlContents = await Promise.all(
     files.map(async (file) => {
-      const content = await WorkspaceFS.read(file);
-      return `<document name="${getPromptFileName(file)}">\n${content}\n</document>`;
+      try {
+        const content = await WorkspaceFS.read(file);
+        return `<document name="${getPromptFileName(file)}">\n${content}\n</document>`;
+      } catch (err) {
+        logger.warn(
+          CHANNEL,
+          `Skipping unreadable file in prompt context: ${file} (${String(err)})`,
+        );
+        return null;
+      }
     }),
   );
-  return xmlContents.join('\n');
+  const readable = xmlContents.filter((doc): doc is string => doc !== null);
+  return readable.length > 0 ? readable.join('\n') : null;
 }
 
 /**
