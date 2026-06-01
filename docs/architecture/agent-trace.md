@@ -18,9 +18,9 @@ from TeXRA-specific helpers; both share one runtime implementation.
                           │  src/logger/TexraTrace        (TYPE)   │
                           │  ────────────────────────────────────  │
                           │  • logError / logProgress              │
-                          │  • logScratchpad / latexDiff           │
-                          │  • missingOutputs / userMessage        │
-                          │  • filesLoaded / logFileCategory       │
+                          │  • latexDiff / missingOutputs          │
+                          │  • userMessage / filesLoaded           │
+                          │  • logFileCategory                     │
                           │  • emitToolUse / updateToolUse         │
                           │  • startGroup / endGroup / statistics  │
                           │  • debugInternal / logInternal / …     │
@@ -81,6 +81,12 @@ from TeXRA-specific helpers; both share one runtime implementation.
             │                     │                       │  drives progress view   │
             └─────────────────────┘                       └─────────────────────────┘
 ```
+
+Not every product event needs a named helper. Low-traffic, TeXRA-specific
+arms ride the `domain` escape hatch directly — for example, scratchpad
+content is emitted with `trace.domain({ key: 'scratchpad', text })`
+(see `src/agent/modelHandlers/utils/fileContentUtils.ts`) instead of a
+dedicated `logScratchpad` method.
 
 ## Where things live
 
