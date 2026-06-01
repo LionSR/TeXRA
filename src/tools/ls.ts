@@ -6,7 +6,6 @@ import { z } from 'zod';
 
 // Local imports - tools
 import { toErrorMessage } from '@common/errors';
-import { isFile, isDirectory } from '@utils/files/fsEntryType';
 import { ToolError, ToolResult } from '@tools/result';
 import { formatToolOutput, pluralize } from '@tools/formatting';
 import {
@@ -17,6 +16,7 @@ import {
 import { createGlobMatcher } from '@tools/utils';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { WorkspaceFS } from '@utils/files';
+import { isFile, isDirectory } from '@utils/files/fsEntryType';
 import { toPosixPath } from '@utils/core/pathCore';
 
 // Local file imports

@@ -9,7 +9,6 @@ import * as path from 'path';
 
 import pMap from 'p-map';
 
-import { isDirectory, isSymlink } from '@utils/files/fsEntryType';
 import type { MemoryPreview, MemoryViewItem } from '@shared/schemas';
 import {
   MEMORY_STORAGE_ROOT,
@@ -20,6 +19,7 @@ import {
 import { relativeToDisplayPath } from '@tools/memory/memoryUtils';
 import { parseFrontmatter, formatAttribution } from '@tools/memory/memoryMeta';
 import { StorageFS } from '@utils/files';
+import { isDirectory, isSymlink } from '@utils/files/fsEntryType';
 import {
   normalizeLineEndings,
   splitContentLines,
