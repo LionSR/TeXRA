@@ -5,7 +5,7 @@ import { type CliApiMode } from '@cli/runtime/apiAccessMode';
 import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
-import { FormFrame } from './_shared/FormFrame';
+import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
 import { isCompactFormRows } from './_shared/selectWindow';
 
 export interface ApiModeFormProps {
@@ -49,7 +49,7 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
 
   if (isCompactFormRows(props.availableRows)) {
     return (
-      <FormFrame color="cyan" title="/api · Esc close" showCloseHint={false}>
+      <FormFrame color="cyan" title="/api" showCloseHint={false}>
         <Select
           items={items}
           activeValue={props.currentMode}
@@ -58,6 +58,7 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
           onSelect={props.onSelect}
           onCancel={props.onCancel}
         />
+        <CompactFormKeyHints primary={{ key: '1-2/Enter', action: 'select' }} />
       </FormFrame>
     );
   }
