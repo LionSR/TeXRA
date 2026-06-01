@@ -292,7 +292,7 @@ describe('CLI conversation transcript splitting', () => {
     expect(again).toHaveLength(1);
   });
 
-  it('caps static transcript rows for short terminal layouts', () => {
+  it('uses a compact header but preserves static transcript entries for short terminal layouts', () => {
     const user = entry('u1', 'user', 'What is a tensor network?', true);
     const assistant = entry('a1', 'assistant', 'A decomposition.', true);
 
@@ -305,13 +305,13 @@ describe('CLI conversation transcript splitting', () => {
       width: 80,
     });
 
-    expect(compact).toHaveLength(2);
+    expect(compact).toHaveLength(3);
     expect(compact[0]).toMatchObject({
       id: 'session-header',
       kind: 'header',
       compact: true,
     });
-    expect(compact[1]?.id).toBe('u1');
+    expect(compact.slice(1).map((item) => item.id)).toEqual(['u1', 'a1']);
 
     expect(
       appendStaticTranscriptItems({
@@ -321,11 +321,11 @@ describe('CLI conversation transcript splitting', () => {
         meta: SESSION_META,
         maxRows: 0,
         width: 80,
-      }),
-    ).toEqual([]);
+      }).map((item) => item.id),
+    ).toEqual(['u1', 'a1']);
   });
 
-  it('preserves static transcript order when one entry does not fit', () => {
+  it('preserves static transcript order when an entry exceeds the compact row budget', () => {
     const first = entry('u1', 'user', 'first', true);
     const large = entry('a1', 'assistant', 'line 1\nline 2\nline 3', true);
     const later = entry('u2', 'user', 'later', true);
@@ -339,17 +339,7 @@ describe('CLI conversation transcript splitting', () => {
       width: 80,
     });
 
-    expect(compact.map((item) => item.id)).toEqual(['session-header', 'u1']);
-
-    const expanded = appendStaticTranscriptItems({
-      activeStreamId: STREAM_ID,
-      currentItems: compact,
-      streams: streamsFromEntries(STREAM_ID, [first, large, later]),
-      meta: SESSION_META,
-      width: 80,
-    });
-
-    expect(expanded.map((item) => item.id)).toEqual([
+    expect(compact.map((item) => item.id)).toEqual([
       'session-header',
       'u1',
       'a1',
