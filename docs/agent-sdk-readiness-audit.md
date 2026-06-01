@@ -70,20 +70,23 @@ the `@agent/runtime` facade barrel (§3.1, adds indirection), the `bridgeState`
 | Logger          | `src/logger/` + `src/agent/trace/`                     | ~1.5k LOC, 14 files | Trace event stream + host sinks                   |
 | Event bus       | `src/eventBus/`                                        | ~0.3k LOC           | Progress/UI events                                |
 
-**The run call path (verified):**
+**The run call path (verified — entry renamed since 2026-05-30, see §9):**
 
 ```
-executeCommand.ts:36 (ext)  ─┐
-agentsRun/multiAgent (cli) ──┤→ runValidatedExecutionRequest (runExecutionRequest.ts:18)
-                              │     → executeAgent (executeAgent.ts:376)
-                              │         → buildAgentLaunchContext (AgentLaunchContext.ts:386)
+executeCommand.ts:36 (ext)  ─┐   validateExecutionRequest (executionRequests.ts:24)
+agentsRun/multiAgent (cli) ──┤→  runAgent (runAgent.ts:32)
+                              │     → executeAgent (executeAgent.ts)
+                              │         → buildAgentLaunchContext (AgentLaunchContext.ts)
                               │         → withExecutionRunContext (AsyncLocalStorage)
                               │         → branch on agentCategory:
                               │             toolUse  → runToolUseFlow   → PersistedFlow.run
                               │             workflow → runReflectionFlow → RoundPersistedFlow.run
 ```
 
-Both hosts converge on one core function — a genuine strength.
+Both hosts converge on one core function — a genuine strength. The curated
+`@texra/core` barrel now re-exports this entry (`validateExecutionRequest` +
+`runAgent`, plus the lower-level `runAgentStream`) as the single public surface
+— see §9.
 
 ---
 
@@ -532,3 +535,70 @@ serve different consumer classes and must not be merged (proposal "Rejected find
 per-run/session handle) and three small, independently-shippable tidies (§2.6 relocate,
 §4 usage de-dup, redaction-contract doc). No rewrite warranted; the codebase has the structure it
 would have had if designed with these hosts in mind.
+
+---
+
+## 10. Re-verification addendum — 2026-06-01
+
+A fourth independent pass (agent core/runtime, model handlers, logger/trace, and
+platform/surface, fanned out across four parallel explorers) re-audited the same
+surfaces against the current tree. **The 2026-05-28/29/30 findings hold; no new
+structural gaps surfaced.** TeXRA remains well-architected and SDK-aligned. The
+notable change since 2026-05-30 is that the top open surface item has been
+**resolved**, plus one entrypoint rename that dated the §1 diagram.
+
+**Resolved since last pass — §8 `packages/core` surface (was a stub, now a real barrel):**
+
+`packages/core/src/index.ts` is no longer `corePackageReady = true`. It is now a
+curated **115-line `@texra/core` barrel** (29 export lines, 8 labeled sections:
+platform composition root → config/identity → request building → running an agent
+→ host port → `AgentTrace` telemetry → agent registry → execution storage). It is
+the single host-neutral public surface §8 asked for — the package typechecks with
+only `@types/node`, so any `vscode` leak into the surface fails the build. This
+**closes the §8 recommendation** ("either populate it as a barrel … or drop it");
+the team populated it. Deep `@agent/*` imports still work and are adopted
+incrementally, as the module's own docstring states.
+
+**Entrypoint rename (dates the §1 diagram, now corrected above):**
+
+The canonical run entry the prior passes called `runValidatedExecutionRequest`
+(`runExecutionRequest.ts:18`) has been split/renamed into the two-tier API the
+`@texra/core` barrel now exposes: `validateExecutionRequest`
+(`core/execution/executionRequests.ts:24`) → `runAgent` (`runtime/runAgent.ts:32`),
+with the lower-level streaming engine `executeAgent` re-exported as `runAgentStream`.
+This is the deliberate, _documented_ high-level/low-level split (`runAgent.ts:19-31`),
+not accidental duplication — `runAgent` adds only id-gen + `registerExecution` +
+the workflow-output callback over `executeAgent`. §1 updated to match.
+
+**Pending items re-confirmed present (paths refreshed where drifted):**
+
+- **§2.6** — `src/agent/modelHandlers/modelHandlerValidation.ts` still sits in the
+  dispatch dir. Still recommended to relocate to `test-kernel/` and inject.
+- **§3.1** — no `@agent/runtime/index.ts` facade barrel yet. _Reduced priority:_ the
+  new `@texra/core` barrel now provides the package-level shielded surface that §3.1's
+  underlying concern (no obvious public runtime subset) was really about; a separate
+  per-directory runtime barrel is now optional polish, not a gap.
+- **§4** — token usage is **still double-emitted**. `UsageMonitor` relocated from
+  `core/usage/` to `src/agent/utils/UsageMonitor.ts`; the two emissions are now
+  `runtimeHost.emit('updateStreamUsage', …)` at `:155` and `logger.usage(payload, …)`
+  at `:164`. The single-source-of-truth consolidation onto `AgentTrace` remains open.
+- **§5** — no first-class `delegateTo(...)` primitive (`grep delegateTo src/** packages/**`
+  empty); delegation remains a tool call inside the LLM loop. Subagent mechanism otherwise
+  intact (delegation tools, depth tracking, parent-linked spawns, multi-agent presets).
+- **§7** — holds. The provider-identity getters (`ModelHandler.ts:406-431`) survive only
+  as the explicitly-endorsed display allow-list: their sole callers outside the handler
+  hierarchy are the template flags at `AgentLaunchContext.ts:263-265` → `userVars.ts:167-169`
+  (`IS_OPENAI/ANTHROPIC/GOOGLE_MODEL`). No behavioral dispatch on identity remains.
+
+**Cross-cutting confirmation (model handlers, logger/trace):** Both layers re-audited
+clean this pass and need no change. The model-handler factory (`ModelFactory.ts`) is a
+single-purpose three-path router (Responses-API / OpenRouter / direct), usage is
+normalized once through `support/UsageNormalizer`, and tool conversion shares one schema
+normalizer across providers. The logger stays SDK/product-free (`logger/index.ts` is a
+3-line re-export; `createChannelTrace`/`attachChannelSubscriber` are justified DRY
+composition, not indirection), with `AgentTrace` as the single per-run event channel and
+`ProgressEventBus` orthogonal — the only genuine overlap is the §4 usage double-emit.
+
+**Net:** the audit's "incremental, not structural" thesis (§0) is reaffirmed, and the
+ledger shrinks — §8 resolved, §3.1 downgraded to optional. Remaining open work is §2.6
+(relocate), §4 (one consumer rewire), and §5 (formalize the subagent primitive).
