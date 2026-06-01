@@ -1,5 +1,5 @@
 diff --git a/build/ink.js b/build/ink.js
-index b8fd45cc9..3c8a9a99c 100644
+index b8fd45cc990adbc080eff28fc37463cd91337dff..3c8a9a99cc9fd2f5f524905ff61df0139f82da05 100644
 --- a/build/ink.js
 +++ b/build/ink.js
 @@ -261,9 +261,14 @@ export default class Ink {
@@ -21,7 +21,7 @@ index b8fd45cc9..3c8a9a99c 100644
              this.lastOutputToRender = '';
          }
 diff --git a/build/log-update.js b/build/log-update.js
-index cdb5fc41f..5b0eaee8b 100644
+index cdb5fc41f158304c4c4f230a765065ab1fe0a2f7..1ab7877f6bcfa7d33aead4af4b37adc8a67c89c7 100644
 --- a/build/log-update.js
 +++ b/build/log-update.js
 @@ -1,6 +1,31 @@
@@ -65,7 +65,7 @@ index cdb5fc41f..5b0eaee8b 100644
 +    // line count (which under-erases on shrink and leaves residue). (TeXRA patch)
 +    render.clearWidthAware = (columns) => {
 +        const physical = physicalLineCount(previousOutput, columns);
-+        const prefix = buildReturnToBottomPrefix(cursorWasShown, previousLineCount, previousCursorPosition);
++        const prefix = buildReturnToBottomPrefix(cursorWasShown, physical, previousCursorPosition);
 +        stream.write(prefix + ansiEscapes.eraseLines(physical));
 +        previousOutput = '';
 +        previousLineCount = 0;
@@ -82,7 +82,7 @@ index cdb5fc41f..5b0eaee8b 100644
 +    // Width-aware clear for terminal resizes (see createStandard). (TeXRA patch)
 +    render.clearWidthAware = (columns) => {
 +        const physical = physicalLineCount(previousOutput, columns);
-+        const prefix = buildReturnToBottomPrefix(cursorWasShown, previousLines.length, previousCursorPosition);
++        const prefix = buildReturnToBottomPrefix(cursorWasShown, physical, previousCursorPosition);
 +        stream.write(prefix + ansiEscapes.eraseLines(physical));
 +        previousOutput = '';
 +        previousLines = [];
