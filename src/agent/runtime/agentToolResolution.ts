@@ -3,12 +3,15 @@
  *
  * The pipeline, in order:
  *   1. Start with the tool names declared in the agent YAML.
- *   2. Strip user-disabled tools (settings dashboard toggle).
- *   3. Strip tools whose external dependency is unavailable (probed at startup).
- *   4. Strip delegation tools when the nesting depth limit is reached.
- *   5. Strip approval-gated tools when approval prompts are unavailable
+ *   2. Strip delegation tools when the nesting depth limit is reached.
+ *   3. Strip approval-gated tools when approval prompts are unavailable
  *      (e.g. a subagent running without an interactive approval channel).
- *   6. Auto-inject conditional tools (memory, odyssey, etc.) registered at startup.
+ *   4. Strip user-disabled tools (settings dashboard toggle).
+ *   5. Strip tools whose external dependency is unavailable (probed at startup).
+ *   6. Auto-inject conditional tools (memory, odyssey, etc.) registered at startup;
+ *      injected tools are subject to delegation and approval gates but bypass
+ *      the disabled/unavailable filters (they are runtime infrastructure, not
+ *      user-selectable tools).
  *   7. Annotate delegation tools with the models currently available for
  *      delegation, so the model sees an accurate "Available models:" line.
  *
