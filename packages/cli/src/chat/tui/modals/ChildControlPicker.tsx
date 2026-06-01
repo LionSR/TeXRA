@@ -42,7 +42,7 @@ export const TASK_DETAIL_LABEL_WIDTH = 13;
 export const ULTRA_COMPACT_PICKER_MAX_ROWS = 6;
 export const ULTRA_COMPACT_TASK_DETAIL_MAX_ROWS = 4;
 export const NARROW_PICKER_HINT_MAX_COLUMNS = 64;
-export const NARROW_TASK_DETAIL_HINT_MAX_COLUMNS = 48;
+export const NARROW_TASK_DETAIL_HINT_MAX_COLUMNS = 56;
 export const TASK_DETAIL_HORIZONTAL_CHROME_COLUMNS = 4;
 export const MIN_COLUMNS_FOR_JUMP_HINT = 58;
 export const MIN_COLUMNS_FOR_KILL_HINT = 44;
@@ -421,7 +421,7 @@ export function computeTaskDetailLayout({
   const rows = Math.max(0, availableRows ?? 18);
   const showExpandedMeta = rows >= 16;
   const compact = !showExpandedMeta;
-  const showHints = rows >= 8;
+  const showHints = rows > ULTRA_COMPACT_TASK_DETAIL_MAX_ROWS;
   const showTitle = rows >= 9;
   const showOutputLabel = rows >= 10;
   const showCommand = rows >= 12;
