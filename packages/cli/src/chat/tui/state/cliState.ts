@@ -302,10 +302,3 @@ export function resetCliState(sessionMeta = defaultSessionMeta()): void {
 export function registerCliStateResetHook(resetHook: () => void): void {
   RESET_HOOKS.add(resetHook);
 }
-
-export function canShowSubagentControls(
-  meta: Pick<SessionMeta, 'canDelegate'>,
-  slice: Pick<StreamSlice, 'childStreams'> | undefined,
-): boolean {
-  return meta.canDelegate || (slice?.childStreams.length ?? 0) > 0;
-}

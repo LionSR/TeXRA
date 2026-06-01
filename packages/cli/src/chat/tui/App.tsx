@@ -44,7 +44,7 @@ import {
   resolveChildControlStreamTarget,
   type ChildControlMode,
 } from './state/childControls';
-import { canShowSubagentControls, cliState } from './state/cliState';
+import { cliState } from './state/cliState';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { streamScopeDisplayLabel } from './state/streamLabels';
 import { useSignal } from './state/useSignal';
@@ -383,7 +383,6 @@ export function App(props: AppProps): React.JSX.Element {
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
   const parentStream = useSignal(cliState.parentStream);
-  const sessionMeta = useSignal(cliState.sessionMeta);
   const activeForm = useSignal(cliState.activeForm);
   const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
   const reverseSearchOpen = useSignal(cliState.reverseSearchOpen);
@@ -474,9 +473,9 @@ export function App(props: AppProps): React.JSX.Element {
     taskControlTarget.slice,
     'tasks',
   );
-  const subagentControlsAvailable = canShowSubagentControls(
-    sessionMeta,
+  const subagentControlsAvailable = hasChildControlItems(
     subagentControlTarget.slice,
+    'subagents',
   );
   const hasSubagentPanel =
     !foregroundOpen && hasChildExecutionRows(activeSlice);
