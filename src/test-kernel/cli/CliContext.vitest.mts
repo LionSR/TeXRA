@@ -8,6 +8,8 @@ import {
   buildCliContext,
   CliUsageError,
   isTexraCliEntrypointPath,
+  readCliBugsUrl,
+  readCliVersion,
   resolveCliCwd,
 } from '@cli/runtime/cliContext';
 import { loadWorkspaceCliConfig } from '@cli/runtime/cliConfig';
@@ -40,6 +42,15 @@ describe('CLI entrypoint detection', () => {
       isTexraCliEntrypointPath('/repo/packages/cli/src/bin/texra.ts'),
     ).toBe(true);
     expect(isTexraCliEntrypointPath('/usr/local/bin/vitest')).toBe(false);
+  });
+});
+
+describe('CLI package manifest discovery', () => {
+  it('finds version and bug-report metadata from the source runtime layout', async () => {
+    await expect(readCliVersion()).resolves.toMatch(/^\d+\.\d+\.\d+/);
+    await expect(readCliBugsUrl()).resolves.toBe(
+      'https://github.com/texra-ai/texra-issues/issues',
+    );
   });
 });
 
