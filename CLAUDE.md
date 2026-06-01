@@ -301,24 +301,26 @@ The `texra` CLI ships an Ink (React) TUI under `packages/cli/src/chat/tui/`. It 
 ### CLI design (clig.dev)
 
 The `texra` CLI (`packages/cli/`) follows the [Command Line Interface
-Guidelines](https://clig.dev). Preserve these invariants:
+Guidelines](https://clig.dev). Follow these conventions:
 
 - **Don't reinvent the wheel.** Lean on the arg parser (`citty`) and existing
-  libraries — `picocolors` for color detection, `$PAGER`/`less -FIRX` for
-  paging, a small distance lib for spelling suggestions. Don't hand-roll
-  flag/help parsing, color support detection, or paging.
+  libraries rather than hand-rolling flag/help parsing or color-support
+  detection — `picocolors` already gates color. If you add paging or "did you
+  mean" suggestions (neither exists yet), reach for `$PAGER`/`less -FIRX` or a
+  small distance lib instead of writing your own.
 - **Streams.** stdout carries primary/parseable output; stderr carries logs,
   progress, and diagnostics. Usage shown _on error_ goes to stderr
   (`showUsageStderr`) so `--output-format json|ndjson` stays parseable; explicit
   `--help` prints to stdout. Don't move usage-on-error to stdout.
 - **Exit codes.** Use the canonical `CliExitCode` (`runtime/exitCodes.ts`):
   `0` success, `1` agent error, `2` usage, `3` model/network, `4` approval-denied,
-  `124` cancelled, `130` interrupted. Usage errors stay `2` (never citty's `1`).
+  `124` cancelled, `130` interrupted, `143` terminated. Usage errors stay `2`
+  (never citty's `1`).
 - **Color gating.** Route every plain-text styled surface through `createCliStyle`
   (`runtime/style.ts`); never branch on color at call sites. Gating honors
-  `NO_COLOR`, `TERM=dumb`, and TTY (`readCliAmbientState`). Gate primary-output
-  color on the stream it is written to — stdout color must not depend on stderr
-  being a TTY.
+  `NO_COLOR`, `TERM=dumb`, and TTY (`readCliAmbientState`). Gate each styled
+  surface's color on the stream it writes to, so stdout color doesn't hinge on
+  stderr being a TTY.
 - **Config precedence.** flags > env (`TEXRA_*`) > workspace config file; invalid
   values warn (non-fatal) rather than throw (`buildCliContext`).
 - **Headless detection.** `--print/-p`, `CI`, or non-TTY stdin ⇒ headless; only
