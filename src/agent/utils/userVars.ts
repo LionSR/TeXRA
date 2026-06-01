@@ -17,7 +17,7 @@ import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import {
   getListOfFiles,
   getPromptFileName,
-  getXmlFormatFromFiles,
+  getXmlFormatFromReadableFiles,
 } from '@utils/prompt';
 import {
   listExternalRoots,
@@ -238,6 +238,7 @@ async function getFileVars(
   const userVars: UserVars = {};
 
   const contextFiles = getCategoryFiles(agentConfig, 'REFERENCE');
+  const readableFilesByPrefix: Record<string, string[]> = {};
 
   // Log file categories being loaded (skip for tool-use agents).
   // Media files are excluded: they have no user vars (display-only in Init)
@@ -251,28 +252,38 @@ async function getFileVars(
 
   for (const prefix of FILE_VAR_CATEGORIES) {
     const allFiles = getCategoryFiles(agentConfig, prefix);
-    const primaryFile = allFiles[0];
+    const fileContent =
+      allFiles.length > 0
+        ? await getXmlFormatFromReadableFiles(allFiles)
+        : { xml: null, readableFiles: [] };
+    const readableFiles = fileContent.readableFiles;
+    readableFilesByPrefix[prefix] = readableFiles;
+    const primaryFile = readableFiles[0];
 
     // Aliases for custom YAMLs that still reference INPUT_FILE / INPUT_CONTENT.
     if (primaryFile) {
-      await setVarFromFile(primaryFile, prefix, userVars);
+      const loaded = await setVarFromFile(primaryFile, prefix, userVars);
+      if (!loaded) {
+        userVars[`${prefix}_FILE`] = null;
+        userVars[`${prefix}_CONTENT`] = null;
+      }
     } else {
       userVars[`${prefix}_FILE`] = null;
       userVars[`${prefix}_CONTENT`] = null;
     }
 
-    userVars[`ALL_${prefix}S`] =
-      allFiles.length > 0 ? await getXmlFormatFromFiles(allFiles) : null;
-    userVars[`${prefix}_FILES`] = allFiles.map((file) =>
+    userVars[`ALL_${prefix}S`] = fileContent.xml;
+    userVars[`${prefix}_FILES`] = readableFiles.map((file) =>
       getPromptFileName(file),
     );
-    userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(allFiles);
+    userVars[`LIST_OF_ALL_${prefix}S`] = getListOfFiles(readableFiles);
   }
 
   // ALL_CONTEXTS is the unified template var; the legacy ALL_REFERENCES
   // alias keeps populating it for back-compat with custom YAMLs.
+  const readableContextFiles = readableFilesByPrefix.REFERENCE ?? [];
   userVars.ALL_CONTEXTS = userVars.ALL_REFERENCES as string | null;
-  userVars.LIST_OF_ALL_CONTEXTS = getListOfFiles(contextFiles);
+  userVars.LIST_OF_ALL_CONTEXTS = getListOfFiles(readableContextFiles);
   userVars.CONTEXT_FILE = userVars.REFERENCE_FILE;
   userVars.CONTEXT_CONTENT = userVars.REFERENCE_CONTENT;
   userVars.ALL_AUXILIARYS = userVars.ALL_CONTEXTS;
