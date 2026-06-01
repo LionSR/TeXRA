@@ -405,6 +405,8 @@ export interface TaskDetailLayout {
   readonly showCommand: boolean;
   readonly showExpandedMeta: boolean;
   readonly showHints: boolean;
+  readonly showOutputLabel: boolean;
+  readonly showTitle: boolean;
   readonly visibleLineCount: number;
 }
 
@@ -466,16 +468,18 @@ export function computeTaskDetailLayout({
   const rows = Math.max(0, availableRows ?? 18);
   const showExpandedMeta = rows >= 16;
   const compact = !showExpandedMeta;
-  const showCommand = rows >= 10;
-  const showHints = rows >= 7;
+  const showHints = rows >= 8;
+  const showTitle = rows >= 9;
+  const showOutputLabel = rows >= 10;
+  const showCommand = rows >= 12;
   const renderedMetaRows = showExpandedMeta ? metaRows : 1;
   const gapRows = showExpandedMeta ? 2 : 0;
   const fixedRows =
     2 + // border
-    1 + // title
+    (showTitle ? 1 : 0) +
     renderedMetaRows +
     (showCommand ? 1 : 0) +
-    1 + // output label
+    (showOutputLabel ? 1 : 0) +
     (showHints ? 1 : 0) +
     gapRows;
   const availableOutputRows = Math.max(0, rows - fixedRows);
@@ -484,6 +488,8 @@ export function computeTaskDetailLayout({
     showCommand,
     showExpandedMeta,
     showHints,
+    showOutputLabel,
+    showTitle,
     visibleLineCount:
       hasTailLines && rows >= fixedRows + 1
         ? Math.max(1, availableOutputRows)
@@ -905,9 +911,11 @@ function TaskDetailView({
       paddingX={1}
       width={availableColumns}
     >
-      <Text bold color="cyan">
-        Task details
-      </Text>
+      {layout.showTitle ? (
+        <Text bold color="cyan">
+          Task details
+        </Text>
+      ) : null}
       {layout.showExpandedMeta ? (
         <>
           {metaLine('Type', item.kind === 'process' ? 'shell' : 'stream')}
@@ -916,7 +924,12 @@ function TaskDetailView({
           {metaLine('Runtime', item.elapsed)}
         </>
       ) : (
-        <Text dimColor wrap="truncate-end">
+        <Text
+          bold={!layout.showTitle}
+          color={!layout.showTitle ? 'cyan' : undefined}
+          dimColor={layout.showTitle}
+          wrap="truncate-end"
+        >
           {compactMeta}
         </Text>
       )}
@@ -929,7 +942,7 @@ function TaskDetailView({
         </Box>
       ) : null}
       <Box flexDirection="column" marginTop={layout.compact ? 0 : 1}>
-        <Text bold>Output:</Text>
+        {layout.showOutputLabel ? <Text bold>Output:</Text> : null}
         <TaskOutput
           childStreamId={item.childStreamId}
           tailLines={item.tailLines}
