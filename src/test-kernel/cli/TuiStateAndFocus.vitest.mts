@@ -42,7 +42,6 @@ import {
 import { visibleSubagentRows } from '@cli/chat/tui/state/childStreamMerge';
 import {
   finalizeSettledPrefix,
-  stripOrchestratorFollowup,
   syncStreamLog,
 } from '@cli/chat/tui/state/subscribeStreamLog';
 import { wrapRuntimeHost } from '@cli/chat/tui/state/subscribeRuntimeHost';
@@ -83,6 +82,7 @@ import {
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
+import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
 
 const root = 'root' as StreamTabId;
 const child1 = 'child-1' as StreamTabId;
@@ -530,7 +530,7 @@ describe('CLI TUI row allocation', () => {
         hasTodosPlanPanel: true,
         rows: 1,
       }),
-    ).toEqual({ subagentRows: 1, todosPlanRows: 0 });
+    ).toEqual({ subagentRows: 0, todosPlanRows: 1 });
   });
 
   it('shows todo and plan chrome only while a stream is active', () => {

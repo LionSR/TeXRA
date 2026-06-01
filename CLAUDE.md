@@ -298,6 +298,39 @@ The `texra` CLI ships an Ink (React) TUI under `packages/cli/src/chat/tui/`. It 
 - **Headless parity is sacred.** The TUI runs only on an interactive TTY. `texra run`, `--print/-p`, and `--output-format json|ndjson` must stay byte-identical — never let Ink rendering, ANSI chrome, or spinners leak into the piped / non-TTY path.
 - **Width changes invalidate wrapped lines.** Soft-wrap is width-dependent: recompute live-region layout from `useWindowSize()` columns on every render; never cache wrapped output across a width change. Already-printed `<Static>` lines keep their original wrap — that is an accepted scrollback tradeoff, not a bug to "fix" by repainting history.
 
+### CLI design (clig.dev)
+
+The `texra` CLI (`packages/cli/`) follows the [Command Line Interface
+Guidelines](https://clig.dev). When working on it, design to the guide's
+philosophy and guidelines rather than ad-hoc choices.
+
+**Philosophy.** Human-first design; simple parts that work together (composable
+via stdin/stdout, exit codes, and signals); consistency across programs; saying
+(just) enough; ease of discovery; conversation as the norm; robustness; empathy.
+
+**Guidelines.** Apply the relevant section of the guide:
+
+- **The basics.** Use the arg-parsing library; zero exit on success, non-zero
+  on failure; primary/machine-readable output to stdout, logs and errors to
+  stderr.
+- **Help & documentation.** `-h`/`--help` everywhere, concise by default and
+  full on request; lead with examples; link to web docs; suggest a command when
+  the user mistypes.
+- **Output & errors.** Human-readable by default, machine-readable (JSON) where
+  it doesn't hurt usability; rewrite errors for humans; make bug reports easy;
+  use color with intention and disable it off-TTY / `NO_COLOR` / `TERM=dumb`.
+- **Arguments & flags.** Prefer flags to args; full-length plus short forms;
+  standard names; `-` for stdin/stdout; confirm destructive actions.
+- **Interactivity.** Only prompt on a TTY; honor `--no-input`; never require a
+  prompt.
+- **Subcommands, robustness, future-proofing, signals.** Consistent naming;
+  validate input and stay responsive; keep changes additive; handle Ctrl-C.
+- **Configuration & environment.** Precedence flags > env > project > user >
+  system; honor general-purpose vars (`NO_COLOR`/`FORCE_COLOR`, `PAGER`, …).
+
+Don't reinvent the wheel: lean on `citty` (parsing/help) and `picocolors`
+(color), and reach for existing libraries over bespoke implementations.
+
 ### Separation of Concerns: VS Code Coupling
 
 For good separation of concerns, testability, and platform independence, core business logic should not depend on the `vscode` module. Keeping domain logic free of host-specific imports makes the code easier to test, reason about, and reuse.
@@ -307,7 +340,7 @@ For good separation of concerns, testability, and platform independence, core bu
 - `src/agent/` (core logic, model handlers, PocketFlow flows)
 - `src/model/` (model registry, capabilities, pricing)
 - `src/latex/` (LaTeX processing, formatting, diff)
-- `src/tools/` (tool implementations — use `@common/files/fsEntryType` instead of `vscode.FileType`)
+- `src/tools/` (tool implementations — use `@utils/files/fsEntryType` instead of `vscode.FileType`)
 - `src/controllers/` (host-neutral orchestration behind injected ports)
 - `src/shared/` (IPC schemas, message types)
 - `src/replacement/` (text cleanup rules)
@@ -330,7 +363,7 @@ For good separation of concerns, testability, and platform independence, core bu
 **Patterns for keeping code platform-agnostic:**
 
 - Reach host services through `platform()` from `@platform` (config, state, log, fs, workspace, storage, secrets) — never import `vscode` in agnostic zones.
-- Use `isFile()` / `isDirectory()` from `@common/files/fsEntryType` instead of `vscode.FileType`
+- Use `isFile()` / `isDirectory()` from `@utils/files/fsEntryType` instead of `vscode.FileType`
 - Use `isFileNotFoundError()` from `@common/errors` instead of `instanceof vscode.FileSystemError`
 - Return error results instead of calling `vscode.window.show*Message()` from business logic — let the caller (command layer) handle UI
 - Use injectable callbacks (like `setExtensionChecker()` in `externalToolDefs.ts`) for platform-specific capabilities needed in agnostic code

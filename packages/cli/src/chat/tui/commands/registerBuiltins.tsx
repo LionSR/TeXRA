@@ -124,6 +124,7 @@ export function registerBuiltinSlashCommands(options?: {
     const current = options?.getApprovalPolicy?.() ?? 'ask';
     return (
       <ApprovalPolicyForm
+        availableRows={props.availableRows}
         currentPolicy={current}
         onSelect={(value) =>
           settleThenDone(
@@ -237,7 +238,7 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'status',
-    description: 'Open the session status tabs',
+    description: 'Show session details',
   });
   registerSlashCommand({
     name: 'resume',

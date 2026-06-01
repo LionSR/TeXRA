@@ -1,8 +1,8 @@
 import * as path from 'path';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { isDirectory } from '@common/files/fsEntryType';
 import { AbsoluteFS } from '@utils/files';
+import { isDirectory } from '@utils/files/fsEntryType';
 
 export interface ExecutionWorkspaceFile {
   readonly path: string;

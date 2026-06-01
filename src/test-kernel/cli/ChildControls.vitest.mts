@@ -921,6 +921,19 @@ describe('CLI child execution controls', () => {
     ]);
     expect(
       taskDetailKeyHintsForColumns({
+        availableColumns: 50,
+        canFocusStream: true,
+        canKill: true,
+        showScrollHint: true,
+      }),
+    ).toEqual([
+      { key: '↑/↓', action: 'scroll' },
+      { key: 'f', action: 'focus' },
+      { key: 'k', action: 'kill' },
+      { key: 'Esc', action: 'back' },
+    ]);
+    expect(
+      taskDetailKeyHintsForColumns({
         availableColumns: 60,
         canFocusStream: true,
         canKill: true,
@@ -1081,7 +1094,20 @@ describe('CLI child execution controls', () => {
     });
   });
 
-  it('spends tiny task detail rows on output instead of labels', () => {
+  it('reserves tiny task detail rows for controls before labels', () => {
+    expect(
+      computeTaskDetailLayout({
+        availableRows: 5,
+        hasTailLines: true,
+        metaRows: 4,
+      }),
+    ).toMatchObject({
+      compact: true,
+      showHints: true,
+      showOutputLabel: false,
+      showTitle: false,
+      visibleLineCount: 1,
+    });
     expect(
       computeTaskDetailLayout({
         availableRows: 6,
@@ -1090,10 +1116,10 @@ describe('CLI child execution controls', () => {
       }),
     ).toMatchObject({
       compact: true,
-      showHints: false,
+      showHints: true,
       showOutputLabel: false,
       showTitle: false,
-      visibleLineCount: 3,
+      visibleLineCount: 2,
     });
   });
 
@@ -1107,7 +1133,7 @@ describe('CLI child execution controls', () => {
         }).visibleLineCount,
     );
 
-    expect(outputRowsByHeight).toEqual([3, 4, 4, 4, 4, 5, 5]);
+    expect(outputRowsByHeight).toEqual([2, 3, 4, 4, 4, 5, 5]);
   });
 
   it('opens long task detail output at the latest visible tail', () => {

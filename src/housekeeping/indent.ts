@@ -1,14 +1,14 @@
 import * as path from 'path';
 
+import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
-import { getWorkspaceState } from '@agent/core/stateStore';
-import { isDirectory, isFile, isSymlink } from '@common/files/fsEntryType';
 import { runLatexFormatter } from '@latex/texFormatter';
 import * as logger from '@logger/logUtils';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
+import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 import { EXCLUDED_DIRS } from './constants';
 
