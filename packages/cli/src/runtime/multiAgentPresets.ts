@@ -92,6 +92,35 @@ export function formatCliMultiAgentPresetDetails(
   ].join('\n');
 }
 
+export function formatCliMultiAgentPresetInspection(
+  plan: CliMultiAgentPresetRunPlan,
+): string {
+  const availableWorkflowAgents = availablePresetAgents(
+    plan.preset.workflowAgents,
+    plan.missingWorkflowAgents,
+  );
+  const availableToolUseAgents = availablePresetAgents(
+    plan.preset.toolUseAgents,
+    plan.missingToolUseAgents,
+  );
+
+  return [
+    `${plan.preset.name} (${plan.preset.id})`,
+    `Source: ${plan.preset.source}`,
+    `Description: ${plan.preset.description}`,
+    'Root tool-use agent:',
+    `  ${plan.rootAgent?.name ?? '(none)'}`,
+    'Available workflow agents:',
+    formatAgentNames(availableWorkflowAgents),
+    'Available tool-use agents:',
+    formatAgentNames(availableToolUseAgents),
+    'Missing workflow agents:',
+    formatAgentNames(plan.missingWorkflowAgents),
+    'Missing tool-use agents:',
+    formatAgentNames(plan.missingToolUseAgents),
+  ].join('\n');
+}
+
 export function cliMultiAgentPresetNdjsonRecords(
   presets: readonly CliMultiAgentPreset[],
 ): object[] {
@@ -270,6 +299,14 @@ function agentHasDelegationTools(agent: AgentEntry): boolean {
 
 function toAgentKey(agent: AgentEntry): string {
   return agentKey(agent.source, agent.name);
+}
+
+function availablePresetAgents(
+  presetAgents: readonly string[],
+  missingAgents: readonly string[],
+): string[] {
+  const missing = new Set(missingAgents);
+  return presetAgents.filter((agent) => !missing.has(agent));
 }
 
 function formatAgentNames(names: readonly string[]): string {
