@@ -95,9 +95,7 @@ export function TranscriptViewer({
           // Ink collapses an empty-string Text to zero height; the space keeps
           // blank separator rows between entries visible.
           visible.map((line, index) => (
-            <Text key={offset + index} wrap="truncate-end">
-              {line || ' '}
-            </Text>
+            <Text key={offset + index}>{line || ' '}</Text>
           ))
         )}
       </Box>

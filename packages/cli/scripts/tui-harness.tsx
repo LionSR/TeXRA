@@ -71,6 +71,8 @@ const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
 const PLAN_APPROVAL_ODYSSEY = process.env.HARNESS_PLAN_APPROVAL_ODYSSEY === '1';
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
+const WIDE_TRANSCRIPT_SUFFIX =
+  ' hidden-middle wide-column-A wide-column-B wide-column-C wide-column-D wide-column-E wide-column-F';
 const SHOW_REJECTED_BASH_TOOL = process.env.HARNESS_REJECTED_BASH_TOOL === '1';
 const SHOW_LONG_CHILD_OUTPUT = process.env.HARNESS_LONG_CHILD_OUTPUT === '1';
 const SHOW_WIDE_FIRST_CHILD_LINE =
@@ -241,7 +243,7 @@ function makeLongToolOutput(): NormalizedToolUse {
     outputText: Array.from(
       { length: 18 },
       (_, index) =>
-        `tool-output-line-${String(index + 1).padStart(2, '0')}${index === 9 ? ' hidden-middle' : ''}`,
+        `tool-output-line-${String(index + 1).padStart(2, '0')}${index === 9 ? WIDE_TRANSCRIPT_SUFFIX : ''}`,
     ).join('\n'),
     userInstructionText: '',
     input: { command: 'python3 enumerate_triples.py' },
