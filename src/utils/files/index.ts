@@ -1,4 +1,5 @@
 // Core filesystem abstractions
+export { isFile, isDirectory, isSymlink } from './fsEntryType';
 export { locatePathInRoot, type ResolvedPath } from './workspaceRoot';
 export { WorkspaceFS } from './workspaceFS';
 export { AbsoluteFS } from './absoluteFS';

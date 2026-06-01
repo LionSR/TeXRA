@@ -45,7 +45,6 @@ import { getWorkspaceState } from '@agent/core/stateStore';
 // Local imports - utils
 import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
-import { isDirectory } from '@common/files/fsEntryType';
 import {
   STREAM_STATUS,
   ExecutionIdSchema,
@@ -53,6 +52,7 @@ import {
 } from '@shared/schemas';
 import { requireRunStream } from '@tools/contextHelpers';
 import { AbsoluteFS, StorageFS } from '@utils/files';
+import { isDirectory } from '@utils/files/fsEntryType';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';

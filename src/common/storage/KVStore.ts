@@ -10,7 +10,7 @@
 import * as path from 'path';
 
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
-import { isFile } from '@common/files/fsEntryType';
+import { isFile } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 import { StorageFS } from '@utils/files/storageFS';
 
