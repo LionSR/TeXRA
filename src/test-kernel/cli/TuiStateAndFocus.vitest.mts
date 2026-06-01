@@ -42,7 +42,6 @@ import {
 import { visibleSubagentRows } from '@cli/chat/tui/state/childStreamMerge';
 import {
   finalizeSettledPrefix,
-  stripOrchestratorFollowup,
   syncStreamLog,
 } from '@cli/chat/tui/state/subscribeStreamLog';
 import { wrapRuntimeHost } from '@cli/chat/tui/state/subscribeRuntimeHost';
@@ -83,6 +82,7 @@ import {
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
+import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
 
 const root = 'root' as StreamTabId;
 const child1 = 'child-1' as StreamTabId;
