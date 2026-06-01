@@ -1,18 +1,94 @@
 diff --git a/build/ink.js b/build/ink.js
-index b8fd45cc990adbc080eff28fc37463cd91337dff..5640b6159be1e6ababac8a77fbc9dcd45d209ce7 100644
+index b8fd45cc9..3c8a9a99c 100644
 --- a/build/ink.js
 +++ b/build/ink.js
-@@ -261,8 +261,11 @@ export default class Ink {
+@@ -261,9 +261,14 @@ export default class Ink {
      }
      resized = () => {
          const currentWidth = getWindowSize(this.options.stdout).columns;
 -        if (currentWidth < this.lastTerminalWidth) {
 -            // We clear the screen when decreasing terminal width to prevent duplicate overlapping re-renders.
+-            this.log.clear();
 +        if (currentWidth !== this.lastTerminalWidth) {
-+            // Clear on ANY width change, not just a decrease. On widening, the
-+            // previously soft-wrapped output occupies more physical rows than the
-+            // new render, so without clearing first Ink redraws on top and leaves
-+            // the old tail behind as scrollback residue (TeXRA patch).
-             this.log.clear();
++            // Clear on ANY width change, not just a decrease. The emulator reflows
++            // the previous frame at the new width, so the logical line count no
++            // longer matches the physical rows on screen: on shrink a wide line
++            // wraps into extra rows that a logical-count eraseLines() leaves behind
++            // as residue. clearWidthAware() erases the actual physical row count at
++            // the new width, covering both widen and shrink (TeXRA patch).
++            this.log.clearWidthAware(currentWidth);
              this.lastOutput = '';
              this.lastOutputToRender = '';
+         }
+diff --git a/build/log-update.js b/build/log-update.js
+index cdb5fc41f..5b0eaee8b 100644
+--- a/build/log-update.js
++++ b/build/log-update.js
+@@ -1,6 +1,31 @@
+ import ansiEscapes from 'ansi-escapes';
+ import cliCursor from 'cli-cursor';
+ import { cursorPositionChanged, buildCursorSuffix, buildCursorOnlySequence, buildReturnToBottomPrefix, hideCursorEscape, } from './cursor-helpers.js';
++import stringWidth from 'string-width';
++
++// Count the PHYSICAL rows a rendered frame occupies when soft-wrapped at the
++// given terminal width. Each logical line contributes ceil(displayWidth/columns)
++// rows (at least 1). Used to clear correctly after a terminal RESIZE, where the
++// emulator reflows previously-wrapped lines and the logical line count no longer
++// matches what is on screen (TeXRA patch).
++const physicalLineCount = (str, columns) => {
++    if (!str) return 0;
++    const cols = columns > 0 ? columns : 1;
++    const lines = str.split('\n');
++    // Match log-update's `previousLineCount = lines.length` convention exactly so
++    // that, with no wrapping, this equals what the plain clear() erases. The
++    // trailing empty element from a final '\n' counts as one row; each visible
++    // line additionally contributes its soft-wrap overflow at `columns`.
++    const hasTrailingNewline = str.endsWith('\n');
++    const visible = hasTrailingNewline ? lines.length - 1 : lines.length;
++    let rows = hasTrailingNewline ? 1 : 0;
++    for (let i = 0; i < visible; i++) {
++        const w = stringWidth(lines[i]);
++        rows += w <= cols ? 1 : Math.ceil(w / cols);
++    }
++    return rows;
++};
++
+ // Count visible lines in a string, ignoring the trailing empty element
+ // that `split('\n')` produces when the string ends with '\n'.
+ const visibleLineCount = (lines, str) => str.endsWith('\n') ? lines.length - 1 : lines.length;
+@@ -63,6 +88,18 @@ const createStandard = (stream, { showCursor = false } = {}) => {
+         previousCursorPosition = undefined;
+         cursorWasShown = false;
+     };
++    // Width-aware clear for terminal resizes: erase the physical rows the frame
++    // occupies after the emulator reflows it at `columns`, not just the logical
++    // line count (which under-erases on shrink and leaves residue). (TeXRA patch)
++    render.clearWidthAware = (columns) => {
++        const physical = physicalLineCount(previousOutput, columns);
++        const prefix = buildReturnToBottomPrefix(cursorWasShown, previousLineCount, previousCursorPosition);
++        stream.write(prefix + ansiEscapes.eraseLines(physical));
++        previousOutput = '';
++        previousLineCount = 0;
++        previousCursorPosition = undefined;
++        cursorWasShown = false;
++    };
+     render.done = () => {
+         previousOutput = '';
+         previousLineCount = 0;
+@@ -204,6 +241,16 @@ const createIncremental = (stream, { showCursor = false } = {}) => {
+         previousCursorPosition = undefined;
+         cursorWasShown = false;
+     };
++    // Width-aware clear for terminal resizes (see createStandard). (TeXRA patch)
++    render.clearWidthAware = (columns) => {
++        const physical = physicalLineCount(previousOutput, columns);
++        const prefix = buildReturnToBottomPrefix(cursorWasShown, previousLines.length, previousCursorPosition);
++        stream.write(prefix + ansiEscapes.eraseLines(physical));
++        previousOutput = '';
++        previousLines = [];
++        previousCursorPosition = undefined;
++        cursorWasShown = false;
++    };
+     render.done = () => {
+         previousOutput = '';
+         previousLines = [];
