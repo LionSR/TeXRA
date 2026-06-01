@@ -174,10 +174,6 @@ export async function runMultiAgentPreset(
   context: CliContext,
   init: MultiAgentRunInit,
 ): Promise<number> {
-  // A team run drives a tool-use orchestrator, so it follows the `chat`
-  // (tool-use) model config rather than `run` (workflow agents).
-  const model = await resolveCliRunModel(context, init.model, 'chat');
-  const runContext = buildHeadlessRunContext(context, model);
   const hasInlineInstruction = init.instruction.trim().length > 0;
   if (init.inputFiles.length === 0 && !hasInlineInstruction) {
     throw new CliUsageError('Provide --input or --instruction.');
@@ -185,15 +181,19 @@ export async function runMultiAgentPreset(
   const { inputFiles, contextFiles } = await expandRunInputs(
     init.inputFiles,
     init.contextFiles,
-    runContext.cwd,
+    context.cwd,
     { allowEmptyInput: hasInlineInstruction },
   );
 
-  await initCliPlatform(runContext);
-  installCliApprovalHandlers(runContext);
+  await initCliPlatform({ ...context, quietLogs: true });
   await loadAgents({ includeRemote: false });
 
   const plan = await fillMultiAgentRunPlanGaps(init);
+  if (plan.missingAgentOverride) {
+    throw new CliUsageError(
+      `Tool-use agent not found: ${plan.missingAgentOverride}. Use \`texra agents list\` to see available agents.`,
+    );
+  }
   if (!plan.rootAgent) {
     writeTextStderr(
       `Multi-agent preset "${init.preset}" has no available tool-use agent to run. Use --agent with an installed tool-use agent, or enable a team with an orchestrator.`,
@@ -201,6 +201,14 @@ export async function runMultiAgentPreset(
     return CliExitCode.Usage;
   }
   writeMissingPresetAgents(plan);
+
+  // A team run drives a tool-use orchestrator, so it follows the `chat`
+  // (tool-use) model config rather than `run` (workflow agents). Resolve the
+  // model after agent validation so usage errors stay focused on bad agents.
+  const model = await resolveCliRunModel(context, init.model, 'chat');
+  const runContext = buildHeadlessRunContext(context, model);
+  await initCliPlatform(runContext);
+  installCliApprovalHandlers(runContext);
 
   const config: AgentConfigPayload = {
     agent: plan.rootAgent.name,
