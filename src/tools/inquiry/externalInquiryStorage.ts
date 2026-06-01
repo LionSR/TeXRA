@@ -3,7 +3,6 @@ import { randomBytes } from 'crypto';
 
 import { z } from 'zod';
 
-import { isDirectory, isFile } from '@utils/files/fsEntryType';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import {
   ExternalInquirySessionLinksSchema,
@@ -19,6 +18,7 @@ import {
 import { normalizeFilePath } from '@shared/utils/path';
 import { ToolError } from '@tools/result';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
+import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
 const THREADS_DIR = 'ei_threads';
 const EXEC_DIR = 'ei';

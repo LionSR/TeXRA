@@ -13,13 +13,13 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { flowKey } from '@agent/node/persistedFlow';
 import { isFileNotFoundError } from '@common/errors';
-import { isDirectory } from '@utils/files/fsEntryType';
 import {
   EXECUTION_STATUS,
   ExecutionIdSchema,
   type ExecutionId,
 } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
+import { isDirectory } from '@utils/files/fsEntryType';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 
 const HISTORY_FILE_SCAN_DEPTH = 2;
