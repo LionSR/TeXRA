@@ -23,6 +23,8 @@ function context(overrides: Partial<CliContext> = {}): CliContext {
     mode: 'interactive',
     outputFormat: 'text',
     approvalPolicy: 'ask',
+    stdoutColorEnabled: false,
+    stderrColorEnabled: false,
     colorEnabled: false,
     version: 'test',
     resourcesPath: '/tmp/resources',

@@ -4,11 +4,16 @@ import pico from 'picocolors';
  * Semantic style vocabulary for the CLI's plain-text (non-Ink) output. Built
  * on picocolors so every styled surface shares one color path and one gate.
  *
- * The gate is `colorEnabled` from `CliContext` (TTY + `NO_COLOR` + dumb-term
- * aware): when it is false, picocolors' `createColors(false)` hands back
- * identity functions, so call sites never branch on color themselves — they
- * always go through the same helper and stay consistent with each other and
- * with the Ink TUI / markdown renderer.
+ * The gate is a per-stream color boolean from `CliContext`:
+ * `stdoutColorEnabled` for stdout-bound output (e.g. `doctor`'s success
+ * report), `stderrColorEnabled` (= `colorEnabled`) for stderr-bound output
+ * (progress, update checker). Both are computed in `readCliAmbientState`
+ * honoring TTY, `NO_COLOR`,
+ * `FORCE_COLOR`, `TERM=dumb`, and `--no-color`. When the gate is false,
+ * picocolors' `createColors(false)` hands back identity functions, so call
+ * sites never branch on color themselves — they always go through the same
+ * helper and stay consistent with each other and with the Ink TUI / markdown
+ * renderer.
  */
 export interface CliStyle {
   /** Whether styling actually emits color (false ⇒ every method is identity). */
