@@ -18,6 +18,7 @@ import {
   resolveDeepestSubCommand,
   showUsage,
   showUsageStderr,
+  withUsageSections,
   type UnknownCliCommand,
 } from './_helpers/dispatch';
 import { getExitCode, resetExitCode } from './_helpers/exitCode';
@@ -46,49 +47,64 @@ export function defaultRootSubcommand(): 'orchestrate' | 'help' {
   return ambient.stdinIsTty && ambient.stdoutIsTty ? 'orchestrate' : 'help';
 }
 
-export const rootCommand = defineCommand({
-  // Citty's `runMain` reads `meta.version` for `--version`/`-v`. We resolve
-  // lazily so the bundled binary picks up the version emitted by the build
-  // (see `readCliVersion` in cliContext.ts).
-  meta: async () => ({
-    name: 'texra',
-    description: 'TeXRA CLI — AI LaTeX research assistant',
-    version: await readCliVersion(),
+export const rootCommand = withUsageSections(
+  defineCommand({
+    // Citty's `runMain` reads `meta.version` for `--version`/`-v`. We resolve
+    // lazily so the bundled binary picks up the version emitted by the build
+    // (see `readCliVersion` in cliContext.ts).
+    meta: async () => ({
+      name: 'texra',
+      description: 'TeXRA CLI — AI LaTeX research assistant',
+      version: await readCliVersion(),
+    }),
+    // Global flags are duplicated here so citty's `findSubCommandIndex` knows
+    // which leading flags take values (otherwise `texra --output-format ndjson
+    // agents list` mis-detects `ndjson` as the subcommand). The actual parsing
+    // happens on each subcommand; root only acts as a routing layer.
+    args: {
+      ...GLOBAL_ARGS,
+    },
+    subCommands: {
+      orchestrate: orchestrationCommand,
+      chat: chatCommand,
+      run: runWorkflowCommand,
+      resume: resumeCommand,
+      init: initCommand,
+      history: historyCommand,
+      memory: memoryCommand,
+      agents: agentsCommand,
+      skills: skillsCommand,
+      tools: toolsCommand,
+      'multi-agent': multiAgentCommand,
+      models: modelsCommand,
+      // `login`/`logout` are convenience shortcuts; the full auth surface
+      // (login, logout, status, usage) lives under `auth`.
+      login: loginCommand,
+      logout: logoutCommand,
+      auth: authCommand,
+      doctor: doctorCommand,
+      completion: completionCommand,
+      version: versionCommand,
+      help: helpCommand,
+    },
+    // No subcommand on bare `texra`: dispatch to the orchestration view when
+    // both TTYs are interactive; fall through to synthetic `help` otherwise.
+    default: defaultRootSubcommand,
   }),
-  // Global flags are duplicated here so citty's `findSubCommandIndex` knows
-  // which leading flags take values (otherwise `texra --output-format ndjson
-  // agents list` mis-detects `ndjson` as the subcommand). The actual parsing
-  // happens on each subcommand; root only acts as a routing layer.
-  args: {
-    ...GLOBAL_ARGS,
-  },
-  subCommands: {
-    orchestrate: orchestrationCommand,
-    chat: chatCommand,
-    run: runWorkflowCommand,
-    resume: resumeCommand,
-    init: initCommand,
-    history: historyCommand,
-    memory: memoryCommand,
-    agents: agentsCommand,
-    skills: skillsCommand,
-    tools: toolsCommand,
-    'multi-agent': multiAgentCommand,
-    models: modelsCommand,
-    // `login`/`logout` are convenience shortcuts; the full auth surface
-    // (login, logout, status, usage) lives under `auth`.
-    login: loginCommand,
-    logout: logoutCommand,
-    auth: authCommand,
-    doctor: doctorCommand,
-    completion: completionCommand,
-    version: versionCommand,
-    help: helpCommand,
-  },
-  // No subcommand on bare `texra`: dispatch to the orchestration view when
-  // both TTYs are interactive; fall through to synthetic `help` otherwise.
-  default: defaultRootSubcommand,
-});
+  [
+    {
+      title: 'EXAMPLES',
+      rows: [
+        ['texra chat', 'start an interactive tool-use session'],
+        ['texra run <agent> --input file.tex', 'run a workflow agent headless'],
+        ['texra agents list', 'list the available agents'],
+        ['texra doctor', 'check your environment and configuration'],
+      ],
+    },
+    // Footer rows are empty, so `formatUsageSection` renders just this title.
+    { title: 'Learn more: https://texra.ai', rows: [] },
+  ],
+);
 
 export async function detectUnknownCliCommand(
   rawArgs: readonly string[],
