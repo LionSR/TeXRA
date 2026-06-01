@@ -13,7 +13,7 @@ import {
 import { formatCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
 import { Select, type SelectItem } from '../ui/Select';
 import { KeyHints } from '../ui/KeyHints';
-import { FormFrame } from './_shared/FormFrame';
+import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
@@ -126,7 +126,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     return (
       <FormFrame
         color="cyan"
-        title={`/model · ${formatCliApiMode(props.apiMode)} · Esc close`}
+        title={`/model · ${formatCliApiMode(props.apiMode)}`}
         showCloseHint={false}
       >
         <Text dimColor>Available models</Text>
@@ -143,6 +143,13 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
             props.onClose();
           }}
           onCancel={props.onClose}
+        />
+        <CompactFormKeyHints
+          primary={
+            selectable
+              ? { key: '1-9/a-z/Enter', action: 'select' }
+              : { key: 'Enter', action: 'close' }
+          }
         />
       </FormFrame>
     );
