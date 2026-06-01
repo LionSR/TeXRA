@@ -675,6 +675,7 @@ async function handleTuiSlashCommand(
           teamName: meta.teamName,
           api: formatCliApiMode(getCliApiMode()),
           approval: formatApprovalPolicy(context.getApprovalPolicy()),
+          approvalBypasses: slice?.bypass,
           status: slice?.status ?? 'not started',
           queuedFollowUpMessages:
             activeStreamId === undefined
