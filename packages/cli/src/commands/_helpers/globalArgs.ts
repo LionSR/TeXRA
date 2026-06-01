@@ -142,13 +142,14 @@ export function rejectHeadlessOnlyFlags(
     (arg) =>
       arg === '--print' ||
       arg === '-p' ||
+      arg === '--no-input' ||
       arg === '--output-format' ||
       arg.startsWith('--output-format='),
   );
   if (!headlessOnly) return;
 
   throw new CliUsageError(
-    `texra ${commandName} is interactive and does not support --print or --output-format. For scripting, use \`texra run\` or a concrete non-interactive subcommand.`,
+    `texra ${commandName} is interactive and does not support --print, --no-input, or --output-format. For scripting, use \`texra run\` or a concrete non-interactive subcommand.`,
   );
 }
 

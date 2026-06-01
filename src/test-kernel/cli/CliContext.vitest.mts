@@ -296,7 +296,7 @@ describe('CLI per-stream color resolution', () => {
     ).toBe(false);
   });
 
-  it('forceDisable (the --no-color path) beats everything', () => {
+  it('forceDisable beats everything', () => {
     expect(
       resolveStreamColor(true, {
         forceDisable: true,

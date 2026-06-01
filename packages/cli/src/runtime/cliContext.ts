@@ -80,10 +80,13 @@ export interface CliAmbientState {
  * Resolve whether ANSI color may be emitted on a given stream, reusing the
  * conventional override precedence picocolors' own `isColorSupported` honors:
  *
- * - `forceDisable`/`--no-color` ⇒ never color.
+ * - `forceDisable` ⇒ never color.
  * - `NO_COLOR` (any value) or `TERM=dumb` ⇒ never color.
  * - `FORCE_COLOR` (any value) ⇒ always color, ignoring TTY detection.
  * - otherwise color only when the destination stream is itself a TTY.
+ *
+ * `buildCliContext` applies `--no-color` after ambient stream detection so
+ * injected ambient gates keep their already-resolved stream decisions.
  *
  * We keep our own per-stream TTY check rather than delegating wholesale to
  * picocolors because picocolors only inspects

@@ -107,6 +107,13 @@ describe('pageStdout', () => {
     expect(stdout).toBe('row\n');
   });
 
+  it('falls back to a direct write when the pager command is not executable', () => {
+    spawnSyncMock.mockReturnValue({ status: 126 });
+    pageStdout('row', { stdoutIsTty: true, env: { PAGER: './not-exec' } });
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1);
+    expect(stdout).toBe('row\n');
+  });
+
   it('does not duplicate output when a launched pager exits nonzero', () => {
     spawnSyncMock.mockReturnValue({ status: 1 });
     pageStdout('row', { stdoutIsTty: true, env: { PAGER: 'less' } });

@@ -267,6 +267,9 @@ describe('CLI root argument routing', () => {
     expect(() =>
       rejectHeadlessOnlyFlags(['--output-format=json'], 'orchestrate'),
     ).toThrow('texra orchestrate is interactive');
+    expect(() => rejectHeadlessOnlyFlags(['--no-input'], 'chat')).toThrow(
+      'texra chat is interactive',
+    );
     expect(() =>
       rejectHeadlessOnlyFlags(['--approval-policy', 'ask'], 'chat'),
     ).not.toThrow();
