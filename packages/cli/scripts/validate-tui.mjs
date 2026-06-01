@@ -625,6 +625,20 @@ const SCENARIOS = [
     unexpect: ['Run bash command?', '1 approval'],
   },
   {
+    name: 'team-status-empty-subagents-hidden',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_BASH_APPROVAL: '1',
+      HARNESS_CAN_DELEGATE: '1',
+      HARNESS_TEAM_NAME: 'Physicist',
+    },
+    bootExpect: '[Ctrl-C]',
+    keys: ['a', '/status', '\r'],
+    frame: 'tail',
+    expect: ['team: Physicist', 'auto-approvals: bash commands', 'AUTO-BASH'],
+    unexpect: ['Run bash command?', '1 approval', ']subagents'],
+  },
+  {
     name: 'agent-proposal-long',
     rows: 24,
     cols: 80,
