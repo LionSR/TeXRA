@@ -642,7 +642,7 @@ export function App(props: AppProps): React.JSX.Element {
       return;
     }
 
-    // Option/Alt chords: s → subagent controls, p → tasks, 1-9 → focus stream.
+    // Esc/Alt chords: s → subagent controls, p → tasks, 1-9 → focus stream.
     const metaInput = metaChordInput(input, key);
     if (metaInput) {
       const lower = metaInput.toLowerCase();
