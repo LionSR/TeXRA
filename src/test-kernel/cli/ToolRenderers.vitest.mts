@@ -94,6 +94,48 @@ describe('CLI tool renderer registry', () => {
     `);
   });
 
+  it('renders bash approval rejections once when output and error match', () => {
+    const message =
+      "User rejected bash command: printf 'approval-reject-live\\n'";
+    const entry = toolUse(
+      'bash',
+      { command: "printf 'approval-reject-live\\n'" },
+      {
+        errorText: message,
+        headerSummary: "printf 'approval-reject-live\\n'",
+        isError: true,
+        outputText: message,
+      },
+    );
+
+    expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
+      [
+        "● bash (printf 'approval-reject-live\\n')",
+        "⎿ User rejected bash command: printf 'approval-reject-live\\n'",
+      ]
+    `);
+  });
+
+  it('keeps long duplicate error output in the full transcript view', () => {
+    const message = `User rejected bash command: ${'diagnostic detail '.repeat(30)}`;
+    const entry = toolUse(
+      'bash',
+      { command: 'run-diagnostic' },
+      {
+        errorText: message,
+        headerSummary: 'run-diagnostic',
+        isError: true,
+        outputText: message,
+      },
+    );
+
+    const lines = toolUseDisplayLines(entry, { elide: false });
+
+    expect(lines[1]).toBe(`⎿ ${message}`);
+    expect(lines[2]).toContain('User rejected bash command: diagnostic detail');
+    expect(lines[2].length).toBeLessThan(lines[1].length);
+  });
+
   it('elides long bash output to a head+tail slice with a line marker', () => {
     const entry = toolUse(
       'bash',

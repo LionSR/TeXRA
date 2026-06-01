@@ -147,6 +147,20 @@ const SCENARIOS = [
     unexpect: ['tool-output-line-10 hidden-middle'],
   },
   {
+    name: 'bash-rejection-deduped',
+    env: { HARNESS_ENTRIES: '0', HARNESS_REJECTED_BASH_TOOL: '1' },
+    expect: [
+      "● bash (printf 'approval-reject-live\\n')",
+      "⎿ User rejected bash command: printf 'approval-reject-live\\n'",
+    ],
+    maxOccurrences: [
+      {
+        text: "User rejected bash command: printf 'approval-reject-live\\n'",
+        max: 1,
+      },
+    ],
+  },
+  {
     name: 'transcript-viewer-long-tool-output',
     env: { HARNESS_ENTRIES: '0', HARNESS_LONG_TOOL_OUTPUT: '1' },
     keys: [DC4],
@@ -1720,6 +1734,18 @@ function lineColumns(line) {
   return [...line].length;
 }
 
+function countOccurrences(text, needle) {
+  if (!needle) return 0;
+  let count = 0;
+  let index = 0;
+  while (true) {
+    const next = text.indexOf(needle, index);
+    if (next < 0) return count;
+    count += 1;
+    index = next + needle.length;
+  }
+}
+
 function snapshotFileName(index, name, extension = 'txt') {
   const prefix = String(index + 1).padStart(2, '0');
   return `${prefix}-${name.replace(/[^a-z0-9._-]+/gi, '-')}.${extension}`;
@@ -1979,6 +2005,14 @@ async function runScenario(scenario) {
     failures.push(`expected text missing: ${JSON.stringify(t)}`);
   for (const t of present)
     failures.push(`unexpected text present: ${JSON.stringify(t)}`);
+  for (const check of scenario.maxOccurrences ?? []) {
+    const actual = countOccurrences(frame, check.text);
+    if (actual > check.max) {
+      failures.push(
+        `text appears too many times: ${JSON.stringify(check.text)} (${actual} > ${check.max})`,
+      );
+    }
+  }
   const slashPaletteVisible =
     frame.includes('Tab complete') && frame.includes('↑/↓ navigate');
   if (
