@@ -55,7 +55,8 @@ export function pageStdout(
     return;
   }
 
-  const command = resolvePagerCommand(options.env);
+  const env = options.env ? { ...readCliEnv(), ...options.env } : readCliEnv();
+  const command = resolvePagerCommand(env);
   if (!command) {
     writeTextStdout(text);
     return;
@@ -67,7 +68,7 @@ export function pageStdout(
     input: `${text}\n`,
     stdio: ['pipe', 'inherit', 'inherit'],
     shell: true,
-    env: options.env ? { ...readCliEnv(), ...options.env } : readCliEnv(),
+    env: options.env ? env : undefined,
   });
 
   if (result.error || result.status === 126 || result.status === 127) {

@@ -95,6 +95,25 @@ describe('pageStdout', () => {
     }
   });
 
+  it('inherits the live environment when no explicit env override is passed', () => {
+    const originalPager = process.env.PAGER;
+    process.env.PAGER = 'less -R';
+    try {
+      pageStdout('row', { stdoutIsTty: true });
+      expect(spawnSyncMock).toHaveBeenCalledTimes(1);
+      const [command, opts] = spawnSyncMock.mock.calls[0] as unknown as [
+        string,
+        childProcess.SpawnSyncOptions,
+      ];
+      expect(command).toBe('less -R');
+      expect(opts.env).toBeUndefined();
+      expect(stdout).toBe('');
+    } finally {
+      if (originalPager === undefined) delete process.env.PAGER;
+      else process.env.PAGER = originalPager;
+    }
+  });
+
   it('writes directly (no pager) when $PAGER is disabled even on a TTY', () => {
     pageStdout('row', { stdoutIsTty: true, env: { PAGER: '' } });
     expect(spawnSyncMock).not.toHaveBeenCalled();
