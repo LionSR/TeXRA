@@ -42,6 +42,8 @@ export interface RunContext {
    * aligned with the tool list shown to the model.
    */
   readonly delegationConfig?: NestedDelegationConfig;
+  /** Whether approval or user prompts cannot be answered by the current host. */
+  readonly approvalPromptsUnavailable?: boolean;
 }
 
 export interface CreateRunContextOptions {
@@ -59,6 +61,7 @@ export interface CreateRunContextOptions {
   workingDirectory?: string;
   delegationDepth?: number;
   delegationConfig?: NestedDelegationConfig;
+  approvalPromptsUnavailable?: boolean;
 }
 
 const runContextScope = new AsyncLocalStorage<RunContext>();
@@ -79,6 +82,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     workingDirectory: options.workingDirectory,
     delegationDepth: options.delegationDepth,
     delegationConfig: options.delegationConfig,
+    approvalPromptsUnavailable: options.approvalPromptsUnavailable,
   });
 }
 

@@ -45,6 +45,7 @@ describe('tool-use tool resolution', () => {
       'grep',
       'plan',
       'send_to_terminal',
+      'update_config',
       'wolfram',
       'write_file',
     ]);
@@ -58,6 +59,7 @@ describe('tool-use tool resolution', () => {
         'grep',
         'plan',
         'send_to_terminal',
+        'update_config',
         'wolfram',
         'write_file',
       ]),
@@ -81,6 +83,7 @@ describe('tool-use tool resolution', () => {
       'delegate_agent',
       'grep',
       'plan',
+      'update_config',
     ]);
 
     const { tools } = await resolveToolUseTools(
@@ -91,6 +94,7 @@ describe('tool-use tool resolution', () => {
         'delegate_agent',
         'grep',
         'plan',
+        'update_config',
       ]),
       registry,
       logger,
@@ -107,6 +111,7 @@ describe('tool-use tool resolution', () => {
       'delegate_agent',
       'grep',
       'plan',
+      'update_config',
     ]);
   });
 
@@ -119,6 +124,23 @@ describe('tool-use tool resolution', () => {
       logger,
       {
         approvalPromptsUnavailable: false,
+        delegationBlocked: true,
+      },
+    );
+
+    expect(tools.map((tool) => tool.name)).toEqual(['grep']);
+    expect(delegationTrimmed).toBe(true);
+  });
+
+  it('keeps delegation trimming when approval filtering is also active', async () => {
+    const registry = registryFor(['bash', 'delegate_agent', 'grep']);
+
+    const { tools, delegationTrimmed } = await resolveToolUseTools(
+      toolDefs(['bash', 'delegate_agent', 'grep']),
+      registry,
+      logger,
+      {
+        approvalPromptsUnavailable: true,
         delegationBlocked: true,
       },
     );
@@ -146,5 +168,26 @@ describe('tool-use tool resolution', () => {
 
     expect(tools.map((tool) => tool.name)).toEqual(['grep']);
     expect(delegationTrimmed).toBe(true);
+  });
+
+  it('filters injected approval-gated tools when approval prompts are unavailable', async () => {
+    const registry = registryFor(['grep', 'update_config']);
+    registerToolInjection({
+      toolName: 'update_config',
+      shouldInject: () => true,
+    });
+
+    const { tools, delegationTrimmed } = await resolveToolUseTools(
+      toolDefs(['grep']),
+      registry,
+      logger,
+      {
+        approvalPromptsUnavailable: true,
+        delegationBlocked: false,
+      },
+    );
+
+    expect(tools.map((tool) => tool.name)).toEqual(['grep']);
+    expect(delegationTrimmed).toBe(false);
   });
 });
