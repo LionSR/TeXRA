@@ -238,7 +238,7 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'status',
-    description: 'Open the session status tabs',
+    description: 'Show session details',
   });
   registerSlashCommand({
     name: 'resume',
