@@ -1,5 +1,7 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+
+import writeFileAtomic from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
 
@@ -23,9 +25,13 @@ async function readJsonRecord(filePath: string): Promise<JsonRecord> {
  * File-backed key-value store, persisted as a flat JSON object.
  *
  * Shared building block for non-VS-Code platform implementations (Electron,
- * CLI). All writes are atomic (stage to sibling temp path, then rename) so a
- * crash mid-flush leaves the previous file intact rather than corrupting the
- * snapshot.
+ * CLI). Writes go through `write-file-atomic`, which stages to a sibling temp
+ * path, `fsync`s, then renames — so a crash mid-flush leaves the previous file
+ * intact rather than corrupting the snapshot. Flushes are chained on
+ * {@link writeChain} so they persist in `set()` call order: `write-file-atomic`
+ * only guarantees same-path writes don't clobber each other's temp files, not
+ * that they land in call order (the per-flush `mkdir` await could otherwise let
+ * an earlier snapshot overtake a later one and silently revert it).
  */
 export class JsonStore {
   private writeChain = Promise.resolve();
@@ -62,30 +68,23 @@ export class JsonStore {
     return { ...this.data };
   }
 
-  private async enqueueFlush(snapshot: JsonRecord): Promise<void> {
+  /**
+   * Chain the flush onto {@link writeChain} so flushes run in `set()` call
+   * order. The link is established synchronously, before any await, so order is
+   * captured at call time rather than racing on `mkdir`/`write-file-atomic`
+   * timing. A failed flush doesn't break the chain (`.then(flush, flush)`).
+   */
+  private enqueueFlush(snapshot: JsonRecord): Promise<void> {
     const flush = () => this.flush(snapshot);
     this.writeChain = this.writeChain.then(flush, flush);
-    await this.writeChain;
+    return this.writeChain;
   }
 
   private async flush(snapshot: JsonRecord): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
-    // The temp suffix is process-unique so concurrent JsonStore writers
-    // (different files in the same dir) don't collide.
-    const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
-    try {
-      await writeFile(tempPath, `${JSON.stringify(snapshot, null, 2)}\n`);
-      await rename(tempPath, this.filePath);
-    } catch (error) {
-      // Best-effort cleanup of stale temp file. Swallow ENOENT (rename
-      // already consumed it) and similar — the original error is what
-      // matters.
-      try {
-        await unlink(tempPath);
-      } catch {
-        // ignore
-      }
-      throw error;
-    }
+    await writeFileAtomic(
+      this.filePath,
+      `${JSON.stringify(snapshot, null, 2)}\n`,
+    );
   }
 }
