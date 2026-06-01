@@ -636,14 +636,14 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.left.map(statusBarSegmentText)).toContain('1 approval');
     expect(display.bindings).toBe(
-      'Use foreground panel shortcuts  [Ctrl-C]stop',
+      'Use foreground panel shortcuts  [Esc]panel  [Ctrl-C]stop',
     );
     expect(display.bindings).not.toContain('[Tab]streams');
     expect(display.bindings).not.toContain('[Alt-p]tasks');
     expect(display.bindings).not.toContain('[/model]models');
   });
 
-  it('keeps the Ctrl-C action visible in narrow foreground panels', () => {
+  it('keeps escape and Ctrl-C actions visible in narrow foreground panels', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,
       pendingExitHint: false,
@@ -665,7 +665,7 @@ describe('CLI StatusBar display model', () => {
       width: 40,
     });
 
-    expect(display.bindings).toBe('Panel shortcuts  [Ctrl-C]stop');
+    expect(display.bindings).toBe('[Esc]panel  [Ctrl-C]stop');
   });
 
   it('falls back to the bare Ctrl-C action in tiny foreground panels', () => {
