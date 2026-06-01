@@ -4,14 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Improvements
+## [0.38.4] - 2026-06-01
 
+### Features
+
+- **Run agent teams from CLI chat** — multi-agent orchestration is now first-class in the terminal. Focus into any child or subagent stream and jump between them with shortcuts, browse active and finished runs in a task picker, and inspect a multi-agent run's plan before it executes. Child streams show their own progress, elapsed time, descriptions, and Ctrl-C stop scope, and the team's identity is shown in chat.
+- **Pipe input into workflows** — `texra` now accepts content on stdin for workflow input, so you can pipe a file or another command's output straight into a run.
 - **Pick the model right after the agent in CLI chat** — choosing the root agent with `/agent` before the first message now flows straight into the model picker, so you set the agent and model together in one step instead of remembering to run `/model` separately. Pressing Esc on the model picker keeps the agent you chose.
-- **Dropped the redundant `/btw` chat command** — queuing a follow-up never needed its own command. Just type your message while a run is active and it's queued automatically; the command only duplicated that path with extra error states.
+- **See remote agents in the CLI** — running remote agents now appear in the CLI instead of being hidden.
 
 ### Bug Fixes
 
-- **Progress board never silently hides a run's groups** — if a stage group's parent is missing from a stream (e.g. a stale cross-trace id), the group and everything under it now render at the top of the transcript instead of vanishing. Paired with giving each run its own private stage scope so a stage from one run can no longer leak as the parent of another.
+- **Ctrl-C always exits cleanly** — pressing Ctrl-C on an idle chat, after a response, or on an interrupt signal now exits cleanly and stops the right scope (root run vs. focused child stream) instead of hanging, and the footer hint stays aligned with the live status.
+- **Color respects your environment** — color output is gated per output stream and honors `NO_COLOR`, `FORCE_COLOR`, and `--no-color`, the pager environment is routed correctly, and the `--output-format json|ndjson` stream stays clean for scripts and CI.
+- **Edit approvals show their diffs** — edit and tool approval prompts now display the diff, scroll when it's long, and stay readable on cramped terminals so you can see exactly what you're approving.
+- **Readable in narrow and compact terminals** — approvals, pickers, task detail, status bars, slash-command forms, and todo panels stay readable and keep their controls visible when the terminal is small, instead of clipping content or pushing the input off-screen.
+- **Queued follow-ups stay visible** — follow-ups you queue while a run is active show up in the status bar and a dedicated panel with previews and counts, and idle messages no longer accidentally start a run.
+- **Mistyped subcommands get a suggestion** — typo a subcommand and `texra` suggests the closest match instead of just erroring.
+- **Privacy in CLI output** — the API account email is redacted, and Gemini function-call debug text is hidden from the transcript.
+- **Progress board never silently hides a run's groups** — a run's stage groups always render in the transcript instead of occasionally vanishing, and one run's progress can no longer show up nested under another.
+
+### Improvements
+
+- **Easier crash reports** — a crash now prints a pre-filled report link, and root-level examples and docs ship alongside the CLI.
+- **Clearer `texra doctor` diagnostics** — access diagnostics and recovery hints are clearer and stay reachable on small terminals.
+- **History shows more context** — the history view now includes a conversation preview and the workspace files involved in each run.
+- **Transcript viewer wraps tool output** — long tool output wraps in the Ctrl-T transcript viewer and one-line tool rows render compactly instead of overflowing.
 
 ## [0.38.3] - 2026-05-29
 
