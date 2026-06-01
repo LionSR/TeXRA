@@ -139,8 +139,12 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
     const tildeLettersMathbf = [...'axpvwz'];
     const tildeLettersMathbfUppercase = [...'MTX'];
     const tildeLettersMathcal = [...'HQSW'];
-    const tildeGreekLetters = 'gamma lambda phi psi rho Sigma mu tau'.split(' ');
-    const tildeGreekBoldLetters = 'zeta gamma lambda pi xi eta Gamma'.split(' ');
+    const tildeGreekLetters = 'gamma lambda phi psi rho Sigma mu tau'.split(
+      ' ',
+    );
+    const tildeGreekBoldLetters = 'zeta gamma lambda pi xi eta Gamma'.split(
+      ' ',
+    );
 
     // Hat variables
     const hatLetters = [...'HFP'];
@@ -213,17 +217,47 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
       // Mathbf uppercase: \mathbf{X} -> \bX
       ...generateMathFontShortcuts(mathbfUpperLetters, 'mathbf', 'b'),
       // Normalize legacy font commands {\rm X}, {\bf X}, {\cal X}
-      ...generateLegacyTextCommandNormalization(alphabetLetters, 'mathrm', 'rm'),
-      ...generateLegacyTextCommandNormalization(alphabetLetters, 'mathbf', 'bf'),
-      ...generateLegacyTextCommandNormalization(alphabetLetters, 'mathcal', 'cal'),
+      ...generateLegacyTextCommandNormalization(
+        alphabetLetters,
+        'mathrm',
+        'rm',
+      ),
+      ...generateLegacyTextCommandNormalization(
+        alphabetLetters,
+        'mathbf',
+        'bf',
+      ),
+      ...generateLegacyTextCommandNormalization(
+        alphabetLetters,
+        'mathcal',
+        'cal',
+      ),
       // Tilde variables: \tilde{x} -> \tx, \tilde{B} -> \tB
       ...generateDecoratorShortcuts('tilde', tildeLetters, 't'),
       // Tilde with mathbf lowercase: \tilde{\mathbf{x}} -> \tbx
-      ...generateNestedDecoratorShortcuts('tilde', 'mathbf', tildeLettersMathbf, 't', 'b'),
+      ...generateNestedDecoratorShortcuts(
+        'tilde',
+        'mathbf',
+        tildeLettersMathbf,
+        't',
+        'b',
+      ),
       // Tilde with mathbf uppercase: \tilde{\mathbf{M}} -> \tbM
-      ...generateNestedDecoratorShortcuts('tilde', 'mathbf', tildeLettersMathbfUppercase, 't', 'b'),
+      ...generateNestedDecoratorShortcuts(
+        'tilde',
+        'mathbf',
+        tildeLettersMathbfUppercase,
+        't',
+        'b',
+      ),
       // Tilde with mathcal: \tilde{\mathcal{H}} -> \tcH
-      ...generateNestedDecoratorShortcuts('tilde', 'mathcal', tildeLettersMathcal, 't', 'c'),
+      ...generateNestedDecoratorShortcuts(
+        'tilde',
+        'mathcal',
+        tildeLettersMathcal,
+        't',
+        'c',
+      ),
       // Tilde with Greek: \tilde{\gamma} -> \tga
       ...Object.fromEntries(
         tildeGreekLetters.map((letter) => [
@@ -248,7 +282,13 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
         ]),
       ),
       // Hat with mathbf: \hat{\mathbf{n}} -> \hbn
-      ...generateNestedDecoratorShortcuts('hat', 'mathbf', hatMathbfLetters, 'h', 'b'),
+      ...generateNestedDecoratorShortcuts(
+        'hat',
+        'mathbf',
+        hatMathbfLetters,
+        'h',
+        'b',
+      ),
       // Hat with boldsymbol+Greek: \hat{\boldsymbol{\zeta}} -> \hbze
       ...Object.fromEntries(
         hatBoldsymbolLetters.map((letter) => [

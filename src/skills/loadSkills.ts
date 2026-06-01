@@ -83,7 +83,6 @@ function issue(
   return { severity, code, message, ...options };
 }
 
-
 function firstZodMessage(error: ZodError): string {
   return error.issues[0]?.message ?? 'Invalid skill metadata';
 }
