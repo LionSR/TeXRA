@@ -6,6 +6,7 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 
+import { approvalPromptsUnavailable } from './approvalPolicyInstruction';
 import {
   readCliTerminalStatus,
   type ExecuteAgentResult,
@@ -49,6 +50,7 @@ export async function executeCliRequest(
       enforceCategory: options.enforceCategory,
       registerExecution: options.registerExecution,
       stopAfterCycle: options.stopAfterCycle,
+      approvalPromptsUnavailable: approvalPromptsUnavailable(runContext),
     });
 
   let result: ExecuteAgentResult;
