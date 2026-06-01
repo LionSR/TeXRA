@@ -15,9 +15,11 @@ at audit time. Claims about Anthropic/Agent SDK _native_ features are marked
 
 ## 0. TL;DR
 
-TeXRA is **already well-architected** and largely SDK-aligned: one canonical run
-entrypoint (`runValidatedExecutionRequest`), a PocketFlow-based agent loop with
-durable resume, a single discriminated trace-event stream (`AgentTrace`), and
+TeXRA is **already well-architected** and largely SDK-aligned: a single core run
+path behind a deliberate two-tier API (`validateExecutionRequest` → `runAgent`,
+with `runAgentStream` as the lower-level streaming engine — see §1/§9), a
+PocketFlow-based agent loop with durable resume, a single discriminated
+trace-event stream (`AgentTrace`), and
 config-driven agents (5 workflow + 10 tool-use YAMLs over 2 shared flows) with a
 working tool-driven delegation/subagent mechanism.
 
