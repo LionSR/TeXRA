@@ -74,7 +74,9 @@ await build({
     js:
       '#!/usr/bin/env node\n' +
       'import { createRequire as __texraCreateRequire } from "node:module";\n' +
-      'const require = __texraCreateRequire(import.meta.url);',
+      'import { fileURLToPath as __texraFileURLToPath } from "node:url";\n' +
+      'const require = __texraCreateRequire(import.meta.url);\n' +
+      'const __filename = __texraFileURLToPath(import.meta.url);',
   },
 });
 
