@@ -18,12 +18,13 @@ import prettyMilliseconds from 'pretty-ms';
 import { serializeError, type ErrorObject } from 'serialize-error';
 
 /**
- * Serialize an Error into a plain object for logging or transport.
+ * Serialize a thrown value into a plain object for logging or transport.
  *
- * Backed by the `serialize-error` package, which (unlike a naive
- * `{ name, message, stack }` copy) preserves `cause` chains, custom
- * properties (e.g. `statusCode`, `requestId`), and handles circular
- * references and non-Error throws.
+ * Typically called with an `Error`, but any thrown value is accepted —
+ * `serialize-error` passes non-`Error` values through and wraps them as
+ * needed. Unlike a naive `{ name, message, stack }` copy it also preserves
+ * `cause` chains, custom enumerable properties (e.g. `statusCode`,
+ * `requestId`), and handles circular references.
  */
 export { serializeError };
 
@@ -70,10 +71,11 @@ export function extractErrorMessage(err: unknown): string | undefined {
  * (e.g. `3m 42s`, `1h 5m`, `2d 4h`).
  *
  * Backed by `pretty-ms`, so durations spanning hours or days render
- * correctly instead of overflowing into `120min` style output. Sub-second
- * durations floor to `1s` and the input is truncated to whole-second
- * granularity so per-second elapsed displays (e.g. ToolTimer) never tick
- * ahead of the real elapsed time.
+ * correctly instead of overflowing into `120min` style output. Durations
+ * of one second or more are floored to whole-second granularity, so
+ * per-second elapsed displays (e.g. ToolTimer) never report more than the
+ * real elapsed time. Sub-second durations render as a `1s` minimum floor
+ * (rather than `0s`) to match the prior behavior.
  */
 export function formatDuration(durationMs: number): string {
   if (durationMs < 0) return '0s';
