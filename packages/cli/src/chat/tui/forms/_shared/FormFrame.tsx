@@ -4,7 +4,7 @@
 
 import { Box, Text } from 'ink';
 
-import { KeyHints } from '@cli/chat/tui/ui/KeyHints';
+import { KeyHints, type KeyHint } from '@cli/chat/tui/ui/KeyHints';
 
 export interface FormFrameProps {
   readonly color: string;
@@ -38,5 +38,20 @@ export function FormFrame(props: FormFrameProps): React.JSX.Element {
         </Box>
       )}
     </Box>
+  );
+}
+
+export function CompactFormKeyHints(props: {
+  readonly primary: KeyHint;
+}): React.JSX.Element {
+  return (
+    <KeyHints
+      hints={[
+        { key: '↑/↓', action: 'navigate' },
+        props.primary,
+        { key: 'Esc', action: 'close' },
+      ]}
+      confirmCancel={false}
+    />
   );
 }
