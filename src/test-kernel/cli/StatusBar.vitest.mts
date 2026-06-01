@@ -769,7 +769,7 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
-  it('uses Option labels for meta shortcuts on macOS', () => {
+  it('uses portable Esc labels for meta shortcuts on macOS', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.WAITING,
       pendingExitHint: false,
@@ -788,8 +788,9 @@ describe('CLI StatusBar display model', () => {
       shortcutModifierLabel: defaultShortcutModifierLabel('darwin'),
     });
 
-    expect(display.bindings).toContain('[Option-1..9]focus');
-    expect(display.bindings).toContain('[Option-p]tasks');
-    expect(display.bindings).toContain('[Option-s]subagents');
+    expect(display.bindings).toContain('[Esc 1..9]focus');
+    expect(display.bindings).toContain('[Esc p]tasks');
+    expect(display.bindings).toContain('[Esc s]subagents');
+    expect(display.bindings).not.toContain('[Option-p]tasks');
   });
 });

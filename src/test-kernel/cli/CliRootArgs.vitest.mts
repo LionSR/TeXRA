@@ -616,11 +616,11 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('Ctrl-T');
     expect(stdout).toContain('Tab');
     expect(stdout).toContain('cycle visible streams');
-    expect(stdout).toContain('Option-p');
+    expect(stdout).toContain('Esc p');
     expect(stdout).toContain('Alt-p');
-    expect(stdout).toContain('Option-s');
+    expect(stdout).toContain('Esc s');
     expect(stdout).toContain('Alt-s');
-    expect(stdout).toContain('Option-1..9');
+    expect(stdout).toContain('Esc 1..9');
     expect(stdout).toContain('focus a visible stream');
     expect(stdout).toContain('approvals');
     expect(stdout).toContain('Ctrl-C');
@@ -645,8 +645,8 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('Interactive tool-use chat session');
     expect(stdout).toContain('USAGE texra chat');
     expect(stdout).toContain('INTERACTIVE CONTROLS');
-    expect(stdout).toContain('Option-s');
-    expect(stdout).toContain('Option-1..9');
+    expect(stdout).toContain('Esc s');
+    expect(stdout).toContain('Esc 1..9');
     expect(stderr).toBe('');
   });
 

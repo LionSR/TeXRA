@@ -326,7 +326,12 @@ function fitStatusBarLeftSegments(
 export function defaultShortcutModifierLabel(
   platform: NodeJS.Platform = process.platform,
 ): string {
-  return platform === 'darwin' ? 'Option' : 'Alt';
+  return platform === 'darwin' ? 'Esc' : 'Alt';
+}
+
+function metaShortcutLabel(modifierLabel: string, key: string): string {
+  const separator = modifierLabel === 'Esc' ? ' ' : '-';
+  return `[${modifierLabel}${separator}${key}]`;
 }
 
 export function statusBarBindingsText(
@@ -337,13 +342,14 @@ export function statusBarBindingsText(
   ctrlCAction: CtrlCAction = 'exit',
   maxColumns?: number,
 ): string {
+  const focusBinding = metaShortcutLabel(modifierLabel, '1..9');
+  const tasksBinding = metaShortcutLabel(modifierLabel, 'p');
+  const subagentsBinding = metaShortcutLabel(modifierLabel, 's');
   const bindings: string[] = [
     // Stream cycling / numeric focus only do something when there is more
     // than one stream — hide the hints in a plain single-stream chat.
-    ...(hasMultipleStreams
-      ? ['[Tab]streams', `[${modifierLabel}-1..9]focus`]
-      : []),
-    `[${modifierLabel}-p]tasks`,
+    ...(hasMultipleStreams ? ['[Tab]streams', `${focusBinding}focus`] : []),
+    `${tasksBinding}tasks`,
     '[/status]details',
     '[/model]models',
     '[/api]api',
@@ -351,12 +357,11 @@ export function statusBarBindingsText(
     `[Ctrl-C]${ctrlCAction}`,
   ];
   if (subagentControlsAvailable) {
-    const tasksBinding = `[${modifierLabel}-p]tasks`;
-    const tasksIndex = bindings.indexOf(tasksBinding);
+    const tasksIndex = bindings.indexOf(`${tasksBinding}tasks`);
     bindings.splice(
       tasksIndex >= 0 ? tasksIndex + 1 : bindings.length,
       0,
-      `[${modifierLabel}-s]subagents`,
+      `${subagentsBinding}subagents`,
     );
   }
   const fullBindings = joinStatusBindings(bindings);
@@ -364,8 +369,8 @@ export function statusBarBindingsText(
 
   const compactBindings = joinStatusBindings([
     ...(hasMultipleStreams ? ['[Tab]streams'] : []),
-    `[${modifierLabel}-p]tasks`,
-    ...(subagentControlsAvailable ? [`[${modifierLabel}-s]subagents`] : []),
+    `${tasksBinding}tasks`,
+    ...(subagentControlsAvailable ? [`${subagentsBinding}subagents`] : []),
     '[/status]details',
     `[Ctrl-C]${ctrlCAction}`,
   ]);
@@ -373,8 +378,8 @@ export function statusBarBindingsText(
 
   const minimalBindings = joinStatusBindings([
     ...(hasMultipleStreams ? ['[Tab]streams'] : []),
-    `[${modifierLabel}-p]tasks`,
-    ...(subagentControlsAvailable ? [`[${modifierLabel}-s]subagents`] : []),
+    `${tasksBinding}tasks`,
+    ...(subagentControlsAvailable ? [`${subagentsBinding}subagents`] : []),
     `[Ctrl-C]${ctrlCAction}`,
   ]);
   if (fitsStatusBindings(minimalBindings, maxColumns)) return minimalBindings;
@@ -382,7 +387,7 @@ export function statusBarBindingsText(
   if (hasMultipleStreams) {
     const taskFocusedBindings = joinStatusBindings([
       '[Tab]streams',
-      `[${modifierLabel}-p]tasks`,
+      `${tasksBinding}tasks`,
       `[Ctrl-C]${ctrlCAction}`,
     ]);
     if (fitsStatusBindings(taskFocusedBindings, maxColumns)) {
@@ -391,7 +396,7 @@ export function statusBarBindingsText(
   }
 
   const bareTaskBindings = joinStatusBindings([
-    `[${modifierLabel}-p]tasks`,
+    `${tasksBinding}tasks`,
     `[Ctrl-C]${ctrlCAction}`,
   ]);
   if (fitsStatusBindings(bareTaskBindings, maxColumns)) {
@@ -401,7 +406,7 @@ export function statusBarBindingsText(
   if (subagentControlsAvailable) {
     const subagentFocusedBindings = joinStatusBindings([
       ...(hasMultipleStreams ? ['[Tab]streams'] : []),
-      `[${modifierLabel}-s]subagents`,
+      `${subagentsBinding}subagents`,
       `[Ctrl-C]${ctrlCAction}`,
     ]);
     if (fitsStatusBindings(subagentFocusedBindings, maxColumns)) {
@@ -409,7 +414,7 @@ export function statusBarBindingsText(
     }
 
     const bareSubagentBindings = joinStatusBindings([
-      `[${modifierLabel}-s]subagents`,
+      `${subagentsBinding}subagents`,
       `[Ctrl-C]${ctrlCAction}`,
     ]);
     if (fitsStatusBindings(bareSubagentBindings, maxColumns)) {
