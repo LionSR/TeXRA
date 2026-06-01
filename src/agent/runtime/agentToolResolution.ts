@@ -105,7 +105,10 @@ export async function resolveAgentTools({
       delegationTrimmed = true;
       continue;
     }
-    if (approvalPromptsUnavailable === true && isApprovalGatedToolName(def.name)) {
+    if (
+      approvalPromptsUnavailable === true &&
+      isApprovalGatedToolName(def.name)
+    ) {
       continue;
     }
     if (disabled.has(def.name)) continue;
