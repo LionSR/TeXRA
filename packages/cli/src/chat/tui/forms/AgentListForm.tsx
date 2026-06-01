@@ -209,7 +209,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
       <Text dimColor wrap="truncate-end">
         {selectable
           ? 'Choose the root tool-use agent for the first message.'
-          : 'Available agents. Start a new chat with texra --agent=<name> to choose the root tool-use agent.'}
+          : 'Available agents. Start a new chat with texra chat --agent=<name> to choose the root tool-use agent.'}
       </Text>
       <Box marginTop={1} flexDirection="column">
         <Text bold>Tool-use agents</Text>
