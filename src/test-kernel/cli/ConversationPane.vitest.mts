@@ -46,6 +46,7 @@ function entry(
 function toolEntry(
   id: string,
   status: NormalizedToolUse['status'],
+  outputText = status === 'completed' ? 'ok' : '',
 ): ConversationEntry {
   return {
     id,
@@ -56,7 +57,7 @@ function toolEntry(
       parsed: {},
       toolName: 'Bash',
       errorText: '',
-      outputText: status === 'completed' ? 'ok' : '',
+      outputText,
       userInstructionText: '',
       input: { command: 'ls' },
       isError: false,
@@ -413,6 +414,20 @@ describe('CLI conversation transcript splitting', () => {
       '● Bash (ls)',
       '⎿ ok',
     ]);
+  });
+
+  it('wraps wide tool output lines in the transcript viewer', () => {
+    const lines = transcriptToLines(
+      sliceWithEntries(STREAM_ID, [
+        toolEntry('t1', 'completed', `wide-output ${'segment '.repeat(12)}`),
+      ]),
+      32,
+    );
+
+    expect(lines).toContain('● Bash (ls)');
+    expect(lines.some((line) => line.includes('⎿ wide-output'))).toBe(true);
+    expect(lines.some((line) => line.includes('segment segment'))).toBe(true);
+    expect(lines.some((line) => line.length > 40)).toBe(false);
   });
 });
 
