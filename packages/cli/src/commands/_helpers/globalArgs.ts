@@ -31,6 +31,21 @@ type CliGlobalArgsDef = {
     options: CliApprovalPolicy[];
     description: string;
   };
+  // Positively-named booleans defaulting to `true`: citty parses `--no-color` /
+  // `--no-input` into `color: false` / `input: false` and renders the negative
+  // variant in usage from `negativeDescription` (see citty's `parseRawArgs`).
+  color: {
+    type: 'boolean';
+    default: true;
+    negativeDescription: string;
+    description: string;
+  };
+  input: {
+    type: 'boolean';
+    default: true;
+    negativeDescription: string;
+    description: string;
+  };
 };
 
 export const GLOBAL_ARGS: CliGlobalArgsDef = {
@@ -64,21 +79,37 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
     description:
       'Privileged tool actions: never (deny all), ask (prompt; default), or yolo (auto-approve)',
   },
+  color: {
+    type: 'boolean',
+    default: true,
+    description: 'Emit ANSI color (also honors NO_COLOR / FORCE_COLOR / TERM)',
+    negativeDescription: 'Disable ANSI color on every stream',
+  },
+  input: {
+    type: 'boolean',
+    default: true,
+    description: 'Allow interactive prompts',
+    negativeDescription:
+      'Disable all prompts (headless + deny privileged actions)',
+  },
 };
 
 /**
  * Flags that are meaningful for commands which necessarily own the terminal.
- * In particular, `chat` and `orchestrate` cannot honor `--print` or
- * `--output-format`; scripts should use a concrete headless command instead.
+ * In particular, `chat` and `orchestrate` cannot honor `--print`,
+ * `--output-format`, or `--no-input` (which forces headless); scripts should use
+ * a concrete headless command instead. `--no-color` still applies — a terminal
+ * session may legitimately want plain output.
  */
 export const INTERACTIVE_GLOBAL_ARGS: Omit<
   CliGlobalArgsDef,
-  'print' | 'output-format'
+  'print' | 'output-format' | 'input'
 > = {
   quiet: GLOBAL_ARGS.quiet,
   cwd: GLOBAL_ARGS.cwd,
   'api-mode': GLOBAL_ARGS['api-mode'],
   'approval-policy': GLOBAL_ARGS['approval-policy'],
+  color: GLOBAL_ARGS.color,
 };
 
 // Derived from `GLOBAL_ARGS` so adding/renaming a global flag in one place
@@ -94,7 +125,13 @@ export const GLOBAL_BOOL_FLAGS = new Set<string>(
     if (def.type !== 'boolean') return [];
     const long = `--${name}`;
     const alias = 'alias' in def ? def.alias : undefined;
-    return alias ? [long, `-${alias}`] : [long];
+    const flags = alias ? [long, `-${alias}`] : [long];
+    // Booleans defaulting to `true` are passed by their negated form
+    // (`--no-color`, `--no-input`); citty rewrites those to `<name>: false`.
+    // Register the negated spelling so leading-flag reordering and unknown-
+    // command detection recognize `texra --no-color agents list`.
+    if ('default' in def && def.default === true) flags.push(`--no-${name}`);
+    return flags;
   }),
 );
 

@@ -30,6 +30,8 @@ import {
 } from '@cli/commands/_helpers/workflowOutput';
 import { isKnownCliModel } from '@cli/runtime/cliConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { pickGlobalArgs } from '@cli/runtime/globalArgs';
+import { GLOBAL_BOOL_FLAGS } from '@cli/commands/_helpers/globalArgs';
 import { END_GROUP_STATUS, EXECUTION_STATUS } from '@shared/schemas';
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -41,6 +43,8 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
     quietLogs: false,
     renderRunProgress: true,
     stderrIsTty: false,
+    stdoutColorEnabled: false,
+    stderrColorEnabled: false,
     colorEnabled: false,
     version: '0.0.0',
     resourcesPath: '/tmp/resources',
@@ -540,6 +544,35 @@ describe('CLI root argument routing', () => {
 
     expect(init.quietLogs).toBe(true);
     expect(init.skipIncludedModelAccess).toBeUndefined();
+  });
+});
+
+describe('CLI global color/input flags', () => {
+  it('maps citty negated booleans to noColor/noInput', () => {
+    // citty parses `--no-color` / `--no-input` into `color: false` /
+    // `input: false`; pickGlobalArgs lifts those onto the canonical knobs.
+    expect(pickGlobalArgs({ color: false, input: false })).toMatchObject({
+      noColor: true,
+      noInput: true,
+    });
+  });
+
+  it('treats present-but-true (default) color/input as not negated', () => {
+    expect(pickGlobalArgs({ color: true, input: true })).toMatchObject({
+      noColor: false,
+      noInput: false,
+    });
+    // Absent flags default to "not negated" too.
+    expect(pickGlobalArgs({})).toMatchObject({
+      noColor: false,
+      noInput: false,
+    });
+  });
+
+  it('registers the negated spellings as leading global flags', () => {
+    // Needed so `texra --no-color agents list` reorders/dispatches correctly.
+    expect(GLOBAL_BOOL_FLAGS.has('--no-color')).toBe(true);
+    expect(GLOBAL_BOOL_FLAGS.has('--no-input')).toBe(true);
   });
 });
 

@@ -33,6 +33,8 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
     outputFormat: 'text',
     approvalPolicy: 'never',
     stderrIsTty: false,
+    stdoutColorEnabled: false,
+    stderrColorEnabled: false,
     colorEnabled: false,
     version: '0.0.0',
     resourcesPath: '/tmp/resources',

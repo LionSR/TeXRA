@@ -19,6 +19,10 @@ export interface ParsedGlobalArgs {
   readonly 'output-format'?: CliOutputFormat;
   readonly 'approval-policy'?: CliApprovalPolicy;
   readonly 'api-mode'?: CliApiMode | string;
+  // Positively-named booleans (default `true`); citty sets these to `false`
+  // when the user passes `--no-color` / `--no-input`.
+  readonly color?: boolean;
+  readonly input?: boolean;
 }
 
 export function pickGlobalArgs(args: ParsedGlobalArgs): CliGlobalArgs {
@@ -31,5 +35,8 @@ export function pickGlobalArgs(args: ParsedGlobalArgs): CliGlobalArgs {
     apiMode: isNonEmptyString(args['api-mode'])
       ? args['api-mode'].trim()
       : undefined,
+    // `--no-color` / `--no-input` arrive as `color: false` / `input: false`.
+    noColor: args.color === false,
+    noInput: args.input === false,
   };
 }
