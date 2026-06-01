@@ -949,6 +949,7 @@ export async function runChat(
     const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
     disposers.push(unbindApprovals);
     const executionId = generateExecutionId();
+    let waitingTurn = 0;
     session.executionId = executionId;
 
     session.runPromise = setCliHelperModel(currentModel)
@@ -961,6 +962,16 @@ export async function runChat(
             moveLocalTranscriptToStream(resolvedStreamId);
             cliState.activeStreamId.set(resolvedStreamId);
             if (session.stopRequested) interruptActive();
+          },
+          onBeforeWaiting: (lastResponse) => {
+            if (!session.streamId) return;
+            syncStreamLog(session.streamId);
+            appendAssistantTranscriptIfMissing(
+              session.streamId,
+              lastResponse,
+              `waiting:${executionId}:${waitingTurn++}`,
+            );
+            finalizeAssistantTranscriptEntries(session.streamId);
           },
         }),
       )
