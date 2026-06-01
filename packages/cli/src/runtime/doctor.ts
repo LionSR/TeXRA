@@ -172,7 +172,7 @@ async function checkAuth(
       'auth',
       'Included access',
       'Not signed in for included model access.',
-      'Run `texra login`, or use `/api personal` in the chat TUI to use your own API keys.',
+      'Run `texra login` for included access, or configure a provider API key before using `--api-mode personal`.',
     );
   } catch (error) {
     return failFromError(
@@ -201,7 +201,7 @@ async function checkModels(
       'models',
       'Models',
       'No model is currently available.',
-      'Run `texra models list`, sign in with `texra login`, or use `/api personal` in the chat TUI.',
+      'Run `texra models list --all` to inspect access, sign in with `texra login`, or configure a provider API key.',
     );
   } catch (error) {
     return failFromError(
