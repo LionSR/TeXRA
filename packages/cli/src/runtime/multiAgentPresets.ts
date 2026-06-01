@@ -18,6 +18,7 @@ export interface CliMultiAgentPreset extends AgentModePreset {
 export interface CliMultiAgentPresetRunPlan {
   readonly preset: CliMultiAgentPreset;
   readonly rootAgent?: AgentEntry;
+  readonly missingAgentOverride?: string;
   readonly workflowAgentKeys: readonly string[];
   readonly toolUseAgentKeys: readonly string[];
   readonly missingWorkflowAgents: readonly string[];
@@ -115,6 +116,7 @@ export function cliMultiAgentPlanHasGaps(
 ): boolean {
   return (
     !plan.rootAgent ||
+    plan.missingAgentOverride !== undefined ||
     plan.missingWorkflowAgents.length > 0 ||
     plan.missingToolUseAgents.length > 0
   );
@@ -136,12 +138,12 @@ export function planCliMultiAgentPresetRun(
     preset.toolUseAgents,
     options.toolUseAgents,
   );
-  const overrideAgent = resolveAgentOverride(
+  const override = resolveAgentOverride(
     options.agentOverride,
     options.toolUseAgents,
   );
   const rootAgent =
-    overrideAgent ??
+    override.agent ??
     selectPresetRootAgent(toolUse.resolved, preset.toolUseAgents);
   const toolUseAgents = rootAgent
     ? includeAgent(toolUse.resolved, rootAgent)
@@ -150,6 +152,7 @@ export function planCliMultiAgentPresetRun(
   return {
     preset,
     rootAgent,
+    missingAgentOverride: override.missing,
     workflowAgentKeys: workflow.resolved.map(toAgentKey),
     toolUseAgentKeys: toolUseAgents.map(toAgentKey),
     missingWorkflowAgents: workflow.missing,
@@ -217,12 +220,13 @@ function resolvePresetAgents(
 function resolveAgentOverride(
   override: string | undefined,
   agents: readonly AgentEntry[],
-): AgentEntry | undefined {
+): { agent?: AgentEntry; missing?: string } {
   const query = override?.trim();
-  if (!query) return undefined;
-  return agents.find(
+  if (!query) return {};
+  const agent = agents.find(
     (agent) => agent.name === query || toAgentKey(agent) === query,
   );
+  return agent ? { agent } : { missing: query };
 }
 
 function selectPresetRootAgent(
