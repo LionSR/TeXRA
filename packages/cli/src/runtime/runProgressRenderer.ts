@@ -33,6 +33,9 @@ export interface RunProgressRendererInit {
   readonly write?: (text: string) => void;
   readonly nowMs?: () => number;
   readonly minIntervalMs?: number;
+  readonly heartbeatIntervalMs?: number;
+  readonly setInterval?: typeof setInterval;
+  readonly clearInterval?: typeof clearInterval;
 }
 
 export function shouldRenderRunProgress(
@@ -55,17 +58,26 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private readonly write: (text: string) => void;
   private readonly nowMs: () => number;
   private readonly minIntervalMs: number;
+  private readonly heartbeatIntervalMs: number;
+  private readonly setInterval: typeof setInterval;
+  private readonly clearInterval: typeof clearInterval;
   private readonly ansi: boolean;
   private lastRenderAt = 0;
   private lastLine = '';
   private liveLine = false;
   private rootStreamId: string | undefined;
   private rootStreamTerminal = false;
+  private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+  private activeProcessCount = 0;
+  private activeSubagentCount = 0;
 
   constructor(init: RunProgressRendererInit) {
     this.write = init.write ?? writeRawStderr;
     this.nowMs = init.nowMs ?? Date.now;
     this.minIntervalMs = init.minIntervalMs ?? 100;
+    this.heartbeatIntervalMs = init.heartbeatIntervalMs ?? 1000;
+    this.setInterval = init.setInterval ?? setInterval;
+    this.clearInterval = init.clearInterval ?? clearInterval;
     this.ansi = init.colorEnabled;
     this.startedAt = this.nowMs();
   }
@@ -94,6 +106,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         this.applyActiveProcesses(
           payload as ProgressEventPayloads['updateActiveProcesses'],
         );
+        this.updateHeartbeat();
         this.render(true);
         return true;
       case 'updateActiveSubagents':
@@ -101,6 +114,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         this.applyActiveSubagents(
           payload as ProgressEventPayloads['updateActiveSubagents'],
         );
+        this.updateHeartbeat();
         this.render(true);
         return true;
       case 'updateStreamStatus':
@@ -117,7 +131,10 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
           if (this.rootStreamTerminal) {
             this.state.activeProcesses = undefined;
             this.state.activeSubagents = undefined;
+            this.activeProcessCount = 0;
+            this.activeSubagentCount = 0;
           }
+          this.updateHeartbeat();
           this.render(true);
         }
         return true;
@@ -141,6 +158,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   clear(): void {
+    this.stopHeartbeat();
     if (this.ansi && this.liveLine) {
       this.write('\r\x1b[2K');
       this.liveLine = false;
@@ -148,6 +166,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   preserve(): void {
+    this.stopHeartbeat();
     if (this.ansi && this.liveLine) {
       this.write('\n');
       this.liveLine = false;
@@ -182,6 +201,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   ): void {
     if (!this.claimRootStream(payload.parentStreamId)) return;
 
+    this.activeProcessCount = payload.processes.length;
     this.state.activeProcesses = formatActiveChildren(
       'tool',
       payload.processes.map(
@@ -195,6 +215,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   ): void {
     if (!this.claimRootStream(payload.parentStreamId)) return;
 
+    this.activeSubagentCount = payload.children.length;
     this.state.activeSubagents = formatActiveChildren(
       'subagent',
       payload.children.map((child) => child.agentName),
@@ -225,6 +246,29 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     }
     this.lastLine = line;
     this.lastRenderAt = now;
+  }
+
+  private updateHeartbeat(): void {
+    if (this.rootStreamTerminal || !this.hasActiveChildren()) {
+      this.stopHeartbeat();
+      return;
+    }
+    if (!this.ansi || this.heartbeatTimer) return;
+
+    this.heartbeatTimer = this.setInterval(() => {
+      this.render(true);
+    }, this.heartbeatIntervalMs);
+    (this.heartbeatTimer as { unref?: () => void }).unref?.();
+  }
+
+  private stopHeartbeat(): void {
+    if (!this.heartbeatTimer) return;
+    this.clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = undefined;
+  }
+
+  private hasActiveChildren(): boolean {
+    return this.activeSubagentCount > 0 || this.activeProcessCount > 0;
   }
 
   private formatLine(now: number): string {
