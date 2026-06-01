@@ -19,7 +19,6 @@ import { formatCliStatusLabel } from '../sessionStatus';
 import { approvalQueueDepth } from '../state/approvalQueue';
 import { terminalCapabilities } from '../state/terminalCapabilities';
 import {
-  canShowSubagentControls,
   cliState,
   NO_BYPASS,
   type BypassState,
@@ -737,9 +736,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       taskControlTarget.slice,
       'tasks',
     ),
-    subagentControlsAvailable: canShowSubagentControls(
-      sessionMeta,
+    subagentControlsAvailable: hasChildControlItems(
       subagentControlTarget.slice,
+      'subagents',
     ),
     hasMultipleStreams: streams.size > 1,
     model: sessionMeta.model,
