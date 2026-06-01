@@ -31,6 +31,8 @@ function testContext(cwd: string): CliContext {
     mode: 'headless',
     outputFormat: 'text',
     approvalPolicy: 'never',
+    stdoutColorEnabled: false,
+    stderrColorEnabled: false,
     colorEnabled: false,
     version: 'test',
     resourcesPath: cwd,

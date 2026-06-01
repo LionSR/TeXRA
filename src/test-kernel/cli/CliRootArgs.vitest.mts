@@ -30,6 +30,8 @@ import {
 } from '@cli/commands/_helpers/workflowOutput';
 import { isKnownCliModel } from '@cli/runtime/cliConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { pickGlobalArgs } from '@cli/runtime/globalArgs';
+import { GLOBAL_BOOL_FLAGS } from '@cli/commands/_helpers/globalArgs';
 import { END_GROUP_STATUS, EXECUTION_STATUS } from '@shared/schemas';
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -41,6 +43,8 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
     quietLogs: false,
     renderRunProgress: true,
     stderrIsTty: false,
+    stdoutColorEnabled: false,
+    stderrColorEnabled: false,
     colorEnabled: false,
     version: '0.0.0',
     resourcesPath: '/tmp/resources',
@@ -263,6 +267,9 @@ describe('CLI root argument routing', () => {
     expect(() =>
       rejectHeadlessOnlyFlags(['--output-format=json'], 'orchestrate'),
     ).toThrow('texra orchestrate is interactive');
+    expect(() => rejectHeadlessOnlyFlags(['--no-input'], 'chat')).toThrow(
+      'texra chat is interactive',
+    );
     expect(() =>
       rejectHeadlessOnlyFlags(['--approval-policy', 'ask'], 'chat'),
     ).not.toThrow();
@@ -540,6 +547,43 @@ describe('CLI root argument routing', () => {
 
     expect(init.quietLogs).toBe(true);
     expect(init.skipIncludedModelAccess).toBeUndefined();
+  });
+});
+
+describe('CLI global color/input flags', () => {
+  it('maps CLI color and no-input flags to canonical knobs', () => {
+    // `--no-input` is direct so it does not collide with the run commands'
+    // command-specific `--input <file>` flag.
+    expect(pickGlobalArgs({ color: false, 'no-input': true })).toMatchObject({
+      noColor: true,
+      noInput: true,
+    });
+  });
+
+  it('treats absent/default color and no-input flags as not negated', () => {
+    expect(pickGlobalArgs({ color: true, 'no-input': false })).toMatchObject({
+      noColor: false,
+      noInput: false,
+    });
+    // Absent flags default to "not negated" too.
+    expect(pickGlobalArgs({})).toMatchObject({
+      noColor: false,
+      noInput: false,
+    });
+  });
+
+  it('registers global boolean spellings without stealing --input', () => {
+    // Needed so `texra --no-color agents list` and
+    // `texra --no-input agents list` reorder/dispatch correctly.
+    expect(GLOBAL_BOOL_FLAGS.has('--no-color')).toBe(true);
+    expect(GLOBAL_BOOL_FLAGS.has('--no-input')).toBe(true);
+    expect(GLOBAL_BOOL_FLAGS.has('--input')).toBe(false);
+  });
+
+  it('does not treat command-specific --input as a leading global flag', () => {
+    expect(
+      reorderGlobalFlags(['--input', 'file.tex', 'run', 'polish']),
+    ).toEqual(['--input', 'file.tex', 'run', 'polish']);
   });
 });
 

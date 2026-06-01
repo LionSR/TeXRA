@@ -11,6 +11,8 @@ import {
   readCliBugsUrl,
   readCliVersion,
   resolveCliCwd,
+  resolveStreamColor,
+  type CliAmbientState,
 } from '@cli/runtime/cliContext';
 import { loadWorkspaceCliConfig } from '@cli/runtime/cliConfig';
 
@@ -23,6 +25,19 @@ const ambient = {
   stderrColorEnabled: false,
   colorEnabled: false,
 };
+
+function ttyAmbient(overrides: Partial<CliAmbientState> = {}): CliAmbientState {
+  return {
+    isCi: false,
+    stdinIsTty: true,
+    stdoutIsTty: true,
+    stderrIsTty: true,
+    stdoutColorEnabled: true,
+    stderrColorEnabled: true,
+    colorEnabled: true,
+    ...overrides,
+  };
+}
 
 async function workspaceWithConfig(config: string): Promise<string> {
   const workspace = await mkdtemp(join(tmpdir(), 'texra-cli-context-'));
@@ -256,5 +271,104 @@ describe('CLI --cwd validation', () => {
     await expect(
       buildCliContext({ ambient, env: {}, globalArgs: { cwd: missing } }),
     ).rejects.toBeInstanceOf(CliUsageError);
+  });
+});
+
+describe('CLI per-stream color resolution', () => {
+  it('colors only when the stream itself is a TTY', () => {
+    expect(resolveStreamColor(true, { env: {} })).toBe(true);
+    expect(resolveStreamColor(false, { env: {} })).toBe(false);
+  });
+
+  it('NO_COLOR and TERM=dumb disable color even on a TTY', () => {
+    expect(resolveStreamColor(true, { env: { NO_COLOR: '1' } })).toBe(false);
+    expect(resolveStreamColor(true, { env: { NO_COLOR: '' } })).toBe(false);
+    expect(resolveStreamColor(true, { env: { TERM: 'dumb' } })).toBe(false);
+  });
+
+  it('FORCE_COLOR enables color even off a TTY', () => {
+    expect(resolveStreamColor(false, { env: { FORCE_COLOR: '1' } })).toBe(true);
+    expect(resolveStreamColor(false, { env: { FORCE_COLOR: 'true' } })).toBe(
+      true,
+    );
+  });
+
+  it('FORCE_COLOR=0 disables color even on a TTY', () => {
+    expect(resolveStreamColor(true, { env: { FORCE_COLOR: '0' } })).toBe(false);
+    expect(resolveStreamColor(true, { env: { FORCE_COLOR: 'false' } })).toBe(
+      false,
+    );
+    expect(resolveStreamColor(true, { env: { FORCE_COLOR: 'no' } })).toBe(
+      false,
+    );
+  });
+
+  it('empty FORCE_COLOR does not force color off a TTY', () => {
+    expect(resolveStreamColor(false, { env: { FORCE_COLOR: '' } })).toBe(false);
+  });
+
+  it('NO_COLOR wins over FORCE_COLOR', () => {
+    expect(
+      resolveStreamColor(true, { env: { FORCE_COLOR: '1', NO_COLOR: '1' } }),
+    ).toBe(false);
+  });
+
+  it('forceDisable beats everything', () => {
+    expect(
+      resolveStreamColor(true, {
+        forceDisable: true,
+        env: { FORCE_COLOR: '1' },
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('CLI color/no-input flag wiring', () => {
+  it('keeps the ambient per-stream gates by default', async () => {
+    const context = await buildCliContext({
+      ambient: ttyAmbient({
+        stdoutColorEnabled: true,
+        stderrColorEnabled: false,
+      }),
+      env: {},
+      globalArgs: { cwd: tmpdir() },
+    });
+    expect(context.stdoutColorEnabled).toBe(true);
+    expect(context.stderrColorEnabled).toBe(false);
+    // Back-compat alias still mirrors the stderr gate.
+    expect(context.colorEnabled).toBe(false);
+  });
+
+  it('--no-color force-disables both stream gates', async () => {
+    const context = await buildCliContext({
+      ambient: ttyAmbient(),
+      env: {},
+      globalArgs: { cwd: tmpdir(), noColor: true },
+    });
+    expect(context.stdoutColorEnabled).toBe(false);
+    expect(context.stderrColorEnabled).toBe(false);
+    expect(context.colorEnabled).toBe(false);
+  });
+
+  it('--no-input forces headless mode and a never approval policy', async () => {
+    const context = await buildCliContext({
+      // stdin is a TTY, so without --no-input this would be interactive.
+      ambient: ttyAmbient(),
+      env: {},
+      globalArgs: { cwd: tmpdir(), noInput: true, approvalPolicy: 'yolo' },
+    });
+    expect(context.mode).toBe('headless');
+    // --no-input pins approval to `never`, overriding the explicit flag.
+    expect(context.approvalPolicy).toBe('never');
+  });
+
+  it('leaves approval policy alone when --no-input is absent', async () => {
+    const context = await buildCliContext({
+      ambient: ttyAmbient(),
+      env: {},
+      globalArgs: { cwd: tmpdir(), approvalPolicy: 'yolo' },
+    });
+    expect(context.mode).toBe('interactive');
+    expect(context.approvalPolicy).toBe('yolo');
   });
 });
