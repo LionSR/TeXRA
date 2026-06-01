@@ -282,16 +282,34 @@ const SCENARIOS = [
     name: 'agent-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/agent', '\r'],
-    expect: ['/agent', 'Tool-use agents', 'Esc close'],
-    unexpect: ['Platform not initialized', '/agent - error'],
+    expect: [
+      '/agent',
+      'Tool-use agents',
+      'texra chat --agent=<name>',
+      'Esc close',
+    ],
+    unexpect: [
+      'Platform not initialized',
+      '/agent - error',
+      'texra --agent=<name>',
+    ],
   },
   {
     name: 'agent-form-80-cols',
     cols: 80,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/agent', '\r'],
-    expect: ['/agent', 'Tool-use agents', 'Esc close'],
-    unexpect: ['Platform not initialized', '/agent - error'],
+    expect: [
+      '/agent',
+      'Tool-use agents',
+      'texra chat --agent=<name>',
+      'Esc close',
+    ],
+    unexpect: [
+      'Platform not initialized',
+      '/agent - error',
+      'texra --agent=<name>',
+    ],
     maxLineColumns: 80,
   },
   {
@@ -299,8 +317,16 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/model', '\r'],
     frame: 'tail',
-    expect: ['/model · personal API keys', 'Available models'],
-    unexpect: ['Platform not initialized', '/model - error'],
+    expect: [
+      '/model · personal API keys',
+      'Available models',
+      'texra chat --model=<name>',
+    ],
+    unexpect: [
+      'Platform not initialized',
+      '/model - error',
+      'texra --model=<name>',
+    ],
   },
   {
     name: 'api-form',
