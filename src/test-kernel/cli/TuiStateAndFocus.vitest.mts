@@ -1237,6 +1237,20 @@ describe('CLI transcript state', () => {
     });
   });
 
+  it('does not duplicate waiting and final fallback entries for the same response', () => {
+    appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'waiting:1');
+    appendAssistantTranscriptIfMissing(root, 'The answer is 2.', 'final:1');
+
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => entry.id)).toEqual(['waiting:1:root']);
+    expect(entries[0]).toMatchObject({
+      role: 'assistant',
+      text: 'The answer is 2.',
+      finalized: true,
+      synthetic: true,
+    });
+  });
+
   it('keeps repeated final responses from distinct turns visible', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
