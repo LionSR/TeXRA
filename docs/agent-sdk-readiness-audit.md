@@ -73,20 +73,26 @@ the `@agent/runtime` facade barrel (§3.1, adds indirection), the `bridgeState`
 **The run call path (verified — entry renamed since 2026-05-30, see §9):**
 
 ```
-executeCommand.ts:36 (ext)  ─┐   validateExecutionRequest (executionRequests.ts:24)
-agentsRun/multiAgent (cli) ──┤→  runAgent (runAgent.ts:32)
-                              │     → executeAgent (executeAgent.ts)
-                              │         → buildAgentLaunchContext (AgentLaunchContext.ts)
-                              │         → withExecutionRunContext (AsyncLocalStorage)
-                              │         → branch on agentCategory:
-                              │             toolUse  → runToolUseFlow   → PersistedFlow.run
-                              │             workflow → runReflectionFlow → RoundPersistedFlow.run
+executeCommand.ts:42 (ext)   AgentConfigSchema.parse → runAgent (runAgent.ts:32) ─┐
+agentsRun/multiAgent (cli)   AgentConfigSchema.parse → executeCliRequest → runAgent┤
+                                                                                    │
+                              runAgent ──→ executeAgent (executeAgent.ts)           │
+                                  → buildAgentLaunchContext (AgentLaunchContext.ts) ─┘
+                                  → withExecutionRunContext (AsyncLocalStorage)
+                                  → branch on agentCategory:
+                                      toolUse  → runToolUseFlow   → PersistedFlow.run
+                                      workflow → runReflectionFlow → RoundPersistedFlow.run
 ```
 
-Both hosts converge on one core function — a genuine strength. The curated
-`@texra/core` barrel now re-exports this entry (`validateExecutionRequest` +
-`runAgent`, plus the lower-level `runAgentStream`) as the single public surface
-— see §9.
+Both hosts validate via `AgentConfigSchema.parse` and converge on one core
+function (`runAgent` → `executeAgent`) — a genuine strength. Note: the named
+extension/CLI hosts call `runAgent` directly; the sibling `validateExecutionRequest`
+(`executionRequests.ts:24`) is the **`@texra/core` public-surface validator**
+used by the webview/desktop handlers (`ProgressViewMessageHandler`,
+`MainViewExecutionController`, `desktopAgentExecution`) and recommended for
+external embedders, not the literal path these two hosts take. The curated
+`@texra/core` barrel re-exports both (`validateExecutionRequest` + `runAgent`,
+plus the lower-level `runAgentStream`) as the single public surface — see §9.
 
 ---
 
@@ -416,14 +422,17 @@ and tool-use vitest suites green.
   (`path` → `texra.path` → explicit prefix). It is justified DRY, **not** removable
   over-abstraction.
 
-**Surface/packaging note (unchanged recommendation, re-confirmed):** _[SUPERSEDED —
-resolved by Step 6 / PR #4781; see §9. The state described below is as of 2026-05-30 and
-is retained as a dated record.]_ `packages/core`
-is still a stub — `packages/core/src/index.ts` exports only `corePackageReady = true`,
-and consumers reach core via path aliases (`@agent`, `@platform`, `@logger`, `@shared`)
-rather than `@texra/core`. This is harmless today but means there is no single
-versioned public surface to point an external SDK consumer at; either populate it as
-a barrel of the genuinely-public types or drop it. Low priority.
+**Surface/packaging note (SUPERSEDED — now resolved, see §9/§10):** _[The state
+described below is as of 2026-05-30 and is retained as a dated record; the §8
+recommendation was resolved by Step 6 / PR #4781 — §9 and §10 carry the current
+status.]_ `packages/core`
+was still a stub — `packages/core/src/index.ts` exported only `corePackageReady = true`,
+and consumers reached core via path aliases (`@agent`, `@platform`, `@logger`, `@shared`)
+rather than `@texra/core`. This was harmless but meant there was no single
+versioned public surface to point an external SDK consumer at; the recommendation was to
+populate it as a barrel of the genuinely-public types or drop it. **§9/§10 record that
+this has since been done** — `packages/core/src/index.ts` is now a curated `@texra/core`
+barrel; treat §9/§10 as the current status for this item.
 
 **Scope note:** "Agent SDK readiness" here means aligning TeXRA's _own_ hand-rolled
 loop with Agent-SDK-shaped patterns. `@anthropic-ai/claude-agent-sdk` is depended on
