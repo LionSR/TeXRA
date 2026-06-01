@@ -441,7 +441,7 @@ const SCENARIOS = [
   {
     name: 'edit-approval',
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     expect: [
       'Apply edit to draft.tex?',
       'y approve',
@@ -456,7 +456,7 @@ const SCENARIOS = [
     rows: 12,
     cols: 40,
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     frame: 'tail',
     expect: [
       'Apply edit to draft.tex?',
@@ -470,7 +470,7 @@ const SCENARIOS = [
   {
     name: 'edit-approval-approve',
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     keys: ['y'],
     frame: 'tail',
     expect: ['[/status]details', '[/model]models'],
@@ -479,7 +479,7 @@ const SCENARIOS = [
   {
     name: 'bash-approval',
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     expect: [
       'Run bash command?',
       '$ npm run compile:safe',
@@ -497,7 +497,7 @@ const SCENARIOS = [
     rows: 12,
     cols: 40,
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     frame: 'tail',
     expect: [
       'Run bash command?',
@@ -516,7 +516,7 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
     },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     expect: [
       'Run bash command?',
       "$ python3 << 'EOF'",
@@ -535,7 +535,7 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
     },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     frame: 'tail',
     expect: [
       'Run bash command?',
@@ -555,7 +555,7 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
     },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     keys: [DOWN, DOWN, DOWN],
     frame: 'tail',
     expect: [
@@ -576,7 +576,7 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
     },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     keys: [PAGE_DOWN],
     frame: 'tail',
     expect: [
@@ -597,7 +597,7 @@ const SCENARIOS = [
       HARNESS_BASH_APPROVAL: '1',
       HARNESS_BASH_APPROVAL_COMMAND: LONG_BASH_APPROVAL_COMMAND,
     },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     frame: 'tail',
     expect: ['Run bash command?', 'more rows', 'scroll command', 'y approve'],
     unexpect: ['[Option-p]tasks'],
@@ -605,7 +605,7 @@ const SCENARIOS = [
   {
     name: 'bash-approval-approve-session',
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     keys: ['a'],
     frame: 'tail',
     expect: ['AUTO-BASH', '[/status]details', '[/model]models'],
@@ -614,7 +614,7 @@ const SCENARIOS = [
   {
     name: 'bash-approval-session-status',
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     keys: ['a', '/status', '\r'],
     frame: 'tail',
     expect: [
@@ -629,7 +629,7 @@ const SCENARIOS = [
     rows: 24,
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_AGENT_PROPOSAL: '1' },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     expect: [
       'Spawn review?',
       'Category: tool-use agent',
@@ -646,7 +646,7 @@ const SCENARIOS = [
     name: 'external-inquiry-long',
     rows: 24,
     env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     keys: [LONG_EXTERNAL_INQUIRY_ANSWER],
     frame: 'tail',
     expect: [
@@ -664,7 +664,7 @@ const SCENARIOS = [
     rows: 24,
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     keys: [LONG_EXTERNAL_INQUIRY_ANSWER],
     frame: 'tail',
     expect: [
@@ -682,7 +682,7 @@ const SCENARIOS = [
     rows: 12,
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_USER_QUESTION: '1' },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     frame: 'tail',
     expect: [
       'Agent asks:',
@@ -698,7 +698,7 @@ const SCENARIOS = [
   {
     name: 'plan-approval',
     env: { HARNESS_ENTRIES: '4', HARNESS_PLAN_APPROVAL: '1' },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     expect: [
       'Approve plan?',
       'Coordinate a short math proof through CLI chat.',
@@ -717,7 +717,7 @@ const SCENARIOS = [
       HARNESS_PLAN_APPROVAL: '1',
       HARNESS_PLAN_APPROVAL_ODYSSEY: '1',
     },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     expect: [
       'Approve plan?',
       'Coordinate a short math proof through CLI chat.',
@@ -733,7 +733,7 @@ const SCENARIOS = [
     rows: 10,
     cols: 80,
     env: { HARNESS_ENTRIES: '4', HARNESS_PLAN_APPROVAL: '1' },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     expect: [
       'Approve plan?',
       'Coordinate a short math proof through CLI chat.',
@@ -753,7 +753,7 @@ const SCENARIOS = [
       HARNESS_PLAN_APPROVAL: '1',
       HARNESS_PLAN_APPROVAL_ODYSSEY: '1',
     },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     expect: [
       'Approve plan?',
       'Coordinate a short math proof through CLI chat.',
@@ -773,7 +773,7 @@ const SCENARIOS = [
       HARNESS_PLAN_APPROVAL: '1',
       HARNESS_PLAN_APPROVAL_ODYSSEY: '1',
     },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     keys: ['r'],
     frame: 'tail',
     expect: ['PLAN-ODYSSEY', '[/status]details', '[/model]models'],
@@ -786,7 +786,7 @@ const SCENARIOS = [
       HARNESS_PLAN_APPROVAL: '1',
       HARNESS_PLAN_APPROVAL_ODYSSEY: '1',
     },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     keys: [DC2],
     frame: 'tail',
     expect: ['Approve plan?', 'r approve & run', '1 approval'],
@@ -795,7 +795,7 @@ const SCENARIOS = [
   {
     name: 'edit-approval-reject',
     env: { HARNESS_ENTRIES: '4', HARNESS_EDIT_APPROVAL: '1' },
-    bootExpect: 'Use foreground panel shortcuts',
+    bootExpect: '[Ctrl-C]',
     keys: ['n'],
     frame: 'tail',
     expect: ['[/status]details', '[/model]models'],
@@ -1268,8 +1268,9 @@ const SCENARIOS = [
       'harness-child-strategy details and',
       'preparing a concise result.',
       '[main]* 1:strategy*',
+      '[Ctrl-C]stop',
     ],
-    unexpect: ['│ ›', 'Task details', 'Output:', '*    y*'],
+    unexpect: ['│ ›', 'Task details', 'Output:', '*    y*', '[Ctrl…'],
   },
   {
     name: 'tiny-task-subworkflow-detail-wrapped-scroll',
