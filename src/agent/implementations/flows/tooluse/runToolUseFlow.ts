@@ -43,6 +43,7 @@ import {
   availableModelNamesFromOptions,
   withDelegationModelAvailability,
 } from '@tools/delegationModelAvailability';
+import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
@@ -64,6 +65,8 @@ export interface RunToolUseFlowInput<
   onFollowUpConsumed?: () => void;
   /** When true, delegation tools are filtered out to prevent nesting. */
   isSubagent?: boolean;
+  /** When true, approval-gated tools are filtered out before model invocation. */
+  approvalPromptsUnavailable?: boolean;
   /** Fires before the subagent enters WAITING, delivering the last response to the orchestrator. */
   onBeforeWaiting?: (
     lastResponse: string | undefined,
@@ -116,11 +119,14 @@ async function availableDelegationModelNamesForTools(
   }
 }
 
-async function resolveTools(
+export async function resolveToolUseTools(
   tools: AgentToolUseSetting['tools'],
   registry: IToolRegistry,
   logger: { warn: (msg: string) => void },
-  delegationBlocked: boolean,
+  options: {
+    readonly approvalPromptsUnavailable?: boolean;
+    readonly delegationBlocked: boolean;
+  },
 ): Promise<{ tools: ToolDefinition[]; delegationTrimmed: boolean }> {
   const disabled = getDisabledToolNames();
   const unavailable = getUnavailableToolNamesCached();
@@ -136,8 +142,14 @@ async function resolveTools(
   const resolved = toolConfigs
     .map((config) => (typeof config === 'string' ? { name: config } : config))
     .filter((def) => {
-      if (DELEGATION_TOOLS.has(def.name) && delegationBlocked) {
+      if (DELEGATION_TOOLS.has(def.name) && options.delegationBlocked) {
         delegationTrimmed = true;
+        return false;
+      }
+      if (
+        options.approvalPromptsUnavailable === true &&
+        isApprovalGatedToolName(def.name)
+      ) {
         return false;
       }
       if (disabled.has(def.name)) return false;
@@ -153,6 +165,16 @@ async function resolveTools(
   for (const injection of listToolInjections()) {
     if (!injection.shouldInject()) continue;
     if (resolvedNames.has(injection.toolName)) continue;
+    if (DELEGATION_TOOLS.has(injection.toolName) && options.delegationBlocked) {
+      delegationTrimmed = true;
+      continue;
+    }
+    if (
+      options.approvalPromptsUnavailable === true &&
+      isApprovalGatedToolName(injection.toolName)
+    ) {
+      continue;
+    }
     const tool = registry.get(injection.toolName);
     if (tool) {
       resolved.push(tool.definition);
@@ -194,11 +216,14 @@ export async function runToolUseFlow<C = unknown>(
     delegationDepth,
     delegationConfig,
   );
-  const { tools: resolvedTools, delegationTrimmed } = await resolveTools(
+  const { tools: resolvedTools, delegationTrimmed } = await resolveToolUseTools(
     setting.tools,
     registry,
     logger,
-    !delegationGate.allowed,
+    {
+      approvalPromptsUnavailable: input.approvalPromptsUnavailable,
+      delegationBlocked: !delegationGate.allowed,
+    },
   );
 
   const kv = getExecutionStore(executionId);
