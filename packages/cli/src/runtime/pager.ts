@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 
+import { readCliEnv } from './cliContext';
 import { writeTextStdout } from './logSinks';
 
 /**
@@ -18,7 +19,7 @@ const DEFAULT_PAGER = 'less -FIRX';
  * `PAGER=` disables paging, matching how `git`/`man` treat it.
  */
 export function resolvePagerCommand(
-  env: Record<string, string | undefined> = process.env,
+  env: Record<string, string | undefined> = readCliEnv(),
 ): string | undefined {
   const pager = env.PAGER;
   if (pager === undefined) return DEFAULT_PAGER;
@@ -66,7 +67,7 @@ export function pageStdout(
     input: `${text}\n`,
     stdio: ['pipe', 'inherit', 'inherit'],
     shell: true,
-    env: options.env ? { ...process.env, ...options.env } : undefined,
+    env: options.env ?? readCliEnv(),
   });
 
   if (result.error || result.status === 126 || result.status === 127) {
