@@ -371,7 +371,14 @@ export function writeDoctorReport(
     }
     return;
   }
-  const text = formatDoctorText(report, createCliStyle(context.colorEnabled));
+  const stdoutColorEnabled =
+    context.stdoutColorEnabled ??
+    (context.colorEnabled && context.stdoutIsTty === true);
+  const stderrColorEnabled =
+    context.stderrColorEnabled ??
+    (context.colorEnabled && context.stderrIsTty === true);
+  const colorEnabled = report.ok ? stdoutColorEnabled : stderrColorEnabled;
+  const text = formatDoctorText(report, createCliStyle(colorEnabled));
   if (report.ok) {
     writeTextStdout(text);
   } else {
