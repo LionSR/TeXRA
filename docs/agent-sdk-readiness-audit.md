@@ -15,9 +15,11 @@ at audit time. Claims about Anthropic/Agent SDK _native_ features are marked
 
 ## 0. TL;DR
 
-TeXRA is **already well-architected** and largely SDK-aligned: one canonical run
-entrypoint (`runValidatedExecutionRequest`), a PocketFlow-based agent loop with
-durable resume, a single discriminated trace-event stream (`AgentTrace`), and
+TeXRA is **already well-architected** and largely SDK-aligned: a single core run
+path behind a deliberate two-tier API (`validateExecutionRequest` → `runAgent`,
+with `runAgentStream` as the lower-level streaming engine — see §1/§9), a
+PocketFlow-based agent loop with durable resume, a single discriminated
+trace-event stream (`AgentTrace`), and
 config-driven agents (5 workflow + 10 tool-use YAMLs over 2 shared flows) with a
 working tool-driven delegation/subagent mechanism.
 
@@ -70,20 +72,29 @@ the `@agent/runtime` facade barrel (§3.1, adds indirection), the `bridgeState`
 | Logger          | `src/logger/` + `src/agent/trace/`                     | ~1.5k LOC, 14 files | Trace event stream + host sinks                   |
 | Event bus       | `src/eventBus/`                                        | ~0.3k LOC           | Progress/UI events                                |
 
-**The run call path (verified):**
+**The run call path (verified — entry renamed since 2026-05-30, see §9):**
 
 ```
-executeCommand.ts:36 (ext)  ─┐
-agentsRun/multiAgent (cli) ──┤→ runValidatedExecutionRequest (runExecutionRequest.ts:18)
-                              │     → executeAgent (executeAgent.ts:376)
-                              │         → buildAgentLaunchContext (AgentLaunchContext.ts:386)
-                              │         → withExecutionRunContext (AsyncLocalStorage)
-                              │         → branch on agentCategory:
-                              │             toolUse  → runToolUseFlow   → PersistedFlow.run
-                              │             workflow → runReflectionFlow → RoundPersistedFlow.run
+executeCommand.ts:42 (ext)        AgentConfigSchema.parse → runAgent (runAgent.ts:32) ─┐
+agentsRun.ts + multiAgent.ts(cli) AgentConfigSchema.parse → executeCliRequest → runAgent┤
+                                                                                         │
+                              runAgent ──→ executeAgent (executeAgent.ts)                │
+                                  → buildAgentLaunchContext (AgentLaunchContext.ts) ──────┘
+                                  → withExecutionRunContext (AsyncLocalStorage)
+                                  → branch on agentCategory:
+                                      toolUse  → runToolUseFlow   → PersistedFlow.run
+                                      workflow → runReflectionFlow → RoundPersistedFlow.run
 ```
 
-Both hosts converge on one core function — a genuine strength.
+Both hosts validate via `AgentConfigSchema.parse` and converge on one core
+function (`runAgent` → `executeAgent`) — a genuine strength. Note: the named
+extension/CLI hosts call `runAgent` directly; the sibling `validateExecutionRequest`
+(`executionRequests.ts:24`) is the **`@texra/core` public-surface validator**
+used by the webview/desktop handlers (`ProgressViewMessageHandler`,
+`MainViewExecutionController`, `desktopAgentExecution`) and recommended for
+external embedders, not the literal path these two hosts take. The curated
+`@texra/core` barrel re-exports both (`validateExecutionRequest` + `runAgent`,
+plus the lower-level `runAgentStream`) as the single public surface — see §9.
 
 ---
 
@@ -167,9 +178,9 @@ The public barrels (`@agent/index`, `@agent/core`, `@agent/types`) are
    `delegationPolicy`). Acceptable for internal command handlers, but there's no
    shielded "public runtime" subset.
    - **Action:** Add a small `@agent/runtime/index.ts` facade re-exporting the
-     genuinely-public subset (`runValidatedExecutionRequest`, `executeAgent`,
-     `resumeToolUseFromSnapshot`, `AgentRuntimeHost`). Keep internals importable
-     but make the intended surface obvious.
+     genuinely-public subset (`runAgent`/`validateExecutionRequest`, `executeAgent`,
+     `resumeToolUseFromSnapshot`, `AgentRuntimeHost` — the API renamed since this
+     pass, see §9). Keep internals importable but make the intended surface obvious.
 
 2. **Core barrel under-exports.** `@agent/core` exports only ~3 symbols;
    `AgentConfigSchema`, `AgentWorkflowSetting`, `AgentToolUseSetting`,
@@ -413,14 +424,17 @@ and tool-use vitest suites green.
   (`path` → `texra.path` → explicit prefix). It is justified DRY, **not** removable
   over-abstraction.
 
-**Surface/packaging note (unchanged recommendation, re-confirmed):** _[SUPERSEDED —
-resolved by Step 6 / PR #4781; see §9. The state described below is as of 2026-05-30 and
-is retained as a dated record.]_ `packages/core`
-is still a stub — `packages/core/src/index.ts` exports only `corePackageReady = true`,
-and consumers reach core via path aliases (`@agent`, `@platform`, `@logger`, `@shared`)
-rather than `@texra/core`. This is harmless today but means there is no single
-versioned public surface to point an external SDK consumer at; either populate it as
-a barrel of the genuinely-public types or drop it. Low priority.
+**Surface/packaging note (SUPERSEDED — now resolved, see §9/§10):** _[The state
+described below is as of 2026-05-30 and is retained as a dated record; the §8
+recommendation was resolved by Step 6 / PR #4781 — §9 and §10 carry the current
+status.]_ `packages/core`
+was still a stub — `packages/core/src/index.ts` exported only `corePackageReady = true`,
+and consumers reached core via path aliases (`@agent`, `@platform`, `@logger`, `@shared`)
+rather than `@texra/core`. This was harmless but meant there was no single
+versioned public surface to point an external SDK consumer at; the recommendation was to
+populate it as a barrel of the genuinely-public types or drop it. **§9/§10 record that
+this has since been done** — `packages/core/src/index.ts` is now a curated `@texra/core`
+barrel; treat §9/§10 as the current status for this item.
 
 **Scope note:** "Agent SDK readiness" here means aligning TeXRA's _own_ hand-rolled
 loop with Agent-SDK-shaped patterns. `@anthropic-ai/claude-agent-sdk` is depended on
@@ -532,3 +546,73 @@ serve different consumer classes and must not be merged (proposal "Rejected find
 per-run/session handle) and three small, independently-shippable tidies (§2.6 relocate,
 §4 usage de-dup, redaction-contract doc). No rewrite warranted; the codebase has the structure it
 would have had if designed with these hosts in mind.
+
+---
+
+## 10. Re-verification addendum — 2026-06-01
+
+A fifth independent pass (agent core/runtime, model handlers, logger/trace, and
+platform/surface, fanned out across four parallel explorers) re-audited the same
+surfaces against the current tree. **The 2026-05-28/29/30/31 findings hold; no new
+structural gaps surfaced.** TeXRA remains well-architected and SDK-aligned. As
+already documented in §9 (2026-05-31), the top open surface item (the §8
+`packages/core` packaging note) was resolved and the run entrypoint was renamed
+between the 2026-05-30 and 2026-05-31 passes; this fifth pass re-confirms both
+remain in place as of 2026-06-01 (and is what dated the original §1 diagram, now
+corrected).
+
+**§8 `packages/core` surface — resolved (landed by §9's pass, re-confirmed here; was a stub, now a real barrel):**
+
+`packages/core/src/index.ts` is no longer `corePackageReady = true`. It is now a
+curated **`@texra/core` barrel** (~115 lines, 8 labeled sections:
+platform composition root → config/identity → request building → running an agent
+→ host port → `AgentTrace` telemetry → agent registry → execution storage). It is
+the single host-neutral public surface §8 asked for — the package typechecks with
+only `@types/node`, so any `vscode` leak into the surface fails the build. This
+**closes the §8 recommendation** ("either populate it as a barrel … or drop it");
+the team populated it. Deep `@agent/*` imports still work and are adopted
+incrementally, as the module's own docstring states.
+
+**Entrypoint rename (dates the §1 diagram, now corrected above):**
+
+The canonical run entry the prior passes called `runValidatedExecutionRequest`
+(`runExecutionRequest.ts:18`) has been split/renamed into the two-tier API the
+`@texra/core` barrel now exposes: `validateExecutionRequest`
+(`core/execution/executionRequests.ts:24`) → `runAgent` (`runtime/runAgent.ts:32`),
+with the lower-level streaming engine `executeAgent` re-exported as `runAgentStream`.
+This is the deliberate, _documented_ high-level/low-level split (`runAgent.ts:19-31`),
+not accidental duplication — `runAgent` adds only id-gen + `registerExecution` +
+the workflow-output callback over `executeAgent`. §1 updated to match.
+
+**Pending items re-confirmed present (paths refreshed where drifted):**
+
+- **§2.6** — `src/agent/modelHandlers/modelHandlerValidation.ts` still sits in the
+  dispatch dir. Still recommended to relocate to `test-kernel/` and inject.
+- **§3.1** — no `@agent/runtime/index.ts` facade barrel yet. _Reduced priority:_ the
+  new `@texra/core` barrel now provides the package-level shielded surface that §3.1's
+  underlying concern (no obvious public runtime subset) was really about; a separate
+  per-directory runtime barrel is now optional polish, not a gap.
+- **§4** — token usage is **still double-emitted**. `UsageMonitor` relocated from
+  `core/usage/` to `src/agent/utils/UsageMonitor.ts`; the two emissions are now
+  `runtimeHost.emit('updateStreamUsage', …)` at `:155` and `logger.usage(payload, …)`
+  at `:164`. The single-source-of-truth consolidation onto `AgentTrace` remains open.
+- **§5** — no first-class `delegateTo(...)` primitive (`grep delegateTo src/** packages/**`
+  empty); delegation remains a tool call inside the LLM loop. Subagent mechanism otherwise
+  intact (delegation tools, depth tracking, parent-linked spawns, multi-agent presets).
+- **§7** — holds. The provider-identity getters (`ModelHandler.ts:406-431`) survive only
+  as the explicitly-endorsed display allow-list: their sole callers outside the handler
+  hierarchy are the template flags at `AgentLaunchContext.ts:263-265` → `userVars.ts:167-169`
+  (`IS_OPENAI/ANTHROPIC/GOOGLE_MODEL`). No behavioral dispatch on identity remains.
+
+**Cross-cutting confirmation (model handlers, logger/trace):** Both layers re-audited
+clean this pass and need no change. The model-handler factory (`ModelFactory.ts`) is a
+single-purpose three-path router (Responses-API / OpenRouter / direct), usage is
+normalized once through `support/UsageNormalizer`, and tool conversion shares one schema
+normalizer across providers. The logger stays SDK/product-free (`logger/index.ts` is a
+3-line re-export; `createChannelTrace`/`attachChannelSubscriber` are justified DRY
+composition, not indirection), with `AgentTrace` as the single per-run event channel and
+`ProgressEventBus` orthogonal — the only genuine overlap is the §4 usage double-emit.
+
+**Net:** the audit's "incremental, not structural" thesis (§0) is reaffirmed, and the
+ledger shrinks — §8 resolved, §3.1 downgraded to optional. Remaining open work is §2.6
+(relocate), §4 (one consumer rewire), and §5 (formalize the subagent primitive).
