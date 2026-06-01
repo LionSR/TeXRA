@@ -1,6 +1,8 @@
 import { STREAM_STATUS } from '@shared/schemas';
 import { truncateSummary } from '@utils/text/stringUtils';
 
+import type { BypassState } from './state/cliState';
+
 const QUEUED_FOLLOW_UP_STATUS_LENGTH = 160;
 
 export interface CliSessionStatusInput {
@@ -9,6 +11,7 @@ export interface CliSessionStatusInput {
   readonly teamName?: string;
   readonly api: string;
   readonly approval: string;
+  readonly approvalBypasses?: Partial<BypassState>;
   readonly status: string;
   readonly queuedFollowUpMessages: readonly string[];
 }
@@ -42,13 +45,28 @@ function queuedFollowUpStatusLines(messages: readonly string[]): string[] {
   ];
 }
 
+function activeApprovalBypassLabels(
+  bypasses: Partial<BypassState> | undefined,
+): string[] {
+  if (!bypasses) return [];
+  const labels: string[] = [];
+  if (bypasses.superYolo) labels.push('delegated tasks');
+  if (bypasses.bash) labels.push('bash commands');
+  if (bypasses.toolEdit) labels.push('file edits');
+  return labels;
+}
+
 export function formatCliSessionStatus(input: CliSessionStatusInput): string {
+  const bypassLabels = activeApprovalBypassLabels(input.approvalBypasses);
   return [
     ...(input.teamName ? [`team: ${input.teamName}`] : []),
     `agent: ${input.agent}`,
     `model: ${input.model}`,
     `api: ${input.api}`,
     `approval: ${input.approval}`,
+    ...(bypassLabels.length > 0
+      ? [`auto-approvals: ${bypassLabels.join(', ')}`]
+      : []),
     `status: ${formatCliStatusLabel(input.status)}`,
     ...queuedFollowUpStatusLines(input.queuedFollowUpMessages),
   ].join('\n');
