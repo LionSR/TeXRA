@@ -124,6 +124,7 @@ export function registerBuiltinSlashCommands(options?: {
     const current = options?.getApprovalPolicy?.() ?? 'ask';
     return (
       <ApprovalPolicyForm
+        availableRows={props.availableRows}
         currentPolicy={current}
         onSelect={(value) =>
           settleThenDone(

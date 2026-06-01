@@ -3,9 +3,12 @@ import { Box, Text } from 'ink';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
+import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
+import { isCompactFormRows } from './_shared/selectWindow';
 
 export interface ApprovalPolicyFormProps {
   readonly currentPolicy: CliApprovalPolicy;
+  readonly availableRows?: number;
   readonly onSelect: (value: CliApprovalPolicy) => void;
   readonly onCancel: () => void;
 }
@@ -24,6 +27,40 @@ export function formatApprovalPolicyForCli(policy: CliApprovalPolicy): string {
 export function ApprovalPolicyForm(
   props: ApprovalPolicyFormProps,
 ): React.JSX.Element {
+  const items = [
+    {
+      value: 'ask' as const,
+      label: 'Ask',
+      description: formatApprovalPolicyForCli('ask'),
+    },
+    {
+      value: 'never' as const,
+      label: 'Never',
+      description: formatApprovalPolicyForCli('never'),
+    },
+    {
+      value: 'yolo' as const,
+      label: 'Approve',
+      description: formatApprovalPolicyForCli('yolo'),
+    },
+  ];
+
+  if (isCompactFormRows(props.availableRows)) {
+    return (
+      <FormFrame color="cyan" title="/approval" showCloseHint={false}>
+        <Select
+          items={items}
+          activeValue={props.currentPolicy}
+          maxVisibleItems={items.length}
+          showOverflow={false}
+          onSelect={props.onSelect}
+          onCancel={props.onCancel}
+        />
+        <CompactFormKeyHints primary={{ key: '1-3/Enter', action: 'select' }} />
+      </FormFrame>
+    );
+  }
+
   return (
     <Box
       borderStyle="round"
@@ -37,23 +74,7 @@ export function ApprovalPolicyForm(
       <Text dimColor>Choose how privileged actions should be handled.</Text>
       <Box marginTop={1} flexDirection="column">
         <Select
-          items={[
-            {
-              value: 'ask',
-              label: 'Ask',
-              description: formatApprovalPolicyForCli('ask'),
-            },
-            {
-              value: 'never',
-              label: 'Never',
-              description: formatApprovalPolicyForCli('never'),
-            },
-            {
-              value: 'yolo',
-              label: 'Approve',
-              description: formatApprovalPolicyForCli('yolo'),
-            },
-          ]}
+          items={items}
           activeValue={props.currentPolicy}
           onSelect={props.onSelect}
           onCancel={props.onCancel}
