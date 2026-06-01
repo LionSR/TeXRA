@@ -22,16 +22,20 @@ async function listAgents(context: CliContext): Promise<number> {
       getVisibleAgents(category).map((agent) => ({ ...agent, category })),
   );
 
-  emitCliResult(context, {
-    json: agents,
-    ndjson: agents.map((agent) => ({ kind: 'agent', agent })),
-    text: agents
-      .map(
-        (agent) =>
-          `${agent.category}\t${agent.name}\t${agent.description ?? ''}`,
-      )
-      .join('\n'),
-  });
+  emitCliResult(
+    context,
+    {
+      json: agents,
+      ndjson: agents.map((agent) => ({ kind: 'agent', agent })),
+      text: agents
+        .map(
+          (agent) =>
+            `${agent.category}\t${agent.name}\t${agent.description ?? ''}`,
+        )
+        .join('\n'),
+    },
+    { paged: true },
+  );
   return CliExitCode.Success;
 }
 

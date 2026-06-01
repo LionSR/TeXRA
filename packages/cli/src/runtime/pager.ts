@@ -1,0 +1,75 @@
+import { spawnSync } from 'node:child_process';
+
+import { writeTextStdout } from './logSinks';
+
+/**
+ * Default pager command (clig.dev's suggestion). `less` flags:
+ *   -F  quit immediately if the content fits on one screen (no-op for short
+ *       output, so the user never has to press `q` for a 3-line list).
+ *   -I  case-insensitive search.
+ *   -R  pass through ANSI color so styled output survives the pager.
+ *   -X  don't clear the screen on exit, leaving the output in scrollback.
+ */
+const DEFAULT_PAGER = 'less -FIRX';
+
+/**
+ * Resolve the pager command from `$PAGER` (then `$TEXRA_PAGER` is *not* a thing
+ * — we deliberately reuse the conventional env var). An explicitly empty
+ * `PAGER=` disables paging, matching how `git`/`man` treat it.
+ */
+export function resolvePagerCommand(
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  const pager = env.PAGER;
+  if (pager === undefined) return DEFAULT_PAGER;
+  const trimmed = pager.trim();
+  // `PAGER=` (empty) or `PAGER=cat` are the conventional "no pager" signals.
+  if (trimmed === '' || trimmed === 'cat') return undefined;
+  return trimmed;
+}
+
+/**
+ * Write `text` to stdout, paging through `$PAGER` (default `less -FIRX`) **only**
+ * when stdout is an interactive TTY. When stdout is not a TTY (piped, redirected,
+ * `--print`, `--output-format json|ndjson`) this is a strict no-op wrapper around
+ * `writeTextStdout` — byte-identical to writing directly, so headless parity is
+ * preserved (the pager never sees the non-TTY path).
+ *
+ * If spawning the pager fails for any reason (missing binary, spawn error), we
+ * fall back to writing the text directly rather than swallowing the output.
+ */
+export function pageStdout(
+  text: string,
+  options: {
+    readonly stdoutIsTty?: boolean;
+    readonly env?: Record<string, string | undefined>;
+  } = {},
+): void {
+  // Empty output never pages — mirrors `emitCliResult`'s skip-empty behavior.
+  if (text === '') return;
+
+  if (options.stdoutIsTty !== true) {
+    writeTextStdout(text);
+    return;
+  }
+
+  const command = resolvePagerCommand(options.env);
+  if (!command) {
+    writeTextStdout(text);
+    return;
+  }
+
+  // Run through `$SHELL -c` so `$PAGER` strings with flags ("less -FIRX") and
+  // user customizations work without us re-implementing shell word-splitting.
+  const result = spawnSync(command, {
+    input: `${text}\n`,
+    stdio: ['pipe', 'inherit', 'inherit'],
+    shell: true,
+  });
+
+  if (result.error || result.status === null) {
+    // The pager could not be launched (e.g. `less` not installed). Don't lose
+    // the content: write it straight to stdout instead.
+    writeTextStdout(text);
+  }
+}
