@@ -1415,31 +1415,22 @@ const SCENARIOS = [
     unexpect: ['Harness received: can you still receive this?'],
   },
   {
-    name: 'empty-task-picker',
+    name: 'empty-task-shortcut-hidden',
     env: {
       HARNESS_ENTRIES: '4',
     },
     keys: [ESC + 'p'],
     frame: 'tail',
-    expect: [
-      'Tasks and sub-workflows',
-      'Stream: main',
-      'No active tasks or sub-workflows.',
-      'Esc close',
-    ],
+    expect: ['entry-4 chat history line', '[/status]details', '[Ctrl-C]exit'],
     unexpect: [
+      '[Option-p]tasks',
+      '[Alt-p]tasks',
+      '[Esc p]tasks',
+      'Tasks and sub-workflows',
+      'No active tasks or sub-workflows.',
       'Enter view',
       'k kill',
       'navigate',
-      '│                                                                                                  │\n│ No active tasks or sub-workflows.',
-      '│ No active tasks or sub-workflows.                                                                │\n│                                                                                                  │',
-    ],
-    maxBlankLinesBetween: [
-      {
-        from: 'entry-4 chat history line',
-        to: 'Tasks and sub-workflows',
-        max: 0,
-      },
     ],
   },
   {
