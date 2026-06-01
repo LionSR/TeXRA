@@ -1092,6 +1092,83 @@ describe('CLI child execution controls', () => {
     });
   });
 
+  it('anchors manual task detail scrolling when earlier output rewraps', () => {
+    const availableColumns = 20;
+    const visibleRowBudget = 1;
+    const beforeLines = ['intro', 'target marker', 'after'];
+    const beforeContext = {
+      availableColumns,
+      compact: true,
+      tailLines: beforeLines,
+    };
+    const beforeScrollableRows =
+      taskDetailScrollableOutputRowCountForColumns(beforeContext);
+    const beforeMaxOffset = taskDetailInitialScrollOffset(
+      beforeScrollableRows,
+      visibleRowBudget,
+    );
+    const beforeFollowOffset = taskDetailFollowTailScrollOffsetForColumns({
+      ...beforeContext,
+      visibleRowBudget,
+    });
+
+    const manual = moveTaskDetailScrollState(
+      { executionId: 'task-1', followsTail: true, offset: beforeFollowOffset },
+      beforeMaxOffset,
+      'up',
+      beforeFollowOffset,
+      beforeContext,
+    );
+
+    expect(manual).toEqual({
+      anchor: { lineIndex: 1, wrappedRowOffset: 0 },
+      executionId: 'task-1',
+      followsTail: false,
+      offset: 1,
+    });
+
+    const afterLines = [
+      'intro expanded before anchor '.repeat(2),
+      'target marker',
+      'after',
+    ];
+    const afterContext = {
+      availableColumns,
+      compact: true,
+      tailLines: afterLines,
+    };
+    const afterMaxOffset = taskDetailInitialScrollOffset(
+      taskDetailScrollableOutputRowCountForColumns(afterContext),
+      visibleRowBudget,
+    );
+    const afterFollowOffset = taskDetailFollowTailScrollOffsetForColumns({
+      ...afterContext,
+      visibleRowBudget,
+    });
+    const synced = syncTaskDetailScrollState(
+      manual,
+      'task-1',
+      afterMaxOffset,
+      afterFollowOffset,
+      afterContext,
+    );
+    const visibleOffset = taskDetailVisibleScrollOffset(
+      synced,
+      afterMaxOffset,
+      afterFollowOffset,
+      afterContext,
+    );
+
+    expect(visibleOffset).toBeGreaterThan(manual.offset);
+    expect(
+      taskDetailVisibleOutputRowsFromOffsetForColumns({
+        ...afterContext,
+        offset: visibleOffset,
+        visibleRowBudget,
+      }),
+    ).toEqual(['target marker']);
+  });
+
   it('moves task detail scroll from the visible tail position', () => {
     const tailing = { executionId: 'task-1', followsTail: true, offset: 7 };
     expect(moveTaskDetailScrollState(tailing, 9, 'up')).toEqual({
