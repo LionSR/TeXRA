@@ -191,6 +191,7 @@ export async function resolveDeepestSubCommand(
 export interface UnknownCliCommand {
   readonly typedCommand: string;
   readonly helpCommand: string;
+  readonly suggestedCommand?: string;
 }
 
 function isPureSubCommandContainer(
@@ -201,6 +202,51 @@ function isPureSubCommandContainer(
     Object.keys(subCommands).length > 0 &&
     typeof (cmd as { run?: unknown }).run !== 'function'
   );
+}
+
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  let current = new Array<number>(b.length + 1);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    current[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const substitutionCost = a[i - 1] === b[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + substitutionCost,
+      );
+    }
+    [previous, current] = [current, previous];
+  }
+
+  return previous[b.length];
+}
+
+function suggestionThreshold(token: string, candidate: string): number {
+  return Math.max(1, Math.floor(Math.max(token.length, candidate.length) / 3));
+}
+
+function suggestSubCommand(
+  token: string,
+  subCommands: Record<string, AnyCommand>,
+): string | undefined {
+  let best: { readonly name: string; readonly distance: number } | undefined;
+
+  for (const name of Object.keys(subCommands)) {
+    const distance = editDistance(token, name);
+    if (distance > suggestionThreshold(token, name)) continue;
+    if (
+      best === undefined ||
+      distance < best.distance ||
+      (distance === best.distance && name < best.name)
+    ) {
+      best = { name, distance };
+    }
+  }
+
+  return best?.name;
 }
 
 export async function detectUnknownCliCommand(
@@ -233,9 +279,14 @@ export async function detectUnknownCliCommand(
     }
 
     if (isPureSubCommandContainer(cmd, subCommands)) {
+      const suggestedName = suggestSubCommand(token, subCommands);
       return {
         typedCommand: [...pathParts, token].join(' '),
         helpCommand: pathParts.join(' '),
+        suggestedCommand:
+          suggestedName == null
+            ? undefined
+            : [...pathParts, suggestedName].join(' '),
       };
     }
 
@@ -246,7 +297,11 @@ export async function detectUnknownCliCommand(
 }
 
 export function formatUnknownCliCommand(command: UnknownCliCommand): string {
-  return `Unknown command: ${command.typedCommand}. Run \`${command.helpCommand} --help\` for usage.`;
+  const suggestion =
+    command.suggestedCommand == null
+      ? ''
+      : ` Did you mean \`${command.suggestedCommand}\`?`;
+  return `Unknown command: ${command.typedCommand}.${suggestion} Run \`${command.helpCommand} --help\` for usage.`;
 }
 
 /**
