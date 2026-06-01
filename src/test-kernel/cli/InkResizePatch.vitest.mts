@@ -83,4 +83,18 @@ describe('CLI Ink resize patch', () => {
 
     expect(stream.output()).toContain('\x1B[3B');
   });
+
+  it('uses the physical cursor row after wrapped lines precede the cursor', async () => {
+    const { default: logUpdate } = await loadCliLogUpdate();
+    const stream = createRecordingStream();
+    const render = logUpdate.create(stream, { showCursor: true });
+
+    render.setCursorPosition({ x: 1, y: 1 });
+    render(`${'x'.repeat(95)}\nnext`);
+    stream.reset();
+    render.clearWidthAware(30);
+
+    expect(countEraseLines(stream.output())).toBe(5);
+    expect(stream.output()).not.toContain('\x1B[3B');
+  });
 });

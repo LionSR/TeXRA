@@ -21,10 +21,10 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..3c8a9a99cc9fd2f5f524905ff61df013
              this.lastOutputToRender = '';
          }
 diff --git a/build/log-update.js b/build/log-update.js
-index cdb5fc41f158304c4c4f230a765065ab1fe0a2f7..1ab7877f6bcfa7d33aead4af4b37adc8a67c89c7 100644
+index cdb5fc41f158304c4c4f230a765065ab1fe0a2f7..cf17dec7258bf9c267bd382786ca3481b9f9bf5a 100644
 --- a/build/log-update.js
 +++ b/build/log-update.js
-@@ -1,6 +1,31 @@
+@@ -1,6 +1,48 @@
  import ansiEscapes from 'ansi-escapes';
  import cliCursor from 'cli-cursor';
  import { cursorPositionChanged, buildCursorSuffix, buildCursorOnlySequence, buildReturnToBottomPrefix, hideCursorEscape, } from './cursor-helpers.js';
@@ -52,11 +52,28 @@ index cdb5fc41f158304c4c4f230a765065ab1fe0a2f7..1ab7877f6bcfa7d33aead4af4b37adc8
 +    }
 +    return rows;
 +};
++const physicalCursorPosition = (str, columns, cursorPosition) => {
++    if (!cursorPosition) return undefined;
++    const cols = columns > 0 ? columns : 1;
++    const lines = str.split('\n');
++    const logicalY = Math.max(0, Math.min(cursorPosition.y, lines.length - 1));
++    let physicalY = 0;
++    for (let i = 0; i < logicalY; i++) {
++        const w = stringWidth(lines[i]);
++        physicalY += w <= cols ? 1 : Math.ceil(w / cols);
++    }
++    physicalY += Math.floor(Math.max(0, cursorPosition.x) / cols);
++    const lastPhysicalY = Math.max(0, physicalLineCount(str, cols) - 1);
++    return {
++        ...cursorPosition,
++        y: Math.min(physicalY, lastPhysicalY),
++    };
++};
 +
  // Count visible lines in a string, ignoring the trailing empty element
  // that `split('\n')` produces when the string ends with '\n'.
  const visibleLineCount = (lines, str) => str.endsWith('\n') ? lines.length - 1 : lines.length;
-@@ -63,6 +88,18 @@ const createStandard = (stream, { showCursor = false } = {}) => {
+@@ -63,6 +105,19 @@ const createStandard = (stream, { showCursor = false } = {}) => {
          previousCursorPosition = undefined;
          cursorWasShown = false;
      };
@@ -65,7 +82,8 @@ index cdb5fc41f158304c4c4f230a765065ab1fe0a2f7..1ab7877f6bcfa7d33aead4af4b37adc8
 +    // line count (which under-erases on shrink and leaves residue). (TeXRA patch)
 +    render.clearWidthAware = (columns) => {
 +        const physical = physicalLineCount(previousOutput, columns);
-+        const prefix = buildReturnToBottomPrefix(cursorWasShown, physical, previousCursorPosition);
++        const physicalCursor = physicalCursorPosition(previousOutput, columns, previousCursorPosition);
++        const prefix = buildReturnToBottomPrefix(cursorWasShown, physical, physicalCursor);
 +        stream.write(prefix + ansiEscapes.eraseLines(physical));
 +        previousOutput = '';
 +        previousLineCount = 0;
@@ -75,14 +93,15 @@ index cdb5fc41f158304c4c4f230a765065ab1fe0a2f7..1ab7877f6bcfa7d33aead4af4b37adc8
      render.done = () => {
          previousOutput = '';
          previousLineCount = 0;
-@@ -204,6 +241,16 @@ const createIncremental = (stream, { showCursor = false } = {}) => {
+@@ -204,6 +259,17 @@ const createIncremental = (stream, { showCursor = false } = {}) => {
          previousCursorPosition = undefined;
          cursorWasShown = false;
      };
 +    // Width-aware clear for terminal resizes (see createStandard). (TeXRA patch)
 +    render.clearWidthAware = (columns) => {
 +        const physical = physicalLineCount(previousOutput, columns);
-+        const prefix = buildReturnToBottomPrefix(cursorWasShown, physical, previousCursorPosition);
++        const physicalCursor = physicalCursorPosition(previousOutput, columns, previousCursorPosition);
++        const prefix = buildReturnToBottomPrefix(cursorWasShown, physical, physicalCursor);
 +        stream.write(prefix + ansiEscapes.eraseLines(physical));
 +        previousOutput = '';
 +        previousLines = [];
