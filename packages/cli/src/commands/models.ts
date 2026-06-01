@@ -85,16 +85,20 @@ async function listModels(
   if (context.outputFormat === 'text' && listedModels.length === 0) {
     writeTextStderr(formatNoListableModelsMessage(context.apiMode, options));
   }
-  emitCliResult(context, {
-    json: listedModels.map(({ model }) => cliModelRecord(model)),
-    ndjson: listedModels.map(({ model }) => ({
-      kind: 'model',
-      model: cliModelRecord(model),
-    })),
-    text: listedModels
-      .map(({ model, status }) => `${model.value}\t${model.label}\t${status}`)
-      .join('\n'),
-  });
+  emitCliResult(
+    context,
+    {
+      json: listedModels.map(({ model }) => cliModelRecord(model)),
+      ndjson: listedModels.map(({ model }) => ({
+        kind: 'model',
+        model: cliModelRecord(model),
+      })),
+      text: listedModels
+        .map(({ model, status }) => `${model.value}\t${model.label}\t${status}`)
+        .join('\n'),
+    },
+    { paged: true },
+  );
   return CliExitCode.Success;
 }
 
