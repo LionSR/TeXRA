@@ -551,9 +551,9 @@ would have had if designed with these hosts in mind.
 
 ## 10. Re-verification addendum — 2026-06-01
 
-A fourth independent pass (agent core/runtime, model handlers, logger/trace, and
+A fifth independent pass (agent core/runtime, model handlers, logger/trace, and
 platform/surface, fanned out across four parallel explorers) re-audited the same
-surfaces against the current tree. **The 2026-05-28/29/30 findings hold; no new
+surfaces against the current tree. **The 2026-05-28/29/30/31 findings hold; no new
 structural gaps surfaced.** TeXRA remains well-architected and SDK-aligned. The
 notable change since 2026-05-30 is that the top open surface item has been
 **resolved**, plus one entrypoint rename that dated the §1 diagram.
