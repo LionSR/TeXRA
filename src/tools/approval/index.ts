@@ -25,6 +25,7 @@ import {
 import {
   toolEditApprovalController,
   enableYoloOnChildStream,
+  inheritBashBypassOnChildStream,
 } from './toolEditApproval';
 
 /**
@@ -55,7 +56,7 @@ export function cleanupAllApprovals(): void {
   cleanupAllCoordinatorRequests();
 }
 
-export { enableYoloOnChildStream };
+export { enableYoloOnChildStream, inheritBashBypassOnChildStream };
 
 // Re-export commonly used functions from individual modules
 export {
