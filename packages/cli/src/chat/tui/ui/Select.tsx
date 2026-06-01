@@ -118,7 +118,8 @@ export function visibleSelectRange({
   const visibleCount =
     maxVisibleItems == null
       ? itemCount
-      : Math.min(Math.max(1, maxVisibleItems), itemCount);
+      : Math.min(Math.max(0, maxVisibleItems), itemCount);
+  if (visibleCount <= 0) return { start: 0, end: 0 };
   const clampedHighlight = clampIndex(highlight, itemCount);
   const centerOffset = Math.floor(visibleCount / 2);
   const start = Math.min(
@@ -145,6 +146,21 @@ export function selectInlineOverflowText({
   }
   if (hiddenBefore > 0) return `+${hiddenBefore} earlier`;
   return `+${hiddenAfter} more`;
+}
+
+export function selectVisibleInlineOverflowText({
+  hiddenAfter,
+  hiddenBefore,
+  showOverflow,
+  visibleItemCount,
+}: {
+  readonly hiddenAfter: number;
+  readonly hiddenBefore: number;
+  readonly showOverflow: boolean | undefined;
+  readonly visibleItemCount: number;
+}): string | undefined {
+  if (visibleItemCount <= 0) return undefined;
+  return selectInlineOverflowText({ hiddenAfter, hiddenBefore, showOverflow });
 }
 
 export function selectItemRenderKey<T>(
@@ -199,14 +215,12 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   const hiddenBefore = visibleRange.start;
   const hiddenAfter = props.items.length - visibleRange.end;
   const visibleItems = props.items.slice(visibleRange.start, visibleRange.end);
-  const inlineOverflowText =
-    visibleItems.length === 1
-      ? selectInlineOverflowText({
-          hiddenAfter,
-          hiddenBefore,
-          showOverflow: props.showOverflow,
-        })
-      : undefined;
+  const inlineOverflowText = selectVisibleInlineOverflowText({
+    hiddenAfter,
+    hiddenBefore,
+    showOverflow: props.showOverflow,
+    visibleItemCount: visibleItems.length,
+  });
 
   useInput((input, key) => {
     if (key.escape) {
@@ -267,6 +281,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
         const tick = active ? '✓' : ' ';
         const hotkey = selectHotkeyForIndex(i);
         const shortcut = hotkey ? `${hotkey}.` : '  ';
+        const showInlineOverflow = focused && inlineOverflowText;
         return (
           <Box key={selectItemRenderKey(item, i)} minWidth={0}>
             <Box flexShrink={0}>
@@ -283,12 +298,12 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
                 {item.label}
               </Text>
             </Box>
-            {focused && inlineOverflowText ? (
+            {showInlineOverflow ? (
               <Box flexShrink={0}>
                 <Text dimColor>{` — ${inlineOverflowText}`}</Text>
               </Box>
             ) : null}
-            {item.description && !inlineOverflowText ? (
+            {item.description && !showInlineOverflow ? (
               <Box minWidth={0} flexShrink={1}>
                 <Text
                   dimColor
