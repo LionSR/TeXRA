@@ -68,7 +68,13 @@ export function ApprovalModal(
         />
       );
     case 'userQuestion':
-      return <UserQuestion payload={payload.payload} onDecide={decide} />;
+      return (
+        <UserQuestion
+          availableRows={props.availableRows}
+          payload={payload.payload}
+          onDecide={decide}
+        />
+      );
   }
   return assertNever(payload, 'Unhandled approval payload');
 }
