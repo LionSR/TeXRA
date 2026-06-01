@@ -232,44 +232,6 @@ const SCENARIOS = [
     unexpect: ['/\u0015/model', '/model - error'],
   },
   {
-    name: 'btw-palette',
-    env: { HARNESS_ENTRIES: '4' },
-    keys: ['/bt'],
-    expect: [
-      '/btw',
-      'Queue a follow-up without interrupting the active run',
-      'Enter complete',
-      'Tab complete',
-    ],
-  },
-  {
-    name: 'btw-submit',
-    env: { HARNESS_ENTRIES: '4' },
-    keys: ['/btw check the finite case later', '\r'],
-    frame: 'tail',
-    expect: [
-      'Queued follow-up: check the finite case later',
-      'queued 1',
-      'check the finite case later',
-    ],
-    unexpect: ['registered but has no harness action'],
-  },
-  {
-    name: 'btw-idle-warning',
-    env: { HARNESS_ENTRIES: '0', HARNESS_BTW_IDLE: '1' },
-    keys: ['/btw check the finite case later', '\r'],
-    frame: 'tail',
-    expect: [
-      'No active run to attach a follow-up to.',
-      'Send a normal message to start a run.',
-    ],
-    unexpect: [
-      'Queued follow-up: check the finite case later',
-      'queued 1',
-      'Harness received',
-    ],
-  },
-  {
     name: 'plain-submit',
     cols: 120,
     env: { HARNESS_ENTRIES: '2' },
@@ -429,11 +391,9 @@ const SCENARIOS = [
     keys: ['/', DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN],
     frame: 'tail',
     expect: [
-      '… 7 earlier',
+      '… 6 earlier',
       '/status',
       'Open the session status tabs',
-      '/btw',
-      'Queue a follow-up without interrupting the active run',
       '/exit',
       'Exit the CLI session',
     ],
