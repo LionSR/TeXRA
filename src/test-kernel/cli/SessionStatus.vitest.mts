@@ -57,6 +57,23 @@ describe('CLI session status formatter', () => {
     );
   });
 
+  it('summarizes queued subagent follow-up payloads', () => {
+    const status = formatCliSessionStatus({
+      agent: 'chat',
+      model: 'harness-model',
+      api: 'personal',
+      approval: 'ask',
+      status: 'running',
+      queuedFollowUpMessages: [
+        '<orchestrator-followup><subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result></orchestrator-followup>',
+      ],
+    });
+
+    expect(status).toContain('1. ✓ reviewer completed All good <ok>');
+    expect(status).not.toContain('<orchestrator-followup>');
+    expect(status).not.toContain('<subagent-result');
+  });
+
   it('reports an empty follow-up queue explicitly', () => {
     expect(
       formatCliSessionStatus({

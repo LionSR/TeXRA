@@ -103,6 +103,24 @@ const SCENARIOS = [
     unexpect: ['Tip: Ctrl-C exits idle chats', 'First queued follo…'],
   },
   {
+    name: 'queued-subagent-followup-summary',
+    cols: 120,
+    env: {
+      HARNESS_ENTRIES: '2',
+      HARNESS_QUEUED_FOLLOWUPS:
+        '<orchestrator-followup><subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result></orchestrator-followup>',
+    },
+    bootExpect: 'queued 1',
+    keys: ['/status', '\r'],
+    frame: 'tail',
+    expect: [
+      'queued follow-ups: 1',
+      '1. ✓ reviewer completed All good <ok>',
+      'Queued follow-ups (1)',
+    ],
+    unexpect: ['<orchestrator-followup>', '<subagent-result'],
+  },
+  {
     name: 'compact-queued-followups',
     rows: 8,
     cols: 60,
