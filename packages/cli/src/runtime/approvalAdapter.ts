@@ -1,3 +1,6 @@
+// Third-party imports
+import { structuredPatch } from 'diff';
+
 // Local imports - runtime
 import {
   cancelRetry,
@@ -36,6 +39,11 @@ const APPROVAL_EVENTS = [
   'showRetryRequest',
 ] as const;
 type ApprovalEvent = (typeof APPROVAL_EVENTS)[number];
+
+const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
+const TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS = 12_000;
+const TOOL_EDIT_APPROVAL_DIFF_MAX_LINES = 80;
+const TOOL_EDIT_APPROVAL_DIFF_MAX_LINE_CHARS = 240;
 
 export const CLI_PERSONAL_API_RETRY_HINT =
   'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to personal API keys.';
@@ -422,13 +430,105 @@ function handleUserQuestion(
   })();
 }
 
+function formatDiffRange(start: number, lineCount: number): string {
+  return lineCount === 1 ? String(start) : `${start},${lineCount}`;
+}
+
+function toolEditDiffLines(
+  request: ToolEditApprovalRequest,
+): readonly string[] {
+  const patch = structuredPatch(
+    request.path,
+    request.path,
+    request.originalContent,
+    request.proposedContent,
+    '',
+    '',
+    { context: 3 },
+  );
+  if (patch.hunks.length === 0) return [];
+
+  return [
+    `--- ${request.path}`,
+    `+++ ${request.path}`,
+    ...patch.hunks.flatMap((hunk) => [
+      `@@ -${formatDiffRange(hunk.oldStart, hunk.oldLines)} +${formatDiffRange(
+        hunk.newStart,
+        hunk.newLines,
+      )} @@`,
+      ...hunk.lines,
+    ]),
+  ];
+}
+
+function truncateDiffLine(line: string): string {
+  if (line.length <= TOOL_EDIT_APPROVAL_DIFF_MAX_LINE_CHARS) return line;
+  const prefixLength = Math.max(
+    0,
+    TOOL_EDIT_APPROVAL_DIFF_MAX_LINE_CHARS - TRUNCATED_DIFF_LINE_MARKER.length,
+  );
+  return `${line.slice(0, prefixLength)}${TRUNCATED_DIFF_LINE_MARKER}`;
+}
+
+function boundedToolEditDiffLines(
+  diffLines: readonly string[],
+): readonly string[] {
+  const visibleLines: string[] = [];
+  let visibleChars = 0;
+  let hiddenLineCount = 0;
+
+  for (let index = 0; index < diffLines.length; index++) {
+    const line = truncateDiffLine(diffLines[index]!);
+    const separatorLength = visibleLines.length === 0 ? 0 : 1;
+    const nextVisibleChars = visibleChars + separatorLength + line.length;
+    if (
+      visibleLines.length >= TOOL_EDIT_APPROVAL_DIFF_MAX_LINES ||
+      nextVisibleChars > TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS
+    ) {
+      hiddenLineCount = diffLines.length - index;
+      break;
+    }
+
+    visibleLines.push(line);
+    visibleChars = nextVisibleChars;
+  }
+
+  if (hiddenLineCount > 0) {
+    visibleLines.push(`… +${hiddenLineCount} diff lines hidden`);
+  }
+
+  return visibleLines;
+}
+
+export function formatToolEditApprovalSummary(
+  request: ToolEditApprovalRequest,
+): string {
+  const header = `Tool edit requested by ${request.sourceTool}: ${request.path}`;
+  const diffLines = toolEditDiffLines(request);
+  if (diffLines.length === 0) {
+    return `${header}\nNo content changes proposed.`;
+  }
+
+  const visibleLines = boundedToolEditDiffLines(diffLines);
+
+  return `${header}\nProposed diff:\n${visibleLines.join('\n')}`;
+}
+
 async function decideToolEdit(
   request: ToolEditApprovalRequest,
   context: CliContext,
 ): Promise<ToolEditApprovalResult> {
-  const summary = `Tool edit requested by ${request.sourceTool}: ${request.path}`;
   const immediate = immediateDecision(context);
-  const decision = immediate ?? (await askApproval(context, summary));
+  if (immediate) {
+    return immediate.accepted
+      ? { accepted: true, appliedContent: request.proposedContent }
+      : { accepted: false, userMessage: immediate.userMessage };
+  }
+
+  const decision = await askApproval(
+    context,
+    formatToolEditApprovalSummary(request),
+  );
   return decision.accepted
     ? { accepted: true, appliedContent: request.proposedContent }
     : { accepted: false, userMessage: decision.userMessage };
