@@ -62,6 +62,7 @@ import {
   chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
   chatTuiCanStartRootRun,
+  chatTuiSigintAction,
   chatTuiActiveChildFollowUpTarget,
   chatTuiRejectedChildFollowUpTarget,
   chatTuiShouldAnnounceQueuedFollowUp,
@@ -892,6 +893,40 @@ describe('CLI TUI row allocation', () => {
         STREAM_STATUS.WAITING,
       ),
     ).toBe(false);
+  });
+
+  it('resolves the TUI Ctrl-C action from armed, stoppable, and interruptible state', () => {
+    expect(
+      chatTuiSigintAction({
+        exitArmed: false,
+        canStopActiveRun: false,
+        canInterruptActiveRun: false,
+      }),
+    ).toBe('clean-exit');
+
+    expect(
+      chatTuiSigintAction({
+        exitArmed: false,
+        canStopActiveRun: false,
+        canInterruptActiveRun: true,
+      }),
+    ).toBe('interrupt-and-exit');
+
+    expect(
+      chatTuiSigintAction({
+        exitArmed: false,
+        canStopActiveRun: true,
+        canInterruptActiveRun: true,
+      }),
+    ).toBe('interrupt-and-arm-exit');
+
+    expect(
+      chatTuiSigintAction({
+        exitArmed: true,
+        canStopActiveRun: true,
+        canInterruptActiveRun: true,
+      }),
+    ).toBe('force-exit');
   });
 
   it('selects the focused child stream as a follow-up target', () => {
