@@ -31,9 +31,9 @@ export function resolvePagerCommand(
 /**
  * Write `text` to stdout, paging through `$PAGER` (default `less -FIRX`) **only**
  * when stdout is an interactive TTY. When stdout is not a TTY (piped, redirected,
- * `--print`, `--output-format json|ndjson`) this is a strict no-op wrapper around
- * `writeTextStdout` — byte-identical to writing directly, so headless parity is
- * preserved (the pager never sees the non-TTY path).
+ * `--print`, `--no-input`, `--output-format json|ndjson`) this is a strict
+ * no-op wrapper around `writeTextStdout` — byte-identical to writing directly,
+ * so headless parity is preserved.
  *
  * If spawning the pager fails for any reason (missing binary, spawn error), we
  * fall back to writing the text directly rather than swallowing the output.
@@ -42,13 +42,14 @@ export function pageStdout(
   text: string,
   options: {
     readonly stdoutIsTty?: boolean;
+    readonly headless?: boolean;
     readonly env?: Record<string, string | undefined>;
   } = {},
 ): void {
   // Empty output never pages — mirrors `emitCliResult`'s skip-empty behavior.
   if (text === '') return;
 
-  if (options.stdoutIsTty !== true) {
+  if (options.headless === true || options.stdoutIsTty !== true) {
     writeTextStdout(text);
     return;
   }
@@ -59,15 +60,16 @@ export function pageStdout(
     return;
   }
 
-  // Run through `$SHELL -c` so `$PAGER` strings with flags ("less -FIRX") and
-  // user customizations work without us re-implementing shell word-splitting.
+  // Run through the default shell so `$PAGER` strings with flags ("less -FIRX")
+  // and user customizations work without us re-implementing shell word-splitting.
   const result = spawnSync(command, {
     input: `${text}\n`,
     stdio: ['pipe', 'inherit', 'inherit'],
     shell: true,
+    env: options.env ? { ...process.env, ...options.env } : undefined,
   });
 
-  if (result.error || result.status === null) {
+  if (result.error || result.status === null || result.status !== 0) {
     // The pager could not be launched (e.g. `less` not installed). Don't lose
     // the content: write it straight to stdout instead.
     writeTextStdout(text);

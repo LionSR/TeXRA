@@ -1,6 +1,6 @@
-import type * as childProcess from 'node:child_process';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type * as childProcess from 'node:child_process';
 
 const spawnSyncMock =
   vi.fn<(...args: Parameters<typeof childProcess.spawnSync>) => unknown>();
@@ -57,6 +57,12 @@ describe('pageStdout', () => {
     expect(stdout).toBe('row1\nrow2\n');
   });
 
+  it('is a strict no-op pager in headless mode even when stdout is a TTY', () => {
+    pageStdout('row1\nrow2', { stdoutIsTty: true, headless: true });
+    expect(spawnSyncMock).not.toHaveBeenCalled();
+    expect(stdout).toBe('row1\nrow2\n');
+  });
+
   it('defaults to non-TTY when stdoutIsTty is omitted', () => {
     pageStdout('row', {});
     expect(spawnSyncMock).not.toHaveBeenCalled();
@@ -73,6 +79,7 @@ describe('pageStdout', () => {
     expect(command).toBe('less -R');
     expect(opts.input).toBe('row1\nrow2\n');
     expect(opts.shell).toBe(true);
+    expect(opts.env).toMatchObject({ PAGER: 'less -R' });
     // Paging writes through the child; nothing is written directly to stdout.
     expect(stdout).toBe('');
   });
@@ -89,6 +96,13 @@ describe('pageStdout', () => {
       status: null,
     });
     pageStdout('row', { stdoutIsTty: true, env: { PAGER: 'less' } });
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1);
+    expect(stdout).toBe('row\n');
+  });
+
+  it('falls back to a direct write when the shell cannot exec the pager', () => {
+    spawnSyncMock.mockReturnValue({ status: 127 });
+    pageStdout('row', { stdoutIsTty: true, env: { PAGER: 'missing-pager' } });
     expect(spawnSyncMock).toHaveBeenCalledTimes(1);
     expect(stdout).toBe('row\n');
   });
