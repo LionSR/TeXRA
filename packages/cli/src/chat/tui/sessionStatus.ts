@@ -1,4 +1,5 @@
 import { STREAM_STATUS } from '@shared/schemas';
+import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import type { BypassState } from './state/cliState';
@@ -40,7 +41,10 @@ function queuedFollowUpStatusLines(messages: readonly string[]): string[] {
     `queued follow-ups: ${messages.length}`,
     ...messages.map(
       (message, index) =>
-        `${index + 1}. ${truncateSummary(message, QUEUED_FOLLOW_UP_STATUS_LENGTH)}`,
+        `${index + 1}. ${truncateSummary(
+          summarizeFollowupMessage(message),
+          QUEUED_FOLLOW_UP_STATUS_LENGTH,
+        )}`,
     ),
   ];
 }
