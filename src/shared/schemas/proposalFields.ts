@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { AgentCategory } from './agent';
 import { ToolConfigSchema } from './toolConfig';
 
 export const BaseProposalFieldsSchema = z.object({
@@ -55,4 +56,12 @@ export function getProposalFileGroups(data: FileFields): ProposalFileGroup[] {
     { label: 'Output', files: data.outputFiles ?? [], clickable: true },
     { label: 'Memories', files: data.memories ?? [], clickable: false },
   ].filter((g) => g.files.length > 0);
+}
+
+export function agentProposalCategoryLabel(
+  agentCategory: AgentCategory,
+): string {
+  return agentCategory === AgentCategory.Workflow
+    ? 'workflow agent'
+    : 'tool-use agent';
 }
