@@ -7,6 +7,7 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { listCliHistoryEntries } from '../runtime/history';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
+import { dumbTerminalMessage } from '../runtime/terminalRequirements';
 import {
   readCliMultiAgentPresets,
   withCliMultiAgentPresetVisibility,
@@ -36,7 +37,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     writeTextStderr(
       isHeadless
         ? 'texra orchestrate requires an interactive terminal (TTY stdin and stdout). For scripting, use `texra run` or a concrete subcommand.'
-        : 'texra orchestrate needs a capable terminal — TERM=dumb strips the cursor controls Ink uses.',
+        : dumbTerminalMessage('orchestrate'),
     );
     return CliExitCode.Usage;
   }
