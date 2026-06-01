@@ -21,7 +21,6 @@ import {
   taskDetailKeyHintsForColumns,
   taskDetailScrollableOutputRowCountForColumns,
   taskDetailVisibleLineCountFromOffsetForColumns,
-  taskDetailVisibleLineCountForColumns,
   taskDetailVisibleOutputRowsFromOffsetForColumns,
   taskDetailVisibleScrollOffset,
   taskDetailWrappedRowCount,
@@ -681,6 +680,46 @@ describe('CLI child execution controls', () => {
     expect(target.slice).toBe(child);
   });
 
+  it('falls back to the nearest ancestor subagent list when a focused grandchild is a leaf', () => {
+    const main = slice({
+      streamId: 'main',
+      activeSubagents: [
+        {
+          executionId: 'agent-1',
+          agentName: 'review',
+          childStreamId: 'review-stream',
+          status: 'running',
+        },
+      ],
+    });
+    const child = slice({ streamId: 'review-stream' });
+    const grandchild = slice({ streamId: 'detail-stream' });
+    const target = resolveChildControlStreamTarget({
+      activeStreamId: 'detail-stream',
+      mode: 'subagents',
+      parentStream: new Map([
+        ['review-stream', 'main'],
+        ['detail-stream', 'review-stream'],
+      ]),
+      streams: new Map([
+        ['main', main],
+        ['review-stream', child],
+        ['detail-stream', grandchild],
+      ]),
+    });
+
+    expect(target.streamId).toBe('main');
+    expect(target.fallbackFromStreamId).toBe('detail-stream');
+    expect(buildChildControlItems(target.slice!, 'subagents')).toMatchObject([
+      {
+        executionId: 'agent-1',
+        childStreamId: 'review-stream',
+        kind: 'subagent',
+        label: 'review',
+      },
+    ]);
+  });
+
   it('falls back to the parent task list when the focused child is a leaf', () => {
     const child = slice({ streamId: 'review-stream' });
     const target = resolveChildControlStreamTarget({
@@ -899,30 +938,6 @@ describe('CLI child execution controls', () => {
     expect(taskDetailWrappedRowCount('abcd', 4)).toBe(1);
     expect(taskDetailWrappedRowCount('abcde', 4)).toBe(2);
     expect(
-      taskDetailVisibleLineCountForColumns({
-        availableColumns: 80,
-        compact: true,
-        tailLines: ['x'.repeat(100), 'final line'],
-        visibleRowBudget: 3,
-      }),
-    ).toBe(2);
-    expect(
-      taskDetailVisibleLineCountForColumns({
-        availableColumns: 80,
-        compact: true,
-        tailLines: ['x'.repeat(100), 'final line'],
-        visibleRowBudget: 2,
-      }),
-    ).toBe(1);
-    expect(
-      taskDetailVisibleLineCountForColumns({
-        availableColumns: 48,
-        compact: true,
-        tailLines: ['final output wraps at this width'],
-        visibleRowBudget: 0,
-      }),
-    ).toBe(0);
-    expect(
       taskDetailVisibleLineCountFromOffsetForColumns({
         availableColumns: 80,
         compact: true,
@@ -966,7 +981,7 @@ describe('CLI child execution controls', () => {
         tailLines: singleLongLine,
         visibleRowBudget: 1,
       }),
-    ).toBe(0);
+    ).toBe(2);
     expect(
       taskDetailVisibleOutputRowsFromOffsetForColumns({
         availableColumns: 10,
@@ -983,6 +998,20 @@ describe('CLI child execution controls', () => {
         tailLines: singleLongLine,
         visibleRowBudget: 1,
         offset: 2,
+      }),
+    ).toEqual(['mnop']);
+    expect(
+      taskDetailVisibleOutputRowsFromOffsetForColumns({
+        availableColumns: 10,
+        compact: true,
+        tailLines: singleLongLine,
+        visibleRowBudget: 1,
+        offset: taskDetailFollowTailScrollOffsetForColumns({
+          availableColumns: 10,
+          compact: true,
+          tailLines: singleLongLine,
+          visibleRowBudget: 1,
+        }),
       }),
     ).toEqual(['mnop']);
   });
