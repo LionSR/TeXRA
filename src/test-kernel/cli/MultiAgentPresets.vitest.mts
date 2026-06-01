@@ -7,6 +7,7 @@ import {
   cliMultiAgentPresets,
   findCliMultiAgentPreset,
   formatCliMultiAgentPresetDetails,
+  formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
   planCliMultiAgentPresetRun,
   parseCliCustomAgentPresets,
@@ -81,6 +82,45 @@ describe('CLI multi-agent presets', () => {
     );
     expect(formatCliMultiAgentPresetDetails(preset!)).toContain(
       'Tool-use agents:\n  lean',
+    );
+  });
+
+  it('formats an inspection plan with root and missing members', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'physicist',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [
+        agent('criticize', AgentCategory.Workflow),
+        agent('generic', AgentCategory.Workflow),
+      ],
+      toolUseAgents: [
+        agent('review', AgentCategory.ToolUse),
+        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
+      ],
+    });
+    const details = formatCliMultiAgentPresetInspection(plan);
+
+    expect(details).toContain('Root tool-use agent:\n  orchestrator');
+    expect(details).toContain(
+      'Available workflow agents:\n  criticize\n  generic',
+    );
+    expect(details).toContain(
+      'Available tool-use agents:\n  orchestrator\n  review',
+    );
+    expect(details).toContain('Missing workflow agents:\n  devise\n  apply');
+    expect(details).toContain(
+      [
+        'Missing tool-use agents:',
+        '  research',
+        '  numerics',
+        '  search',
+        '  presenter',
+        '  simplifier',
+        '  latexFixer',
+        '  progressCheck',
+      ].join('\n'),
     );
   });
 
