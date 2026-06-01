@@ -464,6 +464,16 @@ export function App(props: AppProps): React.JSX.Element {
     parentStream,
     streams,
   });
+  const taskControlTarget = resolveChildControlStreamTarget({
+    activeStreamId,
+    mode: 'tasks',
+    parentStream,
+    streams,
+  });
+  const taskControlsAvailable = hasChildControlItems(
+    taskControlTarget.slice,
+    'tasks',
+  );
   const subagentControlsAvailable = canShowSubagentControls(
     sessionMeta,
     subagentControlTarget.slice,
@@ -651,7 +661,7 @@ export function App(props: AppProps): React.JSX.Element {
         return;
       }
       if (lower === 'p') {
-        setChildControlMode('tasks');
+        if (taskControlsAvailable) setChildControlMode('tasks');
         return;
       }
       const digit = metaChordDigit(input, key);
