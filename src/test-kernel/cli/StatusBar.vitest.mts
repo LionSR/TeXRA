@@ -116,6 +116,65 @@ describe('CLI StatusBar display model', () => {
     expect(display.left.map(statusBarSegmentText)).not.toContain('deepseekT');
   });
 
+  it('hides task shortcuts when no task rows exist', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      elapsedMs: 12_000,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      taskControlsAvailable: false,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: 'relay',
+      shortcutModifierLabel: 'Option',
+      ctrlCAction: 'stop',
+    });
+
+    expect(display.bindings).toContain('[/status]details');
+    expect(display.bindings).toContain('[Ctrl-C]stop');
+    expect(display.bindings).not.toContain('[Option-p]tasks');
+  });
+
+  it('keeps subagent shortcuts grouped when task shortcuts are hidden', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      elapsedMs: 12_000,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 1,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      taskControlsAvailable: false,
+      subagentControlsAvailable: true,
+      hasMultipleStreams: true,
+      model: 'deepseekT',
+      apiMode: 'relay',
+      shortcutModifierLabel: 'Option',
+      ctrlCAction: 'stop',
+    });
+
+    expect(display.bindings).not.toContain('[Option-p]tasks');
+    expect(display.bindings).toContain('[Option-s]subagents');
+    expect(display.bindings.indexOf('[Option-s]subagents')).toBeLessThan(
+      display.bindings.indexOf('[/status]details'),
+    );
+    expect(display.bindings.indexOf('[Option-s]subagents')).toBeLessThan(
+      display.bindings.indexOf('[Ctrl-C]stop'),
+    );
+  });
+
   it('advertises Shift-Enter for newline when the Kitty protocol is active', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.WAITING,
