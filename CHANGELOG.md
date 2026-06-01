@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
+- **Pick the model right after the agent in CLI chat** — choosing the root agent with `/agent` before the first message now flows straight into the model picker, so you set the agent and model together in one step instead of remembering to run `/model` separately. Pressing Esc on the model picker keeps the agent you chose.
 - **Dropped the redundant `/btw` chat command** — queuing a follow-up never needed its own command. Just type your message while a run is active and it's queued automatically; the command only duplicated that path with extra error states.
 
 ### Bug Fixes
