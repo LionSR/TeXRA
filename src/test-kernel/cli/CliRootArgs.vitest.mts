@@ -689,6 +689,26 @@ describe('runCli usage output stream routing', () => {
     expect(stderr).toBe('');
   });
 
+  it('shows EXAMPLES and a docs link in root --help', async () => {
+    const result = await runCli(['--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('EXAMPLES');
+    expect(stdout).toContain('texra chat');
+    expect(stdout).toContain('texra run <agent> --input file.tex');
+    expect(stdout).toContain('texra agents list');
+    expect(stdout).toContain('texra doctor');
+    expect(stdout).toContain('Learn more: https://texra.ai');
+    expect(stderr).toBe('');
+  });
+
+  it('shows EXAMPLES and a docs link for bare `help`', async () => {
+    const result = await runCli(['help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('EXAMPLES');
+    expect(stdout).toContain('Learn more: https://texra.ai');
+    expect(stderr).toBe('');
+  });
+
   it('shows command-specific usage for help command paths', async () => {
     const result = await runCli(['help', 'chat']);
     expect(result.exitCode).toBe(0);
