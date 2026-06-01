@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
+import {
+  stripOrchestratorFollowup,
+  summarizeFollowupMessage,
+  summarizeSubagentFollowup,
+} from '@shared/subagentFollowup';
 
 describe('summarizeSubagentFollowup', () => {
   it('passes non-subagent text through unchanged', () => {
@@ -10,6 +14,17 @@ describe('summarizeSubagentFollowup', () => {
         '<orchestrator-followup>x</orchestrator-followup>',
       ),
     ).toBe('<orchestrator-followup>x</orchestrator-followup>');
+  });
+
+  it('strips orchestrator follow-up wrappers', () => {
+    expect(
+      stripOrchestratorFollowup(
+        '<orchestrator-followup>\nPlease inspect the file.\n</orchestrator-followup>',
+      ),
+    ).toBe('Please inspect the file.');
+    expect(stripOrchestratorFollowup('ordinary user text')).toBe(
+      'ordinary user text',
+    );
   });
 
   it('summarizes a started progress block', () => {
@@ -66,6 +81,19 @@ describe('summarizeSubagentFollowup', () => {
     ].join('\n');
     expect(summarizeSubagentFollowup(xml)).toBe(
       '✓ research completed\nKeep </response> literal & inspect <file>',
+    );
+  });
+
+  it('summarizes wrapped result follow-up messages for queued displays', () => {
+    const xml = [
+      '<orchestrator-followup>',
+      '<subagent-result id="abc" agent="reviewer" category="toolUse" status="completed">',
+      '<response>All good &lt;ok&gt;</response>',
+      '</subagent-result>',
+      '</orchestrator-followup>',
+    ].join('');
+    expect(summarizeFollowupMessage(xml)).toBe(
+      '✓ reviewer completed\nAll good <ok>',
     );
   });
 

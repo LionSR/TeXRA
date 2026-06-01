@@ -1,6 +1,7 @@
 import { Box, Text } from 'ink';
 import stringWidth from 'string-width';
 
+import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 
 export const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;
@@ -74,7 +75,10 @@ export function queuedFollowUpPanelDisplay({
       const bodyWidth = Math.max(0, contentWidth - stringWidth(prefix));
       return {
         kind: 'message',
-        text: `${prefix}${truncateToColumns(message, bodyWidth)}`,
+        text: `${prefix}${truncateToColumns(
+          summarizeFollowupMessage(message),
+          bodyWidth,
+        )}`,
       };
     });
 

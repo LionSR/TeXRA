@@ -13,7 +13,7 @@ import {
 } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
 
-import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
+import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 import { cliState, patchStream, type ConversationEntry } from './cliState';
 import { isFinalTranscriptStatus } from './transcript';
 
@@ -70,14 +70,6 @@ function toolUseEqual(
   );
 }
 
-export function stripOrchestratorFollowup(text: string): string {
-  const trimmed = text.trim();
-  const match = trimmed.match(
-    /^<orchestrator-followup>\s*([\s\S]*?)\s*<\/orchestrator-followup>$/,
-  );
-  return match?.[1]?.trim() ?? text;
-}
-
 // `normalizeToolUseData` is dominated by a Zod parse + YAML stringify
 // of `entry.data`. `StreamLog.update` spreads its patch into a fresh
 // `data` object every tick, so reference equality is a reliable signal
@@ -127,7 +119,7 @@ function renderLogEntryText(
     case 'error':
       return appendCliApiSwitchHint(text);
     case 'user':
-      return summarizeSubagentFollowup(stripOrchestratorFollowup(text));
+      return summarizeFollowupMessage(text);
     default:
       return text;
   }
