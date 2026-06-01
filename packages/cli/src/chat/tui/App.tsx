@@ -335,6 +335,16 @@ export function foregroundSurfaceJustifyContent(
   return kind === 'form' || kind === 'approval' ? 'flex-start' : 'flex-end';
 }
 
+export function foregroundSurfaceContainerHeight({
+  kind,
+  rows,
+}: {
+  readonly kind: ForegroundSurfaceKind | undefined;
+  readonly rows: number;
+}): number | undefined {
+  return kind === 'childControls' && rows >= 3 ? undefined : rows;
+}
+
 export function approvalForegroundMaxRows(
   pending: PendingApproval | undefined,
 ): number | undefined {
@@ -582,6 +592,10 @@ export function App(props: AppProps): React.JSX.Element {
     }
   }
   const foregroundSurface = renderForegroundSurface();
+  const foregroundContainerHeight = foregroundSurfaceContainerHeight({
+    kind: foregroundKind,
+    rows: foregroundRows,
+  });
 
   const focusShortcutsActive = appFocusShortcutsActive({
     inputDisabled,
@@ -684,7 +698,7 @@ export function App(props: AppProps): React.JSX.Element {
           {foregroundSurface ? (
             <Box
               flexDirection="column"
-              height={foregroundRows}
+              height={foregroundContainerHeight}
               alignItems="flex-start"
               justifyContent={foregroundSurfaceJustifyContent(foregroundKind)}
               overflowY="hidden"
