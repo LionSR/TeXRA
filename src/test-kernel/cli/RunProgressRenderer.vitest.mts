@@ -194,6 +194,150 @@ describe('CLI run progress renderer', () => {
     );
   });
 
+  it('ticks the ANSI status line while an active subagent is quiet', () => {
+    let now = 0;
+    let output = '';
+    let heartbeat: (() => void) | undefined;
+    let clearCount = 0;
+    const renderer = createRunProgressRenderer(context(), {
+      colorEnabled: true,
+      write: (text) => {
+        output += text;
+      },
+      nowMs: () => now,
+      setInterval: ((callback: () => void) => {
+        heartbeat = callback;
+        return { unref() {} } as unknown as ReturnType<typeof setInterval>;
+      }) as unknown as typeof setInterval,
+      clearInterval: (() => {
+        clearCount += 1;
+      }) as typeof clearInterval,
+    });
+
+    renderer?.handle(
+      'setTaskState',
+      workflowTaskState({
+        streamId: 'root-stream',
+        agent: 'orchestrator',
+        inputFiles: [],
+      }),
+    );
+    now = 950;
+    renderer?.handle('updateActiveSubagents', {
+      parentStreamId: 'root-stream',
+      children: [
+        {
+          executionId: 'child-1',
+          childStreamId: 'child-stream',
+          agentName: 'review',
+          status: 'running',
+        },
+      ],
+    });
+
+    expect(heartbeat).toBeDefined();
+    now = 1000;
+    heartbeat?.();
+    now = 2300;
+    heartbeat?.();
+
+    expect(output).toContain('\r\x1b[2Korchestrator · subagent: review · 1s');
+    expect(output).toContain('\r\x1b[2Korchestrator · subagent: review · 2s');
+
+    renderer?.handle('updateStreamStatus', {
+      streamId: 'root-stream',
+      status: STREAM_STATUS.STOPPED,
+      previousStatus: STREAM_STATUS.RUNNING,
+    });
+    expect(clearCount).toBe(1);
+  });
+
+  it('keeps heartbeat alive when active child names are unavailable', () => {
+    let now = 0;
+    let output = '';
+    let heartbeat: (() => void) | undefined;
+    const renderer = createRunProgressRenderer(context(), {
+      colorEnabled: true,
+      write: (text) => {
+        output += text;
+      },
+      nowMs: () => now,
+      setInterval: ((callback: () => void) => {
+        heartbeat = callback;
+        return { unref() {} } as unknown as ReturnType<typeof setInterval>;
+      }) as unknown as typeof setInterval,
+    });
+
+    renderer?.handle(
+      'setTaskState',
+      workflowTaskState({
+        streamId: 'root-stream',
+        agent: 'orchestrator',
+        inputFiles: [],
+      }),
+    );
+    renderer?.handle('updateActiveSubagents', {
+      parentStreamId: 'root-stream',
+      children: [
+        {
+          executionId: 'child-1',
+          childStreamId: 'child-stream',
+          agentName: '',
+          status: 'running',
+        },
+      ],
+    });
+
+    expect(heartbeat).toBeDefined();
+    now = 1200;
+    heartbeat?.();
+
+    expect(output).toContain('\r\x1b[2Korchestrator · 1s');
+  });
+
+  it('stops active-child heartbeat when preserving the live line', () => {
+    let output = '';
+    let clearCount = 0;
+    const renderer = createRunProgressRenderer(context(), {
+      colorEnabled: true,
+      write: (text) => {
+        output += text;
+      },
+      nowMs: () => 0,
+      setInterval: (() => {
+        return { unref() {} } as unknown as ReturnType<typeof setInterval>;
+      }) as unknown as typeof setInterval,
+      clearInterval: (() => {
+        clearCount += 1;
+      }) as typeof clearInterval,
+    });
+
+    renderer?.handle(
+      'setTaskState',
+      workflowTaskState({
+        streamId: 'root-stream',
+        agent: 'orchestrator',
+        inputFiles: [],
+      }),
+    );
+    renderer?.handle('updateActiveSubagents', {
+      parentStreamId: 'root-stream',
+      children: [
+        {
+          executionId: 'child-1',
+          childStreamId: 'child-stream',
+          agentName: 'review',
+          status: 'running',
+        },
+      ],
+    });
+
+    renderer?.preserve();
+
+    expect(clearCount).toBe(1);
+    expect(output.endsWith('\n')).toBe(true);
+  });
+
   it('can claim the root stream from conversation progress', () => {
     let output = '';
     const renderer = createRunProgressRenderer(
