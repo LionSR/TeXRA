@@ -23,7 +23,12 @@ await build({
   alias: { 'react-devtools-core': reactDevtoolsStub },
   outfile,
   banner: {
-    js: `import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);`,
+    js: [
+      `import { createRequire as __cr } from 'node:module';`,
+      `import { fileURLToPath as __texraFileURLToPath } from 'node:url';`,
+      `const require = __cr(import.meta.url);`,
+      `const __filename = __texraFileURLToPath(import.meta.url);`,
+    ].join('\n'),
   },
   plugins: [reactCompilerPlugin()],
   logLevel: 'info',
