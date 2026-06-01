@@ -24,6 +24,7 @@ import {
   TOOL_USE_STATUS,
   type ActiveChildInfo,
   type NormalizedToolUse,
+  type UserQuestionPermission,
 } from '@shared/schemas';
 import { getDefaultStreamLogStore } from '@transcript';
 
@@ -67,6 +68,7 @@ const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const SHOW_BASH_APPROVAL = process.env.HARNESS_BASH_APPROVAL === '1';
 const SHOW_EXTERNAL_INQUIRY = process.env.HARNESS_EXTERNAL_INQUIRY === '1';
+const SHOW_USER_QUESTION = process.env.HARNESS_USER_QUESTION === '1';
 const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
 const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
 const PLAN_APPROVAL_ODYSSEY = process.env.HARNESS_PLAN_APPROVAL_ODYSSEY === '1';
@@ -91,6 +93,14 @@ const EXTERNAL_INQUIRY_QUESTION =
     'Non-degenerate triples: (3,4,5), (5,12,13), (6,8,10), (7,24,25), (8,15,17), (9,12,15), (9,40,41), (10,24,26), (12,16,20), (12,35,37), (14,48,50), (15,20,25), (15,36,39), (16,30,34), (18,24,30), (20,21,29), (20,48,52), (21,28,35), (24,32,40), (24,45,51), (27,36,45), (30,40,50).',
     '',
     'Degenerate triples: (0,b,b) for 0 <= b <= 60.',
+  ].join('\n');
+const USER_QUESTION_CONTEXT =
+  process.env.HARNESS_USER_QUESTION_CONTEXT ??
+  [
+    'The agent is asking for direction before continuing a math workflow.',
+    'We need a choice that keeps the proof useful while avoiding a long detour.',
+    'Context detail: the candidate proof has a finite enumeration, a symbolic recurrence, and one unresolved edge case around degenerate triples.',
+    'Please answer the questions below so the agent can continue without guessing.',
   ].join('\n');
 const AGENT_PROPOSAL_INSTRUCTION =
   process.env.HARNESS_AGENT_PROPOSAL_INSTRUCTION ??
@@ -425,6 +435,70 @@ function makeAgentProposalPayload() {
   };
 }
 
+function makeUserQuestionPayload(): UserQuestionPermission {
+  return {
+    requestId: 'harness-user-question',
+    streamId: STREAM_ID,
+    allowBypass: false,
+    context: USER_QUESTION_CONTEXT,
+    questions: [
+      {
+        header: 'Direction',
+        question:
+          'Which proof direction should the agent prioritize for the next pass?',
+        options: [
+          {
+            label: 'Finite check',
+            description: 'Enumerate the bounded cases before simplifying.',
+          },
+          {
+            label: 'Symbolic',
+            description: 'Focus on the recurrence and algebraic invariant.',
+          },
+          {
+            label: 'Edge cases',
+            description: 'Inspect zero, duplicates, and parity assumptions.',
+          },
+        ],
+      },
+      {
+        header: 'Include',
+        question: 'Which supporting details should be included?',
+        multiSelect: true,
+        options: [
+          {
+            label: 'Enumeration table',
+            description: 'Show all bounded triples explicitly.',
+          },
+          {
+            label: 'Invariant derivation',
+            description: 'Explain why the recurrence preserves the equation.',
+          },
+          {
+            label: 'Failure modes',
+            description: 'List assumptions that would break the proof.',
+          },
+        ],
+      },
+      {
+        header: 'Note',
+        question: 'Add a short instruction for the final write-up.',
+        allowFreeText: true,
+        options: [
+          {
+            label: 'Concise',
+            description: 'Keep the final response short.',
+          },
+          {
+            label: 'Detailed',
+            description: 'Include enough detail for independent checking.',
+          },
+        ],
+      },
+    ],
+  };
+}
+
 function applyHarnessApprovalDecision(decision: ApprovalDecision): void {
   if (decision.accepted && decision.bypass === 'bash') {
     patchStream(STREAM_ID, (slice) => ({
@@ -682,6 +756,16 @@ if (SHOW_EXTERNAL_INQUIRY) {
         allowBypass: false,
         streamId: STREAM_ID,
       },
+    },
+    { onPresent: () => notify({ kind: 'approvalNeeded' }) },
+  ).then(applyHarnessApprovalDecision);
+}
+
+if (SHOW_USER_QUESTION) {
+  void enqueueApproval(
+    {
+      kind: 'userQuestion',
+      payload: makeUserQuestionPayload(),
     },
     { onPresent: () => notify({ kind: 'approvalNeeded' }) },
   ).then(applyHarnessApprovalDecision);
