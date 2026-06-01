@@ -9,7 +9,7 @@ import type { AgentOptionData } from '@shared/schemas';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
-import { FormFrame } from './_shared/FormFrame';
+import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
@@ -168,7 +168,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
 
   if (isCompactFormRows(props.availableRows)) {
     return (
-      <FormFrame color="cyan" title="/agent · Esc close" showCloseHint={false}>
+      <FormFrame color="cyan" title="/agent" showCloseHint={false}>
         <Text bold>Tool-use agents</Text>
         <Select
           items={items.map(({ value, label }) => ({ value, label }))}
@@ -183,6 +183,13 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
             props.onClose();
           }}
           onCancel={props.onClose}
+        />
+        <CompactFormKeyHints
+          primary={
+            selectable
+              ? { key: '1-9/a-z/Enter', action: 'select' }
+              : { key: 'Enter', action: 'close' }
+          }
         />
       </FormFrame>
     );
