@@ -1,6 +1,7 @@
 import * as path from 'path';
 import { randomBytes } from 'crypto';
 
+import AsyncLock from 'async-lock';
 import { z } from 'zod';
 
 import { isDirectory, isFile } from '@common/files/fsEntryType';
@@ -136,29 +137,7 @@ export interface PersistedAnsweredTurn {
 // Per-thread write lock
 // ============================================================================
 
-const threadLocks = new Map<string, Promise<void>>();
-
-async function withThreadLock<T>(
-  threadId: string,
-  fn: () => Promise<T>,
-): Promise<T> {
-  const prev = threadLocks.get(threadId) ?? Promise.resolve();
-  let release!: () => void;
-  const next = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  threadLocks.set(threadId, next);
-
-  await prev;
-  try {
-    return await fn();
-  } finally {
-    release();
-    if (threadLocks.get(threadId) === next) {
-      threadLocks.delete(threadId);
-    }
-  }
-}
+const threadLock = new AsyncLock();
 
 // ============================================================================
 // Path helpers
@@ -341,7 +320,7 @@ export async function recordOpenQuestion(params: {
     params.threadId ??
     (`ei_${randomBytes(6).toString('hex')}` as ExternalInquiryThreadId);
 
-  return withThreadLock(threadId, async () => {
+  return threadLock.acquire(threadId, async () => {
     const existing = await readThreadManifest(threadId);
 
     if (params.threadId && !existing) {
@@ -443,7 +422,7 @@ export async function recordAnswerForOpenTurn(params: {
   sessionLinks?: string[] | null;
   executionId?: ExecutionId;
 }): Promise<PersistedAnsweredTurn | null> {
-  return withThreadLock(params.threadId, async () => {
+  return threadLock.acquire(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
     if (!existing) return null;
     if (existing.status !== 'open') return null;
@@ -513,7 +492,7 @@ export async function recordAnswerForOpenTurn(params: {
 export async function markDropped(params: {
   threadId: ExternalInquiryThreadId;
 }): Promise<ExternalInquiryThreadManifest | null> {
-  return withThreadLock(params.threadId, async () => {
+  return threadLock.acquire(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
     if (!existing) return null;
     if (existing.status !== 'open') return null;
@@ -538,7 +517,7 @@ export async function persistOpenTurnDraft(params: {
   threadId: ExternalInquiryThreadId;
   draft: InquiryDraft | null;
 }): Promise<void> {
-  await withThreadLock(params.threadId, async () => {
+  await threadLock.acquire(params.threadId, async () => {
     const existing = await readThreadManifest(params.threadId);
     if (!existing || existing.status !== 'open' || existing.turns.length === 0)
       return;

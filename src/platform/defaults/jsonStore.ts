@@ -1,5 +1,7 @@
-import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+
+import writeFileAtomic from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
 
@@ -23,13 +25,12 @@ async function readJsonRecord(filePath: string): Promise<JsonRecord> {
  * File-backed key-value store, persisted as a flat JSON object.
  *
  * Shared building block for non-VS-Code platform implementations (Electron,
- * CLI). All writes are atomic (stage to sibling temp path, then rename) so a
- * crash mid-flush leaves the previous file intact rather than corrupting the
- * snapshot.
+ * CLI). Writes go through `write-file-atomic`, which stages to a sibling temp
+ * path, `fsync`s, then renames — so a crash mid-flush leaves the previous file
+ * intact rather than corrupting the snapshot. It also serializes concurrent
+ * writes to the same path internally, so no caller-side write queue is needed.
  */
 export class JsonStore {
-  private writeChain = Promise.resolve();
-
   private constructor(
     private readonly filePath: string,
     private data: JsonRecord,
@@ -55,37 +56,18 @@ export class JsonStore {
     } else {
       this.data[key] = value;
     }
-    await this.enqueueFlush(this.snapshot());
+    await this.flush(this.snapshot());
   }
 
   snapshot(): JsonRecord {
     return { ...this.data };
   }
 
-  private async enqueueFlush(snapshot: JsonRecord): Promise<void> {
-    const flush = () => this.flush(snapshot);
-    this.writeChain = this.writeChain.then(flush, flush);
-    await this.writeChain;
-  }
-
   private async flush(snapshot: JsonRecord): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
-    // The temp suffix is process-unique so concurrent JsonStore writers
-    // (different files in the same dir) don't collide.
-    const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
-    try {
-      await writeFile(tempPath, `${JSON.stringify(snapshot, null, 2)}\n`);
-      await rename(tempPath, this.filePath);
-    } catch (error) {
-      // Best-effort cleanup of stale temp file. Swallow ENOENT (rename
-      // already consumed it) and similar — the original error is what
-      // matters.
-      try {
-        await unlink(tempPath);
-      } catch {
-        // ignore
-      }
-      throw error;
-    }
+    await writeFileAtomic(
+      this.filePath,
+      `${JSON.stringify(snapshot, null, 2)}\n`,
+    );
   }
 }

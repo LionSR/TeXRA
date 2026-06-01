@@ -10,10 +10,12 @@
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 
+import AsyncLock from 'async-lock';
+
 const LAKE_RUN_TIMEOUT_MS = 10 * 60 * 1000;
 const LAKE_MAX_OUTPUT_CHARS = 4 * 1024 * 1024;
 
-const workspaceMutexes = new Map<string, Promise<unknown>>();
+const workspaceLock = new AsyncLock();
 
 function appendCapped(existing: string, chunk: string): string {
   const combined = existing + chunk;
@@ -47,21 +49,11 @@ export interface LakeCommandOptions {
 export async function runLakeCommand(
   options: LakeCommandOptions,
 ): Promise<LakeCommandResult> {
-  const workspaceKey = path.resolve(options.workspaceRoot);
   if (!options.serialize) {
     return executeLake(options);
   }
-  const prior = workspaceMutexes.get(workspaceKey) ?? Promise.resolve();
-  const next = prior.catch(() => undefined).then(() => executeLake(options));
-  // Use a finally hook so we always clear ourselves out, even on rejection.
-  workspaceMutexes.set(workspaceKey, next);
-  try {
-    return await next;
-  } finally {
-    if (workspaceMutexes.get(workspaceKey) === next) {
-      workspaceMutexes.delete(workspaceKey);
-    }
-  }
+  const workspaceKey = path.resolve(options.workspaceRoot);
+  return workspaceLock.acquire(workspaceKey, () => executeLake(options));
 }
 
 function executeLake(options: LakeCommandOptions): Promise<LakeCommandResult> {
