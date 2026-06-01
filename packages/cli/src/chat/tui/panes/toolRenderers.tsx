@@ -168,7 +168,46 @@ function formatHeader(
   return `${STATUS_DOT} ${displayName}${preview ? ` (${preview})` : ''}`;
 }
 
-function visibleOutputLines(toolUse: NormalizedToolUse): readonly string[] {
+function errorTextForDisplay(toolUse: NormalizedToolUse): string {
+  return toolUse.isError ? toolUse.errorText || '(error)' : '';
+}
+
+function errorPreviewWouldTruncate(toolUse: NormalizedToolUse): boolean {
+  return (
+    collapseWhitespace(errorTextForDisplay(toolUse)).length > MAX_ERROR_PREVIEW
+  );
+}
+
+function outputDuplicatesError(
+  toolUse: NormalizedToolUse,
+  options: { readonly keepWhenErrorPreviewTruncates?: boolean } = {},
+): boolean {
+  if (!toolUse.isError || !toolUse.outputText) return false;
+  const errorText = errorTextForDisplay(toolUse);
+  if (
+    options.keepWhenErrorPreviewTruncates &&
+    errorPreviewWouldTruncate(toolUse)
+  ) {
+    return false;
+  }
+  return (
+    errorText.length > 0 &&
+    collapseWhitespace(toolUse.outputText) === collapseWhitespace(errorText)
+  );
+}
+
+function visibleOutputLines(
+  toolUse: NormalizedToolUse,
+  options: { readonly keepDuplicateWhenErrorPreviewTruncates?: boolean } = {},
+): readonly string[] {
+  if (
+    outputDuplicatesError(toolUse, {
+      keepWhenErrorPreviewTruncates:
+        options.keepDuplicateWhenErrorPreviewTruncates,
+    })
+  ) {
+    return [];
+  }
   return toolUse.outputText ? toolUse.outputText.split('\n') : [];
 }
 
@@ -194,7 +233,9 @@ function outputDisplayLines(
   toolUse: NormalizedToolUse,
   elide = true,
 ): string[] {
-  const lines = visibleOutputLines(toolUse);
+  const lines = visibleOutputLines(toolUse, {
+    keepDuplicateWhenErrorPreviewTruncates: !elide,
+  });
   const sliced = elide
     ? elideOutputLines(lines)
     : { head: lines, tail: [] as readonly string[], hiddenCount: 0 };
@@ -217,7 +258,7 @@ export function universalToolUseDisplayLines(
   } = {},
 ): readonly string[] {
   const patchLines = toolUsePatchDisplayLines(toolUse);
-  const errorText = toolUse.isError ? toolUse.errorText || '(error)' : '';
+  const errorText = errorTextForDisplay(toolUse);
   const outputLines =
     options.showOutput === true
       ? outputDisplayLines(toolUse, options.elide ?? true)
@@ -251,7 +292,7 @@ export function bashToolUseDisplayLines(
 ): readonly string[] {
   const exitCode = extractExitCode(toolUse);
   const outputLines = outputDisplayLines(toolUse, options.elide ?? true);
-  const errorText = toolUse.isError ? toolUse.errorText || '(error)' : '';
+  const errorText = errorTextForDisplay(toolUse);
   return [
     formatHeader(toolUse),
     ...outputLines,
@@ -392,7 +433,7 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
     };
   }, [toolUse, showPatch, showOutput, preferInputPreview]);
 
-  const errorText = toolUse.isError ? toolUse.errorText || '(error)' : '';
+  const errorText = errorTextForDisplay(toolUse);
   const exitCode = showExitCode ? extractExitCode(toolUse) : undefined;
   const showNoOutput =
     showOutput &&

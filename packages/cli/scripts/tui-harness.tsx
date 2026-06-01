@@ -71,6 +71,7 @@ const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
 const PLAN_APPROVAL_ODYSSEY = process.env.HARNESS_PLAN_APPROVAL_ODYSSEY === '1';
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
+const SHOW_REJECTED_BASH_TOOL = process.env.HARNESS_REJECTED_BASH_TOOL === '1';
 const SHOW_LONG_CHILD_OUTPUT = process.env.HARNESS_LONG_CHILD_OUTPUT === '1';
 const SHOW_WIDE_FIRST_CHILD_LINE =
   process.env.HARNESS_WIDE_FIRST_CHILD_LINE === '1';
@@ -265,6 +266,37 @@ function makeLongToolOutputEntries(): ConversationEntry[] {
       text: '',
       finalized: true,
       toolUse: makeLongToolOutput(),
+    },
+  ];
+}
+
+function makeRejectedBashToolEntries(): ConversationEntry[] {
+  const command = "printf 'approval-reject-live\\n'";
+  const message = `User rejected bash command: ${command}`;
+  return [
+    {
+      id: 'rejected-bash-user',
+      role: 'user',
+      text: 'Run a harmless command, but reject it at the approval prompt.',
+      finalized: true,
+    },
+    {
+      id: 'rejected-bash-tool',
+      role: 'tool',
+      text: '',
+      finalized: true,
+      toolUse: {
+        parsed: {},
+        toolName: 'bash',
+        errorText: message,
+        outputText: message,
+        userInstructionText: '',
+        input: { command },
+        isError: true,
+        isUserFeedback: false,
+        headerSummary: command,
+        status: TOOL_USE_STATUS.COMPLETED,
+      },
     },
   ];
 }
@@ -542,9 +574,11 @@ patchStream(STREAM_ID, (slice) => ({
     QUEUED_FOLLOW_UPS.length > 0 || (SHOW_TODOS && !SHOW_IDLE_TODOS)
       ? Date.now() - 42_000
       : slice.runStartedAt,
-  entries: SHOW_LONG_TOOL_OUTPUT
-    ? makeLongToolOutputEntries()
-    : makeEntries(ENTRY_COUNT),
+  entries: SHOW_REJECTED_BASH_TOOL
+    ? makeRejectedBashToolEntries()
+    : SHOW_LONG_TOOL_OUTPUT
+      ? makeLongToolOutputEntries()
+      : makeEntries(ENTRY_COUNT),
   queuedFollowUps: QUEUED_FOLLOW_UPS.length,
   queuedFollowUpMessages: QUEUED_FOLLOW_UPS,
 }));
