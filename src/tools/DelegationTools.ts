@@ -393,7 +393,7 @@ async function executeSubagent(
         stopAfterCycle: true,
         onStreamResolved: (resolvedStreamId) => {
           if (options?.enableYoloOnChild) {
-            enableYoloOnChildStream(resolvedStreamId);
+            enableYoloOnChildStream(resolvedStreamId, orchestratorStreamId);
           }
         },
         onError: (err) => {
@@ -486,7 +486,7 @@ async function executeSubagent(
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
       if (options?.enableYoloOnChild) {
-        enableYoloOnChildStream(resolvedStreamId);
+        enableYoloOnChildStream(resolvedStreamId, orchestratorStreamId);
       }
     },
     onProgress,

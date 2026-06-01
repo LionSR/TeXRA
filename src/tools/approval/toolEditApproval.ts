@@ -18,6 +18,7 @@ import {
 import { WorkspaceFS } from '@utils/files';
 import { countLines } from '@utils/text/stringUtils';
 
+import { bashApprovalController } from './bashApproval';
 import { createStreamApprovalController } from './streamApprovalQueue';
 
 export const ToolEditApprovalRequestSchema = z.object({
@@ -413,12 +414,25 @@ export async function requestApprovedEditContent(request: {
 }
 
 /**
- * Enable tool-edit YOLO on a freshly resolved child subagent stream.
+ * Enable YOLO on a freshly resolved child subagent stream.
  *
  * Used by DelegationTools when launching a subagent that should inherit the
  * parent's auto-approval. Silent because it fires before the child stream is
  * activated; the subsequent SYNC_STREAM_CONTENT carries the bypass state.
+ *
+ * Tool-edit bypass is enabled unconditionally — the caller only invokes this
+ * when the parent is auto-approving edits / delegated tasks. The parent's bash
+ * bypass is mirrored independently (when `parentStreamId` is given) so bash
+ * commands don't keep prompting in the child. Kept separate from the tool-edit
+ * flag to respect the CLI's distinct AUTO-BASH / AUTO-APPROVE grants: the child
+ * inherits exactly the parent's bash state.
  */
-export function enableYoloOnChildStream(childStreamId: StreamTabId): void {
+export function enableYoloOnChildStream(
+  childStreamId: StreamTabId,
+  parentStreamId?: StreamTabId,
+): void {
   toolEditApprovalController.setBypass(childStreamId, true);
+  if (parentStreamId && bashApprovalController.isBypassed(parentStreamId)) {
+    bashApprovalController.setBypass(childStreamId, true);
+  }
 }
