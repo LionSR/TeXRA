@@ -37,6 +37,7 @@ import { writeTextStderr } from './logSinks';
 import { workspaceCliConfigPath } from './cliConfig';
 import { getCliAuthProvider, initializeCliSupabaseAuth } from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
+import { CliExitCode } from './exitCodes';
 
 // Type imports - platform and CLI runtime
 import type { LifecycleHost } from '@platform/interfaces/lifecycle';
@@ -48,6 +49,7 @@ let serverSideKeysInitialized = false;
 let cliWorkspaceCwd = '';
 let quietPlatformLogs = false;
 let shutdownHandlersInstalled = false;
+type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 
 type CliPlatformInitOptions = Pick<
   CliContext,
@@ -77,14 +79,25 @@ const cliPlatformLog: LogBackend = {
   },
 };
 
-function installCliShutdownSignalHandlers(lifecycle: LifecycleHost): void {
+export function installCliShutdownSignalHandlers(
+  lifecycle: LifecycleHost,
+): void {
   if (shutdownHandlersInstalled) return;
   shutdownHandlersInstalled = true;
 
-  const install = (signal: NodeJS.Signals) => {
+  const exitCodeForSignal = (signal: CliShutdownSignal): number => {
+    switch (signal) {
+      case 'SIGINT':
+        return CliExitCode.Interrupted;
+      case 'SIGTERM':
+        return CliExitCode.Terminated;
+    }
+  };
+
+  const install = (signal: CliShutdownSignal) => {
     const handler = () => {
       void lifecycle.runShutdown().finally(() => {
-        process.kill(process.pid, signal);
+        process.exit(exitCodeForSignal(signal));
       });
     };
     process.once(signal, handler);
