@@ -373,9 +373,29 @@ export function statusBarBindingsText(
   const minimalBindings = joinStatusBindings([
     ...(hasMultipleStreams ? ['[Tab]streams'] : []),
     `[${modifierLabel}-p]tasks`,
+    ...(subagentControlsAvailable ? [`[${modifierLabel}-s]subagents`] : []),
     `[Ctrl-C]${ctrlCAction}`,
   ]);
   if (fitsStatusBindings(minimalBindings, maxColumns)) return minimalBindings;
+
+  if (subagentControlsAvailable) {
+    const subagentFocusedBindings = joinStatusBindings([
+      ...(hasMultipleStreams ? ['[Tab]streams'] : []),
+      `[${modifierLabel}-s]subagents`,
+      `[Ctrl-C]${ctrlCAction}`,
+    ]);
+    if (fitsStatusBindings(subagentFocusedBindings, maxColumns)) {
+      return subagentFocusedBindings;
+    }
+
+    const bareSubagentBindings = joinStatusBindings([
+      `[${modifierLabel}-s]subagents`,
+      `[Ctrl-C]${ctrlCAction}`,
+    ]);
+    if (fitsStatusBindings(bareSubagentBindings, maxColumns)) {
+      return bareSubagentBindings;
+    }
+  }
 
   return `[Ctrl-C]${ctrlCAction}`;
 }
