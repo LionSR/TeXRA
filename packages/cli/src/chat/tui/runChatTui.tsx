@@ -43,6 +43,7 @@ import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import { resolveCliRunnableModel } from '@cli/runtime/modelAccess';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { writeTextStderr } from '@cli/runtime/logSinks';
+import { dumbTerminalMessage } from '@cli/runtime/terminalRequirements';
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
@@ -347,12 +348,18 @@ async function applyInitialCliModelSelection(
 
 async function reconcileRootModelAfterApiModeChange(
   context: SlashCommandContext | undefined,
+  apiMode: CliApiMode,
 ): Promise<string | undefined> {
   if (!context || !chatTuiCanStartRootRun(context.session)) return undefined;
 
   const currentModel = cliState.sessionMeta.get().model;
   const resolution = await resolveCliRunnableModel(currentModel, {
     allowFallback: true,
+    apiMode,
+    noAvailableModelsMessage:
+      apiMode === 'included'
+        ? 'Run `texra login` for included relay access, or switch to personal API keys with `/api personal` after configuring a provider API key.'
+        : undefined,
   });
   if (resolution.model === currentModel) return undefined;
 
@@ -400,16 +407,19 @@ async function applyCliApiModeSelection(
   const apiMode = parseCliApiMode(normalized);
   if (apiMode) {
     await setCliApiMode(apiMode);
-    let modelNotice: string | undefined;
-    try {
-      modelNotice = await reconcileRootModelAfterApiModeChange(context);
-    } catch (error: unknown) {
-      modelNotice = toErrorMessage(error);
-    }
     cliState.sessionMeta.set({
       ...cliState.sessionMeta.get(),
       apiMode,
     });
+    let modelNotice: string | undefined;
+    try {
+      modelNotice = await reconcileRootModelAfterApiModeChange(
+        context,
+        apiMode,
+      );
+    } catch (error: unknown) {
+      modelNotice = toErrorMessage(error);
+    }
     appendLocalAssistantTranscript(
       [
         `API mode set to ${formatCliApiMode(apiMode)}.`,
@@ -755,7 +765,9 @@ export async function runChat(
     writeTextStderr(
       isHeadless
         ? 'texra chat requires an interactive terminal (TTY stdin and stdout). For scripting or piped input, use `texra run`.'
-        : 'texra chat needs a capable terminal — TERM=dumb strips the cursor controls Ink uses. For non-interactive runs, use `texra run`.',
+        : dumbTerminalMessage('chat', {
+            nonInteractiveFallback: '`texra run`',
+          }),
     );
     return { exitCode: CliExitCode.Usage };
   }
@@ -775,8 +787,15 @@ export async function runChat(
   try {
     modelResolution = await resolveCliRunnableModel(defaults.model, {
       allowFallback: !explicitModelRequested,
+      apiMode: context.apiMode,
+      noAvailableModelsMessage:
+        context.apiMode === 'included'
+          ? 'Run `texra login` for included relay access, or retry with `--api-mode personal` after configuring a provider API key.'
+          : undefined,
       noAvailableModelsHint:
-        'Run `texra chat --api-mode included` to try included relay access',
+        context.apiMode === 'included'
+          ? undefined
+          : 'Run `texra chat --api-mode included` to try included relay access',
     });
   } catch (error: unknown) {
     writeTextStderr(toErrorMessage(error));
