@@ -20,6 +20,7 @@ import {
   cliMultiAgentPresetNdjsonRecords,
   findCliMultiAgentPreset,
   formatCliMultiAgentPresetDetails,
+  formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
   planCliMultiAgentPresetRun,
   readCliMultiAgentPresets,
@@ -173,6 +174,25 @@ async function runMultiAgentShow(
   return CliExitCode.Success;
 }
 
+async function runMultiAgentInspect(
+  context: CliContext,
+  presetIdOrName: string,
+): Promise<number> {
+  await initCliPlatform({ ...context, quietLogs: true });
+  await loadAgents({ includeRemote: false });
+
+  const plan = await fillMultiAgentRunPlanGaps({
+    preset: presetIdOrName,
+  });
+
+  emitCliResult(context, {
+    json: plan,
+    ndjson: { kind: 'multi-agent-preset-inspection', plan },
+    text: formatCliMultiAgentPresetInspection(plan),
+  });
+  return CliExitCode.Success;
+}
+
 export async function runMultiAgentPreset(
   context: CliContext,
   init: MultiAgentRunInit,
@@ -293,7 +313,7 @@ const multiAgentShowCommand = defineCliCommand({
 const multiAgentInspectCommand = defineCliCommand({
   meta: { name: 'inspect', description: 'Inspect one multi-agent team preset' },
   args: multiAgentPresetArgs,
-  run: (context, ctx) => runMultiAgentShow(context, ctx.args.preset),
+  run: (context, ctx) => runMultiAgentInspect(context, ctx.args.preset),
 });
 
 const multiAgentRunCommand = defineCliCommand({
