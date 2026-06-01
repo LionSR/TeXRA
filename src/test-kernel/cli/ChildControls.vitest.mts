@@ -306,8 +306,8 @@ describe('CLI child execution controls', () => {
     ).toMatchObject([
       {
         executionId: 'agent-1',
-        description: 'running · 1min, 1sec',
-        elapsed: '1min, 1sec',
+        description: 'running · 1m 1s',
+        elapsed: '1m 1s',
       },
     ]);
     expect(childElapsed(state.activeProcesses[0], 62_000)).toBe('1s');

@@ -165,6 +165,8 @@
     "pdf2pic": "^3.2.0",
     "perfect-debounce": "^2.1.0",
     "postal-mime": "^2.7.4",
+    "pretty-ms": "^9.3.0",
+    "serialize-error": "^13.0.1",
     "shell-quote": "^1.8.4",
     "signal-polyfill": "^0.2.2",
     "sortablejs": "^1.15.7",
