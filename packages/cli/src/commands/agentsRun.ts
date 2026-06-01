@@ -190,7 +190,8 @@ export const agentsRunCommand = defineCliCommand({
     input: {
       type: 'string',
       alias: 'i',
-      description: 'Workspace file made visible to the agent (repeatable)',
+      description:
+        'Workspace file made visible to the agent (repeatable; use `-` to read stdin)',
     },
     context: {
       type: 'string',

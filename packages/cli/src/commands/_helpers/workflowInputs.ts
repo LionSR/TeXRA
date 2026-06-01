@@ -6,6 +6,12 @@ import { glob, hasMagic } from 'glob';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 
+import {
+  STDIN_INPUT_TOKEN,
+  materializeStdinInput,
+  type StdinReader,
+} from './stdinInput';
+
 function resolveAgainstCwd(candidate: string, cwd: string): string {
   return path.isAbsolute(candidate)
     ? path.resolve(candidate)
@@ -26,6 +32,15 @@ function normalizeCliInputPath(candidate: string, cwd: string): string {
 }
 
 /**
+ * Optional dependencies for {@link expandWorkflowInputSpec}. `readStdin` lets
+ * tests feed piped content for the `-` (stdin) token without driving a real
+ * `process.stdin`.
+ */
+export interface ExpandInputSpecOptions {
+  readonly readStdin?: StdinReader;
+}
+
+/**
  * Expand a single user-supplied path spec into the absolute / cwd-relative
  * paths it resolves to.
  *
@@ -33,14 +48,25 @@ function normalizeCliInputPath(candidate: string, cwd: string): string {
  * Usage-error messages so a missing file is attributed to the right flag.
  * Defaults to `--input` for the common case; callers that pass context paths
  * (multi-agent `--context`) should override.
+ *
+ * The literal token `-` means "read from stdin": stdin is drained and written
+ * to a temp file whose absolute path is returned, keeping the downstream
+ * file-centric run pipeline intact (clig.dev pipe composability).
  */
 export async function expandWorkflowInputSpec(
   inputSpec: string,
   cwd: string,
   flagLabel: string = '--input',
+  options: ExpandInputSpecOptions = {},
 ): Promise<string[]> {
   const trimmed = inputSpec.trim();
   if (!trimmed) return [];
+
+  // `-` means stdin. Read it only when explicitly requested so the normal file
+  // path never blocks waiting on stdin.
+  if (trimmed === STDIN_INPUT_TOKEN) {
+    return [await materializeStdinInput(flagLabel, options.readStdin)];
+  }
 
   if (hasMagic(trimmed)) {
     const isAbsolute = path.isAbsolute(trimmed);
@@ -93,11 +119,18 @@ export async function expandWorkflowInputSpecs(
   inputSpecs: readonly string[],
   cwd: string,
   flagLabel: string = '--input',
-  options: { readonly allowEmpty?: boolean } = {},
+  options: {
+    readonly allowEmpty?: boolean;
+    readonly readStdin?: StdinReader;
+  } = {},
 ): Promise<string[]> {
   const expanded = (
     await Promise.all(
-      inputSpecs.map((spec) => expandWorkflowInputSpec(spec, cwd, flagLabel)),
+      inputSpecs.map((spec) =>
+        expandWorkflowInputSpec(spec, cwd, flagLabel, {
+          readStdin: options.readStdin,
+        }),
+      ),
     )
   ).flat();
   const unique = [...new Set(expanded)];
@@ -119,7 +152,10 @@ export async function expandRunInputs(
   inputSpecs: readonly string[],
   contextSpecs: readonly string[],
   cwd: string,
-  options: { readonly allowEmptyInput?: boolean } = {},
+  options: {
+    readonly allowEmptyInput?: boolean;
+    readonly readStdin?: StdinReader;
+  } = {},
 ): Promise<{ inputFiles: string[]; contextFiles: string[] }> {
   const inputFiles = await expandWorkflowInputSpecs(
     inputSpecs,
@@ -127,12 +163,15 @@ export async function expandRunInputs(
     '--input',
     {
       allowEmpty: options.allowEmptyInput,
+      readStdin: options.readStdin,
     },
   );
   const contextFiles = (
     await Promise.all(
       contextSpecs.map((spec) =>
-        expandWorkflowInputSpec(spec, cwd, '--context'),
+        expandWorkflowInputSpec(spec, cwd, '--context', {
+          readStdin: options.readStdin,
+        }),
       ),
     )
   ).flat();

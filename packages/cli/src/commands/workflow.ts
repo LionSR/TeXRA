@@ -170,7 +170,8 @@ export const runWorkflowCommand = defineCliCommand({
       type: 'string',
       alias: 'i',
       required: true,
-      description: 'Input file passed to the workflow agent (repeatable)',
+      description:
+        'Input file passed to the workflow agent (repeatable; use `-` to read stdin)',
     },
     context: {
       type: 'string',

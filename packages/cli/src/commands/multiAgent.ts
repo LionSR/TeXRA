@@ -296,7 +296,7 @@ const multiAgentRunCommand = defineCliCommand({
       type: 'string',
       alias: 'i',
       description:
-        'Input file passed to the team orchestrator (repeatable; optional when --instruction is provided)',
+        'Input file passed to the team orchestrator (repeatable; optional when --instruction is provided; use `-` to read stdin)',
     },
     context: {
       type: 'string',

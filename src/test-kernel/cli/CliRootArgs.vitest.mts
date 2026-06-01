@@ -22,7 +22,10 @@ import {
   rejectHeadlessOnlyFlags,
 } from '@cli/commands/_helpers/globalArgs';
 import { cliTerminalStatus } from '@cli/commands/_helpers/terminalStatus';
-import { expandWorkflowInputSpecs } from '@cli/commands/_helpers/workflowInputs';
+import {
+  expandRunInputs,
+  expandWorkflowInputSpecs,
+} from '@cli/commands/_helpers/workflowInputs';
 import {
   resolveWorkflowOutput,
   resumeWorkflowOutputFile,
@@ -266,6 +269,54 @@ describe('CLI root argument routing', () => {
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
+  });
+
+  it('materializes a `-` --input spec from piped stdin content', async () => {
+    // clig.dev pipe composability: `cat draft.tex | texra run <agent> --input -`
+    // reads the primary input from stdin. The token is resolved to a temp file
+    // whose content matches what was piped in, keeping the downstream
+    // file-centric run pipeline intact.
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      const piped =
+        '\\documentclass{article}\\begin{document}hi\\end{document}';
+      const resolved = await expandWorkflowInputSpecs(['-'], root, '--input', {
+        readStdin: async () => piped,
+      });
+      expect(resolved).toHaveLength(1);
+      const tempPath = resolved[0];
+      expect(path.isAbsolute(tempPath)).toBe(true);
+      expect(path.basename(tempPath)).toBe('stdin.tex');
+      await expect(fs.readFile(tempPath, 'utf8')).resolves.toBe(piped);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reads `-` through expandRunInputs for both input and context', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      const piped = 'piped body';
+      const { inputFiles, contextFiles } = await expandRunInputs(
+        ['-'],
+        [],
+        root,
+        { readStdin: async () => piped },
+      );
+      expect(inputFiles).toHaveLength(1);
+      expect(contextFiles).toEqual([]);
+      await expect(fs.readFile(inputFiles[0], 'utf8')).resolves.toBe(piped);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an empty `-` --input with a clear usage error', async () => {
+    await expect(
+      expandWorkflowInputSpecs(['-'], '/tmp/project', '--input', {
+        readStdin: async () => '   \n',
+      }),
+    ).rejects.toThrow(/--input -: no data on stdin/);
   });
 
   it('rejects a literal --input file that does not exist', async () => {
