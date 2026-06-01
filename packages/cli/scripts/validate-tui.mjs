@@ -461,7 +461,7 @@ const SCENARIOS = [
     expect: [
       '… 6 earlier',
       '/status',
-      'Open the session status tabs',
+      'Show session details',
       '/exit',
       'Exit the CLI session',
     ],
