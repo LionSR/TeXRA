@@ -15,6 +15,7 @@ import {
   selectInlineOverflowText,
   selectInitialHighlightIndex,
   selectItemRenderKey,
+  selectVisibleInlineOverflowText,
   visibleSelectRange,
 } from '@cli/chat/tui/ui/Select';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
@@ -196,6 +197,16 @@ describe('CLI Select visible range', () => {
       }),
     ).toEqual({ start: 3, end: 8 });
   });
+
+  it('allows callers to reserve zero visible rows', () => {
+    expect(
+      visibleSelectRange({
+        itemCount: 8,
+        highlight: 3,
+        maxVisibleItems: 0,
+      }),
+    ).toEqual({ start: 0, end: 0 });
+  });
 });
 
 describe('CLI Select inline overflow', () => {
@@ -231,6 +242,17 @@ describe('CLI Select inline overflow', () => {
         showOverflow: true,
       }),
     ).toBeUndefined();
+  });
+
+  it('shows inline overflow for any clipped visible window', () => {
+    expect(
+      selectVisibleInlineOverflowText({
+        hiddenBefore: 0,
+        hiddenAfter: 2,
+        showOverflow: false,
+        visibleItemCount: 3,
+      }),
+    ).toBe('+2 more');
   });
 });
 
