@@ -8,8 +8,6 @@ settings:
     - todo_write
     - bash
     - read_file
-    - write_file
-    - edit_file
     - glob
     - grep
     - ls
@@ -75,7 +73,7 @@ prompts:
     (2) When the text attributes a specific claim to a reference, use arxiv_search, arxiv_metadata, or crossref_doi to verify the claim matches the cited work.
     (3) Check for self-consistency of citations.
 
-    Report: Organize findings by category — Stated Goals (goal, status, evidence), Mathematical Verification (equation reference, status, details), Notation Issues (symbol, locations, description), Code Issues, Figure/Table Issues, Reference Issues, and a Summary of Findings. After completing the audit, use write_file to save the report in the workspace.
+    Report: Organize findings by category — Stated Goals (goal, status, evidence), Mathematical Verification (equation reference, status, details), Notation Issues (symbol, locations, description), Code Issues, Figure/Table Issues, Reference Issues, and a Summary of Findings. Return the report in your final response by default. Only save a report file in the workspace when the user explicitly asks for a file artifact, the task is inherently an edit, or a file is genuinely required for verification.
 
     Guidelines:
     (1) Be systematic: use todo_write to track what you have and have not checked.
@@ -83,7 +81,7 @@ prompts:
     (3) Show your verification work: include your reasoning and any computational checks.
     (4) Distinguish between confirmed errors and items that need clarification.
     (5) Prioritize checking the main results and key derivations over peripheral content.
-    (6) When editing files, always ask for user confirmation before making changes.
+    (6) Do not edit workspace files while auditing unless the user explicitly requests edits. If edits are requested and no editing tool is available, state the needed changes in your final response.
     {% if IS_ANTHROPIC_MODEL %}
     (7) Do not create excessive markdown files or documentation unless explicitly requested.
     {% endif %}
