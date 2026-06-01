@@ -180,11 +180,13 @@ const SCENARIOS = [
   },
   {
     name: 'transcript-viewer-long-tool-output',
+    cols: 80,
     env: { HARNESS_ENTRIES: '0', HARNESS_LONG_TOOL_OUTPUT: '1' },
     keys: [DC4],
     frame: 'tail',
     expect: [
       'tool-output-line-10 hidden-middle',
+      'wide-column-F',
       'tool-output-line-18',
       'PgUp/PgDn page',
       'Esc close',
