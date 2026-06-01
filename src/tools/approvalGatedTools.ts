@@ -14,9 +14,14 @@ const APPROVAL_GATED_TOOL_NAME_LIST = [
   'delegate_agent',
   'delegate_workflow',
   'edit_file',
+  'install_vscode_extension',
+  'invoke_command',
   'plan',
   'send_to_terminal',
+  'set_api_key',
   'str_replace_editor',
+  'unset_api_key',
+  'update_config',
   'write_file',
 ] as const satisfies readonly RegisteredToolName[];
 
