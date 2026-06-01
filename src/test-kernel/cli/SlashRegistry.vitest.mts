@@ -25,6 +25,8 @@ describe('slashRegistry', () => {
         'model',
         'api',
         'auth',
+        'login',
+        'logout',
         'approval',
         'yolo',
         'status',

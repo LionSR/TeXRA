@@ -43,6 +43,7 @@ export const chatCommand = withUsageSections(
       rows: [
         ['/help', 'show slash commands inside chat'],
         ['/status', 'show session state'],
+        ['/login, /logout', 'sign in or out of included access'],
         ['Ctrl-T', 'open the transcript viewer'],
         ['Tab', 'cycle visible streams when subagents are active'],
         ['Esc p', 'open tasks and sub-workflows (Alt-p when configured)'],
