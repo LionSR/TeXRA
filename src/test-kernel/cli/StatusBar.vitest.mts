@@ -211,6 +211,32 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('[Ctrl-C]stop');
   });
 
+  it('prefers the task picker when one child-control shortcut fits', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      elapsedMs: 88_000,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 3,
+      activeProcesses: 1,
+      approvalDepth: 0,
+      subagentControlsAvailable: true,
+      hasMultipleStreams: true,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Option',
+      ctrlCAction: 'stop',
+      width: 44,
+    });
+
+    expect(display.bindings).toBe('[Option-p]tasks  [Ctrl-C]stop');
+    expect(display.bindings).not.toContain('[Option-s]subagents');
+  });
+
   it('drops low-priority status details before narrow footers lose separators', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,
