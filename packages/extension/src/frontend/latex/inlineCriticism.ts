@@ -26,6 +26,7 @@ import * as logger from '@logger/logUtils';
 import type { OutputFileInfo } from '@shared/schemas';
 import type { ManualCriticismEntry } from '@tools/AddCriticismTool';
 import { AbsoluteFS } from '@utils/files';
+import { hasExtension } from '@utils/core/pathCore';
 
 const CHANNEL = 'InlineCriticism';
 const COLLECTION_NAME = 'texra-criticism';
@@ -73,7 +74,7 @@ async function refreshFileDiagnostics(file: OutputFileInfo): Promise<void> {
   const activeCollection = collection;
   if (!activeCollection) return;
   const absolutePath = file.location.absolutePath;
-  if (!absolutePath.toLowerCase().endsWith('.tex')) return;
+  if (!hasExtension(absolutePath, '.tex')) return;
 
   let text: string;
   try {

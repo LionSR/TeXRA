@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latex';
 import { ToolError, type ToolResult } from '@tools/result';
 import { LEAN4_EXTENSION_ID } from '@tools/lean/leanConstants';
+import { delay } from '@utils/core';
 
 // Local file imports
 import { defineTool } from '../core/define';
@@ -59,7 +60,7 @@ export class InstallVscodeExtensionTool extends defineTool({
     await platform.extensions.install(id);
 
     // Give VS Code a brief moment to register the new extension.
-    await new Promise((r) => setTimeout(r, 250));
+    await delay(250);
     const installed = platform.extensions.isInstalled(id);
 
     return {
