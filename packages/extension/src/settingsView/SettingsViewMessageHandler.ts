@@ -126,6 +126,7 @@ import {
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
+import { hasExtension } from '@utils/core/pathCore';
 import { readGitAuthorSettingsFromState } from '@utils/system/gitAuthorSettings';
 import { setToolUseMemoryEnabled } from '@utils/config/constants';
 import {
@@ -1083,7 +1084,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       const fileUri = vscode.Uri.file(absolutePath);
 
       // Open markdown files in preview mode (read-only rendered view)
-      if (absolutePath.toLowerCase().endsWith('.md')) {
+      if (hasExtension(absolutePath, '.md')) {
         await vscode.commands.executeCommand('markdown.showPreview', fileUri);
       } else {
         const doc = await vscode.workspace.openTextDocument(fileUri);
