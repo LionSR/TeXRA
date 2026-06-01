@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatUnavailableApprovalInstruction } from '@cli/commands/_helpers/approvalPolicyInstruction';
+import {
+  approvalPromptsUnavailable,
+  formatUnavailableApprovalInstruction,
+} from '@cli/commands/_helpers/approvalPolicyInstruction';
 import { formatMultiAgentRunInstruction } from '@cli/commands/_helpers/multiAgentInstruction';
 
 const preset = {
@@ -13,6 +16,33 @@ const preset = {
 };
 
 describe('formatUnavailableApprovalInstruction', () => {
+  it('classifies approval-unavailable CLI contexts', () => {
+    expect(
+      approvalPromptsUnavailable({
+        mode: 'headless',
+        approvalPolicy: 'never',
+      }),
+    ).toBe(true);
+    expect(
+      approvalPromptsUnavailable({
+        mode: 'headless',
+        approvalPolicy: 'ask',
+      }),
+    ).toBe(true);
+    expect(
+      approvalPromptsUnavailable({
+        mode: 'headless',
+        approvalPolicy: 'yolo',
+      }),
+    ).toBe(false);
+    expect(
+      approvalPromptsUnavailable({
+        mode: 'interactive',
+        approvalPolicy: 'ask',
+      }),
+    ).toBe(false);
+  });
+
   it('describes never as an automatic approval rejection', () => {
     for (const mode of ['headless', 'interactive'] as const) {
       const instruction = formatUnavailableApprovalInstruction({
