@@ -449,10 +449,10 @@ tree** (commit `da131dc`, PR #4781):
 - `@texra/core` is **no longer the `corePackageReady` stub** flagged through §8: it is a
   curated 8-section surface (`packages/core/src/index.ts`, 115 LOC) exporting the platform
   composition root, `AgentConfig`/`AgentCategory`, execution-request validation, `runAgent`
-  + `runAgentStream` (the `executeAgent` alias), `AgentRuntimeHost`, the `AgentTrace` channel,
-  the agent registry, and execution storage. `ExecutionId`/`ExecuteAgentOptions`/
-  `WorkflowFlowResult` are exported; `getAgentPath` is dropped from the surface — exactly the
-  Step 6 spec. This resolves the §8 "no single versioned public surface" packaging note.
+  - `runAgentStream` (the `executeAgent` alias), `AgentRuntimeHost`, the `AgentTrace` channel,
+    the agent registry, and execution storage. `ExecutionId`/`ExecuteAgentOptions`/
+    `WorkflowFlowResult` are exported; `getAgentPath` is dropped from the surface — exactly the
+    Step 6 spec. This resolves the §8 "no single versioned public surface" packaging note.
 
 **Independently re-confirmed by the four parallel passes (no action — recorded so they
 are not re-flagged):**
