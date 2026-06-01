@@ -9,6 +9,7 @@ import {
   CliUsageError,
   isTexraCliEntrypointPath,
   readCliBugsUrl,
+  readCliEnv,
   readCliVersion,
   resolveCliCwd,
   resolveStreamColor,
@@ -66,6 +67,19 @@ describe('CLI package manifest discovery', () => {
     await expect(readCliBugsUrl()).resolves.toBe(
       'https://github.com/texra-ai/texra-issues/issues',
     );
+  });
+});
+
+describe('CLI env boundary', () => {
+  it('returns a snapshot for environment reads', () => {
+    process.env.TEXRA_READ_ENV_TEST = 'original';
+    try {
+      const env = readCliEnv();
+      env.TEXRA_READ_ENV_TEST = 'mutated';
+      expect(process.env.TEXRA_READ_ENV_TEST).toBe('original');
+    } finally {
+      delete process.env.TEXRA_READ_ENV_TEST;
+    }
   });
 });
 
