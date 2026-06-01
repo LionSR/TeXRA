@@ -75,11 +75,11 @@ the `@agent/runtime` facade barrel (§3.1, adds indirection), the `bridgeState`
 **The run call path (verified — entry renamed since 2026-05-30, see §9):**
 
 ```
-executeCommand.ts:42 (ext)   AgentConfigSchema.parse → runAgent (runAgent.ts:32) ─┐
-agentsRun/multiAgent (cli)   AgentConfigSchema.parse → executeCliRequest → runAgent┤
-                                                                                    │
-                              runAgent ──→ executeAgent (executeAgent.ts)           │
-                                  → buildAgentLaunchContext (AgentLaunchContext.ts) ─┘
+executeCommand.ts:42 (ext)        AgentConfigSchema.parse → runAgent (runAgent.ts:32) ─┐
+agentsRun.ts + multiAgent.ts(cli) AgentConfigSchema.parse → executeCliRequest → runAgent┤
+                                                                                         │
+                              runAgent ──→ executeAgent (executeAgent.ts)                │
+                                  → buildAgentLaunchContext (AgentLaunchContext.ts) ──────┘
                                   → withExecutionRunContext (AsyncLocalStorage)
                                   → branch on agentCategory:
                                       toolUse  → runToolUseFlow   → PersistedFlow.run
@@ -178,9 +178,9 @@ The public barrels (`@agent/index`, `@agent/core`, `@agent/types`) are
    `delegationPolicy`). Acceptable for internal command handlers, but there's no
    shielded "public runtime" subset.
    - **Action:** Add a small `@agent/runtime/index.ts` facade re-exporting the
-     genuinely-public subset (`runValidatedExecutionRequest`, `executeAgent`,
-     `resumeToolUseFromSnapshot`, `AgentRuntimeHost`). Keep internals importable
-     but make the intended surface obvious.
+     genuinely-public subset (`runAgent`/`validateExecutionRequest`, `executeAgent`,
+     `resumeToolUseFromSnapshot`, `AgentRuntimeHost` — the API renamed since this
+     pass, see §9). Keep internals importable but make the intended surface obvious.
 
 2. **Core barrel under-exports.** `@agent/core` exports only ~3 symbols;
    `AgentConfigSchema`, `AgentWorkflowSetting`, `AgentToolUseSetting`,
