@@ -433,8 +433,18 @@ function fitsStatusBindings(text: string, maxColumns: number | undefined) {
   return maxColumns === undefined || stringWidth(text) <= maxColumns;
 }
 
-function foregroundBindingsText(ctrlCAction: CtrlCAction): string {
-  return `Use foreground panel shortcuts  [Ctrl-C]${ctrlCAction}`;
+function foregroundBindingsText(
+  ctrlCAction: CtrlCAction,
+  maxColumns?: number,
+): string {
+  const ctrlCBinding = `[Ctrl-C]${ctrlCAction}`;
+  const full = `Use foreground panel shortcuts  ${ctrlCBinding}`;
+  if (fitsStatusBindings(full, maxColumns)) return full;
+
+  const compact = `Panel shortcuts  ${ctrlCBinding}`;
+  if (fitsStatusBindings(compact, maxColumns)) return compact;
+
+  return ctrlCBinding;
 }
 
 export function ctrlCActionForFocus({
@@ -642,7 +652,12 @@ export function buildStatusBarDisplay(
       input.pendingExitHint && input.pendingExitResumeId
         ? `Resume this session with: texra --resume ${input.pendingExitResumeId}`
         : input.shortcutsActive === false
-          ? foregroundBindingsText(input.ctrlCAction ?? 'exit')
+          ? foregroundBindingsText(
+              input.ctrlCAction ?? 'exit',
+              input.width === undefined
+                ? undefined
+                : Math.max(0, input.width - STATUS_BAR_HORIZONTAL_PADDING),
+            )
           : statusBarBindingsText(
               input.subagentControlsAvailable,
               input.hasMultipleStreams,
