@@ -7,6 +7,7 @@ import { ZodError } from 'zod';
 
 // Local imports - common
 import { isFileNotFoundError, toErrorMessage } from '@common/errors';
+import { isObject } from '@utils/core';
 
 // Local imports - skill parsing
 import { collapseWhitespace } from '@utils/text/stringUtils';
@@ -82,9 +83,6 @@ function issue(
   return { severity, code, message, ...options };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function firstZodMessage(error: ZodError): string {
   return error.issues[0]?.message ?? 'Invalid skill metadata';
@@ -209,7 +207,7 @@ async function loadSkillDirectory(
   try {
     const content = await fs.readFile(skillPath, 'utf8');
     const { frontmatter, body } = extractFrontmatter(content);
-    if (!isRecord(frontmatter)) {
+    if (!isObject(frontmatter)) {
       return {
         errors: [
           issue(
