@@ -44,6 +44,8 @@ export interface RunContext {
   readonly delegationConfig?: NestedDelegationConfig;
   /** Whether approval or user prompts cannot be answered by the current host. */
   readonly approvalPromptsUnavailable?: boolean;
+  /** Whether this run should stop after one tool-use cycle instead of idling. */
+  readonly stopAfterCycle?: boolean;
 }
 
 export interface CreateRunContextOptions {
@@ -62,6 +64,7 @@ export interface CreateRunContextOptions {
   delegationDepth?: number;
   delegationConfig?: NestedDelegationConfig;
   approvalPromptsUnavailable?: boolean;
+  stopAfterCycle?: boolean;
 }
 
 const runContextScope = new AsyncLocalStorage<RunContext>();
@@ -83,6 +86,7 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     delegationDepth: options.delegationDepth,
     delegationConfig: options.delegationConfig,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+    stopAfterCycle: options.stopAfterCycle,
   });
 }
 
