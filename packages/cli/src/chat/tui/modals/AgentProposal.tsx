@@ -100,11 +100,23 @@ export function maxAgentProposalInstructionScrollOffset(
   totalLines: number,
   maxDisplayLines: number,
 ): number {
+  if (maxDisplayLines <= 0) return 0;
+  if (totalLines <= maxDisplayLines) return 0;
+  if (maxDisplayLines <= COMPACT_AGENT_PROPOSAL_INSTRUCTION_ROWS) {
+    return Math.max(0, totalLines - Math.max(1, maxDisplayLines - 1));
+  }
+
   return maxScrollableRowOffset({
     compactRows: COMPACT_AGENT_PROPOSAL_INSTRUCTION_ROWS,
     maxDisplayLines,
     totalLines,
   });
+}
+
+function agentProposalInstructionPageRows(maxInstructionRows: number): number {
+  return maxInstructionRows <= COMPACT_AGENT_PROPOSAL_INSTRUCTION_ROWS
+    ? Math.max(1, maxInstructionRows - 1)
+    : Math.max(1, maxInstructionRows - 2);
 }
 
 function overflowText(kind: 'more' | 'previous' | 'hidden', count: number) {
@@ -128,7 +140,72 @@ function compactHiddenInstructionText({
     return clipToWidth(overflowText('hidden', hiddenLines), width);
   }
 
-  return `${clipToWidth(firstLine, prefixWidth).trimEnd()}${suffix}`;
+  const prefix = clipToWidth(firstLine, prefixWidth).trimEnd();
+  if (prefix.length === 0) {
+    return clipToWidth(overflowText('hidden', hiddenLines), width);
+  }
+
+  return `${prefix}${suffix}`;
+}
+
+function compactScrollStatusText({
+  hiddenAfter,
+  hiddenBefore,
+  width,
+}: {
+  readonly hiddenAfter: number;
+  readonly hiddenBefore: number;
+  readonly width: number;
+}): string {
+  const text =
+    hiddenBefore > 0 && hiddenAfter > 0
+      ? `... ${hiddenBefore} previous, ${hiddenAfter} more rows`
+      : hiddenBefore > 0
+        ? overflowText('previous', hiddenBefore)
+        : overflowText('more', hiddenAfter);
+  return clipToWidth(text, width);
+}
+
+function wrappedRows(text: string, width: number): number {
+  return wrapAnsiToWidth(text, Math.max(MIN_AGENT_PROPOSAL_WIDTH, width)).split(
+    '\n',
+  ).length;
+}
+
+function fileGroupText(label: string, files: readonly string[]): string {
+  const visible = files.slice(0, FILE_LIMIT);
+  const hidden = files.length - visible.length;
+  return `${label}: ${visible.join(', ')}${hidden > 0 ? `, +${hidden} more` : ''}`;
+}
+
+function agentProposalMetadataRows({
+  fileGroups,
+  payload,
+  width,
+}: {
+  readonly fileGroups: ReturnType<typeof getProposalFileGroups>;
+  readonly payload: AgentProposalPermission;
+  readonly width: number;
+}): number {
+  return (
+    1 +
+    wrappedRows(`Model: ${payload.model}`, width) +
+    wrappedRows(
+      `Category: ${agentProposalCategoryLabel(payload.agentCategory)}`,
+      width,
+    ) +
+    (payload.workingDirectory
+      ? wrappedRows(`Directory: ${payload.workingDirectory}`, width)
+      : 0) +
+    (fileGroups.length > 0
+      ? 1 +
+        fileGroups.reduce(
+          (rows, group) =>
+            rows + wrappedRows(fileGroupText(group.label, group.files), width),
+          0,
+        )
+      : 0)
+  );
 }
 
 export function boundedAgentProposalInstructionLines({
@@ -146,12 +223,21 @@ export function boundedAgentProposalInstructionLines({
   if (maxDisplayLines <= 0 || lines.length <= maxDisplayLines) return lines;
 
   if (maxDisplayLines <= COMPACT_AGENT_PROPOSAL_INSTRUCTION_ROWS) {
+    const contentRows = Math.max(1, maxDisplayLines - 1);
+    const offset = Math.max(
+      0,
+      Math.min(
+        scrollOffset,
+        maxAgentProposalInstructionScrollOffset(lines.length, maxDisplayLines),
+      ),
+    );
+
     if (maxDisplayLines === 1) {
       return [
         {
           kind: 'overflow',
           text: compactHiddenInstructionText({
-            firstLine: lines[0]?.text ?? '',
+            firstLine: lines[offset]?.text ?? '',
             hiddenLines: lines.length - 1,
             width,
           }),
@@ -159,13 +245,18 @@ export function boundedAgentProposalInstructionLines({
       ];
     }
 
-    const visibleCount = Math.max(1, maxDisplayLines - 1);
-    const visible = lines.slice(0, visibleCount);
+    const visible = lines.slice(offset, offset + contentRows);
+    const hiddenBefore = offset;
+    const hiddenAfter = Math.max(0, lines.length - (offset + visible.length));
     return [
       ...visible,
       {
         kind: 'overflow',
-        text: overflowText('hidden', lines.length - visible.length),
+        text: compactScrollStatusText({
+          hiddenAfter,
+          hiddenBefore,
+          width,
+        }),
       },
     ];
   }
@@ -202,13 +293,12 @@ function FileGroup(props: {
   readonly label: string;
   readonly files: readonly string[];
 }): React.JSX.Element {
-  const visible = props.files.slice(0, FILE_LIMIT);
-  const hidden = props.files.length - visible.length;
+  const text = fileGroupText(props.label, props.files);
+  const prefix = `${props.label}: `;
   return (
     <Text>
-      <Text bold>{props.label}: </Text>
-      {visible.join(', ')}
-      {hidden > 0 ? `, +${hidden} more` : ''}
+      <Text bold>{prefix}</Text>
+      {text.slice(prefix.length)}
     </Text>
   );
 }
@@ -218,15 +308,15 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   const [scrollOffset, setScrollOffset] = useState(0);
   const fileGroups = getProposalFileGroups(props.payload);
   const title = `Spawn ${props.payload.agent}?`;
-  const metadataRows =
-    1 +
-    2 +
-    (props.payload.workingDirectory ? 1 : 0) +
-    (fileGroups.length > 0 ? 1 + fileGroups.length : 0);
   const instructionWidth = Math.max(
     MIN_AGENT_PROPOSAL_WIDTH,
     columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
   );
+  const metadataRows = agentProposalMetadataRows({
+    fileGroups,
+    payload: props.payload,
+    width: instructionWidth,
+  });
   const maxInstructionRows = agentProposalInstructionRowsBudget({
     availableRows: props.availableRows,
     columns,
@@ -246,9 +336,10 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
     maxInstructionRows,
   );
   const scrollable = maxScrollOffset > 0;
-  const pageRows = Math.max(1, maxInstructionRows - 2);
+  const pageRows = agentProposalInstructionPageRows(maxInstructionRows);
   const compactInstructionLayout =
     maxInstructionRows <= COMPACT_AGENT_PROPOSAL_INSTRUCTION_ROWS;
+  const showScrollHints = scrollable && maxInstructionRows > 1;
   const displayLines = boundedAgentProposalInstructionLines({
     instruction: props.payload.instruction,
     maxDisplayLines: maxInstructionRows,
@@ -323,7 +414,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
           </Text>
         ))}
       </Box>
-      {scrollable ? (
+      {showScrollHints ? (
         <KeyHints
           confirmCancel={false}
           hints={[
