@@ -37,11 +37,41 @@ export function resolveLoginProvider(
   return DEFAULT_OAUTH_PROVIDER;
 }
 
-interface LoginInit {
+export interface LoginInit {
   readonly provider: string;
   readonly noBrowser: boolean;
   readonly selectAccount: boolean;
   readonly loginHint?: string;
+}
+
+type LoginCommandArgs = Record<string, unknown>;
+
+function readBooleanArg(
+  args: LoginCommandArgs,
+  hyphenKey: string,
+  camelKey: string,
+): boolean {
+  return args[hyphenKey] === true || args[camelKey] === true;
+}
+
+function readStringArg(
+  args: LoginCommandArgs,
+  hyphenKey: string,
+  camelKey: string,
+): string | undefined {
+  return optString(args[hyphenKey]) ?? optString(args[camelKey]);
+}
+
+export function loginInitFromArgs(args: LoginCommandArgs): LoginInit {
+  const positional = optString(args.providerArg);
+  const flag = optString(args.provider);
+  return {
+    provider: resolveLoginProvider(positional, flag),
+    noBrowser:
+      readBooleanArg(args, 'no-browser', 'noBrowser') || args.browser === false,
+    selectAccount: readBooleanArg(args, 'select-account', 'selectAccount'),
+    loginHint: readStringArg(args, 'login-hint', 'loginHint'),
+  };
 }
 
 async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
@@ -125,15 +155,7 @@ export const loginCommand = defineCliCommand({
     },
   },
   run: (context, ctx) => {
-    const positional = optString(ctx.args.providerArg);
-    const flag = optString(ctx.args.provider);
-    const provider = resolveLoginProvider(positional, flag);
-    return runLogin(context, {
-      provider,
-      noBrowser: ctx.args['no-browser'] === true,
-      selectAccount: ctx.args['select-account'] === true,
-      loginHint: optString(ctx.args['login-hint']),
-    });
+    return runLogin(context, loginInitFromArgs(ctx.args));
   },
 });
 
