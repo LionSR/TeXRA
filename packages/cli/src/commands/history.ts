@@ -25,13 +25,17 @@ async function runHistoryList(context: CliContext): Promise<number> {
   await initLocalCliPlatform(context);
   const entries = await listCliHistoryEntries();
 
-  emitCliResult(context, {
-    json: entries,
-    ndjson: cliHistoryNdjsonRecords(entries),
-    text: entries.length
-      ? formatCliHistoryText(entries)
-      : 'No execution history found.',
-  });
+  emitCliResult(
+    context,
+    {
+      json: entries,
+      ndjson: cliHistoryNdjsonRecords(entries),
+      text: entries.length
+        ? formatCliHistoryText(entries)
+        : 'No execution history found.',
+    },
+    { paged: true },
+  );
   return CliExitCode.Success;
 }
 

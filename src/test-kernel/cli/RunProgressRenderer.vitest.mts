@@ -19,6 +19,8 @@ function context(overrides: Partial<CliContext> = {}): CliContext {
     quietLogs: false,
     renderRunProgress: true,
     stderrIsTty: true,
+    stdoutColorEnabled: true,
+    stderrColorEnabled: true,
     colorEnabled: true,
     version: '0.0.0',
     resourcesPath: '/tmp/resources',
