@@ -13,6 +13,7 @@ import {
   normalizeRootShortcuts,
   reorderGlobalFlags,
 } from '@cli/commands/_helpers/dispatch';
+import { CliUsageError, formatCrashReportLine } from '@cli/runtime/cliContext';
 import {
   formatCliModelListError,
   isCliFetchStackLog,
@@ -557,6 +558,26 @@ describe('CLI login arguments', () => {
   });
 });
 
+describe('CLI crash report line', () => {
+  const bugsUrl = 'https://github.com/texra-ai/texra-issues/issues';
+
+  it('points unexpected crashes at the issue tracker', () => {
+    expect(formatCrashReportLine(new Error('boom'), bugsUrl)).toBe(
+      `This looks like a bug — please report it at ${bugsUrl} (include the command and the message above).`,
+    );
+  });
+
+  it('does not append a report link for usage errors', () => {
+    expect(
+      formatCrashReportLine(new CliUsageError('bad flag'), bugsUrl),
+    ).toBeUndefined();
+  });
+
+  it('omits the report link when no tracker URL is configured', () => {
+    expect(formatCrashReportLine(new Error('boom'), undefined)).toBeUndefined();
+  });
+});
+
 describe('runCli usage output stream routing', () => {
   // Capture every byte the CLI writes. Usage on an ERROR flows through
   // writeRawStderr -> process.stderr.write; citty's showUsage (the explicit
@@ -665,6 +686,26 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('open an item directly');
     expect(stdout).toContain('Enter');
     expect(stdout).toContain('Esc');
+    expect(stderr).toBe('');
+  });
+
+  it('shows EXAMPLES and a docs link in root --help', async () => {
+    const result = await runCli(['--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('EXAMPLES');
+    expect(stdout).toContain('texra chat');
+    expect(stdout).toContain('texra run <agent> --input file.tex');
+    expect(stdout).toContain('texra agents list');
+    expect(stdout).toContain('texra doctor');
+    expect(stdout).toContain('Learn more: https://texra.ai');
+    expect(stderr).toBe('');
+  });
+
+  it('shows EXAMPLES and a docs link for bare `help`', async () => {
+    const result = await runCli(['help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('EXAMPLES');
+    expect(stdout).toContain('Learn more: https://texra.ai');
     expect(stderr).toBe('');
   });
 
