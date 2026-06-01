@@ -64,6 +64,7 @@ import {
   isProposalBypassedForStream,
   isApprovalBypassedForStream,
   enableYoloOnChildStream,
+  inheritBashBypassOnChildStream,
 } from '@tools/approval';
 import { computeAndWriteWorkflowDiffs } from '@tools/subagentDiffs';
 import {
@@ -392,8 +393,15 @@ async function executeSubagent(
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
         stopAfterCycle: true,
         onStreamResolved: (resolvedStreamId) => {
+          // Bash bypass follows the parent regardless of edit-YOLO, so a
+          // bash-only parent (CLI AUTO-BASH without AUTO-APPROVE) still
+          // propagates to the child.
+          inheritBashBypassOnChildStream(
+            resolvedStreamId,
+            orchestratorStreamId,
+          );
           if (options?.enableYoloOnChild) {
-            enableYoloOnChildStream(resolvedStreamId, orchestratorStreamId);
+            enableYoloOnChildStream(resolvedStreamId);
           }
         },
         onError: (err) => {
@@ -485,8 +493,11 @@ async function executeSubagent(
     approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
+      // Bash bypass follows the parent regardless of edit-YOLO, so a bash-only
+      // parent (CLI AUTO-BASH without AUTO-APPROVE) still propagates to the child.
+      inheritBashBypassOnChildStream(resolvedStreamId, orchestratorStreamId);
       if (options?.enableYoloOnChild) {
-        enableYoloOnChildStream(resolvedStreamId, orchestratorStreamId);
+        enableYoloOnChildStream(resolvedStreamId);
       }
     },
     onProgress,

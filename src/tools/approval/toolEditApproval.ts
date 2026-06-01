@@ -414,25 +414,33 @@ export async function requestApprovedEditContent(request: {
 }
 
 /**
- * Enable YOLO on a freshly resolved child subagent stream.
+ * Mirror the parent stream's bash-approval bypass onto a freshly resolved child
+ * subagent stream, independent of any tool-edit auto-approval.
  *
- * Used by DelegationTools when launching a subagent that should inherit the
- * parent's auto-approval. Silent because it fires before the child stream is
- * activated; the subsequent SYNC_STREAM_CONTENT carries the bypass state.
- *
- * Tool-edit bypass is enabled unconditionally — the caller only invokes this
- * when the parent is auto-approving edits / delegated tasks. The parent's bash
- * bypass is mirrored independently (when `parentStreamId` is given) so bash
- * commands don't keep prompting in the child. Kept separate from the tool-edit
- * flag to respect the CLI's distinct AUTO-BASH / AUTO-APPROVE grants: the child
- * inherits exactly the parent's bash state.
+ * A child delegated by a parent that auto-runs bash should auto-run bash too. If
+ * the parent's bash is still gated this is a no-op — fresh child streams default
+ * to gated — so the child matches the parent either way. Kept separate from the
+ * tool-edit YOLO flag to respect the CLI's distinct AUTO-BASH / AUTO-APPROVE
+ * grants: a parent with AUTO-BASH but edits still gated still propagates bash.
  */
-export function enableYoloOnChildStream(
+export function inheritBashBypassOnChildStream(
   childStreamId: StreamTabId,
   parentStreamId?: StreamTabId,
 ): void {
-  toolEditApprovalController.setBypass(childStreamId, true);
   if (parentStreamId && bashApprovalController.isBypassed(parentStreamId)) {
     bashApprovalController.setBypass(childStreamId, true);
   }
+}
+
+/**
+ * Enable tool-edit auto-approval on a freshly resolved child subagent stream.
+ *
+ * Used by DelegationTools when the parent is auto-approving edits / delegated
+ * tasks. Silent because it fires before the child stream is activated; the
+ * subsequent SYNC_STREAM_CONTENT carries the tool-edit / super-YOLO bypass.
+ * Bash bypass is handled separately by `inheritBashBypassOnChildStream` so it
+ * follows the parent regardless of the tool-edit flag.
+ */
+export function enableYoloOnChildStream(childStreamId: StreamTabId): void {
+  toolEditApprovalController.setBypass(childStreamId, true);
 }
