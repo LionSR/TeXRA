@@ -1,7 +1,8 @@
 import * as path from 'path';
 
 import { toErrorMessage } from '@common/errors';
-import { workspaceSM, WorkspaceStateKey } from '@common/state';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { getWorkspaceState } from '@agent/core/stateStore';
 import { isDirectory, isFile, isSymlink } from '@common/files/fsEntryType';
 import { runLatexFormatter } from '@latex/texFormatter';
 import * as logger from '@logger/logUtils';
@@ -53,7 +54,7 @@ export async function indentLatexFilesInDirectory(
     `Starting LaTeX indentation process for directory: ${directory}`,
   );
 
-  const formatter = workspaceSM.get<string>(
+  const formatter = getWorkspaceState().get<string>(
     WorkspaceStateKey.LATEX_FORMATTER,
     LATEX_CONFIG_DEFAULTS.latexFormatter,
   );
