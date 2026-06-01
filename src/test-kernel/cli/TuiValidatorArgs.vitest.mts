@@ -22,6 +22,7 @@ describe('TUI validator args', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('[validate-tui] usage:');
     expect(result.stdout).toContain('--snapshot-dir DIR');
+    expect(result.stdout).toContain('--list');
     expect(result.stdout).toContain('Available scenarios:');
     expect(result.stdout).toContain('nested-subagent-picker');
     expect(result.stderr).not.toContain('building tui-harness bundle');
@@ -33,6 +34,24 @@ describe('TUI validator args', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('[validate-tui] usage:');
     expect(result.stdout).toContain('Available scenarios:');
+    expect(result.stderr).toBe('');
+  });
+
+  it('prints scenario names without building the harness', () => {
+    const result = runValidator(['--list']);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.split('\n')).toContain('transcript');
+    expect(result.stdout.split('\n')).toContain('nested-subagent-picker');
+    expect(result.stdout).not.toContain('Available scenarios:');
+    expect(result.stderr).not.toContain('building tui-harness bundle');
+  });
+
+  it('treats a leading package-manager separator as transparent for list', () => {
+    const result = runValidator(['--', '--list']);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.split('\n')).toContain('transcript');
     expect(result.stderr).toBe('');
   });
 });
