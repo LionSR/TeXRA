@@ -175,6 +175,9 @@ describe('CLI multi-agent run command', () => {
       '/tmp/project',
       { allowEmptyInput: true },
     );
+    const request = mocks.executeCliRequest.mock.calls[0]?.[0];
+    expect(request?.config.instruction).toContain('Primary user input files:');
+    expect(request?.config.instruction).toContain('- "problem.tex"');
   });
 
   it('allows instruction-only team runs without input files', async () => {
