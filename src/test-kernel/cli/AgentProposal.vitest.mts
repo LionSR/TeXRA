@@ -86,6 +86,31 @@ describe('CLI agent proposal approval layout', () => {
     );
   });
 
+  it('lets compact delegation prompts scroll to their hidden tail', () => {
+    const budget = 3;
+    const allRows = agentProposalInstructionDisplayLines({
+      instruction: LONG_AGENT_PROMPT,
+      width: 76,
+    });
+    const offset = maxAgentProposalInstructionScrollOffset(
+      allRows.length,
+      budget,
+    );
+    const visible = boundedAgentProposalInstructionLines({
+      instruction: LONG_AGENT_PROMPT,
+      maxDisplayLines: budget,
+      scrollOffset: offset,
+      width: 76,
+    });
+
+    expect(offset).toBeGreaterThan(0);
+    expect(visible).toHaveLength(budget);
+    expect(visible.at(-1)?.text).toContain('previous rows');
+    expect(visible.map((line) => line.text).join('\n')).toContain(
+      'Write a structured report',
+    );
+  });
+
   it('keeps one-row compact previews within their row and column budget', () => {
     const visible = boundedAgentProposalInstructionLines({
       instruction: LONG_AGENT_PROMPT,
@@ -96,5 +121,17 @@ describe('CLI agent proposal approval layout', () => {
     expect(visible).toHaveLength(1);
     expect(visible[0]?.text).toContain('prompt rows hidden');
     expect(textDisplayWidth(visible[0]?.text ?? '')).toBeLessThanOrEqual(40);
+  });
+
+  it('keeps one-row compact previews clean when scrolled onto blank rows', () => {
+    const visible = boundedAgentProposalInstructionLines({
+      instruction: 'First line\n\nTail line',
+      maxDisplayLines: 1,
+      scrollOffset: 1,
+      width: 40,
+    });
+
+    expect(visible).toHaveLength(1);
+    expect(visible[0]?.text).toBe('... 2 prompt rows hidden');
   });
 });
