@@ -838,6 +838,7 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('INTERACTIVE CONTROLS');
     expect(stdout).toContain('/help');
     expect(stdout).toContain('/status');
+    expect(stdout).toContain('/login, /logout');
     expect(stdout).toContain('Ctrl-T');
     expect(stdout).toContain('Tab');
     expect(stdout).toContain('cycle visible streams');
