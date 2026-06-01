@@ -17,6 +17,8 @@ const ambient = {
   stdinIsTty: false,
   stdoutIsTty: false,
   stderrIsTty: false,
+  stdoutColorEnabled: false,
+  stderrColorEnabled: false,
   colorEnabled: false,
 };
 
