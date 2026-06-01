@@ -42,6 +42,8 @@ export function formatModelStatusForCliMode(
       return 'relay: included';
     case 'not-included':
       return 'relay: not included';
+    case 'included-login-required':
+      return 'relay: login required';
     case 'relay-quota-exhausted':
       return 'relay: quota exhausted';
     case 'provider-key':
@@ -92,7 +94,7 @@ function EmptyModelListState(props: { readonly onClose: () => void }) {
 
 export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   const { data, loading, error } = useAsyncListForm<readonly CliModelAccess[]>({
-    load: getCliModelAccessList,
+    load: () => getCliModelAccessList({ apiMode: props.apiMode }),
     onClose: props.onClose,
     isEmpty: (models) => !hasRunnableModelSelectItems(models),
   });

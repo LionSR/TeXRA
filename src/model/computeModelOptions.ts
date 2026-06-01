@@ -53,6 +53,12 @@ const AVAILABILITY_STATUS: Record<
     available: false,
     requiresKey: false,
   },
+  'included-login-required': {
+    kind: 'included-login-required',
+    label: 'Login required',
+    available: false,
+    requiresKey: false,
+  },
   'relay-quota-exhausted': {
     kind: 'relay-quota-exhausted',
     label: 'Relay quota exhausted',
