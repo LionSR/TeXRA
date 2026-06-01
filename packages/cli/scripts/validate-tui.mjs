@@ -1356,7 +1356,12 @@ const SCENARIOS = [
     bootExpect: '[Tab]streams',
     keys: [ESC + 'p', 'k', ESC + 's', DOWN, DOWN, '\r'],
     frame: 'tail',
-    expect: ['[3:strategy](stopped)', '◆ stopped api', '[Ctrl-C]stop root'],
+    expect: [
+      '[3:strategy](stopped)',
+      '◆ running',
+      '2 sub 1 proc',
+      '[Ctrl-C]stop root',
+    ],
   },
   {
     name: 'focused-stopped-subagent-submit',
@@ -1380,6 +1385,7 @@ const SCENARIOS = [
     frame: 'tail',
     expect: [
       '[3:strategy](stopped)',
+      '◆ running',
       'The selected subagent is no longer accepting follow-ups.',
     ],
     unexpect: ['Harness received: can you still receive this?'],
