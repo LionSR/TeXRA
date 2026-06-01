@@ -849,9 +849,9 @@ const SCENARIOS = [
       HARNESS_TODOS: '1',
       HARNESS_CAN_INTERRUPT: '1',
     },
-    bootExpect: ']subagents',
-    expect: [']subagents', '[Ctrl-C]stop'],
-    unexpect: [']tasks'],
+    bootExpect: ']tasks',
+    expect: [']tasks', '[Ctrl-C]stop'],
+    unexpect: [']subagents'],
   },
   {
     name: 'subagent-picker',
