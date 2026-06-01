@@ -64,7 +64,7 @@ async function loadModelAccessList(
   try {
     return await suppressCliFetchStackLogs(async () => {
       await initCliPlatform({ ...context, quietLogs: true });
-      return getCliModelAccessList();
+      return getCliModelAccessList({ apiMode: context.apiMode });
     });
   } catch (error) {
     return { error: formatCliModelListError(error) };

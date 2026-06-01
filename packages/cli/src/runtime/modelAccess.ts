@@ -5,6 +5,9 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { ModelOptionData } from '@shared/schemas';
 
+import type { CliApiMode } from './apiAccessMode';
+import { getCliAuthProvider } from './supabaseAuth';
+
 export interface CliModelAccess {
   readonly model: ModelOptionData;
   readonly available: boolean;
@@ -18,7 +21,13 @@ export interface CliRunnableModelResolution {
 
 export interface CliRunnableModelOptions {
   readonly allowFallback: boolean;
+  readonly apiMode?: CliApiMode;
   readonly noAvailableModelsHint?: string;
+  readonly noAvailableModelsMessage?: string;
+}
+
+export interface CliModelAccessListOptions {
+  readonly apiMode?: CliApiMode;
 }
 
 function formatModelAccessStatus(model: ModelOptionData): string {
@@ -39,9 +48,40 @@ function toCliModelAccess(model: ModelOptionData): CliModelAccess {
   };
 }
 
-export async function getCliModelAccessList(): Promise<CliModelAccess[]> {
+function toIncludedLoginRequiredAccess(entry: CliModelAccess): CliModelAccess {
+  return {
+    model: {
+      ...entry.model,
+      availability: 'included-login-required',
+      availabilityLabel: 'Login required',
+      requiresKey: false,
+      disabled: true,
+    },
+    available: false,
+    status: 'login required',
+  };
+}
+
+async function includedAccessRequiresLogin(
+  options: CliModelAccessListOptions,
+): Promise<boolean> {
+  if (options.apiMode !== 'included') return false;
+  try {
+    return !(await getCliAuthProvider().isAuthenticated());
+  } catch {
+    return true;
+  }
+}
+
+export async function getCliModelAccessList(
+  options: CliModelAccessListOptions = {},
+): Promise<CliModelAccess[]> {
   const models = await computeModelOptionsData();
-  return models.map(toCliModelAccess);
+  const access = models.map(toCliModelAccess);
+  if (await includedAccessRequiresLogin(options)) {
+    return access.map(toIncludedLoginRequiredAccess);
+  }
+  return access;
 }
 
 function findModelAccess(
@@ -78,11 +118,17 @@ function getCanonicalModelConfigId(model: string): string | undefined {
 
 function formatAvailableModels(
   ids: readonly string[],
-  noAvailableModelsHint?: string,
+  options: Pick<
+    CliRunnableModelOptions,
+    'noAvailableModelsHint' | 'noAvailableModelsMessage'
+  >,
 ): string {
   if (ids.length > 0) return `Available models: ${ids.join(', ')}.`;
+  if (options.noAvailableModelsMessage) {
+    return `No models are currently available. ${options.noAvailableModelsMessage}`;
+  }
   const modeHint =
-    noAvailableModelsHint ??
+    options.noAvailableModelsHint ??
     'Retry with `--api-mode included` to try included relay access';
   return `No models are currently available. ${modeHint}, run \`texra login\`, or configure a provider API key.`;
 }
@@ -91,10 +137,13 @@ function formatUnavailableModelMessage(
   model: string,
   entry: CliModelAccess | undefined,
   availableIds: readonly string[],
-  options: Pick<CliRunnableModelOptions, 'noAvailableModelsHint'>,
+  options: Pick<
+    CliRunnableModelOptions,
+    'noAvailableModelsHint' | 'noAvailableModelsMessage'
+  >,
 ): string {
   const status = entry ? ` (${entry.status})` : '';
-  return `Model "${model}" is not available in the active API mode${status}. ${formatAvailableModels(availableIds, options.noAvailableModelsHint)}`;
+  return `Model "${model}" is not available in the active API mode${status}. ${formatAvailableModels(availableIds, options)}`;
 }
 
 export function resolveCliRunnableModelFromAccessList(
@@ -128,7 +177,7 @@ export async function resolveCliRunnableModel(
   model: string,
   options: CliRunnableModelOptions,
 ): Promise<CliRunnableModelResolution> {
-  const models = await getCliModelAccessList();
+  const models = await getCliModelAccessList({ apiMode: options.apiMode });
   const trimmed = model.trim();
   const hiddenModelId =
     trimmed && !findModelAccess(models, trimmed)
@@ -145,6 +194,9 @@ export async function resolveCliRunnableModel(
       );
     }
     hiddenModel = toCliModelAccess(hiddenModelOption);
+    if (await includedAccessRequiresLogin(options)) {
+      hiddenModel = toIncludedLoginRequiredAccess(hiddenModel);
+    }
   }
 
   return resolveCliRunnableModelFromAccessList(
