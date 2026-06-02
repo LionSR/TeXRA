@@ -97,7 +97,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
       const result = await withCliMultiAgentPresetVisibility(plan, () =>
         runChat(context, {
           agentOverride: plan.rootAgent?.name,
-          teamName: action.presetName,
+          teamName: plan.preset.name,
           modelOverride: action.model,
         }),
       );
