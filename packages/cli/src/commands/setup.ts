@@ -55,7 +55,7 @@ export const setupCommand = withUsageSections(
       rows: [
         ['texra setup', 'choose sign-in or a provider API key'],
         ['texra login', 'sign in for included relay access'],
-        ['texra status', 'show which credential path is active'],
+        ['texra auth status', 'show TeXRA sign-in status'],
       ],
     },
   ],
