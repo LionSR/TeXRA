@@ -338,6 +338,9 @@ export async function runMultiAgentPreset(
     const displayResult: CliToolUseRunResult = createCliRunResult(
       result,
       terminalStatus,
+      {
+        workingDirectory: runContext.cwd,
+      },
     );
     writeMultiAgentRunResult(runContext, plan, displayResult);
 
