@@ -262,7 +262,12 @@ export class UsageMonitor {
       // pre-call check sees this round's cost before the next call — bounding
       // free-tier overage to roughly one round instead of a whole session.
       if (usedRelay) {
-        await UsageLogService.flush();
+        const flushed = await UsageLogService.flush();
+        if (!flushed) {
+          this.context.logger.debug(
+            'Relay usage logging is queued; spend-cap data will retry later.',
+          );
+        }
       }
     } catch (error) {
       this.context.logger.debug(

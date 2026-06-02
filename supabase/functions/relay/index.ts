@@ -372,7 +372,12 @@ function isFutureTimestamp(
   timestamp: string | null | undefined,
   now = new Date(),
 ): boolean {
-  return timestamp != null && new Date(timestamp) > now;
+  if (timestamp == null) return false;
+  if (timestamp === 'infinity') return true;
+  if (timestamp === '-infinity') return false;
+
+  const parsed = new Date(timestamp);
+  return Number.isFinite(parsed.getTime()) && parsed > now;
 }
 
 // =============================================================================

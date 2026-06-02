@@ -62,7 +62,10 @@ describe('UsageLogService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     releaseFirstFetch?.();
-    await Promise.all([firstFlush, secondFlush]);
+    await expect(Promise.all([firstFlush, secondFlush])).resolves.toEqual([
+      true,
+      true,
+    ]);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(batches.map(batchModels)).toEqual([['first'], ['second']]);
@@ -83,13 +86,39 @@ describe('UsageLogService', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     UsageLogService.log(usageEntry('first'));
-    await UsageLogService.flush();
+    await expect(UsageLogService.flush()).resolves.toBe(false);
 
     expect(fetchMock).not.toHaveBeenCalled();
 
-    await UsageLogService.flush();
+    await expect(UsageLogService.flush()).resolves.toBe(true);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(batches.map(batchModels)).toEqual([['first']]);
+  });
+
+  it('requeues entries when send fails after dequeue', async () => {
+    vi.spyOn(SupabaseClient, 'getAccessToken').mockResolvedValue('token');
+
+    const batches: unknown[] = [];
+    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      batches.push(JSON.parse(String(init?.body)));
+      if (fetchMock.mock.calls.length === 1) {
+        throw new Error('network unavailable');
+      }
+      return new Response(JSON.stringify({ success: true, accepted: 1 }), {
+        status: 200,
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    UsageLogService.log(usageEntry('first'));
+    await expect(UsageLogService.flush()).resolves.toBe(false);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await expect(UsageLogService.flush()).resolves.toBe(true);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(batches.map(batchModels)).toEqual([['first'], ['first']]);
   });
 });

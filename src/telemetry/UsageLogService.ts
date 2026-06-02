@@ -81,21 +81,24 @@ class UsageLogServiceImpl {
     }
   }
 
-  async flush(): Promise<void> {
+  async flush(): Promise<boolean> {
     while (this.queue.length > 0 || this.activeFlush) {
       if (this.activeFlush) {
-        await this.activeFlush;
+        const madeProgress = await this.activeFlush;
+        if (!madeProgress) return false;
         continue;
       }
 
       this.activeFlush = this.flushQueuedBatch();
       try {
         const madeProgress = await this.activeFlush;
-        if (!madeProgress) return;
+        if (!madeProgress) return false;
       } finally {
         this.activeFlush = null;
       }
     }
+
+    return true;
   }
 
   private async flushQueuedBatch(): Promise<boolean> {
@@ -135,14 +138,30 @@ class UsageLogServiceImpl {
       }
       return true;
     } catch (error) {
-      const droppedMessage =
-        entries.length > 0 ? `; dropped ${entries.length} queued entries` : '';
+      if (entries.length > 0) {
+        this.restoreFailedBatch(entries);
+      }
+      const requeuedMessage =
+        entries.length > 0 ? `; requeued ${entries.length} entries` : '';
       logger.warn(
         CHANNEL,
-        `Failed to send usage batch${droppedMessage}: ${toErrorMessage(error)}`,
+        `Failed to send usage batch${requeuedMessage}: ${toErrorMessage(error)}`,
       );
-      return entries.length > 0;
+      return false;
     }
+  }
+
+  private restoreFailedBatch(entries: UsageLogEntry[]): void {
+    this.queue = [...entries, ...this.queue];
+
+    const overflow = this.queue.length - MAX_QUEUE_SIZE;
+    if (overflow <= 0) return;
+
+    this.queue.splice(0, overflow);
+    logger.warn(
+      CHANNEL,
+      `Queue full while restoring failed batch, dropped ${overflow} oldest entries`,
+    );
   }
 
   private async sendBatch(
