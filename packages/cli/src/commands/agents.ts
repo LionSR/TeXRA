@@ -19,7 +19,7 @@ import {
   missingAgentMessage,
 } from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
+import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { resolveAgentWithRemoteFallback } from './_helpers/remoteAgents';
 import { agentsRunCommand } from './agentsRun';
@@ -27,25 +27,57 @@ import type { CliContext } from '../runtime/cliContext';
 
 interface ListAgentsOptions {
   readonly includeHidden?: boolean;
+  readonly category?: AgentCategory;
 }
+
+const AGENT_CATEGORY_FILTER_ALIASES = [
+  [AgentCategory.Workflow, AgentCategory.Workflow],
+  [AgentCategory.ToolUse, AgentCategory.ToolUse],
+  ['tool-use', AgentCategory.ToolUse],
+] as const satisfies readonly (readonly [string, AgentCategory])[];
+
+const AGENT_CATEGORY_FILTER_VALUES = AGENT_CATEGORY_FILTER_ALIASES.map(
+  ([value]) => value,
+);
+
+const AGENT_CATEGORY_FILTERS = new Map<string, AgentCategory>(
+  AGENT_CATEGORY_FILTER_ALIASES.map(([value, category]) => [
+    value.toLowerCase(),
+    category,
+  ]),
+);
+
+const ALL_AGENT_LOADERS = {
+  [AgentCategory.Workflow]: getWorkflowAgents,
+  [AgentCategory.ToolUse]: getToolUseAgents,
+} satisfies Record<AgentCategory, () => AgentEntry[]>;
 
 function collectAgents(
   source: 'all' | 'visible',
+  categoryFilter?: AgentCategory,
 ): (AgentEntry & { readonly category: AgentCategory })[] {
-  const byCategory =
-    source === 'all'
-      ? {
-          [AgentCategory.Workflow]: getWorkflowAgents(),
-          [AgentCategory.ToolUse]: getToolUseAgents(),
-        }
-      : {
-          [AgentCategory.Workflow]: getVisibleAgents(AgentCategory.Workflow),
-          [AgentCategory.ToolUse]: getVisibleAgents(AgentCategory.ToolUse),
-        };
+  const categories = categoryFilter
+    ? [categoryFilter]
+    : [AgentCategory.Workflow, AgentCategory.ToolUse];
+  return categories.flatMap((category) => {
+    const agents =
+      source === 'visible'
+        ? getVisibleAgents(category)
+        : ALL_AGENT_LOADERS[category]();
 
-  return [AgentCategory.Workflow, AgentCategory.ToolUse].flatMap((category) =>
-    byCategory[category].map((agent) => ({ ...agent, category })),
-  );
+    return agents.map((agent) => ({
+      ...agent,
+      category,
+    }));
+  });
+}
+
+export function parseAgentCategoryFilter(
+  input: string | undefined,
+): AgentCategory | undefined {
+  const normalized = input?.trim();
+  if (!normalized) return undefined;
+  return AGENT_CATEGORY_FILTERS.get(normalized.toLowerCase());
 }
 
 function formatAgentListText(
@@ -65,10 +97,14 @@ export async function listAgents(
   await initLocalCliPlatform(context);
   const includeHidden = options.includeHidden === true;
   await loadAgents(includeHidden ? undefined : { includeRemote: false });
-  const agents = collectAgents(includeHidden ? 'all' : 'visible');
+  const agents = collectAgents(
+    includeHidden ? 'all' : 'visible',
+    options.category,
+  );
 
   if (!includeHidden && context.outputFormat === 'text') {
-    const hiddenCount = collectAgents('all').length - agents.length;
+    const hiddenCount =
+      collectAgents('all', options.category).length - agents.length;
     if (hiddenCount > 0) {
       writeTextStderr(
         `Showing visible agents only; ${hiddenCount} hidden agent${hiddenCount === 1 ? '' : 's'} omitted. Use \`texra agents list --all\` to show the full catalog.`,
@@ -147,9 +183,19 @@ const agentsListCommand = defineCliCommand({
       description:
         'Show the full agent catalog, including agents hidden by workspace visibility settings',
     },
+    category: {
+      type: 'enum',
+      options: AGENT_CATEGORY_FILTER_VALUES,
+      description:
+        'Only list one category: workflow or toolUse (also accepts tool-use)',
+    },
   },
-  run: (context, ctx) =>
-    listAgents(context, { includeHidden: ctx.args.all === true }),
+  run: (context, ctx) => {
+    return listAgents(context, {
+      includeHidden: ctx.args.all === true,
+      category: parseAgentCategoryFilter(optString(ctx.args.category)),
+    });
+  },
 });
 
 const agentsShowCommand = defineCliCommand({
