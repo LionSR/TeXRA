@@ -130,11 +130,8 @@ export async function runCli(
   // (e.g. `texra agents list --help` → list-level usage), mirroring citty's
   // own `runMain` behavior without inheriting its `exit(1)` for usage errors.
   if (rawArgs.some((arg) => arg === '--help' || arg === '-h')) {
-    const [target, parent] = await resolveDeepestSubCommand(
-      rootCommand,
-      rawArgs,
-    );
-    await showUsage(target, parent);
+    const resolved = await resolveDeepestSubCommand(rootCommand, rawArgs);
+    await showUsage(resolved.command, resolved.parent, resolved);
     return { exitCode: CliExitCode.Success };
   }
   if (
@@ -159,15 +156,12 @@ export async function runCli(
       return { exitCode: CliExitCode.Usage };
     }
     if (isCliError(error)) {
-      const [target, parent] = await resolveDeepestSubCommand(
-        rootCommand,
-        rawArgs,
-      );
+      const resolved = await resolveDeepestSubCommand(rootCommand, rawArgs);
       // Usage shown on an ERROR goes to STDERR so STDOUT stays clean and
       // machine-parseable under `--output-format json|ndjson`. The explicit
       // `--help` path above keeps using STDOUT (`showUsage`) per Unix
       // convention.
-      await showUsageStderr(target, parent);
+      await showUsageStderr(resolved.command, resolved.parent, resolved);
       writeTextStderr(error.message);
       return { exitCode: CliExitCode.Usage };
     }
