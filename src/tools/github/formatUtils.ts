@@ -8,6 +8,7 @@
  */
 
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
+import type { GhIssueComment } from './prTypes';
 
 const WEBHOOK_TAG = 'github-webhook-activity';
 
@@ -66,6 +67,36 @@ export function truncate(s: string | null | undefined, max: number): string {
   const body = (s ?? '').trim();
   if (body.length <= max) return body;
   return body.slice(0, max) + '…';
+}
+
+/**
+ * Build a single-arg truncator bound to `max`, so each formatter keeps one
+ * file-local cap instead of re-declaring the `(s) => truncate(s, MAX)` wrapper.
+ */
+export function makeTruncator(
+  max: number,
+): (s: string | null | undefined) => string {
+  return (s) => truncate(s, max);
+}
+
+/**
+ * "New comment on <ref> by <author>:" event, shared by the issue- and
+ * PR-comment formatters — they differ only in whether `ref` is an issue or
+ * pull path. The repo-level formatter uses a denser single-line shape and
+ * intentionally does not route through here.
+ */
+export function formatCommentEvent(
+  ref: string,
+  c: GhIssueComment,
+  maxBody: number,
+): string {
+  return wrapWebhookEvent(
+    sections(
+      `New comment on ${ref} by ${authorOf(c.user)}:`,
+      truncate(c.body, maxBody),
+      c.html_url,
+    ),
+  );
 }
 
 /** Newest `updated_at` (falling back to `created_at`) in a list, or undefined. */

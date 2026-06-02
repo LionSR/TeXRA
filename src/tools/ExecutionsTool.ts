@@ -55,7 +55,7 @@ import { AbsoluteFS, StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
-import { splitContentLines } from '@utils/text/stringUtils';
+import { formatTimestamp, splitContentLines } from '@utils/text/stringUtils';
 import {
   formatListingLine,
   formatProgressLine,
@@ -588,7 +588,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     return children.map((child, i) => {
       const childMeta = metas[i];
       const info = getExecutionStatusInfo(child.id, childMeta?.terminalStatus);
-      const ts = child.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
+      const ts = formatTimestamp(child.timestamp);
       const desc = childMeta?.description ? `  — ${childMeta.description}` : '';
       return `${child.id}  ${ts}  ${child.agent}  [${formatStatusInfo(info)}]${desc}`;
     });
