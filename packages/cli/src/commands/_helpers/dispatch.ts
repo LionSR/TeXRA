@@ -7,6 +7,8 @@ import {
 } from 'citty';
 
 import { writeRawStderr, writeRawStdout } from '@cli/runtime/logSinks';
+import { readCliAmbientState } from '@cli/runtime/cliContext';
+import { stripAnsiSequences } from '@cli/runtime/ansiEscapes';
 
 import { GLOBAL_BOOL_FLAGS, GLOBAL_VALUE_FLAGS } from './globalArgs';
 
@@ -138,6 +140,26 @@ export interface UsageSection {
 
 const usageSections = new WeakMap<AnyCommand, readonly UsageSection[]>();
 
+let usageColorOverride: boolean | undefined;
+
+export function hasUsageNoColorFlag(rawArgs: readonly string[]): boolean {
+  for (let index = 0; index < rawArgs.length; ) {
+    const arg = rawArgs[index];
+    if (arg === undefined || arg === '--') return false;
+    if (arg === '--no-color') return true;
+
+    const tokenCount = knownGlobalFlagTokenCount(rawArgs, index);
+    index += tokenCount ?? 1;
+  }
+  return false;
+}
+
+export function setUsageColorOverrideFromRawArgs(
+  rawArgs: readonly string[],
+): void {
+  usageColorOverride = hasUsageNoColorFlag(rawArgs) ? false : undefined;
+}
+
 export function withUsageSections<T extends AnyCommand>(
   command: T,
   sections: readonly UsageSection[],
@@ -162,19 +184,32 @@ async function renderUsageWithSections(
   cmd: AnyCommand,
   parent?: AnyCommand,
   context?: UsageRenderContext,
+  stream: 'stdout' | 'stderr' = 'stdout',
 ): Promise<string> {
   const usage = await renderUsage(
     cmd,
     await usageParentWithFullPath(parent, context),
   );
   const sections = usageSections.get(cmd);
-  if (!sections?.length) return usage;
-  return `${usage}\n${sections.map(formatUsageSection).join('\n\n')}`;
+  const usageWithSections = sections?.length
+    ? `${usage}\n${sections.map(formatUsageSection).join('\n\n')}`
+    : usage;
+  return usageColorEnabled(stream) === false
+    ? stripAnsiSequences(usageWithSections)
+    : usageWithSections;
 }
 
 interface UsageRenderContext {
   readonly parentPath?: readonly string[];
   readonly rootCommand?: AnyCommand;
+}
+
+function usageColorEnabled(stream: 'stdout' | 'stderr'): boolean | undefined {
+  if (usageColorOverride !== undefined) return usageColorOverride;
+  const ambient = readCliAmbientState();
+  return stream === 'stdout'
+    ? ambient.stdoutColorEnabled
+    : ambient.stderrColorEnabled;
 }
 
 async function resolveCommandMeta(cmd: AnyCommand): Promise<CommandMeta> {
@@ -585,7 +620,9 @@ export async function showUsageStderr(
   parent?: AnyCommand,
   context?: UsageRenderContext,
 ): Promise<void> {
-  writeRawStderr(`${await renderUsageWithSections(cmd, parent, context)}\n`);
+  writeRawStderr(
+    `${await renderUsageWithSections(cmd, parent, context, 'stderr')}\n`,
+  );
 }
 
 export async function showUsage(
