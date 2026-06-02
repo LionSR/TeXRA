@@ -19,18 +19,21 @@
  * ============================================================================
  *
  * DATABASE REQUIREMENTS:
- * The profiles table must have:
+ * The profiles table must have (all server-managed; clients have SELECT only):
  * - tier: text (values: 'Ultra', 'Max', 'free')
  * - access_expires_at: timestamptz (null = no expiration / lifetime access)
+ * - banned_until: timestamptz, mirror of auth.users.banned_until via trigger
  *
- * To add expiration column:
- *   ALTER TABLE profiles ADD COLUMN access_expires_at timestamptz;
+ * To grant time-limited access (legitimate access window — NOT a ban):
+ *   UPDATE profiles SET access_expires_at = NOW() + INTERVAL '90 days'
+ *     WHERE user_id = '<user-id>';   -- service role only
  *
- * To expire/blacklist a user:
- *   UPDATE profiles SET access_expires_at = NOW() WHERE id = '<user-id>';
- *
- * To grant time-limited access:
- *   UPDATE profiles SET access_expires_at = NOW() + INTERVAL '90 days' WHERE id = '<user-id>';
+ * To BAN a user, use GoTrue's native ban (do NOT overload access_expires_at —
+ * a future date there GRANTS access). Admin API:
+ *   supabase.auth.admin.updateUserById(id, { ban_duration: '876000h' })
+ * or the Dashboard "Ban user" action. That sets auth.users.banned_until and
+ * revokes refresh tokens; the trigger mirrors it to profiles.banned_until,
+ * which the relay enforces below (immediate, even for a still-valid token).
  * ============================================================================
  *
  * TIER HIERARCHY (cumulative access):
@@ -319,6 +322,7 @@ async function checkSpendingLimit(
   currentSpend: number;
   limit: number;
   remaining: number;
+  spendCheckFailed?: boolean;
 }> {
   const limit = getSpendingLimit(tier);
   const monthStart = getCurrentMonthStartUTC();
@@ -340,8 +344,17 @@ async function checkSpendingLimit(
 
   if (error) {
     console.error('[RELAY] Failed to check spending:', error.message);
-    // Fail open: allow request on error but log it
-    return { allowed: true, currentSpend: 0, limit, remaining: limit };
+    // Fail closed for the free tier (the abuse-prone path): if we can't verify
+    // spend we must not hand out free relay budget. Paid tiers fail open so a
+    // transient DB error never blocks a paying user.
+    const failClosed = tier === FREE_TIER;
+    return {
+      allowed: !failClosed,
+      currentSpend: 0,
+      limit,
+      remaining: failClosed ? 0 : limit,
+      spendCheckFailed: true,
+    };
   }
 
   const currentSpend = Number(data) || 0;
@@ -353,6 +366,18 @@ async function checkSpendingLimit(
     limit,
     remaining,
   };
+}
+
+function isFutureTimestamp(
+  timestamp: string | null | undefined,
+  now = new Date(),
+): boolean {
+  if (timestamp == null) return false;
+  if (timestamp === 'infinity') return true;
+  if (timestamp === '-infinity') return false;
+
+  const parsed = new Date(timestamp);
+  return Number.isFinite(parsed.getTime()) && parsed > now;
 }
 
 // =============================================================================
@@ -432,15 +457,16 @@ app.get('/tier-config', async (c) => {
       if (user) {
         const { data: profile } = await supabaseClient
           .from('profiles')
-          .select('tier, access_expires_at')
+          .select('tier, access_expires_at, banned_until')
           .eq('user_id', user.id)
           .single();
 
         if (profile) {
-          const userStatus = calculateAccessStatus(
-            profile.tier,
-            profile.access_expires_at,
-          );
+          const now = new Date();
+          const userStatus = {
+            ...calculateAccessStatus(profile.tier, profile.access_expires_at),
+            isBanned: isFutureTimestamp(profile.banned_until, now),
+          };
 
           // Include current spending if service role key is available
           let spendingStatus = null;
@@ -455,6 +481,7 @@ app.get('/tier-config', async (c) => {
               currentSpend: spending.currentSpend,
               limit: spending.limit,
               remaining: spending.remaining,
+              spendCheckFailed: spending.spendCheckFailed ?? false,
               percentUsed:
                 spending.limit > 0
                   ? Math.round((spending.currentSpend / spending.limit) * 100)
@@ -519,10 +546,10 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     return jsonError('Invalid or expired token', 401);
   }
 
-  // 5. Get user profile and check expiration
+  // 5. Get user profile and check ban / expiration
   const { data: profile, error: profileError } = await userClient
     .from('profiles')
-    .select('tier, access_expires_at')
+    .select('tier, access_expires_at, banned_until')
     .eq('user_id', user.id)
     .single();
 
@@ -530,10 +557,23 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     return jsonError('Profile not found', 403);
   }
 
+  // Ban: profiles.banned_until mirrors GoTrue's auth.users.banned_until. GoTrue
+  // already blocks sign-in/refresh for banned users, but a still-valid access
+  // token would otherwise keep working until it expires — enforce it here so the
+  // ban is immediate. Checked before tier/expiry so it can't be circumvented.
+  const now = new Date();
+  if (isFutureTimestamp(profile.banned_until, now)) {
+    return jsonError(
+      'Your account has been suspended. Contact support if you believe this is a mistake.',
+      403,
+      { banned: true },
+    );
+  }
+
   // Check if access has expired
   if (profile.access_expires_at) {
     const expiresAt = new Date(profile.access_expires_at);
-    if (expiresAt < new Date()) {
+    if (expiresAt < now) {
       return jsonError(
         'Your researcher access has expired. Please contact support to renew.',
         403,
@@ -555,6 +595,19 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     );
 
     if (!spending.allowed) {
+      if (spending.spendCheckFailed) {
+        return jsonError(
+          'Unable to verify your monthly relay usage right now. Please try again shortly, or switch to your own API keys.',
+          503,
+          {
+            spendCheckFailed: true,
+            currentSpend: spending.currentSpend,
+            limit: spending.limit,
+            remaining: spending.remaining,
+          },
+        );
+      }
+
       return jsonError(
         `Monthly spending limit reached ($${spending.limit}). ` +
           `Current usage: $${spending.currentSpend.toFixed(2)}. ` +

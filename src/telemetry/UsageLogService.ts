@@ -34,7 +34,7 @@ const DEFAULT_CONFIG: UsageLogConfig = {
 class UsageLogServiceImpl {
   private queue: UsageLogEntry[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
-  private isFlushing = false;
+  private activeFlush: Promise<boolean> | null = null;
   private config: UsageLogConfig = DEFAULT_CONFIG;
   private extensionVersion: string | undefined;
   private editorType: string | undefined;
@@ -81,19 +81,38 @@ class UsageLogServiceImpl {
     }
   }
 
-  async flush(): Promise<void> {
-    if (this.isFlushing || this.queue.length === 0) return;
+  async flush(): Promise<boolean> {
+    while (this.queue.length > 0 || this.activeFlush) {
+      if (this.activeFlush) {
+        const madeProgress = await this.activeFlush;
+        if (!madeProgress) return false;
+        continue;
+      }
 
-    this.isFlushing = true;
+      this.activeFlush = this.flushQueuedBatch();
+      try {
+        const madeProgress = await this.activeFlush;
+        if (!madeProgress) return false;
+      } finally {
+        this.activeFlush = null;
+      }
+    }
+
+    return true;
+  }
+
+  private async flushQueuedBatch(): Promise<boolean> {
+    let entries: UsageLogEntry[] = [];
     try {
       const token = await SupabaseClient.getAccessToken();
       if (!token) {
         logger.debug(CHANNEL, 'Skipping flush - user not authenticated');
-        return;
+        return false;
       }
 
-      const entries = this.queue;
+      entries = this.queue;
       this.queue = [];
+      if (entries.length === 0) return false;
 
       const batch: UsageLogBatch = {
         entries,
@@ -112,16 +131,37 @@ class UsageLogServiceImpl {
           `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
         );
       } else {
-        logger.warn(CHANNEL, `Batch rejected: ${response.error}`);
+        logger.warn(
+          CHANNEL,
+          `Batch rejected; dropped ${entries.length} queued entries: ${response.error}`,
+        );
       }
+      return true;
     } catch (error) {
+      if (entries.length > 0) {
+        this.restoreFailedBatch(entries);
+      }
+      const requeuedMessage =
+        entries.length > 0 ? `; requeued ${entries.length} entries` : '';
       logger.warn(
         CHANNEL,
-        `Failed to send usage batch: ${toErrorMessage(error)}`,
+        `Failed to send usage batch${requeuedMessage}: ${toErrorMessage(error)}`,
       );
-    } finally {
-      this.isFlushing = false;
+      return false;
     }
+  }
+
+  private restoreFailedBatch(entries: UsageLogEntry[]): void {
+    this.queue = [...entries, ...this.queue];
+
+    const overflow = this.queue.length - MAX_QUEUE_SIZE;
+    if (overflow <= 0) return;
+
+    this.queue.splice(0, overflow);
+    logger.warn(
+      CHANNEL,
+      `Queue full while restoring failed batch, dropped ${overflow} oldest entries`,
+    );
   }
 
   private async sendBatch(
@@ -175,11 +215,11 @@ class UsageLogServiceImpl {
     this.config.enabled = false;
 
     const deadline = Date.now() + 5000;
-    while (this.isFlushing && Date.now() < deadline) {
+    while (this.activeFlush && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
 
-    if (this.isFlushing) {
+    if (this.activeFlush) {
       logger.warn(CHANNEL, 'Dispose timeout waiting for in-flight flush');
     }
 
