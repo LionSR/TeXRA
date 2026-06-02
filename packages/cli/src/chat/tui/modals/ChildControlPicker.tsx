@@ -21,7 +21,8 @@ import {
 } from '../state/childControls';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
-import { KeyHints, type KeyHint } from '../ui/KeyHints';
+import { textDisplayWidth } from '../render/terminalText';
+import { KEY_HINT_SEPARATOR, KeyHints, type KeyHint } from '../ui/KeyHints';
 import { SELECT_LABEL_MAX_COLS } from '../ui/Select';
 import type { StreamSlice } from '../state/cliState';
 
@@ -45,10 +46,9 @@ export interface ChildControlPickerProps {
 export const TASK_DETAIL_LABEL_WIDTH = 13;
 export const ULTRA_COMPACT_PICKER_MAX_ROWS = 6;
 export const ULTRA_COMPACT_TASK_DETAIL_MAX_ROWS = 4;
-export const NARROW_PICKER_HINT_MAX_COLUMNS = 64;
 export const NARROW_TASK_DETAIL_HINT_MAX_COLUMNS = 56;
 export const TASK_DETAIL_HORIZONTAL_CHROME_COLUMNS = 4;
-export const MIN_COLUMNS_FOR_JUMP_HINT = 58;
+export const PICKER_HORIZONTAL_CHROME_COLUMNS = 4;
 export const MIN_COLUMNS_FOR_KILL_HINT = 44;
 
 export function pickerTitle(mode: ChildControlMode): string {
@@ -84,16 +84,53 @@ export function pickerKeyHints(
   itemCount: number,
   canKill = itemCount > 0,
 ): readonly KeyHint[] {
-  if (itemCount <= 0) {
-    return [{ key: 'Esc', action: 'close' }];
-  }
-  const hints: KeyHint[] = [{ key: '↑/↓', action: 'navigate' }];
-  if (itemCount > 1) hints.push({ key: '1-9', action: 'jump' });
-  hints.push({ key: 'Enter', action: 'view' });
-  if (mode === 'subagents') hints.push({ key: 'f', action: 'focus' });
-  if (canKill) hints.push({ key: 'k', action: 'kill' });
-  hints.push({ key: 'Esc', action: 'close' });
-  return hints;
+  return pickerKeyHintsForColumns(mode, itemCount, canKill);
+}
+
+function keyHintDisplayText(hint: KeyHint): string {
+  return `${hint.key} ${hint.action}`;
+}
+
+function keyHintsDisplayWidth(hints: readonly KeyHint[]): number {
+  return textDisplayWidth(
+    hints.map(keyHintDisplayText).join(KEY_HINT_SEPARATOR),
+  );
+}
+
+function keyHintsFit(
+  hints: readonly KeyHint[],
+  availableColumns: number | undefined,
+): boolean {
+  return (
+    availableColumns === undefined ||
+    keyHintsDisplayWidth(hints) <= availableColumns
+  );
+}
+
+type PickerOptionalHint = 'focus' | 'jump' | 'kill';
+
+function pickerHintsForOptionals(
+  mode: ChildControlMode,
+  itemCount: number,
+  canKill: boolean,
+  selected: ReadonlySet<PickerOptionalHint>,
+  availableColumns: number | undefined,
+): readonly KeyHint[] {
+  return [
+    {
+      key: '↑/↓',
+      action: availableColumns === undefined ? 'navigate' : 'nav',
+    },
+    ...(selected.has('jump') && itemCount > 1
+      ? [{ key: '1-9', action: 'jump' }]
+      : []),
+    { key: 'Enter', action: 'view' },
+    ...(selected.has('focus') && mode === 'subagents'
+      ? [{ key: 'f', action: 'focus' }]
+      : []),
+    ...(selected.has('kill') && canKill ? [{ key: 'k', action: 'kill' }] : []),
+    { key: 'Esc', action: 'close' },
+  ];
 }
 
 export function pickerKeyHintsForColumns(
@@ -102,27 +139,40 @@ export function pickerKeyHintsForColumns(
   canKill = itemCount > 0,
   availableColumns?: number,
 ): readonly KeyHint[] {
-  if (
-    availableColumns === undefined ||
-    availableColumns > NARROW_PICKER_HINT_MAX_COLUMNS ||
-    itemCount <= 0
-  ) {
-    return pickerKeyHints(mode, itemCount, canKill);
+  if (itemCount <= 0) return [{ key: 'Esc', action: 'close' }];
+
+  const selected = new Set<PickerOptionalHint>();
+  const priority: readonly PickerOptionalHint[] =
+    mode === 'subagents' ? ['focus', 'jump', 'kill'] : ['kill', 'jump'];
+
+  for (const option of priority) {
+    const nextSelected = new Set(selected);
+    nextSelected.add(option);
+    const nextHints = pickerHintsForOptionals(
+      mode,
+      itemCount,
+      canKill,
+      nextSelected,
+      availableColumns,
+    );
+    if (keyHintsFit(nextHints, availableColumns)) selected.add(option);
   }
 
-  const hints: KeyHint[] = [{ key: '↑/↓', action: 'nav' }];
-  if (itemCount > 1 && availableColumns >= MIN_COLUMNS_FOR_JUMP_HINT) {
-    hints.push({ key: '1-9', action: 'jump' });
-  }
-  hints.push({ key: 'Enter', action: 'view' });
-  if (mode === 'subagents' && availableColumns >= MIN_COLUMNS_FOR_KILL_HINT) {
-    hints.push({ key: 'f', action: 'focus' });
-  }
-  if (canKill && availableColumns >= MIN_COLUMNS_FOR_KILL_HINT) {
-    hints.push({ key: 'k', action: 'kill' });
-  }
-  hints.push({ key: 'Esc', action: 'close' });
-  return hints;
+  return pickerHintsForOptionals(
+    mode,
+    itemCount,
+    canKill,
+    selected,
+    availableColumns,
+  );
+}
+
+export function framedPickerHintColumns(
+  availableColumns: number | undefined,
+): number | undefined {
+  return availableColumns === undefined
+    ? undefined
+    : Math.max(0, availableColumns - PICKER_HORIZONTAL_CHROME_COLUMNS);
 }
 
 export function taskDetailKeyHintsForColumns({
@@ -973,6 +1023,10 @@ export function ChildControlPicker({
     itemCount: items.length,
     selectedIndex,
   });
+  const ultraCompact = isUltraCompactPickerRows(availableRows);
+  const hintColumns = ultraCompact
+    ? availableColumns
+    : framedPickerHintColumns(availableColumns);
 
   useEffect(() => {
     setHighlight((current) => clampPickerIndex(current, items.length));
@@ -1066,7 +1120,7 @@ export function ChildControlPicker({
     );
   }
 
-  if (isUltraCompactPickerRows(availableRows)) {
+  if (ultraCompact) {
     return (
       <Box flexDirection="column" minWidth={0} width={availableColumns}>
         <Text bold color="cyan" wrap="truncate-end">
@@ -1084,7 +1138,7 @@ export function ChildControlPicker({
             mode,
             items.length,
             selectedItem?.killable ?? false,
-            availableColumns,
+            hintColumns,
           )}
           confirmCancel={false}
         />
@@ -1141,7 +1195,7 @@ export function ChildControlPicker({
             mode,
             items.length,
             selectedItem?.killable ?? false,
-            availableColumns,
+            hintColumns,
           )}
           confirmCancel={false}
         />
