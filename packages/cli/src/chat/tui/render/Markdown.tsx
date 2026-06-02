@@ -10,12 +10,16 @@ import { renderAnsiMarkdown } from './ansiMarkdown';
 export interface MarkdownProps {
   readonly content: string;
   readonly width?: number;
+  readonly colorEnabled?: boolean;
 }
 
 export function Markdown(props: MarkdownProps): React.JSX.Element {
   // `renderAnsiMarkdown` trims trailing newlines so Ink doesn't add a blank
   // line at the bottom of each conversation entry; the parent
   // `<Box marginBottom={1}>` already provides separation between entries.
-  const rendered = renderAnsiMarkdown(props.content, { width: props.width });
+  const rendered = renderAnsiMarkdown(props.content, {
+    width: props.width,
+    colorEnabled: props.colorEnabled,
+  });
   return <Text>{rendered}</Text>;
 }
