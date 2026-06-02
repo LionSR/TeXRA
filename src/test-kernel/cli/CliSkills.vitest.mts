@@ -67,6 +67,9 @@ describe('CLI skills runtime', () => {
         '/tmp/project/vendor/skills',
       ]),
     );
+    expect(
+      sources.find((source) => source.path === '/tmp/project/vendor/skills'),
+    ).toMatchObject({ required: true, scope: 'custom' });
   });
 
   it('lists bundled skills before custom duplicate names', async () => {
@@ -110,6 +113,52 @@ describe('CLI skills runtime', () => {
       expect.objectContaining({
         code: 'duplicate_name',
         name: 'shared-skill',
+      }),
+    );
+  });
+
+  it('reports missing explicit custom skill sources', async () => {
+    const result = await readCliSkills(
+      {
+        cwd: '/tmp/project',
+        resourcesPath: '/tmp/resources',
+      },
+      {
+        additionalPaths: ['missing-skills'],
+      },
+    );
+
+    expect(result.skills).toEqual([]);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        severity: 'error',
+        code: 'missing_source',
+        path: '/tmp/project/missing-skills',
+      }),
+    );
+  });
+
+  it('reports explicit custom skill sources that are not directories', async () => {
+    const root = await createTempRoot();
+    const sourceFile = path.join(root, 'skills-file');
+    await fs.writeFile(sourceFile, 'not a directory');
+
+    const result = await readCliSkills(
+      {
+        cwd: root,
+        resourcesPath: root,
+      },
+      {
+        additionalPaths: [sourceFile],
+      },
+    );
+
+    expect(result.skills).toEqual([]);
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        severity: 'error',
+        code: 'invalid_source',
+        path: sourceFile,
       }),
     );
   });
