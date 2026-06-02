@@ -94,7 +94,7 @@ Add this arXiv paper to my Zotero library.
 <p class="hero-caption">How the <code>search</code> agent drives the <code>zotero_*</code> tools across one conversation — search → add → export — as the calls surface in the Progress view.</p>
 
 ::: tip Default Bibliography Path
-Set `texra.bib.defaultPath` in your VS Code settings (<wa-icon library="texra" name="gear"></wa-icon>) to specify where Zotero exports land by default, so agents always know where to save bibliography entries.
+Set a default location for Zotero exports so agents always know where to save bibliography entries. The setting key is `texra.bib.defaultPath` — configure it in your `.texra/config.json` (CLI) or VS Code settings.
 :::
 
 ### <wa-icon library="texra" name="symbol-operator"></wa-icon> Verify Math with Wolfram

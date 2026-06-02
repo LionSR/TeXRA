@@ -183,7 +183,7 @@ This compiles all extracted figures and generates preview images.
 
 ## <wa-icon library="texra" name="settings-gear"></wa-icon> Customising TikZ Processing
 
-Several settings tune how TeXRA handles TikZ. Access them through **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>) or VS Code Settings (<wa-icon library="texra" name="gear"></wa-icon>).
+Several settings tune how TeXRA handles TikZ. Access them from the **Dashboard → LaTeX** tab (<wa-icon library="texra" name="file-code"></wa-icon>), or set the keys below in `.texra/config.json` (CLI) or VS Code settings for power users.
 
 ### TikZ Template
 
