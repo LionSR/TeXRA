@@ -54,6 +54,19 @@ async function runOrchestration(context: CliContext): Promise<number> {
     quietLogs: true,
     bestEffortIncludedModelAccess: true,
   });
+  // First-run gate: a credential-less interactive user picks sign-in or a key
+  // here instead of landing on a launcher full of "login required" models. On
+  // success the apiMode/models read below re-reads the freshly-set credentials
+  // in-process — the relay / key paths invalidate the relevant caches — so no
+  // relaunch is needed.
+  const { maybeRunCliOnboarding } = await import('../onboarding/runOnboarding');
+  const onboarding = await maybeRunCliOnboarding(context);
+  if (onboarding.declined) {
+    // The user saw the picker and chose "Skip for now"; the skip summary already
+    // printed. Exit cleanly instead of dropping into a launcher full of
+    // "login required" models — same opt-out behavior as `texra chat`.
+    return CliExitCode.Success;
+  }
   await loadAgents({ includeRemote: false });
   const history = await listCliHistoryEntries();
   const items = buildCliOrchestrationItems({
