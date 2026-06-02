@@ -10,7 +10,6 @@ export type CliOrchestrationAction =
   | {
       readonly kind: 'preset';
       readonly preset: string;
-      readonly presetName: string;
       /** Lead model the orchestrator agent starts on (and is offered for
        *  delegation). Chosen in the launcher's model step. */
       readonly model?: string;
@@ -95,7 +94,7 @@ function presetItems(
   presets: readonly CliMultiAgentPreset[],
 ): CliOrchestrationItem[] {
   return presets.slice(0, MAX_PRESET_ITEMS).map((preset) => ({
-    value: { kind: 'preset', preset: preset.id, presetName: preset.name },
+    value: { kind: 'preset', preset: preset.id },
     label: `Team ${preset.name}`,
     description: `${preset.source}; workflow:${preset.workflowAgents.length}; tool-use:${preset.toolUseAgents.length}`,
   }));
