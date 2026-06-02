@@ -17,6 +17,16 @@ export function clampCursor(cursor: number, length: number): number {
   return Math.max(0, Math.min(cursor, length));
 }
 
+/**
+ * Replace every visible glyph with a bullet for masked (secret) display,
+ * preserving newlines and code-unit length so the caret index stays aligned
+ * with the unmasked value. DISPLAY-ONLY: the stored value, edits, and paste
+ * never see the mask, so masking can never corrupt the captured key.
+ */
+export function maskDisplayValue(value: string): string {
+  return value.replaceAll(/[^\n]/g, '•');
+}
+
 export function insertText(
   value: string,
   cursor: number,
