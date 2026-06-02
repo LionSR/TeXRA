@@ -27,6 +27,7 @@ import {
   isUnhandledControlInput,
   metaChordInput,
 } from './inputKeys';
+import { textDisplayWidth } from '../render/terminalText';
 
 export interface BaseTextInputProps {
   readonly value: string;
@@ -60,6 +61,20 @@ interface TextInputDisplayRow {
   readonly breakKind: 'soft' | 'hard' | 'end';
 }
 
+function codePointAtIndex(
+  value: string,
+  index: number,
+): { readonly char: string; readonly nextIndex: number } | undefined {
+  const codePoint = value.codePointAt(index);
+  if (codePoint === undefined) return undefined;
+  const char = String.fromCodePoint(codePoint);
+  return { char, nextIndex: index + char.length };
+}
+
+function isSoftBreakChar(char: string): boolean {
+  return char !== '\n' && /\s/u.test(char);
+}
+
 function textInputDisplayRows(
   value: string,
   width: number,
@@ -67,21 +82,41 @@ function textInputDisplayRows(
   const rows: TextInputDisplayRow[] = [];
   let rowStart = 0;
   let column = 0;
+  let lastSoftBreakIndex: number | undefined;
 
-  for (let index = 0; index < value.length; index += 1) {
-    const ch = value[index];
-    if (ch === '\n') {
+  let index = 0;
+  while (index < value.length) {
+    const point = codePointAtIndex(value, index);
+    if (point === undefined) break;
+
+    if (point.char === '\n') {
       rows.push({ start: rowStart, end: index, breakKind: 'hard' });
-      rowStart = index + 1;
+      rowStart = point.nextIndex;
+      index = point.nextIndex;
       column = 0;
+      lastSoftBreakIndex = undefined;
       continue;
     }
-    if (column === width) {
-      rows.push({ start: rowStart, end: index, breakKind: 'soft' });
-      rowStart = index;
+
+    const charWidth = textDisplayWidth(point.char);
+    if (column + charWidth > width && column > 0) {
+      const wrapIndex =
+        lastSoftBreakIndex !== undefined && lastSoftBreakIndex > rowStart
+          ? lastSoftBreakIndex
+          : index;
+      rows.push({ start: rowStart, end: wrapIndex, breakKind: 'soft' });
+      rowStart = wrapIndex;
+      index = wrapIndex;
       column = 0;
+      lastSoftBreakIndex = undefined;
+      continue;
     }
-    column += 1;
+
+    column += charWidth;
+    if (isSoftBreakChar(point.char)) {
+      lastSoftBreakIndex = point.nextIndex;
+    }
+    index = point.nextIndex;
   }
 
   rows.push({ start: rowStart, end: value.length, breakKind: 'end' });
