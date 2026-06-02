@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import { getAgent, getVisibleAgents, loadAgents } from '@agent/index';
+import { getVisibleAgents, loadAgents } from '@agent/index';
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
@@ -11,6 +11,7 @@ import { writeTextStderr } from '../runtime/logSinks';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
+import { resolveAgentWithRemoteFallback } from './_helpers/remoteAgents';
 import { agentsRunCommand } from './agentsRun';
 import type { CliContext } from '../runtime/cliContext';
 
@@ -22,16 +23,20 @@ async function listAgents(context: CliContext): Promise<number> {
       getVisibleAgents(category).map((agent) => ({ ...agent, category })),
   );
 
-  emitCliResult(context, {
-    json: agents,
-    ndjson: agents.map((agent) => ({ kind: 'agent', agent })),
-    text: agents
-      .map(
-        (agent) =>
-          `${agent.category}\t${agent.name}\t${agent.description ?? ''}`,
-      )
-      .join('\n'),
-  });
+  emitCliResult(
+    context,
+    {
+      json: agents,
+      ndjson: agents.map((agent) => ({ kind: 'agent', agent })),
+      text: agents
+        .map(
+          (agent) =>
+            `${agent.category}\t${agent.name}\t${agent.description ?? ''}`,
+        )
+        .join('\n'),
+    },
+    { paged: true },
+  );
   return CliExitCode.Success;
 }
 
@@ -64,11 +69,14 @@ function formatAgentDetails(entry: AgentEntry): string {
   return lines.join('\n');
 }
 
-async function showAgent(context: CliContext, name: string): Promise<number> {
+export async function showAgent(
+  context: CliContext,
+  name: string,
+): Promise<number> {
   await initLocalCliPlatform(context);
   await loadAgents({ includeRemote: false });
 
-  const entry = getAgent(name);
+  const entry = await resolveAgentWithRemoteFallback(name);
   if (!entry) {
     writeTextStderr(`Agent not found: ${name}`);
     return CliExitCode.Usage;

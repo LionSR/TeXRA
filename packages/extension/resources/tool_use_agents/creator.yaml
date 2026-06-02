@@ -46,7 +46,11 @@ prompts:
     - Process LaTeX documents in fixed rounds (1 or 2).
     - Receive pre-loaded file content via template variables
       ({% raw %}`{{ INPUT_CONTENT }}`, `{{ ALL_INPUTS }}`{% endraw %}, etc.).
-    - Produce output wrapped in XML tags (e.g. `<latex_document>`).
+    - Produce output with the unified documents protocol — one
+      `<document name="...">` block per output file inside a single
+      `<documents>...</documents>` wrapper. Editing agents reuse the input
+      filenames; agents that generate new artifacts declare
+      `defaultOutputFiles` and emit those names (exposed as `OUTPUT_FILES`).
     - Use chain-of-thought with `<scratchpad>` planning before the final
       output.
     - Best for: editing, polishing, correcting, merging, or creating LaTeX

@@ -103,6 +103,24 @@ const SCENARIOS = [
     unexpect: ['Tip: Ctrl-C exits idle chats', 'First queued follo…'],
   },
   {
+    name: 'queued-subagent-followup-summary',
+    cols: 120,
+    env: {
+      HARNESS_ENTRIES: '2',
+      HARNESS_QUEUED_FOLLOWUPS:
+        '<orchestrator-followup><subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result></orchestrator-followup>',
+    },
+    bootExpect: 'queued 1',
+    keys: ['/status', '\r'],
+    frame: 'tail',
+    expect: [
+      'queued follow-ups: 1',
+      '1. ✓ reviewer completed All good <ok>',
+      'Queued follow-ups (1)',
+    ],
+    unexpect: ['<orchestrator-followup>', '<subagent-result'],
+  },
+  {
     name: 'compact-queued-followups',
     rows: 8,
     cols: 60,
@@ -162,11 +180,13 @@ const SCENARIOS = [
   },
   {
     name: 'transcript-viewer-long-tool-output',
+    cols: 80,
     env: { HARNESS_ENTRIES: '0', HARNESS_LONG_TOOL_OUTPUT: '1' },
     keys: [DC4],
     frame: 'tail',
     expect: [
       'tool-output-line-10 hidden-middle',
+      'wide-column-F',
       'tool-output-line-18',
       'PgUp/PgDn page',
       'Esc close',
@@ -226,12 +246,14 @@ const SCENARIOS = [
     expect: [
       '/api',
       'Switch between included relay',
-      '/yolo',
-      'Approve privileged actions',
+      '/login',
+      'Sign in to TeXRA included access',
+      '/logout',
+      'Sign out of TeXRA',
     ],
     unexpect: [
       '/ap  Switch',
-      '/yol  Approve',
+      '/log  Sign',
       'personal API keys',
       'automatically',
     ],
@@ -313,6 +335,20 @@ const SCENARIOS = [
     unexpect: ['ServerSideKeyService not initialized'],
   },
   {
+    name: 'approval-form',
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/approval', '\r'],
+    frame: 'tail',
+    expect: [
+      '/approval',
+      'Choose how privileged actions should be handled.',
+      'Ask',
+      'Never',
+      'Approve',
+      'Enter select highlighted',
+    ],
+  },
+  {
     name: 'tools-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/tools', '\r'],
@@ -380,6 +416,28 @@ const SCENARIOS = [
     unexpect: ['ServerSideKeyService not initialized'],
   },
   {
+    name: 'compact-approval-form',
+    rows: 10,
+    cols: 60,
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/approval', '\r'],
+    frame: 'tail',
+    expect: [
+      '/approval',
+      'Ask',
+      'Never',
+      'Approve',
+      '↑/↓ navigate',
+      '1-3/Enter select',
+      'Esc close',
+    ],
+    unexpect: [
+      'Choose how privileged actions should be handled.',
+      '1-3 select now',
+    ],
+    maxLineColumns: 60,
+  },
+  {
     name: 'compact-tools-form',
     rows: 12,
     cols: 80,
@@ -405,9 +463,9 @@ const SCENARIOS = [
     keys: ['/', DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN],
     frame: 'tail',
     expect: [
-      '… 6 earlier',
+      '… 8 earlier',
       '/status',
-      'Open the session status tabs',
+      'Show session details',
       '/exit',
       'Exit the CLI session',
     ],
@@ -629,6 +687,27 @@ const SCENARIOS = [
       'n reject',
     ],
     unexpect: ['confirmation of correctness', '[Option-p]tasks'],
+  },
+  {
+    name: 'compact-agent-proposal-scroll',
+    rows: 17,
+    cols: 80,
+    env: { HARNESS_ENTRIES: '4', HARNESS_AGENT_PROPOSAL: '1' },
+    bootExpect: '[Ctrl-C]',
+    keys: [PAGE_DOWN, PAGE_DOWN, PAGE_DOWN, PAGE_DOWN, PAGE_DOWN, PAGE_DOWN],
+    frame: 'tail',
+    expect: [
+      'Spawn review?',
+      'Model: deepseekT',
+      'Category: tool-use agent',
+      'Include a short independent enumeration',
+      'previous rows',
+      'scroll prompt',
+      'y approve',
+      'n reject',
+    ],
+    unexpect: ['prompt rows hidden', '[Option-p]tasks'],
+    maxLineColumns: 80,
   },
   {
     name: 'external-inquiry-long',
@@ -1535,6 +1614,7 @@ function formatUsage() {
     '',
     'Options:',
     '  --snapshot-dir DIR  Write per-scenario .txt/.svg frames and an index.html report',
+    '  --list              Print available scenario names and exit',
     '  -h, --help          Show this help',
     '',
     'Available scenarios:',
@@ -1544,6 +1624,10 @@ function formatUsage() {
 
 function printUsage(stream = console.log) {
   stream(formatUsage());
+}
+
+function printScenarioList() {
+  console.log(SCENARIOS.map((scenario) => scenario.name).join('\n'));
 }
 
 function parseArgs(argv) {
@@ -1562,6 +1646,10 @@ function parseArgs(argv) {
     }
     if (!endOfOptions && (arg === '--help' || arg === '-h')) {
       printUsage();
+      process.exit(0);
+    }
+    if (!endOfOptions && arg === '--list') {
+      printScenarioList();
       process.exit(0);
     }
     if (!endOfOptions && arg === '--snapshot-dir') {

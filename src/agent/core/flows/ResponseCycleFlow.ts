@@ -20,8 +20,10 @@ import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 import { K_SLICE } from '@agent/core/constants';
 import { bestConnectionMethod } from '@latex';
+import type { ToolDefinition } from '@model';
 import replacementEngine from '@replacement/engine';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';
+import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { getSystemPromptWithRules } from '@utils/prompt';
 import { extractScratchpad } from '@utils/text/xmlUtils';
@@ -190,6 +192,23 @@ type ContinuationNodeResult = SkippableNodeResult<{
   shouldStop: boolean;
   shouldContinue: boolean;
 }>;
+
+export function responseCycleToolsForModel<C>(
+  services: Pick<
+    ResponseCycleServices<C>,
+    'approvalPromptsUnavailable' | 'modelHandler' | 'setting'
+  >,
+): ToolDefinition[] | undefined {
+  if (!services.modelHandler.capabilities.supportsFunctionCalling) {
+    return undefined;
+  }
+  if (services.approvalPromptsUnavailable !== true) {
+    return services.setting.tools;
+  }
+  return services.setting.tools.filter(
+    (tool) => !isApprovalGatedToolName(tool.name),
+  );
+}
 
 /**
  * Transforms the raw model response into output-ready text, updates usage metrics,
@@ -580,10 +599,7 @@ export function createResponseCycleFlow<C>(): Flow<
     backgroundModeAware: true,
     getSystemPrompt: (shared) => shared.systemPrompt,
     getEndTag: (services) => services.setting.endTag,
-    getTools: (services) =>
-      services.modelHandler.capabilities.supportsFunctionCalling
-        ? services.setting.tools
-        : undefined,
+    getTools: responseCycleToolsForModel,
     storeResponse: (shared, response) => {
       shared.responseObject = response;
     },

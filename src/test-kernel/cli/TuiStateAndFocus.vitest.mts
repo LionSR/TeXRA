@@ -42,7 +42,6 @@ import {
 import { visibleSubagentRows } from '@cli/chat/tui/state/childStreamMerge';
 import {
   finalizeSettledPrefix,
-  stripOrchestratorFollowup,
   syncStreamLog,
 } from '@cli/chat/tui/state/subscribeStreamLog';
 import { wrapRuntimeHost } from '@cli/chat/tui/state/subscribeRuntimeHost';
@@ -63,9 +62,11 @@ import {
   chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
   chatTuiCanStartRootRun,
+  chatTuiSigintAction,
   chatTuiActiveChildFollowUpTarget,
   chatTuiRejectedChildFollowUpTarget,
   chatTuiShouldAnnounceQueuedFollowUp,
+  parseChatLoginSlashArgs,
   clearTuiSessionRunState,
 } from '@cli/chat/tui/runChatTui';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -83,6 +84,7 @@ import {
   STREAM_STATUS,
   type StreamTabId,
 } from '@shared/schemas';
+import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
 
 const root = 'root' as StreamTabId;
 const child1 = 'child-1' as StreamTabId;
@@ -892,6 +894,79 @@ describe('CLI TUI row allocation', () => {
         STREAM_STATUS.WAITING,
       ),
     ).toBe(false);
+  });
+
+  it('resolves the TUI Ctrl-C action from armed, stoppable, and interruptible state', () => {
+    expect(
+      chatTuiSigintAction({
+        exitArmed: false,
+        canStopActiveRun: false,
+        canInterruptActiveRun: false,
+      }),
+    ).toBe('clean-exit');
+
+    expect(
+      chatTuiSigintAction({
+        exitArmed: false,
+        canStopActiveRun: false,
+        canInterruptActiveRun: true,
+      }),
+    ).toBe('interrupt-and-exit');
+
+    expect(
+      chatTuiSigintAction({
+        exitArmed: false,
+        canStopActiveRun: true,
+        canInterruptActiveRun: true,
+      }),
+    ).toBe('interrupt-and-arm-exit');
+
+    expect(
+      chatTuiSigintAction({
+        exitArmed: true,
+        canStopActiveRun: true,
+        canInterruptActiveRun: true,
+      }),
+    ).toBe('force-exit');
+  });
+
+  it('parses in-chat login slash command options', () => {
+    expect(parseChatLoginSlashArgs('')).toEqual({
+      provider: 'github',
+      noBrowser: false,
+      selectAccount: false,
+      loginHint: undefined,
+    });
+    expect(
+      parseChatLoginSlashArgs('google --no-browser --select-account'),
+    ).toEqual({
+      provider: 'google',
+      noBrowser: true,
+      selectAccount: true,
+      loginHint: undefined,
+    });
+    expect(parseChatLoginSlashArgs('--login-hint user@example.edu')).toEqual({
+      provider: 'github',
+      noBrowser: false,
+      selectAccount: false,
+      loginHint: 'user@example.edu',
+    });
+    expect(parseChatLoginSlashArgs('github --login-hint=octocat')).toEqual({
+      provider: 'github',
+      noBrowser: false,
+      selectAccount: false,
+      loginHint: 'octocat',
+    });
+  });
+
+  it('rejects invalid in-chat login slash command options', () => {
+    expect(parseChatLoginSlashArgs('slack')).toBeUndefined();
+    expect(parseChatLoginSlashArgs('github google')).toBeUndefined();
+    expect(parseChatLoginSlashArgs('--login-hint')).toBeUndefined();
+    expect(
+      parseChatLoginSlashArgs('--login-hint --no-browser'),
+    ).toBeUndefined();
+    expect(parseChatLoginSlashArgs('--unexpected')).toBeUndefined();
   });
 
   it('selects the focused child stream as a follow-up target', () => {

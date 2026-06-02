@@ -13,6 +13,7 @@ import {
   normalizeRootShortcuts,
   reorderGlobalFlags,
 } from '@cli/commands/_helpers/dispatch';
+import { CliUsageError, formatCrashReportLine } from '@cli/runtime/cliContext';
 import {
   formatCliModelListError,
   isCliFetchStackLog,
@@ -23,8 +24,10 @@ import {
 } from '@cli/commands/_helpers/globalArgs';
 import { cliTerminalStatus } from '@cli/commands/_helpers/terminalStatus';
 import {
+  createStdinWorkflowInputMaterializer,
   expandRunInputs,
   expandWorkflowInputSpecs,
+  hasMixedStdinWorkflowInputSpecs,
 } from '@cli/commands/_helpers/workflowInputs';
 import {
   resolveWorkflowOutput,
@@ -32,6 +35,8 @@ import {
 } from '@cli/commands/_helpers/workflowOutput';
 import { isKnownCliModel } from '@cli/runtime/cliConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { pickGlobalArgs } from '@cli/runtime/globalArgs';
+import { GLOBAL_BOOL_FLAGS } from '@cli/commands/_helpers/globalArgs';
 import { END_GROUP_STATUS, EXECUTION_STATUS } from '@shared/schemas';
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -43,6 +48,8 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
     quietLogs: false,
     renderRunProgress: true,
     stderrIsTty: false,
+    stdoutColorEnabled: false,
+    stderrColorEnabled: false,
     colorEnabled: false,
     version: '0.0.0',
     resourcesPath: '/tmp/resources',
@@ -140,6 +147,14 @@ describe('CLI root argument routing', () => {
     });
   });
 
+  it('suggests close command names for mistyped top-level commands', async () => {
+    await expect(detectUnknownCliCommand(['chatt'])).resolves.toEqual({
+      typedCommand: 'texra chatt',
+      helpCommand: 'texra',
+      suggestedCommand: 'texra chat',
+    });
+  });
+
   it('detects unknown command-group children', async () => {
     await expect(detectUnknownCliCommand(['agents', 'bogus'])).resolves.toEqual(
       {
@@ -175,6 +190,16 @@ describe('CLI root argument routing', () => {
     });
   });
 
+  it('suggests close command names inside command groups', async () => {
+    await expect(
+      detectUnknownCliCommand(['multi-agent', 'rn']),
+    ).resolves.toEqual({
+      typedCommand: 'texra multi-agent rn',
+      helpCommand: 'texra multi-agent',
+      suggestedCommand: 'texra multi-agent run',
+    });
+  });
+
   it('formats unknown command usage guidance', () => {
     expect(
       formatUnknownCliCommand({
@@ -183,6 +208,18 @@ describe('CLI root argument routing', () => {
       }),
     ).toBe(
       'Unknown command: texra agents bogus. Run `texra agents --help` for usage.',
+    );
+  });
+
+  it('formats typo suggestions for unknown commands', () => {
+    expect(
+      formatUnknownCliCommand({
+        typedCommand: 'texra chatt',
+        helpCommand: 'texra',
+        suggestedCommand: 'texra chat',
+      }),
+    ).toBe(
+      'Unknown command: texra chatt. Did you mean `texra chat`? Run `texra --help` for usage.',
     );
   });
 
@@ -235,6 +272,9 @@ describe('CLI root argument routing', () => {
     expect(() =>
       rejectHeadlessOnlyFlags(['--output-format=json'], 'orchestrate'),
     ).toThrow('texra orchestrate is interactive');
+    expect(() => rejectHeadlessOnlyFlags(['--no-input'], 'chat')).toThrow(
+      'texra chat is interactive',
+    );
     expect(() =>
       rejectHeadlessOnlyFlags(['--approval-policy', 'ask'], 'chat'),
     ).not.toThrow();
@@ -271,107 +311,6 @@ describe('CLI root argument routing', () => {
     }
   });
 
-  it('materializes a `-` --input spec from piped stdin content', async () => {
-    // clig.dev pipe composability: `cat draft.tex | texra run <agent> --input -`
-    // reads the primary input from stdin. The token is resolved to a temp file
-    // whose content matches what was piped in, keeping the downstream
-    // file-centric run pipeline intact.
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
-    try {
-      const piped =
-        '\\documentclass{article}\\begin{document}hi\\end{document}';
-      const resolved = await expandWorkflowInputSpecs(['-'], root, '--input', {
-        readStdin: async () => piped,
-      });
-      expect(resolved).toHaveLength(1);
-      const tempPath = resolved[0];
-      expect(path.isAbsolute(tempPath)).toBe(true);
-      expect(path.dirname(tempPath)).toBe(root);
-      expect(path.basename(tempPath)).toMatch(/^\.texra-stdin-.+\.tex$/);
-      await expect(fs.readFile(tempPath, 'utf8')).resolves.toBe(piped);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
-  });
-
-  it('reuses one materialized stdin file for repeated `-` specs', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
-    try {
-      let readCount = 0;
-      const resolved = await expandWorkflowInputSpecs(
-        ['-', '-'],
-        root,
-        '--input',
-        {
-          readStdin: async () => {
-            readCount += 1;
-            return 'piped body';
-          },
-        },
-      );
-      expect(readCount).toBe(1);
-      expect(resolved).toHaveLength(1);
-      await expect(fs.readFile(resolved[0], 'utf8')).resolves.toBe(
-        'piped body',
-      );
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
-  });
-
-  it('reads `-` through expandRunInputs for input', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
-    try {
-      const piped = 'piped body';
-      const { inputFiles, contextFiles } = await expandRunInputs(
-        ['-'],
-        [],
-        root,
-        { readStdin: async () => piped },
-      );
-      expect(inputFiles).toHaveLength(1);
-      expect(contextFiles).toEqual([]);
-      await expect(fs.readFile(inputFiles[0], 'utf8')).resolves.toBe(piped);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
-  });
-
-  it('reads `-` through expandRunInputs for context', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
-    try {
-      await fs.writeFile(path.join(root, 'main.tex'), 'main body');
-      const piped = 'context body';
-      const { inputFiles, contextFiles } = await expandRunInputs(
-        ['main.tex'],
-        ['-'],
-        root,
-        { readStdin: async () => piped },
-      );
-      expect(inputFiles).toEqual(['main.tex']);
-      expect(contextFiles).toHaveLength(1);
-      await expect(fs.readFile(contextFiles[0], 'utf8')).resolves.toBe(piped);
-    } finally {
-      await fs.rm(root, { recursive: true, force: true });
-    }
-  });
-
-  it('rejects `-` across both input and context with a clear usage error', async () => {
-    await expect(
-      expandRunInputs(['-'], ['-'], '/tmp/project', {
-        readStdin: async () => 'piped body',
-      }),
-    ).rejects.toThrow(/Use `-` for either --input or --context/);
-  });
-
-  it('rejects an empty `-` --input with a clear usage error', async () => {
-    await expect(
-      expandWorkflowInputSpecs(['-'], '/tmp/project', '--input', {
-        readStdin: async () => '   \n',
-      }),
-    ).rejects.toThrow(/--input -: no data on stdin/);
-  });
-
   it('rejects a literal --input file that does not exist', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-inputs-'));
     try {
@@ -381,6 +320,177 @@ describe('CLI root argument routing', () => {
       await expect(expandWorkflowInputSpecs([missing], root)).rejects.toThrow(
         /--input: file not found/,
       );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('materializes stdin when --input - is passed', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      let readCount = 0;
+      const stdinInputFile = createStdinWorkflowInputMaterializer({
+        tempDir: root,
+        readStdinText: async () => {
+          readCount += 1;
+          return '\\documentclass{article}\n\\begin{document}Hi\\end{document}\n';
+        },
+      });
+
+      const expanded = await expandWorkflowInputSpecs(
+        ['-', '-'],
+        root,
+        '--input',
+        {
+          stdinInputFile,
+        },
+      );
+
+      expect(expanded).toHaveLength(1);
+      expect(readCount).toBe(1);
+      expect(path.basename(expanded[0])).toMatch(/^\.texra-stdin-.+\.tex$/);
+      await expect(
+        fs.readFile(path.resolve(root, expanded[0]), 'utf8'),
+      ).resolves.toContain('\\begin{document}Hi');
+      await stdinInputFile.cleanup();
+      await expect(fs.stat(path.resolve(root, expanded[0]))).rejects.toThrow();
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves stdin position when mixed with file inputs', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      await fs.writeFile(path.join(root, 'paper.tex'), 'paper');
+      const stdinInputFile = createStdinWorkflowInputMaterializer({
+        tempDir: root,
+        readStdinText: async () =>
+          '\\documentclass{article}\\begin{document}Hi\\end{document}',
+      });
+
+      const expanded = await expandWorkflowInputSpecs(
+        ['-', 'paper.tex'],
+        root,
+        '--input',
+        {
+          stdinInputFile,
+        },
+      );
+
+      expect(path.basename(expanded[0])).toMatch(/^\.texra-stdin-.+\.tex$/);
+      expect(expanded[1]).toBe('paper.tex');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects empty stdin input', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      const stdinInputFile = createStdinWorkflowInputMaterializer({
+        tempDir: root,
+        readStdinText: async () => ' \n\t ',
+      });
+
+      await expect(
+        expandWorkflowInputSpecs(['-'], root, '--input', { stdinInputFile }),
+      ).rejects.toThrow(/stdin: no data on stdin/);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('detects stdin mixed with other raw workflow input specs', () => {
+    expect(hasMixedStdinWorkflowInputSpecs(['-'])).toBe(false);
+    expect(hasMixedStdinWorkflowInputSpecs(['-', '-'])).toBe(false);
+    expect(hasMixedStdinWorkflowInputSpecs(['-', 'paper.tex'])).toBe(true);
+    expect(hasMixedStdinWorkflowInputSpecs(['  -  ', 'paper.tex'])).toBe(true);
+  });
+
+  it('does not read stdin before later --input validation errors', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      let readCount = 0;
+      const stdinInputFile = createStdinWorkflowInputMaterializer({
+        tempDir: root,
+        readStdinText: async () => {
+          readCount += 1;
+          return '\\documentclass{article}\\begin{document}Hi\\end{document}';
+        },
+      });
+
+      await expect(
+        expandWorkflowInputSpecs(['-', 'missing.tex'], root, '--input', {
+          stdinInputFile,
+        }),
+      ).rejects.toThrow(/--input: file not found: missing\.tex/);
+      expect(readCount).toBe(0);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not read stdin before --context validation errors', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      let readCount = 0;
+      const stdinInputFile = createStdinWorkflowInputMaterializer({
+        tempDir: root,
+        readStdinText: async () => {
+          readCount += 1;
+          return '\\documentclass{article}\\begin{document}Hi\\end{document}';
+        },
+      });
+
+      await expect(
+        expandRunInputs(['-'], ['missing-context.tex'], root, {
+          stdinInputFile,
+        }),
+      ).rejects.toThrow(/--context: file not found: missing-context\.tex/);
+      expect(readCount).toBe(0);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('materializes stdin for --context - when input is a normal file', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      await fs.writeFile(path.join(root, 'main.tex'), 'main');
+      const stdinInputFile = createStdinWorkflowInputMaterializer({
+        tempDir: root,
+        readStdinText: async () => 'context body',
+      });
+
+      const { inputFiles, contextFiles } = await expandRunInputs(
+        ['main.tex'],
+        ['-'],
+        root,
+        { stdinInputFile },
+      );
+
+      expect(inputFiles).toEqual(['main.tex']);
+      expect(contextFiles).toHaveLength(1);
+      expect(path.basename(contextFiles[0])).toMatch(/^\.texra-stdin-.+\.tex$/);
+      await expect(
+        fs.readFile(path.resolve(root, contextFiles[0]), 'utf8'),
+      ).resolves.toBe('context body');
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects stdin across both input and context with a clear usage error', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      const stdinInputFile = createStdinWorkflowInputMaterializer({
+        tempDir: root,
+        readStdinText: async () => 'piped body',
+      });
+      await expect(
+        expandRunInputs(['-'], ['-'], root, { stdinInputFile }),
+      ).rejects.toThrow(/Use `-` for either --input or --context/);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
@@ -616,6 +726,50 @@ describe('CLI root argument routing', () => {
   });
 });
 
+describe('CLI global color/input flags', () => {
+  it('maps CLI color and no-input flags to canonical knobs', () => {
+    expect(pickGlobalArgs({ color: false, 'no-input': true })).toMatchObject({
+      noColor: true,
+      noInput: true,
+    });
+  });
+
+  it('maps citty negated input output to --no-input', () => {
+    expect(pickGlobalArgs({ input: false })).toMatchObject({
+      noInput: true,
+    });
+    expect(pickGlobalArgs({ input: 'file.tex' })).toMatchObject({
+      noInput: false,
+    });
+  });
+
+  it('treats absent/default color and no-input flags as not negated', () => {
+    expect(pickGlobalArgs({ color: true, 'no-input': false })).toMatchObject({
+      noColor: false,
+      noInput: false,
+    });
+    // Absent flags default to "not negated" too.
+    expect(pickGlobalArgs({})).toMatchObject({
+      noColor: false,
+      noInput: false,
+    });
+  });
+
+  it('registers global boolean spellings without stealing --input', () => {
+    // Needed so `texra --no-color agents list` and
+    // `texra --no-input agents list` reorder/dispatch correctly.
+    expect(GLOBAL_BOOL_FLAGS.has('--no-color')).toBe(true);
+    expect(GLOBAL_BOOL_FLAGS.has('--no-input')).toBe(true);
+    expect(GLOBAL_BOOL_FLAGS.has('--input')).toBe(false);
+  });
+
+  it('does not treat command-specific --input as a leading global flag', () => {
+    expect(
+      reorderGlobalFlags(['--input', 'file.tex', 'run', 'polish']),
+    ).toEqual(['--input', 'file.tex', 'run', 'polish']);
+  });
+});
+
 describe('CLI model flag validation contract', () => {
   it('classifies built-in models as known and bogus names as unknown', () => {
     expect(isKnownCliModel('sonnet46T')).toBe(true);
@@ -628,6 +782,26 @@ describe('CLI model flag validation contract', () => {
 describe('CLI login arguments', () => {
   it('prefers explicit provider flags over positional providers', () => {
     expect(resolveLoginProvider('google', 'github')).toBe('github');
+  });
+});
+
+describe('CLI crash report line', () => {
+  const bugsUrl = 'https://github.com/texra-ai/texra-issues/issues';
+
+  it('points unexpected crashes at the issue tracker', () => {
+    expect(formatCrashReportLine(new Error('boom'), bugsUrl)).toBe(
+      `This looks like a bug — please report it at ${bugsUrl} (include the command and the message above).`,
+    );
+  });
+
+  it('does not append a report link for usage errors', () => {
+    expect(
+      formatCrashReportLine(new CliUsageError('bad flag'), bugsUrl),
+    ).toBeUndefined();
+  });
+
+  it('omits the report link when no tracker URL is configured', () => {
+    expect(formatCrashReportLine(new Error('boom'), undefined)).toBeUndefined();
   });
 });
 
@@ -716,6 +890,7 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('INTERACTIVE CONTROLS');
     expect(stdout).toContain('/help');
     expect(stdout).toContain('/status');
+    expect(stdout).toContain('/login, /logout');
     expect(stdout).toContain('Ctrl-T');
     expect(stdout).toContain('Tab');
     expect(stdout).toContain('cycle visible streams');
@@ -739,6 +914,26 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('open an item directly');
     expect(stdout).toContain('Enter');
     expect(stdout).toContain('Esc');
+    expect(stderr).toBe('');
+  });
+
+  it('shows EXAMPLES and a docs link in root --help', async () => {
+    const result = await runCli(['--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('EXAMPLES');
+    expect(stdout).toContain('texra chat');
+    expect(stdout).toContain('texra run <agent> --input file.tex');
+    expect(stdout).toContain('texra agents list');
+    expect(stdout).toContain('texra doctor');
+    expect(stdout).toContain('Learn more: https://texra.ai');
+    expect(stderr).toBe('');
+  });
+
+  it('shows EXAMPLES and a docs link for bare `help`', async () => {
+    const result = await runCli(['help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('EXAMPLES');
+    expect(stdout).toContain('Learn more: https://texra.ai');
     expect(stderr).toBe('');
   });
 
@@ -777,6 +972,9 @@ describe('runCli usage output stream routing', () => {
     const result = await runCli(['multi-agent', 'inspect', 'mathematician']);
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('Mathematician (mathematician)');
+    expect(stdout).toContain('Root tool-use agent:');
+    expect(stdout).toContain('Available workflow agents:');
+    expect(stdout).toContain('Missing tool-use agents:');
     expect(stderr).toBe('');
   });
 

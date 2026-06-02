@@ -30,6 +30,20 @@ describe('CLI queued follow-up panel display model', () => {
     expect(display.hiddenCount).toBe(0);
   });
 
+  it('summarizes queued subagent follow-up payloads', () => {
+    const display = queuedFollowUpPanelDisplay({
+      messages: [
+        '<orchestrator-followup><subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result></orchestrator-followup>',
+      ],
+      maxRows: 3,
+      width: 80,
+    });
+
+    expect(display.rows.map((row) => row.text)).toEqual([
+      '1. ✓ reviewer completed All good <ok>',
+    ]);
+  });
+
   it('keeps the panel bounded when more messages are queued', () => {
     expect(queuedFollowUpPanelRowCount(['first', 'second', 'third'])).toBe(3);
 

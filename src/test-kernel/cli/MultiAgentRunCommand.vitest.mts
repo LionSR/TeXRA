@@ -2,18 +2,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CliContext } from '@cli/runtime/cliContext';
 
-const mocks = vi.hoisted(() => ({
-  executeCliRequest: vi.fn(),
-  expandRunInputs: vi.fn(),
-  getToolUseAgents: vi.fn(),
-  getWorkflowAgents: vi.fn(),
-  initCliPlatform: vi.fn(),
-  installCliApprovalHandlers: vi.fn(),
-  isAuthenticated: vi.fn(),
-  loadAgents: vi.fn(),
-  writeTextStderr: vi.fn(),
-  writeTextStdout: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const stdinInputFile = Object.assign(vi.fn(), { cleanup: vi.fn() });
+  return {
+    executeCliRequest: vi.fn(),
+    expandRunInputs: vi.fn(),
+    getToolUseAgents: vi.fn(),
+    getWorkflowAgents: vi.fn(),
+    initCliPlatform: vi.fn(),
+    installCliApprovalHandlers: vi.fn(),
+    isAuthenticated: vi.fn(),
+    loadAgents: vi.fn(),
+    planCliMultiAgentPresetRun: vi.fn(),
+    stdinInputFile,
+    writeTextStderr: vi.fn(),
+    writeTextStdout: vi.fn(),
+  };
+});
 
 vi.mock('@agent/index', () => ({
   getToolUseAgents: mocks.getToolUseAgents,
@@ -59,25 +64,9 @@ vi.mock('@cli/runtime/multiAgentPresets', () => ({
     source: 'built-in',
   })),
   formatCliMultiAgentPresetDetails: vi.fn(() => ''),
+  formatCliMultiAgentPresetInspection: vi.fn(() => ''),
   formatCliMultiAgentPresetList: vi.fn(() => ''),
-  planCliMultiAgentPresetRun: vi.fn(() => ({
-    preset: {
-      id: 'mathematician',
-      name: 'Mathematician',
-      source: 'built-in',
-    },
-    rootAgent: {
-      name: 'orchestrator',
-      category: 'toolUse',
-      source: 'builtInToolUse',
-      path: '/agents/orchestrator.yaml',
-      tools: ['delegate_agent'],
-    },
-    missingWorkflowAgents: [],
-    missingToolUseAgents: [],
-    workflowAgentKeys: [],
-    toolUseAgentKeys: ['builtInToolUse:orchestrator'],
-  })),
+  planCliMultiAgentPresetRun: mocks.planCliMultiAgentPresetRun,
   readCliMultiAgentPresets: vi.fn(() => []),
   withCliMultiAgentPresetVisibility: vi.fn(
     (_plan: unknown, run: () => Promise<unknown>) => run(),
@@ -102,6 +91,7 @@ vi.mock('@cli/commands/_helpers/runExecution', () => ({
 }));
 
 vi.mock('@cli/commands/_helpers/workflowInputs', () => ({
+  createStdinWorkflowInputMaterializer: vi.fn(() => mocks.stdinInputFile),
   expandRunInputs: mocks.expandRunInputs,
 }));
 
@@ -114,6 +104,8 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
     quietLogs: false,
     renderRunProgress: true,
     stderrIsTty: false,
+    stdoutColorEnabled: false,
+    stderrColorEnabled: false,
     colorEnabled: false,
     version: '0.0.0',
     resourcesPath: '/tmp/resources',
@@ -138,6 +130,24 @@ describe('CLI multi-agent run command', () => {
         tools: ['delegate_agent'],
       },
     ]);
+    mocks.planCliMultiAgentPresetRun.mockReturnValue({
+      preset: {
+        id: 'mathematician',
+        name: 'Mathematician',
+        source: 'built-in',
+      },
+      rootAgent: {
+        name: 'orchestrator',
+        category: 'toolUse',
+        source: 'builtInToolUse',
+        path: '/agents/orchestrator.yaml',
+        tools: ['delegate_agent'],
+      },
+      missingWorkflowAgents: [],
+      missingToolUseAgents: [],
+      workflowAgentKeys: [],
+      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+    });
     mocks.isAuthenticated.mockResolvedValue(false);
     mocks.executeCliRequest.mockResolvedValue({
       result: {
@@ -173,11 +183,15 @@ describe('CLI multi-agent run command', () => {
       ['problem.tex'],
       [],
       '/tmp/project',
-      { allowEmptyInput: true },
+      {
+        allowEmptyInput: true,
+        stdinInputFile: mocks.stdinInputFile,
+      },
     );
     const request = mocks.executeCliRequest.mock.calls[0]?.[0];
     expect(request?.config.instruction).toContain('Primary user input files:');
     expect(request?.config.instruction).toContain('- "problem.tex"');
+    expect(mocks.stdinInputFile.cleanup).toHaveBeenCalledTimes(1);
   });
 
   it('allows instruction-only team runs without input files', async () => {
@@ -198,6 +212,7 @@ describe('CLI multi-agent run command', () => {
     expect(exitCode).toBe(0);
     expect(mocks.expandRunInputs).toHaveBeenCalledWith([], [], '/tmp/project', {
       allowEmptyInput: true,
+      stdinInputFile: mocks.stdinInputFile,
     });
     const request = mocks.executeCliRequest.mock.calls[0]?.[0];
     expect(request?.config.inputFiles).toEqual([]);
@@ -205,6 +220,7 @@ describe('CLI multi-agent run command', () => {
     expect(request?.config.instruction).toContain(
       'Prove that every odd square is congruent to 1 modulo 8.',
     );
+    expect(mocks.stdinInputFile.cleanup).toHaveBeenCalledTimes(1);
   });
 
   it('still requires either an input file or an inline instruction', async () => {
@@ -220,5 +236,116 @@ describe('CLI multi-agent run command', () => {
       }),
     ).rejects.toThrow(/Provide --input or --instruction/);
     expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+  });
+
+  it('makes signed-out preset fallback to one root agent explicit', async () => {
+    mocks.planCliMultiAgentPresetRun.mockReturnValue({
+      preset: {
+        id: 'mathematician',
+        name: 'Mathematician',
+        source: 'built-in',
+      },
+      rootAgent: {
+        name: 'lean',
+        category: 'toolUse',
+        source: 'builtInToolUse',
+        path: '/agents/lean.yaml',
+        tools: [],
+      },
+      missingWorkflowAgents: ['generic', 'devise', 'apply'],
+      missingToolUseAgents: ['simplifier', 'progressCheck', 'orchestrator'],
+      workflowAgentKeys: [],
+      toolUseAgentKeys: ['builtInToolUse:lean'],
+    });
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    const exitCode = await runMultiAgentPreset(cliContext(), {
+      preset: 'mathematician',
+      inputFiles: [],
+      contextFiles: [],
+      model: 'deepseekT',
+      instruction: 'Solve a short math problem.',
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'WARN preset mathematician references unavailable agents: workflow:generic, workflow:devise, workflow:apply, tool-use:simplifier, tool-use:progressCheck, tool-use:orchestrator',
+    );
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'WARN team delegation unavailable for preset mathematician; running only root agent lean. Enable a delegating team root or pass --agent to choose one.',
+    );
+  });
+
+  it('keeps degraded-team wording when the root can delegate', async () => {
+    mocks.planCliMultiAgentPresetRun.mockReturnValue({
+      preset: {
+        id: 'mathematician',
+        name: 'Mathematician',
+        source: 'built-in',
+      },
+      rootAgent: {
+        name: 'orchestrator',
+        category: 'toolUse',
+        source: 'builtInToolUse',
+        path: '/agents/orchestrator.yaml',
+        tools: ['delegate_agent'],
+      },
+      missingWorkflowAgents: ['generic'],
+      missingToolUseAgents: ['simplifier'],
+      workflowAgentKeys: ['builtIn:devise'],
+      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+    });
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    const exitCode = await runMultiAgentPreset(cliContext(), {
+      preset: 'mathematician',
+      inputFiles: [],
+      contextFiles: [],
+      model: 'deepseekT',
+      instruction: 'Solve a short math problem.',
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'WARN preset mathematician is degraded; running root agent orchestrator with 1 available team agent.',
+    );
+  });
+
+  it('does not show non-delegating fallback text for a delegating root', async () => {
+    mocks.planCliMultiAgentPresetRun.mockReturnValue({
+      preset: {
+        id: 'mathematician',
+        name: 'Mathematician',
+        source: 'built-in',
+      },
+      rootAgent: {
+        name: 'orchestrator',
+        category: 'toolUse',
+        source: 'builtInToolUse',
+        path: '/agents/orchestrator.yaml',
+        tools: ['delegate_agent'],
+      },
+      missingWorkflowAgents: ['generic'],
+      missingToolUseAgents: ['simplifier'],
+      workflowAgentKeys: [],
+      toolUseAgentKeys: ['builtInToolUse:orchestrator'],
+    });
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    const exitCode = await runMultiAgentPreset(cliContext(), {
+      preset: 'mathematician',
+      inputFiles: [],
+      contextFiles: [],
+      model: 'deepseekT',
+      instruction: 'Solve a short math problem.',
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'WARN preset mathematician is missing team agents; running delegating root agent orchestrator.',
+    );
+    expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
+      expect.stringContaining('Enable a delegating team root'),
+    );
   });
 });

@@ -1,10 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import stripAnsi from 'strip-ansi';
 
 import {
   buildDoctorReport,
   doctorExitCode,
   doctorNdjsonRecords,
   formatDoctorText,
+  type DoctorReport,
+  writeDoctorReport,
 } from '@cli/runtime/doctor';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -42,6 +45,43 @@ const latexProbe = {
   hasBibliographyTool: false,
   hasLatexmk: false,
 } as const;
+
+const healthyNodeReport: DoctorReport = {
+  ok: true,
+  checks: [
+    {
+      id: 'node',
+      name: 'Node.js',
+      status: 'pass',
+      message: 'Node 24.0.0',
+    },
+  ],
+};
+
+function captureDoctorStdout(
+  writeContext: CliContext,
+  report: DoctorReport,
+): string {
+  let stdout = '';
+  const stdoutSpy = vi
+    .spyOn(process.stdout, 'write')
+    .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
+      stdout += String(chunk);
+      const cb = rest.find((arg) => typeof arg === 'function') as
+        | ((error?: Error | null) => void)
+        | undefined;
+      cb?.(null);
+      return true;
+    }) as unknown as ReturnType<typeof vi.spyOn>;
+
+  try {
+    writeDoctorReport(writeContext, report);
+  } finally {
+    stdoutSpy.mockRestore();
+  }
+
+  return stdout;
+}
 
 describe('CLI doctor', () => {
   it('reports failed checks and exits nonzero', async () => {
@@ -233,5 +273,39 @@ describe('CLI doctor', () => {
       ok: true,
     });
     expect(doctorExitCode(report)).toBe(CliExitCode.Success);
+  });
+
+  it('does not color successful text output when stdout is piped', () => {
+    const stdout = captureDoctorStdout(
+      {
+        ...context,
+        colorEnabled: true,
+        stdoutIsTty: false,
+        stderrIsTty: true,
+        stdoutColorEnabled: false,
+        stderrColorEnabled: true,
+      },
+      healthyNodeReport,
+    );
+
+    expect(stdout).toContain('PASS Node.js: Node 24.0.0');
+    expect(stdout).toBe(stripAnsi(stdout));
+  });
+
+  it('keeps successful text output colored when only stderr is redirected', () => {
+    const stdout = captureDoctorStdout(
+      {
+        ...context,
+        colorEnabled: false,
+        stdoutIsTty: true,
+        stderrIsTty: false,
+        stdoutColorEnabled: true,
+        stderrColorEnabled: false,
+      },
+      healthyNodeReport,
+    );
+
+    expect(stripAnsi(stdout)).toContain('PASS Node.js: Node 24.0.0');
+    expect(stdout).not.toBe(stripAnsi(stdout));
   });
 });

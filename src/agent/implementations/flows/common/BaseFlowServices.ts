@@ -46,6 +46,8 @@ export interface AgentCore<C = unknown> {
    * max-depth setting without carrying a second depth value.
    */
   delegationConfig?: NestedDelegationConfig;
+  /** Whether approval or user prompts cannot be answered by the current host. */
+  approvalPromptsUnavailable?: boolean;
 }
 
 export interface BaseFlowContextInit<C = unknown> extends AgentCore<C> {

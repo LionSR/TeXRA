@@ -12,10 +12,20 @@
 // NO host imports (no vscode, no Ink/React) so both @shared (webview) and the
 // CLI can consume it.
 
+import { escapeRegExp } from '@utils/core/stringCore';
+
 const SUBAGENT_TAG_RE = /^<subagent-(?:progress|result|error)\b/;
 
+export function stripOrchestratorFollowup(text: string): string {
+  const trimmed = text.trim();
+  const match = trimmed.match(
+    /^<orchestrator-followup>\s*([\s\S]*?)\s*<\/orchestrator-followup>$/,
+  );
+  return match?.[1]?.trim() ?? text;
+}
+
 function attr(xml: string, name: string): string | undefined {
-  return new RegExp(`\\b${name}="([^"]*)"`).exec(xml)?.[1];
+  return new RegExp(`\\b${escapeRegExp(name)}="([^"]*)"`).exec(xml)?.[1];
 }
 
 function innerTag(xml: string, tag: string): string | undefined {
@@ -91,4 +101,8 @@ export function summarizeSubagentFollowup(text: string): string {
   const retryable = attr(trimmed, 'retryable') === 'true';
   const head = `✗ ${agent} failed${wall ? ` · ${wall}` : ''}${retryable ? ' (retryable)' : ''}`;
   return message ? `${head}\n${decodeXmlEntities(message)}` : head;
+}
+
+export function summarizeFollowupMessage(text: string): string {
+  return summarizeSubagentFollowup(stripOrchestratorFollowup(text));
 }

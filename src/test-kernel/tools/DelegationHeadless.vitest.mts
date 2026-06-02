@@ -6,6 +6,7 @@ import { DelegateAgentTool } from '@tools/DelegationTools';
 
 const mocks = vi.hoisted(() => ({
   enableYoloOnChildStream: vi.fn(),
+  inheritBashBypassOnChildStream: vi.fn(),
   executeAgent: vi.fn(),
   getExecutionStore: vi.fn(),
   getVisibleAgents: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock('@model/computeModelOptions', () => ({
 
 vi.mock('@tools/approval', () => ({
   enableYoloOnChildStream: mocks.enableYoloOnChildStream,
+  inheritBashBypassOnChildStream: mocks.inheritBashBypassOnChildStream,
   isApprovalBypassedForStream: mocks.isApprovalBypassedForStream,
   isProposalBypassedForStream: mocks.isProposalBypassedForStream,
 }));

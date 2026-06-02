@@ -27,7 +27,10 @@ import {
   getToolUseFlowContext,
 } from '@agent/toolUse/ToolUseAgentRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
+import { isOAuthProvider, type OAuthProvider } from '@auth/sharedConfig';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
+import { formatCliAccountLabelForDisplay } from '@cli/runtime/accountDisplay';
 import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
 import {
   formatCliApiMode,
@@ -43,6 +46,10 @@ import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import { resolveCliRunnableModel } from '@cli/runtime/modelAccess';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { writeTextStderr } from '@cli/runtime/logSinks';
+import {
+  signInCliSupabase,
+  signOutCliSupabase,
+} from '@cli/runtime/supabaseAuth';
 import { dumbTerminalMessage } from '@cli/runtime/terminalRequirements';
 import {
   CLI_APPROVAL_POLICIES,
@@ -69,6 +76,7 @@ import { generateExecutionId } from '@utils/core/executionId';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import { App } from './App';
+import { assertNever } from './assertNever';
 import { AgentListForm } from './forms/AgentListForm';
 import { ApiModeForm } from './forms/ApiModeForm';
 import {
@@ -187,6 +195,23 @@ export function chatTuiCanStartRootRun(
   session: PendingTuiRunSessionState,
 ): boolean {
   return !session.runPromise || session.runCompleted;
+}
+
+export type ChatTuiSigintAction =
+  | 'clean-exit'
+  | 'force-exit'
+  | 'interrupt-and-exit'
+  | 'interrupt-and-arm-exit';
+
+export function chatTuiSigintAction(input: {
+  readonly exitArmed: boolean;
+  readonly canStopActiveRun: boolean;
+  readonly canInterruptActiveRun: boolean;
+}): ChatTuiSigintAction {
+  if (input.exitArmed) return 'force-exit';
+  if (input.canStopActiveRun) return 'interrupt-and-arm-exit';
+  if (input.canInterruptActiveRun) return 'interrupt-and-exit';
+  return 'clean-exit';
 }
 
 function chatTuiActiveChildStreamId(): StreamTabId | undefined {
@@ -445,6 +470,111 @@ async function showCliAuthStatus(): Promise<void> {
   appendLocalAssistantTranscript((await loadCliApiStatusLines()).join('\n'));
 }
 
+export const CHAT_LOGIN_USAGE =
+  'Usage: /login [github | google] [--no-browser] [--select-account] [--login-hint <account>]';
+
+interface ChatLoginSlashArgs {
+  readonly provider: OAuthProvider;
+  readonly noBrowser: boolean;
+  readonly selectAccount: boolean;
+  readonly loginHint?: string;
+}
+
+export function parseChatLoginSlashArgs(
+  input: string,
+): ChatLoginSlashArgs | undefined {
+  const tokens = input.trim().split(/\s+/).filter(Boolean);
+  let provider: string = DEFAULT_OAUTH_PROVIDER;
+  let providerSet = false;
+  let noBrowser = false;
+  let selectAccount = false;
+  let loginHint: string | undefined;
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === '--no-browser') {
+      noBrowser = true;
+      continue;
+    }
+    if (token === '--select-account') {
+      selectAccount = true;
+      continue;
+    }
+    if (token === '--login-hint') {
+      const next = tokens[index + 1];
+      if (!next || next.startsWith('--')) return undefined;
+      loginHint = next;
+      index += 1;
+      continue;
+    }
+    if (token.startsWith('--login-hint=')) {
+      const value = token.slice('--login-hint='.length).trim();
+      if (!value || value.startsWith('--')) return undefined;
+      loginHint = value;
+      continue;
+    }
+    if (token.startsWith('--') || providerSet) return undefined;
+    provider = token;
+    providerSet = true;
+  }
+
+  if (!isOAuthProvider(provider)) return undefined;
+  return { provider, noBrowser, selectAccount, loginHint };
+}
+
+async function loginFromChat(input: string): Promise<void> {
+  const args = parseChatLoginSlashArgs(input);
+  if (!args) {
+    appendLocalAssistantTranscript(CHAT_LOGIN_USAGE);
+    return;
+  }
+
+  if (args.provider === 'github' && args.selectAccount && !args.loginHint) {
+    appendLocalAssistantTranscript(
+      'GitHub does not support --select-account by itself. Use --login-hint <username> to request a specific GitHub account.',
+    );
+  }
+  appendLocalAssistantTranscript(
+    args.noBrowser
+      ? `Starting TeXRA ${args.provider} sign-in.`
+      : `Opening browser for TeXRA ${args.provider} sign-in...`,
+  );
+
+  try {
+    const session = await signInCliSupabase({
+      provider: args.provider,
+      openBrowser: !args.noBrowser,
+      selectAccount: args.selectAccount,
+      loginHint: args.loginHint,
+      manualBrowserHint: '/login --no-browser',
+      onAuthUrl: (url) => {
+        if (args.noBrowser) {
+          appendLocalAssistantTranscript(`Open this URL to sign in:\n${url}`);
+        }
+      },
+    });
+    appendLocalAssistantTranscript(
+      [
+        `Signed in as ${formatCliAccountLabelForDisplay(session.account.label)}.`,
+        ...(await loadCliApiStatusLines()),
+      ].join('\n'),
+    );
+  } catch (error: unknown) {
+    appendLocalAssistantTranscript(toErrorMessage(error));
+  }
+}
+
+async function logoutFromChat(): Promise<void> {
+  try {
+    await signOutCliSupabase();
+    appendLocalAssistantTranscript(
+      ['Signed out.', ...(await loadCliApiStatusLines())].join('\n'),
+    );
+  } catch (error: unknown) {
+    appendLocalAssistantTranscript(toErrorMessage(error));
+  }
+}
+
 function parseApprovalPolicy(input: string): CliApprovalPolicy | undefined {
   const normalized = input.trim().toLowerCase();
   if ((CLI_APPROVAL_POLICIES as readonly string[]).includes(normalized)) {
@@ -472,8 +602,9 @@ const YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 function openCliApprovalPolicyForm(context: SlashCommandContext): void {
   cliState.activeForm.set({
     commandName: 'approval',
-    render: (close) => (
+    render: (close, availableRows) => (
       <ApprovalPolicyForm
+        availableRows={availableRows}
         currentPolicy={context.getApprovalPolicy()}
         onSelect={(policy) => {
           context.setApprovalPolicy(policy);
@@ -589,7 +720,7 @@ async function handleTuiSlashCommand(
   // exit commands (the TUI is tearing down); /clear still echoes because
   // resetSessionForClear refuses while a run is active and surfaces an
   // error — without the echo the user wouldn't see what triggered it.
-  if (command !== 'exit' && command !== 'quit') {
+  if (command !== 'exit' && command !== 'quit' && command !== 'login') {
     appendLocalUserTranscript(line.trim());
   }
   switch (command) {
@@ -642,6 +773,12 @@ async function handleTuiSlashCommand(
       } catch (error: unknown) {
         appendLocalAssistantTranscript(toErrorMessage(error));
       }
+      return true;
+    case 'login':
+      await loginFromChat(rest);
+      return true;
+    case 'logout':
+      await logoutFromChat();
       return true;
     case 'approval':
       if (rest) {
@@ -1166,21 +1303,35 @@ export async function runChat(
     pendingExitTimer = setTimeout(clearPendingExit, 800);
   };
   const handleSigint = (): void => {
-    if (exitArmed) {
-      exitNow(130);
-      return;
-    }
-    if (!canStopActiveRun()) {
-      if (canInterruptActiveRun()) {
+    const sigintAction = chatTuiSigintAction({
+      exitArmed,
+      canStopActiveRun: canStopActiveRun(),
+      canInterruptActiveRun: canInterruptActiveRun(),
+    });
+    switch (sigintAction) {
+      case 'clean-exit':
         session.stopRequested = true;
         interruptActive();
-      }
-      exitNow(130);
-      return;
+        requestInputExit();
+        return;
+      case 'force-exit':
+        exitNow(130);
+        return;
+      case 'interrupt-and-exit':
+        if (canInterruptActiveRun()) {
+          session.stopRequested = true;
+          interruptActive();
+        }
+        exitNow(130);
+        return;
+      case 'interrupt-and-arm-exit':
+        session.stopRequested = true;
+        interruptActive();
+        armExit();
+        return;
+      default:
+        assertNever(sigintAction, 'Unhandled chat TUI SIGINT action');
     }
-    session.stopRequested = true;
-    interruptActive();
-    armExit();
   };
   const handleSigterm = (): void => {
     session.stopRequested = true;
