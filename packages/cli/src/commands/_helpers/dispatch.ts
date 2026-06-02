@@ -1,4 +1,4 @@
-import { renderUsage, type CommandDef } from 'citty';
+import { renderUsage, type CommandDef, type CommandMeta } from 'citty';
 
 import { writeRawStderr, writeRawStdout } from '@cli/runtime/logSinks';
 
@@ -114,6 +114,14 @@ export function isCliError(error: unknown): error is Error & { code?: string } {
 
 export type AnyCommand = CommandDef<any>;
 
+export interface ResolvedCliCommand {
+  readonly command: AnyCommand;
+  readonly parent?: AnyCommand;
+  readonly commandPath: readonly string[];
+  readonly parentPath: readonly string[];
+  readonly rootCommand: AnyCommand;
+}
+
 export interface UsageSection {
   readonly title: string;
   readonly rows: readonly (readonly [label: string, description: string])[];
@@ -144,11 +152,48 @@ function formatUsageSection(section: UsageSection): string {
 async function renderUsageWithSections(
   cmd: AnyCommand,
   parent?: AnyCommand,
+  context?: UsageRenderContext,
 ): Promise<string> {
-  const usage = await renderUsage(cmd, parent);
+  const usage = await renderUsage(
+    cmd,
+    await usageParentWithFullPath(parent, context),
+  );
   const sections = usageSections.get(cmd);
   if (!sections?.length) return usage;
   return `${usage}\n${sections.map(formatUsageSection).join('\n\n')}`;
+}
+
+interface UsageRenderContext {
+  readonly parentPath?: readonly string[];
+  readonly rootCommand?: AnyCommand;
+}
+
+async function resolveCommandMeta(cmd: AnyCommand): Promise<CommandMeta> {
+  const meta = cmd.meta;
+  if (meta == null) return {};
+  return typeof meta === 'function' ? await meta() : await meta;
+}
+
+async function usageParentWithFullPath(
+  parent: AnyCommand | undefined,
+  context: UsageRenderContext | undefined,
+): Promise<AnyCommand | undefined> {
+  if (!parent || !context?.parentPath || context.parentPath.length <= 1) {
+    return parent;
+  }
+
+  const [parentMeta, rootMeta] = await Promise.all([
+    resolveCommandMeta(parent),
+    context.rootCommand ? resolveCommandMeta(context.rootCommand) : undefined,
+  ]);
+  return {
+    ...parent,
+    meta: {
+      ...parentMeta,
+      name: context.parentPath.join(' '),
+      version: parentMeta.version ?? rootMeta?.version,
+    },
+  };
 }
 
 async function commandSubCommands(
@@ -167,25 +212,62 @@ async function commandSubCommands(
  * user typed rather than always showing root-level usage.
  *
  * Stops at the first positional that doesn't match a child subcommand. Returns
- * a tuple of `[matchedCommand, parentCommandOrUndefined]` so `showUsage` can
- * render the same breadcrumb citty's own resolver produces.
+ * the matched command, immediate parent, and the full command path so usage can
+ * render `texra multi-agent run` rather than citty's immediate-parent fallback
+ * of `multi-agent run`.
  */
 export async function resolveDeepestSubCommand(
   cmd: AnyCommand,
   rawArgs: readonly string[],
-  parent?: AnyCommand,
-): Promise<[AnyCommand, AnyCommand | undefined]> {
+): Promise<ResolvedCliCommand> {
+  return resolveDeepestSubCommandPath({
+    cmd,
+    rawArgs,
+    commandPath: ['texra'],
+    parentPath: [],
+    rootCommand: cmd,
+  });
+}
+
+interface ResolveDeepestSubCommandPathInput {
+  readonly cmd: AnyCommand;
+  readonly rawArgs: readonly string[];
+  readonly parent?: AnyCommand;
+  readonly commandPath: readonly string[];
+  readonly parentPath: readonly string[];
+  readonly rootCommand: AnyCommand;
+}
+
+async function resolveDeepestSubCommandPath({
+  cmd,
+  rawArgs,
+  parent,
+  commandPath,
+  parentPath,
+  rootCommand,
+}: ResolveDeepestSubCommandPathInput): Promise<ResolvedCliCommand> {
   const subCommands = await commandSubCommands(cmd);
-  if (!subCommands) return [cmd, parent];
+  if (!subCommands) {
+    return { command: cmd, parent, commandPath, parentPath, rootCommand };
+  }
   for (let i = 0; i < rawArgs.length; i++) {
     const token = rawArgs[i];
     if (token === undefined) break;
     if (token.startsWith('-')) continue;
     const next = subCommands[token];
-    if (next) return resolveDeepestSubCommand(next, rawArgs.slice(i + 1), cmd);
+    if (next) {
+      return resolveDeepestSubCommandPath({
+        cmd: next,
+        rawArgs: rawArgs.slice(i + 1),
+        parent: cmd,
+        commandPath: [...commandPath, token],
+        parentPath: commandPath,
+        rootCommand,
+      });
+    }
     break;
   }
-  return [cmd, parent];
+  return { command: cmd, parent, commandPath, parentPath, rootCommand };
 }
 
 export interface UnknownCliCommand {
@@ -317,13 +399,15 @@ export function formatUnknownCliCommand(command: UnknownCliCommand): string {
 export async function showUsageStderr(
   cmd: AnyCommand,
   parent?: AnyCommand,
+  context?: UsageRenderContext,
 ): Promise<void> {
-  writeRawStderr(`${await renderUsageWithSections(cmd, parent)}\n`);
+  writeRawStderr(`${await renderUsageWithSections(cmd, parent, context)}\n`);
 }
 
 export async function showUsage(
   cmd: AnyCommand,
   parent?: AnyCommand,
+  context?: UsageRenderContext,
 ): Promise<void> {
-  writeRawStdout(`${await renderUsageWithSections(cmd, parent)}\n\n`);
+  writeRawStdout(`${await renderUsageWithSections(cmd, parent, context)}\n\n`);
 }

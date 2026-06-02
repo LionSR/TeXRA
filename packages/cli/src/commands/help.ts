@@ -26,10 +26,7 @@ export const helpCommand = defineCommand({
       throw new CliUsageError(formatUnknownCliCommand(unknownCommand));
     }
 
-    const [target, parent] = await resolveDeepestSubCommand(
-      rootCommand,
-      ctx.rawArgs,
-    );
-    await showUsage(target, parent);
+    const resolved = await resolveDeepestSubCommand(rootCommand, ctx.rawArgs);
+    await showUsage(resolved.command, resolved.parent, resolved);
   },
 });
