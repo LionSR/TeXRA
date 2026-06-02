@@ -100,6 +100,8 @@ export interface ExternalToolDef {
   readonly configNotes?: string;
   /** When true, the tool is checked for availability but not shown in the Tools tab dashboard. */
   readonly hideFromDashboard?: boolean;
+  /** When true, the tool is shown in app dashboards but hidden from CLI tools surfaces. */
+  readonly hideFromCli?: boolean;
   /** Short auth/billing note shown as a badge (e.g. "Uses ChatGPT subscription"). */
   readonly authNote?: string;
   /** When true, the dashboard shows an enable/disable toggle for this tool group. */
@@ -457,6 +459,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
     configNotes:
       'Coming soon. This entry only checks whether the local CLI is visible.',
     comingSoon: true,
+    hideFromCli: true,
     probe: probeTexraCli,
     check: async (probeResult) => resolveBooleanProbe(probeResult) ?? false,
     statusLabel: async (probeResult) =>
