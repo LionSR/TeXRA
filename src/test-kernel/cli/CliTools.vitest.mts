@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { formatToolDescriptionForTui } from '@cli/chat/tui/forms/ToolsListForm';
 import {
   cliToolIds,
+  findCliToolDef,
   formatCliBoolean,
   formatCliToolList,
   formatCliToolStatus,
@@ -33,6 +34,8 @@ describe('CLI tools runtime', () => {
     expect(cliToolIds()).toEqual(
       expect.arrayContaining(['codex', 'claude-agent', 'external-inquiry']),
     );
+    expect(cliToolIds()).not.toContain('texra-cli');
+    expect(findCliToolDef('texra-cli')).toBeUndefined();
   });
 
   it('formats nullable booleans consistently', () => {
