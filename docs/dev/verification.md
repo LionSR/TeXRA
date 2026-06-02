@@ -26,6 +26,18 @@ cd packages/desktop && npx vite build --mode development
 # Playwright Electron smoke — launches the desktop app, swaps routes,
 # captures screenshots, exercises the command palette.
 cd packages/desktop && pnpm exec playwright test
+
+# CLI TUI frame validator — drives the Ink TUI through a PTY and checks the
+# visible terminal frame for chat, slash commands, approvals, subagents, and
+# compact layouts. If the optional native node-pty dependency is unavailable,
+# the validator prints a skip notice instead of failing the install.
+corepack pnpm --filter @texra-ai/cli validate:tui
+
+# CLI TUI snapshot report — use this when a PR or issue needs terminal
+# screenshots for product review. It writes numbered .txt/.svg frames and an
+# index.html report under the requested directory.
+corepack pnpm --filter @texra-ai/cli validate:tui --snapshot-dir /tmp/texra-tui-frames \
+  transcript slash-palette bash-approval subagents
 ```
 
 ## PR review automation
