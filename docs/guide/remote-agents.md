@@ -82,9 +82,9 @@ In the agent dropdown, your local agents sit above a **Remote** group whose entr
 
 <p class="hero-caption">The agent dropdown: remote agents (<code>search</code>, <code>discuss</code>, <code>simplifier</code>) carry a cloud marker that sets them apart from local agents like <code>polish</code> and <code>correct</code>.</p>
 
-## Research Access Program
+## Researcher Access Program
 
-The **Research Access Program** provides access to specialized remote agents designed for academic research and professional writing. Program members get access to:
+The **Researcher Access Program** provides access to specialized remote agents designed for academic research and professional writing. Program members get access to:
 
 - **Specialized domain agents**: Agents tailored for specific research fields (mathematics, computer science, physics, etc.)
 - **Advanced reasoning capabilities**: Multi-step analysis and complex document processing
@@ -101,7 +101,7 @@ The **Research Access Program** provides access to specialized remote agents des
   ]"
 />
 
-<p class="hero-caption">What Research Access Program members get: domain-specific agents, advanced multi-step reasoning, early access to beta agents, and a direct line into how agents evolve.</p>
+<p class="hero-caption">What Researcher Access Program members get: domain-specific agents, advanced multi-step reasoning, early access to beta agents, and a direct line into how agents evolve.</p>
 
 Current remote agents include `search` (literature discovery), `discuss` (academic brainstorming with literature), and `simplifier` (code and writing simplification). See [Built-in Agents — Remote Agents](./built-in-agents.md#remote-agents) for details on each.
 
@@ -109,7 +109,7 @@ Different agents may be available to different research groups based on their do
 
 ### Joining the Program
 
-The Research Access Program is available to active researchers, academics, and technical writers. To join:
+The Researcher Access Program is available to active researchers, academics, and technical writers. To join:
 
 1. **Sign in** to TeXRA using your institutional or professional email
 2. **Contact us** at [contact@texra.ai](mailto:contact@texra.ai) with:
@@ -120,7 +120,7 @@ The Research Access Program is available to active researchers, academics, and t
 We'll review your application and grant appropriate access within 1-2 business days.
 
 ::: tip Free for Researchers
-TeXRA is committed to supporting academic research. The Research Access Program is **free for qualifying researchers and students**. We do not charge for remote agent access.
+TeXRA is committed to supporting academic research. The Researcher Access Program is **free for qualifying researchers and students**. We do not charge for remote agent access.
 :::
 
 ## Managing Your Account

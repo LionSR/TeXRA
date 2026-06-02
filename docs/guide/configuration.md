@@ -19,7 +19,7 @@ exposes models, tools, and agents through `texra models`, `texra tools`, and
 
 ## The TeXRA Dashboard
 
-The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard**. Its ten tabs all live in one navigation rail:
+The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Settings Dashboard**. Its ten tabs all live in one navigation rail:
 
 <DashboardTabsCard />
 
@@ -42,7 +42,7 @@ The Dashboard tabs are the recommended way to manage agents, models, tools, and 
 
 ## Where Settings Live
 
-Most configuration happens in the **Dashboard** (above) — open it with `TeXRA: Show Dashboard`. The CLI keeps project defaults in a per-project `.texra/config.json` (`texra init` scaffolds one).
+Most configuration happens in the **Dashboard** (above) — open it with `TeXRA: Show Settings Dashboard`. The CLI keeps project defaults in a per-project `.texra/config.json` (`texra init` scaffolds one).
 
 Many `texra.*` keys share the same **name** across the VS Code extension and the CLI's `.texra/config.json` (most of the file-, LaTeX-, and model-connection settings below), so the same documentation applies to both. They don't share storage, though — the extension persists settings in VS Code's config/global state, while the CLI reads `.texra/config.json`. Some keys are extension-only (for example the LaTeX formatter and the model picker, which live in extension state); the CLI warns on any key it doesn't recognize.
 
@@ -166,7 +166,7 @@ Control which file types TeXRA includes:
   ".tex",
   ".md"
 ],
-"texra.files.included.referenceExtensions": [
+"texra.files.included.contextExtensions": [
   ".txt",
   ".tex",
   ".md",
@@ -229,16 +229,14 @@ Control which directories TeXRA ignores:
 
 ### LaTeX Formatting
 
-Configure LaTeX formatting behavior:
+Pick the formatter (`latexindent`, `tex-fmt`, or `none` to disable) from the **Dashboard → LaTeX** tab. The related options are standard settings:
 
 ```json
-"texra.latex.formatter": "none",
 "texra.latex.showLatexindentWarning": false,
 "texra.latex.latexindentConfig": "/path/to/latexindent.yaml",
 "texra.latex.texfmtConfig": "/path/to/tex-fmt.toml"
 ```
 
-- `formatter`: Choose between `latexindent`, `tex-fmt`, or `none` to disable formatting.
 - `showLatexindentWarning`: Disabled by default. Set to `true` to show a popup when `latexindent` is missing.
 - `latexindentConfig`: Path to a `latexindent` configuration file.
 - `texfmtConfig`: Path to a `tex-fmt` configuration file.
@@ -259,7 +257,7 @@ Configure how TikZ figures are extracted and compiled:
 
 ## Git Integration
 
-The **Git tab** in the TeXRA Dashboard (`TeXRA: Show Dashboard` → **Git**) covers two independent features: a GitHub token used by the PR-subscription tool, and optional TeXRA-branded commit authorship for agent-made commits.
+The **Git tab** in the TeXRA Dashboard (`TeXRA: Show Settings Dashboard` → **Git**) covers two independent features: a GitHub token used by the PR-subscription tool, and optional TeXRA-branded commit authorship for agent-made commits.
 
 <GitTabCard />
 
