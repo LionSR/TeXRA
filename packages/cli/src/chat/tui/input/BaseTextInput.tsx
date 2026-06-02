@@ -178,7 +178,7 @@ function leadingEllipsisDisplay(
   text: string,
   width: number,
 ): { readonly text: string; readonly replacesFirstColumn: boolean } {
-  const replacesFirstColumn = text.length >= width;
+  const replacesFirstColumn = textDisplayWidth(text) >= width;
   if (width <= 1) return { text: '…', replacesFirstColumn };
   return {
     text: replacesFirstColumn ? `…${text.slice(1)}` : `…${text}`,

@@ -225,6 +225,19 @@ describe('CLI external inquiry modal', () => {
     expect(display.cursor).toBe(display.value.length);
   });
 
+  it('uses display width for clipped ellipsis cursor alignment', () => {
+    const value = 'abcdef １２３';
+    const display = textInputDisplayWindow({
+      cursor: 'abcdef １'.length,
+      maxDisplayRows: 1,
+      value,
+      width: 6,
+    });
+
+    expect(display.value).toBe('…２３');
+    expect(display.cursor).toBe(1);
+  });
+
   it('does not wrap back to distant whitespace before a long token', () => {
     const value = `a ${'x'.repeat(80)}`;
     const display = textInputDisplayWindow({
