@@ -23,7 +23,8 @@ export function formatRelativeTime(timestamp: number): string {
   const diffDay = Math.floor(diffHr / 24);
   if (diffDay < 30) return RELATIVE_TIME_FORMATTER.format(-diffDay, 'day');
   const diffMonth = Math.floor(diffDay / 30);
-  if (diffMonth < 12) return RELATIVE_TIME_FORMATTER.format(-diffMonth, 'month');
+  if (diffMonth < 12)
+    return RELATIVE_TIME_FORMATTER.format(-diffMonth, 'month');
   return RELATIVE_TIME_FORMATTER.format(-Math.floor(diffMonth / 12), 'year');
 }
 
