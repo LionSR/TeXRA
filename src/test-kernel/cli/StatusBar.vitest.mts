@@ -643,6 +643,31 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('[/model]models');
   });
 
+  it('labels foreground user questions as questions instead of approvals', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 1,
+      approvalKind: 'question',
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: 'api',
+      shortcutModifierLabel: 'Alt',
+      shortcutsActive: false,
+    });
+
+    expect(display.left.map(statusBarSegmentText)).toContain('1 question');
+    expect(display.left.map(statusBarSegmentText)).not.toContain('1 approval');
+  });
+
   it('keeps escape and Ctrl-C actions visible in narrow foreground panels', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,
