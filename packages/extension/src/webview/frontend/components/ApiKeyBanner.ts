@@ -12,7 +12,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import type { ApiKeyBannerState } from '@shared/schemas';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
-import { capitalize } from '@shared/utils/string';
+import { capitalize } from '@utils/text/stringUtils';
 import { applyBannerVisibility, bannerStyles } from '../styles/bannerStyles';
 import { MainViewEvents } from '../events';
 
