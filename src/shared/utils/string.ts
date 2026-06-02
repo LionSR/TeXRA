@@ -16,7 +16,7 @@ export function formatRelativeTime(timestamp: number): string {
   if (!timestamp) return '';
   const diffMs = Date.now() - timestamp;
   const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return 'just now';
+  if (diffMin < 1) return RELATIVE_TIME_FORMATTER.format(0, 'second');
   if (diffMin < 60) return RELATIVE_TIME_FORMATTER.format(-diffMin, 'minute');
   const diffHr = Math.floor(diffMin / 60);
   if (diffHr < 24) return RELATIVE_TIME_FORMATTER.format(-diffHr, 'hour');
