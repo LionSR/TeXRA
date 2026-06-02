@@ -8,6 +8,7 @@ import { Spinner } from '@inkjs/ui';
 
 import {
   getCliModelAccessList,
+  runnableCliModelAccessEntries,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
 import { formatCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
@@ -69,19 +70,11 @@ export function modelSelectItemsForCliMode(
   models: readonly CliModelAccess[],
   apiMode: CliApiMode,
 ): ReadonlyArray<SelectItem<string>> {
-  return models
-    .filter((m) => m.available)
-    .map((m) => ({
-      value: m.model.value,
-      label: m.model.label || m.model.value,
-      description: formatModelStatusForCliMode(m, apiMode),
-    }));
-}
-
-export function hasRunnableModelSelectItems(
-  models: readonly CliModelAccess[],
-): boolean {
-  return models.some((m) => m.available);
+  return runnableCliModelAccessEntries(models).map((m) => ({
+    value: m.model.value,
+    label: m.model.label || m.model.value,
+    description: formatModelStatusForCliMode(m, apiMode),
+  }));
 }
 
 function EmptyModelListState(props: { readonly onClose: () => void }) {
@@ -96,7 +89,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   const { data, loading, error } = useAsyncListForm<readonly CliModelAccess[]>({
     load: () => getCliModelAccessList({ apiMode: props.apiMode }),
     onClose: props.onClose,
-    isEmpty: (models) => !hasRunnableModelSelectItems(models),
+    isEmpty: (models) => !models.some((model) => model.available),
   });
 
   if (loading) {

@@ -22,6 +22,12 @@ export function getCliApiMode(): CliApiMode {
     : 'personal';
 }
 
+export function effectiveCliApiMode(source: {
+  readonly apiMode?: CliApiMode;
+}): CliApiMode {
+  return source.apiMode ?? getCliApiMode();
+}
+
 export function formatCliApiMode(mode: CliApiMode): string {
   return mode === 'included' ? 'included relay' : 'personal API keys';
 }

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatModelStatusForCliMode,
-  hasRunnableModelSelectItems,
   modelSelectItemsForCliMode,
   modelSelectWindow,
 } from '@cli/chat/tui/forms/ModelListForm';
@@ -24,6 +23,7 @@ import type { ModelOptionData } from '@shared/schemas';
 function access(
   model: Partial<ModelOptionData>,
   status = 'api key set',
+  available = !model.disabled && !model.requiresKey,
 ): CliModelAccess {
   return {
     model: {
@@ -31,7 +31,7 @@ function access(
       label: 'DeepSeek V4 Flash (Thinking)',
       ...model,
     },
-    available: !model.disabled && !model.requiresKey,
+    available,
     status,
   };
 }
@@ -108,12 +108,31 @@ describe('CLI ModelListForm model visibility', () => {
         }),
         access(
           {
+            value: 'deepseekT',
+            label: 'DeepSeek',
+            availability: 'provider-key',
+          },
+          'api key set',
+          false,
+        ),
+        access(
+          {
+            value: 'openrouterOnlyT',
+            label: 'OpenRouter Only',
+            availability: 'openrouter-key',
+          },
+          'openrouter key',
+          false,
+        ),
+        access(
+          {
             value: 'opus48T',
             label: 'Opus',
             availability: 'not-included',
             disabled: true,
           },
           'not included',
+          false,
         ),
         access({
           value: 'gpt54',
@@ -131,25 +150,86 @@ describe('CLI ModelListForm model visibility', () => {
     ]);
   });
 
-  it('treats filtered-empty lists as non-actionable', () => {
-    expect(
-      hasRunnableModelSelectItems([
+  it('shows personal-key models for personal API mode', () => {
+    const items = modelSelectItemsForCliMode(
+      [
         access(
           {
+            value: 'sonnet46T',
+            label: 'Sonnet',
+            availability: 'included-access',
+          },
+          'api key set',
+          false,
+        ),
+        access({
+          value: 'deepseekT',
+          label: 'DeepSeek',
+          availability: 'provider-key',
+        }),
+        access(
+          {
+            value: 'openrouterOnlyT',
+            label: 'OpenRouter Only',
+            availability: 'openrouter-key',
+          },
+          'openrouter key',
+        ),
+        access(
+          {
+            value: 'gemini31p',
+            label: 'Gemini',
             availability: 'missing-key',
             requiresKey: true,
           },
           'missing api key',
+          false,
         ),
-        access(
-          {
-            availability: 'not-included',
-            disabled: true,
-          },
-          'not included',
-        ),
-      ]),
-    ).toBe(false);
+      ],
+      'personal',
+    );
+
+    expect(items.map((item) => item.value)).toEqual([
+      'deepseekT',
+      'openrouterOnlyT',
+    ]);
+    expect(items.map((item) => item.description)).toEqual([
+      'api: api key set',
+      'api: openrouter key',
+    ]);
+  });
+
+  it('treats filtered-empty lists as non-actionable', () => {
+    expect(
+      modelSelectItemsForCliMode(
+        [
+          access(
+            {
+              availability: 'provider-key',
+            },
+            'api key set',
+            false,
+          ),
+          access(
+            {
+              availability: 'missing-key',
+              requiresKey: true,
+            },
+            'missing api key',
+            false,
+          ),
+          access(
+            {
+              availability: 'not-included',
+              disabled: true,
+            },
+            'not included',
+            false,
+          ),
+        ],
+        'included',
+      ).length,
+    ).toBe(0);
   });
 });
 
