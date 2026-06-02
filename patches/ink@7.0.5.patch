@@ -1,113 +1,67 @@
 diff --git a/build/ink.js b/build/ink.js
-index b8fd45cc990adbc080eff28fc37463cd91337dff..3c8a9a99cc9fd2f5f524905ff61df0139f82da05 100644
+index b8fd45cc990adbc080eff28fc37463cd91337dff..39f2acb8bf923ef6d6bb8a158525fe03ecb94009 100644
 --- a/build/ink.js
 +++ b/build/ink.js
-@@ -261,9 +261,14 @@ export default class Ink {
+@@ -259,13 +259,45 @@ export default class Ink {
+         // error but consumers never call waitUntilExit().
+         void this.exitPromise.catch(noop);
      }
++    resizeTimer = undefined;
      resized = () => {
++        const currentWidth = getWindowSize(this.options.stdout).columns;
++        this.calculateLayout();
++        dom.emitLayoutListeners(this.rootNode);
++        if (currentWidth === this.lastTerminalWidth) {
++            this.onRender();
++            return;
++        }
++        // Full repaint on width changes, debounced. Ink normally erases the bottom live
++        // region by line count, but after the emulator reflows soft-wrapped lines
++        // at the new width no count is correct: too small leaves residue, too large
++        // walks up and erases the <Static> header above. The reflow/scroll geometry
++        // is owned by the emulator and not observable through a write-only stdout,
++        // so the only terminal-independent fix is to redraw from a known origin:
++        // clearTerminal homes the cursor and clears screen+scrollback, then we
++        // reprint fullStaticOutput (header + finalized history, reflowed) and let
++        // onRender draw the live region below it. Layout listeners still fire
++        // synchronously above so components see the new terminal width immediately;
++        // only the expensive clear+repaint is debounced so a drag-storm of resize
++        // events collapses into a single repaint (TeXRA patch).
++        if (this.resizeTimer) {
++            clearTimeout(this.resizeTimer);
++        }
++        this.resizeTimer = setTimeout(this.repaintAfterResize, 24);
++        this.resizeTimer.unref?.();
++    };
++    repaintAfterResize = () => {
++        this.resizeTimer = undefined;
++        if (this.isUnmounted) {
++            return;
++        }
          const currentWidth = getWindowSize(this.options.stdout).columns;
 -        if (currentWidth < this.lastTerminalWidth) {
 -            // We clear the screen when decreasing terminal width to prevent duplicate overlapping re-renders.
 -            this.log.clear();
 +        if (currentWidth !== this.lastTerminalWidth) {
-+            // Clear on ANY width change, not just a decrease. The emulator reflows
-+            // the previous frame at the new width, so the logical line count no
-+            // longer matches the physical rows on screen: on shrink a wide line
-+            // wraps into extra rows that a logical-count eraseLines() leaves behind
-+            // as residue. clearWidthAware() erases the actual physical row count at
-+            // the new width, covering both widen and shrink (TeXRA patch).
-+            this.log.clearWidthAware(currentWidth);
++            this.log.reset();
++            this.options.stdout.write(ansiEscapes.clearTerminal + (this.fullStaticOutput ?? ''));
              this.lastOutput = '';
              this.lastOutputToRender = '';
++            this.lastOutputHeight = 0;
          }
-diff --git a/build/log-update.js b/build/log-update.js
-index cdb5fc41f158304c4c4f230a765065ab1fe0a2f7..cf17dec7258bf9c267bd382786ca3481b9f9bf5a 100644
---- a/build/log-update.js
-+++ b/build/log-update.js
-@@ -1,6 +1,48 @@
- import ansiEscapes from 'ansi-escapes';
- import cliCursor from 'cli-cursor';
- import { cursorPositionChanged, buildCursorSuffix, buildCursorOnlySequence, buildReturnToBottomPrefix, hideCursorEscape, } from './cursor-helpers.js';
-+import stringWidth from 'string-width';
-+
-+// Count the PHYSICAL rows a rendered frame occupies when soft-wrapped at the
-+// given terminal width. Each logical line contributes ceil(displayWidth/columns)
-+// rows (at least 1). Used to clear correctly after a terminal RESIZE, where the
-+// emulator reflows previously-wrapped lines and the logical line count no longer
-+// matches what is on screen (TeXRA patch).
-+const physicalLineCount = (str, columns) => {
-+    if (!str) return 0;
-+    const cols = columns > 0 ? columns : 1;
-+    const lines = str.split('\n');
-+    // Match log-update's `previousLineCount = lines.length` convention exactly so
-+    // that, with no wrapping, this equals what the plain clear() erases. The
-+    // trailing empty element from a final '\n' counts as one row; each visible
-+    // line additionally contributes its soft-wrap overflow at `columns`.
-+    const hasTrailingNewline = str.endsWith('\n');
-+    const visible = hasTrailingNewline ? lines.length - 1 : lines.length;
-+    let rows = hasTrailingNewline ? 1 : 0;
-+    for (let i = 0; i < visible; i++) {
-+        const w = stringWidth(lines[i]);
-+        rows += w <= cols ? 1 : Math.ceil(w / cols);
-+    }
-+    return rows;
-+};
-+const physicalCursorPosition = (str, columns, cursorPosition) => {
-+    if (!cursorPosition) return undefined;
-+    const cols = columns > 0 ? columns : 1;
-+    const lines = str.split('\n');
-+    const logicalY = Math.max(0, Math.min(cursorPosition.y, lines.length - 1));
-+    let physicalY = 0;
-+    for (let i = 0; i < logicalY; i++) {
-+        const w = stringWidth(lines[i]);
-+        physicalY += w <= cols ? 1 : Math.ceil(w / cols);
-+    }
-+    physicalY += Math.floor(Math.max(0, cursorPosition.x) / cols);
-+    const lastPhysicalY = Math.max(0, physicalLineCount(str, cols) - 1);
-+    return {
-+        ...cursorPosition,
-+        y: Math.min(physicalY, lastPhysicalY),
-+    };
-+};
-+
- // Count visible lines in a string, ignoring the trailing empty element
- // that `split('\n')` produces when the string ends with '\n'.
- const visibleLineCount = (lines, str) => str.endsWith('\n') ? lines.length - 1 : lines.length;
-@@ -63,6 +105,19 @@ const createStandard = (stream, { showCursor = false } = {}) => {
-         previousCursorPosition = undefined;
-         cursorWasShown = false;
-     };
-+    // Width-aware clear for terminal resizes: erase the physical rows the frame
-+    // occupies after the emulator reflows it at `columns`, not just the logical
-+    // line count (which under-erases on shrink and leaves residue). (TeXRA patch)
-+    render.clearWidthAware = (columns) => {
-+        const physical = physicalLineCount(previousOutput, columns);
-+        const physicalCursor = physicalCursorPosition(previousOutput, columns, previousCursorPosition);
-+        const prefix = buildReturnToBottomPrefix(cursorWasShown, physical, physicalCursor);
-+        stream.write(prefix + ansiEscapes.eraseLines(physical));
-+        previousOutput = '';
-+        previousLineCount = 0;
-+        previousCursorPosition = undefined;
-+        cursorWasShown = false;
-+    };
-     render.done = () => {
-         previousOutput = '';
-         previousLineCount = 0;
-@@ -204,6 +259,17 @@ const createIncremental = (stream, { showCursor = false } = {}) => {
-         previousCursorPosition = undefined;
-         cursorWasShown = false;
-     };
-+    // Width-aware clear for terminal resizes (see createStandard). (TeXRA patch)
-+    render.clearWidthAware = (columns) => {
-+        const physical = physicalLineCount(previousOutput, columns);
-+        const physicalCursor = physicalCursorPosition(previousOutput, columns, previousCursorPosition);
-+        const prefix = buildReturnToBottomPrefix(cursorWasShown, physical, physicalCursor);
-+        stream.write(prefix + ansiEscapes.eraseLines(physical));
-+        previousOutput = '';
-+        previousLines = [];
-+        previousCursorPosition = undefined;
-+        cursorWasShown = false;
-+    };
-     render.done = () => {
-         previousOutput = '';
-         previousLines = [];
+         this.calculateLayout();
+         dom.emitLayoutListeners(this.rootNode);
+@@ -456,6 +479,13 @@ export default class Ink {
+             return;
+         }
+         this.isUnmounting = true;
++        // Cancel any pending debounced resize repaint so it can't fire after
++        // teardown (repaintAfterResize already guards on isUnmounted; this also
++        // drops the dangling timer reference). (TeXRA patch)
++        if (this.resizeTimer) {
++            clearTimeout(this.resizeTimer);
++            this.resizeTimer = undefined;
++        }
+         if (this.beforeExitHandler) {
+             process.off('beforeExit', this.beforeExitHandler);
+             this.beforeExitHandler = undefined;
