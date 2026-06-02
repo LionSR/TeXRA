@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **In-session updates take effect immediately** — accepting the "a new version is available" prompt now restarts `texra` on the freshly installed version, so the session you land in (and its header/`/status`) runs the update instead of silently continuing on the old build until you quit and relaunch by hand.
 - **Unknown CLI flags are rejected** — mistyped command options now fail before the command runs, and structured CLI output stays clean for scripts.
 - **File-backed multi-agent CLI prompts** — `texra multi-agent run` now accepts `--instruction-file` for long scripted team prompts, matching `texra agents run`.
 - **Full CLI command paths in help** — nested command help now shows the complete `texra ...` command in usage banners, so commands like `texra multi-agent run --help` and `texra history show --help` are directly copyable.
