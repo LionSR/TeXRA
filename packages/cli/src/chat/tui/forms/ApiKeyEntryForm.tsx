@@ -70,8 +70,8 @@ export function ApiKeyEntryForm(
           <Text color="red">{props.error}</Text>
         ) : (
           <Text dimColor>
-            Saved to TeXRA secrets — or set {apiKeyEnvName(props.provider)} in
-            your environment.
+            Stored in TeXRA secrets on Enter — or set{' '}
+            {apiKeyEnvName(props.provider)} in your environment.
           </Text>
         )}
         {props.saving ? <Text dimColor>Saving…</Text> : null}
