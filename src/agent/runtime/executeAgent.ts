@@ -15,6 +15,7 @@ import {
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
+import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import {
   AgentCategory,
   isWorkflowSetting,
@@ -152,6 +153,15 @@ function createRoundProgressCallback(
         toolCallCount: 0,
       },
     });
+  };
+}
+
+/** Create the awaited round-finalized callback used by agent flows. */
+function createUsageRecordingCallback(
+  ctx: AgentLaunchContext,
+): RoundFinalizedCallback {
+  return async (run) => {
+    await ctx.usageMonitor.recordUsage(run);
   };
 }
 
@@ -447,10 +457,11 @@ export async function executeAgent(
 
         if (setting.agentCategory === AgentCategory.ToolUse) {
           let toolUseTurns = 0;
+          const onRoundFinalized = createUsageRecordingCallback(ctx);
           const result = await runToolUseFlow({
             ...ctx,
             ...interrupts,
-            onRoundFinalized: (run) => ctx.usageMonitor.recordUsage(run),
+            onRoundFinalized,
             setting,
             isSubagent,
             approvalPromptsUnavailable: options.approvalPromptsUnavailable,
@@ -499,10 +510,11 @@ export async function executeAgent(
           ctx.runtimeHost,
           options.onProgress,
         );
+        const onRoundFinalized = createUsageRecordingCallback(ctx);
         const result = await runReflectionFlow({
           ...ctx,
           ...interrupts,
-          onRoundFinalized: (run) => ctx.usageMonitor.recordUsage(run),
+          onRoundFinalized,
           setting,
           parentStage: ctx.parentStage,
           onRoundCompleted,
@@ -562,7 +574,7 @@ export async function resumeToolUseFromSnapshot(
           {
             ...ctx,
             ...createInterruptCallbacks(),
-            onRoundFinalized: (run) => ctx.usageMonitor.recordUsage(run),
+            onRoundFinalized: createUsageRecordingCallback(ctx),
             setting,
             resumeSnapshot: snapshot,
             // Derive from the recovered parent chain: any execution with a
