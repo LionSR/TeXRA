@@ -156,7 +156,7 @@ exports[`CLI shell completion > generates fish completion 1`] = `
 complete -c texra -n '__fish_use_subcommand' -a 'orchestrate' -d 'Interactive launcher (runs by default on bare \`texra\` in a TTY): pick a chat, resume, or team preset'
 complete -c texra -n '__fish_use_subcommand' -a 'chat' -d 'Interactive tool-use chat session'
 complete -c texra -n '__fish_use_subcommand' -a 'run' -d 'Run a workflow agent'
-complete -c texra -n '__fish_use_subcommand' -a 'resume' -d 'Re-run a stored execution config'
+complete -c texra -n '__fish_use_subcommand' -a 'resume' -d 'Continue (resume) a stored tool-use session'
 complete -c texra -n '__fish_use_subcommand' -a 'init' -d 'Bootstrap a .texra/config.json with sensible defaults'
 complete -c texra -n '__fish_use_subcommand' -a 'history' -d 'Inspect stored executions'
 complete -c texra -n '__fish_use_subcommand' -a 'memory' -d 'Inspect stored memories'

@@ -1,15 +1,34 @@
 import { render, Box, Text, useApp, useInput, useWindowSize } from 'ink';
+import { useState } from 'react';
 
-import { Select } from '../chat/tui/ui/Select';
+import { Select, type SelectItem } from '../chat/tui/ui/Select';
 import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
+import { modelSelectItemsForCliMode } from '../chat/tui/forms/ModelListForm';
+import { formatCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
+import type { CliModelAccess } from '../runtime/modelAccess';
 import type {
   CliOrchestrationAction,
   CliOrchestrationItem,
 } from '../runtime/orchestration';
 
+/** Launcher items that chain into a model pick before launching the chat. */
+type ModelPickAction = Extract<
+  CliOrchestrationAction,
+  { kind: 'chat' | 'preset' }
+>;
+
+function isModelPickAction(
+  action: CliOrchestrationAction,
+): action is ModelPickAction {
+  return action.kind === 'chat' || action.kind === 'preset';
+}
+
 export interface OrchestrationAppProps {
   readonly items: readonly CliOrchestrationItem[];
+  /** Available models for the second step; empty skips the model pick. */
+  readonly modelItems: ReadonlyArray<SelectItem<string>>;
+  readonly apiMode: CliApiMode;
   readonly onResolve: (action: CliOrchestrationAction) => void;
 }
 
@@ -21,23 +40,77 @@ export function orchestrationKeyHints(): readonly KeyHint[] {
   ];
 }
 
+function modelPickKeyHints(): readonly KeyHint[] {
+  return [
+    { key: '↑/↓', action: 'navigate' },
+    { key: '1-9/a-z/Enter', action: 'select' },
+    { key: 'Esc', action: 'back' },
+  ];
+}
+
 export function OrchestrationApp(
   props: OrchestrationAppProps,
 ): React.JSX.Element {
   const app = useApp();
   const { rows } = useWindowSize();
   const maxVisibleItems = Math.max(4, rows - 8);
+  // When set, the launcher is on its second step: choosing the model for this
+  // chat/team. Esc returns to the item list rather than exiting.
+  const [pending, setPending] = useState<ModelPickAction | undefined>(
+    undefined,
+  );
 
   const finish = (action: CliOrchestrationAction): void => {
     props.onResolve(action);
     app.exit();
   };
 
+  const onItemSelect = (action: CliOrchestrationAction): void => {
+    if (isModelPickAction(action) && props.modelItems.length > 0) {
+      setPending(action);
+    } else {
+      finish(action);
+    }
+  };
+
   useInput((_input, key) => {
-    if (key.escape) {
+    if (!key.escape) return;
+    if (pending) {
+      setPending(undefined);
+    } else {
       finish({ kind: 'exit' });
     }
   });
+
+  if (pending) {
+    const isTeam = pending.kind === 'preset';
+    return (
+      <Box flexDirection="column" paddingX={1}>
+        <Text bold color="cyan">
+          {isTeam ? 'Lead model' : 'Model'}
+          {' · '}
+          <Text dimColor>{formatCliApiMode(props.apiMode)}</Text>
+        </Text>
+        <Text dimColor>
+          {isTeam
+            ? 'Runs the orchestrator agent and is the model it can choose for delegation.'
+            : 'Model for the first message.'}
+        </Text>
+        <Box marginTop={1}>
+          <Select
+            items={props.modelItems}
+            maxVisibleItems={maxVisibleItems}
+            showOverflow={props.modelItems.length > maxVisibleItems}
+            onSelect={(model) => finish({ ...pending, model })}
+            onCancel={() => setPending(undefined)}
+          />
+        </Box>
+        <Box marginTop={1}>
+          <KeyHints hints={modelPickKeyHints()} confirmCancel={false} />
+        </Box>
+      </Box>
+    );
+  }
 
   return (
     <Box flexDirection="column" paddingX={1}>
@@ -50,7 +123,7 @@ export function OrchestrationApp(
           items={props.items}
           maxVisibleItems={maxVisibleItems}
           showOverflow={props.items.length > maxVisibleItems}
-          onSelect={finish}
+          onSelect={onItemSelect}
           onCancel={() => finish({ kind: 'exit' })}
         />
       </Box>
@@ -61,9 +134,21 @@ export function OrchestrationApp(
   );
 }
 
+export interface RunOrchestrationTuiOptions {
+  /** Available models for the second step; the launcher filters to runnable
+   *  ones. Empty or all-unavailable skips the model pick. */
+  readonly models: readonly CliModelAccess[];
+  readonly apiMode: CliApiMode;
+}
+
 export async function runOrchestrationTui(
   items: readonly CliOrchestrationItem[],
+  options: RunOrchestrationTuiOptions,
 ): Promise<CliOrchestrationAction> {
+  const modelItems = modelSelectItemsForCliMode(
+    options.models,
+    options.apiMode,
+  );
   return new Promise((resolve) => {
     let chosen: CliOrchestrationAction | undefined;
     const record = (action: CliOrchestrationAction): void => {
@@ -72,7 +157,12 @@ export async function runOrchestrationTui(
     };
 
     const instance = render(
-      <OrchestrationApp items={items} onResolve={record} />,
+      <OrchestrationApp
+        items={items}
+        modelItems={modelItems}
+        apiMode={options.apiMode}
+        onResolve={record}
+      />,
       {
         stdout: process.stdout,
         stderr: process.stderr,
