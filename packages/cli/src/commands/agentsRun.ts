@@ -18,6 +18,10 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 
+import {
+  TOOL_USE_AGENT_NAME_DESCRIPTION,
+  missingToolUseAgentMessage,
+} from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
   GLOBAL_ARGS,
@@ -101,9 +105,7 @@ async function runToolUseAgent(
   const agent = await resolveAgentWithRemoteFallback(init.agent);
 
   if (!agent) {
-    writeTextStderr(
-      `Agent not found: ${init.agent}. Use \`texra agents list\` to see available agents.`,
-    );
+    writeTextStderr(missingToolUseAgentMessage(init.agent));
     return CliExitCode.Usage;
   }
   if (agent.category !== AgentCategory.ToolUse) {
@@ -190,7 +192,7 @@ export const agentsRunCommand = defineCliCommand({
     name: {
       type: 'positional',
       required: true,
-      description: 'Tool-use agent name from `texra agents list`',
+      description: TOOL_USE_AGENT_NAME_DESCRIPTION,
     },
     input: {
       type: 'string',

@@ -31,6 +31,7 @@ import {
 } from '../runtime/multiAgentPresets';
 import { getCliAuthProvider } from '../runtime/supabaseAuth';
 
+import { missingToolUseAgentMessage } from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
   buildHeadlessRunContext,
@@ -266,7 +267,7 @@ export async function runMultiAgentPreset(
   const plan = await fillMultiAgentRunPlanGaps(init);
   if (plan.missingAgentOverride) {
     throw new CliUsageError(
-      `Tool-use agent not found: ${plan.missingAgentOverride}. Use \`texra agents list\` to see available agents.`,
+      missingToolUseAgentMessage(plan.missingAgentOverride),
     );
   }
   if (!plan.rootAgent) {
