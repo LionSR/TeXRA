@@ -5,8 +5,10 @@ import {
   type CommandDef,
   type CommandMeta,
 } from 'citty';
+import stripAnsi from 'strip-ansi';
 
 import { writeRawStderr, writeRawStdout } from '@cli/runtime/logSinks';
+import { readCliAmbientState } from '@cli/runtime/cliContext';
 
 import { GLOBAL_BOOL_FLAGS, GLOBAL_VALUE_FLAGS } from './globalArgs';
 
@@ -162,19 +164,38 @@ async function renderUsageWithSections(
   cmd: AnyCommand,
   parent?: AnyCommand,
   context?: UsageRenderContext,
+  stream: 'stdout' | 'stderr' = 'stdout',
 ): Promise<string> {
   const usage = await renderUsage(
     cmd,
     await usageParentWithFullPath(parent, context),
   );
   const sections = usageSections.get(cmd);
-  if (!sections?.length) return usage;
-  return `${usage}\n${sections.map(formatUsageSection).join('\n\n')}`;
+  const usageWithSections = sections?.length
+    ? `${usage}\n${sections.map(formatUsageSection).join('\n\n')}`
+    : usage;
+  return usageColorEnabled(context, stream) === false
+    ? stripAnsi(usageWithSections)
+    : usageWithSections;
 }
 
 interface UsageRenderContext {
   readonly parentPath?: readonly string[];
   readonly rootCommand?: AnyCommand;
+  readonly rawArgs?: readonly string[];
+}
+
+function usageColorEnabled(
+  context: UsageRenderContext | undefined,
+  stream: 'stdout' | 'stderr',
+): boolean | undefined {
+  const rawArgs = context?.rawArgs;
+  if (rawArgs == null) return undefined;
+  if (rawArgs.includes('--no-color')) return false;
+  const ambient = readCliAmbientState();
+  return stream === 'stdout'
+    ? ambient.stdoutColorEnabled
+    : ambient.stderrColorEnabled;
 }
 
 async function resolveCommandMeta(cmd: AnyCommand): Promise<CommandMeta> {
@@ -585,7 +606,9 @@ export async function showUsageStderr(
   parent?: AnyCommand,
   context?: UsageRenderContext,
 ): Promise<void> {
-  writeRawStderr(`${await renderUsageWithSections(cmd, parent, context)}\n`);
+  writeRawStderr(
+    `${await renderUsageWithSections(cmd, parent, context, 'stderr')}\n`,
+  );
 }
 
 export async function showUsage(

@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import stripAnsi from 'strip-ansi';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -1094,6 +1095,14 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('texra agents list');
     expect(stdout).toContain('texra doctor');
     expect(stdout).toContain('Learn more: https://texra.ai');
+    expect(stderr).toBe('');
+  });
+
+  it('honors --no-color in explicit help output', async () => {
+    const result = await runCli(['--no-color', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('USAGE');
+    expect(stdout).toBe(stripAnsi(stdout));
     expect(stderr).toBe('');
   });
 
