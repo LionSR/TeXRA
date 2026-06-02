@@ -41,7 +41,7 @@ export async function runResumeExecution(
     return CliExitCode.Usage;
   }
 
-  const headless = context.mode === 'headless' || !process.stdout.isTTY;
+  const headless = context.mode === 'headless' || context.stdoutIsTty !== true;
   if (headless) {
     // A resumed tool-use session goes back to WAITING for the next message;
     // headless has no input channel to provide one, so continuing here would
