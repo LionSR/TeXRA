@@ -146,7 +146,8 @@ TeXRA intelligently handles file paths to ensure proper document processing:
 
 ### File Path Configuration
 
-You can customize file extensions and ignored paths in VS Code settings. The
+You can customize file extensions and ignored paths via the `texra.files.*`
+settings — set them in `.texra/config.json` (CLI) or VS Code settings. The
 default values are listed in the [Configuration Guide](./configuration.md). A
 minimal example configuration might look like this:
 
@@ -274,7 +275,7 @@ These defaults are applied only if the corresponding settings are not already de
 
 - **Word Wrap**: Enables word wrap specifically for `.tex` files (`[latex].editor.wordWrap`) for better readability of long lines.
 
-These automatic configurations aim to provide a good default setup. You can always review and adjust these settings in your VS Code `settings.json` file if needed.
+These automatic configurations aim to provide a good default setup. They apply to the VS Code extension only (LaTeX Workshop is itself a VS Code extension); you can review and adjust them in your VS Code `settings.json` if needed.
 
 ## Cross-Computer Syncing
 
