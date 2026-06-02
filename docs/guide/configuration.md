@@ -69,33 +69,13 @@ See the [Models Guide](./models.md) for the full list of supported models.
 Configure how TeXRA connects to AI model providers:
 
 ```json
-"texra.model.useImprovedConnection": false,
-"texra.model.improvedConnectionDomain": "",
 "texra.model.useOpenAIResponsesAPI": true,
 "texra.model.gpt5ReasoningSummary": false
 ```
 
 - **OpenRouter**: To route all API calls through OpenRouter, expand the OpenRouter row in the Dashboard → Models tab → API Configuration and enable **"Use OpenRouter for All Models"**
-- `useImprovedConnection`: Route all API requests through a proxy server
-- `improvedConnectionDomain`: Custom proxy domain when `useImprovedConnection` is enabled. Defaults to the built-in proxy when unset.
-  - ⚠️ **Security Warning:** When using a proxy, ensure you trust the proxy server as it will receive your API keys. Only use proxies from trusted sources.
 - `useOpenAIResponsesAPI`: Use OpenAI's Responses API instead of Chat Completions when available
 - `gpt5ReasoningSummary`: Request reasoning summaries from the GPT-5 family, including GPT-5.5 and GPT-5.5 Pro (requires verified account and user tier)
-
-| Provider         | Proxy path                  | Supported |
-| ---------------- | --------------------------- | --------- |
-| OpenAI           | `openai/v1`                 | ✅ Yes    |
-| Anthropic        | `anthropic/v1`              | ✅ Yes    |
-| Gemini (Google)  | `generativelanguage/v1beta` | ✅ Yes    |
-| xAI              | `xai`                       | ✅ Yes    |
-| OpenRouter       | `openrouter`                | ✅ Yes    |
-| Groq             | `groq/openai/v1`            | ✅ Yes    |
-| Perplexity       | `pplx`                      | ✅ Yes    |
-| Mistral          | `mistral`                   | ✅ Yes    |
-| Moonshot (Kimi)  | N/A                         | ❌ No     |
-| DashScope (Qwen) | N/A                         | ❌ No     |
-
-**Note:** Only the providers marked with ✅ are supported by the proxy. Other providers will use their direct API endpoints even when proxy is enabled.
 
 ### Anthropic 1M Context Window
 

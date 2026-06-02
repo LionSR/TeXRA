@@ -136,7 +136,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 3. **Network issues**:
    - Ensure your network allows connections to API endpoints
-   - Check if you need to configure proxy settings
+   - Check whether a firewall or network policy is blocking the connection
 
 4. **Provider status**:
    - Check the status pages for OpenAI, Anthropic, or Google
