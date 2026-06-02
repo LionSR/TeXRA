@@ -6,11 +6,10 @@
 
 import { Box, Text } from 'ink';
 import { structuredPatch, type StructuredPatchHunk } from 'diff';
-import stringWidth from 'string-width';
 
 import { wrapAnsiToWidth } from './ansiWrap';
 import { maxScrollableRowOffset, scrollBoundedRows } from './scrollBounds';
-import { clipToWidth } from './terminalText';
+import { clipToWidth, fillRows, textDisplayWidth } from './terminalText';
 
 export type Hunk = StructuredPatchHunk;
 
@@ -204,8 +203,9 @@ function overflowMarkerText(
 
   const markerWidth = Math.max(MIN_DIFF_WIDTH, width);
   return (
-    candidates.find((candidate) => stringWidth(candidate) <= markerWidth) ??
-    clipToWidth(candidates.at(-1) ?? '', markerWidth)
+    candidates.find(
+      (candidate) => textDisplayWidth(candidate) <= markerWidth,
+    ) ?? clipToWidth(candidates.at(-1) ?? '', markerWidth)
   );
 }
 
@@ -329,19 +329,6 @@ export const DIFF_BAND_BG: Partial<Record<DiffDisplayLine['kind'], string>> = {
   added: '#1f3a28',
   removed: '#4a2526',
 };
-
-/**
- * Pad every visual row out to `width` columns. Ink only paints a background
- * behind the glyphs it draws, so without this the band would stop at the end
- * of the text; padding extends it across the full row. `string-width` measures
- * display columns so wide glyphs (σ, ℂ, ∑ …) and emoji pad correctly.
- */
-export function fillRows(text: string, width: number): string {
-  return text
-    .split('\n')
-    .map((row) => row + ' '.repeat(Math.max(0, width - stringWidth(row))))
-    .join('\n');
-}
 
 function DiffLine({
   line,

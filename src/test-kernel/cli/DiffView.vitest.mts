@@ -5,11 +5,11 @@ import {
   buildHunks,
   DIFF_BAND_BG,
   diffVisualRowCount,
-  fillRows,
   maxDiffScrollOffset,
   scrollBoundedDiffDisplayLines,
   wrappedDiffDisplayLines,
 } from '@cli/chat/tui/render/DiffView';
+import { fillRows } from '@cli/chat/tui/render/terminalText';
 
 describe('CLI diff display', () => {
   it('keeps the overflow marker inside the total display budget', () => {
