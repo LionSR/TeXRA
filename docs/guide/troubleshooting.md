@@ -127,9 +127,8 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 **Solutions**:
 
 1. **Verify API keys**:
-   - Open TeXRA in VS Code
-   - Click "Set API Key" option
-   - Re-enter your API keys carefully
+   - VS Code extension: open the **Dashboard → Models** tab and re-enter the key for the affected provider
+   - CLI: set the provider's API-key environment variable (or run `texra auth login` for hosted access)
 
 2. **Check API key validity**:
    - Verify your API keys are active in the provider dashboards
@@ -137,7 +136,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 3. **Network issues**:
    - Ensure your network allows connections to API endpoints
-   - Check if you need to configure proxy settings
+   - Check whether a firewall or network policy is blocking the connection
 
 4. **Provider status**:
    - Check the status pages for OpenAI, Anthropic, or Google
