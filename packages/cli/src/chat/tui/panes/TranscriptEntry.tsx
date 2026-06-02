@@ -7,6 +7,7 @@ import { Box, Text } from 'ink';
 
 import { Markdown } from '../render/Markdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
+import { fillRows } from '../render/terminalText';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
 import { ToolUseRow } from './ToolUseRow';
 import { toolUseDisplayLines } from './toolRenderers';
@@ -21,25 +22,21 @@ function UserEntryRow({
   readonly colorEnabled?: boolean;
   readonly width?: number;
 }): React.JSX.Element {
-  // Mark a user turn with a reverse-video highlight so it stands out in
-  // scrollback against the assistant's `●` rows. Reverse video (not a fixed
-  // color) adapts to the terminal theme automatically — a light bar with dark
-  // text on a dark terminal, the inverse on a light one — using the terminal's
-  // own foreground/background. The highlight hugs the text (no width padding)
-  // so it stays correct across a resize: a fixed-width fill gets baked into the
-  // printed scrollback line and can't reflow, leaving a dead bar at the old
-  // width when the terminal widens. The `› ` chevron is 2 cols, matching the
-  // static row count in transcriptLines.ts.
+  // Mark a user turn with a full-width reverse-video band (theme-adaptive via
+  // reverse video). The fixed-width fill is baked at render width, so it only
+  // stays full-width across a resize because `<Static>` is remounted on a width
+  // change (key={columns} in StaticConversationTranscript) — that regenerates
+  // `fullStaticOutput` at the new width, which the resize full-repaint then
+  // reprints. The `› ` chevron is 2 cols, matching the static row count in
+  // transcriptLines.ts.
   const cols = Math.max(1, Math.floor(width ?? 80));
   const body = wrapAnsiToWidth(entry.text, Math.max(1, cols - 2))
     .split('\n')
     .map((line, index) => `${index === 0 ? '› ' : '  '}${line}`)
     .join('\n');
-  // No-color terminals can't show the reverse-video band; the `› ` marker still
-  // distinguishes the turn, so only the `inverse` attribute differs.
   return (
     <Box>
-      <Text inverse={colorEnabled !== false}>{body}</Text>
+      <Text inverse={colorEnabled !== false}>{fillRows(body, cols)}</Text>
     </Box>
   );
 }
