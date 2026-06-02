@@ -15,6 +15,7 @@
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors';
 import { apiKeyEnvName, lookupApiKeyOrigin } from '@model/apiProviders';
+import { TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY } from '@shared/constants/cliRuntime';
 import type { ToolCategory } from '@shared/schemas/settingsViewMessages';
 import type { RegisteredToolName } from '@tools/registry';
 import { importCodexClass, findCodexBinaryPath } from '@tools/codexImport';
@@ -449,7 +450,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'Local TeXRA command-line app integration. Detection is shown now; activation is coming soon.',
     installGuide:
       'Run the same agents on your .tex projects without an editor — ideal for scripts, CI, and remote machines.\n\n' +
-      'Install globally from npm (requires Node.js >= 22):\n' +
+      `Install globally from npm (requires Node.js ${TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY}):\n` +
       '  npm install -g @texra-ai/cli\n\n' +
       'The CLI also ships with the TeXRA package — make sure the `texra` command is on the PATH visible to VS Code or the desktop app.\n\n' +
       'Check from a terminal:\n' +
