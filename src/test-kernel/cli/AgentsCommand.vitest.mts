@@ -6,6 +6,9 @@ import type { CliContext } from '@cli/runtime/cliContext';
 const mocks = vi.hoisted(() => ({
   emitCliResult: vi.fn(),
   getAgent: vi.fn(),
+  getToolUseAgents: vi.fn(),
+  getVisibleAgents: vi.fn(),
+  getWorkflowAgents: vi.fn(),
   initLocalCliPlatform: vi.fn(),
   loadAgents: vi.fn(),
   resolveAgentWithRemoteFallback: vi.fn(),
@@ -14,7 +17,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/index', () => ({
   getAgent: mocks.getAgent,
-  getVisibleAgents: vi.fn(() => []),
+  getToolUseAgents: mocks.getToolUseAgents,
+  getVisibleAgents: mocks.getVisibleAgents,
+  getWorkflowAgents: mocks.getWorkflowAgents,
   loadAgents: mocks.loadAgents,
 }));
 
@@ -55,6 +60,90 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
 describe('CLI agents command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getToolUseAgents.mockReturnValue([]);
+    mocks.getVisibleAgents.mockReturnValue([]);
+    mocks.getWorkflowAgents.mockReturnValue([]);
+  });
+
+  it('lists visible agents by default and reports hidden agents in text mode', async () => {
+    const visibleAgent = {
+      name: 'lean',
+      source: 'builtInToolUse',
+      path: '/tmp/resources/tool_use_agents/lean.yaml',
+      category: AgentCategory.ToolUse,
+      description: 'Lean 4 proof assistant.',
+    };
+    const hiddenAgent = {
+      name: 'chat',
+      source: 'builtInToolUse',
+      path: '/tmp/resources/tool_use_agents/chat.yaml',
+      category: AgentCategory.ToolUse,
+      description: 'Interactive assistant.',
+    };
+    mocks.getVisibleAgents.mockImplementation((category: AgentCategory) =>
+      category === AgentCategory.ToolUse ? [visibleAgent] : [],
+    );
+    mocks.getToolUseAgents.mockReturnValue([visibleAgent, hiddenAgent]);
+    const { listAgents } = await import('@cli/commands/agents');
+
+    const exitCode = await listAgents(cliContext());
+
+    expect(exitCode).toBe(0);
+    expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
+    expect(mocks.emitCliResult).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        json: [visibleAgent],
+        ndjson: [{ kind: 'agent', agent: visibleAgent }],
+        text: 'toolUse\tlean\tLean 4 proof assistant.',
+      },
+      { paged: true },
+    );
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --all` to show the full catalog.',
+    );
+  });
+
+  it('lists the full catalog with --all semantics', async () => {
+    const workflowAgent = {
+      name: 'correct',
+      source: 'builtInWorkflow',
+      path: '/tmp/resources/agents/correct.yaml',
+      category: AgentCategory.Workflow,
+      description: 'Fixes typos.',
+    };
+    const toolUseAgent = {
+      name: 'chat',
+      source: 'builtInToolUse',
+      path: '/tmp/resources/tool_use_agents/chat.yaml',
+      category: AgentCategory.ToolUse,
+      description: 'Interactive assistant.',
+    };
+    mocks.getWorkflowAgents.mockReturnValue([workflowAgent]);
+    mocks.getToolUseAgents.mockReturnValue([toolUseAgent]);
+    const { listAgents } = await import('@cli/commands/agents');
+
+    const exitCode = await listAgents(cliContext(), { includeHidden: true });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.loadAgents).toHaveBeenCalledWith(undefined);
+    expect(mocks.getVisibleAgents).not.toHaveBeenCalled();
+    expect(mocks.writeTextStderr).not.toHaveBeenCalled();
+    expect(mocks.emitCliResult).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        json: [workflowAgent, toolUseAgent],
+        ndjson: [
+          { kind: 'agent', agent: workflowAgent },
+          { kind: 'agent', agent: toolUseAgent },
+        ],
+        text: [
+          'workflow\tcorrect\tFixes typos.',
+          'toolUse\tchat\tInteractive assistant.',
+        ].join('\n'),
+      },
+      { paged: true },
+    );
   });
 
   it('uses the local registry match for agent details before remote fallback', async () => {
