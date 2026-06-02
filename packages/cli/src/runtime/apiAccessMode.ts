@@ -4,6 +4,18 @@ import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 export type CliApiMode = 'included' | 'personal';
 
+export const CLI_API_MODE_INPUTS = [
+  'included',
+  'relay',
+  'texra',
+  'personal',
+  'direct',
+  'api',
+  'byok',
+  'key',
+  'keys',
+] as const;
+
 export function getCliApiMode(): CliApiMode {
   return getServerSideKeyService().getUseIncludedModelAccess()
     ? 'included'

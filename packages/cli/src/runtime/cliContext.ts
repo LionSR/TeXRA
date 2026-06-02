@@ -9,7 +9,11 @@ import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
 } from '../schemas/cliSettings';
-import { parseCliApiMode, type CliApiMode } from './apiAccessMode';
+import {
+  CLI_API_MODE_INPUTS,
+  parseCliApiMode,
+  type CliApiMode,
+} from './apiAccessMode';
 import {
   CLI_OUTPUT_FORMATS,
   isKnownCliModel,
@@ -314,13 +318,22 @@ function pickEnvModel(
 }
 
 function pickCliApiMode(
-  candidates: readonly { readonly label: string; readonly value?: string }[],
+  candidates: readonly {
+    readonly label: string;
+    readonly value?: string;
+    readonly strict?: boolean;
+  }[],
   warnings: string[],
 ): CliApiMode | undefined {
   for (const candidate of candidates) {
     if (!candidate.value) continue;
     const apiMode = parseCliApiMode(candidate.value);
     if (apiMode) return apiMode;
+    if (candidate.strict) {
+      throw new CliUsageError(
+        `Invalid value for argument: ${candidate.label} (${candidate.value}). Expected one of: ${CLI_API_MODE_INPUTS.join(', ')}.`,
+      );
+    }
     warnings.push(`Ignoring invalid ${candidate.label} "${candidate.value}".`);
   }
   return undefined;
@@ -366,7 +379,7 @@ export async function buildCliContext(
   const envModel = pickEnvModel(env, configWarnings);
   const apiMode = pickCliApiMode(
     [
-      { label: '--api-mode', value: init.globalArgs.apiMode },
+      { label: '--api-mode', value: init.globalArgs.apiMode, strict: true },
       { label: 'TEXRA_API_MODE', value: envValue(env, 'TEXRA_API_MODE') },
     ],
     configWarnings,

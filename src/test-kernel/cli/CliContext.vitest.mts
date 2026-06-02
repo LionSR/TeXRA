@@ -234,6 +234,19 @@ describe('CLI context config defaults', () => {
     expect(context.apiMode).toBe('included');
   });
 
+  it('rejects invalid explicit --api-mode values', async () => {
+    await expect(
+      buildCliContext({
+        ambient,
+        env: { TEXRA_API_MODE: 'included' },
+        globalArgs: {
+          apiMode: 'unknown-mode',
+          cwd: tmpdir(),
+        },
+      }),
+    ).rejects.toThrow('Invalid value for argument: --api-mode');
+  });
+
   it('reports invalid TEXRA_API_MODE values without failing', async () => {
     const context = await buildCliContext({
       ambient,
