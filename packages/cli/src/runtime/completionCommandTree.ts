@@ -21,6 +21,17 @@ export interface CompletionFlag {
   readonly takesValue: boolean;
   readonly values: readonly string[];
   readonly valueKind?: string;
+  readonly negatedName?: string;
+  readonly negatedDescription?: string;
+}
+
+export interface CompletionFlagVariant {
+  readonly name: string;
+  readonly aliases: readonly string[];
+  readonly description: string;
+  readonly takesValue: boolean;
+  readonly values: readonly string[];
+  readonly valueKind?: string;
 }
 
 function isCompletionShell(value: string): value is CliCompletionShell {
@@ -49,6 +60,17 @@ function argValues(arg: ArgDef): readonly string[] {
   return arg.type === 'enum' && Array.isArray(arg.options) ? arg.options : [];
 }
 
+function isNegatableBoolean(arg: ArgDef): boolean {
+  return arg.type === 'boolean' && 'default' in arg && arg.default === true;
+}
+
+function negativeDescription(arg: ArgDef): string | undefined {
+  if (!('negativeDescription' in arg)) return undefined;
+  return typeof arg.negativeDescription === 'string'
+    ? arg.negativeDescription
+    : undefined;
+}
+
 function flagFromArg(name: string, arg: ArgDef): CompletionFlag | undefined {
   if (arg.type === 'positional') return undefined;
   return {
@@ -58,7 +80,45 @@ function flagFromArg(name: string, arg: ArgDef): CompletionFlag | undefined {
     takesValue: arg.type !== 'boolean',
     values: argValues(arg),
     valueKind: arg.valueHint,
+    ...(isNegatableBoolean(arg)
+      ? {
+          negatedName: `no-${name}`,
+          negatedDescription: negativeDescription(arg),
+        }
+      : {}),
   };
+}
+
+export function completionFlagVariants(
+  flag: CompletionFlag,
+): CompletionFlagVariant[] {
+  const variants: CompletionFlagVariant[] = [
+    {
+      name: flag.name,
+      aliases: flag.aliases,
+      description: flag.description,
+      takesValue: flag.takesValue,
+      values: flag.values,
+      valueKind: flag.valueKind,
+    },
+  ];
+  if (flag.negatedName) {
+    variants.push({
+      name: flag.negatedName,
+      aliases: [],
+      description: flag.negatedDescription ?? flag.description,
+      takesValue: false,
+      values: [],
+    });
+  }
+  return variants;
+}
+
+export function completionFlagTokens(flag: CompletionFlag): string[] {
+  return completionFlagVariants(flag).flatMap((variant) => [
+    `--${variant.name}`,
+    ...variant.aliases.map((alias) => `-${alias}`),
+  ]);
 }
 
 async function commandMeta(command: AnyCommand): Promise<CommandMeta> {
