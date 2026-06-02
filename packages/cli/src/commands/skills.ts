@@ -75,6 +75,7 @@ const skillsListCommand = defineCliCommand({
     source: {
       type: 'string',
       alias: 's',
+      valueHint: 'directory',
       description:
         'Additional skill root to scan; may be repeated and is resolved relative to --cwd',
     },
