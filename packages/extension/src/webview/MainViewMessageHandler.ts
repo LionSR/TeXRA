@@ -23,9 +23,13 @@ import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
 
 import { DiffManager } from './managers/DiffManager';
-import { ExecutionManager } from './managers/ExecutionManager';
+import {
+  ExecutionManager,
+  type CommandMessage,
+} from './managers/ExecutionManager';
 import { FileManager } from './managers/FileManager';
 import { InstructionManager } from './managers/InstructionManager';
+import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionController';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
@@ -148,14 +152,18 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       [MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS]: () =>
         safeExecuteCommand('texra.openDoc', ['installation'], this.viewName),
 
+      // The execution/file-op commands are validated as loose `{ command }`
+      // objects (payload typed nearer the handlers), so the dispatcher can't
+      // infer the rich shape — cast to the handler's declared input type
+      // rather than discarding all checking with `any`.
       [MAIN_VIEW_COMMANDS.EXECUTE]: (m) =>
-        this.executionManager.handleExecute(m as any),
+        this.executionManager.handleExecute(m as MainViewExecuteMessage),
       [MAIN_VIEW_COMMANDS.MERGE]: (m) =>
-        this.executionManager.handleFileOperation(m as any),
+        this.executionManager.handleFileOperation(m as CommandMessage),
       [MAIN_VIEW_COMMANDS.COMPARE]: (m) =>
-        this.executionManager.handleFileOperation(m as any),
+        this.executionManager.handleFileOperation(m as CommandMessage),
       [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: (m) =>
-        this.executionManager.handleFileOperation(m as any),
+        this.executionManager.handleFileOperation(m as CommandMessage),
 
       [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: () =>
         this.fileManager.handleEditedFileSelection(),
@@ -198,7 +206,7 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.fileManager.handleUpdateFiles(m),
 
       [MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT]: (m) =>
-        this.instructionManager.handlePolishInstructionText(m as any),
+        this.instructionManager.handlePolishInstructionText(m),
       [MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION]: () =>
         this.instructionManager.handleTranscribeInstruction(),
       [MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE]: (m) =>
