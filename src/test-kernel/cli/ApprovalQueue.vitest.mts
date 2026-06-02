@@ -7,6 +7,7 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
 }));
 
 import {
+  approvalQueueStatus,
   clearApprovals,
   currentApproval,
   enqueueApproval,
@@ -26,6 +27,19 @@ function bashPayload(streamId: string): ApprovalPayload {
       allowBypass: true,
       streamId,
       command: 'echo ok',
+    },
+  };
+}
+
+function externalInquiryPayload(streamId: string): ApprovalPayload {
+  return {
+    kind: 'externalInquiry',
+    payload: {
+      requestId: `external-${streamId}`,
+      question: 'Please verify the finite enumeration independently.',
+      threadId: `thread-${streamId}`,
+      allowBypass: false,
+      streamId,
     },
   };
 }
@@ -66,6 +80,48 @@ describe('CLI approval queue', () => {
     currentApproval.get()?.decide({ accepted: false });
     await expect(secondResult).resolves.toEqual({ accepted: false });
     expect(currentApproval.get()).toBeUndefined();
+  });
+
+  it('labels queued human-input prompts separately from approvals', async () => {
+    const question = externalInquiryPayload('question-1');
+    const questionResult = enqueueApproval(question);
+
+    expect(approvalQueueStatus.get()).toEqual({
+      depth: 1,
+      kind: 'question',
+    });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(question);
+    });
+
+    currentApproval.get()?.decide({ accepted: true });
+    await expect(questionResult).resolves.toEqual({ accepted: true });
+    expect(approvalQueueStatus.get()).toEqual({
+      depth: 0,
+      kind: 'approval',
+    });
+
+    const approval = bashPayload('approval-1');
+    const mixedQuestion = externalInquiryPayload('question-2');
+    const approvalResult = enqueueApproval(approval);
+    const mixedQuestionResult = enqueueApproval(mixedQuestion);
+
+    expect(approvalQueueStatus.get()).toEqual({
+      depth: 2,
+      kind: 'request',
+    });
+    currentApproval.get()?.decide({ accepted: false });
+    await expect(approvalResult).resolves.toEqual({ accepted: false });
+    await vi.waitFor(() => {
+      expect(currentApproval.get()?.payload).toBe(mixedQuestion);
+    });
+    expect(approvalQueueStatus.get()).toEqual({
+      depth: 1,
+      kind: 'question',
+    });
+
+    currentApproval.get()?.decide({ accepted: false });
+    await expect(mixedQuestionResult).resolves.toEqual({ accepted: false });
   });
 
   it('notifies only when a TUI approval becomes the foreground modal', async () => {
