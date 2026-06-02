@@ -232,6 +232,29 @@ const SCENARIOS = [
     unexpect: ['[/model]models', 'Tip:'],
   },
   {
+    name: 'orchestrate-relay-model-pick',
+    env: {
+      HARNESS_ORCHESTRATION: '1',
+      HARNESS_API_MODE: 'included',
+    },
+    bootExpect: 'Choose how to start this CLI session.',
+    keys: ['\r'],
+    exitKeys: [ESC, ESC],
+    expectExit: true,
+    expect: [
+      'Model · included relay',
+      'Model for the first message.',
+      'Sonnet 4.6 (Thinking) — relay: included',
+      'GPT-5.4 — relay: included',
+      'Esc back',
+    ],
+    unexpect: [
+      'DeepSeek V4 Flash (Thinking)',
+      'api: api key set',
+      'personal API keys',
+    ],
+  },
+  {
     name: 'slash-palette',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/mo'],
