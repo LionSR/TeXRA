@@ -43,6 +43,7 @@ import {
   collectStringFlagValues,
   optString,
 } from './_helpers/globalArgs';
+import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { executeCliRequest } from './_helpers/runExecution';
 import {
   createCliRunResult,
@@ -66,6 +67,7 @@ interface MultiAgentRunInit {
   readonly agent?: string;
   readonly model?: string;
   readonly instruction: string;
+  readonly instructionFile?: string;
 }
 
 function resolveMultiAgentRunPlan(
@@ -250,9 +252,12 @@ export async function runMultiAgentPreset(
   context: CliContext,
   init: MultiAgentRunInit,
 ): Promise<number> {
-  const hasInlineInstruction = init.instruction.trim().length > 0;
-  if (init.inputFiles.length === 0 && !hasInlineInstruction) {
-    throw new CliUsageError('Provide --input or --instruction.');
+  const instruction = await resolveFileBackedInstruction(init, context.cwd);
+  const hasInstruction = instruction.trim().length > 0;
+  if (init.inputFiles.length === 0 && !hasInstruction) {
+    throw new CliUsageError(
+      'Provide --input, --instruction, or --instruction-file.',
+    );
   }
 
   await initCliPlatform({ ...context, quietLogs: true });
@@ -287,7 +292,7 @@ export async function runMultiAgentPreset(
       init.contextFiles,
       runContext.cwd,
       {
-        allowEmptyInput: hasInlineInstruction,
+        allowEmptyInput: hasInstruction,
         stdinInputFile,
       },
     );
@@ -302,7 +307,7 @@ export async function runMultiAgentPreset(
       contextFiles,
       instruction: formatMultiAgentRunInstruction(plan.preset, {
         inputFiles,
-        instruction: init.instruction,
+        instruction,
         approvalContext: runContext,
       }),
       workingDirectory: runContext.cwd,
@@ -385,7 +390,7 @@ const multiAgentRunCommand = defineCliCommand({
       alias: 'i',
       valueHint: 'file',
       description:
-        'Input file passed to the team orchestrator (repeatable; optional when --instruction is provided; use `-` to read stdin)',
+        'Input file passed to the team orchestrator (repeatable; optional when --instruction or --instruction-file is provided; use `-` to read stdin)',
     },
     context: {
       type: 'string',
@@ -408,6 +413,12 @@ const multiAgentRunCommand = defineCliCommand({
       type: 'string',
       description: 'Additional instruction for the team orchestrator',
     },
+    'instruction-file': {
+      type: 'string',
+      valueHint: 'file',
+      description:
+        'File whose contents are passed before --instruction when both are set',
+    },
   },
   run: (context, ctx) =>
     runMultiAgentPreset(context, {
@@ -417,6 +428,7 @@ const multiAgentRunCommand = defineCliCommand({
       agent: optString(ctx.args.agent),
       model: optString(ctx.args.model),
       instruction: optString(ctx.args.instruction) ?? '',
+      instructionFile: optString(ctx.args['instruction-file']),
     }),
 });
 
