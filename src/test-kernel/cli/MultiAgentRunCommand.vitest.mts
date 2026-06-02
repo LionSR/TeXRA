@@ -52,26 +52,40 @@ vi.mock('@cli/runtime/supabaseAuth', () => ({
   }),
 }));
 
-vi.mock('@cli/runtime/multiAgentPresets', () => ({
-  cliMultiAgentPlanHasGaps: vi.fn(() => false),
-  cliMultiAgentPresetNdjsonRecords: vi.fn(() => []),
-  findCliMultiAgentPreset: vi.fn(() => ({
-    id: 'mathematician',
-    name: 'Mathematician',
-    description: 'For math papers.',
-    workflowAgents: [],
-    toolUseAgents: ['orchestrator'],
-    source: 'built-in',
-  })),
-  formatCliMultiAgentPresetDetails: vi.fn(() => ''),
-  formatCliMultiAgentPresetInspection: vi.fn(() => ''),
-  formatCliMultiAgentPresetList: vi.fn(() => ''),
-  planCliMultiAgentPresetRun: mocks.planCliMultiAgentPresetRun,
-  readCliMultiAgentPresets: vi.fn(() => []),
-  withCliMultiAgentPresetVisibility: vi.fn(
-    (_plan: unknown, run: () => Promise<unknown>) => run(),
-  ),
-}));
+vi.mock('@cli/runtime/multiAgentPresets', () => {
+  const delegationTools = new Set([
+    'delegate_workflow',
+    'delegate_agent',
+    'resume_agent',
+    'propose_workflow',
+    'propose_agent',
+  ]);
+
+  return {
+    agentHasDelegationTools: vi.fn(
+      (agent: { tools?: readonly string[] }) =>
+        agent.tools?.some((tool) => delegationTools.has(tool)) ?? false,
+    ),
+    cliMultiAgentPlanHasGaps: vi.fn(() => false),
+    cliMultiAgentPresetNdjsonRecords: vi.fn(() => []),
+    findCliMultiAgentPreset: vi.fn(() => ({
+      id: 'mathematician',
+      name: 'Mathematician',
+      description: 'For math papers.',
+      workflowAgents: [],
+      toolUseAgents: ['orchestrator'],
+      source: 'built-in',
+    })),
+    formatCliMultiAgentPresetDetails: vi.fn(() => ''),
+    formatCliMultiAgentPresetInspection: vi.fn(() => ''),
+    formatCliMultiAgentPresetList: vi.fn(() => ''),
+    planCliMultiAgentPresetRun: mocks.planCliMultiAgentPresetRun,
+    readCliMultiAgentPresets: vi.fn(() => []),
+    withCliMultiAgentPresetVisibility: vi.fn(
+      (_plan: unknown, run: () => Promise<unknown>) => run(),
+    ),
+  };
+});
 
 vi.mock('@cli/commands/_helpers/modelArg', () => ({
   buildHeadlessRunContext: vi.fn((context: CliContext, model: string) => ({
@@ -114,6 +128,11 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
 }
 
 describe('CLI multi-agent run command', () => {
+  const approvalUnavailableWarning =
+    'WARN preset mathematician may run without subagent delegation because approval policy "never" denies approval-gated delegation tools. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
+  const headlessAskWarning =
+    'WARN preset mathematician may run without subagent delegation because headless approval policy "ask" cannot show delegation prompts. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.';
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.expandRunInputs.mockResolvedValue({
@@ -192,6 +211,61 @@ describe('CLI multi-agent run command', () => {
     expect(request?.config.instruction).toContain('Primary user input files:');
     expect(request?.config.instruction).toContain('- "problem.tex"');
     expect(mocks.stdinInputFile.cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns when approval policy never blocks team delegation', async () => {
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    const exitCode = await runMultiAgentPreset(cliContext(), {
+      preset: 'mathematician',
+      inputFiles: ['problem.tex'],
+      contextFiles: [],
+      model: 'deepseekT',
+      instruction: 'Solve the problem with the team.',
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      approvalUnavailableWarning,
+    );
+  });
+
+  it('warns when headless ask cannot show delegation prompts', async () => {
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    const exitCode = await runMultiAgentPreset(
+      cliContext({ approvalPolicy: 'ask' }),
+      {
+        preset: 'mathematician',
+        inputFiles: ['problem.tex'],
+        contextFiles: [],
+        model: 'deepseekT',
+        instruction: 'Solve the problem with the team.',
+      },
+    );
+
+    expect(exitCode).toBe(0);
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(headlessAskWarning);
+  });
+
+  it('does not warn when yolo can auto-approve delegation', async () => {
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    const exitCode = await runMultiAgentPreset(
+      cliContext({ approvalPolicy: 'yolo' }),
+      {
+        preset: 'mathematician',
+        inputFiles: ['problem.tex'],
+        contextFiles: [],
+        model: 'deepseekT',
+        instruction: 'Solve the problem with the team.',
+      },
+    );
+
+    expect(exitCode).toBe(0);
+    expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
+      expect.stringContaining('may run without subagent delegation'),
+    );
   });
 
   it('allows instruction-only team runs without input files', async () => {
