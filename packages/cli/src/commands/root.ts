@@ -11,7 +11,9 @@ import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 
 import {
   detectUnknownCliCommand as detectUnknownCliCommandImpl,
+  detectUnknownCliFlag as detectUnknownCliFlagImpl,
   formatUnknownCliCommand,
+  formatUnknownCliFlag,
   isCliError,
   normalizeRootShortcuts,
   reorderGlobalFlags,
@@ -20,6 +22,7 @@ import {
   showUsageStderr,
   withUsageSections,
   type UnknownCliCommand,
+  type UnknownCliFlag,
 } from './_helpers/dispatch';
 import { getExitCode, resetExitCode } from './_helpers/exitCode';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
@@ -112,6 +115,12 @@ export async function detectUnknownCliCommand(
   return detectUnknownCliCommandImpl(rootCommand, rawArgs);
 }
 
+export async function detectUnknownCliFlag(
+  rawArgs: readonly string[],
+): Promise<UnknownCliFlag | undefined> {
+  return detectUnknownCliFlagImpl(rootCommand, rawArgs);
+}
+
 /**
  * Re-implement the surface citty's `runMain` provides — `--help` / `--version`
  * detection plus error handling around `runCommand` — so usage errors (missing
@@ -145,6 +154,12 @@ export async function runCli(
   const unknownCommand = await detectUnknownCliCommand(rawArgs);
   if (unknownCommand) {
     writeTextStderr(formatUnknownCliCommand(unknownCommand));
+    return { exitCode: CliExitCode.Usage };
+  }
+
+  const unknownFlag = await detectUnknownCliFlag(rawArgs);
+  if (unknownFlag) {
+    writeTextStderr(formatUnknownCliFlag(unknownFlag));
     return { exitCode: CliExitCode.Usage };
   }
 
