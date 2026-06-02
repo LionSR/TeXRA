@@ -240,4 +240,66 @@ description: A project-specific skill.
       }),
     );
   });
+
+  it('reports missing required sources without treating optional roots as errors', async () => {
+    const optional = path.join(os.tmpdir(), 'texra-skills-optional-missing');
+    const required = path.join(os.tmpdir(), 'texra-skills-required-missing');
+
+    const result = await discoverSkillSources([
+      { scope: 'user', path: optional },
+      { scope: 'custom', path: required, required: true },
+    ]);
+
+    expect(result.skills).toEqual([]);
+    expect(result.errors).toEqual([
+      expect.objectContaining({
+        severity: 'error',
+        code: 'missing_source',
+        path: required,
+      }),
+    ]);
+  });
+
+  it('reports required sources that are not directories', async () => {
+    const root = await createTempRoot();
+    const required = path.join(root, 'skills-file');
+    await fs.writeFile(required, 'not a directory');
+
+    const result = await discoverSkillSources([
+      { scope: 'custom', path: required, required: true },
+    ]);
+
+    expect(result.skills).toEqual([]);
+    expect(result.errors).toEqual([
+      expect.objectContaining({
+        severity: 'error',
+        code: 'invalid_source',
+        path: required,
+      }),
+    ]);
+  });
+
+  it('reports required source read errors as source failures', async () => {
+    const root = await createTempRoot();
+    const required = path.join(root, 'blocked-skills');
+    await fs.mkdir(required);
+    await fs.chmod(required, 0o000);
+
+    try {
+      const result = await discoverSkillSources([
+        { scope: 'custom', path: required, required: true },
+      ]);
+
+      expect(result.skills).toEqual([]);
+      expect(result.errors).toEqual([
+        expect.objectContaining({
+          severity: 'error',
+          code: 'source_read_error',
+          path: required,
+        }),
+      ]);
+    } finally {
+      await fs.chmod(required, 0o700);
+    }
+  });
 });

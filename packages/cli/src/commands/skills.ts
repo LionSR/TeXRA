@@ -25,6 +25,14 @@ async function listSkills(
   },
 ): Promise<number> {
   const result = await readCliSkills(context, options);
+  const exitCode = result.errors.some(
+    (issue) =>
+      issue.code === 'missing_source' ||
+      issue.code === 'invalid_source' ||
+      issue.code === 'source_read_error',
+  )
+    ? CliExitCode.Usage
+    : CliExitCode.Success;
 
   if (context.outputFormat === 'json') {
     // Match the bare-array JSON shape every other `<resource> list` command
@@ -38,7 +46,7 @@ async function listSkills(
     writeTextStdout(
       JSON.stringify(result.skills.map(skillListRecord), null, 2),
     );
-    return CliExitCode.Success;
+    return exitCode;
   }
 
   if (context.outputFormat === 'ndjson') {
@@ -53,14 +61,16 @@ async function listSkills(
     for (const issue of result.errors) {
       writeNdjsonStdout({ kind: 'skill-issue', ts, issue });
     }
-    return CliExitCode.Success;
+    return exitCode;
   }
 
   for (const issue of result.errors) {
     writeTextStderr(formatCliSkillIssue(issue));
   }
-  writeTextStdout(formatCliSkillList(result.skills));
-  return CliExitCode.Success;
+  if (exitCode === CliExitCode.Success || result.skills.length > 0) {
+    writeTextStdout(formatCliSkillList(result.skills));
+  }
+  return exitCode;
 }
 
 const skillsListCommand = defineCliCommand({
