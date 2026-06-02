@@ -14,7 +14,7 @@ All notable changes to this project will be documented in this file.
 
 ### Improvements
 
-- **User turns stand out in chat** — your messages now render on a full-width highlight band (reverse video, so it adapts to your terminal's light/dark theme) in the terminal transcript, making them easy to pick out from the assistant's output when scrolling back.
+- **User turns stand out in chat** — your messages now render with a reverse-video highlight (so it adapts to your terminal's light/dark theme and reflows on resize) in the terminal transcript, making them easy to pick out from the assistant's output when scrolling back.
 
 ## [0.38.4] - 2026-06-01
 
