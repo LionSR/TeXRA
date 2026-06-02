@@ -218,12 +218,14 @@ export const agentsRunCommand = defineCliCommand({
     input: {
       type: 'string',
       alias: 'i',
+      valueHint: 'file',
       description:
         'Workspace file made visible to the agent (repeatable; use `-` to read stdin)',
     },
     context: {
       type: 'string',
       alias: 'c',
+      valueHint: 'file',
       description:
         'Read-only context file made visible to the agent (repeatable; use `-` to read stdin)',
     },
@@ -238,6 +240,7 @@ export const agentsRunCommand = defineCliCommand({
     },
     'instruction-file': {
       type: 'string',
+      valueHint: 'file',
       description:
         'File whose contents are passed before --instruction when both are set',
     },
