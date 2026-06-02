@@ -166,8 +166,9 @@ export class UsageMonitor {
         });
       }
 
-      // Log to backend for analytics (non-blocking, fire-and-forget)
-      this.logToBackend(stateGlobal.totalResponseTimeMs, {
+      // Log to backend for analytics/billing. Relay-backed rounds wait for the
+      // flush because the next relay request enforces the cap from DB state.
+      await this.logToBackend(stateGlobal.totalResponseTimeMs, {
         inputTokens: roundInputTokens,
         outputTokens: roundOutputTokens,
         cachedInputTokens: roundCacheReadTokens,
@@ -205,9 +206,9 @@ export class UsageMonitor {
 
   /**
    * Log per-round usage to backend for analytics/billing.
-   * Non-blocking - errors are caught and logged, never thrown.
+   * Errors are caught and logged, never thrown.
    */
-  private logToBackend(
+  private async logToBackend(
     totalResponseTimeMs: number,
     usage: {
       inputTokens: number;
@@ -218,7 +219,7 @@ export class UsageMonitor {
       reasoningTokens?: number;
       cost: number;
     },
-  ): void {
+  ): Promise<void> {
     try {
       const { config } = this.modelInfo;
       const provider = UsageProviderSchema.catch('unknown').parse(
@@ -228,6 +229,13 @@ export class UsageMonitor {
       const cacheMissInputTokens =
         usage.cacheMissInputTokens ??
         Math.max(0, usage.inputTokens - cachedInputTokens);
+
+      const usedRelay =
+        !shouldUseOpenRouter(config) &&
+        getServerSideKeyService().shouldUseServerSideKeysSync(
+          config.provider,
+          config.name,
+        );
 
       UsageLogService.log({
         model: config.fullName,
@@ -244,14 +252,23 @@ export class UsageMonitor {
         }),
         cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
         reasoningTokens: usage.reasoningTokens ?? 0,
-        usedRelay:
-          !shouldUseOpenRouter(config) &&
-          getServerSideKeyService().shouldUseServerSideKeysSync(
-            config.provider,
-            config.name,
-          ),
+        usedRelay,
         streamId: this.context.streamId,
       });
+
+      // The relay enforces the monthly spend cap from the server-side usage
+      // total, which is only as fresh as the last flush (otherwise batched
+      // every ~30s / 10 entries). For relay rounds, flush now so the relay's
+      // pre-call check sees this round's cost before the next call — bounding
+      // free-tier overage to roughly one round instead of a whole session.
+      if (usedRelay) {
+        const flushed = await UsageLogService.flush();
+        if (!flushed) {
+          this.context.logger.debug(
+            'Relay usage logging is queued; spend-cap data will retry later.',
+          );
+        }
+      }
     } catch (error) {
       this.context.logger.debug(
         `Backend usage logging failed: ${toErrorMessage(error)}`,
