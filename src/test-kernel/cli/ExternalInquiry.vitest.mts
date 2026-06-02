@@ -188,6 +188,18 @@ describe('CLI external inquiry modal', () => {
     expect(display.value).not.toContain('dis\nplayed');
   });
 
+  it('does not render a whitespace-only row after an exact-width word', () => {
+    const value = 'hello world';
+    const display = textInputDisplayWindow({
+      cursor: value.length,
+      maxDisplayRows: 3,
+      value,
+      width: 5,
+    });
+
+    expect(display.value).toBe('hello\nworld');
+  });
+
   it('uses terminal display width when wrapping wide answer text', () => {
     const display = textInputDisplayWindow({
       cursor: '１２３４５'.length,

@@ -100,10 +100,15 @@ function textInputDisplayRows(
 
     const charWidth = textDisplayWidth(point.char);
     if (column + charWidth > width && column > 0) {
-      const wrapIndex =
-        lastSoftBreakIndex !== undefined && lastSoftBreakIndex > rowStart
-          ? lastSoftBreakIndex
-          : index;
+      let wrapIndex = index;
+      if (isSoftBreakChar(point.char)) {
+        wrapIndex = point.nextIndex;
+      } else if (
+        lastSoftBreakIndex !== undefined &&
+        lastSoftBreakIndex > rowStart
+      ) {
+        wrapIndex = lastSoftBreakIndex;
+      }
       rows.push({ start: rowStart, end: wrapIndex, breakKind: 'soft' });
       rowStart = wrapIndex;
       index = wrapIndex;
@@ -121,6 +126,14 @@ function textInputDisplayRows(
 
   rows.push({ start: rowStart, end: value.length, breakKind: 'end' });
   return rows;
+}
+
+function textInputDisplayRowValue(
+  value: string,
+  row: TextInputDisplayRow,
+): string {
+  const text = value.slice(row.start, row.end);
+  return row.breakKind === 'soft' ? text.trimEnd() : text;
 }
 
 function cursorDisplayRowIndex(
@@ -177,7 +190,9 @@ export function textInputDisplayWindow({
     visibleRows[0] === undefined
       ? 0
       : visibleRows[0].end - visibleRows[0].start;
-  const rowTexts = visibleRows.map((row) => value.slice(row.start, row.end));
+  const rowTexts = visibleRows.map((row) =>
+    textInputDisplayRowValue(value, row),
+  );
   if (clipped && startRow > 0) {
     rowTexts[0] = leadingEllipsisText(rowTexts[0] ?? '', columnCount);
   }
