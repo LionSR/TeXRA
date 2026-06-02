@@ -1,100 +1,99 @@
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { Writable } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-type LogUpdateRenderer = {
-  (value: string): boolean;
-  clear(): void;
-  clearWidthAware(columns: number): void;
-  setCursorPosition(position: { x: number; y: number }): void;
+type LogUpdateRenderer = ((value: string) => boolean) & {
+  reset: () => void;
 };
 
-type LogUpdateModule = {
-  default: {
-    create(
-      stream: { isTTY: boolean; columns: number; write(chunk: string): void },
-      options: { showCursor: boolean },
-    ): LogUpdateRenderer;
-  };
-};
-
-function createRecordingStream() {
-  let writes: string[] = [];
-  return {
-    isTTY: true,
-    columns: 80,
-    write(chunk: string) {
-      writes.push(String(chunk));
-    },
-    output() {
-      return writes.join('');
-    },
-    reset() {
-      writes = [];
-    },
-  };
-}
-
-function countEraseLines(output: string): number {
-  return output.split('\u001B[2K').length - 1;
-}
-
-async function loadCliLogUpdate() {
+// The CLI vendors a patch (patches/ink@7.0.5.patch) that rewrites Ink's resize
+// handling: instead of erasing the live region by logical line count — which is
+// wrong once the emulator reflows soft-wrapped lines at the new width (too few
+// rows leaves residue, too many eats the <Static> header) — it repaints from a
+// known origin (clearTerminal + reprint fullStaticOutput), debounced so a drag
+// collapses into one redraw. The runtime behaviour is verified by hand under a
+// real TTY; here we guard that the patch is actually applied to the installed
+// ink, so a future ink bump or a dropped patch fails loudly in CI rather than
+// silently reverting the resize fix.
+function inkBuildDir(): string {
   const cliRequire = createRequire(
     new URL('../../../packages/cli/package.json', import.meta.url),
   );
-  const inkMain = cliRequire.resolve('ink');
-  const logUpdatePath = path.join(path.dirname(inkMain), 'log-update.js');
-  return (await import(pathToFileURL(logUpdatePath).href)) as LogUpdateModule;
+  return path.dirname(cliRequire.resolve('ink'));
+}
+
+function patchedInkSource(): string {
+  return readFileSync(path.join(inkBuildDir(), 'ink.js'), 'utf8');
+}
+
+async function createLogUpdateRenderer(
+  incremental: boolean,
+): Promise<LogUpdateRenderer> {
+  const moduleUrl = pathToFileURL(
+    path.join(inkBuildDir(), 'log-update.js'),
+  ).href;
+  const { default: logUpdate } = await import(moduleUrl);
+  const output = new Writable({
+    write(_chunk, _encoding, callback) {
+      callback();
+    },
+  });
+  return logUpdate.create(output, { incremental }) as LogUpdateRenderer;
 }
 
 describe('CLI Ink resize patch', () => {
-  it('clears physical wrapped rows after terminal resize', async () => {
-    const { default: logUpdate } = await loadCliLogUpdate();
-    const stream = createRecordingStream();
-    const render = logUpdate.create(stream, { showCursor: true });
-    const longLine = 'x'.repeat(95);
+  const source = patchedInkSource();
 
-    render(longLine);
-    stream.reset();
-    render.clear();
-    const logicalEraseLines = countEraseLines(stream.output());
-
-    render(longLine);
-    stream.reset();
-    render.clearWidthAware(30);
-    const widthAwareEraseLines = countEraseLines(stream.output());
-
-    expect(logicalEraseLines).toBe(1);
-    expect(widthAwareEraseLines).toBe(4);
+  it('repaints from a known origin on resize instead of line-count erasing', () => {
+    expect(source).toContain('repaintAfterResize');
+    expect(source).toContain(
+      "ansiEscapes.clearTerminal + (this.fullStaticOutput ?? '')",
+    );
+    // Resets log-update's internal cursor/line bookkeeping before the repaint.
+    expect(source).toContain('this.log.reset()');
   });
 
-  it('returns from an active cursor using physical resize rows', async () => {
-    const { default: logUpdate } = await loadCliLogUpdate();
-    const stream = createRecordingStream();
-    const render = logUpdate.create(stream, { showCursor: true });
+  it('calls a real log-update reset method for both renderer variants', async () => {
+    for (const incremental of [false, true]) {
+      const render = await createLogUpdateRenderer(incremental);
 
-    render.setCursorPosition({ x: 1, y: 0 });
-    render('x'.repeat(95));
-    stream.reset();
-    render.clearWidthAware(30);
-
-    expect(stream.output()).toContain('\x1B[3B');
+      expect(typeof render.reset).toBe('function');
+      render('hello');
+      expect(() => render.reset()).not.toThrow();
+    }
   });
 
-  it('uses the physical cursor row after wrapped lines precede the cursor', async () => {
-    const { default: logUpdate } = await loadCliLogUpdate();
-    const stream = createRecordingStream();
-    const render = logUpdate.create(stream, { showCursor: true });
+  it('debounces the resize repaint so a drag-storm collapses to one redraw', () => {
+    expect(source).toContain('resizeTimer');
+    expect(source).toMatch(/setTimeout\(this\.repaintAfterResize/);
+  });
 
-    render.setCursorPosition({ x: 1, y: 1 });
-    render(`${'x'.repeat(95)}\nnext`);
-    stream.reset();
-    render.clearWidthAware(30);
+  it('updates layout synchronously before scheduling the repaint', () => {
+    const resizeStart = source.indexOf('resized = () => {');
+    const scheduleRepaint = source.indexOf(
+      'setTimeout(this.repaintAfterResize',
+      resizeStart,
+    );
+    const calculateLayout = source.indexOf(
+      'this.calculateLayout();',
+      resizeStart,
+    );
+    const emitLayout = source.indexOf(
+      'dom.emitLayoutListeners(this.rootNode);',
+      resizeStart,
+    );
 
-    expect(countEraseLines(stream.output())).toBe(5);
-    expect(stream.output()).not.toContain('\x1B[3B');
+    expect(resizeStart).toBeGreaterThanOrEqual(0);
+    expect(calculateLayout).toBeGreaterThan(resizeStart);
+    expect(emitLayout).toBeGreaterThan(calculateLayout);
+    expect(scheduleRepaint).toBeGreaterThan(emitLayout);
+  });
+
+  it('no longer references the removed clearWidthAware helper', () => {
+    expect(source).not.toContain('clearWidthAware');
   });
 });
