@@ -964,8 +964,23 @@ describe('runCli usage output stream routing', () => {
     const result = await runCli(['help', 'multi-agent', 'run']);
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('Run a multi-agent team preset');
-    expect(stdout).toContain('USAGE multi-agent run');
+    expect(stdout).toContain('USAGE texra multi-agent run');
     expect(stderr).toBe('');
+  });
+
+  it('shows full command paths for nested --help usage', async () => {
+    const result = await runCli(['history', 'show', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('Show one stored execution');
+    expect(stdout).toContain('USAGE texra history show');
+    expect(stderr).toBe('');
+  });
+
+  it('shows full command paths for nested usage errors', async () => {
+    const result = await runCli(['history', 'show']);
+    expect(result.exitCode).toBe(2);
+    expect(stderr).toContain('USAGE texra history show');
+    expect(stdout).toBe('');
   });
 
   it('accepts the documented multi-agent inspect command', async () => {
