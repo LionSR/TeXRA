@@ -10,7 +10,7 @@ const CHANNEL = 'ExecutionManager';
 logger.initialize(CHANNEL);
 
 /** Message shape for command-based operations. */
-interface CommandMessage {
+export interface CommandMessage {
   command: string;
   inputFile?: string;
   baseFile?: string;

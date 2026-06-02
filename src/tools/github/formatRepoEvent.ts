@@ -25,9 +25,9 @@ import {
   authorOf,
   formatPreviousStateHint,
   issueRef,
+  makeTruncator,
   prRef,
   sections,
-  truncate as truncateBody,
   wrapWebhookEvent as wrap,
 } from './formatUtils';
 import type {
@@ -38,8 +38,7 @@ import type {
 
 const MAX_BODY = 200;
 
-const truncate = (s: string | null | undefined): string =>
-  truncateBody(s, MAX_BODY);
+const truncate = makeTruncator(MAX_BODY);
 
 /** Repo-level events use a single newline + URL footer. */
 const withFooterUrl = (headline: string, url: string): string =>

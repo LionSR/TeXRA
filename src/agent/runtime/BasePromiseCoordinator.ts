@@ -108,7 +108,14 @@ export abstract class BasePromiseCoordinator<
         timeoutId,
       });
 
-      runtimeHost.emit(this.config.showEventName, payload as any);
+      // `showEventName` is a runtime-variable key into ProgressEventPayloads,
+      // so TS can't correlate it with `payload`'s type. Cast to the payload
+      // the emitter expects for that key set rather than discarding all
+      // checking with `any`.
+      runtimeHost.emit(
+        this.config.showEventName,
+        payload as ProgressEventPayloads[keyof ProgressEventPayloads],
+      );
     });
   }
 
@@ -152,9 +159,11 @@ export abstract class BasePromiseCoordinator<
   private cleanup(id: string, runtimeHost: AgentRuntimeHost): void {
     this.requests.set(id, { status: 'resolved' });
 
+    // Computed-key payload for a runtime-variable resolve event — same
+    // dynamic-key limitation as the show event in waitForUserAction.
     runtimeHost.emit(this.config.resolveEventName, {
       [this.config.idFieldName]: id,
-    } as any);
+    } as ProgressEventPayloads[keyof ProgressEventPayloads]);
 
     // Defer Map deletion so callers re-entering this method (e.g. resolving
     // and then immediately re-checking pending state) see the resolved entry.
