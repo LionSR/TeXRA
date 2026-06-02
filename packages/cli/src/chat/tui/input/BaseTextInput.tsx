@@ -84,6 +84,16 @@ function shouldWrapAtPreviousSoftBreak(
   return column - lastSoftBreakColumn <= Math.max(8, Math.floor(width / 4));
 }
 
+function softBreakRunEnd(value: string, start: number): number {
+  let index = start;
+  while (index < value.length) {
+    const point = codePointAtIndex(value, index);
+    if (point === undefined || !isSoftBreakChar(point.char)) break;
+    index = point.nextIndex;
+  }
+  return index;
+}
+
 function textInputDisplayRows(
   value: string,
   width: number,
@@ -113,7 +123,7 @@ function textInputDisplayRows(
     if (column + charWidth > width && column > 0) {
       let wrapIndex = index;
       if (isSoftBreakChar(point.char)) {
-        wrapIndex = point.nextIndex;
+        wrapIndex = softBreakRunEnd(value, index);
       } else if (
         lastSoftBreakIndex !== undefined &&
         lastSoftBreakIndex > rowStart &&
@@ -164,9 +174,16 @@ function cursorDisplayRowIndex(
   return rowIndex < 0 ? Math.max(0, rows.length - 1) : rowIndex;
 }
 
-function leadingEllipsisText(text: string, width: number): string {
-  if (width <= 1) return '…';
-  return text.length >= width ? `…${text.slice(1)}` : `…${text}`;
+function leadingEllipsisDisplay(
+  text: string,
+  width: number,
+): { readonly text: string; readonly replacesFirstColumn: boolean } {
+  const replacesFirstColumn = text.length >= width;
+  if (width <= 1) return { text: '…', replacesFirstColumn };
+  return {
+    text: replacesFirstColumn ? `…${text.slice(1)}` : `…${text}`,
+    replacesFirstColumn,
+  };
 }
 
 export function textInputDisplayWindow({
@@ -200,29 +217,26 @@ export function textInputDisplayWindow({
   const startRow = rows.length <= rowCount ? 0 : Math.max(0, endRow - rowCount);
   const visibleRows = rows.slice(startRow, endRow);
   const clipped = startRow > 0 || endRow < rows.length;
-  const firstRowOriginalLength =
-    visibleRows[0] === undefined
-      ? 0
-      : visibleRows[0].end - visibleRows[0].start;
   const rowTexts = visibleRows.map((row) =>
     textInputDisplayRowValue(value, row),
   );
+  const displayCursorRow = Math.max(0, cursorRowIndex - startRow);
+  const cursorRowTextLength = rowTexts[displayCursorRow]?.length ?? 0;
+  let firstRowEllipsisReplacesFirstColumn = false;
   if (clipped && startRow > 0) {
-    rowTexts[0] = leadingEllipsisText(rowTexts[0] ?? '', columnCount);
+    const firstRow = leadingEllipsisDisplay(rowTexts[0] ?? '', columnCount);
+    firstRowEllipsisReplacesFirstColumn = firstRow.replacesFirstColumn;
+    rowTexts[0] = firstRow.text;
   }
   const displayValue = rowTexts.join('\n');
-  const displayCursorRow = Math.max(0, cursorRowIndex - startRow);
   const cursorRow = visibleRows[displayCursorRow] ?? visibleRows.at(-1);
   const cursorColumn =
     cursorRow === undefined
       ? 0
-      : clampCursor(
-          sourceCursor - cursorRow.start,
-          rowTexts[displayCursorRow]?.length ?? 0,
-        );
+      : clampCursor(sourceCursor - cursorRow.start, cursorRowTextLength);
   const ellipsisCursorColumn =
     clipped && startRow > 0 && displayCursorRow === 0
-      ? firstRowOriginalLength >= columnCount
+      ? firstRowEllipsisReplacesFirstColumn
         ? Math.max(1, cursorColumn)
         : cursorColumn + 1
       : cursorColumn;

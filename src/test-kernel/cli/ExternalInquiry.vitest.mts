@@ -200,6 +200,31 @@ describe('CLI external inquiry modal', () => {
     expect(display.value).toBe('hello\nworld');
   });
 
+  it('does not render a blank row from consecutive soft-break spaces', () => {
+    const value = 'hell  world';
+    const display = textInputDisplayWindow({
+      cursor: value.length,
+      maxDisplayRows: 3,
+      value,
+      width: 5,
+    });
+
+    expect(display.value).toBe('hell\nworld');
+  });
+
+  it('keeps the cursor aligned when clipped ellipsis precedes trimmed text', () => {
+    const value = 'aaaaa hell  world';
+    const display = textInputDisplayWindow({
+      cursor: 'aaaaa hell'.length,
+      maxDisplayRows: 1,
+      value,
+      width: 5,
+    });
+
+    expect(display.value).toBe('…hell');
+    expect(display.cursor).toBe(display.value.length);
+  });
+
   it('does not wrap back to distant whitespace before a long token', () => {
     const value = `a ${'x'.repeat(80)}`;
     const display = textInputDisplayWindow({
