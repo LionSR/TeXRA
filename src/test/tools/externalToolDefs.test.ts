@@ -27,6 +27,7 @@ describe('external tool definitions', () => {
     assert.ok(texraCli, 'TeXRA CLI tool definition should exist');
     assert.strictEqual(texraCli.category, 'ai-agents');
     assert.strictEqual(texraCli.comingSoon, true);
+    assert.strictEqual(texraCli.hideFromCli, true);
     assert.strictEqual(texraCli.toggleable, undefined);
     assert.deepStrictEqual(texraCli.tools, []);
   });
