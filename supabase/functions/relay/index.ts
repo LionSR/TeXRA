@@ -322,6 +322,7 @@ async function checkSpendingLimit(
   currentSpend: number;
   limit: number;
   remaining: number;
+  spendCheckFailed?: boolean;
 }> {
   const limit = getSpendingLimit(tier);
   const monthStart = getCurrentMonthStartUTC();
@@ -352,6 +353,7 @@ async function checkSpendingLimit(
       currentSpend: 0,
       limit,
       remaining: failClosed ? 0 : limit,
+      spendCheckFailed: true,
     };
   }
 
@@ -364,6 +366,13 @@ async function checkSpendingLimit(
     limit,
     remaining,
   };
+}
+
+function isFutureTimestamp(
+  timestamp: string | null | undefined,
+  now = new Date(),
+): boolean {
+  return timestamp != null && new Date(timestamp) > now;
 }
 
 // =============================================================================
@@ -448,11 +457,10 @@ app.get('/tier-config', async (c) => {
           .single();
 
         if (profile) {
+          const now = new Date();
           const userStatus = {
             ...calculateAccessStatus(profile.tier, profile.access_expires_at),
-            isBanned:
-              profile.banned_until != null &&
-              new Date(profile.banned_until) > new Date(),
+            isBanned: isFutureTimestamp(profile.banned_until, now),
           };
 
           // Include current spending if service role key is available
@@ -468,6 +476,7 @@ app.get('/tier-config', async (c) => {
               currentSpend: spending.currentSpend,
               limit: spending.limit,
               remaining: spending.remaining,
+              spendCheckFailed: spending.spendCheckFailed ?? false,
               percentUsed:
                 spending.limit > 0
                   ? Math.round((spending.currentSpend / spending.limit) * 100)
@@ -547,7 +556,8 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   // already blocks sign-in/refresh for banned users, but a still-valid access
   // token would otherwise keep working until it expires — enforce it here so the
   // ban is immediate. Checked before tier/expiry so it can't be circumvented.
-  if (profile.banned_until && new Date(profile.banned_until) > new Date()) {
+  const now = new Date();
+  if (isFutureTimestamp(profile.banned_until, now)) {
     return jsonError(
       'Your account has been suspended. Contact support if you believe this is a mistake.',
       403,
@@ -558,7 +568,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   // Check if access has expired
   if (profile.access_expires_at) {
     const expiresAt = new Date(profile.access_expires_at);
-    if (expiresAt < new Date()) {
+    if (expiresAt < now) {
       return jsonError(
         'Your researcher access has expired. Please contact support to renew.',
         403,
@@ -580,6 +590,19 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     );
 
     if (!spending.allowed) {
+      if (spending.spendCheckFailed) {
+        return jsonError(
+          'Unable to verify your monthly relay usage right now. Please try again shortly, or switch to your own API keys.',
+          503,
+          {
+            spendCheckFailed: true,
+            currentSpend: spending.currentSpend,
+            limit: spending.limit,
+            remaining: spending.remaining,
+          },
+        );
+      }
+
       return jsonError(
         `Monthly spending limit reached ($${spending.limit}). ` +
           `Current usage: $${spending.currentSpend.toFixed(2)}. ` +

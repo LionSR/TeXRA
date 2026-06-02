@@ -23,6 +23,10 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
+  IF TG_OP = 'UPDATE' AND NEW.banned_until IS NOT DISTINCT FROM OLD.banned_until THEN
+    RETURN NEW;
+  END IF;
+
   UPDATE public.profiles
   SET banned_until = NEW.banned_until
   WHERE user_id = NEW.id;
@@ -30,11 +34,13 @@ BEGIN
 END;
 $$;
 
+REVOKE EXECUTE ON FUNCTION public.sync_profile_banned_until()
+  FROM PUBLIC, anon, authenticated;
+
 DROP TRIGGER IF EXISTS trg_sync_profile_banned_until ON auth.users;
 CREATE TRIGGER trg_sync_profile_banned_until
-AFTER UPDATE OF banned_until ON auth.users
+AFTER INSERT OR UPDATE OF banned_until ON auth.users
 FOR EACH ROW
-WHEN (NEW.banned_until IS DISTINCT FROM OLD.banned_until)
 EXECUTE FUNCTION public.sync_profile_banned_until();
 
 -- Backfill from the source of truth (covers the atomicmail.io cluster already

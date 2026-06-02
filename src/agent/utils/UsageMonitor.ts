@@ -166,8 +166,9 @@ export class UsageMonitor {
         });
       }
 
-      // Log to backend for analytics (non-blocking, fire-and-forget)
-      this.logToBackend(stateGlobal.totalResponseTimeMs, {
+      // Log to backend for analytics/billing. Relay-backed rounds wait for the
+      // flush because the next relay request enforces the cap from DB state.
+      await this.logToBackend(stateGlobal.totalResponseTimeMs, {
         inputTokens: roundInputTokens,
         outputTokens: roundOutputTokens,
         cachedInputTokens: roundCacheReadTokens,
@@ -205,9 +206,9 @@ export class UsageMonitor {
 
   /**
    * Log per-round usage to backend for analytics/billing.
-   * Non-blocking - errors are caught and logged, never thrown.
+   * Errors are caught and logged, never thrown.
    */
-  private logToBackend(
+  private async logToBackend(
     totalResponseTimeMs: number,
     usage: {
       inputTokens: number;
@@ -218,7 +219,7 @@ export class UsageMonitor {
       reasoningTokens?: number;
       cost: number;
     },
-  ): void {
+  ): Promise<void> {
     try {
       const { config } = this.modelInfo;
       const provider = UsageProviderSchema.catch('unknown').parse(
@@ -261,7 +262,7 @@ export class UsageMonitor {
       // pre-call check sees this round's cost before the next call — bounding
       // free-tier overage to roughly one round instead of a whole session.
       if (usedRelay) {
-        void UsageLogService.flush();
+        await UsageLogService.flush();
       }
     } catch (error) {
       this.context.logger.debug(

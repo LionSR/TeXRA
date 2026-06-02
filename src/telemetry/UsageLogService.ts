@@ -34,7 +34,7 @@ const DEFAULT_CONFIG: UsageLogConfig = {
 class UsageLogServiceImpl {
   private queue: UsageLogEntry[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
-  private isFlushing = false;
+  private activeFlush: Promise<boolean> | null = null;
   private config: UsageLogConfig = DEFAULT_CONFIG;
   private extensionVersion: string | undefined;
   private editorType: string | undefined;
@@ -82,14 +82,28 @@ class UsageLogServiceImpl {
   }
 
   async flush(): Promise<void> {
-    if (this.isFlushing || this.queue.length === 0) return;
+    while (this.queue.length > 0 || this.activeFlush) {
+      if (this.activeFlush) {
+        await this.activeFlush;
+        continue;
+      }
 
-    this.isFlushing = true;
+      this.activeFlush = this.flushQueuedBatch();
+      try {
+        const madeProgress = await this.activeFlush;
+        if (!madeProgress) return;
+      } finally {
+        this.activeFlush = null;
+      }
+    }
+  }
+
+  private async flushQueuedBatch(): Promise<boolean> {
     try {
       const token = await SupabaseClient.getAccessToken();
       if (!token) {
         logger.debug(CHANNEL, 'Skipping flush - user not authenticated');
-        return;
+        return false;
       }
 
       const entries = this.queue;
@@ -114,13 +128,13 @@ class UsageLogServiceImpl {
       } else {
         logger.warn(CHANNEL, `Batch rejected: ${response.error}`);
       }
+      return true;
     } catch (error) {
       logger.warn(
         CHANNEL,
         `Failed to send usage batch: ${toErrorMessage(error)}`,
       );
-    } finally {
-      this.isFlushing = false;
+      return true;
     }
   }
 
@@ -175,11 +189,11 @@ class UsageLogServiceImpl {
     this.config.enabled = false;
 
     const deadline = Date.now() + 5000;
-    while (this.isFlushing && Date.now() < deadline) {
+    while (this.activeFlush && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
 
-    if (this.isFlushing) {
+    if (this.activeFlush) {
       logger.warn(CHANNEL, 'Dispose timeout waiting for in-flight flush');
     }
 
