@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import { getVisibleAgents, loadAgents } from '@agent/index';
+import { getAgent, getVisibleAgents, loadAgents } from '@agent/index';
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
@@ -76,7 +76,7 @@ export async function showAgent(
   await initLocalCliPlatform(context);
   await loadAgents({ includeRemote: false });
 
-  const entry = await resolveAgentWithRemoteFallback(name);
+  const entry = getAgent(name) ?? (await resolveAgentWithRemoteFallback(name));
   if (!entry) {
     writeTextStderr(`Agent not found: ${name}`);
     return CliExitCode.Usage;
