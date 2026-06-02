@@ -7,7 +7,7 @@ import {
   probeLatexToolchain,
   type LatexToolchainProbe,
 } from '@latex/latexToolchain';
-import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from '@shared/constants/cliRuntime';
+import { TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY } from '@shared/constants/cliRuntime';
 
 // Local imports - CLI runtime
 import { redactEmailAccountLabelsForDisplay } from './accountDisplay';
@@ -159,7 +159,7 @@ function checkNode(version: string): DoctorCheck {
     'node',
     'Node.js',
     `Node ${version || 'unknown'} is outside the supported range.`,
-    `Install Node ${TEXRA_CLI_SUPPORTED_NODE_RANGE}.`,
+    `Install Node ${TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY} before running TeXRA CLI.`,
   );
 }
 
