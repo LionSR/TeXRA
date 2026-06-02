@@ -8,6 +8,7 @@ import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { resolveCliRunnableModel } from '@cli/runtime/modelAccess';
 import { shouldRenderRunProgress } from '@cli/runtime/runProgressRenderer';
+import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
 import { toErrorMessage } from '@common/errors/errorMessage';
 
 /** Trim `-m`; throw a Usage error for unknown ids; undefined when absent. */
@@ -52,12 +53,13 @@ export async function resolveCliRunModel(
     modelOverride?.trim() || context.envModel?.trim(),
   );
   await initCliPlatform({ ...context, quietLogs: true });
+  const apiMode = effectiveCliApiMode(context);
   try {
     const resolution = await resolveCliRunnableModel(model, {
       allowFallback: !explicitModelRequested,
-      apiMode: context.apiMode,
+      apiMode,
       noAvailableModelsMessage:
-        context.apiMode === 'included'
+        apiMode === 'included'
           ? 'Run `texra login` for included relay access, or retry with `--api-mode personal` after configuring a provider API key.'
           : undefined,
     });

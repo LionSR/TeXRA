@@ -3,13 +3,14 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports - model surfaces
 import { computeModelOptionsData } from '@model/computeModelOptions';
-import type { ModelOptionData } from '@shared/schemas';
+import type { ModelAvailabilityKind, ModelOptionData } from '@shared/schemas';
 
-import type { CliApiMode } from './apiAccessMode';
 import { getCliAuthProvider } from './supabaseAuth';
+import type { CliApiMode } from './apiAccessMode';
 
 export interface CliModelAccess {
   readonly model: ModelOptionData;
+  /** Runnable in the API mode used to load this access list. */
   readonly available: boolean;
   readonly status: string;
 }
@@ -30,6 +31,45 @@ export interface CliModelAccessListOptions {
   readonly apiMode?: CliApiMode;
 }
 
+const PERSONAL_API_AVAILABILITY: ReadonlySet<ModelAvailabilityKind> = new Set([
+  'provider-key',
+  'openrouter-key',
+]);
+
+function isCliModelOptionBasicallyAvailable(model: ModelOptionData): boolean {
+  return model.disabled !== true && model.requiresKey !== true;
+}
+
+function isCliModelOptionAllowedInMode(
+  model: ModelOptionData,
+  apiMode?: CliApiMode,
+): boolean {
+  if (apiMode === 'included') {
+    return model.availability === 'included-access';
+  }
+  if (apiMode === 'personal') {
+    const availability = model.availability;
+    return availability != null && PERSONAL_API_AVAILABILITY.has(availability);
+  }
+  return true;
+}
+
+function isCliModelOptionRunnableInMode(
+  model: ModelOptionData,
+  apiMode?: CliApiMode,
+): boolean {
+  return (
+    isCliModelOptionBasicallyAvailable(model) &&
+    isCliModelOptionAllowedInMode(model, apiMode)
+  );
+}
+
+export function runnableCliModelAccessEntries(
+  models: readonly CliModelAccess[],
+): CliModelAccess[] {
+  return models.filter((entry) => entry.available);
+}
+
 function formatModelAccessStatus(model: ModelOptionData): string {
   if (model.availabilityLabel) return model.availabilityLabel.toLowerCase();
   if (!model.disabled && !model.requiresKey) return 'available';
@@ -40,10 +80,13 @@ function formatModelAccessStatus(model: ModelOptionData): string {
   return 'unavailable';
 }
 
-function toCliModelAccess(model: ModelOptionData): CliModelAccess {
+function toCliModelAccess(
+  model: ModelOptionData,
+  apiMode?: CliApiMode,
+): CliModelAccess {
   return {
     model,
-    available: !model.disabled && !model.requiresKey,
+    available: isCliModelOptionRunnableInMode(model, apiMode),
     status: formatModelAccessStatus(model),
   };
 }
@@ -77,7 +120,9 @@ export async function getCliModelAccessList(
   options: CliModelAccessListOptions = {},
 ): Promise<CliModelAccess[]> {
   const models = await computeModelOptionsData();
-  const access = models.map(toCliModelAccess);
+  const access = models.map((model) =>
+    toCliModelAccess(model, options.apiMode),
+  );
   if (await includedAccessRequiresLogin(options)) {
     return access.map(toIncludedLoginRequiredAccess);
   }
@@ -96,9 +141,9 @@ function findModelAccess(
 }
 
 function availableModelIds(models: readonly CliModelAccess[]): string[] {
-  return models
-    .filter((entry) => entry.available)
-    .map((entry) => entry.model.value);
+  return runnableCliModelAccessEntries(models).map(
+    (entry) => entry.model.value,
+  );
 }
 
 function withModelAccess(
@@ -193,7 +238,7 @@ export async function resolveCliRunnableModel(
         `Model "${hiddenModelId}" is configured but has no option data.`,
       );
     }
-    hiddenModel = toCliModelAccess(hiddenModelOption);
+    hiddenModel = toCliModelAccess(hiddenModelOption, options.apiMode);
     if (await includedAccessRequiresLogin(options)) {
       hiddenModel = toIncludedLoginRequiredAccess(hiddenModel);
     }
