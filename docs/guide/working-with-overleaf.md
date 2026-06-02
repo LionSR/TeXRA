@@ -46,7 +46,7 @@ The whole loop is a round-trip: pull your project down from Overleaf, edit it lo
 
 #### Option A: Use TeXRA's clone command (recommended)
 
-1.  In VS Code, open the command palette (<kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>) and run **TeXRA: Clone Overleaf Project**.
+1.  In VS Code, open the command palette (<kbd>Ctrl/Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>) and run **TeXRA: Clone Overleaf/ShareLaTeX Project**.
 2.  Paste the Overleaf project URL or 24-character project ID when prompted.
 3.  Enter your Overleaf Git token (it begins with `olp_`). TeXRA saves it to VS Code's secret storage so future clones can reuse it.
 4.  The command runs `git clone` directly into your workspace root so the cloned project becomes the repository you're working in. Make sure that folder is empty before starting.

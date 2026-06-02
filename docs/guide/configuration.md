@@ -19,7 +19,7 @@ exposes models, tools, and agents through `texra models`, `texra tools`, and
 
 ## The TeXRA Dashboard
 
-The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Dashboard**. Its ten tabs all live in one navigation rail:
+The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open it from the Command Palette (`Ctrl+Shift+P`) with **TeXRA: Show Settings Dashboard**. Its ten tabs all live in one navigation rail:
 
 <DashboardTabsCard />
 
@@ -37,18 +37,16 @@ The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open i
 - **Odyssey** - Monitor long-running multi-agent jobs from the orchestrator.
 
 ::: tip
-Many connection and model settings are configured through VS Code's standard settings. The Dashboard tabs provide convenient access to agent, model, and tool configuration.
+The Dashboard tabs are the recommended way to manage agents, models, tools, and connections. VS Code's raw settings (`texra.*` keys) still work for power users.
 :::
 
-## Accessing Configuration
+## Where Settings Live
 
-You can also configure TeXRA through VS Code's standard settings:
+Most configuration happens in the **Dashboard** (above) — open it with `TeXRA: Show Settings Dashboard`. The CLI keeps project defaults in a per-project `.texra/config.json` (`texra init` scaffolds one).
 
-1. Open VS Code Settings (File > Preferences > Settings or `Ctrl+,`)
-2. Search for "TeXRA" to see all available settings
-3. Adjust settings in the UI or edit the JSON directly
+Many `texra.*` keys share the same **name** across the VS Code extension and the CLI's `.texra/config.json` (most of the file-, LaTeX-, and model-connection settings below), so the same documentation applies to both. They don't share storage, though — the extension persists settings in VS Code's config/global state, while the CLI reads `.texra/config.json`. Some keys are extension-only (for example the LaTeX formatter and the model picker, which live in extension state); the CLI warns on any key it doesn't recognize.
 
-![VS Code Settings](/images/vscode-settings.png)
+VS Code's built-in Settings UI remains available for power users — open it with `Ctrl+,` (`Cmd+,` on macOS), search for "TeXRA", and edit in the UI or the JSON. It's no longer the primary path, so reach for the Dashboard or CLI config first.
 
 ## Core Configuration Options
 
@@ -71,33 +69,13 @@ See the [Models Guide](./models.md) for the full list of supported models.
 Configure how TeXRA connects to AI model providers:
 
 ```json
-"texra.model.useImprovedConnection": false,
-"texra.model.improvedConnectionDomain": "",
 "texra.model.useOpenAIResponsesAPI": true,
 "texra.model.gpt5ReasoningSummary": false
 ```
 
 - **OpenRouter**: To route all API calls through OpenRouter, expand the OpenRouter row in the Dashboard → Models tab → API Configuration and enable **"Use OpenRouter for All Models"**
-- `useImprovedConnection`: Route all API requests through a proxy server
-- `improvedConnectionDomain`: Custom proxy domain when `useImprovedConnection` is enabled. Defaults to the built-in proxy when unset.
-  - ⚠️ **Security Warning:** When using a proxy, ensure you trust the proxy server as it will receive your API keys. Only use proxies from trusted sources.
 - `useOpenAIResponsesAPI`: Use OpenAI's Responses API instead of Chat Completions when available
 - `gpt5ReasoningSummary`: Request reasoning summaries from the GPT-5 family, including GPT-5.5 and GPT-5.5 Pro (requires verified account and user tier)
-
-| Provider         | Proxy path                  | Supported |
-| ---------------- | --------------------------- | --------- |
-| OpenAI           | `openai/v1`                 | ✅ Yes    |
-| Anthropic        | `anthropic/v1`              | ✅ Yes    |
-| Gemini (Google)  | `generativelanguage/v1beta` | ✅ Yes    |
-| xAI              | `xai`                       | ✅ Yes    |
-| OpenRouter       | `openrouter`                | ✅ Yes    |
-| Groq             | `groq/openai/v1`            | ✅ Yes    |
-| Perplexity       | `pplx`                      | ✅ Yes    |
-| Mistral          | `mistral`                   | ✅ Yes    |
-| Moonshot (Kimi)  | N/A                         | ❌ No     |
-| DashScope (Qwen) | N/A                         | ❌ No     |
-
-**Note:** Only the providers marked with ✅ are supported by the proxy. Other providers will use their direct API endpoints even when proxy is enabled.
 
 ### Anthropic 1M Context Window
 
@@ -168,7 +146,7 @@ Control which file types TeXRA includes:
   ".tex",
   ".md"
 ],
-"texra.files.included.referenceExtensions": [
+"texra.files.included.contextExtensions": [
   ".txt",
   ".tex",
   ".md",
@@ -231,16 +209,14 @@ Control which directories TeXRA ignores:
 
 ### LaTeX Formatting
 
-Configure LaTeX formatting behavior:
+Pick the formatter (`latexindent`, `tex-fmt`, or `none` to disable) from the **Dashboard → LaTeX** tab. The related options are standard settings:
 
 ```json
-"texra.latex.formatter": "none",
 "texra.latex.showLatexindentWarning": false,
 "texra.latex.latexindentConfig": "/path/to/latexindent.yaml",
 "texra.latex.texfmtConfig": "/path/to/tex-fmt.toml"
 ```
 
-- `formatter`: Choose between `latexindent`, `tex-fmt`, or `none` to disable formatting.
 - `showLatexindentWarning`: Disabled by default. Set to `true` to show a popup when `latexindent` is missing.
 - `latexindentConfig`: Path to a `latexindent` configuration file.
 - `texfmtConfig`: Path to a `tex-fmt` configuration file.
@@ -261,7 +237,7 @@ Configure how TikZ figures are extracted and compiled:
 
 ## Git Integration
 
-The **Git tab** in the TeXRA Dashboard (`TeXRA: Show Dashboard` → **Git**) covers two independent features: a GitHub token used by the PR-subscription tool, and optional TeXRA-branded commit authorship for agent-made commits.
+The **Git tab** in the TeXRA Dashboard (`TeXRA: Show Settings Dashboard` → **Git**) covers two independent features: a GitHub token used by the PR-subscription tool, and optional TeXRA-branded commit authorship for agent-made commits.
 
 <GitTabCard />
 
@@ -291,7 +267,7 @@ Enable **Mark commits with TeXRA author info** to attribute commits created by T
 
 ### LaTeX diff commit history
 
-The unrelated setting controlling how many recent commits appear in the LaTeX-diff commit picker is:
+A separate setting controls how many recent commits appear in the LaTeX-diff commit picker:
 
 ```json
 "texra.git.numberOfCommitsToShow": 20
@@ -323,10 +299,11 @@ Control logging behavior:
 
 You can configure TeXRA at different levels:
 
-1. **User Settings**: Apply to all workspaces (set in VS Code's user settings)
-2. **Workspace Settings**: Apply only to the current workspace (set in `.vscode/settings.json`)
+1. **User Settings**: Apply to all workspaces (the VS Code extension's user settings)
+2. **Workspace Settings**: Apply only to the current workspace (`.vscode/settings.json`)
+3. **CLI / project config**: A per-project `.texra/config.json` (run `texra init`) — the CLI's native project-level equivalent of workspace settings
 
-For project-specific configurations, use workspace settings:
+For project-specific configurations in the VS Code extension, use workspace settings:
 
 ```json
 // .vscode/settings.json
@@ -360,11 +337,10 @@ For macOS and Linux, use forward slashes:
 
 ## Creating Custom Profiles
 
-While TeXRA doesn't have built-in profile support, you can create multiple configuration sets using VS Code's settings profiles:
+To keep different configuration sets:
 
-1. Create different VS Code profiles for different types of projects
-2. Configure TeXRA differently in each profile
-3. Switch between profiles based on your current task
+- **CLI:** each project carries its own `.texra/config.json`, so per-project defaults come for free.
+- **VS Code extension:** TeXRA has no built-in profile support, but you can use VS Code's settings profiles — create a profile per project type, configure TeXRA differently in each, and switch as you change tasks.
 
 ## Configuration Best Practices
 
@@ -383,7 +359,7 @@ For team collaboration:
 
 ```json
 "texra.git.numberOfCommitsToShow": 30,
-"texra.latex.latexindentConfig": "${workspaceFolder}/.latexindent.yaml"
+"texra.latex.latexindentConfig": "${workspaceFolder}/.latexindent.yaml",
 "texra.latex.texfmtConfig": "${workspaceFolder}/tex-fmt.toml"
 ```
 
@@ -393,11 +369,10 @@ Use workspace settings to ensure consistent configuration across the team.
 
 ### Manual Settings File Editing
 
-For advanced configurations, you can directly edit the VS Code settings JSON:
+Power users can edit the underlying settings file directly:
 
-1. Open Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS)
-2. Run "Preferences: Open User Settings (JSON)"
-3. Add or modify TeXRA settings
+- **CLI / project-level:** edit `.texra/config.json` in your project (run `texra init` to scaffold one). Only recognized `texra.*` keys take effect — the CLI warns on unknown keys.
+- **VS Code extension:** open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`), run "Preferences: Open User Settings (JSON)", and add or modify `texra.*` keys.
 
 ### Cross-Extension Compatibility
 
@@ -448,7 +423,7 @@ These settings, accessible directly in the main TeXRA webview, control how agent
 
 Reflection rounds are now controlled entirely by the agent definition. Choose agents whose `userRequest` prompt list includes follow-up entries (or create custom ones) when you need an automatic follow-up critique.
 
-To capture the full prompt sent to the model, enable the `Save Input Prompt` debug setting in VS Code Settings (`texra.debug.saveInputPrompt`).
+To capture the full prompt sent to the model, enable the `texra.debug.saveInputPrompt` setting (in `.texra/config.json` or VS Code settings).
 
 **Model/Agent Selection:**
 

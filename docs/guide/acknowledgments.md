@@ -15,6 +15,18 @@ If TeXRA helps you publish faster, graduate sooner, or simply reduces your LaTeX
 - [**Sponsor on GitHub**](https://github.com/sponsors/texra-ai)
 - [**Buy Me a Coffee**](https://buymeacoffee.com/texra.ai)
 
+## Research produced with TeXRA
+
+TeXRA grew out of real research, and it's built to produce more of it. A selection of work by the TeXRA team and collaborators that uses these multi-agent workflows:
+
+- **Lu, S., Jin, Z., Zhang, T. J., Kos, P., Cirac, J. I., & Schölkopf, B.** (2026). [_Can Theoretical Physics Research Benefit from Language Agents?_](https://arxiv.org/abs/2506.06214) International Conference on Machine Learning (ICML 2026).
+  A position paper on how language agents can accelerate theoretical and computational physics — the motivation behind TeXRA.
+
+- **He, X., Lu, S., & Zeng, B.** (2025). [_Co-Designing Quantum Codes with Transversal Diagonal Gates via Multi-Agent Systems_](https://arxiv.org/abs/2510.20728). arXiv:2510.20728.
+  A multi-agent system pairs symbolic synthesis and search with Lean 4 formal verification to produce a certified catalogue of 14,116 nonadditive quantum codes with prescribed transversal diagonal gates, and resolves the transversal-T problem for distance-3 codes.
+
+Used TeXRA in your own work? We'd love to hear about it — see [Acknowledging TeXRA](#acknowledging-texra) above, or reach us at [contact@texra.ai](mailto:contact@texra.ai).
+
 ## Conceptual Background & References
 
 TeXRA's design draws inspiration from several key concepts in AI and software development:
@@ -37,4 +49,4 @@ We believe combining these concepts provides a robust and adaptable platform for
 
 [4] Shinn, N., Cassano, F., Gopinath, A., Narasimhan, K., & Yao, S. (2023). Reflexion: Language Agents with Verbal Reinforcement Learning. In _Advances in Neural Information Processing Systems 36 (NeurIPS 2023)_.
 
-[5] Lu, S., Jin, Z., Zhang, T. J., Kos, P., Cirac, J. I., & Schölkopf, B. (2025). Can Theoretical Physics Research Benefit from Language Agents? _arXiv preprint arXiv:2506.06214_.
+[5] Lu, S., Jin, Z., Zhang, T. J., Kos, P., Cirac, J. I., & Schölkopf, B. (2026). Can Theoretical Physics Research Benefit from Language Agents? _International Conference on Machine Learning (ICML 2026)_. arXiv:2506.06214.

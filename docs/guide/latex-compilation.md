@@ -29,7 +29,7 @@ TeXRA leverages LaTeX Workshop when available. For example, after generating a c
 
 To keep your project directory clean, it's highly recommended to configure LaTeX Workshop to place its build output files (like `.aux`, `.log`, `.pdf`) into a separate subdirectory. TeXRA is aware of this common practice.
 
-You can configure this setting via:
+LaTeX Workshop is a separate VS Code extension, so this one lives in VS Code's own settings rather than TeXRA's:
 
 1.  Open VS Code Settings (<wa-icon library="texra" name="gear"></wa-icon> icon or `Ctrl+,`).
 2.  Search for `Latex-workshop: Latex: Out Dir`.
