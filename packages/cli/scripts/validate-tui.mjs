@@ -723,8 +723,14 @@ const SCENARIOS = [
       'Enter submit answer',
       'Ctrl-R reject with note',
       'Esc skip',
+      '1 question',
     ],
-    unexpect: ['└─Degenerate triples', '[/model]models', 'Esc sk…'],
+    unexpect: [
+      '└─Degenerate triples',
+      '[/model]models',
+      'Esc sk…',
+      '1 approval',
+    ],
   },
   {
     name: 'external-inquiry-long-80-cols',
@@ -741,8 +747,14 @@ const SCENARIOS = [
       'Enter submit answer',
       'Ctrl-R reject with note',
       'Esc skip',
+      '1 question',
     ],
-    unexpect: ['└─Degenerate triples', '[/model]models', 'Esc sk…'],
+    unexpect: [
+      '└─Degenerate triples',
+      '[/model]models',
+      'Esc sk…',
+      '1 approval',
+    ],
   },
   {
     name: 'compact-user-question',
@@ -758,8 +770,13 @@ const SCENARIOS = [
       '+2 more',
       'Enter select',
       'Esc skip',
+      '1 question',
     ],
-    unexpect: ['[/model]models', 'Context detail: the candidate proof'],
+    unexpect: [
+      '[/model]models',
+      'Context detail: the candidate proof',
+      '1 approval',
+    ],
     maxLineColumns: 80,
   },
   {

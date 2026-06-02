@@ -16,7 +16,10 @@ import {
 import { collapseWhitespace } from '@utils/text/stringUtils';
 
 import { formatCliStatusLabel } from '../sessionStatus';
-import { approvalQueueDepth } from '../state/approvalQueue';
+import {
+  approvalQueueStatus,
+  type ApprovalQueueStatusKind,
+} from '../state/approvalQueue';
 import { terminalCapabilities } from '../state/terminalCapabilities';
 import {
   cliState,
@@ -58,6 +61,7 @@ export interface StatusBarDisplayInput {
   readonly activeSubagents: number;
   readonly activeProcesses: number;
   readonly approvalDepth: number;
+  readonly approvalKind?: ApprovalQueueStatusKind;
   readonly taskControlsAvailable?: boolean;
   readonly subagentControlsAvailable: boolean;
   /** True when more than the root stream exists, i.e. a subagent or
@@ -238,6 +242,21 @@ function queuedFollowUpsCountSegment(
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.queuedFollowUp,
       }
     : undefined;
+}
+
+function pendingInteractionSegment({
+  depth,
+  kind = 'approval',
+}: {
+  readonly depth: number;
+  readonly kind?: ApprovalQueueStatusKind;
+}): StatusBarSegment | undefined {
+  if (depth <= 0) return undefined;
+  return {
+    text: `${depth} ${kind}${depth === 1 ? '' : 's'}`,
+    color: 'yellow',
+    compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalDepth,
+  };
 }
 
 function statusBarSegmentWidth(segment: StatusBarSegment): number {
@@ -621,15 +640,11 @@ export function buildStatusBarDisplay(
       compactPriority: STATUS_BAR_COMPACT_PRIORITY.activeProcess,
     });
   }
-  if (input.approvalDepth > 0) {
-    left.push({
-      text: `${input.approvalDepth} approval${
-        input.approvalDepth === 1 ? '' : 's'
-      }`,
-      color: 'yellow',
-      compactPriority: STATUS_BAR_COMPACT_PRIORITY.approvalDepth,
-    });
-  }
+  const pendingInteraction = pendingInteractionSegment({
+    depth: input.approvalDepth,
+    kind: input.approvalKind,
+  });
+  if (pendingInteraction) left.push(pendingInteraction);
   if (input.bypass.superYolo) {
     left.push({ text: 'YOLO', badge: true, badgeColor: 'red' });
   }
@@ -692,7 +707,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const sessionMeta = useSignal(cliState.sessionMeta);
   const pendingExitHint = useSignal(cliState.pendingExitHint);
   const pendingExitResumeId = useSignal(cliState.pendingExitResumeId);
-  const approvals = useSignal(approvalQueueDepth);
+  const approvals = useSignal(approvalQueueStatus);
   const caps = useSignal(terminalCapabilities);
   const { columns } = useWindowSize();
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
@@ -732,7 +747,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     conversation: statusSlice?.conversation,
     activeSubagents: statusSlice?.activeSubagents.length ?? 0,
     activeProcesses: statusSlice?.activeProcesses.length ?? 0,
-    approvalDepth: approvals,
+    approvalDepth: approvals.depth,
+    approvalKind: approvals.kind,
     taskControlsAvailable: hasChildControlItems(
       taskControlTarget.slice,
       'tasks',
