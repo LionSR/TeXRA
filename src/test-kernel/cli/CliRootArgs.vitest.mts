@@ -27,7 +27,10 @@ import {
   collectStringFlagValues,
   rejectHeadlessOnlyFlags,
 } from '@cli/commands/_helpers/globalArgs';
-import { cliTerminalStatus } from '@cli/commands/_helpers/terminalStatus';
+import {
+  cliTerminalStatus,
+  createCliRunResult,
+} from '@cli/commands/_helpers/terminalStatus';
 import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
@@ -673,6 +676,26 @@ describe('CLI root argument routing', () => {
         EXECUTION_STATUS.INTERRUPTED,
       ),
     ).toBe(EXECUTION_STATUS.INTERRUPTED);
+  });
+
+  it('includes working directory metadata in CLI run results', () => {
+    const result = createCliRunResult(
+      {
+        status: END_GROUP_STATUS.STOPPED,
+        category: AgentCategory.ToolUse,
+        executionId: 'completed-without-output',
+        streamId: 'stream-without-output',
+        lastResponse: 'done',
+      } as Parameters<typeof createCliRunResult>[0],
+      EXECUTION_STATUS.COMPLETED,
+      { workingDirectory: '/tmp/project' },
+    );
+
+    expect(result).toMatchObject({
+      executionId: 'completed-without-output',
+      workingDirectory: '/tmp/project',
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
+    });
   });
 
   it('restores one requested workflow output path for resume', () => {

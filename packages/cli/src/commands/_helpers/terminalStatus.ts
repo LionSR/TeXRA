@@ -13,6 +13,7 @@ type CliRunResultFor<T extends ExecuteAgentResult> = Omit<T, 'status'> & {
   status: ExecutionStatus;
   endGroupStatus: T['status'];
   terminalStatus: ExecutionStatus;
+  workingDirectory?: string;
   runDirectory?: string;
   copiedOutput?: string;
   copiedOutputs?: string[];
@@ -58,6 +59,7 @@ export function createCliRunResult<T extends ExecuteAgentResult>(
   result: T,
   terminalStatus: ExecutionStatus,
   extras: {
+    readonly workingDirectory?: string;
     readonly runDirectory?: string;
     readonly copiedOutput?: string;
     readonly copiedOutputs?: string[];
