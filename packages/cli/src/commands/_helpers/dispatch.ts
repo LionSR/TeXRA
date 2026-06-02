@@ -84,6 +84,9 @@ export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
 export function normalizeRootShortcuts(rawArgs: readonly string[]): string[] {
   const { leadingGlobals, restIndex } = collectLeadingGlobalFlags(rawArgs);
   const shortcut = rawArgs[restIndex];
+  if (shortcut === '--version' || shortcut === '-v' || shortcut === '-V') {
+    return ['version', ...leadingGlobals, ...rawArgs.slice(restIndex + 1)];
+  }
   if (shortcut === '--logout') {
     return ['logout', ...leadingGlobals, ...rawArgs.slice(restIndex + 1)];
   }
