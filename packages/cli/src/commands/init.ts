@@ -6,6 +6,7 @@ import { BUILTIN_DEFAULT_CHAT_AGENT } from '../runtime/chatDefaults';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
+import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import { getCliModelAccessList } from '../runtime/modelAccess';
 import {
   buildInitConfig,
@@ -19,7 +20,7 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import type { CliContext } from '../runtime/cliContext';
 
-async function gatherOptions(): Promise<{
+async function gatherOptions(apiMode: CliApiMode): Promise<{
   agents: { name: string; description?: string }[];
   models: {
     value: string;
@@ -33,7 +34,7 @@ async function gatherOptions(): Promise<{
     name: agent.name,
     description: agent.description,
   }));
-  const models = (await getCliModelAccessList()).map((entry) => ({
+  const models = (await getCliModelAccessList({ apiMode })).map((entry) => ({
     value: entry.model.value,
     label: entry.model.label ?? entry.model.value,
     available: entry.available,
@@ -105,7 +106,7 @@ async function runInit(
     return CliExitCode.Usage;
   }
 
-  const { agents, models } = await gatherOptions();
+  const { agents, models } = await gatherOptions(effectiveCliApiMode(context));
 
   const interactive =
     !opts.yes &&

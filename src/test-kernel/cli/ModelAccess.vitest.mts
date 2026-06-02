@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   getCliModelAccessList,
+  runnableCliModelAccessEntries,
   resolveCliRunnableModel,
   resolveCliRunnableModelFromAccessList,
   type CliModelAccess,
@@ -65,7 +66,14 @@ describe('CLI model access resolution', () => {
       resolveCliRunnableModelFromAccessList(
         [
           model('sonnet46T'),
-          model('opus48T', { available: false, status: 'not included' }),
+          model('opus48T', {
+            available: false,
+            status: 'not included',
+            model: modelOption('opus48T', {
+              availability: 'not-included',
+              disabled: true,
+            }),
+          }),
         ],
         'opus48T',
         { allowFallback: false },
@@ -79,7 +87,14 @@ describe('CLI model access resolution', () => {
     expect(
       resolveCliRunnableModelFromAccessList(
         [
-          model('opus48T', { available: false, status: 'not included' }),
+          model('opus48T', {
+            available: false,
+            status: 'not included',
+            model: modelOption('opus48T', {
+              availability: 'not-included',
+              disabled: true,
+            }),
+          }),
           model('deepseekT'),
           model('sonnet46T'),
         ],
@@ -93,10 +108,108 @@ describe('CLI model access resolution', () => {
     });
   });
 
+  it('filters runnable models by access-list availability', () => {
+    const entries = [
+      model('sonnet46T', {
+        model: modelOption('sonnet46T', {
+          availability: 'included-access',
+        }),
+      }),
+      model('deepseekT', {
+        available: false,
+        model: modelOption('deepseekT', {
+          availability: 'provider-key',
+        }),
+      }),
+      model('openrouterOnlyT', {
+        available: false,
+        model: modelOption('openrouterOnlyT', {
+          availability: 'openrouter-key',
+        }),
+      }),
+      model('gemini31p', {
+        available: false,
+        model: modelOption('gemini31p', {
+          availability: 'missing-key',
+          disabled: true,
+          requiresKey: true,
+        }),
+      }),
+    ];
+
+    expect(
+      runnableCliModelAccessEntries(entries).map((entry) => entry.model.value),
+    ).toEqual(['sonnet46T']);
+  });
+
+  it('rejects personal-key models in included relay mode', () => {
+    expect(() =>
+      resolveCliRunnableModelFromAccessList(
+        [
+          model('sonnet46T', {
+            model: modelOption('sonnet46T', {
+              availability: 'included-access',
+            }),
+            status: 'included access',
+          }),
+          model('deepseekT', {
+            available: false,
+            model: modelOption('deepseekT', {
+              availability: 'provider-key',
+            }),
+            status: 'api key set',
+          }),
+        ],
+        'deepseekT',
+        { allowFallback: false, apiMode: 'included' },
+      ),
+    ).toThrow(
+      'Model "deepseekT" is not available in the active API mode (api key set). Available models: sonnet46T.',
+    );
+  });
+
+  it('falls back from included relay models in personal API mode', () => {
+    expect(
+      resolveCliRunnableModelFromAccessList(
+        [
+          model('sonnet46T', {
+            available: false,
+            model: modelOption('sonnet46T', {
+              availability: 'included-access',
+            }),
+            status: 'included access',
+          }),
+          model('deepseekT', {
+            model: modelOption('deepseekT', {
+              availability: 'provider-key',
+            }),
+            status: 'api key set',
+          }),
+        ],
+        'sonnet46T',
+        { allowFallback: true, apiMode: 'personal' },
+      ),
+    ).toEqual({
+      model: 'deepseekT',
+      notice:
+        'Model "sonnet46T" is not available in the active API mode (included access). Available models: deepseekT. Using "deepseekT" instead.',
+    });
+  });
+
   it('reports when no fallback model is runnable', () => {
     expect(() =>
       resolveCliRunnableModelFromAccessList(
-        [model('gemini31p', { available: false, status: 'missing api key' })],
+        [
+          model('gemini31p', {
+            available: false,
+            status: 'missing api key',
+            model: modelOption('gemini31p', {
+              availability: 'missing-key',
+              disabled: true,
+              requiresKey: true,
+            }),
+          }),
+        ],
         'gemini31p',
         { allowFallback: true },
       ),
@@ -108,7 +221,17 @@ describe('CLI model access resolution', () => {
   it('can format command-specific recovery hints for interactive chat', () => {
     expect(() =>
       resolveCliRunnableModelFromAccessList(
-        [model('gemini31p', { available: false, status: 'missing api key' })],
+        [
+          model('gemini31p', {
+            available: false,
+            status: 'missing api key',
+            model: modelOption('gemini31p', {
+              availability: 'missing-key',
+              disabled: true,
+              requiresKey: true,
+            }),
+          }),
+        ],
         'gemini31p',
         {
           allowFallback: true,
@@ -173,6 +296,87 @@ describe('CLI model access resolution', () => {
         },
       },
     ]);
+  });
+
+  it('marks only included-access models runnable in included relay mode', async () => {
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('sonnet46T', {
+        availability: 'included-access',
+        availabilityLabel: 'Included access',
+      }),
+      modelOption('deepseekT', {
+        availability: 'provider-key',
+        availabilityLabel: 'API key set',
+      }),
+      modelOption('openrouterOnlyT', {
+        availability: 'openrouter-key',
+        availabilityLabel: 'OpenRouter key',
+      }),
+    ]);
+
+    await expect(
+      getCliModelAccessList({ apiMode: 'included' }),
+    ).resolves.toMatchObject([
+      { model: { value: 'sonnet46T' }, available: true },
+      { model: { value: 'deepseekT' }, available: false },
+      { model: { value: 'openrouterOnlyT' }, available: false },
+    ]);
+  });
+
+  it('marks only API-key models runnable in personal API mode', async () => {
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('sonnet46T', {
+        availability: 'included-access',
+        availabilityLabel: 'Included access',
+      }),
+      modelOption('deepseekT', {
+        availability: 'provider-key',
+        availabilityLabel: 'API key set',
+      }),
+      modelOption('openrouterOnlyT', {
+        availability: 'openrouter-key',
+        availabilityLabel: 'OpenRouter key',
+      }),
+    ]);
+
+    await expect(
+      getCliModelAccessList({ apiMode: 'personal' }),
+    ).resolves.toMatchObject([
+      { model: { value: 'sonnet46T' }, available: false },
+      { model: { value: 'deepseekT' }, available: true },
+      { model: { value: 'openrouterOnlyT' }, available: true },
+    ]);
+  });
+
+  it('uses the loaded access list as the availability source of truth', async () => {
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('sonnet46T', {
+        availability: 'included-access',
+        availabilityLabel: 'Included access',
+        disabled: false,
+        requiresKey: false,
+      }),
+      modelOption('deepseekT', {
+        availability: 'provider-key',
+        availabilityLabel: 'API key set',
+        disabled: false,
+        requiresKey: false,
+      }),
+    ]);
+
+    const includedModeEntries = await getCliModelAccessList({
+      apiMode: 'included',
+    });
+
+    expect(includedModeEntries).toMatchObject([
+      { model: { value: 'sonnet46T' }, available: true },
+      { model: { value: 'deepseekT' }, available: false },
+    ]);
+    expect(
+      runnableCliModelAccessEntries(includedModeEntries).map(
+        (entry) => entry.model.value,
+      ),
+    ).toEqual(['sonnet46T']);
   });
 
   it('checks access for explicit models hidden from the visible model list', async () => {

@@ -42,6 +42,7 @@ import {
   finalizeSettledPrefix,
   syncStreamLog,
 } from '@cli/chat/tui/state/subscribeStreamLog';
+import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import { wrapRuntimeHost } from '@cli/chat/tui/state/subscribeRuntimeHost';
 import {
   COMPLETED_PROCESS_TAIL_LINES,
@@ -182,6 +183,52 @@ describe('cliState Phase 4 fields', () => {
     expect(hasChildControlItems(parent, 'tasks')).toBe(false);
     expect(hasChildControlItems(parent, 'subagents')).toBe(false);
     expect(nextFocusForward()).toBeUndefined();
+  });
+
+  it('updates retained child rows when a failed subagent leaves the active list', () => {
+    const wrapped = wrapRuntimeHost({
+      emit: () => undefined,
+      close: async () => {},
+    } as unknown as CliRuntimeHost);
+    const dispose = subscribeStreamStatus();
+    try {
+      patchStream(root, (s) => ({
+        ...s,
+        activeSubagents: [
+          {
+            executionId: 'agent-1',
+            agentName: 'codex',
+            childStreamId: child1,
+            status: STREAM_STATUS.RUNNING,
+          },
+        ],
+        childStreams: [
+          {
+            executionId: 'agent-1',
+            agentName: 'codex',
+            childStreamId: child1,
+            status: STREAM_STATUS.RUNNING,
+          },
+        ],
+      }));
+      patchStream(root, (s) => ({ ...s, activeSubagents: [] }));
+
+      StreamStatusService.set(child1, STREAM_STATUS.ERROR, {
+        runtimeHost: wrapped,
+      });
+
+      const parent = cliState.streams.get().get(root);
+      expect(parent?.activeSubagents).toEqual([]);
+      expect(visibleSubagentRows(parent!)).toMatchObject([
+        {
+          executionId: 'agent-1',
+          childStreamId: child1,
+          status: STREAM_STATUS.ERROR,
+        },
+      ]);
+    } finally {
+      dispose();
+    }
   });
 
   it('treats a null-parent update as child promotion to top-level', () => {
