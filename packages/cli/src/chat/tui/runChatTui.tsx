@@ -839,7 +839,9 @@ async function handleTuiSlashCommand(
           agent: meta.agent || context.initialAgent,
           model: meta.model || context.initialModel,
           teamName: meta.teamName,
-          api: formatCliApiMode(getCliApiMode()),
+          // Read the session's own mode (which honors a --api-mode/env override)
+          // so /status agrees with the header instead of re-reading the global.
+          api: formatCliApiMode(meta.apiMode),
           approval: formatApprovalPolicy(context.getApprovalPolicy()),
           approvalBypasses: slice?.bypass,
           status: slice?.status ?? 'not started',
@@ -940,17 +942,24 @@ export async function runChat(
   const explicitModelRequested = Boolean(
     init.modelOverride?.trim() || context.envModel?.trim(),
   );
+  // One API mode for the whole session: an explicit --api-mode/env override
+  // wins, otherwise the persisted account default. Model resolution, the
+  // no-models hints, and the header/status all read this same value so they can
+  // never disagree — previously resolution used `context.apiMode` (undefined on
+  // a bare launch, so ungated) while the header showed `getCliApiMode()`, which
+  // let a model resolve as if in one mode while the UI reported another.
+  const sessionApiMode = context.apiMode ?? getCliApiMode();
   let modelResolution: Awaited<ReturnType<typeof resolveCliRunnableModel>>;
   try {
     modelResolution = await resolveCliRunnableModel(defaults.model, {
       allowFallback: !explicitModelRequested,
-      apiMode: context.apiMode,
+      apiMode: sessionApiMode,
       noAvailableModelsMessage:
-        context.apiMode === 'included'
+        sessionApiMode === 'included'
           ? 'Run `texra login` for included relay access, or retry with `--api-mode personal` after configuring a provider API key.'
           : undefined,
       noAvailableModelsHint:
-        context.apiMode === 'included'
+        sessionApiMode === 'included'
           ? undefined
           : 'Run `texra chat --api-mode included` to try included relay access',
     });
@@ -995,7 +1004,7 @@ export async function runChat(
     agent,
     model,
     cwd: context.cwd,
-    apiMode: getCliApiMode(),
+    apiMode: sessionApiMode,
     canDelegate: agentSupportsDelegation(agent),
     teamName: init.teamName,
     version,

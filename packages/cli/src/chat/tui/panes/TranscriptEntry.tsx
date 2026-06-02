@@ -5,12 +5,50 @@
 
 import { Box, Text } from 'ink';
 
+import { fillRows } from '../render/DiffView';
 import { Markdown } from '../render/Markdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
 import { ToolUseRow } from './ToolUseRow';
 import { toolUseDisplayLines } from './toolRenderers';
 import type { ConversationEntry } from '../state/cliState';
+
+function UserEntryRow({
+  entry,
+  colorEnabled,
+  width,
+}: {
+  readonly entry: ConversationEntry;
+  readonly colorEnabled?: boolean;
+  readonly width?: number;
+}): React.JSX.Element {
+  // Mark a user turn with a full-width reverse-video band so it stands out in
+  // scrollback against the assistant's `●` rows. Reverse video (not a fixed
+  // color) makes the highlight adapt to the terminal theme automatically — a
+  // dark bar with light text on a light terminal, a light bar with dark text on
+  // a dark one — using the terminal's own foreground/background. The `› `
+  // chevron is 2 cols, matching the static row count in transcriptLines.ts so
+  // render and counting stay in lockstep.
+  const cols = Math.max(1, Math.floor(width ?? 80));
+  const body = wrapAnsiToWidth(entry.text, Math.max(1, cols - 2))
+    .split('\n')
+    .map((line, index) => `${index === 0 ? '› ' : '  '}${line}`)
+    .join('\n');
+  // No-color terminals can't show the band; render the chevron text plain
+  // (skip the width padding so we don't litter scrollback with trailing space).
+  if (colorEnabled === false) {
+    return (
+      <Box>
+        <Text>{body}</Text>
+      </Box>
+    );
+  }
+  return (
+    <Box>
+      <Text inverse>{fillRows(body, cols)}</Text>
+    </Box>
+  );
+}
 
 function ProcessEntryRow({
   process,
@@ -59,10 +97,7 @@ export function TranscriptEntry({
   switch (entry.role) {
     case 'user':
       return (
-        <Box paddingX={1}>
-          <Text dimColor>› </Text>
-          <Text>{entry.text}</Text>
-        </Box>
+        <UserEntryRow entry={entry} colorEnabled={colorEnabled} width={width} />
       );
     case 'error':
       return (
