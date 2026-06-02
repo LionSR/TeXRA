@@ -8,7 +8,7 @@
 import { render } from 'ink';
 import PQueue from 'p-queue';
 
-import { getDefaultStreamLogStore } from '@transcript';
+import { flushPendingRunTraces, getDefaultStreamLogStore } from '@transcript';
 import { getAgent, loadAgents } from '@agent/index';
 import { type AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -16,7 +16,10 @@ import {
   interruptActiveChildren,
   killExecution,
 } from '@agent/runtime/executionRegistry';
-import { executeAgent } from '@agent/runtime/executeAgent';
+import {
+  executeAgent,
+  resumeToolUseFromSnapshot,
+} from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   notifyFollowUpSent,
@@ -45,7 +48,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import { resolveCliRunnableModel } from '@cli/runtime/modelAccess';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
-import { writeTextStderr } from '@cli/runtime/logSinks';
+import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
 import {
   signInCliSupabase,
   signOutCliSupabase,
@@ -56,6 +59,10 @@ import {
   type CliApprovalPolicy,
 } from '@cli/schemas/cliSettings';
 import { parseCliHistoryId, readCliHistoryConfig } from '@cli/runtime/history';
+import {
+  explainNonResumable,
+  resolveCliResumeSnapshot,
+} from '@cli/runtime/sessionResume';
 import {
   formatCliMemoryList,
   formatCliMemoryPreview,
@@ -93,6 +100,7 @@ import { notify } from './notifications/terminalNotifier';
 import { formatCliSessionStatus } from './sessionStatus';
 import { clearApprovals } from './state/approvalQueue';
 import { cliState, resetCliState } from './state/cliState';
+import { collectResumeTargets, formatResumeHint } from './state/resumeHint';
 import { installTuiApprovals } from './state/subscribeApprovals';
 import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog, syncStreamLog } from './state/subscribeStreamLog';
@@ -123,6 +131,13 @@ export interface RunChatInit {
   readonly modelOverride?: string;
   /** Visible team identity when chat was launched from a multi-agent preset. */
   readonly teamName?: string;
+  /**
+   * Continue (resume) a stored tool-use session by its execution id instead of
+   * starting fresh: the interactive `texra --resume <id>` path. Set by the
+   * resume command for TTY sessions; the prior transcript is rehydrated and the
+   * suspended tool-use flow is continued on mount (see `resumeAgentRun`).
+   */
+  readonly resumeExecutionId?: ExecutionId;
 }
 
 const QUEUED_FOLLOW_UP_NOTICE_LENGTH = 96;
@@ -200,7 +215,6 @@ export function chatTuiCanStartRootRun(
 export type ChatTuiSigintAction =
   | 'clean-exit'
   | 'force-exit'
-  | 'interrupt-and-exit'
   | 'interrupt-and-arm-exit';
 
 export function chatTuiSigintAction(input: {
@@ -210,8 +224,32 @@ export function chatTuiSigintAction(input: {
 }): ChatTuiSigintAction {
   if (input.exitArmed) return 'force-exit';
   if (input.canStopActiveRun) return 'interrupt-and-arm-exit';
-  if (input.canInterruptActiveRun) return 'interrupt-and-exit';
+  // Resumable-idle (interruptible but not actively running): exit WITHOUT
+  // interrupting so the suspended tool-use flow record survives for resume —
+  // interrupting would clear it in runToolUseFlow's finally. force-exit calls
+  // process.exit, leaving the suspended flow on disk for `texra --resume`.
+  if (input.canInterruptActiveRun) return 'force-exit';
   return 'clean-exit';
+}
+
+/**
+ * On exit, a tool-use session suspended at the WAIT node (idle/WAITING) must
+ * NOT be interrupted: interrupting clears its per-execution flow record in
+ * `runToolUseFlow`'s finally, destroying the only resumable state. The record
+ * survives only when the process dies while the flow is still suspended.
+ *
+ * The discriminator: `canInterruptActiveRun` is true for any pending run, but
+ * `canStopActiveRun` is true only while a turn is *actively* running. So
+ * "interruptible but not stoppable" is exactly the resumable-idle case. Kept
+ * pure (takes the two precomputed booleans) so the exit policy is unit-testable
+ * without the live status plumbing. Used by the graceful-exit `finally`; the
+ * SIGINT path encodes the same idle→preserve rule via `chatTuiSigintAction`.
+ */
+export function chatTuiIsResumableIdleOnExit(input: {
+  readonly canInterruptActiveRun: boolean;
+  readonly canStopActiveRun: boolean;
+}): boolean {
+  return input.canInterruptActiveRun && !input.canStopActiveRun;
 }
 
 function chatTuiActiveChildStreamId(): StreamTabId | undefined {
@@ -255,19 +293,19 @@ export function chatTuiActiveChildFollowUpTarget(): StreamTabId | undefined {
     : undefined;
 }
 
+export function chatTuiShouldAnnounceQueuedFollowUp(
+  targetStreamId: StreamTabId | undefined,
+): boolean {
+  if (!targetStreamId) return true;
+  return !chatTuiStreamStatuses(targetStreamId).includes(STREAM_STATUS.WAITING);
+}
+
 export function chatTuiRejectedChildFollowUpTarget(): StreamTabId | undefined {
   const activeStreamId = chatTuiActiveChildStreamId();
   if (!activeStreamId) return undefined;
   return chatTuiCanAcceptFollowUp(chatTuiStreamStatuses(activeStreamId))
     ? undefined
     : activeStreamId;
-}
-
-export function chatTuiShouldAnnounceQueuedFollowUp(
-  targetStreamId: StreamTabId | undefined,
-): boolean {
-  if (!targetStreamId) return true;
-  return !chatTuiStreamStatuses(targetStreamId).includes(STREAM_STATUS.WAITING);
 }
 
 interface SlashCommandContext {
@@ -978,6 +1016,19 @@ export async function runChat(
     stdout: process.stdout,
   });
 
+  // Enable StreamLog persistence for the interactive session so transcripts
+  // survive exit and can be reopened on resume. Uses the shared (extension-
+  // compatible) StreamLogStore, so a workspace opened in either surface reads
+  // the same `streamLogs/<id>.json`. load() is summaries-only (lazy) and must
+  // run before any append — it clears in-memory logs on entry — hence before
+  // subscribeStreamLog wires the append→sync bridge below. Best-effort: a load
+  // failure leaves persistence off (save() no-ops) rather than breaking chat.
+  try {
+    await getDefaultStreamLogStore().load();
+  } catch {
+    // Persistence stays disabled; the session still runs in-memory as before.
+  }
+
   const disposers: Array<() => void> = [];
   disposers.push(subscribeStreamLog());
   disposers.push(subscribeStreamStatus());
@@ -1137,6 +1188,81 @@ export async function runChat(
       });
   };
 
+  // Interactive `texra --resume <id>`: continue a suspended tool-use session.
+  // Mirrors startAgentRun's runtimeHost/approvals/runPromise lifecycle, but
+  // (a) resolves a persisted snapshot instead of building a fresh config, and
+  // (b) the streamId is already known (re-derived from the prior run), so we
+  // set session.streamId up front and rehydrate that stream's transcript so
+  // the user sees the prior conversation before the continued turn streams in.
+  const resumeAgentRun = async (id: ExecutionId): Promise<void> => {
+    const resolution = await resolveCliResumeSnapshot(id);
+    if (resolution.kind !== 'toolUse') {
+      // Workflows / missing / already-completed sessions can't continue here —
+      // surface why and leave the session idle so the user can still chat.
+      appendLocalErrorTranscript(explainNonResumable(resolution, id));
+      return;
+    }
+
+    followUpQueue.clear();
+    session.runCompleted = false;
+    session.stopRequested = false;
+    session.runExitCode = CliExitCode.Success;
+    session.streamId = resolution.streamId;
+    session.executionId = resolution.snapshot.executionId;
+
+    const currentModel = resolution.config.model;
+    const sessionContext = currentSessionContext(currentModel);
+    cliState.sessionMeta.set({
+      ...cliState.sessionMeta.get(),
+      agent: resolution.config.agent,
+      model: resolution.config.model,
+      canDelegate: agentSupportsDelegation(resolution.config.agent),
+    });
+
+    // Rehydrate the prior transcript so the user sees the conversation they're
+    // continuing. ensureLoaded pulls the persisted entries off disk into the
+    // store; syncStreamLog promotes them into `<Static>` scrollback. An older
+    // run with no persisted entries simply shows whatever exists (possibly
+    // nothing) — the continued turn streams in regardless.
+    await getDefaultStreamLogStore().ensureLoaded(resolution.streamId);
+    syncStreamLog(resolution.streamId);
+    cliState.activeStreamId.set(resolution.streamId);
+
+    const runtimeHost = createCliRuntimeHost(sessionContext);
+    const wrapped = wrapRuntimeHost(runtimeHost);
+    const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
+    disposers.push(unbindApprovals);
+
+    session.runPromise = setCliHelperModel(currentModel)
+      .then(() => resumeToolUseFromSnapshot(resolution.snapshot, wrapped))
+      .then(() => {
+        // resumeToolUseFromSnapshot resolves void (no result object), so the
+        // streamId we already know is the only handle: flush the tail and
+        // promote any deferred assistant/tool rows into `<Static>`.
+        if (session.streamId) {
+          syncStreamLog(session.streamId);
+          finalizeAssistantTranscriptEntries(session.streamId);
+        }
+        session.runExitCode = CliExitCode.Success;
+        notify({ kind: 'agentFinished' });
+      })
+      .catch((error: unknown) => {
+        if (!session.stopRequested) {
+          appendLocalErrorTranscript(toErrorMessage(error));
+        }
+        session.runExitCode = session.stopRequested
+          ? CliExitCode.Success
+          : CliExitCode.AgentError;
+      })
+      .finally(() => {
+        session.runCompleted = true;
+        void runtimeHost.close();
+      });
+    // Don't await session.runPromise here: a resumed session that suspends at
+    // the WAIT node leaves runPromise unresolved (mirrors startAgentRun's
+    // fire-and-forget). The exit `finally` handles the dangling-promise case.
+  };
+
   // Pre-register the slash commands the input palette uses.
   registerBuiltinSlashCommands({
     canSelectAgent: () => chatTuiCanStartRootRun(session),
@@ -1277,6 +1403,11 @@ export async function runChat(
 
   let pendingExitTimer: ReturnType<typeof setTimeout> | undefined;
   let exitArmed = false;
+  // Set once a signal exit (exitNow) starts: its ink.unmount() resolves
+  // waitUntilExit and re-enters the post-waitUntilExit finally, so the finally
+  // guards on this to avoid draining persistence / printing the resume hint a
+  // second time.
+  let exiting = false;
   const clearPendingExit = (): void => {
     if (pendingExitTimer) clearTimeout(pendingExitTimer);
     pendingExitTimer = undefined;
@@ -1289,12 +1420,45 @@ export async function runChat(
     process.off('SIGTERM', handleSigterm);
     process.off('SIGHUP', handleSighup);
   };
+  // Persist the reopen hint to native scrollback: the main session plus each
+  // resumable tool-use subagent, so any route can be continued by its own id.
+  // Read cliState before resetCliState() clears it.
+  const printResumeHintOnExit = (): void => {
+    if (!session.executionId) return;
+    const hint = formatResumeHint(
+      collectResumeTargets({
+        rootExecutionId: session.executionId,
+        streams: cliState.streams.get(),
+      }),
+    );
+    if (hint) writeTextStdout(`\n${hint}`);
+  };
+  // Materialize buffered trace chunks, then drain the debounced StreamLog disk
+  // writes so the tail of the session isn't lost (SAVE_DEBOUNCE_MS window).
+  // flush() is bounded (MAX_WRITE_RETRIES) and a no-op when persistence never
+  // loaded, so this can neither hang nor affect headless paths.
+  const drainPersistence = (): Promise<void> => {
+    flushPendingRunTraces();
+    return getDefaultStreamLogStore().flush();
+  };
   const exitNow = (exitCode: number): void => {
+    exiting = true;
     removeProcessHandlers();
     clearPendingExit();
     ink.unmount();
+    // Print the resume hint while the cursor is still parked at the bottom of
+    // the unmounted frame — BEFORE cleanupTerminalModes, whose `?1049l` jumps
+    // the cursor mid-screen on this (never-alt-screen) TUI and makes the hint
+    // overprint the transcript. Mirrors the requestInputExit path's order.
+    printResumeHintOnExit();
     cleanupTerminalModes({ clearItermProgress });
-    process.exit(exitCode);
+    // Synchronous signal exits (SIGINT double-tap / SIGTERM / SIGHUP) own the
+    // whole teardown here (the finally skips when `exiting`), so drain
+    // persistence before exiting. `.catch` keeps a flush failure from becoming
+    // an unhandled rejection under --unhandled-rejections=strict.
+    void drainPersistence()
+      .catch(() => {})
+      .finally(() => process.exit(exitCode));
   };
   const armExit = (): void => {
     exitArmed = true;
@@ -1316,13 +1480,11 @@ export async function runChat(
         requestInputExit();
         return;
       case 'force-exit':
-        exitNow(130);
-        return;
-      case 'interrupt-and-exit':
-        if (canInterruptActiveRun()) {
-          session.stopRequested = true;
-          interruptActive();
-        }
+        // exitArmed OR resumable-idle: exit WITHOUT interrupting. For an
+        // idle/WAITING session this preserves the suspended tool-use flow
+        // record (executions/<id>/flow-*.json) so `texra --resume` can
+        // continue it — interrupting would clear it in runToolUseFlow's
+        // finally. exitNow() calls process.exit, leaving the flow on disk.
         exitNow(130);
         return;
       case 'interrupt-and-arm-exit':
@@ -1334,16 +1496,17 @@ export async function runChat(
         assertNever(sigintAction, 'Unhandled chat TUI SIGINT action');
     }
   };
-  const handleSigterm = (): void => {
-    session.stopRequested = true;
-    interruptActive();
-    exitNow(143);
+  // Only interrupt an actively-running turn; an idle/WAITING session is left
+  // suspended so its flow record survives for resume (see handleSigint).
+  const handleTermSignal = (exitCode: number): void => {
+    if (canStopActiveRun()) {
+      session.stopRequested = true;
+      interruptActive();
+    }
+    exitNow(exitCode);
   };
-  const handleSighup = (): void => {
-    session.stopRequested = true;
-    interruptActive();
-    exitNow(129);
-  };
+  const handleSigterm = (): void => handleTermSignal(143);
+  const handleSighup = (): void => handleTermSignal(129);
   function requestInputExit(): void {
     removeProcessHandlers();
     clearPendingExit();
@@ -1352,6 +1515,20 @@ export async function runChat(
   process.on('SIGINT', handleSigint);
   process.on('SIGTERM', handleSigterm);
   process.on('SIGHUP', handleSighup);
+
+  // Interactive resume: kick off the continued tool-use run now that Ink is
+  // mounted (so the rehydrated transcript + streamed continuation render) and
+  // the signal handlers are armed. Fire-and-forget — resumeAgentRun installs
+  // session.runPromise, and the normal first-input path stays available so the
+  // user can keep chatting (follow-ups target session.streamId as usual).
+  if (init.resumeExecutionId) {
+    // Guard the void: resumeAgentRun awaits snapshot resolution / ensureLoaded
+    // before installing its own .then/.catch, so an early throw there would
+    // otherwise surface as an unhandled rejection.
+    void resumeAgentRun(init.resumeExecutionId).catch((error: unknown) => {
+      appendLocalErrorTranscript(toErrorMessage(error));
+    });
+  }
 
   // Auto-prompt when the active stream goes WAITING so the UI clearly
   // signals "your turn." Combined with the StatusBar pill, this replaces
@@ -1371,17 +1548,45 @@ export async function runChat(
   try {
     await ink.waitUntilExit();
   } finally {
-    removeProcessHandlers();
-    clearPendingExit();
-    for (const dispose of disposers) dispose();
-    await followUpQueue.onIdle();
-    if (session.runPromise && !session.runCompleted) {
-      session.stopRequested = true;
-      interruptActive();
+    // A signal exit (SIGINT/SIGTERM/SIGHUP) runs exitNow(), which does the full
+    // teardown and process.exit()s itself; its ink.unmount() resolves
+    // waitUntilExit and re-enters this finally. Skip the entire graceful
+    // teardown in that case — re-running it would duplicate the drain / hint /
+    // cleanup, and the resumableIdle process.exit() below would race exitNow's
+    // async exit, dropping the flush and the signal exit code.
+    if (!exiting) {
+      removeProcessHandlers();
+      clearPendingExit();
+      for (const dispose of disposers) dispose();
+      await followUpQueue.onIdle();
+      // A suspended (idle/WAITING) root session is resumable: its flow record
+      // survives only if we DON'T interrupt the flow (interrupt clears it). See
+      // chatTuiIsResumableIdleOnExit for why "interruptible but not stoppable"
+      // is exactly the idle-but-suspended case we must leave untouched.
+      const resumableIdle = chatTuiIsResumableIdleOnExit({
+        canInterruptActiveRun: canInterruptActiveRun(),
+        canStopActiveRun: canStopActiveRun(),
+      });
+      if (session.runPromise && !session.runCompleted && !resumableIdle) {
+        session.stopRequested = true;
+        interruptActive();
+        // Only await a run we actually interrupted/finished. A resumableIdle run
+        // is parked at the WAIT node and its runPromise NEVER resolves, so
+        // awaiting it would hang the process here.
+        await session.runPromise;
+      }
+      await drainPersistence();
+      printResumeHintOnExit();
+      resetCliState();
+      cleanupTerminalModes({ clearItermProgress });
+      if (resumableIdle) {
+        // The dangling runPromise keeps the event loop alive, so a normal return
+        // would never let the process exit. Force-exit here, AFTER persistence
+        // is flushed and the resume hint is printed, preserving the suspended
+        // flow record on disk for `texra --resume`.
+        process.exit(session.runExitCode);
+      }
     }
-    await session.runPromise;
-    resetCliState();
-    cleanupTerminalModes({ clearItermProgress });
   }
   return { exitCode: session.runExitCode };
 }
