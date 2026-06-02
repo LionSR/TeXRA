@@ -54,6 +54,13 @@ async function runOrchestration(context: CliContext): Promise<number> {
     quietLogs: true,
     bestEffortIncludedModelAccess: true,
   });
+  // First-run gate: a credential-less interactive user picks sign-in or a key
+  // here instead of landing on a launcher full of "login required" models. On
+  // success the apiMode/models read below re-reads the freshly-set credentials
+  // in-process — the relay / key paths invalidate the relevant caches — so no
+  // relaunch is needed.
+  const { maybeRunCliOnboarding } = await import('../onboarding/runOnboarding');
+  await maybeRunCliOnboarding(context);
   await loadAgents({ includeRemote: false });
   const history = await listCliHistoryEntries();
   const items = buildCliOrchestrationItems({
