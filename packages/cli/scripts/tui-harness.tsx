@@ -50,13 +50,14 @@ import {
 } from '../src/chat/tui/state/approvalQueue';
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
+import { cliMultiAgentPresets } from '../src/runtime/multiAgentPresets';
+import { buildCliOrchestrationItems } from '../src/runtime/orchestration';
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
 } from '../src/schemas/cliSettings';
 import { initLocalCliPlatform } from '../src/runtime/initPlatform';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
-import type { CliOrchestrationItem } from '../src/runtime/orchestration';
 
 const STREAM_ID = 'harness-stream-1';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
@@ -147,55 +148,18 @@ function parseList(value: string | undefined): string[] {
     .filter((item) => item.length > 0);
 }
 
-const HARNESS_ORCHESTRATION_ITEMS: readonly CliOrchestrationItem[] = [
-  {
-    value: { kind: 'chat' },
-    label: 'New chat',
-    description: 'Start the default tool-use chat',
-  },
-  {
-    value: {
-      kind: 'preset',
-      preset: 'lean-project',
-      presetName: 'Lean Project',
-    },
-    label: 'Team Lean Project',
-    description: 'built-in; workflow:0; tool-use:7',
-  },
-  {
-    value: { kind: 'preset', preset: 'physicist', presetName: 'Physicist' },
-    label: 'Team Physicist',
-    description: 'built-in; workflow:4; tool-use:9',
-  },
-  {
-    value: {
-      kind: 'preset',
-      preset: 'mathematician',
-      presetName: 'Mathematician',
-    },
-    label: 'Team Mathematician',
-    description: 'built-in; workflow:5; tool-use:7',
-  },
-  {
-    value: {
-      kind: 'preset',
-      preset: 'computer-scientist',
-      presetName: 'Computer Scientist',
-    },
-    label: 'Team Computer Scientist',
-    description: 'built-in; workflow:5; tool-use:8',
-  },
-  {
-    value: { kind: 'help' },
-    label: 'Help',
-    description: 'Show CLI commands',
-  },
-];
+const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
+  presets: cliMultiAgentPresets(undefined),
+  history: [],
+  toolUseAgents: [],
+});
 
 if (SHOW_ORCHESTRATION) {
   const instance = render(
     <OrchestrationApp
       items={HARNESS_ORCHESTRATION_ITEMS}
+      models={[]}
+      apiMode="personal"
       onResolve={() => undefined}
     />,
     {
