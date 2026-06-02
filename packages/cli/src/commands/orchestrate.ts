@@ -5,7 +5,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { listCliHistoryEntries } from '../runtime/history';
-import { initLocalCliPlatform } from '../runtime/initPlatform';
+import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import { dumbTerminalMessage } from '../runtime/terminalRequirements';
 import {
@@ -17,7 +17,7 @@ import {
   getCliModelAccessList,
   type CliModelAccess,
 } from '../runtime/modelAccess';
-import { getCliApiMode } from '../runtime/apiAccessMode';
+import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 
 import { contextFromArgs } from './_helpers/context';
@@ -49,7 +49,11 @@ async function runOrchestration(context: CliContext): Promise<number> {
 
   await notifyCliUpdate(context);
 
-  await initLocalCliPlatform(context);
+  await initCliPlatform({
+    ...context,
+    quietLogs: true,
+    bestEffortIncludedModelAccess: true,
+  });
   await loadAgents({ includeRemote: false });
   const history = await listCliHistoryEntries();
   const items = buildCliOrchestrationItems({
@@ -60,7 +64,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // Load the model registry up front so the launcher can offer a model pick
   // after an agent/team choice. Best-effort: an unavailable registry just
   // launches with the default model instead of blocking the launcher.
-  const apiMode = context.apiMode ?? getCliApiMode();
+  const apiMode = effectiveCliApiMode(context);
   const models: readonly CliModelAccess[] = await getCliModelAccessList({
     apiMode,
   }).catch(() => []);
