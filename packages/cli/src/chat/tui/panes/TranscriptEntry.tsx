@@ -50,9 +50,11 @@ function ProcessEntryRow({
 export function TranscriptEntry({
   entry,
   width,
+  colorEnabled,
 }: {
   readonly entry: ConversationEntry;
   readonly width?: number;
+  readonly colorEnabled?: boolean;
 }): React.JSX.Element {
   switch (entry.role) {
     case 'user':
@@ -78,7 +80,11 @@ export function TranscriptEntry({
   }
   return (
     <Box marginBottom={1}>
-      <Markdown content={entry.text} width={width} />
+      <Markdown
+        content={entry.text}
+        width={width}
+        colorEnabled={colorEnabled}
+      />
     </Box>
   );
 }
