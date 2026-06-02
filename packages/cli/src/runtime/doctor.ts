@@ -7,6 +7,7 @@ import {
   probeLatexToolchain,
   type LatexToolchainProbe,
 } from '@latex/latexToolchain';
+import { TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY } from '@shared/constants/cliRuntime';
 
 // Local imports - CLI runtime
 import { redactEmailAccountLabelsForDisplay } from './accountDisplay';
@@ -61,8 +62,6 @@ interface DoctorDependencies {
 }
 
 type ResolvedDoctorDependencies = Required<DoctorDependencies>;
-
-const SUPPORTED_NODE_RANGE = '^22.22.2 || ^24.15.0 || >=26.0.0';
 
 function parseNodeVersion(version: string): [number, number, number] | null {
   const [majorRaw, minorRaw, patchRaw] = version.split('.');
@@ -160,7 +159,7 @@ function checkNode(version: string): DoctorCheck {
     'node',
     'Node.js',
     `Node ${version || 'unknown'} is outside the supported range.`,
-    `Install Node ${SUPPORTED_NODE_RANGE}.`,
+    `Install Node ${TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY} before running TeXRA CLI.`,
   );
 }
 

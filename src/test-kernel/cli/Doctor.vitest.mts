@@ -139,6 +139,11 @@ describe('CLI doctor', () => {
       unsupportedOddRelease.checks.find((check) => check.id === 'node')
         ?.message,
     ).toBe('Node 23.0.0 is outside the supported range.');
+    expect(
+      unsupportedOddRelease.checks.find((check) => check.id === 'node')?.hint,
+    ).toBe(
+      'Install Node ^22.22.2, ^24.15.0, or >=26.0.0 before running TeXRA CLI.',
+    );
   });
 
   it('keeps human-readable hints in text output', async () => {
