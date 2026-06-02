@@ -587,379 +587,317 @@ export class DesktopProgressBridge {
     event: K,
     payload: ProgressEventPayloads[K],
   ): void {
-    switch (event) {
-      case 'requestEnsureProgressView':
-        this.routeToProgress();
-        break;
-      case 'setActiveStream': {
-        const data = payload as ProgressEventPayloads['setActiveStream'];
-        if (!data.streamId) {
-          this.activeStream = '';
-          this.send({
-            command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-            activeStream: '',
-          });
-          break;
-        }
-        this.ensureStream(
-          data.streamId,
-          data.agentCategory ?? AGENT_CATEGORY.WORKFLOW,
-        );
-        this.activeStream = data.streamId;
-        this.routeToProgress();
-        this.syncStreams();
+    this.progressEventHandlers[event]?.(payload);
+  }
+
+  private sendActiveChildrenBadges(
+    parentStreamId: StreamTabId,
+    opts: {
+      activeField: 'activeSubagents' | 'activeProcesses';
+      countField: 'finishedSubagentCount' | 'finishedProcessCount';
+      next: ActiveChildInfo[];
+    },
+  ): void {
+    const badges = this.updateActiveChildren(parentStreamId, opts);
+    this.syncStreams();
+    this.send({
+      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
+      stream: parentStreamId,
+      ...badges,
+    });
+  }
+
+  // Maps each progress event to its desktop-side handler. A `null` entry is an
+  // explicit no-op: the event is either dispatched elsewhere (e.g.
+  // `odysseyStateChanged` via `bus.on` in the constructor; `runtimeHost.emit`
+  // is never its producer) or carries no desktop progress-mirror side effect.
+  // The map is exhaustive over `ProgressEventPayloads`, so adding a new event
+  // is a compile error until it is handled or explicitly marked `null` here.
+  private readonly progressEventHandlers: {
+    [K in keyof ProgressEventPayloads]:
+      | ((payload: ProgressEventPayloads[K]) => void)
+      | null;
+  } = {
+    requestEnsureProgressView: () => this.routeToProgress(),
+    setActiveStream: (data) => {
+      if (!data.streamId) {
+        this.activeStream = '';
         this.send({
           command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-          activeStream: data.streamId,
+          activeStream: '',
         });
-        this.flushLogs(data.streamId);
-        break;
+        return;
       }
-      case 'setTaskState': {
-        const data = payload as ProgressEventPayloads['setTaskState'];
-        this.ensureStream(
-          data.streamId,
-          data.taskState.agentConfig.agentCategory,
-        );
-        this.taskStates.set(data.streamId, data.taskState);
-        if (data.executionId)
-          this.executionIds.set(data.streamId, data.executionId);
-        // Live event arrived for what may have been a ghost. Drop the
-        // ghost entry — the live stream owns the rail row now.
-        this.restoredStreams.delete(data.streamId);
-        this.persistStreamSnapshot(data.streamId);
+      this.ensureStream(
+        data.streamId,
+        data.agentCategory ?? AGENT_CATEGORY.WORKFLOW,
+      );
+      this.activeStream = data.streamId;
+      this.routeToProgress();
+      this.syncStreams();
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+        activeStream: data.streamId,
+      });
+      this.flushLogs(data.streamId);
+    },
+    setTaskState: (data) => {
+      this.ensureStream(
+        data.streamId,
+        data.taskState.agentConfig.agentCategory,
+      );
+      this.taskStates.set(data.streamId, data.taskState);
+      if (data.executionId)
+        this.executionIds.set(data.streamId, data.executionId);
+      // Live event arrived for what may have been a ghost. Drop the
+      // ghost entry — the live stream owns the rail row now.
+      this.restoredStreams.delete(data.streamId);
+      this.persistStreamSnapshot(data.streamId);
+      this.syncStreams();
+    },
+    updateStreamStatus: (data) => {
+      const wasKnownStream = this.streamLogs.has(data.streamId);
+      this.ensureStream(data.streamId);
+      this.statuses.set(data.streamId, data.status);
+      this.restoredStreams.delete(data.streamId);
+      this.persistStreamSnapshot(data.streamId);
+      if (!wasKnownStream) {
         this.syncStreams();
-        break;
       }
-      case 'updateStreamStatus': {
-        const data = payload as ProgressEventPayloads['updateStreamStatus'];
-        const wasKnownStream = this.streamLogs.has(data.streamId);
-        this.ensureStream(data.streamId);
-        this.statuses.set(data.streamId, data.status);
-        this.restoredStreams.delete(data.streamId);
-        this.persistStreamSnapshot(data.streamId);
-        if (!wasKnownStream) {
-          this.syncStreams();
-        }
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
-          stream: data.streamId,
-          status: data.status,
-          lastTimestamp: this.streamLogs.getLastTimestamp(data.streamId),
-        });
-        break;
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
+        stream: data.streamId,
+        status: data.status,
+        lastTimestamp: this.streamLogs.getLastTimestamp(data.streamId),
+      });
+    },
+    updateConversationProgress: (data) => {
+      this.conversationProgress.set(data.streamId, data.progress);
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS,
+        stream: data.streamId,
+        progress: data.progress,
+      });
+    },
+    updateTodos: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
+        stream: data.streamId,
+        todos: data.todos,
+      });
+    },
+    updatePlan: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PLAN,
+        stream: data.streamId,
+        plan: data.plan,
+      });
+    },
+    updateStreamUsage: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
+        stream: data.streamId,
+        runId: data.executionId ?? data.storageKey,
+        usage: data.usage,
+      });
+    },
+    addOutputFiles: (data) => {
+      const existing = this.outputFiles.get(data.streamId) ?? new Map();
+      for (const [round, files] of Object.entries(data.filesByRound)) {
+        existing.set(Number(round), files);
       }
-      case 'updateConversationProgress': {
-        const data =
-          payload as ProgressEventPayloads['updateConversationProgress'];
-        this.conversationProgress.set(data.streamId, data.progress);
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS,
-          stream: data.streamId,
-          progress: data.progress,
-        });
-        break;
+      this.outputFiles.set(data.streamId, existing);
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
+        stream: data.streamId,
+        rounds: data.filesByRound,
+      });
+    },
+    updateMissingOutputs: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
+        stream: data.streamId,
+        rounds: data.filesByRound,
+      });
+    },
+    updateCompileFailures: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
+        stream: data.streamId,
+        rounds: data.filesByRound,
+        reset: true,
+      });
+    },
+    updateStreamDescription: (data) => {
+      this.descriptions.set(data.streamId, data.description);
+      this.persistStreamSnapshot(data.streamId);
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION,
+        stream: data.streamId,
+        description: data.description,
+      });
+    },
+    setParentStream: (data) => {
+      if (data.parentStreamId == null) {
+        this.parentStreams.delete(data.childStreamId);
+      } else {
+        this.parentStreams.set(data.childStreamId, data.parentStreamId);
       }
-      case 'updateTodos': {
-        const data = payload as ProgressEventPayloads['updateTodos'];
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
-          stream: data.streamId,
-          todos: data.todos,
-        });
-        break;
-      }
-      case 'updatePlan': {
-        const data = payload as ProgressEventPayloads['updatePlan'];
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_PLAN,
-          stream: data.streamId,
-          plan: data.plan,
-        });
-        break;
-      }
-      case 'updateStreamUsage': {
-        const data = payload as ProgressEventPayloads['updateStreamUsage'];
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
-          stream: data.streamId,
-          runId: data.executionId ?? data.storageKey,
-          usage: data.usage,
-        });
-        break;
-      }
-      case 'addOutputFiles': {
-        const data = payload as ProgressEventPayloads['addOutputFiles'];
-        const existing = this.outputFiles.get(data.streamId) ?? new Map();
-        for (const [round, files] of Object.entries(data.filesByRound)) {
-          existing.set(Number(round), files);
-        }
-        this.outputFiles.set(data.streamId, existing);
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
-          stream: data.streamId,
-          rounds: data.filesByRound,
-        });
-        break;
-      }
-      case 'updateMissingOutputs': {
-        const data = payload as ProgressEventPayloads['updateMissingOutputs'];
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
-          stream: data.streamId,
-          rounds: data.filesByRound,
-        });
-        break;
-      }
-      case 'updateCompileFailures': {
-        const data = payload as ProgressEventPayloads['updateCompileFailures'];
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
-          stream: data.streamId,
-          rounds: data.filesByRound,
-          reset: true,
-        });
-        break;
-      }
-      case 'updateStreamDescription': {
-        const data =
-          payload as ProgressEventPayloads['updateStreamDescription'];
-        this.descriptions.set(data.streamId, data.description);
-        this.persistStreamSnapshot(data.streamId);
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION,
-          stream: data.streamId,
-          description: data.description,
-        });
-        break;
-      }
-      case 'setParentStream': {
-        const data = payload as ProgressEventPayloads['setParentStream'];
-        if (data.parentStreamId == null) {
-          this.parentStreams.delete(data.childStreamId);
-        } else {
-          this.parentStreams.set(data.childStreamId, data.parentStreamId);
-        }
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM,
-          stream: data.childStreamId,
-          parentStreamId: data.parentStreamId ?? undefined,
-        });
-        this.persistStreamSnapshot(data.childStreamId);
-        break;
-      }
-      case 'updateActiveSubagents':
-      case 'updateActiveProcesses': {
-        const data = payload as
-          | ProgressEventPayloads['updateActiveSubagents']
-          | ProgressEventPayloads['updateActiveProcesses'];
-        const badges =
-          event === 'updateActiveSubagents'
-            ? this.updateActiveChildren(data.parentStreamId, {
-                activeField: 'activeSubagents',
-                countField: 'finishedSubagentCount',
-                next: (data as ProgressEventPayloads['updateActiveSubagents'])
-                  .children,
-              })
-            : this.updateActiveChildren(data.parentStreamId, {
-                activeField: 'activeProcesses',
-                countField: 'finishedProcessCount',
-                next: (data as ProgressEventPayloads['updateActiveProcesses'])
-                  .processes,
-              });
-        this.syncStreams();
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
-          stream: data.parentStreamId,
-          ...badges,
-        });
-        break;
-      }
-      case 'updateProcessOutput': {
-        const data = payload as ProgressEventPayloads['updateProcessOutput'];
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT,
-          stream: data.parentStreamId,
-          executionId: data.executionId,
-          stdout: data.stdout,
-          stderr: data.stderr,
-        });
-        break;
-      }
-      case 'showToolEditPermission': {
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-          action: 'show',
-          permission: {
-            kind: 'toolEdit',
-            data: payload as ProgressEventPayloads['showToolEditPermission'],
-          },
-        });
-        break;
-      }
-      case 'resolveToolEditPermission': {
-        const data =
-          payload as ProgressEventPayloads['resolveToolEditPermission'];
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-          action: 'resolve',
-          kind: 'toolEdit',
-          id: data.requestId,
-        });
-        break;
-      }
-      case 'updateToolEditApprovalBypassState': {
-        const data =
-          payload as ProgressEventPayloads['updateToolEditApprovalBypassState'];
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
-          stream: data.streamId,
-          type: 'toolEdit',
-          bypassActive: data.bypassActive,
-        });
-        break;
-      }
-      case 'showBashPermission': {
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-          action: 'show',
-          permission: {
-            kind: 'bash',
-            data: payload as ProgressEventPayloads['showBashPermission'],
-          },
-        });
-        break;
-      }
-      case 'resolveBashPermission': {
-        const data = payload as ProgressEventPayloads['resolveBashPermission'];
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-          action: 'resolve',
-          kind: 'bash',
-          id: data.requestId,
-        });
-        break;
-      }
-      case 'showAgentProposal': {
-        const data = payload as ProgressEventPayloads['showAgentProposal'];
-        this.agentProposals.set(data.proposalId, data);
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-          action: 'show',
-          permission: {
-            kind: 'proposal',
-            data,
-          },
-        });
-        break;
-      }
-      case 'resolveAgentProposal': {
-        const data = payload as ProgressEventPayloads['resolveAgentProposal'];
-        this.agentProposals.delete(data.proposalId);
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-          action: 'resolve',
-          kind: 'proposal',
-          id: data.proposalId,
-        });
-        break;
-      }
-      case 'showPlanApproval': {
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-          action: 'show',
-          permission: {
-            kind: 'planApproval',
-            data: payload as ProgressEventPayloads['showPlanApproval'],
-          },
-        });
-        break;
-      }
-      case 'resolvePlanApproval': {
-        const data = payload as ProgressEventPayloads['resolvePlanApproval'];
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-          action: 'resolve',
-          kind: 'planApproval',
-          id: data.approvalId,
-        });
-        break;
-      }
-      case 'showUserQuestion': {
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-          action: 'show',
-          permission: {
-            kind: 'userQuestion',
-            data: payload as ProgressEventPayloads['showUserQuestion'],
-          },
-        });
-        break;
-      }
-      case 'resolveUserQuestion': {
-        const data = payload as ProgressEventPayloads['resolveUserQuestion'];
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-          action: 'resolve',
-          kind: 'userQuestion',
-          id: data.requestId,
-        });
-        break;
-      }
-      case 'updateSuperYoloBypassState': {
-        const data =
-          payload as ProgressEventPayloads['updateSuperYoloBypassState'];
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
-          stream: data.streamId,
-          type: 'superYolo',
-          bypassActive: data.bypassActive,
-        });
-        break;
-      }
-      case 'updateQueuedFollowUps': {
-        const data = payload as ProgressEventPayloads['updateQueuedFollowUps'];
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
-          stream: data.streamId,
-          messages: ToolUseFollowUpQueue.getAll(data.streamId),
-        });
-        break;
-      }
-      // `odysseyStateChanged` is dispatched via `bus.on` (see constructor);
-      // `runtimeHost.emit` is never the producer. Listed here only for
-      // TypeScript exhaustiveness.
-      case 'odysseyStateChanged':
-      case 'clearMissingOutputs':
-      case 'updateBashApprovalBypassState':
-      case 'showRetryRequest':
-      case 'resolveRetryRequest':
-      case 'showExternalInquiry':
-      case 'resolveExternalInquiry':
-      case 'inquiryThreadUpdated':
-      case 'followUpSent':
-      case 'removeStream':
-      case 'extensionDeactivating':
-      case 'githubTokenInvalid':
-      case 'prSubscriptionsChanged':
-      case 'prSubscriptionBindingsChanged':
-      case 'repoSubscriptionsChanged':
-      case 'repoSubscriptionBindingsChanged':
-      case 'issueSubscriptionsChanged':
-      case 'issueSubscriptionBindingsChanged':
-      case 'toolAvailabilityChanged':
-      case 'workspaceFilesWritten':
-      case 'requestOpenFile':
-      case 'requestShowInstruction':
-      case 'showAgentConfigBanner':
-      case 'requestShowError':
-        break;
-      default: {
-        const exhaustive: never = event;
-        return exhaustive;
-      }
-    }
-  }
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM,
+        stream: data.childStreamId,
+        parentStreamId: data.parentStreamId ?? undefined,
+      });
+      this.persistStreamSnapshot(data.childStreamId);
+    },
+    updateActiveSubagents: (data) =>
+      this.sendActiveChildrenBadges(data.parentStreamId, {
+        activeField: 'activeSubagents',
+        countField: 'finishedSubagentCount',
+        next: data.children,
+      }),
+    updateActiveProcesses: (data) =>
+      this.sendActiveChildrenBadges(data.parentStreamId, {
+        activeField: 'activeProcesses',
+        countField: 'finishedProcessCount',
+        next: data.processes,
+      }),
+    updateProcessOutput: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT,
+        stream: data.parentStreamId,
+        executionId: data.executionId,
+        stdout: data.stdout,
+        stderr: data.stderr,
+      });
+    },
+    showToolEditPermission: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+        action: 'show',
+        permission: { kind: 'toolEdit', data },
+      });
+    },
+    resolveToolEditPermission: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+        action: 'resolve',
+        kind: 'toolEdit',
+        id: data.requestId,
+      });
+    },
+    updateToolEditApprovalBypassState: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
+        stream: data.streamId,
+        type: 'toolEdit',
+        bypassActive: data.bypassActive,
+      });
+    },
+    showBashPermission: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+        action: 'show',
+        permission: { kind: 'bash', data },
+      });
+    },
+    resolveBashPermission: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+        action: 'resolve',
+        kind: 'bash',
+        id: data.requestId,
+      });
+    },
+    showAgentProposal: (data) => {
+      this.agentProposals.set(data.proposalId, data);
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+        action: 'show',
+        permission: { kind: 'proposal', data },
+      });
+    },
+    resolveAgentProposal: (data) => {
+      this.agentProposals.delete(data.proposalId);
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+        action: 'resolve',
+        kind: 'proposal',
+        id: data.proposalId,
+      });
+    },
+    showPlanApproval: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+        action: 'show',
+        permission: { kind: 'planApproval', data },
+      });
+    },
+    resolvePlanApproval: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+        action: 'resolve',
+        kind: 'planApproval',
+        id: data.approvalId,
+      });
+    },
+    showUserQuestion: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+        action: 'show',
+        permission: { kind: 'userQuestion', data },
+      });
+    },
+    resolveUserQuestion: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
+        action: 'resolve',
+        kind: 'userQuestion',
+        id: data.requestId,
+      });
+    },
+    updateSuperYoloBypassState: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
+        stream: data.streamId,
+        type: 'superYolo',
+        bypassActive: data.bypassActive,
+      });
+    },
+    updateQueuedFollowUps: (data) => {
+      this.send({
+        command: PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
+        stream: data.streamId,
+        messages: ToolUseFollowUpQueue.getAll(data.streamId),
+      });
+    },
+    // No-op events: produced elsewhere or with no desktop progress-mirror
+    // side effect. Kept as explicit `null` to preserve exhaustiveness.
+    odysseyStateChanged: null,
+    clearMissingOutputs: null,
+    updateBashApprovalBypassState: null,
+    showRetryRequest: null,
+    resolveRetryRequest: null,
+    showExternalInquiry: null,
+    resolveExternalInquiry: null,
+    inquiryThreadUpdated: null,
+    followUpSent: null,
+    removeStream: null,
+    extensionDeactivating: null,
+    githubTokenInvalid: null,
+    prSubscriptionsChanged: null,
+    prSubscriptionBindingsChanged: null,
+    repoSubscriptionsChanged: null,
+    repoSubscriptionBindingsChanged: null,
+    issueSubscriptionsChanged: null,
+    issueSubscriptionBindingsChanged: null,
+    toolAvailabilityChanged: null,
+    workspaceFilesWritten: null,
+    requestOpenFile: null,
+    requestShowInstruction: null,
+    showAgentConfigBanner: null,
+    requestShowError: null,
+  };
 
   syncFullView(): void {
     this.syncStreams();
