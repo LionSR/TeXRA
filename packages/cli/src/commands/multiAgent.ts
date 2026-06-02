@@ -259,6 +259,7 @@ export async function runMultiAgentPreset(
   const runContext = buildHeadlessRunContext(context, model);
   const stdinInputFile = createStdinWorkflowInputMaterializer({
     readStdinText: readCliStdinText,
+    tempDir: runContext.cwd,
   });
   try {
     const { inputFiles, contextFiles } = await expandRunInputs(
@@ -362,13 +363,13 @@ const multiAgentRunCommand = defineCliCommand({
       type: 'string',
       alias: 'i',
       description:
-        'Input file passed to the team orchestrator (repeatable; optional when --instruction is provided)',
+        'Input file passed to the team orchestrator (repeatable; optional when --instruction is provided; use `-` to read stdin)',
     },
     context: {
       type: 'string',
       alias: 'c',
       description:
-        'Read-only context file passed to the team orchestrator (repeatable)',
+        'Read-only context file passed to the team orchestrator (repeatable; use `-` to read stdin)',
     },
     agent: {
       type: 'string',
