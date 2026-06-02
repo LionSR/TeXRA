@@ -1,6 +1,3 @@
-import { readFile } from 'node:fs/promises';
-import * as path from 'node:path';
-
 import { loadAgents } from '@agent/index';
 import { writeTerminalStatus } from '@agent/storage';
 import {
@@ -8,7 +5,6 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 
@@ -28,6 +24,7 @@ import {
   collectStringFlagValues,
   optString,
 } from './_helpers/globalArgs';
+import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import {
   buildHeadlessRunContext,
   resolveCliRunModel,
@@ -57,34 +54,11 @@ interface ToolUseAgentRunInit {
   readonly instructionFile?: string;
 }
 
-async function readInstructionFile(
-  instructionFile: string | undefined,
-  cwd: string,
-): Promise<string> {
-  const trimmed = instructionFile?.trim();
-  if (!trimmed) return '';
-  const absolutePath = path.isAbsolute(trimmed)
-    ? path.resolve(trimmed)
-    : path.resolve(cwd, trimmed);
-  try {
-    return await readFile(absolutePath, 'utf8');
-  } catch (error: unknown) {
-    if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
-      throw new CliUsageError(`--instruction-file: file not found: ${trimmed}`);
-    }
-    throw error;
-  }
-}
-
 async function resolveToolUseInstruction(
   init: Pick<ToolUseAgentRunInit, 'instruction' | 'instructionFile'>,
   cwd: string,
 ): Promise<string> {
-  const fileInstruction = await readInstructionFile(init.instructionFile, cwd);
-  const inlineInstruction = init.instruction.trim();
-  const instruction = [fileInstruction.trim(), inlineInstruction]
-    .filter(Boolean)
-    .join('\n\n');
+  const instruction = await resolveFileBackedInstruction(init, cwd);
   if (!instruction) {
     throw new CliUsageError('Provide --instruction or --instruction-file.');
   }
