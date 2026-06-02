@@ -118,19 +118,18 @@ GLM models support thinking mode (reasoning is shown inline). The API uses a non
 
 <p class="hero-caption">Pick a model by intent: each use case maps to a short list of recommended model ids.</p>
 
-## Configuration
+## Customizing the model list
 
-Customize available models in VS Code Settings under `texra.models`:
+Choose which models appear in the picker from the **Dashboard → Models** tab — toggle them on or off per provider, no JSON required. In the CLI, run `texra models`, or set the `models` array in your project's `.texra/config.json`.
+
+::: details VS Code power users
+The Dashboard writes the underlying `texra.models` setting (an array of model IDs) for you. Edit it by hand in `settings.json` only if you prefer:
 
 ```json
-"texra.models": [
-  "gemini31p",
-  "sonnet46T",
-  "opus48T",
-  "gpt55",
-  "deepseekT"
-]
+"texra.models": ["gemini31p", "sonnet46T", "opus48T", "gpt55", "deepseekT"]
 ```
+
+:::
 
 ## Using OpenRouter
 

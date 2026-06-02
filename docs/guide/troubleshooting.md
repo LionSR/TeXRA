@@ -127,9 +127,8 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 **Solutions**:
 
 1. **Verify API keys**:
-   - Open TeXRA in VS Code
-   - Click "Set API Key" option
-   - Re-enter your API keys carefully
+   - Open the **Dashboard → Models** tab (or `texra models` / `.texra/config.json` in the CLI)
+   - Re-enter your API keys carefully for the affected provider
 
 2. **Check API key validity**:
    - Verify your API keys are active in the provider dashboards

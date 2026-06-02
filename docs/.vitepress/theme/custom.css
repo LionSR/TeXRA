@@ -78,3 +78,15 @@ wa-card:not(:defined) {
   line-height: 1.5;
   color: var(--vp-c-text-3);
 }
+
+/* Shields.io badge rows (e.g. on the Open Source page) must sit on one line.
+   The global reset sets `img { display: block }`, which would otherwise stack
+   each badge vertically; restore inline flow just for the badges. */
+.vp-doc a:has(> img[src*='shields.io']) {
+  display: inline-block;
+}
+.vp-doc img[src*='shields.io'] {
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 0.25rem 0.35rem 0;
+}

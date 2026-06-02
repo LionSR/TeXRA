@@ -37,18 +37,14 @@ The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open i
 - **Odyssey** - Monitor long-running multi-agent jobs from the orchestrator.
 
 ::: tip
-Many connection and model settings are configured through VS Code's standard settings. The Dashboard tabs provide convenient access to agent, model, and tool configuration.
+The Dashboard tabs are the recommended way to manage agents, models, tools, and connections. VS Code's raw settings (`texra.*` keys) still work for power users and apply across every client.
 :::
 
-## Accessing Configuration
+## Where settings live
 
-You can also configure TeXRA through VS Code's standard settings:
+Most configuration happens in the **Dashboard** (above) — open it with `TeXRA: Show Dashboard`. CLI users keep the same settings in a per-project `.texra/config.json` (`texra init` scaffolds one). The setting **keys** referenced throughout this guide (e.g. `texra.latex.formatter`) are shared: the Dashboard and `.texra/config.json` both read them, so you rarely need to touch raw JSON.
 
-1. Open VS Code Settings (File > Preferences > Settings or `Ctrl+,`)
-2. Search for "TeXRA" to see all available settings
-3. Adjust settings in the UI or edit the JSON directly
-
-![VS Code Settings](/images/vscode-settings.png)
+VS Code's built-in Settings UI remains available for power users — open it with `Ctrl+,` (`Cmd+,` on macOS), search for "TeXRA", and edit in the UI or the JSON. It's no longer the primary path, so reach for the Dashboard or CLI config first.
 
 ## Core Configuration Options
 
@@ -291,7 +287,7 @@ Enable **Mark commits with TeXRA author info** to attribute commits created by T
 
 ### LaTeX diff commit history
 
-The unrelated setting controlling how many recent commits appear in the LaTeX-diff commit picker is:
+A separate setting controls how many recent commits appear in the LaTeX-diff commit picker:
 
 ```json
 "texra.git.numberOfCommitsToShow": 20
@@ -323,10 +319,11 @@ Control logging behavior:
 
 You can configure TeXRA at different levels:
 
-1. **User Settings**: Apply to all workspaces (set in VS Code's user settings)
-2. **Workspace Settings**: Apply only to the current workspace (set in `.vscode/settings.json`)
+1. **User Settings**: Apply to all workspaces (the VS Code extension's user settings)
+2. **Workspace Settings**: Apply only to the current workspace (`.vscode/settings.json`)
+3. **CLI / project config**: A per-project `.texra/config.json` (run `texra init`) — the CLI's native project-level equivalent of workspace settings
 
-For project-specific configurations, use workspace settings:
+For project-specific configurations in the VS Code extension, use workspace settings:
 
 ```json
 // .vscode/settings.json
@@ -360,11 +357,10 @@ For macOS and Linux, use forward slashes:
 
 ## Creating Custom Profiles
 
-While TeXRA doesn't have built-in profile support, you can create multiple configuration sets using VS Code's settings profiles:
+To keep different configuration sets:
 
-1. Create different VS Code profiles for different types of projects
-2. Configure TeXRA differently in each profile
-3. Switch between profiles based on your current task
+- **CLI:** each project carries its own `.texra/config.json`, so per-project defaults come for free.
+- **VS Code extension:** TeXRA has no built-in profile support, but you can use VS Code's settings profiles — create a profile per project type, configure TeXRA differently in each, and switch as you change tasks.
 
 ## Configuration Best Practices
 
@@ -391,13 +387,12 @@ Use workspace settings to ensure consistent configuration across the team.
 
 ## Advanced Configuration
 
-### Manual Settings File Editing
+### Manual settings file editing
 
-For advanced configurations, you can directly edit the VS Code settings JSON:
+Power users can edit the underlying settings file directly:
 
-1. Open Command Palette (Ctrl+Shift+P or Cmd+Shift+P on macOS)
-2. Run "Preferences: Open User Settings (JSON)"
-3. Add or modify TeXRA settings
+- **CLI / project-level:** edit `.texra/config.json` in your project (run `texra init` to scaffold one).
+- **VS Code extension:** open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`), run "Preferences: Open User Settings (JSON)", and add or modify `texra.*` keys.
 
 ### Cross-Extension Compatibility
 
@@ -448,7 +443,7 @@ These settings, accessible directly in the main TeXRA webview, control how agent
 
 Reflection rounds are now controlled entirely by the agent definition. Choose agents whose `userRequest` prompt list includes follow-up entries (or create custom ones) when you need an automatic follow-up critique.
 
-To capture the full prompt sent to the model, enable the `Save Input Prompt` debug setting in VS Code Settings (`texra.debug.saveInputPrompt`).
+To capture the full prompt sent to the model, enable the `texra.debug.saveInputPrompt` setting (in `.texra/config.json` or VS Code settings).
 
 **Model/Agent Selection:**
 

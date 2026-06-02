@@ -432,12 +432,12 @@ single-use helper functions, and remove dead code. Run existing tests after each
 ```
 
 ::: tip
-Additional remote agents may be available depending on your access level. Check **TeXRA: View Profile** for the full list.
+Additional remote agents may be available depending on your access level. In the VS Code extension, run **TeXRA: View Profile** from the Command Palette for the full list. See [Remote Agents](./remote-agents.md) to sign in and sync them.
 :::
 
 ## Next Steps
 
 - [Agent Architecture](./agent-architecture.md) - How agents work internally
-- [Research Tools](./research-tools) - Literature discovery and web tools
+- [Research Tools](./research-tools.md) - Literature discovery and web tools
 - [Custom Agents](./custom-agents.md) - Create your own agents
 - [Models](./models.md) - AI model selection
