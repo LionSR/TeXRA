@@ -139,21 +139,18 @@ describe('CLI orchestration items', () => {
     );
   });
 
-  it('carries preset display names through team launch actions', () => {
+  it('keeps team launch actions keyed by preset id only', () => {
     const items = buildCliOrchestrationItems({
       presets: [preset({ id: 'physicist', name: 'Physicist' })],
       history: [],
       toolUseAgents: [],
     });
 
-    expect(items.find((item) => item.label === 'Team Physicist')).toEqual(
-      expect.objectContaining({
-        value: {
-          kind: 'preset',
-          preset: 'physicist',
-          presetName: 'Physicist',
-        },
-      }),
-    );
+    expect(
+      items.find((item) => item.label === 'Team Physicist')?.value,
+    ).toEqual({
+      kind: 'preset',
+      preset: 'physicist',
+    });
   });
 });
