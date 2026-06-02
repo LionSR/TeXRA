@@ -896,7 +896,6 @@ describe('CLI child execution controls', () => {
       { key: '1-9', action: 'jump' },
       { key: 'Enter', action: 'view' },
       { key: 'f', action: 'focus' },
-      { key: 'k', action: 'kill' },
       { key: 'Esc', action: 'close' },
     ]);
     expect(pickerKeyHintsForColumns('tasks', 3, true, 50)).toEqual([
