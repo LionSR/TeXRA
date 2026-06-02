@@ -200,6 +200,18 @@ describe('CLI external inquiry modal', () => {
     expect(display.value).toBe('hello\nworld');
   });
 
+  it('does not wrap back to distant whitespace before a long token', () => {
+    const value = `a ${'x'.repeat(80)}`;
+    const display = textInputDisplayWindow({
+      cursor: value.length,
+      maxDisplayRows: 3,
+      value,
+      width: 80,
+    });
+
+    expect(display.value.split('\n')).toEqual([`a ${'x'.repeat(78)}`, 'xx']);
+  });
+
   it('uses terminal display width when wrapping wide answer text', () => {
     const display = textInputDisplayWindow({
       cursor: '１２３４５'.length,

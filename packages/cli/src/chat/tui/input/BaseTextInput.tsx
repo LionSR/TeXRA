@@ -75,6 +75,15 @@ function isSoftBreakChar(char: string): boolean {
   return char !== '\n' && /\s/u.test(char);
 }
 
+function shouldWrapAtPreviousSoftBreak(
+  width: number,
+  column: number,
+  lastSoftBreakColumn: number | undefined,
+): boolean {
+  if (lastSoftBreakColumn === undefined) return false;
+  return column - lastSoftBreakColumn <= Math.max(8, Math.floor(width / 4));
+}
+
 function textInputDisplayRows(
   value: string,
   width: number,
@@ -83,6 +92,7 @@ function textInputDisplayRows(
   let rowStart = 0;
   let column = 0;
   let lastSoftBreakIndex: number | undefined;
+  let lastSoftBreakColumn: number | undefined;
 
   let index = 0;
   while (index < value.length) {
@@ -95,6 +105,7 @@ function textInputDisplayRows(
       index = point.nextIndex;
       column = 0;
       lastSoftBreakIndex = undefined;
+      lastSoftBreakColumn = undefined;
       continue;
     }
 
@@ -105,7 +116,8 @@ function textInputDisplayRows(
         wrapIndex = point.nextIndex;
       } else if (
         lastSoftBreakIndex !== undefined &&
-        lastSoftBreakIndex > rowStart
+        lastSoftBreakIndex > rowStart &&
+        shouldWrapAtPreviousSoftBreak(width, column, lastSoftBreakColumn)
       ) {
         wrapIndex = lastSoftBreakIndex;
       }
@@ -114,12 +126,14 @@ function textInputDisplayRows(
       index = wrapIndex;
       column = 0;
       lastSoftBreakIndex = undefined;
+      lastSoftBreakColumn = undefined;
       continue;
     }
 
     column += charWidth;
     if (isSoftBreakChar(point.char)) {
       lastSoftBreakIndex = point.nextIndex;
+      lastSoftBreakColumn = column;
     }
     index = point.nextIndex;
   }
