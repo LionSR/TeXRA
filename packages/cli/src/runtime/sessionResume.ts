@@ -1,0 +1,66 @@
+// Resolve what `texra --resume <id>` should continue.
+//
+// Resume = continue (load the prior conversation), not re-run. The resumable
+// state lives in the per-execution flow record (executions/<id>/flow-*.json),
+// written per-step during a tool-use run; `retrieveSessionResumeData` rebuilds
+// a full snapshot (messages + state slices) from it. Only tool-use agents
+// resume this way — workflows are not continuable here.
+
+import { isToolUseTaskState } from '@agent/core/execution/TaskState';
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse';
+import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import { getStreamTabId } from '@agent/runtime/streamTab';
+import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
+
+import { readCliHistoryConfig } from './history';
+
+export type CliResumeResolution =
+  | {
+      readonly kind: 'toolUse';
+      readonly snapshot: ToolUseSessionSnapshot;
+      readonly streamId: StreamTabId;
+      readonly config: AgentConfig;
+    }
+  /** A workflow execution — not continuable via the tool-use snapshot path. */
+  | { readonly kind: 'workflow' }
+  /** No execution with this id. */
+  | { readonly kind: 'not-found' }
+  /** Tool-use, but no live flow record to continue from (completed or cleared). */
+  | { readonly kind: 'no-snapshot' };
+
+export async function resolveCliResumeSnapshot(
+  id: ExecutionId,
+): Promise<CliResumeResolution> {
+  const config = await readCliHistoryConfig(id);
+  if (!config) return { kind: 'not-found' };
+
+  const taskState = agentConfigToTaskState(config);
+  if (!isToolUseTaskState(taskState)) return { kind: 'workflow' };
+
+  // The original run derived its streamId deterministically from agent+model+id,
+  // so re-deriving it here reuses the same stream/transcript on resume.
+  const streamId = getStreamTabId(config.agent, config.model, {
+    executionId: id,
+  });
+  const resume = await retrieveSessionResumeData(streamId, id, taskState);
+  if (resume?.type !== 'toolUse') return { kind: 'no-snapshot' };
+
+  return { kind: 'toolUse', snapshot: resume.snapshot, streamId, config };
+}
+
+/** A user-facing line explaining why a non-tool-use resolution can't continue. */
+export function explainNonResumable(
+  resolution: Exclude<CliResumeResolution, { kind: 'toolUse' }>,
+  id: ExecutionId,
+): string {
+  switch (resolution.kind) {
+    case 'not-found':
+      return `Execution not found: ${id}`;
+    case 'workflow':
+      return `Execution ${id} is a workflow; only tool-use sessions can be resumed.`;
+    case 'no-snapshot':
+      return `Execution ${id} has no resumable session state (it completed or was cleared).`;
+  }
+}

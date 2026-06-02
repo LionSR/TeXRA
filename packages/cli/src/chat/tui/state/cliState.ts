@@ -10,6 +10,7 @@ import { signal, Signal } from '@lit-labs/signals';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type {
   ActiveChildInfo,
+  AgentCategory,
   ConversationProgress,
   NormalizedToolUse,
   Plan,
@@ -71,6 +72,10 @@ export interface BypassState {
 
 export interface StreamSlice {
   readonly streamId: StreamTabId;
+  /** Agent category for this stream (`toolUse` / `workflow` / …), captured
+   *  from `setActiveStream`. Lets the exit hint list only resumable tool-use
+   *  subagents (workflows don't resume). Undefined until the stream activates. */
+  readonly category: AgentCategory | undefined;
   readonly status: StreamStatus | undefined;
   /** Epoch ms when this stream last entered `RUNNING`; cleared on any other
    *  status. Drives the StatusBar's live elapsed-time segment so a long
@@ -137,10 +142,14 @@ const ACTIVE_FORM = signal<ActiveSlashForm | undefined>(undefined);
 const SLASH_PALETTE_OPEN = signal<boolean>(false);
 const REVERSE_SEARCH_OPEN = signal<boolean>(false);
 
-/** True while the ctrl+t full-output transcript viewer owns the screen. The
- *  viewer shows the active stream's tool output untruncated and scrollable;
- *  the finalized scrollback and live region only ever show a head+tail slice. */
-const TRANSCRIPT_VIEWER_OPEN = signal<boolean>(false);
+/** The stream whose full-output transcript the viewer is showing, or
+ *  `undefined` when the viewer is closed. ctrl+t opens it on the active
+ *  stream; the Subagents picker opens it on a chosen child so each subagent's
+ *  transcript is independently browsable without disturbing the main
+ *  scrollback. The viewer shows that one stream's tool output untruncated and
+ *  scrollable; the finalized scrollback and live region only ever show a
+ *  head+tail slice. */
+const TRANSCRIPT_VIEWER_STREAM_ID = signal<StreamTabId | undefined>(undefined);
 
 const PENDING_EXIT_HINT = signal<boolean>(false);
 const PENDING_EXIT_RESUME_ID = signal<string | undefined>(undefined);
@@ -157,7 +166,9 @@ export const cliState = {
   activeForm: ACTIVE_FORM as Signal.State<ActiveSlashForm | undefined>,
   slashPaletteOpen: SLASH_PALETTE_OPEN as Signal.State<boolean>,
   reverseSearchOpen: REVERSE_SEARCH_OPEN as Signal.State<boolean>,
-  transcriptViewerOpen: TRANSCRIPT_VIEWER_OPEN as Signal.State<boolean>,
+  transcriptViewerStreamId: TRANSCRIPT_VIEWER_STREAM_ID as Signal.State<
+    StreamTabId | undefined
+  >,
   pendingExitHint: PENDING_EXIT_HINT as Signal.State<boolean>,
   pendingExitResumeId: PENDING_EXIT_RESUME_ID as Signal.State<
     string | undefined
@@ -173,6 +184,7 @@ export const NO_BYPASS: BypassState = {
 function emptySlice(streamId: StreamTabId): StreamSlice {
   return {
     streamId,
+    category: undefined,
     status: undefined,
     runStartedAt: undefined,
     description: undefined,
@@ -293,7 +305,7 @@ export function resetCliState(sessionMeta = defaultSessionMeta()): void {
   cliState.activeForm.set(undefined);
   cliState.slashPaletteOpen.set(false);
   cliState.reverseSearchOpen.set(false);
-  cliState.transcriptViewerOpen.set(false);
+  cliState.transcriptViewerStreamId.set(undefined);
   cliState.pendingExitHint.set(false);
   cliState.pendingExitResumeId.set(undefined);
   for (const resetHook of RESET_HOOKS) resetHook();

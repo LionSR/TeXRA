@@ -15,6 +15,7 @@ import {
   clampPickerIndex,
   liveChildExecutionElapsedKey,
   nextPickerIndex,
+  subagentPickerSelection,
   type ChildControlItem,
   type ChildControlMode,
 } from '../state/childControls';
@@ -32,6 +33,9 @@ export interface ChildControlPickerProps {
   readonly mode: ChildControlMode;
   readonly onClose: () => void;
   readonly onFocusStream: (streamId: StreamTabId) => void;
+  /** Open the chosen subagent's scoped transcript viewer (its independent
+   *  history). Falls back to focus when omitted. */
+  readonly onViewStream?: (streamId: StreamTabId) => void;
   readonly onKillExecution: (executionId: string) => void;
   readonly slice: StreamSlice | undefined;
   readonly streamScopeDetail?: string;
@@ -85,7 +89,8 @@ export function pickerKeyHints(
   }
   const hints: KeyHint[] = [{ key: '↑/↓', action: 'navigate' }];
   if (itemCount > 1) hints.push({ key: '1-9', action: 'jump' });
-  hints.push({ key: 'Enter', action: mode === 'subagents' ? 'focus' : 'view' });
+  hints.push({ key: 'Enter', action: 'view' });
+  if (mode === 'subagents') hints.push({ key: 'f', action: 'focus' });
   if (canKill) hints.push({ key: 'k', action: 'kill' });
   hints.push({ key: 'Esc', action: 'close' });
   return hints;
@@ -109,7 +114,10 @@ export function pickerKeyHintsForColumns(
   if (itemCount > 1 && availableColumns >= MIN_COLUMNS_FOR_JUMP_HINT) {
     hints.push({ key: '1-9', action: 'jump' });
   }
-  hints.push({ key: 'Enter', action: mode === 'subagents' ? 'focus' : 'view' });
+  hints.push({ key: 'Enter', action: 'view' });
+  if (mode === 'subagents' && availableColumns >= MIN_COLUMNS_FOR_KILL_HINT) {
+    hints.push({ key: 'f', action: 'focus' });
+  }
   if (canKill && availableColumns >= MIN_COLUMNS_FOR_KILL_HINT) {
     hints.push({ key: 'k', action: 'kill' });
   }
@@ -921,6 +929,7 @@ export function ChildControlPicker({
   mode,
   onClose,
   onFocusStream,
+  onViewStream,
   onKillExecution,
   slice,
   streamScopeDetail,
@@ -975,6 +984,18 @@ export function ChildControlPicker({
 
   useInput(
     (input, key) => {
+      // 'f' focuses the highlighted subagent (make it the active stream)
+      // without opening its transcript — distinct from Enter, which opens
+      // the scoped viewer. Mirrors TaskDetailView's 'f: focus stream'.
+      if (
+        mode === 'subagents' &&
+        input.toLowerCase() === 'f' &&
+        selectedItem?.childStreamId
+      ) {
+        onFocusStream(selectedItem.childStreamId);
+        onClose();
+        return;
+      }
       const action = childPickerKeyAction({
         input,
         ctrl: key.ctrl,
@@ -1002,13 +1023,14 @@ export function ChildControlPicker({
           if (action.index < items.length) setHighlight(action.index);
           return;
         case 'select': {
-          if (!selectedItem) return;
-          if (mode === 'subagents' && selectedItem.childStreamId) {
-            onFocusStream(selectedItem.childStreamId);
+          const selection = subagentPickerSelection(mode, selectedItem);
+          if (!selection) return;
+          if (selection.kind === 'view') {
+            (onViewStream ?? onFocusStream)(selection.streamId);
             onClose();
             return;
           }
-          setTailExecutionId(selectedItem.executionId);
+          setTailExecutionId(selection.executionId);
           return;
         }
         case 'kill': {
