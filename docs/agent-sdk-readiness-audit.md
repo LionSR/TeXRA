@@ -623,7 +623,7 @@ ledger shrinks — §8 resolved, §3.1 downgraded to optional. Remaining open wo
 
 A sixth independent pass (three parallel maps — agent core/runtime, model handlers, and
 logger/platform/public surface — plus a direct line-by-line re-check of every open item)
-re-audited the same surfaces against current `main` (HEAD `10f8b81`). **All
+re-audited the same surfaces against `main` at HEAD `10f8b81`. **All
 2026-05-28/29/30/31 and 2026-06-01 findings hold without change. No new structural
 over-abstraction surfaced, and no new barrels or run-entry wrappers were added since the
 fifth pass.** TeXRA remains well-architected and SDK-aligned; this pass is a confirmation,
@@ -644,9 +644,11 @@ not a re-scoping.
 
 **Open items re-confirmed present (line numbers refreshed against HEAD `10f8b81`):**
 
-- **§2.6** — `src/agent/modelHandlers/modelHandlerValidation.ts` still sits in the dispatch
-  dir, gated by `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL` (`ModelFactory.ts:22`,
-  dispatched at `:211`). _Methodology note for the eventual fix:_ it is **CLI** validation
+- **§2.6** — `src/agent/modelHandlers/modelHandlerValidation.ts` still sits in the
+  production handler directory (`src/agent/modelHandlers/`, alongside the real provider
+  handlers rather than in `test-kernel/`), gated by
+  `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL` and dispatched from `ModelFactory.ts`
+  (`:22` reads the env flag, `:211` dynamically imports the handler). _Methodology note for the eventual fix:_ it is **CLI** validation
   machinery (the env var is `TEXRA_CLI_*`), not vitest-only — relocating it must keep it in
   the CLI bundle, so "move to `test-kernel/`" needs an injection seam the CLI can reach, not
   a straight move. Still recommended; still low priority.
