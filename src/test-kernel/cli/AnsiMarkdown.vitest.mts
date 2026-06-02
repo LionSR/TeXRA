@@ -15,6 +15,11 @@ import {
 } from '@cli/chat/tui/render/ansiMarkdown';
 import { wrapAnsiToWidth } from '@cli/chat/tui/render/ansiWrap';
 
+const ANSI_SGR_PATTERN = new RegExp(
+  `${String.fromCharCode(27)}\\[[0-9;]*m`,
+  'u',
+);
+
 function displayWidthForTest(line: string): number {
   let width = 0;
   for (const char of line) {
@@ -121,6 +126,18 @@ describe('renderAnsiMarkdown', () => {
     expect(plain).toContain('Core objects');
     expect(plain).not.toContain('## What');
     expect(plain).not.toContain('### Core');
+  });
+
+  it('renders markdown without ANSI styles when color is disabled', () => {
+    _resetAnsiMarkdownForTests();
+    const out = renderAnsiMarkdown(
+      '**Bold** and _emphasis_ with `code`.\n\n```ts\nconst x = 1;\n```',
+      { colorEnabled: false },
+    );
+
+    expect(out).toContain('Bold and emphasis with `code`.');
+    expect(out).toContain('const x = 1;');
+    expect(out).not.toMatch(ANSI_SGR_PATTERN);
   });
 
   it('separates consecutive paragraphs visually', () => {
