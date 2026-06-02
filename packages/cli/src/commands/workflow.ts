@@ -193,22 +193,26 @@ export const runWorkflowCommand = defineCliCommand({
       type: 'string',
       alias: 'i',
       required: true,
+      valueHint: 'file',
       description:
         'Input file passed to the workflow agent (repeatable; use `-` to read stdin)',
     },
     context: {
       type: 'string',
       alias: 'c',
+      valueHint: 'file',
       description:
         'Read-only context file passed to the workflow agent (repeatable; use `-` to read stdin)',
     },
     output: {
       type: 'string',
+      valueHint: 'file',
       description:
         'Output file for a single-input run (use --output-dir for multi-input)',
     },
     'output-dir': {
       type: 'string',
+      valueHint: 'directory',
       description: 'Directory to copy outputs into for multi-input runs',
     },
     model: {
