@@ -1,4 +1,4 @@
-export { capitalize } from '@utils/text/stringUtils';
+import prettyBytes from 'pretty-bytes';
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
@@ -8,22 +8,21 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit',
 });
 
-/**
- * Formats a timestamp as a relative time string (e.g., "2 mins ago").
- */
+const RTF = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+
 export function formatRelativeTime(timestamp: number): string {
   if (!timestamp) return '';
-  const diff = Date.now() - timestamp;
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes === 1) return '1 min ago';
-  if (minutes < 60) return `${minutes} mins ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours === 1) return '1 hr ago';
-  if (hours < 24) return `${hours} hrs ago`;
-  const days = Math.floor(hours / 24);
-  if (days === 1) return '1 day ago';
-  return `${days} days ago`;
+  const diffMs = Date.now() - timestamp;
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return RTF.format(-diffMin, 'minute');
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return RTF.format(-diffHr, 'hour');
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 30) return RTF.format(-diffDay, 'day');
+  const diffMonth = Math.floor(diffDay / 30);
+  if (diffMonth < 12) return RTF.format(-diffMonth, 'month');
+  return RTF.format(-Math.floor(diffMonth / 12), 'year');
 }
 
 export function formatUpdatedDate(
@@ -39,17 +38,4 @@ export function formatLineCount(count: number): string {
   return count === 1 ? '1 line' : `${count} lines`;
 }
 
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let value = bytes / 1024;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return `${value.toFixed(1)} ${units[unitIndex]}`;
-}
+export { prettyBytes as formatBytes };
