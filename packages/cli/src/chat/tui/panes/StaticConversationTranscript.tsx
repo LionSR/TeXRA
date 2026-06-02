@@ -205,9 +205,11 @@ export function appendStaticTranscriptItems({
 }
 
 export function StaticConversationTranscript({
+  colorEnabled,
   maxRows,
   width,
 }: {
+  readonly colorEnabled?: boolean;
   readonly maxRows?: number;
   readonly width?: number;
 }): React.JSX.Element {
@@ -245,7 +247,11 @@ export function StaticConversationTranscript({
               width={width}
             />
           ) : (
-            <TranscriptEntry entry={item.entry} width={width} />
+            <TranscriptEntry
+              entry={item.entry}
+              width={width}
+              colorEnabled={colorEnabled}
+            />
           )}
         </Box>
       )}

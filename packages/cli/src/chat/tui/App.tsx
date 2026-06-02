@@ -373,6 +373,7 @@ export interface AppProps {
   readonly onKillExecution: (executionId: string) => void;
   readonly canInterruptActiveRun: () => boolean;
   readonly canStopActiveRun?: () => boolean;
+  readonly colorEnabled?: boolean;
   readonly onInterruptActive: () => void;
   readonly onCtrlC?: () => void;
   readonly inputDisabled?: boolean;
@@ -696,6 +697,7 @@ export function App(props: AppProps): React.JSX.Element {
   return (
     <>
       <StaticConversationTranscript
+        colorEnabled={props.colorEnabled}
         maxRows={staticTranscriptRows}
         width={transcriptWidth}
       />
