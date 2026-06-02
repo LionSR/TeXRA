@@ -18,5 +18,6 @@ allowBuilds:
   keytar: true
   node-pty: true
   protobufjs: true
+  unrs-resolver: true
 patchedDependencies:
   ink@7.0.5: patches/ink@7.0.5.patch
