@@ -5,11 +5,16 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { detectUnknownCliCommand, runCli } from '@cli/commands/root';
+import {
+  detectUnknownCliCommand,
+  detectUnknownCliFlag,
+  runCli,
+} from '@cli/commands/root';
 import { resolveLoginProvider } from '@cli/commands/auth';
 import { doctorPlatformInitContext } from '@cli/commands/doctor';
 import {
   formatUnknownCliCommand,
+  formatUnknownCliFlag,
   normalizeRootShortcuts,
   reorderGlobalFlags,
 } from '@cli/commands/_helpers/dispatch';
@@ -221,6 +226,84 @@ describe('CLI root argument routing', () => {
     ).toBe(
       'Unknown command: texra chatt. Did you mean `texra chat`? Run `texra --help` for usage.',
     );
+  });
+
+  it('detects unknown command-scoped flags before command execution', async () => {
+    await expect(detectUnknownCliFlag(['doctor', '--bogus'])).resolves.toEqual({
+      flag: '--bogus',
+      helpCommand: 'texra doctor',
+    });
+    await expect(
+      detectUnknownCliFlag([
+        'models',
+        'list',
+        '--unknown',
+        '--no-input',
+        '--output-format',
+        'json',
+      ]),
+    ).resolves.toEqual({
+      flag: '--unknown',
+      helpCommand: 'texra models list',
+    });
+    await expect(detectUnknownCliFlag(['--bogus', 'doctor'])).resolves.toEqual({
+      flag: '--bogus',
+      helpCommand: 'texra doctor',
+    });
+  });
+
+  it('does not classify flag values or known aliases as unknown flags', async () => {
+    await expect(
+      detectUnknownCliFlag(['run', 'polish', '--instruction', '--literal']),
+    ).resolves.toBeUndefined();
+    await expect(
+      detectUnknownCliFlag(['run', 'polish', '-mdeepseekT', '--no-color']),
+    ).resolves.toBeUndefined();
+    await expect(
+      detectUnknownCliFlag([
+        'multi-agent',
+        'run',
+        'mathematician',
+        '--instruction-file=prompt.md',
+      ]),
+    ).resolves.toBeUndefined();
+  });
+
+  it('rejects camelCase spellings for kebab-case flags', async () => {
+    await expect(
+      detectUnknownCliFlag(['models', 'list', '--outputFormat', 'json']),
+    ).resolves.toEqual({
+      flag: '--outputFormat',
+      helpCommand: 'texra models list',
+    });
+  });
+
+  it('validates help command paths against the displayed command', async () => {
+    await expect(
+      detectUnknownCliFlag(['help', 'models', 'list', '--unknown']),
+    ).resolves.toEqual({
+      flag: '--unknown',
+      helpCommand: 'texra models list',
+    });
+    await expect(
+      detectUnknownCliFlag([
+        'help',
+        'models',
+        'list',
+        '--no-input',
+        '--output-format',
+        'json',
+      ]),
+    ).resolves.toBeUndefined();
+  });
+
+  it('formats unknown flag usage guidance', () => {
+    expect(
+      formatUnknownCliFlag({
+        flag: '--bogus',
+        helpCommand: 'texra doctor',
+      }),
+    ).toBe('Unknown option: --bogus. Run `texra doctor --help` for usage.');
   });
 
   it('does not classify known command arguments as unknown commands', async () => {
@@ -882,6 +965,48 @@ describe('runCli usage output stream routing', () => {
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('USAGE');
     expect(stderr).toBe('');
+  });
+
+  it('rejects unknown flags before running command bodies', async () => {
+    const result = await runCli(['doctor', '--bogus', '--no-input']);
+    expect(result.exitCode).toBe(2);
+    expect(stderr).toContain(
+      'Unknown option: --bogus. Run `texra doctor --help` for usage.',
+    );
+    expect(stdout).toBe('');
+  });
+
+  it('keeps stdout clean when rejecting unknown flags in structured mode', async () => {
+    const result = await runCli([
+      'models',
+      'list',
+      '--unknown',
+      '--no-input',
+      '--output-format',
+      'json',
+    ]);
+    expect(result.exitCode).toBe(2);
+    expect(stderr).toContain(
+      'Unknown option: --unknown. Run `texra models list --help` for usage.',
+    );
+    expect(stdout).toBe('');
+  });
+
+  it('preserves the interactive-command error for headless-only flags', async () => {
+    const result = await runCli(['chat', '--print']);
+    expect(result.exitCode).toBe(2);
+    expect(stderr).toContain('texra chat is interactive');
+    expect(stderr).not.toContain('Unknown option');
+    expect(stdout).toBe('');
+  });
+
+  it('rejects camelCase headless-only flags on interactive commands', async () => {
+    const result = await runCli(['chat', '--outputFormat', 'json']);
+    expect(result.exitCode).toBe(2);
+    expect(stderr).toContain(
+      'Unknown option: --outputFormat. Run `texra chat --help` for usage.',
+    );
+    expect(stdout).toBe('');
   });
 
   it('documents interactive chat controls in chat --help', async () => {
