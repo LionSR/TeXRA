@@ -27,6 +27,7 @@ import {
   isUnhandledControlInput,
   metaChordInput,
 } from './inputKeys';
+import { textDisplayWidth } from '../render/terminalText';
 
 export interface BaseTextInputProps {
   readonly value: string;
@@ -60,6 +61,54 @@ interface TextInputDisplayRow {
   readonly breakKind: 'soft' | 'hard' | 'end';
 }
 
+interface LeadingEllipsisDisplay {
+  readonly text: string;
+  readonly removedPrefixCodeUnits: number;
+}
+
+function codePointAtIndex(
+  value: string,
+  index: number,
+): { readonly char: string; readonly nextIndex: number } | undefined {
+  const codePoint = value.codePointAt(index);
+  if (codePoint === undefined) return undefined;
+  const char = String.fromCodePoint(codePoint);
+  return { char, nextIndex: index + char.length };
+}
+
+function isSoftBreakChar(char: string): boolean {
+  return char !== '\n' && /\s/u.test(char);
+}
+
+function shouldWrapAtPreviousSoftBreak(
+  width: number,
+  column: number,
+  lastSoftBreakColumn: number | undefined,
+): boolean {
+  if (lastSoftBreakColumn === undefined) return false;
+  return column - lastSoftBreakColumn <= Math.max(8, Math.floor(width / 4));
+}
+
+function softBreakRunEnd(value: string, start: number): number {
+  let index = start;
+  while (index < value.length) {
+    const point = codePointAtIndex(value, index);
+    if (point === undefined || !isSoftBreakChar(point.char)) break;
+    index = point.nextIndex;
+  }
+  return index;
+}
+
+function appendSoftDisplayRow(
+  rows: TextInputDisplayRow[],
+  value: string,
+  start: number,
+  end: number,
+): void {
+  if (value.slice(start, end).trimEnd().length === 0) return;
+  rows.push({ start, end, breakKind: 'soft' });
+}
+
 function textInputDisplayRows(
   value: string,
   width: number,
@@ -67,25 +116,65 @@ function textInputDisplayRows(
   const rows: TextInputDisplayRow[] = [];
   let rowStart = 0;
   let column = 0;
+  let lastSoftBreakIndex: number | undefined;
+  let lastSoftBreakColumn: number | undefined;
 
-  for (let index = 0; index < value.length; index += 1) {
-    const ch = value[index];
-    if (ch === '\n') {
+  let index = 0;
+  while (index < value.length) {
+    const point = codePointAtIndex(value, index);
+    if (point === undefined) break;
+
+    if (point.char === '\n') {
       rows.push({ start: rowStart, end: index, breakKind: 'hard' });
-      rowStart = index + 1;
+      rowStart = point.nextIndex;
+      index = point.nextIndex;
       column = 0;
+      lastSoftBreakIndex = undefined;
+      lastSoftBreakColumn = undefined;
       continue;
     }
-    if (column === width) {
-      rows.push({ start: rowStart, end: index, breakKind: 'soft' });
-      rowStart = index;
+
+    const charWidth = textDisplayWidth(point.char);
+    if (column + charWidth > width && column > 0) {
+      let wrapIndex = index;
+      if (isSoftBreakChar(point.char)) {
+        wrapIndex = softBreakRunEnd(value, index);
+      } else if (
+        lastSoftBreakIndex !== undefined &&
+        lastSoftBreakIndex > rowStart &&
+        shouldWrapAtPreviousSoftBreak(width, column, lastSoftBreakColumn)
+      ) {
+        wrapIndex = lastSoftBreakIndex;
+      }
+      appendSoftDisplayRow(rows, value, rowStart, wrapIndex);
+      rowStart = wrapIndex;
+      index = wrapIndex;
       column = 0;
+      lastSoftBreakIndex = undefined;
+      lastSoftBreakColumn = undefined;
+      continue;
     }
-    column += 1;
+
+    column += charWidth;
+    if (isSoftBreakChar(point.char)) {
+      lastSoftBreakIndex = point.nextIndex;
+      lastSoftBreakColumn = column;
+    }
+    index = point.nextIndex;
   }
 
-  rows.push({ start: rowStart, end: value.length, breakKind: 'end' });
+  if (rowStart < value.length || rows.at(-1)?.breakKind !== 'soft') {
+    rows.push({ start: rowStart, end: value.length, breakKind: 'end' });
+  }
   return rows;
+}
+
+function textInputDisplayRowValue(
+  value: string,
+  row: TextInputDisplayRow,
+): string {
+  const text = value.slice(row.start, row.end);
+  return row.breakKind === 'soft' ? text.trimEnd() : text;
 }
 
 function cursorDisplayRowIndex(
@@ -102,9 +191,29 @@ function cursorDisplayRowIndex(
   return rowIndex < 0 ? Math.max(0, rows.length - 1) : rowIndex;
 }
 
-function leadingEllipsisText(text: string, width: number): string {
-  if (width <= 1) return '…';
-  return text.length >= width ? `…${text.slice(1)}` : `…${text}`;
+function leadingEllipsisDisplay(
+  text: string,
+  width: number,
+): LeadingEllipsisDisplay {
+  if (width <= 1) {
+    return { text: '…', removedPrefixCodeUnits: text.length };
+  }
+  if (textDisplayWidth(text) < width) {
+    return { text: `…${text}`, removedPrefixCodeUnits: 0 };
+  }
+
+  let suffix = '';
+  const chars = [...text];
+  for (let index = chars.length - 1; index >= 0; index--) {
+    const char = chars[index] ?? '';
+    const candidate = `${char}${suffix}`;
+    if (textDisplayWidth(candidate) > width - textDisplayWidth('…')) break;
+    suffix = candidate;
+  }
+  return {
+    text: `…${suffix}`,
+    removedPrefixCodeUnits: text.length - suffix.length,
+  };
 }
 
 export function textInputDisplayWindow({
@@ -138,28 +247,27 @@ export function textInputDisplayWindow({
   const startRow = rows.length <= rowCount ? 0 : Math.max(0, endRow - rowCount);
   const visibleRows = rows.slice(startRow, endRow);
   const clipped = startRow > 0 || endRow < rows.length;
-  const firstRowOriginalLength =
-    visibleRows[0] === undefined
-      ? 0
-      : visibleRows[0].end - visibleRows[0].start;
-  const rowTexts = visibleRows.map((row) => value.slice(row.start, row.end));
+  const rowTexts = visibleRows.map((row) =>
+    textInputDisplayRowValue(value, row),
+  );
+  const displayCursorRow = Math.max(0, cursorRowIndex - startRow);
+  const cursorRowTextLength = rowTexts[displayCursorRow]?.length ?? 0;
+  let firstRowEllipsisRemovedPrefixCodeUnits = 0;
   if (clipped && startRow > 0) {
-    rowTexts[0] = leadingEllipsisText(rowTexts[0] ?? '', columnCount);
+    const firstRow = leadingEllipsisDisplay(rowTexts[0] ?? '', columnCount);
+    firstRowEllipsisRemovedPrefixCodeUnits = firstRow.removedPrefixCodeUnits;
+    rowTexts[0] = firstRow.text;
   }
   const displayValue = rowTexts.join('\n');
-  const displayCursorRow = Math.max(0, cursorRowIndex - startRow);
   const cursorRow = visibleRows[displayCursorRow] ?? visibleRows.at(-1);
   const cursorColumn =
     cursorRow === undefined
       ? 0
-      : clampCursor(
-          sourceCursor - cursorRow.start,
-          rowTexts[displayCursorRow]?.length ?? 0,
-        );
+      : clampCursor(sourceCursor - cursorRow.start, cursorRowTextLength);
   const ellipsisCursorColumn =
     clipped && startRow > 0 && displayCursorRow === 0
-      ? firstRowOriginalLength >= columnCount
-        ? Math.max(1, cursorColumn)
+      ? firstRowEllipsisRemovedPrefixCodeUnits > 0
+        ? Math.max(1, cursorColumn - firstRowEllipsisRemovedPrefixCodeUnits + 1)
         : cursorColumn + 1
       : cursorColumn;
   const cursorPrefixLength = rowTexts
