@@ -38,11 +38,17 @@ function resolveSkillSourcePath(base: string, candidate: string): string {
 
 function uniqueSources(sources: readonly SkillSource[]): SkillSource[] {
   const unique: SkillSource[] = [];
-  const seen = new Set<string>();
+  const seen = new Map<string, number>();
   for (const source of sources) {
     const key = path.resolve(source.path);
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const existingIndex = seen.get(key);
+    if (existingIndex !== undefined) {
+      if (source.required === true) {
+        unique[existingIndex] = { ...unique[existingIndex], required: true };
+      }
+      continue;
+    }
+    seen.set(key, unique.length);
     unique.push({ ...source, path: key });
   }
   return unique;
@@ -89,6 +95,7 @@ export function defaultSkillSources(
       scope: 'custom',
       path: resolveSkillSourcePath(context.cwd, candidate),
       label: 'custom',
+      required: true,
     });
   }
 
