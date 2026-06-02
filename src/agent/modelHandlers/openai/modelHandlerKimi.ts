@@ -1,7 +1,7 @@
 // Local imports - agent
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { ToolDefinition } from '@model';
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
 // Type imports
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
@@ -27,9 +27,7 @@ interface KimiTokenEstimateResponse {
  *
  * @see https://platform.moonshot.cn/docs/guide/reasoning-model
  */
-export class ModelHandlerKimi extends ModelHandlerOpenAI {
-  protected override useReasoningStreamAggregator = true;
-
+export class ModelHandlerKimi extends ReasoningModelHandlerOpenAI {
   protected override get usageProvider(): NormalizedUsage['provider'] {
     return 'moonshot';
   }
@@ -58,13 +56,6 @@ export class ModelHandlerKimi extends ModelHandlerOpenAI {
       return { type: 'disabled' };
     }
     return undefined;
-  }
-
-  /**
-   * Kimi thinking models require reasoning_content in tool-use follow-up messages.
-   */
-  protected override shouldIncludeReasoningInToolCalls(): boolean {
-    return this.capabilities.supportsReasoning;
   }
 
   protected override buildChatBaseParams(

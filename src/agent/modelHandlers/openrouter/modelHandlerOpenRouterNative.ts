@@ -68,6 +68,16 @@ type OpenRouterReasoningEffort = NonNullable<
   NonNullable<ChatRequest['reasoning']>['effort']
 >;
 
+/**
+ * Structural views for the in-place message rewrites below. Every member of
+ * the `ChatMessages` union carries `content`, but the union itself makes a
+ * direct assignment un-typeable — so these narrow to just the field being
+ * written rather than discarding all type-safety with `as any`. The assigned
+ * value is still checked against the real content type.
+ */
+type ContentWritable = { content: string | ChatContentItems[] };
+type TextPartWritable = { text: string };
+
 export function toOpenRouterReasoningEffort(
   effort: string,
 ): OpenRouterReasoningEffort {
@@ -998,7 +1008,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           text: pseudoPrefillMsg,
         });
       } else if (lastMessage && typeof lastMessage.content === 'string') {
-        (lastMessage as any).content = [
+        (lastMessage as ContentWritable).content = [
           { type: 'text', text: lastMessage.content },
           { type: 'text', text: pseudoPrefillMsg },
         ];
@@ -1062,7 +1072,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           // Anthropic prefill: replace the last text part
           const lastPart = (msg.content as ChatContentItems[]).at(-1);
           if (lastPart && 'text' in lastPart) {
-            (lastPart as any).text = bestConnector + newResponse;
+            (lastPart as TextPartWritable).text = bestConnector + newResponse;
           }
         } else {
           (msg.content as ChatContentItems[]).push({
@@ -1071,7 +1081,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           });
         }
       } else {
-        (lastMessage as any).content = [
+        (lastMessage as ContentWritable).content = [
           {
             type: 'text',
             text: workspaceState.assembly.accumulatedOutput,
@@ -1131,7 +1141,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
             text: bestConnector + newResponse,
           });
         } else {
-          (secondLastMessage as any).content = [
+          (secondLastMessage as ContentWritable).content = [
             {
               type: 'text',
               text: workspaceState.assembly.accumulatedOutput,
@@ -1162,13 +1172,14 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     if (!lastUserMsg || !('content' in lastUserMsg)) return;
 
     if (typeof lastUserMsg.content === 'string') {
-      (lastUserMsg as any).content = text + lastUserMsg.content;
+      (lastUserMsg as ContentWritable).content = text + lastUserMsg.content;
     } else if (Array.isArray(lastUserMsg.content)) {
       const firstTextPart = (lastUserMsg.content as ChatContentItems[]).find(
         (p) => p.type === 'text',
       );
       if (firstTextPart && 'text' in firstTextPart) {
-        (firstTextPart as any).text = text + (firstTextPart as any).text;
+        const part = firstTextPart as TextPartWritable;
+        part.text = text + part.text;
       } else {
         (lastUserMsg.content as ChatContentItems[]).unshift({
           type: 'text',
@@ -1189,7 +1200,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     try {
       const formattedMedia = await this.createMediaMessage(mediaFiles);
       if (typeof lastUserMsg.content === 'string') {
-        (lastUserMsg as any).content = [
+        (lastUserMsg as ContentWritable).content = [
           ...formattedMedia,
           { type: 'text', text: lastUserMsg.content },
         ];

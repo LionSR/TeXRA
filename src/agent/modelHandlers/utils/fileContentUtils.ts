@@ -8,7 +8,7 @@ import { type AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 
 // Local imports - replacement
-import { cleanFileContent } from '@replacement/engine';
+import { replacementEngine } from '@replacement/engine';
 
 // Local imports - files
 import { flexibleFS, type FileLocation } from '@utils/files';
@@ -53,7 +53,7 @@ export async function prepareExistingOutputContent(
 ): Promise<PreparedFileContent> {
   // Read and clean the file content
   let content = await flexibleFS.read(outputLocation);
-  content = cleanFileContent(content);
+  content = replacementEngine.applyAll(content);
 
   // Extract any existing scratchpad content and log it
   const scratchpad = await extractScratchpad(content, 'scratchpad');

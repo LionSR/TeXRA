@@ -23,6 +23,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
+import { logContextManagementFromResponse } from '@agent/modelHandlers/anthropic/anthropicContextManagement';
 
 // Type imports
 
@@ -1287,20 +1288,17 @@ describe('ModelHandlerAnthropic message guards', () => {
   });
 
   it('logs server-side compaction events from compaction blocks', () => {
-    const handler = createAnthropicHandler();
     const events: Array<{ message: string; data: unknown }> = [];
 
-    handler.setLogger(
-      createLoggerStub({
-        domain: (event: { key: string; text?: string; data?: unknown }) => {
-          if (event.key === 'contextManagement') {
-            events.push({ message: event.text ?? '', data: event.data });
-          }
-        },
-      }) as unknown as AgentTrace,
-    );
+    const logger = createLoggerStub({
+      domain: (event: { key: string; text?: string; data?: unknown }) => {
+        if (event.key === 'contextManagement') {
+          events.push({ message: event.text ?? '', data: event.data });
+        }
+      },
+    }) as unknown as AgentTrace;
 
-    (handler as any).logContextManagementFromResponse(
+    logContextManagementFromResponse(
       {
         content: [
           { type: 'compaction', content: '<summary>state</summary>' },
@@ -1332,6 +1330,7 @@ describe('ModelHandlerAnthropic message guards', () => {
         },
       } as any,
       200000,
+      logger,
     );
 
     assert.equal(
