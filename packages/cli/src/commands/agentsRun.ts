@@ -43,7 +43,7 @@ import {
 } from './_helpers/terminalStatus';
 import {
   createStdinWorkflowInputMaterializer,
-  expandWorkflowInputSpecs,
+  expandRunInputs,
 } from './_helpers/workflowInputs';
 
 type CliToolUseRunResult = Extract<CliRunResult, { category: 'toolUse' }>;
@@ -141,24 +141,21 @@ async function runToolUseAgent(
 
   const stdinInputFile = createStdinWorkflowInputMaterializer({
     readStdinText: readCliStdinText,
+    tempDir: runContext.cwd,
   });
   try {
     try {
-      contextFiles = await expandWorkflowInputSpecs(
+      const expanded = await expandRunInputs(
+        init.inputFiles,
         init.contextFiles,
         runContext.cwd,
-        '--context',
-        { allowEmpty: true },
-      );
-      inputFiles = await expandWorkflowInputSpecs(
-        init.inputFiles,
-        runContext.cwd,
-        '--input',
         {
-          allowEmpty: true,
+          allowEmptyInput: true,
           stdinInputFile,
         },
       );
+      inputFiles = expanded.inputFiles;
+      contextFiles = expanded.contextFiles;
     } catch (error: unknown) {
       if (!(error instanceof CliUsageError)) {
         throw error;
@@ -221,13 +218,14 @@ export const agentsRunCommand = defineCliCommand({
     input: {
       type: 'string',
       alias: 'i',
-      description: 'Workspace file made visible to the agent (repeatable)',
+      description:
+        'Workspace file made visible to the agent (repeatable; use `-` to read stdin)',
     },
     context: {
       type: 'string',
       alias: 'c',
       description:
-        'Read-only context file made visible to the agent (repeatable)',
+        'Read-only context file made visible to the agent (repeatable; use `-` to read stdin)',
     },
     model: {
       type: 'string',
