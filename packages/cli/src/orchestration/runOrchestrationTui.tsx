@@ -1,7 +1,7 @@
 import { render, Box, Text, useApp, useInput, useWindowSize } from 'ink';
 import { useState } from 'react';
 
-import { Select, type SelectItem } from '../chat/tui/ui/Select';
+import { Select } from '../chat/tui/ui/Select';
 import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import { modelSelectItemsForCliMode } from '../chat/tui/forms/ModelListForm';
@@ -26,8 +26,9 @@ function isModelPickAction(
 
 export interface OrchestrationAppProps {
   readonly items: readonly CliOrchestrationItem[];
-  /** Available models for the second step; empty skips the model pick. */
-  readonly modelItems: ReadonlyArray<SelectItem<string>>;
+  /** Model access list for the second step; if no entries are runnable in the
+   *  active API mode, the launcher skips the model pick. */
+  readonly models: readonly CliModelAccess[];
   readonly apiMode: CliApiMode;
   readonly onResolve: (action: CliOrchestrationAction) => void;
 }
@@ -54,6 +55,7 @@ export function OrchestrationApp(
   const app = useApp();
   const { rows } = useWindowSize();
   const maxVisibleItems = Math.max(4, rows - 8);
+  const modelItems = modelSelectItemsForCliMode(props.models, props.apiMode);
   // When set, the launcher is on its second step: choosing the model for this
   // chat/team. Esc returns to the item list rather than exiting.
   const [pending, setPending] = useState<ModelPickAction | undefined>(
@@ -66,7 +68,7 @@ export function OrchestrationApp(
   };
 
   const onItemSelect = (action: CliOrchestrationAction): void => {
-    if (isModelPickAction(action) && props.modelItems.length > 0) {
+    if (isModelPickAction(action) && modelItems.length > 0) {
       setPending(action);
     } else {
       finish(action);
@@ -98,9 +100,9 @@ export function OrchestrationApp(
         </Text>
         <Box marginTop={1}>
           <Select
-            items={props.modelItems}
+            items={modelItems}
             maxVisibleItems={maxVisibleItems}
-            showOverflow={props.modelItems.length > maxVisibleItems}
+            showOverflow={modelItems.length > maxVisibleItems}
             onSelect={(model) => finish({ ...pending, model })}
             onCancel={() => setPending(undefined)}
           />
@@ -145,10 +147,6 @@ export async function runOrchestrationTui(
   items: readonly CliOrchestrationItem[],
   options: RunOrchestrationTuiOptions,
 ): Promise<CliOrchestrationAction> {
-  const modelItems = modelSelectItemsForCliMode(
-    options.models,
-    options.apiMode,
-  );
   return new Promise((resolve) => {
     let chosen: CliOrchestrationAction | undefined;
     const record = (action: CliOrchestrationAction): void => {
@@ -159,7 +157,7 @@ export async function runOrchestrationTui(
     const instance = render(
       <OrchestrationApp
         items={items}
-        modelItems={modelItems}
+        models={options.models}
         apiMode={options.apiMode}
         onResolve={record}
       />,

@@ -204,6 +204,7 @@ const SCENARIOS = [
       'New chat',
       'Team Lean Project',
       'Team Physicist',
+      'Team Computer Scientist…',
       'Help',
       '1-9/a-z/Enter open',
       'Esc exit',
