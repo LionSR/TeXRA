@@ -2,7 +2,7 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import stylistic from '@stylistic/eslint-plugin';
-import importPlugin from 'eslint-plugin-import';
+import importPlugin from 'eslint-plugin-import-x';
 import unicorn from 'eslint-plugin-unicorn';
 import globals from 'globals';
 import path from 'node:path';
@@ -445,7 +445,7 @@ export default tseslint.config(
         },
       ],
 
-      // --- Adjustments for ESLint v9 ---
+      // --- Adjustments for ESLint v9/v10 ---
 
       // Temporarily disable strict any checks - REVISIT LATER
       '@typescript-eslint/no-explicit-any': 'off',
@@ -454,6 +454,9 @@ export default tseslint.config(
       'no-case-declarations': 'off',
       'no-useless-catch': 'off',
       'no-useless-escape': 'off',
+      // ESLint 10 recommended additions; keep this dependency PR policy-neutral.
+      'no-useless-assignment': 'off',
+      'preserve-caught-error': 'off',
       '@typescript-eslint/prefer-as-const': 'off',
 
       // Allow @ts-ignore with description, but prefer @ts-expect-error
