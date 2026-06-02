@@ -1,20 +1,26 @@
 import {
   CLI_COMPLETION_SHELLS,
   commandKey,
+  completionFlagVariants,
   shellQuote,
   type CompletionCommand,
   type CompletionFlag,
 } from './completionCommandTree';
 
 function zshFlagSpec(flag: CompletionFlag): string[] {
-  const names = [`--${flag.name}`, ...flag.aliases.map((alias) => `-${alias}`)];
-  const suffix =
-    flag.values.length > 0
-      ? `: :(${flag.values.join(' ')})`
-      : flag.takesValue
-        ? `:${flag.valueKind ?? 'value'}:`
-        : '';
-  return names.map((name) => `${name}[${flag.description}]${suffix}`);
+  return completionFlagVariants(flag).flatMap((variant) => {
+    const names = [
+      `--${variant.name}`,
+      ...variant.aliases.map((alias) => `-${alias}`),
+    ];
+    const suffix =
+      variant.values.length > 0
+        ? `: :(${variant.values.join(' ')})`
+        : variant.takesValue
+          ? `:${variant.valueKind ?? 'value'}:`
+          : '';
+    return names.map((name) => `${name}[${variant.description}]${suffix}`);
+  });
 }
 
 export function zshCompletion(commands: readonly CompletionCommand[]): string {

@@ -1,17 +1,15 @@
 import {
   CLI_COMPLETION_SHELLS,
   commandKey,
+  completionFlagTokens,
+  completionFlagVariants,
   shellQuote,
   type CompletionCommand,
   type CompletionFlag,
 } from './completionCommandTree';
 
 function flagTokens(flags: readonly CompletionFlag[]): string[] {
-  return flags.flatMap(flagTokensForFlag);
-}
-
-function flagTokensForFlag(flag: CompletionFlag): string[] {
-  return [`--${flag.name}`, ...flag.aliases.map((alias) => `-${alias}`)];
+  return flags.flatMap(completionFlagTokens);
 }
 
 interface FlagValueTokenEntry {
@@ -27,7 +25,7 @@ function flagValueTokenEntries(
   for (const command of commands) {
     for (const flag of command.flags) {
       if (!flag.takesValue) continue;
-      for (const token of flagTokensForFlag(flag)) {
+      for (const token of completionFlagTokens(flag)) {
         if (seen.has(token)) continue;
         seen.add(token);
         entries.push({ flag, token });
@@ -45,10 +43,12 @@ function fixedFlagValueCases(commands: readonly CompletionCommand[]): string {
   const cases = new Map<string, string[]>();
   for (const command of commands) {
     for (const flag of command.flags) {
-      if (flag.values.length === 0) continue;
-      cases.set(`--${flag.name}`, [...flag.values]);
-      for (const alias of flag.aliases) {
-        cases.set(`-${alias}`, [...flag.values]);
+      for (const variant of completionFlagVariants(flag)) {
+        if (variant.values.length === 0) continue;
+        cases.set(`--${variant.name}`, [...variant.values]);
+        for (const alias of variant.aliases) {
+          cases.set(`-${alias}`, [...variant.values]);
+        }
       }
     }
   }
@@ -91,7 +91,7 @@ function genericFlagValueCases(commands: readonly CompletionCommand[]): string {
     commands.flatMap((command) =>
       command.flags
         .filter((flag) => flag.values.length > 0)
-        .flatMap(flagTokensForFlag),
+        .flatMap(completionFlagTokens),
     ),
   );
   const dynamicValueFlags = dynamicFlagValueTokens();

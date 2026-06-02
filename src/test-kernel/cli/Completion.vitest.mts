@@ -34,6 +34,18 @@ describe('CLI shell completion', () => {
     expect(bash).toContain('texra models list --quiet');
   });
 
+  it('advertises the negated no-color flag in every shell', async () => {
+    const [bash, zsh, fish] = await Promise.all(
+      CLI_COMPLETION_SHELLS.map((shell) =>
+        generateCompletionScript(rootCommand, shell),
+      ),
+    );
+
+    expect(bash).toContain('--no-color');
+    expect(zsh).toContain('--no-color[Disable ANSI color on every stream]');
+    expect(fish).toContain("-l 'no-color'");
+  });
+
   it('consumes every bash value flag while resolving command paths', async () => {
     const [bash, commands] = await Promise.all([
       generateCompletionScript(rootCommand, 'bash'),
