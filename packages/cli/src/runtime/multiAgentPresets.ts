@@ -293,7 +293,7 @@ function includeAgent(
     : [...agents, rootAgent];
 }
 
-function agentHasDelegationTools(agent: AgentEntry): boolean {
+export function agentHasDelegationTools(agent: AgentEntry): boolean {
   return agent.tools?.some((tool) => DELEGATION_TOOLS.has(tool)) ?? false;
 }
 

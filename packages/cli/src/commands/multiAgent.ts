@@ -10,7 +10,6 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { agentKey } from '@shared/schemas/agent';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { generateExecutionId } from '@utils/core/executionId';
 import { CliUsageError, readCliStdinText } from '../runtime/cliContext';
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
@@ -18,6 +17,7 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import {
+  agentHasDelegationTools,
   cliMultiAgentPlanHasGaps,
   cliMultiAgentPresetNdjsonRecords,
   findCliMultiAgentPreset,
@@ -50,6 +50,7 @@ import {
   toolUseResultText,
   type CliRunResult,
 } from './_helpers/terminalStatus';
+import { approvalPromptsUnavailable } from './_helpers/approvalPolicyInstruction';
 import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
@@ -129,9 +130,7 @@ export function writeMissingPresetAgents(
   availableTeamAgents.delete(
     agentKey(plan.rootAgent.source, plan.rootAgent.name),
   );
-  const rootCanDelegate =
-    plan.rootAgent.tools?.some((tool) => DELEGATION_TOOLS.has(tool)) ?? false;
-  if (!rootCanDelegate) {
+  if (!agentHasDelegationTools(plan.rootAgent)) {
     writeTextStderr(
       `WARN team delegation unavailable for preset ${plan.preset.id}; running only root agent ${plan.rootAgent.name}. Enable a delegating team root or pass --agent to choose one.`,
     );
@@ -150,6 +149,27 @@ export function writeMissingPresetAgents(
       : `${availableTeamAgents.size} available team agents`;
   writeTextStderr(
     `WARN preset ${plan.preset.id} is degraded; running root agent ${plan.rootAgent.name} with ${availableText}.`,
+  );
+}
+
+function writeApprovalUnavailableDelegationWarning(
+  context: CliContext,
+  plan: CliMultiAgentPresetRunPlan,
+): void {
+  if (
+    !plan.rootAgent ||
+    !agentHasDelegationTools(plan.rootAgent) ||
+    !approvalPromptsUnavailable(context)
+  ) {
+    return;
+  }
+
+  const reason =
+    context.approvalPolicy === 'never'
+      ? 'approval policy "never" denies approval-gated delegation tools'
+      : 'headless approval policy "ask" cannot show delegation prompts';
+  writeTextStderr(
+    `WARN preset ${plan.preset.id} may run without subagent delegation because ${reason}. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
   );
 }
 
@@ -273,6 +293,7 @@ export async function runMultiAgentPreset(
     );
     await initCliPlatform(runContext);
     installCliApprovalHandlers(runContext);
+    writeApprovalUnavailableDelegationWarning(runContext, plan);
 
     const config: AgentConfigPayload = {
       agent: plan.rootAgent.name,
