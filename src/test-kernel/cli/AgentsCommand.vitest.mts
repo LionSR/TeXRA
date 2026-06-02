@@ -121,7 +121,7 @@ describe('CLI agents command', () => {
 
     expect(exitCode).toBe(2);
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Agent not found: missing-agent',
+      'Agent not found: missing-agent. Use `texra agents list` for visible starter agents, or pass a known launchable agent name from a team preset.',
     );
     expect(mocks.emitCliResult).not.toHaveBeenCalled();
   });
