@@ -666,6 +666,13 @@ src/** packages/**` empty); delegation remains a tool call inside the LLM loop. 
   resolve-side UI callers run outside the run's `AsyncLocalStorage`).
 - **§3.1** — still no `@agent/runtime/index.ts` barrel; still optional polish (the
   `@texra/core` barrel already provides the package-level shielded surface §3.1 was about).
+- **§9 finding #1 (redaction contract)** — unchanged. `redactSecrets()`
+  (`logger/redaction.ts`) is still applied only by hosts that opt in (desktop/CLI sinks);
+  the trace/logger core does not redact at `logAt()`, and the three regex patterns are
+  module constants with no extension hook. The fix remains a documented host-responsibility
+  contract in `logUtils` TSDoc (+ optionally a configurable pattern hook) — not forced
+  emit-time redaction. One of the three small, independently-shippable tidies in the net
+  summary below.
 - **§7** — holds. The provider-identity getters survive only as the endorsed display
   allow-list (`ModelHandler.ts:406–431`: `isAnthropic`/`isOpenai`/`isGoogle`/`isDeepSeek`/
   `isKimi`/`isMiniMax`); their sole callers outside the handler hierarchy are the template
