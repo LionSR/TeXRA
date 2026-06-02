@@ -16,6 +16,7 @@ import { doctorPlatformInitContext } from '@cli/commands/doctor';
 import {
   formatUnknownCliCommand,
   formatUnknownCliFlag,
+  hasUsageNoColorFlag,
   normalizeRootShortcuts,
   reorderGlobalFlags,
 } from '@cli/commands/_helpers/dispatch';
@@ -880,6 +881,12 @@ describe('CLI global color/input flags', () => {
     expect(GLOBAL_BOOL_FLAGS.has('--no-color')).toBe(true);
     expect(GLOBAL_BOOL_FLAGS.has('--no-input')).toBe(true);
     expect(GLOBAL_BOOL_FLAGS.has('--input')).toBe(false);
+  });
+
+  it('detects usage --no-color only as a global flag', () => {
+    expect(hasUsageNoColorFlag(['--no-color', '--help'])).toBe(true);
+    expect(hasUsageNoColorFlag(['--cwd', '--no-color', '--help'])).toBe(false);
+    expect(hasUsageNoColorFlag(['--', '--no-color', '--help'])).toBe(false);
   });
 
   it('does not treat command-specific --input as a leading global flag', () => {

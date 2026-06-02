@@ -3,7 +3,7 @@ export const ANSI_ESCAPE_START = String.fromCharCode(27);
 const ANSI_BEL = String.fromCharCode(7);
 
 export function ansiEscapeEnd(text: string, index: number): number {
-  if (text[index] !== ANSI_ESCAPE_START) return index + 1;
+  if (text[index] !== ANSI_ESCAPE_START) return index;
 
   const next = text[index + 1];
   if (next === '[') {

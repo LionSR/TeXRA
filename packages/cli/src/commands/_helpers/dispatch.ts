@@ -142,10 +142,22 @@ const usageSections = new WeakMap<AnyCommand, readonly UsageSection[]>();
 
 let usageColorOverride: boolean | undefined;
 
+export function hasUsageNoColorFlag(rawArgs: readonly string[]): boolean {
+  for (let index = 0; index < rawArgs.length; ) {
+    const arg = rawArgs[index];
+    if (arg === undefined || arg === '--') return false;
+    if (arg === '--no-color') return true;
+
+    const tokenCount = knownGlobalFlagTokenCount(rawArgs, index);
+    index += tokenCount ?? 1;
+  }
+  return false;
+}
+
 export function setUsageColorOverrideFromRawArgs(
   rawArgs: readonly string[],
 ): void {
-  usageColorOverride = rawArgs.includes('--no-color') ? false : undefined;
+  usageColorOverride = hasUsageNoColorFlag(rawArgs) ? false : undefined;
 }
 
 export function withUsageSections<T extends AnyCommand>(
