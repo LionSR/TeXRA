@@ -1,4 +1,6 @@
+import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 
 import { formatCliAccountLabelForDisplay } from './accountDisplay';
 import { formatCliApiMode, getCliApiMode } from './apiAccessMode';
@@ -28,6 +30,28 @@ export function formatCliAuthStatusLine(
   }`;
 }
 
+/**
+ * Warn when a provider key is present at the same time as a relay sign-in: the
+ * active `--api-mode` / `/api` setting decides which is actually used, so a
+ * stale env key can silently shadow a fresh login (a documented footgun in
+ * comparable CLIs). Returns `undefined` unless both credential paths exist.
+ */
+export function formatApiKeyShadowWarning(
+  authenticated: boolean,
+  hasPersonalKey: boolean,
+): string | undefined {
+  if (!authenticated || !hasPersonalKey) return undefined;
+  return 'note: a provider API key is set while signed in — `--api-mode` (or `/api`) controls which one is used.';
+}
+
+async function anyPersonalKeyPresent(): Promise<boolean> {
+  const secrets = platform().secrets;
+  const origins = await Promise.all(
+    API_PROVIDERS.map((provider) => lookupApiKeyOrigin(secrets, provider)),
+  );
+  return origins.some((origin) => origin !== 'none');
+}
+
 export async function loadCliApiStatusLines(): Promise<string[]> {
   const mode = getCliApiMode();
   const profile = await getCliAuthProfile();
@@ -35,6 +59,14 @@ export async function loadCliApiStatusLines(): Promise<string[]> {
     `api: ${formatCliApiMode(mode)}`,
     formatCliAuthStatusLine(profile),
   ];
+
+  if (profile.authenticated) {
+    const shadowWarning = formatApiKeyShadowWarning(
+      true,
+      await anyPersonalKeyPresent(),
+    );
+    if (shadowWarning) lines.push(shadowWarning);
+  }
 
   if (profile.tier) lines.push(`tier: ${profile.tier}`);
   if (!profile.authenticated || !profile.tier) return lines;

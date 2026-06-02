@@ -16,6 +16,7 @@ import {
   deleteToStart,
   applyTerminalInputChunk,
   insertText,
+  maskDisplayValue,
   type TextEdit,
 } from './textInputEditing';
 import {
@@ -42,6 +43,9 @@ export interface BaseTextInputProps {
   readonly onSubmit: (value: string) => void;
   readonly onInputChunkSubmit?: (value: string) => void;
   readonly onChange: (value: string) => void;
+  /** Render the value as bullets (secret entry, e.g. an API key). Display-only:
+   *  the captured value, edits, and paste are unaffected. */
+  readonly masked?: boolean;
 }
 
 export interface TextInputDisplayWindow {
@@ -323,12 +327,17 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     value,
     width: displayWidth,
   });
+  // Mask only at the render layer. maskDisplayValue preserves length, so the
+  // caret index from textInputDisplayWindow stays valid against the masked text.
+  const shownValue = props.masked
+    ? maskDisplayValue(display.value)
+    : display.value;
 
-  if (!focus) return <Text>{display.value}</Text>;
+  if (!focus) return <Text>{shownValue}</Text>;
 
-  const before = display.value.slice(0, display.cursor);
-  const ch = display.value[display.cursor];
-  const after = display.value.slice(display.cursor + 1);
+  const before = shownValue.slice(0, display.cursor);
+  const ch = shownValue[display.cursor];
+  const after = shownValue.slice(display.cursor + 1);
   // Inverse-on-newline collapses to nothing visible; render the caret as a
   // leading space and let the literal newline carry the line break.
   if (ch === '\n') {

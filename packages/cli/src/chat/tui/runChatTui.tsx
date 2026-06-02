@@ -915,8 +915,9 @@ export async function runChat(
   // (see cliContext.cliMode); stdout must also be a TTY for Ink to render,
   // and `TERM=dumb` strips the cursor controls Ink depends on (Ink would
   // mount and emit garbled output instead of a usable session).
-  const isHeadless = context.mode === 'headless' || !process.stdout.isTTY;
-  const dumbTerm = process.env.TERM === 'dumb';
+  const isHeadless =
+    context.mode === 'headless' || context.stdoutIsTty !== true;
+  const dumbTerm = context.termIsDumb === true;
   const clearItermProgress = process.env.TERM_PROGRAM === 'iTerm.app';
   if (isHeadless || dumbTerm) {
     // Headless precedence: in CI (headless + TERM=dumb often co-occur) the
@@ -932,6 +933,18 @@ export async function runChat(
   }
 
   await initCliPlatform({ ...context, quietLogs: true });
+  // First-run gate (interactive only; headless already rejected above). A
+  // credential-less user signs in or saves a key here; the apiMode + model
+  // resolution below then see the freshly-set credentials in the same process.
+  const { maybeRunCliOnboarding } =
+    await import('@cli/onboarding/runOnboarding');
+  const onboarding = await maybeRunCliOnboarding(context);
+  if (onboarding.declined) {
+    // The user saw the picker and chose "Skip for now"; the skip summary already
+    // told them how to set up later. Exit cleanly instead of falling through to
+    // the no-models resolution error — the dead-end this feature exists to fix.
+    return { exitCode: CliExitCode.Success };
+  }
   const apiMode = effectiveCliApiMode(context);
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
