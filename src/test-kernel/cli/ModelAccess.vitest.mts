@@ -142,6 +142,37 @@ describe('CLI model access resolution', () => {
     ).toEqual(['sonnet46T']);
   });
 
+  it('filters runnable models by active API mode when requested', () => {
+    const entries = [
+      model('sonnet46T', {
+        model: modelOption('sonnet46T', {
+          availability: 'included-access',
+        }),
+      }),
+      model('deepseekT', {
+        model: modelOption('deepseekT', {
+          availability: 'provider-key',
+        }),
+      }),
+      model('openrouterOnlyT', {
+        model: modelOption('openrouterOnlyT', {
+          availability: 'openrouter-key',
+        }),
+      }),
+    ];
+
+    expect(
+      runnableCliModelAccessEntries(entries, 'included').map(
+        (entry) => entry.model.value,
+      ),
+    ).toEqual(['sonnet46T']);
+    expect(
+      runnableCliModelAccessEntries(entries, 'personal').map(
+        (entry) => entry.model.value,
+      ),
+    ).toEqual(['deepseekT', 'openrouterOnlyT']);
+  });
+
   it('rejects personal-key models in included relay mode', () => {
     expect(() =>
       resolveCliRunnableModelFromAccessList(
@@ -153,7 +184,6 @@ describe('CLI model access resolution', () => {
             status: 'included access',
           }),
           model('deepseekT', {
-            available: false,
             model: modelOption('deepseekT', {
               availability: 'provider-key',
             }),
@@ -173,7 +203,6 @@ describe('CLI model access resolution', () => {
       resolveCliRunnableModelFromAccessList(
         [
           model('sonnet46T', {
-            available: false,
             model: modelOption('sonnet46T', {
               availability: 'included-access',
             }),
@@ -373,7 +402,7 @@ describe('CLI model access resolution', () => {
       { model: { value: 'deepseekT' }, available: false },
     ]);
     expect(
-      runnableCliModelAccessEntries(includedModeEntries).map(
+      runnableCliModelAccessEntries(includedModeEntries, 'included').map(
         (entry) => entry.model.value,
       ),
     ).toEqual(['sonnet46T']);
