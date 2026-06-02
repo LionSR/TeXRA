@@ -28,6 +28,9 @@ const processTerminalInputAllowedFiles = new Set([
   'packages/cli/src/runtime/cliContext.ts',
   'packages/cli/src/chat/tui/runChatTui.tsx',
   'packages/cli/src/orchestration/runOrchestrationTui.tsx',
+  // First-run onboarding mounts Ink and uses process.stdout.isTTY as its
+  // defensive TTY guard, like the other interactive launchers.
+  'packages/cli/src/onboarding/runOnboarding.tsx',
 ]);
 
 const processOutputAllowedFiles = new Set([
@@ -38,6 +41,7 @@ const processOutputAllowedFiles = new Set([
   'packages/cli/src/chat/tui/runChatTui.tsx',
   'packages/cli/src/orchestration/runOrchestrationTui.tsx',
   'packages/cli/src/init/runInitWizard.tsx',
+  'packages/cli/src/onboarding/runOnboarding.tsx',
 ]);
 
 const processOutputPatterns = [
