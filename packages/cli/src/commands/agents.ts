@@ -8,6 +8,10 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 
+import {
+  AGENT_NAME_DESCRIPTION,
+  missingAgentMessage,
+} from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
@@ -78,7 +82,7 @@ export async function showAgent(
 
   const entry = getAgent(name) ?? (await resolveAgentWithRemoteFallback(name));
   if (!entry) {
-    writeTextStderr(`Agent not found: ${name}`);
+    writeTextStderr(missingAgentMessage(name));
     return CliExitCode.Usage;
   }
 
@@ -105,8 +109,7 @@ const agentsShowCommand = defineCliCommand({
     name: {
       type: 'positional',
       required: true,
-      description:
-        'Agent name from `texra agents list` (use `source:name` to disambiguate when the same name exists in multiple sources)',
+      description: `${AGENT_NAME_DESCRIPTION} (use \`source:name\` to disambiguate when the same name exists in multiple sources)`,
     },
   },
   run: (context, ctx) => showAgent(context, ctx.args.name),

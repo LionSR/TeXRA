@@ -16,6 +16,7 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeErrorStderr } from '../runtime/logSinks';
 
+import { missingAgentMessage } from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
   buildHeadlessRunContext,
@@ -80,9 +81,7 @@ async function runWorkflowAgent(
   // Pre-validate the resolved agent so usage errors land before stdin is read
   // or the runtime host starts.
   if (!agent) {
-    throw new CliUsageError(
-      `Agent not found: ${init.agent}. Use \`texra agents list\` to see available agents.`,
-    );
+    throw new CliUsageError(missingAgentMessage(init.agent));
   }
   if (agent.category !== AgentCategory.Workflow) {
     throw new CliUsageError(
