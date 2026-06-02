@@ -616,3 +616,104 @@ composition, not indirection), with `AgentTrace` as the single per-run event cha
 **Net:** the audit's "incremental, not structural" thesis (§0) is reaffirmed, and the
 ledger shrinks — §8 resolved, §3.1 downgraded to optional. Remaining open work is §2.6
 (relocate), §4 (one consumer rewire), and §5 (formalize the subagent primitive).
+
+---
+
+## 11. Re-verification addendum — 2026-06-02
+
+A sixth independent pass (three parallel maps — agent core/runtime, model handlers, and
+logger/platform/public surface — plus a direct line-by-line re-check of every open item)
+re-audited the same surfaces against `main` at HEAD `10f8b81`. **All
+2026-05-28/29/30/31 and 2026-06-01 findings hold without change. No new structural
+over-abstraction surfaced, and no new barrels or run-entry wrappers were added since the
+fifth pass.** TeXRA remains well-architected and SDK-aligned; this pass is a confirmation,
+not a re-scoping.
+
+**New since the 2026-06-01 pass — audited clean (not a regression):**
+
+- **`agentToolResolution` (`runtime/agentToolResolution.ts`, 163 LOC; PR #4703).** Tool
+  resolution was **extracted** out of the tool-use flow into one documented, single-
+  responsibility module (`resolveAgentTools` + one private helper), called from
+  `runToolUseFlow.ts` and covered by `ToolUseToolResolution.vitest.ts`. This is a textbook
+  CLAUDE.md "single source of truth" extraction — it _reduces_ inline branching in the
+  flow, it does **not** add an indirection layer. No action.
+- The only other commits touching the audited tree since 2026-06-01 are localized fixes
+  (`fsEntryType` relocation #5007, prompt-file var sync, CLI workflow-approval filtering)
+  — none introduces a wrapper, barrel, or surface change. Verified: `git log --since` over
+  `src/agent`, `src/logger`, `packages/core` shows no new `index.ts` barrel added.
+
+**Open items re-confirmed present (line numbers refreshed against HEAD `10f8b81`):**
+
+- **§2.6** — `src/agent/modelHandlers/modelHandlerValidation.ts` still sits in the
+  production handler directory (`src/agent/modelHandlers/`, alongside the real provider
+  handlers rather than in `test-kernel/`), gated by
+  `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL` and dispatched from `ModelFactory.ts`
+  (`:22` reads the env flag, `:211` dynamically imports the handler). _Methodology note for the eventual fix:_ it is **CLI** validation
+  machinery (the env var is `TEXRA_CLI_*`), not vitest-only — relocating it must keep it in
+  the CLI bundle, so "move to `test-kernel/`" needs an injection seam the CLI can reach, not
+  a straight move. Still recommended; still low priority.
+- **§4** — token usage is still double-emitted in `src/agent/utils/UsageMonitor.ts`:
+  `runtimeHost.emit('updateStreamUsage', …)` at `:155` and `logger.usage(payload, …)` at
+  `:164`. The single-source-of-truth consolidation onto `AgentTrace` remains open (a
+  progress-view consumer rewire, not a deletion).
+- **§5 / proposal Step 7** — no first-class `delegateTo(...)` primitive (`grep delegateTo
+src/** packages/**` empty); delegation remains a tool call inside the LLM loop. The three
+  module-global registries are **unchanged**: `runCoordinators.bridgeState` (`:27`),
+  `executionRegistry` module Maps (`:32`–`:36`), and the interrupt registry still named
+  `ToolUseAgentRegistry` (the proposal's `SessionInterruptRegistry` rename, Step 7a, has not
+  landed). These remain the gating blocker for concurrent in-process sessions; the
+  prescription is unchanged — **relocate onto a per-run/session handle, never delete** (the
+  resolve-side UI callers run outside the run's `AsyncLocalStorage`).
+- **§3.1** — still no `@agent/runtime/index.ts` barrel; still optional polish (the
+  `@texra/core` barrel already provides the package-level shielded surface §3.1 was about).
+- **§9 finding #1 (redaction contract)** — unchanged. `redactSecrets()`
+  (`logger/redaction.ts`) is still applied only by hosts that opt in (desktop/CLI sinks);
+  the trace/logger core does not redact at `logAt()`, and the three regex patterns are
+  module constants with no extension hook. The fix remains a documented host-responsibility
+  contract in `logUtils` TSDoc (+ optionally a configurable pattern hook) — not forced
+  emit-time redaction. One of the three small, independently-shippable tidies in the net
+  summary below.
+- **§7** — holds. The provider-identity getters survive only as the endorsed display
+  allow-list (`ModelHandler.ts:406–431`: `isAnthropic`/`isOpenai`/`isGoogle`/`isDeepSeek`/
+  `isKimi`/`isMiniMax`); their sole callers outside the handler hierarchy are the template
+  flags in `AgentLaunchContext`/`userVars`. No behavioral dispatch on identity remains.
+
+**Independently re-confirmed clean by the three parallel maps (recorded so they are not
+re-flagged):**
+
+- **Agent core/runtime.** The two-tier run entry (`runAgent` → `executeAgent`/`runAgentStream`)
+  is the documented high/low split — `runAgent` adds only id-gen + `registerExecution` +
+  the `openWorkflowOutput` callback (`runtime/runAgent.ts`); not duplication. PocketFlow nodes
+  create+run flows directly. The coordinator hierarchy, `MapToolRegistry`, the noop
+  `AgentRuntimeHost`/`RunStorageService`, `InterruptManager`, and the small single-purpose
+  helpers (`streamTab`, `followUpResumeDetection`, `priceUtils`) are justified DI seams / DRY
+  naming, **not** removable over-abstraction — consistent with the prior passes' false-positive
+  ledger.
+- **Model handlers.** `IModelHandler` is not a redundant duplicate of `ModelHandler` (the
+  optional `createBatchedToolUseFollowUpMessages?` is load-bearing); `PROVIDER_HANDLERS` is
+  exhaustive over `ModelProvider`; usage normalizes once through `support/UsageNormalizer`;
+  tool conversion shares one schema flattener; the thin OpenAI-compatible subclasses each carry
+  genuine deltas and map 1:1 to a `ModelProvider` arm. The `modelHandlerOpenAIResponse.ts`
+  god-file and per-provider stream handlers remain a tracked, multi-day design migration —
+  **not** a mechanical quick win (re-confirms the proposal's "Rejected findings").
+- **Logger / platform / surface.** `@logger` imports nothing from `@platform` (a single
+  `writeLine` emission point; host-injected sink factory; pre-init-tolerant). The
+  `@platform` composition root (8 vscode-free ports + node defaults + frozen single-call
+  init) is the strongest SDK-aligned piece. The `@agent/core/stateStore`/`config` facades and
+  `@agent/trace/helpers` sugar are boundary isolation, not indirection. `@texra/core` is the
+  curated 8-section host-neutral barrel; deep `@agent/*` imports still work and migrate
+  incrementally.
+
+**Subagent split points — unchanged and still accurate** (§5 + proposal "Subagent split
+points"): config-driven YAML agents over two flows (reflection/tool-use) + the `delegate_*`
+tools are the existing subagent mechanism; the `agentCategory` dispatch in `executeAgent` is
+the cleanest internal seam; helper-model tasks remain the lowest-risk tools-as-data extraction.
+
+**Net for 2026-06-02:** the structural surface is done (proposal Steps 1–6 landed); the
+codebase has the shape it would have had if designed for these hosts from the start. What
+remains is exactly three independently-shippable tidies (§2.6 relocate, §4 usage de-dup,
+redaction-contract doc) plus the larger multi-session-isolation work (proposal Step 7a–7d:
+relocate the three module-globals onto a per-run handle). **No refactor was applied in this
+pass** — every remaining item is either behavior-sensitive (§4, Step 7) or non-trivial
+(§2.6 is CLI machinery, not a straight move; §5 is a multi-day primitive), exactly the items
+five prior passes deliberately deferred. No rewrite warranted.
