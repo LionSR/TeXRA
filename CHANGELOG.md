@@ -7,9 +7,14 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
 
 - **In-session updates take effect immediately** — accepting the "a new version is available" prompt now restarts `texra` on the freshly installed version, so the session you land in (and its header/`/status`) runs the update instead of silently continuing on the old build until you quit and relaunch by hand.
+- **Chat API mode is reported consistently** — the model is now resolved against the same API mode shown in the header and `/status` (an explicit `--api-mode`/env override, otherwise your account default), so a session can no longer pick a model as if in one mode while the UI reports another.
 - **Unknown CLI flags are rejected** — mistyped command options now fail before the command runs, and structured CLI output stays clean for scripts.
 - **File-backed multi-agent CLI prompts** — `texra multi-agent run` now accepts `--instruction-file` for long scripted team prompts, matching `texra agents run`.
 - **Full CLI command paths in help** — nested command help now shows the complete `texra ...` command in usage banners, so commands like `texra multi-agent run --help` and `texra history show --help` are directly copyable.
+
+### Improvements
+
+- **User turns stand out in chat** — your messages now render on a full-width highlight band (reverse video, so it adapts to your terminal's light/dark theme) in the terminal transcript, making them easy to pick out from the assistant's output when scrolling back.
 
 ## [0.38.4] - 2026-06-01
 
