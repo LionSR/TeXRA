@@ -51,7 +51,7 @@ describe('CLI Ink resize patch', () => {
   it('repaints from a known origin on resize instead of line-count erasing', () => {
     expect(source).toContain('repaintAfterResize');
     expect(source).toContain(
-      'ansiEscapes.clearTerminal + this.fullStaticOutput',
+      "ansiEscapes.clearTerminal + (this.fullStaticOutput ?? '')",
     );
     // Resets log-update's internal cursor/line bookkeeping before the repaint.
     expect(source).toContain('this.log.reset()');

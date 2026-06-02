@@ -44,7 +44,7 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..39f2acb8bf923ef6d6bb8a158525fe03
 -            this.log.clear();
 +        if (currentWidth !== this.lastTerminalWidth) {
 +            this.log.reset();
-+            this.options.stdout.write(ansiEscapes.clearTerminal + this.fullStaticOutput);
++            this.options.stdout.write(ansiEscapes.clearTerminal + (this.fullStaticOutput ?? ''));
              this.lastOutput = '';
              this.lastOutputToRender = '';
 +            this.lastOutputHeight = 0;
