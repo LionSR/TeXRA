@@ -1,5 +1,5 @@
 diff --git a/build/ink.js b/build/ink.js
-index b8fd45cc9..5135ab3c1 100644
+index b8fd45cc990adbc080eff28fc37463cd91337dff..39f2acb8bf923ef6d6bb8a158525fe03ecb94009 100644
 --- a/build/ink.js
 +++ b/build/ink.js
 @@ -259,13 +259,36 @@ export default class Ink {
@@ -42,3 +42,17 @@ index b8fd45cc9..5135ab3c1 100644
          }
          this.calculateLayout();
          dom.emitLayoutListeners(this.rootNode);
+@@ -456,6 +479,13 @@ export default class Ink {
+             return;
+         }
+         this.isUnmounting = true;
++        // Cancel any pending debounced resize repaint so it can't fire after
++        // teardown (repaintAfterResize already guards on isUnmounted; this also
++        // drops the dangling timer reference). (TeXRA patch)
++        if (this.resizeTimer) {
++            clearTimeout(this.resizeTimer);
++            this.resizeTimer = undefined;
++        }
+         if (this.beforeExitHandler) {
+             process.off('beforeExit', this.beforeExitHandler);
+             this.beforeExitHandler = undefined;
