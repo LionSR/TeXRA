@@ -1077,6 +1077,14 @@ describe('runCli usage output stream routing', () => {
     expect(stderr).toBe('');
   });
 
+  it('points setup users at the existing auth status command', async () => {
+    const result = await runCli(['setup', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('texra auth status');
+    expect(stdout).not.toContain('texra status');
+    expect(stderr).toBe('');
+  });
+
   it('shows EXAMPLES and a docs link in root --help', async () => {
     const result = await runCli(['--help']);
     expect(result.exitCode).toBe(0);
