@@ -246,12 +246,14 @@ const SCENARIOS = [
     expect: [
       '/api',
       'Switch between included relay',
-      '/yolo',
-      'Approve privileged actions',
+      '/login',
+      'Sign in to TeXRA included access',
+      '/logout',
+      'Sign out of TeXRA',
     ],
     unexpect: [
       '/ap  Switch',
-      '/yol  Approve',
+      '/log  Sign',
       'personal API keys',
       'automatically',
     ],
@@ -461,7 +463,7 @@ const SCENARIOS = [
     keys: ['/', DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN],
     frame: 'tail',
     expect: [
-      '… 6 earlier',
+      '… 8 earlier',
       '/status',
       'Show session details',
       '/exit',
