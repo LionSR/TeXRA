@@ -8,6 +8,7 @@ import {
 } from '@cli/chat/tui/modals/ExternalInquiry';
 import { KEY_HINT_SEPARATOR } from '@cli/chat/tui/ui/KeyHints';
 import { textInputDisplayWindow } from '@cli/chat/tui/input/BaseTextInput';
+import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
 
 describe('CLI external inquiry modal', () => {
   function hintText(
@@ -171,6 +172,118 @@ describe('CLI external inquiry modal', () => {
     expect(display.value.startsWith('…')).toBe(true);
     expect(display.cursor).toBeGreaterThan(0);
     expect(display.cursor).toBeLessThanOrEqual(display.value.length);
+  });
+
+  it('wraps long answers at word boundaries when there is a nearby break', () => {
+    const value =
+      'Independent check agrees: there are 22 non-degenerate triples in the displayed list, plus exactly 61 degenerate triples.';
+    const display = textInputDisplayWindow({
+      cursor: value.length,
+      maxDisplayRows: 3,
+      value,
+      width: 72,
+    });
+
+    expect(display.value).toContain('\ndisplayed list');
+    expect(display.value).not.toContain('dis\nplayed');
+  });
+
+  it('does not render a whitespace-only row after an exact-width word', () => {
+    const value = 'hello world';
+    const display = textInputDisplayWindow({
+      cursor: value.length,
+      maxDisplayRows: 3,
+      value,
+      width: 5,
+    });
+
+    expect(display.value).toBe('hello\nworld');
+  });
+
+  it('does not render a blank row from consecutive soft-break spaces', () => {
+    const value = 'hell  world';
+    const display = textInputDisplayWindow({
+      cursor: value.length,
+      maxDisplayRows: 3,
+      value,
+      width: 5,
+    });
+
+    expect(display.value).toBe('hell\nworld');
+  });
+
+  it('does not render a blank row for trailing wrapped whitespace', () => {
+    const value = 'hello ';
+    const display = textInputDisplayWindow({
+      cursor: value.length,
+      maxDisplayRows: 3,
+      value,
+      width: 5,
+    });
+
+    expect(display.value).toBe('hello');
+    expect(display.cursor).toBe(display.value.length);
+  });
+
+  it('skips space-only soft-wrap rows', () => {
+    const display = textInputDisplayWindow({
+      cursor: '   word'.length,
+      maxDisplayRows: 4,
+      value: '   word',
+      width: 2,
+    });
+
+    expect(display.value.split('\n')).not.toContain('');
+    expect(display.value).toBe('wo\nrd');
+  });
+
+  it('keeps the cursor aligned when clipped ellipsis precedes trimmed text', () => {
+    const value = 'aaaaa hell  world';
+    const display = textInputDisplayWindow({
+      cursor: 'aaaaa hell'.length,
+      maxDisplayRows: 1,
+      value,
+      width: 5,
+    });
+
+    expect(display.value).toBe('…hell');
+    expect(display.cursor).toBe(display.value.length);
+  });
+
+  it('uses display width for clipped ellipsis cursor alignment', () => {
+    const value = 'abcdef １２３';
+    const display = textInputDisplayWindow({
+      cursor: 'abcdef １'.length,
+      maxDisplayRows: 1,
+      value,
+      width: 6,
+    });
+
+    expect(display.value).toBe('…２３');
+    expect(display.cursor).toBe(1);
+  });
+
+  it('does not wrap back to distant whitespace before a long token', () => {
+    const value = `a ${'x'.repeat(80)}`;
+    const display = textInputDisplayWindow({
+      cursor: value.length,
+      maxDisplayRows: 3,
+      value,
+      width: 80,
+    });
+
+    expect(display.value.split('\n')).toEqual([`a ${'x'.repeat(78)}`, 'xx']);
+  });
+
+  it('uses terminal display width when wrapping wide answer text', () => {
+    const display = textInputDisplayWindow({
+      cursor: '１２３４５'.length,
+      maxDisplayRows: 4,
+      value: '１２３４５',
+      width: 6,
+    });
+
+    expect(display.value.split('\n').map(textDisplayWidth)).toEqual([6, 4]);
   });
 
   it('keeps Esc skip readable when scroll hints make the footer tight', () => {
