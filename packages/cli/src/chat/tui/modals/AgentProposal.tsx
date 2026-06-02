@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import {
+  agentProposalCategoryLabel,
   getProposalFileGroups,
   type AgentProposalPermission,
 } from '@shared/schemas';
 
 import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
-import { agentProposalCategoryLabel } from './AgentProposalDisplay';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
   maxScrollableRowOffset,

@@ -6,9 +6,8 @@ import {
   boundedAgentProposalInstructionLines,
   maxAgentProposalInstructionScrollOffset,
 } from '@cli/chat/tui/modals/AgentProposal';
-import { agentProposalCategoryLabel } from '@cli/chat/tui/modals/AgentProposalDisplay';
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
-import { AGENT_CATEGORY } from '@shared/schemas';
+import { AGENT_CATEGORY, agentProposalCategoryLabel } from '@shared/schemas';
 
 const LONG_AGENT_PROMPT = [
   'Review the mathematical proof in triangular_square_mod5.tex for correctness, completeness, and rigor.',
