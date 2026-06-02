@@ -1,43 +1,16 @@
 import wrapAnsi from 'wrap-ansi';
 
+import {
+  ANSI_ESCAPE_START,
+  ansiEscapeEnd,
+  stripAnsiSequences,
+} from '@cli/runtime/ansiEscapes';
+
 const MIN_WRAP_WIDTH = 1;
-const ESC = String.fromCharCode(27);
-const BEL = String.fromCharCode(7);
 
 function normalizedWidth(width: number | undefined): number | undefined {
   if (width == null || !Number.isFinite(width)) return undefined;
   return Math.max(MIN_WRAP_WIDTH, Math.floor(width));
-}
-
-function ansiEscapeEnd(text: string, index: number): number {
-  if (text[index] !== ESC) return index;
-  const next = text[index + 1];
-  if (next === '[') {
-    let end = index + 2;
-    while (end < text.length && !/[@-~]/.test(text[end] ?? '')) end += 1;
-    return Math.min(end + 1, text.length);
-  }
-  if (next === ']') {
-    const belEnd = text.indexOf(BEL, index + 2);
-    const stEnd = text.indexOf(`${ESC}\\`, index + 2);
-    if (belEnd === -1 && stEnd === -1) return text.length;
-    if (belEnd !== -1 && (stEnd === -1 || belEnd < stEnd)) return belEnd + 1;
-    return stEnd + 2;
-  }
-  return Math.min(index + 2, text.length);
-}
-
-function stripAnsiForPrefix(text: string): string {
-  let plain = '';
-  for (let i = 0; i < text.length; ) {
-    if (text[i] === ESC) {
-      i = ansiEscapeEnd(text, i);
-    } else {
-      plain += text[i];
-      i += 1;
-    }
-  }
-  return plain;
 }
 
 function splitRawAtVisiblePrefix(
@@ -47,14 +20,16 @@ function splitRawAtVisiblePrefix(
   let visible = 0;
   let index = 0;
   while (index < line.length && visible < visiblePrefixLength) {
-    if (line[index] === ESC) {
+    if (line[index] === ANSI_ESCAPE_START) {
       index = ansiEscapeEnd(line, index);
     } else {
       visible += 1;
       index += 1;
     }
   }
-  while (line[index] === ESC) index = ansiEscapeEnd(line, index);
+  while (line[index] === ANSI_ESCAPE_START) {
+    index = ansiEscapeEnd(line, index);
+  }
   return {
     prefix: line.slice(0, index),
     rest: line.slice(index),
@@ -69,7 +44,7 @@ function markdownContinuationPrefix(line: string):
       width: number;
     }
   | undefined {
-  const plain = stripAnsiForPrefix(line);
+  const plain = stripAnsiSequences(line);
   const list = plain.match(/^((?:│ )*)( {2}(?:•|\d+[.)]) )/);
   if (list) {
     const quote = list[1] ?? '';
