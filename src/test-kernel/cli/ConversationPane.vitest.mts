@@ -437,6 +437,7 @@ function sliceWithEntries(
 ): StreamSlice {
   return {
     streamId,
+    category: undefined,
     status: undefined,
     runStartedAt: undefined,
     description: undefined,

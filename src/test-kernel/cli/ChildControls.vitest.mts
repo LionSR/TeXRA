@@ -79,6 +79,7 @@ function slice(
   StreamSlice {
   return {
     streamId: 'root',
+    category: undefined,
     status: undefined,
     runStartedAt: undefined,
     description: undefined,
@@ -877,6 +878,10 @@ describe('CLI child execution controls', () => {
     });
     expect(pickerKeyHints('subagents', 1)).toContainEqual({
       key: 'Enter',
+      action: 'view',
+    });
+    expect(pickerKeyHints('subagents', 1)).toContainEqual({
+      key: 'f',
       action: 'focus',
     });
     expect(pickerKeyHints('subagents', 1, false)).not.toContainEqual({
@@ -889,7 +894,8 @@ describe('CLI child execution controls', () => {
     expect(pickerKeyHintsForColumns('subagents', 3, true, 60)).toEqual([
       { key: '↑/↓', action: 'nav' },
       { key: '1-9', action: 'jump' },
-      { key: 'Enter', action: 'focus' },
+      { key: 'Enter', action: 'view' },
+      { key: 'f', action: 'focus' },
       { key: 'k', action: 'kill' },
       { key: 'Esc', action: 'close' },
     ]);

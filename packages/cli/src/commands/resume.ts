@@ -1,90 +1,71 @@
-import { loadAgents } from '@agent/index';
-import { writeTerminalStatus } from '@agent/storage';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
+import type { ExecutionId } from '@shared/schemas';
 
-import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliExitCode } from '../runtime/exitCodes';
-import { readCliHistoryConfig, parseCliHistoryId } from '../runtime/history';
+import { parseCliHistoryId } from '../runtime/history';
 import { initCliPlatform } from '../runtime/initPlatform';
-import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
-import { shouldRenderRunProgress } from '../runtime/runProgressRenderer';
+import { writeTextStderr } from '../runtime/logSinks';
+import {
+  explainNonResumable,
+  resolveCliResumeSnapshot,
+} from '../runtime/sessionResume';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
-import { emitCliResult } from './_helpers/output';
-import { resolveAgentWithRemoteFallback } from './_helpers/remoteAgents';
-import { executeCliRequest } from './_helpers/runExecution';
-import {
-  terminalStatusExitCode,
-  type CliRunResult,
-} from './_helpers/terminalStatus';
-import {
-  formatWorkflowTextResult,
-  resolveWorkflowOutput,
-  resumeWorkflowOutputFile,
-} from './_helpers/workflowOutput';
+
 import type { CliContext } from '../runtime/cliContext';
 
+/**
+ * `texra --resume <id>` continues (resumes) a stored tool-use session by
+ * reopening the interactive chat TUI, which rehydrates the prior transcript and
+ * continues the suspended flow.
+ *
+ * Resume is interactive by nature: a resumed tool-use session returns to
+ * WAITING for the user's next message, so there is no meaningful non-interactive
+ * continuation without an input channel — a headless run would simply block at
+ * the WAIT node. Headless callers are therefore pointed at `texra run`.
+ */
 export async function runResumeExecution(
   context: CliContext,
   id: ExecutionId,
 ): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
-  const config = await readCliHistoryConfig(id);
-  if (!config) {
-    writeTextStderr(`Execution not found: ${id}`);
+
+  // Resolve the stored session up front so we (a) fail fast with a clear
+  // message for non-resumable ids (workflow / missing / no live snapshot) and
+  // (b) reopen the TUI on the SAVED model/agent rather than the current chat
+  // defaults — those could be unavailable while the saved model is still
+  // runnable, which would otherwise fail resume for the wrong reason.
+  const resolution = await resolveCliResumeSnapshot(id);
+  if (resolution.kind !== 'toolUse') {
+    writeTextStderr(explainNonResumable(resolution, id));
     return CliExitCode.Usage;
   }
 
-  const runContext: CliContext = {
-    ...context,
-    helperModel: config.model,
-    quietLogs: true,
-    renderRunProgress: shouldRenderRunProgress(context),
-  };
-  await initCliPlatform(runContext);
-  installCliApprovalHandlers(runContext);
-  await loadAgents({ includeRemote: false });
-  await resolveAgentWithRemoteFallback(config.agent);
-
-  const { result, terminalStatus } = await executeCliRequest(
-    { config, executionId: id },
-    runContext,
-  );
-  let displayResult: CliRunResult;
-  try {
-    ({ displayResult } = await resolveWorkflowOutput(
-      resumeWorkflowOutputFile(config),
-      undefined,
-      result,
-      runContext,
-      { terminalStatus },
-    ));
-  } catch (error) {
-    if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) {
-      writeErrorStderr(error);
-      return CliExitCode.Interrupted;
-    }
-    await writeTerminalStatus(id, EXECUTION_STATUS.ERROR);
-    writeErrorStderr(error);
-    return CliExitCode.AgentError;
+  const headless = context.mode === 'headless' || !process.stdout.isTTY;
+  if (headless) {
+    // A resumed tool-use session goes back to WAITING for the next message;
+    // headless has no input channel to provide one, so continuing here would
+    // block forever. Mirror runChat's non-TTY guidance instead of hanging.
+    writeTextStderr(
+      `Resuming continues an interactive chat session — run \`texra --resume ${id}\` in a terminal. For scripting, use \`texra run\`.`,
+    );
+    return CliExitCode.Usage;
   }
 
-  emitCliResult(runContext, {
-    json: displayResult,
-    ndjson: { kind: 'result', result: displayResult },
-    text:
-      displayResult.category === AgentCategory.Workflow
-        ? formatWorkflowTextResult(displayResult)
-        : displayResult.status,
+  const { runChat } = await import('../chat/tui/runChatTui');
+  const result = await runChat(context, {
+    resumeExecutionId: id,
+    agentOverride: resolution.config.agent,
+    modelOverride: resolution.config.model,
   });
-
-  return terminalStatusExitCode(terminalStatus, runContext);
+  return result.exitCode;
 }
 
 export const resumeCommand = defineCliCommand({
-  meta: { name: 'resume', description: 'Re-run a stored execution config' },
+  meta: {
+    name: 'resume',
+    description: 'Continue (resume) a stored tool-use session',
+  },
   args: {
     ...GLOBAL_ARGS,
     id: {
