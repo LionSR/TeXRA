@@ -1,3 +1,8 @@
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { rootCommand } from '@cli/commands/root';
@@ -5,7 +10,12 @@ import {
   CLI_COMPLETION_SHELLS,
   generateCompletionScript,
 } from '@cli/runtime/completion';
+import { bashCompletion } from '@cli/runtime/completionBash';
 import { collectCommands } from '@cli/runtime/completionCommandTree';
+
+function bashQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
 
 describe('CLI shell completion', () => {
   for (const shell of CLI_COMPLETION_SHELLS) {
@@ -22,6 +32,128 @@ describe('CLI shell completion', () => {
     expect(bash).toContain('TEXRA_COMPLETION_DYNAMIC');
     expect(bash).toContain('texra agents list --quiet');
     expect(bash).toContain('texra models list --quiet');
+  });
+
+  it('consumes every bash value flag while resolving command paths', async () => {
+    const [bash, commands] = await Promise.all([
+      generateCompletionScript(rootCommand, 'bash'),
+      collectCommands(rootCommand),
+    ]);
+    const lines = bash.split('\n');
+    const valueSkipIndex = lines.findIndex((line) =>
+      line.includes('((i+=2)); continue'),
+    );
+    const pathValueLine =
+      valueSkipIndex > 0 ? lines[valueSkipIndex - 1] : undefined;
+    const valueFlags = new Set(
+      commands.flatMap((command) =>
+        command.flags
+          .filter((flag) => flag.takesValue)
+          .flatMap((flag) => [
+            `--${flag.name}`,
+            ...flag.aliases.map((alias) => `-${alias}`),
+          ]),
+      ),
+    );
+
+    expect(pathValueLine).toBeDefined();
+    for (const flag of valueFlags) {
+      expect(pathValueLine).toContain(flag);
+    }
+  });
+
+  it('does not offer bash positionals while completing flag values', async () => {
+    const bash = await generateCompletionScript(rootCommand, 'bash');
+    const lines = bash.split('\n');
+    const fileValueLine = lines.find((line) =>
+      line.includes('_texra_compgen_files "$cur"'),
+    );
+    const directoryValueLine = lines.find((line) =>
+      line.includes('_texra_compgen_dirs "$cur"'),
+    );
+    const genericValueLine = lines.find((line) =>
+      line.includes('COMPREPLY=(); return'),
+    );
+
+    expect(bash).toContain('compgen -f -- "$1"');
+    expect(bash).toContain('compgen -d -- "$1"');
+    expect(fileValueLine).toBeDefined();
+    expect(directoryValueLine).toBeDefined();
+    expect(genericValueLine).toBeDefined();
+    const fileLine = fileValueLine ?? '';
+    const directoryLine = directoryValueLine ?? '';
+    const genericLine = genericValueLine ?? '';
+    expect(fileLine).toContain('--input');
+    expect(fileLine).toContain('-i');
+    expect(fileLine).toContain('--context');
+    expect(fileLine).toContain('-c');
+    expect(fileLine).toContain('--output');
+    expect(fileLine).toContain('--instruction-file');
+    expect(directoryLine).toContain('--cwd');
+    expect(directoryLine).toContain('--output-dir');
+    expect(directoryLine).toContain('--source');
+    expect(directoryLine).toContain('-s');
+    expect(genericLine).toContain('--instruction');
+    expect(genericLine).toContain('--api-mode');
+    expect(bash).toContain(
+      '--model|-m) COMPREPLY=( $(compgen -W "$(_texra_models)" -- "$cur") ); return ;;',
+    );
+    expect(bash).toContain(
+      '--agent) COMPREPLY=( $(compgen -W "$(_texra_agents)" -- "$cur") ); return ;;',
+    );
+  });
+
+  it('keeps spaced bash file completions as one candidate', async () => {
+    const bash = await generateCompletionScript(rootCommand, 'bash');
+    const root = mkdtempSync(path.join(tmpdir(), 'texra-completion-'));
+
+    try {
+      writeFileSync(path.join(root, 'paper draft.tex'), '');
+      writeFileSync(path.join(root, 'regular-file.tex'), '');
+      const spacedDir = path.join(root, 'paper drafts');
+      mkdirSync(spacedDir);
+      writeFileSync(path.join(spacedDir, '.keep'), '', { flag: 'w' });
+      const script = `
+${bash.replace(/\ncomplete .*_texra texra\n$/, '\n')}
+TEXRA_COMPLETION_DYNAMIC=0
+cd ${bashQuote(root)}
+COMP_WORDS=(texra run polish --input "paper")
+COMP_CWORD=4
+_texra
+printf '%s\\n' "\${COMPREPLY[@]}"
+COMP_WORDS=(texra --cwd "paper")
+COMP_CWORD=2
+_texra
+printf '%s\\n' "\${COMPREPLY[@]}"
+`;
+      const result = spawnSync('bash', ['-s'], {
+        input: script,
+        encoding: 'utf8',
+      });
+
+      expect(result.stderr).toBe('');
+      expect(result.status).toBe(0);
+      const completions = result.stdout.trim().split('\n');
+      expect(completions).toContain('paper draft.tex');
+      expect(completions).toContain('paper drafts');
+      expect(completions).not.toContain('regular-file.tex');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps bash completion syntactically valid without value flags', () => {
+    const bash = bashCompletion([
+      {
+        path: [],
+        description: '',
+        subcommands: [],
+        flags: [],
+        positionals: [],
+      },
+    ]);
+
+    expect(bash).toContain('--_texra_no_value_flags_)');
   });
 
   it('does not offer headless-only flags on interactive commands', async () => {

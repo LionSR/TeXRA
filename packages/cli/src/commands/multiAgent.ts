@@ -362,12 +362,14 @@ const multiAgentRunCommand = defineCliCommand({
     input: {
       type: 'string',
       alias: 'i',
+      valueHint: 'file',
       description:
         'Input file passed to the team orchestrator (repeatable; optional when --instruction is provided; use `-` to read stdin)',
     },
     context: {
       type: 'string',
       alias: 'c',
+      valueHint: 'file',
       description:
         'Read-only context file passed to the team orchestrator (repeatable; use `-` to read stdin)',
     },
