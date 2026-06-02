@@ -66,8 +66,12 @@ function isCliModelOptionRunnableInMode(
 
 export function runnableCliModelAccessEntries(
   models: readonly CliModelAccess[],
+  apiMode?: CliApiMode,
 ): CliModelAccess[] {
-  return models.filter((entry) => entry.available);
+  return models.filter(
+    (entry) =>
+      entry.available && isCliModelOptionAllowedInMode(entry.model, apiMode),
+  );
 }
 
 function formatModelAccessStatus(model: ModelOptionData): string {
@@ -140,8 +144,11 @@ function findModelAccess(
   return models.find((entry) => entry.model.value.toLowerCase() === lower);
 }
 
-function availableModelIds(models: readonly CliModelAccess[]): string[] {
-  return runnableCliModelAccessEntries(models).map(
+function availableModelIds(
+  models: readonly CliModelAccess[],
+  apiMode?: CliApiMode,
+): string[] {
+  return runnableCliModelAccessEntries(models, apiMode).map(
     (entry) => entry.model.value,
   );
 }
@@ -198,9 +205,14 @@ export function resolveCliRunnableModelFromAccessList(
 ): CliRunnableModelResolution {
   const trimmed = model.trim();
   const entry = findModelAccess(models, trimmed);
-  if (entry?.available) return { model: entry.model.value };
+  if (
+    entry?.available &&
+    isCliModelOptionAllowedInMode(entry.model, options.apiMode)
+  ) {
+    return { model: entry.model.value };
+  }
 
-  const availableIds = availableModelIds(models);
+  const availableIds = availableModelIds(models, options.apiMode);
   const unavailableMessage = formatUnavailableModelMessage(
     trimmed,
     entry,

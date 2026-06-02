@@ -113,7 +113,6 @@ describe('CLI ModelListForm model visibility', () => {
             availability: 'provider-key',
           },
           'api key set',
-          false,
         ),
         access(
           {
@@ -122,7 +121,6 @@ describe('CLI ModelListForm model visibility', () => {
             availability: 'openrouter-key',
           },
           'openrouter key',
-          false,
         ),
         access(
           {
@@ -159,8 +157,7 @@ describe('CLI ModelListForm model visibility', () => {
             label: 'Sonnet',
             availability: 'included-access',
           },
-          'api key set',
-          false,
+          'included access',
         ),
         access({
           value: 'deepseekT',

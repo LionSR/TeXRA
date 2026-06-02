@@ -70,7 +70,7 @@ export function modelSelectItemsForCliMode(
   models: readonly CliModelAccess[],
   apiMode: CliApiMode,
 ): ReadonlyArray<SelectItem<string>> {
-  return runnableCliModelAccessEntries(models).map((m) => ({
+  return runnableCliModelAccessEntries(models, apiMode).map((m) => ({
     value: m.model.value,
     label: m.model.label || m.model.value,
     description: formatModelStatusForCliMode(m, apiMode),
