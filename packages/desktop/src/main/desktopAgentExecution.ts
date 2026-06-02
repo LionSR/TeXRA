@@ -1,4 +1,4 @@
-import { access, readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -75,6 +75,7 @@ import { OdysseyStore, isOdysseyInFlight } from '@tools/odyssey';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import {
+  AbsoluteFS,
   createExternalLocation,
   pathToLocation,
   type FileLocation,
@@ -1280,7 +1281,7 @@ export class DesktopProgressBridge {
       editedLocation.absolutePath,
     );
     const targetExists =
-      isNewFile && (await fileExists(targetLocation.absolutePath));
+      isNewFile && (await AbsoluteFS.exists(targetLocation.absolutePath));
     const action = getAcceptAction(isNewFile, targetExists);
     const extensionNote = isNewFile
       ? `Extensions differ (${path.extname(baseFile).toLowerCase()} vs ${path.extname(editedFile).toLowerCase()}). `
@@ -1392,15 +1393,6 @@ export class DesktopProgressBridge {
 
   private async showErrorMessage(message: string): Promise<void> {
     await this.options.showErrorMessage?.(message);
-  }
-}
-
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await access(filePath);
-    return true;
-  } catch {
-    return false;
   }
 }
 
