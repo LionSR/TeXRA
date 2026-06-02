@@ -132,8 +132,8 @@ never leave your machine except to the provider endpoint.
 **Hosted access** (signed in with GitHub or Google). Requests to
 hosted models are proxied through TeXRA's service so we can manage
 provider credentials and quota on your behalf. Switch any run back
-to direct mode with `--api-mode personal` (CLI) or by providing your
-own key in Settings (extension).
+to direct mode with `--api-mode personal` (CLI) or by adding your own
+key in the **Dashboard → Models** tab (VS Code extension).
 
 API keys, whichever mode you use, are stored in your operating
 system's secure credential store — VS Code's built-in Secret Storage

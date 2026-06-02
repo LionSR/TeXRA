@@ -35,7 +35,7 @@ TeXRA uses formatters to keep LaTeX code consistent and readable.
 - **`latexindent`** — the default formatter; highly configurable
 - **`tex-fmt`** — a faster alternative with simpler configuration
 
-Formatting runs automatically after agent execution and is also available via the Command Palette (`Ctrl+Shift+P`) → **TeXRA: Indent Current TeX** (or **Indent All LaTeX Files** for the whole workspace).
+Formatting runs automatically after agent execution. In the VS Code extension you can also trigger it manually from the Command Palette (`Ctrl+Shift+P`) → **TeXRA: Indent Current TeX** (or **Indent All LaTeX Files** for the whole workspace).
 
 **Configuration:** Formatter selection and installation live on the **LaTeX** tab (<wa-icon library="texra" name="file-code"></wa-icon>) of the TeXRA Dashboard. See [Configuration](./configuration.md#latex-configuration) for the full set of settings.
 
