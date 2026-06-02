@@ -237,7 +237,11 @@ export function StaticConversationTranscript({
   }, [activeStreamId, maxRows, streams, sessionMeta, width]);
 
   return (
-    <Static items={[...items]}>
+    // Remount <Static> on a width change so Ink regenerates `fullStaticOutput`
+    // at the new width (via its handleStaticChange identity-reset). Without this
+    // the resize full-repaint reprints the cached, baked-width static output, so
+    // fixed-width content (e.g. the full-width user-message band) can't reflow.
+    <Static key={Math.max(1, Math.floor(width ?? 80))} items={[...items]}>
       {(item: StaticTranscriptItem) => (
         <Box key={item.id} flexDirection="column">
           {item.kind === 'header' ? (
