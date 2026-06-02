@@ -138,6 +138,12 @@ async function runOnboardingFlow(options: {
         "Note: couldn't save your choice, so you may be asked again next time.",
       );
     }
+  } else if (resolution.configured) {
+    // Clear any prior "skip" now that credentials exist — otherwise a user who
+    // skipped, then configured via `texra setup` (which bypasses the gate), then
+    // signed out would have the stale flag suppress onboarding and land back on
+    // the dead-end. Best-effort: a failed clear only re-surfaces that rare edge.
+    await setOnboardingDeclined(platform().globalState, false).catch(() => {});
   }
   if (resolution.summary) writeTextStdout(resolution.summary);
   return { configured: resolution.configured, declined: resolution.declined };
