@@ -5,7 +5,6 @@ import {
   type CommandDef,
   type CommandMeta,
 } from 'citty';
-import stripAnsi from 'strip-ansi';
 
 import { writeRawStderr, writeRawStdout } from '@cli/runtime/logSinks';
 import { readCliAmbientState } from '@cli/runtime/cliContext';
@@ -139,6 +138,16 @@ export interface UsageSection {
 }
 
 const usageSections = new WeakMap<AnyCommand, readonly UsageSection[]>();
+const ESC = String.fromCharCode(27);
+const BEL = String.fromCharCode(7);
+
+let usageColorOverride: boolean | undefined;
+
+export function setUsageColorOverrideFromRawArgs(
+  rawArgs: readonly string[],
+): void {
+  usageColorOverride = rawArgs.includes('--no-color') ? false : undefined;
+}
 
 export function withUsageSections<T extends AnyCommand>(
   command: T,
@@ -174,24 +183,47 @@ async function renderUsageWithSections(
   const usageWithSections = sections?.length
     ? `${usage}\n${sections.map(formatUsageSection).join('\n\n')}`
     : usage;
-  return usageColorEnabled(context, stream) === false
-    ? stripAnsi(usageWithSections)
+  return usageColorEnabled(stream) === false
+    ? stripAnsiSequences(usageWithSections)
     : usageWithSections;
 }
 
 interface UsageRenderContext {
   readonly parentPath?: readonly string[];
   readonly rootCommand?: AnyCommand;
-  readonly rawArgs?: readonly string[];
 }
 
-function usageColorEnabled(
-  context: UsageRenderContext | undefined,
-  stream: 'stdout' | 'stderr',
-): boolean | undefined {
-  const rawArgs = context?.rawArgs;
-  if (rawArgs == null) return undefined;
-  if (rawArgs.includes('--no-color')) return false;
+function stripAnsiSequences(text: string): string {
+  let stripped = '';
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] !== ESC) {
+      stripped += text[index];
+      continue;
+    }
+    index = ansiEscapeEnd(text, index);
+  }
+  return stripped;
+}
+
+function ansiEscapeEnd(text: string, start: number): number {
+  const marker = text[start + 1];
+  if (marker === '[') {
+    for (let index = start + 2; index < text.length; index += 1) {
+      const code = text.charCodeAt(index);
+      if (code >= 0x40 && code <= 0x7e) return index;
+    }
+  }
+  if (marker === ']') {
+    for (let index = start + 2; index < text.length; index += 1) {
+      if (text[index] === BEL) return index;
+      if (text[index] === ESC && text[index + 1] === '\\') return index + 1;
+    }
+  }
+  return start + 1;
+}
+
+function usageColorEnabled(stream: 'stdout' | 'stderr'): boolean | undefined {
+  if (usageColorOverride !== undefined) return usageColorOverride;
   const ambient = readCliAmbientState();
   return stream === 'stdout'
     ? ambient.stdoutColorEnabled

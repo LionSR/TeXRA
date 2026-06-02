@@ -18,6 +18,7 @@ import {
   normalizeRootShortcuts,
   reorderGlobalFlags,
   resolveDeepestSubCommand,
+  setUsageColorOverrideFromRawArgs,
   showUsage,
   showUsageStderr,
   withUsageSections,
@@ -137,16 +138,14 @@ export async function runCli(
   const rawArgs = reorderGlobalFlags(
     normalizeRootShortcuts(argv ? [...argv] : readCliArgv()),
   );
+  setUsageColorOverrideFromRawArgs(rawArgs);
 
   // `--help` / `-h` anywhere prints usage for the deepest matched subcommand
   // (e.g. `texra agents list --help` → list-level usage), mirroring citty's
   // own `runMain` behavior without inheriting its `exit(1)` for usage errors.
   if (rawArgs.some((arg) => arg === '--help' || arg === '-h')) {
     const resolved = await resolveDeepestSubCommand(rootCommand, rawArgs);
-    await showUsage(resolved.command, resolved.parent, {
-      ...resolved,
-      rawArgs,
-    });
+    await showUsage(resolved.command, resolved.parent, resolved);
     return { exitCode: CliExitCode.Success };
   }
 
@@ -175,10 +174,7 @@ export async function runCli(
       // machine-parseable under `--output-format json|ndjson`. The explicit
       // `--help` path above keeps using STDOUT (`showUsage`) per Unix
       // convention.
-      await showUsageStderr(resolved.command, resolved.parent, {
-        ...resolved,
-        rawArgs,
-      });
+      await showUsageStderr(resolved.command, resolved.parent, resolved);
       writeTextStderr(error.message);
       return { exitCode: CliExitCode.Usage };
     }

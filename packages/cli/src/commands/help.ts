@@ -14,9 +14,7 @@ export const helpCommand = defineCommand({
   async run(ctx) {
     const { rootCommand } = await import('./root');
     if (ctx.rawArgs.length === 0) {
-      await showUsage(rootCommand, undefined, {
-        rawArgs: ctx.rawArgs,
-      });
+      await showUsage(rootCommand);
       return;
     }
 
@@ -29,9 +27,6 @@ export const helpCommand = defineCommand({
     }
 
     const resolved = await resolveDeepestSubCommand(rootCommand, ctx.rawArgs);
-    await showUsage(resolved.command, resolved.parent, {
-      ...resolved,
-      rawArgs: ctx.rawArgs,
-    });
+    await showUsage(resolved.command, resolved.parent, resolved);
   },
 });

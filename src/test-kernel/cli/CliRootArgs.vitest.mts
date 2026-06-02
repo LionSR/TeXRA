@@ -1106,6 +1106,14 @@ describe('runCli usage output stream routing', () => {
     expect(stderr).toBe('');
   });
 
+  it('honors --no-color in help command output', async () => {
+    const result = await runCli(['--no-color', 'help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('USAGE');
+    expect(stdout).toBe(stripAnsi(stdout));
+    expect(stderr).toBe('');
+  });
+
   it('prints version output when no-op global color flags are present', async () => {
     for (const args of [
       ['--version', '--no-color'],
