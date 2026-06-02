@@ -2,7 +2,7 @@
 import { ReasoningEffort } from 'llm-zoo';
 
 // Local file imports
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
 // Type imports
 import type { DeepSeekToolCall } from '../types/IModelHandler';
@@ -27,10 +27,10 @@ import type { DeepSeekToolCall } from '../types/IModelHandler';
  *
  * @see https://api-docs.deepseek.com/guides/thinking_with_tools
  */
-export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
+export class ModelHandlerDeepSeek extends ReasoningModelHandlerOpenAI<DeepSeekToolCall> {
   // toolCallProvider and usageProvider inherit from base class via config.provider
-
-  protected override useReasoningStreamAggregator = true;
+  // useReasoningStreamAggregator + shouldIncludeReasoningInToolCalls inherit
+  // from ReasoningModelHandlerOpenAI.
 
   /**
    * DeepSeek models don't support vision/attachments in tool results.
@@ -63,13 +63,6 @@ export class ModelHandlerDeepSeek extends ModelHandlerOpenAI<DeepSeekToolCall> {
    */
   protected override formatAssistantContent(text: string): string {
     return text;
-  }
-
-  /**
-   * DeepSeek thinking models require reasoning_content in tool-use follow-up messages.
-   */
-  protected override shouldIncludeReasoningInToolCalls(): boolean {
-    return this.capabilities.supportsReasoning;
   }
 
   /**

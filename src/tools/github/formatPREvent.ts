@@ -11,7 +11,9 @@
 
 import {
   authorOf,
+  formatCommentEvent,
   formatPreviousStateHint,
+  makeTruncator,
   prRef,
   sections,
   truncate as truncateBody,
@@ -32,8 +34,7 @@ const MAX_ANNOTATIONS_PER_RUN = 20;
 const MAX_CI_STARTED_CHECK_NAMES = 20;
 const MAX_ANNOTATION_MESSAGE = 300;
 
-const truncate = (s: string | null | undefined): string =>
-  truncateBody(s, MAX_BODY);
+const truncate = makeTruncator(MAX_BODY);
 
 /** Verb fragments per `GhReview.state`. Unknown states fall back to "reviewed". */
 const REVIEW_VERBS: Readonly<Record<string, string>> = {
@@ -98,13 +99,7 @@ export function formatIssueComment(
   prNumber: number,
   c: GhIssueComment,
 ): string {
-  return wrap(
-    sections(
-      `New comment on ${prRef(slug, prNumber)} by ${authorOf(c.user)}:`,
-      truncate(c.body),
-      c.html_url,
-    ),
-  );
+  return formatCommentEvent(prRef(slug, prNumber), c, MAX_BODY);
 }
 
 export function formatReviewComment(

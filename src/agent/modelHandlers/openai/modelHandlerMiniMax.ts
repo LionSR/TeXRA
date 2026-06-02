@@ -1,7 +1,7 @@
 // Local file imports
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { ToolDefinition } from '@model';
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
 // Type imports
 import type {
@@ -35,19 +35,13 @@ function extractTextFromReasoningDetails(details: unknown): string | undefined {
  * @see https://platform.minimax.io/docs/api-reference/text-openai-api
  * @see https://platform.minimax.io/docs/guides/text-m2-function-call
  */
-export class ModelHandlerMiniMax extends ModelHandlerOpenAI {
-  protected override useReasoningStreamAggregator = true;
-
+export class ModelHandlerMiniMax extends ReasoningModelHandlerOpenAI {
   /**
    * MiniMax emits reasoning alongside parallel tool calls, which must be
    * preserved by batching the results into a single follow-up message.
    */
   override get requiresBatchedParallelToolResults(): boolean {
     return true;
-  }
-
-  protected override shouldIncludeReasoningInToolCalls(): boolean {
-    return this.capabilities.supportsReasoning;
   }
 
   /**

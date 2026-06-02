@@ -258,18 +258,6 @@ export function applyReplacements(
 }
 
 /**
- * Clean content using all replacement rules.
- * @deprecated Use replacementEngine.applyAll() instead for the recommended order.
- * This function applies non-regex, then regex, then critique wrapping.
- * The engine's applyAll() method applies non-regex, regex, then non-regex again.
- */
-export function cleanFileContent(content: string): string {
-  let cleaned = applyReplacements(content, getAllReplacements()).trim();
-  cleaned = applyReplacements(cleaned, getAllReplacementsRegex()).trim();
-  return shouldWrapCritiqueInAlign() ? wrapCritiqueInAlign(cleaned) : cleaned;
-}
-
-/**
  * Provides high-level APIs for applying text replacement rules.
  */
 export const replacementEngine: ReplacementEngine = new ReplacementEngineImpl();

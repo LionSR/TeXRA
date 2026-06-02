@@ -50,8 +50,10 @@ import type {
   ChatUsage,
   ChatMessages,
   ChatAssistantMessage,
+  ChatUserMessage,
   ChatToolCall,
   ChatContentItems,
+  ChatContentText,
   ChatRequest,
   ChatFinishReasonEnum,
   ReasoningDetailUnion,
@@ -998,7 +1000,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           text: pseudoPrefillMsg,
         });
       } else if (lastMessage && typeof lastMessage.content === 'string') {
-        (lastMessage as any).content = [
+        (lastMessage as ChatUserMessage).content = [
           { type: 'text', text: lastMessage.content },
           { type: 'text', text: pseudoPrefillMsg },
         ];
@@ -1062,7 +1064,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           // Anthropic prefill: replace the last text part
           const lastPart = (msg.content as ChatContentItems[]).at(-1);
           if (lastPart && 'text' in lastPart) {
-            (lastPart as any).text = bestConnector + newResponse;
+            (lastPart as ChatContentText).text = bestConnector + newResponse;
           }
         } else {
           (msg.content as ChatContentItems[]).push({
@@ -1071,7 +1073,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
           });
         }
       } else {
-        (lastMessage as any).content = [
+        msg.content = [
           {
             type: 'text',
             text: workspaceState.assembly.accumulatedOutput,
@@ -1131,7 +1133,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
             text: bestConnector + newResponse,
           });
         } else {
-          (secondLastMessage as any).content = [
+          msg.content = [
             {
               type: 'text',
               text: workspaceState.assembly.accumulatedOutput,
@@ -1162,13 +1164,14 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     if (!lastUserMsg || !('content' in lastUserMsg)) return;
 
     if (typeof lastUserMsg.content === 'string') {
-      (lastUserMsg as any).content = text + lastUserMsg.content;
+      (lastUserMsg as ChatUserMessage).content = text + lastUserMsg.content;
     } else if (Array.isArray(lastUserMsg.content)) {
       const firstTextPart = (lastUserMsg.content as ChatContentItems[]).find(
         (p) => p.type === 'text',
       );
       if (firstTextPart && 'text' in firstTextPart) {
-        (firstTextPart as any).text = text + (firstTextPart as any).text;
+        const part = firstTextPart as ChatContentText;
+        part.text = text + part.text;
       } else {
         (lastUserMsg.content as ChatContentItems[]).unshift({
           type: 'text',
@@ -1189,7 +1192,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
     try {
       const formattedMedia = await this.createMediaMessage(mediaFiles);
       if (typeof lastUserMsg.content === 'string') {
-        (lastUserMsg as any).content = [
+        (lastUserMsg as ChatUserMessage).content = [
           ...formattedMedia,
           { type: 'text', text: lastUserMsg.content },
         ];

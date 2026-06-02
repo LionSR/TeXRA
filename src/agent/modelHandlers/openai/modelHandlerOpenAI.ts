@@ -1018,7 +1018,18 @@ export class ModelHandlerOpenAI<
     });
   }
 
-  /** Extracts response text and usage statistics from API response. */
+  /**
+   * Extracts response text and usage statistics from an API response.
+   *
+   * `responseObject` is intentionally `any`: ModelHandlerOpenAI is the shared
+   * base for every OpenAI-compatible provider (DeepSeek, Kimi, GLM, MiniMax,
+   * xAI, DashScope, …), which in practice don't all return a strict
+   * `ChatCompletion`. The reasoning stream aggregator finalizes to a
+   * streaming-style `{ role, content }` object with no `choices`, and some
+   * relays return a bare `{ error }` payload — the branches below read those
+   * off-spec shapes directly. Typing this as `ChatCompletion` would
+   * misrepresent them and just push the looseness into per-branch casts.
+   */
   extractResponse(responseObject: any, endTag: string): ExtractResponseResult {
     if (!responseObject.choices?.length) {
       this.logger.debug(

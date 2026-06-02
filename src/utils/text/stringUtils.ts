@@ -97,6 +97,15 @@ export function tailWithEllipsis(text: string, maxLen: number): string {
 }
 
 /**
+ * Format an ISO-8601 timestamp for compact display: replace the `T`
+ * separator with a space and drop the fractional-seconds + `Z` suffix.
+ * (e.g. `'2026-06-02T14:30:45.123Z'` → `'2026-06-02 14:30:45'`).
+ */
+export function formatTimestamp(isoTimestamp: string): string {
+  return isoTimestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
+}
+
+/**
  * Extract the subtype from a MIME type string (e.g. `'wav'` from `'audio/wav'`).
  * Returns `fallback` (defaults to the original string) when no `/` is found.
  */
