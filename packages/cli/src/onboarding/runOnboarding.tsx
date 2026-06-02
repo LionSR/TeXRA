@@ -379,7 +379,7 @@ function RelayProviderStep(props: {
           { value: 'google', label: 'Google' },
         ]}
         activeValue={props.activeProvider}
-        onSelect={(value) => props.onSelect(value)}
+        onSelect={props.onSelect}
         onCancel={props.onCancel}
       />
     </OnboardingFrame>
@@ -477,7 +477,7 @@ function KeyProviderStep(props: {
           label: PROVIDER_DISPLAY_NAMES[provider] ?? provider,
         }))}
         activeValue={props.activeProvider}
-        onSelect={(value) => props.onSelect(value)}
+        onSelect={props.onSelect}
         onCancel={props.onCancel}
       />
     </OnboardingFrame>
