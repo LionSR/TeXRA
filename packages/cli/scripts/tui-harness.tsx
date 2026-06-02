@@ -50,6 +50,8 @@ import {
 } from '../src/chat/tui/state/approvalQueue';
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
+import { parseCliApiMode, type CliApiMode } from '../src/runtime/apiAccessMode';
+import type { CliModelAccess } from '../src/runtime/modelAccess';
 import { cliMultiAgentPresets } from '../src/runtime/multiAgentPresets';
 import { buildCliOrchestrationItems } from '../src/runtime/orchestration';
 import {
@@ -79,6 +81,10 @@ const SHOW_LONG_CHILD_OUTPUT = process.env.HARNESS_LONG_CHILD_OUTPUT === '1';
 const SHOW_WIDE_FIRST_CHILD_LINE =
   process.env.HARNESS_WIDE_FIRST_CHILD_LINE === '1';
 const SHOW_ORCHESTRATION = process.env.HARNESS_ORCHESTRATION === '1';
+const HARNESS_API_MODE_FROM_ENV = parseCliApiMode(
+  process.env.HARNESS_API_MODE ?? '',
+);
+const HARNESS_API_MODE: CliApiMode = HARNESS_API_MODE_FROM_ENV ?? 'personal';
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const EXTERNAL_INQUIRY_QUESTION =
@@ -154,12 +160,79 @@ const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
   toolUseAgents: [],
 });
 
+type HarnessModelFixture = Readonly<{
+  value: string;
+  label: string;
+  availability: NonNullable<CliModelAccess['model']['availability']>;
+}>;
+
+const HARNESS_ORCHESTRATION_MODEL_FIXTURES: readonly HarnessModelFixture[] = [
+  {
+    value: 'sonnet46T',
+    label: 'Sonnet 4.6 (Thinking)',
+    availability: 'included-access',
+  },
+  { value: 'gpt54', label: 'GPT-5.4', availability: 'included-access' },
+  {
+    value: 'deepseekT',
+    label: 'DeepSeek V4 Flash',
+    availability: 'provider-key',
+  },
+];
+
+function isHarnessModelAvailable(
+  availability: HarnessModelFixture['availability'],
+  apiMode: CliApiMode,
+): boolean {
+  return apiMode === 'included'
+    ? availability === 'included-access'
+    : availability === 'provider-key' || availability === 'openrouter-key';
+}
+
+function harnessModelStatus(
+  availability: HarnessModelFixture['availability'],
+): string {
+  switch (availability) {
+    case 'included-access':
+      return 'included access';
+    case 'provider-key':
+      return 'api key set';
+    case 'openrouter-key':
+      return 'openrouter key set';
+    default:
+      return availability.replaceAll('-', ' ');
+  }
+}
+
+function harnessModel(
+  fixture: HarnessModelFixture,
+  apiMode: CliApiMode,
+): CliModelAccess {
+  return {
+    model: fixture,
+    available: isHarnessModelAvailable(fixture.availability, apiMode),
+    status: harnessModelStatus(fixture.availability),
+  };
+}
+
+function harnessOrchestrationModels(
+  apiMode: CliApiMode,
+): readonly CliModelAccess[] {
+  return HARNESS_ORCHESTRATION_MODEL_FIXTURES.map((fixture) =>
+    harnessModel(fixture, apiMode),
+  );
+}
+
 if (SHOW_ORCHESTRATION) {
   const instance = render(
     <OrchestrationApp
       items={HARNESS_ORCHESTRATION_ITEMS}
-      models={[]}
-      apiMode="personal"
+      models={
+        HARNESS_API_MODE_FROM_ENV
+          ? harnessOrchestrationModels(HARNESS_API_MODE)
+          : []
+      }
+      apiMode={HARNESS_API_MODE}
       onResolve={() => undefined}
     />,
     {
@@ -173,7 +246,7 @@ if (SHOW_ORCHESTRATION) {
 }
 
 await initLocalCliPlatform({
-  apiMode: 'personal',
+  apiMode: HARNESS_API_MODE,
   cwd: HARNESS_CWD,
   installSignalHandlers: false,
   resourcesPath: resolveCliResourcesPath(),
@@ -522,7 +595,7 @@ cliState.sessionMeta.set({
   agent: 'chat',
   model: 'harness-model',
   cwd: HARNESS_CWD,
-  apiMode: 'personal',
+  apiMode: HARNESS_API_MODE,
   canDelegate: CAN_DELEGATE,
   teamName: TEAM_NAME,
   version: '0.0.0-harness',
