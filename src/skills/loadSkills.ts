@@ -6,7 +6,11 @@ import * as path from 'node:path';
 import { ZodError } from 'zod';
 
 // Local imports - common
-import { isFileNotFoundError, toErrorMessage } from '@common/errors';
+import {
+  isFileNotFoundError,
+  isNotADirectoryError,
+  toErrorMessage,
+} from '@common/errors';
 import { isObject } from '@utils/core';
 
 // Local imports - skill parsing
@@ -29,9 +33,12 @@ export type SkillIssueCode =
   | 'duplicate_realpath'
   | 'invalid_frontmatter'
   | 'invalid_name'
+  | 'invalid_source'
+  | 'missing_source'
   | 'missing_description'
   | 'name_mismatch'
-  | 'read_error';
+  | 'read_error'
+  | 'source_read_error';
 
 export interface SkillLoadIssue {
   severity: SkillIssueSeverity;
@@ -57,6 +64,7 @@ export interface SkillSource {
   scope: SkillSourceScope;
   path: string;
   label?: string;
+  required?: boolean;
 }
 
 export interface SourcedSkill {
@@ -362,8 +370,64 @@ export async function discoverSkillSources(
   const seenRealPaths = new Set<string>();
 
   for (const source of sources) {
+    if (source.required === true) {
+      try {
+        const sourceStat = await fs.stat(source.path);
+        if (!sourceStat.isDirectory()) {
+          errors.push(
+            issue(
+              'error',
+              'invalid_source',
+              'Skill source is not a directory',
+              {
+                path: source.path,
+              },
+            ),
+          );
+          continue;
+        }
+      } catch (err) {
+        if (isFileNotFoundError(err)) {
+          errors.push(
+            issue('error', 'missing_source', 'Skill source does not exist', {
+              path: source.path,
+            }),
+          );
+          continue;
+        }
+        if (isNotADirectoryError(err)) {
+          errors.push(
+            issue(
+              'error',
+              'invalid_source',
+              'Skill source is not a directory',
+              {
+                path: source.path,
+              },
+            ),
+          );
+          continue;
+        }
+        errors.push(
+          issue('error', 'source_read_error', toErrorMessage(err), {
+            path: source.path,
+          }),
+        );
+        continue;
+      }
+    }
+
     const result = await discoverSkills(source.path);
-    errors.push(...result.errors);
+    errors.push(
+      ...result.errors.map((error) =>
+        source.required === true &&
+        error.severity === 'error' &&
+        error.code === 'read_error' &&
+        error.path === source.path
+          ? { ...error, code: 'source_read_error' as const }
+          : error,
+      ),
+    );
 
     for (const skill of result.skills) {
       let realSkillPath = skill.path;
