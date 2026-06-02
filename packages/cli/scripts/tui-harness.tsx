@@ -175,7 +175,7 @@ const HARNESS_ORCHESTRATION_MODEL_FIXTURES: readonly HarnessModelFixture[] = [
   { value: 'gpt54', label: 'GPT-5.4', availability: 'included-access' },
   {
     value: 'deepseekT',
-    label: 'DeepSeek V4 Flash (Thinking)',
+    label: 'DeepSeek V4 Flash',
     availability: 'provider-key',
   },
 ];
