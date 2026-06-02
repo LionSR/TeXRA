@@ -19,7 +19,7 @@ import { CliUsageError } from '@cli/runtime/cliContext';
 type CliGlobalArgsDef = {
   print: { type: 'boolean'; alias: 'p'; description: string };
   quiet: { type: 'boolean'; alias: 'q'; description: string };
-  cwd: { type: 'string'; description: string };
+  cwd: { type: 'string'; valueHint: string; description: string };
   'api-mode': { type: 'string'; description: string };
   'output-format': {
     type: 'enum';
@@ -59,6 +59,7 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
   },
   cwd: {
     type: 'string',
+    valueHint: 'directory',
     description: 'Working directory the agent runs against (defaults to $PWD)',
   },
   'api-mode': {
