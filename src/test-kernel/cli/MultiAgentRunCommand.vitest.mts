@@ -1,3 +1,7 @@
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -297,7 +301,63 @@ describe('CLI multi-agent run command', () => {
     expect(mocks.stdinInputFile.cleanup).toHaveBeenCalledTimes(1);
   });
 
-  it('still requires either an input file or an inline instruction', async () => {
+  it('allows instruction-file-only team runs without input files', async () => {
+    mocks.expandRunInputs.mockResolvedValue({
+      inputFiles: [],
+      contextFiles: [],
+    });
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-agent-team-'));
+    try {
+      await fs.writeFile(
+        path.join(root, 'prompt.txt'),
+        'Read the prompt from disk.\n',
+      );
+      const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+      const exitCode = await runMultiAgentPreset(cliContext({ cwd: root }), {
+        preset: 'mathematician',
+        inputFiles: [],
+        contextFiles: [],
+        model: 'deepseekT',
+        instruction: 'Then summarize the plan.',
+        instructionFile: 'prompt.txt',
+      });
+
+      expect(exitCode).toBe(0);
+      expect(mocks.expandRunInputs).toHaveBeenCalledWith([], [], root, {
+        allowEmptyInput: true,
+        stdinInputFile: mocks.stdinInputFile,
+      });
+      const request = mocks.executeCliRequest.mock.calls[0]?.[0];
+      expect(request?.config.inputFiles).toEqual([]);
+      expect(request?.config.instruction).toContain('User instruction:');
+      expect(request?.config.instruction).toContain(
+        'Read the prompt from disk.\n\nThen summarize the plan.',
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports missing instruction files before expanding inputs', async () => {
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    await expect(
+      runMultiAgentPreset(cliContext(), {
+        preset: 'mathematician',
+        inputFiles: [],
+        contextFiles: [],
+        model: 'deepseekT',
+        instruction: '',
+        instructionFile: 'missing-prompt.txt',
+      }),
+    ).rejects.toThrow(
+      /--instruction-file: file not found: missing-prompt\.txt/,
+    );
+    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+  });
+
+  it('still requires an input file or instruction text', async () => {
     const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
 
     await expect(
@@ -308,7 +368,7 @@ describe('CLI multi-agent run command', () => {
         model: 'deepseekT',
         instruction: '',
       }),
-    ).rejects.toThrow(/Provide --input or --instruction/);
+    ).rejects.toThrow(/Provide --input, --instruction, or --instruction-file/);
     expect(mocks.expandRunInputs).not.toHaveBeenCalled();
   });
 
