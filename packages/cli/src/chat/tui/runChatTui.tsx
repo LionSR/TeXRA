@@ -938,7 +938,13 @@ export async function runChat(
   // resolution below then see the freshly-set credentials in the same process.
   const { maybeRunCliOnboarding } =
     await import('@cli/onboarding/runOnboarding');
-  await maybeRunCliOnboarding(context);
+  const onboarding = await maybeRunCliOnboarding(context);
+  if (onboarding.declined) {
+    // The user saw the picker and chose "Skip for now"; the skip summary already
+    // told them how to set up later. Exit cleanly instead of falling through to
+    // the no-models resolution error — the dead-end this feature exists to fix.
+    return { exitCode: CliExitCode.Success };
+  }
   const apiMode = effectiveCliApiMode(context);
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,

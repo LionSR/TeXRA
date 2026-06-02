@@ -14,7 +14,7 @@
 
 import { render, Box, Text, useApp, useInput } from 'ink';
 import { Spinner } from '@inkjs/ui';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { platform } from '@platform/platform';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
@@ -29,7 +29,7 @@ import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
 import { Select } from '../chat/tui/ui/Select';
 import { formatCliAccountLabelForDisplay } from '../runtime/accountDisplay';
 import { hasAnyCliCredential } from '../runtime/credentialStatus';
-import { writeTextStdout } from '../runtime/logSinks';
+import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { signInCliSupabase } from '../runtime/supabaseAuth';
 
 import { saveProviderApiKey } from './applyOnboardingResult';
@@ -41,6 +41,10 @@ import {
 export interface CliOnboardingResult {
   /** True when the user finished a sign-in or saved a key this run. */
   readonly configured: boolean;
+  /** True when the picker was shown and the user chose "Skip for now" this run.
+   *  Lets `chat` exit cleanly (the skip summary already printed) instead of
+   *  falling through to the no-models resolution error. */
+  readonly declined: boolean;
 }
 
 /** Minimal slice of CliContext the gate needs (keeps it cheaply testable). */
@@ -78,13 +82,13 @@ export async function maybeRunCliOnboarding(
     context.termIsDumb === true ||
     !process.stdout.isTTY
   ) {
-    return { configured: false };
+    return { configured: false, declined: false };
   }
   if (await hasAnyCliCredential().catch(() => false)) {
-    return { configured: false };
+    return { configured: false, declined: false };
   }
   if (getOnboardingDeclined(platform().globalState)) {
-    return { configured: false };
+    return { configured: false, declined: false };
   }
   return runOnboardingFlow({ firstRun: true });
 }
@@ -95,7 +99,7 @@ export async function maybeRunCliOnboarding(
  * headless before calling this.
  */
 export async function runCliOnboarding(): Promise<CliOnboardingResult> {
-  if (!process.stdout.isTTY) return { configured: false };
+  if (!process.stdout.isTTY) return { configured: false, declined: false };
   return runOnboardingFlow({ firstRun: false });
 }
 
@@ -124,10 +128,19 @@ async function runOnboardingFlow(options: {
   });
 
   if (resolution.declined) {
-    await setOnboardingDeclined(platform().globalState, true).catch(() => {});
+    // Best-effort: persist the decline so we don't re-prompt next launch. If the
+    // global-state write fails (read-only home, permissions), tell the user
+    // rather than silently re-prompting later with no explanation.
+    try {
+      await setOnboardingDeclined(platform().globalState, true);
+    } catch {
+      writeTextStderr(
+        "Note: couldn't save your choice, so you may be asked again next time.",
+      );
+    }
   }
   if (resolution.summary) writeTextStdout(resolution.summary);
-  return { configured: resolution.configured };
+  return { configured: resolution.configured, declined: resolution.declined };
 }
 
 type Screen =
@@ -394,14 +407,14 @@ function RelayProgressStep(props: {
 }): React.JSX.Element {
   const { provider, noBrowser, onSuccess, onError } = props;
   const [url, setUrl] = useState<string | undefined>(undefined);
-  // Fire the sign-in exactly once for the lifetime of this step, even if a
-  // re-render ever changes the effect deps — a second run would open a second
-  // browser and loopback callback server.
-  const startedRef = useRef(false);
 
+  // Start the sign-in exactly once on mount. Empty deps is deliberate (not the
+  // captured props): re-running would open a second browser + loopback server,
+  // and a deps-triggered cleanup would flip `cancelled` and orphan the in-flight
+  // login (eternal spinner). The captured callbacks only invoke stable state
+  // setters / app.exit, so the mount-time closure stays correct. `cancelled`
+  // guards against the real unmount (the user navigating away).
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
     let cancelled = false;
     void (async () => {
       try {
@@ -421,7 +434,7 @@ function RelayProgressStep(props: {
     return () => {
       cancelled = true;
     };
-  }, [provider, noBrowser, onSuccess, onError]);
+  }, []);
 
   return (
     <Box

@@ -56,6 +56,7 @@ describe('maybeRunCliOnboarding gate', () => {
     mocks.hasAnyCliCredential.mockResolvedValue(true);
     await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual({
       configured: false,
+      declined: false,
     });
     expect(mocks.hasAnyCliCredential).toHaveBeenCalledOnce();
   });
@@ -64,6 +65,7 @@ describe('maybeRunCliOnboarding gate', () => {
     mocks.declined = true;
     await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual({
       configured: false,
+      declined: false,
     });
   });
 
@@ -74,7 +76,7 @@ describe('maybeRunCliOnboarding gate', () => {
         stdoutIsTty: true,
         termIsDumb: true,
       }),
-    ).resolves.toEqual({ configured: false });
+    ).resolves.toEqual({ configured: false, declined: false });
     expect(mocks.hasAnyCliCredential).not.toHaveBeenCalled();
   });
 
@@ -85,7 +87,7 @@ describe('maybeRunCliOnboarding gate', () => {
         stdoutIsTty: true,
         termIsDumb: false,
       }),
-    ).resolves.toEqual({ configured: false });
+    ).resolves.toEqual({ configured: false, declined: false });
     expect(mocks.hasAnyCliCredential).not.toHaveBeenCalled();
   });
 });

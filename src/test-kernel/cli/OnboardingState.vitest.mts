@@ -84,7 +84,7 @@ describe('maybeRunCliOnboarding headless parity', () => {
           stdoutIsTty: true,
           termIsDumb: false,
         }),
-      ).resolves.toEqual({ configured: false });
+      ).resolves.toEqual({ configured: false, declined: false });
       expect(writeSpy).not.toHaveBeenCalled();
     } finally {
       writeSpy.mockRestore();
@@ -92,14 +92,27 @@ describe('maybeRunCliOnboarding headless parity', () => {
   });
 
   it('returns configured:false on a non-TTY stdout even when marked interactive', async () => {
-    // The defensive `!process.stdout.isTTY` guard: in the test runner stdout is
-    // not a TTY, so the gate must bail before rendering regardless of context.
-    await expect(
-      maybeRunCliOnboarding({
-        mode: 'interactive',
-        stdoutIsTty: true,
-        termIsDumb: false,
-      }),
-    ).resolves.toEqual({ configured: false });
+    // The defensive `!process.stdout.isTTY` guard must bail before rendering.
+    // Stub isTTY explicitly so the test is deterministic regardless of whether
+    // the runner attaches a TTY (vitest locally vs CI).
+    const original = process.stdout.isTTY;
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: false,
+      configurable: true,
+    });
+    try {
+      await expect(
+        maybeRunCliOnboarding({
+          mode: 'interactive',
+          stdoutIsTty: true,
+          termIsDumb: false,
+        }),
+      ).resolves.toEqual({ configured: false, declined: false });
+    } finally {
+      Object.defineProperty(process.stdout, 'isTTY', {
+        value: original,
+        configurable: true,
+      });
+    }
   });
 });

@@ -20,9 +20,13 @@ export async function hasAnyCliCredential(): Promise<boolean> {
     .catch(() => false);
   if (signedIn) return true;
 
+  // Short-circuit on the first provider key found rather than scanning all
+  // providers up front — avoids touching unrelated provider secrets once a
+  // usable key is present.
   const secrets = platform().secrets;
-  const present = await Promise.all(
-    API_PROVIDERS.map((provider) => apiKeyExists(secrets, provider)),
-  );
-  return present.some(Boolean);
+  for (const provider of API_PROVIDERS) {
+    // Sequential by design: stop at the first key found.
+    if (await apiKeyExists(secrets, provider)) return true;
+  }
+  return false;
 }

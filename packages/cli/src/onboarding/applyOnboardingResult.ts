@@ -8,7 +8,6 @@ import {
   invalidateApiKeyCache,
   type ApiProvider,
 } from '@model/apiProviders';
-import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 import { setCliApiMode } from '../runtime/apiAccessMode';
 
@@ -16,9 +15,9 @@ import { describeSavedKeyLocation } from './onboardingState';
 
 /**
  * Persist a provider API key entered during onboarding and make it the active
- * credential path: write the secret, drop the key + model-options caches so the
- * very next availability read sees it (no process restart), and switch to
- * personal API-key mode. Returns the "where we stored it" line — never the key.
+ * credential path: write the secret, drop the key cache so the very next
+ * availability read sees it (no process restart), and switch to personal
+ * API-key mode. Returns the "where we stored it" line — never the key.
  */
 export async function saveProviderApiKey(
   provider: ApiProvider,
@@ -27,13 +26,13 @@ export async function saveProviderApiKey(
   const trimmed = key.trim();
   if (!trimmed) throw new Error('API key is empty.');
 
+  // Write the secret BEFORE invalidating, so a concurrent read can't repopulate
+  // a stale "no key" entry. invalidateApiKeyCache drops the provider-key cache
+  // that computeModelOptions reads `requiresKey` from; setCliApiMode persists
+  // personal mode AND invalidates the model-options cache, so a single
+  // availability read afterward reflects the new key.
   await platform().secrets.set(apiKeySecretName(provider), trimmed);
-  // computeModelOptions reads `requiresKey` through the apiProviders cache; both
-  // caches must drop or the launcher/chat would re-read a stale "no key" result
-  // for up to the 5s TTL and still show the "login required" wall.
   invalidateApiKeyCache();
-  invalidateModelOptionsCache();
-  // setCliApiMode persists the mode and itself invalidates model options.
   await setCliApiMode('personal');
 
   return describeSavedKeyLocation(provider);
