@@ -23,7 +23,7 @@ Memory is **not** a chat transcript. The agent doesn't replay old conversations;
 
 ## Enabling memory
 
-Memory is **opt-in**. Open the **Dashboard** (Command Palette → `TeXRA: Show Dashboard`), switch to the **Memory** tab, and flip the **Enable memory for chat agents** switch.
+Memory is **opt-in**. Open the **Dashboard** (Command Palette → `TeXRA: Show Settings Dashboard`), switch to the **Memory** tab, and flip the **Enable memory for chat agents** switch.
 
 You can also jump straight to the tab with `TeXRA: Show Memory`.
 
