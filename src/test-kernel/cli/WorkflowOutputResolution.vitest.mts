@@ -117,6 +117,7 @@ describe('CLI workflow output resolution', () => {
       status: EXECUTION_STATUS.COMPLETED,
       endGroupStatus: END_GROUP_STATUS.STOPPED,
       terminalStatus: EXECUTION_STATUS.COMPLETED,
+      workingDirectory: cwd,
       copiedOutputs: [join(cwd, 'out', 'a.tex'), join(cwd, 'out', 'b.tex')],
     });
     await expect(readFile(join(cwd, 'out', 'a.tex'), 'utf8')).resolves.toBe(
@@ -180,6 +181,7 @@ describe('CLI workflow output resolution', () => {
     );
 
     expect(displayResult).toMatchObject({
+      workingDirectory: cwd,
       copiedOutput: join(cwd, 'out', 'a.tex'),
     });
     await expect(readFile(join(cwd, 'out', 'a.tex'), 'utf8')).resolves.toBe(

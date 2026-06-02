@@ -171,6 +171,9 @@ async function runToolUseAgent(
     const displayResult: CliToolUseRunResult = createCliRunResult(
       result,
       terminalStatus,
+      {
+        workingDirectory: runContext.cwd,
+      },
     );
     writeToolUseRunResult(runContext, displayResult);
 
