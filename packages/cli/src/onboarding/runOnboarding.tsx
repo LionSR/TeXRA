@@ -23,6 +23,7 @@ import { toErrorMessage } from '@common/errors/errorMessage';
 import { API_PROVIDERS, type ApiProvider } from '@model/apiProviders';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 
+import { assertNever } from '../chat/tui/assertNever';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
@@ -251,35 +252,39 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
     );
   }
 
-  return (
-    <ApiKeyEntryForm
-      provider={keyProvider}
-      error={error}
-      saving={saving}
-      onCancel={() => {
-        setError(undefined);
-        setScreen('key-provider');
-      }}
-      onSubmit={(key) => {
-        setSaving(true);
-        void (async () => {
-          try {
-            const where = await saveProviderApiKey(keyProvider, key);
-            finish({
-              configured: true,
-              declined: false,
-              summary: `Saved your ${
-                PROVIDER_DISPLAY_NAMES[keyProvider] ?? keyProvider
-              } API key. ${where}`,
-            });
-          } catch (saveError: unknown) {
-            setSaving(false);
-            setError(toErrorMessage(saveError));
-          }
-        })();
-      }}
-    />
-  );
+  if (screen === 'key-entry') {
+    return (
+      <ApiKeyEntryForm
+        provider={keyProvider}
+        error={error}
+        saving={saving}
+        onCancel={() => {
+          setError(undefined);
+          setScreen('key-provider');
+        }}
+        onSubmit={(key) => {
+          setSaving(true);
+          void (async () => {
+            try {
+              const where = await saveProviderApiKey(keyProvider, key);
+              finish({
+                configured: true,
+                declined: false,
+                summary: `Saved your ${
+                  PROVIDER_DISPLAY_NAMES[keyProvider] ?? keyProvider
+                } API key. ${where}`,
+              });
+            } catch (saveError: unknown) {
+              setSaving(false);
+              setError(toErrorMessage(saveError));
+            }
+          })();
+        }}
+      />
+    );
+  }
+
+  return assertNever(screen, 'Unhandled onboarding screen');
 }
 
 function OnboardingFrame(props: {
