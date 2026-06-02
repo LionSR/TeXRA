@@ -312,7 +312,9 @@ async function runForAllSessions(
   }
 }
 
-async function pathExists(target: string): Promise<boolean> {
+// Uses fs/promises directly — must not call platform() because this function
+// is invoked before initPlatform() during early startup / test harness setup.
+async function fsPathExists(target: string): Promise<boolean> {
   try {
     await access(target);
     return true;
@@ -329,8 +331,8 @@ export async function defaultResolveWorkspaceRoot(
   const root = path.parse(dir).root;
   for (;;) {
     if (
-      (await pathExists(path.join(dir, 'lakefile.lean'))) ||
-      (await pathExists(path.join(dir, 'lakefile.toml')))
+      (await fsPathExists(path.join(dir, 'lakefile.lean'))) ||
+      (await fsPathExists(path.join(dir, 'lakefile.toml')))
     ) {
       return dir;
     }
