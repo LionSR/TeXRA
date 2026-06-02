@@ -168,7 +168,7 @@ Currently, remote agents are maintained by the TeXRA team. If you have ideas for
 
 ### How do I disable remote agents?
 
-If you prefer not to use remote agents, turn off the `texra.remoteAgents.enabled` setting — in `.texra/config.json` for the CLI, or via VS Code settings (`Ctrl+,` / `Cmd+,`, then search for `texra.remoteAgents.enabled`) for the extension. This hides remote agents from your interface without affecting built-in agents.
+Remote agents are available only while you're signed in. To stop using them, simply sign out — your built-in agents keep working. (In the CLI, run `texra auth logout`; in the VS Code extension, use the sign-out action in the account menu.)
 
 ## Need Help?
 

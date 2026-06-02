@@ -37,12 +37,14 @@ The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open i
 - **Odyssey** - Monitor long-running multi-agent jobs from the orchestrator.
 
 ::: tip
-The Dashboard tabs are the recommended way to manage agents, models, tools, and connections. VS Code's raw settings (`texra.*` keys) still work for power users and apply across every client.
+The Dashboard tabs are the recommended way to manage agents, models, tools, and connections. VS Code's raw settings (`texra.*` keys) still work for power users.
 :::
 
-## Where settings live
+## Where Settings Live
 
-Most configuration happens in the **Dashboard** (above) — open it with `TeXRA: Show Dashboard`. CLI users keep the same settings in a per-project `.texra/config.json` (`texra init` scaffolds one). The setting **keys** referenced throughout this guide (e.g. `texra.latex.formatter`) are shared: the Dashboard and `.texra/config.json` both read them, so you rarely need to touch raw JSON.
+Most configuration happens in the **Dashboard** (above) — open it with `TeXRA: Show Dashboard`. The CLI keeps project defaults in a per-project `.texra/config.json` (`texra init` scaffolds one).
+
+Many `texra.*` keys share the same **name** across the VS Code extension and the CLI's `.texra/config.json` (most of the file-, LaTeX-, and model-connection settings below), so the same documentation applies to both. They don't share storage, though — the extension persists settings in VS Code's config/global state, while the CLI reads `.texra/config.json`. Some keys are extension-only (for example the LaTeX formatter and the model picker, which live in extension state); the CLI warns on any key it doesn't recognize.
 
 VS Code's built-in Settings UI remains available for power users — open it with `Ctrl+,` (`Cmd+,` on macOS), search for "TeXRA", and edit in the UI or the JSON. It's no longer the primary path, so reach for the Dashboard or CLI config first.
 
@@ -379,7 +381,7 @@ For team collaboration:
 
 ```json
 "texra.git.numberOfCommitsToShow": 30,
-"texra.latex.latexindentConfig": "${workspaceFolder}/.latexindent.yaml"
+"texra.latex.latexindentConfig": "${workspaceFolder}/.latexindent.yaml",
 "texra.latex.texfmtConfig": "${workspaceFolder}/tex-fmt.toml"
 ```
 
@@ -387,11 +389,11 @@ Use workspace settings to ensure consistent configuration across the team.
 
 ## Advanced Configuration
 
-### Manual settings file editing
+### Manual Settings File Editing
 
 Power users can edit the underlying settings file directly:
 
-- **CLI / project-level:** edit `.texra/config.json` in your project (run `texra init` to scaffold one).
+- **CLI / project-level:** edit `.texra/config.json` in your project (run `texra init` to scaffold one). Only recognized `texra.*` keys take effect — the CLI warns on unknown keys.
 - **VS Code extension:** open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`), run "Preferences: Open User Settings (JSON)", and add or modify `texra.*` keys.
 
 ### Cross-Extension Compatibility

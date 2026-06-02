@@ -127,8 +127,8 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 **Solutions**:
 
 1. **Verify API keys**:
-   - Open the **Dashboard → Models** tab (or `texra models` / `.texra/config.json` in the CLI)
-   - Re-enter your API keys carefully for the affected provider
+   - VS Code extension: open the **Dashboard → Models** tab and re-enter the key for the affected provider
+   - CLI: set the provider's API-key environment variable (or run `texra auth login` for hosted access)
 
 2. **Check API key validity**:
    - Verify your API keys are active in the provider dashboards
