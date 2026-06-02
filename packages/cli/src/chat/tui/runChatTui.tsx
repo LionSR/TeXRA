@@ -1244,6 +1244,7 @@ export async function runChat(
       onSubmit={handleSubmit}
       canInterruptActiveRun={canInterruptActiveRun}
       canStopActiveRun={canStopActiveRun}
+      colorEnabled={context.stdoutColorEnabled ?? context.colorEnabled}
       onInterruptActive={interruptActive}
       onCtrlC={() => handleSigint()}
       onKillExecution={(executionId) => {

@@ -32,9 +32,49 @@ import type { RenderRule } from 'markdown-it/lib/renderer.mjs';
  *  raw control chars). */
 const ESC = String.fromCharCode(27);
 const sgr = (code: number): string => `${ESC}[${code}m`;
+const plain = (text: string): string => text;
 
-function highlightForTui(code: string, lang: string): string {
+interface AnsiMarkdownStyle {
+  readonly enabled: boolean;
+  bold(text: string): string;
+  cyan(text: string): string;
+  dim(text: string): string;
+  gray(text: string): string;
+  underline(text: string): string;
+  sgr(code: number): string;
+}
+
+const ColorAnsiStyle: AnsiMarkdownStyle = {
+  enabled: true,
+  bold: pico.bold,
+  cyan: pico.cyan,
+  dim: pico.dim,
+  gray: pico.gray,
+  underline: pico.underline,
+  sgr,
+};
+
+const PlainAnsiStyle: AnsiMarkdownStyle = {
+  enabled: false,
+  bold: plain,
+  cyan: plain,
+  dim: plain,
+  gray: plain,
+  underline: plain,
+  sgr: () => '',
+};
+
+function ansiMarkdownStyle(colorEnabled: boolean): AnsiMarkdownStyle {
+  return colorEnabled ? ColorAnsiStyle : PlainAnsiStyle;
+}
+
+function highlightForTui(
+  code: string,
+  lang: string,
+  style: AnsiMarkdownStyle,
+): string {
   const trimmed = code.replace(/\n+$/, '');
+  if (!style.enabled) return trimmed;
   if (lang && supportsLanguage(lang)) {
     try {
       return highlight(trimmed, { language: lang, ignoreIllegals: true });
@@ -42,7 +82,7 @@ function highlightForTui(code: string, lang: string): string {
       // fall through to plain rendering
     }
   }
-  return pico.gray(trimmed);
+  return style.gray(trimmed);
 }
 
 type ColumnAlign = 'left' | 'center' | 'right';
@@ -112,10 +152,11 @@ function renderAnsiTable(
   rows: readonly (readonly string[])[],
   aligns: readonly ColumnAlign[],
   width: number | undefined,
+  style: AnsiMarkdownStyle,
 ): string {
   const numCols = Math.max(head.length, ...rows.map((row) => row.length), 1);
   const table = new Table({
-    head: head.map((cell) => pico.bold(cell)),
+    head: head.map(style.bold),
     colWidths: tableColWidths(head, rows, numCols, width),
     colAligns: Array.from({ length: numCols }, (_, i) => aligns[i] ?? 'left'),
     wordWrap: true,
@@ -136,13 +177,14 @@ function restoreProtectedLatexInCell(cell: string, env: unknown): string {
 function configureAnsi(
   md: MarkdownItInstance,
   width: number | undefined,
+  style: AnsiMarkdownStyle,
 ): void {
   const r = md.renderer.rules;
   let quoteDepth = 0;
   let headingDepth = 0;
 
   const quotePrefix = (): string =>
-    quoteDepth > 0 ? pico.dim('│ '.repeat(quoteDepth)) : '';
+    quoteDepth > 0 ? style.dim('│ '.repeat(quoteDepth)) : '';
 
   const startsAtQuoteOpen = (tokens: Parameters<RenderRule>[0], idx: number) =>
     tokens[idx - 1]?.type === 'blockquote_open';
@@ -196,19 +238,19 @@ function configureAnsi(
     return quoteDepth > 0 ? `\n${quotePrefix()}\n` : '\n\n';
   };
 
-  r.strong_open = () => sgr(1);
-  r.strong_close = () => sgr(22);
-  r.em_open = () => sgr(3);
-  r.em_close = () => sgr(23);
-  r.s_open = () => sgr(9);
-  r.s_close = () => sgr(29);
+  r.strong_open = () => style.sgr(1);
+  r.strong_close = () => style.sgr(22);
+  r.em_open = () => style.sgr(3);
+  r.em_close = () => style.sgr(23);
+  r.s_open = () => style.sgr(9);
+  r.s_close = () => style.sgr(29);
 
   const styleHeadingText = (text: string): string =>
-    headingDepth > 0 ? pico.bold(pico.cyan(text)) : text;
+    headingDepth > 0 ? style.bold(style.cyan(text)) : text;
 
   r.code_inline = (tokens, idx) => {
     const code = `\`${tokens[idx]?.content ?? ''}\``;
-    return headingDepth > 0 ? styleHeadingText(code) : pico.cyan(code);
+    return headingDepth > 0 ? styleHeadingText(code) : style.cyan(code);
   };
   r.fence = (tokens, idx) => {
     const token = tokens[idx];
@@ -220,14 +262,14 @@ function configureAnsi(
     return `${withQuoteGutter(
       tokens,
       idx,
-      body || pico.gray(token.content.replace(/\n+$/, '')),
+      body || style.gray(token.content.replace(/\n+$/, '')),
     )}\n\n`;
   };
   r.code_block = (tokens, idx) =>
     `${withQuoteGutter(
       tokens,
       idx,
-      pico.gray(tokens[idx]?.content.replace(/\n+$/, '') ?? ''),
+      style.gray(tokens[idx]?.content.replace(/\n+$/, '') ?? ''),
     )}\n\n`;
 
   r.bullet_list_open = () => '';
@@ -243,14 +285,14 @@ function configureAnsi(
     const marker = token?.info ? `${token.info}${token.markup || '.'}` : '•';
     const prev = tokens[idx - 1]?.type;
     const fresh = prev === 'bullet_list_open' || prev === 'ordered_list_open';
-    return `${fresh ? '' : quotePrefix()}  ${pico.dim(marker)} `;
+    return `${fresh ? '' : quotePrefix()}  ${style.dim(marker)} `;
   };
   r.list_item_close = () => '';
 
   r.blockquote_open = (tokens, idx) => {
     quoteDepth += 1;
     return tokens[idx - 1]?.type === 'blockquote_open'
-      ? pico.dim('│ ')
+      ? style.dim('│ ')
       : quotePrefix();
   };
   r.blockquote_close = () => {
@@ -259,21 +301,22 @@ function configureAnsi(
   };
 
   r.hr = (tokens, idx) =>
-    `${quoteBlockStart(tokens, idx)}${pico.dim('─'.repeat(40))}\n`;
+    `${quoteBlockStart(tokens, idx)}${style.dim('─'.repeat(40))}\n`;
 
   // Emit raw SGR codes so the styling stays open across the link body. The
   // bracket characters are part of the styled run; if we used `pico.blue('[')`
   // here the close-code would land immediately and the link text would render
   // unstyled (Cursor finding).
-  r.link_open = () => `${sgr(4)}${sgr(34)}[`;
-  r.link_close = () => `]${sgr(39)}${sgr(24)}`;
+  r.link_open = () => `${style.sgr(4)}${style.sgr(34)}[`;
+  r.link_close = () => `]${style.sgr(39)}${style.sgr(24)}`;
 
   r.softbreak = () => `\n${quotePrefix()}`;
   r.hardbreak = () => `\n${quotePrefix()}`;
 
   // markdown-it default `text` rule escapes HTML; we want raw text.
   r.text = (tokens, idx) => styleHeadingText(tokens[idx]?.content ?? '');
-  r.image = (tokens, idx) => pico.dim(`[image: ${tokens[idx]?.content ?? ''}]`);
+  r.image = (tokens, idx) =>
+    style.dim(`[image: ${tokens[idx]?.content ?? ''}]`);
 
   // The table-family tokens (table_open … table_close) have no ANSI rules, so
   // we collapse each table's token range into a single pre-rendered
@@ -341,7 +384,7 @@ function configureAnsi(
         }
       }
       const tableToken = new Token('ansi_table', '', 0);
-      tableToken.content = renderAnsiTable(head, rows, aligns, width);
+      tableToken.content = renderAnsiTable(head, rows, aligns, width, style);
       collapsed.push(tableToken);
       i = j; // land on table_close; the loop's i++ skips it
     }
@@ -354,8 +397,13 @@ function configureAnsi(
   };
 }
 
-function formatAnsiLatexReference(refType: string, label: string): string {
-  return pico.dim(pico.underline(`\\${refType}{${label}}`));
+function formatAnsiLatexReference(
+  refType: string,
+  label: string,
+  style: AnsiMarkdownStyle,
+): string {
+  const text = `\\${refType}{${label}}`;
+  return style.dim(style.underline(text));
 }
 
 let cachedProcessor: MarkdownProcessor | null = null;
@@ -364,9 +412,11 @@ let cachedProcessor: MarkdownProcessor | null = null;
 // and rebuilt when the width changes — a rare event (resize), unlike the
 // per-delta streaming calls the cache exists to serve.
 let cachedWidth: number | undefined;
+let cachedColorEnabled: boolean | undefined;
 
 export interface RenderAnsiMarkdownOptions {
   readonly width?: number;
+  readonly colorEnabled?: boolean;
 }
 
 /**
@@ -378,20 +428,28 @@ export function renderAnsiMarkdown(
   content: string,
   options: RenderAnsiMarkdownOptions = {},
 ): string {
-  if (!cachedProcessor || cachedWidth !== options.width) {
+  const colorEnabled = options.colorEnabled ?? true;
+  const style = ansiMarkdownStyle(colorEnabled);
+  if (
+    !cachedProcessor ||
+    cachedWidth !== options.width ||
+    cachedColorEnabled !== colorEnabled
+  ) {
     const renderer = createMarkdownRenderer({
-      highlight: highlightForTui,
-      configure: (md) => configureAnsi(md, options.width),
+      highlight: (code, lang) => highlightForTui(code, lang, style),
+      configure: (md) => configureAnsi(md, options.width, style),
     });
     cachedProcessor = createMarkdownProcessor({
       renderer,
-      formatLatexReference: formatAnsiLatexReference,
+      formatLatexReference: (refType, label) =>
+        formatAnsiLatexReference(refType, label, style),
       // The CLI shows LaTeX source verbatim (math rendering is disabled), so
       // shield `$…$` / `$$…$$` / `\(…\)` / `\[…\]` spans from markdown-it, which
       // would otherwise strip `\(`→`(`, `\;`→`;` and eat `_{…}` subscripts.
       protectLatexMath: true,
     });
     cachedWidth = options.width;
+    cachedColorEnabled = colorEnabled;
   }
   return wrapAnsiToWidth(
     cachedProcessor(content),
@@ -404,6 +462,7 @@ export function renderAnsiMarkdown(
 export function _resetAnsiMarkdownForTests(): void {
   cachedProcessor = null;
   cachedWidth = undefined;
+  cachedColorEnabled = undefined;
 }
 
 /** Test seam: returns cache hit/miss counters for the active processor. */
