@@ -53,7 +53,7 @@ const healthyNodeReport: DoctorReport = {
       id: 'node',
       name: 'Node.js',
       status: 'pass',
-      message: 'Node 24.0.0',
+      message: 'Node 24.15.0',
     },
   ],
 };
@@ -83,6 +83,19 @@ function captureDoctorStdout(
   return stdout;
 }
 
+async function buildNodeVersionReport(
+  nodeVersion: string,
+): Promise<DoctorReport> {
+  return buildDoctorReport(context, {
+    nodeVersion,
+    authProfile: async () => ({ authenticated: true }),
+    modelAccessList: async () => [],
+    latexToolchain: async () => latexProbe,
+    pathStat: async () => directory,
+    pathAccess: async () => undefined,
+  });
+}
+
 describe('CLI doctor', () => {
   it('reports failed checks and exits nonzero', async () => {
     const report = await buildDoctorReport(context, {
@@ -104,9 +117,33 @@ describe('CLI doctor', () => {
     expect(doctorExitCode(report)).toBe(CliExitCode.ModelOrNetworkError);
   });
 
+  it('matches the published Node engine range', async () => {
+    const cases: Array<[string, 'pass' | 'fail']> = [
+      ['22.22.1', 'fail'],
+      ['22.22.2', 'pass'],
+      ['23.0.0', 'fail'],
+      ['24.14.9', 'fail'],
+      ['24.15.0', 'pass'],
+      ['26.0.0', 'pass'],
+    ];
+
+    for (const [nodeVersion, expected] of cases) {
+      const report = await buildNodeVersionReport(nodeVersion);
+      expect(report.checks.find((check) => check.id === 'node')?.status).toBe(
+        expected,
+      );
+    }
+
+    const unsupportedOddRelease = await buildNodeVersionReport('23.0.0');
+    expect(
+      unsupportedOddRelease.checks.find((check) => check.id === 'node')
+        ?.message,
+    ).toBe('Node 23.0.0 is outside the supported range.');
+  });
+
   it('keeps human-readable hints in text output', async () => {
     const report = await buildDoctorReport(context, {
-      nodeVersion: '24.0.0',
+      nodeVersion: '24.15.0',
       authProfile: async () => ({ authenticated: false }),
       modelAccessList: async () => [],
       latexToolchain: async () => latexProbe,
@@ -134,7 +171,7 @@ describe('CLI doctor', () => {
         configWarnings: ['Ignoring invalid model.'],
       },
       {
-        nodeVersion: '24.0.0',
+        nodeVersion: '24.15.0',
         authProfile: async () => ({ authenticated: true }),
         modelAccessList: async () =>
           [
@@ -164,7 +201,7 @@ describe('CLI doctor', () => {
 
   it('redacts email account labels in text output', async () => {
     const report = await buildDoctorReport(context, {
-      nodeVersion: '24.0.0',
+      nodeVersion: '24.15.0',
       authProfile: async () => ({
         authenticated: true,
         accountLabel: 'user@example.edu',
@@ -203,7 +240,7 @@ describe('CLI doctor', () => {
 
   it('keeps non-email account labels readable in text output', async () => {
     const report = await buildDoctorReport(context, {
-      nodeVersion: '24.0.0',
+      nodeVersion: '24.15.0',
       authProfile: async () => ({
         authenticated: true,
         accountLabel: 'team@internal',
@@ -238,7 +275,7 @@ describe('CLI doctor', () => {
 
   it('emits stable ndjson record kinds', async () => {
     const report = await buildDoctorReport(context, {
-      nodeVersion: '24.0.0',
+      nodeVersion: '24.15.0',
       authProfile: async () => ({
         authenticated: true,
         accountLabel: 'Ada',
@@ -288,7 +325,7 @@ describe('CLI doctor', () => {
       healthyNodeReport,
     );
 
-    expect(stdout).toContain('PASS Node.js: Node 24.0.0');
+    expect(stdout).toContain('PASS Node.js: Node 24.15.0');
     expect(stdout).toBe(stripAnsi(stdout));
   });
 
@@ -305,7 +342,7 @@ describe('CLI doctor', () => {
       healthyNodeReport,
     );
 
-    expect(stripAnsi(stdout)).toContain('PASS Node.js: Node 24.0.0');
+    expect(stripAnsi(stdout)).toContain('PASS Node.js: Node 24.15.0');
     expect(stdout).not.toBe(stripAnsi(stdout));
   });
 });
