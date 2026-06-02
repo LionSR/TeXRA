@@ -219,11 +219,33 @@ async function commandSubCommands(
 export async function resolveDeepestSubCommand(
   cmd: AnyCommand,
   rawArgs: readonly string[],
-  parent?: AnyCommand,
-  commandPath: readonly string[] = ['texra'],
-  parentPath: readonly string[] = [],
-  rootCommand: AnyCommand = cmd,
 ): Promise<ResolvedCliCommand> {
+  return resolveDeepestSubCommandPath({
+    cmd,
+    rawArgs,
+    commandPath: ['texra'],
+    parentPath: [],
+    rootCommand: cmd,
+  });
+}
+
+interface ResolveDeepestSubCommandPathInput {
+  readonly cmd: AnyCommand;
+  readonly rawArgs: readonly string[];
+  readonly parent?: AnyCommand;
+  readonly commandPath: readonly string[];
+  readonly parentPath: readonly string[];
+  readonly rootCommand: AnyCommand;
+}
+
+async function resolveDeepestSubCommandPath({
+  cmd,
+  rawArgs,
+  parent,
+  commandPath,
+  parentPath,
+  rootCommand,
+}: ResolveDeepestSubCommandPathInput): Promise<ResolvedCliCommand> {
   const subCommands = await commandSubCommands(cmd);
   if (!subCommands) {
     return { command: cmd, parent, commandPath, parentPath, rootCommand };
@@ -234,14 +256,14 @@ export async function resolveDeepestSubCommand(
     if (token.startsWith('-')) continue;
     const next = subCommands[token];
     if (next) {
-      return resolveDeepestSubCommand(
-        next,
-        rawArgs.slice(i + 1),
-        cmd,
-        [...commandPath, token],
-        commandPath,
+      return resolveDeepestSubCommandPath({
+        cmd: next,
+        rawArgs: rawArgs.slice(i + 1),
+        parent: cmd,
+        commandPath: [...commandPath, token],
+        parentPath: commandPath,
         rootCommand,
-      );
+      });
     }
     break;
   }
