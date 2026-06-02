@@ -655,7 +655,7 @@ not a re-scoping.
   `:164`. The single-source-of-truth consolidation onto `AgentTrace` remains open (a
   progress-view consumer rewire, not a deletion).
 - **§5 / proposal Step 7** — no first-class `delegateTo(...)` primitive (`grep delegateTo
-  src/** packages/**` empty); delegation remains a tool call inside the LLM loop. The three
+src/** packages/**` empty); delegation remains a tool call inside the LLM loop. The three
   module-global registries are **unchanged**: `runCoordinators.bridgeState` (`:27`),
   `executionRegistry` module Maps (`:32`–`:36`), and the interrupt registry still named
   `ToolUseAgentRegistry` (the proposal's `SessionInterruptRegistry` rename, Step 7a, has not
