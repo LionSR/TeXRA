@@ -1,5 +1,6 @@
 import {
   CLI_COMPLETION_SHELLS,
+  completionFlagVariants,
   type CompletionCommand,
 } from './completionCommandTree';
 
@@ -55,14 +56,18 @@ export function fishCompletion(commands: readonly CompletionCommand[]): string {
   for (const command of commands) {
     const condition = fishCondition(command.path);
     for (const flag of command.flags) {
-      const base = [condition, `-l '${fishEscape(flag.name)}'`];
-      for (const alias of flag.aliases) base.push(`-s '${fishEscape(alias)}'`);
-      if (flag.takesValue) base.push('-r');
-      if (flag.values.length > 0) {
-        base.push(`-a '${fishEscape(flag.values.join(' '))}'`);
+      for (const variant of completionFlagVariants(flag)) {
+        const base = [condition, `-l '${fishEscape(variant.name)}'`];
+        for (const alias of variant.aliases) {
+          base.push(`-s '${fishEscape(alias)}'`);
+        }
+        if (variant.takesValue) base.push('-r');
+        if (variant.values.length > 0) {
+          base.push(`-a '${fishEscape(variant.values.join(' '))}'`);
+        }
+        base.push(...fishDescription(variant.description));
+        lines.push(fishCompleteLine(base));
       }
-      base.push(...fishDescription(flag.description));
-      lines.push(fishCompleteLine(base));
     }
     for (const subcommand of command.subcommands) {
       if (command.path.length === 0) continue;
