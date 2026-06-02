@@ -54,7 +54,7 @@ import {
 } from '@shared/wa/webAwesomeIcons';
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { agentName } from '@shared/schemas/agent';
-import { capitalize } from '@shared/utils/string';
+import { capitalize } from '@utils/text/stringUtils';
 import '@shared/wa/tabs';
 import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 
