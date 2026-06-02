@@ -212,6 +212,31 @@ describe('CLI external inquiry modal', () => {
     expect(display.value).toBe('hell\nworld');
   });
 
+  it('does not render a blank row for trailing wrapped whitespace', () => {
+    const value = 'hello ';
+    const display = textInputDisplayWindow({
+      cursor: value.length,
+      maxDisplayRows: 3,
+      value,
+      width: 5,
+    });
+
+    expect(display.value).toBe('hello');
+    expect(display.cursor).toBe(display.value.length);
+  });
+
+  it('skips space-only soft-wrap rows', () => {
+    const display = textInputDisplayWindow({
+      cursor: '   word'.length,
+      maxDisplayRows: 4,
+      value: '   word',
+      width: 2,
+    });
+
+    expect(display.value.split('\n')).not.toContain('');
+    expect(display.value).toBe('wo\nrd');
+  });
+
   it('keeps the cursor aligned when clipped ellipsis precedes trimmed text', () => {
     const value = 'aaaaa hell  world';
     const display = textInputDisplayWindow({
