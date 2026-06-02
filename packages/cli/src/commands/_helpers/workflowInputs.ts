@@ -38,6 +38,13 @@ export interface WorkflowInputExpansionOptions {
   readonly stdinInputFile?: () => Promise<string>;
 }
 
+type WorkflowInputExpansionEntry = readonly string[] | 'stdin';
+
+interface PreparedWorkflowInputExpansion {
+  readonly entries: WorkflowInputExpansionEntry[];
+  readonly stdinInputFile?: () => Promise<string>;
+}
+
 export type StdinWorkflowInputMaterializer = (() => Promise<string>) & {
   cleanup: () => Promise<void>;
 };
@@ -176,7 +183,20 @@ export async function expandWorkflowInputSpecs(
   flagLabel: string = '--input',
   options: WorkflowInputExpansionOptions = {},
 ): Promise<string[]> {
-  const entries: Array<readonly string[] | 'stdin'> = [];
+  return finishWorkflowInputExpansion(
+    await prepareWorkflowInputExpansion(inputSpecs, cwd, flagLabel, options),
+    cwd,
+    options,
+  );
+}
+
+async function prepareWorkflowInputExpansion(
+  inputSpecs: readonly string[],
+  cwd: string,
+  flagLabel: string,
+  options: WorkflowInputExpansionOptions,
+): Promise<PreparedWorkflowInputExpansion> {
+  const entries: WorkflowInputExpansionEntry[] = [];
   let stdinInputFile: (() => Promise<string>) | undefined;
   for (const spec of inputSpecs) {
     if (isStdinWorkflowInputSpec(spec)) {
@@ -186,11 +206,19 @@ export async function expandWorkflowInputSpecs(
     }
     entries.push(await expandWorkflowInputSpec(spec, cwd, flagLabel));
   }
+  return { entries, stdinInputFile };
+}
+
+async function finishWorkflowInputExpansion(
+  prepared: PreparedWorkflowInputExpansion,
+  cwd: string,
+  options: WorkflowInputExpansionOptions,
+): Promise<string[]> {
   const expanded: string[] = [];
-  const stdinPath = stdinInputFile
-    ? normalizeCliInputPath(await stdinInputFile(), cwd)
+  const stdinPath = prepared.stdinInputFile
+    ? normalizeCliInputPath(await prepared.stdinInputFile(), cwd)
     : undefined;
-  for (const entry of entries) {
+  for (const entry of prepared.entries) {
     if (entry === 'stdin') {
       if (stdinPath) expanded.push(stdinPath);
       continue;
@@ -228,32 +256,26 @@ export async function expandRunInputs(
     );
   }
 
-  await expandWorkflowInputSpecs(
-    inputSpecs.filter((spec) => !isStdinWorkflowInputSpec(spec)),
-    cwd,
-    '--input',
-    { allowEmpty: true },
-  );
-  await expandWorkflowInputSpecs(
-    contextSpecs.filter((spec) => !isStdinWorkflowInputSpec(spec)),
-    cwd,
-    '--context',
-    { allowEmpty: true },
-  );
-
-  const inputFiles = await expandWorkflowInputSpecs(
+  const inputExpansion = await prepareWorkflowInputExpansion(
     inputSpecs,
     cwd,
     '--input',
-    {
-      allowEmpty: options.allowEmptyInput,
-      stdinInputFile: options.stdinInputFile,
-    },
+    { stdinInputFile: options.stdinInputFile },
   );
-  const contextFiles = await expandWorkflowInputSpecs(
+  const contextExpansion = await prepareWorkflowInputExpansion(
     contextSpecs,
     cwd,
     '--context',
+    { stdinInputFile: options.stdinInputFile },
+  );
+
+  const inputFiles = await finishWorkflowInputExpansion(inputExpansion, cwd, {
+    allowEmpty: options.allowEmptyInput,
+    stdinInputFile: options.stdinInputFile,
+  });
+  const contextFiles = await finishWorkflowInputExpansion(
+    contextExpansion,
+    cwd,
     {
       allowEmpty: true,
       stdinInputFile: options.stdinInputFile,
