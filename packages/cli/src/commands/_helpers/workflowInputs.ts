@@ -31,6 +31,10 @@ function normalizeCliInputPath(candidate: string, cwd: string): string {
   return absolutePath;
 }
 
+function isStdinInputSpec(inputSpec: string): boolean {
+  return inputSpec.trim() === STDIN_INPUT_TOKEN;
+}
+
 /**
  * Optional dependencies for {@link expandWorkflowInputSpec}. `readStdin` lets
  * tests feed piped content for the `-` (stdin) token without driving a real
@@ -65,7 +69,7 @@ export async function expandWorkflowInputSpec(
   // `-` means stdin. Read it only when explicitly requested so the normal file
   // path never blocks waiting on stdin.
   if (trimmed === STDIN_INPUT_TOKEN) {
-    return [await materializeStdinInput(flagLabel, options.readStdin)];
+    return [await materializeStdinInput(flagLabel, options.readStdin, cwd)];
   }
 
   if (hasMagic(trimmed)) {
@@ -124,12 +128,19 @@ export async function expandWorkflowInputSpecs(
     readonly readStdin?: StdinReader;
   } = {},
 ): Promise<string[]> {
+  const stdinExpansion = inputSpecs.some(isStdinInputSpec)
+    ? expandWorkflowInputSpec(STDIN_INPUT_TOKEN, cwd, flagLabel, {
+        readStdin: options.readStdin,
+      })
+    : undefined;
   const expanded = (
     await Promise.all(
       inputSpecs.map((spec) =>
-        expandWorkflowInputSpec(spec, cwd, flagLabel, {
-          readStdin: options.readStdin,
-        }),
+        isStdinInputSpec(spec)
+          ? stdinExpansion!
+          : expandWorkflowInputSpec(spec, cwd, flagLabel, {
+              readStdin: options.readStdin,
+            }),
       ),
     )
   ).flat();
@@ -157,6 +168,14 @@ export async function expandRunInputs(
     readonly readStdin?: StdinReader;
   } = {},
 ): Promise<{ inputFiles: string[]; contextFiles: string[] }> {
+  if (
+    inputSpecs.some(isStdinInputSpec) &&
+    contextSpecs.some(isStdinInputSpec)
+  ) {
+    throw new CliUsageError(
+      'Use `-` for either --input or --context, not both; stdin can only be read once.',
+    );
+  }
   const inputFiles = await expandWorkflowInputSpecs(
     inputSpecs,
     cwd,
@@ -166,14 +185,14 @@ export async function expandRunInputs(
       readStdin: options.readStdin,
     },
   );
-  const contextFiles = (
-    await Promise.all(
-      contextSpecs.map((spec) =>
-        expandWorkflowInputSpec(spec, cwd, '--context', {
-          readStdin: options.readStdin,
-        }),
-      ),
-    )
-  ).flat();
+  const contextFiles = await expandWorkflowInputSpecs(
+    contextSpecs,
+    cwd,
+    '--context',
+    {
+      allowEmpty: true,
+      readStdin: options.readStdin,
+    },
+  );
   return { inputFiles, contextFiles };
 }

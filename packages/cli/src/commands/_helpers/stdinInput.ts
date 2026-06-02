@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as fsSync from 'node:fs';
 import * as os from 'node:os';
@@ -12,8 +13,8 @@ import { CliUsageError } from '@cli/runtime/cliContext';
  */
 export const STDIN_INPUT_TOKEN = '-';
 
-/** Default basename for the temp file stdin is materialized into. */
-const STDIN_TEMP_BASENAME = 'stdin.tex';
+/** Prefix for the temporary cwd-local file stdin is materialized into. */
+const STDIN_TEMP_PREFIX = '.texra-stdin-';
 
 /**
  * Reads the entirety of a (presumably piped) stdin stream to a UTF-8 string.
@@ -22,20 +23,29 @@ const STDIN_TEMP_BASENAME = 'stdin.tex';
  */
 export type StdinReader = () => Promise<string>;
 
-/** Default reader: drains `process.stdin` to a UTF-8 string. */
-export const readProcessStdin: StdinReader = async () => {
+async function drainProcessStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
   return Buffer.concat(chunks).toString('utf8');
+}
+
+let processStdinRead: Promise<string> | undefined;
+
+/** Default reader: drains `process.stdin` once to a UTF-8 string. */
+export const readProcessStdin: StdinReader = async () => {
+  processStdinRead ??= drainProcessStdin();
+  return processStdinRead;
 };
 
 /**
  * Read stdin and write it to a freshly-created temp file, returning that file's
  * absolute path. The downstream run pipeline is file-centric, so materializing
  * to a temp file keeps the file-based input path intact while letting callers
- * pipe content in. The temp directory is removed on process exit.
+ * pipe content in. The temp file lives in `cwd` so LaTeX dependencies like
+ * `\input{sections/intro}` keep resolving from the project root. It is removed
+ * on process exit.
  *
  * Throws a {@link CliUsageError} when stdin is empty so the user sees a clear
  * "nothing piped in" message rather than running the agent against an empty
@@ -43,10 +53,12 @@ export const readProcessStdin: StdinReader = async () => {
  *
  * @param flagLabel CLI flag the `-` token came from (for the empty-input error)
  * @param readStdin injected stdin reader (defaults to draining process.stdin)
+ * @param cwd run working directory where the temporary file should live
  */
 export async function materializeStdinInput(
   flagLabel: string,
   readStdin: StdinReader = readProcessStdin,
+  cwd?: string,
 ): Promise<string> {
   const content = await readStdin();
   if (content.trim().length === 0) {
@@ -55,25 +67,28 @@ export async function materializeStdinInput(
     );
   }
 
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-stdin-'));
-  const tempPath = path.join(tempDir, STDIN_TEMP_BASENAME);
-  await fs.writeFile(tempPath, content, 'utf8');
-  registerStdinTempCleanup(tempDir);
+  const tempRoot = cwd ? path.resolve(cwd) : os.tmpdir();
+  const tempPath = path.join(
+    tempRoot,
+    `${STDIN_TEMP_PREFIX}${process.pid}-${randomUUID()}.tex`,
+  );
+  await fs.writeFile(tempPath, content, { encoding: 'utf8', flag: 'wx' });
+  registerStdinTempCleanup(tempPath);
   return tempPath;
 }
 
 /**
- * Best-effort removal of the stdin temp directory when the process exits. The
+ * Best-effort removal of the stdin temp file when the process exits. The
  * CLI process is short-lived per run, so an `exit` hook is sufficient and keeps
  * the call site free of run-spanning try/finally plumbing. `exit` handlers must
  * be synchronous, so this uses the sync rm variant.
  */
-function registerStdinTempCleanup(tempDir: string): void {
+function registerStdinTempCleanup(tempPath: string): void {
   process.once('exit', () => {
     try {
-      fsSync.rmSync(tempDir, { recursive: true, force: true });
+      fsSync.rmSync(tempPath, { force: true });
     } catch {
-      // Cleanup is best-effort; the OS temp dir is reclaimed regardless.
+      // Cleanup is best-effort; stale hidden temp files are harmless.
     }
   });
 }

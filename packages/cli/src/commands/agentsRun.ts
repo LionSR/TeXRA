@@ -37,7 +37,7 @@ import {
   toolUseResultText,
   type CliRunResult,
 } from './_helpers/terminalStatus';
-import { expandWorkflowInputSpecs } from './_helpers/workflowInputs';
+import { expandRunInputs } from './_helpers/workflowInputs';
 
 type CliToolUseRunResult = Extract<CliRunResult, { category: 'toolUse' }>;
 
@@ -106,15 +106,15 @@ async function runToolUseAgent(
   let contextFiles: string[];
   let instruction: string;
   try {
-    [inputFiles, contextFiles, instruction] = await Promise.all([
-      expandWorkflowInputSpecs(init.inputFiles, runContext.cwd, '--input', {
-        allowEmpty: true,
-      }),
-      expandWorkflowInputSpecs(init.contextFiles, runContext.cwd, '--context', {
-        allowEmpty: true,
-      }),
-      resolveToolUseInstruction(init, runContext.cwd),
-    ]);
+    const expanded = await expandRunInputs(
+      init.inputFiles,
+      init.contextFiles,
+      runContext.cwd,
+      { allowEmptyInput: true },
+    );
+    inputFiles = expanded.inputFiles;
+    contextFiles = expanded.contextFiles;
+    instruction = await resolveToolUseInstruction(init, runContext.cwd);
   } catch (error: unknown) {
     if (!(error instanceof CliUsageError)) {
       throw error;
@@ -197,7 +197,7 @@ export const agentsRunCommand = defineCliCommand({
       type: 'string',
       alias: 'c',
       description:
-        'Read-only context file made visible to the agent (repeatable)',
+        'Read-only context file made visible to the agent (repeatable; use `-` to read stdin)',
     },
     model: {
       type: 'string',

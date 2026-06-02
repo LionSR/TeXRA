@@ -302,7 +302,7 @@ const multiAgentRunCommand = defineCliCommand({
       type: 'string',
       alias: 'c',
       description:
-        'Read-only context file passed to the team orchestrator (repeatable)',
+        'Read-only context file passed to the team orchestrator (repeatable; use `-` to read stdin)',
     },
     agent: {
       type: 'string',

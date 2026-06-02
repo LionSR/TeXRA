@@ -286,14 +286,40 @@ describe('CLI root argument routing', () => {
       expect(resolved).toHaveLength(1);
       const tempPath = resolved[0];
       expect(path.isAbsolute(tempPath)).toBe(true);
-      expect(path.basename(tempPath)).toBe('stdin.tex');
+      expect(path.dirname(tempPath)).toBe(root);
+      expect(path.basename(tempPath)).toMatch(/^\.texra-stdin-.+\.tex$/);
       await expect(fs.readFile(tempPath, 'utf8')).resolves.toBe(piped);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
   });
 
-  it('reads `-` through expandRunInputs for both input and context', async () => {
+  it('reuses one materialized stdin file for repeated `-` specs', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      let readCount = 0;
+      const resolved = await expandWorkflowInputSpecs(
+        ['-', '-'],
+        root,
+        '--input',
+        {
+          readStdin: async () => {
+            readCount += 1;
+            return 'piped body';
+          },
+        },
+      );
+      expect(readCount).toBe(1);
+      expect(resolved).toHaveLength(1);
+      await expect(fs.readFile(resolved[0], 'utf8')).resolves.toBe(
+        'piped body',
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('reads `-` through expandRunInputs for input', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
     try {
       const piped = 'piped body';
@@ -309,6 +335,33 @@ describe('CLI root argument routing', () => {
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
+  });
+
+  it('reads `-` through expandRunInputs for context', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-stdin-'));
+    try {
+      await fs.writeFile(path.join(root, 'main.tex'), 'main body');
+      const piped = 'context body';
+      const { inputFiles, contextFiles } = await expandRunInputs(
+        ['main.tex'],
+        ['-'],
+        root,
+        { readStdin: async () => piped },
+      );
+      expect(inputFiles).toEqual(['main.tex']);
+      expect(contextFiles).toHaveLength(1);
+      await expect(fs.readFile(contextFiles[0], 'utf8')).resolves.toBe(piped);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects `-` across both input and context with a clear usage error', async () => {
+    await expect(
+      expandRunInputs(['-'], ['-'], '/tmp/project', {
+        readStdin: async () => 'piped body',
+      }),
+    ).rejects.toThrow(/Use `-` for either --input or --context/);
   });
 
   it('rejects an empty `-` --input with a clear usage error', async () => {
