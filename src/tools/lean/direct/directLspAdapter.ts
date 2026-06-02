@@ -8,11 +8,11 @@
  * same session. Sessions are torn down on platform shutdown.
  */
 
-import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { toErrorMessage } from '@common/errors';
 import { warn } from '@logger/logUtils';
+import { AbsoluteFS } from '@utils/files';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanSession } from './leanSession';
@@ -312,15 +312,6 @@ async function runForAllSessions(
   }
 }
 
-async function pathExists(target: string): Promise<boolean> {
-  try {
-    await access(target);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /** Walk up from `filePath` looking for a Lake project root. */
 export async function defaultResolveWorkspaceRoot(
   filePath: string,
@@ -329,8 +320,8 @@ export async function defaultResolveWorkspaceRoot(
   const root = path.parse(dir).root;
   for (;;) {
     if (
-      (await pathExists(path.join(dir, 'lakefile.lean'))) ||
-      (await pathExists(path.join(dir, 'lakefile.toml')))
+      (await AbsoluteFS.exists(path.join(dir, 'lakefile.lean'))) ||
+      (await AbsoluteFS.exists(path.join(dir, 'lakefile.toml')))
     ) {
       return dir;
     }
