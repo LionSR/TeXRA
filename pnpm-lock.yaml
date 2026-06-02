@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  ink@7.0.5: 09fff841c44a5a89561efc2975c10f66ab0696fd7d356c229778510b28b0d293
+  ink@7.0.5: 9fd58217082c27d92992fc05cc67abfbcd97305e7e13de35ceb67cd5592027f4
 
 importers:
 
@@ -377,7 +377,7 @@ importers:
         version: 7.29.7(@babel/core@7.29.7)
       '@inkjs/ui':
         specifier: ^2.0.0
-        version: 2.0.0(ink@7.0.5(patch_hash=09fff841c44a5a89561efc2975c10f66ab0696fd7d356c229778510b28b0d293)(@types/react@19.2.16)(react@19.2.7))
+        version: 2.0.0(ink@7.0.5(patch_hash=9fd58217082c27d92992fc05cc67abfbcd97305e7e13de35ceb67cd5592027f4)(@types/react@19.2.16)(react@19.2.7))
       '@lit-labs/signals':
         specifier: ^0.3.0
         version: 0.3.0
@@ -416,7 +416,7 @@ importers:
         version: 0.28.0
       ink:
         specifier: ^7.0.5
-        version: 7.0.5(patch_hash=09fff841c44a5a89561efc2975c10f66ab0696fd7d356c229778510b28b0d293)(@types/react@19.2.16)(react@19.2.7)
+        version: 7.0.5(patch_hash=9fd58217082c27d92992fc05cc67abfbcd97305e7e13de35ceb67cd5592027f4)(@types/react@19.2.16)(react@19.2.7)
       markdown-it:
         specifier: ^14.2.0
         version: 14.2.0
@@ -7754,13 +7754,13 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@inkjs/ui@2.0.0(ink@7.0.5(patch_hash=09fff841c44a5a89561efc2975c10f66ab0696fd7d356c229778510b28b0d293)(@types/react@19.2.16)(react@19.2.7))':
+  '@inkjs/ui@2.0.0(ink@7.0.5(patch_hash=9fd58217082c27d92992fc05cc67abfbcd97305e7e13de35ceb67cd5592027f4)(@types/react@19.2.16)(react@19.2.7))':
     dependencies:
       chalk: 5.6.2
       cli-spinners: 3.4.0
       deepmerge: 4.3.1
       figures: 6.1.0
-      ink: 7.0.5(patch_hash=09fff841c44a5a89561efc2975c10f66ab0696fd7d356c229778510b28b0d293)(@types/react@19.2.16)(react@19.2.7)
+      ink: 7.0.5(patch_hash=9fd58217082c27d92992fc05cc67abfbcd97305e7e13de35ceb67cd5592027f4)(@types/react@19.2.16)(react@19.2.7)
 
   '@isaacs/cliui@8.0.2':
     dependencies:
@@ -11104,7 +11104,7 @@ snapshots:
   ini@1.3.8:
     optional: true
 
-  ink@7.0.5(patch_hash=09fff841c44a5a89561efc2975c10f66ab0696fd7d356c229778510b28b0d293)(@types/react@19.2.16)(react@19.2.7):
+  ink@7.0.5(patch_hash=9fd58217082c27d92992fc05cc67abfbcd97305e7e13de35ceb67cd5592027f4)(@types/react@19.2.16)(react@19.2.7):
     dependencies:
       '@alcalzone/ansi-tokenize': 0.3.0
       ansi-escapes: 7.3.0

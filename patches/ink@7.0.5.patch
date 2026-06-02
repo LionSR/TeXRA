@@ -2,13 +2,20 @@ diff --git a/build/ink.js b/build/ink.js
 index b8fd45cc990adbc080eff28fc37463cd91337dff..39f2acb8bf923ef6d6bb8a158525fe03ecb94009 100644
 --- a/build/ink.js
 +++ b/build/ink.js
-@@ -259,13 +259,36 @@ export default class Ink {
+@@ -259,13 +259,45 @@ export default class Ink {
          // error but consumers never call waitUntilExit().
          void this.exitPromise.catch(noop);
      }
 +    resizeTimer = undefined;
      resized = () => {
-+        // Full repaint on resize, debounced. Ink normally erases the bottom live
++        const currentWidth = getWindowSize(this.options.stdout).columns;
++        this.calculateLayout();
++        dom.emitLayoutListeners(this.rootNode);
++        if (currentWidth === this.lastTerminalWidth) {
++            this.onRender();
++            return;
++        }
++        // Full repaint on width changes, debounced. Ink normally erases the bottom live
 +        // region by line count, but after the emulator reflows soft-wrapped lines
 +        // at the new width no count is correct: too small leaves residue, too large
 +        // walks up and erases the <Static> header above. The reflow/scroll geometry
@@ -16,8 +23,10 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..39f2acb8bf923ef6d6bb8a158525fe03
 +        // so the only terminal-independent fix is to redraw from a known origin:
 +        // clearTerminal homes the cursor and clears screen+scrollback, then we
 +        // reprint fullStaticOutput (header + finalized history, reflowed) and let
-+        // onRender draw the live region below it. Debounced so a drag-storm of
-+        // resize events collapses into a single repaint (TeXRA patch).
++        // onRender draw the live region below it. Layout listeners still fire
++        // synchronously above so components see the new terminal width immediately;
++        // only the expensive clear+repaint is debounced so a drag-storm of resize
++        // events collapses into a single repaint (TeXRA patch).
 +        if (this.resizeTimer) {
 +            clearTimeout(this.resizeTimer);
 +        }

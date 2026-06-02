@@ -72,6 +72,27 @@ describe('CLI Ink resize patch', () => {
     expect(source).toMatch(/setTimeout\(this\.repaintAfterResize/);
   });
 
+  it('updates layout synchronously before scheduling the repaint', () => {
+    const resizeStart = source.indexOf('resized = () => {');
+    const scheduleRepaint = source.indexOf(
+      'setTimeout(this.repaintAfterResize',
+      resizeStart,
+    );
+    const calculateLayout = source.indexOf(
+      'this.calculateLayout();',
+      resizeStart,
+    );
+    const emitLayout = source.indexOf(
+      'dom.emitLayoutListeners(this.rootNode);',
+      resizeStart,
+    );
+
+    expect(resizeStart).toBeGreaterThanOrEqual(0);
+    expect(calculateLayout).toBeGreaterThan(resizeStart);
+    expect(emitLayout).toBeGreaterThan(calculateLayout);
+    expect(scheduleRepaint).toBeGreaterThan(emitLayout);
+  });
+
   it('no longer references the removed clearWidthAware helper', () => {
     expect(source).not.toContain('clearWidthAware');
   });
