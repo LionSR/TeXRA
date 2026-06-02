@@ -70,9 +70,8 @@ export function truncate(s: string | null | undefined, max: number): string {
 }
 
 /**
- * Build a single-arg truncator bound to `max`. Replaces the per-formatter
- * `(s) => truncate(s, MAX_BODY)` wrapper so the cap stays the one
- * file-local knob and the closure shape isn't re-declared everywhere.
+ * Build a single-arg truncator bound to `max`, so each formatter keeps one
+ * file-local cap instead of re-declaring the `(s) => truncate(s, MAX)` wrapper.
  */
 export function makeTruncator(
   max: number,
