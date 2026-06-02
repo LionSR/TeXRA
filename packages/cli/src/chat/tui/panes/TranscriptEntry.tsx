@@ -35,16 +35,11 @@ function UserEntryRow({
     .split('\n')
     .map((line, index) => `${index === 0 ? '› ' : '  '}${line}`)
     .join('\n');
-  if (colorEnabled === false) {
-    return (
-      <Box>
-        <Text>{body}</Text>
-      </Box>
-    );
-  }
+  // No-color terminals can't show the reverse-video band; the `› ` marker still
+  // distinguishes the turn, so only the `inverse` attribute differs.
   return (
     <Box>
-      <Text inverse>{body}</Text>
+      <Text inverse={colorEnabled !== false}>{body}</Text>
     </Box>
   );
 }
