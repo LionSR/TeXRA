@@ -217,6 +217,7 @@ const baseConfig = {
     'README.md',
     'agent-sdk-readiness-audit.md',
     'analysis-subagent-updates.md',
+    'tui-performance-audit.md',
     'desktop-signing-ci.md',
     'electron-migration-plan.md',
     'relay-tier-config.md',
