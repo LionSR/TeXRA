@@ -5,9 +5,9 @@
 
 import { Box, Text } from 'ink';
 
-import { fillRows } from '../render/DiffView';
 import { Markdown } from '../render/Markdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
+import { fillRows } from '../render/terminalText';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
 import { ToolUseRow } from './ToolUseRow';
 import { toolUseDisplayLines } from './toolRenderers';

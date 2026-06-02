@@ -20,6 +20,8 @@ import { createRequire } from 'node:module';
 
 import { describe, expect, it } from 'vitest';
 
+import { fillRows } from '@cli/chat/tui/render/terminalText';
+
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
 );
@@ -50,13 +52,6 @@ class FakeStdin extends EventEmitter {
   read(): null {
     return null;
   }
-}
-
-function fillRow(text: string, width: number): string {
-  return text
-    .split('\n')
-    .map((row) => row + ' '.repeat(Math.max(0, width - row.length)))
-    .join('\n');
 }
 
 /** Widest visible reverse-video (`ESC[7m…ESC[27m`) run that contains the band. */
@@ -106,7 +101,7 @@ describe('Static band resize', () => {
         createElement(
           ink.Box,
           { key: 'band' },
-          createElement(ink.Text, { inverse: true }, fillRow('> hi', cols)),
+          createElement(ink.Text, { inverse: true }, fillRows('> hi', cols)),
         ),
       );
     }
