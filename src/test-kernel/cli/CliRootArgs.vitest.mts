@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import stripAnsi from 'strip-ansi';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
@@ -15,6 +16,7 @@ import { doctorPlatformInitContext } from '@cli/commands/doctor';
 import {
   formatUnknownCliCommand,
   formatUnknownCliFlag,
+  hasUsageNoColorFlag,
   normalizeRootShortcuts,
   reorderGlobalFlags,
 } from '@cli/commands/_helpers/dispatch';
@@ -881,6 +883,12 @@ describe('CLI global color/input flags', () => {
     expect(GLOBAL_BOOL_FLAGS.has('--input')).toBe(false);
   });
 
+  it('detects usage --no-color only as a global flag', () => {
+    expect(hasUsageNoColorFlag(['--no-color', '--help'])).toBe(true);
+    expect(hasUsageNoColorFlag(['--cwd', '--no-color', '--help'])).toBe(false);
+    expect(hasUsageNoColorFlag(['--', '--no-color', '--help'])).toBe(false);
+  });
+
   it('does not treat command-specific --input as a leading global flag', () => {
     expect(
       reorderGlobalFlags(['--input', 'file.tex', 'run', 'polish']),
@@ -1094,6 +1102,22 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('texra agents list');
     expect(stdout).toContain('texra doctor');
     expect(stdout).toContain('Learn more: https://texra.ai');
+    expect(stderr).toBe('');
+  });
+
+  it('honors --no-color in explicit help output', async () => {
+    const result = await runCli(['--no-color', '--help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('USAGE');
+    expect(stdout).toBe(stripAnsi(stdout));
+    expect(stderr).toBe('');
+  });
+
+  it('honors --no-color in help command output', async () => {
+    const result = await runCli(['--no-color', 'help']);
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toContain('USAGE');
+    expect(stdout).toBe(stripAnsi(stdout));
     expect(stderr).toBe('');
   });
 

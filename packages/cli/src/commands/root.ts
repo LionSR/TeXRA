@@ -18,6 +18,7 @@ import {
   normalizeRootShortcuts,
   reorderGlobalFlags,
   resolveDeepestSubCommand,
+  setUsageColorOverrideFromRawArgs,
   showUsage,
   showUsageStderr,
   withUsageSections,
@@ -137,6 +138,7 @@ export async function runCli(
   const rawArgs = reorderGlobalFlags(
     normalizeRootShortcuts(argv ? [...argv] : readCliArgv()),
   );
+  setUsageColorOverrideFromRawArgs(rawArgs);
 
   // `--help` / `-h` anywhere prints usage for the deepest matched subcommand
   // (e.g. `texra agents list --help` → list-level usage), mirroring citty's
