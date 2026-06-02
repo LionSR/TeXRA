@@ -29,6 +29,12 @@ function getMaxImageDimension(): number {
 // Define the temporary directory path
 const TEMP_DIR = path.join(os.tmpdir(), 'texra-pdf-conversion');
 
+/** Default DPI/density used when rasterizing a PDF page to PNG. */
+const DEFAULT_PDF_QUALITY = 300;
+
+/** Default maximum [width, height] in px for a rasterized PDF page. */
+const DEFAULT_PDF_MAX_SIZE: [number, number] = [1024, 1024];
+
 // ImageMagick configuration is now in toolUtils.ts
 
 /** Ensure the pdf2pic temporary directory exists. */
@@ -223,8 +229,8 @@ export async function countPdfPages(pdfPath: string): Promise<number> {
 async function singlePagePdf2Png(
   pdfPath: string,
   pageNum: number = 1,
-  quality: number = 300,
-  maxSize: [number, number] = [1024, 1024],
+  quality: number = DEFAULT_PDF_QUALITY,
+  maxSize: [number, number] = DEFAULT_PDF_MAX_SIZE,
 ): Promise<string> {
   try {
     // Check for GraphicsMagick/ImageMagick installation
@@ -281,8 +287,8 @@ async function singlePagePdf2Png(
 /** Convert multiple pages of a PDF to base64 encoded PNG images. */
 async function multiPagePdf2Png(
   pdfPath: string,
-  quality: number = 300,
-  maxSize: [number, number] = [1024, 1024],
+  quality: number = DEFAULT_PDF_QUALITY,
+  maxSize: [number, number] = DEFAULT_PDF_MAX_SIZE,
   maxPages: number = 100,
 ): Promise<string[]> {
   const pageCount = await countPdfPages(pdfPath);
@@ -325,8 +331,8 @@ export async function processPdf2Png(
       return null;
     }
 
-    const finalQuality = quality ?? 300;
-    const finalMaxSize: [number, number] = maxSize ?? [1024, 1024];
+    const finalQuality = quality ?? DEFAULT_PDF_QUALITY;
+    const finalMaxSize: [number, number] = maxSize ?? DEFAULT_PDF_MAX_SIZE;
 
     if (pageCount === 1) {
       return await singlePagePdf2Png(pdfPath, 1, finalQuality, finalMaxSize);

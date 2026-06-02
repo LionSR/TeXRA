@@ -718,7 +718,7 @@ export abstract class ModelHandler<
    * @returns Object containing response text, usage info, and stop reason
    */
   abstract extractResponse(
-    responseObject: any,
+    responseObject: Resp,
     endTag: string,
   ): ExtractResponseResult;
 

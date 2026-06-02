@@ -11,6 +11,7 @@ import {
   type TodoStatus,
 } from '@shared/schemas';
 import { isProcessAgent } from '@shared/streams/agentKind';
+import { formatTimestamp } from '@utils/text/stringUtils';
 
 export function resolveExecutionDisplayCategory(
   agent: string | undefined,
@@ -81,7 +82,7 @@ export function formatProgressLine(
 
 /** Format a listing entry as a single summary line. */
 export function formatListingLine(entry: ExecutionListingEntry): string {
-  const ts = entry.timestamp.replace('T', ' ').replace(/\.\d+Z$/, '');
+  const ts = formatTimestamp(entry.timestamp);
   const info = getExecutionStatusInfo(entry.id, entry.terminalStatus);
   const category = resolveExecutionDisplayCategory(entry.agent, entry.category);
   const categoryTag = category ? `  ${category}` : '';
