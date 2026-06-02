@@ -83,7 +83,15 @@ function applyToState<K extends ProgressEvent>(
       }
       // Register background child streams without stealing focus from the
       // parent page. This mirrors the extension progress view contract.
-      patchStream(next, (s) => ({ ...s }));
+      // Capture the agent category so the exit hint can list only resumable
+      // tool-use subagents (workflows don't resume).
+      // Always return a fresh slice so a brand-new (e.g. suppressed child)
+      // stream is registered in the map even when no category is supplied —
+      // returning `s` unchanged would leave a never-created stream unregistered.
+      patchStream(next, (s) => ({
+        ...s,
+        category: p.agentCategory ?? s.category,
+      }));
       if (p.suppressViewSwitch !== true) {
         cliState.activeStreamId.set(next);
       }

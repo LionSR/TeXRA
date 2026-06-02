@@ -6,11 +6,14 @@ import type { CliHistoryEntry } from './history';
 import type { CliMultiAgentPreset } from './multiAgentPresets';
 
 export type CliOrchestrationAction =
-  | { readonly kind: 'chat'; readonly agent?: string }
+  | { readonly kind: 'chat'; readonly agent?: string; readonly model?: string }
   | {
       readonly kind: 'preset';
       readonly preset: string;
       readonly presetName: string;
+      /** Lead model the orchestrator agent starts on (and is offered for
+       *  delegation). Chosen in the launcher's model step. */
+      readonly model?: string;
     }
   | { readonly kind: 'resume'; readonly id: ExecutionId }
   | { readonly kind: 'help' }

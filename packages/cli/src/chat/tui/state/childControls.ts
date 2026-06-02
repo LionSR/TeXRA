@@ -370,6 +370,26 @@ export function nextPickerIndex(
   return (index + 1) % length;
 }
 
+export type SubagentPickerSelection =
+  | { readonly kind: 'view'; readonly streamId: StreamTabId }
+  | { readonly kind: 'detail'; readonly executionId: string };
+
+/** What pressing Enter on a child-control row should do. In subagents mode a
+ *  row backed by a child stream opens that subagent's scoped transcript
+ *  viewer (its independent history); everything else (tasks/processes, or a
+ *  stream-less row) drops into the inline tail detail view. Pure so the
+ *  picker's key handling stays unit-testable. */
+export function subagentPickerSelection(
+  mode: ChildControlMode,
+  item: Pick<ChildControlItem, 'childStreamId' | 'executionId'> | undefined,
+): SubagentPickerSelection | undefined {
+  if (!item) return undefined;
+  if (mode === 'subagents' && item.childStreamId) {
+    return { kind: 'view', streamId: item.childStreamId };
+  }
+  return { kind: 'detail', executionId: item.executionId };
+}
+
 export function childPickerKeyAction(key: PickerKeyInput): PickerKeyAction {
   if (key.escape) return { kind: 'close' };
   if (key.upArrow) return { kind: 'up' };

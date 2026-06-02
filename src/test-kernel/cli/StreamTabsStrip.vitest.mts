@@ -39,6 +39,7 @@ function slice(
 ): StreamSlice {
   return {
     streamId: streamId(streamIdValue),
+    category: undefined,
     status: undefined,
     runStartedAt: undefined,
     description: undefined,
