@@ -7,7 +7,7 @@ import {
   CliUsageError,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
+import { writeTextStderr } from '../runtime/logSinks';
 
 import {
   detectUnknownCliCommand as detectUnknownCliCommandImpl,
@@ -122,10 +122,11 @@ export async function detectUnknownCliFlag(
 }
 
 /**
- * Re-implement the surface citty's `runMain` provides — `--help` / `--version`
+ * Re-implement the surface citty's `runMain` provides — explicit `--help`
  * detection plus error handling around `runCommand` — so usage errors (missing
- * required flag, unknown subcommand, invalid enum value) preserve our
- * canonical `CliExitCode.Usage` (2) instead of citty's hard-coded `exit(1)`.
+ * required flag, unknown subcommand, invalid enum value) preserve our canonical
+ * `CliExitCode.Usage` (2) instead of citty's hard-coded `exit(1)`. Root version
+ * shortcuts normalize to the `version` subcommand before this point.
  */
 export async function runCli(
   argv?: readonly string[],
@@ -141,13 +142,6 @@ export async function runCli(
   if (rawArgs.some((arg) => arg === '--help' || arg === '-h')) {
     const resolved = await resolveDeepestSubCommand(rootCommand, rawArgs);
     await showUsage(resolved.command, resolved.parent, resolved);
-    return { exitCode: CliExitCode.Success };
-  }
-  if (
-    rawArgs.length === 1 &&
-    (rawArgs[0] === '--version' || rawArgs[0] === '-v' || rawArgs[0] === '-V')
-  ) {
-    writeTextStdout(await readCliVersion());
     return { exitCode: CliExitCode.Success };
   }
 
