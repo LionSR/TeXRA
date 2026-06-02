@@ -62,7 +62,40 @@ interface DoctorDependencies {
 
 type ResolvedDoctorDependencies = Required<DoctorDependencies>;
 
-const MIN_NODE_MAJOR = 22;
+const SUPPORTED_NODE_RANGE = '^22.22.2 || ^24.15.0 || >=26.0.0';
+
+function parseNodeVersion(version: string): [number, number, number] | null {
+  const [majorRaw, minorRaw, patchRaw] = version.split('.');
+  const major = Number.parseInt(majorRaw ?? '', 10);
+  const minor = Number.parseInt(minorRaw ?? '', 10);
+  const patch = Number.parseInt(patchRaw ?? '', 10);
+  if (![major, minor, patch].every(Number.isFinite)) return null;
+  return [major, minor, patch];
+}
+
+function isAtLeast(
+  version: [number, number, number],
+  minimum: [number, number, number],
+): boolean {
+  return (
+    version[0] > minimum[0] ||
+    (version[0] === minimum[0] &&
+      (version[1] > minimum[1] ||
+        (version[1] === minimum[1] && version[2] >= minimum[2])))
+  );
+}
+
+function isSupportedNodeVersion(version: string): boolean {
+  const parsed = parseNodeVersion(version);
+  if (!parsed) return false;
+
+  const [major] = parsed;
+  return (
+    (major === 22 && isAtLeast(parsed, [22, 22, 2])) ||
+    (major === 24 && isAtLeast(parsed, [24, 15, 0])) ||
+    major >= 26
+  );
+}
 
 function check(
   id: string,
@@ -120,15 +153,14 @@ function failFromError(
 }
 
 function checkNode(version: string): DoctorCheck {
-  const major = Number.parseInt(version.split('.')[0] ?? '', 10);
-  if (Number.isFinite(major) && major >= MIN_NODE_MAJOR) {
+  if (isSupportedNodeVersion(version)) {
     return pass('node', 'Node.js', `Node ${version}`);
   }
   return fail(
     'node',
     'Node.js',
-    `Node ${version || 'unknown'} is below the supported version.`,
-    `Install Node ${MIN_NODE_MAJOR} or newer.`,
+    `Node ${version || 'unknown'} is outside the supported range.`,
+    `Install Node ${SUPPORTED_NODE_RANGE}.`,
   );
 }
 
