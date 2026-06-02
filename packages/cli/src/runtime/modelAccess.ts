@@ -144,13 +144,8 @@ function findModelAccess(
   return models.find((entry) => entry.model.value.toLowerCase() === lower);
 }
 
-function availableModelIds(
-  models: readonly CliModelAccess[],
-  apiMode?: CliApiMode,
-): string[] {
-  return runnableCliModelAccessEntries(models, apiMode).map(
-    (entry) => entry.model.value,
-  );
+function modelIds(models: readonly CliModelAccess[]): string[] {
+  return models.map((entry) => entry.model.value);
 }
 
 function withModelAccess(
@@ -204,15 +199,15 @@ export function resolveCliRunnableModelFromAccessList(
   options: CliRunnableModelOptions,
 ): CliRunnableModelResolution {
   const trimmed = model.trim();
+  const runnableEntries = runnableCliModelAccessEntries(
+    models,
+    options.apiMode,
+  );
   const entry = findModelAccess(models, trimmed);
-  if (
-    entry?.available &&
-    isCliModelOptionAllowedInMode(entry.model, options.apiMode)
-  ) {
-    return { model: entry.model.value };
-  }
+  const runnableEntry = findModelAccess(runnableEntries, trimmed);
+  if (runnableEntry) return { model: runnableEntry.model.value };
 
-  const availableIds = availableModelIds(models, options.apiMode);
+  const availableIds = modelIds(runnableEntries);
   const unavailableMessage = formatUnavailableModelMessage(
     trimmed,
     entry,
