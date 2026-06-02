@@ -14,12 +14,19 @@ import { resolveCliRunnableModel } from '@cli/runtime/modelAccess';
 
 const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
+  getCliApiMode: vi.fn(),
   resolveCliRunnableModel: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
+}));
+
+vi.mock('@cli/runtime/apiAccessMode', () => ({
+  effectiveCliApiMode: (source: { readonly apiMode?: string }) =>
+    source.apiMode ?? mocks.getCliApiMode(),
+  getCliApiMode: mocks.getCliApiMode,
 }));
 
 vi.mock('@cli/runtime/modelAccess', () => ({
@@ -52,9 +59,11 @@ const runConfig = (model: string): CliConfigValues => ({ run: { model } });
 describe('resolveCliRunModel precedence', () => {
   beforeEach(() => {
     mocks.initCliPlatform.mockReset();
+    mocks.getCliApiMode.mockReset();
     mocks.resolveCliRunnableModel.mockReset();
     mocks.writeTextStderr.mockReset();
     mocks.initCliPlatform.mockResolvedValue(undefined);
+    mocks.getCliApiMode.mockReturnValue('personal');
     resolveCliRunnableModelMock.mockImplementation(async (model) => ({
       model,
     }));
@@ -145,7 +154,7 @@ describe('resolveCliRunModel precedence', () => {
     );
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith('opus48T', {
       allowFallback: false,
-      apiMode: undefined,
+      apiMode: 'personal',
       noAvailableModelsMessage: undefined,
     });
   });
@@ -160,7 +169,7 @@ describe('resolveCliRunModel precedence', () => {
 
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith('opus48T', {
       allowFallback: false,
-      apiMode: undefined,
+      apiMode: 'personal',
       noAvailableModelsMessage: undefined,
     });
   });

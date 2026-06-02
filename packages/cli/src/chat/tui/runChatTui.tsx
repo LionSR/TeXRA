@@ -36,8 +36,8 @@ import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import { formatCliAccountLabelForDisplay } from '@cli/runtime/accountDisplay';
 import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
 import {
+  effectiveCliApiMode,
   formatCliApiMode,
-  getCliApiMode,
   parseCliApiMode,
   setCliApiMode,
   type CliApiMode,
@@ -932,6 +932,7 @@ export async function runChat(
   }
 
   await initCliPlatform({ ...context, quietLogs: true });
+  const apiMode = effectiveCliApiMode(context);
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
     agentOverride: init.agentOverride,
@@ -945,21 +946,18 @@ export async function runChat(
   // One API mode for the whole session: an explicit --api-mode/env override
   // wins, otherwise the persisted account default. Model resolution, the
   // no-models hints, and the header/status all read this same value so they can
-  // never disagree — previously resolution used `context.apiMode` (undefined on
-  // a bare launch, so ungated) while the header showed `getCliApiMode()`, which
-  // let a model resolve as if in one mode while the UI reported another.
-  const sessionApiMode = context.apiMode ?? getCliApiMode();
+  // never disagree.
   let modelResolution: Awaited<ReturnType<typeof resolveCliRunnableModel>>;
   try {
     modelResolution = await resolveCliRunnableModel(defaults.model, {
       allowFallback: !explicitModelRequested,
-      apiMode: sessionApiMode,
+      apiMode,
       noAvailableModelsMessage:
-        sessionApiMode === 'included'
+        apiMode === 'included'
           ? 'Run `texra login` for included relay access, or retry with `--api-mode personal` after configuring a provider API key.'
           : undefined,
       noAvailableModelsHint:
-        sessionApiMode === 'included'
+        apiMode === 'included'
           ? undefined
           : 'Run `texra chat --api-mode included` to try included relay access',
     });
@@ -975,6 +973,7 @@ export async function runChat(
   let activeApprovalPolicy = context.approvalPolicy;
   const currentSessionContext = (helperModel: string): CliContext => ({
     ...context,
+    apiMode: cliState.sessionMeta.get().apiMode,
     get approvalPolicy(): CliApprovalPolicy {
       return activeApprovalPolicy;
     },
@@ -1004,7 +1003,7 @@ export async function runChat(
     agent,
     model,
     cwd: context.cwd,
-    apiMode: sessionApiMode,
+    apiMode,
     canDelegate: agentSupportsDelegation(agent),
     teamName: init.teamName,
     version,
