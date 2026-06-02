@@ -229,6 +229,13 @@ export class UsageMonitor {
         usage.cacheMissInputTokens ??
         Math.max(0, usage.inputTokens - cachedInputTokens);
 
+      const usedRelay =
+        !shouldUseOpenRouter(config) &&
+        getServerSideKeyService().shouldUseServerSideKeysSync(
+          config.provider,
+          config.name,
+        );
+
       UsageLogService.log({
         model: config.fullName,
         provider,
@@ -244,14 +251,18 @@ export class UsageMonitor {
         }),
         cacheCreationInputTokens: usage.cacheCreationInputTokens ?? 0,
         reasoningTokens: usage.reasoningTokens ?? 0,
-        usedRelay:
-          !shouldUseOpenRouter(config) &&
-          getServerSideKeyService().shouldUseServerSideKeysSync(
-            config.provider,
-            config.name,
-          ),
+        usedRelay,
         streamId: this.context.streamId,
       });
+
+      // The relay enforces the monthly spend cap from the server-side usage
+      // total, which is only as fresh as the last flush (otherwise batched
+      // every ~30s / 10 entries). For relay rounds, flush now so the relay's
+      // pre-call check sees this round's cost before the next call — bounding
+      // free-tier overage to roughly one round instead of a whole session.
+      if (usedRelay) {
+        void UsageLogService.flush();
+      }
     } catch (error) {
       this.context.logger.debug(
         `Backend usage logging failed: ${toErrorMessage(error)}`,

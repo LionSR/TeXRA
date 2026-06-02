@@ -19,18 +19,21 @@
  * ============================================================================
  *
  * DATABASE REQUIREMENTS:
- * The profiles table must have:
+ * The profiles table must have (all server-managed; clients have SELECT only):
  * - tier: text (values: 'Ultra', 'Max', 'free')
  * - access_expires_at: timestamptz (null = no expiration / lifetime access)
+ * - banned_until: timestamptz, mirror of auth.users.banned_until via trigger
  *
- * To add expiration column:
- *   ALTER TABLE profiles ADD COLUMN access_expires_at timestamptz;
+ * To grant time-limited access (legitimate access window — NOT a ban):
+ *   UPDATE profiles SET access_expires_at = NOW() + INTERVAL '90 days'
+ *     WHERE user_id = '<user-id>';   -- service role only
  *
- * To expire/blacklist a user:
- *   UPDATE profiles SET access_expires_at = NOW() WHERE id = '<user-id>';
- *
- * To grant time-limited access:
- *   UPDATE profiles SET access_expires_at = NOW() + INTERVAL '90 days' WHERE id = '<user-id>';
+ * To BAN a user, use GoTrue's native ban (do NOT overload access_expires_at —
+ * a future date there GRANTS access). Admin API:
+ *   supabase.auth.admin.updateUserById(id, { ban_duration: '876000h' })
+ * or the Dashboard "Ban user" action. That sets auth.users.banned_until and
+ * revokes refresh tokens; the trigger mirrors it to profiles.banned_until,
+ * which the relay enforces below (immediate, even for a still-valid token).
  * ============================================================================
  *
  * TIER HIERARCHY (cumulative access):
@@ -340,8 +343,16 @@ async function checkSpendingLimit(
 
   if (error) {
     console.error('[RELAY] Failed to check spending:', error.message);
-    // Fail open: allow request on error but log it
-    return { allowed: true, currentSpend: 0, limit, remaining: limit };
+    // Fail closed for the free tier (the abuse-prone path): if we can't verify
+    // spend we must not hand out free relay budget. Paid tiers fail open so a
+    // transient DB error never blocks a paying user.
+    const failClosed = tier === FREE_TIER;
+    return {
+      allowed: !failClosed,
+      currentSpend: 0,
+      limit,
+      remaining: failClosed ? 0 : limit,
+    };
   }
 
   const currentSpend = Number(data) || 0;
@@ -432,15 +443,17 @@ app.get('/tier-config', async (c) => {
       if (user) {
         const { data: profile } = await supabaseClient
           .from('profiles')
-          .select('tier, access_expires_at')
+          .select('tier, access_expires_at, banned_until')
           .eq('user_id', user.id)
           .single();
 
         if (profile) {
-          const userStatus = calculateAccessStatus(
-            profile.tier,
-            profile.access_expires_at,
-          );
+          const userStatus = {
+            ...calculateAccessStatus(profile.tier, profile.access_expires_at),
+            isBanned:
+              profile.banned_until != null &&
+              new Date(profile.banned_until) > new Date(),
+          };
 
           // Include current spending if service role key is available
           let spendingStatus = null;
@@ -519,15 +532,27 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     return jsonError('Invalid or expired token', 401);
   }
 
-  // 5. Get user profile and check expiration
+  // 5. Get user profile and check ban / expiration
   const { data: profile, error: profileError } = await userClient
     .from('profiles')
-    .select('tier, access_expires_at')
+    .select('tier, access_expires_at, banned_until')
     .eq('user_id', user.id)
     .single();
 
   if (profileError || !profile) {
     return jsonError('Profile not found', 403);
+  }
+
+  // Ban: profiles.banned_until mirrors GoTrue's auth.users.banned_until. GoTrue
+  // already blocks sign-in/refresh for banned users, but a still-valid access
+  // token would otherwise keep working until it expires — enforce it here so the
+  // ban is immediate. Checked before tier/expiry so it can't be circumvented.
+  if (profile.banned_until && new Date(profile.banned_until) > new Date()) {
+    return jsonError(
+      'Your account has been suspended. Contact support if you believe this is a mistake.',
+      403,
+      { banned: true },
+    );
   }
 
   // Check if access has expired
