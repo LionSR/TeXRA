@@ -97,6 +97,7 @@ async function runWorkflowAgent(
 
   const stdinInputFile = createStdinWorkflowInputMaterializer({
     readStdinText: readCliStdinText,
+    tempDir: runContext.cwd,
   });
   try {
     const { inputFiles, contextFiles } = await expandRunInputs(
@@ -192,13 +193,14 @@ export const runWorkflowCommand = defineCliCommand({
       type: 'string',
       alias: 'i',
       required: true,
-      description: 'Input file passed to the workflow agent (repeatable)',
+      description:
+        'Input file passed to the workflow agent (repeatable; use `-` to read stdin)',
     },
     context: {
       type: 'string',
       alias: 'c',
       description:
-        'Read-only context file passed to the workflow agent (repeatable)',
+        'Read-only context file passed to the workflow agent (repeatable; use `-` to read stdin)',
     },
     output: {
       type: 'string',
