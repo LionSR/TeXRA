@@ -28,7 +28,6 @@ import {
   registerXmlCommands,
   registerYamlCommands,
   registerTextEditorCommands,
-  registerSettingsCommands,
   registerMainViewCommands,
 } from '@commands/system';
 import { registerStateRestoreCommand } from '@commands/history';
@@ -76,7 +75,6 @@ export function registerCommands(context: vscode.ExtensionContext): void {
   registerResumeAgentCommand(context);
   registerOpenFileCommands(context);
   registerMainViewCommands(context);
-  registerSettingsCommands(context);
 
   // The shared registry now owns the no-arg housekeeping (cleanOutput,
   // cleanBuild, indentTeX), auth (signIn/signOut/viewProfile), system
@@ -128,7 +126,6 @@ export {
   xmlCommands,
   yamlCommands,
   helpCommands,
-  settingsCommands,
   mainViewCommands,
   sampleProjectCommands,
 } from '@commands/system';
