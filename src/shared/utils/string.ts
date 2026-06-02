@@ -38,4 +38,5 @@ export function formatLineCount(count: number): string {
   return count === 1 ? '1 line' : `${count} lines`;
 }
 
-export { prettyBytes as formatBytes };
+export const formatBytes = (bytes: number): string =>
+  prettyBytes(bytes, { binary: true });
