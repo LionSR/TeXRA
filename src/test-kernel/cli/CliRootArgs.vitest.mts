@@ -93,6 +93,18 @@ describe('CLI root argument routing', () => {
     ).toEqual(['logout', '--output-format', 'json']);
   });
 
+  it('routes top-level version shortcuts to the version command', () => {
+    expect(normalizeRootShortcuts(['--version'])).toEqual(['version']);
+    expect(normalizeRootShortcuts(['--no-color', '-v'])).toEqual([
+      'version',
+      '--no-color',
+    ]);
+    expect(normalizeRootShortcuts(['-V', '--no-color'])).toEqual([
+      'version',
+      '--no-color',
+    ]);
+  });
+
   it('does not rewrite subcommand-scoped --logout flags', () => {
     expect(normalizeRootShortcuts(['chat', '--logout'])).toEqual([
       'chat',
@@ -1075,6 +1087,23 @@ describe('runCli usage output stream routing', () => {
     expect(stdout).toContain('texra doctor');
     expect(stdout).toContain('Learn more: https://texra.ai');
     expect(stderr).toBe('');
+  });
+
+  it('prints version output when no-op global color flags are present', async () => {
+    for (const args of [
+      ['--version', '--no-color'],
+      ['--no-color', 'version'],
+      ['version', '--no-color'],
+    ]) {
+      stdout = '';
+      stderr = '';
+
+      const result = await runCli(args);
+
+      expect(result.exitCode).toBe(0);
+      expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+      expect(stderr).toBe('');
+    }
   });
 
   it('shows EXAMPLES and a docs link for bare `help`', async () => {
