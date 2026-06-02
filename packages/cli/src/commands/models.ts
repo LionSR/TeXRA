@@ -5,7 +5,11 @@ import type { ModelOptionData } from '@shared/schemas';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
-import { getCliModelAccessList } from '../runtime/modelAccess';
+import { effectiveCliApiMode } from '../runtime/apiAccessMode';
+import {
+  getCliModelAccessList,
+  runnableCliModelAccessEntries,
+} from '../runtime/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
@@ -33,10 +37,12 @@ export function cliModelRecord(
 
 export function listableModelAccessEntries(
   models: ModelAccessList,
-  options: { readonly includeUnavailable?: boolean } = {},
+  options: {
+    readonly includeUnavailable?: boolean;
+  } = {},
 ): ModelAccessList {
   if (options.includeUnavailable === true) return models;
-  return models.filter(({ available }) => available);
+  return runnableCliModelAccessEntries(models);
 }
 
 export function formatNoListableModelsMessage(
@@ -58,13 +64,18 @@ export function formatNoListableModelsMessage(
   );
 }
 
-async function loadModelAccessList(
-  context: CliContext,
-): Promise<ModelAccessList | { error: string }> {
+async function loadModelAccessList(context: CliContext): Promise<
+  | { models: ModelAccessList; apiMode: CliContext['apiMode'] }
+  | {
+      error: string;
+    }
+> {
   try {
     return await suppressCliFetchStackLogs(async () => {
       await initCliPlatform({ ...context, quietLogs: true });
-      return getCliModelAccessList({ apiMode: context.apiMode });
+      const apiMode = effectiveCliApiMode(context);
+      const models = await getCliModelAccessList({ apiMode });
+      return { models, apiMode };
     });
   } catch (error) {
     return { error: formatCliModelListError(error) };
@@ -81,9 +92,9 @@ async function listModels(
     return CliExitCode.ModelOrNetworkError;
   }
 
-  const listedModels = listableModelAccessEntries(result, options);
+  const listedModels = listableModelAccessEntries(result.models, options);
   if (context.outputFormat === 'text' && listedModels.length === 0) {
-    writeTextStderr(formatNoListableModelsMessage(context.apiMode, options));
+    writeTextStderr(formatNoListableModelsMessage(result.apiMode, options));
   }
   emitCliResult(
     context,
@@ -137,7 +148,7 @@ async function showModel(context: CliContext, id: string): Promise<number> {
     return CliExitCode.ModelOrNetworkError;
   }
 
-  const entry = findModelById(result, id);
+  const entry = findModelById(result.models, id);
   if (!entry) {
     writeTextStderr(`Model not found: ${id}`);
     return CliExitCode.Usage;

@@ -55,6 +55,7 @@ type CliPlatformInitOptions = Pick<
   CliContext,
   'apiMode' | 'cwd' | 'resourcesPath' | 'helperModel'
 > & {
+  readonly bestEffortIncludedModelAccess?: boolean;
   readonly installSignalHandlers?: boolean;
   readonly storageRoot?: string;
 };
@@ -116,8 +117,8 @@ export async function setCliHelperModel(
 
 /**
  * Init for commands that act on local state only (no model invocation):
- * inspect paths (history/agents/memory/multi-agent list+show, orchestrate)
- * plus local-destructive paths (history delete). Quiet logs and skip the
+ * inspect paths (history/agents/memory/multi-agent list+show) plus
+ * local-destructive paths (history delete). Quiet logs and skip the
  * included-model-access probe, since no model is run.
  *
  * Not actually read-only — the name describes the boundary (local-only,
@@ -202,9 +203,19 @@ export async function initCliPlatform(
 
   const forcePersonalApiKeys =
     context.skipIncludedModelAccess === true || context.apiMode === 'personal';
-  const authed = forcePersonalApiKeys
-    ? false
-    : await getCliAuthProvider().isAuthenticated();
+  let authed = false;
+  if (!forcePersonalApiKeys) {
+    try {
+      authed = await getCliAuthProvider().isAuthenticated();
+    } catch (error) {
+      if (context.bestEffortIncludedModelAccess !== true) throw error;
+      logAt(
+        'warn',
+        'cli.auth',
+        `Included model access probe failed: ${toErrorMessage(error)}`,
+      );
+    }
+  }
   await getServerSideKeyService().setUseIncludedModelAccess(authed);
   await setCliHelperModel(context.helperModel);
 

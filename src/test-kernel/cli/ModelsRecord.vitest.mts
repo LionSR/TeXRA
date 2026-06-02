@@ -83,7 +83,17 @@ describe('CLI model list filtering', () => {
   it('lists only currently runnable models by default', () => {
     const entries = [
       access('sonnet46T'),
-      access('opus48T', { available: false, status: 'not included' }),
+      access('opus48T', {
+        available: false,
+        status: 'not included',
+        model: model({
+          value: 'opus48T',
+          label: 'opus48T',
+          availability: 'not-included',
+          availabilityLabel: 'Not included',
+          disabled: true,
+        }),
+      }),
       access('deepseekT'),
     ];
 
@@ -92,10 +102,69 @@ describe('CLI model list filtering', () => {
     ).toEqual(['sonnet46T', 'deepseekT']);
   });
 
+  it('lists only models marked runnable by the loaded access list', () => {
+    const includedModeEntries = [
+      access('sonnet46T', {
+        model: model({ value: 'sonnet46T', availability: 'included-access' }),
+      }),
+      access('deepseekT', {
+        available: false,
+        model: model({ value: 'deepseekT', availability: 'provider-key' }),
+      }),
+      access('openrouterOnlyT', {
+        available: false,
+        model: model({
+          value: 'openrouterOnlyT',
+          availability: 'openrouter-key',
+        }),
+      }),
+    ];
+
+    expect(
+      listableModelAccessEntries(includedModeEntries).map(
+        (entry) => entry.model.value,
+      ),
+    ).toEqual(['sonnet46T']);
+  });
+
+  it('does not recompute availability from model metadata', () => {
+    const personalModeEntries = [
+      access('sonnet46T', {
+        available: false,
+        model: model({ value: 'sonnet46T', availability: 'included-access' }),
+      }),
+      access('deepseekT', {
+        model: model({ value: 'deepseekT', availability: 'provider-key' }),
+      }),
+      access('openrouterOnlyT', {
+        model: model({
+          value: 'openrouterOnlyT',
+          availability: 'openrouter-key',
+        }),
+      }),
+    ];
+
+    expect(
+      listableModelAccessEntries(personalModeEntries).map(
+        (entry) => entry.model.value,
+      ),
+    ).toEqual(['deepseekT', 'openrouterOnlyT']);
+  });
+
   it('keeps unavailable models for the explicit diagnostic view', () => {
     const entries = [
       access('sonnet46T'),
-      access('opus48T', { available: false, status: 'not included' }),
+      access('opus48T', {
+        available: false,
+        status: 'not included',
+        model: model({
+          value: 'opus48T',
+          label: 'opus48T',
+          availability: 'not-included',
+          availabilityLabel: 'Not included',
+          disabled: true,
+        }),
+      }),
     ];
 
     expect(

@@ -3,7 +3,7 @@
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@shared/schemas';
 
-import { patchStream } from './cliState';
+import { patchStream, updateChildStreamStatus } from './cliState';
 import { syncStreamLog } from './subscribeStreamLog';
 import {
   finalizeAssistantTranscriptEntries,
@@ -28,6 +28,7 @@ export function subscribeStreamStatus(): () => void {
           : undefined;
       return { ...slice, status: change.status, runStartedAt };
     });
+    updateChildStreamStatus(change.streamId, change.status);
     syncStreamLog(change.streamId);
     if (isFinalTranscriptStatus(change.status)) {
       finalizeAssistantTranscriptEntries(change.streamId);
