@@ -7,31 +7,24 @@
  */
 
 import {
-  authorOf,
+  formatCommentEvent,
   issueRef,
+  makeTruncator,
   sections,
-  truncate as truncateBody,
   wrapWebhookEvent as wrap,
 } from './formatUtils';
 import type { GhIssue, GhIssueComment } from './prTypes';
 
 const MAX_BODY = 500;
 
-const truncate = (s: string | null | undefined): string =>
-  truncateBody(s, MAX_BODY);
+const truncate = makeTruncator(MAX_BODY);
 
 export function formatIssueComment(
   slug: string,
   issueNumber: number,
   c: GhIssueComment,
 ): string {
-  return wrap(
-    sections(
-      `New comment on ${issueRef(slug, issueNumber)} by ${authorOf(c.user)}:`,
-      truncate(c.body),
-      c.html_url,
-    ),
-  );
+  return formatCommentEvent(issueRef(slug, issueNumber), c, MAX_BODY);
 }
 
 export function formatIssueClosed(

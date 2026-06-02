@@ -1,5 +1,5 @@
 // Local file imports
-import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
+import { ReasoningModelHandlerOpenAI } from './reasoningModelHandlerOpenAI';
 
 /**
  * Handler for GLM (Zhipu AI / Z.AI) models using OpenAI-compatible API.
@@ -17,9 +17,7 @@ import { ModelHandlerOpenAI } from './modelHandlerOpenAI';
  * @see https://docs.z.ai/guides/capabilities/thinking
  * @see https://open.bigmodel.cn/dev/api
  */
-export class ModelHandlerGLM extends ModelHandlerOpenAI {
-  protected override useReasoningStreamAggregator = true;
-
+export class ModelHandlerGLM extends ReasoningModelHandlerOpenAI {
   /**
    * GLM models require explicit `thinking` parameter to control reasoning.
    * Thinking models (e.g. GLM-4.5) need it enabled; non-thinking variants
@@ -29,14 +27,6 @@ export class ModelHandlerGLM extends ModelHandlerOpenAI {
     return this.capabilities.supportsReasoning
       ? { type: 'enabled' }
       : { type: 'disabled' };
-  }
-
-  /**
-   * GLM thinking models require reasoning_content in tool-use follow-up messages
-   * to maintain reasoning chain coherence across tool calls.
-   */
-  protected override shouldIncludeReasoningInToolCalls(): boolean {
-    return this.capabilities.supportsReasoning;
   }
 
   // GLM stringifies content for non-vision models; vision models (GLM-4.5v,
