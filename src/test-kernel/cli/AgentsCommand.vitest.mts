@@ -65,6 +65,16 @@ describe('CLI agents command', () => {
     mocks.getWorkflowAgents.mockReturnValue([]);
   });
 
+  it('parses agent category filter spellings', async () => {
+    const { parseAgentCategoryFilter } = await import('@cli/commands/agents');
+
+    expect(parseAgentCategoryFilter('workflow')).toBe(AgentCategory.Workflow);
+    expect(parseAgentCategoryFilter('toolUse')).toBe(AgentCategory.ToolUse);
+    expect(parseAgentCategoryFilter('tool-use')).toBe(AgentCategory.ToolUse);
+    expect(parseAgentCategoryFilter('work-flow')).toBeUndefined();
+    expect(parseAgentCategoryFilter('unknown')).toBeUndefined();
+  });
+
   it('lists visible agents by default and reports hidden agents in text mode', async () => {
     const visibleAgent = {
       name: 'lean',
@@ -95,6 +105,56 @@ describe('CLI agents command', () => {
       {
         json: [visibleAgent],
         ndjson: [{ kind: 'agent', agent: visibleAgent }],
+        text: 'toolUse\tlean\tLean 4 proof assistant.',
+      },
+      { paged: true },
+    );
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'Showing visible agents only; 1 hidden agent omitted. Use `texra agents list --all` to show the full catalog.',
+    );
+  });
+
+  it('filters agents by category and reports hidden agents in that category', async () => {
+    const visibleToolUseAgent = {
+      name: 'lean',
+      source: 'builtInToolUse',
+      path: '/tmp/resources/tool_use_agents/lean.yaml',
+      category: AgentCategory.ToolUse,
+      description: 'Lean 4 proof assistant.',
+    };
+    const hiddenToolUseAgent = {
+      name: 'chat',
+      source: 'builtInToolUse',
+      path: '/tmp/resources/tool_use_agents/chat.yaml',
+      category: AgentCategory.ToolUse,
+      description: 'Interactive assistant.',
+    };
+    mocks.getVisibleAgents.mockImplementation((category: AgentCategory) => {
+      if (category !== AgentCategory.ToolUse) {
+        throw new Error('workflow agents should not be loaded');
+      }
+      return [visibleToolUseAgent];
+    });
+    mocks.getWorkflowAgents.mockImplementation(() => {
+      throw new Error('workflow agents should not be loaded');
+    });
+    mocks.getToolUseAgents.mockReturnValue([
+      visibleToolUseAgent,
+      hiddenToolUseAgent,
+    ]);
+    const { listAgents } = await import('@cli/commands/agents');
+
+    const exitCode = await listAgents(cliContext(), {
+      category: AgentCategory.ToolUse,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.getWorkflowAgents).not.toHaveBeenCalled();
+    expect(mocks.emitCliResult).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        json: [visibleToolUseAgent],
+        ndjson: [{ kind: 'agent', agent: visibleToolUseAgent }],
         text: 'toolUse\tlean\tLean 4 proof assistant.',
       },
       { paged: true },
