@@ -40,6 +40,7 @@ import { modelsCommand } from './models';
 import { multiAgentCommand } from './multiAgent';
 import { orchestrationCommand } from './orchestrate';
 import { resumeCommand } from './resume';
+import { setupCommand } from './setup';
 import { skillsCommand } from './skills';
 import { toolsCommand } from './tools';
 import { versionCommand } from './version';
@@ -72,6 +73,7 @@ export const rootCommand = withUsageSections(
       chat: chatCommand,
       run: runWorkflowCommand,
       resume: resumeCommand,
+      setup: setupCommand,
       init: initCommand,
       history: historyCommand,
       memory: memoryCommand,
