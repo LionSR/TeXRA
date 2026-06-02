@@ -359,7 +359,7 @@ const SCENARIOS = [
       'always on ·',
       'enabled · detected · available',
     ],
-    unexpect: ['[TeXRA]', 'toolUtils', 'enabled -'],
+    unexpect: ['[TeXRA]', 'toolUtils', 'enabled -', 'TeXRA CLI'],
     maxBlankLinesBetween: [
       { from: 'entry-4 chat history line', to: '/tools', max: 8 },
     ],
@@ -447,12 +447,12 @@ const SCENARIOS = [
     expect: [
       '/tools',
       'Toggle available external integrations',
-      '+1 earlier, +6 more',
+      '+1 earlier, +5 more',
       '↑/↓ navigate',
       '1-9/a-z/Enter toggle',
       'Esc close',
     ],
-    unexpect: ['[TeXRA]', 'toolUtils', 'enabled -'],
+    unexpect: ['[TeXRA]', 'toolUtils', 'enabled -', 'TeXRA CLI'],
     maxBlankLinesBetween: [
       { from: 'entry-4 chat history line', to: '/tools', max: 2 },
     ],
