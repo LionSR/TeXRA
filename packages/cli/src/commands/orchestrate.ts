@@ -13,6 +13,11 @@ import {
   withCliMultiAgentPresetVisibility,
 } from '../runtime/multiAgentPresets';
 import { buildCliOrchestrationItems } from '../runtime/orchestration';
+import {
+  getCliModelAccessList,
+  type CliModelAccess,
+} from '../runtime/modelAccess';
+import { getCliApiMode } from '../runtime/apiAccessMode';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 
 import { contextFromArgs } from './_helpers/context';
@@ -52,15 +57,23 @@ async function runOrchestration(context: CliContext): Promise<number> {
     history,
     toolUseAgents: getVisibleAgents(AgentCategory.ToolUse),
   });
+  // Load the model registry up front so the launcher can offer a model pick
+  // after an agent/team choice. Best-effort: an unavailable registry just
+  // launches with the default model instead of blocking the launcher.
+  const apiMode = context.apiMode ?? getCliApiMode();
+  const models: readonly CliModelAccess[] = await getCliModelAccessList({
+    apiMode,
+  }).catch(() => []);
   const { runOrchestrationTui } =
     await import('../orchestration/runOrchestrationTui');
-  const action = await runOrchestrationTui(items);
+  const action = await runOrchestrationTui(items, { models, apiMode });
 
   switch (action.kind) {
     case 'chat': {
       const { runChat } = await import('../chat/tui/runChatTui');
       const result = await runChat(context, {
         agentOverride: action.agent,
+        modelOverride: action.model,
       });
       return result.exitCode;
     }
@@ -81,6 +94,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
         runChat(context, {
           agentOverride: plan.rootAgent?.name,
           teamName: action.presetName,
+          modelOverride: action.model,
         }),
       );
       return result.exitCode;

@@ -18,6 +18,9 @@ export interface TranscriptViewerProps {
   readonly width: number;
   readonly availableRows: number;
   readonly onClose: () => void;
+  /** Optional header label naming the stream being viewed (e.g. the subagent
+   *  label) so a scoped viewer makes clear whose transcript this is. */
+  readonly title?: string;
 }
 
 interface ScrollState {
@@ -30,6 +33,7 @@ export function TranscriptViewer({
   width,
   availableRows,
   onClose,
+  title,
 }: TranscriptViewerProps): React.JSX.Element {
   const lines = useMemo(
     () => transcriptToLines(slice, Math.max(1, width)),
@@ -39,8 +43,10 @@ export function TranscriptViewer({
     // O(N) re-flatten on status-only ticks during streaming.
     [slice?.entries, width],
   );
-  // Reserve one row for the footer hint strip.
-  const viewRows = Math.max(1, availableRows - 1);
+  // Reserve one row for the footer hint strip, plus one for the title header
+  // when present, so the scrollable region never overflows availableRows.
+  const titleRows = title ? 1 : 0;
+  const viewRows = Math.max(1, availableRows - 1 - titleRows);
   const maxOffset = Math.max(0, lines.length - viewRows);
   // Open pinned to the bottom — the latest output is what the user just asked
   // to inspect.
@@ -88,6 +94,11 @@ export function TranscriptViewer({
 
   return (
     <Box flexDirection="column" width={width}>
+      {title ? (
+        <Text bold color="cyan" wrap="truncate-end">
+          {title}
+        </Text>
+      ) : null}
       <Box flexDirection="column" overflowY="hidden">
         {lines.length === 0 ? (
           <Text dimColor>(no transcript yet)</Text>

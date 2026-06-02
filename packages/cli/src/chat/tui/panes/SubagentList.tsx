@@ -135,6 +135,19 @@ export function compactRows(params: {
   };
 }
 
+/**
+ * Natural (uncapped) compact-row count for a slice's children: one row per
+ * visible subagent and active process. Drives the bottom-panel reservation in
+ * App so the panel takes only the height it needs.
+ */
+export function subagentPanelRowCount(slice: {
+  readonly activeSubagents: readonly ActiveChildInfo[];
+  readonly childStreams: readonly ActiveChildInfo[];
+  readonly activeProcesses: readonly ActiveChildInfo[];
+}): number {
+  return visibleSubagentRows(slice).length + slice.activeProcesses.length;
+}
+
 export interface SubagentListProps {
   readonly maxRows?: number;
 }

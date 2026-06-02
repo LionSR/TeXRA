@@ -24,9 +24,7 @@ import {
   appFocusShortcutsActive,
   approvalForegroundMaxRows,
   childControlForegroundMaxRows,
-  foregroundSurfaceContainerHeight,
   foregroundSurfaceKind,
-  foregroundSurfaceJustifyContent,
   shouldShowTipRow,
   shouldShowTodosPlanPanel,
   staticTranscriptRowBudget,
@@ -362,34 +360,6 @@ describe('CLI TUI row allocation', () => {
     ).toBe(18);
   });
 
-  it('top-aligns forms and approvals without moving transcript viewer', () => {
-    expect(foregroundSurfaceJustifyContent('form')).toBe('flex-start');
-    expect(foregroundSurfaceJustifyContent('approval')).toBe('flex-start');
-    expect(foregroundSurfaceJustifyContent('childControls')).toBe('flex-end');
-    expect(foregroundSurfaceJustifyContent('transcript')).toBe('flex-end');
-  });
-
-  it('lets child-control foregrounds shrink to their rendered height', () => {
-    expect(
-      foregroundSurfaceContainerHeight({
-        kind: 'childControls',
-        rows: 12,
-      }),
-    ).toBeUndefined();
-    expect(
-      foregroundSurfaceContainerHeight({
-        kind: 'childControls',
-        rows: 2,
-      }),
-    ).toBe(2);
-    expect(
-      foregroundSurfaceContainerHeight({
-        kind: 'approval',
-        rows: 12,
-      }),
-    ).toBe(12);
-  });
-
   it('uses the whole middle region for the transcript without foreground UI', () => {
     const layout = allocateMiddleRows({
       foregroundOpen: false,
@@ -509,27 +479,49 @@ describe('CLI TUI row allocation', () => {
     expect(layout.foregroundRows).toBe(0);
   });
 
-  it('bounds side panels to the available middle row budget', () => {
+  it('sizes side panels to their content within the budget', () => {
+    // Everything fits: each panel takes exactly its content (no dead rows).
     expect(
       allocateSidePanelRows({
-        hasSubagentPanel: true,
-        hasTodosPlanPanel: true,
+        subagentContentRows: 3,
+        todosPlanContentRows: 4,
         rows: 13,
       }),
-    ).toEqual({ subagentRows: 6, todosPlanRows: 7 });
+    ).toEqual({ subagentRows: 3, todosPlanRows: 4 });
 
+    // A lone panel takes only what it needs; the rest is the conversation's.
     expect(
       allocateSidePanelRows({
-        hasSubagentPanel: false,
-        hasTodosPlanPanel: true,
+        subagentContentRows: 0,
+        todosPlanContentRows: 4,
+        rows: 13,
+      }),
+    ).toEqual({ subagentRows: 0, todosPlanRows: 4 });
+
+    // Over budget, a lone panel is capped at the available rows.
+    expect(
+      allocateSidePanelRows({
+        subagentContentRows: 0,
+        todosPlanContentRows: 20,
         rows: 13,
       }),
     ).toEqual({ subagentRows: 0, todosPlanRows: 13 });
 
+    // Over budget with both present: keep at least one row each, split the
+    // remainder proportionally to need.
     expect(
       allocateSidePanelRows({
-        hasSubagentPanel: true,
-        hasTodosPlanPanel: true,
+        subagentContentRows: 10,
+        todosPlanContentRows: 10,
+        rows: 13,
+      }),
+    ).toEqual({ subagentRows: 7, todosPlanRows: 6 });
+
+    // A single row with both present goes to the todos/plan panel.
+    expect(
+      allocateSidePanelRows({
+        subagentContentRows: 5,
+        todosPlanContentRows: 5,
         rows: 1,
       }),
     ).toEqual({ subagentRows: 0, todosPlanRows: 1 });
@@ -906,12 +898,14 @@ describe('CLI TUI row allocation', () => {
     ).toBe('clean-exit');
 
     expect(
+      // Idle/WAITING (interruptible, not stoppable): exit WITHOUT interrupting
+      // so the suspended tool-use flow record survives for `texra --resume`.
       chatTuiSigintAction({
         exitArmed: false,
         canStopActiveRun: false,
         canInterruptActiveRun: true,
       }),
-    ).toBe('interrupt-and-exit');
+    ).toBe('force-exit');
 
     expect(
       chatTuiSigintAction({
@@ -1045,20 +1039,6 @@ describe('CLI TUI row allocation', () => {
     cliState.activeStreamId.set(child1);
     expect(chatTuiActiveChildFollowUpTarget()).toBeUndefined();
     expect(chatTuiRejectedChildFollowUpTarget()).toBe(child1);
-  });
-
-  it('announces queued follow-ups only when the target is not waiting', () => {
-    expect(chatTuiShouldAnnounceQueuedFollowUp(undefined)).toBe(true);
-
-    patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
-    expect(chatTuiShouldAnnounceQueuedFollowUp(root)).toBe(false);
-
-    patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
-    expect(chatTuiShouldAnnounceQueuedFollowUp(root)).toBe(true);
-
-    patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
-    setParentStream(child1, root);
-    expect(chatTuiShouldAnnounceQueuedFollowUp(child1)).toBe(false);
   });
 
   it('clears stale resume ids when clearing chat session run state', () => {
