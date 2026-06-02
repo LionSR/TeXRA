@@ -164,6 +164,18 @@ export function compactTodosPlanRows({
   };
 }
 
+/**
+ * Natural (uncapped) compact-row count for a slice's todos + plan: one row per
+ * todo, plus the plan summary and one row per plan step. Drives the bottom-panel
+ * reservation in App so the panel takes only the height it needs.
+ */
+export function todosPlanPanelRowCount(
+  todos: readonly TodoItem[],
+  plan: Plan | null,
+): number {
+  return todos.length + (plan ? 1 + plan.steps.length : 0);
+}
+
 function CompactRow({ row }: { row: CompactTodosPlanRow }): React.JSX.Element {
   switch (row.kind) {
     case 'todo':

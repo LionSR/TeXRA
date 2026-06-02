@@ -28,9 +28,9 @@ import {
   StreamTabsStrip,
   streamTabsDisplayItems,
 } from './panes/StreamTabsStrip';
-import { SubagentList } from './panes/SubagentList';
+import { SubagentList, subagentPanelRowCount } from './panes/SubagentList';
 import { TipRow } from './panes/TipRow';
-import { TodosPlanPanel } from './panes/TodosPlanPanel';
+import { TodosPlanPanel, todosPlanPanelRowCount } from './panes/TodosPlanPanel';
 import { currentApproval, type PendingApproval } from './state/approvalQueue';
 import {
   isKittyKeypadEnter,
@@ -176,39 +176,41 @@ export function allocateMiddleRows({
 }
 
 export function allocateSidePanelRows({
-  hasSubagentPanel,
-  hasTodosPlanPanel,
+  subagentContentRows,
+  todosPlanContentRows,
   rows,
 }: {
-  readonly hasSubagentPanel: boolean;
-  readonly hasTodosPlanPanel: boolean;
+  readonly subagentContentRows: number;
+  readonly todosPlanContentRows: number;
   readonly rows: number;
 }): {
   readonly subagentRows: number;
   readonly todosPlanRows: number;
 } {
-  const availableRows = Math.max(0, rows);
-  if (!hasSubagentPanel && !hasTodosPlanPanel) {
+  const available = Math.max(0, rows);
+  const subagentNeed = Math.max(0, subagentContentRows);
+  const todosNeed = Math.max(0, todosPlanContentRows);
+  if (available === 0 || subagentNeed + todosNeed === 0) {
     return { subagentRows: 0, todosPlanRows: 0 };
   }
-  if (!hasTodosPlanPanel) {
-    return { subagentRows: availableRows, todosPlanRows: 0 };
+  // Everything fits: each panel gets exactly what its content needs.
+  if (subagentNeed + todosNeed <= available) {
+    return { subagentRows: subagentNeed, todosPlanRows: todosNeed };
   }
-  if (!hasSubagentPanel) {
-    return { subagentRows: 0, todosPlanRows: availableRows };
-  }
-  if (availableRows === 0) {
-    return { subagentRows: 0, todosPlanRows: 0 };
-  }
-  if (availableRows === 1) {
-    return { subagentRows: 0, todosPlanRows: 1 };
-  }
-
-  const subagentRows = Math.max(1, Math.floor(availableRows / 2));
-  return {
-    subagentRows,
-    todosPlanRows: availableRows - subagentRows,
-  };
+  // Over budget: a panel with no content gets nothing, a lone panel takes all.
+  if (subagentNeed === 0) return { subagentRows: 0, todosPlanRows: available };
+  if (todosNeed === 0) return { subagentRows: available, todosPlanRows: 0 };
+  // Both present and over budget: keep at least one row each, split the rest
+  // proportionally to need. At a single row the todo/plan panel wins.
+  if (available === 1) return { subagentRows: 0, todosPlanRows: 1 };
+  const subagentRows = Math.min(
+    available - 1,
+    Math.max(
+      1,
+      Math.round((subagentNeed / (subagentNeed + todosNeed)) * available),
+    ),
+  );
+  return { subagentRows, todosPlanRows: available - subagentRows };
 }
 
 export function staticTranscriptRowBudget({
@@ -332,22 +334,6 @@ export function childControlForegroundMaxRows({
     : EMPTY_CHILD_CONTROL_FOREGROUND_MAX_ROWS;
 }
 
-export function foregroundSurfaceJustifyContent(
-  kind: ForegroundSurfaceKind | undefined,
-): 'flex-start' | 'flex-end' {
-  return kind === 'form' || kind === 'approval' ? 'flex-start' : 'flex-end';
-}
-
-export function foregroundSurfaceContainerHeight({
-  kind,
-  rows,
-}: {
-  readonly kind: ForegroundSurfaceKind | undefined;
-  readonly rows: number;
-}): number | undefined {
-  return kind === 'childControls' && rows >= 3 ? undefined : rows;
-}
-
 export function approvalForegroundMaxRows(
   pending: PendingApproval | undefined,
 ): number | undefined {
@@ -389,7 +375,8 @@ export function App(props: AppProps): React.JSX.Element {
   const activeForm = useSignal(cliState.activeForm);
   const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
   const reverseSearchOpen = useSignal(cliState.reverseSearchOpen);
-  const transcriptViewerOpen = useSignal(cliState.transcriptViewerOpen);
+  const transcriptViewerStreamId = useSignal(cliState.transcriptViewerStreamId);
+  const transcriptViewerOpen = transcriptViewerStreamId !== undefined;
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
   const [childControlMode, setChildControlMode] = useState<
@@ -526,30 +513,49 @@ export function App(props: AppProps): React.JSX.Element {
     staticTranscriptRows: staticTranscriptRows ?? 0,
     tipVisible: tipRowVisible,
   });
-  // The subagent/todos panels live at the bottom of the same vertical
-  // column. Carve a bounded slice off the transcript area so the
-  // conversation keeps most of the height and the input stays pinned.
-  const bottomPanelBudget =
-    hasSubagentPanel || hasTodosPlanPanel
-      ? Math.min(BOTTOM_PANEL_MAX_ROWS, Math.floor(transcriptRows / 2))
+  // The subagent/todos panels live at the bottom of the same vertical column.
+  // Reserve only as many rows as the panels actually need — capped so they
+  // never take more than half the transcript or push the input off-screen —
+  // and let the conversation reclaim whatever the panels don't use. A fixed
+  // reservation would leave a dead gap above the input whenever the lists are
+  // shorter than the cap.
+  const subagentContentRows =
+    hasSubagentPanel && activeSlice ? subagentPanelRowCount(activeSlice) : 0;
+  const todosPlanContentRows =
+    hasTodosPlanPanel && activeSlice
+      ? todosPlanPanelRowCount(activeSlice.todos, activeSlice.plan)
       : 0;
+  const bottomPanelBudget = Math.min(
+    BOTTOM_PANEL_MAX_ROWS,
+    subagentContentRows + todosPlanContentRows,
+    Math.floor(transcriptRows / 2),
+  );
   const conversationRows = transcriptRows - bottomPanelBudget;
   const { subagentRows, todosPlanRows } = allocateSidePanelRows({
-    hasSubagentPanel,
-    hasTodosPlanPanel,
+    subagentContentRows,
+    todosPlanContentRows,
     rows: bottomPanelBudget,
   });
   function renderForegroundSurface(): React.ReactNode {
     switch (foregroundKind) {
-      case 'transcript':
+      case 'transcript': {
+        // foregroundKind is 'transcript' only while transcriptViewerOpen, so
+        // transcriptViewerStreamId is set here — guard once to narrow it.
+        if (!transcriptViewerStreamId) return null;
         return (
           <TranscriptViewer
             availableRows={foregroundRows}
-            onClose={() => cliState.transcriptViewerOpen.set(false)}
-            slice={activeSlice}
+            onClose={() => cliState.transcriptViewerStreamId.set(undefined)}
+            slice={streams.get(transcriptViewerStreamId)}
+            title={streamScopeDisplayLabel({
+              parentStream,
+              streamId: transcriptViewerStreamId,
+              streams,
+            })}
             width={transcriptWidth}
           />
         );
+      }
       case 'childControls': {
         if (!childControlMode) return null;
         const target = childControlTarget;
@@ -583,6 +589,9 @@ export function App(props: AppProps): React.JSX.Element {
             mode={childControlMode}
             onClose={() => setChildControlMode(undefined)}
             onFocusStream={(streamId) => cliState.activeStreamId.set(streamId)}
+            onViewStream={(streamId) =>
+              cliState.transcriptViewerStreamId.set(streamId)
+            }
             onKillExecution={props.onKillExecution}
             slice={target.slice}
             streamScopeDetail={streamScopeDetail}
@@ -604,10 +613,6 @@ export function App(props: AppProps): React.JSX.Element {
     }
   }
   const foregroundSurface = renderForegroundSurface();
-  const foregroundContainerHeight = foregroundSurfaceContainerHeight({
-    kind: foregroundKind,
-    rows: foregroundRows,
-  });
 
   const focusShortcutsActive = appFocusShortcutsActive({
     inputDisabled,
@@ -643,7 +648,7 @@ export function App(props: AppProps): React.JSX.Element {
     if (!focusShortcutsActive) return;
 
     if (key.ctrl && input.toLowerCase() === 't') {
-      if (activeSlice) cliState.transcriptViewerOpen.set(true);
+      if (activeStreamId) cliState.transcriptViewerStreamId.set(activeStreamId);
       return;
     }
 
@@ -708,11 +713,16 @@ export function App(props: AppProps): React.JSX.Element {
             />
           ) : null}
           {foregroundSurface ? (
+            // Cap the modal area at its row budget but size to the surface's
+            // actual content: every foreground surface (forms, approvals,
+            // transcript viewer, child controls) already windows itself to the
+            // `foregroundRows` budget it is handed, so a fixed height only ever
+            // leaves dead rows below a short form/approval. maxHeight keeps the
+            // budget as a safety clip without reserving it.
             <Box
               flexDirection="column"
-              height={foregroundContainerHeight}
+              maxHeight={foregroundRows}
               alignItems="flex-start"
-              justifyContent={foregroundSurfaceJustifyContent(foregroundKind)}
               overflowY="hidden"
             >
               {foregroundSurface}
