@@ -99,6 +99,7 @@ class UsageLogServiceImpl {
   }
 
   private async flushQueuedBatch(): Promise<boolean> {
+    let entries: UsageLogEntry[] = [];
     try {
       const token = await SupabaseClient.getAccessToken();
       if (!token) {
@@ -106,8 +107,9 @@ class UsageLogServiceImpl {
         return false;
       }
 
-      const entries = this.queue;
+      entries = this.queue;
       this.queue = [];
+      if (entries.length === 0) return false;
 
       const batch: UsageLogBatch = {
         entries,
@@ -126,15 +128,20 @@ class UsageLogServiceImpl {
           `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
         );
       } else {
-        logger.warn(CHANNEL, `Batch rejected: ${response.error}`);
+        logger.warn(
+          CHANNEL,
+          `Batch rejected; dropped ${entries.length} queued entries: ${response.error}`,
+        );
       }
       return true;
     } catch (error) {
+      const droppedMessage =
+        entries.length > 0 ? `; dropped ${entries.length} queued entries` : '';
       logger.warn(
         CHANNEL,
-        `Failed to send usage batch: ${toErrorMessage(error)}`,
+        `Failed to send usage batch${droppedMessage}: ${toErrorMessage(error)}`,
       );
-      return true;
+      return entries.length > 0;
     }
   }
 

@@ -12,6 +12,10 @@
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS banned_until timestamptz;
 
+REVOKE UPDATE (banned_until)
+  ON public.profiles
+  FROM anon, authenticated;
+
 COMMENT ON COLUMN public.profiles.banned_until IS
   'Mirror of auth.users.banned_until (GoTrue native ban). Relay rejects while in the future. Server-managed via trigger; not client-writable.';
 

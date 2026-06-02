@@ -19,6 +19,11 @@ DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 -- Reset client-role privileges, then grant back only what the relay/client need.
 -- service_role and table owner are unaffected (REVOKE targets these two roles).
 REVOKE ALL ON public.profiles FROM anon, authenticated;
+-- Column-level UPDATE grants are independent of table-level grants. Revoke the
+-- privileged columns explicitly so old partial grants cannot survive the reset.
+REVOKE UPDATE (tier, access_expires_at, permissions)
+  ON public.profiles
+  FROM anon, authenticated;
 GRANT SELECT ON public.profiles TO authenticated;
 
 -- The "Users can view own profile" SELECT policy (auth.uid() = user_id) is
