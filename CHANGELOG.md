@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- **Full CLI command paths in help** — nested command help now shows the complete `texra ...` command in usage banners, so commands like `texra multi-agent run --help` and `texra history show --help` are directly copyable.
+
 ## [0.38.4] - 2026-06-01
 
 ### Features
