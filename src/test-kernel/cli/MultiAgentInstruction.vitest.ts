@@ -58,6 +58,11 @@ describe('formatUnavailableApprovalInstruction', () => {
 
       expect(instruction).toContain('Approval policy for this run is "never"');
       expect(instruction).toContain('will be rejected automatically');
+      expect(instruction).toContain(
+        'Valid CLI approval policies are "ask", "never", and "yolo" only.',
+      );
+      expect(instruction).toContain('--approval-policy yolo');
+      expect(instruction).toContain('--approval-policy ask');
     }
   });
 
@@ -69,6 +74,11 @@ describe('formatUnavailableApprovalInstruction', () => {
 
     expect(instruction).toContain('headless run with approval policy "ask"');
     expect(instruction).toContain('approval prompts cannot be answered');
+    expect(instruction).toContain(
+      'Valid CLI approval policies are "ask", "never", and "yolo" only.',
+    );
+    expect(instruction).toContain('--approval-policy yolo');
+    expect(instruction).toContain('--approval-policy ask');
   });
 
   it('does not warn for interactive ask because prompts are available', () => {
@@ -122,6 +132,7 @@ describe('formatMultiAgentRunInstruction', () => {
     expect(instruction).toContain('Approval policy for this run is "never"');
     expect(instruction).toContain('will be rejected automatically');
     expect(instruction).toContain('Do not call approval-gated tools');
+    expect(instruction).toContain('do not invent other approval mode names');
     expect(instruction).toContain('Additional user instruction:');
   });
 
