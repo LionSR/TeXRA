@@ -69,6 +69,42 @@ function workflowTaskState(
   };
 }
 
+async function captureStreamWrites(
+  stream: NodeJS.WriteStream,
+  action: () => Promise<void>,
+): Promise<string> {
+  let output = '';
+  const originalWrite = stream.write;
+  stream.write = ((chunk: string | Uint8Array, ...args: unknown[]) => {
+    output += decodeStreamChunk(chunk, args);
+    const callback = args.find(
+      (arg): arg is (error?: Error | null) => void => typeof arg === 'function',
+    );
+    callback?.();
+    return true;
+  }) as typeof stream.write;
+
+  try {
+    await action();
+  } finally {
+    stream.write = originalWrite;
+  }
+
+  return output;
+}
+
+function decodeStreamChunk(
+  chunk: string | Uint8Array,
+  args: unknown[],
+): string {
+  if (typeof chunk === 'string') return chunk;
+
+  const encoding = args.find(
+    (arg): arg is BufferEncoding => typeof arg === 'string',
+  );
+  return Buffer.from(chunk).toString(encoding);
+}
+
 describe('CLI run progress renderer', () => {
   it('renders a single ANSI status line and clears it on close', () => {
     let now = 0;
@@ -492,7 +528,7 @@ describe('CLI run progress renderer', () => {
     expect(shouldRenderRunProgress(context({ quietLogs: true }))).toBe(false);
     expect(shouldRenderRunProgress(context({ mode: 'headless' }))).toBe(true);
     expect(shouldRenderRunProgress(context({ outputFormat: 'json' }))).toBe(
-      false,
+      true,
     );
     expect(shouldRenderRunProgress(context({ outputFormat: 'ndjson' }))).toBe(
       false,
@@ -501,51 +537,39 @@ describe('CLI run progress renderer', () => {
   });
 
   it('routes progress events even when ordinary CLI logs are quiet', async () => {
-    let output = '';
-    const originalWrite = process.stderr.write;
-    process.stderr.write = ((
-      chunk: string | Uint8Array,
-      ...args: unknown[]
-    ) => {
-      output += String(chunk);
-      const callback = args.find(
-        (arg): arg is (error?: Error | null) => void =>
-          typeof arg === 'function',
-      );
-      callback?.();
-      return true;
-    }) as typeof process.stderr.write;
-
-    try {
+    const output = await captureStreamWrites(process.stderr, async () => {
       const host = createCliRuntimeHost(
         context({ quietLogs: true, renderRunProgress: true }),
       );
       host.emit('setTaskState', workflowTaskState());
       await host.close();
-    } finally {
-      process.stderr.write = originalWrite;
-    }
+    });
 
     expect(output).toContain('polish paper.tex · 0s');
   });
 
-  it('writes subagent progress events to stdout in ndjson mode', async () => {
-    let output = '';
-    const originalWrite = process.stdout.write;
-    process.stdout.write = ((
-      chunk: string | Uint8Array,
-      ...args: unknown[]
-    ) => {
-      output += String(chunk);
-      const callback = args.find(
-        (arg): arg is (error?: Error | null) => void =>
-          typeof arg === 'function',
-      );
-      callback?.();
-      return true;
-    }) as typeof process.stdout.write;
+  it('writes human progress to stderr without polluting json stdout', async () => {
+    let stderr = '';
+    const stdout = await captureStreamWrites(process.stdout, async () => {
+      stderr = await captureStreamWrites(process.stderr, async () => {
+        const host = createCliRuntimeHost(
+          context({
+            outputFormat: 'json',
+            colorEnabled: false,
+            renderRunProgress: true,
+          }),
+        );
+        host.emit('setTaskState', workflowTaskState());
+        await host.close();
+      });
+    });
 
-    try {
+    expect(stderr).toContain('polish paper.tex · 0s');
+    expect(stdout).toBe('');
+  });
+
+  it('writes subagent progress events to stdout in ndjson mode', async () => {
+    const output = await captureStreamWrites(process.stdout, async () => {
       const host = createCliRuntimeHost(
         context({ outputFormat: 'ndjson', renderRunProgress: false }),
       );
@@ -561,9 +585,7 @@ describe('CLI run progress renderer', () => {
         ],
       });
       await host.close();
-    } finally {
-      process.stdout.write = originalWrite;
-    }
+    });
 
     const records = output
       .trim()
