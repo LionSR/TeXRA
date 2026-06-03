@@ -20,9 +20,9 @@
 // `--snapshot-dir` writes per-scenario `.txt` and `.svg` frames plus an
 // `index.html` report for quick visual review in a browser or GitHub issue.
 //
-// Deps: node-pty (PTY; optional — native) and @xterm/headless (pure JS). If
-// node-pty is unavailable (e.g. CI without build tools), the validator prints a
-// notice and exits 0 so it never breaks installs that opt out of the native dep.
+// Deps: node-pty (PTY; native) and @xterm/headless (pure JS). Missing deps fail
+// by default so validation cannot look green without exercising any frames.
+// Pass --skip-if-missing-deps only in environments that intentionally opt out.
 
 import {
   chmodSync,
@@ -1747,10 +1747,11 @@ const SCENARIOS = [
 
 function formatUsage() {
   return [
-    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [scenario ...]',
+    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [--skip-if-missing-deps] [scenario ...]',
     '',
     'Options:',
     '  --snapshot-dir DIR  Write per-scenario .txt/.svg frames and an index.html report',
+    '  --skip-if-missing-deps  Exit 0 instead of failing when PTY screenshot deps are unavailable',
     '  --list              Print available scenario names and exit',
     '  --list-selected     Print selected scenario names in run order and exit',
     '  -h, --help          Show this help',
@@ -1772,6 +1773,7 @@ function parseArgs(argv) {
   const scenarios = [];
   let snapshotDir;
   let listSelected = false;
+  let skipIfMissingDeps = false;
   let endOfOptions = false;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -1793,6 +1795,10 @@ function parseArgs(argv) {
     }
     if (!endOfOptions && arg === '--list-selected') {
       listSelected = true;
+      continue;
+    }
+    if (!endOfOptions && arg === '--skip-if-missing-deps') {
+      skipIfMissingDeps = true;
       continue;
     }
     if (!endOfOptions && arg === '--snapshot-dir') {
@@ -1821,7 +1827,7 @@ function parseArgs(argv) {
     }
     scenarios.push(arg);
   }
-  return { scenarios, snapshotDir, listSelected };
+  return { scenarios, snapshotDir, listSelected, skipIfMissingDeps };
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -1885,11 +1891,11 @@ try {
   }
 } catch (err) {
   console.error(
-    '[validate-tui] skipped — install the TUI dev deps to run this validator:\n' +
+    `[validate-tui] ${args.skipIfMissingDeps ? 'skipped' : 'failed'} — install the TUI dev deps to run this validator:\n` +
       '  pnpm --filter @texra-ai/cli add -D node-pty @xterm/headless\n' +
       `  (${err instanceof Error ? err.message : String(err)})`,
   );
-  process.exit(0);
+  process.exit(args.skipIfMissingDeps ? 0 : 1);
 }
 
 // --- harness bundle ------------------------------------------------------
