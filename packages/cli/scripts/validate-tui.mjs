@@ -1750,6 +1750,7 @@ function formatUsage() {
     'Options:',
     '  --snapshot-dir DIR  Write per-scenario .txt/.svg frames and an index.html report',
     '  --list              Print available scenario names and exit',
+    '  --list-selected     Print selected scenario names in run order and exit',
     '  -h, --help          Show this help',
     '',
     'Available scenarios:',
@@ -1768,6 +1769,7 @@ function printScenarioList() {
 function parseArgs(argv) {
   const scenarios = [];
   let snapshotDir;
+  let listSelected = false;
   let endOfOptions = false;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -1786,6 +1788,10 @@ function parseArgs(argv) {
     if (!endOfOptions && arg === '--list') {
       printScenarioList();
       process.exit(0);
+    }
+    if (!endOfOptions && arg === '--list-selected') {
+      listSelected = true;
+      continue;
     }
     if (!endOfOptions && arg === '--snapshot-dir') {
       const value = argv[index + 1];
@@ -1813,14 +1819,16 @@ function parseArgs(argv) {
     }
     scenarios.push(arg);
   }
-  return { scenarios, snapshotDir };
+  return { scenarios, snapshotDir, listSelected };
 }
 
 const args = parseArgs(process.argv.slice(2));
 const only = args.scenarios;
-const scenarioNames = new Set(SCENARIOS.map((s) => s.name));
+const scenarioByName = new Map(
+  SCENARIOS.map((scenario) => [scenario.name, scenario]),
+);
 const unknownScenarios = [
-  ...new Set(only.filter((name) => !scenarioNames.has(name))),
+  ...new Set(only.filter((name) => !scenarioByName.has(name))),
 ];
 if (unknownScenarios.length > 0) {
   console.error(
@@ -1832,8 +1840,12 @@ if (unknownScenarios.length > 0) {
   process.exit(1);
 }
 const scenarios = only.length
-  ? SCENARIOS.filter((s) => only.includes(s.name))
+  ? only.map((name) => scenarioByName.get(name))
   : SCENARIOS;
+if (args.listSelected) {
+  console.log(scenarios.map((scenario) => scenario.name).join('\n'));
+  process.exit(0);
+}
 const snapshotDir = args.snapshotDir;
 
 function ensureNodePtySpawnHelperExecutable() {
