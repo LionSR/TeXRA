@@ -15,6 +15,7 @@ import {
   type CliApprovalPolicy,
   type CliOutputFormat,
 } from '../schemas/cliSettings';
+import { BUILTIN_DEFAULT_CHAT_AGENT } from '../runtime/defaultAgents';
 import type { InitAnswers } from '../runtime/initConfig';
 
 export interface InitWizardAgentOption {
@@ -118,6 +119,13 @@ function firstAvailableIndex(models: readonly InitWizardModelOption[]): number {
   return index >= 0 ? index : 0;
 }
 
+function defaultAgentIndex(agents: readonly InitWizardAgentOption[]): number {
+  const index = agents.findIndex(
+    (agent) => agent.name === BUILTIN_DEFAULT_CHAT_AGENT,
+  );
+  return index >= 0 ? index : 0;
+}
+
 interface WizardAppProps {
   readonly options: InitWizardOptions;
   readonly onResolve: (result: InitWizardResult | undefined) => void;
@@ -175,6 +183,7 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
       >
         <Select
           key={step}
+          initialIndex={defaultAgentIndex(props.options.agents)}
           items={props.options.agents.map((agent) => ({
             value: agent.name,
             label: agent.name,

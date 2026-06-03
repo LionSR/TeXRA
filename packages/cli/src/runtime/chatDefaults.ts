@@ -9,10 +9,14 @@ import {
   resolveConfiguredAgent,
   resolveConfiguredModel,
 } from './cliConfig';
+import {
+  BUILTIN_DEFAULT_CHAT_AGENT,
+  normalizeDefaultToolUseAgent,
+} from './defaultAgents';
 import type { CliModelSelectionSource } from './modelAccess';
 
-export const BUILTIN_DEFAULT_CHAT_AGENT = 'chat';
 export const BUILTIN_DEFAULT_CHAT_MODEL = CLI_BUILTIN_DEFAULT_MODEL;
+export { BUILTIN_DEFAULT_CHAT_AGENT } from './defaultAgents';
 
 export interface ChatDefaults {
   readonly agent: string;
@@ -49,7 +53,10 @@ function pickDefaults(parsed: unknown): PartialDefaults {
   const record = parsed as Record<string, unknown>;
   const out: { -readonly [K in keyof PartialDefaults]: PartialDefaults[K] } =
     {};
-  if (isNonEmptyString(record.agent)) out.agent = record.agent.trim();
+  if (isNonEmptyString(record.agent)) {
+    const agent = normalizeDefaultToolUseAgent(record.agent);
+    if (agent) out.agent = agent;
+  }
   if (isNonEmptyString(record.model)) {
     const model = record.model.trim();
     if (isKnownCliModel(model)) out.model = model;
@@ -60,7 +67,9 @@ function pickDefaults(parsed: unknown): PartialDefaults {
 async function loadWorkspaceDefaults(cwd: string): Promise<PartialDefaults> {
   const loaded = await loadWorkspaceCliConfig(cwd);
   return {
-    agent: resolveConfiguredAgent(loaded.values, 'chat'),
+    agent: normalizeDefaultToolUseAgent(
+      resolveConfiguredAgent(loaded.values, 'chat'),
+    ),
     model: resolveConfiguredModel(loaded.values, 'chat'),
   };
 }
