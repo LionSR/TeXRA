@@ -31,6 +31,7 @@ import type { SubagentProgressUpdate } from '@shared/schemas';
 import { evaluateDelegationGate } from '@shared/constants/delegationPolicy';
 
 import { getDefaultToolRegistry } from '@tools/registry';
+import { TaskRunFileService } from '@utils/files';
 import { ToolUsePrepareNode } from './nodes/ToolUsePrepareNode';
 import { ToolUseCycleNode } from './nodes/ToolUseCycleNode';
 import { ToolUseWaitNode } from './nodes/ToolUseWaitNode';
@@ -126,6 +127,7 @@ export async function runToolUseFlow<C = unknown>(
     snapshot: input.resumeSnapshot ?? null,
     onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
     persistTodos: (todos) => kv.writeTodos(todos),
+    fileService: new TaskRunFileService(executionId),
     delegationDepth,
     delegationConfig,
     delegationTrimmed,

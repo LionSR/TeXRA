@@ -642,6 +642,16 @@ const SendFollowUpMessageSchema = z.object({
   command: z.literal(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP),
   stream: StreamTabIdSchema,
   text: TrimmedStringSchema,
+  /** Pasted images (base64) to attach to this follow-up turn. */
+  images: z
+    .array(
+      z.object({
+        base64: z.string(),
+        mediaType: z.string(),
+        fileName: z.string(),
+      }),
+    )
+    .optional(),
 });
 
 const PolishFollowUpMessageSchema = z.object({

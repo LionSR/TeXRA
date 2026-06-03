@@ -57,6 +57,12 @@ export type WaitExecResult =
        * continuations don't emit a spurious updateQueuedFollowUps event.
        */
       synthetic?: boolean;
+      /**
+       * Media file paths attached to this follow-up (from the user queue).
+       * Converted to FileLocation[] and attached to the new user message via
+       * `addMediaToUserMessage` in post(). Empty for synthetic continuations.
+       */
+      mediaFiles?: string[];
     }
   | { kind: 'stop' };
 

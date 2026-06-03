@@ -5,6 +5,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import type { StreamTabId } from '@shared/schemas';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
 
 // Local imports - progress view
 import {
@@ -164,13 +165,23 @@ function getActiveFollowUpText(
   return { streamId, text };
 }
 
-export function handleFollowUpSend(ctx: FrontendEventHandlerContext): void {
+export function handleFollowUpSend(
+  ctx: FrontendEventHandlerContext,
+  images: readonly ExtractedClipboardImage[] = [],
+): void {
   const result = getActiveFollowUpText(ctx);
   if (!result) return;
+
+  // Orphan gate: only attach images whose [fileName] token survives in the
+  // submitted text (the user may have deleted a pasted chip before sending).
+  const attached = images.filter((img) =>
+    result.text.includes(`[${img.fileName}]`),
+  );
 
   postMessage(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP, {
     stream: result.streamId,
     text: result.text,
+    ...(attached.length > 0 ? { images: attached } : {}),
   });
   updateToolUseState(ctx, result.streamId, (prev) =>
     create(prev, (draft) => {
