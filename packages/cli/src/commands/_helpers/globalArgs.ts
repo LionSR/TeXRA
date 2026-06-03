@@ -86,7 +86,8 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
   },
   'no-input': {
     type: 'boolean',
-    description: 'Disable all prompts (headless + deny privileged actions)',
+    description:
+      'Disable prompts and run headlessly (defaults approvals to never)',
   },
 };
 
