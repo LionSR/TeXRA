@@ -5,6 +5,7 @@ import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
 
 import {
+  formatCliHistoryInputLabel,
   listCliHistoryEntries,
   type CliHistoryEntry,
 } from '@cli/runtime/history';
@@ -33,7 +34,7 @@ export function resumeSelectWindow(args: {
 }
 
 export function resumeEntryDescription(entry: CliHistoryEntry): string {
-  const input = entry.inputBasename === '-' ? 'no input' : entry.inputBasename;
+  const input = formatCliHistoryInputLabel(entry.inputBasename);
   return `${entry.timestamp}; ${entry.agent}; ${entry.status}; ${input}`;
 }
 
