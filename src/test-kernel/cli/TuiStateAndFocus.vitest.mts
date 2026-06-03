@@ -73,6 +73,7 @@ import {
   appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
+  clearLocalTranscript,
   CLI_LOCAL_STREAM_ID,
   moveLocalTranscriptToStream,
 } from '@cli/chat/tui/state/transcript';
@@ -1619,6 +1620,20 @@ describe('CLI transcript state', () => {
         .get(root)
         ?.entries.map((entry) => entry.text),
     ).toEqual(['Available commands: /help']);
+  });
+
+  it('can discard pre-resume local slash-command output', () => {
+    appendLocalAssistantTranscript('/resume exec-1');
+
+    expect(cliState.activeStreamId.get()).toBe(CLI_LOCAL_STREAM_ID);
+    expect(
+      cliState.streams.get().get(CLI_LOCAL_STREAM_ID)?.entries,
+    ).toHaveLength(1);
+
+    clearLocalTranscript();
+
+    expect(cliState.streams.get().has(CLI_LOCAL_STREAM_ID)).toBe(false);
+    expect(cliState.activeStreamId.get()).toBeUndefined();
   });
 
   it('preserves synthetic final responses across later log syncs', () => {

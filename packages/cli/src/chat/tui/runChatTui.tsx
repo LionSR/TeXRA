@@ -61,7 +61,7 @@ import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
 } from '@cli/schemas/cliSettings';
-import { parseCliHistoryId, readCliHistoryConfig } from '@cli/runtime/history';
+import { parseCliHistoryId } from '@cli/runtime/history';
 import {
   explainNonResumable,
   resolveCliResumeSnapshot,
@@ -119,6 +119,7 @@ import {
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
   appendLocalUserTranscript,
+  clearLocalTranscript,
   finalizeAssistantTranscriptEntries,
   moveLocalTranscriptToStream,
 } from './state/transcript';
@@ -351,7 +352,7 @@ interface SlashCommandContext {
   readonly getApprovalPolicy: () => CliApprovalPolicy;
   readonly setApprovalPolicy: (policy: CliApprovalPolicy) => void;
   readonly resetSession: () => void;
-  readonly startStoredExecution: (config: AgentConfigPayload) => void;
+  readonly resumeExecution: (id: ExecutionId) => Promise<void>;
 }
 
 function agentSupportsDelegation(agentName: string): boolean {
@@ -714,25 +715,6 @@ function applyCliApprovalPolicySelection(
   );
 }
 
-async function resumeStoredExecution(
-  id: ExecutionId,
-  context: SlashCommandContext,
-): Promise<void> {
-  if (!chatTuiCanStartRootRun(context.session)) {
-    appendLocalAssistantTranscript(
-      'Finish the active chat before resuming a stored execution.',
-    );
-    return;
-  }
-  const config = await readCliHistoryConfig(id);
-  if (!config) {
-    appendLocalAssistantTranscript(`Execution not found: ${id}`);
-    return;
-  }
-  context.startStoredExecution(config);
-  appendLocalAssistantTranscript(`Resuming execution ${id}.`);
-}
-
 function openCliResumeListForm(context: SlashCommandContext): void {
   cliState.activeForm.set({
     commandName: 'resume',
@@ -741,7 +723,7 @@ function openCliResumeListForm(context: SlashCommandContext): void {
         availableRows={availableRows}
         onSelect={(id) => {
           close();
-          void resumeStoredExecution(id, context).catch((error: unknown) => {
+          void context.resumeExecution(id).catch((error: unknown) => {
             appendLocalAssistantTranscript(toErrorMessage(error));
           });
         }}
@@ -916,7 +898,7 @@ async function handleTuiSlashCommand(
         appendLocalAssistantTranscript(`Invalid execution id: ${rest}`);
         return true;
       }
-      await resumeStoredExecution(id, context);
+      await context.resumeExecution(id);
       return true;
     }
     case 'memory': {
@@ -1054,7 +1036,7 @@ export async function runChat(
   };
   // The slash-command context is identical at every call site; build it once
   // lazily so the closures it captures (interruptActive, resetSessionForClear,
-  // startAgentRun) are all defined before the first use.
+  // resumeAgentRun) are all defined before the first use.
   const slashCommandContext = (): SlashCommandContext => ({
     session,
     initialAgent: agent,
@@ -1064,7 +1046,7 @@ export async function runChat(
     getApprovalPolicy,
     setApprovalPolicy,
     resetSession: resetSessionForClear,
-    startStoredExecution: startAgentRun,
+    resumeExecution: resumeAgentRun,
   });
   await loadAgents();
   cliState.sessionMeta.set({
@@ -1264,13 +1246,20 @@ export async function runChat(
       });
   };
 
-  // Interactive `texra --resume <id>`: continue a suspended tool-use session.
+  // Interactive resume: continue a suspended tool-use session by execution id.
   // Mirrors startAgentRun's runtimeHost/approvals/runPromise lifecycle, but
   // (a) resolves a persisted snapshot instead of building a fresh config, and
   // (b) the streamId is already known (re-derived from the prior run), so we
   // set session.streamId up front and rehydrate that stream's transcript so
   // the user sees the prior conversation before the continued turn streams in.
   const resumeAgentRun = async (id: ExecutionId): Promise<void> => {
+    if (!chatTuiCanStartRootRun(session)) {
+      appendLocalAssistantTranscript(
+        'Finish the active chat before resuming a previous session.',
+      );
+      return;
+    }
+
     const resolution = await resolveCliResumeSnapshot(id);
     if (resolution.kind !== 'toolUse') {
       // Workflows / missing / already-completed sessions can't continue here —
@@ -1279,6 +1268,7 @@ export async function runChat(
       return;
     }
 
+    clearLocalTranscript();
     followUpQueue.clear();
     session.runCompleted = false;
     session.stopRequested = false;
@@ -1360,7 +1350,7 @@ export async function runChat(
     onMemoryError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));
     },
-    onResumeSelect: (id) => resumeStoredExecution(id, slashCommandContext()),
+    onResumeSelect: resumeAgentRun,
     onResumeError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));
     },
