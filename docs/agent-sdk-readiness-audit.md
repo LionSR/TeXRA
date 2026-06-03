@@ -717,3 +717,107 @@ relocate the three module-globals onto a per-run handle). **No refactor was appl
 pass** — every remaining item is either behavior-sensitive (§4, Step 7) or non-trivial
 (§2.6 is CLI machinery, not a straight move; §5 is a multi-day primitive), exactly the items
 five prior passes deliberately deferred. No rewrite warranted.
+
+---
+
+## 12. Re-verification addendum — 2026-06-03 (+ two tidies applied)
+
+A seventh pass — three parallel fresh-eyes audits (agent core/runtime, model handlers,
+logger/public-surface) plus a direct line-by-line re-check of every open item against
+`main` at HEAD `08e63af`. **All 2026-05-28 → 06-02 findings hold without change. No new
+structural over-abstraction surfaced.** The three independent audits each, on their own,
+re-reached the prior verdict: TeXRA is well-architected and SDK-aligned; the gaps are
+incremental. Unlike the prior six confirmation-only passes, this one **applied two of the
+backlog's safest, behavior-neutral items** (below) so the ledger actually moves.
+
+### Applied this pass (behavior-preserving; `npm run typecheck` + `eslint` green)
+
+- **`@platform` public surface — realized.** CLAUDE.md instructs core code to "reach host
+  services through `platform()` from `@platform`", and the alias is configured
+  (`tsconfig.json:46` → `"@platform": ["src/platform"]`), but `src/platform/` had **no
+  `index.ts`** — so the documented import was a phantom: **0 files import bare `@platform`**;
+  all **52** importers reach into `@platform/platform`. Added `src/platform/index.ts`
+  re-exporting `initPlatform`/`platform`/`tryPlatform`/`tryGlobalState`/`type Platform`. Purely
+  additive (the deep path still works; no consumer migrated) — it makes the documented single
+  import surface real, matching what `@texra/core` already re-exports.
+- **Redaction host-responsibility contract — documented (§9 finding #1).** Added a TSDoc
+  block to `logUtils.ts` stating that the logger does **not** redact at emit time by design and
+  that hosts persisting/shipping logs MUST run text through `redactSecrets` in their sink
+  (pointing at the `desktopAppLog.ts` / CLI reference wiring), and that SDK consumers wiring a
+  custom `setOutputChannelFactory` inherit the same contract. This is exactly the fix four
+  prior passes prescribed ("a documented contract, not forced redaction"). No behavior change.
+
+### Genuinely-new findings recorded for the backlog (none are blockers)
+
+- **`IModelHandler` leaks three internal provider booleans (low, surface trim).** The port
+  (`types/IModelHandler.ts`) still declares `isDeepSeek`/`isKimi`/`isMiniMax`; their **only**
+  reader is `openrouter/modelHandlerOpenRouterNative.ts` (internally, ~`:240/:250`). They are an
+  implementation detail on the public port — make them protected on the relevant classes, or
+  derive OpenRouter's check from `config.provider`. Complements §7 (the behavioral identity
+  gates are already converted; this is the residual port-shape trim). Low effort, low risk.
+- **`RunStorageService` is a one-boolean port (low).** `runtime/RunStorageService.ts` (~24 LOC)
+  is a full interface + module-global setter/getter + no-op default for a single `isViewVisible()`
+  read, with exactly one caller (`executeAgent.ts`, the `!getRunStorageService().isViewVisible()`
+  guard). Fold `isViewVisible` onto `AgentRuntimeHost` (already the per-run `emit` port threaded
+  everywhere) or pass a flag in `ExecuteAgentOptions`, and delete the file.
+- **`createChannelTrace` as a 26-site module-singleton logger (medium, judgment call).** 26
+  modules do `const logger = createChannelTrace('X'); logger.info(…)`. For a plain log line that
+  routes through the full `TraceEmitter` event/`AsyncLocalStorage`/subscriber path (~6 hops + an
+  event allocation) when the functional `logUtils.info('Channel', msg)` API reaches the same sink
+  in ~2 hops — these singletons never subscribe, stage, or stream. _Tension:_ prior passes
+  endorsed `createChannelTrace` as justified DRY; it is, for **runs**. The narrow win is migrating
+  the 26 plain-log call sites to the functional API (mechanical, but a signature change across 26
+  files). Recorded, not pursued — judgment call.
+- **`@agent/index` barrel mixes discovery API with directory-wiring internals (low–med).** The
+  barrel (`index.ts`) re-exports ~15 composition-root symbols (`AgentDirectoryService` + 7 satellite
+  interfaces, `BundledAgentDirectorySync`, `GlobalStorageAgentDirectoryStorage`,
+  `PathAgentDirectoryBundleSource` + their interfaces) consumed by only 1–2 callers, alongside the
+  read-only discover/run API. Splitting the directory-bootstrap into an internal (non-public) module
+  would roughly halve the symbols an SDK consumer sees. Surface polish, not a correctness issue.
+- **Shared persisted-flow boilerplate across the two runners (low–med, DRY).** `runReflectionFlow`
+  and `runToolUseFlow` each repeat the same ~40-line scaffold (`getExecutionStore`,
+  interrupt register/unregister, `flowKey` read + migrate, retry/plan-approval clears, the
+  `kv.delete(flowKey)` finally). A shared `runPersistedAgentFlow` helper in `flows/common/` could
+  hold it. **Not** a wrapper-to-inline (the runners carry real distinct logic) — a DRY extraction,
+  consistent with the §2.4 "extract the trivial bookkeeping, leave the orchestration" guidance.
+
+### False-positive ledger (re-confirmed this pass — do not re-flag)
+
+- **`redactSecrets` is NOT dead.** One audit re-flagged it as "possibly unwired" (it greps clean
+  from the `@logger` barrel and `writeLine` never calls it). This is the same trap §7 already
+  retracted: it is used by `packages/desktop/src/main/desktopAppLog.ts` (4 call sites) and
+  referenced by the CLI log sinks. Confirmed present at HEAD. Audits of `src/` must grep
+  `packages/**` before declaring a logger symbol unused.
+- The thin OpenAI-compatible subclasses (DashScope/XAI/GLM + the heavier Kimi/MiniMax/DeepSeek)
+  remain a **lean-keep** (§9 #2): each maps 1:1 to a `ModelProvider` arm in the exhaustive
+  `PROVIDER_HANDLERS`; the prior OpenRouter merge of this flavor was deliberately reverted.
+- The cycle-flow factories (`createResponseCycleFlow`/`createToolUseCycleFlow`) are the prescribed
+  `Node.exec()→createFlow()→run()` shape (§8); `IModelHandler` is **not** a redundant duplicate of
+  `ModelHandler` (load-bearing optional `createBatchedToolUseFollowUpMessages?`); the two run
+  entries (`runAgent`/`runAgentStream`) serve different consumer classes — all re-confirmed.
+
+### Open items still present at HEAD `08e63af` (verified)
+
+- **§2.6** — `modelHandlerValidation.ts` still in the dispatch dir, gated by
+  `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL` (`ModelFactory.ts:22`, dynamic-imported `:211`).
+- **§4** — token usage still double-emitted in `src/agent/utils/UsageMonitor.ts`
+  (`runtimeHost.emit('updateStreamUsage', …)` `:155` + `logger.usage(payload, …)` `:164`).
+- **§5 / proposal Step 7** — no `delegateTo(...)` primitive (`grep` empty); delegation remains a
+  tool call. The three module-global registries are unchanged (the gating blocker for concurrent
+  in-process sessions — relocate onto a per-run handle, never delete).
+- **§3.1** — still no `@agent/runtime/index.ts` barrel; still optional polish (the new
+  `src/platform/index.ts` above closes the analogous gap for `@platform`).
+
+**Subagent split points — unchanged and accurate** (§5 + proposal): config-driven YAML agents
+over the two flows (reflection/tool-use) + the `delegate_*` tools are the existing subagent
+mechanism; the `agentCategory` dispatch in `executeAgent` is the cleanest internal seam; the
+helper-model tasks (session-desc / polish / agent-creation) remain the lowest-risk
+tools-as-data extraction. The three fresh-eyes audits independently surfaced the same node-level
+candidates (`MediaExtractionNode`, `TeXCountNode`, `OutputNode`, the sessionDescription
+background call) as cleanly-isolatable units, each gated by the same coupling blocker: they read
+the ALS `RunContext` + module-global registries, which Step 7 must thread through context first.
+
+**Net for 2026-06-03:** thesis reaffirmed — incremental, not structural. Two backlog tidies
+applied (`@platform` surface, redaction contract); the remaining ledger is §2.6 (relocate),
+§4 (one consumer rewire), §5/Step 7 (multi-session isolation), and the five small new items
+above. No rewrite warranted.
