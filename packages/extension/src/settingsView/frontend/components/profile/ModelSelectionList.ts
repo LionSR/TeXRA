@@ -82,10 +82,6 @@ export class ModelSelectionList extends LitElement {
 
   @property({ attribute: false }) models: ModelSelectionItem[] = [];
   @property({ attribute: false }) helperModel = '';
-  @property({ attribute: false }) authenticated = false;
-  @property({ attribute: false }) apiAccessMode: 'included' | 'personal' =
-    'personal';
-  @property({ attribute: false }) allowedModels: string[] | null = [];
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
 
   @property({ type: Boolean, attribute: 'prefer-short-model-names' })
@@ -138,20 +134,6 @@ export class ModelSelectionList extends LitElement {
     this.expandedDeprecated = next;
   }
 
-  /**
-   * Check if a model is available via the relay (included access).
-   * Returns true if using personal keys, or if relay allows all models, or if model is in allowed list.
-   */
-  private isRelayAvailable(modelName: string): boolean {
-    if (!this.authenticated || this.apiAccessMode !== 'included') {
-      return true; // personal keys - no relay restriction
-    }
-    if (this.allowedModels === null) {
-      return true; // Ultra tier - all models
-    }
-    return this.allowedModels.includes(modelName);
-  }
-
   private handleHelperModelChange(e: Event): void {
     const select = e.currentTarget as WaSelect | null;
     const value = typeof select?.value === 'string' ? select.value : '';
@@ -174,10 +156,11 @@ export class ModelSelectionList extends LitElement {
   private getIncludedAccessReasoningCap(
     model: ModelSelectionItem,
   ): ReasoningLevel | null {
+    // The cap only applies when the model is actually reachable through
+    // included access; availability is resolved upstream and carried on the
+    // item, so no relay/auth re-derivation is needed here.
     if (
-      !this.authenticated ||
-      this.apiAccessMode !== 'included' ||
-      !this.isRelayAvailable(model.name) ||
+      model.availability !== 'included-access' ||
       model.reasoningLevel ||
       !model.includedAccessReasoningCap
     ) {
@@ -228,8 +211,31 @@ export class ModelSelectionList extends LitElement {
     `;
   }
 
+  private renderAvailabilityIcon(
+    model: ModelSelectionItem,
+  ): TemplateResult | typeof nothing {
+    if (!model.disabled) return nothing;
+
+    const title = model.requiresKey
+      ? `${model.availabilityLabel ?? 'Missing API key'} — configure it in API Configuration`
+      : (model.availabilityLabel ?? 'Unavailable');
+    const iconName = model.requiresKey ? 'key' : 'warning';
+    const className = model.requiresKey
+      ? 'model-row-icon'
+      : 'model-row-icon model-row-icon--warning';
+
+    return html`
+      <wa-icon
+        library="texra"
+        name=${iconName}
+        class=${className}
+        title=${title}
+      ></wa-icon>
+    `;
+  }
+
   private renderModelRow(model: ModelSelectionItem): TemplateResult {
-    const available = this.isRelayAvailable(model.name);
+    const available = !model.disabled;
     const unavailableClass = !available ? ' model-row--unavailable' : '';
 
     return html`
@@ -248,15 +254,7 @@ export class ModelSelectionList extends LitElement {
         >
           <span class="model-name">${model.label}</span>
           <span class="model-shortname">(${model.name})</span>
-          ${!available
-            ? html`<wa-icon
-                library="texra"
-                name="key"
-                class="model-row-icon"
-                title="Requires ${PROVIDER_DISPLAY_NAMES[model.provider] ??
-                model.provider} API key — set via TeXRA: Set API Key command"
-              ></wa-icon>`
-            : nothing}
+          ${this.renderAvailabilityIcon(model)}
           ${isExpensiveModel(model.provider, model.name)
             ? html`<wa-icon
                 library="texra"

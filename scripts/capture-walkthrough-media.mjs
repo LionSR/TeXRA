@@ -200,7 +200,6 @@ const webviewViews = [
         permissions: [],
         remoteAgents: [],
         apiAccessMode: 'personal',
-        allowedModels: [],
         tierConstants: { ultra: 'ultra', max: 'max' },
         providerKeyStatuses: providers,
         globalStreamingDefault: true,

@@ -394,13 +394,6 @@ export class ServerSideKeyService {
     return modelName ? this.canUseModelSync(modelName) : this.hasFullAccess();
   }
 
-  /** Returns null if all models allowed (Ultra), empty array if no access. */
-  getAllowedModelsForCurrentUser(): string[] | null {
-    if (!this.userTier) return [];
-    if (this.hasFullAccess()) return null;
-    return this.tierService.getAllowedModels(this.userTier);
-  }
-
   getAccessDescription(): string {
     if (!this.userTier) {
       return 'No included model access';
