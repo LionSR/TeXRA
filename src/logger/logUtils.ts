@@ -16,6 +16,14 @@
  * Output-channel creation is host-injected via {@link setOutputChannelFactory};
  * the VS Code extension provides a factory that returns VS Code
  * `OutputChannel`s, tests/CLI fall back to a console-backed sink.
+ *
+ * Secret redaction is a host responsibility, by design. This module does NOT
+ * redact at emit time — the trade-off is cost/flexibility (most channel output
+ * is product-internal and never persisted off-box). Hosts that persist or ship
+ * logs off the machine MUST run text through {@link redactSecrets} in their sink
+ * (see `desktopAppLog.ts` / the CLI log sinks for the reference wiring) before
+ * writing. SDK consumers wiring a custom {@link setOutputChannelFactory} take on
+ * the same contract; a sink that forgets it can leak API keys/paths into logs.
  */
 import type {
   AgentEvent,
