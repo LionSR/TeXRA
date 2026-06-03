@@ -24,9 +24,11 @@ import {
   formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
+  planCliMultiAgentPresets,
   planCliMultiAgentPresetRun,
   readCliMultiAgentPresets,
   withCliMultiAgentPresetVisibility,
+  type CliMultiAgentPreset,
   type CliMultiAgentPresetRunPlan,
 } from '../runtime/multiAgentPresets';
 import { getCliAuthProvider } from '../runtime/supabaseAuth';
@@ -89,6 +91,15 @@ function resolveMultiAgentRunPlan(
   });
 }
 
+function planLoadedCliMultiAgentPresets(
+  presets: readonly CliMultiAgentPreset[],
+): CliMultiAgentPresetRunPlan[] {
+  return planCliMultiAgentPresets(presets, {
+    workflowAgents: getWorkflowAgents(),
+    toolUseAgents: getToolUseAgents(),
+  });
+}
+
 /**
  * Resolve a preset plan, then — when it still has gaps and the user is
  * authenticated — perform a remote load and replan. Relay-served premium agents
@@ -112,6 +123,21 @@ export async function fillMultiAgentRunPlanGaps(
     plan = resolveMultiAgentRunPlan(init);
   }
   return plan;
+}
+
+export async function loadCliMultiAgentPresetPlans(
+  presets: readonly CliMultiAgentPreset[],
+): Promise<CliMultiAgentPresetRunPlan[]> {
+  await loadAgents({ includeRemote: false });
+  let plans = planLoadedCliMultiAgentPresets(presets);
+  if (
+    plans.some(cliMultiAgentPlanHasGaps) &&
+    (await getCliAuthProvider().isAuthenticated())
+  ) {
+    await loadAgents();
+    plans = planLoadedCliMultiAgentPresets(presets);
+  }
+  return plans;
 }
 
 export function writeMissingPresetAgents(
@@ -202,11 +228,12 @@ function writeMultiAgentRunResult(
 async function runMultiAgentList(context: CliContext): Promise<number> {
   await initLocalCliPlatform(context);
   const presets = readCliMultiAgentPresets();
+  const plans = await loadCliMultiAgentPresetPlans(presets);
 
   emitCliResult(context, {
     json: presets,
     ndjson: cliMultiAgentPresetNdjsonRecords(presets),
-    text: formatCliMultiAgentPresetList(presets),
+    text: formatCliMultiAgentPresetList(plans),
   });
   return CliExitCode.Success;
 }
