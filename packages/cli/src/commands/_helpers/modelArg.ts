@@ -6,10 +6,24 @@ import {
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { writeTextStderr } from '@cli/runtime/logSinks';
-import { resolveCliRunnableModel } from '@cli/runtime/modelAccess';
+import {
+  cliRunnableModelOptionsForSource,
+  resolveCliRunnableModel,
+  type CliModelSelectionSource,
+} from '@cli/runtime/modelAccess';
 import { shouldRenderRunProgress } from '@cli/runtime/runProgressRenderer';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
 import { toErrorMessage } from '@common/errors/errorMessage';
+
+type CliRunModelCandidateSource = Extract<
+  CliModelSelectionSource,
+  'override' | 'env' | 'config' | 'builtin'
+>;
+
+interface CliRunModelCandidate {
+  readonly model: string;
+  readonly source: CliRunModelCandidateSource;
+}
 
 /** Trim `-m`; throw a Usage error for unknown ids; undefined when absent. */
 export function assertExplicitModelKnown(
@@ -25,6 +39,21 @@ export function assertExplicitModelKnown(
   return trimmed;
 }
 
+function resolveCliRunModelCandidateDetails(
+  context: CliContext,
+  modelOverride: string | undefined,
+  role: 'chat' | 'run',
+): CliRunModelCandidate {
+  const explicit = assertExplicitModelKnown(modelOverride);
+  if (explicit) return { model: explicit, source: 'override' };
+  if (context.envModel) return { model: context.envModel, source: 'env' };
+
+  const configured = resolveConfiguredModel(context.cliConfig, role);
+  if (configured) return { model: configured, source: 'config' };
+
+  return { model: CLI_BUILTIN_DEFAULT_MODEL, source: 'builtin' };
+}
+
 /**
  * Resolve the model for a headless runner with the shared precedence:
  * explicit `-m` > `TEXRA_MODEL` env > configured `chat`/`run` model > builtin.
@@ -34,13 +63,7 @@ export function resolveCliRunModelCandidate(
   modelOverride: string | undefined,
   role: 'chat' | 'run',
 ): string {
-  const explicit = assertExplicitModelKnown(modelOverride);
-  return (
-    explicit ||
-    context.envModel ||
-    resolveConfiguredModel(context.cliConfig, role) ||
-    CLI_BUILTIN_DEFAULT_MODEL
-  );
+  return resolveCliRunModelCandidateDetails(context, modelOverride, role).model;
 }
 
 export async function resolveCliRunModel(
@@ -48,21 +71,24 @@ export async function resolveCliRunModel(
   modelOverride: string | undefined,
   role: 'chat' | 'run',
 ): Promise<string> {
-  const model = resolveCliRunModelCandidate(context, modelOverride, role);
-  const explicitModelRequested = Boolean(
-    modelOverride?.trim() || context.envModel?.trim(),
+  const candidate = resolveCliRunModelCandidateDetails(
+    context,
+    modelOverride,
+    role,
   );
   await initCliPlatform({ ...context, quietLogs: true });
   const apiMode = effectiveCliApiMode(context);
   try {
-    const resolution = await resolveCliRunnableModel(model, {
-      allowFallback: !explicitModelRequested,
-      apiMode,
-      noAvailableModelsMessage:
-        apiMode === 'included'
-          ? 'Run `texra login` for included relay access, or retry with `--api-mode personal` after configuring a provider API key.'
-          : undefined,
-    });
+    const resolution = await resolveCliRunnableModel(
+      candidate.model,
+      cliRunnableModelOptionsForSource(candidate.source, {
+        apiMode,
+        noAvailableModelsMessage:
+          apiMode === 'included'
+            ? 'Run `texra login` for included relay access, or retry with `--api-mode personal` after configuring a provider API key.'
+            : undefined,
+      }),
+    );
     if (resolution.notice && context.quietLogs !== true) {
       writeTextStderr(resolution.notice);
     }
