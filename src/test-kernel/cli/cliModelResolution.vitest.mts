@@ -29,9 +29,14 @@ vi.mock('@cli/runtime/apiAccessMode', () => ({
   getCliApiMode: mocks.getCliApiMode,
 }));
 
-vi.mock('@cli/runtime/modelAccess', () => ({
-  resolveCliRunnableModel: mocks.resolveCliRunnableModel,
-}));
+vi.mock('@cli/runtime/modelAccess', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@cli/runtime/modelAccess')>();
+  return {
+    ...actual,
+    resolveCliRunnableModel: mocks.resolveCliRunnableModel,
+  };
+});
 
 vi.mock('@cli/runtime/logSinks', () => ({
   writeTextStderr: mocks.writeTextStderr,
@@ -114,6 +119,21 @@ describe('resolveCliRunModel precedence', () => {
     );
   });
 
+  it('suppresses fallback notices for the implicit builtin default', async () => {
+    const context = makeContext();
+
+    await resolveCliRunModel(context, undefined, 'run');
+
+    expect(resolveCliRunnableModelMock).toHaveBeenCalledWith(
+      CLI_BUILTIN_DEFAULT_MODEL,
+      {
+        apiMode: 'personal',
+        fallbackMode: 'silent',
+        noAvailableModelsMessage: undefined,
+      },
+    );
+  });
+
   it('checks active API-mode access before returning the model', async () => {
     const context = makeContext({
       cliConfig: runConfig('staleConfiguredModel'),
@@ -128,7 +148,7 @@ describe('resolveCliRunModel precedence', () => {
     );
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith(
       'staleConfiguredModel',
-      expect.objectContaining({ allowFallback: true }),
+      expect.objectContaining({ fallbackMode: 'notice' }),
     );
     expect(mocks.initCliPlatform).toHaveBeenCalledWith({
       ...context,
@@ -153,8 +173,8 @@ describe('resolveCliRunModel precedence', () => {
       CliUsageError,
     );
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith('opus48T', {
-      allowFallback: false,
       apiMode: 'personal',
+      fallbackMode: 'reject',
       noAvailableModelsMessage: undefined,
     });
   });
@@ -168,8 +188,8 @@ describe('resolveCliRunModel precedence', () => {
     await resolveCliRunModel(context, undefined, 'run');
 
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith('opus48T', {
-      allowFallback: false,
       apiMode: 'personal',
+      fallbackMode: 'reject',
       noAvailableModelsMessage: undefined,
     });
   });
