@@ -20,6 +20,7 @@ import {
   agentHasDelegationTools,
   cliMultiAgentPlanHasGaps,
   cliMultiAgentPresetNdjsonRecords,
+  cliMultiAgentPresetListRecords,
   findCliMultiAgentPreset,
   formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetInspection,
@@ -229,10 +230,11 @@ async function runMultiAgentList(context: CliContext): Promise<number> {
   await initLocalCliPlatform(context);
   const presets = readCliMultiAgentPresets();
   const plans = await loadCliMultiAgentPresetPlans(presets);
+  const records = cliMultiAgentPresetListRecords(plans);
 
   emitCliResult(context, {
-    json: presets,
-    ndjson: cliMultiAgentPresetNdjsonRecords(presets),
+    json: records,
+    ndjson: cliMultiAgentPresetNdjsonRecords(plans),
     text: formatCliMultiAgentPresetList(plans),
   });
   return CliExitCode.Success;
