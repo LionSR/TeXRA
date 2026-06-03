@@ -242,7 +242,7 @@ export function registerBuiltinSlashCommands(options?: {
   });
   registerSlashCommand({
     name: 'yolo',
-    description: 'Approve privileged actions automatically',
+    description: 'Auto-approve privileged actions',
   });
   registerSlashCommand({
     name: 'status',
