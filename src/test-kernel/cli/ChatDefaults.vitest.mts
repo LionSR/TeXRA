@@ -12,6 +12,7 @@ import {
   BUILTIN_DEFAULT_CHAT_MODEL,
   resolveChatDefaults,
 } from '@cli/runtime/chatDefaults';
+import { GlobalStorageFS } from '@utils/files/storageFS';
 
 vi.mock('@agent/storage', () => ({
   listExecutions: vi.fn(async () => []),
@@ -42,6 +43,8 @@ vi.mock('@utils/files/storageFS', () => ({
     }),
   },
 }));
+
+const mockedReadJson = vi.mocked(GlobalStorageFS.readJson);
 
 describe('CLI chat defaults', () => {
   it('uses chat and DeepSeek as the built-in chat defaults', async () => {
@@ -189,6 +192,51 @@ describe('CLI chat defaults', () => {
       model: 'sonnet46T',
       agentSource: 'builtin',
       modelSource: 'history',
+    });
+  });
+
+  it('ignores simplifier from configured chat default tiers', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'texra-chat-defaults-'));
+    await mkdir(join(workspace, '.texra'), { recursive: true });
+    await writeFile(
+      join(workspace, '.texra', 'config.json'),
+      JSON.stringify({ chat: { agent: 'simplifier', model: 'sonnet46T' } }),
+    );
+
+    await expect(
+      resolveChatDefaults({ cwd: workspace }),
+    ).resolves.toMatchObject({
+      agent: 'chat',
+      model: 'sonnet46T',
+      agentSource: 'builtin',
+      modelSource: 'workspace',
+    });
+
+    mockedReadJson.mockResolvedValueOnce({
+      agent: 'simplifier',
+      model: 'sonnet46T',
+    });
+    await expect(
+      resolveChatDefaults({
+        cwd: '/tmp/no-such-texra-workspace',
+      }),
+    ).resolves.toMatchObject({
+      agent: 'chat',
+      model: 'sonnet46T',
+      agentSource: 'builtin',
+      modelSource: 'user',
+    });
+  });
+
+  it('still honors a TEXRA_AGENT simplifier override', async () => {
+    await expect(
+      resolveChatDefaults({
+        cwd: '/tmp/no-such-texra-workspace',
+        envAgent: 'simplifier',
+      }),
+    ).resolves.toMatchObject({
+      agent: 'simplifier',
+      agentSource: 'env',
     });
   });
 

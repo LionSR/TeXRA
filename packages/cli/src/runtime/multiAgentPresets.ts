@@ -8,6 +8,7 @@ import {
   AgentModePresetSchema,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
+import { defaultToolUseAgents } from './defaultAgents';
 
 export type CliMultiAgentPresetSource = 'built-in' | 'custom';
 
@@ -376,7 +377,8 @@ function selectPresetRootAgent(
     readonly presetSource: CliMultiAgentPresetSource;
   },
 ): AgentEntry | undefined {
-  const delegatingAgents = agents.filter(agentHasDelegationTools);
+  const rootCandidates = defaultToolUseAgents(agents);
+  const delegatingAgents = rootCandidates.filter(agentHasDelegationTools);
   const preferredRoot = findPreferredRootAgent(
     delegatingAgents,
     options.presetSource,
@@ -388,10 +390,10 @@ function selectPresetRootAgent(
     // Built-in teams name specialists as members. If their orchestrator is not
     // available, fall back only to a plain local agent rather than promoting an
     // arbitrary delegation specialist to team root.
-    return agents.find((agent) => !agentHasDelegationTools(agent));
+    return rootCandidates.find((agent) => !agentHasDelegationTools(agent));
   }
 
-  return delegatingAgents[0] ?? agents[0];
+  return delegatingAgents[0] ?? rootCandidates[0];
 }
 
 function findPreferredRootAgent(
