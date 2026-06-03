@@ -261,6 +261,39 @@ describe('CLI orchestration items', () => {
     expect(view.modelItems).toEqual([]);
   });
 
+  it('scopes startup model choices to the active API mode', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [presetPlan({ id: 'physicist', name: 'Physicist' })],
+      history: [historyEntry('aaaaaaaaaaaa', { agent: 'review' })],
+      toolUseAgents: [toolUseAgent('review')],
+    });
+    const models = [
+      modelAccess('sonnet46T', 'included-access', true, 'included'),
+      modelAccess('deepseekT', 'provider-key', true, 'api key set'),
+      modelAccess('gemini31p', 'missing-key', false),
+    ];
+
+    const relayView = orchestrationModelAccessView(items, models, 'included');
+    const personalView = orchestrationModelAccessView(
+      items,
+      models,
+      'personal',
+    );
+
+    expect(relayView.modelItems.map((item) => item.value)).toEqual([
+      'sonnet46T',
+    ]);
+    expect(relayView.modelItems.map((item) => item.description)).toEqual([
+      'relay: included',
+    ]);
+    expect(personalView.modelItems.map((item) => item.value)).toEqual([
+      'deepseekT',
+    ]);
+    expect(personalView.modelItems.map((item) => item.description)).toEqual([
+      'api: api key set',
+    ]);
+  });
+
   it('keeps launcher rows active when model registry state is unknown', () => {
     const view = orchestrationModelAccessView(
       buildCliOrchestrationItems({
