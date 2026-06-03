@@ -53,8 +53,8 @@ export function defineCliCommand<A extends ArgsDef>(
     async run(ctx) {
       // citty's `ctx.args` for a generic `ArgsDef` widens past the precise
       // `ParsedGlobalArgs` shape; every command that uses this helper spreads
-      // `GLOBAL_ARGS` (or supplies `cwd`), so the parsed object carries the
-      // global flags `contextFromArgs` reads.
+      // `GLOBAL_ARGS`, overriding individual entries such as `cwd` only when
+      // it needs command-specific help text.
       const context = await contextFromArgs(ctx.args as ParsedGlobalArgs);
       if (options.catchExitCode === undefined) {
         setExitCode(await options.run(context, ctx as CliCommandRunContext<A>));
