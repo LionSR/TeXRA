@@ -262,13 +262,10 @@ async function getFileVars(
     const primaryFile = readableFiles[0];
 
     // Aliases for custom YAMLs that still reference INPUT_FILE / INPUT_CONTENT.
-    if (primaryFile) {
-      const loaded = await setVarFromFile(primaryFile, prefix, userVars);
-      if (!loaded) {
-        userVars[`${prefix}_FILE`] = null;
-        userVars[`${prefix}_CONTENT`] = null;
-      }
-    } else {
+    const loaded =
+      primaryFile != null &&
+      (await setVarFromFile(primaryFile, prefix, userVars));
+    if (!loaded) {
       userVars[`${prefix}_FILE`] = null;
       userVars[`${prefix}_CONTENT`] = null;
     }

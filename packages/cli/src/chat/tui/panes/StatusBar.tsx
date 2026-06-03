@@ -13,6 +13,7 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { filterNotNullish } from '@utils/core';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 
 import { formatCliStatusLabel } from '../sessionStatus';
@@ -330,7 +331,7 @@ function fitStatusBarLeftSegments(
     ...new Set(
       compacted
         .map((segment) => segment.compactPriority)
-        .filter((priority): priority is number => priority !== undefined),
+        .filter(filterNotNullish),
     ),
   ].sort((a, b) => a - b);
 
