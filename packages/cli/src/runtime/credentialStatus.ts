@@ -1,32 +1,40 @@
-// "Does the user have any usable credential path?" — the single signal the
-// first-run onboarding gate keys off.
+// Credential checks used by the interactive first-run onboarding gate.
 //
-// Deliberately mode-independent: the orchestrate launcher boots the platform
-// with included-access probing skipped (initLocalCliPlatform forces personal
-// mode), so an api-mode-derived model list (getCliModelAccessList) is
-// unreliable there and would mis-flag a signed-in returning user as
-// credential-less. Checking the two real credential sources directly — a stored
-// TeXRA sign-in (included relay) and any resolvable provider key (secret OR
-// env) — is correct in both entry points.
+// The default check remains mode-independent for launchers that have not pinned
+// an API mode. When a command explicitly asks for included relay or personal
+// keys, use the credential source that can actually satisfy that mode so a
+// provider key does not suppress included-relay sign-in setup, and vice versa.
 
 import { platform } from '@platform/platform';
 import { API_PROVIDERS, apiKeyExists } from '@model/apiProviders';
 
 import { getCliAuthProvider } from './supabaseAuth';
+import type { CliApiMode } from './apiAccessMode';
 
-export async function hasAnyCliCredential(): Promise<boolean> {
-  const signedIn = await getCliAuthProvider()
+async function hasIncludedRelaySignIn(): Promise<boolean> {
+  return await getCliAuthProvider()
     .isAuthenticated()
     .catch(() => false);
-  if (signedIn) return true;
+}
 
-  // Short-circuit on the first provider key found rather than scanning all
-  // providers up front — avoids touching unrelated provider secrets once a
-  // usable key is present.
+async function hasProviderApiKey(): Promise<boolean> {
   const secrets = platform().secrets;
   for (const provider of API_PROVIDERS) {
     // Sequential by design: stop at the first key found.
     if (await apiKeyExists(secrets, provider)) return true;
   }
   return false;
+}
+
+export async function hasCliCredentialForApiMode(
+  apiMode: CliApiMode | undefined,
+): Promise<boolean> {
+  switch (apiMode) {
+    case 'included':
+      return hasIncludedRelaySignIn();
+    case 'personal':
+      return hasProviderApiKey();
+    default:
+      return (await hasIncludedRelaySignIn()) || (await hasProviderApiKey());
+  }
 }
