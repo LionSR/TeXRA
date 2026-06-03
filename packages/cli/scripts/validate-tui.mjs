@@ -523,6 +523,16 @@ const SCENARIOS = [
     unexpect: ['ServerSideKeyService not initialized'],
   },
   {
+    name: 'api-form-buffered-hotkey',
+    rows: 12,
+    cols: 80,
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/api', '\r', '21'],
+    frame: 'tail',
+    expect: ['API mode set to included.'],
+    unexpect: ['ServerSideKeyService not initialized'],
+  },
+  {
     name: 'compact-approval-form',
     rows: 10,
     cols: 60,
