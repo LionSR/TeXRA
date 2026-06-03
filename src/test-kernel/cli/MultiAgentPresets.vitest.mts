@@ -307,7 +307,7 @@ describe('CLI multi-agent presets', () => {
     expect(cliMultiAgentPlanHasGaps(onlySimplifierPlan)).toBe(true);
   });
 
-  it('allows custom presets to default to their simplifier agent', () => {
+  it('does not allow custom presets to default to their simplifier agent', () => {
     const plan = planCliMultiAgentPresetRun(
       {
         id: 'custom-cleanup',
@@ -326,8 +326,8 @@ describe('CLI multi-agent presets', () => {
       },
     );
 
-    expect(plan.rootAgent?.name).toBe('simplifier');
-    expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
+    expect(plan.rootAgent).toBeUndefined();
+    expect(cliMultiAgentPlanHasGaps(plan)).toBe(true);
   });
 
   it('reports no gaps when every preset member resolves', () => {
