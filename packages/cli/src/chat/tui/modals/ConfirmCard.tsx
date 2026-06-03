@@ -109,16 +109,17 @@ export function ConfirmCard({
     { isActive: true },
   );
 
+  const mappedExtraActions = extraActions.map((action) => ({
+    key: action.key,
+    action: action.label,
+  }));
   const hints = feedbackMode
     ? confirmCardFeedbackHints()
     : confirmCardKeyHintsForWidth({
         approveLabel,
         rejectLabel,
         alwaysAllowLabel: alwaysAllow?.label,
-        extraActions: extraActions.map((action) => ({
-          key: action.key,
-          action: action.label,
-        })),
+        extraActions: mappedExtraActions,
         maxColumns: Math.max(
           0,
           columns -
@@ -133,10 +134,7 @@ export function ConfirmCard({
         approveLabel,
         rejectLabel,
         alwaysAllowLabel: alwaysAllow?.label,
-        extraActions: extraActions.map((action) => ({
-          key: action.key,
-          action: action.label,
-        })),
+        extraActions: mappedExtraActions,
         maxColumns: columns,
       });
   const stackCompactHints =

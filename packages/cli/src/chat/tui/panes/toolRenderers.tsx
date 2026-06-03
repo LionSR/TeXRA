@@ -497,23 +497,6 @@ export function UniversalToolRow({
   );
 }
 
-function BashToolRow({
-  toolUse,
-}: {
-  readonly toolUse: NormalizedToolUse;
-}): React.JSX.Element {
-  return (
-    <ToolRow
-      toolUse={toolUse}
-      fallbackName="bash"
-      previewColor="cyan"
-      showOutput={true}
-      showExitCode={true}
-      preferInputPreview={true}
-    />
-  );
-}
-
 function isBashTool(toolUse: NormalizedToolUse): boolean {
   return lastSegmentToolName(toolUse.toolName).toLowerCase() === 'bash';
 }
@@ -533,7 +516,16 @@ const editRenderer: ToolRenderer = {
 const bashRenderer: ToolRenderer = {
   key: 'bash',
   matches: isBashTool,
-  render: (toolUse) => <BashToolRow toolUse={toolUse} />,
+  render: (toolUse) => (
+    <ToolRow
+      toolUse={toolUse}
+      fallbackName="bash"
+      previewColor="cyan"
+      showOutput={true}
+      showExitCode={true}
+      preferInputPreview={true}
+    />
+  ),
   displayLines: (toolUse, options) =>
     bashToolUseDisplayLines(toolUse, { elide: options?.elide }),
 };
