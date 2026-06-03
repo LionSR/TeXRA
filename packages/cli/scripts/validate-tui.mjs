@@ -68,9 +68,14 @@ const ASYNC_FORM_SETTLE_MS = 12000;
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');
+const DEFAULT_HARNESS_RELATIVE_PATH = path.join(
+  'dist',
+  'bin',
+  'tui-harness.js',
+);
 const HARNESS = path.resolve(
   CLI_ROOT,
-  process.env.TEXRA_TUI_HARNESS ?? path.join('dist', 'bin', 'tui-harness.js'),
+  process.env.TEXRA_TUI_HARNESS ?? DEFAULT_HARNESS_RELATIVE_PATH,
 );
 
 // --- scenarios (verified against the committed harness) ------------------
@@ -1753,7 +1758,7 @@ function formatUsage() {
     '',
     'Options:',
     '  --snapshot-dir DIR  Write per-scenario .txt/.svg frames and an index.html report',
-    '  --no-build          Use the existing dist/bin/tui-harness.js instead of rebuilding it',
+    `  --no-build          Use the existing ${DEFAULT_HARNESS_RELATIVE_PATH} instead of rebuilding it`,
     '  --skip-if-missing-deps  Exit 0 instead of failing when PTY screenshot deps are unavailable',
     '  --list              Print available scenario names and exit',
     '  --list-selected     Print selected scenario names in run order and exit',
@@ -1876,7 +1881,7 @@ if (useExistingHarness) {
         HARNESS,
       );
       console.error(
-        '[validate-tui] run without --no-build once to build dist/bin/tui-harness.js',
+        `[validate-tui] run without --no-build once to build ${DEFAULT_HARNESS_RELATIVE_PATH}`,
       );
     }
     process.exit(1);

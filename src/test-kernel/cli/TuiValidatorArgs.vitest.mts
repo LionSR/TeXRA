@@ -8,10 +8,14 @@ const VALIDATOR = path.join(
   'packages/cli/scripts/validate-tui.mjs',
 );
 
-function runValidator(args: string[]) {
+function runValidator(
+  args: string[],
+  env: Record<string, string | undefined> = {},
+) {
   return spawnSync(process.execPath, [VALIDATOR, ...args], {
     cwd: process.cwd(),
     encoding: 'utf8',
+    env: { ...process.env, ...env },
   });
 }
 
@@ -97,6 +101,26 @@ describe('TUI validator args', () => {
     expect(result.status).toBe(0);
     expect(result.stdout.trim()).toBe('compact-user-question');
     expect(result.stderr).toBe('');
+  });
+
+  it('fails early when no-build selects a missing custom harness', () => {
+    const missingHarness = path.join(
+      'dist',
+      'bin',
+      'definitely-missing-tui-harness.js',
+    );
+    const result = runValidator(['--no-build', 'compact-user-question'], {
+      TEXRA_TUI_HARNESS: missingHarness,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      '[validate-tui] custom harness does not exist:',
+    );
+    expect(result.stderr).toContain(
+      path.join('packages', 'cli', missingHarness),
+    );
+    expect(result.stderr).not.toContain('building tui-harness bundle');
   });
 
   it('preserves repeated selected scenarios for snapshot order checks', () => {
