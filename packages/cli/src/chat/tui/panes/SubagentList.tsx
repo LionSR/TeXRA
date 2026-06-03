@@ -51,7 +51,7 @@ export function compactChildRowText({
     elapsed,
     tailSummary,
   ]
-    .filter((part): part is string => Boolean(part))
+    .filter(Boolean)
     .join(' · ');
 }
 

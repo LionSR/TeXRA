@@ -65,7 +65,9 @@ function orderedStreamTree(init: {
   if (init.streams.has(init.root)) out.push({ id: init.root });
   for (const [index, id] of ordered.entries()) {
     if (!init.streams.has(id)) continue;
-    out.push({ id, shortcutIndex: streamTabShortcutIndex(index + 1) });
+    const position = index + 1;
+    const shortcutIndex = position <= 0 || position > 9 ? undefined : position;
+    out.push({ id, shortcutIndex });
   }
   return out;
 }
@@ -102,14 +104,12 @@ export interface StreamTabLineSegment {
   readonly text: string;
 }
 
-function ellipsisTabItem(): StreamTabDisplayItem {
-  return {
-    id: 'ellipsis',
-    label: '…',
-    active: false,
-    running: false,
-  };
-}
+const ELLIPSIS_TAB_ITEM: StreamTabDisplayItem = {
+  id: 'ellipsis',
+  label: '…',
+  active: false,
+  running: false,
+};
 
 function activeAnchoredItems(
   items: readonly StreamTabDisplayItem[],
@@ -121,11 +121,11 @@ function activeAnchoredItems(
   const out: StreamTabDisplayItem[] = [];
   if (activeIndex > 0) {
     out.push(items[0]);
-    if (activeIndex > 1) out.push(ellipsisTabItem());
+    if (activeIndex > 1) out.push(ELLIPSIS_TAB_ITEM);
   }
   out.push(activeItem);
   if (lastItem && activeIndex < items.length - 1) {
-    if (activeIndex < items.length - 2) out.push(ellipsisTabItem());
+    if (activeIndex < items.length - 2) out.push(ELLIPSIS_TAB_ITEM);
     out.push(lastItem);
   }
   return out;
@@ -220,7 +220,7 @@ function collapseMiddle(
     const item = items[i];
     if (keep.has(i)) {
       if (elided) {
-        out.push(ellipsisTabItem());
+        out.push(ELLIPSIS_TAB_ITEM);
         elided = false;
       }
       out.push(item);
@@ -229,11 +229,6 @@ function collapseMiddle(
     }
   }
   return out;
-}
-
-function streamTabShortcutIndex(position: number): number | undefined {
-  if (position <= 0 || position > 9) return undefined;
-  return position;
 }
 
 export function streamTabsDisplayItems(init: {
