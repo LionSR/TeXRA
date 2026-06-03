@@ -223,8 +223,13 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
             mediaFiles.push(
               await savePastedImageBase64(img.base64, img.fileName),
             );
-          } catch {
-            // Best-effort: a failed image save must not block the text.
+          } catch (err) {
+            // Best-effort: a failed image save must not block the text, but log
+            // it so a missing attachment is diagnosable.
+            this.logger.warn(
+              this.channel,
+              `Failed to save pasted follow-up image: ${toErrorMessage(err)}`,
+            );
           }
         }
         await vscode.commands.executeCommand('texra.sendFollowUp', {

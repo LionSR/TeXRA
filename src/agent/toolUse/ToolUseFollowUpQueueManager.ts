@@ -109,6 +109,13 @@ export class ToolUseFollowUpQueue {
     return this.queues.get(streamId)?.drain() ?? [];
   }
 
+  /** Drain queued follow-ups with their media file paths (resume replay). */
+  static drainItems(
+    streamId: StreamTabId,
+  ): Array<{ text: string; mediaFiles?: readonly string[] }> {
+    return this.queues.get(streamId)?.drainItems() ?? [];
+  }
+
   /** Get all queued follow-up messages for a stream without consuming them. */
   static getAll(streamId: StreamTabId): string[] {
     return this.queues.get(streamId)?.getAll() ?? [];

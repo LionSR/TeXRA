@@ -311,6 +311,12 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     value.length,
   );
 
+  // Mirror the latest value/cursor for async handlers (image paste): a
+  // clipboard probe that resolves after the user keeps typing must insert at
+  // the current caret, not a stale keypress-time snapshot.
+  const latestStateRef = useRef({ value, cursor });
+  latestStateRef.current = { value, cursor };
+
   // Track the last value we ourselves emitted via onChange. If the prop's
   // `value` diverges from this, the parent swapped the text out from under
   // us (slash-palette accept, reverse-search recall, programmatic clear) —
@@ -395,13 +401,13 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         return;
       }
       if (isCtrlInput(input, key, 'v') && props.onImagePaste) {
-        // Async clipboard probe; insert the resulting chip at the caret. Uses
-        // the caret captured at keypress — a deliberate ctrl-v isn't raced by
-        // typing in the few ms the probe takes.
-        const atValue = value;
-        const atCursor = cursor;
+        // Insert the chip at whatever the caret is when the async probe
+        // resolves (read from a ref, not a keypress-time snapshot) so typing
+        // during the probe isn't clobbered.
         void props.onImagePaste().then((chip) => {
-          if (chip) applyEdit(insertText(atValue, atCursor, chip));
+          if (!chip) return;
+          const { value: v, cursor: c } = latestStateRef.current;
+          applyEdit(insertText(v, c, chip));
         });
         return;
       }

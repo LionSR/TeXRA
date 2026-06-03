@@ -41,8 +41,12 @@ export async function savePastedImageBuffer(
   data: Buffer,
   fileName: string,
 ): Promise<string> {
+  // Defensive: a pasted filename can arrive from a webview message, so strip
+  // any directory components to keep the write inside PASTED_DIR — no `../`
+  // traversal or absolute-path escape.
+  const safeName = path.basename(fileName);
   await StorageFS.ensureDir(PASTED_DIR);
-  const relativePath = path.join(PASTED_DIR, fileName);
+  const relativePath = path.join(PASTED_DIR, safeName);
   await StorageFS.write(relativePath, data);
   await StorageFS.cleanupOldFiles(PASTED_DIR, THREE_DAYS_MS);
   return StorageFS.fullPath(relativePath);
