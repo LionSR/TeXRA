@@ -74,6 +74,8 @@ describe('CLI chat defaults', () => {
       agent: 'chat',
       model: 'deepseekT',
       source: 'builtin',
+      agentSource: 'builtin',
+      modelSource: 'builtin',
     });
   });
 
@@ -91,6 +93,8 @@ describe('CLI chat defaults', () => {
       agent: 'chat',
       model: 'deepseekT',
       source: 'mixed',
+      agentSource: 'workspace',
+      modelSource: 'builtin',
     });
   });
 
@@ -112,6 +116,8 @@ describe('CLI chat defaults', () => {
       agent: 'chat',
       model: 'sonnet46T',
       source: 'mixed',
+      agentSource: 'workspace',
+      modelSource: 'env',
     });
   });
 
