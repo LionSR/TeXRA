@@ -144,6 +144,9 @@ function parseArgs(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (!endOfOptions && arg === '--') {
+      // pnpm can forward a leading separator to scripts (`pnpm run x -- --flag`).
+      // Treat that package-manager separator as transparent when it precedes a
+      // script option; later `--` still follows normal end-of-options behavior.
       if (index === 0 && argv[1]?.startsWith('-')) continue;
       endOfOptions = true;
       continue;
