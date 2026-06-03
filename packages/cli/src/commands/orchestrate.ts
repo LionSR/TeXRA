@@ -112,6 +112,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
           agentOverride: plan.rootAgent?.name,
           teamName: plan.preset.name,
           modelOverride: action.model,
+          cliMultiAgentPresetId: plan.preset.id,
         }),
       );
       return result.exitCode;
