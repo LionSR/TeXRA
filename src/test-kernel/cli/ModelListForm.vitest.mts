@@ -5,6 +5,7 @@ import {
   formatModelStatusForCliMode,
   modelSelectItemsForCliMode,
   modelSelectWindow,
+  noRunnableModelAccessReason,
 } from '@cli/chat/tui/forms/ModelListForm';
 import {
   COMPACT_FORM_MAX_ROWS,
@@ -232,6 +233,57 @@ describe('CLI ModelListForm model visibility', () => {
 });
 
 describe('CLI ModelListForm empty state', () => {
+  it('classifies signed-out included access separately from other included outages', () => {
+    expect(
+      noRunnableModelAccessReason(
+        [
+          access(
+            {
+              availability: 'included-login-required',
+              disabled: true,
+            },
+            'login required',
+            false,
+          ),
+        ],
+        'included',
+      ),
+    ).toBe('includedLoginRequired');
+  });
+
+  it('classifies personal and non-login included empty states by API mode', () => {
+    expect(
+      noRunnableModelAccessReason(
+        [
+          access(
+            {
+              availability: 'missing-key',
+              requiresKey: true,
+            },
+            'missing api key',
+            false,
+          ),
+        ],
+        'personal',
+      ),
+    ).toBe('personal');
+    expect(
+      noRunnableModelAccessReason(
+        [
+          access(
+            {
+              availability: 'relay-quota-exhausted',
+              disabled: true,
+            },
+            'relay quota exhausted',
+            false,
+          ),
+        ],
+        'included',
+      ),
+    ).toBe('included');
+  });
+
   it('explains that included relay models require sign-in', () => {
     expect(
       emptyModelListMessageForCliMode(

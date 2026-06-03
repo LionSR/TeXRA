@@ -52,6 +52,23 @@ const EMPTY_MODEL_LIST_MESSAGES = {
     'No personal API-key models are runnable. Configure a provider key or switch with /api included.',
 } satisfies Record<CliApiMode | 'includedLoginRequired', string>;
 
+export type NoRunnableModelAccessReason = CliApiMode | 'includedLoginRequired';
+
+export function noRunnableModelAccessReason(
+  models: readonly CliModelAccess[],
+  apiMode: CliApiMode,
+): NoRunnableModelAccessReason {
+  if (
+    apiMode === 'included' &&
+    models.some(
+      (model) => model.model.availability === 'included-login-required',
+    )
+  ) {
+    return 'includedLoginRequired';
+  }
+  return apiMode;
+}
+
 export function formatModelStatusForCliMode(
   model: CliModelAccess,
   apiMode: CliApiMode,
@@ -86,16 +103,9 @@ export function emptyModelListMessageForCliMode(
   models: readonly CliModelAccess[],
   apiMode: CliApiMode,
 ): string {
-  if (
-    apiMode === 'included' &&
-    models.some(
-      (model) => model.model.availability === 'included-login-required',
-    )
-  ) {
-    return EMPTY_MODEL_LIST_MESSAGES.includedLoginRequired;
-  }
-
-  return EMPTY_MODEL_LIST_MESSAGES[apiMode];
+  return EMPTY_MODEL_LIST_MESSAGES[
+    noRunnableModelAccessReason(models, apiMode)
+  ];
 }
 
 function EmptyModelListState(props: {

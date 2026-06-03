@@ -286,6 +286,14 @@ export async function resolveCliRunnableModel(
   options: CliRunnableModelOptions,
 ): Promise<CliRunnableModelResolution> {
   const models = await getCliModelAccessList({ apiMode: options.apiMode });
+  return resolveCliRunnableModelWithAccessList(models, model, options);
+}
+
+export async function resolveCliRunnableModelWithAccessList(
+  models: readonly CliModelAccess[],
+  model: string,
+  options: CliRunnableModelOptions,
+): Promise<CliRunnableModelResolution> {
   const trimmed = model.trim();
   const hiddenModelId =
     trimmed && !findModelAccess(models, trimmed)
