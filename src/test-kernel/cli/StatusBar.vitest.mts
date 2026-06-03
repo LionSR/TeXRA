@@ -9,8 +9,11 @@ import {
   statusBarDisplaySlice,
   statusBarSegmentText,
 } from '@cli/chat/tui/panes/StatusBar';
+import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import { STREAM_STATUS } from '@shared/schemas';
+
+const PERSONAL_API_MODE_LABEL = shortCliApiMode('personal');
 
 describe('CLI StatusBar display model', () => {
   it('previews queued follow-up messages without duplicating the count', () => {
@@ -47,6 +50,11 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
+  it('uses clear compact labels for API access mode', () => {
+    expect(shortCliApiMode('included')).toBe('relay');
+    expect(shortCliApiMode('personal')).toBe('keys');
+  });
+
   it('keeps queued follow-up counts in the durable left status segments', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,
@@ -62,14 +70,14 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
     });
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'running',
-      'api',
+      PERSONAL_API_MODE_LABEL,
       'queued 1',
     ]);
     expect(display.left.at(-1)).toMatchObject({ color: 'yellow' });
@@ -91,14 +99,14 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
     });
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'idle',
-      'api',
+      PERSONAL_API_MODE_LABEL,
     ]);
     expect(display.right).toBeUndefined();
     expect(display.bindings).toContain('[/api]api');
@@ -190,7 +198,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       shiftEnterNewline: true,
     });
@@ -259,7 +267,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: true,
       hasMultipleStreams: true,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       ctrlCAction: 'stop',
       width: 60,
@@ -287,7 +295,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: true,
       hasMultipleStreams: true,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Option',
       ctrlCAction: 'stop',
       width: 44,
@@ -313,7 +321,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: true,
       hasMultipleStreams: true,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       ctrlCAction: 'stop',
       width: 30,
@@ -324,11 +332,11 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'running',
       '75s',
-      'api',
+      PERSONAL_API_MODE_LABEL,
       '3 sub',
     ]);
     expect(display.left.map(statusBarSegmentText).join(' ')).not.toContain(
-      'api3',
+      `${PERSONAL_API_MODE_LABEL}3`,
     );
   });
 
@@ -348,7 +356,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       ctrlCAction: 'stop',
       width: 30,
@@ -358,7 +366,7 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'running',
       '75s',
-      'api',
+      PERSONAL_API_MODE_LABEL,
     ]);
   });
 
@@ -378,7 +386,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       ctrlCAction: 'stop',
       width: 16,
@@ -387,7 +395,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'running',
-      'api',
+      PERSONAL_API_MODE_LABEL,
     ]);
   });
 
@@ -407,7 +415,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       ctrlCAction: 'stop',
       width: 30,
@@ -417,7 +425,7 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'running',
       '75s',
-      'api',
+      PERSONAL_API_MODE_LABEL,
     ]);
     expect(display.right).toBeUndefined();
   });
@@ -438,7 +446,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       ctrlCAction: 'stop',
       width: 80,
@@ -487,7 +495,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: true,
       hasMultipleStreams: true,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       ctrlCAction: 'stop root',
     });
@@ -495,7 +503,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'stopped',
-      'api',
+      PERSONAL_API_MODE_LABEL,
     ]);
     expect(display.bindings).toContain('[Ctrl-C]stop root');
   });
@@ -603,7 +611,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       width: 50,
     });
@@ -628,7 +636,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: true,
       hasMultipleStreams: true,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       ctrlCAction: 'stop',
       shortcutsActive: false,
@@ -659,7 +667,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       shortcutsActive: false,
     });
@@ -683,7 +691,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: true,
       hasMultipleStreams: true,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       ctrlCAction: 'stop',
       shortcutsActive: false,
@@ -708,7 +716,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: true,
       hasMultipleStreams: true,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       ctrlCAction: 'stop',
       shortcutsActive: false,
@@ -734,7 +742,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
     };
     const running = buildStatusBarDisplay(runningInput);
@@ -743,7 +751,7 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'running',
       '110s',
-      'api',
+      PERSONAL_API_MODE_LABEL,
     ]);
 
     const justStarted = buildStatusBarDisplay({
@@ -754,7 +762,7 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'running',
       '0s',
-      'api',
+      PERSONAL_API_MODE_LABEL,
     ]);
 
     // The same elapsed reading is suppressed once the turn is no longer running.
@@ -773,11 +781,15 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
     });
 
-    expect(idle.left.map(statusBarSegmentText)).toEqual(['◆', 'idle', 'api']);
+    expect(idle.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'idle',
+      PERSONAL_API_MODE_LABEL,
+    ]);
   });
 
   it('preserves distinct YOLO and auto-approval badges', () => {
@@ -795,14 +807,14 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
     });
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'running',
-      'api',
+      PERSONAL_API_MODE_LABEL,
       'YOLO',
       'AUTO-BASH',
       'AUTO-APPROVE',
@@ -836,9 +848,9 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
-      width: 60,
+      width: 61,
     });
 
     expect(display.right).toBe('Keep the pr…');
@@ -860,14 +872,14 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
     });
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'Press Ctrl-C again to exit',
-      'api',
+      PERSONAL_API_MODE_LABEL,
     ]);
     expect(display.bindings).toBe(
       'Resume this session with: texra --resume abc123',
@@ -889,7 +901,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: false,
       hasMultipleStreams: false,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       width: 29,
     });
@@ -918,7 +930,7 @@ describe('CLI StatusBar display model', () => {
       subagentControlsAvailable: true,
       hasMultipleStreams: true,
       model: 'deepseekT',
-      apiMode: 'api',
+      apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: defaultShortcutModifierLabel('darwin'),
     });
 
