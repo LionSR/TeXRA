@@ -9,6 +9,7 @@ import {
   DraftAttachmentStore,
   shouldCollapsePaste,
 } from '../input/draftAttachments';
+import { ImagePasteQueue } from '../input/imagePasteQueue';
 import { ReverseSearch } from '../input/ReverseSearch';
 import { isCtrlInput } from '../input/inputKeys';
 import { SlashPalette } from '../commands/SlashPalette';
@@ -40,21 +41,56 @@ function slashSubmitText(
   current: string,
   commandName: string,
   fallbackRemainder: string,
+  typedName?: string,
 ): string {
-  const parsed = parseSlashInput(current);
-  if (!parsed) {
+  const parsedName = parseSlashInput(current)?.name;
+  const nameToReplace =
+    typedName && current.startsWith(`/${typedName}`) ? typedName : parsedName;
+  if (!nameToReplace) {
     return `/${commandName}${fallbackRemainder ? ` ${fallbackRemainder.trimStart()}` : ''}`;
   }
-  return `/${commandName}${current.slice(parsed.name.length + 1)}`;
+  const suffix = current.slice(nameToReplace.length + 1);
+  const separator = suffix.length > 0 && !/^\s/.test(suffix) ? ' ' : '';
+  return `/${commandName}${separator}${suffix}`;
+}
+
+export function submitSlashCommandWhenReady({
+  commandName,
+  fallbackRemainder,
+  handleSubmit,
+  imagePasteQueue,
+  readDraft,
+  typedName,
+}: {
+  readonly commandName: string;
+  readonly fallbackRemainder: string;
+  readonly handleSubmit: (value: string) => void;
+  readonly imagePasteQueue: ImagePasteQueue;
+  readonly readDraft: () => string;
+  readonly typedName?: string;
+}): void {
+  imagePasteQueue.runWhenIdle(() => {
+    handleSubmit(
+      slashSubmitText(readDraft(), commandName, fallbackRemainder, typedName),
+    );
+  });
 }
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
   const { disabled, history, onSubmit, prompt } = props;
-  const [value, setValue] = useState('');
+  const [value, setValueState] = useState('');
   const [reverseSearchOpen, setReverseSearchOpen] = useState(false);
   const [attachNotice, setAttachNotice] = useState<string | null>(null);
+  const draftValueRef = useRef(value);
+  const setValue = useCallback((next: string) => {
+    draftValueRef.current = next;
+    setValueState(next);
+  }, []);
   const historyRef = useRef(history);
   historyRef.current = history;
+  const imagePasteQueueRef = useRef<ImagePasteQueue | null>(null);
+  imagePasteQueueRef.current ??= new ImagePasteQueue();
+  const imagePasteQueue = imagePasteQueueRef.current;
 
   // Collapsed pastes (and, in the image slice, pasted images) live here keyed
   // by chip id and are expanded back into the submitted text at handleSubmit.
@@ -126,11 +162,16 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       });
       onSubmit(trimmed, mediaFiles.length > 0 ? mediaFiles : undefined);
     },
-    [onSubmit],
+    [onSubmit, setValue],
   );
 
   const acceptSlashCommand = useCallback(
-    (cmd: SlashCommand, intent: SlashPickIntent, remainder: string): void => {
+    (
+      cmd: SlashCommand,
+      intent: SlashPickIntent,
+      typedName: string,
+      remainder: string,
+    ): void => {
       if (cmd.formComponent) {
         // Structured forms own the screen — clear the input and let
         // the active-form signal mount the component (see App.tsx).
@@ -149,12 +190,19 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         return;
       }
       if (intent === 'submit') {
-        handleSubmit(slashSubmitText(value, cmd.name, remainder));
+        submitSlashCommandWhenReady({
+          commandName: cmd.name,
+          fallbackRemainder: remainder,
+          handleSubmit,
+          imagePasteQueue,
+          readDraft: () => draftValueRef.current,
+          typedName,
+        });
         return;
       }
       setValue(`/${cmd.name}${remainder ? ` ${remainder.trimStart()}` : ' '}`);
     },
-    [handleSubmit, value],
+    [handleSubmit, imagePasteQueue, setValue],
   );
 
   const handleInputChunkSubmit = useCallback(
@@ -166,6 +214,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           acceptSlashCommand(
             chosen,
             slashPickIntent(chosen, 'enter'),
+            slash.name,
             slash.remainder,
           );
           return;
@@ -216,7 +265,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         <SlashPalette
           query={parsed.name}
           onPick={(cmd, intent) => {
-            acceptSlashCommand(cmd, intent, parsed.remainder);
+            acceptSlashCommand(cmd, intent, parsed.name, parsed.remainder);
           }}
           onCancel={() => {
             /* Esc clears the slash — caller can re-open by typing again. */
@@ -241,6 +290,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           value={value}
           focus={!disabled && !reverseSearchOpen}
           onChange={setValue}
+          imagePasteQueue={imagePasteQueue}
           transformPaste={transformPaste}
           onImagePaste={onImagePaste}
           onImagePasteError={(error) =>

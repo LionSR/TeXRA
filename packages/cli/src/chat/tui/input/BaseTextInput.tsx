@@ -27,9 +27,8 @@ import {
   isUnhandledControlInput,
   metaChordInput,
 } from './inputKeys';
+import { ImagePasteQueue, withImagePasteTimeout } from './imagePasteQueue';
 import { textDisplayWidth } from '../render/terminalText';
-
-const IMAGE_PASTE_TIMEOUT_MS = 15_000;
 
 export interface BaseTextInputProps {
   readonly value: string;
@@ -54,6 +53,7 @@ export interface BaseTextInputProps {
    *  text to insert (e.g. `[Image #1]`) or null when there is no image. */
   readonly onImagePaste?: () => Promise<string | null>;
   readonly onImagePasteError?: (error: unknown) => void;
+  readonly imagePasteQueue?: ImagePasteQueue;
   /** Render the value as bullets (secret entry, e.g. an API key). Display-only:
    *  the captured value, edits, and paste are unaffected. */
   readonly masked?: boolean;
@@ -74,19 +74,6 @@ interface TextInputDisplayRow {
 interface LeadingEllipsisDisplay {
   readonly text: string;
   readonly removedPrefixCodeUnits: number;
-}
-
-function withImagePasteTimeout<T>(promise: Promise<T>): Promise<T> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<never>((_resolve, reject) => {
-    timeout = setTimeout(
-      () => reject(new Error('Image paste timed out.')),
-      IMAGE_PASTE_TIMEOUT_MS,
-    );
-  });
-  return Promise.race([promise, timeoutPromise]).finally(() => {
-    if (timeout) clearTimeout(timeout);
-  });
 }
 
 function codePointAtIndex(
@@ -332,8 +319,10 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   // the current caret, not a stale keypress-time snapshot.
   const latestStateRef = useRef({ value, cursor });
   latestStateRef.current = { value, cursor };
-  const pendingImagePastesRef = useRef(new Set<Promise<void>>());
-  const pendingSubmitRef = useRef<(() => void) | null>(null);
+  const ownedImagePasteQueueRef = useRef<ImagePasteQueue | null>(null);
+  ownedImagePasteQueueRef.current ??= new ImagePasteQueue();
+  const imagePasteQueue =
+    props.imagePasteQueue ?? ownedImagePasteQueueRef.current;
 
   // Track the last value we ourselves emitted via onChange. If the prop's
   // `value` diverges from this, the parent swapped the text out from under
@@ -378,36 +367,26 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     [applyEdit],
   );
 
-  const flushPendingSubmit = useCallback(() => {
-    if (pendingImagePastesRef.current.size > 0) return;
-    const submit = pendingSubmitRef.current;
-    pendingSubmitRef.current = null;
-    submit?.();
-  }, []);
-
   const submitAfterImagePastes = useCallback(
     (handler: (value: string) => void, submitted: string): void => {
-      if (pendingImagePastesRef.current.size === 0) {
+      if (
+        !imagePasteQueue.deferUntilIdle(() =>
+          handler(latestStateRef.current.value),
+        )
+      ) {
         handler(submitted);
-        return;
       }
-      // Enter commits this draft and locks further input until clipboard probes
-      // settle. The flushed submit should include chips produced by those
-      // already-started probes, but not later user edits. Freeze the handler
-      // from this Enter press so a later parent rerender cannot redirect the
-      // committed submit.
-      pendingSubmitRef.current ??= () => handler(latestStateRef.current.value);
     },
-    [],
+    [imagePasteQueue],
   );
 
   useInput(
     (input, key) => {
       if (isEscapeInput(input, key)) {
-        pendingSubmitRef.current = null;
+        imagePasteQueue.cancelDeferredAction();
         return;
       }
-      if (pendingSubmitRef.current) {
+      if (imagePasteQueue.hasDeferredAction) {
         // A visible Enter already committed this draft. Ignore later keystrokes
         // until clipboard probes settle so the deferred submit is neither
         // overwritten nor allowed to clear a newer draft.
@@ -472,11 +451,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
             insertIntoLatestDraft(chip);
           })
           .catch((err: unknown) => props.onImagePasteError?.(err));
-        pendingImagePastesRef.current.add(paste);
-        void paste.finally(() => {
-          pendingImagePastesRef.current.delete(paste);
-          flushPendingSubmit();
-        });
+        imagePasteQueue.track(paste);
         return;
       }
       // Drop unhandled control/meta combos; pass printable input through.
@@ -506,7 +481,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   // otherwise the paste is inserted verbatim.
   usePaste(
     (text) => {
-      if (pendingSubmitRef.current) return;
+      if (imagePasteQueue.hasDeferredAction) return;
       const toInsert = props.transformPaste?.(text) ?? text;
       insertIntoLatestDraft(toInsert);
     },
