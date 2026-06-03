@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   selectHotkeyForIndex,
   selectIndexForHotkey,
+  selectIndexForHotkeyInput,
 } from '@cli/chat/tui/ui/Select';
 
 describe('Select hotkeys', () => {
@@ -32,5 +33,12 @@ describe('Select hotkeys', () => {
     expect(selectIndexForHotkey('0')).toBeUndefined();
     expect(selectIndexForHotkey('')).toBeUndefined();
     expect(selectIndexForHotkey('ab')).toBeUndefined();
+  });
+
+  it('uses the first shortcut from buffered terminal input', () => {
+    expect(selectIndexForHotkeyInput('21')).toBe(1);
+    expect(selectIndexForHotkeyInput('A1')).toBe(9);
+    expect(selectIndexForHotkeyInput('0a')).toBeUndefined();
+    expect(selectIndexForHotkeyInput('')).toBeUndefined();
   });
 });
