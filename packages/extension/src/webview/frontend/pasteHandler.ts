@@ -21,25 +21,32 @@ export async function handleImagePaste(
   // Must run synchronously, before any await, to suppress the default paste.
   event.preventDefault();
 
-  let insertText = event.clipboardData?.getData('text/plain') || '';
-  for (const { file, type } of images) {
-    const fileName = generatePastedImageName(getExtensionFromMimeType(type));
-    const base64 = await readFileAsBase64(file);
-    if (!base64) {
-      postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
-        text: `Failed to process pasted image: ${fileName}`,
+  const pastedImageText = await Promise.all(
+    images.map(async ({ file, type }) => {
+      const fileName = generatePastedImageName(getExtensionFromMimeType(type));
+      const base64 = await readFileAsBase64(file);
+      if (!base64) {
+        postMessage(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE, {
+          text: `Failed to process pasted image: ${fileName}`,
+        });
+        return '';
+      }
+      postMessage(MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE, {
+        base64,
+        mediaType: type,
+        fileName,
       });
-      continue;
-    }
-    postMessage(MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE, {
-      base64,
-      mediaType: type,
-      fileName,
-    });
+      return `[${fileName}]`;
+    }),
+  );
+
+  const imageChips = pastedImageText.filter(Boolean).join(' ');
+  let insertText = event.clipboardData?.getData('text/plain') || '';
+  if (imageChips) {
     if (insertText && !insertText.endsWith(' ') && !insertText.endsWith('\n')) {
       insertText += ' ';
     }
-    insertText += `[${fileName}]`;
+    insertText += imageChips;
   }
 
   if (insertText) {

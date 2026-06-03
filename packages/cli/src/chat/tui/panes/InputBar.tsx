@@ -3,6 +3,7 @@ import { Box, Text, useInput } from 'ink';
 
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import { attachClipboardImage } from '@cli/runtime/clipboardImage';
+import { toErrorMessage } from '@common/errors/errorMessage';
 import { BaseTextInput } from '../input/BaseTextInput';
 import {
   DraftAttachmentStore,
@@ -52,16 +53,21 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     return attachmentsRef.current.addPastedText(text);
   }, []);
   const onImagePaste = useCallback(async (): Promise<string | null> => {
-    const result = await attachClipboardImage();
-    if (!result.ok) {
-      setAttachNotice(result.reason);
+    try {
+      const result = await attachClipboardImage();
+      if (!result.ok) {
+        setAttachNotice(result.reason);
+        return null;
+      }
+      return attachmentsRef.current.addPastedImage({
+        path: result.path,
+        mediaType: result.mediaType,
+        displayName: result.displayName,
+      });
+    } catch (error) {
+      setAttachNotice(`Image paste failed: ${toErrorMessage(error)}`);
       return null;
     }
-    return attachmentsRef.current.addPastedImage({
-      path: result.path,
-      mediaType: result.mediaType,
-      displayName: result.displayName,
-    });
   }, []);
 
   // Clear the transient paste notice a few seconds after it appears.
@@ -87,7 +93,11 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       // Expand `[Pasted text #N …]` chips back to their full content, and
       // collect any pasted-image attachments still referenced in the draft.
       const trimmed = store.expandText(submitted).trim();
-      if (trimmed.length === 0) return;
+      if (trimmed.length === 0) {
+        setValue('');
+        store.clear();
+        return;
+      }
       const mediaFiles = store.resolveMedia(submitted);
       setValue('');
       store.clear();
@@ -221,6 +231,9 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           onChange={setValue}
           transformPaste={transformPaste}
           onImagePaste={onImagePaste}
+          onImagePasteError={(error) =>
+            setAttachNotice(`Image paste failed: ${toErrorMessage(error)}`)
+          }
           onInputChunkSubmit={handleInputChunkSubmit}
           onSubmit={showPalette ? () => undefined : handleSubmit}
         />
