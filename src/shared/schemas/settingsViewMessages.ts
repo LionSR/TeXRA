@@ -47,6 +47,7 @@ import {
   UpdateMemoryMessageSchema,
   UpdateMemoryPreviewMessageSchema,
 } from './memoryViewMessages';
+import { ModelAvailabilityFieldsSchema } from './mainView';
 import { NESTED_DELEGATION_DEPTH_RANGE } from '../constants/delegationPolicy';
 import {
   AgentCategorySchema,
@@ -221,6 +222,9 @@ export const ModelSelectionItemSchema = z.object({
   includedAccessReasoningCap: ReasoningLevelSchema.optional(),
   /** Whether this model qualifies as a "fast first response" pick (price-based). */
   isFast: z.boolean().optional(),
+  // Resolved once by computeModelOptionsData and carried verbatim so the
+  // Models tab renders availability without re-deriving it at render time.
+  ...ModelAvailabilityFieldsSchema.shape,
 });
 export type ModelSelectionItem = z.infer<typeof ModelSelectionItemSchema>;
 
