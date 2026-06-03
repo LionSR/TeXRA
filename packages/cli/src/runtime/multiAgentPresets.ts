@@ -57,12 +57,6 @@ export interface CliMultiAgentPresetListRecord extends CliMultiAgentPreset {
   readonly availability: CliMultiAgentPresetAvailability;
 }
 
-const NON_DEFAULT_ROOT_TOOL_USE_AGENTS_BY_PRESET_SOURCE: Partial<
-  Record<CliMultiAgentPresetSource, ReadonlySet<string>>
-> = {
-  'built-in': new Set(['simplifier']),
-};
-
 export function parseCliCustomAgentPresets(raw: unknown): AgentModePreset[] {
   return AgentModePresetSchema.array().catch([]).parse(raw);
 }
@@ -382,33 +376,33 @@ function selectPresetRootAgent(
     readonly presetSource: CliMultiAgentPresetSource;
   },
 ): AgentEntry | undefined {
-  const rootCandidates = agents.filter((agent) =>
-    isPresetRootCandidate(agent, options.presetSource),
+  const delegatingAgents = agents.filter(agentHasDelegationTools);
+  const preferredRoot = findPreferredRootAgent(
+    delegatingAgents,
+    options.presetSource,
+    options.presetOrder,
   );
-  const delegatingAgents = rootCandidates.filter(agentHasDelegationTools);
-  if (delegatingAgents.length > 0) {
-    return (
-      findPreferredRootAgent(delegatingAgents, options.presetOrder) ??
-      delegatingAgents[0]
-    );
-  }
-  return rootCandidates[0];
-}
+  if (preferredRoot) return preferredRoot;
 
-function isPresetRootCandidate(
-  agent: AgentEntry,
-  presetSource: CliMultiAgentPresetSource,
-): boolean {
-  return !NON_DEFAULT_ROOT_TOOL_USE_AGENTS_BY_PRESET_SOURCE[presetSource]?.has(
-    agent.name,
-  );
+  if (options.presetSource === 'built-in') {
+    // Built-in teams name specialists as members. If their orchestrator is not
+    // available, fall back only to a plain local agent rather than promoting an
+    // arbitrary delegation specialist to team root.
+    return agents.find((agent) => !agentHasDelegationTools(agent));
+  }
+
+  return delegatingAgents[0] ?? agents[0];
 }
 
 function findPreferredRootAgent(
   agents: readonly AgentEntry[],
+  presetSource: CliMultiAgentPresetSource,
   presetOrder: readonly string[],
 ): AgentEntry | undefined {
-  const searchOrder = ['orchestrator', 'leanOrchestrator', ...presetOrder];
+  const searchOrder =
+    presetSource === 'built-in'
+      ? ['orchestrator', 'leanOrchestrator']
+      : ['orchestrator', 'leanOrchestrator', ...presetOrder];
   for (const name of searchOrder) {
     const entry = agents.find((agent) => agent.name === name);
     if (entry) return entry;
