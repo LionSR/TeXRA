@@ -1,3 +1,8 @@
+import { execFileSync } from 'child_process';
+import { existsSync } from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
 // Local imports - agent config
 import { platform } from '@platform/platform';
 import {
@@ -6,7 +11,11 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
-import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
+import {
+  lookupApiKey,
+  lookupApiKeyOrigin,
+  apiKeyEnvName,
+} from '@model/apiProviders';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { createEnumParser, createEnumStateGetter } from './support/enumConfig';
 import {
@@ -93,28 +102,73 @@ export const getClaudeAgentEffort: () => ClaudeAgentEffort =
 // ============================================================================
 
 /**
+ * Detect an existing Claude Code OAuth credential — either the
+ * `CLAUDE_CODE_OAUTH_TOKEN` env var (from `claude setup-token`) or a
+ * `claude login` session (Pro/Max subscription).
+ *
+ * Best-effort and side-effect-free: the login session lives in
+ * `${CLAUDE_CONFIG_DIR | ~/.claude}/.credentials.json` on Linux/Windows and in
+ * the login keychain on macOS. The macOS probe reads metadata only (no
+ * `-w`/`-g`) so it never triggers a keychain access prompt; any failure is
+ * swallowed and treated as "no credential."
+ */
+function hasClaudeOauthCredential(): boolean {
+  if (process.env.CLAUDE_CODE_OAUTH_TOKEN) return true;
+
+  const configDir =
+    process.env.CLAUDE_CONFIG_DIR?.trim() || path.join(os.homedir(), '.claude');
+  if (existsSync(path.join(configDir, '.credentials.json'))) return true;
+
+  if (process.platform === 'darwin') {
+    try {
+      execFileSync(
+        'security',
+        ['find-generic-password', '-s', 'Claude Code-credentials'],
+        { stdio: 'ignore', timeout: 2000 },
+      );
+      return true;
+    } catch {
+      // Not found / `security` unavailable — fall through to "no credential."
+    }
+  }
+
+  return false;
+}
+
+/**
  * Build the env block passed to the Claude Code subprocess.
  *
- * Resolution order matches user expectations:
- *   1. Workspace-managed secret (Settings → API Keys → Anthropic) wins, so
- *      a key set in TeXRA "just works."
- *   2. Otherwise we leave `ANTHROPIC_API_KEY` and `CLAUDE_CODE_OAUTH_TOKEN`
- *      alone — the CLI handles them itself, and if neither is set it falls
- *      back to the `~/.claude/` config produced by `claude login`.
+ * Auth resolution prefers an existing OAuth credential over a TeXRA-managed
+ * API key, so a stale key saved in Settings → API Keys can never shadow a
+ * working `claude login` session (the cause of spurious "Invalid API key"
+ * failures):
+ *   1. An explicit `ANTHROPIC_API_KEY` in the environment is already present
+ *      in `env` and passes through untouched.
+ *   2. A `CLAUDE_CODE_OAUTH_TOKEN` or `claude login` session is left for the
+ *      CLI to use; we do NOT override it with the managed key.
+ *   3. Only when no OAuth credential exists do we inject the workspace-managed
+ *      secret (Settings → API Keys → Anthropic) as `ANTHROPIC_API_KEY`.
  *
  * The SDK identifies itself in the User-Agent via CLAUDE_AGENT_SDK_CLIENT_APP.
  */
 export async function buildClaudeAgentEnv(): Promise<NodeJS.ProcessEnv> {
   const env: NodeJS.ProcessEnv = { ...process.env };
+  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
 
-  const managed = await lookupApiKey(platform().secrets, 'anthropic').catch(
-    () => undefined,
-  );
-  if (managed) {
+  const [managed, origin] = await Promise.all([
+    lookupApiKey(platform().secrets, 'anthropic').catch(() => undefined),
+    lookupApiKeyOrigin(platform().secrets, 'anthropic').catch(
+      () => 'none' as const,
+    ),
+  ]);
+
+  // Inject only the Settings-stored secret, and only when no OAuth credential
+  // is available. An `env`-origin key is already in `env`; an OAuth session
+  // takes precedence over the managed key.
+  if (managed && origin === 'secret' && !hasClaudeOauthCredential()) {
     env[apiKeyEnvName('anthropic')] = managed;
   }
 
-  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
   return env;
 }
 
