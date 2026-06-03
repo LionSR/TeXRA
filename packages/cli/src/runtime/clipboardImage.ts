@@ -12,7 +12,7 @@
 // code is duplicated.
 
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { platform as osPlatform, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -37,7 +37,22 @@ export type ClipboardAttachResult =
   | { readonly ok: false; readonly reason: string };
 
 /** Per-platform read result: PNG bytes, no image present, or unsupported. */
-type ClipboardRead = Buffer | 'none' | 'unsupported';
+type ClipboardRead = Buffer | 'none' | 'unsupported' | 'too-large';
+
+async function readPngFileWithinLimit(outFile: string): Promise<ClipboardRead> {
+  const { size } = await stat(outFile);
+  if (size > MAX_IMAGE_BYTES) return 'too-large';
+  return readFile(outFile);
+}
+
+function isMaxBufferError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+  );
+}
 
 async function readClipboardPngMac(outFile: string): Promise<ClipboardRead> {
   try {
@@ -56,7 +71,7 @@ async function readClipboardPngMac(outFile: string): Promise<ClipboardRead> {
   } catch {
     return 'none';
   }
-  return readFile(outFile);
+  return readPngFileWithinLimit(outFile);
 }
 
 async function readClipboardPngLinux(): Promise<ClipboardRead> {
@@ -77,6 +92,7 @@ async function readClipboardPngLinux(): Promise<ClipboardRead> {
       const buf = stdout as unknown as Buffer;
       if (buf.length > 0) return buf;
     } catch (err) {
+      if (isMaxBufferError(err)) return 'too-large';
       if (isFileNotFoundError(err)) continue; // tool not installed → try next
       toolFound = true; // tool ran but the clipboard had no image
     }
@@ -101,7 +117,7 @@ async function readClipboardPngWindows(
   } catch {
     return 'none';
   }
-  return readFile(outFile);
+  return readPngFileWithinLimit(outFile);
 }
 
 /**
@@ -135,6 +151,12 @@ export async function attachClipboardImage(): Promise<ClipboardAttachResult> {
     }
     if (read === 'none') {
       return { ok: false, reason: 'No image found on the clipboard.' };
+    }
+    if (read === 'too-large') {
+      return {
+        ok: false,
+        reason: 'Clipboard image is too large to attach.',
+      };
     }
 
     const fileName = generatePastedImageName('png');

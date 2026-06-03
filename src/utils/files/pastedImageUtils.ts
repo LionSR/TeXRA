@@ -20,7 +20,9 @@ export function isPastedImage(filename: string): boolean {
  * Get the full filesystem path for a pasted image
  */
 export function getPastedImageFullPath(filename: string): string {
-  return StorageFS.fullPath(path.join(PASTED_DIR, filename));
+  return StorageFS.fullPath(
+    path.join(PASTED_DIR, pastedImageFileName(filename)),
+  );
 }
 
 /**
@@ -29,6 +31,26 @@ export function getPastedImageFullPath(filename: string): string {
  */
 export function generatePastedImageName(ext: string): string {
   return `${PASTED_PREFIX}${Date.now()}_${randomBytes(4).toString('hex')}.${ext}`;
+}
+
+/**
+ * Validate a pasted-image filename received at a trust boundary. Webviews send
+ * filenames over IPC, so reject path separators, absolute paths, empty names,
+ * and non-TeXRA pasted-image names instead of silently normalizing them.
+ */
+export function pastedImageFileName(fileName: string): string {
+  if (
+    !fileName ||
+    fileName.includes('\0') ||
+    path.isAbsolute(fileName) ||
+    path.win32.isAbsolute(fileName) ||
+    path.posix.basename(fileName) !== fileName ||
+    path.win32.basename(fileName) !== fileName ||
+    !isPastedImage(fileName)
+  ) {
+    throw new Error('Invalid pasted image filename.');
+  }
+  return fileName;
 }
 
 /**
@@ -41,10 +63,7 @@ export async function savePastedImageBuffer(
   data: Buffer,
   fileName: string,
 ): Promise<string> {
-  // Defensive: a pasted filename can arrive from a webview message, so strip
-  // any directory components to keep the write inside PASTED_DIR — no `../`
-  // traversal or absolute-path escape.
-  const safeName = path.basename(fileName);
+  const safeName = pastedImageFileName(fileName);
   await StorageFS.ensureDir(PASTED_DIR);
   const relativePath = path.join(PASTED_DIR, safeName);
   await StorageFS.write(relativePath, data);
