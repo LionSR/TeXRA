@@ -10,10 +10,12 @@ import { render } from 'ink';
 import React from 'react';
 
 import { getToolUseAgents, getWorkflowAgents, loadAgents } from '@agent/index';
+import { getWorkspaceState } from '@agent/core/stateStore';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { isInFlightStatus } from '@common/constants/streamStatus';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { tryPlatform } from '@platform/platform';
 import {
   AGENT_CATEGORY,
@@ -162,6 +164,10 @@ function parseList(value: string | undefined): string[] {
     .filter((item) => item.length > 0);
 }
 
+const HARNESS_VISIBLE_TOOL_USE_AGENTS = parseList(
+  process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS,
+);
+
 await initLocalCliPlatform({
   apiMode: HARNESS_API_MODE,
   cwd: HARNESS_CWD,
@@ -170,6 +176,12 @@ await initLocalCliPlatform({
   storageRoot: path.join(HARNESS_CWD, '.texra-storage'),
   helperModel: 'harness-model',
 });
+if (process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined) {
+  await getWorkspaceState().update(
+    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+    HARNESS_VISIBLE_TOOL_USE_AGENTS,
+  );
+}
 await loadAgents({ includeRemote: false });
 
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
