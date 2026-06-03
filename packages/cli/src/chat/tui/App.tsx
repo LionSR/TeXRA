@@ -355,7 +355,7 @@ export function approvalForegroundMaxRows(
 }
 
 export interface AppProps {
-  readonly onSubmit: (line: string) => void;
+  readonly onSubmit: (line: string, mediaFiles?: readonly string[]) => void;
   readonly onKillExecution: (executionId: string) => void;
   readonly canInterruptActiveRun: () => boolean;
   readonly canStopActiveRun?: () => boolean;

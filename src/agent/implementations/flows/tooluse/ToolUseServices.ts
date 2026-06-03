@@ -3,6 +3,7 @@ import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { ToolDefinition } from '@model';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
+import type { TaskRunFileService } from '@utils/files';
 import type {
   BaseFlowContextInit,
   FlowParams,
@@ -13,6 +14,8 @@ import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly setting: AgentToolUseSetting;
   readonly session: IToolUseSession;
+  /** Run-storage-aware file locator; used to attach follow-up media files. */
+  readonly fileService: TaskRunFileService;
   readonly resolvedTools: ToolDefinition[];
   readonly toolRegistry: IToolRegistry;
   readonly snapshot: ToolUseSessionSnapshot | null;
