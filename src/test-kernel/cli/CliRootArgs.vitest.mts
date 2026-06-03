@@ -27,6 +27,7 @@ import {
 } from '@cli/commands/_helpers/fetchSilencer';
 import {
   collectStringFlagValues,
+  optionalStringFlagValue,
   rejectHeadlessOnlyFlags,
 } from '@cli/commands/_helpers/globalArgs';
 import {
@@ -363,6 +364,55 @@ describe('CLI root argument routing', () => {
         'i',
       ),
     ).toEqual(['Draft0.tex', 'appendices.tex']);
+  });
+
+  it('rejects file flags when the next token is another option', () => {
+    expect(() =>
+      collectStringFlagValues(
+        ['firstread', '--input', '--print'],
+        'input',
+        'i',
+      ),
+    ).toThrow('Missing value for --input');
+    expect(() =>
+      collectStringFlagValues(['firstread', '-i', '-p'], 'input', 'i'),
+    ).toThrow('Missing value for -i');
+  });
+
+  it('rejects file flags with empty inline values', () => {
+    expect(() =>
+      collectStringFlagValues(['firstread', '--input='], 'input', 'i'),
+    ).toThrow('Missing value for --input');
+  });
+
+  it('preserves bare dash as a file flag stdin value', () => {
+    expect(
+      collectStringFlagValues(['firstread', '--input', '-'], 'input', 'i'),
+    ).toEqual(['-']);
+  });
+
+  it('reads optional file flags from raw args with the same value guard', () => {
+    expect(
+      optionalStringFlagValue(['firstread', '--output', 'out.tex'], 'output'),
+    ).toBe('out.tex');
+    expect(
+      optionalStringFlagValue(
+        ['review', '--instruction-file=prompt.md'],
+        'instruction-file',
+      ),
+    ).toBe('prompt.md');
+    expect(
+      optionalStringFlagValue(['firstread', '--output', '-'], 'output'),
+    ).toBe('-');
+    expect(() =>
+      optionalStringFlagValue(
+        ['review', '--instruction-file', '--print'],
+        'instruction-file',
+      ),
+    ).toThrow('Missing value for --instruction-file');
+    expect(() =>
+      optionalStringFlagValue(['firstread', '--output='], 'output'),
+    ).toThrow('Missing value for --output');
   });
 
   it('rejects headless-only flags on interactive command bodies', () => {

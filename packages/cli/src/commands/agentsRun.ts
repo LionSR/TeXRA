@@ -26,6 +26,7 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
   GLOBAL_ARGS,
   collectStringFlagValues,
+  optionalStringFlagValue,
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
@@ -231,6 +232,6 @@ export const agentsRunCommand = defineCliCommand({
       contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
       model: optString(ctx.args.model),
       instruction: optString(ctx.args.instruction) ?? '',
-      instructionFile: optString(ctx.args['instruction-file']),
+      instructionFile: optionalStringFlagValue(ctx.rawArgs, 'instruction-file'),
     }),
 });
