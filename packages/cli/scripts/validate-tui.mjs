@@ -849,6 +849,8 @@ const SCENARIOS = [
       'previous rows',
       'Which proof direction',
       '+2 more',
+      '↑/↓ navigate',
+      '1-3 select now',
       'Enter select',
       'Esc skip',
       '1 question',
