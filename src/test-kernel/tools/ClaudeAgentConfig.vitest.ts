@@ -10,6 +10,14 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 let secretStore: Map<string, string>;
 let cleanupDirs: string[];
 let execFileSyncMock: ReturnType<typeof vi.fn>;
+let originalProcessPlatform: NodeJS.Platform;
+
+function stubProcessPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', {
+    value: platform,
+    configurable: true,
+  });
+}
 
 async function loadBuildClaudeAgentEnv(): Promise<
   typeof import('@tools/claudeAgentConfig').buildClaudeAgentEnv
@@ -41,6 +49,7 @@ async function loadBuildClaudeAgentEnv(): Promise<
 
 describe('Claude Code CLI configuration', () => {
   beforeEach(() => {
+    originalProcessPlatform = process.platform;
     secretStore = new Map();
     cleanupDirs = [];
     execFileSyncMock = vi.fn(() => {
@@ -65,6 +74,7 @@ describe('Claude Code CLI configuration', () => {
     vi.doUnmock('@platform/platform');
     invalidateApiKeyCache();
     vi.unstubAllEnvs();
+    stubProcessPlatform(originalProcessPlatform);
     for (const dir of cleanupDirs)
       rmSync(dir, { recursive: true, force: true });
   });
@@ -76,6 +86,13 @@ describe('Claude Code CLI configuration', () => {
     await expect(buildClaudeAgentEnv()).resolves.toMatchObject({
       ANTHROPIC_API_KEY: 'from-secret',
     });
+  });
+
+  it('leaves ANTHROPIC_API_KEY absent when no credential exists', async () => {
+    const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
+    const env = await buildClaudeAgentEnv();
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.CLAUDE_AGENT_SDK_CLIENT_APP).toBe('texra');
   });
 
   it('does not override a CLAUDE_CODE_OAUTH_TOKEN session with the managed secret', async () => {
@@ -115,6 +132,7 @@ describe('Claude Code CLI configuration', () => {
   });
 
   it('strips ANTHROPIC_API_KEY when a config-dir keychain OAuth session exists', async () => {
+    stubProcessPlatform('darwin');
     const configDir = path.join(os.tmpdir(), 'texra-test-claude-profile');
     vi.stubEnv('CLAUDE_CONFIG_DIR', configDir);
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
