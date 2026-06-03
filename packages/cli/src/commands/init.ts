@@ -2,7 +2,10 @@ import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';
-import { BUILTIN_DEFAULT_CHAT_AGENT } from '../runtime/chatDefaults';
+import {
+  BUILTIN_DEFAULT_CHAT_AGENT,
+  defaultToolUseAgents,
+} from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
@@ -20,8 +23,22 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import type { CliContext } from '../runtime/cliContext';
 
+interface InitAgentOption {
+  readonly name: string;
+  readonly description?: string;
+}
+
+export function defaultInitAgentOptions(
+  agents: readonly InitAgentOption[],
+): InitAgentOption[] {
+  return defaultToolUseAgents(agents).map((agent) => ({
+    name: agent.name,
+    description: agent.description,
+  }));
+}
+
 async function gatherOptions(apiMode: CliApiMode): Promise<{
-  agents: { name: string; description?: string }[];
+  agents: InitAgentOption[];
   models: {
     value: string;
     label: string;
@@ -30,10 +47,9 @@ async function gatherOptions(apiMode: CliApiMode): Promise<{
   }[];
 }> {
   await loadAgents({ includeRemote: false });
-  const agents = getVisibleAgents(AgentCategory.ToolUse).map((agent) => ({
-    name: agent.name,
-    description: agent.description,
-  }));
+  const agents = defaultInitAgentOptions(
+    getVisibleAgents(AgentCategory.ToolUse),
+  );
   const models = (await getCliModelAccessList({ apiMode })).map((entry) => ({
     value: entry.model.value,
     label: entry.model.label ?? entry.model.value,
