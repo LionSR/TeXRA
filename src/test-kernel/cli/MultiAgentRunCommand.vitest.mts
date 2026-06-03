@@ -368,7 +368,9 @@ describe('CLI multi-agent run command', () => {
         model: 'deepseekT',
         instruction: '',
       }),
-    ).rejects.toThrow(/Provide --input, --instruction, or --instruction-file/);
+    ).rejects.toThrow(
+      /Provide --input, --instruction, or --instruction-file for the team task\. Example: texra multi-agent run physicist --instruction "Check this derivation"/,
+    );
     expect(mocks.expandRunInputs).not.toHaveBeenCalled();
   });
 
