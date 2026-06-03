@@ -9,6 +9,7 @@ import type { StreamTabId } from '@shared/schemas/identifiers';
 
 import type { Plan } from '@shared/schemas/plan';
 
+import { filterNotNull } from '@utils/core';
 import {
   ODYSSEY_DEFAULT_MAX_CONTINUATIONS,
   ODYSSEY_HISTORY_LIMIT,
@@ -149,7 +150,7 @@ export const OdysseyStore = {
   list(): Odyssey[] {
     return readIndex()
       .map((id) => readRaw(id))
-      .filter((o): o is Odyssey => o !== null);
+      .filter(filterNotNull);
   },
 
   /**

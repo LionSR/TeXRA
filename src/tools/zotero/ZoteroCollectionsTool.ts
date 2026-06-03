@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - zotero
+import { filterNotNull } from '@utils/core';
 import {
   callBetterBibTeX,
   getZoteroPort,
@@ -133,7 +134,7 @@ function filterTree(nodes: CollectionNode[], query: string): FilterResult {
     const nameMatches = node.name.toLowerCase().includes(lowerQuery);
     const filteredChildren = node.children
       .map((child) => visit(child))
-      .filter((c): c is CollectionNode => c !== null);
+      .filter(filterNotNull);
 
     if (nameMatches) matchCount++;
 
@@ -143,9 +144,7 @@ function filterTree(nodes: CollectionNode[], query: string): FilterResult {
     return null;
   }
 
-  const tree = nodes
-    .map((n) => visit(n))
-    .filter((n): n is CollectionNode => n !== null);
+  const tree = nodes.map((n) => visit(n)).filter(filterNotNull);
 
   return { tree, matchCount };
 }

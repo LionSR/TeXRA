@@ -43,6 +43,7 @@ import {
 import { ToolError, type ToolResult } from '@tools/result';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
+import { filterNotNull } from '@utils/core';
 
 const logger = createChannelTrace('PlanTool');
 
@@ -80,7 +81,7 @@ function formatOdysseyView(odyssey: Odyssey): string {
     `Time elapsed: ${formatOdysseyTime(odysseyElapsedMs(odyssey))}`,
     odyssey.completedReason ? `Reason: ${odyssey.completedReason}` : null,
   ]
-    .filter((v): v is string => v !== null)
+    .filter(filterNotNull)
     .join('\n');
 }
 
