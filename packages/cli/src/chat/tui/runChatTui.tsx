@@ -57,7 +57,10 @@ import {
   signInCliSupabase,
   signOutCliSupabase,
 } from '@cli/runtime/supabaseAuth';
-import { dumbTerminalMessage } from '@cli/runtime/terminalRequirements';
+import {
+  formatInteractiveTerminalFailure,
+  interactiveTerminalFailure,
+} from '@cli/runtime/terminalRequirements';
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
@@ -954,19 +957,18 @@ export async function runChat(
   // (see cliContext.cliMode); stdout must also be a TTY for Ink to render,
   // and `TERM=dumb` strips the cursor controls Ink depends on (Ink would
   // mount and emit garbled output instead of a usable session).
-  const isHeadless =
-    context.mode === 'headless' || context.stdoutIsTty !== true;
-  const dumbTerm = context.termIsDumb === true;
+  const terminalFailure = interactiveTerminalFailure(context);
   const clearItermProgress = process.env.TERM_PROGRAM === 'iTerm.app';
-  if (isHeadless || dumbTerm) {
+  if (terminalFailure) {
     // Headless precedence: in CI (headless + TERM=dumb often co-occur) the
     // actionable advice is "use `texra run`", not "fix your TERM".
     writeTextStderr(
-      isHeadless
-        ? 'texra chat requires an interactive terminal (TTY stdin and stdout). For scripting or piped input, use `texra run`.'
-        : dumbTerminalMessage('chat', {
-            nonInteractiveFallback: '`texra run`',
-          }),
+      formatInteractiveTerminalFailure(terminalFailure, {
+        headlessMessage:
+          'texra chat requires an interactive terminal (TTY stdin and stdout). For scripting or piped input, use `texra run`.',
+        dumbTerminalCommand: 'chat',
+        dumbTerminalOptions: { nonInteractiveFallback: '`texra run`' },
+      }),
     );
     return { exitCode: CliExitCode.Usage };
   }

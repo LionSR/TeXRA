@@ -33,6 +33,7 @@ import { type CliApiMode } from '../runtime/apiAccessMode';
 import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { signInCliSupabase } from '../runtime/supabaseAuth';
+import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { saveProviderApiKey } from './applyOnboardingResult';
 import {
@@ -79,12 +80,7 @@ export async function maybeRunCliOnboarding(
   // `process.stdout.isTTY` is the authoritative "Ink can actually mount here"
   // check at the call site (same guard runCliOnboarding uses for the
   // context-less `texra setup` path). Defense-in-depth before we render.
-  if (
-    context.mode === 'headless' ||
-    context.stdoutIsTty !== true ||
-    context.termIsDumb === true ||
-    !process.stdout.isTTY
-  ) {
+  if (interactiveTerminalFailure(context) || !process.stdout.isTTY) {
     return { configured: false, declined: false };
   }
   if (getOnboardingDeclined(platform().globalState)) {
