@@ -1747,7 +1747,7 @@ const SCENARIOS = [
 
 function formatUsage() {
   return [
-    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [scenario ...]',
+    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [--skip-if-missing-deps] [scenario ...]',
     '',
     'Options:',
     '  --snapshot-dir DIR  Write per-scenario .txt/.svg frames and an index.html report',
