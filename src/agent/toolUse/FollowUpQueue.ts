@@ -8,19 +8,23 @@
 interface FollowUpQueueItem {
   readonly text: string;
   readonly synthetic: boolean;
+  /** Media file paths (e.g. pasted images) attached to this user follow-up. */
+  readonly mediaFiles?: readonly string[];
 }
 
 export interface FollowUpQueueBatch {
   readonly items: string[];
   readonly synthetic: boolean;
+  /** Media file paths from the user follow-ups in this batch, flattened. */
+  readonly mediaFiles: string[];
 }
 
 export class FollowUpQueue {
   private readonly queued: FollowUpQueueItem[] = [];
   private resolver: ((value: FollowUpQueueItem | null) => void) | null = null;
 
-  enqueue(value: string): void {
-    this.enqueueItem({ text: value, synthetic: false });
+  enqueue(value: string, mediaFiles?: readonly string[]): void {
+    this.enqueueItem({ text: value, synthetic: false, mediaFiles });
   }
 
   enqueueSynthetic(value: string): void {
@@ -46,6 +50,18 @@ export class FollowUpQueue {
       .splice(0)
       .filter((item) => !item.synthetic)
       .map((item) => item.text);
+  }
+
+  /**
+   * Drain queued visible follow-ups together with their media file paths.
+   * Used by resume to replay queued user input without losing pasted images;
+   * the text-only {@link drain} stays for display/back-compat.
+   */
+  drainItems(): Array<{ text: string; mediaFiles?: readonly string[] }> {
+    return this.queued
+      .splice(0)
+      .filter((item) => !item.synthetic)
+      .map((item) => ({ text: item.text, mediaFiles: item.mediaFiles }));
   }
 
   waitForNext(
@@ -75,16 +91,19 @@ export class FollowUpQueue {
     const first = await this.waitForNext(checkInterruption);
     if (first === null) return null;
     if (first.synthetic) {
-      return { items: [first.text], synthetic: true };
+      return { items: [first.text], synthetic: true, mediaFiles: [] };
     }
 
     const items = [first.text];
+    const mediaFiles: string[] = [...(first.mediaFiles ?? [])];
     while (true) {
       const next = this.queued[0];
       if (!next || next.synthetic) break;
-      items.push(this.queued.shift()!.text);
+      const item = this.queued.shift()!;
+      items.push(item.text);
+      if (item.mediaFiles?.length) mediaFiles.push(...item.mediaFiles);
     }
-    return { items, synthetic: false };
+    return { items, synthetic: false, mediaFiles };
   }
 
   cancelWait(): void {

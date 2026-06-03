@@ -161,6 +161,7 @@ export interface BuildInitialChatAgentConfigInput {
   readonly model: string;
   readonly instruction: string;
   readonly workingDirectory: string;
+  readonly mediaFiles?: readonly string[];
   readonly cliMultiAgentPresetId?: string;
 }
 
@@ -169,6 +170,7 @@ export function buildInitialChatAgentConfig({
   model,
   instruction,
   workingDirectory,
+  mediaFiles,
   cliMultiAgentPresetId,
 }: BuildInitialChatAgentConfigInput): AgentConfigPayload {
   return {
@@ -177,6 +179,7 @@ export function buildInitialChatAgentConfig({
     instruction,
     agentCategory: AgentCategory.ToolUse,
     workingDirectory,
+    ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
     ...(cliMultiAgentPresetId ? { cliMultiAgentPresetId } : {}),
   };
 }
@@ -1355,7 +1358,10 @@ export async function runChat(
     },
   });
 
-  const startSession = (instruction: string): void => {
+  const startSession = (
+    instruction: string,
+    mediaFiles?: readonly string[],
+  ): void => {
     const meta = cliState.sessionMeta.get();
     const currentAgent = meta.agent || agent;
     const currentModel = meta.model || model;
@@ -1364,24 +1370,31 @@ export async function runChat(
         agent: currentAgent,
         model: currentModel,
         instruction,
+        mediaFiles,
         workingDirectory: context.cwd,
         cliMultiAgentPresetId: init.cliMultiAgentPresetId,
       }),
     );
   };
 
-  const handleSubmit = (line: string): void => {
-    void handleSubmittedLine(line);
+  const handleSubmit = (line: string, mediaFiles?: readonly string[]): void => {
+    void handleSubmittedLine(line, mediaFiles);
   };
 
-  const handleSubmittedLine = async (line: string): Promise<void> => {
+  const handleSubmittedLine = async (
+    line: string,
+    mediaFiles?: readonly string[],
+  ): Promise<void> => {
     if (await handleTuiSlashCommand(line, slashCommandContext())) {
       return;
     }
-    await submitChatMessage(line);
+    await submitChatMessage(line, mediaFiles);
   };
 
-  const submitChatMessage = async (line: string): Promise<void> => {
+  const submitChatMessage = async (
+    line: string,
+    mediaFiles?: readonly string[],
+  ): Promise<void> => {
     const rejectedChildFollowUpTarget = chatTuiRejectedChildFollowUpTarget();
     if (rejectedChildFollowUpTarget) {
       appendLocalAssistantTranscript(
@@ -1392,7 +1405,7 @@ export async function runChat(
     }
     const childFollowUpTarget = chatTuiActiveChildFollowUpTarget();
     if (!childFollowUpTarget && chatTuiCanStartRootRun(session)) {
-      startSession(line);
+      startSession(line, mediaFiles);
       return;
     }
     // PRD success criterion: follow-ups must not be silently dropped when the
@@ -1417,7 +1430,7 @@ export async function runChat(
         followUpTarget = session.streamId;
       }
       if (!followUpTarget || session.stopRequested) return;
-      const result = await sendFollowUp(followUpTarget, line);
+      const result = await sendFollowUp(followUpTarget, line, mediaFiles);
       if (result.status === 'no_session') {
         // Child stream ids are keys in parentStream; the root session id is not.
         if (followUpTarget === session.streamId) {
