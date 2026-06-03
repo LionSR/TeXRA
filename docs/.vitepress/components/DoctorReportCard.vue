@@ -22,7 +22,7 @@ const groups = [
   {
     label: 'Runtime & auth',
     rows: [
-      { name: 'Node.js', status: 'found', detail: 'v22.22.2' },
+      { name: 'Node.js', status: 'found', detail: '22.11.0' },
       { name: 'Authentication', status: 'found', detail: 'signed in' },
       {
         name: 'Models available',

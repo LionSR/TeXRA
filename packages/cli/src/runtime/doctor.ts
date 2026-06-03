@@ -2,12 +2,18 @@
 import { constants as fsConstants } from 'node:fs';
 import { access, stat } from 'node:fs/promises';
 
+// Third-party imports
+import { satisfies as semverSatisfies } from 'semver';
+
 // Local imports - LaTeX
 import {
   probeLatexToolchain,
   type LatexToolchainProbe,
 } from '@latex/latexToolchain';
-import { TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY } from '@shared/constants/cliRuntime';
+import {
+  TEXRA_CLI_SUPPORTED_NODE_RANGE,
+  TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY,
+} from '@shared/constants/cliRuntime';
 
 // Local imports - CLI runtime
 import { redactEmailAccountLabelsForDisplay } from './accountDisplay';
@@ -63,37 +69,10 @@ interface DoctorDependencies {
 
 type ResolvedDoctorDependencies = Required<DoctorDependencies>;
 
-function parseNodeVersion(version: string): [number, number, number] | null {
-  const [majorRaw, minorRaw, patchRaw] = version.split('.');
-  const major = Number.parseInt(majorRaw ?? '', 10);
-  const minor = Number.parseInt(minorRaw ?? '', 10);
-  const patch = Number.parseInt(patchRaw ?? '', 10);
-  if (![major, minor, patch].every(Number.isFinite)) return null;
-  return [major, minor, patch];
-}
-
-function isAtLeast(
-  version: [number, number, number],
-  minimum: [number, number, number],
-): boolean {
-  return (
-    version[0] > minimum[0] ||
-    (version[0] === minimum[0] &&
-      (version[1] > minimum[1] ||
-        (version[1] === minimum[1] && version[2] >= minimum[2])))
-  );
-}
-
 function isSupportedNodeVersion(version: string): boolean {
-  const parsed = parseNodeVersion(version);
-  if (!parsed) return false;
-
-  const [major] = parsed;
-  return (
-    (major === 22 && isAtLeast(parsed, [22, 22, 2])) ||
-    (major === 24 && isAtLeast(parsed, [24, 15, 0])) ||
-    major >= 26
-  );
+  return semverSatisfies(version, TEXRA_CLI_SUPPORTED_NODE_RANGE, {
+    loose: true,
+  });
 }
 
 function check(
