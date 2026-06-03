@@ -11,9 +11,12 @@ import {
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
+import { openRegisteredCliSlashForm } from '@cli/chat/tui/runChatTui';
+import { cliState, resetCliState } from '@cli/chat/tui/state/cliState';
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
+  resetCliState();
 });
 
 describe('slashRegistry', () => {
@@ -32,6 +35,7 @@ describe('slashRegistry', () => {
         'status',
         'resume',
         'memory',
+        'tools',
         'compact',
       ]),
     );
@@ -64,11 +68,27 @@ describe('slashRegistry', () => {
         formComponent: expect.any(Function),
       }),
     );
+    expect(listSlashCommands().find((cmd) => cmd.name === 'tools')).toEqual(
+      expect.objectContaining({
+        description: 'List or toggle external integrations',
+        formComponent: expect.any(Function),
+      }),
+    );
     expect(listSlashCommands().find((cmd) => cmd.name === 'compact')).toEqual(
       expect.objectContaining({
         description: 'Request context compaction',
       }),
     );
+  });
+
+  it('opens registered structured forms through the shared form opener', () => {
+    registerBuiltinSlashCommands();
+    const tools = listSlashCommands().find((cmd) => cmd.name === 'tools');
+
+    if (!tools) throw new Error('Expected /tools to be registered');
+
+    expect(openRegisteredCliSlashForm(tools, '')).toBe(true);
+    expect(cliState.activeForm.get()?.commandName).toBe('tools');
   });
 
   it('matches by name prefix case-insensitively', () => {
