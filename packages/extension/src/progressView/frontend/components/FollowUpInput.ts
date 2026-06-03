@@ -16,6 +16,13 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import { RecordingButtonController } from '@shared/controllers';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { getTextareaValue, insertTextAtCursor } from '@shared/utils/textarea';
+import {
+  clipboardImageFiles,
+  generatePastedImageName,
+  getExtensionFromMimeType,
+  readFileAsBase64,
+  type ExtractedClipboardImage,
+} from '@shared/utils/clipboardImages';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { ELEMENT_IDS } from '../constants';
 import { ProgressEvents } from '../events';
@@ -114,6 +121,12 @@ export class FollowUpInput extends LitElement {
 
   @state() private polishing = false;
 
+  /** Images pasted into the follow-up box; attached to the message on send. */
+  private pendingImages: ExtractedClipboardImage[] = [];
+  private readonly pendingImagePastes = new Set<Promise<void>>();
+  private imagePasteRevision = 0;
+  private sendAfterImagePastes = false;
+
   @query(`#${ELEMENT_IDS.FOLLOW_UP_INPUT}`)
   declare private textAreaEl: HTMLElement | null;
 
@@ -179,6 +192,64 @@ export class FollowUpInput extends LitElement {
     }
   }
 
+  /** Pasting an image stashes its bytes and inserts a `[fileName]` token; the
+   *  bytes ride along to the model when the follow-up is sent. Non-image
+   *  pastes fall through to the textarea's default text handling. */
+  private handlePaste(event: ClipboardEvent): void {
+    const files = clipboardImageFiles(event);
+    if (files.length === 0) return;
+    // Suppress the default paste synchronously, before the async read below.
+    event.preventDefault();
+    const paste = this.attachPastedImages(
+      event,
+      files,
+      this.imagePasteRevision,
+    );
+    this.pendingImagePastes.add(paste);
+    void paste.finally(() => {
+      this.pendingImagePastes.delete(paste);
+      this.flushPendingImagePasteSend();
+    });
+  }
+
+  private async attachPastedImages(
+    event: ClipboardEvent,
+    files: Array<{ file: File; type: string }>,
+    pasteRevision: number,
+  ): Promise<void> {
+    const target = this.textAreaEl;
+    if (!target) return;
+    let insertText = event.clipboardData?.getData('text/plain') || '';
+    const added = (
+      await Promise.all(
+        files.map(
+          async ({
+            file,
+            type,
+          }): Promise<ExtractedClipboardImage | undefined> => {
+            const base64 = await readFileAsBase64(file);
+            if (!base64) return undefined;
+            return {
+              fileName: generatePastedImageName(getExtensionFromMimeType(type)),
+              base64,
+              mediaType: type,
+            };
+          },
+        ),
+      )
+    ).filter((image): image is ExtractedClipboardImage => image !== undefined);
+    if (pasteRevision !== this.imagePasteRevision) return;
+    if (added.length === 0) return;
+    const chipText = added.map(({ fileName }) => `[${fileName}]`).join(' ');
+    if (insertText && !insertText.endsWith(' ') && !insertText.endsWith('\n')) {
+      insertText += ' ';
+    }
+    insertText += chipText;
+    this.pendingImages = [...this.pendingImages, ...added];
+    insertTextAtCursor(target, insertText);
+    this.updateValue(getTextareaValue(target));
+  }
+
   override render(): TemplateResult | typeof nothing {
     return html`
       <wa-details class="panel-collapsible" summary="Follow-up Input">
@@ -196,6 +267,7 @@ export class FollowUpInput extends LitElement {
               .value=${live(this.value)}
               @input=${this.handleInput}
               @keydown=${this.handleKeydown}
+              @paste=${this.handlePaste}
             ></wa-textarea>
 
             <div class="follow-up-actions">
@@ -266,7 +338,22 @@ export class FollowUpInput extends LitElement {
   }
 
   private emitSend(): void {
-    this.dispatchEvent(ProgressEvents.followupSend());
+    if (this.pendingImagePastes.size > 0) {
+      this.sendAfterImagePastes = true;
+      return;
+    }
+    this.dispatchEvent(
+      ProgressEvents.followupSend({ images: this.pendingImages }),
+    );
+    this.pendingImages = [];
+    this.sendAfterImagePastes = false;
+  }
+
+  private flushPendingImagePasteSend(): void {
+    if (!this.sendAfterImagePastes || this.pendingImagePastes.size > 0) {
+      return;
+    }
+    this.emitSend();
   }
 
   private emitPolish(): void {
@@ -278,6 +365,9 @@ export class FollowUpInput extends LitElement {
   }
 
   private emitClear(): void {
+    this.imagePasteRevision += 1;
+    this.pendingImages = [];
+    this.sendAfterImagePastes = false;
     this.dispatchEvent(ProgressEvents.followupClear());
   }
 
