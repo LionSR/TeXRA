@@ -127,21 +127,6 @@ function staticTranscriptItemRowCount(
     .length;
 }
 
-function canAppendStaticTranscriptItem({
-  currentRows,
-  item,
-  maxRows,
-  width,
-}: {
-  readonly currentRows: number;
-  readonly item: StaticTranscriptItem;
-  readonly maxRows?: number;
-  readonly width?: number;
-}): boolean {
-  if (maxRows === undefined) return true;
-  return currentRows + staticTranscriptItemRowCount(item, width) <= maxRows;
-}
-
 export function appendStaticTranscriptItems({
   activeStreamId,
   currentItems,
@@ -172,12 +157,7 @@ export function appendStaticTranscriptItems({
     };
     if (
       maxRows === undefined ||
-      canAppendStaticTranscriptItem({
-        currentRows,
-        item: header,
-        maxRows,
-        width,
-      })
+      currentRows + staticTranscriptItemRowCount(header, width) <= maxRows
     ) {
       nextItems.push(header);
       currentRows += staticTranscriptItemRowCount(header, width);

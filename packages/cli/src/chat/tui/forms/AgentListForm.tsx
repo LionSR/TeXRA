@@ -165,6 +165,13 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     0,
     selectWindow.maxVisibleWorkflows,
   );
+  const handleSelectItem = (value: string): void => {
+    if (selectable) {
+      props.onSelect?.(value);
+      return;
+    }
+    props.onClose();
+  };
 
   if (isCompactFormRows(props.availableRows)) {
     return (
@@ -175,13 +182,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           activeValue={activeValue}
           maxVisibleItems={1}
           showOverflow={false}
-          onSelect={(value) => {
-            if (selectable) {
-              props.onSelect?.(value);
-              return;
-            }
-            props.onClose();
-          }}
+          onSelect={handleSelectItem}
           onCancel={props.onClose}
         />
         <CompactFormKeyHints
@@ -218,13 +219,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           activeValue={activeValue}
           maxVisibleItems={selectWindow.maxVisibleItems}
           showOverflow={selectWindow.showOverflow}
-          onSelect={(value) => {
-            if (selectable) {
-              props.onSelect?.(value);
-              return;
-            }
-            props.onClose();
-          }}
+          onSelect={handleSelectItem}
           onCancel={props.onClose}
         />
       </Box>
