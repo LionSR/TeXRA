@@ -8,6 +8,7 @@ import { flowKey } from '@agent/node/persistedFlow';
 import {
   CLI_HISTORY_RESUMABLE_STATUS,
   formatCliHistoryDetailsText,
+  resumableCliHistoryEntries,
   readCliHistoryDetails,
   resolveCliHistoryStatus,
 } from '@cli/runtime/history';
@@ -60,6 +61,16 @@ describe('CLI history status formatting', () => {
     expect(resolveCliHistoryStatus({ hasFlowRecord: true })).toBe(
       CLI_HISTORY_RESUMABLE_STATUS,
     );
+  });
+
+  it('filters history entries to resumable sessions only', () => {
+    expect(
+      resumableCliHistoryEntries([
+        { id: 'resume-me', status: CLI_HISTORY_RESUMABLE_STATUS },
+        { id: 'done', status: EXECUTION_STATUS.COMPLETED },
+        { id: 'errored', status: EXECUTION_STATUS.ERROR },
+      ]),
+    ).toEqual([{ id: 'resume-me', status: CLI_HISTORY_RESUMABLE_STATUS }]);
   });
 
   it('keeps legacy terminal-status-free entries completed when no flow remains', () => {

@@ -8,7 +8,10 @@ import {
 } from '@cli/orchestration/runOrchestrationTui';
 import { buildCliOrchestrationItems } from '@cli/runtime/orchestration';
 
-import type { CliHistoryEntry } from '@cli/runtime/history';
+import {
+  CLI_HISTORY_RESUMABLE_STATUS,
+  type CliHistoryEntry,
+} from '@cli/runtime/history';
 import type { CliModelAccess } from '@cli/runtime/modelAccess';
 import {
   planCliMultiAgentPresetRun,
@@ -136,8 +139,14 @@ describe('CLI orchestration items', () => {
     const items = buildCliOrchestrationItems({
       presetPlans: [],
       history: [
-        historyEntry('aaaaaaaaaaaa', { agent: 'review' }),
-        historyEntry('bbbbbbbbbbbb', { agent: 'orchestrator' }),
+        historyEntry('aaaaaaaaaaaa', {
+          agent: 'review',
+          status: CLI_HISTORY_RESUMABLE_STATUS,
+        }),
+        historyEntry('bbbbbbbbbbbb', {
+          agent: 'orchestrator',
+          status: CLI_HISTORY_RESUMABLE_STATUS,
+        }),
       ],
       toolUseAgents: [toolUseAgent('review'), toolUseAgent('orchestrator')],
     });
@@ -150,8 +159,26 @@ describe('CLI orchestration items', () => {
       'Chat with orchestrator',
       'Help',
     ]);
-    expect(items[1]?.description).toBe('review; completed; no input');
-    expect(items[2]?.description).toBe('orchestrator; completed; no input');
+    expect(items[1]?.description).toBe('review; resumable; no input');
+    expect(items[2]?.description).toBe('orchestrator; resumable; no input');
+  });
+
+  it('does not list completed executions as resume launcher rows', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [],
+      history: [
+        historyEntry('aaaaaaaaaaaa', { agent: 'review' }),
+        historyEntry('bbbbbbbbbbbb', { agent: 'orchestrator' }),
+      ],
+      toolUseAgents: [toolUseAgent('review'), toolUseAgent('orchestrator')],
+    });
+
+    expect(items.map((item) => item.label)).toEqual([
+      'New chat',
+      'Chat with review',
+      'Chat with orchestrator',
+      'Help',
+    ]);
   });
 
   it('uses the input file name in resume launcher rows when present', () => {
@@ -160,13 +187,14 @@ describe('CLI orchestration items', () => {
       history: [
         historyEntry('aaaaaaaaaaaa', {
           agent: 'review',
+          status: CLI_HISTORY_RESUMABLE_STATUS,
           inputBasename: 'paper.tex',
         }),
       ],
       toolUseAgents: [toolUseAgent('review')],
     });
 
-    expect(items[1]?.description).toBe('review; completed; paper.tex');
+    expect(items[1]?.description).toBe('review; resumable; paper.tex');
   });
 
   it('filters recent agent entries to known tool-use agents', () => {
@@ -252,7 +280,12 @@ describe('CLI orchestration items', () => {
     const view = orchestrationModelAccessView(
       buildCliOrchestrationItems({
         presetPlans: [presetPlan({ id: 'physicist', name: 'Physicist' })],
-        history: [historyEntry('aaaaaaaaaaaa', { agent: 'review' })],
+        history: [
+          historyEntry('aaaaaaaaaaaa', {
+            agent: 'review',
+            status: CLI_HISTORY_RESUMABLE_STATUS,
+          }),
+        ],
         toolUseAgents: [toolUseAgent('review')],
       }),
       [modelAccess('deepseekT', 'provider-key', false)],
