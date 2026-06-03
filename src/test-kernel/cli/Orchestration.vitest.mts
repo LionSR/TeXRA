@@ -188,6 +188,22 @@ describe('CLI orchestration items', () => {
     expect(items.map((item) => item.label)).not.toContain('Chat with missing');
   });
 
+  it('does not offer simplifier as an inferred startup chat agent', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [],
+      history: [
+        historyEntry('aaaaaaaaaaaa', { agent: 'simplifier' }),
+        historyEntry('bbbbbbbbbbbb', { agent: 'review' }),
+      ],
+      toolUseAgents: [toolUseAgent('simplifier'), toolUseAgent('review')],
+    });
+
+    expect(items.map((item) => item.label)).toContain('Chat with review');
+    expect(items.map((item) => item.label)).not.toContain(
+      'Chat with simplifier',
+    );
+  });
+
   it('lists team presets as runnable orchestration actions', () => {
     const items = buildCliOrchestrationItems({
       presetPlans: [
