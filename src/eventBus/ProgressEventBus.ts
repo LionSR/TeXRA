@@ -16,6 +16,7 @@ import type {
   PlanApprovalPermission,
   RetryPermission,
   StorageKey,
+  ExecutionStatus,
   StreamStatus,
   StreamTabId,
   TokenUsageStats,
@@ -82,6 +83,8 @@ export interface ProgressEventPayloads {
     status: StreamStatus;
     /** Previous status before this update, for detecting transitions */
     previousStatus: StreamStatus;
+    /** Terminal execution outcome when the stream ended, if known. */
+    terminalStatus?: ExecutionStatus;
   };
   addOutputFiles: StreamScopedPayload & {
     filesByRound: { [key: number]: OutputFileInfo[] };

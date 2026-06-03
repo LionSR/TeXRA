@@ -3,7 +3,10 @@ import { defineCommand } from 'citty';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
-import { dumbTerminalMessage } from '../runtime/terminalRequirements';
+import {
+  formatInteractiveTerminalFailure,
+  interactiveTerminalFailure,
+} from '../runtime/terminalRequirements';
 
 import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch';
@@ -15,14 +18,14 @@ import {
 import type { CliContext } from '../runtime/cliContext';
 
 async function runSetup(context: CliContext): Promise<number> {
-  const isHeadless =
-    context.mode === 'headless' || context.stdoutIsTty !== true;
-  const dumbTerm = context.termIsDumb === true;
-  if (isHeadless || dumbTerm) {
+  const terminalFailure = interactiveTerminalFailure(context);
+  if (terminalFailure) {
     writeTextStderr(
-      isHeadless
-        ? 'texra setup requires an interactive terminal (TTY stdin and stdout). For scripting, set a provider API key env var (e.g. ANTHROPIC_API_KEY) or run `texra login`.'
-        : dumbTerminalMessage('setup'),
+      formatInteractiveTerminalFailure(terminalFailure, {
+        headlessMessage:
+          'texra setup requires an interactive terminal (TTY stdin and stdout). For scripting, set a provider API key env var (e.g. ANTHROPIC_API_KEY) or run `texra login`.',
+        dumbTerminalCommand: 'setup',
+      }),
     );
     return CliExitCode.Usage;
   }
