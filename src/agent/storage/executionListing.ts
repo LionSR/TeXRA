@@ -21,6 +21,7 @@ import { toErrorMessage } from '@common/errors/errorMessage';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS, WorkspaceFS } from '@utils/files';
+import { filterNotNull } from '@utils/core';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 import {
@@ -152,7 +153,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
   );
 
   const listing = results
-    .filter((e): e is ExecutionListingEntry => e !== null)
+    .filter(filterNotNull)
     .sort(
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
