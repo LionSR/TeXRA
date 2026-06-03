@@ -22,6 +22,7 @@ describe('TUI validator args', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('[validate-tui] usage:');
     expect(result.stdout).toContain('--snapshot-dir DIR');
+    expect(result.stdout).toContain('--no-build');
     expect(result.stdout).toContain('--skip-if-missing-deps');
     expect(result.stdout).toContain('--list');
     expect(result.stdout).toContain('--list-selected');
@@ -77,6 +78,18 @@ describe('TUI validator args', () => {
   it('parses explicit missing-dependency skip mode before selected scenarios', () => {
     const result = runValidator([
       '--skip-if-missing-deps',
+      '--list-selected',
+      'compact-user-question',
+    ]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe('compact-user-question');
+    expect(result.stderr).toBe('');
+  });
+
+  it('parses no-build mode before selected scenarios', () => {
+    const result = runValidator([
+      '--no-build',
       '--list-selected',
       'compact-user-question',
     ]);
