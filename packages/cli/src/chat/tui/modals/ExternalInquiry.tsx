@@ -117,9 +117,8 @@ export function externalInquiryQuestionRowsBudget({
   return Math.max(0, availableRows - EXTERNAL_INQUIRY_FIXED_ROWS - answerRows);
 }
 
-function overflowText(kind: 'previous' | 'more' | 'hidden', count: number) {
+function overflowText(kind: 'previous' | 'more', count: number) {
   if (kind === 'previous') return `... ${count} previous rows`;
-  if (kind === 'hidden') return `... ${count} rows hidden`;
   return `... ${count} more rows`;
 }
 
