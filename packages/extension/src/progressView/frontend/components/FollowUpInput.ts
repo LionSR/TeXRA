@@ -207,22 +207,30 @@ export class FollowUpInput extends LitElement {
     const target = this.textAreaEl;
     if (!target) return;
     let insertText = event.clipboardData?.getData('text/plain') || '';
-    const added: ExtractedClipboardImage[] = [];
-    for (const { file, type } of files) {
-      const base64 = await readFileAsBase64(file);
-      if (!base64) continue;
-      const fileName = generatePastedImageName(getExtensionFromMimeType(type));
-      added.push({ fileName, base64, mediaType: type });
-      if (
-        insertText &&
-        !insertText.endsWith(' ') &&
-        !insertText.endsWith('\n')
-      ) {
-        insertText += ' ';
-      }
-      insertText += `[${fileName}]`;
-    }
+    const added = (
+      await Promise.all(
+        files.map(
+          async ({
+            file,
+            type,
+          }): Promise<ExtractedClipboardImage | undefined> => {
+            const base64 = await readFileAsBase64(file);
+            if (!base64) return undefined;
+            return {
+              fileName: generatePastedImageName(getExtensionFromMimeType(type)),
+              base64,
+              mediaType: type,
+            };
+          },
+        ),
+      )
+    ).filter((image): image is ExtractedClipboardImage => image !== undefined);
     if (added.length === 0) return;
+    const chipText = added.map(({ fileName }) => `[${fileName}]`).join(' ');
+    if (insertText && !insertText.endsWith(' ') && !insertText.endsWith('\n')) {
+      insertText += ' ';
+    }
+    insertText += chipText;
     this.pendingImages = [...this.pendingImages, ...added];
     insertTextAtCursor(target, insertText);
     this.updateValue(getTextareaValue(target));
