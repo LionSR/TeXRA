@@ -83,6 +83,19 @@ function userQuestionInlineClipIndicator({
   };
 }
 
+function userQuestionChoiceHints({
+  optionCount,
+  shortcutAction,
+}: {
+  readonly optionCount: number;
+  readonly shortcutAction: string;
+}): KeyHint[] {
+  return [
+    { key: '↑/↓', action: 'navigate' },
+    { key: `1-${optionCount}`, action: shortcutAction },
+  ];
+}
+
 export function isCompactUserQuestionRows(
   availableRows: number | undefined,
 ): boolean {
@@ -406,6 +419,10 @@ function MultiSelectQuestion(
       question={props.question}
       index={props.index}
       hints={[
+        ...userQuestionChoiceHints({
+          optionCount: options.length,
+          shortcutAction: 'toggle',
+        }),
         { key: 'Space', action: 'toggle' },
         { key: 'Enter', action: 'submit' },
         { key: 'Esc', action: 'skip' },
@@ -551,6 +568,10 @@ function SingleSelectQuestion(
       question={props.question}
       index={props.index}
       hints={[
+        ...userQuestionChoiceHints({
+          optionCount: props.question.options.length,
+          shortcutAction: 'select now',
+        }),
         { key: 'Enter', action: 'select' },
         { key: 'Esc', action: 'skip' },
       ]}
