@@ -51,6 +51,7 @@ export interface BaseTextInputProps {
   /** Ctrl-V handler: probe the OS clipboard for an image. Resolves to the chip
    *  text to insert (e.g. `[Image #1]`) or null when there is no image. */
   readonly onImagePaste?: () => Promise<string | null>;
+  readonly onImagePasteError?: (error: unknown) => void;
   /** Render the value as bullets (secret entry, e.g. an API key). Display-only:
    *  the captured value, edits, and paste are unaffected. */
   readonly masked?: boolean;
@@ -404,11 +405,14 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         // Insert the chip at whatever the caret is when the async probe
         // resolves (read from a ref, not a keypress-time snapshot) so typing
         // during the probe isn't clobbered.
-        void props.onImagePaste().then((chip) => {
-          if (!chip) return;
-          const { value: v, cursor: c } = latestStateRef.current;
-          applyEdit(insertText(v, c, chip));
-        });
+        void props
+          .onImagePaste()
+          .then((chip) => {
+            if (!chip) return;
+            const { value: v, cursor: c } = latestStateRef.current;
+            applyEdit(insertText(v, c, chip));
+          })
+          .catch((err: unknown) => props.onImagePasteError?.(err));
         return;
       }
       // Drop unhandled control/meta combos; pass printable input through.
