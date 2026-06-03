@@ -296,6 +296,26 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'orchestrate-no-runnable-models',
+    env: {
+      HARNESS_ORCHESTRATION: '1',
+      HARNESS_API_MODE: 'personal',
+      HARNESS_NO_RUNNABLE_MODELS: '1',
+    },
+    bootExpect: 'Choose how to start this CLI session.',
+    keys: ['1'],
+    exitKeys: [ESC],
+    expectExit: true,
+    expect: [
+      'Choose how to start this CLI session.',
+      'New chat',
+      'No personal API-key models are runnable',
+      'Help',
+      'Esc exit',
+    ],
+    unexpect: ['Model · personal API keys', 'DeepSeek V4 Flash'],
+  },
+  {
     name: 'slash-palette',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/mo'],
