@@ -42,6 +42,7 @@ import { emitCliResult } from './_helpers/output';
 import {
   GLOBAL_ARGS,
   collectStringFlagValues,
+  optionalStringFlagValue,
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
@@ -432,7 +433,7 @@ const multiAgentRunCommand = defineCliCommand({
       agent: optString(ctx.args.agent),
       model: optString(ctx.args.model),
       instruction: optString(ctx.args.instruction) ?? '',
-      instructionFile: optString(ctx.args['instruction-file']),
+      instructionFile: optionalStringFlagValue(ctx.rawArgs, 'instruction-file'),
     }),
 });
 

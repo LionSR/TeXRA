@@ -100,6 +100,17 @@ function assertSuccess(result, label) {
   );
 }
 
+function assertUsageError(result, label, expectedText) {
+  assert(
+    result.status === 2,
+    `${label} should fail with usage exit 2, got ${result.status}${result.signal ? ` signal ${result.signal}` : ''}${result.error ? ` error ${result.error}` : ''}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+  );
+  assert(
+    `${result.stdout}\n${result.stderr}`.includes(expectedText),
+    `${label} should include ${JSON.stringify(expectedText)}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+  );
+}
+
 function parseNdjson(stdout, label) {
   const lines = stdout
     .split('\n')
@@ -144,6 +155,56 @@ function validateBinarySmoke() {
       (record) => record.kind === 'agent',
     ),
     'agents list NDJSON records should have kind=agent',
+  );
+}
+
+function validateFileFlagMissingValues() {
+  assertUsageError(
+    run(process.execPath, [binaryPath, 'run', 'polish', '--input', '--print']),
+    'texra run missing --input value',
+    'Missing value for --input',
+  );
+  assertUsageError(
+    run(process.execPath, [binaryPath, 'run', 'polish', '-i', '-p']),
+    'texra run missing -i value',
+    'Missing value for -i',
+  );
+  assertUsageError(
+    run(process.execPath, [
+      binaryPath,
+      'run',
+      'polish',
+      '--input',
+      'paper.tex',
+      '--output',
+      '--print',
+    ]),
+    'texra run missing --output value',
+    'Missing value for --output',
+  );
+  assertUsageError(
+    run(process.execPath, [
+      binaryPath,
+      'agents',
+      'run',
+      'review',
+      '--instruction-file',
+      '--print',
+    ]),
+    'texra agents run missing --instruction-file value',
+    'Missing value for --instruction-file',
+  );
+  assertUsageError(
+    run(process.execPath, [
+      binaryPath,
+      'multi-agent',
+      'run',
+      'mathematician',
+      '--input',
+      '--print',
+    ]),
+    'texra multi-agent run missing --input value',
+    'Missing value for --input',
   );
 }
 
@@ -1029,6 +1090,7 @@ async function validateCliRunArtifacts() {
   });
   assertSuccess(buildResult, 'pnpm run build');
   validateBinarySmoke();
+  validateFileFlagMissingValues();
   await validateOrchestratePreservesScrollback();
   validateRunCommand();
   validateToolUseAgentRunCommand();
