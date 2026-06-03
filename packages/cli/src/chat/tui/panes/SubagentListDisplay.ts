@@ -1,7 +1,9 @@
+import { isChildExecutionErrorStatus } from '../state/childExecutionStatus';
+
 export function childStatusColor(status: string | undefined): string {
   if (!status) return 'green';
   if (status === 'waiting' || status === 'idle') return 'yellow';
-  if (status === 'error' || status === 'stopped') return 'red';
+  if (isChildExecutionErrorStatus(status)) return 'red';
   return 'green';
 }
 
