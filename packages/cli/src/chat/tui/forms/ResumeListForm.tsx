@@ -6,6 +6,7 @@ import { Spinner } from '@inkjs/ui';
 
 import {
   listCliHistoryEntries,
+  resumableCliHistoryEntries,
   type CliHistoryEntry,
 } from '@cli/runtime/history';
 import { formatCliHistoryInputLabel } from '@cli/runtime/historyLabels';
@@ -41,7 +42,8 @@ export function resumeEntryDescription(entry: CliHistoryEntry): string {
 export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
   const { data, loading, error } = useAsyncListForm<readonly CliHistoryEntry[]>(
     {
-      load: async () => (await listCliHistoryEntries()).slice(0, 50),
+      load: async () =>
+        resumableCliHistoryEntries(await listCliHistoryEntries()).slice(0, 50),
       onClose: props.onClose,
       isEmpty: (entries) => entries.length === 0,
     },
@@ -67,7 +69,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
   if (entries.length === 0) {
     return (
       <FormFrame color="yellow" title="/resume">
-        <Text>No execution history found.</Text>
+        <Text>No resumable sessions found.</Text>
       </FormFrame>
     );
   }
