@@ -70,17 +70,6 @@ async function resolveToolUseInstruction(
   return instruction;
 }
 
-function writeToolUseRunResult(
-  context: CliContext,
-  result: CliToolUseRunResult,
-): void {
-  emitCliResult(context, {
-    json: result,
-    ndjson: { kind: 'agent-result', result },
-    text: toolUseResultText(result),
-  });
-}
-
 async function runToolUseAgent(
   context: CliContext,
   init: ToolUseAgentRunInit,
@@ -178,7 +167,11 @@ async function runToolUseAgent(
         workingDirectory: runContext.cwd,
       },
     );
-    writeToolUseRunResult(runContext, displayResult);
+    emitCliResult(runContext, {
+      json: displayResult,
+      ndjson: { kind: 'agent-result', result: displayResult },
+      text: toolUseResultText(displayResult),
+    });
 
     return terminalStatusExitCode(terminalStatus, runContext);
   } finally {

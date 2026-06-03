@@ -98,6 +98,14 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
     disabled: !tool.toggleable || tool.comingSoon,
   }));
 
+  function handleToggle(id: string): void {
+    const tool = tools.find((candidate) => candidate.id === id);
+    if (!tool || tool.enabled == null) return;
+    void setCliToolEnabled(id, !tool.enabled)
+      .then(() => readCliToolStatuses())
+      .then(setTools);
+  }
+
   if (isCompactFormRows(props.availableRows)) {
     return (
       <FormFrame color="cyan" title="/tools" showCloseHint={false}>
@@ -108,13 +116,7 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
           items={items}
           maxVisibleItems={1}
           showOverflow={false}
-          onSelect={(id) => {
-            const tool = tools.find((candidate) => candidate.id === id);
-            if (!tool || tool.enabled == null) return;
-            void setCliToolEnabled(id, !tool.enabled)
-              .then(() => readCliToolStatuses())
-              .then(setTools);
-          }}
+          onSelect={handleToggle}
           onCancel={props.onClose}
         />
         <CompactFormKeyHints
@@ -131,13 +133,7 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
         items={items}
         maxVisibleItems={selectWindow.maxVisibleItems}
         showOverflow={selectWindow.showOverflow}
-        onSelect={(id) => {
-          const tool = tools.find((candidate) => candidate.id === id);
-          if (!tool || tool.enabled == null) return;
-          void setCliToolEnabled(id, !tool.enabled)
-            .then(() => readCliToolStatuses())
-            .then(setTools);
-        }}
+        onSelect={handleToggle}
         onCancel={props.onClose}
       />
       <Box marginTop={1}>

@@ -54,7 +54,6 @@ import type {
   StreamTabId,
   ExecutionId,
   StorageKey,
-  TokenUsageStats,
   ToolUseLog,
 } from '@shared/schemas';
 import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
@@ -203,13 +202,6 @@ class ClaudeAgentSession implements IInterruptible {
   }
 }
 
-function finalizeClaudeAgentLoopStatus(
-  childStreamId: StreamTabId,
-  runtimeHost: AgentRuntimeHost,
-): void {
-  finalizeAgentCliLoopStatus(childStreamId, runtimeHost);
-}
-
 // ============================================================================
 // Result formatting
 // ============================================================================
@@ -274,20 +266,6 @@ function formatClaudeError(
 type ClaudeToolLogRef = ToolUseCardRef & {
   toolLog: ToolUseLog;
 };
-
-function publishClaudeAgentStreamUsage(
-  childStreamId: StreamTabId,
-  executionId: ExecutionId,
-  usage: TokenUsageStats,
-  runtimeHost: AgentRuntimeHost,
-): void {
-  runtimeHost.emit('updateStreamUsage', {
-    streamId: childStreamId,
-    storageKey: executionId as StorageKey,
-    executionId,
-    usage,
-  });
-}
 
 // ============================================================================
 // SDK type aliases — we keep these loose to avoid pulling the SDK's full type
@@ -602,12 +580,12 @@ function startClaudeAgentLoop(params: {
         }
 
         if (turn?.usage) {
-          publishClaudeAgentStreamUsage(
-            childStreamId,
+          runtimeHost.emit('updateStreamUsage', {
+            streamId: childStreamId,
+            storageKey: executionId as StorageKey,
             executionId,
-            buildClaudeUsageStats(turn.usage),
-            runtimeHost,
-          );
+            usage: buildClaudeUsageStats(turn.usage),
+          });
         }
 
         const msg =
@@ -649,7 +627,7 @@ function startClaudeAgentLoop(params: {
         agentCliLoopTerminalStatus(sawTurnFailure),
       ).catch(() => {});
       untrackExecution(executionId);
-      finalizeClaudeAgentLoopStatus(childStreamId, runtimeHost);
+      finalizeAgentCliLoopStatus(childStreamId, runtimeHost);
       disposeTrace();
     }
   })();
