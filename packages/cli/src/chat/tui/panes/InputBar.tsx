@@ -36,6 +36,18 @@ export interface InputBarProps {
   readonly history?: InputHistory;
 }
 
+function slashSubmitText(
+  current: string,
+  commandName: string,
+  fallbackRemainder: string,
+): string {
+  const parsed = parseSlashInput(current);
+  if (!parsed) {
+    return `/${commandName}${fallbackRemainder ? ` ${fallbackRemainder.trimStart()}` : ''}`;
+  }
+  return `/${commandName}${current.slice(parsed.name.length + 1)}`;
+}
+
 export function InputBar(props: InputBarProps): React.JSX.Element {
   const { disabled, history, onSubmit, prompt } = props;
   const [value, setValue] = useState('');
@@ -137,14 +149,12 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         return;
       }
       if (intent === 'submit') {
-        handleSubmit(
-          `/${cmd.name}${remainder ? ` ${remainder.trimStart()}` : ''}`,
-        );
+        handleSubmit(slashSubmitText(value, cmd.name, remainder));
         return;
       }
       setValue(`/${cmd.name}${remainder ? ` ${remainder.trimStart()}` : ' '}`);
     },
-    [handleSubmit],
+    [handleSubmit, value],
   );
 
   const handleInputChunkSubmit = useCallback(
