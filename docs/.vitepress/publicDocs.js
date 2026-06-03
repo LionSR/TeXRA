@@ -10,8 +10,18 @@
 // directory is internal and must NOT be published. Static assets under public/
 // are served as-is and are fine to expose.
 
-// Root-level markdown intentionally published to texra.ai.
-export const publicRootDocs = ['index.md', 'launch.md', 'providers.md'];
+// Root-level markdown intentionally published to texra.ai. `changelog.md` and
+// `terms.md` are generated into the docs root at build time by the
+// `sync-content` script (from repo-root CHANGELOG.md / TERMS_OF_SERVICE.md) and
+// are .gitignored; they are listed here so the boundary gate does not flag them
+// as unclassified in a checkout where the build has run.
+export const publicRootDocs = [
+  'index.md',
+  'launch.md',
+  'providers.md',
+  'changelog.md',
+  'terms.md',
+];
 
 // Root-level directories whose contents are published (minus any per-page
 // exclusions in `srcExclude`, e.g. the guide/desktop* beta pages).
