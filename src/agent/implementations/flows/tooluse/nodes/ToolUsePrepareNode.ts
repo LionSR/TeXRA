@@ -21,7 +21,8 @@ export class ToolUsePrepareNode<C> extends Node<
   async exec(
     _prepRes: void,
   ): Promise<{ kind: 'success'; result: PrepareResult }> {
-    const { userVarChannels, logger, snapshot } = this.services;
+    const { userVarChannels, logger, snapshot, config, fileService } =
+      this.services;
     const resolvedToolNames = this.services.resolvedTools.map((t) => t.name);
     const hasDelegationTools = this.services.resolvedTools.some((t) =>
       DELEGATION_TOOLS.has(t.name),
@@ -83,10 +84,16 @@ export class ToolUsePrepareNode<C> extends Node<
     const systemMessage = systemPrompt
       ? `${systemPrompt}\n${instructionSuffix}`
       : instructionSuffix;
+    // Attach any media files (CLI `--media`, an image pasted on the first
+    // message) to the initial user message via the shared media slot. No-ops
+    // when empty or the model lacks vision.
+    const mediaFiles = config.mediaFiles.length
+      ? config.mediaFiles.map((p) => fileService.createLocation(p))
+      : undefined;
     const messages = await this.services.modelHandler.initializeMessages(
       userPrefix,
       userRequest,
-      undefined,
+      mediaFiles,
       systemMessage,
     );
 
