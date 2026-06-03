@@ -14,10 +14,6 @@ import type {
 
 export const COMPLETED_PROCESS_TAIL_LINES = 20;
 
-function processTitle(info: ActiveChildInfo): string {
-  return info.agentName || info.toolName || info.executionId;
-}
-
 export function isCompletedProcessError(status: string | undefined): boolean {
   return isChildExecutionErrorStatus(status);
 }
@@ -40,7 +36,7 @@ export function buildCompletedProcessTranscript(
   const status = completedChildExecutionStatus(info.status);
   return {
     executionId: info.executionId,
-    title: processTitle(info),
+    title: info.agentName || info.toolName || info.executionId,
     status,
     elapsed: info.elapsed,
     isError: isCompletedProcessError(status),
