@@ -8,7 +8,7 @@ import {
 } from '@cli/runtime/runProgressRenderer';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { STREAM_STATUS } from '@shared/schemas';
+import { EXECUTION_STATUS, STREAM_STATUS } from '@shared/schemas';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   return {
@@ -442,7 +442,7 @@ describe('CLI run progress renderer', () => {
     );
   });
 
-  it('does not overwrite a terminal status with late root descriptions', () => {
+  it('shows completed terminal stream stops as done', () => {
     let now = 0;
     let output = '';
     const renderer = createRunProgressRenderer(
@@ -481,6 +481,7 @@ describe('CLI run progress renderer', () => {
       streamId: 'root-stream',
       status: STREAM_STATUS.STOPPED,
       previousStatus: STREAM_STATUS.RUNNING,
+      terminalStatus: EXECUTION_STATUS.COMPLETED,
     });
     renderer?.handle('updateStreamDescription', {
       streamId: 'root-stream',
@@ -508,8 +509,40 @@ describe('CLI run progress renderer', () => {
     expect(output).toBe(
       'orchestrator · 0s\n' +
         'orchestrator · tool: Bash · 0s\n' +
-        'orchestrator · stopped · 11s\n',
+        'orchestrator · done · 11s\n',
     );
+  });
+
+  it('keeps interrupted terminal stream stops distinct from completion', () => {
+    let output = '';
+    const renderer = createRunProgressRenderer(
+      context({ colorEnabled: false }),
+      {
+        colorEnabled: false,
+        write: (text) => {
+          output += text;
+        },
+        minIntervalMs: 0,
+        nowMs: () => 0,
+      },
+    );
+
+    renderer?.handle(
+      'setTaskState',
+      workflowTaskState({
+        streamId: 'root-stream',
+        agent: 'orchestrator',
+        inputFiles: [],
+      }),
+    );
+    renderer?.handle('updateStreamStatus', {
+      streamId: 'root-stream',
+      status: STREAM_STATUS.STOPPED,
+      previousStatus: STREAM_STATUS.RUNNING,
+      terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+    });
+
+    expect(output).toBe('orchestrator · 0s\norchestrator · interrupted · 0s\n');
   });
 
   it('uses a separate render flag from platform log suppression', () => {
