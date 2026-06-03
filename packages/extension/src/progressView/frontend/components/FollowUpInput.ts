@@ -123,6 +123,8 @@ export class FollowUpInput extends LitElement {
 
   /** Images pasted into the follow-up box; attached to the message on send. */
   private pendingImages: ExtractedClipboardImage[] = [];
+  private readonly pendingImagePastes = new Set<Promise<void>>();
+  private sendAfterImagePastes = false;
 
   @query(`#${ELEMENT_IDS.FOLLOW_UP_INPUT}`)
   declare private textAreaEl: HTMLElement | null;
@@ -197,7 +199,12 @@ export class FollowUpInput extends LitElement {
     if (files.length === 0) return;
     // Suppress the default paste synchronously, before the async read below.
     event.preventDefault();
-    void this.attachPastedImages(event, files);
+    const paste = this.attachPastedImages(event, files);
+    this.pendingImagePastes.add(paste);
+    void paste.finally(() => {
+      this.pendingImagePastes.delete(paste);
+      this.flushPendingImagePasteSend();
+    });
   }
 
   private async attachPastedImages(
@@ -324,10 +331,22 @@ export class FollowUpInput extends LitElement {
   }
 
   private emitSend(): void {
+    if (this.pendingImagePastes.size > 0) {
+      this.sendAfterImagePastes = true;
+      return;
+    }
     this.dispatchEvent(
       ProgressEvents.followupSend({ images: this.pendingImages }),
     );
     this.pendingImages = [];
+    this.sendAfterImagePastes = false;
+  }
+
+  private flushPendingImagePasteSend(): void {
+    if (!this.sendAfterImagePastes || this.pendingImagePastes.size > 0) {
+      return;
+    }
+    this.emitSend();
   }
 
   private emitPolish(): void {
@@ -340,6 +359,7 @@ export class FollowUpInput extends LitElement {
 
   private emitClear(): void {
     this.pendingImages = [];
+    this.sendAfterImagePastes = false;
     this.dispatchEvent(ProgressEvents.followupClear());
   }
 
