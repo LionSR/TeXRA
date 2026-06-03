@@ -110,12 +110,23 @@ describe('Claude Code CLI configuration', () => {
     // OAuth must win even over an explicit env API key; otherwise the CLI
     // prefers ANTHROPIC_API_KEY and ignores the login session.
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
-    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', 'oauth-token');
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', ' oauth-token ');
 
     const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
     const env = await buildClaudeAgentEnv();
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('oauth-token');
+  });
+
+  it('ignores a whitespace-only OAuth token when no OAuth credential exists', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', '   ');
+    secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
+
+    const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
+    const env = await buildClaudeAgentEnv();
+    expect(env.ANTHROPIC_API_KEY).toBe('from-env');
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
   });
 
   it('strips ANTHROPIC_API_KEY when a `claude login` session file exists', async () => {

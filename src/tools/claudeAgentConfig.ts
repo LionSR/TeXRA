@@ -109,11 +109,13 @@ export const getClaudeAgentEffort: () => ClaudeAgentEffort =
  * `-w`/`-g`) so they never trigger a keychain access prompt; any failure is
  * swallowed and treated as "no credential."
  */
-function hasClaudeOauthCredential(): boolean {
-  if (process.env.CLAUDE_CODE_OAUTH_TOKEN) return true;
+function hasClaudeOauthCredential(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (env.CLAUDE_CODE_OAUTH_TOKEN) return true;
 
   const configDir =
-    process.env.CLAUDE_CONFIG_DIR?.trim() || path.join(os.homedir(), '.claude');
+    env.CLAUDE_CONFIG_DIR?.trim() || path.join(os.homedir(), '.claude');
   if (existsSync(path.join(configDir, '.credentials.json'))) return true;
 
   if (process.platform === 'darwin') {
@@ -178,12 +180,18 @@ function claudeKeychainCredentialProbes(configDir: string): string[][] {
 export async function buildClaudeAgentEnv(): Promise<NodeJS.ProcessEnv> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
+  const oauthToken = env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
+  if (oauthToken) {
+    env.CLAUDE_CODE_OAUTH_TOKEN = oauthToken;
+  } else {
+    delete env.CLAUDE_CODE_OAUTH_TOKEN;
+  }
 
   const apiKeyVar = apiKeyEnvName('anthropic');
 
   // 1. OAuth wins: drop any inherited API key so it can't out-prioritize the
   //    OAuth credential, and skip injecting the managed secret entirely.
-  if (hasClaudeOauthCredential()) {
+  if (hasClaudeOauthCredential(env)) {
     delete env[apiKeyVar];
     return env;
   }
