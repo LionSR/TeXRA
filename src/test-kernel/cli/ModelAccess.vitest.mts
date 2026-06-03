@@ -7,6 +7,8 @@ import {
   resolveCliRunnableModel,
   resolveCliRunnableModelFromAccessList,
   type CliModelAccess,
+  type CliModelFallbackMode,
+  type CliModelSelectionSource,
 } from '@cli/runtime/modelAccess';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import type { ModelOptionData } from '@shared/schemas';
@@ -63,10 +65,21 @@ describe('CLI model access resolution', () => {
   });
 
   it('centralizes fallback policy by model source', () => {
-    expect(cliModelFallbackModeForSource('override')).toBe('reject');
-    expect(cliModelFallbackModeForSource('env')).toBe('reject');
-    expect(cliModelFallbackModeForSource('workspace')).toBe('notice');
-    expect(cliModelFallbackModeForSource('builtin')).toBe('silent');
+    const expectedModes = {
+      override: 'reject',
+      env: 'reject',
+      config: 'notice',
+      workspace: 'notice',
+      user: 'notice',
+      history: 'notice',
+      builtin: 'silent',
+    } satisfies Record<CliModelSelectionSource, CliModelFallbackMode>;
+
+    for (const [source, mode] of Object.entries(expectedModes)) {
+      expect(
+        cliModelFallbackModeForSource(source as CliModelSelectionSource),
+      ).toBe(mode);
+    }
   });
 
   it('rejects an explicit model that is unavailable in the active API mode', () => {
