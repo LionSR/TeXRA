@@ -1,16 +1,11 @@
 // Standard library imports
 import * as path from 'path';
 
-// Local imports - log
-import * as logger from '@logger/logUtils';
 import { flexibleFS } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { joinLatexPath } from '@utils/core/pathCore';
 
 import { findExistingLatexPath, resolveLatexDir } from './latexParsingUtils';
-
-const CHANNEL = 'LaTeXCommands';
-logger.initialize(CHANNEL);
 
 const FIGURE_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg'];
 
