@@ -557,7 +557,7 @@ describe('CLI StatusBar display model', () => {
     ).toBe(false);
   });
 
-  it('uses live ancestor status when a stopped child stream is focused', () => {
+  it('uses focused stream status when a stopped child stream is focused', () => {
     const rootSlice = {
       status: STREAM_STATUS.RUNNING,
     } as StreamSlice;
@@ -579,7 +579,7 @@ describe('CLI StatusBar display model', () => {
         parentStream: new Map([['child', 'root']]),
         streams,
       }),
-    ).toBe(rootSlice);
+    ).toBe(childSlice);
     expect(
       statusBarDisplaySlice({
         activeStreamId: 'waiting-child',
