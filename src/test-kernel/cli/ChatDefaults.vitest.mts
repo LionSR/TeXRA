@@ -8,33 +8,13 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { listExecutions } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
+  BUILTIN_DEFAULT_CHAT_AGENT,
   BUILTIN_DEFAULT_CHAT_MODEL,
   resolveChatDefaults,
 } from '@cli/runtime/chatDefaults';
 
 vi.mock('@agent/storage', () => ({
   listExecutions: vi.fn(async () => []),
-}));
-
-// Stub the agent registry so chat-defaults validation is hermetic — the real
-// `loadAgents()` reads from disk paths that aren't reliably populated in the
-// test kernel, so we treat a small allowlist of names as "real tool-use
-// agents" and everything else (including the stale `bash` row from #4397) as
-// unresolvable.
-const TOOL_USE_AGENT_FIXTURES = new Set([
-  'research',
-  'review',
-  'chat',
-  'orchestrator',
-  'leanOrchestrator',
-]);
-vi.mock('@agent/index', () => ({
-  loadAgents: vi.fn(async () => {}),
-  getAgent: vi.fn((name: string) =>
-    TOOL_USE_AGENT_FIXTURES.has(name)
-      ? { name, category: 'toolUse' as const }
-      : undefined,
-  ),
 }));
 
 const mockedListExecutions = vi.mocked(listExecutions);
@@ -64,7 +44,8 @@ vi.mock('@utils/files/storageFS', () => ({
 }));
 
 describe('CLI chat defaults', () => {
-  it('uses DeepSeek as the built-in chat model', async () => {
+  it('uses chat and DeepSeek as the built-in chat defaults', async () => {
+    expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('chat');
     expect(BUILTIN_DEFAULT_CHAT_MODEL).toBe('deepseekT');
     expect(MODEL_CONFIGS[BUILTIN_DEFAULT_CHAT_MODEL]).toBeDefined();
 
@@ -121,18 +102,24 @@ describe('CLI chat defaults', () => {
     });
   });
 
-  it('inherits the agent from the most recent single-agent tool-use execution', async () => {
+  it('inherits only the model from recent single-agent tool-use history', async () => {
     mockedListExecutions.mockResolvedValueOnce([historyEntry('research')]);
 
     await expect(
       resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
-    ).resolves.toMatchObject({ agent: 'research', source: 'history' });
+    ).resolves.toMatchObject({
+      agent: 'chat',
+      model: 'sonnet46T',
+      source: 'mixed',
+      agentSource: 'builtin',
+      modelSource: 'history',
+    });
   });
 
-  it('does not inherit the orchestrator from a multi-agent team run', async () => {
+  it('does not inherit the model from a multi-agent team run', async () => {
     // A `texra multi-agent run physicist` is stored as a tool-use execution
-    // whose root is the team orchestrator. It must not become the default
-    // agent for a plain `texra chat` — fall back to the built-in instead.
+    // whose root is the team orchestrator. It must not affect plain
+    // `texra chat` defaults — fall back to the built-ins instead.
     mockedListExecutions.mockResolvedValueOnce([
       historyEntry('leanOrchestrator', {
         cliMultiAgentPresetId: 'lean-project',
@@ -141,13 +128,17 @@ describe('CLI chat defaults', () => {
 
     await expect(
       resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
-    ).resolves.toMatchObject({ agent: 'chat', source: 'builtin' });
+    ).resolves.toMatchObject({
+      agent: 'chat',
+      model: 'deepseekT',
+      source: 'builtin',
+    });
   });
 
-  it('skips a history row whose agent is not in the tool-use registry', async () => {
-    // A stale `bash` row (or any other name not resolved by `getAgent()`)
-    // used to win this tier and the chat session would then crash on first
-    // submit with "Could not find agent: bash" — see #4397.
+  it('does not inherit stale history agent names', async () => {
+    // A stale `bash` row used to win the agent tier and crash on first submit
+    // with "Could not find agent: bash" — see #4397. History is now model-only,
+    // so the single-chat agent stays on the built-in `chat` default.
     mockedListExecutions.mockResolvedValueOnce([
       historyEntry('bash', {}, '2026-05-21T08:02:00.000Z'),
       historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
@@ -155,10 +146,15 @@ describe('CLI chat defaults', () => {
 
     await expect(
       resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
-    ).resolves.toMatchObject({ agent: 'research', source: 'history' });
+    ).resolves.toMatchObject({
+      agent: 'chat',
+      model: 'sonnet46T',
+      agentSource: 'builtin',
+      modelSource: 'history',
+    });
   });
 
-  it('skips a team run to reach an earlier single-agent execution', async () => {
+  it('skips a team run to reach an earlier single-agent model', async () => {
     mockedListExecutions.mockResolvedValueOnce([
       historyEntry(
         'orchestrator',
@@ -172,7 +168,41 @@ describe('CLI chat defaults', () => {
 
     await expect(
       resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
-    ).resolves.toMatchObject({ agent: 'research', source: 'history' });
+    ).resolves.toMatchObject({
+      agent: 'chat',
+      model: 'sonnet46T',
+      agentSource: 'builtin',
+      modelSource: 'history',
+    });
+  });
+
+  it('does not inherit simplifier as the default single-chat agent', async () => {
+    mockedListExecutions.mockResolvedValueOnce([
+      historyEntry('simplifier', {}, '2026-05-21T08:02:00.000Z'),
+      historyEntry('research', {}, '2026-05-21T08:01:00.000Z'),
+    ]);
+
+    await expect(
+      resolveChatDefaults({ cwd: '/tmp/no-such-texra-workspace' }),
+    ).resolves.toMatchObject({
+      agent: 'chat',
+      model: 'sonnet46T',
+      agentSource: 'builtin',
+      modelSource: 'history',
+    });
+  });
+
+  it('still honors an explicit simplifier agent override', async () => {
+    await expect(
+      resolveChatDefaults({
+        cwd: '/tmp/no-such-texra-workspace',
+        agentOverride: 'simplifier',
+        modelOverride: 'deepseekT',
+      }),
+    ).resolves.toMatchObject({
+      agent: 'simplifier',
+      agentSource: 'override',
+    });
   });
 
   it('uses prefixed command-specific workspace defaults', async () => {
