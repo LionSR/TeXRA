@@ -11,7 +11,7 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
-import { isFiniteNumber, isObject } from '@utils/core';
+import { filterNotNull, isFiniteNumber, isObject } from '@utils/core';
 
 import {
   isRunningGroupEntry,
@@ -391,7 +391,7 @@ export class StreamLogStore {
       );
 
       const sortedResults = results
-        .filter((result): result is StreamLoadResult => result !== null)
+        .filter(filterNotNull)
         .sort(
           (a, b) =>
             (a.summary.firstTimestamp ?? Number.POSITIVE_INFINITY) -

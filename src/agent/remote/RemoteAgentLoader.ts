@@ -18,6 +18,7 @@ import { ensureError, toErrorMessage } from '@common/errors/errorMessage';
 import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions } from '@tools/registry';
 
+import { filterNotNull } from '@utils/core';
 import {
   RemoteAgentListItemSchema,
   EdgeFunctionResponseSchema,
@@ -175,9 +176,7 @@ export class RemoteAgentLoader {
         return [];
       }
 
-      return (data ?? [])
-        .map(parseListItemRow)
-        .filter((item): item is RemoteAgentListItem => item !== null);
+      return (data ?? []).map(parseListItemRow).filter(filterNotNull);
     } catch (error) {
       logger.debug(
         CHANNEL,

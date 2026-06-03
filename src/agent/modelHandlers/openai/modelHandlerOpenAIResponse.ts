@@ -33,7 +33,7 @@ import {
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { delay } from '@utils/core';
+import { delay, filterNotNullish } from '@utils/core';
 import {
   getWebSocketEnabled,
   getUseOpenRouter,
@@ -2417,7 +2417,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     if (Array.isArray(message.content)) {
       const texts = message.content
         .map((part) => extractTextContentPart(part))
-        .filter((text): text is string => text !== undefined);
+        .filter(filterNotNullish);
       return texts.length > 0 ? texts.join('') : undefined;
     }
 
