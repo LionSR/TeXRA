@@ -17,11 +17,15 @@ import {
 } from '../runtime/multiAgentPresets';
 import { buildCliOrchestrationItems } from '../runtime/orchestration';
 import {
+  cliRunnableModelOptionsForSource,
   getCliModelAccessList,
+  resolveCliRunnableModelWithAccessList,
+  runnableCliModelAccessEntries,
   type CliModelAccess,
 } from '../runtime/modelAccess';
 import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import { notifyCliUpdate } from '../runtime/updateChecker';
+import { resolveChatDefaults } from '../runtime/chatDefaults';
 
 import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch';
@@ -37,6 +41,35 @@ import {
 } from './multiAgent';
 import { runResumeExecution } from './resume';
 import type { CliContext } from '../runtime/cliContext';
+
+async function canLaunchWithDefaultModel(
+  context: CliContext,
+  models: readonly CliModelAccess[],
+  apiMode: ReturnType<typeof effectiveCliApiMode>,
+): Promise<boolean> {
+  if (
+    models.length === 0 ||
+    runnableCliModelAccessEntries(models, apiMode).length > 0
+  ) {
+    return true;
+  }
+
+  const defaults = await resolveChatDefaults({
+    cwd: context.cwd,
+    envAgent: context.envAgent,
+    envModel: context.envModel,
+  });
+  try {
+    await resolveCliRunnableModelWithAccessList(
+      models,
+      defaults.model,
+      cliRunnableModelOptionsForSource(defaults.modelSource, { apiMode }),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function runOrchestration(context: CliContext): Promise<number> {
   const terminalFailure = interactiveTerminalFailure(context);
@@ -85,9 +118,18 @@ async function runOrchestration(context: CliContext): Promise<number> {
   const models: readonly CliModelAccess[] = await getCliModelAccessList({
     apiMode,
   }).catch(() => []);
+  const allowDefaultModelLaunch = await canLaunchWithDefaultModel(
+    context,
+    models,
+    apiMode,
+  );
   const { runOrchestrationTui } =
     await import('../orchestration/runOrchestrationTui');
-  const action = await runOrchestrationTui(items, { models, apiMode });
+  const action = await runOrchestrationTui(items, {
+    models,
+    apiMode,
+    allowDefaultModelLaunch,
+  });
 
   switch (action.kind) {
     case 'chat': {
