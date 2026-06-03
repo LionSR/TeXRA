@@ -192,12 +192,11 @@ async function runFlowWithLifecycle(
   try {
     const result = await runner();
     await options?.onCompleted?.(result);
-    await writeTerminalStatus(
-      ctx.executionId,
+    const terminalStatus =
       result.status === END_GROUP_STATUS.ERROR
         ? EXECUTION_STATUS.ERROR
-        : EXECUTION_STATUS.COMPLETED,
-    ).catch(() => {});
+        : EXECUTION_STATUS.COMPLETED;
+    await writeTerminalStatus(ctx.executionId, terminalStatus).catch(() => {});
 
     untrackExecution(ctx.executionId);
     ctx.parentStage.end(result.status);
@@ -207,6 +206,7 @@ async function runFlowWithLifecycle(
         result.status === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
       StreamStatusService.set(streamId, status, {
         runtimeHost: ctx.runtimeHost,
+        terminalStatus,
       });
     }
     logger.debug(`Task completed with status: ${result.status}`);
@@ -235,6 +235,7 @@ async function runFlowWithLifecycle(
     ctx.parentStage.end(status);
     StreamStatusService.set(streamId, streamStatus, {
       runtimeHost: ctx.runtimeHost,
+      terminalStatus,
     });
 
     // Subagents propagate errors to the orchestrator via FollowUpQueue —

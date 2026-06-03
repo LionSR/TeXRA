@@ -7,7 +7,10 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { listCliHistoryEntries } from '../runtime/history';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
-import { dumbTerminalMessage } from '../runtime/terminalRequirements';
+import {
+  formatInteractiveTerminalFailure,
+  interactiveTerminalFailure,
+} from '../runtime/terminalRequirements';
 import {
   readCliMultiAgentPresets,
   withCliMultiAgentPresetVisibility,
@@ -36,14 +39,14 @@ import { runResumeExecution } from './resume';
 import type { CliContext } from '../runtime/cliContext';
 
 async function runOrchestration(context: CliContext): Promise<number> {
-  const isHeadless =
-    context.mode === 'headless' || context.stdoutIsTty !== true;
-  const dumbTerm = context.termIsDumb === true;
-  if (isHeadless || dumbTerm) {
+  const terminalFailure = interactiveTerminalFailure(context);
+  if (terminalFailure) {
     writeTextStderr(
-      isHeadless
-        ? 'texra orchestrate requires an interactive terminal (TTY stdin and stdout). For scripting, use `texra run` or a concrete subcommand.'
-        : dumbTerminalMessage('orchestrate'),
+      formatInteractiveTerminalFailure(terminalFailure, {
+        headlessMessage:
+          'texra orchestrate requires an interactive terminal (TTY stdin and stdout). For scripting, use `texra run` or a concrete subcommand.',
+        dumbTerminalCommand: 'orchestrate',
+      }),
     );
     return CliExitCode.Usage;
   }

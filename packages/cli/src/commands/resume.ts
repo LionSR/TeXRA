@@ -8,6 +8,10 @@ import {
   explainNonResumable,
   resolveCliResumeSnapshot,
 } from '../runtime/sessionResume';
+import {
+  formatInteractiveTerminalFailure,
+  interactiveTerminalFailure,
+} from '../runtime/terminalRequirements';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
@@ -28,6 +32,22 @@ export async function runResumeExecution(
   context: CliContext,
   id: ExecutionId,
 ): Promise<number> {
+  const terminalFailure = interactiveTerminalFailure(context);
+  if (terminalFailure) {
+    // A resumed tool-use session goes back to WAITING for the next message;
+    // headless has no input channel to provide one, so continuing here would
+    // block forever. Reject before platform/snapshot work; no terminal means no
+    // interactive resume regardless of whether the id is otherwise resumable.
+    writeTextStderr(
+      formatInteractiveTerminalFailure(terminalFailure, {
+        headlessMessage: `Resuming continues an interactive chat session — run \`texra --resume ${id}\` in a terminal. For scripting, use \`texra run\`.`,
+        dumbTerminalCommand: 'resume',
+        dumbTerminalOptions: { nonInteractiveFallback: '`texra run`' },
+      }),
+    );
+    return CliExitCode.Usage;
+  }
+
   await initCliPlatform({ ...context, quietLogs: true });
 
   // Resolve the stored session up front so we (a) fail fast with a clear
@@ -38,17 +58,6 @@ export async function runResumeExecution(
   const resolution = await resolveCliResumeSnapshot(id);
   if (resolution.kind !== 'toolUse') {
     writeTextStderr(explainNonResumable(resolution, id));
-    return CliExitCode.Usage;
-  }
-
-  const headless = context.mode === 'headless' || context.stdoutIsTty !== true;
-  if (headless) {
-    // A resumed tool-use session goes back to WAITING for the next message;
-    // headless has no input channel to provide one, so continuing here would
-    // block forever. Mirror runChat's non-TTY guidance instead of hanging.
-    writeTextStderr(
-      `Resuming continues an interactive chat session — run \`texra --resume ${id}\` in a terminal. For scripting, use \`texra run\`.`,
-    );
     return CliExitCode.Usage;
   }
 
