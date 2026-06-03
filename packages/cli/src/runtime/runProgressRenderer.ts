@@ -4,7 +4,12 @@ import path from 'node:path';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 
 // Local imports - shared schemas
-import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  STREAM_STATUS,
+  type ExecutionStatus,
+  type StreamStatus,
+} from '@shared/schemas';
 
 // Local imports - CLI runtime
 import { writeRawStderr } from './logSinks';
@@ -118,15 +123,14 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         this.render(true);
         return true;
       case 'updateStreamStatus':
-        if (
-          this.isRootStream(
-            (payload as ProgressEventPayloads['updateStreamStatus']).streamId,
-          )
-        ) {
-          const status = (
-            payload as ProgressEventPayloads['updateStreamStatus']
-          ).status;
-          this.state.phase = String(status);
+        {
+          const data = payload as ProgressEventPayloads['updateStreamStatus'];
+          if (!this.isRootStream(data.streamId)) return true;
+          const { status } = data;
+          this.state.phase = formatRunProgressStatus(
+            status,
+            data.terminalStatus,
+          );
           this.rootStreamTerminal = isTerminalStreamStatus(status);
           if (this.rootStreamTerminal) {
             this.state.activeProcesses = undefined;
@@ -298,6 +302,16 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
 
 function isTerminalStreamStatus(status: StreamStatus): boolean {
   return status === STREAM_STATUS.STOPPED || status === STREAM_STATUS.ERROR;
+}
+
+function formatRunProgressStatus(
+  status: StreamStatus,
+  terminalStatus?: ExecutionStatus,
+): string {
+  if (status !== STREAM_STATUS.STOPPED) return status;
+  if (terminalStatus === EXECUTION_STATUS.COMPLETED) return 'done';
+  if (terminalStatus === EXECUTION_STATUS.INTERRUPTED) return 'interrupted';
+  return status;
 }
 
 function safeBasename(file: string | undefined): string | undefined {
