@@ -9,12 +9,17 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 // Local imports - tools
+import {
+  agentCliLoopTerminalStatus,
+  markAgentCliLoopError,
+} from '@tools/agentCliShared';
 import { finalizeCodexLoopStatus } from '@tools/codex';
 
 const streamIds = [
   'stream:codex-loop-running',
   'stream:codex-loop-waiting',
   'stream:codex-loop-stopped',
+  'stream:codex-loop-error',
 ] as const satisfies readonly StreamTabId[];
 
 const runtimeHost = { emit: () => {} } satisfies AgentRuntimeHost;
@@ -55,5 +60,37 @@ describe('finalizeCodexLoopStatus', () => {
     finalizeCodexLoopStatus(streamId, runtimeHost);
 
     expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+  });
+
+  it('preserves error statuses set by failed turns', () => {
+    const streamId = streamIds[3];
+    StreamStatusService.set(streamId, STREAM_STATUS.ERROR, { emit: false });
+
+    finalizeCodexLoopStatus(streamId, runtimeHost);
+
+    expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.ERROR);
+  });
+
+  it('marks loop-owned child streams as errored after a failed turn', () => {
+    const streamId = streamIds[0];
+    StreamStatusService.set(streamId, STREAM_STATUS.WAITING, { emit: false });
+
+    markAgentCliLoopError(streamId, runtimeHost);
+
+    expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.ERROR);
+  });
+
+  it('does not overwrite explicit user stops with failed-turn errors', () => {
+    const streamId = streamIds[2];
+    StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, { emit: false });
+
+    markAgentCliLoopError(streamId, runtimeHost);
+
+    expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+  });
+
+  it('maps loop failure state to persisted terminal status', () => {
+    expect(agentCliLoopTerminalStatus(false)).toBe('completed');
+    expect(agentCliLoopTerminalStatus(true)).toBe('error');
   });
 });
