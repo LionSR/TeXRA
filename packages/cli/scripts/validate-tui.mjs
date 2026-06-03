@@ -16,6 +16,7 @@
 // Run:  node scripts/validate-tui.mjs        (from packages/cli)
 //   or: pnpm --filter @texra-ai/cli validate:tui
 //   or: node scripts/validate-tui.mjs --snapshot-dir /tmp/tui-frames slash-palette
+//   or: node scripts/validate-tui.mjs --no-build slash-palette
 //
 // `--snapshot-dir` writes per-scenario `.txt` and `.svg` frames plus an
 // `index.html` report for quick visual review in a browser or GitHub issue.
@@ -67,9 +68,14 @@ const ASYNC_FORM_SETTLE_MS = 12000;
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');
-const HARNESS =
-  process.env.TEXRA_TUI_HARNESS ||
-  path.join(CLI_ROOT, 'dist', 'bin', 'tui-harness.js');
+const DEFAULT_HARNESS_RELATIVE_PATH = path.join(
+  'dist',
+  'bin',
+  'tui-harness.js',
+);
+const HARNESS = process.env.TEXRA_TUI_HARNESS
+  ? path.resolve(process.env.TEXRA_TUI_HARNESS)
+  : path.resolve(CLI_ROOT, DEFAULT_HARNESS_RELATIVE_PATH);
 
 // --- scenarios (verified against the committed harness) ------------------
 const SCENARIOS = [
@@ -1747,10 +1753,11 @@ const SCENARIOS = [
 
 function formatUsage() {
   return [
-    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [--skip-if-missing-deps] [scenario ...]',
+    '[validate-tui] usage: node scripts/validate-tui.mjs [--snapshot-dir DIR] [--no-build] [--skip-if-missing-deps] [scenario ...]',
     '',
     'Options:',
     '  --snapshot-dir DIR  Write per-scenario .txt/.svg frames and an index.html report',
+    `  --no-build          Use the existing ${DEFAULT_HARNESS_RELATIVE_PATH} instead of rebuilding it`,
     '  --skip-if-missing-deps  Exit 0 instead of failing when PTY screenshot deps are unavailable',
     '  --list              Print available scenario names and exit',
     '  --list-selected     Print selected scenario names in run order and exit',
@@ -1773,6 +1780,7 @@ function parseArgs(argv) {
   const scenarios = [];
   let snapshotDir;
   let listSelected = false;
+  let noBuild = false;
   let skipIfMissingDeps = false;
   let endOfOptions = false;
   for (let index = 0; index < argv.length; index += 1) {
@@ -1795,6 +1803,10 @@ function parseArgs(argv) {
     }
     if (!endOfOptions && arg === '--list-selected') {
       listSelected = true;
+      continue;
+    }
+    if (!endOfOptions && arg === '--no-build') {
+      noBuild = true;
       continue;
     }
     if (!endOfOptions && arg === '--skip-if-missing-deps') {
@@ -1827,7 +1839,7 @@ function parseArgs(argv) {
     }
     scenarios.push(arg);
   }
-  return { scenarios, snapshotDir, listSelected, skipIfMissingDeps };
+  return { scenarios, snapshotDir, listSelected, noBuild, skipIfMissingDeps };
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -1855,6 +1867,25 @@ if (args.listSelected) {
   process.exit(0);
 }
 const snapshotDir = args.snapshotDir;
+const useExistingHarness =
+  Boolean(process.env.TEXRA_TUI_HARNESS) || args.noBuild;
+
+if (useExistingHarness) {
+  if (!existsSync(HARNESS)) {
+    if (process.env.TEXRA_TUI_HARNESS) {
+      console.error('[validate-tui] custom harness does not exist:', HARNESS);
+    } else {
+      console.error(
+        '[validate-tui] --no-build requires an existing harness:',
+        HARNESS,
+      );
+      console.error(
+        `[validate-tui] run without --no-build once to build ${DEFAULT_HARNESS_RELATIVE_PATH}`,
+      );
+    }
+    process.exit(1);
+  }
+}
 
 function ensureNodePtySpawnHelperExecutable() {
   if (process.platform === 'win32') return;
@@ -1899,12 +1930,7 @@ try {
 }
 
 // --- harness bundle ------------------------------------------------------
-if (process.env.TEXRA_TUI_HARNESS) {
-  if (!existsSync(HARNESS)) {
-    console.error('[validate-tui] custom harness does not exist:', HARNESS);
-    process.exit(1);
-  }
-} else {
+if (!useExistingHarness) {
   // Rebuild the committed harness on every run so local TUI source edits are
   // tested against the current tree instead of a stale dist/bin artifact.
   console.error('[validate-tui] building tui-harness bundle…');
