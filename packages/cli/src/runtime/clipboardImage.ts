@@ -103,10 +103,8 @@ async function readClipboardPngLinux(): Promise<ClipboardRead> {
 async function readClipboardPngWindows(
   outFile: string,
 ): Promise<ClipboardRead> {
-  const script = `$img = Get-Clipboard -Format Image; if ($img) { Add-Type -AssemblyName System.Drawing; $img.Save('${outFile.replaceAll(
-    '\\',
-    '\\\\',
-  )}', [System.Drawing.Imaging.ImageFormat]::Png) } else { Write-Output 'NO_IMAGE' }`;
+  const quotedOutFile = outFile.replaceAll("'", "''");
+  const script = `$img = Get-Clipboard -Format Image; if ($img) { Add-Type -AssemblyName System.Drawing; $img.Save('${quotedOutFile}', [System.Drawing.Imaging.ImageFormat]::Png) } else { Write-Output 'NO_IMAGE' }`;
   try {
     const { stdout } = await execFileAsync('powershell', [
       '-NoProfile',
