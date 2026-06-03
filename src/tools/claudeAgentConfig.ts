@@ -1,3 +1,9 @@
+import { execFileSync } from 'child_process';
+import { createHash } from 'crypto';
+import { existsSync } from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
 // Local imports - agent config
 import { platform } from '@platform/platform';
 import {
@@ -93,28 +99,135 @@ export const getClaudeAgentEffort: () => ClaudeAgentEffort =
 // ============================================================================
 
 /**
+ * Detect an existing Claude Code OAuth credential — either the
+ * `CLAUDE_CODE_OAUTH_TOKEN` env var (from `claude setup-token`) or a
+ * `claude login` session (Pro/Max subscription).
+ *
+ * Best-effort and side-effect-free: the login session lives in
+ * `${CLAUDE_CONFIG_DIR | ~/.claude}/.credentials.json` on Linux/Windows and in
+ * the login keychain on macOS. The macOS probes read metadata only (no
+ * `-w`/`-g`) so they never trigger a keychain access prompt; any failure is
+ * swallowed and treated as "no credential."
+ */
+function hasClaudeOauthCredential(
+  env: NodeJS.ProcessEnv = process.env,
+  currentPlatform: NodeJS.Platform = process.platform,
+): boolean {
+  if (env.CLAUDE_CODE_OAUTH_TOKEN) return true;
+
+  const configDir = resolveClaudeConfigDir(env.CLAUDE_CONFIG_DIR);
+  if (existsSync(path.join(configDir, '.credentials.json'))) return true;
+
+  if (currentPlatform === 'darwin') {
+    for (const probe of claudeKeychainCredentialProbes(configDir)) {
+      try {
+        execFileSync('security', probe, { stdio: 'ignore', timeout: 1000 });
+        return true;
+      } catch {
+        // Not found / `security` unavailable — try the next known service name.
+      }
+    }
+  }
+
+  return false;
+}
+
+function resolveClaudeConfigDir(configDirInput: string | undefined): string {
+  const configDir = configDirInput?.trim();
+  if (!configDir) return path.join(os.homedir(), '.claude');
+  return expandHomePath(configDir);
+}
+
+function expandHomePath(filePath: string): string {
+  if (filePath === '~') return os.homedir();
+  if (filePath.startsWith('~/') || filePath.startsWith('~\\')) {
+    return path.join(os.homedir(), filePath.slice(2));
+  }
+  return filePath;
+}
+
+function claudeKeychainCredentialProbes(configDir: string): string[][] {
+  const normalizedConfigDir = path.resolve(configDir);
+  const usesDefaultConfigDir =
+    normalizedConfigDir === path.resolve(resolveClaudeConfigDir(undefined));
+  const configDirHash = createHash('sha256')
+    .update(normalizedConfigDir)
+    .digest('hex');
+  const keychainProfiles = [normalizedConfigDir, configDirHash];
+  const legacyProbes: string[][] = usesDefaultConfigDir
+    ? [['find-generic-password', '-s', 'Claude Code-credentials']]
+    : [];
+
+  return [
+    ...legacyProbes,
+    ...keychainProfiles.flatMap((profile) => [
+      [
+        'find-generic-password',
+        '-a',
+        `${profile}-user`,
+        '-s',
+        `${profile}-access-token`,
+      ],
+      [
+        'find-generic-password',
+        '-a',
+        `${profile}-user`,
+        '-s',
+        `${profile}-refresh-token`,
+      ],
+    ]),
+  ];
+}
+
+/**
  * Build the env block passed to the Claude Code subprocess.
  *
- * Resolution order matches user expectations:
- *   1. Workspace-managed secret (Settings → API Keys → Anthropic) wins, so
- *      a key set in TeXRA "just works."
- *   2. Otherwise we leave `ANTHROPIC_API_KEY` and `CLAUDE_CODE_OAUTH_TOKEN`
- *      alone — the CLI handles them itself, and if neither is set it falls
- *      back to the `~/.claude/` config produced by `claude login`.
+ * Auth precedence is OAuth > env API key > managed secret:
+ *
+ *   1. A `CLAUDE_CODE_OAUTH_TOKEN` or `claude login` session always wins. We
+ *      strip `ANTHROPIC_API_KEY` from the subprocess env so the CLI uses the
+ *      OAuth credential and never inject the managed key — an API key must
+ *      never out-prioritize or shadow OAuth (the cause of spurious "Invalid
+ *      API key" failures).
+ *   2. Otherwise an explicit `ANTHROPIC_API_KEY` inherited from the
+ *      environment passes through untouched.
+ *   3. Otherwise the workspace-managed secret (Settings → API Keys →
+ *      Anthropic) is injected as `ANTHROPIC_API_KEY`.
  *
  * The SDK identifies itself in the User-Agent via CLAUDE_AGENT_SDK_CLIENT_APP.
  */
-export async function buildClaudeAgentEnv(): Promise<NodeJS.ProcessEnv> {
+export async function buildClaudeAgentEnv(
+  options: { platform?: NodeJS.Platform } = {},
+): Promise<NodeJS.ProcessEnv> {
   const env: NodeJS.ProcessEnv = { ...process.env };
+  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
+  const oauthToken = env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
+  if (oauthToken) {
+    env.CLAUDE_CODE_OAUTH_TOKEN = oauthToken;
+  } else {
+    delete env.CLAUDE_CODE_OAUTH_TOKEN;
+  }
 
+  const apiKeyVar = apiKeyEnvName('anthropic');
+
+  // 1. OAuth wins: drop any inherited API key so it can't out-prioritize the
+  //    OAuth credential, and skip injecting the managed secret entirely.
+  if (hasClaudeOauthCredential(env, options.platform ?? process.platform)) {
+    delete env[apiKeyVar];
+    return env;
+  }
+
+  // 2. Preserve an explicit env key rather than overriding it with the secret.
+  if (env[apiKeyVar]) return env;
+
+  // 3. Fall back to the Settings-managed secret.
   const managed = await lookupApiKey(platform().secrets, 'anthropic').catch(
     () => undefined,
   );
   if (managed) {
-    env[apiKeyEnvName('anthropic')] = managed;
+    env[apiKeyVar] = managed;
   }
 
-  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
   return env;
 }
 
