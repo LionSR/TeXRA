@@ -148,13 +148,18 @@ function expandHomePath(filePath: string): string {
 
 function claudeKeychainCredentialProbes(configDir: string): string[][] {
   const normalizedConfigDir = path.resolve(configDir);
+  const usesDefaultConfigDir =
+    normalizedConfigDir === path.resolve(resolveClaudeConfigDir(undefined));
   const configDirHash = createHash('sha256')
     .update(normalizedConfigDir)
     .digest('hex');
   const keychainProfiles = [normalizedConfigDir, configDirHash];
+  const legacyProbes: string[][] = usesDefaultConfigDir
+    ? [['find-generic-password', '-s', 'Claude Code-credentials']]
+    : [];
 
   return [
-    ['find-generic-password', '-s', 'Claude Code-credentials'],
+    ...legacyProbes,
     ...keychainProfiles.flatMap((profile) => [
       [
         'find-generic-password',

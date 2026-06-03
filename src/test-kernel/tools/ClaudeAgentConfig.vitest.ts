@@ -179,6 +179,29 @@ describe('Claude Code CLI configuration', () => {
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
   });
 
+  it('ignores the global keychain entry when a custom config dir is active', async () => {
+    const configDir = path.join(os.tmpdir(), 'texra-test-custom-claude');
+    vi.stubEnv('CLAUDE_CONFIG_DIR', configDir);
+    vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
+    secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
+    execFileSyncMock.mockImplementation((_command, args) => {
+      if (Array.isArray(args) && args.includes('Claude Code-credentials')) {
+        return Buffer.from('');
+      }
+      throw new Error('not found');
+    });
+
+    const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
+    const env = await buildClaudeAgentEnv({ platform: 'darwin' });
+    expect(env.ANTHROPIC_API_KEY).toBe('from-env');
+    expect(
+      execFileSyncMock.mock.calls.some(
+        ([, args]) =>
+          Array.isArray(args) && args.includes('Claude Code-credentials'),
+      ),
+    ).toBe(false);
+  });
+
   it('passes an explicit env ANTHROPIC_API_KEY through when no OAuth credential exists', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
