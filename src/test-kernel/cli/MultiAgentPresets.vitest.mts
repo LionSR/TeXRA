@@ -283,6 +283,53 @@ describe('CLI multi-agent presets', () => {
     expect(cliMultiAgentPlanHasGaps(plan)).toBe(true);
   });
 
+  it('does not select simplifier as an implicit preset root', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'physicist',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('review', AgentCategory.ToolUse),
+        agent('simplifier', AgentCategory.ToolUse, ['delegate_agent']),
+      ],
+    });
+    const onlySimplifierPlan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('simplifier', AgentCategory.ToolUse, ['delegate_agent']),
+      ],
+    });
+
+    expect(plan.rootAgent?.name).toBe('review');
+    expect(onlySimplifierPlan.rootAgent).toBeUndefined();
+    expect(cliMultiAgentPlanHasGaps(onlySimplifierPlan)).toBe(true);
+  });
+
+  it('allows custom presets to default to their simplifier agent', () => {
+    const plan = planCliMultiAgentPresetRun(
+      {
+        id: 'custom-cleanup',
+        name: 'Custom cleanup',
+        description: 'User-authored cleanup team.',
+        icon: 'codicon-symbol-method',
+        source: 'custom',
+        workflowAgents: [],
+        toolUseAgents: ['simplifier'],
+      },
+      {
+        workflowAgents: [],
+        toolUseAgents: [
+          agent('simplifier', AgentCategory.ToolUse, ['delegate_agent']),
+        ],
+      },
+    );
+
+    expect(plan.rootAgent?.name).toBe('simplifier');
+    expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
+  });
+
   it('reports no gaps when every preset member resolves', () => {
     const preset = findCliMultiAgentPreset(
       cliMultiAgentPresets(undefined),
@@ -344,6 +391,24 @@ describe('CLI multi-agent presets', () => {
     expect(plan.toolUseAgentKeys).toContain('builtInToolUse:review');
     expect(sourceQualifiedPlan.missingAgentOverride).toBeUndefined();
     expect(sourceQualifiedPlan.rootAgent?.name).toBe('review');
+  });
+
+  it('allows simplifier when explicitly requested as the preset root', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'physicist',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('review', AgentCategory.ToolUse),
+        agent('simplifier', AgentCategory.ToolUse, ['delegate_agent']),
+      ],
+      agentOverride: 'simplifier',
+    });
+
+    expect(plan.rootAgent?.name).toBe('simplifier');
+    expect(plan.toolUseAgentKeys).toContain('builtInToolUse:simplifier');
   });
 
   it('tracks a missing root override as a plan gap', () => {
