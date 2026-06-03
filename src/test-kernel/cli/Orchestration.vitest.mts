@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { orchestrationKeyHints } from '@cli/orchestration/runOrchestrationTui';
+import {
+  orchestrationKeyHints,
+  orchestrationModelAccessView,
+} from '@cli/orchestration/runOrchestrationTui';
 import { buildCliOrchestrationItems } from '@cli/runtime/orchestration';
 
 import type { CliHistoryEntry } from '@cli/runtime/history';
+import type { CliModelAccess } from '@cli/runtime/modelAccess';
 import {
   planCliMultiAgentPresetRun,
   type CliMultiAgentPreset,
@@ -51,6 +55,19 @@ function toolUseAgent(name: string, tools: string[] = []): AgentEntry {
 
 function workflowAgent(name: string): AgentEntry {
   return agent(name, AgentCategory.Workflow);
+}
+
+function modelAccess(
+  value: string,
+  availability: CliModelAccess['model']['availability'],
+  available: boolean,
+  status = available ? 'available' : 'missing key',
+): CliModelAccess {
+  return {
+    model: { value, label: value, availability },
+    available,
+    status,
+  };
 }
 
 function preset(overrides: Partial<CliMultiAgentPreset>): CliMultiAgentPreset {
@@ -212,6 +229,82 @@ describe('CLI orchestration items', () => {
     ).toEqual({
       kind: 'preset',
       preset: 'physicist',
+    });
+  });
+
+  it('disables model-dependent launcher rows when no personal model can run', () => {
+    const view = orchestrationModelAccessView(
+      buildCliOrchestrationItems({
+        presetPlans: [presetPlan({ id: 'physicist', name: 'Physicist' })],
+        history: [historyEntry('aaaaaaaaaaaa', { agent: 'review' })],
+        toolUseAgents: [toolUseAgent('review')],
+      }),
+      [modelAccess('deepseekT', 'provider-key', false)],
+      'personal',
+    );
+
+    const disabledLabels = view.items
+      .filter((item) => item.disabled)
+      .map((item) => item.label);
+    expect(disabledLabels).toEqual([
+      'New chat',
+      'Chat with review',
+      'Team Physicist',
+    ]);
+    expect(
+      view.items.find((item) => item.label === 'Resume aaaaaaaaaaaa'),
+    ).not.toHaveProperty('disabled');
+    expect(view.items.at(-1)).toMatchObject({ label: 'Help' });
+    expect(view.items[0]?.description).toBe(
+      'No personal API-key models are runnable',
+    );
+    expect(view.modelItems).toEqual([]);
+  });
+
+  it('keeps launcher rows active when model registry state is unknown', () => {
+    const view = orchestrationModelAccessView(
+      buildCliOrchestrationItems({
+        presetPlans: [presetPlan({ id: 'physicist', name: 'Physicist' })],
+        history: [],
+        toolUseAgents: [],
+      }),
+      [],
+      'personal',
+    );
+
+    expect(view.items.some((item) => item.disabled)).toBe(false);
+  });
+
+  it('keeps launcher rows active when a hidden runtime default can launch', () => {
+    const view = orchestrationModelAccessView(
+      buildCliOrchestrationItems({
+        presetPlans: [presetPlan({ id: 'physicist', name: 'Physicist' })],
+        history: [],
+        toolUseAgents: [],
+      }),
+      [modelAccess('deepseekT', 'provider-key', false)],
+      'personal',
+      { allowDefaultModelLaunch: true },
+    );
+
+    expect(view.items.some((item) => item.disabled)).toBe(false);
+    expect(view.modelItems).toEqual([]);
+  });
+
+  it('uses relay-specific disabled text when included access needs login', () => {
+    const view = orchestrationModelAccessView(
+      buildCliOrchestrationItems({
+        presetPlans: [],
+        history: [],
+        toolUseAgents: [],
+      }),
+      [modelAccess('sonnet46T', 'included-login-required', false)],
+      'included',
+    );
+
+    expect(view.items[0]).toMatchObject({
+      disabled: true,
+      description: 'Sign in with texra login for included relay models',
     });
   });
 });
