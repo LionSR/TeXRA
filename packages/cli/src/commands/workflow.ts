@@ -26,6 +26,7 @@ import { emitCliResult } from './_helpers/output';
 import {
   GLOBAL_ARGS,
   collectStringFlagValues,
+  optionalStringFlagValue,
   optString,
 } from './_helpers/globalArgs';
 import { resolveAgentWithRemoteFallback } from './_helpers/remoteAgents';
@@ -229,8 +230,8 @@ export const runWorkflowCommand = defineCliCommand({
       agent: ctx.args.agent,
       inputFiles: collectStringFlagValues(ctx.rawArgs, 'input', 'i'),
       contextFiles: collectStringFlagValues(ctx.rawArgs, 'context', 'c'),
-      output: optString(ctx.args.output),
-      outputDir: optString(ctx.args['output-dir']),
+      output: optionalStringFlagValue(ctx.rawArgs, 'output'),
+      outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
       model: optString(ctx.args.model),
       instruction: optString(ctx.args.instruction) ?? '',
     }),
