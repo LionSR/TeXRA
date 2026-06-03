@@ -52,10 +52,10 @@ export interface CliModelAccessListOptions {
   readonly apiMode?: CliApiMode;
 }
 
-const PERSONAL_API_AVAILABILITY: ReadonlySet<ModelAvailabilityKind> = new Set([
-  'provider-key',
-  'openrouter-key',
-]);
+const CLI_MODEL_AVAILABILITY_BY_API_MODE = {
+  included: new Set<ModelAvailabilityKind>(['included-access']),
+  personal: new Set<ModelAvailabilityKind>(['provider-key', 'openrouter-key']),
+} satisfies Record<CliApiMode, ReadonlySet<ModelAvailabilityKind>>;
 
 function isCliModelOptionBasicallyAvailable(model: ModelOptionData): boolean {
   return model.disabled !== true && model.requiresKey !== true;
@@ -65,14 +65,13 @@ function isCliModelOptionAllowedInMode(
   model: ModelOptionData,
   apiMode?: CliApiMode,
 ): boolean {
-  if (apiMode === 'included') {
-    return model.availability === 'included-access';
-  }
-  if (apiMode === 'personal') {
-    const availability = model.availability;
-    return availability != null && PERSONAL_API_AVAILABILITY.has(availability);
-  }
-  return true;
+  if (apiMode == null) return true;
+
+  const availability = model.availability;
+  return (
+    availability != null &&
+    CLI_MODEL_AVAILABILITY_BY_API_MODE[apiMode].has(availability)
+  );
 }
 
 function isCliModelOptionRunnableInMode(
