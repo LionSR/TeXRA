@@ -4,7 +4,10 @@ import { useState } from 'react';
 import { Select } from '../chat/tui/ui/Select';
 import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
-import { modelSelectItemsForCliMode } from '../chat/tui/forms/ModelListForm';
+import {
+  modelSelectItemsForCliMode,
+  noRunnableModelAccessReason,
+} from '../chat/tui/forms/ModelListForm';
 import { formatCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import type { CliModelAccess } from '../runtime/modelAccess';
 import type {
@@ -24,12 +27,62 @@ function isModelPickAction(
   return action.kind === 'chat' || action.kind === 'preset';
 }
 
+function noRunnableModelLaunchDescription(
+  models: readonly CliModelAccess[],
+  apiMode: CliApiMode,
+): string {
+  const reason = noRunnableModelAccessReason(models, apiMode);
+  switch (reason) {
+    case 'includedLoginRequired':
+      return 'Sign in with texra login for included relay models';
+    case 'included':
+      return 'No included relay models are runnable';
+    case 'personal':
+      return 'No personal API-key models are runnable';
+  }
+  const exhaustive: never = reason;
+  return exhaustive;
+}
+
+export function orchestrationModelAccessView(
+  items: readonly CliOrchestrationItem[],
+  models: readonly CliModelAccess[],
+  apiMode: CliApiMode,
+  options: {
+    readonly allowDefaultModelLaunch?: boolean;
+  } = {},
+): {
+  readonly items: readonly CliOrchestrationItem[];
+  readonly modelItems: ReturnType<typeof modelSelectItemsForCliMode>;
+} {
+  const modelItems = modelSelectItemsForCliMode(models, apiMode);
+  if (
+    models.length === 0 ||
+    modelItems.length > 0 ||
+    options.allowDefaultModelLaunch === true
+  ) {
+    return { items, modelItems };
+  }
+
+  const description = noRunnableModelLaunchDescription(models, apiMode);
+  return {
+    modelItems,
+    items: items.map((item) =>
+      isModelPickAction(item.value)
+        ? { ...item, description, disabled: true }
+        : item,
+    ),
+  };
+}
+
 export interface OrchestrationAppProps {
   readonly items: readonly CliOrchestrationItem[];
-  /** Model access list for the second step; if no entries are runnable in the
-   *  active API mode, the launcher skips the model pick. */
+  /** Model access list for the second step. An empty list means unknown
+   *  registry state, so the launcher still starts chats with runtime defaults;
+   *  a known list with no runnable model disables chat/team starts. */
   readonly models: readonly CliModelAccess[];
   readonly apiMode: CliApiMode;
+  readonly allowDefaultModelLaunch?: boolean;
   readonly onResolve: (action: CliOrchestrationAction) => void;
 }
 
@@ -55,7 +108,12 @@ export function OrchestrationApp(
   const app = useApp();
   const { rows } = useWindowSize();
   const maxVisibleItems = Math.max(4, rows - 8);
-  const modelItems = modelSelectItemsForCliMode(props.models, props.apiMode);
+  const { items, modelItems } = orchestrationModelAccessView(
+    props.items,
+    props.models,
+    props.apiMode,
+    { allowDefaultModelLaunch: props.allowDefaultModelLaunch },
+  );
   // When set, the launcher is on its second step: choosing the model for this
   // chat/team. Esc returns to the item list rather than exiting.
   const [pending, setPending] = useState<ModelPickAction | undefined>(
@@ -122,9 +180,9 @@ export function OrchestrationApp(
       <Text dimColor>Choose how to start this CLI session.</Text>
       <Box marginTop={1}>
         <Select
-          items={props.items}
+          items={items}
           maxVisibleItems={maxVisibleItems}
-          showOverflow={props.items.length > maxVisibleItems}
+          showOverflow={items.length > maxVisibleItems}
           onSelect={onItemSelect}
           onCancel={() => finish({ kind: 'exit' })}
         />
@@ -137,10 +195,13 @@ export function OrchestrationApp(
 }
 
 export interface RunOrchestrationTuiOptions {
-  /** Available models for the second step; the launcher filters to runnable
-   *  ones. Empty or all-unavailable skips the model pick. */
+  /** Available models for the second step; an empty list means registry
+   *  unavailable/unknown, while a non-empty all-unavailable list disables
+   *  model-dependent launch rows unless runtime defaults can still resolve a
+   *  hidden configured model. */
   readonly models: readonly CliModelAccess[];
   readonly apiMode: CliApiMode;
+  readonly allowDefaultModelLaunch?: boolean;
 }
 
 export async function runOrchestrationTui(
@@ -159,6 +220,7 @@ export async function runOrchestrationTui(
         items={items}
         models={options.models}
         apiMode={options.apiMode}
+        allowDefaultModelLaunch={options.allowDefaultModelLaunch}
         onResolve={record}
       />,
       {
