@@ -11,6 +11,16 @@ let secretStore: Map<string, string>;
 async function loadBuildClaudeAgentEnv(): Promise<
   typeof import('@tools/claudeAgentConfig').buildClaudeAgentEnv
 > {
+  vi.doMock('child_process', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('child_process')>();
+    return {
+      ...actual,
+      execFileSync: vi.fn(() => {
+        throw new Error('not found');
+      }),
+    };
+  });
+
   vi.doMock('@platform/platform', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@platform/platform')>();
     return {
@@ -37,6 +47,8 @@ describe('Claude Code CLI configuration', () => {
     // at a path that cannot contain `.credentials.json` and clear the token so
     // tests don't pick up a real `claude login` session on the host.
     vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', '');
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    delete process.env.ANTHROPIC_API_KEY;
     vi.stubEnv(
       'CLAUDE_CONFIG_DIR',
       path.join(os.tmpdir(), 'texra-test-no-claude-config'),
@@ -44,13 +56,13 @@ describe('Claude Code CLI configuration', () => {
   });
 
   afterEach(() => {
+    vi.doUnmock('child_process');
     vi.doUnmock('@platform/platform');
     invalidateApiKeyCache();
     vi.unstubAllEnvs();
   });
 
   it('injects the managed Anthropic secret when no OAuth credential exists', async () => {
-    vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
 
     const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
@@ -72,6 +84,7 @@ describe('Claude Code CLI configuration', () => {
 
   it('passes an explicit env ANTHROPIC_API_KEY through untouched', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
+    secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
 
     const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
     await expect(buildClaudeAgentEnv()).resolves.toMatchObject({

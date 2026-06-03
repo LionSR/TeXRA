@@ -154,6 +154,9 @@ function hasClaudeOauthCredential(): boolean {
 export async function buildClaudeAgentEnv(): Promise<NodeJS.ProcessEnv> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
+  const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
+
+  if (env[anthropicApiKeyEnv]) return env;
 
   const [managed, origin] = await Promise.all([
     lookupApiKey(platform().secrets, 'anthropic').catch(() => undefined),
@@ -166,7 +169,7 @@ export async function buildClaudeAgentEnv(): Promise<NodeJS.ProcessEnv> {
   // is available. An `env`-origin key is already in `env`; an OAuth session
   // takes precedence over the managed key.
   if (managed && origin === 'secret' && !hasClaudeOauthCredential()) {
-    env[apiKeyEnvName('anthropic')] = managed;
+    env[anthropicApiKeyEnv] = managed;
   }
 
   return env;
