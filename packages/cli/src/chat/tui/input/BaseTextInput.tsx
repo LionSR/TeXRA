@@ -403,7 +403,10 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
 
   useInput(
     (input, key) => {
-      if (isEscapeInput(input, key)) return;
+      if (isEscapeInput(input, key)) {
+        pendingSubmitRef.current = null;
+        return;
+      }
       if (pendingSubmitRef.current) {
         // A visible Enter already committed this draft. Ignore later keystrokes
         // until clipboard probes settle so the deferred submit is neither
