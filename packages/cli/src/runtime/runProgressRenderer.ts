@@ -41,7 +41,7 @@ export interface RunProgressRendererInit {
 export function shouldRenderRunProgress(
   context: Pick<CliContext, 'outputFormat' | 'quietLogs'>,
 ): boolean {
-  return context.quietLogs !== true && context.outputFormat === 'text';
+  return context.quietLogs !== true && context.outputFormat !== 'ndjson';
 }
 
 export function createRunProgressRenderer(
