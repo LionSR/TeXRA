@@ -178,7 +178,7 @@
     "tar": "^7.5.16",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
-    "write-file-atomic": "^8.0.0",
+    "write-file-atomic": "^7.0.1",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   }

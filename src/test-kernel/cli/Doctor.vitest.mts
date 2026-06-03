@@ -119,10 +119,11 @@ describe('CLI doctor', () => {
 
   it('matches the published Node engine range', async () => {
     const cases: Array<[string, 'pass' | 'fail']> = [
-      ['22.22.1', 'fail'],
-      ['22.22.2', 'pass'],
-      ['23.0.0', 'fail'],
-      ['24.14.9', 'fail'],
+      ['21.9.9', 'fail'],
+      ['22.8.9', 'fail'],
+      ['22.9.0', 'pass'],
+      ['v22.9.0', 'pass'],
+      ['23.0.0', 'pass'],
       ['24.15.0', 'pass'],
       ['26.0.0', 'pass'],
     ];
@@ -134,16 +135,13 @@ describe('CLI doctor', () => {
       );
     }
 
-    const unsupportedOddRelease = await buildNodeVersionReport('23.0.0');
+    const unsupportedRelease = await buildNodeVersionReport('21.0.0');
     expect(
-      unsupportedOddRelease.checks.find((check) => check.id === 'node')
-        ?.message,
-    ).toBe('Node 23.0.0 is outside the supported range.');
+      unsupportedRelease.checks.find((check) => check.id === 'node')?.message,
+    ).toBe('Node 21.0.0 is outside the supported range.');
     expect(
-      unsupportedOddRelease.checks.find((check) => check.id === 'node')?.hint,
-    ).toBe(
-      'Install Node ^22.22.2, ^24.15.0, or >=26.0.0 before running TeXRA CLI.',
-    );
+      unsupportedRelease.checks.find((check) => check.id === 'node')?.hint,
+    ).toBe('Install Node >=22.9.0 before running TeXRA CLI.');
   });
 
   it('keeps human-readable hints in text output', async () => {
