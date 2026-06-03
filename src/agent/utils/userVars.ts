@@ -19,6 +19,7 @@ import {
   getPromptFileName,
   getXmlFormatFromReadableFiles,
 } from '@utils/prompt';
+import { filterNotNull } from '@utils/core';
 import {
   listExternalRoots,
   type ExternalRootKind,
@@ -459,7 +460,7 @@ async function getAttachedMemories(
     }),
   );
 
-  const parts = results.filter((p): p is string => p !== null);
+  const parts = results.filter(filterNotNull);
   if (parts.length === 0) return null;
   return `<attached_memories>\n${parts.join('\n')}\n</attached_memories>`;
 }

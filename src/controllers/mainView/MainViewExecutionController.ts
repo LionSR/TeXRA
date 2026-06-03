@@ -15,6 +15,7 @@ import {
 } from '@shared/schemas/toolConfig';
 
 // Local imports - utilities
+import { filterNotNull } from '@utils/core';
 import {
   getPastedImageFullPath,
   isPastedImage,
@@ -84,7 +85,7 @@ export function prepareMainViewExecutionRequest(
       toolConfig: { ...toolConfigResult.data, attachDiagnostics: false },
       mediaFiles: (message.mediaFiles ?? [])
         .map(mapMediaFile)
-        .filter((file: string | null): file is string => file !== null),
+        .filter(filterNotNull),
       editedFile: null,
     },
   });

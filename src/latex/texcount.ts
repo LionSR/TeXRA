@@ -6,6 +6,7 @@ import * as logger from '@logger/logUtils';
 import { flexibleFS, pathToLocation } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
+import { filterNotNull } from '@utils/core';
 import { hasExtension } from '@utils/core/pathCore';
 
 const CHANNEL = 'LaTeXCommands';
@@ -162,9 +163,7 @@ async function getIndividualCounts(
     }),
   );
 
-  const outputs = results
-    .map((result) => result.output)
-    .filter((output): output is string => output !== null);
+  const outputs = results.map((result) => result.output).filter(filterNotNull);
   const errors = results.flatMap((result) => result.errors);
 
   return { outputs, errors };
