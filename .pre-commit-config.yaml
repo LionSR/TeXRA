@@ -7,3 +7,14 @@ repos:
         args: ['run', 'format']
         language: system
         pass_filenames: false
+      # Forbid a stray internal doc at the docs root from being published to
+      # texra.ai. The boundary lives in docs/.vitepress/publicDocs.js; this
+      # dependency-free Node gate fails the commit if a root-level doc/dir is
+      # neither public nor excluded. (The docs-deploy.yml allowlist remains the
+      # server-side backstop.) Scoped to docs/ so it only runs when relevant.
+      - id: docs-root-boundary
+        name: docs root public/internal boundary
+        entry: node docs/scripts/check-root-docs.mjs
+        language: system
+        files: ^docs/
+        pass_filenames: false
