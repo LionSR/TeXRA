@@ -5,10 +5,11 @@
 // unclassified root-level doc). Keep this file dependency-free — no imports —
 // so the gate can run with bare Node, without installing the docs sub-project.
 //
-// Public site allowlist: only the files in `publicRootDocs` and the dirs in
-// `publicRootDirs` are published to texra.ai. Every other markdown file in this
-// directory is internal and must NOT be published. Static assets under public/
-// are served as-is and are fine to expose.
+// Intended public root surface for texra.ai. VitePress is opt-out: it publishes
+// root markdown files and content directories unless `srcExclude` blocks them.
+// The boundary gate treats `publicRootDocs` / `publicRootDirs` as the explicit
+// public surface and `srcExclude` as internal. Static assets under public/ are
+// served as-is and are fine to expose.
 
 // Root-level markdown intentionally published to texra.ai. `changelog.md` and
 // `terms.md` are generated into the docs root at build time by the
