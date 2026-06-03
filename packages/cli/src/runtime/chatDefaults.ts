@@ -1,4 +1,3 @@
-import { getAgent, loadAgents } from '@agent/index';
 import { listExecutions } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { isNonEmptyString } from '@utils/core/stringCore';
@@ -74,20 +73,8 @@ async function loadUserDefaults(): Promise<PartialDefaults> {
   }
 }
 
-function isResolvableToolUseAgent(name: string | undefined): boolean {
-  if (!name) return false;
-  const entry = getAgent(name);
-  return entry?.category === AgentCategory.ToolUse;
-}
-
 async function loadHistoryDefaults(): Promise<PartialDefaults> {
   try {
-    // Ensure the local registry is populated before validating history names —
-    // otherwise stale rows that name an agent missing from the current install
-    // (e.g. a `bash` row persisted from a process-tracking run) would still
-    // win this tier and the chat session would crash on first submit with
-    // "Could not find agent: <name>".
-    await loadAgents({ includeRemote: false });
     const entries = await listExecutions();
     const candidates = entries
       .filter(
@@ -101,12 +88,9 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
         (a, b) =>
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
       );
-    const mostRecent = candidates.find((entry) =>
-      isResolvableToolUseAgent(entry.agentConfig?.agent),
-    );
+    const mostRecent = candidates[0];
     if (!mostRecent?.agentConfig) return {};
     return pickDefaults({
-      agent: mostRecent.agentConfig.agent,
       model: mostRecent.agentConfig.model,
     });
   } catch {
@@ -159,8 +143,9 @@ export interface ResolveChatDefaultsInit {
 /**
  * Four-tier lookup per `docs/prd/cli-tui-ink/10-architecture.md#entrypoint-default`:
  * workspace `.texra/config.json` → user `<global-storage>/config.json` →
- * last toolUse execution → built-in. Per-field independence: a workspace that
- * only sets `agent` still falls through to user/history for `model`.
+ * last single-agent toolUse execution's model → built-in. Per-field
+ * independence: a workspace that only sets `agent` still falls through to
+ * user/history for `model`, but history never changes the single-chat agent.
  */
 export async function resolveChatDefaults(
   init: ResolveChatDefaultsInit,
