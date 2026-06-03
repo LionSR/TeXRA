@@ -52,7 +52,7 @@ In the terminal:
 ```sh
 texra chat                                  # interactive tool-use session
 texra run polish --input paper.tex          # one-shot workflow
-texra multi-agent run physicist             # named team
+texra multi-agent run physicist --instruction "Check this derivation"  # named team
 ```
 
 Run history and agent settings are shared between both surfaces.
