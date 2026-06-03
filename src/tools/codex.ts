@@ -72,9 +72,11 @@ import { defineTool } from './core/define';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream } from './childStream';
 import {
+  agentCliLoopTerminalStatus,
+  finalizeAgentCliLoopStatus,
   isCleanInterruption,
-  isLoopOwnedStatus,
   logTurnSummary,
+  markAgentCliLoopError,
 } from './agentCliShared';
 import {
   buildCodexCommandToolLog,
@@ -227,11 +229,7 @@ export function finalizeCodexLoopStatus(
   childStreamId: StreamTabId,
   runtimeHost: AgentRuntimeHost,
 ): void {
-  if (isLoopOwnedStatus(StreamStatusService.get(childStreamId))) {
-    StreamStatusService.set(childStreamId, STREAM_STATUS.READY, {
-      runtimeHost,
-    });
-  }
+  finalizeAgentCliLoopStatus(childStreamId, runtimeHost);
 }
 
 // ============================================================================
@@ -547,6 +545,7 @@ function startCodexLoop(params: {
     runtimeHost,
   });
 
+  let sawTurnFailure = false;
   void (async () => {
     try {
       while (!session.isInterrupted()) {
@@ -583,8 +582,9 @@ function startCodexLoop(params: {
         }
 
         const wallTimeMs = Date.now() - startedAt;
+        const turnFailed = err != null;
         const threadId = thread.id;
-        if (threadId && !threadRegistry.has(threadId)) {
+        if (!turnFailed && threadId && !threadRegistry.has(threadId)) {
           storeThread(threadId, {
             thread,
             childStreamId,
@@ -603,7 +603,7 @@ function startCodexLoop(params: {
         }
 
         const msg =
-          turn && !err
+          turn && !turnFailed
             ? formatCodexDelivery(
                 executionId,
                 prompt,
@@ -619,6 +619,12 @@ function startCodexLoop(params: {
         }
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
 
+        if (turnFailed) {
+          sawTurnFailure = true;
+          markAgentCliLoopError(childStreamId, runtimeHost);
+          break;
+        }
+
         if (!session.isInterrupted()) {
           StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING, {
             runtimeHost,
@@ -626,14 +632,17 @@ function startCodexLoop(params: {
         }
       }
     } finally {
-      sessionStage.end('stopped');
+      sessionStage.end(sawTurnFailure ? 'error' : 'stopped');
       unregisterInterruptible(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
       const threadId = thread.id;
       if (threadId) threadRegistry.delete(threadId);
       // Persist terminal status before untracking — untrackExecution fires
       // notifyWaiters, so consumers must see the final status on disk.
-      await writeTerminalStatus(executionId, 'completed').catch(() => {});
+      await writeTerminalStatus(
+        executionId,
+        agentCliLoopTerminalStatus(sawTurnFailure),
+      ).catch(() => {});
       untrackExecution(executionId);
 
       finalizeCodexLoopStatus(childStreamId, runtimeHost);

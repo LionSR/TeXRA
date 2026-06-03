@@ -21,6 +21,7 @@ describe('CLI SubagentList display model', () => {
     expect(childStatusColor(undefined)).toBe('green');
     expect(childStatusColor('running')).toBe('green');
     expect(childStatusColor('waiting')).toBe('yellow');
+    expect(childStatusColor('error')).toBe('red');
     expect(childStatusColor('stopped')).toBe('red');
   });
 

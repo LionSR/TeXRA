@@ -1,8 +1,16 @@
 // Shared helpers for the agent-CLI tool modules (codex.ts, claudeAgent.ts).
-// Host-agnostic, VS Code-free: pure predicates and a turn-summary logger.
+// Host-agnostic, VS Code-free.
 
 import { type AgentTrace } from '@agent/trace';
-import { StreamStatus, STREAM_STATUS } from '@shared/schemas';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import {
+  EXECUTION_STATUS,
+  type ExecutionStatus,
+  type StreamStatus,
+  STREAM_STATUS,
+  type StreamTabId,
+} from '@shared/schemas';
 import { formatDuration } from '@utils/core';
 
 /** True for an AbortController-style cancellation error. */
@@ -25,6 +33,34 @@ export function isCleanInterruption(
 /** Transient statuses owned by a running agent loop. */
 export function isLoopOwnedStatus(status: StreamStatus | undefined): boolean {
   return status === STREAM_STATUS.WAITING || status === STREAM_STATUS.RUNNING;
+}
+
+export function agentCliLoopTerminalStatus(
+  sawTurnFailure: boolean,
+): ExecutionStatus {
+  return sawTurnFailure ? EXECUTION_STATUS.ERROR : EXECUTION_STATUS.COMPLETED;
+}
+
+export function markAgentCliLoopError(
+  childStreamId: StreamTabId,
+  runtimeHost: AgentRuntimeHost,
+): void {
+  if (StreamStatusService.get(childStreamId) !== STREAM_STATUS.STOPPED) {
+    StreamStatusService.set(childStreamId, STREAM_STATUS.ERROR, {
+      runtimeHost,
+    });
+  }
+}
+
+export function finalizeAgentCliLoopStatus(
+  childStreamId: StreamTabId,
+  runtimeHost: AgentRuntimeHost,
+): void {
+  if (isLoopOwnedStatus(StreamStatusService.get(childStreamId))) {
+    StreamStatusService.set(childStreamId, STREAM_STATUS.READY, {
+      runtimeHost,
+    });
+  }
 }
 
 /** Log a turn summary (duration + token usage) to the child stream. */
