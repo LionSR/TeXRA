@@ -11,11 +11,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
-import {
-  lookupApiKey,
-  lookupApiKeyOrigin,
-  apiKeyEnvName,
-} from '@model/apiProviders';
+import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { createEnumParser, createEnumStateGetter } from './support/enumConfig';
 import {
@@ -138,38 +134,42 @@ function hasClaudeOauthCredential(): boolean {
 /**
  * Build the env block passed to the Claude Code subprocess.
  *
- * Auth resolution prefers an existing OAuth credential over a TeXRA-managed
- * API key, so a stale key saved in Settings → API Keys can never shadow a
- * working `claude login` session (the cause of spurious "Invalid API key"
- * failures):
- *   1. An explicit `ANTHROPIC_API_KEY` in the environment is already present
- *      in `env` and passes through untouched.
- *   2. A `CLAUDE_CODE_OAUTH_TOKEN` or `claude login` session is left for the
- *      CLI to use; we do NOT override it with the managed key.
- *   3. Only when no OAuth credential exists do we inject the workspace-managed
- *      secret (Settings → API Keys → Anthropic) as `ANTHROPIC_API_KEY`.
+ * Auth precedence is OAuth > env API key > managed secret:
+ *
+ *   1. A `CLAUDE_CODE_OAUTH_TOKEN` or `claude login` session always wins. We
+ *      strip `ANTHROPIC_API_KEY` from the subprocess env so the CLI uses the
+ *      OAuth credential and never inject the managed key — an API key must
+ *      never out-prioritize or shadow OAuth (the cause of spurious "Invalid
+ *      API key" failures).
+ *   2. Otherwise an explicit `ANTHROPIC_API_KEY` inherited from the
+ *      environment passes through untouched.
+ *   3. Otherwise the workspace-managed secret (Settings → API Keys →
+ *      Anthropic) is injected as `ANTHROPIC_API_KEY`.
  *
  * The SDK identifies itself in the User-Agent via CLAUDE_AGENT_SDK_CLIENT_APP.
  */
 export async function buildClaudeAgentEnv(): Promise<NodeJS.ProcessEnv> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
-  const anthropicApiKeyEnv = apiKeyEnvName('anthropic');
 
-  if (env[anthropicApiKeyEnv]) return env;
+  const apiKeyVar = apiKeyEnvName('anthropic');
 
-  const [managed, origin] = await Promise.all([
-    lookupApiKey(platform().secrets, 'anthropic').catch(() => undefined),
-    lookupApiKeyOrigin(platform().secrets, 'anthropic').catch(
-      () => 'none' as const,
-    ),
-  ]);
+  // 1. OAuth wins: drop any inherited API key so it can't out-prioritize the
+  //    OAuth credential, and skip injecting the managed secret entirely.
+  if (hasClaudeOauthCredential()) {
+    delete env[apiKeyVar];
+    return env;
+  }
 
-  // Inject only the Settings-stored secret, and only when no OAuth credential
-  // is available. An `env`-origin key is already in `env`; an OAuth session
-  // takes precedence over the managed key.
-  if (managed && origin === 'secret' && !hasClaudeOauthCredential()) {
-    env[anthropicApiKeyEnv] = managed;
+  // 2. Preserve an explicit env key rather than overriding it with the secret.
+  if (env[apiKeyVar]) return env;
+
+  // 3. Fall back to the Settings-managed secret.
+  const managed = await lookupApiKey(platform().secrets, 'anthropic').catch(
+    () => undefined,
+  );
+  if (managed) {
+    env[apiKeyVar] = managed;
   }
 
   return env;

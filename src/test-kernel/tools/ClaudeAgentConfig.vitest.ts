@@ -1,4 +1,5 @@
 // Third-party imports
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 
 let secretStore: Map<string, string>;
+let cleanupDirs: string[];
 
 async function loadBuildClaudeAgentEnv(): Promise<
   typeof import('@tools/claudeAgentConfig').buildClaudeAgentEnv
@@ -41,6 +43,7 @@ async function loadBuildClaudeAgentEnv(): Promise<
 describe('Claude Code CLI configuration', () => {
   beforeEach(() => {
     secretStore = new Map();
+    cleanupDirs = [];
     vi.resetModules();
     invalidateApiKeyCache();
     // Deterministic baseline: no OAuth credential present. Point the config dir
@@ -60,6 +63,7 @@ describe('Claude Code CLI configuration', () => {
     vi.doUnmock('@platform/platform');
     invalidateApiKeyCache();
     vi.unstubAllEnvs();
+    for (const dir of cleanupDirs) rmSync(dir, { recursive: true, force: true });
   });
 
   it('injects the managed Anthropic secret when no OAuth credential exists', async () => {
@@ -82,7 +86,32 @@ describe('Claude Code CLI configuration', () => {
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('oauth-token');
   });
 
-  it('passes an explicit env ANTHROPIC_API_KEY through untouched', async () => {
+  it('strips an inherited ANTHROPIC_API_KEY when an OAuth token is present', async () => {
+    // OAuth must win even over an explicit env API key — otherwise the CLI
+    // prefers ANTHROPIC_API_KEY and ignores the login session.
+    vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', 'oauth-token');
+
+    const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
+    const env = await buildClaudeAgentEnv();
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe('oauth-token');
+  });
+
+  it('strips ANTHROPIC_API_KEY when a `claude login` session file exists', async () => {
+    const sessionDir = mkdtempSync(path.join(os.tmpdir(), 'texra-claude-'));
+    writeFileSync(path.join(sessionDir, '.credentials.json'), '{}');
+    cleanupDirs.push(sessionDir);
+    vi.stubEnv('CLAUDE_CONFIG_DIR', sessionDir);
+    vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
+    secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
+
+    const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
+    const env = await buildClaudeAgentEnv();
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
+  it('passes an explicit env ANTHROPIC_API_KEY through when no OAuth credential exists', async () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
 
