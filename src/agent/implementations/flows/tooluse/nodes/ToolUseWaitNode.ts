@@ -127,6 +127,7 @@ export class ToolUseWaitNode<C> extends Node<
       kind: 'continue',
       followUp: batch.items.join('\n\n'),
       synthetic: batch.synthetic,
+      mediaFiles: batch.mediaFiles,
     };
   }
 
@@ -143,8 +144,14 @@ export class ToolUseWaitNode<C> extends Node<
     prepRes: WaitPrepResult,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
-    const { onFollowUpConsumed, streamId, logger, modelHandler, runtimeHost } =
-      this.services;
+    const {
+      onFollowUpConsumed,
+      streamId,
+      logger,
+      modelHandler,
+      runtimeHost,
+      fileService,
+    } = this.services;
 
     if (execRes.kind === 'stop') {
       if (prepRes.deliveredToOrchestrator) {
@@ -179,6 +186,16 @@ export class ToolUseWaitNode<C> extends Node<
       shared.messages,
       execRes.followUp,
     );
+
+    // Attach any media (e.g. pasted images) the user sent with this follow-up
+    // to the freshly-appended user message, reusing the same shared media path
+    // as the reflection flow. No-ops when empty or the model lacks vision.
+    if (execRes.mediaFiles?.length) {
+      await modelHandler.addMediaToUserMessage(
+        shared.messages,
+        execRes.mediaFiles.map((p) => fileService.createLocation(p)),
+      );
+    }
 
     return FlowTransition.CONTINUE;
   }
