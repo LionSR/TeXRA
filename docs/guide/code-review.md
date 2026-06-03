@@ -38,13 +38,18 @@ those same threads instead of posting duplicates.
 Copy these into the repository you want reviewed:
 
 - `.github/workflows/texra-code-review.yml` — the workflow.
-- `.github/actions/texra-code-review/` — the composite action and its scripts.
-- `.github/prompts/texra-code-review-prompt.md` — the review prompt.
+- `.github/prompts/texra-code-review-prompt.md` — custom review instructions
+  used by this workflow. Read custom prompts from the trusted default branch,
+  not from the pull request checkout.
 
-Once these are merged to your default branch, every new PR from a branch in
-the same repository will get a TeXRA review. The review code always runs from
-the version on your default branch, so PR authors can't change how reviews
-work by editing the workflow.
+The workflow delegates review mechanics to `texra-ai/texra-action/review`.
+Pin the action to a reviewed release commit for reproducible CI behavior, and
+update that pin deliberately when adopting a new action release.
+
+Once the workflow is merged to your default branch, every new PR from a branch
+in the same repository will get a TeXRA review. Keep any custom prompt on the
+trusted default branch, or use the external action's bundled prompt by omitting
+the trusted prompt checkout and `prompt-file` input.
 
 ::: warning Forks don't get reviewed
 PRs opened from a **fork** are not reviewed. GitHub deliberately doesn't share
@@ -84,10 +89,13 @@ variables → Actions → **Variables**):
 
 - `TEXRA_REVIEW_MODEL` — pin one model id for every review, regardless of
   provider.
-- `TEXRA_REVIEW_ANTHROPIC_MODEL`, `TEXRA_REVIEW_OPENAI_MODEL`,
-  `TEXRA_REVIEW_GOOGLE_MODEL`, `TEXRA_REVIEW_DEEPSEEK_MODEL`,
-  `TEXRA_REVIEW_OPENROUTER_MODEL`, `TEXRA_REVIEW_XAI_MODEL` — override the
-  default for one provider only.
+- `TEXRA_REVIEW_MODEL_DEFAULTS` — JSON map from provider id to default model
+  id, used when you want provider-specific defaults. Example:
+  `{"deepseek":"deepseekproT","anthropic":"opus48T"}`.
+
+Older per-provider variables such as `TEXRA_REVIEW_DEEPSEEK_MODEL` are no
+longer read by the external action. Move those values into
+`TEXRA_REVIEW_MODEL_DEFAULTS`.
 
 The built-in defaults:
 
@@ -121,6 +129,12 @@ want TeXRA to clean up its own threads on subsequent pushes (resolving fixed
 ones, replying with updates rather than re-posting), create a personal or
 fine-grained access token with pull-request review permissions and add it as a
 `TEXRA_REVIEW_GITHUB_TOKEN` repo secret.
+
+## Review failures
+
+If the model provider or CLI run fails, the external action fails the workflow
+check instead of posting a fallback review. Treat that failed check as the
+signal that no review was completed.
 
 ## Next Steps
 
