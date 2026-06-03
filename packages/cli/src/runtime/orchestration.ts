@@ -2,8 +2,11 @@ import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ExecutionId } from '@shared/schemas';
 
+import {
+  formatCliMultiAgentPresetPlanSummary,
+  type CliMultiAgentPresetRunPlan,
+} from './multiAgentPresets';
 import type { CliHistoryEntry } from './history';
-import type { CliMultiAgentPreset } from './multiAgentPresets';
 
 export type CliOrchestrationAction =
   | { readonly kind: 'chat'; readonly agent?: string; readonly model?: string }
@@ -26,7 +29,7 @@ export interface CliOrchestrationItem {
 }
 
 export interface BuildCliOrchestrationItemsInput {
-  readonly presets: readonly CliMultiAgentPreset[];
+  readonly presetPlans: readonly CliMultiAgentPresetRunPlan[];
   readonly history: readonly CliHistoryEntry[];
   readonly toolUseAgents: readonly AgentEntry[];
 }
@@ -48,7 +51,7 @@ export function buildCliOrchestrationItems(
 
   items.push(...recentResumeItems(input.history));
   items.push(...recentAgentItems(input.history, input.toolUseAgents));
-  items.push(...presetItems(input.presets));
+  items.push(...presetItems(input.presetPlans));
   items.push({
     value: { kind: 'help' },
     label: 'Help',
@@ -91,11 +94,11 @@ function recentAgentItems(
 }
 
 function presetItems(
-  presets: readonly CliMultiAgentPreset[],
+  plans: readonly CliMultiAgentPresetRunPlan[],
 ): CliOrchestrationItem[] {
-  return presets.slice(0, MAX_PRESET_ITEMS).map((preset) => ({
-    value: { kind: 'preset', preset: preset.id },
-    label: `Team ${preset.name}`,
-    description: `${preset.source}; workflow:${preset.workflowAgents.length}; tool-use:${preset.toolUseAgents.length}`,
+  return plans.slice(0, MAX_PRESET_ITEMS).map((plan) => ({
+    value: { kind: 'preset', preset: plan.preset.id },
+    label: `Team ${plan.preset.name}`,
+    description: formatCliMultiAgentPresetPlanSummary(plan),
   }));
 }

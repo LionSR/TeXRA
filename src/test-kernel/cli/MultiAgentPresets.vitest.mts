@@ -9,6 +9,7 @@ import {
   formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
+  planCliMultiAgentPresets,
   planCliMultiAgentPresetRun,
   parseCliCustomAgentPresets,
 } from '@cli/runtime/multiAgentPresets';
@@ -29,12 +30,46 @@ function agent(
 }
 
 describe('CLI multi-agent presets', () => {
-  it('lists built-in team presets with stable counts', () => {
+  it('lists planned built-in team presets with stable counts', () => {
     const presets = cliMultiAgentPresets(undefined);
+    const plans = planCliMultiAgentPresets(presets, {
+      workflowAgents: presets.flatMap((preset) =>
+        preset.workflowAgents.map((name) =>
+          agent(name, AgentCategory.Workflow),
+        ),
+      ),
+      toolUseAgents: presets.flatMap((preset) =>
+        preset.toolUseAgents.map((name) =>
+          agent(
+            name,
+            AgentCategory.ToolUse,
+            name === 'orchestrator' ? ['delegate_agent'] : [],
+          ),
+        ),
+      ),
+    });
 
     expect(presets.map((preset) => preset.id)).toContain('physicist');
-    expect(formatCliMultiAgentPresetList(presets)).toContain(
+    expect(formatCliMultiAgentPresetList(plans)).toContain(
       'built-in\tphysicist\tPhysicist\tworkflow:4\ttool-use:9',
+    );
+  });
+
+  it('lists missing preset members as degraded availability', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'lean-project',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('lean', AgentCategory.ToolUse),
+        agent('latexFixer', AgentCategory.ToolUse),
+      ],
+    });
+
+    expect(formatCliMultiAgentPresetList([plan])).toContain(
+      'built-in\tlean-project\tLean Project\tworkflow:0\ttool-use:2/7\tdegraded',
     );
   });
 
