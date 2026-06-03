@@ -75,6 +75,9 @@ interface MultiAgentRunInit {
   readonly instructionFile?: string;
 }
 
+const MULTI_AGENT_TASK_REQUIRED_MESSAGE =
+  'Provide --input, --instruction, or --instruction-file for the team task. Example: texra multi-agent run physicist --instruction "Check this derivation"';
+
 function resolveMultiAgentRunPlan(
   init: Pick<MultiAgentRunInit, 'preset' | 'agent'>,
 ): CliMultiAgentPresetRunPlan {
@@ -286,9 +289,7 @@ export async function runMultiAgentPreset(
   const instruction = await resolveFileBackedInstruction(init, context.cwd);
   const hasInstruction = instruction.trim().length > 0;
   if (init.inputFiles.length === 0 && !hasInstruction) {
-    throw new CliUsageError(
-      'Provide --input, --instruction, or --instruction-file.',
-    );
+    throw new CliUsageError(MULTI_AGENT_TASK_REQUIRED_MESSAGE);
   }
 
   await initCliPlatform({ ...context, quietLogs: true });
