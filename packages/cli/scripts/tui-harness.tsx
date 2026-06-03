@@ -9,6 +9,7 @@ import path from 'node:path';
 import { render } from 'ink';
 import React from 'react';
 
+import { getToolUseAgents, getWorkflowAgents, loadAgents } from '@agent/index';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { SupabaseClient } from '@auth/SupabaseClient';
@@ -53,7 +54,10 @@ import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
 import { parseCliApiMode, type CliApiMode } from '../src/runtime/apiAccessMode';
 import type { CliModelAccess } from '../src/runtime/modelAccess';
-import { cliMultiAgentPresets } from '../src/runtime/multiAgentPresets';
+import {
+  cliMultiAgentPresets,
+  planCliMultiAgentPresets,
+} from '../src/runtime/multiAgentPresets';
 import { buildCliOrchestrationItems } from '../src/runtime/orchestration';
 import {
   CLI_APPROVAL_POLICIES,
@@ -156,10 +160,23 @@ function parseList(value: string | undefined): string[] {
     .filter((item) => item.length > 0);
 }
 
+await initLocalCliPlatform({
+  apiMode: HARNESS_API_MODE,
+  cwd: HARNESS_CWD,
+  installSignalHandlers: false,
+  resourcesPath: resolveCliResourcesPath(),
+  storageRoot: path.join(HARNESS_CWD, '.texra-storage'),
+  helperModel: 'harness-model',
+});
+await loadAgents({ includeRemote: false });
+
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
-  presets: cliMultiAgentPresets(undefined),
+  presetPlans: planCliMultiAgentPresets(cliMultiAgentPresets(undefined), {
+    workflowAgents: getWorkflowAgents(),
+    toolUseAgents: getToolUseAgents(),
+  }),
   history: [],
-  toolUseAgents: [],
+  toolUseAgents: getToolUseAgents(),
 });
 
 type HarnessModelFixture = Readonly<{
@@ -246,15 +263,6 @@ if (SHOW_ORCHESTRATION) {
   await instance.waitUntilExit();
   process.exit(0);
 }
-
-await initLocalCliPlatform({
-  apiMode: HARNESS_API_MODE,
-  cwd: HARNESS_CWD,
-  installSignalHandlers: false,
-  resourcesPath: resolveCliResourcesPath(),
-  storageRoot: path.join(HARNESS_CWD, '.texra-storage'),
-  helperModel: 'harness-model',
-});
 
 if (HARNESS_AUTHENTICATED === '1' || HARNESS_AUTHENTICATED === '0') {
   const accessToken = HARNESS_AUTHENTICATED === '1' ? 'harness-token' : null;
