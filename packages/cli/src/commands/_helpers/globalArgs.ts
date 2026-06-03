@@ -154,6 +154,57 @@ export function rejectHeadlessOnlyFlags(
   );
 }
 
+function requireInlineStringFlagValue(flag: string, value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new CliUsageError(`Missing value for ${flag}`);
+  }
+  return trimmed;
+}
+
+function requireSeparateStringFlagValue(
+  flag: string,
+  value: string | undefined,
+): string {
+  if (
+    value === undefined ||
+    value === '--' ||
+    (value !== '-' && value.startsWith('-'))
+  ) {
+    throw new CliUsageError(`Missing value for ${flag}`);
+  }
+  return value;
+}
+
+export function optionalStringFlagValue(
+  rawArgs: readonly string[],
+  longName: string,
+): string | undefined {
+  const longFlag = `--${longName}`;
+  const inlineLongPrefix = `${longFlag}=`;
+  let value: string | undefined;
+
+  for (let i = 0; i < rawArgs.length; i += 1) {
+    const arg = rawArgs[i];
+    if (arg === undefined || arg === '--') break;
+
+    if (arg.startsWith(inlineLongPrefix)) {
+      value = requireInlineStringFlagValue(
+        longFlag,
+        arg.slice(inlineLongPrefix.length),
+      );
+      continue;
+    }
+
+    if (arg === longFlag) {
+      value = requireSeparateStringFlagValue(longFlag, rawArgs[i + 1]);
+      i += 1;
+    }
+  }
+
+  return value;
+}
+
 export function collectStringFlagValues(
   rawArgs: readonly string[],
   longName: string,
@@ -169,17 +220,17 @@ export function collectStringFlagValues(
     if (arg === undefined || arg === '--') break;
 
     if (arg.startsWith(inlineLongPrefix)) {
-      const value = arg.slice(inlineLongPrefix.length).trim();
-      if (value) values.push(value);
+      values.push(
+        requireInlineStringFlagValue(
+          longFlag,
+          arg.slice(inlineLongPrefix.length),
+        ),
+      );
       continue;
     }
 
     if (arg === longFlag || arg === shortFlag) {
-      const value = rawArgs[i + 1];
-      if (value === undefined) {
-        throw new CliUsageError(`Missing value for ${arg}`);
-      }
-      values.push(value);
+      values.push(requireSeparateStringFlagValue(arg, rawArgs[i + 1]));
       i += 1;
     }
   }
