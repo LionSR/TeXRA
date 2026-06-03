@@ -21,12 +21,6 @@ type RuntimeHostProvider = () => AgentRuntimeHost;
 
 export type CoordinatorRuntimeHost = AgentRuntimeHost | RuntimeHostProvider;
 
-function toRuntimeHostProvider(
-  runtimeHost: CoordinatorRuntimeHost,
-): RuntimeHostProvider {
-  return typeof runtimeHost === 'function' ? runtimeHost : () => runtimeHost;
-}
-
 type RequestState<TResult> =
   | {
       status: 'pending';
@@ -52,7 +46,8 @@ export abstract class BasePromiseCoordinator<
   private readonly getRuntimeHost: RuntimeHostProvider;
 
   constructor(runtimeHost: CoordinatorRuntimeHost) {
-    this.getRuntimeHost = toRuntimeHostProvider(runtimeHost);
+    this.getRuntimeHost =
+      typeof runtimeHost === 'function' ? runtimeHost : () => runtimeHost;
   }
 
   protected get runtimeHost(): AgentRuntimeHost {
