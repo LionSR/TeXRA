@@ -59,6 +59,7 @@ const { collectTexraThreads } = require(
 const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
 const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
 const validationFlagContent = 'texra-cli-run-validation\n';
+const validationBundleMarker = validationFlagContent.trim();
 const ESC = String.fromCharCode(27);
 const validationProviderApiKeyEnv = [
   'OPENAI_API_KEY',
@@ -121,6 +122,71 @@ function assertUsageError(result, label, expectedText) {
     `${result.stdout}\n${result.stderr}`.includes(expectedText),
     `${label} should include ${JSON.stringify(expectedText)}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
   );
+}
+
+function formatUsage() {
+  return [
+    '[validate-run] usage: node scripts/validate-run.mjs [--no-build]',
+    '',
+    'Options:',
+    '  --no-build  Reuse the existing dist/bin/texra.js validation bundle instead of rebuilding it',
+    '  -h, --help  Show this help',
+  ].join('\n');
+}
+
+function printUsage(stream = console.log) {
+  stream(formatUsage());
+}
+
+function parseArgs(argv) {
+  let noBuild = false;
+  let endOfOptions = false;
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (!endOfOptions && arg === '--') {
+      // pnpm can forward a leading separator to scripts (`pnpm run x -- --flag`).
+      // Treat that package-manager separator as transparent when it precedes a
+      // script option; later `--` still follows normal end-of-options behavior.
+      if (index === 0 && argv[1]?.startsWith('-')) continue;
+      endOfOptions = true;
+      continue;
+    }
+    if (!endOfOptions && (arg === '--help' || arg === '-h')) {
+      printUsage();
+      process.exit(0);
+    }
+    if (!endOfOptions && arg === '--no-build') {
+      noBuild = true;
+      continue;
+    }
+    console.error(`[validate-run] unknown argument: ${arg}`);
+    printUsage(console.error);
+    process.exit(2);
+  }
+  return { noBuild };
+}
+
+function preflightExistingValidationBundle() {
+  if (!existsSync(binaryPath)) {
+    console.error(
+      `[validate-run] --no-build requires an existing CLI bundle: ${binaryPath}`,
+    );
+    console.error(
+      '[validate-run] omit --no-build once to build the validation bundle.',
+    );
+    process.exit(1);
+  }
+
+  const bundle = readFileSync(binaryPath, 'utf8');
+  if (!bundle.includes(validationBundleMarker)) {
+    console.error(
+      `[validate-run] --no-build requires ${binaryPath} to include the internal validation model.`,
+    );
+    console.error(
+      '[validate-run] omit --no-build once, or run `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL=1 pnpm --filter @texra-ai/cli run build`.',
+    );
+    process.exit(1);
+  }
 }
 
 function parseNdjson(stdout, label) {
@@ -1359,12 +1425,16 @@ ${JSON.stringify({
   }
 }
 
-async function validateCliRunArtifacts() {
-  const buildResult = run('pnpm', ['run', 'build'], {
-    cwd: cliRoot,
-    env: { TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1' },
-  });
-  assertSuccess(buildResult, 'pnpm run build');
+async function validateCliRunArtifacts(options = {}) {
+  if (options.noBuild) {
+    preflightExistingValidationBundle();
+  } else {
+    const buildResult = run('pnpm', ['run', 'build'], {
+      cwd: cliRoot,
+      env: { TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1' },
+    });
+    assertSuccess(buildResult, 'pnpm run build');
+  }
   validateBinarySmoke();
   validateMultiAgentListAvailability();
   validateFileFlagMissingValues();
@@ -1385,8 +1455,12 @@ function rebuildCliWithoutInternalValidationModel() {
   assertSuccess(rebuildResult, 'pnpm run build after validation');
 }
 
+const args = parseArgs(process.argv.slice(2));
+
 try {
-  await validateCliRunArtifacts();
+  await validateCliRunArtifacts(args);
 } finally {
-  rebuildCliWithoutInternalValidationModel();
+  if (!args.noBuild) {
+    rebuildCliWithoutInternalValidationModel();
+  }
 }
