@@ -195,6 +195,15 @@ export function selectIndexForHotkey(input: string): number | undefined {
   return undefined;
 }
 
+/**
+ * Ink can deliver rapid key presses as one input chunk. Menus should still
+ * honor the first shortcut instead of silently dropping the whole chunk.
+ */
+export function selectIndexForHotkeyInput(input: string): number | undefined {
+  const first = input.at(0);
+  return first == null ? undefined : selectIndexForHotkey(first);
+}
+
 export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   const initial = selectInitialHighlightIndex({
     activeValue: props.activeValue,
@@ -257,7 +266,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
     // we render with exitOnCtrlC: false, so Ink no longer mutes it), and
     // Ctrl/Alt+<letter> were never meant as row hotkeys.
     if (!key.ctrl && !key.meta) {
-      const idx = selectIndexForHotkey(input);
+      const idx = selectIndexForHotkeyInput(input);
       if (idx != null && idx < props.items.length) {
         const choice = props.items[idx];
         if (choice && !choice.disabled) {
