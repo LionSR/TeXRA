@@ -287,10 +287,6 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  function applyAndPostGitAuthorSettings(): void {
-    postGitAuthorSettings(applyCurrentGitAuthorSettings());
-  }
-
   function readLatexConfigValues() {
     return latexConfigPersistenceController.buildConfigValues((key) =>
       workspaceState.get(key),
@@ -576,7 +572,7 @@ export function createDesktopSettingsIpc(
     value: unknown,
   ): Promise<void> {
     await workspaceState.update(key, value);
-    applyAndPostGitAuthorSettings();
+    postGitAuthorSettings(applyCurrentGitAuthorSettings());
   }
 
   async function updateLatexConfigValue(input: {

@@ -8,10 +8,6 @@ import {
   type CompletionFlag,
 } from './completionCommandTree';
 
-function flagTokens(flags: readonly CompletionFlag[]): string[] {
-  return flags.flatMap(completionFlagTokens);
-}
-
 interface FlagValueTokenEntry {
   readonly flag: CompletionFlag;
   readonly token: string;
@@ -33,10 +29,6 @@ function flagValueTokenEntries(
     }
   }
   return entries;
-}
-
-function flagValueTokens(commands: readonly CompletionCommand[]): string[] {
-  return flagValueTokenEntries(commands).map((entry) => entry.token);
 }
 
 function fixedFlagValueCases(commands: readonly CompletionCommand[]): string {
@@ -65,25 +57,11 @@ const DYNAMIC_VALUE_FLAG_CASES = [
   { tokens: ['--agent'], source: '_texra_agents' },
 ] as const;
 
-function dynamicFlagValueTokens(): Set<string> {
-  return new Set(
-    DYNAMIC_VALUE_FLAG_CASES.flatMap((flagCase) => flagCase.tokens),
-  );
-}
-
 function dynamicFlagValueCases(): string {
   return DYNAMIC_VALUE_FLAG_CASES.map(
     (flagCase) =>
       `${flagCase.tokens.join('|')}) COMPREPLY=( $(compgen -W "$(${flagCase.source})" -- "$cur") ); return ;;`,
   ).join('\n    ');
-}
-
-function isFileValueFlag(flag: CompletionFlag): boolean {
-  return flag.valueKind === 'file' || flag.valueKind === 'path';
-}
-
-function isDirectoryValueFlag(flag: CompletionFlag): boolean {
-  return flag.valueKind === 'directory' || flag.valueKind === 'dir';
 }
 
 function genericFlagValueCases(commands: readonly CompletionCommand[]): string {
@@ -94,16 +72,18 @@ function genericFlagValueCases(commands: readonly CompletionCommand[]): string {
         .flatMap(completionFlagTokens),
     ),
   );
-  const dynamicValueFlags = dynamicFlagValueTokens();
+  const dynamicValueFlags = new Set<string>(
+    DYNAMIC_VALUE_FLAG_CASES.flatMap((flagCase) => flagCase.tokens),
+  );
   const fileFlags: string[] = [];
   const directoryFlags: string[] = [];
   const genericFlags: string[] = [];
 
   for (const { flag, token } of flagValueTokenEntries(commands)) {
     if (fixedValueFlags.has(token) || dynamicValueFlags.has(token)) continue;
-    if (isDirectoryValueFlag(flag)) {
+    if (flag.valueKind === 'directory' || flag.valueKind === 'dir') {
       directoryFlags.push(token);
-    } else if (isFileValueFlag(flag)) {
+    } else if (flag.valueKind === 'file' || flag.valueKind === 'path') {
       fileFlags.push(token);
     } else {
       genericFlags.push(token);
@@ -130,7 +110,7 @@ function genericFlagValueCases(commands: readonly CompletionCommand[]): string {
 function commandCaseBlock(command: CompletionCommand): string {
   const key = commandKey(command.path);
   const commands = command.subcommands.join(' ');
-  const flags = flagTokens(command.flags).join(' ');
+  const flags = command.flags.flatMap(completionFlagTokens).join(' ');
   return `${shellQuote(key)}) subcommands=${shellQuote(commands)}; flags=${shellQuote(flags)} ;;`;
 }
 
@@ -140,7 +120,9 @@ export function bashCompletion(commands: readonly CompletionCommand[]): string {
   const dynamicValueCases = dynamicFlagValueCases();
   const genericValueCases = genericFlagValueCases(commands);
   const valueFlagPattern =
-    flagValueTokens(commands).join('|') || '--_texra_no_value_flags_';
+    flagValueTokenEntries(commands)
+      .map((entry) => entry.token)
+      .join('|') || '--_texra_no_value_flags_';
   const allCommandPaths = commands
     .map((command) => commandKey(command.path))
     .filter((path) => path.length > 0);

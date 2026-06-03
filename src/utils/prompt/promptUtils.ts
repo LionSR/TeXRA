@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as nunjucks from 'nunjucks';
 
 import * as logger from '@logger/logUtils';
+import { filterNotNull } from '@utils/core';
 import { WorkspaceFS } from '@utils/files';
 
 const CHANNEL = 'promptUtils';
@@ -74,9 +75,7 @@ export async function getXmlFormatFromReadableFiles(
       }
     }),
   );
-  const readable = xmlContents.filter(
-    (doc): doc is { file: string; xml: string } => doc !== null,
-  );
+  const readable = xmlContents.filter(filterNotNull);
   return {
     xml: readable.length > 0 ? readable.map((doc) => doc.xml).join('\n') : null,
     readableFiles: readable.map((doc) => doc.file),

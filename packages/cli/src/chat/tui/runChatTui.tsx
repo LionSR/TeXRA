@@ -86,6 +86,7 @@ import {
 } from '@shared/schemas';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
+import { filterNotNullish } from '@utils/core';
 import { generateExecutionId } from '@utils/core/executionId';
 import { truncateSummary } from '@utils/text/stringUtils';
 
@@ -182,13 +183,6 @@ export function buildInitialChatAgentConfig({
     ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
     ...(cliMultiAgentPresetId ? { cliMultiAgentPresetId } : {}),
   };
-}
-
-function formatQueuedFollowUpNotice(line: string): string {
-  return `Queued follow-up: ${truncateSummary(
-    line,
-    QUEUED_FOLLOW_UP_NOTICE_LENGTH,
-  )}`;
 }
 
 export interface ClearableTuiSessionState {
@@ -314,7 +308,7 @@ function chatTuiStreamStatuses(streamId: StreamTabId): readonly string[] {
     childStreamStatus,
     streams.get(streamId)?.status,
     StreamStatusService.get(streamId),
-  ].filter((status): status is string => status !== undefined);
+  ].filter(filterNotNullish);
 }
 
 function chatTuiCanAcceptFollowUp(statuses: readonly string[]): boolean {
@@ -1415,7 +1409,10 @@ export async function runChat(
     const initialFollowUpTarget = childFollowUpTarget ?? session.streamId;
     if (chatTuiShouldAnnounceQueuedFollowUp(initialFollowUpTarget)) {
       appendLocalAssistantTranscript(
-        formatQueuedFollowUpNotice(line),
+        `Queued follow-up: ${truncateSummary(
+          line,
+          QUEUED_FOLLOW_UP_NOTICE_LENGTH,
+        )}`,
         initialFollowUpTarget,
       );
     }
