@@ -46,7 +46,10 @@ import { loadCliApiStatusLines } from '@cli/runtime/apiStatus';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
-import { resolveCliRunnableModel } from '@cli/runtime/modelAccess';
+import {
+  cliRunnableModelOptionsForSource,
+  resolveCliRunnableModel,
+} from '@cli/runtime/modelAccess';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
 import {
@@ -429,7 +432,7 @@ async function reconcileRootModelAfterApiModeChange(
 
   const currentModel = cliState.sessionMeta.get().model;
   const resolution = await resolveCliRunnableModel(currentModel, {
-    allowFallback: true,
+    fallbackMode: 'notice',
     apiMode,
     noAvailableModelsMessage:
       apiMode === 'included'
@@ -1006,27 +1009,26 @@ export async function runChat(
     envAgent: context.envAgent,
     envModel: context.envModel,
   });
-  const explicitModelRequested = Boolean(
-    init.modelOverride?.trim() || context.envModel?.trim(),
-  );
   // One API mode for the whole session: an explicit --api-mode/env override
   // wins, otherwise the persisted account default. Model resolution, the
   // no-models hints, and the header/status all read this same value so they can
   // never disagree.
   let modelResolution: Awaited<ReturnType<typeof resolveCliRunnableModel>>;
   try {
-    modelResolution = await resolveCliRunnableModel(defaults.model, {
-      allowFallback: !explicitModelRequested,
-      apiMode,
-      noAvailableModelsMessage:
-        apiMode === 'included'
-          ? 'Run `texra login` for included relay access, or retry with `--api-mode personal` after configuring a provider API key.'
-          : undefined,
-      noAvailableModelsHint:
-        apiMode === 'included'
-          ? undefined
-          : 'Run `texra chat --api-mode included` to try included relay access',
-    });
+    modelResolution = await resolveCliRunnableModel(
+      defaults.model,
+      cliRunnableModelOptionsForSource(defaults.modelSource, {
+        apiMode,
+        noAvailableModelsMessage:
+          apiMode === 'included'
+            ? 'Run `texra login` for included relay access, or retry with `--api-mode personal` after configuring a provider API key.'
+            : undefined,
+        noAvailableModelsHint:
+          apiMode === 'included'
+            ? undefined
+            : 'Run `texra chat --api-mode included` to try included relay access',
+      }),
+    );
   } catch (error: unknown) {
     writeTextStderr(toErrorMessage(error));
     return { exitCode: CliExitCode.Usage };
