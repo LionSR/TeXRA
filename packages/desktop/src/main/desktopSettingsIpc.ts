@@ -334,12 +334,11 @@ export function createDesktopSettingsIpc(
   async function postModelSelectionData(): Promise<void> {
     await modelListRefresh;
     options.postToRenderer(
-      buildModelSelectionMessage(modelSelectionController),
+      await buildModelSelectionMessage(modelSelectionController),
     );
   }
 
   async function postMainModelOptionsData(): Promise<void> {
-    invalidateModelOptionsCache();
     options.postToRenderer({
       command: MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS,
       optionsData: await computeModelOptionsData(
@@ -603,6 +602,7 @@ export function createDesktopSettingsIpc(
     enabled: boolean;
   }): Promise<void> {
     await modelSelectionController.setModelEnabled(input);
+    invalidateModelOptionsCache();
     await postModelSelectionData();
     await postMainModelOptionsData();
   }
@@ -746,6 +746,7 @@ export function createDesktopSettingsIpc(
   }
 
   async function refreshAuthDependentData(): Promise<void> {
+    invalidateModelOptionsCache();
     await postModelSelectionData();
     await postMainModelOptionsData();
     await Promise.all([

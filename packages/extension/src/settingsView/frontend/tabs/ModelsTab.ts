@@ -43,7 +43,6 @@ export class ModelsTab extends LitElement {
     'personal';
   @property({ attribute: false }) spendingStatus: SpendingStatus | null = null;
   @property({ type: Boolean }) quotaAutoSwitched = false;
-  @property({ attribute: false }) allowedModels: string[] | null = [];
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
   @property({ attribute: false }) globalStreamingDefault = true;
   @property({ attribute: false }) modelSelectionItems: ModelSelectionItem[] =
@@ -134,9 +133,6 @@ export class ModelsTab extends LitElement {
         <model-selection-list
           .models=${this.modelSelectionItems}
           .helperModel=${this.helperModel}
-          .authenticated=${this.authenticated}
-          .apiAccessMode=${this.apiAccessMode}
-          .allowedModels=${this.allowedModels}
           .providerKeyStatuses=${this.providerKeyStatuses}
           .preferShortModelNames=${this.preferShortModelNames}
         ></model-selection-list>

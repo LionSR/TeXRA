@@ -17,9 +17,11 @@ function installServerSideKeyService(options: {
   readonly relayQuotaExceeded: boolean;
   readonly quotaAutoSwitched: boolean;
   readonly autoSwitchDuringAccessCheck?: boolean;
+  readonly onAccessCheck?: () => void;
 }): void {
   setServerSideKeyService({
     canUseServerSideKeys: async () => {
+      options.onAccessCheck?.();
       if (options.autoSwitchDuringAccessCheck) {
         options.useIncludedAccess = false;
       }
@@ -87,5 +89,28 @@ describe('computeModelOptionsData relay quota state', () => {
 
     expect(model.availability).toBe('provider-key');
     expect(model.disabled).toBe(false);
+  });
+
+  it('caches explicit model-list availability until invalidated', async () => {
+    let accessChecks = 0;
+    installServerSideKeyService({
+      useIncludedAccess: false,
+      relayQuotaExceeded: false,
+      quotaAutoSwitched: false,
+      onAccessCheck: () => {
+        accessChecks += 1;
+      },
+    });
+
+    const first = await computeModelOptionsData(['gpt55']);
+    const second = await computeModelOptionsData(['gpt55']);
+
+    expect(second).toBe(first);
+    expect(accessChecks).toBe(1);
+
+    invalidateModelOptionsCache();
+    await computeModelOptionsData(['gpt55']);
+
+    expect(accessChecks).toBe(2);
   });
 });
