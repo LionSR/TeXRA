@@ -86,14 +86,7 @@ function isAtLeast(
 
 function isSupportedNodeVersion(version: string): boolean {
   const parsed = parseNodeVersion(version);
-  if (!parsed) return false;
-
-  const [major] = parsed;
-  return (
-    (major === 22 && isAtLeast(parsed, [22, 22, 2])) ||
-    (major === 24 && isAtLeast(parsed, [24, 15, 0])) ||
-    major >= 26
-  );
+  return parsed !== null && isAtLeast(parsed, [22, 9, 0]);
 }
 
 function check(
