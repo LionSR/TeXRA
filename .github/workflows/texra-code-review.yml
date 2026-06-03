@@ -1,3 +1,6 @@
+# TeXRA code review, powered by the external texra-ai/texra-action.
+# (Replaces the former in-repo .github/actions/texra-code-review composite
+# action + scripts, which now live in texra-ai/texra-action.)
 name: TeXRA Code Review
 
 on:
@@ -9,259 +12,62 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  texra-review:
-    if: vars.TEXRA_REVIEW_ENABLED != 'false'
+  review:
+    if: ${{ vars.TEXRA_REVIEW_ENABLED != 'false' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
-
-    env:
-      TEXRA_REVIEW_MARKER: '<!-- texra-review -->'
-
     steps:
-      - name: Check TeXRA review switch
-        id: texra-switch
+      # Provider keys are unavailable to pull_request runs from forks; skip
+      # gracefully instead of failing the agent when no key is configured.
+      - name: Check provider key
+        id: keys
         env:
-          TEXRA_REVIEW_ENABLED: ${{ vars.TEXRA_REVIEW_ENABLED }}
+          KEYS: "${{ secrets.ANTHROPIC_API_KEY }}${{ secrets.DEEPSEEK_API_KEY }}${{ secrets.OPENAI_API_KEY }}${{ secrets.GOOGLE_API_KEY }}${{ secrets.OPENROUTER_API_KEY }}${{ secrets.XAI_API_KEY }}"
         run: |
-          if [ "$TEXRA_REVIEW_ENABLED" = "false" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping TeXRA code review: TEXRA_REVIEW_ENABLED=false"
+          if [ -n "$KEYS" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
           else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping TeXRA review: no model provider key is configured."
           fi
 
-      - name: Check model provider token
-        if: steps.texra-switch.outputs.skip != 'true'
-        id: provider-token
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
-        run: |
-          if [ -n "${ANTHROPIC_API_KEY}${DEEPSEEK_API_KEY}${GOOGLE_API_KEY}${OPENAI_API_KEY}${OPENROUTER_API_KEY}${XAI_API_KEY}" ]; then
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping TeXRA code review: no model provider API key is configured."
-          fi
-
-      - name: Checkout repository under review
-        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true'
+      - name: Checkout pull request
+        if: steps.keys.outputs.present == 'true'
         uses: actions/checkout@v6
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
-          persist-credentials: false
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Checkout trusted automation
-        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true'
+      - name: Checkout trusted review prompt
+        if: steps.keys.outputs.present == 'true'
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.base.ref }}
-          path: .trusted-actions
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .trusted-review-prompt
+          sparse-checkout: .github/prompts/texra-code-review-prompt.md
+          sparse-checkout-cone-mode: false
           persist-credentials: false
-          fetch-depth: 1
 
-      - name: Check trusted TeXRA action
-        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true'
-        id: trusted-texra-action
-        env:
-          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          REPOSITORY: ${{ github.repository }}
-          REPOSITORY_OWNER: ${{ github.repository_owner }}
-        run: |
-          set -euo pipefail
-          if [ -f .trusted-actions/.github/actions/texra-code-review/action.yml ]; then
-            {
-              echo "available=true"
-              echo "source=trusted"
-              echo "prompt-file=.trusted-actions/.github/prompts/texra-code-review-prompt.md"
-              echo "script-root=.trusted-actions/.github/actions/texra-code-review/scripts"
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [ "$HEAD_REPOSITORY" = "$REPOSITORY" ] &&
-            [ "$PR_AUTHOR" = "$REPOSITORY_OWNER" ] &&
-            [ -f .github/actions/texra-code-review/action.yml ]; then
-            {
-              echo "available=true"
-              echo "source=bootstrap"
-              echo "prompt-file=.github/prompts/texra-code-review-prompt.md"
-              echo "script-root=.github/actions/texra-code-review/scripts"
-            } >> "$GITHUB_OUTPUT"
-            echo "::notice::Running TeXRA code review in owner-authored bootstrap mode."
-            exit 0
-          fi
-
-          {
-            echo "available=false"
-            echo "source=none"
-            echo "prompt-file="
-            echo "script-root="
-          } >> "$GITHUB_OUTPUT"
-          echo "::notice::Skipping TeXRA code review: trusted base branch does not yet contain texra-code-review."
-
-      - name: Resolve TeXRA review model
-        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.trusted-texra-action.outputs.available == 'true'
-        id: review-model
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          TEXRA_REVIEW_ANTHROPIC_MODEL: ${{ vars.TEXRA_REVIEW_ANTHROPIC_MODEL }}
-          TEXRA_REVIEW_DEEPSEEK_MODEL: ${{ vars.TEXRA_REVIEW_DEEPSEEK_MODEL }}
-          TEXRA_REVIEW_GOOGLE_MODEL: ${{ vars.TEXRA_REVIEW_GOOGLE_MODEL }}
-          TEXRA_REVIEW_MODEL: ${{ vars.TEXRA_REVIEW_MODEL }}
-          TEXRA_REVIEW_OPENAI_MODEL: ${{ vars.TEXRA_REVIEW_OPENAI_MODEL }}
-          TEXRA_REVIEW_OPENROUTER_MODEL: ${{ vars.TEXRA_REVIEW_OPENROUTER_MODEL }}
-          TEXRA_REVIEW_XAI_MODEL: ${{ vars.TEXRA_REVIEW_XAI_MODEL }}
-          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
-        run: |
-          set -euo pipefail
-          node "${{ steps.trusted-texra-action.outputs.script-root }}/resolve-model.cjs"
-
-      - name: Prepare PR diff
-        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.trusted-texra-action.outputs.available == 'true'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          mkdir -p .texra-action
-          MERGE_BASE_SHA="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
-          git diff --find-renames "$MERGE_BASE_SHA" "$HEAD_SHA" > .texra-action/pr.diff
-          node "${{ steps.trusted-texra-action.outputs.script-root }}/write-commentable-lines.cjs"
-
-      - name: Write TeXRA review prompt context
-        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.trusted-texra-action.outputs.available == 'true'
-        id: prompt-context
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BODY_JSON: ${{ toJSON(github.event.pull_request.body) }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_TITLE_JSON: ${{ toJSON(github.event.pull_request.title) }}
-          REPOSITORY: ${{ github.repository }}
-          REPOSITORY_NAME: ${{ github.event.repository.name }}
-          REPOSITORY_OWNER: ${{ github.repository_owner }}
-          REVIEW_MODE: ${{ steps.trusted-texra-action.outputs.source }}
-          TEXRA_REVIEW_MODEL: ${{ steps.review-model.outputs.model }}
-          TRIGGER_EVENT: ${{ github.event.action }}
-        run: |
-          set -euo pipefail
-          node "${{ steps.trusted-texra-action.outputs.script-root }}/write-prompt-context.cjs"
-
-      - name: Collect previous TeXRA review threads
-        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.trusted-texra-action.outputs.available == 'true'
-        id: texra-threads
-        uses: actions/github-script@v7
-        env:
-          TEXRA_COLLECT_THREADS_SCRIPT: ${{ steps.trusted-texra-action.outputs.script-root }}/collect-threads.cjs
-          TEXRA_THREADS_OUTPUT: .texra-action/previous-texra-review-threads.json
+      - name: TeXRA review
+        if: steps.keys.outputs.present == 'true'
+        # texra-ai/texra-action v1.0.0; pin the reviewed release commit so
+        # PR review behavior only changes through an explicit workflow update.
+        # Review mode defaults to api-mode=personal and approval-policy=never.
+        uses: texra-ai/texra-action/review@911e9a550ace3abd9e85f9d36a050940d6da6c5c
         with:
-          github-token: ${{ github.token }}
-          script: |
-            const path = require('node:path');
-            const { collectTexraThreads } = require(path.resolve(process.env.TEXRA_COLLECT_THREADS_SCRIPT));
-            await collectTexraThreads({ github, context, core });
-
-      - name: Run trusted TeXRA single-agent review
-        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.trusted-texra-action.outputs.source == 'trusted'
-        id: texra-review-trusted
-        uses: ./.trusted-actions/.github/actions/texra-code-review
-        with:
-          prompt-file: ${{ steps.trusted-texra-action.outputs.prompt-file }}
-          prompt-context-file: ${{ steps.prompt-context.outputs.path }}
-          review-context-file: .texra-action/pr.diff
-          commentable-lines-file: .texra-action/commentable-lines.md
-          review-thread-context-file: ${{ steps.texra-threads.outputs.path }}
-          texra-version: ${{ vars.TEXRA_CLI_VERSION || '' }}
-          agent: review
-          model: ${{ steps.review-model.outputs.model }}
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
-          google-api-key: ${{ secrets.GOOGLE_API_KEY }}
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-          xai-api-key: ${{ secrets.XAI_API_KEY }}
-          api-mode: personal
-          approval-policy: never
-
-      - name: Run bootstrap TeXRA single-agent review
-        if: steps.texra-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.trusted-texra-action.outputs.source == 'bootstrap'
-        id: texra-review-bootstrap
-        uses: ./.github/actions/texra-code-review
-        with:
-          prompt-file: ${{ steps.trusted-texra-action.outputs.prompt-file }}
-          prompt-context-file: ${{ steps.prompt-context.outputs.path }}
-          review-context-file: .texra-action/pr.diff
-          commentable-lines-file: .texra-action/commentable-lines.md
-          review-thread-context-file: ${{ steps.texra-threads.outputs.path }}
-          texra-version: workspace
-          agent: review
-          model: ${{ steps.review-model.outputs.model }}
-          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
-          google-api-key: ${{ secrets.GOOGLE_API_KEY }}
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-          xai-api-key: ${{ secrets.XAI_API_KEY }}
-          api-mode: personal
-          approval-policy: never
-
-      - name: Write TeXRA review failure fallback
-        if: >
-          always() &&
-          steps.texra-switch.outputs.skip != 'true' &&
-          steps.provider-token.outputs.skip != 'true' &&
-          steps.trusted-texra-action.outputs.available == 'true' &&
-          steps.texra-review-trusted.outputs.review-json == '' &&
-          steps.texra-review-bootstrap.outputs.review-json == ''
-        id: texra-review-fallback
-        run: |
-          mkdir -p .texra-action
-          cat > .texra-action/texra-review-fallback.json <<'JSON'
-          {
-            "body": "## TeXRA Code Review\n\nTeXRA did not produce a review payload. Inspect the TeXRA Code Review workflow logs for the agent failure.",
-            "comments": [],
-            "thread_actions": []
-          }
-          JSON
-          echo "review-json=.texra-action/texra-review-fallback.json" >> "$GITHUB_OUTPUT"
-
-      - name: Post TeXRA pull request review
-        if: >
-          always() &&
-          steps.trusted-texra-action.outputs.available == 'true' &&
-          (
-            steps.texra-review-trusted.outputs.review-json != '' ||
-            steps.texra-review-bootstrap.outputs.review-json != '' ||
-            steps.texra-review-fallback.outputs.review-json != ''
-          )
-        uses: actions/github-script@v7
-        env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          TEXRA_COMMENTABLE_LINES_JSON: .texra-action/commentable-lines.json
-          TEXRA_POST_REVIEW_SCRIPT: ${{ steps.trusted-texra-action.outputs.script-root }}/post-review.cjs
-          TEXRA_RESOLVE_THREADS: ${{ secrets.TEXRA_REVIEW_GITHUB_TOKEN != '' && 'true' || 'false' }}
-          TEXRA_REVIEW_AGENT: review
-          TEXRA_REVIEW_JSON: ${{ steps.texra-review-trusted.outputs.review-json || steps.texra-review-bootstrap.outputs.review-json || steps.texra-review-fallback.outputs.review-json }}
-          TEXRA_REVIEW_MODEL: ${{ steps.review-model.outputs.model }}
-          TEXRA_THREADS_JSON: .texra-action/previous-texra-review-threads.json
-        with:
+          prompt-file: .trusted-review-prompt/.github/prompts/texra-code-review-prompt.md
+          model: ${{ vars.TEXRA_REVIEW_MODEL }}
+          model-defaults: ${{ vars.TEXRA_REVIEW_MODEL_DEFAULTS }}
+          texra-version: ${{ vars.TEXRA_CLI_VERSION }}
           github-token: ${{ secrets.TEXRA_REVIEW_GITHUB_TOKEN || github.token }}
-          script: |
-            const path = require('node:path');
-            const { postTexraReview } = require(path.resolve(process.env.TEXRA_POST_REVIEW_SCRIPT));
-            await postTexraReview({ github, context, core });
+          review-marker: '<!-- texra-review -->'
+          resolve-threads: ${{ secrets.TEXRA_REVIEW_GITHUB_TOKEN != '' && 'true' || 'false' }}
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          deepseek-api-key: ${{ secrets.DEEPSEEK_API_KEY }}
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          google-api-key: ${{ secrets.GOOGLE_API_KEY }}
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          xai-api-key: ${{ secrets.XAI_API_KEY }}
