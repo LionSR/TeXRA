@@ -48,6 +48,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   cliRunnableModelOptionsForSource,
+  formatCliNoAvailableModelsRecovery,
   resolveCliRunnableModel,
 } from '@cli/runtime/modelAccess';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
@@ -435,10 +436,10 @@ async function reconcileRootModelAfterApiModeChange(
   const resolution = await resolveCliRunnableModel(currentModel, {
     fallbackMode: 'notice',
     apiMode,
-    noAvailableModelsMessage:
-      apiMode === 'included'
-        ? 'Run `texra login` for included relay access, or switch to personal API keys with `/api personal` after configuring a provider API key.'
-        : undefined,
+    noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(apiMode, {
+      includedModeAction: 'switch to included relay with `/api included`',
+      personalModeAction: 'switch to personal API keys with `/api personal`',
+    }),
   });
   if (resolution.model === currentModel) return undefined;
 
@@ -1001,14 +1002,10 @@ export async function runChat(
       defaults.model,
       cliRunnableModelOptionsForSource(defaults.modelSource, {
         apiMode,
-        noAvailableModelsMessage:
-          apiMode === 'included'
-            ? 'Run `texra login` for included relay access, or retry with `--api-mode personal` after configuring a provider API key.'
-            : undefined,
-        noAvailableModelsHint:
-          apiMode === 'included'
-            ? undefined
-            : 'Run `texra chat --api-mode included` to try included relay access',
+        noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(apiMode, {
+          includedModeAction: 'retry with `texra chat --api-mode included`',
+          personalModeAction: 'retry with `texra chat --api-mode personal`',
+        }),
       }),
     );
   } catch (error: unknown) {
