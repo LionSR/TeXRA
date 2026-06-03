@@ -14,6 +14,7 @@ import {
   pathToLocation,
   type FileLocation,
 } from '@utils/files';
+import { filterNotNullish } from '@utils/core';
 import { isFile } from '@utils/files/fsEntryType';
 import { getExtensionLowercase, hasExtension } from '@utils/core/pathCore';
 
@@ -153,10 +154,8 @@ export class LatexMediaManager {
       { concurrency: LATEX_CONCURRENCY, stopOnError: false },
     );
 
-    for (const result of compileResults) {
-      if (result) {
-        workspaceState.media.addMediaFiles([result]);
-      }
+    for (const result of compileResults.filter(filterNotNullish)) {
+      workspaceState.media.addMediaFiles([result]);
     }
   }
 
