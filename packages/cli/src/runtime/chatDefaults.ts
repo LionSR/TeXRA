@@ -10,6 +10,7 @@ import {
   resolveConfiguredAgent,
   resolveConfiguredModel,
 } from './cliConfig';
+import type { CliModelSelectionSource } from './modelAccess';
 
 export const BUILTIN_DEFAULT_CHAT_AGENT = 'chat';
 export const BUILTIN_DEFAULT_CHAT_MODEL = CLI_BUILTIN_DEFAULT_MODEL;
@@ -18,6 +19,8 @@ export interface ChatDefaults {
   readonly agent: string;
   readonly model: string;
   readonly source: ChatDefaultSource;
+  readonly agentSource: ChatDefaultValueSource;
+  readonly modelSource: ChatDefaultValueSource;
 }
 
 export type ChatDefaultSource =
@@ -26,6 +29,14 @@ export type ChatDefaultSource =
   | 'history'
   | 'builtin'
   | 'mixed';
+
+export type ChatDefaultValueSource =
+  | 'override'
+  | 'env'
+  | Extract<
+      CliModelSelectionSource,
+      'workspace' | 'user' | 'history' | 'builtin'
+    >;
 
 interface PartialDefaults {
   readonly agent?: string;
@@ -103,12 +114,38 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
   }
 }
 
-function deriveSource(picked: {
-  agent?: ChatDefaultSource;
-  model?: ChatDefaultSource;
+function deriveSource(sources: {
+  readonly agent: ChatDefaultValueSource;
+  readonly model: ChatDefaultValueSource;
 }): ChatDefaultSource {
-  const sources = [picked.agent ?? 'builtin', picked.model ?? 'builtin'];
-  return sources[0] === sources[1] ? sources[0] : 'mixed';
+  const source = sources.agent === sources.model ? sources.agent : 'mixed';
+  return source === 'override' || source === 'env' ? 'mixed' : source;
+}
+
+function sourceForOverride(
+  override: string | undefined,
+  env: string | undefined,
+): ChatDefaultValueSource | undefined {
+  if (override) return 'override';
+  if (env) return 'env';
+  return undefined;
+}
+
+function buildChatDefaults(init: {
+  readonly agent: string | undefined;
+  readonly model: string | undefined;
+  readonly agentSource: ChatDefaultValueSource | undefined;
+  readonly modelSource: ChatDefaultValueSource | undefined;
+}): ChatDefaults {
+  const agentSource = init.agentSource ?? 'builtin';
+  const modelSource = init.modelSource ?? 'builtin';
+  return {
+    agent: init.agent ?? BUILTIN_DEFAULT_CHAT_AGENT,
+    model: init.model ?? BUILTIN_DEFAULT_CHAT_MODEL,
+    source: deriveSource({ agent: agentSource, model: modelSource }),
+    agentSource,
+    modelSource,
+  };
 }
 
 export interface ResolveChatDefaultsInit {
@@ -132,16 +169,13 @@ export async function resolveChatDefaults(
   const overrideModel = init.modelOverride?.trim();
   const envAgent = init.envAgent?.trim();
   const envModel = init.envModel?.trim();
+  let agent = overrideAgent || envAgent;
+  let model = overrideModel || envModel;
+  let agentSource = sourceForOverride(overrideAgent, envAgent);
+  let modelSource = sourceForOverride(overrideModel, envModel);
 
-  if (overrideAgent && overrideModel) {
-    return { agent: overrideAgent, model: overrideModel, source: 'mixed' };
-  }
-  if ((overrideAgent || envAgent) && (overrideModel || envModel)) {
-    return {
-      agent: overrideAgent || envAgent || BUILTIN_DEFAULT_CHAT_AGENT,
-      model: overrideModel || envModel || BUILTIN_DEFAULT_CHAT_MODEL,
-      source: 'mixed',
-    };
+  if (agent && model) {
+    return buildChatDefaults({ agent, model, agentSource, modelSource });
   }
 
   // Tiers are independent I/O — fan out in parallel.
@@ -152,34 +186,25 @@ export async function resolveChatDefaults(
     loadUserDefaults(),
     loadHistoryDefaults(),
   ]);
-  const tiers: ReadonlyArray<readonly [ChatDefaultSource, PartialDefaults]> = [
+  const tiers: ReadonlyArray<
+    readonly [ChatDefaultValueSource, PartialDefaults]
+  > = [
     ['workspace', workspace],
     ['user', user],
     ['history', history],
   ];
 
-  const pickedSources: {
-    agent?: ChatDefaultSource;
-    model?: ChatDefaultSource;
-  } = {};
-  let agent = overrideAgent || envAgent;
-  let model = overrideModel || envModel;
-
   for (const [source, defaults] of tiers) {
     if (!agent && defaults.agent) {
       agent = defaults.agent;
-      pickedSources.agent = source;
+      agentSource = source;
     }
     if (!model && defaults.model) {
       model = defaults.model;
-      pickedSources.model = source;
+      modelSource = source;
     }
     if (agent && model) break;
   }
 
-  return {
-    agent: agent ?? BUILTIN_DEFAULT_CHAT_AGENT,
-    model: model ?? BUILTIN_DEFAULT_CHAT_MODEL,
-    source: deriveSource(pickedSources),
-  };
+  return buildChatDefaults({ agent, model, agentSource, modelSource });
 }
