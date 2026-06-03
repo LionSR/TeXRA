@@ -29,6 +29,8 @@ import {
 } from './inputKeys';
 import { textDisplayWidth } from '../render/terminalText';
 
+const IMAGE_PASTE_TIMEOUT_MS = 15_000;
+
 export interface BaseTextInputProps {
   readonly value: string;
   readonly placeholder?: string;
@@ -72,6 +74,19 @@ interface TextInputDisplayRow {
 interface LeadingEllipsisDisplay {
   readonly text: string;
   readonly removedPrefixCodeUnits: number;
+}
+
+function withImagePasteTimeout<T>(promise: Promise<T>): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(
+      () => reject(new Error('Image paste timed out.')),
+      IMAGE_PASTE_TIMEOUT_MS,
+    );
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
 }
 
 function codePointAtIndex(
@@ -378,7 +393,9 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       }
       // Enter commits this draft and locks further input until clipboard probes
       // settle. The flushed submit should include chips produced by those
-      // already-started probes, but not later user edits.
+      // already-started probes, but not later user edits. Freeze the handler
+      // from this Enter press so a later parent rerender cannot redirect the
+      // committed submit.
       pendingSubmitRef.current ??= () => handler(latestStateRef.current.value);
     },
     [],
@@ -444,8 +461,9 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         // Insert the chip at whatever the caret is when the async probe
         // resolves (read from a ref, not a keypress-time snapshot) so typing
         // during the probe isn't clobbered.
-        const paste = props
-          .onImagePaste()
+        const paste = withImagePasteTimeout(
+          Promise.resolve().then(() => props.onImagePaste?.() ?? null),
+        )
           .then((chip) => {
             if (!chip) return;
             insertIntoLatestDraft(chip);
