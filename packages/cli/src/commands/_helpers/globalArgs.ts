@@ -135,21 +135,23 @@ export function optString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+function isHeadlessOnlyFlag(arg: string): boolean {
+  return (
+    arg === '--print' ||
+    arg.startsWith('--print=') ||
+    arg === '-p' ||
+    arg === '--no-input' ||
+    arg.startsWith('--no-input=') ||
+    arg === '--output-format' ||
+    arg.startsWith('--output-format=')
+  );
+}
+
 export function rejectHeadlessOnlyFlags(
   rawArgs: readonly string[],
   commandName: string,
 ): void {
-  const headlessOnly = rawArgs.some(
-    (arg) =>
-      arg === '--print' ||
-      arg.startsWith('--print=') ||
-      arg === '-p' ||
-      arg === '--no-input' ||
-      arg.startsWith('--no-input=') ||
-      arg === '--output-format' ||
-      arg.startsWith('--output-format='),
-  );
-  if (!headlessOnly) return;
+  if (!rawArgs.some(isHeadlessOnlyFlag)) return;
 
   throw new CliUsageError(
     `texra ${commandName} is interactive and does not support --print, --no-input, or --output-format. For scripting, use \`texra run\` or a concrete non-interactive subcommand.`,

@@ -386,7 +386,7 @@ const multiAgentListCommand = defineCliCommand({
   args: {
     ...GLOBAL_ARGS,
   },
-  run: (context) => runMultiAgentList(context),
+  run: runMultiAgentList,
 });
 
 const multiAgentPresetArgs = {
