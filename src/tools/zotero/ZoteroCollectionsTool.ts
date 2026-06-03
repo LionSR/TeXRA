@@ -144,9 +144,7 @@ function filterTree(nodes: CollectionNode[], query: string): FilterResult {
     return null;
   }
 
-  const tree = nodes
-    .map((n) => visit(n))
-    .filter(filterNotNull);
+  const tree = nodes.map((n) => visit(n)).filter(filterNotNull);
 
   return { tree, matchCount };
 }

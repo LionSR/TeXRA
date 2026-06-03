@@ -176,9 +176,7 @@ export class RemoteAgentLoader {
         return [];
       }
 
-      return (data ?? [])
-        .map(parseListItemRow)
-        .filter(filterNotNull);
+      return (data ?? []).map(parseListItemRow).filter(filterNotNull);
     } catch (error) {
       logger.debug(
         CHANNEL,

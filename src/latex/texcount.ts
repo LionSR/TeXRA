@@ -163,9 +163,7 @@ async function getIndividualCounts(
     }),
   );
 
-  const outputs = results
-    .map((result) => result.output)
-    .filter(filterNotNull);
+  const outputs = results.map((result) => result.output).filter(filterNotNull);
   const errors = results.flatMap((result) => result.errors);
 
   return { outputs, errors };
