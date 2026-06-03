@@ -71,6 +71,7 @@ export function notifyFollowUpSent(
 export async function sendFollowUp(
   streamId: StreamTabId,
   text: string,
+  mediaFiles?: readonly string[],
 ): Promise<SendFollowUpResult> {
   const status = StreamStatusService.get(streamId);
   const activeChildren = getActiveChildren(streamId);
@@ -78,7 +79,7 @@ export async function sendFollowUp(
     activeChildren.subagents.length > 0 || activeChildren.processes.length > 0;
   if (status !== undefined && !isInFlightStatus(status)) {
     if (hasActiveChildren) {
-      ToolUseFollowUpQueue.enqueue(streamId, text, { force: true });
+      ToolUseFollowUpQueue.enqueue(streamId, text, { force: true, mediaFiles });
       return { status: 'queued', reason: 'children_running' };
     }
     logger.warn(
@@ -90,20 +91,20 @@ export async function sendFollowUp(
   // Try active flow context first
   const flowContext = getToolUseFlowContext(streamId);
   if (flowContext) {
-    flowContext.session.appendFollowUp(text);
+    flowContext.session.appendFollowUp(text, mediaFiles);
     notifyFollowUpSent(streamId, flowContext.runtimeHost);
     return { status: 'sent' };
   }
 
   // Queue if session is resuming
   if (ToolUseFollowUpQueue.isResuming(streamId)) {
-    ToolUseFollowUpQueue.enqueue(streamId, text);
+    ToolUseFollowUpQueue.enqueue(streamId, text, { mediaFiles });
     return { status: 'queued', reason: 'resuming' };
   }
 
   // Queue if session is waiting (paused, can be resumed)
   if (status === STREAM_STATUS.WAITING) {
-    ToolUseFollowUpQueue.enqueue(streamId, text);
+    ToolUseFollowUpQueue.enqueue(streamId, text, { mediaFiles });
     return { status: 'queued', reason: 'waiting' };
   }
 
@@ -111,7 +112,7 @@ export async function sendFollowUp(
     // force:true reopens a queue sealed by sessionLifecycle disposal — the
     // caller must auto-resume the parent or re-release, or late child
     // deliveries will leak into the next run on this stream.
-    ToolUseFollowUpQueue.enqueue(streamId, text, { force: true });
+    ToolUseFollowUpQueue.enqueue(streamId, text, { force: true, mediaFiles });
     return { status: 'queued', reason: 'children_running' };
   }
 
