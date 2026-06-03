@@ -415,8 +415,9 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/api', '\r'],
     frame: 'tail',
-    expect: ['/api', 'Personal API keys', 'Included relay'],
-    unexpect: ['ServerSideKeyService not initialized'],
+    settleMs: ASYNC_FORM_SETTLE_MS,
+    expect: ['/api', 'api:', 'auth:', 'Personal API keys', 'Included relay'],
+    unexpect: ['loading API status...', 'ServerSideKeyService not initialized'],
   },
   {
     name: 'approval-form',
