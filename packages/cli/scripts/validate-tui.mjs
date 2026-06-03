@@ -1637,12 +1637,8 @@ const SCENARIOS = [
     bootExpect: '[Tab]streams',
     keys: [ESC + 'p', 'k', ESC + 's', DOWN, DOWN, 'f'],
     frame: 'tail',
-    expect: [
-      '[3:strategy](stopped)',
-      '◆ running',
-      '2 sub 1 proc',
-      '[Ctrl-C]stop root',
-    ],
+    expect: ['[3:strategy](stopped)', '◆ stopped', '[Ctrl-C]stop root'],
+    unexpect: ['◆ running', '2 sub 1 proc'],
   },
   {
     name: 'focused-stopped-subagent-submit',
@@ -1666,10 +1662,14 @@ const SCENARIOS = [
     frame: 'tail',
     expect: [
       '[3:strategy](stopped)',
-      '◆ running',
+      '◆ stopped',
       'The selected subagent is no longer accepting follow-ups.',
     ],
-    unexpect: ['Harness received: can you still receive this?'],
+    unexpect: [
+      'Harness received: can you still receive this?',
+      '◆ running',
+      '2 sub 1 proc',
+    ],
   },
   {
     name: 'empty-task-shortcut-hidden',
