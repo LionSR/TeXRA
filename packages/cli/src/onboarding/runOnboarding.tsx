@@ -343,14 +343,14 @@ type OnboardingPickerItem = SelectItem<OnboardingChoice>;
 
 const RELAY_PICKER_ITEM: OnboardingPickerItem = {
   value: 'relay',
-  label: 'Sign in for included relay access (recommended)',
-  description: 'opens your browser, no API key needed',
+  label: 'Included relay access',
+  description: 'sign in, no API key needed (recommended)',
 };
 
 const KEY_PICKER_ITEM: OnboardingPickerItem = {
   value: 'key',
-  label: 'Use my own provider API key',
-  description: 'paste an Anthropic / OpenAI / Google key',
+  label: 'Provider API key',
+  description: 'paste Anthropic / OpenAI / Google',
 };
 
 const SKIP_PICKER_ITEM: OnboardingPickerItem = {
