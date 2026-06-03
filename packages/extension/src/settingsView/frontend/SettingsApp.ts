@@ -268,7 +268,6 @@ export class SettingsApp extends SettingsAppBase {
   private readonly apiAccessMode = signal<'included' | 'personal'>('personal');
   private readonly spendingStatus = signal<SpendingStatus | null>(null);
   private readonly quotaAutoSwitched = signal(false);
-  private readonly allowedModels = signal<string[] | null>([]);
   private readonly providerKeyStatuses = signal<ProviderKeyStatus[]>([]);
   private readonly globalStreamingDefault = signal(true);
   private readonly providerKeyModal = signal<{
@@ -467,7 +466,6 @@ export class SettingsApp extends SettingsAppBase {
       }
       this.quotaAutoSwitched.set(data.quotaAutoSwitched ?? false);
       this.apiAccessMode.set(data.apiAccessMode);
-      this.allowedModels.set(data.allowedModels ?? null);
       this.providerKeyStatuses.set(data.providerKeyStatuses ?? []);
       this.globalStreamingDefault.set(data.globalStreamingDefault ?? true);
     },
@@ -1136,7 +1134,6 @@ export class SettingsApp extends SettingsAppBase {
               .apiAccessMode=${this.apiAccessMode.get()}
               .spendingStatus=${this.spendingStatus.get()}
               .quotaAutoSwitched=${this.quotaAutoSwitched.get()}
-              .allowedModels=${this.allowedModels.get()}
               .providerKeyStatuses=${this.providerKeyStatuses.get()}
               .globalStreamingDefault=${this.globalStreamingDefault.get()}
               .modelSelectionItems=${this.modelSelectionItems.get()}
