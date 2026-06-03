@@ -86,6 +86,8 @@ const SHOW_LONG_CHILD_OUTPUT = process.env.HARNESS_LONG_CHILD_OUTPUT === '1';
 const SHOW_WIDE_FIRST_CHILD_LINE =
   process.env.HARNESS_WIDE_FIRST_CHILD_LINE === '1';
 const SHOW_ORCHESTRATION = process.env.HARNESS_ORCHESTRATION === '1';
+const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
+  process.env.HARNESS_NO_RUNNABLE_MODELS === '1';
 const HARNESS_API_MODE_FROM_ENV = parseCliApiMode(
   process.env.HARNESS_API_MODE ?? '',
 );
@@ -237,9 +239,16 @@ function harnessModel(
 function harnessOrchestrationModels(
   apiMode: CliApiMode,
 ): readonly CliModelAccess[] {
-  return HARNESS_ORCHESTRATION_MODEL_FIXTURES.map((fixture) =>
+  const models = HARNESS_ORCHESTRATION_MODEL_FIXTURES.map((fixture) =>
     harnessModel(fixture, apiMode),
   );
+  return SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS
+    ? models.map((model) => ({
+        ...model,
+        available: false,
+        status: 'missing key',
+      }))
+    : models;
 }
 
 if (SHOW_ORCHESTRATION) {
@@ -252,6 +261,7 @@ if (SHOW_ORCHESTRATION) {
           : []
       }
       apiMode={HARNESS_API_MODE}
+      allowDefaultModelLaunch={false}
       onResolve={() => undefined}
     />,
     {
