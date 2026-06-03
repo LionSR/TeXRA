@@ -1,5 +1,6 @@
 // .vitepress/config.js
 import { withMermaid } from 'vitepress-plugin-mermaid';
+import { srcExclude } from './publicDocs.js';
 
 const base = '/';
 
@@ -208,33 +209,9 @@ const baseConfig = {
       };
     },
   },
-  // Public site allowlist: only index.md, launch.md, terms.md, providers.md,
-  // and everything under guide/ except the desktop pages, which stay internal
-  // while the desktop app is in beta. Every other markdown file in this
-  // directory is internal and must NOT be published to texra.ai. Static assets
-  // under public/ are served as-is and are fine to expose.
-  srcExclude: [
-    'README.md',
-    'agent-sdk-readiness-audit.md',
-    'analysis-subagent-updates.md',
-    'desktop-signing-ci.md',
-    'electron-migration-plan.md',
-    'relay-tier-config.md',
-    'guide/desktop.md',
-    'guide/desktop-migration.md',
-    'blog/**',
-    'design/**',
-    'dev/**',
-    'architecture/**',
-    'pocketflow/**',
-    'prd/**',
-    'proposals/**',
-    'reference/**',
-    'skills/**',
-    'supabase/**',
-    'toolCalls/**',
-    'node_modules/**',
-  ],
+  // The public/internal docs boundary lives in ./publicDocs.js (single source
+  // of truth, shared with the scripts/check-root-docs.mjs CI gate).
+  srcExclude,
   vite: {
     vue: {
       template: {
