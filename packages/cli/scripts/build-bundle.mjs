@@ -4,6 +4,7 @@ import { chmod } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
+import { esmCjsGlobalsBanner } from './esm-cjs-globals-banner.mjs';
 import { reactCompilerPlugin } from './reactCompilerPlugin.mjs';
 
 const reactDevtoolsStub = fileURLToPath(
@@ -71,12 +72,7 @@ await build({
   // JSX needs to be transformed for ink (which uses React's JSX runtime).
   jsx: 'automatic',
   banner: {
-    js:
-      '#!/usr/bin/env node\n' +
-      'import { createRequire as __texraCreateRequire } from "node:module";\n' +
-      'import { fileURLToPath as __texraFileURLToPath } from "node:url";\n' +
-      'const require = __texraCreateRequire(import.meta.url);\n' +
-      'const __filename = __texraFileURLToPath(import.meta.url);',
+    js: `#!/usr/bin/env node\n${esmCjsGlobalsBanner}`,
   },
 });
 
