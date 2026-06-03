@@ -25,7 +25,37 @@ export interface CliMultiAgentPresetRunPlan {
   readonly missingToolUseAgents: readonly string[];
 }
 
-type CliMultiAgentPlanStatus = 'available' | 'degraded' | 'unavailable';
+export type CliMultiAgentPlanStatus = 'available' | 'degraded' | 'unavailable';
+
+export interface CliMultiAgentPresetAgentAvailability {
+  readonly available: number;
+  readonly total: number;
+  readonly missing: readonly string[];
+  readonly label: string;
+}
+
+export interface CliMultiAgentPresetAvailability {
+  readonly status: CliMultiAgentPlanStatus;
+  readonly workflow: CliMultiAgentPresetAgentAvailability;
+  readonly toolUse: CliMultiAgentPresetAgentAvailability;
+  readonly rootAgent?: {
+    readonly key: string;
+    readonly name: string;
+    readonly source: AgentEntry['source'];
+  };
+  readonly missingAgentOverride?: string;
+}
+
+/**
+ * Machine-readable `multi-agent list` record. It preserves the raw preset
+ * fields so existing consumers still see a preset-shaped object, while adding
+ * the planned availability that list output needs. `multi-agent show` continues
+ * to emit the raw `CliMultiAgentPreset` because it is definition-focused and
+ * does not load the agent registry.
+ */
+export interface CliMultiAgentPresetListRecord extends CliMultiAgentPreset {
+  readonly availability: CliMultiAgentPresetAvailability;
+}
 
 export function parseCliCustomAgentPresets(raw: unknown): AgentModePreset[] {
   return AgentModePresetSchema.array().catch([]).parse(raw);
@@ -154,13 +184,13 @@ export function formatCliMultiAgentPresetInspection(
 }
 
 export function cliMultiAgentPresetNdjsonRecords(
-  presets: readonly CliMultiAgentPreset[],
+  plans: readonly CliMultiAgentPresetRunPlan[],
 ): object[] {
   const ts = new Date().toISOString();
-  return presets.map((preset) => ({
+  return plans.map((plan) => ({
     kind: 'multi-agent-preset',
     ts,
-    preset,
+    preset: cliMultiAgentPresetListRecord(plan),
   }));
 }
 
@@ -183,11 +213,50 @@ export function cliMultiAgentPlanHasGaps(
   );
 }
 
-function cliMultiAgentPlanStatus(
+export function cliMultiAgentPlanStatus(
   plan: CliMultiAgentPresetRunPlan,
 ): CliMultiAgentPlanStatus {
   if (!plan.rootAgent) return 'unavailable';
   return cliMultiAgentPlanHasGaps(plan) ? 'degraded' : 'available';
+}
+
+export function cliMultiAgentPresetAvailability(
+  plan: CliMultiAgentPresetRunPlan,
+): CliMultiAgentPresetAvailability {
+  return {
+    status: cliMultiAgentPlanStatus(plan),
+    workflow: presetAgentAvailability(
+      plan.preset.workflowAgents,
+      plan.missingWorkflowAgents,
+    ),
+    toolUse: presetAgentAvailability(
+      plan.preset.toolUseAgents,
+      plan.missingToolUseAgents,
+    ),
+    rootAgent: plan.rootAgent
+      ? {
+          key: toAgentKey(plan.rootAgent),
+          name: plan.rootAgent.name,
+          source: plan.rootAgent.source,
+        }
+      : undefined,
+    missingAgentOverride: plan.missingAgentOverride,
+  };
+}
+
+export function cliMultiAgentPresetListRecord(
+  plan: CliMultiAgentPresetRunPlan,
+): CliMultiAgentPresetListRecord {
+  return {
+    ...plan.preset,
+    availability: cliMultiAgentPresetAvailability(plan),
+  };
+}
+
+export function cliMultiAgentPresetListRecords(
+  plans: readonly CliMultiAgentPresetRunPlan[],
+): CliMultiAgentPresetListRecord[] {
+  return plans.map(cliMultiAgentPresetListRecord);
 }
 
 export function planCliMultiAgentPresetRun(
@@ -352,9 +421,21 @@ function formatAvailablePresetAgentCount(
   presetAgents: readonly string[],
   missingAgents: readonly string[],
 ): string {
+  return presetAgentAvailability(presetAgents, missingAgents).label;
+}
+
+function presetAgentAvailability(
+  presetAgents: readonly string[],
+  missingAgents: readonly string[],
+): CliMultiAgentPresetAgentAvailability {
   const total = presetAgents.length;
   const available = total - missingAgents.length;
-  return missingAgents.length === 0 ? String(total) : `${available}/${total}`;
+  return {
+    available,
+    total,
+    missing: [...missingAgents],
+    label: missingAgents.length === 0 ? String(total) : `${available}/${total}`,
+  };
 }
 
 function formatAgentNames(names: readonly string[]): string {
