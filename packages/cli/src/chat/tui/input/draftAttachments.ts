@@ -87,6 +87,12 @@ function isInlineWhitespace(char: string | undefined): boolean {
 function removeChipRange(input: string, start: number, end: number): string {
   const removeFollowingSpace =
     isInlineWhitespace(input[start - 1]) && isInlineWhitespace(input[end]);
+  const removePrecedingSpace =
+    isInlineWhitespace(input[start - 1]) &&
+    (input[end] === undefined || input[end] === '\n' || input[end] === '\r');
+  if (removePrecedingSpace) {
+    return input.slice(0, start - 1) + input.slice(end);
+  }
   return (
     input.slice(0, start) + input.slice(removeFollowingSpace ? end + 1 : end)
   );
@@ -143,15 +149,15 @@ export class DraftAttachmentStore {
    * recalled `[Image #N]` would be a bare token with no file attached.
    */
   expandTextForHistory(input: string): string {
-    let out = this.expandText(input);
-    const matches = matchChips(out);
+    let out = input;
+    const matches = matchChips(input);
     for (let i = matches.length - 1; i >= 0; i--) {
       const match = matches[i];
       const entry = this.entries.get(match.id);
       if (entry?.kind !== 'image') continue;
       out = removeChipRange(out, match.start, match.end);
     }
-    return out;
+    return this.expandText(out);
   }
 
   /**
