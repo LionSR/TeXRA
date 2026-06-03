@@ -12,6 +12,7 @@ import {
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
 import { formatCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
+import type { ModelAvailabilityKind } from '@shared/schemas';
 import { Select, type SelectItem } from '../ui/Select';
 import { KeyHints } from '../ui/KeyHints';
 import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
@@ -32,30 +33,37 @@ export interface ModelListFormProps {
   readonly onClose: () => void;
 }
 
+const RELAY_STATUS_BY_AVAILABILITY = {
+  'included-access': 'relay: included',
+  'not-included': 'relay: not included',
+  'included-login-required': 'relay: login required',
+  'relay-quota-exhausted': 'relay: quota exhausted',
+  'provider-key': 'relay: unavailable; api key set',
+  'openrouter-key': 'relay: unavailable; openrouter key set',
+  'missing-key': 'relay: unavailable; missing api key',
+} satisfies Partial<Record<ModelAvailabilityKind, string>>;
+
+const EMPTY_MODEL_LIST_MESSAGES = {
+  includedLoginRequired:
+    'Included relay models require sign-in. Run /login or switch with /api personal.',
+  included:
+    'No included relay models are runnable. Switch with /api personal or try again later.',
+  personal:
+    'No personal API-key models are runnable. Configure a provider key or switch with /api included.',
+} satisfies Record<CliApiMode | 'includedLoginRequired', string>;
+
 export function formatModelStatusForCliMode(
   model: CliModelAccess,
   apiMode: CliApiMode,
 ): string {
   if (apiMode === 'personal') return `api: ${model.status}`;
 
-  switch (model.model.availability) {
-    case 'included-access':
-      return 'relay: included';
-    case 'not-included':
-      return 'relay: not included';
-    case 'included-login-required':
-      return 'relay: login required';
-    case 'relay-quota-exhausted':
-      return 'relay: quota exhausted';
-    case 'provider-key':
-      return 'relay: unavailable; api key set';
-    case 'openrouter-key':
-      return 'relay: unavailable; openrouter key set';
-    case 'missing-key':
-      return 'relay: unavailable; missing api key';
-    default:
-      return `relay: ${model.status}`;
-  }
+  const availability = model.model.availability;
+  const relayStatus =
+    availability == null
+      ? undefined
+      : RELAY_STATUS_BY_AVAILABILITY[availability];
+  return relayStatus ?? `relay: ${model.status}`;
 }
 
 export function modelSelectWindow(args: {
@@ -87,14 +95,10 @@ export function emptyModelListMessageForCliMode(
       (model) => model.model.availability === 'included-login-required',
     )
   ) {
-    return 'Included relay models require sign-in. Run /login or switch with /api personal.';
+    return EMPTY_MODEL_LIST_MESSAGES.includedLoginRequired;
   }
 
-  if (apiMode === 'included') {
-    return 'No included relay models are runnable. Switch with /api personal or try again later.';
-  }
-
-  return 'No personal API-key models are runnable. Configure a provider key or switch with /api included.';
+  return EMPTY_MODEL_LIST_MESSAGES[apiMode];
 }
 
 function EmptyModelListState(props: {

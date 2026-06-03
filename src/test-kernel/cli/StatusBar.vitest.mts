@@ -9,6 +9,7 @@ import {
   statusBarDisplaySlice,
   statusBarSegmentText,
 } from '@cli/chat/tui/panes/StatusBar';
+import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import { STREAM_STATUS } from '@shared/schemas';
 
@@ -45,6 +46,11 @@ describe('CLI StatusBar display model', () => {
     expect(queuedFollowUpsSummary(['請補充一個單調有界證明。'], 20)).toBe(
       '請補充一個單調有界…',
     );
+  });
+
+  it('uses clear compact labels for API access mode', () => {
+    expect(shortCliApiMode('included')).toBe('relay');
+    expect(shortCliApiMode('personal')).toBe('keys');
   });
 
   it('keeps queued follow-up counts in the durable left status segments', () => {

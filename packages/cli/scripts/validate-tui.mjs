@@ -443,7 +443,7 @@ const SCENARIOS = [
       '/tools',
       'Toggle available external integrations',
       'always on ·',
-      'enabled · detected · available',
+      'enabled · detected · Ready',
     ],
     unexpect: ['[TeXRA]', 'toolUtils', 'enabled -', 'TeXRA CLI'],
     maxBlankLinesBetween: [
@@ -1457,8 +1457,8 @@ const SCENARIOS = [
     bootExpect: 'TeXRA',
     keys: [ESC + 's'], // Esc/Alt-s
     frame: 'tail',
-    expect: ['◆ running 75s api 3 sub'],
-    unexpect: ['◆running', 'api3', '3 sub 1 proc'],
+    expect: ['◆ running 75s keys 3 sub'],
+    unexpect: ['◆running', 'keys3', '3 sub 1 proc'],
   },
   {
     name: 'tiny-task-subworkflow-detail',
@@ -1747,7 +1747,7 @@ const SCENARIOS = [
     expect: [
       'Harness interrupt requested.',
       '[main](stopped)',
-      '◆ stopped api',
+      '◆ stopped keys',
     ],
   },
 ];
