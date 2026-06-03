@@ -513,8 +513,8 @@ async function validateOrchestratePreservesScrollback() {
   );
 }
 
-async function validateOrchestrateApiModeOnboardingPicker(options) {
-  const root = mkdtempSync(path.join(tmpdir(), 'texra-cli-api-mode-setup-'));
+async function validateOrchestrateOnboardingPicker(options) {
+  const root = mkdtempSync(path.join(tmpdir(), 'texra-cli-onboarding-'));
   try {
     const home = path.join(root, 'home');
     const env = Object.fromEntries(
@@ -528,68 +528,65 @@ async function validateOrchestrateApiModeOnboardingPicker(options) {
       pty.write(ESC);
     };
 
-    const result = await runTexraPty(
-      ['orchestrate', '--api-mode', options.apiMode],
-      {
-        label: `texra orchestrate ${options.apiMode}-mode onboarding`,
-        cwd: repoRoot,
-        env: {
-          HOME: home,
-          XDG_CONFIG_HOME: path.join(home, '.config'),
-          XDG_DATA_HOME: path.join(home, '.local/share'),
-          XDG_STATE_HOME: path.join(home, '.local/state'),
-          ...env,
-          ...options.env,
-        },
-        onData: (_data, pty) => {
-          if (
-            !exitSent &&
-            welcomeExitTimer == null &&
-            pty.output.includes('Welcome to TeXRA')
-          ) {
-            welcomeExitTimer = pty.setTimer(() => sendEsc(pty), 100);
-          }
-          if (
-            !exitSent &&
-            pty.output.includes('Choose how to start this CLI session')
-          ) {
-            exitSent = true;
-            pty.write('\r');
-          }
-        },
+    const result = await runTexraPty(options.args, {
+      label: options.label,
+      cwd: repoRoot,
+      env: {
+        HOME: home,
+        XDG_CONFIG_HOME: path.join(home, '.config'),
+        XDG_DATA_HOME: path.join(home, '.local/share'),
+        XDG_STATE_HOME: path.join(home, '.local/state'),
+        ...env,
+        ...options.env,
       },
-    );
+      onData: (_data, pty) => {
+        if (
+          !exitSent &&
+          welcomeExitTimer == null &&
+          pty.output.includes('Welcome to TeXRA')
+        ) {
+          welcomeExitTimer = pty.setTimer(() => sendEsc(pty), 100);
+        }
+        if (
+          !exitSent &&
+          pty.output.includes('Choose how to start this CLI session')
+        ) {
+          exitSent = true;
+          pty.write('\r');
+        }
+      },
+    });
 
     assert(
       result.exit.exitCode === 0 && !result.exit.signal,
-      `${options.apiMode}-mode onboarding should exit cleanly after Esc (exit ${result.exit.exitCode}, signal ${result.exit.signal || 'none'})\noutput:\n${result.output}`,
+      `${options.label} should exit cleanly after Esc (exit ${result.exit.exitCode}, signal ${result.exit.signal || 'none'})\noutput:\n${result.output}`,
     );
     assert(
       result.output.includes('Welcome to TeXRA'),
-      `${options.apiMode} mode should show onboarding`,
+      `${options.label} should show onboarding`,
     );
     assert(
       !result.output.includes('Choose how to start this CLI session'),
-      `${options.apiMode} mode should not show launcher actions before onboarding`,
+      `${options.label} should not show launcher actions before onboarding`,
     );
     assert(
       !result.output.includes('New chat'),
-      `${options.apiMode} mode should not offer New chat before onboarding`,
+      `${options.label} should not offer New chat before onboarding`,
     );
     assert(
       !result.output.includes('Model "deepseekT" is not available'),
-      `${options.apiMode} mode should not fall through to model resolution`,
+      `${options.label} should not fall through to model resolution`,
     );
     for (const text of options.expected) {
       assert(
         result.output.includes(text),
-        `${options.apiMode} mode should show ${JSON.stringify(text)}`,
+        `${options.label} should show ${JSON.stringify(text)}`,
       );
     }
     for (const text of options.forbidden) {
       assert(
         !result.output.includes(text),
-        `${options.apiMode} mode should not show ${JSON.stringify(text)}`,
+        `${options.label} should not show ${JSON.stringify(text)}`,
       );
     }
   } finally {
@@ -597,29 +594,53 @@ async function validateOrchestrateApiModeOnboardingPicker(options) {
   }
 }
 
-async function validateOrchestrateApiModeOnboardingPickers() {
-  await validateOrchestrateApiModeOnboardingPicker({
-    apiMode: 'included',
+async function validateOrchestrateOnboardingPickers() {
+  const oldTruncatedLabels = [
+    'Sign in for included re…',
+    'Use my own provider API…',
+  ];
+
+  await validateOrchestrateOnboardingPicker({
+    label: 'texra orchestrate first-run onboarding',
+    args: ['orchestrate'],
+    env: {},
+    expected: [
+      'Not signed in, and no provider API key is configured. Choose how to power model calls:',
+      'Included relay access',
+      'Provider API key',
+      'sign in, no API key needed (recommended)',
+      'paste Anthropic / OpenAI / Google',
+    ],
+    forbidden: oldTruncatedLabels,
+  });
+  await validateOrchestrateOnboardingPicker({
+    label: 'texra orchestrate included-mode onboarding',
+    args: ['orchestrate', '--api-mode', 'included'],
     env: { ANTHROPIC_API_KEY: 'texra-validation-fake-key' },
     expected: [
       'Included relay access needs sign-in for this run:',
-      'opens your browser, no API key needed',
+      'Included relay access',
+      'sign in, no API key needed (recommended)',
     ],
     forbidden: [
-      'Use my own provider API key',
-      'paste an Anthropic / OpenAI / Google key',
+      'Provider API key',
+      'paste Anthropic / OpenAI / Google',
+      ...oldTruncatedLabels,
     ],
   });
-  await validateOrchestrateApiModeOnboardingPicker({
-    apiMode: 'personal',
+  await validateOrchestrateOnboardingPicker({
+    label: 'texra orchestrate personal-mode onboarding',
+    args: ['orchestrate', '--api-mode', 'personal'],
     env: {},
     expected: [
       'Personal API-key mode needs a provider key for this run:',
-      'paste an Anthropic / OpenAI / Google key',
+      'Provider API key',
+      'paste Anthropic / OpenAI / Google',
     ],
     forbidden: [
-      'Sign in for included relay access',
-      'opens your browser, no API key needed',
+      'Included relay access',
+      'sign in, no API key needed',
+      ...oldTruncatedLabels,
     ],
   });
 }
@@ -907,7 +928,7 @@ async function validateCliRunArtifacts(options = {}) {
   validateMultiAgentListAvailability();
   validateFileFlagMissingValues();
   await validateOrchestratePreservesScrollback();
-  await validateOrchestrateApiModeOnboardingPickers();
+  await validateOrchestrateOnboardingPickers();
   validateRunCommand();
   validateToolUseAgentRunCommand();
   validateMultiAgentRunCommand();
