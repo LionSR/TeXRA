@@ -355,6 +355,14 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     [isControlled, onChange, onCursorChange],
   );
 
+  const insertIntoLatestDraft = useCallback(
+    (text: string) => {
+      const { value: v, cursor: c } = latestStateRef.current;
+      applyEdit(insertText(v, c, text));
+    },
+    [applyEdit],
+  );
+
   const flushPendingSubmit = useCallback(() => {
     if (pendingImagePastesRef.current.size > 0) return;
     const submit = pendingSubmitRef.current;
@@ -379,6 +387,12 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   useInput(
     (input, key) => {
       if (isEscapeInput(input, key)) return;
+      if (pendingSubmitRef.current) {
+        // A visible Enter already committed this draft. Ignore later keystrokes
+        // until clipboard probes settle so the deferred submit is neither
+        // overwritten nor allowed to clear a newer draft.
+        return;
+      }
 
       if (isCtrlInput(input, key, 'j') || isShiftReturnInput(input, key)) {
         // Ctrl-J (universal) or Shift+Enter (Kitty-protocol terminals) →
@@ -434,8 +448,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
           .onImagePaste()
           .then((chip) => {
             if (!chip) return;
-            const { value: v, cursor: c } = latestStateRef.current;
-            applyEdit(insertText(v, c, chip));
+            insertIntoLatestDraft(chip);
           })
           .catch((err: unknown) => props.onImagePasteError?.(err));
         pendingImagePastesRef.current.add(paste);
@@ -472,9 +485,9 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   // otherwise the paste is inserted verbatim.
   usePaste(
     (text) => {
+      if (pendingSubmitRef.current) return;
       const toInsert = props.transformPaste?.(text) ?? text;
-      const { value: v, cursor: c } = latestStateRef.current;
-      applyEdit(insertText(v, c, toInsert));
+      insertIntoLatestDraft(toInsert);
     },
     { isActive: focus },
   );
