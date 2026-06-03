@@ -6,8 +6,8 @@ import * as logger from '@logger/logUtils';
 import { flexibleFS, pathToLocation } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
-import { hasExtension } from '@utils/core/pathCore';
 import { filterNotNull } from '@utils/core';
+import { hasExtension } from '@utils/core/pathCore';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

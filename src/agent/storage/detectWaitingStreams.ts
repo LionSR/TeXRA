@@ -7,8 +7,8 @@
 
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import { getExecutionStore } from './ExecutionKVStore';
 import { filterNotNull } from '@utils/core';
+import { getExecutionStore } from './ExecutionKVStore';
 
 /**
  * Check if a single stream has a valid, resumable flow record.
@@ -53,5 +53,5 @@ export async function detectWaitingStreams(
     (await hasPersistedFlowRecord(executionId)) ? streamId : null,
   );
   const results = await Promise.all(checks);
-  return new Set(filterNotNull(results));
+  return new Set(results.filter(filterNotNull));
 }

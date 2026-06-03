@@ -18,13 +18,13 @@ import { ensureError, toErrorMessage } from '@common/errors/errorMessage';
 import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions } from '@tools/registry';
 
+import { filterNotNull } from '@utils/core';
 import {
   RemoteAgentListItemSchema,
   EdgeFunctionResponseSchema,
   type RemoteAgentListItem,
   type RemoteAgentConfig,
 } from './types';
-import { filterNotNull } from '@utils/core';
 
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);

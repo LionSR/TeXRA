@@ -15,12 +15,12 @@ import {
 } from '@shared/schemas/toolConfig';
 
 // Local imports - utilities
+import { filterNotNull } from '@utils/core';
 import {
   getPastedImageFullPath,
   isPastedImage,
 } from '@utils/files/pastedImageUtils';
 import type { z } from 'zod';
-import { filterNotNull } from '@utils/core';
 
 /**
  * Message shape from the main view for agent execution.

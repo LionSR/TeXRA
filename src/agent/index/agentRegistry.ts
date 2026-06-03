@@ -17,11 +17,11 @@ import { AgentSource } from '@shared/schemas/agent';
 import { agentKey as createKey, agentName } from '@shared/schemas/agent';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { AbsoluteFS } from '@utils/files';
+import { filterNotNull } from '@utils/core';
 import {
   getAgentDirectories,
   type AgentDirectories,
 } from './agentDirectoriesRegistry';
-import { filterNotNull } from '@utils/core';
 
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
@@ -394,7 +394,7 @@ async function scanDirectory(
       }),
     );
 
-    const result = filterNotNull(entries);
+    const result = entries.filter(filterNotNull);
     logger.debug(CHANNEL, `Scanned ${result.length} agents from ${source}`);
     return result;
   } catch (err) {

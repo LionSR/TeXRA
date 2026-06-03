@@ -16,13 +16,13 @@ import { z } from 'zod';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - zotero
+import { filterNotNull } from '@utils/core';
 import {
   callBetterBibTeX,
   getZoteroPort,
   type BbtCollection,
   type BbtLibrary,
 } from './bbtClient';
-import { filterNotNull } from '@utils/core';
 
 const ZoteroCollectionsInputSchema = z.strictObject({
   query: z

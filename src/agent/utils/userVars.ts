@@ -19,13 +19,13 @@ import {
   getPromptFileName,
   getXmlFormatFromReadableFiles,
 } from '@utils/prompt';
+import { filterNotNull } from '@utils/core';
 import {
   listExternalRoots,
   type ExternalRootKind,
 } from '@utils/files/externalRoots';
 import { setVarFromFile } from '@utils/files/varsUtils';
 import { StorageFS } from '@utils/files/storageFS';
-import { filterNotNull } from '@utils/core';
 
 /** Relative path from an agent directory to the shared LaTeX style rules file. */
 const SHARED_LATEX_RULES_REL = '../shared/latex_style_rules.txt';
@@ -460,7 +460,7 @@ async function getAttachedMemories(
     }),
   );
 
-  const parts = filterNotNull(results);
+  const parts = results.filter(filterNotNull);
   if (parts.length === 0) return null;
   return `<attached_memories>\n${parts.join('\n')}\n</attached_memories>`;
 }

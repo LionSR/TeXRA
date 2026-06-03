@@ -3,9 +3,9 @@ import * as path from 'path';
 
 // Local imports - utils
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
+import { filterNotNull } from '@utils/core';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { toPosixPath } from '@utils/core/pathCore';
-import { filterNotNull } from '@utils/core';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 // Local file imports

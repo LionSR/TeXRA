@@ -45,12 +45,12 @@ import {
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files';
+import { filterNotNull } from '@utils/core';
 import {
   getOriginalSnapshotPath,
   resolveStoragePath,
 } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
-import { filterNotNull } from '@utils/core';
 
 // ============================================================================
 // Schema
@@ -411,6 +411,6 @@ Optional:
       }),
     );
 
-    return filterNotNull(results);
+    return results.filter(filterNotNull);
   }
 }

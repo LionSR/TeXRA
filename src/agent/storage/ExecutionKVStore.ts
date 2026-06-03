@@ -218,7 +218,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
         return result.success ? { id, ...result.data } : null;
       }),
     );
-    return filterNotNull(entries);
+    return entries.filter(filterNotNull);
   }
 
   async readResultMeta(): Promise<ResultMeta | null> {

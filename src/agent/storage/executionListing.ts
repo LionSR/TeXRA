@@ -21,6 +21,7 @@ import { toErrorMessage } from '@common/errors/errorMessage';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { StorageFS, WorkspaceFS } from '@utils/files';
+import { filterNotNull } from '@utils/core';
 import { isDirectory } from '@utils/files/fsEntryType';
 
 import {
@@ -28,7 +29,6 @@ import {
   EXECUTIONS_DIR,
   getExecutionStore,
 } from './ExecutionKVStore';
-import { filterNotNull } from '@utils/core';
 
 const CHANNEL = 'ExecutionListing';
 const INDEX_PATH = 'executions/index.json';
