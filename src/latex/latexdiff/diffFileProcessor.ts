@@ -94,30 +94,18 @@ export class DiffFileProcessor {
         return [];
       }
 
-      return this.formatLine(line);
+      const result: string[] = [];
+      if (PACKAGES_NEEDING_NEWLINE.some((pkg) => line.includes(pkg))) {
+        result.push('');
+      }
+      result.push(line);
+      if (line.includes('\\RequirePackage{color}')) {
+        result.push('');
+      }
+      return result;
     });
 
     return processedLines.join('\n') + '\n';
-  }
-
-  private formatLine(line: string): string[] {
-    const result: string[] = [];
-
-    if (this.needsNewlineBefore(line)) {
-      result.push('');
-    }
-
-    result.push(line);
-
-    if (line.includes('\\RequirePackage{color}')) {
-      result.push('');
-    }
-
-    return result;
-  }
-
-  private needsNewlineBefore(line: string): boolean {
-    return PACKAGES_NEEDING_NEWLINE.some((pkg) => line.includes(pkg));
   }
 
   private async processTikzPictureEndings(
