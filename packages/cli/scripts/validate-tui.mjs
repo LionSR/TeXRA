@@ -68,9 +68,10 @@ const ASYNC_FORM_SETTLE_MS = 12000;
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');
-const HARNESS =
-  process.env.TEXRA_TUI_HARNESS ||
-  path.join(CLI_ROOT, 'dist', 'bin', 'tui-harness.js');
+const HARNESS = path.resolve(
+  CLI_ROOT,
+  process.env.TEXRA_TUI_HARNESS ?? path.join('dist', 'bin', 'tui-harness.js'),
+);
 
 // --- scenarios (verified against the committed harness) ------------------
 const SCENARIOS = [
