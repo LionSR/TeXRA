@@ -371,7 +371,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       // Enter commits the draft that was visible at keypress time. Pending
       // image probes may still insert chips into the UI, but they should not
       // silently change what this submit sends.
-      pendingSubmitRef.current = () => handler(submitted);
+      pendingSubmitRef.current ??= () => handler(submitted);
     },
     [],
   );
@@ -473,7 +473,8 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   usePaste(
     (text) => {
       const toInsert = props.transformPaste?.(text) ?? text;
-      applyEdit(insertText(value, cursor, toInsert));
+      const { value: v, cursor: c } = latestStateRef.current;
+      applyEdit(insertText(v, c, toInsert));
     },
     { isActive: focus },
   );
