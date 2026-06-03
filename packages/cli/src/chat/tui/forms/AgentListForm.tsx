@@ -6,6 +6,7 @@ import { Spinner } from '@inkjs/ui';
 
 import { computeAgentOptionsData } from '@agent/index';
 import type { AgentOptionData } from '@shared/schemas';
+import { agentName } from '@shared/schemas/agent';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
@@ -29,6 +30,8 @@ interface AgentGroups {
   readonly workflow: readonly AgentOptionData[];
 }
 
+type AgentIdentity = Pick<AgentOptionData, 'label' | 'value'>;
+
 const AGENT_FORM_MAX_WIDTH = 80;
 
 export function agentFormWidth(columns: number | undefined): number {
@@ -49,12 +52,37 @@ function agentDescription(agent: AgentOptionData): string {
   return agent.description ? `${kind}; ${source}; ${agent.description}` : kind;
 }
 
+export function currentVisibleAgent(
+  agents: readonly AgentIdentity[],
+  currentAgent: string,
+): AgentIdentity | undefined {
+  const current = currentAgent.trim();
+  const currentName = agentName(current);
+  return agents.find(
+    (agent) =>
+      agent.value === current ||
+      agent.label === current ||
+      agent.label === currentName,
+  );
+}
+
+export function hiddenCurrentAgentHint(
+  agents: readonly AgentIdentity[],
+  currentAgent: string,
+): string | undefined {
+  const current = currentAgent.trim();
+  if (!current || currentVisibleAgent(agents, current)) return undefined;
+  return `Current: ${agentName(current)} (hidden from picker)`;
+}
+
 export function agentSelectWindow({
   availableRows,
+  extraRows = 0,
   itemCount,
   workflowCount,
 }: {
   readonly availableRows: number | undefined;
+  readonly extraRows?: number;
   readonly itemCount: number;
   readonly workflowCount: number;
 }): {
@@ -72,18 +100,19 @@ export function agentSelectWindow({
     };
   }
 
+  const chromeRows = 8 + Math.max(0, extraRows);
   // Border, title, description, tool-use heading, and key hints are the fixed
   // chrome for the primary selectable list.
-  const selectRows = Math.max(1, availableRows - 8);
+  const selectRows = Math.max(1, availableRows - chromeRows);
   if (itemCount > selectRows) {
     return {
-      ...computeSelectWindowSize({ availableRows, itemCount, chromeRows: 8 }),
+      ...computeSelectWindowSize({ availableRows, itemCount, chromeRows }),
       maxVisibleWorkflows: 0,
       showWorkflowOverflow: false,
     };
   }
 
-  const remainingRows = availableRows - 8 - itemCount;
+  const remainingRows = availableRows - chromeRows - itemCount;
   if (workflowCount === 0 || remainingRows < 4) {
     return {
       maxVisibleItems: itemCount,
@@ -147,17 +176,19 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   // The current agent may be stored as a canonical key (`source:name`) or a
   // bare name; rows are keyed by bare name, so resolve to the matching label
   // so Select can render the ✓ on the active row.
-  const activeAgent = agents.toolUse.find(
-    (agent) =>
-      agent.value === props.currentAgent || agent.label === props.currentAgent,
-  );
+  const activeAgent = currentVisibleAgent(agents.toolUse, props.currentAgent);
   const activeValue = activeAgent?.label ?? props.currentAgent;
+  const currentAgentHint = hiddenCurrentAgentHint(
+    agents.toolUse,
+    props.currentAgent,
+  );
   const workflowRows = agents.workflow.map((agent) => ({
     name: agent.label,
     description: agentDescription(agent),
   }));
   const selectWindow = agentSelectWindow({
     availableRows: props.availableRows,
+    extraRows: currentAgentHint ? 1 : 0,
     itemCount: items.length,
     workflowCount: workflowRows.length,
   });
@@ -176,6 +207,11 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   if (isCompactFormRows(props.availableRows)) {
     return (
       <FormFrame color="cyan" title="/agent" showCloseHint={false}>
+        {currentAgentHint ? (
+          <Text dimColor wrap="truncate-end">
+            {currentAgentHint}
+          </Text>
+        ) : null}
         <Text bold>Tool-use agents</Text>
         <Select
           items={items.map(({ value, label }) => ({ value, label }))}
@@ -212,6 +248,11 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           ? 'Choose the root tool-use agent for the first message.'
           : 'Available agents. Start a new chat with texra chat --agent=<name> to choose the root tool-use agent.'}
       </Text>
+      {currentAgentHint ? (
+        <Text dimColor wrap="truncate-end">
+          {currentAgentHint}
+        </Text>
+      ) : null}
       <Box marginTop={1} flexDirection="column">
         <Text bold>Tool-use agents</Text>
         <Select
