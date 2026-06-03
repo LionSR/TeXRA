@@ -16,6 +16,7 @@ describe('FollowUpQueue', () => {
     await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
       items: ['first', 'second'],
       synthetic: false,
+      mediaFiles: [],
     });
   });
 
@@ -30,10 +31,25 @@ describe('FollowUpQueue', () => {
     await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
       items: ['compact now'],
       synthetic: true,
+      mediaFiles: [],
     });
     await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
       items: ['user text'],
       synthetic: false,
+      mediaFiles: [],
+    });
+  });
+
+  it('carries media file paths and flattens them across a visible batch', async () => {
+    const queue = new FollowUpQueue();
+
+    queue.enqueue('look at this', ['/tmp/pasted/a.png']);
+    queue.enqueue('and this', ['/tmp/pasted/b.png']);
+
+    await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
+      items: ['look at this', 'and this'],
+      synthetic: false,
+      mediaFiles: ['/tmp/pasted/a.png', '/tmp/pasted/b.png'],
     });
   });
 
@@ -49,6 +65,7 @@ describe('FollowUpQueue', () => {
       await expect(session.waitForFollowUp(() => false)).resolves.toEqual({
         items: ['compact now'],
         synthetic: true,
+        mediaFiles: [],
       });
       expect(session.hasQueuedFollowUp()).toBe(false);
     } finally {
@@ -69,6 +86,25 @@ describe('FollowUpQueue', () => {
       await expect(session.waitForFollowUp(() => false)).resolves.toEqual({
         items: ['compact after interrupt'],
         synthetic: true,
+        mediaFiles: [],
+      });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it('attaches media to a session follow-up', async () => {
+    const session = new ToolUseSessionLifecycle(
+      'stream:media-followup' as StreamTabId,
+    );
+
+    try {
+      session.appendFollowUp('describe the figure', ['/tmp/pasted/fig.png']);
+
+      await expect(session.waitForFollowUp(() => false)).resolves.toEqual({
+        items: ['describe the figure'],
+        synthetic: false,
+        mediaFiles: ['/tmp/pasted/fig.png'],
       });
     } finally {
       session.dispose();

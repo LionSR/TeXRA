@@ -27,6 +27,7 @@ import {
   isUnhandledControlInput,
   metaChordInput,
 } from './inputKeys';
+import { ImagePasteQueue, withImagePasteTimeout } from './imagePasteQueue';
 import { textDisplayWidth } from '../render/terminalText';
 
 export interface BaseTextInputProps {
@@ -44,6 +45,15 @@ export interface BaseTextInputProps {
   readonly onSubmit: (value: string) => void;
   readonly onInputChunkSubmit?: (value: string) => void;
   readonly onChange: (value: string) => void;
+  /** Optionally transform pasted text before it is inserted — e.g. collapse a
+   *  large paste into a `[Pasted text #N +M lines]` chip and stash the content
+   *  elsewhere. Defaults to inserting the paste verbatim. */
+  readonly transformPaste?: (text: string) => string;
+  /** Ctrl-V handler: probe the OS clipboard for an image. Resolves to the chip
+   *  text to insert (e.g. `[Image #1]`) or null when there is no image. */
+  readonly onImagePaste?: () => Promise<string | null>;
+  readonly onImagePasteError?: (error: unknown) => void;
+  readonly imagePasteQueue?: ImagePasteQueue;
   /** Render the value as bullets (secret entry, e.g. an API key). Display-only:
    *  the captured value, edits, and paste are unaffected. */
   readonly masked?: boolean;
@@ -304,6 +314,16 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     value.length,
   );
 
+  // Mirror the latest value/cursor for async handlers (image paste): a
+  // clipboard probe that resolves after the user keeps typing must insert at
+  // the current caret, not a stale keypress-time snapshot.
+  const latestStateRef = useRef({ value, cursor });
+  latestStateRef.current = { value, cursor };
+  const ownedImagePasteQueueRef = useRef<ImagePasteQueue | null>(null);
+  ownedImagePasteQueueRef.current ??= new ImagePasteQueue();
+  const imagePasteQueue =
+    props.imagePasteQueue ?? ownedImagePasteQueueRef.current;
+
   // Track the last value we ourselves emitted via onChange. If the prop's
   // `value` diverges from this, the parent swapped the text out from under
   // us (slash-palette accept, reverse-search recall, programmatic clear) —
@@ -320,15 +340,17 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   const moveCursor = useCallback(
     (next: number) => {
       const c = clampCursor(next, value.length);
+      latestStateRef.current = { value, cursor: c };
       if (!isControlled) setInternalCursor(c);
       onCursorChange?.(c);
     },
-    [isControlled, value.length, onCursorChange],
+    [isControlled, value, onCursorChange],
   );
 
   const applyEdit = useCallback(
     (edit: TextEdit) => {
       const c = clampCursor(edit.cursor, edit.value.length);
+      latestStateRef.current = { value: edit.value, cursor: c };
       lastEmittedValueRef.current = edit.value;
       onChange(edit.value);
       if (!isControlled) setInternalCursor(c);
@@ -337,9 +359,39 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     [isControlled, onChange, onCursorChange],
   );
 
+  const insertIntoLatestDraft = useCallback(
+    (text: string) => {
+      const { value: v, cursor: c } = latestStateRef.current;
+      applyEdit(insertText(v, c, text));
+    },
+    [applyEdit],
+  );
+
+  const submitAfterImagePastes = useCallback(
+    (handler: (value: string) => void, submitted: string): void => {
+      if (
+        !imagePasteQueue.deferUntilIdle(() =>
+          handler(latestStateRef.current.value),
+        )
+      ) {
+        handler(submitted);
+      }
+    },
+    [imagePasteQueue],
+  );
+
   useInput(
     (input, key) => {
-      if (isEscapeInput(input, key)) return;
+      if (isEscapeInput(input, key)) {
+        imagePasteQueue.cancelDeferredAction();
+        return;
+      }
+      if (imagePasteQueue.hasDeferredAction) {
+        // A visible Enter already committed this draft. Ignore later keystrokes
+        // until clipboard probes settle so the deferred submit is neither
+        // overwritten nor allowed to clear a newer draft.
+        return;
+      }
 
       if (isCtrlInput(input, key, 'j') || isShiftReturnInput(input, key)) {
         // Ctrl-J (universal) or Shift+Enter (Kitty-protocol terminals) →
@@ -348,7 +400,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         return;
       }
       if (isPlainReturnInput(input, key)) {
-        onSubmit(value);
+        submitAfterImagePastes(onSubmit, value);
         return;
       }
       if (key.backspace) {
@@ -387,6 +439,21 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         applyEdit(deletePreviousWord(value, cursor));
         return;
       }
+      if (isCtrlInput(input, key, 'v') && props.onImagePaste) {
+        // Insert the chip at whatever the caret is when the async probe
+        // resolves (read from a ref, not a keypress-time snapshot) so typing
+        // during the probe isn't clobbered.
+        const paste = withImagePasteTimeout(
+          Promise.resolve().then(() => props.onImagePaste?.() ?? null),
+        )
+          .then((chip) => {
+            if (!chip) return;
+            insertIntoLatestDraft(chip);
+          })
+          .catch((err: unknown) => props.onImagePasteError?.(err));
+        imagePasteQueue.track(paste);
+        return;
+      }
       // Drop unhandled control/meta combos; pass printable input through.
       if (
         key.meta ||
@@ -399,7 +466,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       }
       const edit = applyTerminalInputChunk(value, cursor, input);
       if (edit.submit) {
-        (onInputChunkSubmit ?? onSubmit)(edit.value);
+        submitAfterImagePastes(onInputChunkSubmit ?? onSubmit, edit.value);
         return;
       }
       if (edit.value === value && edit.cursor === cursor) return;
@@ -410,9 +477,13 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
 
   // Bracketed paste arrives as ONE string and is not forwarded to useInput,
   // so newlines in the paste are preserved literally instead of firing Enter.
+  // `transformPaste` (when supplied) may collapse a large paste into a chip;
+  // otherwise the paste is inserted verbatim.
   usePaste(
     (text) => {
-      applyEdit(insertText(value, cursor, text));
+      if (imagePasteQueue.hasDeferredAction) return;
+      const toInsert = props.transformPaste?.(text) ?? text;
+      insertIntoLatestDraft(toInsert);
     },
     { isActive: focus },
   );

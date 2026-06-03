@@ -56,6 +56,7 @@ import {
   pathToLocation,
   WorkspaceFS,
 } from '@utils/files';
+import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
 import {
   buildFileContextFromTaskState,
   polishTextWithAI,
@@ -213,9 +214,28 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         }
       },
       [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: async (data) => {
+        // Persist any pasted follow-up images to the shared `pasted/` dir (the
+        // same path the main webview uses) and forward their file paths so they
+        // reach the model on this follow-up turn via addMediaToUserMessage.
+        const mediaFiles: string[] = [];
+        for (const img of data.images ?? []) {
+          try {
+            mediaFiles.push(
+              await savePastedImageBase64(img.base64, img.fileName),
+            );
+          } catch (err) {
+            // Best-effort: a failed image save must not block the text, but log
+            // it so a missing attachment is diagnosable.
+            this.logger.warn(
+              this.channel,
+              `Failed to save pasted follow-up image: ${toErrorMessage(err)}`,
+            );
+          }
+        }
         await vscode.commands.executeCommand('texra.sendFollowUp', {
           stream: data.stream,
           text: data.text,
+          ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
         });
       },
       [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]: (data) =>

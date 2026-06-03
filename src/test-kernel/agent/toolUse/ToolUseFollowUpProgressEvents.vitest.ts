@@ -45,7 +45,7 @@ describe('tool-use follow-up progress events', () => {
     const result = await sendFollowUp(streamId, 'please continue');
 
     expect(result).toEqual({ status: 'sent' });
-    expect(appendFollowUp).toHaveBeenCalledWith('please continue');
+    expect(appendFollowUp).toHaveBeenCalledWith('please continue', undefined);
     expect(events).toEqual([
       {
         event: 'followUpSent',

@@ -1,5 +1,3 @@
-import * as path from 'path';
-
 import * as vscode from 'vscode';
 
 import { toErrorMessage } from '@common/errors';
@@ -8,7 +6,10 @@ import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewInboundMessage } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { THREE_DAYS_MS } from '@utils/config';
-import { PASTED_DIR } from '@utils/files/pastedImageUtils';
+import {
+  PASTED_DIR,
+  savePastedImageBase64,
+} from '@utils/files/pastedImageUtils';
 import {
   polishTextWithAI,
   FileContext,
@@ -114,10 +115,7 @@ export class InstructionManager extends BaseWebviewManager {
       if (!base64 || !mediaType || !fileName) {
         return;
       }
-      await StorageFS.ensureDir(PASTED_DIR);
-      const relativePath = path.join(PASTED_DIR, fileName);
-      await StorageFS.write(relativePath, Buffer.from(base64, 'base64'));
-      await StorageFS.cleanupOldFiles(PASTED_DIR, THREE_DAYS_MS);
+      await savePastedImageBase64(base64, fileName);
       this.postMessage({
         command: MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE,
         file: fileName,
