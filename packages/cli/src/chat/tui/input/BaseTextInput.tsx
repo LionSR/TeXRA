@@ -317,6 +317,8 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   // the current caret, not a stale keypress-time snapshot.
   const latestStateRef = useRef({ value, cursor });
   latestStateRef.current = { value, cursor };
+  const pendingImagePastesRef = useRef(new Set<Promise<void>>());
+  const pendingSubmitRef = useRef<(() => void) | null>(null);
 
   // Track the last value we ourselves emitted via onChange. If the prop's
   // `value` diverges from this, the parent swapped the text out from under
@@ -334,21 +336,41 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   const moveCursor = useCallback(
     (next: number) => {
       const c = clampCursor(next, value.length);
+      latestStateRef.current = { value, cursor: c };
       if (!isControlled) setInternalCursor(c);
       onCursorChange?.(c);
     },
-    [isControlled, value.length, onCursorChange],
+    [isControlled, value, onCursorChange],
   );
 
   const applyEdit = useCallback(
     (edit: TextEdit) => {
       const c = clampCursor(edit.cursor, edit.value.length);
+      latestStateRef.current = { value: edit.value, cursor: c };
       lastEmittedValueRef.current = edit.value;
       onChange(edit.value);
       if (!isControlled) setInternalCursor(c);
       onCursorChange?.(c);
     },
     [isControlled, onChange, onCursorChange],
+  );
+
+  const flushPendingSubmit = useCallback(() => {
+    if (pendingImagePastesRef.current.size > 0) return;
+    const submit = pendingSubmitRef.current;
+    pendingSubmitRef.current = null;
+    submit?.();
+  }, []);
+
+  const submitAfterImagePastes = useCallback(
+    (handler: (value: string) => void, submitted: string): void => {
+      if (pendingImagePastesRef.current.size === 0) {
+        handler(submitted);
+        return;
+      }
+      pendingSubmitRef.current = () => handler(latestStateRef.current.value);
+    },
+    [],
   );
 
   useInput(
@@ -362,7 +384,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         return;
       }
       if (isPlainReturnInput(input, key)) {
-        onSubmit(value);
+        submitAfterImagePastes(onSubmit, value);
         return;
       }
       if (key.backspace) {
@@ -405,7 +427,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         // Insert the chip at whatever the caret is when the async probe
         // resolves (read from a ref, not a keypress-time snapshot) so typing
         // during the probe isn't clobbered.
-        void props
+        const paste = props
           .onImagePaste()
           .then((chip) => {
             if (!chip) return;
@@ -413,6 +435,11 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
             applyEdit(insertText(v, c, chip));
           })
           .catch((err: unknown) => props.onImagePasteError?.(err));
+        pendingImagePastesRef.current.add(paste);
+        void paste.finally(() => {
+          pendingImagePastesRef.current.delete(paste);
+          flushPendingSubmit();
+        });
         return;
       }
       // Drop unhandled control/meta combos; pass printable input through.
@@ -427,7 +454,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       }
       const edit = applyTerminalInputChunk(value, cursor, input);
       if (edit.submit) {
-        (onInputChunkSubmit ?? onSubmit)(edit.value);
+        submitAfterImagePastes(onInputChunkSubmit ?? onSubmit, edit.value);
         return;
       }
       if (edit.value === value && edit.cursor === cursor) return;

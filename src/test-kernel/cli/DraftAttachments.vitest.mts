@@ -63,6 +63,18 @@ describe('DraftAttachmentStore', () => {
     expect(store.expandText(`look ${chip}`)).toBe(`look ${chip}`);
   });
 
+  it('drops backed image chips from history text after expanding pasted text', () => {
+    const store = new DraftAttachmentStore();
+    const text = store.addPastedText('A\nB\nC\nD');
+    const image = store.addPastedImage(img('a.png'));
+    expect(store.expandTextForHistory(`look ${text} ${image} done`)).toBe(
+      'look A\nB\nC\nD done',
+    );
+    expect(store.resolveMedia(`look ${text} ${image} done`)).toEqual([
+      '/p/a.png',
+    ]);
+  });
+
   it('resolves only image chips still present in the draft (orphan gate)', () => {
     const store = new DraftAttachmentStore();
     const kept = store.addPastedImage(img('a.png'));
