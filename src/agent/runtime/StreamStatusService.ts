@@ -5,6 +5,7 @@ import {
 } from '@common/constants/streamStatus';
 import {
   STREAM_STATUS,
+  type ExecutionStatus,
   type StreamTabId,
   type StreamStatus,
 } from '@shared/schemas';
@@ -16,16 +17,19 @@ export interface StreamStatusChange {
   streamId: StreamTabId;
   status: StreamStatus;
   previousStatus: StreamStatus;
+  terminalStatus?: ExecutionStatus;
 }
 
 interface EmitSetOptions {
   emit?: true;
   runtimeHost: AgentRuntimeHost;
+  terminalStatus?: ExecutionStatus;
 }
 
 interface SilentSetOptions {
   emit: false;
   runtimeHost?: AgentRuntimeHost;
+  terminalStatus?: ExecutionStatus;
 }
 
 type SetOptions = EmitSetOptions | SilentSetOptions;
@@ -63,6 +67,9 @@ export const StreamStatusService = {
         streamId: stream,
         status,
         previousStatus,
+        ...(options.terminalStatus
+          ? { terminalStatus: options.terminalStatus }
+          : {}),
       };
       options.runtimeHost.emit('updateStreamStatus', change);
       for (const listener of statusListeners) {

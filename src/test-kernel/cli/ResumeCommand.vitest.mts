@@ -92,12 +92,29 @@ describe('runResumeExecution', () => {
       runResumeExecution(cliContext({ stdoutIsTty: false }), EXECUTION_ID),
     ).resolves.toBe(2);
 
+    expect(mocks.initCliPlatform).not.toHaveBeenCalled();
+    expect(mocks.resolveCliResumeSnapshot).not.toHaveBeenCalled();
     expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       expect.stringContaining(`texra --resume ${EXECUTION_ID}`),
     );
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       expect.stringContaining('For scripting, use `texra run`.'),
+    );
+  });
+
+  it('rejects resume in dumb terminals before falling through to chat', async () => {
+    const { runResumeExecution } = await import('@cli/commands/resume');
+
+    await expect(
+      runResumeExecution(cliContext({ termIsDumb: true }), EXECUTION_ID),
+    ).resolves.toBe(2);
+
+    expect(mocks.initCliPlatform).not.toHaveBeenCalled();
+    expect(mocks.resolveCliResumeSnapshot).not.toHaveBeenCalled();
+    expect(mocks.runChat).not.toHaveBeenCalled();
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'texra resume needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with `TERM=xterm-256color`. For non-interactive runs, use `texra run`.',
     );
   });
 });
