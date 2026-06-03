@@ -5,6 +5,7 @@ import * as path from 'path';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { splitContentLines } from '@utils/text/stringUtils';
 import { toPosixPath } from '@utils/core/pathCore';
+import { filterNotNull } from '@utils/core';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 // Local file imports
@@ -170,7 +171,7 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
       ...globalSources,
       workspaceGlobalSource,
       workspaceSource,
-    ].filter((source): source is GitignoreSource => source !== null);
+    ].filter(filterNotNull);
 
     const rules = sources.flatMap((source) => source.rules);
     if (rules.length === 0) {

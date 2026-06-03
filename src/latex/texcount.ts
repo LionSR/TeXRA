@@ -7,6 +7,7 @@ import { flexibleFS, pathToLocation } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
 import { hasExtension } from '@utils/core/pathCore';
+import { filterNotNull } from '@utils/core';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
@@ -164,7 +165,7 @@ async function getIndividualCounts(
 
   const outputs = results
     .map((result) => result.output)
-    .filter((output): output is string => output !== null);
+    .filter(filterNotNull);
   const errors = results.flatMap((result) => result.errors);
 
   return { outputs, errors };

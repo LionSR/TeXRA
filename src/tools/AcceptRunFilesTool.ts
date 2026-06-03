@@ -50,6 +50,7 @@ import {
   resolveStoragePath,
 } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
+import { filterNotNull } from '@utils/core';
 
 // ============================================================================
 // Schema
@@ -410,6 +411,6 @@ Optional:
       }),
     );
 
-    return results.filter((f): f is string => f !== null);
+    return filterNotNull(results);
   }
 }

@@ -20,6 +20,7 @@ import {
   isPastedImage,
 } from '@utils/files/pastedImageUtils';
 import type { z } from 'zod';
+import { filterNotNull } from '@utils/core';
 
 /**
  * Message shape from the main view for agent execution.
@@ -84,7 +85,7 @@ export function prepareMainViewExecutionRequest(
       toolConfig: { ...toolConfigResult.data, attachDiagnostics: false },
       mediaFiles: (message.mediaFiles ?? [])
         .map(mapMediaFile)
-        .filter((file: string | null): file is string => file !== null),
+        .filter(filterNotNull),
       editedFile: null,
     },
   });

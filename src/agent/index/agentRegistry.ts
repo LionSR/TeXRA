@@ -21,6 +21,7 @@ import {
   getAgentDirectories,
   type AgentDirectories,
 } from './agentDirectoriesRegistry';
+import { filterNotNull } from '@utils/core';
 
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
@@ -393,7 +394,7 @@ async function scanDirectory(
       }),
     );
 
-    const result = entries.filter((e): e is AgentEntry => e !== null);
+    const result = filterNotNull(entries);
     logger.debug(CHANNEL, `Scanned ${result.length} agents from ${source}`);
     return result;
   } catch (err) {

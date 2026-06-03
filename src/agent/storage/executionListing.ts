@@ -28,6 +28,7 @@ import {
   EXECUTIONS_DIR,
   getExecutionStore,
 } from './ExecutionKVStore';
+import { filterNotNull } from '@utils/core';
 
 const CHANNEL = 'ExecutionListing';
 const INDEX_PATH = 'executions/index.json';
@@ -152,7 +153,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
   );
 
   const listing = results
-    .filter((e): e is ExecutionListingEntry => e !== null)
+    .filter(filterNotNull)
     .sort(
       (a, b) =>
         new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),

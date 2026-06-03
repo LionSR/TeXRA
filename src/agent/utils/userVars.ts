@@ -25,6 +25,7 @@ import {
 } from '@utils/files/externalRoots';
 import { setVarFromFile } from '@utils/files/varsUtils';
 import { StorageFS } from '@utils/files/storageFS';
+import { filterNotNull } from '@utils/core';
 
 /** Relative path from an agent directory to the shared LaTeX style rules file. */
 const SHARED_LATEX_RULES_REL = '../shared/latex_style_rules.txt';
@@ -459,7 +460,7 @@ async function getAttachedMemories(
     }),
   );
 
-  const parts = results.filter((p): p is string => p !== null);
+  const parts = filterNotNull(results);
   if (parts.length === 0) return null;
   return `<attached_memories>\n${parts.join('\n')}\n</attached_memories>`;
 }

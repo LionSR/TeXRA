@@ -24,6 +24,7 @@ import {
   type RemoteAgentListItem,
   type RemoteAgentConfig,
 } from './types';
+import { filterNotNull } from '@utils/core';
 
 const CHANNEL = 'RemoteAgentLoader';
 logger.initialize(CHANNEL);
@@ -177,7 +178,7 @@ export class RemoteAgentLoader {
 
       return (data ?? [])
         .map(parseListItemRow)
-        .filter((item): item is RemoteAgentListItem => item !== null);
+        .filter(filterNotNull);
     } catch (error) {
       logger.debug(
         CHANNEL,

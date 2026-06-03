@@ -22,6 +22,7 @@ import {
   type BbtCollection,
   type BbtLibrary,
 } from './bbtClient';
+import { filterNotNull } from '@utils/core';
 
 const ZoteroCollectionsInputSchema = z.strictObject({
   query: z
@@ -133,7 +134,7 @@ function filterTree(nodes: CollectionNode[], query: string): FilterResult {
     const nameMatches = node.name.toLowerCase().includes(lowerQuery);
     const filteredChildren = node.children
       .map((child) => visit(child))
-      .filter((c): c is CollectionNode => c !== null);
+      .filter(filterNotNull);
 
     if (nameMatches) matchCount++;
 
@@ -145,7 +146,7 @@ function filterTree(nodes: CollectionNode[], query: string): FilterResult {
 
   const tree = nodes
     .map((n) => visit(n))
-    .filter((n): n is CollectionNode => n !== null);
+    .filter(filterNotNull);
 
   return { tree, matchCount };
 }

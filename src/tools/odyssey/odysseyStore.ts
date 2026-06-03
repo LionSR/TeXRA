@@ -19,6 +19,7 @@ import {
   type OdysseyEventKind,
   type OdysseyStatus,
 } from './odysseyMeta';
+import { filterNotNull } from '@utils/core';
 
 const STREAM_KEY_PREFIX = 'odysseys:byStream:';
 const INDEX_KEY = 'odysseys:index';
@@ -149,7 +150,7 @@ export const OdysseyStore = {
   list(): Odyssey[] {
     return readIndex()
       .map((id) => readRaw(id))
-      .filter((o): o is Odyssey => o !== null);
+      .filter(filterNotNull);
   },
 
   /**
