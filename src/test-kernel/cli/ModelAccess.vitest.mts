@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   cliModelFallbackModeForSource,
+  formatCliNoAvailableModelsRecovery,
   getCliModelAccessList,
   runnableCliModelAccessEntries,
   resolveCliRunnableModel,
@@ -285,7 +286,32 @@ describe('CLI model access resolution', () => {
         { fallbackMode: 'notice' },
       ),
     ).toThrow(
-      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Retry with `--api-mode included` to try included relay access, run `texra login`, or configure a provider API key.',
+      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra login` for included relay access, retry with `--api-mode included`, or configure a provider API key.',
+    );
+  });
+
+  it('keeps personal-mode recovery scoped to provider keys or included mode', () => {
+    expect(formatCliNoAvailableModelsRecovery('personal')).toBe(
+      'Configure a provider API key for personal mode, or retry with `--api-mode included` and run `texra login` for included relay access.',
+    );
+    expect(() =>
+      resolveCliRunnableModelFromAccessList(
+        [
+          model('gemini31p', {
+            available: false,
+            status: 'missing api key',
+            model: modelOption('gemini31p', {
+              availability: 'missing-key',
+              disabled: true,
+              requiresKey: true,
+            }),
+          }),
+        ],
+        'gemini31p',
+        { fallbackMode: 'notice', apiMode: 'personal' },
+      ),
+    ).toThrow(
+      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Configure a provider API key for personal mode, or retry with `--api-mode included` and run `texra login` for included relay access.',
     );
   });
 
