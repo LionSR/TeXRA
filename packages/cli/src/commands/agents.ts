@@ -34,6 +34,7 @@ const AGENT_CATEGORY_FILTER_ALIASES = [
   [AgentCategory.Workflow, AgentCategory.Workflow],
   [AgentCategory.ToolUse, AgentCategory.ToolUse],
   ['tool-use', AgentCategory.ToolUse],
+  ['tool_use', AgentCategory.ToolUse],
 ] as const satisfies readonly (readonly [string, AgentCategory])[];
 
 const AGENT_CATEGORY_FILTER_VALUES = AGENT_CATEGORY_FILTER_ALIASES.map(
@@ -187,7 +188,7 @@ const agentsListCommand = defineCliCommand({
       type: 'enum',
       options: AGENT_CATEGORY_FILTER_VALUES,
       description:
-        'Only list one category: workflow or toolUse (also accepts tool-use)',
+        'Only list one category: workflow or toolUse (also accepts tool-use/tool_use)',
     },
   },
   run: (context, ctx) => {
