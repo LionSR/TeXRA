@@ -135,6 +135,8 @@ export interface RunChatInit {
   readonly modelOverride?: string;
   /** Visible team identity when chat was launched from a multi-agent preset. */
   readonly teamName?: string;
+  /** Multi-agent preset id when chat was launched from a team preset. */
+  readonly cliMultiAgentPresetId?: string;
   /**
    * Continue (resume) a stored tool-use session by its execution id instead of
    * starting fresh: the interactive `texra --resume <id>` path. Set by the
@@ -145,6 +147,31 @@ export interface RunChatInit {
 }
 
 const QUEUED_FOLLOW_UP_NOTICE_LENGTH = 96;
+
+export interface BuildInitialChatAgentConfigInput {
+  readonly agent: string;
+  readonly model: string;
+  readonly instruction: string;
+  readonly workingDirectory: string;
+  readonly cliMultiAgentPresetId?: string;
+}
+
+export function buildInitialChatAgentConfig({
+  agent,
+  model,
+  instruction,
+  workingDirectory,
+  cliMultiAgentPresetId,
+}: BuildInitialChatAgentConfigInput): AgentConfigPayload {
+  return {
+    agent,
+    model,
+    instruction,
+    agentCategory: AgentCategory.ToolUse,
+    workingDirectory,
+    ...(cliMultiAgentPresetId ? { cliMultiAgentPresetId } : {}),
+  };
+}
 
 function formatQueuedFollowUpNotice(line: string): string {
   return `Queued follow-up: ${truncateSummary(
@@ -1341,13 +1368,15 @@ export async function runChat(
     const meta = cliState.sessionMeta.get();
     const currentAgent = meta.agent || agent;
     const currentModel = meta.model || model;
-    startAgentRun({
-      agent: currentAgent,
-      model: currentModel,
-      instruction,
-      agentCategory: AgentCategory.ToolUse,
-      workingDirectory: context.cwd,
-    });
+    startAgentRun(
+      buildInitialChatAgentConfig({
+        agent: currentAgent,
+        model: currentModel,
+        instruction,
+        workingDirectory: context.cwd,
+        cliMultiAgentPresetId: init.cliMultiAgentPresetId,
+      }),
+    );
   };
 
   const handleSubmit = (line: string): void => {
