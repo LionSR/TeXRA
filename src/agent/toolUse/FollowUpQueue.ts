@@ -52,6 +52,18 @@ export class FollowUpQueue {
       .map((item) => item.text);
   }
 
+  /**
+   * Drain queued visible follow-ups together with their media file paths.
+   * Used by resume to replay queued user input without losing pasted images;
+   * the text-only {@link drain} stays for display/back-compat.
+   */
+  drainItems(): Array<{ text: string; mediaFiles?: readonly string[] }> {
+    return this.queued
+      .splice(0)
+      .filter((item) => !item.synthetic)
+      .map((item) => ({ text: item.text, mediaFiles: item.mediaFiles }));
+  }
+
   waitForNext(
     checkInterruption: () => boolean,
   ): Promise<FollowUpQueueItem | null> {
