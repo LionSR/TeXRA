@@ -96,6 +96,17 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   // by chip id and are expanded back into the submitted text at handleSubmit.
   // Ref-held so the store survives re-renders and never triggers one itself.
   const attachmentsRef = useRef(new DraftAttachmentStore());
+  const clearDraft = useCallback(() => {
+    setValue('');
+    attachmentsRef.current.clear();
+  }, [setValue]);
+  const replaceDraft = useCallback(
+    (next: string) => {
+      setValue(next);
+      attachmentsRef.current.clear();
+    },
+    [setValue],
+  );
   const transformPaste = useCallback((text: string): string => {
     if (!shouldCollapsePaste(text)) return text;
     return attachmentsRef.current.addPastedText(text);
@@ -142,14 +153,12 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       // collect any pasted-image attachments still referenced in the draft.
       const trimmed = store.expandText(submitted).trim();
       if (trimmed.length === 0) {
-        setValue('');
-        store.clear();
+        clearDraft();
         return;
       }
       const mediaFiles = store.resolveMedia(submitted);
       const historyText = store.expandTextForHistory(submitted).trim();
-      setValue('');
-      store.clear();
+      clearDraft();
       // Persisting history is best-effort — a disk failure (read-only fs,
       // ENOSPC) must not block the submit. Surface the failure through the
       // shared log sink so it isn't completely silent.
@@ -162,7 +171,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       });
       onSubmit(trimmed, mediaFiles.length > 0 ? mediaFiles : undefined);
     },
-    [onSubmit, setValue],
+    [clearDraft, onSubmit],
   );
 
   const acceptSlashCommand = useCallback(
@@ -176,7 +185,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         // Structured forms own the screen — clear the input and let
         // the active-form signal mount the component (see App.tsx).
         const Form = cmd.formComponent;
-        setValue('');
+        clearDraft();
         cliState.activeForm.set({
           commandName: cmd.name,
           render: (close, availableRows) => (
@@ -200,9 +209,11 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         });
         return;
       }
-      setValue(`/${cmd.name}${remainder ? ` ${remainder.trimStart()}` : ' '}`);
+      replaceDraft(
+        `/${cmd.name}${remainder ? ` ${remainder.trimStart()}` : ' '}`,
+      );
     },
-    [handleSubmit, imagePasteQueue, setValue],
+    [clearDraft, handleSubmit, imagePasteQueue, replaceDraft],
   );
 
   const handleInputChunkSubmit = useCallback(
@@ -269,7 +280,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           }}
           onCancel={() => {
             /* Esc clears the slash — caller can re-open by typing again. */
-            setValue('');
+            clearDraft();
           }}
         />
       ) : null}
@@ -277,7 +288,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         <ReverseSearch
           history={historyRef.current}
           onCommit={(line) => {
-            setValue(line);
+            replaceDraft(line);
             setReverseSearchOpen(false);
           }}
           onCancel={() => setReverseSearchOpen(false)}
