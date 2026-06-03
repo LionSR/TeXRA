@@ -46,9 +46,12 @@ async function resumeFromSnapshot(
     runtimeHost,
   });
 
-  let queuedFollowUps: string[] = [];
+  let queuedFollowUps: Array<{
+    text: string;
+    mediaFiles?: readonly string[];
+  }> = [];
   try {
-    queuedFollowUps = ToolUseFollowUpQueue.drain(streamId);
+    queuedFollowUps = ToolUseFollowUpQueue.drainItems(streamId);
     runtimeHost.emit('updateQueuedFollowUps', {
       streamId,
     });
@@ -56,11 +59,11 @@ async function resumeFromSnapshot(
     await resumeToolUseFromSnapshot(snapshot, runtimeHost, (session) => {
       const allFollowUps =
         followUp !== undefined
-          ? [followUp, ...queuedFollowUps]
+          ? [{ text: followUp }, ...queuedFollowUps]
           : queuedFollowUps;
 
-      for (const text of allFollowUps) {
-        session.appendFollowUp(text);
+      for (const item of allFollowUps) {
+        session.appendFollowUp(item.text, item.mediaFiles);
       }
     });
 
@@ -69,7 +72,7 @@ async function resumeFromSnapshot(
     const lostFollowUps =
       queuedFollowUps.length > 0
         ? queuedFollowUps
-        : ToolUseFollowUpQueue.drain(streamId);
+        : ToolUseFollowUpQueue.drainItems(streamId);
     const lostCount = lostFollowUps.length;
 
     const baseMessage = logErrorMessage(
