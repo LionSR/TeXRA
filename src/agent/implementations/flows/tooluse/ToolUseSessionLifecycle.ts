@@ -3,7 +3,7 @@ import type { FollowUpQueueBatch } from '@agent/toolUse/FollowUpQueue';
 import type { StreamTabId } from '@shared/schemas';
 
 export interface IToolUseSession {
-  appendFollowUp(text: string): void;
+  appendFollowUp(text: string, mediaFiles?: readonly string[]): void;
   appendSyntheticFollowUp(text: string): void;
   hasQueuedFollowUp(): boolean;
   /** Wait for the next follow-up items. Returns null if interrupted. */
@@ -18,8 +18,8 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
 
   constructor(private readonly streamTabId: StreamTabId) {}
 
-  appendFollowUp(text: string): void {
-    this.followUps.enqueue(text);
+  appendFollowUp(text: string, mediaFiles?: readonly string[]): void {
+    this.followUps.enqueue(text, mediaFiles);
   }
 
   appendSyntheticFollowUp(text: string): void {

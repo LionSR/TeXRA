@@ -91,7 +91,7 @@ export class ToolUseFollowUpQueue {
   static enqueue(
     streamId: StreamTabId,
     followUp: string,
-    options?: { force?: boolean },
+    options?: { force?: boolean; mediaFiles?: readonly string[] },
   ): boolean {
     if (this.released.has(streamId) && !options?.force) {
       logger.debug(
@@ -100,7 +100,7 @@ export class ToolUseFollowUpQueue {
       return false;
     }
     const queue = this.acquire(streamId);
-    queue.enqueue(followUp);
+    queue.enqueue(followUp, options?.mediaFiles);
     logger.debug(`Queued follow-up for stream ${streamId}.`);
     return true;
   }

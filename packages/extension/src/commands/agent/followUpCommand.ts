@@ -106,12 +106,16 @@ export function registerFollowUpCommand(context: vscode.ExtensionContext) {
   registerCommands(context, [
     {
       id: 'texra.sendFollowUp',
-      handler: async (payload: { stream: StreamTabId; text: string }) => {
-        const { stream: streamId, text } = payload;
+      handler: async (payload: {
+        stream: StreamTabId;
+        text: string;
+        mediaFiles?: string[];
+      }) => {
+        const { stream: streamId, text, mediaFiles } = payload;
 
         await lazyDetectWaitingStatus(streamId);
 
-        const result = await sendFollowUp(streamId, text);
+        const result = await sendFollowUp(streamId, text, mediaFiles);
         await handleFollowUpResult(result, streamId);
       },
     },

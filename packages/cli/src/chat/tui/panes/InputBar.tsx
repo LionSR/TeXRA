@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
 import { writeTextStderr } from '@cli/runtime/logSinks';
+import { attachClipboardImage } from '@cli/runtime/clipboardImage';
 import { BaseTextInput } from '../input/BaseTextInput';
+import {
+  DraftAttachmentStore,
+  shouldCollapsePaste,
+} from '../input/draftAttachments';
 import { ReverseSearch } from '../input/ReverseSearch';
 import { isCtrlInput } from '../input/inputKeys';
 import { SlashPalette } from '../commands/SlashPalette';
@@ -17,8 +22,9 @@ import { cliState } from '../state/cliState';
 import type { InputHistory } from '../history/inputHistory';
 
 export interface InputBarProps {
-  /** Forwarded to BaseTextInput; called only on real (non-paste) Enter. */
-  readonly onSubmit: (value: string) => void;
+  /** Forwarded to BaseTextInput; called only on real (non-paste) Enter.
+   *  `mediaFiles` carries absolute paths of any pasted-image attachments. */
+  readonly onSubmit: (value: string, mediaFiles?: readonly string[]) => void;
   /** Disable the input while an approval modal is owning the screen. */
   readonly disabled?: boolean;
   /** Preserve component state while giving foreground panels the input rows. */
@@ -33,8 +39,37 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   const { disabled, history, onSubmit, prompt } = props;
   const [value, setValue] = useState('');
   const [reverseSearchOpen, setReverseSearchOpen] = useState(false);
+  const [attachNotice, setAttachNotice] = useState<string | null>(null);
   const historyRef = useRef(history);
   historyRef.current = history;
+
+  // Collapsed pastes (and, in the image slice, pasted images) live here keyed
+  // by chip id and are expanded back into the submitted text at handleSubmit.
+  // Ref-held so the store survives re-renders and never triggers one itself.
+  const attachmentsRef = useRef(new DraftAttachmentStore());
+  const transformPaste = useCallback((text: string): string => {
+    if (!shouldCollapsePaste(text)) return text;
+    return attachmentsRef.current.addPastedText(text);
+  }, []);
+  const onImagePaste = useCallback(async (): Promise<string | null> => {
+    const result = await attachClipboardImage();
+    if (!result.ok) {
+      setAttachNotice(result.reason);
+      return null;
+    }
+    return attachmentsRef.current.addPastedImage({
+      path: result.path,
+      mediaType: result.mediaType,
+      displayName: result.displayName,
+    });
+  }, []);
+
+  // Clear the transient paste notice a few seconds after it appears.
+  useEffect(() => {
+    if (attachNotice === null) return;
+    const timer = setTimeout(() => setAttachNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [attachNotice]);
 
   // Listen for Ctrl-R *outside* the text input — Ink emits the keystroke
   // to every `useInput` consumer, and BaseTextInput drops unhandled ctrl
@@ -48,9 +83,14 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
 
   const handleSubmit = useCallback(
     (submitted: string) => {
-      const trimmed = submitted.trim();
+      const store = attachmentsRef.current;
+      // Expand `[Pasted text #N …]` chips back to their full content, and
+      // collect any pasted-image attachments still referenced in the draft.
+      const trimmed = store.expandText(submitted).trim();
       if (trimmed.length === 0) return;
+      const mediaFiles = store.resolveMedia(submitted);
       setValue('');
+      store.clear();
       // Persisting history is best-effort — a disk failure (read-only fs,
       // ENOSPC) must not block the submit. Surface the failure through the
       // shared log sink so it isn't completely silent.
@@ -60,7 +100,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           `texra: failed to persist input history: ${String(err)}`,
         );
       });
-      onSubmit(trimmed);
+      onSubmit(trimmed, mediaFiles.length > 0 ? mediaFiles : undefined);
     },
     [onSubmit],
   );
@@ -172,12 +212,15 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           onCancel={() => setReverseSearchOpen(false)}
         />
       ) : null}
+      {attachNotice ? <Text dimColor>{attachNotice}</Text> : null}
       <Box borderStyle="round" borderColor="gray" paddingX={1}>
         <Text color="cyan">{prompt ?? '›'} </Text>
         <BaseTextInput
           value={value}
           focus={!disabled && !reverseSearchOpen}
           onChange={setValue}
+          transformPaste={transformPaste}
+          onImagePaste={onImagePaste}
           onInputChunkSubmit={handleInputChunkSubmit}
           onSubmit={showPalette ? () => undefined : handleSubmit}
         />
