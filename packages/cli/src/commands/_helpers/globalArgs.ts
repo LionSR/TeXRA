@@ -142,8 +142,10 @@ export function rejectHeadlessOnlyFlags(
   const headlessOnly = rawArgs.some(
     (arg) =>
       arg === '--print' ||
+      arg.startsWith('--print=') ||
       arg === '-p' ||
       arg === '--no-input' ||
+      arg.startsWith('--no-input=') ||
       arg === '--output-format' ||
       arg.startsWith('--output-format='),
   );
