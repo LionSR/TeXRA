@@ -6,6 +6,7 @@
 import type { StringValueDetail } from '@shared/schemas';
 import type { UserQuestionAnswers } from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
+import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
 
 import type { PermissionState } from './components/PermissionCard';
 import type { StreamFilter } from './store';
@@ -28,6 +29,11 @@ export interface ToolbarCommandDetail {
 
 /** Alias for semantic clarity - uses shared StringValueDetail */
 export type FollowUpChangeDetail = StringValueDetail;
+
+/** Images pasted into the follow-up box, carried with the send event. */
+export interface FollowUpSendDetail {
+  readonly images: readonly ExtractedClipboardImage[];
+}
 
 export interface WorkflowFollowupFormData {
   agent: string;
@@ -87,7 +93,8 @@ export const ProgressEvents = {
   followupChange: (detail: FollowUpChangeDetail) =>
     createEvent('followup-change', detail),
 
-  followupSend: () => createEvent('followup-send', undefined),
+  followupSend: (detail: FollowUpSendDetail) =>
+    createEvent('followup-send', detail),
 
   followupPolish: () => createEvent('followup-polish', undefined),
 

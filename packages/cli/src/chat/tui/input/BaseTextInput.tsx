@@ -44,6 +44,13 @@ export interface BaseTextInputProps {
   readonly onSubmit: (value: string) => void;
   readonly onInputChunkSubmit?: (value: string) => void;
   readonly onChange: (value: string) => void;
+  /** Optionally transform pasted text before it is inserted — e.g. collapse a
+   *  large paste into a `[Pasted text #N +M lines]` chip and stash the content
+   *  elsewhere. Defaults to inserting the paste verbatim. */
+  readonly transformPaste?: (text: string) => string;
+  /** Ctrl-V handler: probe the OS clipboard for an image. Resolves to the chip
+   *  text to insert (e.g. `[Image #1]`) or null when there is no image. */
+  readonly onImagePaste?: () => Promise<string | null>;
   /** Render the value as bullets (secret entry, e.g. an API key). Display-only:
    *  the captured value, edits, and paste are unaffected. */
   readonly masked?: boolean;
@@ -387,6 +394,17 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         applyEdit(deletePreviousWord(value, cursor));
         return;
       }
+      if (isCtrlInput(input, key, 'v') && props.onImagePaste) {
+        // Async clipboard probe; insert the resulting chip at the caret. Uses
+        // the caret captured at keypress — a deliberate ctrl-v isn't raced by
+        // typing in the few ms the probe takes.
+        const atValue = value;
+        const atCursor = cursor;
+        void props.onImagePaste().then((chip) => {
+          if (chip) applyEdit(insertText(atValue, atCursor, chip));
+        });
+        return;
+      }
       // Drop unhandled control/meta combos; pass printable input through.
       if (
         key.meta ||
@@ -410,9 +428,12 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
 
   // Bracketed paste arrives as ONE string and is not forwarded to useInput,
   // so newlines in the paste are preserved literally instead of firing Enter.
+  // `transformPaste` (when supplied) may collapse a large paste into a chip;
+  // otherwise the paste is inserted verbatim.
   usePaste(
     (text) => {
-      applyEdit(insertText(value, cursor, text));
+      const toInsert = props.transformPaste?.(text) ?? text;
+      applyEdit(insertText(value, cursor, toInsert));
     },
     { isActive: focus },
   );
