@@ -1,6 +1,10 @@
 import { getDefaultStreamLogStore } from '@transcript';
 import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 
+import {
+  completedChildExecutionStatus,
+  isChildExecutionErrorStatus,
+} from './childExecutionStatus';
 import type {
   CompletedProcessTranscript,
   ConversationEntry,
@@ -14,25 +18,8 @@ function processTitle(info: ActiveChildInfo): string {
   return info.agentName || info.toolName || info.executionId;
 }
 
-const ERROR_STATUSES = new Set(['error', 'failed', 'stopped']);
-const IN_FLIGHT_STATUSES = new Set([
-  'initializing',
-  'resuming',
-  'running',
-  'waiting',
-]);
-
 export function isCompletedProcessError(status: string | undefined): boolean {
-  const normalized = status?.trim().toLowerCase();
-  if (!normalized) return false;
-  if (ERROR_STATUSES.has(normalized)) return true;
-  return /exit(?:ed)?(?:\s+with)?(?:\s+code)?\s+[1-9]\d*/.test(normalized);
-}
-
-function completedProcessStatus(status: string | undefined): string {
-  const normalized = status?.trim().toLowerCase();
-  if (!normalized || IN_FLIGHT_STATUSES.has(normalized)) return 'completed';
-  return status ?? 'completed';
+  return isChildExecutionErrorStatus(status);
 }
 
 export function completedProcessTailLines(
@@ -50,7 +37,7 @@ export function buildCompletedProcessTranscript(
   info: ActiveChildInfo,
   tail: ProcessOutputTail | undefined,
 ): CompletedProcessTranscript {
-  const status = completedProcessStatus(info.status);
+  const status = completedChildExecutionStatus(info.status);
   return {
     executionId: info.executionId,
     title: processTitle(info),
