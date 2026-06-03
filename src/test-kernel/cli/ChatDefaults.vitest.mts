@@ -228,15 +228,15 @@ describe('CLI chat defaults', () => {
     });
   });
 
-  it('still honors a TEXRA_AGENT simplifier override', async () => {
+  it('does not honor TEXRA_AGENT=simplifier as a default agent', async () => {
     await expect(
       resolveChatDefaults({
         cwd: '/tmp/no-such-texra-workspace',
         envAgent: 'simplifier',
       }),
     ).resolves.toMatchObject({
-      agent: 'simplifier',
-      agentSource: 'env',
+      agent: 'chat',
+      agentSource: 'builtin',
     });
   });
 
