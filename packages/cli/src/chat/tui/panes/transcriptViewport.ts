@@ -84,7 +84,6 @@ export function selectPendingEntriesForViewport(
   let usedRows = 0;
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
-    if (!entry) continue;
     const entryRows = estimatePendingEntryRows(entry, width);
     if (usedRows + entryRows > maxRows) {
       if (
