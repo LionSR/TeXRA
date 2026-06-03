@@ -23,6 +23,11 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
   'image/avif': 'avif',
   'image/pjpeg': 'jpg',
   'image/x-png': 'png',
+  'image/x-jng': 'jng',
+  'image/x-mng': 'mng',
+  'image/vnd.adobe.photoshop': 'psd',
+  'image/x-photoshop': 'psd',
+  'image/x-psd': 'psd',
 };
 
 export function getExtensionFromMimeType(mimeType: string): string {
