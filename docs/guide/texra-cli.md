@@ -12,7 +12,7 @@ terminal. It is published to npm as [`@texra-ai/cli`](https://www.npmjs.com/pack
 
 ## Install From npm
 
-Install the CLI globally (requires Node.js ^22.22.2, ^24.15.0, or >=26.0.0):
+Install the CLI globally (requires Node.js >=22.9.0):
 
 ```bash
 npm install -g @texra-ai/cli
