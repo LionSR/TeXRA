@@ -7,6 +7,7 @@ import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import {
+  formatCliNoAvailableModelsRecovery,
   getCliModelAccessList,
   runnableCliModelAccessEntries,
 } from '../runtime/modelAccess';
@@ -49,19 +50,15 @@ export function formatNoListableModelsMessage(
   apiMode: CliContext['apiMode'],
   options: { readonly includeUnavailable?: boolean } = {},
 ): string {
-  const accessHint =
-    apiMode === 'personal'
-      ? 'Retry with `--api-mode included` to try included relay access, run `texra login`, or configure a provider API key.'
-      : apiMode === 'included'
-        ? 'Run `texra login`, or retry with `--api-mode personal` after configuring a provider API key.'
-        : 'Run `texra login` for included relay access, retry with `--api-mode included`, or configure a provider API key.';
   const statusHint =
     options.includeUnavailable === true
       ? 'No model records were returned for this installation.'
       : 'Run `texra models list --all` to see unavailable models and access status.';
-  return ['No models are currently available.', statusHint, accessHint].join(
-    '\n',
-  );
+  return [
+    'No models are currently available.',
+    statusHint,
+    formatCliNoAvailableModelsRecovery(apiMode),
+  ].join('\n');
 }
 
 async function loadModelAccessList(context: CliContext): Promise<

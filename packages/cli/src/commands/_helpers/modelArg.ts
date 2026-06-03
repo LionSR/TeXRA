@@ -83,10 +83,6 @@ export async function resolveCliRunModel(
       candidate.model,
       cliRunnableModelOptionsForSource(candidate.source, {
         apiMode,
-        noAvailableModelsMessage:
-          apiMode === 'included'
-            ? 'Run `texra login` for included relay access, or retry with `--api-mode personal` after configuring a provider API key.'
-            : undefined,
       }),
     );
     if (resolution.notice && context.quietLogs !== true) {
