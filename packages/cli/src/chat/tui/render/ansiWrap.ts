@@ -8,11 +8,6 @@ import {
 
 const MIN_WRAP_WIDTH = 1;
 
-function normalizedWidth(width: number | undefined): number | undefined {
-  if (width == null || !Number.isFinite(width)) return undefined;
-  return Math.max(MIN_WRAP_WIDTH, Math.floor(width));
-}
-
 function splitRawAtVisiblePrefix(
   line: string,
   visiblePrefixLength: number,
@@ -103,7 +98,10 @@ export function wrapAnsiToWidth(
   width?: number,
   preserveMarkdownPrefix = false,
 ): string {
-  const columns = normalizedWidth(width);
+  const columns =
+    width == null || !Number.isFinite(width)
+      ? undefined
+      : Math.max(MIN_WRAP_WIDTH, Math.floor(width));
   if (columns == null) return text;
 
   return text
