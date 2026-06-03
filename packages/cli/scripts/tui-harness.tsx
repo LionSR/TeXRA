@@ -11,6 +11,7 @@ import React from 'react';
 
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { SupabaseClient } from '@auth/SupabaseClient';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { tryPlatform } from '@platform/platform';
 import {
@@ -85,6 +86,7 @@ const HARNESS_API_MODE_FROM_ENV = parseCliApiMode(
   process.env.HARNESS_API_MODE ?? '',
 );
 const HARNESS_API_MODE: CliApiMode = HARNESS_API_MODE_FROM_ENV ?? 'personal';
+const HARNESS_AUTHENTICATED = process.env.HARNESS_AUTHENTICATED?.trim();
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
 const EXTERNAL_INQUIRY_QUESTION =
@@ -253,6 +255,18 @@ await initLocalCliPlatform({
   storageRoot: path.join(HARNESS_CWD, '.texra-storage'),
   helperModel: 'harness-model',
 });
+
+if (HARNESS_AUTHENTICATED === '1' || HARNESS_AUTHENTICATED === '0') {
+  const accessToken = HARNESS_AUTHENTICATED === '1' ? 'harness-token' : null;
+  SupabaseClient.setAuthProvider({
+    whenReady: async () => {},
+    ensureFreshToken: async () => accessToken,
+    getSessionTokens: async () =>
+      accessToken
+        ? { accessToken, refreshToken: 'harness-refresh-token' }
+        : null,
+  });
+}
 
 function makeEntries(count: number): ConversationEntry[] {
   const entries: ConversationEntry[] = [];
