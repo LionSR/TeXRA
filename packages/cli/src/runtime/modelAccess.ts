@@ -20,12 +20,33 @@ export interface CliRunnableModelResolution {
   readonly notice?: string;
 }
 
+export type CliModelFallbackMode = 'reject' | 'notice' | 'silent';
+
 export interface CliRunnableModelOptions {
-  readonly allowFallback: boolean;
+  readonly fallbackMode: CliModelFallbackMode;
   readonly apiMode?: CliApiMode;
   readonly noAvailableModelsHint?: string;
   readonly noAvailableModelsMessage?: string;
 }
+
+export type CliModelSelectionSource =
+  | 'override'
+  | 'env'
+  | 'config'
+  | 'workspace'
+  | 'user'
+  | 'history'
+  | 'builtin';
+
+const CLI_MODEL_FALLBACK_MODE_BY_SOURCE = {
+  override: 'reject',
+  env: 'reject',
+  config: 'notice',
+  workspace: 'notice',
+  user: 'notice',
+  history: 'notice',
+  builtin: 'silent',
+} satisfies Record<CliModelSelectionSource, CliModelFallbackMode>;
 
 export interface CliModelAccessListOptions {
   readonly apiMode?: CliApiMode;
@@ -82,6 +103,22 @@ function formatModelAccessStatus(model: ModelOptionData): string {
     return `missing ${provider}key`;
   }
   return 'unavailable';
+}
+
+export function cliModelFallbackModeForSource(
+  source: CliModelSelectionSource,
+): CliModelFallbackMode {
+  return CLI_MODEL_FALLBACK_MODE_BY_SOURCE[source];
+}
+
+export function cliRunnableModelOptionsForSource(
+  source: CliModelSelectionSource,
+  options: Omit<CliRunnableModelOptions, 'fallbackMode'> = {},
+): CliRunnableModelOptions {
+  return {
+    ...options,
+    fallbackMode: cliModelFallbackModeForSource(source),
+  };
 }
 
 function toCliModelAccess(
@@ -214,11 +251,12 @@ export function resolveCliRunnableModelFromAccessList(
     availableIds,
     options,
   );
-  if (!options.allowFallback || availableIds.length === 0) {
+  if (options.fallbackMode === 'reject' || availableIds.length === 0) {
     throw new Error(unavailableMessage);
   }
 
   const fallback = availableIds[0]!;
+  if (options.fallbackMode === 'silent') return { model: fallback };
   return {
     model: fallback,
     notice: `${unavailableMessage} Using "${fallback}" instead.`,
