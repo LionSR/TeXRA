@@ -2,19 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.38.5] - 2026-06-04
+
+### Features
+
+- **Independent subagent history in CLI chat** — each subagent in a team run now keeps its own scoped transcript that persists across sessions, so you can focus into a child or subagent stream, jump between them, and review their separate histories. Resuming a subagent continues it where it left off instead of starting over, and interactive team chats are tagged so you always know which run you're in.
+- **First-run auth onboarding** — starting a session without credentials now walks you through signing in instead of failing, and new `/login` and `/logout` chat commands (with options like `--no-browser`, `--select-account`, and `--login-hint`) let you manage access without leaving chat.
+- **Paste images and large text into chat** — paste a screenshot or other image straight into the chat input and it attaches as a thumbnail chip; large text pastes collapse into a compact chip so the input stays readable. Attachments clear with the draft when you reset.
+- **Pipe input into a run** — `texra run` now reads `--input -` from stdin, so you can pipe a file or another command's output straight into a run and compose it with other tools.
+- **Filter agents by category** — `texra agents` can now filter the agent list by category, so you can quickly narrow to the kind of agent you want.
 
 ### Bug Fixes
 
 - **In-session updates take effect immediately** — accepting the "a new version is available" prompt now restarts `texra` on the freshly installed version, so the session you land in (and its header/`/status`) runs the update instead of silently continuing on the old build until you quit and relaunch by hand.
-- **Chat API mode is reported consistently** — the model is now resolved against the same API mode shown in the header and `/status` (an explicit `--api-mode`/env override, otherwise your account default), so a session can no longer pick a model as if in one mode while the UI reports another.
-- **Unknown CLI flags are rejected** — mistyped command options now fail before the command runs, and structured CLI output stays clean for scripts.
-- **File-backed multi-agent CLI prompts** — `texra multi-agent run` now accepts `--instruction-file` for long scripted team prompts, matching `texra agents run`.
+- **Chat API mode is reported consistently** — the model is now resolved against the same API mode shown in the header and `/status` (an explicit `--api-mode`/env override, otherwise your account default), so a session can no longer pick a model as if in one mode while the UI reports another. The `--api-mode` flag also rejects invalid values, and the model picker only offers models valid for the active mode.
+- **Unknown CLI flags are rejected** — mistyped command options and missing values for file flags now fail before the command runs, so typos surface immediately and structured CLI output stays clean for scripts.
+- **File-backed multi-agent prompts** — `texra multi-agent run` now accepts `--instruction-file` for long scripted team prompts, matching `texra agents run`.
 - **Full CLI command paths in help** — nested command help now shows the complete `texra ...` command in usage banners, so commands like `texra multi-agent run --help` and `texra history show --help` are directly copyable.
+- **Your approval policy survives `--no-input`** — passing an explicit `--approval` choice together with `--no-input` now keeps the policy you set instead of silently forcing a default, so non-interactive and scripted runs honor exactly what you asked for. The default approval policy is applied consistently across `texra init` and chat, and negated login flags are honored too.
+- **Resume and history pickers only list resumable runs** — already-completed runs no longer clutter the resume/history pickers, so the list shows just the runs you can actually continue, with conversation previews to help you find the right one.
+- **CLI chat redraws cleanly on resize** — the terminal now fully repaints on a width change, so resizing no longer leaves stray residue from reflowed lines, and long input wraps at word boundaries.
+- **Color honors your environment everywhere** — `--no-color` and `NO_COLOR` are now respected in help text and Markdown rendering as well, and run progress for `--output-format json` is written to stderr so the machine-readable stdout stays clean.
+- **Agent and model lookup is more forgiving** — hidden agents now show in `texra agents list` and the chat picker, `texra agents show` prefers listed agents, the `tool_use` category alias is accepted, and empty model lists explain why instead of showing nothing.
+- **Failed runs are clearly marked** — failed background agents and failed child rows now show as errors rather than looking stuck or successful, and a focused stopped stream shows its real status.
+- **Clearer guidance when something is blocked** — `texra` now warns when multi-agent delegation can't run and when a team preset's availability is degraded, validates skill source paths with readable errors, and gates the included-access launcher behind sign-in.
 
 ### Improvements
 
-- **User turns stand out in chat** — your messages now render with a reverse-video highlight (so it adapts to your terminal's light/dark theme and reflows on resize) in the terminal transcript, making them easy to pick out from the assistant's output when scrolling back.
+- **Better defaults and guidance when starting a run** — multi-agent launches show a task example to guide what to type, the simplifier agent is no longer offered as a default team root, buffered menu hotkeys are handled correctly on startup, and setup/auth errors point you to `texra auth status`.
+- **User turns stand out in chat** — your messages now render as a full-width reverse-video band that adapts to your terminal's light/dark theme and reflows on resize, making them easy to pick out from the assistant's output when scrolling back.
+- **Clearer `texra doctor` diagnostics** — Node.js version reporting and the supported-version check are aligned and consistent across messages.
+- **Quieter, more predictable model selection** — the CLI no longer prints noise when it implicitly falls back to a default model, and personal-account model recovery hints are clearer when a configured model isn't available.
 
 ## [0.38.4] - 2026-06-01
 
