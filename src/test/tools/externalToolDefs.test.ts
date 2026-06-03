@@ -31,14 +31,8 @@ describe('external tool definitions', () => {
     assert.strictEqual(texraCli.toggleable, undefined);
     assert.deepStrictEqual(texraCli.tools, []);
     assert.ok(
-      texraCli.installGuide?.includes(
-        'requires Node.js ^22.22.2, ^24.15.0, or >=26.0.0',
-      ),
+      texraCli.installGuide?.includes('requires Node.js >=22.9.0'),
       'TeXRA CLI install guide should match the published Node engine range',
-    );
-    assert.ok(
-      !texraCli.installGuide?.includes('Node.js >= 22'),
-      'TeXRA CLI install guide should not advertise a stale Node 22+ range',
     );
   });
 
