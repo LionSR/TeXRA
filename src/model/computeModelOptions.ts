@@ -218,6 +218,10 @@ async function buildModelOptionData(
   };
 }
 
+const MODEL_OPTIONS_CACHE_TTL_MS = 5_000;
+const VISIBLE_MODELS_CACHE_KEY = 'visible';
+const EXPLICIT_MODELS_CACHE_PREFIX = 'models:';
+
 /**
  * TTL-based cache for computeModelOptionsData.
  * Avoids redundant async work (SecretManager + server-side key checks)
@@ -226,45 +230,60 @@ async function buildModelOptionData(
  * State is split into resolved data vs in-flight promise to avoid
  * sentinel values (like `data: []`) that could leak to callers.
  */
-const MODEL_OPTIONS_CACHE_TTL_MS = 5_000;
-let _resolved: { data: ModelOptionData[]; expiry: number } | null = null;
-let _pending: Promise<ModelOptionData[]> | null = null;
+const resolvedModelOptions = new Map<
+  string,
+  { data: ModelOptionData[]; expiry: number }
+>();
+const pendingModelOptions = new Map<string, Promise<ModelOptionData[]>>();
 
 /** Invalidate the shared model options cache (e.g. after key or model-list changes). */
 export function invalidateModelOptionsCache(): void {
-  _resolved = null;
-  _pending = null;
+  resolvedModelOptions.clear();
+  pendingModelOptions.clear();
 }
 
 /**
  * Compute typed model options data for Lit-native rendering.
  *
- * When `models` is provided, the caller's view of the visible-models
- * list is honored verbatim (skipping the cache). This avoids a desync
- * when the caller is wired against an alternate `globalState` while
- * the default `getVisibleModels()` reads from `platform().globalState`.
+ * When `models` is provided, the caller's view of the visible-models list is
+ * honored verbatim. Explicit lists are cached by their exact ordered contents,
+ * so alternate global-state views stay isolated while repeated settings/CLI
+ * refreshes do not redo secret and server-side key checks.
  */
 export async function computeModelOptionsData(
   models?: readonly string[],
 ): Promise<ModelOptionData[]> {
-  if (models != null) return computeModelOptionsDataUncached(models);
+  const cacheKey = getModelOptionsCacheKey(models);
+  const cached = resolvedModelOptions.get(cacheKey);
+  if (cached && Date.now() < cached.expiry) return cached.data;
 
-  if (_resolved && Date.now() < _resolved.expiry) return _resolved.data;
-  if (_pending) return _pending;
+  const pending = pendingModelOptions.get(cacheKey);
+  if (pending) return pending;
 
-  const request = computeModelOptionsDataUncached();
-  _pending = request;
+  const request = computeModelOptionsDataUncached(models);
+  pendingModelOptions.set(cacheKey, request);
 
   try {
     const data = await request;
     // Only populate cache if no invalidation occurred while we were awaiting.
-    if (_pending === request) {
-      _resolved = { data, expiry: Date.now() + MODEL_OPTIONS_CACHE_TTL_MS };
+    if (pendingModelOptions.get(cacheKey) === request) {
+      resolvedModelOptions.set(cacheKey, {
+        data,
+        expiry: Date.now() + MODEL_OPTIONS_CACHE_TTL_MS,
+      });
     }
     return data;
   } finally {
-    if (_pending === request) _pending = null;
+    if (pendingModelOptions.get(cacheKey) === request) {
+      pendingModelOptions.delete(cacheKey);
+    }
   }
+}
+
+function getModelOptionsCacheKey(models?: readonly string[]): string {
+  return models == null
+    ? VISIBLE_MODELS_CACHE_KEY
+    : `${EXPLICIT_MODELS_CACHE_PREFIX}${JSON.stringify(models)}`;
 }
 
 async function computeModelOptionsDataUncached(
