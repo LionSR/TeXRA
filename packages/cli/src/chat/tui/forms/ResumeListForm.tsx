@@ -1,5 +1,5 @@
-// `/resume` form. It lists recent execution configurations that can be
-// restarted in the current chat TUI.
+// `/resume` form. It lists recent executions that can be continued from the
+// current chat TUI.
 
 import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
@@ -91,7 +91,7 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
       <Text bold color="cyan">
         /resume
       </Text>
-      <Text dimColor>Choose a stored execution configuration.</Text>
+      <Text dimColor>Choose a previous session to continue.</Text>
       <Box marginTop={1}>
         <Select
           items={items}
