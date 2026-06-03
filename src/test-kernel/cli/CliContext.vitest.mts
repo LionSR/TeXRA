@@ -377,15 +377,37 @@ describe('CLI color/no-input flag wiring', () => {
     expect(context.colorEnabled).toBe(false);
   });
 
-  it('--no-input forces headless mode and a never approval policy', async () => {
+  it('--no-input forces headless mode and defaults approval policy to never', async () => {
     const context = await buildCliContext({
       // stdin is a TTY, so without --no-input this would be interactive.
+      ambient: ttyAmbient(),
+      env: {},
+      globalArgs: { cwd: tmpdir(), noInput: true },
+    });
+    expect(context.mode).toBe('headless');
+    expect(context.approvalPolicy).toBe('never');
+  });
+
+  it('--no-input preserves explicit approval policy', async () => {
+    const context = await buildCliContext({
       ambient: ttyAmbient(),
       env: {},
       globalArgs: { cwd: tmpdir(), noInput: true, approvalPolicy: 'yolo' },
     });
     expect(context.mode).toBe('headless');
-    // --no-input pins approval to `never`, overriding the explicit flag.
+    expect(context.approvalPolicy).toBe('yolo');
+  });
+
+  it('--no-input ignores env and config approval defaults', async () => {
+    const workspace = await workspaceWithConfig(
+      JSON.stringify({ approvalPolicy: 'yolo' }),
+    );
+    const context = await buildCliContext({
+      ambient: ttyAmbient(),
+      env: { TEXRA_APPROVAL_POLICY: 'yolo' },
+      globalArgs: { cwd: workspace, noInput: true },
+    });
+    expect(context.mode).toBe('headless');
     expect(context.approvalPolicy).toBe('never');
   });
 
