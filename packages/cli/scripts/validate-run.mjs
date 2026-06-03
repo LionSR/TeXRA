@@ -60,6 +60,18 @@ const validationEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER';
 const validationFlagEnv = 'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG';
 const validationFlagContent = 'texra-cli-run-validation\n';
 const ESC = String.fromCharCode(27);
+const validationProviderApiKeyEnv = [
+  'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'OPENROUTER_API_KEY',
+  'GOOGLE_API_KEY',
+  'XAI_API_KEY',
+  'DEEPSEEK_API_KEY',
+  'MOONSHOT_API_KEY',
+  'DASHSCOPE_API_KEY',
+  'MINIMAX_API_KEY',
+  'GLM_API_KEY',
+];
 
 function run(command, args, options = {}) {
   const env = {
@@ -228,82 +240,147 @@ function ensureNodePtySpawnHelperExecutable() {
   }
 }
 
-async function validateOrchestratePreservesScrollback() {
-  ensureNodePtySpawnHelperExecutable();
-  const ptyMod = await import('node-pty');
-  const ptySpawn = ptyMod.spawn ?? ptyMod.default?.spawn;
-  assert(
-    typeof ptySpawn === 'function',
-    'node-pty should expose spawn for orchestration validation',
-  );
-
+function createInteractivePtyEnv(overrides = {}) {
   const env = {
     ...process.env,
     TERM: 'xterm-256color',
     FORCE_COLOR: '3',
     TEXRA_NO_UPDATE_CHECK: '1',
+    ...overrides,
   };
   // Exercise the same interactive path a real terminal uses. CI markers make
-  // Ink switch render modes, which hides the behavior this PTY check covers.
+  // Ink switch render modes, which hides the behavior these PTY checks cover.
   delete env.CI;
   delete env.NO_COLOR;
+  return env;
+}
 
-  const result = await new Promise((resolve, reject) => {
+async function loadPtySpawn(label) {
+  ensureNodePtySpawnHelperExecutable();
+  const ptyMod = await import('node-pty');
+  const ptySpawn = ptyMod.spawn ?? ptyMod.default?.spawn;
+  assert(
+    typeof ptySpawn === 'function',
+    `node-pty should expose spawn for ${label}`,
+  );
+  return ptySpawn;
+}
+
+async function runTexraPty(args, options = {}) {
+  const label = options.label ?? `texra ${args.join(' ')}`;
+  const ptySpawn = await loadPtySpawn(label);
+  const env = createInteractivePtyEnv(options.env);
+
+  return await new Promise((resolve, reject) => {
     let output = '';
-    let exitSent = false;
     let exited = false;
-    let fallbackExitTimer;
-    let promptExitTimer;
+    let settled = false;
+    const timers = new Set();
 
-    const child = ptySpawn(process.execPath, [binaryPath, 'orchestrate'], {
+    const clearTimers = () => {
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+    };
+    const settle = (callback) => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      callback();
+    };
+    const setTimer = (callback, delayMs) => {
+      const timer = setTimeout(() => {
+        timers.delete(timer);
+        if (!settled) callback();
+      }, delayMs);
+      timers.add(timer);
+      return timer;
+    };
+
+    const child = ptySpawn(process.execPath, [binaryPath, ...args], {
       name: 'xterm-256color',
-      cols: 100,
-      rows: 30,
-      cwd: cliRoot,
+      cols: options.cols ?? 100,
+      rows: options.rows ?? 30,
+      cwd: options.cwd ?? cliRoot,
       env,
     });
 
-    const sendExit = () => {
-      if (exitSent || exited) return;
-      exitSent = true;
-      try {
-        child.write(ESC);
-      } catch (err) {
-        if (!exited) reject(err);
-      }
-    };
-
-    const timeout = setTimeout(() => {
+    const rejectWithKill = (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
       if (!exited) {
         try {
           child.kill();
         } catch {}
       }
-      clearTimeout(fallbackExitTimer);
-      clearTimeout(promptExitTimer);
-      reject(new Error(`texra orchestrate did not exit\noutput:\n${output}`));
-    }, 12_000);
+      reject(err);
+    };
+
+    const controller = {
+      get output() {
+        return output;
+      },
+      write(data) {
+        if (exited || settled) return;
+        try {
+          child.write(data);
+        } catch (err) {
+          if (!exited) rejectWithKill(err);
+        }
+      },
+      setTimer,
+    };
+
+    setTimer(() => {
+      rejectWithKill(new Error(`${label} did not exit\noutput:\n${output}`));
+    }, options.timeoutMs ?? 12_000);
 
     child.onData((data) => {
       output += data;
-      if (
-        !exitSent &&
-        promptExitTimer == null &&
-        output.includes('Choose how to start this CLI session')
-      ) {
-        promptExitTimer = setTimeout(sendExit, 100);
+      try {
+        options.onData?.(data, controller);
+      } catch (err) {
+        rejectWithKill(err);
       }
     });
 
-    fallbackExitTimer = setTimeout(sendExit, 4_000);
-
     child.onExit((exit) => {
       exited = true;
-      clearTimeout(timeout);
-      clearTimeout(fallbackExitTimer);
-      clearTimeout(promptExitTimer);
-      resolve({ output, exit });
+      settle(() => resolve({ output, exit }));
     });
+
+    try {
+      options.onStart?.(controller);
+    } catch (err) {
+      rejectWithKill(err);
+    }
+  });
+}
+
+async function validateOrchestratePreservesScrollback() {
+  let exitSent = false;
+  let promptExitTimer;
+  const sendExit = (pty) => {
+    if (exitSent) return;
+    exitSent = true;
+    pty.write(ESC);
+  };
+
+  const result = await runTexraPty(['orchestrate'], {
+    label: 'texra orchestrate',
+    cwd: cliRoot,
+    onStart: (pty) => {
+      pty.setTimer(() => sendExit(pty), 4_000);
+    },
+    onData: (_data, pty) => {
+      if (
+        !exitSent &&
+        promptExitTimer == null &&
+        pty.output.includes('Choose how to start this CLI session')
+      ) {
+        promptExitTimer = pty.setTimer(() => sendExit(pty), 100);
+      }
+    },
   });
 
   assert(
@@ -318,6 +395,117 @@ async function validateOrchestratePreservesScrollback() {
     !result.output.includes(`${ESC}[3J`),
     'texra orchestrate should not erase terminal scrollback on exit',
   );
+}
+
+async function validateOrchestrateApiModeOnboardingPicker(options) {
+  const root = mkdtempSync(path.join(tmpdir(), 'texra-cli-api-mode-setup-'));
+  try {
+    const home = path.join(root, 'home');
+    const env = Object.fromEntries(
+      validationProviderApiKeyEnv.map((name) => [name, '']),
+    );
+    let exitSent = false;
+    let welcomeExitTimer;
+    const sendEsc = (pty) => {
+      if (exitSent) return;
+      exitSent = true;
+      pty.write(ESC);
+    };
+
+    const result = await runTexraPty(
+      ['orchestrate', '--api-mode', options.apiMode],
+      {
+        label: `texra orchestrate ${options.apiMode}-mode onboarding`,
+        cwd: repoRoot,
+        env: {
+          HOME: home,
+          XDG_CONFIG_HOME: path.join(home, '.config'),
+          XDG_DATA_HOME: path.join(home, '.local/share'),
+          XDG_STATE_HOME: path.join(home, '.local/state'),
+          ...env,
+          ...options.env,
+        },
+        onData: (_data, pty) => {
+          if (
+            !exitSent &&
+            welcomeExitTimer == null &&
+            pty.output.includes('Welcome to TeXRA')
+          ) {
+            welcomeExitTimer = pty.setTimer(() => sendEsc(pty), 100);
+          }
+          if (
+            !exitSent &&
+            pty.output.includes('Choose how to start this CLI session')
+          ) {
+            exitSent = true;
+            pty.write('\r');
+          }
+        },
+      },
+    );
+
+    assert(
+      result.exit.exitCode === 0 && !result.exit.signal,
+      `${options.apiMode}-mode onboarding should exit cleanly after Esc (exit ${result.exit.exitCode}, signal ${result.exit.signal || 'none'})\noutput:\n${result.output}`,
+    );
+    assert(
+      result.output.includes('Welcome to TeXRA'),
+      `${options.apiMode} mode should show onboarding`,
+    );
+    assert(
+      !result.output.includes('Choose how to start this CLI session'),
+      `${options.apiMode} mode should not show launcher actions before onboarding`,
+    );
+    assert(
+      !result.output.includes('New chat'),
+      `${options.apiMode} mode should not offer New chat before onboarding`,
+    );
+    assert(
+      !result.output.includes('Model "deepseekT" is not available'),
+      `${options.apiMode} mode should not fall through to model resolution`,
+    );
+    for (const text of options.expected) {
+      assert(
+        result.output.includes(text),
+        `${options.apiMode} mode should show ${JSON.stringify(text)}`,
+      );
+    }
+    for (const text of options.forbidden) {
+      assert(
+        !result.output.includes(text),
+        `${options.apiMode} mode should not show ${JSON.stringify(text)}`,
+      );
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+async function validateOrchestrateApiModeOnboardingPickers() {
+  await validateOrchestrateApiModeOnboardingPicker({
+    apiMode: 'included',
+    env: { ANTHROPIC_API_KEY: 'texra-validation-fake-key' },
+    expected: [
+      'Included relay access needs sign-in for this run:',
+      'opens your browser, no API key needed',
+    ],
+    forbidden: [
+      'Use my own provider API key',
+      'paste an Anthropic / OpenAI / Google key',
+    ],
+  });
+  await validateOrchestrateApiModeOnboardingPicker({
+    apiMode: 'personal',
+    env: {},
+    expected: [
+      'Personal API-key mode needs a provider key for this run:',
+      'paste an Anthropic / OpenAI / Google key',
+    ],
+    forbidden: [
+      'Sign in for included relay access',
+      'opens your browser, no API key needed',
+    ],
+  });
 }
 
 function validateRunCommand() {
@@ -1092,6 +1280,7 @@ async function validateCliRunArtifacts() {
   validateBinarySmoke();
   validateFileFlagMissingValues();
   await validateOrchestratePreservesScrollback();
+  await validateOrchestrateApiModeOnboardingPickers();
   validateRunCommand();
   validateToolUseAgentRunCommand();
   validateMultiAgentRunCommand();
