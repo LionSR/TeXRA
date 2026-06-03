@@ -80,6 +80,18 @@ function matchChips(input: string): ChipMatch[] {
   return matches;
 }
 
+function isInlineWhitespace(char: string | undefined): boolean {
+  return char === ' ' || char === '\t';
+}
+
+function removeChipRange(input: string, start: number, end: number): string {
+  const removeFollowingSpace =
+    isInlineWhitespace(input[start - 1]) && isInlineWhitespace(input[end]);
+  return (
+    input.slice(0, start) + input.slice(removeFollowingSpace ? end + 1 : end)
+  );
+}
+
 export class DraftAttachmentStore {
   private readonly entries = new Map<number, DraftAttachment>();
   private nextId = 1;
@@ -121,6 +133,23 @@ export class DraftAttachmentStore {
       const entry = this.entries.get(match.id);
       if (entry?.kind !== 'text') continue;
       out = out.slice(0, match.start) + entry.content + out.slice(match.end);
+    }
+    return out;
+  }
+
+  /**
+   * Text to persist in input history. Pasted text is useful on recall, but
+   * image chips are not: once submitted, their media entries are cleared and a
+   * recalled `[Image #N]` would be a bare token with no file attached.
+   */
+  expandTextForHistory(input: string): string {
+    let out = this.expandText(input);
+    const matches = matchChips(out);
+    for (let i = matches.length - 1; i >= 0; i--) {
+      const match = matches[i];
+      const entry = this.entries.get(match.id);
+      if (entry?.kind !== 'image') continue;
+      out = removeChipRange(out, match.start, match.end);
     }
     return out;
   }
