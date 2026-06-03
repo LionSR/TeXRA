@@ -63,6 +63,7 @@ const LONG_BASH_APPROVAL_COMMAND = [
 ].join('\n');
 const LONG_EXTERNAL_INQUIRY_ANSWER =
   'Independent check agrees: there are 22 non-degenerate triples in the displayed list, plus exactly 61 degenerate triples of the form (0,b,b), and the bounded search over integer pairs proves completeness.';
+const ASYNC_FORM_SETTLE_MS = 12000;
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');
@@ -323,6 +324,7 @@ const SCENARIOS = [
     name: 'agent-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/agent', '\r'],
+    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
       'Tool-use agents',
@@ -340,6 +342,7 @@ const SCENARIOS = [
     cols: 80,
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/agent', '\r'],
+    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
       'Tool-use agents',
@@ -413,6 +416,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/tools', '\r'],
     frame: 'tail',
+    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/tools',
       'Toggle available external integrations',
@@ -431,6 +435,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/agent', '\r'],
     frame: 'tail',
+    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
       'Tool-use agents',
@@ -504,6 +509,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/tools', '\r'],
     frame: 'tail',
+    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/tools',
       'Toggle available external integrations',
@@ -2175,7 +2181,7 @@ async function runScenario(scenario) {
   // which used to snapshot partial lines such as a task detail output row
   // ending at `Ple`. Prefer a frame where the scenario's expected visible text
   // is present, but still time out with the best frame if the UI regresses.
-  const settleDeadline = Date.now() + 4000;
+  const settleDeadline = Date.now() + Number(scenario.settleMs ?? 4000);
   let fullFrame = await frameSnapshot();
   let frame = scenarioFrame(scenario, fullFrame, rows);
   while (Date.now() < settleDeadline) {
