@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  emptyModelListMessageForCliMode,
   formatModelStatusForCliMode,
   modelSelectItemsForCliMode,
   modelSelectWindow,
@@ -227,6 +228,68 @@ describe('CLI ModelListForm model visibility', () => {
         'included',
       ).length,
     ).toBe(0);
+  });
+});
+
+describe('CLI ModelListForm empty state', () => {
+  it('explains that included relay models require sign-in', () => {
+    expect(
+      emptyModelListMessageForCliMode(
+        [
+          access(
+            {
+              availability: 'included-login-required',
+              disabled: true,
+            },
+            'login required',
+            false,
+          ),
+        ],
+        'included',
+      ),
+    ).toBe(
+      'Included relay models require sign-in. Run /login or switch with /api personal.',
+    );
+  });
+
+  it('points included relay users at personal keys when no relay models are runnable', () => {
+    expect(
+      emptyModelListMessageForCliMode(
+        [
+          access(
+            {
+              availability: 'not-included',
+              disabled: true,
+            },
+            'not included',
+            false,
+          ),
+        ],
+        'included',
+      ),
+    ).toBe(
+      'No included relay models are runnable. Switch with /api personal or try again later.',
+    );
+  });
+
+  it('points personal API-key users at key setup or included relay', () => {
+    expect(
+      emptyModelListMessageForCliMode(
+        [
+          access(
+            {
+              availability: 'missing-key',
+              requiresKey: true,
+            },
+            'missing api key',
+            false,
+          ),
+        ],
+        'personal',
+      ),
+    ).toBe(
+      'No personal API-key models are runnable. Configure a provider key or switch with /api included.',
+    );
   });
 });
 

@@ -370,6 +370,23 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'model-form-included-empty',
+    env: {
+      HARNESS_AUTHENTICATED: '1',
+      HARNESS_API_MODE: 'included',
+      HARNESS_ENTRIES: '4',
+    },
+    keys: ['/model', '\r'],
+    frame: 'tail',
+    expect: [
+      '/model · included relay',
+      'No included relay models are runnable.',
+      'Switch with /api personal or try again later.',
+      'Enter close',
+    ],
+    unexpect: ['No models are available in this API mode.'],
+  },
+  {
     name: 'api-form',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/api', '\r'],
