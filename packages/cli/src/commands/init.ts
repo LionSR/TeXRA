@@ -21,6 +21,7 @@ import {
 } from '../runtime/initConfig';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
+import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/cliContext';
 
 interface InitAgentOption {
@@ -168,7 +169,9 @@ export const initCommand = defineCliCommand({
     description: 'Bootstrap a .texra/config.json with sensible defaults',
   },
   args: {
+    ...GLOBAL_ARGS,
     cwd: {
+      ...GLOBAL_ARGS.cwd,
       type: 'string',
       description: 'Working directory to initialize (defaults to $PWD)',
     },
