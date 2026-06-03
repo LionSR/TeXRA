@@ -1,4 +1,5 @@
 import { execFileSync } from 'child_process';
+import { createHash } from 'crypto';
 import { existsSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -104,8 +105,8 @@ export const getClaudeAgentEffort: () => ClaudeAgentEffort =
  *
  * Best-effort and side-effect-free: the login session lives in
  * `${CLAUDE_CONFIG_DIR | ~/.claude}/.credentials.json` on Linux/Windows and in
- * the login keychain on macOS. The macOS probe reads metadata only (no
- * `-w`/`-g`) so it never triggers a keychain access prompt; any failure is
+ * the login keychain on macOS. The macOS probes read metadata only (no
+ * `-w`/`-g`) so they never trigger a keychain access prompt; any failure is
  * swallowed and treated as "no credential."
  */
 function hasClaudeOauthCredential(): boolean {
@@ -116,19 +117,45 @@ function hasClaudeOauthCredential(): boolean {
   if (existsSync(path.join(configDir, '.credentials.json'))) return true;
 
   if (process.platform === 'darwin') {
-    try {
-      execFileSync(
-        'security',
-        ['find-generic-password', '-s', 'Claude Code-credentials'],
-        { stdio: 'ignore', timeout: 2000 },
-      );
-      return true;
-    } catch {
-      // Not found / `security` unavailable — fall through to "no credential."
+    for (const probe of claudeKeychainCredentialProbes(configDir)) {
+      try {
+        execFileSync('security', probe, { stdio: 'ignore', timeout: 1000 });
+        return true;
+      } catch {
+        // Not found / `security` unavailable — try the next known service name.
+      }
     }
   }
 
   return false;
+}
+
+function claudeKeychainCredentialProbes(configDir: string): string[][] {
+  const normalizedConfigDir = path.resolve(configDir);
+  const configDirHash = createHash('sha256')
+    .update(normalizedConfigDir)
+    .digest('hex');
+  const keychainProfiles = [normalizedConfigDir, configDirHash];
+
+  return [
+    ['find-generic-password', '-s', 'Claude Code-credentials'],
+    ...keychainProfiles.flatMap((profile) => [
+      [
+        'find-generic-password',
+        '-a',
+        `${profile}-user`,
+        '-s',
+        `${profile}-access-token`,
+      ],
+      [
+        'find-generic-password',
+        '-a',
+        `${profile}-user`,
+        '-s',
+        `${profile}-refresh-token`,
+      ],
+    ]),
+  ];
 }
 
 /**

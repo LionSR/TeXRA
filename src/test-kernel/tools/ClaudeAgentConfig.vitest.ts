@@ -9,6 +9,7 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 
 let secretStore: Map<string, string>;
 let cleanupDirs: string[];
+let execFileSyncMock: ReturnType<typeof vi.fn>;
 
 async function loadBuildClaudeAgentEnv(): Promise<
   typeof import('@tools/claudeAgentConfig').buildClaudeAgentEnv
@@ -17,9 +18,7 @@ async function loadBuildClaudeAgentEnv(): Promise<
     const actual = await importOriginal<typeof import('child_process')>();
     return {
       ...actual,
-      execFileSync: vi.fn(() => {
-        throw new Error('not found');
-      }),
+      execFileSync: execFileSyncMock,
     };
   });
 
@@ -44,6 +43,9 @@ describe('Claude Code CLI configuration', () => {
   beforeEach(() => {
     secretStore = new Map();
     cleanupDirs = [];
+    execFileSyncMock = vi.fn(() => {
+      throw new Error('not found');
+    });
     vi.resetModules();
     invalidateApiKeyCache();
     // Deterministic baseline: no OAuth credential present. Point the config dir
@@ -88,7 +90,7 @@ describe('Claude Code CLI configuration', () => {
   });
 
   it('strips an inherited ANTHROPIC_API_KEY when an OAuth token is present', async () => {
-    // OAuth must win even over an explicit env API key — otherwise the CLI
+    // OAuth must win even over an explicit env API key; otherwise the CLI
     // prefers ANTHROPIC_API_KEY and ignores the login session.
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', 'oauth-token');
@@ -106,6 +108,26 @@ describe('Claude Code CLI configuration', () => {
     vi.stubEnv('CLAUDE_CONFIG_DIR', sessionDir);
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
     secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
+
+    const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
+    const env = await buildClaudeAgentEnv();
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
+  it('strips ANTHROPIC_API_KEY when a config-dir keychain OAuth session exists', async () => {
+    const configDir = path.join(os.tmpdir(), 'texra-test-claude-profile');
+    vi.stubEnv('CLAUDE_CONFIG_DIR', configDir);
+    vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
+    secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
+    execFileSyncMock.mockImplementation((_command, args) => {
+      if (
+        Array.isArray(args) &&
+        args.includes(`${path.resolve(configDir)}-access-token`)
+      ) {
+        return Buffer.from('');
+      }
+      throw new Error('not found');
+    });
 
     const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
     const env = await buildClaudeAgentEnv();
