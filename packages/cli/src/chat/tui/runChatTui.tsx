@@ -94,7 +94,11 @@ import { MemoryListForm } from './forms/MemoryListForm';
 import { ModelListForm } from './forms/ModelListForm';
 import { ResumeListForm } from './forms/ResumeListForm';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
-import { listSlashCommands, parseSlashInput } from './commands/slashRegistry';
+import {
+  listSlashCommands,
+  parseSlashInput,
+  type SlashCommand,
+} from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
 import { formatCliSessionStatus } from './sessionStatus';
@@ -743,6 +747,25 @@ function openCliMemoryListForm(): void {
   });
 }
 
+export function openRegisteredCliSlashForm(
+  command: SlashCommand,
+  remainder: string,
+): boolean {
+  const Form = command.formComponent;
+  if (!Form) return false;
+  cliState.activeForm.set({
+    commandName: command.name,
+    render: (close, availableRows) => (
+      <Form
+        availableRows={availableRows}
+        remainder={remainder.trimStart()}
+        onDone={() => close()}
+      />
+    ),
+  });
+  return true;
+}
+
 async function handleTuiSlashCommand(
   line: string,
   context: SlashCommandContext,
@@ -896,6 +919,9 @@ async function handleTuiSlashCommand(
             true,
       );
       if (registered) {
+        if (openRegisteredCliSlashForm(registered, parsed.remainder)) {
+          return true;
+        }
         appendLocalAssistantTranscript(
           `/${parsed.name} is registered but is not available in this CLI view yet.`,
         );
