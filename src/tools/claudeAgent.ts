@@ -77,9 +77,11 @@ import {
 } from './claudeAgentImport';
 import { createChildStream } from './childStream';
 import {
+  agentCliLoopTerminalStatus,
+  finalizeAgentCliLoopStatus,
   isCleanInterruption,
-  isLoopOwnedStatus,
   logTurnSummary,
+  markAgentCliLoopError,
 } from './agentCliShared';
 import {
   buildClaudeToolUseLog,
@@ -205,11 +207,7 @@ function finalizeClaudeAgentLoopStatus(
   childStreamId: StreamTabId,
   runtimeHost: AgentRuntimeHost,
 ): void {
-  if (isLoopOwnedStatus(StreamStatusService.get(childStreamId))) {
-    StreamStatusService.set(childStreamId, STREAM_STATUS.READY, {
-      runtimeHost,
-    });
-  }
+  finalizeAgentCliLoopStatus(childStreamId, runtimeHost);
 }
 
 // ============================================================================
@@ -537,6 +535,7 @@ function startClaudeAgentLoop(params: {
   let resumeSessionId: string | undefined;
   const storedSessionIds = new Set<string>();
 
+  let sawTurnFailure = false;
   void (async () => {
     try {
       while (!session.isInterrupted()) {
@@ -583,7 +582,12 @@ function startClaudeAgentLoop(params: {
         }
 
         const wallTimeMs = Date.now() - startedAt;
-        if (turn?.sessionId && !sessionRegistry.has(turn.sessionId)) {
+        const turnFailed = err != null || turn?.isError === true;
+        if (
+          !turnFailed &&
+          turn?.sessionId &&
+          !sessionRegistry.has(turn.sessionId)
+        ) {
           storeSession(turn.sessionId, {
             childStreamId,
             parentStreamId,
@@ -607,15 +611,25 @@ function startClaudeAgentLoop(params: {
         }
 
         const msg =
-          turn && !err
+          turn && !turnFailed
             ? formatClaudeDelivery(executionId, prompt, wallTimeMs, turn)
-            : formatClaudeError(executionId, prompt, err);
+            : formatClaudeError(
+                executionId,
+                prompt,
+                err ?? turn?.errorMessage ?? turn?.finalResponse,
+              );
         try {
           await getExecutionStore(executionId).writeReport(msg);
         } catch {
           // Best-effort; delivery must not block on storage.
         }
         ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
+
+        if (turnFailed) {
+          sawTurnFailure = true;
+          markAgentCliLoopError(childStreamId, runtimeHost);
+          break;
+        }
 
         if (!session.isInterrupted()) {
           StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING, {
@@ -624,13 +638,16 @@ function startClaudeAgentLoop(params: {
         }
       }
     } finally {
-      sessionStage.end('stopped');
+      sessionStage.end(sawTurnFailure ? 'error' : 'stopped');
       for (const sessionId of storedSessionIds) {
         sessionRegistry.delete(sessionId);
       }
       unregisterInterruptible(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
-      await writeTerminalStatus(executionId, 'completed').catch(() => {});
+      await writeTerminalStatus(
+        executionId,
+        agentCliLoopTerminalStatus(sawTurnFailure),
+      ).catch(() => {});
       untrackExecution(executionId);
       finalizeClaudeAgentLoopStatus(childStreamId, runtimeHost);
       disposeTrace();
