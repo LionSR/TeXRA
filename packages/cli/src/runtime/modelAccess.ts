@@ -38,6 +38,16 @@ export type CliModelSelectionSource =
   | 'history'
   | 'builtin';
 
+const CLI_MODEL_FALLBACK_MODE_BY_SOURCE = {
+  override: 'reject',
+  env: 'reject',
+  config: 'notice',
+  workspace: 'notice',
+  user: 'notice',
+  history: 'notice',
+  builtin: 'silent',
+} satisfies Record<CliModelSelectionSource, CliModelFallbackMode>;
+
 export interface CliModelAccessListOptions {
   readonly apiMode?: CliApiMode;
 }
@@ -98,10 +108,7 @@ function formatModelAccessStatus(model: ModelOptionData): string {
 export function cliModelFallbackModeForSource(
   source: CliModelSelectionSource,
 ): CliModelFallbackMode {
-  if (source === 'override' || source === 'env') {
-    return 'reject';
-  }
-  return source === 'builtin' ? 'silent' : 'notice';
+  return CLI_MODEL_FALLBACK_MODE_BY_SOURCE[source];
 }
 
 export function cliRunnableModelOptionsForSource(
