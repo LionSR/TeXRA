@@ -133,6 +133,23 @@ describe('CLI orchestration items', () => {
       'Chat with orchestrator',
       'Help',
     ]);
+    expect(items[1]?.description).toBe('review; completed; no input');
+    expect(items[2]?.description).toBe('orchestrator; completed; no input');
+  });
+
+  it('uses the input file name in resume launcher rows when present', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [],
+      history: [
+        historyEntry('aaaaaaaaaaaa', {
+          agent: 'review',
+          inputBasename: 'paper.tex',
+        }),
+      ],
+      toolUseAgents: [toolUseAgent('review')],
+    });
+
+    expect(items[1]?.description).toBe('review; completed; paper.tex');
   });
 
   it('filters recent agent entries to known tool-use agents', () => {

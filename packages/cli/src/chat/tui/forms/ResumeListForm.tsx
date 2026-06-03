@@ -8,6 +8,7 @@ import {
   listCliHistoryEntries,
   type CliHistoryEntry,
 } from '@cli/runtime/history';
+import { formatCliHistoryInputLabel } from '@cli/runtime/historyLabels';
 import type { ExecutionId } from '@shared/schemas';
 
 import { KeyHints } from '../ui/KeyHints';
@@ -33,7 +34,7 @@ export function resumeSelectWindow(args: {
 }
 
 export function resumeEntryDescription(entry: CliHistoryEntry): string {
-  const input = entry.inputBasename === '-' ? 'no input' : entry.inputBasename;
+  const input = formatCliHistoryInputLabel(entry.inputBasename);
   return `${entry.timestamp}; ${entry.agent}; ${entry.status}; ${input}`;
 }
 
