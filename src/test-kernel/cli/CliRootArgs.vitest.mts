@@ -278,6 +278,9 @@ describe('CLI root argument routing', () => {
       detectUnknownCliFlag(['run', 'polish', '-mdeepseekT', '--no-color']),
     ).resolves.toBeUndefined();
     await expect(
+      detectUnknownCliFlag(['setup', '--no-input']),
+    ).resolves.toBeUndefined();
+    await expect(
       detectUnknownCliFlag([
         'multi-agent',
         'run',
@@ -423,6 +426,12 @@ describe('CLI root argument routing', () => {
       rejectHeadlessOnlyFlags(['--output-format=json'], 'orchestrate'),
     ).toThrow('texra orchestrate is interactive');
     expect(() => rejectHeadlessOnlyFlags(['--no-input'], 'chat')).toThrow(
+      'texra chat is interactive',
+    );
+    expect(() => rejectHeadlessOnlyFlags(['--no-input=true'], 'chat')).toThrow(
+      'texra chat is interactive',
+    );
+    expect(() => rejectHeadlessOnlyFlags(['--print=true'], 'chat')).toThrow(
       'texra chat is interactive',
     );
     expect(() =>
@@ -1089,6 +1098,20 @@ describe('runCli usage output stream routing', () => {
     const result = await runCli(['chat', '--print']);
     expect(result.exitCode).toBe(2);
     expect(stderr).toContain('texra chat is interactive');
+    expect(stderr).not.toContain('Unknown option');
+    expect(stdout).toBe('');
+
+    stderr = '';
+    const setupResult = await runCli(['setup', '--no-input']);
+    expect(setupResult.exitCode).toBe(2);
+    expect(stderr).toContain('texra setup is interactive');
+    expect(stderr).not.toContain('Unknown option');
+    expect(stdout).toBe('');
+
+    stderr = '';
+    const inlineSetupResult = await runCli(['setup', '--no-input=true']);
+    expect(inlineSetupResult.exitCode).toBe(2);
+    expect(stderr).toContain('texra setup is interactive');
     expect(stderr).not.toContain('Unknown option');
     expect(stdout).toBe('');
   });
