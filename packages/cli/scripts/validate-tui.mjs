@@ -65,6 +65,17 @@ const LONG_BASH_APPROVAL_COMMAND = [
 const LONG_EXTERNAL_INQUIRY_ANSWER =
   'Independent check agrees: there are 22 non-degenerate triples in the displayed list, plus exactly 61 degenerate triples of the form (0,b,b), and the bounded search over integer pairs proves completeness.';
 const ASYNC_FORM_SETTLE_MS = 12000;
+const VISIBLE_TOOL_USE_AGENTS_WITHOUT_CHAT = [
+  'research',
+  'review',
+  'creator',
+  'latexDiff',
+  'latexFixer',
+  'lean',
+  'numerics',
+  'presenter',
+  'setup',
+].join('||');
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_ROOT = path.resolve(dirname, '..');
@@ -363,12 +374,16 @@ const SCENARIOS = [
   },
   {
     name: 'agent-form',
-    env: { HARNESS_ENTRIES: '4' },
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_VISIBLE_TOOL_USE_AGENTS: VISIBLE_TOOL_USE_AGENTS_WITHOUT_CHAT,
+    },
     keys: ['/agent', '\r'],
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
       'Tool-use agents',
+      'Current: chat (hidden from picker)',
       'texra chat --agent=<name>',
       'Esc close',
     ],
@@ -381,12 +396,16 @@ const SCENARIOS = [
   {
     name: 'agent-form-80-cols',
     cols: 80,
-    env: { HARNESS_ENTRIES: '4' },
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_VISIBLE_TOOL_USE_AGENTS: VISIBLE_TOOL_USE_AGENTS_WITHOUT_CHAT,
+    },
     keys: ['/agent', '\r'],
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
       'Tool-use agents',
+      'Current: chat (hidden from picker)',
       'texra chat --agent=<name>',
       'Esc close',
     ],
@@ -474,14 +493,18 @@ const SCENARIOS = [
     name: 'compact-agent-form',
     rows: 12,
     cols: 80,
-    env: { HARNESS_ENTRIES: '4' },
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_VISIBLE_TOOL_USE_AGENTS: VISIBLE_TOOL_USE_AGENTS_WITHOUT_CHAT,
+    },
     keys: ['/agent', '\r'],
     frame: 'tail',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
+      'Current: chat (hidden from picker)',
       'Tool-use agents',
-      '+2 earlier, +7 more',
+      '+8 more',
       '↑/↓ navigate',
       'Enter close',
       'Esc close',
