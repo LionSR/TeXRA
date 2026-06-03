@@ -673,16 +673,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Helpers
   // ============================================================
 
-  private async primeIncludedAccessIfAuthenticated(): Promise<boolean> {
+  private async primeIncludedAccessIfEnabled(): Promise<void> {
     const serverSideKeyService = getServerSideKeyService();
-    if (
-      !serverSideKeyService.getUseIncludedModelAccess() ||
-      !(await SupabaseClient.isAuthenticated())
-    ) {
-      return false;
-    }
-
-    return serverSideKeyService.canUseServerSideKeys();
+    if (!serverSideKeyService.getUseIncludedModelAccess()) return;
+    await serverSideKeyService.canUseServerSideKeys();
   }
 
   // ============================================================
@@ -695,9 +689,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     // spinner until data arrives.
     void this.sendToolDashboardData(webview);
 
-    const hasServerSideAccess = await this.primeIncludedAccessIfAuthenticated();
-    await this.sendProfileData(webview, { hasServerSideAccess });
-    await this.sendModelSelectionData(webview);
+    // Auth/session changes affect included access and must not reuse a
+    // pre-login/pre-logout availability snapshot.
+    invalidateModelOptionsCache();
+    await this.sendProfileAndModelSelectionData(webview);
 
     await Promise.all([
       this.sendMemoryData(webview),
@@ -769,10 +764,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await webview.postMessage(await buildHistoryMessage());
   }
 
-  public async sendProfileData(
-    webview: vscode.Webview,
-    options: { hasServerSideAccess?: boolean } = {},
-  ): Promise<void> {
+  public async sendProfileData(webview: vscode.Webview): Promise<void> {
     const isAuthenticated = await SupabaseClient.isAuthenticated();
     const providerKeyStatuses = await getProviderKeyStatuses();
 
@@ -787,7 +779,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         permissions: [],
         remoteAgents: [],
         apiAccessMode: 'personal',
-        allowedModels: [],
         tierConstants: {
           ultra: ULTRA_TIER,
           max: MAX_TIER,
@@ -798,10 +789,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       return;
     }
 
+    await this.primeIncludedAccessIfEnabled();
     const serverSideKeyService = getServerSideKeyService();
-    const hasServerSideAccess =
-      options.hasServerSideAccess ??
-      (await serverSideKeyService.canUseServerSideKeys());
 
     const user = await SupabaseClient.getUser();
     const authContext = await SupabaseClient.getUserAuthContext();
@@ -814,10 +803,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     const apiAccessMode = serverSideKeyService.getUseIncludedModelAccess()
       ? 'included'
       : 'personal';
-
-    const allowedModels = hasServerSideAccess
-      ? serverSideKeyService.getAllowedModelsForCurrentUser()
-      : [];
 
     const accessExpiresAt = serverSideKeyService.getAccessExpirationDate();
     const spendingStatus = getTierService().getSpendingStatus();
@@ -834,7 +819,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       permissions: authContext.permissions,
       remoteAgents,
       apiAccessMode,
-      allowedModels,
       tierConstants: {
         ultra: ULTRA_TIER,
         max: MAX_TIER,
@@ -849,8 +833,15 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   public async sendModelSelectionData(webview: vscode.Webview): Promise<void> {
     await webview.postMessage(
-      buildModelSelectionMessage(this.modelSelectionController),
+      await buildModelSelectionMessage(this.modelSelectionController),
     );
+  }
+
+  private async sendProfileAndModelSelectionData(
+    webview: vscode.Webview,
+  ): Promise<void> {
+    await this.sendProfileData(webview);
+    await this.sendModelSelectionData(webview);
   }
 
   // ============================================================
@@ -1455,10 +1446,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
     // Access mode affects model availability — invalidate cached options.
     invalidateModelOptionsCache();
-    const hasServerSideAccess = await this.primeIncludedAccessIfAuthenticated();
     await this.withActiveWebview(async (w) => {
-      await this.sendProfileData(w, { hasServerSideAccess });
-      await this.sendModelSelectionData(w);
+      await this.sendProfileAndModelSelectionData(w);
     });
 
     const modeLabel =
@@ -1501,14 +1490,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         error,
       );
       // On error, still refresh settings view to reflect current key state.
-      await this.withActiveWebview((w) => this.sendProfileData(w));
+      await this.withActiveWebview((w) =>
+        this.sendProfileAndModelSelectionData(w),
+      );
     }
   }
 
   /**
-   * Refresh main view API key status, model options, AND settings-view profile
-   * after key changes. Combines all refreshes into a single call to avoid
-   * redundant async work when callers would otherwise call sendProfileData separately.
+   * Refresh main view API key status, model options, and settings-view model/profile
+   * data after key changes. Model selection availability depends on provider
+   * key state, so keep it paired with the profile refresh.
    */
   private async refreshAfterKeyChange(): Promise<void> {
     // Invalidate caches so downstream refreshes see fresh key state.
@@ -1517,7 +1508,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await vscode.commands.executeCommand('texra.refreshApiKeyStatus');
     await Promise.all([
       vscode.commands.executeCommand('texra.refreshAllOptions'),
-      this.withActiveWebview((w) => this.sendProfileData(w)),
+      this.withActiveWebview((w) => this.sendProfileAndModelSelectionData(w)),
     ]);
   }
 
