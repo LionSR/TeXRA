@@ -152,6 +152,14 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     itemCount: items.length,
   });
 
+  function handleSelect(value: string): void {
+    if (selectable) {
+      props.onSelect?.(value);
+      return;
+    }
+    props.onClose();
+  }
+
   if (isCompactFormRows(props.availableRows) && items.length > 0) {
     return (
       <FormFrame
@@ -165,13 +173,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
           activeValue={props.currentModel}
           maxVisibleItems={1}
           showOverflow={false}
-          onSelect={(value) => {
-            if (selectable) {
-              props.onSelect?.(value);
-              return;
-            }
-            props.onClose();
-          }}
+          onSelect={handleSelect}
           onCancel={props.onClose}
         />
         <CompactFormKeyHints
@@ -213,13 +215,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
             activeValue={props.currentModel}
             maxVisibleItems={selectWindow.maxVisibleItems}
             showOverflow={selectWindow.showOverflow}
-            onSelect={(value) => {
-              if (selectable) {
-                props.onSelect?.(value);
-                return;
-              }
-              props.onClose();
-            }}
+            onSelect={handleSelect}
             onCancel={props.onClose}
           />
         </Box>

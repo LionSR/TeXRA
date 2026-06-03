@@ -40,19 +40,9 @@ const MAX_BODY = 200;
 
 const truncate = makeTruncator(MAX_BODY);
 
-/** Repo-level events use a single newline + URL footer. */
-const withFooterUrl = (headline: string, url: string): string =>
-  `${headline}\n${url}`;
-
-const reviewCommentLabel = (c: GhReviewComment): string =>
-  c.in_reply_to_id != null ? 'review reply' : 'inline review comment';
-
 export function formatRepoPROpened(slug: string, pr: GhPullsListEntry): string {
   return wrap(
-    withFooterUrl(
-      `New pull request ${prRef(slug, pr.number)} opened by ${authorOf(pr.user)}: "${truncate(pr.title)}"`,
-      pr.html_url,
-    ),
+    `New pull request ${prRef(slug, pr.number)} opened by ${authorOf(pr.user)}: "${truncate(pr.title)}"\n${pr.html_url}`,
   );
 }
 
@@ -70,10 +60,7 @@ export function formatRepoIssueComment(
   c: GhIssueComment,
 ): string {
   return wrap(
-    withFooterUrl(
-      `New comment on ${issueRef(slug, number)} by ${authorOf(c.user)}: "${truncate(c.body)}"`,
-      c.html_url,
-    ),
+    `New comment on ${issueRef(slug, number)} by ${authorOf(c.user)}: "${truncate(c.body)}"\n${c.html_url}`,
   );
 }
 
@@ -83,10 +70,7 @@ export function formatRepoReviewComment(
   c: GhReviewComment,
 ): string {
   return wrap(
-    withFooterUrl(
-      `New ${reviewCommentLabel(c)} on ${prRef(slug, prNumber)} by ${authorOf(c.user)} (${c.path}): "${truncate(c.body)}"`,
-      c.html_url,
-    ),
+    `New ${c.in_reply_to_id != null ? 'review reply' : 'inline review comment'} on ${prRef(slug, prNumber)} by ${authorOf(c.user)} (${c.path}): "${truncate(c.body)}"\n${c.html_url}`,
   );
 }
 
