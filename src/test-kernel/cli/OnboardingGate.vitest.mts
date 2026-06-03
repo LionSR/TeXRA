@@ -6,12 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // branches we stub stdout.isTTY = true and mock the gate's collaborators.
 
 const mocks = vi.hoisted(() => ({
-  hasAnyCliCredential: vi.fn(),
+  hasCliCredentialForApiMode: vi.fn(),
   declined: false,
 }));
 
 vi.mock('@cli/runtime/credentialStatus', () => ({
-  hasAnyCliCredential: mocks.hasAnyCliCredential,
+  hasCliCredentialForApiMode: mocks.hasCliCredentialForApiMode,
 }));
 
 vi.mock('@platform/platform', () => ({
@@ -36,7 +36,7 @@ describe('maybeRunCliOnboarding gate', () => {
   let originalIsTty: unknown;
 
   beforeEach(() => {
-    mocks.hasAnyCliCredential.mockReset().mockResolvedValue(false);
+    mocks.hasCliCredentialForApiMode.mockReset().mockResolvedValue(false);
     mocks.declined = false;
     originalIsTty = process.stdout.isTTY;
     Object.defineProperty(process.stdout, 'isTTY', {
@@ -53,12 +53,23 @@ describe('maybeRunCliOnboarding gate', () => {
   });
 
   it('skips (configured:false) when the user already has a credential', async () => {
-    mocks.hasAnyCliCredential.mockResolvedValue(true);
+    mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
     await expect(maybeRunCliOnboarding(INTERACTIVE)).resolves.toEqual({
       configured: false,
       declined: false,
     });
-    expect(mocks.hasAnyCliCredential).toHaveBeenCalledOnce();
+    expect(mocks.hasCliCredentialForApiMode).toHaveBeenCalledWith(undefined);
+  });
+
+  it('checks credentials for the explicitly requested API mode', async () => {
+    mocks.hasCliCredentialForApiMode.mockResolvedValue(true);
+    await expect(
+      maybeRunCliOnboarding({ ...INTERACTIVE, apiMode: 'included' }),
+    ).resolves.toEqual({
+      configured: false,
+      declined: false,
+    });
+    expect(mocks.hasCliCredentialForApiMode).toHaveBeenCalledWith('included');
   });
 
   it('skips when onboarding was previously declined', async () => {
@@ -67,6 +78,7 @@ describe('maybeRunCliOnboarding gate', () => {
       configured: false,
       declined: false,
     });
+    expect(mocks.hasCliCredentialForApiMode).not.toHaveBeenCalled();
   });
 
   it('skips on a dumb terminal before checking credentials', async () => {
@@ -77,7 +89,7 @@ describe('maybeRunCliOnboarding gate', () => {
         termIsDumb: true,
       }),
     ).resolves.toEqual({ configured: false, declined: false });
-    expect(mocks.hasAnyCliCredential).not.toHaveBeenCalled();
+    expect(mocks.hasCliCredentialForApiMode).not.toHaveBeenCalled();
   });
 
   it('skips in headless mode before checking credentials', async () => {
@@ -88,6 +100,6 @@ describe('maybeRunCliOnboarding gate', () => {
         termIsDumb: false,
       }),
     ).resolves.toEqual({ configured: false, declined: false });
-    expect(mocks.hasAnyCliCredential).not.toHaveBeenCalled();
+    expect(mocks.hasCliCredentialForApiMode).not.toHaveBeenCalled();
   });
 });

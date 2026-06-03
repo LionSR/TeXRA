@@ -18,9 +18,10 @@ vi.mock('@model/apiProviders', async (importOriginal) => {
   return { ...actual, apiKeyExists: mocks.apiKeyExists };
 });
 
-const { hasAnyCliCredential } = await import('@cli/runtime/credentialStatus');
+const { hasCliCredentialForApiMode } =
+  await import('@cli/runtime/credentialStatus');
 
-describe('hasAnyCliCredential', () => {
+describe('CLI credential status', () => {
   beforeEach(() => {
     mocks.isAuthenticated.mockReset();
     mocks.apiKeyExists.mockReset();
@@ -28,7 +29,7 @@ describe('hasAnyCliCredential', () => {
 
   it('is true when signed in, without checking any provider key', async () => {
     mocks.isAuthenticated.mockResolvedValue(true);
-    await expect(hasAnyCliCredential()).resolves.toBe(true);
+    await expect(hasCliCredentialForApiMode(undefined)).resolves.toBe(true);
     expect(mocks.apiKeyExists).not.toHaveBeenCalled();
   });
 
@@ -36,18 +37,44 @@ describe('hasAnyCliCredential', () => {
     mocks.isAuthenticated.mockResolvedValue(false);
     mocks.apiKeyExists.mockResolvedValue(false);
     mocks.apiKeyExists.mockResolvedValueOnce(true);
-    await expect(hasAnyCliCredential()).resolves.toBe(true);
+    await expect(hasCliCredentialForApiMode(undefined)).resolves.toBe(true);
+  });
+
+  it('does not count provider keys as included-relay credentials', async () => {
+    mocks.isAuthenticated.mockResolvedValue(false);
+    mocks.apiKeyExists.mockRejectedValue(
+      new Error('provider keys must not be checked'),
+    );
+    await expect(hasCliCredentialForApiMode('included')).resolves.toBe(false);
+    expect(mocks.apiKeyExists).not.toHaveBeenCalled();
+  });
+
+  it('does not count relay sign-in as a personal API-key credential', async () => {
+    mocks.isAuthenticated.mockRejectedValue(
+      new Error('relay sign-in must not be checked'),
+    );
+    mocks.apiKeyExists.mockResolvedValue(false);
+    await expect(hasCliCredentialForApiMode('personal')).resolves.toBe(false);
+    expect(mocks.isAuthenticated).not.toHaveBeenCalled();
+    expect(mocks.apiKeyExists).toHaveBeenCalled();
+  });
+
+  it('counts provider keys as personal API-key credentials', async () => {
+    mocks.isAuthenticated.mockResolvedValue(false);
+    mocks.apiKeyExists.mockResolvedValue(false);
+    mocks.apiKeyExists.mockResolvedValueOnce(true);
+    await expect(hasCliCredentialForApiMode('personal')).resolves.toBe(true);
   });
 
   it('is false when signed out and no provider key resolves', async () => {
     mocks.isAuthenticated.mockResolvedValue(false);
     mocks.apiKeyExists.mockResolvedValue(false);
-    await expect(hasAnyCliCredential()).resolves.toBe(false);
+    await expect(hasCliCredentialForApiMode(undefined)).resolves.toBe(false);
   });
 
   it('treats an auth-check failure as not signed in', async () => {
     mocks.isAuthenticated.mockRejectedValue(new Error('offline'));
     mocks.apiKeyExists.mockResolvedValue(false);
-    await expect(hasAnyCliCredential()).resolves.toBe(false);
+    await expect(hasCliCredentialForApiMode(undefined)).resolves.toBe(false);
   });
 });

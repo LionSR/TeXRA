@@ -3,10 +3,10 @@
 // Replaces today's dead-end (a launcher full of "login required" models that
 // errors out when the user picks chat) with a 2-choice picker, modeled on
 // Claude Code / Gemini CLI / aider: the no-key included-relay login is the
-// recommended default, bring-your-own provider key is second, and skip is
-// explicit. After credentials are set the caller re-reads availability in the
-// SAME process (the relay/key paths invalidate the relevant caches), so the
-// launcher/chat continues with real models — no restart.
+// recommended default when both modes are viable, bring-your-own provider key is
+// second, and skip is explicit. After credentials are set the caller re-reads
+// availability in the SAME process (the relay/key paths invalidate the relevant
+// caches), so the launcher/chat continues with real models — no restart.
 //
 // TTY-only: the gate returns immediately in headless / non-TTY / dumb-terminal
 // runs, and both entry points already reject those before calling it, so
@@ -27,9 +27,10 @@ import { assertNever } from '../chat/tui/assertNever';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
-import { Select } from '../chat/tui/ui/Select';
+import { Select, type SelectItem } from '../chat/tui/ui/Select';
 import { formatCliAccountLabelForDisplay } from '../runtime/accountDisplay';
-import { hasAnyCliCredential } from '../runtime/credentialStatus';
+import { type CliApiMode } from '../runtime/apiAccessMode';
+import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { signInCliSupabase } from '../runtime/supabaseAuth';
 
@@ -53,6 +54,7 @@ export interface OnboardingGateContext {
   readonly mode: 'headless' | 'interactive';
   readonly stdoutIsTty?: boolean;
   readonly termIsDumb?: boolean;
+  readonly apiMode?: CliApiMode;
 }
 
 const SKIP_SUMMARY =
@@ -85,13 +87,13 @@ export async function maybeRunCliOnboarding(
   ) {
     return { configured: false, declined: false };
   }
-  if (await hasAnyCliCredential().catch(() => false)) {
-    return { configured: false, declined: false };
-  }
   if (getOnboardingDeclined(platform().globalState)) {
     return { configured: false, declined: false };
   }
-  return runOnboardingFlow({ firstRun: true });
+  if (await hasCliCredentialForApiMode(context.apiMode).catch(() => false)) {
+    return { configured: false, declined: false };
+  }
+  return runOnboardingFlow({ firstRun: true, apiMode: context.apiMode });
 }
 
 /**
@@ -106,14 +108,21 @@ export async function runCliOnboarding(): Promise<CliOnboardingResult> {
 
 async function runOnboardingFlow(options: {
   readonly firstRun: boolean;
+  readonly apiMode?: CliApiMode;
 }): Promise<CliOnboardingResult> {
+  const pickerSubtitle = onboardingPickerSubtitle(options);
+  const pickerItems = onboardingPickerItems(onboardingSetupPaths(options));
   const resolution = await new Promise<OnboardingResolution>((resolve) => {
     let chosen: OnboardingResolution = { configured: false, declined: false };
     const record = (next: OnboardingResolution): void => {
       chosen = next;
     };
     const instance = render(
-      <OnboardingApp firstRun={options.firstRun} onResolve={record} />,
+      <OnboardingApp
+        pickerSubtitle={pickerSubtitle}
+        pickerItems={pickerItems}
+        onResolve={record}
+      />,
       {
         stdout: process.stdout,
         stderr: process.stderr,
@@ -158,9 +167,8 @@ type Screen =
   | 'key-entry';
 
 interface OnboardingAppProps {
-  /** First-run gate vs. an explicit `texra setup` re-configuration — only the
-   *  picker subtitle differs (the latter may already have credentials). */
-  readonly firstRun: boolean;
+  readonly pickerSubtitle: string;
+  readonly pickerItems: readonly OnboardingPickerItem[];
   readonly onResolve: (resolution: OnboardingResolution) => void;
 }
 
@@ -185,7 +193,8 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
   if (screen === 'picker') {
     return (
       <PickerStep
-        firstRun={props.firstRun}
+        subtitle={props.pickerSubtitle}
+        items={props.pickerItems}
         onRelay={() => {
           setError(undefined);
           setScreen('relay-provider');
@@ -316,8 +325,68 @@ function OnboardingFrame(props: {
   );
 }
 
-function PickerStep(props: {
+function onboardingPickerSubtitle(props: {
   readonly firstRun: boolean;
+  readonly apiMode?: CliApiMode;
+}): string {
+  if (!props.firstRun) {
+    return 'Choose how to power model calls — sign in, or add a provider API key:';
+  }
+  if (props.apiMode === 'included') {
+    return 'Included relay access needs sign-in for this run:';
+  }
+  if (props.apiMode === 'personal') {
+    return 'Personal API-key mode needs a provider key for this run:';
+  }
+  return 'Not signed in, and no provider API key is configured. Choose how to power model calls:';
+}
+
+type OnboardingChoice = 'relay' | 'key' | 'skip';
+type OnboardingSetupPath = Exclude<OnboardingChoice, 'skip'>;
+type OnboardingPickerItem = SelectItem<OnboardingChoice>;
+
+const RELAY_PICKER_ITEM: OnboardingPickerItem = {
+  value: 'relay',
+  label: 'Sign in for included relay access (recommended)',
+  description: 'opens your browser, no API key needed',
+};
+
+const KEY_PICKER_ITEM: OnboardingPickerItem = {
+  value: 'key',
+  label: 'Use my own provider API key',
+  description: 'paste an Anthropic / OpenAI / Google key',
+};
+
+const SKIP_PICKER_ITEM: OnboardingPickerItem = {
+  value: 'skip',
+  label: 'Skip for now',
+  description: 'set up later: texra login / texra setup',
+};
+
+function onboardingSetupPaths(props: {
+  readonly firstRun: boolean;
+  readonly apiMode?: CliApiMode;
+}): readonly OnboardingSetupPath[] {
+  if (!props.firstRun) return ['relay', 'key'];
+  if (props.apiMode === 'included') return ['relay'];
+  if (props.apiMode === 'personal') return ['key'];
+  return ['relay', 'key'];
+}
+
+function onboardingPickerItems(
+  setupPaths: readonly OnboardingSetupPath[],
+): readonly OnboardingPickerItem[] {
+  return [
+    ...setupPaths.map((path) =>
+      path === 'relay' ? RELAY_PICKER_ITEM : KEY_PICKER_ITEM,
+    ),
+    SKIP_PICKER_ITEM,
+  ];
+}
+
+function PickerStep(props: {
+  readonly subtitle: string;
+  readonly items: readonly OnboardingPickerItem[];
   readonly onRelay: () => void;
   readonly onKey: () => void;
   readonly onSkip: () => void;
@@ -325,35 +394,15 @@ function PickerStep(props: {
   return (
     <OnboardingFrame
       title="Welcome to TeXRA"
-      subtitle={
-        props.firstRun
-          ? 'Not signed in, and no provider API key is configured. Choose how to power model calls:'
-          : 'Choose how to power model calls — sign in, or add a provider API key:'
-      }
+      subtitle={props.subtitle}
       hints={[
         { key: '↑/↓', action: 'navigate' },
-        { key: '1-3/Enter', action: 'select' },
+        { key: `1-${props.items.length}/Enter`, action: 'select' },
         { key: 'Esc', action: 'skip' },
       ]}
     >
-      <Select<'relay' | 'key' | 'skip'>
-        items={[
-          {
-            value: 'relay',
-            label: 'Sign in for included relay access (recommended)',
-            description: 'opens your browser, no API key needed',
-          },
-          {
-            value: 'key',
-            label: 'Use my own provider API key',
-            description: 'paste an Anthropic / OpenAI / Google key',
-          },
-          {
-            value: 'skip',
-            label: 'Skip for now',
-            description: 'set up later: texra login / texra setup',
-          },
-        ]}
+      <Select<OnboardingChoice>
+        items={props.items}
         onSelect={(value) => {
           if (value === 'relay') props.onRelay();
           else if (value === 'key') props.onKey();
