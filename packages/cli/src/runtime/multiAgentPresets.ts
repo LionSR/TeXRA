@@ -57,6 +57,12 @@ export interface CliMultiAgentPresetListRecord extends CliMultiAgentPreset {
   readonly availability: CliMultiAgentPresetAvailability;
 }
 
+const NON_DEFAULT_ROOT_TOOL_USE_AGENTS_BY_PRESET_SOURCE: Partial<
+  Record<CliMultiAgentPresetSource, ReadonlySet<string>>
+> = {
+  'built-in': new Set(['simplifier']),
+};
+
 export function parseCliCustomAgentPresets(raw: unknown): AgentModePreset[] {
   return AgentModePresetSchema.array().catch([]).parse(raw);
 }
@@ -281,7 +287,10 @@ export function planCliMultiAgentPresetRun(
   );
   const rootAgent =
     override.agent ??
-    selectPresetRootAgent(toolUse.resolved, preset.toolUseAgents);
+    selectPresetRootAgent(toolUse.resolved, {
+      presetOrder: preset.toolUseAgents,
+      presetSource: preset.source,
+    });
   const toolUseAgents = rootAgent
     ? includeAgent(toolUse.resolved, rootAgent)
     : toolUse.resolved;
@@ -368,16 +377,31 @@ function resolveAgentOverride(
 
 function selectPresetRootAgent(
   agents: readonly AgentEntry[],
-  presetOrder: readonly string[],
+  options: {
+    readonly presetOrder: readonly string[];
+    readonly presetSource: CliMultiAgentPresetSource;
+  },
 ): AgentEntry | undefined {
-  const delegatingAgents = agents.filter(agentHasDelegationTools);
+  const rootCandidates = agents.filter((agent) =>
+    isPresetRootCandidate(agent, options.presetSource),
+  );
+  const delegatingAgents = rootCandidates.filter(agentHasDelegationTools);
   if (delegatingAgents.length > 0) {
     return (
-      findPreferredRootAgent(delegatingAgents, presetOrder) ??
+      findPreferredRootAgent(delegatingAgents, options.presetOrder) ??
       delegatingAgents[0]
     );
   }
-  return agents[0];
+  return rootCandidates[0];
+}
+
+function isPresetRootCandidate(
+  agent: AgentEntry,
+  presetSource: CliMultiAgentPresetSource,
+): boolean {
+  return !NON_DEFAULT_ROOT_TOOL_USE_AGENTS_BY_PRESET_SOURCE[presetSource]?.has(
+    agent.name,
+  );
 }
 
 function findPreferredRootAgent(
