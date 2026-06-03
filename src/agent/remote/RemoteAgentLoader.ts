@@ -18,7 +18,7 @@ import { ensureError, toErrorMessage } from '@common/errors/errorMessage';
 import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions } from '@tools/registry';
 
-import { filterNotNull } from '@utils/core';
+import { filterNotNull, filterNotNullish } from '@utils/core';
 import {
   RemoteAgentListItemSchema,
   EdgeFunctionResponseSchema,
@@ -60,7 +60,7 @@ export function isMissingRemoteAgentToolsColumnError(
   if (!error) return false;
 
   const text = [error.message, error.details, error.hint]
-    .filter((part): part is string => typeof part === 'string')
+    .filter(filterNotNullish)
     .join(' ')
     .toLowerCase();
   const schemaError =

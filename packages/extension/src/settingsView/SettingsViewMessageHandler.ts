@@ -341,9 +341,10 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.withActiveWebview((w) => this.sendMemoryEnabled(w)),
       [SETTINGS_VIEW_COMMANDS.SET_MEMORY_ENABLED]: (data) =>
         this.handleSetMemoryEnabled(data),
-      [SETTINGS_VIEW_COMMANDS.PIN_MEMORY]: (data) => this.handlePinMemory(data),
+      [SETTINGS_VIEW_COMMANDS.PIN_MEMORY]: (data) =>
+        this.setMemoryPinned(data.storagePath, true),
       [SETTINGS_VIEW_COMMANDS.UNPIN_MEMORY]: (data) =>
-        this.handleUnpinMemory(data),
+        this.setMemoryPinned(data.storagePath, false),
 
       // History handlers
       [SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA]: () =>
@@ -1136,18 +1137,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         await w.postMessage(message);
       });
     }
-  }
-
-  private async handlePinMemory(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.PIN_MEMORY>,
-  ): Promise<void> {
-    await this.setMemoryPinned(data.storagePath, true);
-  }
-
-  private async handleUnpinMemory(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.UNPIN_MEMORY>,
-  ): Promise<void> {
-    await this.setMemoryPinned(data.storagePath, false);
   }
 
   private async setMemoryPinned(
