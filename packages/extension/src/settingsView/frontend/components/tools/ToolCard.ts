@@ -17,6 +17,7 @@ import type {
   ToolCommandKind,
   ToolDashboardItem,
 } from '@shared/schemas/settingsViewMessages';
+import { toolStatusLabel } from '@shared/tools/toolStatusLabels';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('tool-card')
@@ -246,31 +247,27 @@ export class ToolCard extends LitElement {
     ToolDashboardItem['status'],
     {
       icon: string;
-      label: string;
       variant: 'brand' | 'neutral' | 'success' | 'warning' | 'danger';
     }
   > = {
-    available: { icon: 'check', label: 'Ready', variant: 'success' },
+    available: { icon: 'check', variant: 'success' },
     'not-found': {
       icon: 'warning',
-      label: 'Needs setup',
       variant: 'danger',
     },
     unknown: {
       icon: 'question',
-      label: 'Not checked',
       variant: 'neutral',
     },
     'coming-soon': {
       icon: 'clock',
-      label: 'Coming soon',
       variant: 'neutral',
     },
   };
 
   private renderAvailableStatusIcon(): TemplateResult {
     const config = ToolCard.STATUS_CONFIG.available;
-    const label = this.item.statusLabel ?? config.label;
+    const label = toolStatusLabel(this.item.status, this.item.statusLabel);
 
     return html`
       <span
@@ -288,7 +285,7 @@ export class ToolCard extends LitElement {
     const { status } = this.item;
     const config =
       ToolCard.STATUS_CONFIG[status] ?? ToolCard.STATUS_CONFIG.unknown;
-    const label = this.item.statusLabel ?? config.label;
+    const label = toolStatusLabel(status, this.item.statusLabel);
 
     return html`
       <wa-tag
