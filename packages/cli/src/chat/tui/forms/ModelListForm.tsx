@@ -41,7 +41,7 @@ const RELAY_STATUS_BY_AVAILABILITY = {
   'provider-key': 'relay: unavailable; api key set',
   'openrouter-key': 'relay: unavailable; openrouter key set',
   'missing-key': 'relay: unavailable; missing api key',
-} satisfies Partial<Record<ModelAvailabilityKind, string>>;
+} satisfies Record<ModelAvailabilityKind, string>;
 
 const EMPTY_MODEL_LIST_MESSAGES = {
   includedLoginRequired:
@@ -59,11 +59,8 @@ export function formatModelStatusForCliMode(
   if (apiMode === 'personal') return `api: ${model.status}`;
 
   const availability = model.model.availability;
-  const relayStatus =
-    availability == null
-      ? undefined
-      : RELAY_STATUS_BY_AVAILABILITY[availability];
-  return relayStatus ?? `relay: ${model.status}`;
+  if (availability == null) return `relay: ${model.status}`;
+  return RELAY_STATUS_BY_AVAILABILITY[availability];
 }
 
 export function modelSelectWindow(args: {
