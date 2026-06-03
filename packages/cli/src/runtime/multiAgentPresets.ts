@@ -25,6 +25,8 @@ export interface CliMultiAgentPresetRunPlan {
   readonly missingToolUseAgents: readonly string[];
 }
 
+type CliMultiAgentPlanStatus = 'available' | 'degraded' | 'unavailable';
+
 export function parseCliCustomAgentPresets(raw: unknown): AgentModePreset[] {
   return AgentModePresetSchema.array().catch([]).parse(raw);
 }
@@ -60,19 +62,49 @@ export function findCliMultiAgentPreset(
   );
 }
 
-export function formatCliMultiAgentPresetList(
+export function planCliMultiAgentPresets(
   presets: readonly CliMultiAgentPreset[],
-): string {
-  if (presets.length === 0) return 'No multi-agent presets found.';
+  options: {
+    readonly workflowAgents: readonly AgentEntry[];
+    readonly toolUseAgents: readonly AgentEntry[];
+  },
+): CliMultiAgentPresetRunPlan[] {
+  return presets.map((preset) => planCliMultiAgentPresetRun(preset, options));
+}
 
-  return presets
-    .map((preset) =>
+export function cliMultiAgentPresetAvailabilityParts(
+  plan: CliMultiAgentPresetRunPlan,
+): string[] {
+  const status = cliMultiAgentPlanStatus(plan);
+  const parts = [
+    `workflow:${formatAvailablePresetAgentCount(plan.preset.workflowAgents, plan.missingWorkflowAgents)}`,
+    `tool-use:${formatAvailablePresetAgentCount(plan.preset.toolUseAgents, plan.missingToolUseAgents)}`,
+  ];
+  if (status !== 'available') parts.push(status);
+  return parts;
+}
+
+export function formatCliMultiAgentPresetPlanSummary(
+  plan: CliMultiAgentPresetRunPlan,
+): string {
+  return [
+    plan.preset.source,
+    ...cliMultiAgentPresetAvailabilityParts(plan),
+  ].join('; ');
+}
+
+export function formatCliMultiAgentPresetList(
+  plans: readonly CliMultiAgentPresetRunPlan[],
+): string {
+  if (plans.length === 0) return 'No multi-agent presets found.';
+
+  return plans
+    .map((plan) =>
       [
-        preset.source,
-        preset.id,
-        preset.name,
-        `workflow:${preset.workflowAgents.length}`,
-        `tool-use:${preset.toolUseAgents.length}`,
+        plan.preset.source,
+        plan.preset.id,
+        plan.preset.name,
+        ...cliMultiAgentPresetAvailabilityParts(plan),
       ].join('\t'),
     )
     .join('\n');
@@ -149,6 +181,13 @@ export function cliMultiAgentPlanHasGaps(
     plan.missingWorkflowAgents.length > 0 ||
     plan.missingToolUseAgents.length > 0
   );
+}
+
+function cliMultiAgentPlanStatus(
+  plan: CliMultiAgentPresetRunPlan,
+): CliMultiAgentPlanStatus {
+  if (!plan.rootAgent) return 'unavailable';
+  return cliMultiAgentPlanHasGaps(plan) ? 'degraded' : 'available';
 }
 
 export function planCliMultiAgentPresetRun(
@@ -307,6 +346,15 @@ function availablePresetAgents(
 ): string[] {
   const missing = new Set(missingAgents);
   return presetAgents.filter((agent) => !missing.has(agent));
+}
+
+function formatAvailablePresetAgentCount(
+  presetAgents: readonly string[],
+  missingAgents: readonly string[],
+): string {
+  const total = presetAgents.length;
+  const available = total - missingAgents.length;
+  return missingAgents.length === 0 ? String(total) : `${available}/${total}`;
 }
 
 function formatAgentNames(names: readonly string[]): string {

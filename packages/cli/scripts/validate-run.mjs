@@ -170,6 +170,50 @@ function validateBinarySmoke() {
   );
 }
 
+function validateMultiAgentListAvailability() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-list-cwd-'));
+  const home = mkdtempSync(path.join(tmpdir(), 'texra-cli-list-home-'));
+  try {
+    const env = Object.fromEntries(
+      validationProviderApiKeyEnv.map((name) => [name, '']),
+    );
+    const text = run(
+      process.execPath,
+      [binaryPath, 'multi-agent', 'list', '--cwd', cwd, '--no-color'],
+      {
+        cwd: repoRoot,
+        env: {
+          ...env,
+          HOME: home,
+          XDG_CONFIG_HOME: path.join(home, '.config'),
+          XDG_DATA_HOME: path.join(home, '.local/share'),
+          XDG_CACHE_HOME: path.join(home, '.cache'),
+          TEXRA_NO_UPDATE_CHECK: '1',
+        },
+      },
+    );
+    assertSuccess(text, 'texra multi-agent list');
+    const leanProjectLine = text.stdout
+      .split('\n')
+      .find((line) => line.includes('\tlean-project\t'));
+    assert(
+      leanProjectLine != null,
+      `multi-agent list should include lean-project\nstdout:\n${text.stdout}`,
+    );
+    assert(
+      /\ttool-use:\d+\/7\t(degraded|unavailable)(\t|$)/.test(leanProjectLine),
+      `lean-project should show no-auth available/total tool-use availability\nline:\n${leanProjectLine}`,
+    );
+    assert(
+      !leanProjectLine.includes('\ttool-use:7'),
+      `lean-project should not claim the full preset is available without auth\nline:\n${leanProjectLine}`,
+    );
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+}
+
 function validateFileFlagMissingValues() {
   assertUsageError(
     run(process.execPath, [binaryPath, 'run', 'polish', '--input', '--print']),
@@ -1278,6 +1322,7 @@ async function validateCliRunArtifacts() {
   });
   assertSuccess(buildResult, 'pnpm run build');
   validateBinarySmoke();
+  validateMultiAgentListAvailability();
   validateFileFlagMissingValues();
   await validateOrchestratePreservesScrollback();
   await validateOrchestrateApiModeOnboardingPickers();
