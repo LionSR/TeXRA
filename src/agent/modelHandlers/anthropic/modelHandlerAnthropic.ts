@@ -91,7 +91,6 @@ import {
   setupContextManagement,
   logContextManagementFromResponse,
   enforceCacheControlLimit,
-  type ContextManagementSetupOptions,
 } from './anthropicContextManagement';
 import {
   extractDocumentBlocks,
@@ -137,7 +136,6 @@ import type {
 } from '@anthropic-ai/sdk/resources/beta/messages';
 import type {
   Base64ImageSource,
-  CacheControlEphemeral,
   MessageParam,
   ContentBlockParam,
   ToolUseBlock,
@@ -162,10 +160,7 @@ function extractPartialTextTail(
 ): string {
   if (!message?.content) return '';
   const text = message.content
-    .filter(
-      (block): block is Extract<BetaContentBlock, { type: 'text' }> =>
-        block.type === 'text',
-    )
+    .filter(isBetaTextBlock)
     .map((block) => block.text)
     .join('');
   return takeTail(text, maxChars);
@@ -180,6 +175,12 @@ const isAnyThinkingBlockParam = (
 /** Type guard for tool use blocks in Beta API responses */
 const isBetaToolUseBlock = (block: BetaContentBlock): block is ToolUseBlock =>
   block.type === 'tool_use';
+
+/** Type guard for text blocks in Beta API responses */
+const isBetaTextBlock = (
+  block: BetaContentBlock,
+): block is Extract<BetaContentBlock, { type: 'text' }> =>
+  block.type === 'text';
 
 const INTERLEAVED_THINKING_BETA: AnthropicBeta =
   'interleaved-thinking-2025-05-14';
@@ -253,22 +254,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
    */
   protected override get supportsToolResultFileUpload(): boolean {
     return true;
-  }
-
-  /**
-   * Sets up context management configuration for Anthropic's server-side editing.
-   * Must be called before token counting so estimate options match create options.
-   */
-  private setupContextManagement(opts: ContextManagementSetupOptions): void {
-    const consumed = setupContextManagement(
-      opts,
-      this.isToolUseMode(),
-      isCompactionEligibleModel(this.config.fullName),
-      this.compactionRequested,
-    );
-    if (consumed) {
-      this.compactionRequested = false;
-    }
   }
 
   async getClient(): Promise<Anthropic> {
@@ -412,7 +397,12 @@ export class ModelHandlerAnthropic extends ModelHandler<
       ? LONG_CACHE_CONTROL
       : SHORT_CACHE_CONTROL;
 
-    this.enforceCacheControlLimit(messages, reservedCacheSlots, cacheControl);
+    enforceCacheControlLimit(
+      messages,
+      reservedCacheSlots,
+      cacheControl,
+      this.capabilities.supportsPromptCaching,
+    );
 
     const documentAnalysis = analyzeDocumentSources(messages);
     let hasFileReference = documentAnalysis.hasFileSource;
@@ -520,11 +510,19 @@ export class ModelHandlerAnthropic extends ModelHandler<
       'texra.model.compactionThresholdPercent',
       DEFAULT_COMPACTION_THRESHOLD_PERCENT,
     );
-    this.setupContextManagement({
-      options,
-      contextWindow: effectiveContextWindow,
-      thresholdPercent: compactionThresholdPercent,
-    });
+    const compactionConsumed = setupContextManagement(
+      {
+        options,
+        contextWindow: effectiveContextWindow,
+        thresholdPercent: compactionThresholdPercent,
+      },
+      this.isToolUseMode(),
+      isCompactionEligibleModel(this.config.fullName),
+      this.compactionRequested,
+    );
+    if (compactionConsumed) {
+      this.compactionRequested = false;
+    }
 
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust max_tokens if needed
@@ -762,19 +760,6 @@ export class ModelHandlerAnthropic extends ModelHandler<
     );
 
     return { response };
-  }
-
-  private enforceCacheControlLimit(
-    messages: MessageParam[],
-    reservedSlots: number,
-    cacheControl: CacheControlEphemeral,
-  ): void {
-    enforceCacheControlLimit(
-      messages,
-      reservedSlots,
-      cacheControl,
-      this.capabilities.supportsPromptCaching,
-    );
   }
 
   /** Initializes the message array for Anthropic chat models with user prefix, request, and optional media. */
@@ -1022,10 +1007,7 @@ export class ModelHandlerAnthropic extends ModelHandler<
     // Extract base response
     const stopReason = responseObject.stop_reason;
     let newResponse = responseObject.content
-      .filter(
-        (block): block is Extract<BetaContentBlock, { type: 'text' }> =>
-          block.type === 'text',
-      )
+      .filter(isBetaTextBlock)
       .map((block) => block.text.trim())
       .join('');
 
