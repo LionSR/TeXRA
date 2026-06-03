@@ -53,12 +53,16 @@ jobs:
 
       - name: TeXRA review
         if: steps.keys.outputs.present == 'true'
-        # texra-ai/texra-action v1.0.0; pin the reviewed release commit so
+        # texra-ai/texra-action v1.1.0; pin the reviewed release commit so
         # PR review behavior only changes through an explicit workflow update.
-        # Review mode defaults to api-mode=personal and approval-policy=never.
-        uses: texra-ai/texra-action/review@911e9a550ace3abd9e85f9d36a050940d6da6c5c
+        # Keep the secret-bearing review job read-only: provider keys and the
+        # GitHub token are present, so shell/tool mutations must stay disabled.
+        uses: texra-ai/texra-action/review@7800c7098bcb4d4bf956aa5dc72437eb5d0af6ac
         with:
           prompt-file: .trusted-review-prompt/.github/prompts/texra-code-review-prompt.md
+          approval-policy: never
+          require-write-access: 'true'
+          allow-bots: dependabot[bot]
           model: ${{ vars.TEXRA_REVIEW_MODEL }}
           model-defaults: ${{ vars.TEXRA_REVIEW_MODEL_DEFAULTS }}
           texra-version: ${{ vars.TEXRA_CLI_VERSION }}
