@@ -71,6 +71,7 @@ describe('CLI agents command', () => {
     expect(parseAgentCategoryFilter('workflow')).toBe(AgentCategory.Workflow);
     expect(parseAgentCategoryFilter('toolUse')).toBe(AgentCategory.ToolUse);
     expect(parseAgentCategoryFilter('tool-use')).toBe(AgentCategory.ToolUse);
+    expect(parseAgentCategoryFilter('tool_use')).toBe(AgentCategory.ToolUse);
     expect(parseAgentCategoryFilter('work-flow')).toBeUndefined();
     expect(parseAgentCategoryFilter('unknown')).toBeUndefined();
   });
