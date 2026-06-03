@@ -129,7 +129,6 @@ describe('resolveCliRunModel precedence', () => {
       {
         apiMode: 'personal',
         fallbackMode: 'silent',
-        noAvailableModelsMessage: undefined,
       },
     );
   });
@@ -175,7 +174,6 @@ describe('resolveCliRunModel precedence', () => {
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith('opus48T', {
       apiMode: 'personal',
       fallbackMode: 'reject',
-      noAvailableModelsMessage: undefined,
     });
   });
 
@@ -190,7 +188,6 @@ describe('resolveCliRunModel precedence', () => {
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith('opus48T', {
       apiMode: 'personal',
       fallbackMode: 'reject',
-      noAvailableModelsMessage: undefined,
     });
   });
 });

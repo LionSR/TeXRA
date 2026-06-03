@@ -25,7 +25,6 @@ export type CliModelFallbackMode = 'reject' | 'notice' | 'silent';
 export interface CliRunnableModelOptions {
   readonly fallbackMode: CliModelFallbackMode;
   readonly apiMode?: CliApiMode;
-  readonly noAvailableModelsHint?: string;
   readonly noAvailableModelsMessage?: string;
 }
 
@@ -50,6 +49,11 @@ const CLI_MODEL_FALLBACK_MODE_BY_SOURCE = {
 
 export interface CliModelAccessListOptions {
   readonly apiMode?: CliApiMode;
+}
+
+export interface CliNoAvailableModelsRecoveryOptions {
+  readonly includedModeAction?: string;
+  readonly personalModeAction?: string;
 }
 
 const CLI_MODEL_AVAILABILITY_BY_API_MODE = {
@@ -118,6 +122,24 @@ export function cliRunnableModelOptionsForSource(
     ...options,
     fallbackMode: cliModelFallbackModeForSource(source),
   };
+}
+
+export function formatCliNoAvailableModelsRecovery(
+  apiMode?: CliApiMode,
+  options: CliNoAvailableModelsRecoveryOptions = {},
+): string {
+  const includedModeAction =
+    options.includedModeAction ?? 'retry with `--api-mode included`';
+  const personalModeAction =
+    options.personalModeAction ?? 'retry with `--api-mode personal`';
+
+  if (apiMode === 'personal') {
+    return `Configure a provider API key for personal mode, or ${includedModeAction} and run \`texra login\` for included relay access.`;
+  }
+  if (apiMode === 'included') {
+    return `Run \`texra login\` for included relay access, or ${personalModeAction} after configuring a provider API key.`;
+  }
+  return `Run \`texra login\` for included relay access, ${includedModeAction}, or configure a provider API key.`;
 }
 
 function toCliModelAccess(
@@ -203,17 +225,14 @@ function formatAvailableModels(
   ids: readonly string[],
   options: Pick<
     CliRunnableModelOptions,
-    'noAvailableModelsHint' | 'noAvailableModelsMessage'
+    'apiMode' | 'noAvailableModelsMessage'
   >,
 ): string {
   if (ids.length > 0) return `Available models: ${ids.join(', ')}.`;
-  if (options.noAvailableModelsMessage) {
-    return `No models are currently available. ${options.noAvailableModelsMessage}`;
-  }
-  const modeHint =
-    options.noAvailableModelsHint ??
-    'Retry with `--api-mode included` to try included relay access';
-  return `No models are currently available. ${modeHint}, run \`texra login\`, or configure a provider API key.`;
+  const recoveryMessage =
+    options.noAvailableModelsMessage ??
+    formatCliNoAvailableModelsRecovery(options.apiMode);
+  return `No models are currently available. ${recoveryMessage}`;
 }
 
 function formatUnavailableModelMessage(
@@ -222,7 +241,7 @@ function formatUnavailableModelMessage(
   availableIds: readonly string[],
   options: Pick<
     CliRunnableModelOptions,
-    'noAvailableModelsHint' | 'noAvailableModelsMessage'
+    'apiMode' | 'noAvailableModelsMessage'
   >,
 ): string {
   const status = entry ? ` (${entry.status})` : '';
