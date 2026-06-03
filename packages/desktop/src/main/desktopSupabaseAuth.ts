@@ -46,7 +46,6 @@ export interface DesktopAuthProfileData {
   permissions: string[];
   remoteAgents: RemoteAgent[];
   apiAccessMode: 'included' | 'personal';
-  allowedModels: string[] | null;
   accessExpiresAt?: string | null;
 }
 
@@ -336,16 +335,13 @@ async function loadDesktopAuthProfileData(): Promise<DesktopAuthProfileData> {
   }
 
   let apiAccessMode: 'included' | 'personal' = 'personal';
-  let allowedModels: string[] | null = [];
   let accessExpiresAt: string | null = null;
   try {
     const serverSideKeyService = getServerSideKeyService();
     apiAccessMode = serverSideKeyService.getUseIncludedModelAccess()
       ? 'included'
       : 'personal';
-    allowedModels = (await serverSideKeyService.canUseServerSideKeys())
-      ? serverSideKeyService.getAllowedModelsForCurrentUser()
-      : [];
+    await serverSideKeyService.canUseServerSideKeys();
     accessExpiresAt =
       serverSideKeyService.getAccessExpirationDate()?.toISOString() ?? null;
   } catch {
@@ -370,7 +366,6 @@ async function loadDesktopAuthProfileData(): Promise<DesktopAuthProfileData> {
     permissions: authContext.permissions,
     remoteAgents,
     apiAccessMode,
-    allowedModels,
     accessExpiresAt,
   };
 }
@@ -383,7 +378,6 @@ export function unauthenticatedProfileData(): DesktopAuthProfileData {
     permissions: [],
     remoteAgents: [],
     apiAccessMode: 'personal',
-    allowedModels: [],
     accessExpiresAt: null,
   };
 }

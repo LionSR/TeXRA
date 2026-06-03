@@ -89,7 +89,6 @@ export const UpdateProfileMessageSchema = z.object({
   permissions: z.array(z.string()),
   remoteAgents: z.array(RemoteAgentSchema),
   apiAccessMode: ApiAccessModeSchema,
-  allowedModels: z.array(z.string()).nullable(),
   tierConstants: TierConstantsSchema,
   accessExpiresAt: z.string().nullish(),
   spendingStatus: SpendingStatusSchema.nullish(),

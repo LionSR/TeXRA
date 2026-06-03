@@ -77,9 +77,6 @@ function createTierService(
     isModelAvailable() {
       return false;
     },
-    getAllowedModels() {
-      return [];
-    },
     getAccessDescription() {
       return 'No included model access';
     },

@@ -1442,7 +1442,6 @@ describe('desktop settings IPC', () => {
         permissions: [],
         remoteAgents: [],
         apiAccessMode: 'personal',
-        allowedModels: [],
         accessExpiresAt: null,
       }),
     });
@@ -1493,7 +1492,6 @@ describe('desktop settings IPC', () => {
         permissions: [],
         remoteAgents: [],
         apiAccessMode: 'personal',
-        allowedModels: [],
         accessExpiresAt: null,
       }),
     });
@@ -1534,7 +1532,6 @@ describe('desktop settings IPC', () => {
         permissions: [],
         remoteAgents: [],
         apiAccessMode: 'included',
-        allowedModels: [],
         accessExpiresAt: null,
       }),
     });
@@ -1542,6 +1539,11 @@ describe('desktop settings IPC', () => {
     await settings.refreshAuthDependentData();
 
     expect(loadCount).toBe(1);
+    expect(invalidateModelOptionsCache).toHaveBeenCalled();
+    expect(computeModelOptionsData).toHaveBeenCalled();
+    expect(
+      invalidateModelOptionsCache.mock.invocationCallOrder[0],
+    ).toBeLessThan(computeModelOptionsData.mock.invocationCallOrder[0]);
     expect(
       posted.map((message) => (message as { command?: string }).command),
     ).toEqual(
@@ -1655,7 +1657,6 @@ describe('desktop settings IPC', () => {
         permissions: [],
         remoteAgents: [],
         apiAccessMode: 'personal',
-        allowedModels: [],
         accessExpiresAt: null,
       }),
     });

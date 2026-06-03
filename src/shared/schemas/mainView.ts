@@ -83,15 +83,27 @@ export const ModelAvailabilityKindSchema = z.enum([
 ]);
 export type ModelAvailabilityKind = z.infer<typeof ModelAvailabilityKindSchema>;
 
+/**
+ * Resolved per-model availability under the active API mode. Computed once by
+ * `computeModelOptionsData` and shared verbatim across hosts (CLI picker,
+ * extension Models tab) so availability is never re-derived at render time.
+ */
+export const ModelAvailabilityFieldsSchema = z.object({
+  availability: ModelAvailabilityKindSchema.optional(),
+  availabilityLabel: z.string().optional(),
+  requiresKey: z.boolean().optional(),
+  disabled: z.boolean().optional(),
+});
+export type ModelAvailabilityFields = z.infer<
+  typeof ModelAvailabilityFieldsSchema
+>;
+
 export const ModelOptionDataSchema = PickerOptionBaseSchema.extend({
   provider: z.string().optional(),
   context: z.string().optional(),
   cost: z.string().optional(),
   hint: z.string().optional(),
-  availability: ModelAvailabilityKindSchema.optional(),
-  availabilityLabel: z.string().optional(),
-  requiresKey: z.boolean().optional(),
-  disabled: z.boolean().optional(),
+  ...ModelAvailabilityFieldsSchema.shape,
 });
 export type ModelOptionData = z.infer<typeof ModelOptionDataSchema>;
 
