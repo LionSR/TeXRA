@@ -1,5 +1,5 @@
 // Third-party imports
-import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,14 +10,7 @@ import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 let secretStore: Map<string, string>;
 let cleanupDirs: string[];
 let execFileSyncMock: ReturnType<typeof vi.fn>;
-let originalProcessPlatform: NodeJS.Platform;
-
-function stubProcessPlatform(platform: NodeJS.Platform): void {
-  Object.defineProperty(process, 'platform', {
-    value: platform,
-    configurable: true,
-  });
-}
+let homedirMock: string;
 
 async function loadBuildClaudeAgentEnv(): Promise<
   typeof import('@tools/claudeAgentConfig').buildClaudeAgentEnv
@@ -27,6 +20,14 @@ async function loadBuildClaudeAgentEnv(): Promise<
     return {
       ...actual,
       execFileSync: execFileSyncMock,
+    };
+  });
+
+  vi.doMock('os', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('os')>();
+    return {
+      ...actual,
+      homedir: () => homedirMock,
     };
   });
 
@@ -49,9 +50,9 @@ async function loadBuildClaudeAgentEnv(): Promise<
 
 describe('Claude Code CLI configuration', () => {
   beforeEach(() => {
-    originalProcessPlatform = process.platform;
     secretStore = new Map();
     cleanupDirs = [];
+    homedirMock = os.homedir();
     execFileSyncMock = vi.fn(() => {
       throw new Error('not found');
     });
@@ -71,10 +72,10 @@ describe('Claude Code CLI configuration', () => {
 
   afterEach(() => {
     vi.doUnmock('child_process');
+    vi.doUnmock('os');
     vi.doUnmock('@platform/platform');
     invalidateApiKeyCache();
     vi.unstubAllEnvs();
-    stubProcessPlatform(originalProcessPlatform);
     for (const dir of cleanupDirs)
       rmSync(dir, { recursive: true, force: true });
   });
@@ -142,8 +143,23 @@ describe('Claude Code CLI configuration', () => {
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
   });
 
+  it('expands a tilde CLAUDE_CONFIG_DIR before checking for a login session file', async () => {
+    const homeDir = mkdtempSync(path.join(os.tmpdir(), 'texra-home-'));
+    const sessionDir = path.join(homeDir, '.claude');
+    mkdirSync(sessionDir);
+    writeFileSync(path.join(sessionDir, '.credentials.json'), '{}');
+    cleanupDirs.push(homeDir);
+    homedirMock = homeDir;
+    vi.stubEnv('CLAUDE_CONFIG_DIR', '~/.claude');
+    vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
+    secretStore.set(apiKeySecretName('anthropic'), 'from-secret');
+
+    const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
+    const env = await buildClaudeAgentEnv();
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
   it('strips ANTHROPIC_API_KEY when a config-dir keychain OAuth session exists', async () => {
-    stubProcessPlatform('darwin');
     const configDir = path.join(os.tmpdir(), 'texra-test-claude-profile');
     vi.stubEnv('CLAUDE_CONFIG_DIR', configDir);
     vi.stubEnv('ANTHROPIC_API_KEY', 'from-env');
@@ -159,7 +175,7 @@ describe('Claude Code CLI configuration', () => {
     });
 
     const buildClaudeAgentEnv = await loadBuildClaudeAgentEnv();
-    const env = await buildClaudeAgentEnv();
+    const env = await buildClaudeAgentEnv({ platform: 'darwin' });
     expect(env.ANTHROPIC_API_KEY).toBeUndefined();
   });
 

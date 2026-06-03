@@ -111,14 +111,14 @@ export const getClaudeAgentEffort: () => ClaudeAgentEffort =
  */
 function hasClaudeOauthCredential(
   env: NodeJS.ProcessEnv = process.env,
+  currentPlatform: NodeJS.Platform = process.platform,
 ): boolean {
   if (env.CLAUDE_CODE_OAUTH_TOKEN) return true;
 
-  const configDir =
-    env.CLAUDE_CONFIG_DIR?.trim() || path.join(os.homedir(), '.claude');
+  const configDir = resolveClaudeConfigDir(env.CLAUDE_CONFIG_DIR);
   if (existsSync(path.join(configDir, '.credentials.json'))) return true;
 
-  if (process.platform === 'darwin') {
+  if (currentPlatform === 'darwin') {
     for (const probe of claudeKeychainCredentialProbes(configDir)) {
       try {
         execFileSync('security', probe, { stdio: 'ignore', timeout: 1000 });
@@ -130,6 +130,20 @@ function hasClaudeOauthCredential(
   }
 
   return false;
+}
+
+function resolveClaudeConfigDir(configDirInput: string | undefined): string {
+  const configDir = configDirInput?.trim();
+  if (!configDir) return path.join(os.homedir(), '.claude');
+  return expandHomePath(configDir);
+}
+
+function expandHomePath(filePath: string): string {
+  if (filePath === '~') return os.homedir();
+  if (filePath.startsWith('~/') || filePath.startsWith('~\\')) {
+    return path.join(os.homedir(), filePath.slice(2));
+  }
+  return filePath;
 }
 
 function claudeKeychainCredentialProbes(configDir: string): string[][] {
@@ -177,7 +191,9 @@ function claudeKeychainCredentialProbes(configDir: string): string[][] {
  *
  * The SDK identifies itself in the User-Agent via CLAUDE_AGENT_SDK_CLIENT_APP.
  */
-export async function buildClaudeAgentEnv(): Promise<NodeJS.ProcessEnv> {
+export async function buildClaudeAgentEnv(
+  options: { platform?: NodeJS.Platform } = {},
+): Promise<NodeJS.ProcessEnv> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
   const oauthToken = env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
@@ -191,7 +207,7 @@ export async function buildClaudeAgentEnv(): Promise<NodeJS.ProcessEnv> {
 
   // 1. OAuth wins: drop any inherited API key so it can't out-prioritize the
   //    OAuth credential, and skip injecting the managed secret entirely.
-  if (hasClaudeOauthCredential(env)) {
+  if (hasClaudeOauthCredential(env, options.platform ?? process.platform)) {
     delete env[apiKeyVar];
     return env;
   }
