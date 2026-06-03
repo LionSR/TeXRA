@@ -496,18 +496,6 @@ function statusBarCanStopStatus(status: StreamStatus | undefined): boolean {
   );
 }
 
-function statusBarCanRepresentFocusedSlice(
-  status: StreamStatus | undefined,
-): boolean {
-  return (
-    status === undefined ||
-    status === STREAM_STATUS.INITIALIZING ||
-    status === STREAM_STATUS.RUNNING ||
-    status === STREAM_STATUS.RESUMING ||
-    status === STREAM_STATUS.WAITING
-  );
-}
-
 function statusBarCanRepresentLiveAncestor(
   status: StreamStatus | undefined,
 ): boolean {
@@ -580,18 +568,13 @@ export function statusBarDisplaySlice({
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): StreamSlice | undefined {
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  if (activeSlice && statusBarCanRepresentFocusedSlice(activeSlice.status)) {
-    return activeSlice;
-  }
-  return (
-    statusBarFindAncestorStream({
-      activeStreamId,
-      parentStream,
-      streams,
-      canUseStream: (stream) =>
-        statusBarCanRepresentLiveAncestor(stream.status),
-    }) ?? activeSlice
-  );
+  if (activeSlice) return activeSlice;
+  return statusBarFindAncestorStream({
+    activeStreamId,
+    parentStream,
+    streams,
+    canUseStream: (stream) => statusBarCanRepresentLiveAncestor(stream.status),
+  });
 }
 
 export function buildStatusBarDisplay(
