@@ -117,9 +117,7 @@ describe('TUI validator args', () => {
     expect(result.stderr).toContain(
       '[validate-tui] custom harness does not exist:',
     );
-    expect(result.stderr).toContain(
-      path.join('packages', 'cli', missingHarness),
-    );
+    expect(result.stderr).toContain(path.resolve(missingHarness));
     expect(result.stderr).not.toContain('building tui-harness bundle');
   });
 

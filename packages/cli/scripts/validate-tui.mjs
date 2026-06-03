@@ -73,9 +73,9 @@ const DEFAULT_HARNESS_RELATIVE_PATH = path.join(
   'bin',
   'tui-harness.js',
 );
-const HARNESS_PATH_INPUT =
-  process.env.TEXRA_TUI_HARNESS || DEFAULT_HARNESS_RELATIVE_PATH;
-const HARNESS = path.resolve(CLI_ROOT, HARNESS_PATH_INPUT);
+const HARNESS = process.env.TEXRA_TUI_HARNESS
+  ? path.resolve(process.env.TEXRA_TUI_HARNESS)
+  : path.resolve(CLI_ROOT, DEFAULT_HARNESS_RELATIVE_PATH);
 
 // --- scenarios (verified against the committed harness) ------------------
 const SCENARIOS = [
