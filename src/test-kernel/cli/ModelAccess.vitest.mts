@@ -7,6 +7,7 @@ import {
   runnableCliModelAccessEntries,
   resolveCliRunnableModel,
   resolveCliRunnableModelFromAccessList,
+  resolveCliRunnableModelWithAccessList,
   type CliModelAccess,
   type CliModelFallbackMode,
   type CliModelSelectionSource,
@@ -491,6 +492,39 @@ describe('CLI model access resolution', () => {
       }),
     ).resolves.toEqual({ model: 'hiddenFixtureModel' });
     expect(computeModelOptionsDataMock).toHaveBeenNthCalledWith(2, [
+      'hiddenFixtureModel',
+    ]);
+  });
+
+  it('checks hidden model access against a supplied visible model list', async () => {
+    computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('hiddenFixtureModel', {
+        availability: 'provider-key',
+        availabilityLabel: 'API key set',
+      }),
+    ]);
+
+    await expect(
+      resolveCliRunnableModelWithAccessList(
+        [
+          model('deepseekT', {
+            available: false,
+            status: 'missing api key',
+            model: modelOption('deepseekT', {
+              availability: 'missing-key',
+              disabled: true,
+              requiresKey: true,
+            }),
+          }),
+        ],
+        'hiddenFixtureModel',
+        {
+          fallbackMode: 'reject',
+          apiMode: 'personal',
+        },
+      ),
+    ).resolves.toEqual({ model: 'hiddenFixtureModel' });
+    expect(computeModelOptionsDataMock).toHaveBeenCalledWith([
       'hiddenFixtureModel',
     ]);
   });
