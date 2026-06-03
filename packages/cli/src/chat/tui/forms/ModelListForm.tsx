@@ -77,12 +77,38 @@ export function modelSelectItemsForCliMode(
   }));
 }
 
-function EmptyModelListState(props: { readonly onClose: () => void }) {
+export function emptyModelListMessageForCliMode(
+  models: readonly CliModelAccess[],
+  apiMode: CliApiMode,
+): string {
+  if (
+    apiMode === 'included' &&
+    models.some(
+      (model) => model.model.availability === 'included-login-required',
+    )
+  ) {
+    return 'Included relay models require sign-in. Run /login or switch with /api personal.';
+  }
+
+  if (apiMode === 'included') {
+    return 'No included relay models are runnable. Switch with /api personal or try again later.';
+  }
+
+  return 'No personal API-key models are runnable. Configure a provider key or switch with /api included.';
+}
+
+function EmptyModelListState(props: {
+  readonly models: readonly CliModelAccess[];
+  readonly apiMode: CliApiMode;
+  readonly onClose: () => void;
+}) {
   useInput((input, key) => {
     if (isPlainReturnInput(input, key)) props.onClose();
   });
 
-  return <Text>No models are available in this API mode.</Text>;
+  return (
+    <Text>{emptyModelListMessageForCliMode(props.models, props.apiMode)}</Text>
+  );
 }
 
 export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
@@ -164,7 +190,11 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
           : 'Available models. Start a new chat with texra chat --model=<name> to choose the root model.'}
       </Text>
       {items.length === 0 ? (
-        <EmptyModelListState onClose={props.onClose} />
+        <EmptyModelListState
+          models={models}
+          apiMode={props.apiMode}
+          onClose={props.onClose}
+        />
       ) : (
         <Box flexDirection="column">
           <Select
