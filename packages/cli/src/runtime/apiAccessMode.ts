@@ -33,7 +33,7 @@ export function formatCliApiMode(mode: CliApiMode): string {
 }
 
 export function shortCliApiMode(mode: CliApiMode): string {
-  return mode === 'included' ? 'relay' : 'api';
+  return mode === 'included' ? 'relay' : 'keys';
 }
 
 export function parseCliApiMode(input: string): CliApiMode | undefined {

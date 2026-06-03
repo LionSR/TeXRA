@@ -66,7 +66,7 @@ describe('CLI tools runtime', () => {
           status: 'available',
         }),
       ),
-    ).toBe('always on · detected · available');
+    ).toBe('always on · detected · Ready');
 
     expect(
       formatToolDescriptionForTui(
@@ -74,10 +74,19 @@ describe('CLI tools runtime', () => {
           enabled: true,
           detected: false,
           status: 'not-found',
-          statusLabel: 'Needs setup',
         }),
       ),
     ).toBe('enabled · not detected · Needs setup');
+
+    expect(
+      formatToolDescriptionForTui(
+        record({
+          enabled: true,
+          detected: null,
+          status: 'unknown',
+        }),
+      ),
+    ).toBe('enabled · detection unknown · Not checked');
 
     expect(
       formatToolDescriptionForTui(

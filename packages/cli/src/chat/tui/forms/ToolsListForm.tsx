@@ -9,6 +9,7 @@ import {
   setCliToolEnabled,
   type CliToolStatusRecord,
 } from '@cli/runtime/tools';
+import { toolStatusLabel } from '@shared/tools/toolStatusLabels';
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
 import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
@@ -40,7 +41,7 @@ function formatToolDetectionForTui(
 
 function formatToolStatusForTui(tool: CliToolStatusRecord): string {
   if (tool.comingSoon) return 'not yet usable';
-  return tool.statusLabel ?? tool.status;
+  return toolStatusLabel(tool.status, tool.statusLabel);
 }
 
 export function formatToolDescriptionForTui(tool: CliToolStatusRecord): string {
