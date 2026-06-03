@@ -460,7 +460,7 @@ const SCENARIOS = [
     expect: [
       '/agent',
       'Tool-use agents',
-      '+4 earlier, +13 more',
+      '+2 earlier, +7 more',
       '↑/↓ navigate',
       'Enter close',
       'Esc close',
