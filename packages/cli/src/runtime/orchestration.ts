@@ -8,7 +8,7 @@ import {
 } from './multiAgentPresets';
 import { defaultToolUseAgents } from './defaultAgents';
 import { formatCliHistoryInputLabel } from './historyLabels';
-import type { CliHistoryEntry } from './history';
+import { resumableCliHistoryEntries, type CliHistoryEntry } from './history';
 
 export type CliOrchestrationAction =
   | { readonly kind: 'chat'; readonly agent?: string; readonly model?: string }
@@ -65,11 +65,13 @@ export function buildCliOrchestrationItems(
 function recentResumeItems(
   history: readonly CliHistoryEntry[],
 ): CliOrchestrationItem[] {
-  return history.slice(0, MAX_RECENT_RESUME_ITEMS).map((entry) => ({
-    value: { kind: 'resume', id: entry.id },
-    label: `Resume ${entry.id}`,
-    description: `${entry.agent}; ${entry.status}; ${formatCliHistoryInputLabel(entry.inputBasename)}`,
-  }));
+  return resumableCliHistoryEntries(history)
+    .slice(0, MAX_RECENT_RESUME_ITEMS)
+    .map((entry) => ({
+      value: { kind: 'resume', id: entry.id },
+      label: `Resume ${entry.id}`,
+      description: `${entry.agent}; ${entry.status}; ${formatCliHistoryInputLabel(entry.inputBasename)}`,
+    }));
 }
 
 function recentAgentItems(
