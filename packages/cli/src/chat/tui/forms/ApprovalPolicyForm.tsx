@@ -2,7 +2,7 @@ import { Box, Text } from 'ink';
 
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import { KeyHints } from '../ui/KeyHints';
-import { Select } from '../ui/Select';
+import { Select, type SelectItem } from '../ui/Select';
 import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
 import { isCompactFormRows } from './_shared/selectWindow';
 
@@ -20,38 +20,38 @@ export function formatApprovalPolicyForCli(policy: CliApprovalPolicy): string {
     case 'never':
       return 'deny privileged actions';
     case 'yolo':
-      return 'approve privileged actions';
+      return 'auto-approve privileged actions';
   }
 }
+
+export const APPROVAL_POLICY_ITEMS = [
+  {
+    value: 'ask',
+    label: 'Ask',
+    description: formatApprovalPolicyForCli('ask'),
+  },
+  {
+    value: 'never',
+    label: 'Never',
+    description: formatApprovalPolicyForCli('never'),
+  },
+  {
+    value: 'yolo',
+    label: 'Auto-approve',
+    description: formatApprovalPolicyForCli('yolo'),
+  },
+] as const satisfies ReadonlyArray<SelectItem<CliApprovalPolicy>>;
 
 export function ApprovalPolicyForm(
   props: ApprovalPolicyFormProps,
 ): React.JSX.Element {
-  const items = [
-    {
-      value: 'ask' as const,
-      label: 'Ask',
-      description: formatApprovalPolicyForCli('ask'),
-    },
-    {
-      value: 'never' as const,
-      label: 'Never',
-      description: formatApprovalPolicyForCli('never'),
-    },
-    {
-      value: 'yolo' as const,
-      label: 'Approve',
-      description: formatApprovalPolicyForCli('yolo'),
-    },
-  ];
-
   if (isCompactFormRows(props.availableRows)) {
     return (
       <FormFrame color="cyan" title="/approval" showCloseHint={false}>
         <Select
-          items={items}
+          items={APPROVAL_POLICY_ITEMS}
           activeValue={props.currentPolicy}
-          maxVisibleItems={items.length}
+          maxVisibleItems={APPROVAL_POLICY_ITEMS.length}
           showOverflow={false}
           onSelect={props.onSelect}
           onCancel={props.onCancel}
@@ -71,10 +71,12 @@ export function ApprovalPolicyForm(
       <Text bold color="cyan">
         /approval
       </Text>
-      <Text dimColor>Choose how privileged actions should be handled.</Text>
+      <Text dimColor>
+        Choose when privileged actions prompt or auto-approve.
+      </Text>
       <Box marginTop={1} flexDirection="column">
         <Select
-          items={items}
+          items={APPROVAL_POLICY_ITEMS}
           activeValue={props.currentPolicy}
           onSelect={props.onSelect}
           onCancel={props.onCancel}
