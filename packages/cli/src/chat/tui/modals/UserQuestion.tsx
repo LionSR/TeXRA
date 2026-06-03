@@ -181,32 +181,6 @@ export function userQuestionFreeTextSuggestionLine({
   return clipToWidth(`${prefix}${suffix}`, width);
 }
 
-export function userQuestionPromptLines({
-  context,
-  question,
-  width,
-}: {
-  readonly context?: string | null;
-  readonly question: string;
-  readonly width: number;
-}): readonly UserQuestionPromptLine[] {
-  const wrapWidth = Math.max(MIN_USER_QUESTION_CONTENT_WIDTH, width);
-  return [
-    ...(context
-      ? wrappedUserQuestionPromptLines({
-          kind: 'context',
-          text: context,
-          width: wrapWidth,
-        })
-      : []),
-    ...wrappedUserQuestionPromptLines({
-      kind: 'question',
-      text: question,
-      width: wrapWidth,
-    }),
-  ];
-}
-
 export function boundedUserQuestionPromptLines({
   context,
   maxDisplayLines,
