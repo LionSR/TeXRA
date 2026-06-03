@@ -21,9 +21,11 @@
  * redact at emit time — the trade-off is cost/flexibility (most channel output
  * is product-internal and never persisted off-box). Hosts that persist or ship
  * logs off the machine MUST run text through {@link redactSecrets} in their sink
- * (see `desktopAppLog.ts` / the CLI log sinks for the reference wiring) before
- * writing. SDK consumers wiring a custom {@link setOutputChannelFactory} take on
- * the same contract; a sink that forgets it can leak API keys/paths into logs.
+ * (see `desktopAppLog.ts` for the reference redacting wiring) before writing.
+ * SDK consumers wiring a custom {@link setOutputChannelFactory} take on the same
+ * contract; a sink that forgets it can leak API keys/paths into logs. (The CLI
+ * stdout/stderr sinks in `logSinks.ts` are a deliberate non-redacting exception —
+ * they target the operator's own terminal, not a persisted/exported artifact.)
  */
 import type {
   AgentEvent,
