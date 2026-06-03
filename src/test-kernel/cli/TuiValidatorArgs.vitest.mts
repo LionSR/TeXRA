@@ -23,6 +23,7 @@ describe('TUI validator args', () => {
     expect(result.stdout).toContain('[validate-tui] usage:');
     expect(result.stdout).toContain('--snapshot-dir DIR');
     expect(result.stdout).toContain('--list');
+    expect(result.stdout).toContain('--list-selected');
     expect(result.stdout).toContain('Available scenarios:');
     expect(result.stdout).toContain('nested-subagent-picker');
     expect(result.stderr).not.toContain('building tui-harness bundle');
@@ -52,6 +53,56 @@ describe('TUI validator args', () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout.split('\n')).toContain('transcript');
+    expect(result.stderr).toBe('');
+  });
+
+  it('prints selected scenarios in requested order without building the harness', () => {
+    const result = runValidator([
+      '--list-selected',
+      'compact-user-question',
+      'plan-approval-odyssey',
+      'slash-palette',
+    ]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim().split('\n')).toEqual([
+      'compact-user-question',
+      'plan-approval-odyssey',
+      'slash-palette',
+    ]);
+    expect(result.stderr).not.toContain('building tui-harness bundle');
+  });
+
+  it('preserves repeated selected scenarios for snapshot order checks', () => {
+    const result = runValidator([
+      '--list-selected',
+      'slash-palette',
+      'compact-user-question',
+      'slash-palette',
+    ]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim().split('\n')).toEqual([
+      'slash-palette',
+      'compact-user-question',
+      'slash-palette',
+    ]);
+    expect(result.stderr).toBe('');
+  });
+
+  it('treats a leading package-manager separator as transparent for selected scenarios', () => {
+    const result = runValidator([
+      '--',
+      '--list-selected',
+      'plan-approval-odyssey',
+      'compact-user-question',
+    ]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim().split('\n')).toEqual([
+      'plan-approval-odyssey',
+      'compact-user-question',
+    ]);
     expect(result.stderr).toBe('');
   });
 });
