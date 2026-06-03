@@ -236,20 +236,19 @@ export class LaTeXdiffService {
       const results = { success: [] as string[], failed: [] as string[] };
 
       for (const inputLocation of inputLocations) {
+        const inputFile = inputLocation.absolutePath;
         try {
           const result = await this.runDiffVc(
             inputLocation,
             commitHash,
             mathMarkup,
           );
-          const inputFile = inputLocation.absolutePath;
           if (result.success) {
             results.success.push(inputFile);
           } else {
             results.failed.push(inputFile);
           }
         } catch (err) {
-          const inputFile = inputLocation.absolutePath;
           results.failed.push(inputFile);
           logger.error(
             this.channel,
