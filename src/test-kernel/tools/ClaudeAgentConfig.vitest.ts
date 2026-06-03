@@ -63,7 +63,8 @@ describe('Claude Code CLI configuration', () => {
     vi.doUnmock('@platform/platform');
     invalidateApiKeyCache();
     vi.unstubAllEnvs();
-    for (const dir of cleanupDirs) rmSync(dir, { recursive: true, force: true });
+    for (const dir of cleanupDirs)
+      rmSync(dir, { recursive: true, force: true });
   });
 
   it('injects the managed Anthropic secret when no OAuth credential exists', async () => {
