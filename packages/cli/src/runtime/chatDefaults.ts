@@ -161,7 +161,7 @@ export async function resolveChatDefaults(
 ): Promise<ChatDefaults> {
   const overrideAgent = init.agentOverride?.trim();
   const overrideModel = init.modelOverride?.trim();
-  const envAgent = init.envAgent?.trim();
+  const envAgent = normalizeDefaultToolUseAgent(init.envAgent);
   const envModel = init.envModel?.trim();
   let agent = overrideAgent || envAgent;
   let model = overrideModel || envModel;
