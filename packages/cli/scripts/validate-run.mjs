@@ -177,21 +177,33 @@ function validateMultiAgentListAvailability() {
     const env = Object.fromEntries(
       validationProviderApiKeyEnv.map((name) => [name, '']),
     );
-    const text = run(
-      process.execPath,
-      [binaryPath, 'multi-agent', 'list', '--cwd', cwd, '--no-color'],
-      {
-        cwd: repoRoot,
-        env: {
-          ...env,
-          HOME: home,
-          XDG_CONFIG_HOME: path.join(home, '.config'),
-          XDG_DATA_HOME: path.join(home, '.local/share'),
-          XDG_CACHE_HOME: path.join(home, '.cache'),
-          TEXRA_NO_UPDATE_CHECK: '1',
+    const listEnv = {
+      ...env,
+      HOME: home,
+      XDG_CONFIG_HOME: path.join(home, '.config'),
+      XDG_DATA_HOME: path.join(home, '.local/share'),
+      XDG_CACHE_HOME: path.join(home, '.cache'),
+      TEXRA_NO_UPDATE_CHECK: '1',
+    };
+    const runList = (args = []) =>
+      run(
+        process.execPath,
+        [
+          binaryPath,
+          'multi-agent',
+          'list',
+          '--cwd',
+          cwd,
+          ...args,
+          '--no-color',
+        ],
+        {
+          cwd: repoRoot,
+          env: listEnv,
         },
-      },
-    );
+      );
+
+    const text = runList();
     assertSuccess(text, 'texra multi-agent list');
     const leanProjectLine = text.stdout
       .split('\n')
@@ -207,6 +219,38 @@ function validateMultiAgentListAvailability() {
     assert(
       !leanProjectLine.includes('\ttool-use:7'),
       `lean-project should not claim the full preset is available without auth\nline:\n${leanProjectLine}`,
+    );
+
+    const json = runList(['--output-format', 'json']);
+    assertSuccess(json, 'texra multi-agent list JSON');
+    const jsonRecords = JSON.parse(json.stdout);
+    const leanProjectJson = jsonRecords.find(
+      (record) => record.id === 'lean-project',
+    );
+    const leanProjectAvailability = leanProjectJson?.availability;
+    assert(
+      leanProjectAvailability?.toolUse?.label != null,
+      `multi-agent list JSON should include planned availability\nstdout:\n${json.stdout}`,
+    );
+    assert(
+      leanProjectAvailability?.status === 'degraded' ||
+        leanProjectAvailability?.status === 'unavailable',
+      `lean-project JSON should report degraded or unavailable status\nrecord:\n${JSON.stringify(leanProjectJson, null, 2)}`,
+    );
+    assert(
+      leanProjectAvailability?.toolUse?.label !== '7',
+      `lean-project JSON should not claim full tool-use availability\nrecord:\n${JSON.stringify(leanProjectJson, null, 2)}`,
+    );
+
+    const ndjson = runList(['--output-format', 'ndjson']);
+    assertSuccess(ndjson, 'texra multi-agent list NDJSON');
+    const leanProjectNdjson = parseNdjson(
+      ndjson.stdout,
+      'multi-agent list NDJSON',
+    ).find((record) => record.preset?.id === 'lean-project');
+    assert(
+      leanProjectNdjson?.preset?.availability?.toolUse?.label != null,
+      `multi-agent list NDJSON should include planned availability\nstdout:\n${ndjson.stdout}`,
     );
   } finally {
     rmSync(cwd, { recursive: true, force: true });

@@ -4,6 +4,8 @@ import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   cliMultiAgentPlanHasGaps,
+  cliMultiAgentPresetListRecord,
+  cliMultiAgentPresetNdjsonRecords,
   cliMultiAgentPresets,
   findCliMultiAgentPreset,
   formatCliMultiAgentPresetDetails,
@@ -71,6 +73,79 @@ describe('CLI multi-agent presets', () => {
     expect(formatCliMultiAgentPresetList([plan])).toContain(
       'built-in\tlean-project\tLean Project\tworkflow:0\ttool-use:2/7\tdegraded',
     );
+  });
+
+  it('serializes planned availability for machine-readable list output', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'lean-project',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('lean', AgentCategory.ToolUse),
+        agent('latexFixer', AgentCategory.ToolUse),
+      ],
+    });
+    const record = cliMultiAgentPresetListRecord(plan);
+
+    expect(record.id).toBe('lean-project');
+    expect(record.toolUseAgents).toEqual(preset.toolUseAgents);
+    expect(record.availability).toMatchObject({
+      status: 'degraded',
+      workflow: {
+        available: 0,
+        total: 0,
+        missing: [],
+        label: '0',
+      },
+      toolUse: {
+        available: 2,
+        total: 7,
+        missing: [
+          'leanSearch',
+          'leanSimplifier',
+          'leanBlueprint',
+          'progressCheck',
+          'leanOrchestrator',
+        ],
+        label: '2/7',
+      },
+      rootAgent: {
+        key: 'builtInToolUse:lean',
+        name: 'lean',
+        source: 'builtInToolUse',
+      },
+    });
+  });
+
+  it('includes planned availability in ndjson preset records', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'lean-project',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [agent('lean', AgentCategory.ToolUse)],
+    });
+
+    expect(cliMultiAgentPresetNdjsonRecords([plan])).toEqual([
+      expect.objectContaining({
+        kind: 'multi-agent-preset',
+        ts: expect.any(String),
+        preset: expect.objectContaining({
+          id: 'lean-project',
+          availability: expect.objectContaining({
+            status: 'degraded',
+            toolUse: expect.objectContaining({
+              available: 1,
+              total: 7,
+              label: '1/7',
+            }),
+          }),
+        }),
+      }),
+    ]);
   });
 
   it('parses valid custom team presets and ignores invalid state', () => {
