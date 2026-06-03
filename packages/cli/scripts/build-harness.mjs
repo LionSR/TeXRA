@@ -3,6 +3,7 @@
 import { chmod } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { esmCjsGlobalsBanner } from './esm-cjs-globals-banner.mjs';
 import { reactCompilerPlugin } from './reactCompilerPlugin.mjs';
 
 const reactDevtoolsStub = fileURLToPath(
@@ -23,12 +24,7 @@ await build({
   alias: { 'react-devtools-core': reactDevtoolsStub },
   outfile,
   banner: {
-    js: [
-      `import { createRequire as __cr } from 'node:module';`,
-      `import { fileURLToPath as __texraFileURLToPath } from 'node:url';`,
-      `const require = __cr(import.meta.url);`,
-      `const __filename = __texraFileURLToPath(import.meta.url);`,
-    ].join('\n'),
+    js: esmCjsGlobalsBanner,
   },
   plugins: [reactCompilerPlugin()],
   logLevel: 'info',
