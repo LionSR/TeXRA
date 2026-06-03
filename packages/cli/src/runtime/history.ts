@@ -97,10 +97,6 @@ export function parseCliHistoryId(raw: string): ExecutionId | undefined {
     : undefined;
 }
 
-export function formatCliHistoryInputLabel(inputBasename: string): string {
-  return inputBasename === '-' ? 'no input' : inputBasename;
-}
-
 export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
   const entries = await listExecutions();
   const history: CliHistoryEntry[] = [];

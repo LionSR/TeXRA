@@ -6,7 +6,8 @@ import {
   formatCliMultiAgentPresetPlanSummary,
   type CliMultiAgentPresetRunPlan,
 } from './multiAgentPresets';
-import { formatCliHistoryInputLabel, type CliHistoryEntry } from './history';
+import { formatCliHistoryInputLabel } from './historyLabels';
+import type { CliHistoryEntry } from './history';
 
 export type CliOrchestrationAction =
   | { readonly kind: 'chat'; readonly agent?: string; readonly model?: string }

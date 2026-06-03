@@ -5,10 +5,10 @@ import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
 
 import {
-  formatCliHistoryInputLabel,
   listCliHistoryEntries,
   type CliHistoryEntry,
 } from '@cli/runtime/history';
+import { formatCliHistoryInputLabel } from '@cli/runtime/historyLabels';
 import type { ExecutionId } from '@shared/schemas';
 
 import { KeyHints } from '../ui/KeyHints';
