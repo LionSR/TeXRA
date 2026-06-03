@@ -212,25 +212,6 @@ const authStatusCommand = defineCliCommand({
   },
 });
 
-function writeRelayUsageSummary(
-  context: CliContext,
-  summary: RelayUsageSummary,
-): void {
-  const month = summary.periodStart.slice(0, 7);
-  emitCliResult(context, {
-    json: summary,
-    ndjson: { kind: 'relay-usage', ...summary },
-    text: [
-      `Relay usage for ${month} (${summary.tier})`,
-      `Spend: $${summary.costUsd.toFixed(2)} / $${summary.limitUsd.toFixed(2)} (${summary.usagePercent.toFixed(1)}%)`,
-      `Remaining: $${summary.remainingUsd.toFixed(2)}`,
-      `Streams: ${summary.streamCount}`,
-      `Tokens: ${summary.inputTokens} input (${summary.cachedTokens} cached), ${summary.outputTokens} output, ${summary.reasoningTokens} reasoning`,
-      `Models: ${summary.modelsUsed}; providers: ${summary.providersUsed}`,
-    ].join('\n'),
-  });
-}
-
 const usageCommand = defineCliCommand({
   meta: { name: 'usage', description: 'Show relay usage for this account' },
   args: {
@@ -270,7 +251,19 @@ const usageCommand = defineCliCommand({
       return CliExitCode.ModelOrNetworkError;
     }
 
-    writeRelayUsageSummary(context, summary);
+    const periodMonth = summary.periodStart.slice(0, 7);
+    emitCliResult(context, {
+      json: summary,
+      ndjson: { kind: 'relay-usage', ...summary },
+      text: [
+        `Relay usage for ${periodMonth} (${summary.tier})`,
+        `Spend: $${summary.costUsd.toFixed(2)} / $${summary.limitUsd.toFixed(2)} (${summary.usagePercent.toFixed(1)}%)`,
+        `Remaining: $${summary.remainingUsd.toFixed(2)}`,
+        `Streams: ${summary.streamCount}`,
+        `Tokens: ${summary.inputTokens} input (${summary.cachedTokens} cached), ${summary.outputTokens} output, ${summary.reasoningTokens} reasoning`,
+        `Models: ${summary.modelsUsed}; providers: ${summary.providersUsed}`,
+      ].join('\n'),
+    });
     return CliExitCode.Success;
   },
 });

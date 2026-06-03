@@ -203,7 +203,7 @@ export class DesktopProgressBridge {
       openPath: options.openPath,
       openBuildDisplay: options.openBuildDisplay,
       openDiff: options.openDiff,
-      showErrorMessage: (message) => this.showErrorMessage(message),
+      showErrorMessage: (message) => this.options.showErrorMessage?.(message),
     });
     this.workflowFileActions = new ProgressWorkflowFileActionsController({
       state: {
@@ -229,8 +229,12 @@ export class DesktopProgressBridge {
         },
         openLabel: (label) => this.findAndOpenLabel(label),
         readFile: (file) => readFile(file, 'utf8'),
-        showInfo: (message) => this.showInfoMessage(message),
-        showError: (message) => this.showErrorMessage(message),
+        showInfo: async (message) => {
+          await this.options.showInfoMessage?.(message);
+        },
+        showError: async (message) => {
+          await this.options.showErrorMessage?.(message);
+        },
         logError: (message, error) => {
           this.logger.error(message, {
             data: error instanceof Error ? error : { error },
@@ -1027,7 +1031,7 @@ export class DesktopProgressBridge {
       // memory and reviving the runtime is out of scope (audit item
       // D Phase 2). Surface a clear message rather than silently no-op.
       if (this.restoredStreams.has(streamId)) {
-        await this.showInfoMessage(
+        await this.options.showInfoMessage?.(
           'This run is from a previous session. Live resume is not yet supported — please start a fresh run.',
         );
       }
@@ -1055,7 +1059,7 @@ export class DesktopProgressBridge {
       return;
     }
 
-    await this.showInfoMessage(
+    await this.options.showInfoMessage?.(
       'No active session. Start a new agent task to continue.',
     );
   }
@@ -1069,7 +1073,7 @@ export class DesktopProgressBridge {
       await this.options.openBuildDisplay(toFileLocation(filePath));
       return;
     }
-    await this.showErrorMessage(
+    await this.options.showErrorMessage?.(
       'Desktop LaTeX preview is unavailable. Cannot compile and open this file.',
     );
   }
@@ -1171,7 +1175,7 @@ export class DesktopProgressBridge {
     editedFile: string,
   ): Promise<void> {
     if (!this.options.openDiff) {
-      await this.showErrorMessage(
+      await this.options.showErrorMessage?.(
         'Desktop file comparison is not available in this host yet.',
       );
       return;
@@ -1202,7 +1206,7 @@ export class DesktopProgressBridge {
       },
     });
     if (!validation.valid) {
-      await this.showErrorMessage(`Merge: ${validation.message}`);
+      await this.options.showErrorMessage?.(`Merge: ${validation.message}`);
       return;
     }
     await this.runExecution(validation.request);
@@ -1240,7 +1244,7 @@ export class DesktopProgressBridge {
     }
 
     const operation = isNewFile && !targetExists ? 'created' : 'replaced';
-    await this.showInfoMessage(
+    await this.options.showInfoMessage?.(
       `Successfully ${operation} '${targetFileName}' with content from '${path.basename(editedFile)}'`,
     );
     return true;
@@ -1260,7 +1264,7 @@ export class DesktopProgressBridge {
     );
 
     if (!result.success || !result.diffFileName) {
-      await this.showErrorMessage(
+      await this.options.showErrorMessage?.(
         result.message ?? 'Failed to generate diff file.',
       );
       return;
@@ -1323,14 +1327,6 @@ export class DesktopProgressBridge {
       readDirectory: (directory) =>
         (tryPlatform()?.fs ?? nodeFilesystem).readDirectory(directory),
     });
-  }
-
-  private async showInfoMessage(message: string): Promise<void> {
-    await this.options.showInfoMessage?.(message);
-  }
-
-  private async showErrorMessage(message: string): Promise<void> {
-    await this.options.showErrorMessage?.(message);
   }
 }
 

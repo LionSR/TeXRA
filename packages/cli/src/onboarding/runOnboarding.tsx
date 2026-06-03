@@ -61,6 +61,12 @@ export interface OnboardingGateContext {
 const SKIP_SUMMARY =
   "Setup skipped — run `texra login` or `texra setup` when you're ready.";
 
+/** Gate returned without showing the picker (or before any choice is made). */
+const NO_ONBOARDING_RESULT: CliOnboardingResult = {
+  configured: false,
+  declined: false,
+};
+
 interface OnboardingResolution {
   readonly configured: boolean;
   readonly declined: boolean;
@@ -81,13 +87,13 @@ export async function maybeRunCliOnboarding(
   // check at the call site (same guard runCliOnboarding uses for the
   // context-less `texra setup` path). Defense-in-depth before we render.
   if (interactiveTerminalFailure(context) || !process.stdout.isTTY) {
-    return { configured: false, declined: false };
+    return NO_ONBOARDING_RESULT;
   }
   if (getOnboardingDeclined(platform().globalState)) {
-    return { configured: false, declined: false };
+    return NO_ONBOARDING_RESULT;
   }
   if (await hasCliCredentialForApiMode(context.apiMode).catch(() => false)) {
-    return { configured: false, declined: false };
+    return NO_ONBOARDING_RESULT;
   }
   return runOnboardingFlow({ firstRun: true, apiMode: context.apiMode });
 }
@@ -98,7 +104,7 @@ export async function maybeRunCliOnboarding(
  * headless before calling this.
  */
 export async function runCliOnboarding(): Promise<CliOnboardingResult> {
-  if (!process.stdout.isTTY) return { configured: false, declined: false };
+  if (!process.stdout.isTTY) return NO_ONBOARDING_RESULT;
   return runOnboardingFlow({ firstRun: false });
 }
 
@@ -109,7 +115,7 @@ async function runOnboardingFlow(options: {
   const pickerSubtitle = onboardingPickerSubtitle(options);
   const pickerItems = onboardingPickerItems(onboardingSetupPaths(options));
   const resolution = await new Promise<OnboardingResolution>((resolve) => {
-    let chosen: OnboardingResolution = { configured: false, declined: false };
+    let chosen: OnboardingResolution = NO_ONBOARDING_RESULT;
     const record = (next: OnboardingResolution): void => {
       chosen = next;
     };
