@@ -16,6 +16,7 @@ import {
 } from '@agent/core/definition/AgentConfig';
 import { KVStore } from '@common/storage/KVStore';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
+import { filterNotNull } from '@utils/core';
 
 // ============================================================================
 // Key constants (implementation detail — not exported)
@@ -217,7 +218,7 @@ class StorageFSKVStore extends KVStore implements ExecutionKVStore {
         return result.success ? { id, ...result.data } : null;
       }),
     );
-    return entries.filter((e): e is ChildRecord => e !== null);
+    return entries.filter(filterNotNull);
   }
 
   async readResultMeta(): Promise<ResultMeta | null> {

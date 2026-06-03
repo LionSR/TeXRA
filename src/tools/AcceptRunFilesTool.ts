@@ -45,6 +45,7 @@ import {
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@utils/files';
+import { filterNotNull } from '@utils/core';
 import {
   getOriginalSnapshotPath,
   resolveStoragePath,
@@ -410,6 +411,6 @@ Optional:
       }),
     );
 
-    return results.filter((f): f is string => f !== null);
+    return results.filter(filterNotNull);
   }
 }
