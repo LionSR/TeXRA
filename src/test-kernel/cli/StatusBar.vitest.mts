@@ -850,10 +850,10 @@ describe('CLI StatusBar display model', () => {
       model: 'deepseekT',
       apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
-      width: 80,
+      width: 61,
     });
 
-    expect(display.right).toBe('Keep the proof under one page.');
+    expect(display.right).toBe('Keep the pr…');
     expect(display.bindings).toContain('[Ctrl-C]exit');
   });
 
