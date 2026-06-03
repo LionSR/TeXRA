@@ -34,4 +34,17 @@ describe('CLI ResumeListForm labels', () => {
       }),
     ).toBe('2026-05-20T21:00:00.000Z; polish; completed; paper.tex');
   });
+
+  it('uses human wording for sessions without an input file', () => {
+    expect(
+      resumeEntryDescription({
+        id: 'abc',
+        timestamp: '2026-05-20T21:00:00.000Z',
+        agent: 'chat',
+        model: 'deepseekT',
+        status: 'completed',
+        inputBasename: '-',
+      }),
+    ).toBe('2026-05-20T21:00:00.000Z; chat; completed; no input');
+  });
 });
