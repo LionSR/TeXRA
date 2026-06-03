@@ -661,8 +661,8 @@ export class ProgressApp extends ProgressAppBase {
   private onFollowUpChange = (e: CustomEvent): void =>
     handleFollowUpChange(e, this.getEventHandlerContext());
 
-  private onFollowUpSend = (): void =>
-    handleFollowUpSend(this.getEventHandlerContext());
+  private onFollowUpSend = (e: CustomEvent): void =>
+    handleFollowUpSend(this.getEventHandlerContext(), e.detail?.images ?? []);
 
   private onFollowUpPolish = (): void =>
     handleFollowUpPolish(this.getEventHandlerContext());

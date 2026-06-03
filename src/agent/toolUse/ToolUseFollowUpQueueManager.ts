@@ -91,7 +91,7 @@ export class ToolUseFollowUpQueue {
   static enqueue(
     streamId: StreamTabId,
     followUp: string,
-    options?: { force?: boolean },
+    options?: { force?: boolean; mediaFiles?: readonly string[] },
   ): boolean {
     if (this.released.has(streamId) && !options?.force) {
       logger.debug(
@@ -100,13 +100,20 @@ export class ToolUseFollowUpQueue {
       return false;
     }
     const queue = this.acquire(streamId);
-    queue.enqueue(followUp);
+    queue.enqueue(followUp, options?.mediaFiles);
     logger.debug(`Queued follow-up for stream ${streamId}.`);
     return true;
   }
 
   static drain(streamId: StreamTabId): string[] {
     return this.queues.get(streamId)?.drain() ?? [];
+  }
+
+  /** Drain queued follow-ups with their media file paths (resume replay). */
+  static drainItems(
+    streamId: StreamTabId,
+  ): Array<{ text: string; mediaFiles?: readonly string[] }> {
+    return this.queues.get(streamId)?.drainItems() ?? [];
   }
 
   /** Get all queued follow-up messages for a stream without consuming them. */
