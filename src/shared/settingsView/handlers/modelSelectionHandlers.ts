@@ -61,11 +61,11 @@ export function createModelSelectionController(
   });
 }
 
-export function buildModelSelectionMessage(
+export async function buildModelSelectionMessage(
   controller: SettingsModelSelectionController,
-): UpdateModelSelectionMessage {
+): Promise<UpdateModelSelectionMessage> {
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
-    ...controller.buildSelectionData(),
+    ...(await controller.buildSelectionData()),
   };
 }

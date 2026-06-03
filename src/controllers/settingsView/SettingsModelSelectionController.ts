@@ -8,11 +8,9 @@ import {
 
 import { LEVEL_TO_EFFORT } from '@agent/runtime/reasoningEffort';
 import { FREE_TIER, MAX_TIER } from '@auth/sharedConfig';
-import {
-  DEFAULT_MODELS,
-  formatContext,
-  formatCost,
-} from '@model/modelOptionsBasic';
+import { computeModelOptionsData } from '@model/computeModelOptions';
+import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
+import type { ModelOptionData } from '@shared/schemas';
 import {
   DEFAULT_HELPER_MODEL,
   MODEL_PROVIDERS_ORDER,
@@ -40,6 +38,14 @@ export interface SettingsModelSelectionControllerDeps {
   modelProviders?: readonly string[];
   useIncludedAccess?: () => boolean;
   getUserTier?: () => string | undefined;
+  /**
+   * Resolve availability-decorated options for the given models. Injected as a
+   * port so the controller stays unit-testable; production wiring uses the
+   * shared `computeModelOptionsData` — the same source the CLI picker uses.
+   */
+  resolveModelOptions?: (
+    models: readonly string[],
+  ) => Promise<ModelOptionData[]>;
 }
 
 export interface SettingsModelSelectionData {
@@ -69,10 +75,10 @@ export class SettingsModelSelectionController {
     return enabled && enabled.length > 0 ? enabled : DEFAULT_MODELS;
   }
 
-  buildSelectionData(): SettingsModelSelectionData {
+  async buildSelectionData(): Promise<SettingsModelSelectionData> {
     const visibleModels = this.getVisibleModels();
     return {
-      models: this.buildSelectionItems(),
+      models: await this.buildSelectionItems(),
       helperModel: this.getEffectiveHelperModel(visibleModels),
       preferShortModelNames:
         this.deps.state.getPreferShortModelNames() ?? false,
@@ -122,25 +128,42 @@ export class SettingsModelSelectionController {
     await this.deps.state.setPreferShortModelNames(enabled);
   }
 
-  private buildSelectionItems(): ModelSelectionItem[] {
+  private async buildSelectionItems(): Promise<ModelSelectionItem[]> {
     const enabledSet = new Set(this.getVisibleModels());
     const reasoningOverrides =
       this.deps.state.getReasoningLevelOverrides() ?? {};
 
-    const items: ModelSelectionItem[] = [];
-    for (const name of MODELS) {
+    // Resolve availability (relay/included, personal-key, quota) once for the
+    // models this host shows, via the same shared computation the CLI picker
+    // uses. Passing an explicit list keeps the picker's view authoritative and
+    // avoids re-deriving availability at render time.
+    const candidates = MODELS.filter((name) => {
       const config = MODEL_CONFIGS[name];
-      if (!config || !this.modelProviders.has(config.provider)) continue;
+      return config != null && this.modelProviders.has(config.provider);
+    });
+    const resolveModelOptions =
+      this.deps.resolveModelOptions ?? computeModelOptionsData;
+    const optionsData = await resolveModelOptions(candidates);
+
+    const items: ModelSelectionItem[] = [];
+    for (const option of optionsData) {
+      const name = option.value;
+      const config = MODEL_CONFIGS[name];
+      if (!config) continue;
 
       const item: ModelSelectionItem = {
         name,
-        label: config.label,
-        provider: config.provider,
+        label: option.label,
+        provider: option.provider ?? config.provider,
         enabled: enabledSet.has(name),
         deprecated: config.deprecated ?? false,
-        contextWindow: formatContext(config.contextWindow),
-        cost: formatCost(config.inputPrice, config.outputPrice),
+        contextWindow: option.context,
+        cost: option.cost,
         isFast: isFastFirstResponseModel(config.inputPrice),
+        availability: option.availability,
+        availabilityLabel: option.availabilityLabel,
+        requiresKey: option.requiresKey,
+        disabled: option.disabled,
       };
 
       this.addReasoningLevelData(item, config, reasoningOverrides[name]);

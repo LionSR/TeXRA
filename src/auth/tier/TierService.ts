@@ -265,20 +265,6 @@ export class TierService {
   }
 
   /**
-   * Get the list of allowed models for a specific tier.
-   * Returns null if all models are allowed ("*").
-   */
-  getAllowedModels(
-    tier: UserTier,
-    config?: TierModelConfig | null,
-  ): string[] | null {
-    const tierConfig = this.getTierConfig(tier, config);
-    if (!tierConfig) return [];
-    if (tierConfig.models === '*') return null;
-    return tierConfig.models;
-  }
-
-  /**
    * Get the list of supported providers from the tier config.
    * All tiers have access to the same providers.
    */
