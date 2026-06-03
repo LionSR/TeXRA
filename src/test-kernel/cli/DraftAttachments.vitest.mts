@@ -75,6 +75,15 @@ describe('DraftAttachmentStore', () => {
     ]);
   });
 
+  it('does not strip chip-like text from pasted text history', () => {
+    const store = new DraftAttachmentStore();
+    const text = store.addPastedText('literal [Image #2]');
+    const image = store.addPastedImage(img('a.png'));
+    expect(store.expandTextForHistory(`${text} ${image}`)).toBe(
+      'literal [Image #2]',
+    );
+  });
+
   it('resolves only image chips still present in the draft (orphan gate)', () => {
     const store = new DraftAttachmentStore();
     const kept = store.addPastedImage(img('a.png'));

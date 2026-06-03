@@ -124,6 +124,7 @@ export class FollowUpInput extends LitElement {
   /** Images pasted into the follow-up box; attached to the message on send. */
   private pendingImages: ExtractedClipboardImage[] = [];
   private readonly pendingImagePastes = new Set<Promise<void>>();
+  private imagePasteRevision = 0;
   private sendAfterImagePastes = false;
 
   @query(`#${ELEMENT_IDS.FOLLOW_UP_INPUT}`)
@@ -199,7 +200,11 @@ export class FollowUpInput extends LitElement {
     if (files.length === 0) return;
     // Suppress the default paste synchronously, before the async read below.
     event.preventDefault();
-    const paste = this.attachPastedImages(event, files);
+    const paste = this.attachPastedImages(
+      event,
+      files,
+      this.imagePasteRevision,
+    );
     this.pendingImagePastes.add(paste);
     void paste.finally(() => {
       this.pendingImagePastes.delete(paste);
@@ -210,6 +215,7 @@ export class FollowUpInput extends LitElement {
   private async attachPastedImages(
     event: ClipboardEvent,
     files: Array<{ file: File; type: string }>,
+    pasteRevision: number,
   ): Promise<void> {
     const target = this.textAreaEl;
     if (!target) return;
@@ -232,6 +238,7 @@ export class FollowUpInput extends LitElement {
         ),
       )
     ).filter((image): image is ExtractedClipboardImage => image !== undefined);
+    if (pasteRevision !== this.imagePasteRevision) return;
     if (added.length === 0) return;
     const chipText = added.map(({ fileName }) => `[${fileName}]`).join(' ');
     if (insertText && !insertText.endsWith(' ') && !insertText.endsWith('\n')) {
@@ -358,6 +365,7 @@ export class FollowUpInput extends LitElement {
   }
 
   private emitClear(): void {
+    this.imagePasteRevision += 1;
     this.pendingImages = [];
     this.sendAfterImagePastes = false;
     this.dispatchEvent(ProgressEvents.followupClear());
