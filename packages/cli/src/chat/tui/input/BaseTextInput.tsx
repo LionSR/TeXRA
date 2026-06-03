@@ -376,10 +376,10 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         handler(submitted);
         return;
       }
-      // Enter commits the draft that was visible at keypress time. Pending
-      // image probes may still insert chips into the UI, but they should not
-      // silently change what this submit sends.
-      pendingSubmitRef.current ??= () => handler(submitted);
+      // Enter commits this draft and locks further input until clipboard probes
+      // settle. The flushed submit should include chips produced by those
+      // already-started probes, but not later user edits.
+      pendingSubmitRef.current ??= () => handler(latestStateRef.current.value);
     },
     [],
   );
