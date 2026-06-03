@@ -6,6 +6,7 @@ import {
   formatCliMultiAgentPresetPlanSummary,
   type CliMultiAgentPresetRunPlan,
 } from './multiAgentPresets';
+import { defaultToolUseAgents } from './defaultAgents';
 import { formatCliHistoryInputLabel } from './historyLabels';
 import type { CliHistoryEntry } from './history';
 
@@ -75,7 +76,9 @@ function recentAgentItems(
   history: readonly CliHistoryEntry[],
   toolUseAgents: readonly AgentEntry[],
 ): CliOrchestrationItem[] {
-  const toolUseNames = new Set(toolUseAgents.map((agent) => agent.name));
+  const toolUseNames = new Set(
+    defaultToolUseAgents(toolUseAgents).map((agent) => agent.name),
+  );
   const seen = new Set<string>();
   const items: CliOrchestrationItem[] = [];
 
