@@ -202,28 +202,21 @@ export function buildChildControlItems(
   > = new Map(),
   nowMs?: number,
 ): readonly ChildControlItem[] {
+  const activeKeys = new Set(slice.activeSubagents.map(childKey));
+  const subagentItems = visibleSubagentRows(slice).map((child) =>
+    buildSubagentItem(
+      child,
+      streamsById,
+      nowMs,
+      activeKeys.has(childKey(child)),
+    ),
+  );
   if (mode === 'subagents') {
-    const activeKeys = new Set(slice.activeSubagents.map(childKey));
-    return visibleSubagentRows(slice).map((child) =>
-      buildSubagentItem(
-        child,
-        streamsById,
-        nowMs,
-        activeKeys.has(childKey(child)),
-      ),
-    );
+    return subagentItems;
   }
 
-  const activeKeys = new Set(slice.activeSubagents.map(childKey));
   return [
-    ...visibleSubagentRows(slice).map((child) =>
-      buildSubagentItem(
-        child,
-        streamsById,
-        nowMs,
-        activeKeys.has(childKey(child)),
-      ),
-    ),
+    ...subagentItems,
     ...slice.activeProcesses.map((child) =>
       buildProcessItem(
         child,

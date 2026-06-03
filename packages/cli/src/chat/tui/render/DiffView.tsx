@@ -7,6 +7,8 @@
 import { Box, Text } from 'ink';
 import { structuredPatch, type StructuredPatchHunk } from 'diff';
 
+import { filterNotNullish, isObject } from '@utils/core';
+
 import { wrapAnsiToWidth } from './ansiWrap';
 import { maxScrollableRowOffset, scrollBoundedRows } from './scrollBounds';
 import { clipToWidth, fillRows, textDisplayWidth } from './terminalText';
@@ -60,10 +62,6 @@ export function statsFromHunks(hunks: readonly Hunk[]): DiffStats {
   return { added, removed, hunks: hunks.length };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 function stringField(
   record: Record<string, unknown>,
   keys: readonly string[],
@@ -85,7 +83,7 @@ function editCandidate(
       readonly newText: string;
     }
   | undefined {
-  if (!isRecord(input)) return undefined;
+  if (!isObject(input)) return undefined;
   const oldText = stringField(input, ['old_string', 'old_str']);
   const newText = stringField(input, ['new_string', 'new_str']);
   if (oldText === undefined || newText === undefined) return undefined;
@@ -99,15 +97,14 @@ function editCandidate(
 export function editPatchGroups(
   input: unknown,
 ): readonly InlinePatchGroup[] | undefined {
-  if (!isRecord(input)) return undefined;
+  if (!isObject(input)) return undefined;
   const fileLabel = stringField(input, ['path', 'file_path']) ?? 'edit';
   const edits = input.edits;
   const candidates = Array.isArray(edits)
     ? edits.map((edit) => editCandidate(edit, fileLabel))
     : [editCandidate(input, fileLabel)];
 
-  const groups = candidates.flatMap((candidate) => {
-    if (!candidate) return [];
+  const groups = candidates.filter(filterNotNullish).flatMap((candidate) => {
     const hunks = buildHunks(
       candidate.fileLabel,
       candidate.oldText,
