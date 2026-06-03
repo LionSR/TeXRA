@@ -585,24 +585,6 @@ function taskDetailScrollContextKey(context: TaskDetailScrollContext): string {
   ].join(':');
 }
 
-function taskDetailScrollStateWithAnchor(
-  state: Omit<TaskDetailScrollState, 'anchor'>,
-  anchor: TaskDetailScrollAnchor | undefined,
-): TaskDetailScrollState {
-  return anchor ? { ...state, anchor } : state;
-}
-
-function taskDetailScrollStateWithoutAnchor(
-  state: TaskDetailScrollState,
-  offset: number,
-): TaskDetailScrollState {
-  return {
-    executionId: state.executionId,
-    followsTail: state.followsTail,
-    offset,
-  };
-}
-
 export function syncTaskDetailScrollState(
   state: TaskDetailScrollState,
   executionId: string,
@@ -615,7 +597,11 @@ export function syncTaskDetailScrollState(
     return { executionId, followsTail: true, offset: clampedFollowOffset };
   }
   if (state.followsTail) {
-    return taskDetailScrollStateWithoutAnchor(state, clampedFollowOffset);
+    return {
+      executionId: state.executionId,
+      followsTail: state.followsTail,
+      offset: clampedFollowOffset,
+    };
   }
   if (context && state.anchor) {
     return {
@@ -673,18 +659,17 @@ export function moveTaskDetailScrollState(
     maxOffset,
     followOffset,
   );
-  return taskDetailScrollStateWithAnchor(
-    {
-      executionId: state.executionId,
-      followsTail,
-      offset: nextOffset,
-    },
-    followsTail
-      ? undefined
-      : context
-        ? taskDetailScrollAnchorFromOffset(context, nextOffset)
-        : state.anchor,
-  );
+  const anchor = followsTail
+    ? undefined
+    : context
+      ? taskDetailScrollAnchorFromOffset(context, nextOffset)
+      : state.anchor;
+  return {
+    executionId: state.executionId,
+    followsTail,
+    offset: nextOffset,
+    ...(anchor ? { anchor } : {}),
+  };
 }
 
 export function computePickerListLayout({

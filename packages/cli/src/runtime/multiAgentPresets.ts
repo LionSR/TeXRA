@@ -73,10 +73,14 @@ export function cliMultiAgentPresets(
   customRaw: unknown,
 ): CliMultiAgentPreset[] {
   return [
-    ...AGENT_MODE_PRESETS.map((preset) => withSource(preset, 'built-in')),
-    ...parseCliCustomAgentPresets(customRaw).map((preset) =>
-      withSource(preset, 'custom'),
-    ),
+    ...AGENT_MODE_PRESETS.map((preset) => ({
+      ...preset,
+      source: 'built-in' as const,
+    })),
+    ...parseCliCustomAgentPresets(customRaw).map((preset) => ({
+      ...preset,
+      source: 'custom' as const,
+    })),
   ];
 }
 
@@ -332,13 +336,6 @@ export async function withCliMultiAgentPresetVisibility<T>(
       previousToolUseAgents,
     );
   }
-}
-
-function withSource(
-  preset: AgentModePreset,
-  source: CliMultiAgentPresetSource,
-): CliMultiAgentPreset {
-  return { ...preset, source };
 }
 
 function resolvePresetAgents(
