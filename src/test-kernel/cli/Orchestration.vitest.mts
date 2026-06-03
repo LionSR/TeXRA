@@ -6,7 +6,11 @@ import { orchestrationKeyHints } from '@cli/orchestration/runOrchestrationTui';
 import { buildCliOrchestrationItems } from '@cli/runtime/orchestration';
 
 import type { CliHistoryEntry } from '@cli/runtime/history';
-import type { CliMultiAgentPreset } from '@cli/runtime/multiAgentPresets';
+import {
+  planCliMultiAgentPresetRun,
+  type CliMultiAgentPreset,
+  type CliMultiAgentPresetRunPlan,
+} from '@cli/runtime/multiAgentPresets';
 import type { ExecutionId } from '@shared/schemas';
 
 function historyEntry(
@@ -25,12 +29,28 @@ function historyEntry(
   };
 }
 
-function toolUseAgent(name: string): AgentEntry {
+function agent(
+  name: string,
+  category: AgentCategory,
+  tools: string[] = [],
+): AgentEntry {
   return {
     name,
     description: `${name} agent`,
-    tools: [],
-  } as unknown as AgentEntry;
+    category,
+    source:
+      category === AgentCategory.ToolUse ? 'builtInToolUse' : 'builtInWorkflow',
+    path: `/agents/${name}.yaml`,
+    tools,
+  };
+}
+
+function toolUseAgent(name: string, tools: string[] = []): AgentEntry {
+  return agent(name, AgentCategory.ToolUse, tools);
+}
+
+function workflowAgent(name: string): AgentEntry {
+  return agent(name, AgentCategory.Workflow);
 }
 
 function preset(overrides: Partial<CliMultiAgentPreset>): CliMultiAgentPreset {
@@ -44,6 +64,19 @@ function preset(overrides: Partial<CliMultiAgentPreset>): CliMultiAgentPreset {
     source: 'built-in',
     ...overrides,
   };
+}
+
+function presetPlan(
+  overrides: Partial<CliMultiAgentPreset>,
+  agents: {
+    readonly workflowAgents?: readonly AgentEntry[];
+    readonly toolUseAgents?: readonly AgentEntry[];
+  } = {},
+): CliMultiAgentPresetRunPlan {
+  return planCliMultiAgentPresetRun(preset(overrides), {
+    workflowAgents: agents.workflowAgents ?? [],
+    toolUseAgents: agents.toolUseAgents ?? [],
+  });
 }
 
 describe('CLI orchestration items', () => {
@@ -67,7 +100,7 @@ describe('CLI orchestration items', () => {
 
   it('starts with new chat and keeps help as the final active item', () => {
     const items = buildCliOrchestrationItems({
-      presets: [],
+      presetPlans: [],
       history: [],
       toolUseAgents: [],
     });
@@ -84,7 +117,7 @@ describe('CLI orchestration items', () => {
 
   it('lists recent resumable executions before recent agents', () => {
     const items = buildCliOrchestrationItems({
-      presets: [],
+      presetPlans: [],
       history: [
         historyEntry('aaaaaaaaaaaa', { agent: 'review' }),
         historyEntry('bbbbbbbbbbbb', { agent: 'orchestrator' }),
@@ -104,7 +137,7 @@ describe('CLI orchestration items', () => {
 
   it('filters recent agent entries to known tool-use agents', () => {
     const items = buildCliOrchestrationItems({
-      presets: [],
+      presetPlans: [],
       history: [
         historyEntry('aaaaaaaaaaaa', {
           agent: 'polish',
@@ -123,7 +156,18 @@ describe('CLI orchestration items', () => {
 
   it('lists team presets as runnable orchestration actions', () => {
     const items = buildCliOrchestrationItems({
-      presets: [preset({ id: 'physicist' })],
+      presetPlans: [
+        presetPlan(
+          { id: 'physicist' },
+          {
+            workflowAgents: [workflowAgent('criticize')],
+            toolUseAgents: [
+              toolUseAgent('orchestrator', ['delegate_agent']),
+              toolUseAgent('review'),
+            ],
+          },
+        ),
+      ],
       history: [],
       toolUseAgents: [],
     });
@@ -141,7 +185,7 @@ describe('CLI orchestration items', () => {
 
   it('keeps team launch actions keyed by preset id only', () => {
     const items = buildCliOrchestrationItems({
-      presets: [preset({ id: 'physicist', name: 'Physicist' })],
+      presetPlans: [presetPlan({ id: 'physicist', name: 'Physicist' })],
       history: [],
       toolUseAgents: [],
     });

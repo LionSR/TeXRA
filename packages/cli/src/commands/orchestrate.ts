@@ -1,6 +1,6 @@
 import { defineCommand, showUsage } from 'citty';
 
-import { getVisibleAgents, loadAgents } from '@agent/index';
+import { getVisibleAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -29,6 +29,7 @@ import {
 } from './_helpers/globalArgs';
 import {
   fillMultiAgentRunPlanGaps,
+  loadCliMultiAgentPresetPlans,
   writeMissingPresetAgents,
 } from './multiAgent';
 import { runResumeExecution } from './resume';
@@ -67,10 +68,10 @@ async function runOrchestration(context: CliContext): Promise<number> {
     // "login required" models — same opt-out behavior as `texra chat`.
     return CliExitCode.Success;
   }
-  await loadAgents({ includeRemote: false });
   const history = await listCliHistoryEntries();
+  const presets = readCliMultiAgentPresets();
   const items = buildCliOrchestrationItems({
-    presets: readCliMultiAgentPresets(),
+    presetPlans: await loadCliMultiAgentPresetPlans(presets),
     history,
     toolUseAgents: getVisibleAgents(AgentCategory.ToolUse),
   });
