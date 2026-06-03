@@ -255,9 +255,9 @@ export interface CliGlobalArgs {
   /** `--no-color`: force-disable ANSI color on every stream. */
   readonly noColor?: boolean;
   /**
-   * `--no-input`: the conventional "disable all prompts" switch. Maps onto the
-   * existing mechanism — forces headless mode and an implicit
-   * `--approval-policy never` (deny anything that would otherwise prompt).
+   * `--no-input`: the conventional "disable all prompts" switch. Forces
+   * headless mode and defaults approval-gated actions to `never` unless the
+   * user explicitly selects another approval policy.
    */
   readonly noInput?: boolean;
 }
@@ -390,11 +390,15 @@ export async function buildCliContext(
   const noColor = init.globalArgs.noColor === true;
   const stdoutColorEnabled = noColor ? false : ambient.stdoutColorEnabled;
   const stderrColorEnabled = noColor ? false : ambient.stderrColorEnabled;
-  // `--no-input` implies "deny anything that would prompt": pin the approval
-  // policy to `never` (overriding flag/env/config) — the same headless behavior
-  // `--approval-policy never` already provides, surfaced under the conventional
-  // alias scripts expect.
   const noInput = init.globalArgs.noInput === true;
+  const approvalPolicyFallback = noInput ? 'never' : 'ask';
+  const approvalPolicyCandidates = noInput
+    ? [init.globalArgs.approvalPolicy]
+    : [
+        init.globalArgs.approvalPolicy,
+        envValue(env, 'TEXRA_APPROVAL_POLICY'),
+        loadedConfig.values.approvalPolicy,
+      ];
   return {
     cwd,
     mode: cliMode(init.globalArgs, ambient),
@@ -409,22 +413,16 @@ export async function buildCliContext(
       configWarnings,
       'TEXRA_OUTPUT_FORMAT',
     ),
-    approvalPolicy: noInput
-      ? 'never'
-      : pickEnum(
-          [
-            init.globalArgs.approvalPolicy,
-            envValue(env, 'TEXRA_APPROVAL_POLICY'),
-            loadedConfig.values.approvalPolicy,
-          ],
-          CLI_APPROVAL_POLICIES,
-          // Default to prompting. The interactive TUI surfaces a prompt; in
-          // headless mode `ask` has no TTY to prompt on and falls through to
-          // denial (see approvalAdapter), so this is safe for `run` too.
-          'ask',
-          configWarnings,
-          'TEXRA_APPROVAL_POLICY',
-        ),
+    approvalPolicy: pickEnum(
+      approvalPolicyCandidates,
+      CLI_APPROVAL_POLICIES,
+      // Interactive sessions default to prompting. `--no-input` forces
+      // headless mode and intentionally ignores env/config approval defaults;
+      // only an explicit CLI flag should opt that invocation into yolo.
+      approvalPolicyFallback,
+      configWarnings,
+      'TEXRA_APPROVAL_POLICY',
+    ),
     apiMode,
     quietLogs: init.globalArgs.quiet === true,
     stdoutIsTty: ambient.stdoutIsTty,
