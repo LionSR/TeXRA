@@ -203,7 +203,9 @@ export class DesktopProgressBridge {
       openPath: options.openPath,
       openBuildDisplay: options.openBuildDisplay,
       openDiff: options.openDiff,
-      showErrorMessage: (message) => this.options.showErrorMessage?.(message),
+      showErrorMessage: async (message) => {
+        await this.options.showErrorMessage?.(message);
+      },
     });
     this.workflowFileActions = new ProgressWorkflowFileActionsController({
       state: {
