@@ -5,7 +5,22 @@ import {
   type SettingsModelSelectionState,
 } from '@controllers/settingsView/SettingsModelSelectionController';
 import { MAX_TIER } from '@auth/sharedConfig';
+import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
+import type { ModelOptionData } from '@shared/schemas';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
+
+// Stub the injected availability resolver so the controller stays decoupled
+// from the global platform / server-side key service in unit tests.
+const resolveModelOptions = async (
+  models: readonly string[],
+): Promise<ModelOptionData[]> =>
+  buildBasicModelOptionsData(models).map((option) => ({
+    ...option,
+    availability: 'provider-key',
+    availabilityLabel: 'API key set',
+    requiresKey: false,
+    disabled: false,
+  }));
 
 function createState(
   overrides: Partial<{
@@ -42,16 +57,16 @@ function createState(
 }
 
 describe('SettingsModelSelectionController', () => {
-  it('uses canonical tier constants for included-access reasoning caps', () => {
+  it('uses canonical tier constants for included-access reasoning caps', async () => {
     const controller = new SettingsModelSelectionController({
       state: createState(),
       useIncludedAccess: () => true,
       getUserTier: () => MAX_TIER,
+      resolveModelOptions,
     });
 
-    const gpt55 = controller
-      .buildSelectionData()
-      .models.find((model) => model.name === 'gpt55');
+    const { models } = await controller.buildSelectionData();
+    const gpt55 = models.find((model) => model.name === 'gpt55');
 
     expect(gpt55).toMatchObject({
       supportsReasoningLevel: true,
@@ -64,9 +79,12 @@ describe('SettingsModelSelectionController', () => {
       enabledModels: ['gpt55', 'sonnet46T'],
       helperModel: 'removed-model',
     });
-    const controller = new SettingsModelSelectionController({ state });
+    const controller = new SettingsModelSelectionController({
+      state,
+      resolveModelOptions,
+    });
 
-    expect(controller.buildSelectionData().helperModel).toBe('gpt55');
+    expect((await controller.buildSelectionData()).helperModel).toBe('gpt55');
 
     await controller.setModelEnabled({ modelName: 'gpt55', enabled: false });
 
@@ -74,27 +92,28 @@ describe('SettingsModelSelectionController', () => {
     expect(state.getHelperModel()).toBe('sonnet46T');
   });
 
-  it('falls back to default models when the persisted enabled list is empty', () => {
+  it('falls back to default models when the persisted enabled list is empty', async () => {
     const controller = new SettingsModelSelectionController({
       state: createState({ enabledModels: [] }),
+      resolveModelOptions,
     });
 
-    const enabled = controller
-      .buildSelectionData()
-      .models.filter((model) => model.enabled);
+    const { models } = await controller.buildSelectionData();
+    const enabled = models.filter((model) => model.enabled);
 
     // An empty persisted list must not blank out the helper-model dropdown.
     expect(enabled.length).toBeGreaterThan(0);
   });
 
-  it('uses the runtime helper default when no helper model is configured', () => {
+  it('uses the runtime helper default when no helper model is configured', async () => {
     const controller = new SettingsModelSelectionController({
       state: createState({
         enabledModels: ['gpt55', 'sonnet46T'],
       }),
+      resolveModelOptions,
     });
 
-    expect(controller.buildSelectionData().helperModel).toBe(
+    expect((await controller.buildSelectionData()).helperModel).toBe(
       DEFAULT_HELPER_MODEL,
     );
   });
