@@ -184,9 +184,9 @@ describe('buildHeadlessRunContext', () => {
     expect(runContext.renderRunProgress).toBe(true);
   });
 
-  it('disables run progress for non-text output formats', () => {
+  it('keeps human run progress for json output', () => {
     const context = makeContext({ outputFormat: 'json' });
     const runContext = buildHeadlessRunContext(context, KNOWN_MODEL);
-    expect(runContext.renderRunProgress).toBe(false);
+    expect(runContext.renderRunProgress).toBe(true);
   });
 });
