@@ -11,7 +11,12 @@ import PQueue from 'p-queue';
 import { flushPendingRunTraces, getDefaultStreamLogStore } from '@transcript';
 import { tryPlatform } from '@platform/platform';
 import { getAgent, loadAgents } from '@agent/index';
-import { type AgentConfigPayload } from '@agent/core/definition/AgentConfig';
+import { registerExecution, writeTerminalStatus } from '@agent/storage';
+import {
+  AgentConfigSchema,
+  type AgentConfig,
+  type AgentConfigPayload,
+} from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   interruptActiveChildren,
@@ -78,6 +83,7 @@ import {
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import {
+  EXECUTION_STATUS,
   LIVE_ELAPSED_STREAM_STATUSES,
   STREAM_STATUS,
   StreamStatusSchema,
@@ -176,6 +182,26 @@ export function buildInitialChatAgentConfig({
     ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
     ...(cliMultiAgentPresetId ? { cliMultiAgentPresetId } : {}),
   };
+}
+
+export async function registerFreshChatExecution(
+  executionId: ExecutionId,
+  configPayload: AgentConfigPayload,
+): Promise<AgentConfig> {
+  const config = AgentConfigSchema.parse(configPayload);
+  await registerExecution(executionId, config, config.agent);
+  return config;
+}
+
+export async function markRegisteredChatExecutionError(
+  executionId: ExecutionId,
+  options: {
+    readonly executionRegistered: boolean;
+    readonly agentSettled: boolean;
+  },
+): Promise<void> {
+  if (!options.executionRegistered || options.agentSettled) return;
+  await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR);
 }
 
 export interface ClearableTuiSessionState {
@@ -1124,11 +1150,15 @@ export async function runChat(
     disposers.push(unbindApprovals);
     const executionId = generateExecutionId();
     let waitingTurn = 0;
+    let executionRegistered = false;
+    let agentSettled = false;
     session.executionId = executionId;
 
     session.runPromise = setCliHelperModel(currentModel)
-      .then(() =>
-        executeAgent(config, executionId, {
+      .then(() => registerFreshChatExecution(executionId, config))
+      .then((registeredConfig) => {
+        executionRegistered = true;
+        return executeAgent(registeredConfig, executionId, {
           runtimeHost: wrapped,
           enforceCategory: true,
           onStreamResolved: (resolvedStreamId) => {
@@ -1147,9 +1177,10 @@ export async function runChat(
             );
             finalizeAssistantTranscriptEntries(session.streamId);
           },
-        }),
-      )
+        });
+      })
       .then((result) => {
+        agentSettled = true;
         if (session.stopRequested || result.status !== 'error') {
           session.runExitCode = CliExitCode.Success;
         } else if (hasCliApprovalDenied(sessionContext)) {
@@ -1177,7 +1208,11 @@ export async function runChat(
         }
         notify({ kind: 'agentFinished' });
       })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
+        await markRegisteredChatExecutionError(executionId, {
+          executionRegistered,
+          agentSettled,
+        });
         if (!session.stopRequested) {
           // Ink owns stdout while the TUI is mounted; surface the failure
           // inline so the user sees why the agent stopped.
