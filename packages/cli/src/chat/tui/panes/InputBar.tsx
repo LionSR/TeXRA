@@ -188,6 +188,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         clearDraft();
         cliState.activeForm.set({
           commandName: cmd.name,
+          escapeAction: cmd.formEscapeAction,
           render: (close, availableRows) => (
             <Form
               remainder={remainder.trimStart()}
