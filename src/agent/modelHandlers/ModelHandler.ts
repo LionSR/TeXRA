@@ -10,7 +10,11 @@ import {
 } from 'llm-zoo';
 import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace';
-import { logWebFetch, logWebSearch } from '@agent/trace';
+import {
+  logWebFetch,
+  logWebSearch,
+  logContextManagementEvent,
+} from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   AgentCategory,
@@ -27,6 +31,10 @@ import { K_SLICE } from '@agent/core/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { MAX_TIER, FREE_TIER } from '@auth/config';
 import { SupabaseClient } from '@auth/SupabaseClient';
+import {
+  getSdkErrorMessage,
+  isContextWindowError,
+} from '@common/errors/sdkErrorUtils';
 
 // Local imports - platform
 
@@ -63,6 +71,7 @@ import {
 import {
   computeReducedMaxTokens,
   TOKEN_SAFETY_BUFFER,
+  TOOL_USE_SAFETY_BUFFER,
   TOOL_USE_MAX_OUTPUT_FACTOR,
 } from './contextManagementConstants';
 
@@ -970,6 +979,106 @@ export abstract class ModelHandler<
       inputTokens,
       utilizationPercent,
     };
+  }
+
+  /**
+   * COUNT + VALIDATE template for handlers with native token counting.
+   *
+   * Wraps the shared {@link validateTokenLimits} in the soft-failure envelope
+   * every provider handler otherwise repeats: gated on
+   * {@link supportsTokenCounting}, it estimates input tokens via the injected
+   * `countTokens` thunk, reduces the requested max-output tokens to fit the
+   * context window, emits the `max_tokens_reduced` event, and applies the
+   * reduction through the provider-specific `applyReduced` setter.
+   *
+   * Token-count API failures are soft (proceed without adjustment) — except
+   * context-window violations, which are re-thrown so they fail fast. The
+   * caller may inject side effects via `onCounted` (e.g. diagnostics) and
+   * override the soft-failure path via `onCountFailure` (e.g. a fallback cap).
+   *
+   * @param params.countTokens Estimates input tokens; closes over built params.
+   * @param params.currentMaxTokens The requested max output tokens.
+   * @param params.contextWindow The effective context window size.
+   * @param params.detailLabel Human-readable `details` for the reduction event.
+   * @param params.applyReduced Writes the reduced max back to provider params.
+   * @param params.tokenBuffer Safety buffer; defaults to the tool-use-aware buffer.
+   * @param params.onCounted Invoked with the counted tokens before validation.
+   * @param params.onCountFailure Replaces the default soft-failure debug log.
+   */
+  protected async applyTokenCountLimit(params: {
+    countTokens: () => Promise<number>;
+    currentMaxTokens: number;
+    contextWindow: number;
+    detailLabel: string;
+    applyReduced: (adjustedMaxTokens: number) => void;
+    tokenBuffer?: number;
+    onCounted?: (inputTokens: number) => void;
+    onCountFailure?: (err: unknown) => void;
+  }): Promise<void> {
+    if (!this.supportsTokenCounting) {
+      return;
+    }
+    const {
+      countTokens,
+      currentMaxTokens,
+      contextWindow,
+      detailLabel,
+      applyReduced,
+      onCounted,
+      onCountFailure,
+    } = params;
+    // Token counting uses soft failure: if it fails we proceed without
+    // adjustment and let the API enforce limits, avoiding retries for a
+    // non-critical operation.
+    try {
+      const inputTokens = await countTokens();
+      onCounted?.(inputTokens);
+
+      // Use a larger safety buffer in tool-use mode unless the caller overrides.
+      const tokenBuffer =
+        params.tokenBuffer ??
+        (this.isToolUseMode() ? TOOL_USE_SAFETY_BUFFER : undefined);
+      // Throws if input alone exceeds the context window.
+      const validation = this.validateTokenLimits(
+        inputTokens,
+        currentMaxTokens,
+        contextWindow,
+        tokenBuffer,
+      );
+
+      if (validation.adjustedMaxTokens !== currentMaxTokens) {
+        logContextManagementEvent(
+          this.logger,
+          `Token count (${inputTokens}) + max output tokens (${currentMaxTokens}) exceeds context window (${contextWindow}). Reducing to ${validation.adjustedMaxTokens}.`,
+          {
+            action: 'max_tokens_reduced',
+            tokensBefore: inputTokens,
+            contextWindow,
+            utilizationBefore:
+              validation.utilizationPercent ??
+              (inputTokens / contextWindow) * 100,
+            originalMaxTokens: currentMaxTokens,
+            reducedMaxTokens: validation.adjustedMaxTokens,
+            details: detailLabel,
+          },
+        );
+        applyReduced(validation.adjustedMaxTokens);
+      }
+    } catch (err) {
+      this.sdkErrorTagger(err, this.config.provider);
+      // Context-window violations are intentional validation errors that must
+      // fail fast rather than be swallowed by soft failure.
+      if (isContextWindowError(err)) {
+        throw err;
+      }
+      if (onCountFailure) {
+        onCountFailure(err);
+      } else {
+        this.logger.debug(
+          `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
+        );
+      }
+    }
   }
 
   /**
