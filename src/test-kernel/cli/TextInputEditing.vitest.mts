@@ -17,6 +17,7 @@ import {
   isKittyShiftEnter,
   isPlainReturnInput,
   isShiftReturnInput,
+  isTextInputNewlineInput,
   metaChordDigit,
   metaChordInput,
   normalizedCtrlInput,
@@ -45,6 +46,17 @@ describe('CLI TUI text input editing', () => {
     expect(isShiftReturnInput('', { return: true })).toBe(false);
     expect(isShiftReturnInput('j', { ctrl: true })).toBe(false);
     expect(isShiftReturnInput('', { return: true, meta: true })).toBe(false);
+  });
+
+  it('treats Ctrl-J and Shift+Enter as literal newlines in text input', () => {
+    expect(isTextInputNewlineInput('\n', {})).toBe(true);
+    expect(isTextInputNewlineInput('j', { ctrl: true })).toBe(true);
+    expect(isTextInputNewlineInput(SYNTHETIC_SHIFT_RETURN_INPUT, {})).toBe(
+      true,
+    );
+    expect(isTextInputNewlineInput('\n', { meta: true })).toBe(false);
+    expect(isTextInputNewlineInput('\r', {})).toBe(false);
+    expect(isTextInputNewlineInput('', { return: true })).toBe(false);
   });
 
   it('recognizes Kitty Enter sequences for raw re-dispatch', () => {
