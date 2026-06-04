@@ -101,22 +101,20 @@ jobs:
         if: steps.tracker-gate.outputs.should_run == 'true'
         id: trusted-provider-wrapper
         run: |
-          if [ -f .trusted-actions/.github/actions/claude-code-with-provider/action.yml ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping issue tracker: trusted base branch does not yet contain claude-code-with-provider."
-          fi
+          # claude-code-with-provider is now external (LionSR/agent-ci-actions@v1), always available;
+          # the legacy trusted base-ref presence check is obsolete.
+          echo "available=true" >> "$GITHUB_OUTPUT"
 
       - name: Run Claude Code
         id: claude
         if: steps.tracker-gate.outputs.should_run == 'true' && steps.trusted-provider-wrapper.outputs.available == 'true'
-        uses: ./.trusted-actions/.github/actions/claude-code-with-provider
+        uses: LionSR/agent-ci-actions@v1
         with:
           provider: ${{ env.CLAUDE_CODE_PROVIDER }}
           model-tier: opus
           allowed-bots: 'dependabot[bot],github-actions[bot],Copilot,claude[bot],cursor[bot]'
-          allowed-tools-preset: issue-tracker
+          allowed_tools_preset: issue-tracker
+          allowed_tools_preset_map_file: .trusted-actions/.github/allowed-tools.json
           claude-prompt-file: .trusted-actions/.github/prompts/issue-tracker-prompt.md
           claude-prompt-context: |
             Event: ${{ github.event_name }} / ${{ github.event.action }}
