@@ -644,7 +644,7 @@ describe('CLI StatusBar display model', () => {
 
     expect(display.left.map(statusBarSegmentText)).toContain('1 approval');
     expect(display.bindings).toBe(
-      'Use foreground panel shortcuts  [Esc]panel  [Ctrl-C]stop',
+      'Use foreground panel shortcuts  [Esc]close  [Ctrl-C]stop',
     );
     expect(display.bindings).not.toContain('[Tab]streams');
     expect(display.bindings).not.toContain('[Alt-p]tasks');
@@ -669,11 +669,37 @@ describe('CLI StatusBar display model', () => {
       model: 'deepseekT',
       apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
+      foregroundEscapeAction: 'skip',
       shortcutsActive: false,
     });
 
     expect(display.left.map(statusBarSegmentText)).toContain('1 question');
     expect(display.left.map(statusBarSegmentText)).not.toContain('1 approval');
+    expect(display.bindings).toContain('[Esc]skip');
+  });
+
+  it('shows cancel for non-question approval foregrounds', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 1,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: PERSONAL_API_MODE_LABEL,
+      shortcutModifierLabel: 'Alt',
+      foregroundEscapeAction: 'cancel',
+      shortcutsActive: false,
+    });
+
+    expect(display.bindings).toContain('[Esc]cancel');
   });
 
   it('keeps escape and Ctrl-C actions visible in narrow foreground panels', () => {
@@ -698,7 +724,7 @@ describe('CLI StatusBar display model', () => {
       width: 40,
     });
 
-    expect(display.bindings).toBe('[Esc]panel  [Ctrl-C]stop');
+    expect(display.bindings).toBe('[Esc]close  [Ctrl-C]stop');
   });
 
   it('falls back to the bare Ctrl-C action in tiny foreground panels', () => {
