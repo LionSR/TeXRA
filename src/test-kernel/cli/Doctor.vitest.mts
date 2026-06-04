@@ -202,7 +202,7 @@ describe('CLI doctor', () => {
     expect(formatDoctorText(report)).toContain('Ignoring invalid model.');
   });
 
-  it('redacts email account labels in text output', async () => {
+  it('shows email account labels plainly in text output', async () => {
     const report = await buildDoctorReport(context, {
       nodeVersion: '24.15.0',
       authProfile: async () => ({
@@ -231,12 +231,48 @@ describe('CLI doctor', () => {
     const records = doctorNdjsonRecords(report, '2026-05-18T00:00:00.000Z');
 
     expect(authCheck?.message).toContain('user@example.edu');
-    expect(text).toContain('Stored sign-in found for u***@e***.edu, Max.');
-    expect(text).not.toContain('user@example.edu');
+    expect(text).toContain('Stored sign-in found for user@example.edu, Max.');
     expect(records).toContainEqual(
       expect.objectContaining({
         id: 'auth',
         message: 'Stored sign-in found for user@example.edu, Max.',
+      }),
+    );
+  });
+
+  it('redacts email-like values outside the auth account message', () => {
+    const report: DoctorReport = {
+      ok: false,
+      checks: [
+        {
+          id: 'auth',
+          name: 'Included access',
+          status: 'pass',
+          message: 'Stored sign-in found for user@example.edu.',
+        },
+        {
+          id: 'config',
+          name: 'Config',
+          status: 'warn',
+          message: 'Workspace config references owner@example.edu.',
+          hint: 'Ask admin@example.edu to update it.',
+        },
+      ],
+    };
+
+    const text = formatDoctorText(report);
+    const records = doctorNdjsonRecords(report, '2026-05-18T00:00:00.000Z');
+
+    expect(text).toContain('Stored sign-in found for user@example.edu.');
+    expect(text).toContain('Workspace config references o***@e***.edu.');
+    expect(text).toContain('Ask a***@e***.edu to update it.');
+    expect(text).not.toContain('owner@example.edu');
+    expect(text).not.toContain('admin@example.edu');
+    expect(records).toContainEqual(
+      expect.objectContaining({
+        id: 'config',
+        message: 'Workspace config references owner@example.edu.',
+        hint: 'Ask admin@example.edu to update it.',
       }),
     );
   });
