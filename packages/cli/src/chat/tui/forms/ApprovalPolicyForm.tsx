@@ -56,7 +56,10 @@ export function ApprovalPolicyForm(
           onSelect={props.onSelect}
           onCancel={props.onCancel}
         />
-        <CompactFormKeyHints primary={{ key: '1-3/Enter', action: 'select' }} />
+        <CompactFormKeyHints
+          primary={{ key: '1-3/Enter', action: 'select' }}
+          escapeAction="cancel"
+        />
       </FormFrame>
     );
   }
