@@ -28,13 +28,17 @@
 import {
   chmodSync,
   existsSync,
+  mkdtempSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
+  rmSync,
   statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -44,6 +48,7 @@ const ETX = String.fromCharCode(3); // Ctrl-C
 const DC2 = String.fromCharCode(18); // Ctrl-R
 const DC4 = String.fromCharCode(20); // Ctrl-T
 const NAK = String.fromCharCode(21); // Ctrl-U
+const EM = String.fromCharCode(25); // Ctrl-Y
 const UP = ESC + '[A';
 const DOWN = ESC + '[B';
 const PAGE_DOWN = ESC + '[6~';
@@ -911,6 +916,23 @@ const SCENARIOS = [
       'Esc sk…',
       '1 approval',
     ],
+  },
+  {
+    name: 'external-inquiry-copy-question',
+    rows: 24,
+    cols: 80,
+    env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
+    bootExpect: '[Ctrl-C]',
+    keys: [EM],
+    frame: 'tail',
+    fakeClipboard: {
+      expectIncludes: [
+        'Problem: Find all integer triples',
+        'whose perimeter is at most 120',
+      ],
+    },
+    expect: ['Agent asks: copied to clipboard', 'Ctrl-Y copy', '1 question'],
+    unexpect: ['copy failed', '[/model]models', '1 approval'],
   },
   {
     name: 'compact-user-question',
@@ -2062,6 +2084,40 @@ function expectedFrameTextVisible(scenario, frame) {
   return (scenario.expect ?? []).every((text) => frame.includes(text));
 }
 
+const FAKE_CLIPBOARD_COMMANDS_BY_PLATFORM = {
+  darwin: ['pbcopy'],
+  linux: ['wl-copy', 'xclip', 'xsel'],
+};
+
+function fakeClipboardCommandsForPlatform(platform = process.platform) {
+  return FAKE_CLIPBOARD_COMMANDS_BY_PLATFORM[platform] ?? [];
+}
+
+function makeFakeClipboard(platform = process.platform) {
+  const commands = fakeClipboardCommandsForPlatform(platform);
+  if (commands.length === 0) return null;
+
+  const dir = mkdtempSync(path.join(tmpdir(), 'texra-tui-clipboard-'));
+  const binDir = path.join(dir, 'bin');
+  const textFile = path.join(dir, 'clipboard.txt');
+  mkdirSync(binDir, { recursive: true });
+  writeFileSync(textFile, '');
+
+  const script = [
+    '#!/usr/bin/env sh',
+    'set -eu',
+    'cat > "$TEXRA_FAKE_CLIPBOARD_FILE"',
+    '',
+  ].join('\n');
+  for (const command of commands) {
+    const commandPath = path.join(binDir, command);
+    writeFileSync(commandPath, script);
+    chmodSync(commandPath, 0o755);
+  }
+
+  return { binDir, dir, textFile };
+}
+
 function blankLinesBetween(frame, from, to) {
   const lines = frame.split('\n');
   const toIndex = lines.findLastIndex((line) => line.includes(to));
@@ -2245,6 +2301,33 @@ function writeSnapshotReport(results) {
 }
 
 async function runScenario(scenario) {
+  const fakeClipboard = scenario.fakeClipboard ? makeFakeClipboard() : null;
+  if (scenario.fakeClipboard && !fakeClipboard) {
+    const skipReason = `fake clipboard is not supported on ${process.platform}`;
+    return {
+      name: scenario.name,
+      ok: true,
+      skipped: true,
+      skipReason,
+      failures: [],
+      frame: skipReason,
+      fullFrame: skipReason,
+      rows: scenarioRows(scenario),
+    };
+  }
+  try {
+    return await runScenarioWithResources(scenario, fakeClipboard);
+  } finally {
+    cleanupFakeClipboard(fakeClipboard);
+  }
+}
+
+function cleanupFakeClipboard(fakeClipboard) {
+  if (!fakeClipboard) return;
+  rmSync(fakeClipboard.dir, { recursive: true, force: true });
+}
+
+async function runScenarioWithResources(scenario, fakeClipboard) {
   const term = makeTerm(scenario);
   const cols = scenarioCols(scenario);
   const rows = scenarioRows(scenario);
@@ -2263,6 +2346,10 @@ async function runScenario(scenario) {
     COLUMNS: String(cols),
     LINES: String(rows),
   };
+  if (fakeClipboard) {
+    childEnv.PATH = `${fakeClipboard.binDir}${path.delimiter}${childEnv.PATH ?? ''}`;
+    childEnv.TEXRA_FAKE_CLIPBOARD_FILE = fakeClipboard.textFile;
+  }
   // The validator intentionally exercises an interactive TTY. Inherited CI
   // markers make Ink choose a non-interactive render mode and hide the live
   // input/status surface this script is meant to inspect.
@@ -2402,10 +2489,21 @@ async function runScenario(scenario) {
       : '';
     failures.push(`exit keys did not close the TUI cleanly${exitDetails}`);
   }
+  if (fakeClipboard) {
+    const copiedText = readFileSync(fakeClipboard.textFile, 'utf8');
+    for (const text of scenario.fakeClipboard.expectIncludes ?? []) {
+      if (!copiedText.includes(text)) {
+        failures.push(
+          `fake clipboard missing expected text: ${JSON.stringify(text)}`,
+        );
+      }
+    }
+  }
 
   return {
     name: scenario.name,
     ok: failures.length === 0,
+    skipped: false,
     failures,
     frame,
     fullFrame,
@@ -2416,13 +2514,17 @@ async function runScenario(scenario) {
 if (snapshotDir) resetSnapshotDir(snapshotDir);
 
 let failed = 0;
+let skipped = 0;
 const results = [];
 for (const [index, scenario] of scenarios.entries()) {
   // eslint-disable-next-line no-await-in-loop
   const result = await runScenario(scenario);
   results.push(result);
   writeSnapshot(index, result.name, result.fullFrame, result.rows);
-  if (result.ok) {
+  if (result.skipped) {
+    skipped += 1;
+    console.log(`- ${result.name} (skipped: ${result.skipReason})`);
+  } else if (result.ok) {
     console.log(`✓ ${result.name}`);
   } else {
     failed += 1;
@@ -2442,7 +2544,7 @@ writeSnapshotReport(results);
 console.log('');
 console.log(
   failed === 0
-    ? `validate-tui: all ${scenarios.length} scenarios passed`
+    ? `validate-tui: all ${scenarios.length - skipped} scenario(s) passed${skipped ? `, ${skipped} skipped` : ''}`
     : `validate-tui: ${failed}/${scenarios.length} scenario(s) FAILED`,
 );
 if (snapshotDir) {
