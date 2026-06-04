@@ -423,12 +423,13 @@ const SCENARIOS = [
     frame: 'tail',
     expect: [
       '/model · personal API keys',
-      'Available models',
-      'texra chat --model=<name>',
+      'Available models. Finish the active response before switching models.',
+      'Enter close',
     ],
     unexpect: [
       'Platform not initialized',
       '/model - error',
+      'texra chat --model=<name>',
       'texra --model=<name>',
     ],
   },
