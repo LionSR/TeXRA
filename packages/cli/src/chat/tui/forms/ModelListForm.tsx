@@ -1,7 +1,7 @@
 // `/model` form. It loads the same registry used by `texra models list`, then
 // shows only the entries that can run in the active API mode. Before the first
-// message it can choose the root model; after that it is read-only because an
-// active conversation owns a concrete model handler.
+// message it chooses the root model; once a tool-use chat is waiting, it can
+// switch the live conversation to a compatible model for future turns.
 
 import { Box, Text, useInput } from 'ink';
 import { Spinner } from '@inkjs/ui';
@@ -199,8 +199,8 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
       </Text>
       <Text dimColor>
         {selectable
-          ? 'Choose the root model for the first message.'
-          : 'Available models. Start a new chat with texra chat --model=<name> to choose the root model.'}
+          ? 'Choose the model for future turns.'
+          : 'Available models. Finish the active response before switching models.'}
       </Text>
       {items.length === 0 ? (
         <EmptyModelListState
