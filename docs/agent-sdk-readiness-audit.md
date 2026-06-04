@@ -821,3 +821,236 @@ the ALS `RunContext` + module-global registries, which Step 7 must thread throug
 applied (`@platform` surface, redaction contract); the remaining ledger is §2.6 (relocate),
 §4 (one consumer rewire), §5/Step 7 (multi-session isolation), and the five small new items
 above. No rewrite warranted.
+
+---
+
+## 13. Re-verification addendum — 2026-06-04 (+ one tidy applied)
+
+An eighth pass — four parallel fresh-eyes audits (model handlers, agent core/runtime,
+logger/trace/eventBus, public surface) plus a direct line-by-line re-check of every open
+item against `main` at HEAD `bf32964`. **All 2026-05-28 → 06-03 findings hold without
+change. No new structural over-abstraction surfaced.** TeXRA remains well-architected and
+SDK-aligned; the gaps are incremental. One additive, behavior-neutral tidy was applied
+(below), addressing the single genuinely-new finding this pass.
+
+### Drift since the 2026-06-03 pass (HEAD `08e63af` → `bf32964`) — audited clean
+
+The 30-odd commits between passes are CLI fixes plus **simplification** refactors that move
+_with_ the audit, not against it — none adds a wrapper, barrel, or surface:
+
+- `3c959c8` "refactor(latex): simplify LaTeX-processing helpers — inline wrappers, drop dead
+  code" (PR #5234) and `e0ef81b` "refactor(cli/tui): simplify TUI subsystem — inline
+  single-use helpers, drop dead code" are textbook applications of the repo's own
+  flatten/anti-shim rules.
+- `c619ca4` "refactor: simplify recently-changed CLI/agent code" net-trimmed
+  `modelHandlerAnthropic.ts` (−more than added) and touched `BasePromiseCoordinator`,
+  `executeAgent`, `userVars`, follow-up queue — all reductions, no new indirection.
+- `git log --since` over `src/agent`, `src/logger`, `src/platform`, `packages/core/src`
+  shows **no new `index.ts` barrel and no new run-entry wrapper** added since the fifth pass.
+
+### Applied this pass (behavior-preserving; `npm run typecheck` + `eslint` green)
+
+- **`AgentRuntimeHost` headless contract — documented (new finding #1 below).** Added a TSDoc
+  block to the `AgentRuntimeHost` port (`runtime/AgentRuntimeHost.ts`) — the interface an SDK
+  embedder implements — stating the two-tier event contract: the **essential streaming
+  surface** (stream lifecycle / usage / task state, the `show*`/`resolve*` approval pairs,
+  conversation progress) versus the **frontend-bound, ignorable** group (the
+  `── Frontend-bound events ──` events in `ProgressEventPayloads`: `requestOpenFile`,
+  `requestShowInstruction`, `showAgentConfigBanner`, `requestShowError`,
+  `requestEnsureProgressView`, plus the `*SubscriptionsChanged` / `toolAvailabilityChanged`
+  UI-refresh signals), which a headless consumer may drop without affecting the run. Points
+  at `noopAgentRuntimeHost` as the valid drop-everything host. This is the same
+  "document-the-contract, don't force structure" fix shape as §12's redaction contract — no
+  behavior change, no event re-routing.
+
+### Genuinely-new finding recorded for the backlog (not a blocker)
+
+1. **`AgentRuntimeHost.emit()` mixes UI-only events with the essential streaming surface
+   (low, surface clarity).** The single `emit` port carries ~40 `ProgressEventPayloads`
+   arms spanning two concerns: stream/approval/usage (which an embedder must observe to
+   drive a run) and pure host-UI requests (`requestOpenFile`, `requestEnsureProgressView`,
+   `showAgentConfigBanner`, …, already grouped under the interface's
+   `── Frontend-bound events ──` header). A headless SDK consumer has to know which to
+   ignore. **Applied fix:** the headless contract is now documented on the port (above).
+   **Optional future polish (not pursued):** split the frontend-bound arms into a separate
+   optional `UIRuntimeHost` so the essential surface stands alone in the type. Deferred for
+   the same reason as §4 / Step 7 — it is a multi-site host-interface change, behavior-
+   sensitive across all three hosts, not a quick win; the documented contract resolves the
+   immediate discoverability gap.
+
+### False-positive ledger — two re-surfaced this pass, both re-verified and rebutted
+
+The fresh model-handler audit independently re-flagged the two findings the prior passes
+already adjudicated as false positives. Recorded with **fresh line-level verification at
+HEAD `bf32964`** so they are not re-litigated a ninth time:
+
+- **"`IModelHandler` is a redundant duplicate of `ModelHandler` — delete the 473-line port."**
+  **Refuted, verified.** The port is **not** the same shape as the base class: the optional
+  `createBatchedToolUseFollowUpMessages?(...)` is declared on the port
+  (`types/IModelHandler.ts:395`, with `?`) and is **not** implemented on the base
+  `ModelHandler`. `ToolUseCycleFlow.ts:810-815` **feature-detects** it on the port-typed
+  handler (`modelHandler.requiresBatchedParallelToolResults && !!modelHandler.createBatchedToolUseFollowUpMessages`
+  then calls it with `!`). Re-typing those call sites to the concrete `ModelHandler` (which
+  lacks the method) would fail to compile — the port's optional-method surface is exactly what
+  enables provider-agnostic feature detection. (Consistent with §9/§12.) Not redundant.
+- **"Collapse the thin OpenAI-compatible subclasses into a provider-config table (~87 LOC)."**
+  **Re-confirmed lean-keep** (§9 #2, §12). Each maps 1:1 to a `ModelProvider` arm in the
+  exhaustive `PROVIDER_HANDLERS` record, and the prior OpenRouter merge of this flavor was
+  deliberately reverted. Even the fresh audit conceded that only DashScope (14 LOC) / XAI (38)
+  / GLM (35) are pure-config, while Kimi / MiniMax / DeepSeek (~130 each) carry genuine deltas
+  (Kimi's token-count API, MiniMax's `reasoning_details`, DeepSeek's content-format + effort
+  validation). The collapse still needs a class per provider for the registry — it trades small
+  LOC for a less-obvious dispatch table. Do not pursue.
+
+### Open items still present at HEAD `bf32964` (verified, line numbers refreshed)
+
+- **§2.6** — `modelHandlerValidation.ts` still in the production handler dir, gated by
+  `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL` (`ModelFactory.ts`). Relocate-with-injection
+  (it is CLI machinery, not vitest-only) still recommended; still low priority.
+- **§4** — token usage still double-emitted in `src/agent/utils/UsageMonitor.ts`:
+  `runtimeHost.emit('updateStreamUsage', …)` at `:155` and `logger.usage(payload, …)` at
+  `:164`. Single-source-of-truth onto `AgentTrace` remains a progress-view consumer rewire.
+- **§5 / proposal Step 7** — no `delegateTo(...)` primitive (`grep` over `src/**` +
+  `packages/**` empty); delegation remains a tool call. The three module-globals are
+  unchanged: `runCoordinators.bridgeState` (`:27`), `executionRegistry` module Maps, and the
+  interrupt registry still named `ToolUseAgentRegistry` (Step 7a rename not landed). Still the
+  gating blocker for concurrent in-process sessions — relocate onto a per-run handle, never
+  delete.
+- **§3.1** — still no `@agent/runtime/index.ts` barrel; still optional polish (the `@texra/core`
+  - `src/platform/index.ts` surfaces already cover the underlying concern).
+- **§12 residual port trim** — `IModelHandler` still declares `isDeepSeek`/`isKimi`/`isMiniMax`
+  (`types/IModelHandler.ts:229-231`); their sole external reader is
+  `openrouter/modelHandlerOpenRouterNative.ts`. Make them protected on the relevant classes or
+  derive OpenRouter's check from `config.provider`. Low effort, low risk; unstarted.
+- **§12 `RunStorageService`** — still a one-boolean port (`runtime/RunStorageService.ts`,
+  24 LOC) with a single caller (`executeAgent.ts:445`, the `!getRunStorageService().isViewVisible()`
+  guard). Fold `isViewVisible` onto `AgentRuntimeHost` or `ExecuteAgentOptions` and delete the
+  file. Unstarted.
+- **§9 finding #1 (redaction contract)** — addressed 2026-06-03 (TSDoc on `logUtils`); unchanged.
+
+> **Latest-main note.** This addendum was rebased onto and re-verified against `origin/main`
+> at `17d229860` (the §13 work began at `bf32964`). The diff `bf32964..17d229860` over
+> `src/agent`, `src/logger`, `src/platform`, `src/eventBus`, `packages/core/src` is **empty** —
+> the ~10 intervening commits are CLI/webview fixes and a Lean-LSP decouple (`src/tools/lean`,
+> #5260) — so every `file:line` below holds unchanged on latest main.
+
+### Deeper trace (latest main `17d229860`) — two ledger items refined to ground truth
+
+Eight prior passes carried §4 and §5/Step 7 forward by description. A direct line-level
+trace of both this pass shows the **conclusions hold but the prior framing was imprecise**;
+the refinements below change what the eventual fix must do, so they are recorded explicitly.
+
+**Finding A — §4 is a deliberately-gated two-sink fan-out, _not_ a duplicated signal.**
+The two emissions in `UsageMonitor.recordUsage` (`utils/UsageMonitor.ts:155` and `:164`) are
+documented in-code (`:151-167`) as targeting **two different sinks with different scope**, not
+the same signal twice:
+
+- `runtimeHost.emit('updateStreamUsage', …)` (`:155`) → the progress-view **sidebar**, for
+  **all** agents (the `ProgressEventBus`/UI accumulation surface).
+- `logger.usage(payload, …)` (`:164`) → the transcript **statistics line** via the `AgentTrace`
+  channel, **gated to `AgentCategory.Workflow` only** (`:160`) — tool-use agents deliberately
+  skip it because their UI surface is the tool-use cards, not a stats line.
+
+So §0's "genuinely duplicated signal (token usage)" overstates it: there is one _payload_ built
+once, fanned to two _consumers_ with different audiences and a workflow-only gate. Consolidating
+onto `AgentTrace` (the SDK-aligned single channel) is therefore **not** a dead-emit deletion —
+it requires (a) the sidebar consumer to subscribe to the trace `usage`/`domain` channel, and
+(b) preserving the workflow-only gate so tool-use transcripts don't grow a stats line. **Ledger
+update:** keep §4 open, but reclassify it from "remove the duplicate" to "consolidate two sinks
+onto one channel, preserving the `AgentCategory.Workflow` gate" — a UI consumer rewire, larger
+than a one-line deletion. (This matches, and sharpens, the standing "progress-view consumer
+rewire" note.)
+
+**Finding B — the Step-7 "concurrent in-process sessions" blocker is narrowly the _unscoped
+sweep/all_ operations, not the keyed registries.** Tracing all three module-globals shows every
+_lookup/resolve_ path is already concurrency-safe, because each is **keyed by a unique id** and
+each entry points at the correct per-run object:
+
+- `executionRegistry` — `Map<executionId, ExecutionHandle>` (`executionRegistry.ts:32`); handles
+  carry their own per-run `runtimeHost`. No cross-session key collision.
+- `runCoordinators.bridgeState` — 8 `Map`s keyed by `streamId`/`approvalId`/`proposalId`
+  (`runCoordinators.ts:27-36`), each pointing at that run's `RunCoordinators`. The resolve-side
+  UI callers (`resolveProposal`/`resolvePlanApproval`/`triggerRetry`) run outside the run's ALS
+  and key by id — which is _why_ the bridge exists (§7); it is not collision-prone.
+- `ToolUseAgentRegistry` — `Map<streamId, IInterruptible>` (`ToolUseAgentRegistry.ts:27`).
+- `StreamStatusService` — `Map<streamId, StreamStatus>` (`StreamStatusService.ts:13`).
+
+Operations that iterate a whole map are then either **already scoped** or **shutdown-only**, and
+thus also safe for multiple in-process sessions:
+
+- `interruptActiveChildren(parentStreamId)` filters by `isChildOf(handle, parentStreamId)`
+  (`ExecutionHandle.ts:178-187`) — parent-scoped, not a global sweep; likewise
+  `collectChildSummary`/`updateActiveSubagents`.
+- `killBackgroundProcesses()` is wired only to process shutdown (`extension.ts:190`
+  `onShutdown(BEFORE)`, desktop `index.ts:620`) — the process is tearing down, so cross-session
+  scope is moot.
+
+The genuine cross-session leaks for a hypothetical multi-session-in-one-process SDK embedder are
+therefore a **short, enumerable list** — the explicit _all/sweep_ entry points, not the maps:
+
+1. `getActiveExecutionIds()` (`executionRegistry.ts:124`) returns **every** session's executions;
+   consumed by the orchestrator's `ExecutionsTool` listing (`tools/ExecutionsTool.ts:382,441`) and
+   the delete-all guards (`SettingsViewMessageHandler.ts:1201/1227`,
+   `desktopSettingsIpc.ts:449/463`). A second session's runs would be visible/selectable.
+2. `cleanupAllCoordinatorRequests()` + `clearAll*` (`runCoordinators.ts:115/216/237`), reached via
+   `cleanupAllApprovals()` ("delete all streams", `tools/approval/index.ts:49-57`). A reset in one
+   session would clear another's pending approvals. **Note:** the per-session variant already
+   exists — `cleanupCoordinatorRequestsForStream(streamId)` (`runCoordinators.ts:231`,
+   `tools/approval/index.ts:42`) — so the scoped path is built; only the "all" sweep leaks.
+3. The single module-level `StreamStatusService.onDidChange(...)` subscription in
+   `executionRegistry.ts:44` — one process-wide listener (its body is keyed-safe; the subscription
+   registration is the global).
+
+**Ledger update:** the §5/Step-7 prescription "relocate the three module-globals onto a per-run
+handle, never delete" is directionally right but heavier than needed. The minimal correctness fix
+for concurrent sessions is to **scope these ~3 sweep/list/subscribe seams by session/owner**
+(pass an owner filter to `getActiveExecutionIds`, route "clear-all" through a per-session set, and
+own the status subscription per session) — the keyed entries themselves need not move for
+correctness. This is a smaller, lower-risk change than a wholesale registry relocation, and it is
+why none of the current single-session-per-process hosts (extension, CLI, desktop) exhibit any bug
+today. Recorded as a precise scope for Step 7; **not applied** (still a behavior-sensitive,
+multi-host change, consistent with the prior deferral).
+
+### Independently re-confirmed clean by the four parallel maps (recorded, not re-flagged)
+
+- **Model handlers.** `ModelFactory` is a clean three-path router over an exhaustive
+  `PROVIDER_HANDLERS`; the `support/` collaborators (`AnthropicStreamHandler`,
+  `MediaAttachmentProcessor`, `ProxyConfigResolver`, `UsageNormalizer`, `sdkErrorAdapters`) are
+  each multi-caller, non-trivial, and correctly shared — zero single-caller forwarders.
+  `ReasoningModelHandlerOpenAI` is a justified DRY intermediate base. The hand-rolled streaming
+  is necessary multi-provider glue, not a reimplementation of any single SDK's loop.
+- **Agent core / runtime.** The two-tier run entry (`runAgent` → `executeAgent`/`runAgentStream`),
+  the coordinator hierarchy, the `Node.exec()→createFlow()→run()` cycle factories, and the
+  composed `AgentWorkspaceState` sub-objects all re-audited clean — no god-objects, no
+  wrapper-to-inline. (Consistent with the §8/§9 false-positive ledger.)
+- **Logger / trace / eventBus.** `@logger` stays decoupled from `platform()`; `AgentTrace` is
+  the single per-run discriminated event channel; `ProgressEventBus` is orthogonal UI/state
+  pub/sub; the only overlap remains the §4 usage emission — now traced (Finding A above) to be a
+  deliberate two-sink fan-out with a workflow-only gate, not a duplicated signal. `redaction.ts`
+  centralized and **not** dead (re-confirmed: `desktopAppLog.ts` is the live consumer).
+- **Public surface.** Agent core is `vscode`-free (grep clean); the `@texra/core` 8-section
+  barrel, the `Platform` 8-port composition root, and the `src/platform/index.ts` surface (added
+  06-03) are the strongest SDK-aligned pieces. The would-be SDK callable
+  (`initPlatform` → `validateExecutionRequest` → `runAgent`/`executeAgent` with an
+  `AgentRuntimeHost` + `AgentTrace`) is ~95% pure; the only residual host leak is the UI-event
+  mixing now documented as new finding #1.
+
+**Subagent split points — unchanged and accurate** (§5 + proposal): config-driven YAML agents
+over the two flows (reflection / tool-use) + the `delegate_*` tools are the existing subagent
+mechanism; the `agentCategory` dispatch in `executeAgent` is the cleanest internal seam; the
+helper-model tasks remain the lowest-risk tools-as-data extraction. The node-level
+candidates (`MediaExtractionNode`, `TeXCountNode`, `OutputNode`, the `sessionDescription`
+background call) stay gated behind the same Step-7 coupling blocker (they read the ALS
+`RunContext` + module-global registries).
+
+**Net for 2026-06-04:** thesis reaffirmed for the eighth pass — incremental, not structural;
+the post-06-03 drift is pure simplification, moving the codebase further _toward_ the audit's
+target (re-verified on latest main `17d229860`). One additive tidy applied (`AgentRuntimeHost`
+headless contract). The two highest-value open items were traced to ground truth rather than
+carried by description: **§4** is a deliberately-gated two-sink fan-out (Finding A), so its fix is
+a sink consolidation that must preserve the workflow-only gate — not a duplicate deletion; and
+**§5/Step 7's** "concurrent-session blocker" narrows to ~3 unscoped sweep/list/subscribe seams
+(`getActiveExecutionIds`, the `clearAll*` reset, the module-level status subscription) over
+otherwise concurrency-safe keyed registries (Finding B), so the minimal fix is to scope those
+seams by session, not relocate the registries. The rest of the ledger is unchanged: §2.6
+(relocate), and the small §12 trims (port booleans, `RunStorageService`). No rewrite warranted.
