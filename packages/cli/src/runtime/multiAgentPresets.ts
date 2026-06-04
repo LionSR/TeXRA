@@ -58,6 +58,12 @@ export interface CliMultiAgentPresetListRecord extends CliMultiAgentPreset {
   readonly availability: CliMultiAgentPresetAvailability;
 }
 
+const MULTI_AGENT_TEAM_ROOT_AGENT_LABEL = 'Team root agent';
+export const MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION =
+  'Root agent for the team run (defaults to the preset orchestrator)';
+export const MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION =
+  'Model for the team root agent';
+
 export function parseCliCustomAgentPresets(raw: unknown): AgentModePreset[] {
   return AgentModePresetSchema.array().catch([]).parse(raw);
 }
@@ -176,7 +182,7 @@ export function formatCliMultiAgentPresetInspection(
     `${plan.preset.name} (${plan.preset.id})`,
     `Source: ${plan.preset.source}`,
     `Description: ${plan.preset.description}`,
-    'Root tool-use agent:',
+    `${MULTI_AGENT_TEAM_ROOT_AGENT_LABEL}:`,
     `  ${plan.rootAgent?.name ?? '(none)'}`,
     'Available workflow agents:',
     formatAgentNames(availableWorkflowAgents),
