@@ -132,6 +132,7 @@ const AGENT_PROPOSAL_INSTRUCTION =
     '6. Include a short independent enumeration so the orchestrator can compare results.',
   ].join('\n');
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
+const CAN_SELECT_MODEL = process.env.HARNESS_CAN_SELECT_MODEL === '1';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
@@ -1194,9 +1195,15 @@ function handleHarnessSlashCommand(line: string): boolean {
 
 registerBuiltinSlashCommands({
   canSelectAgent: () => false,
-  canSelectModel: () => false,
+  canSelectModel: () => CAN_SELECT_MODEL,
   getApprovalPolicy: () => harnessApprovalPolicy,
   onApprovalPolicySelect: setHarnessApprovalPolicy,
+  onModelSelect: (model) => {
+    cliState.sessionMeta.set({ ...cliState.sessionMeta.get(), model });
+    appendHarnessAssistantTranscript(
+      `Harness model selected. Future turns: ${model}.`,
+    );
+  },
   onApiModeSelect: (apiMode) => {
     cliState.sessionMeta.set({ ...cliState.sessionMeta.get(), apiMode });
     appendHarnessAssistantTranscript(`API mode set to ${apiMode}.`);
