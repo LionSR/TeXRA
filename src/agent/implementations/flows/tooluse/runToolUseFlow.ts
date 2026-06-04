@@ -41,6 +41,7 @@ import {
   migrateSharedState,
   type ToolUseRunShared,
 } from './nodes/types';
+import { withToolUseSharedModel } from './modelSwitchState';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
@@ -134,6 +135,22 @@ export async function runToolUseFlow<C = unknown>(
   };
   const switchedHandlers = new Set<ToolUseServices<C>['modelHandler']>();
 
+  const persistModelSwitch = async (model: string): Promise<void> => {
+    const key = flowKey(executionId);
+    const flowRecord = await kv.read<FlowRecord>(key);
+    const migrationResult = migrateSharedState(flowRecord?.shared);
+    const updatedShared = migrationResult
+      ? withToolUseSharedModel(migrationResult.data, model)
+      : null;
+    if (!flowRecord || !updatedShared) {
+      throw new Error(
+        'Cannot save the model switch because the resumable session state is unavailable.',
+      );
+    }
+    flowRecord.shared = updatedShared;
+    await kv.write(key, flowRecord);
+  };
+
   const switchModel = async (model: string): Promise<void> => {
     const nextConfig = MODEL_CONFIGS[model];
     if (!nextConfig) {
@@ -150,6 +167,12 @@ export async function runToolUseFlow<C = unknown>(
       throw new Error(
         'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.',
       );
+    }
+    try {
+      await persistModelSwitch(model);
+    } catch (error) {
+      nextHandler.dispose();
+      throw error;
     }
     nextHandler.setAgentCategory(setting.agentCategory);
     nextHandler.setLogger(logger);
