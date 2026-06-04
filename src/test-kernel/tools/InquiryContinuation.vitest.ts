@@ -43,6 +43,7 @@ describe('buildContinuationText', () => {
     expect(text).toContain(`[inquiry] ${THREAD} answered.`);
     expect(text).toContain('Q: Q');
     expect(text).toContain('A: A');
+    expect(text).toContain(`Full thread: inquiry { command: 'read'`);
     expect(text).toContain('Still open on this stream:');
     expect(text).toContain(OTHER_THREAD);
     expect(text).toContain(
@@ -74,8 +75,31 @@ describe('buildContinuationText', () => {
 
     expect(text).toContain(`[inquiry] ${THREAD} dropped by user.`);
     expect(text).toContain('Q: Q');
+    expect(text).toContain(`Full thread: inquiry { command: 'read'`);
     expect(text).toContain('re-formulate (new thread)');
     expect(text).toContain(`Do not re-dispatch ${THREAD}.`);
+  });
+
+  it('collapses multiline markdown previews to avoid rendering code blocks', () => {
+    const text = buildContinuationText({
+      event: 'answered',
+      threadId: THREAD,
+      question: [
+        'Please run this analysis:',
+        '',
+        '```bash',
+        'grep -rn "SameMPV₂" TNLean',
+        '```',
+      ].join('\n'),
+      answer: ['```text', 'do subagent; not inquiry', '```'].join('\n'),
+      stillOpen: [],
+    });
+
+    expect(text).toContain(
+      'Q: Please run this analysis: ```bash grep -rn "SameMPV₂" TNLean ```',
+    );
+    expect(text).toContain('A: ```text do subagent; not inquiry ```');
+    expect(text.split('\n').some((line) => line.startsWith('```'))).toBe(false);
   });
 
   it('truncates long questions and answers', () => {
