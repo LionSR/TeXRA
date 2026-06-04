@@ -135,4 +135,54 @@ describe('ToolUseWaitNode', () => {
     expect(transition).toBe(FlowTransition.COMPLETE);
     expect(shared.deliveredToOrchestrator).toBe(true);
   });
+
+  it('warns when follow-up media cannot be attached to a non-vision model', async () => {
+    const shared: ToolUseRunShared = {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    };
+    const warn = vi.fn();
+    const addMediaToUserMessage = vi.fn(async () => {});
+
+    const services = {
+      checkInterruption: () => false,
+      fileService: {
+        createLocation: (filePath: string) => ({ absolutePath: filePath }),
+      },
+      logger: { info: vi.fn(), warn },
+      modelHandler: {
+        addMediaToUserMessage,
+        capabilities: {
+          supportsNativeAudio: true,
+          supportsVision: false,
+        },
+        createUserFollowUpMessages: vi.fn(async () => []),
+      },
+      runtimeHost: { emit: vi.fn() },
+      streamId: 'test-stream',
+    } as unknown as ToolUseServices;
+
+    const node = new ToolUseWaitNode().setServices(services);
+    const transition = await node.post(
+      shared,
+      {
+        afterError: false,
+        lastResponse: undefined,
+        previouslyDeliveredToOrchestrator: false,
+        touchedFiles: [],
+      },
+      {
+        followUp: 'please inspect this figure',
+        kind: 'continue',
+        mediaFiles: ['/tmp/figure.png'],
+      },
+    );
+
+    expect(transition).toBe(FlowTransition.CONTINUE);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('Model has no vision support'),
+    );
+    expect(addMediaToUserMessage).toHaveBeenCalledOnce();
+  });
 });

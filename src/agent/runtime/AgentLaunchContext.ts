@@ -45,6 +45,11 @@ import {
   withRunContext,
   type RunCoordinators,
 } from './RunContext';
+import {
+  countMediaFilesNeedingVision,
+  formatMediaNeedsVisionWarning,
+  shouldWarnMediaNeedsVision,
+} from './mediaVisionWarning';
 import { retainRunCoordinatorsForStream } from './runCoordinators';
 import { getStreamTabId } from './streamTab';
 import { StreamStatusService } from './StreamStatusService';
@@ -252,20 +257,19 @@ async function assembleAgentLaunchContext(
     ? normalizeRunId(parentStage.id)
     : (executionId as StorageKey);
 
-  // Tell the user when attached media will be dropped because the chosen model
-  // can consume neither vision nor native audio (e.g. a pasted figure on a
-  // non-vision model like DeepSeek). The downstream initializeMessages /
-  // addMediaToUserMessage guards drop it silently otherwise.
+  // Tell the user when attached images will be dropped because the chosen model
+  // lacks vision. The downstream initializeMessages/addMediaToUserMessage guards
+  // drop them silently otherwise.
+  const visionMediaCount = countMediaFilesNeedingVision(config.mediaFiles);
   if (
-    config.mediaFiles.length > 0 &&
-    !modelHandler.capabilities.supportsVision &&
-    !modelHandler.capabilities.supportsNativeAudio
+    shouldWarnMediaNeedsVision(config.mediaFiles, modelHandler.capabilities)
   ) {
-    const n = config.mediaFiles.length;
     agentLogger.warn(
-      `Model "${fullConfig.model}" has no vision support — ${n} attached ` +
-        `${n === 1 ? 'image is' : 'images are'} not sent to the model. ` +
-        `Switch to a vision-capable model to use ${n === 1 ? 'it' : 'them'}.`,
+      formatMediaNeedsVisionWarning(
+        visionMediaCount,
+        'attached',
+        fullConfig.model,
+      ),
     );
   }
 

@@ -2,6 +2,11 @@ import { Node } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { listIdleContinuationProviders } from '@agent/runtime/idleContinuation';
+import {
+  countMediaFilesNeedingVision,
+  formatMediaNeedsVisionWarning,
+  shouldWarnMediaNeedsVision,
+} from '@agent/runtime/mediaVisionWarning';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@shared/schemas';
 
@@ -191,16 +196,14 @@ export class ToolUseWaitNode<C> extends Node<
     // to the freshly-appended user message, reusing the same shared media path
     // as the reflection flow. No-ops when empty or the model lacks vision.
     if (execRes.mediaFiles?.length) {
+      const visionMediaCount = countMediaFilesNeedingVision(execRes.mediaFiles);
       if (
-        !modelHandler.capabilities.supportsVision &&
-        !modelHandler.capabilities.supportsNativeAudio
+        shouldWarnMediaNeedsVision(
+          execRes.mediaFiles,
+          modelHandler.capabilities,
+        )
       ) {
-        const n = execRes.mediaFiles.length;
-        logger.warn(
-          `Model has no vision support — ${n} pasted ` +
-            `${n === 1 ? 'image is' : 'images are'} not sent to the model. ` +
-            `Switch to a vision-capable model to use ${n === 1 ? 'it' : 'them'}.`,
-        );
+        logger.warn(formatMediaNeedsVisionWarning(visionMediaCount, 'pasted'));
       }
       await modelHandler.addMediaToUserMessage(
         shared.messages,
