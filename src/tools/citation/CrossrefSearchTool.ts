@@ -18,19 +18,27 @@ import { CROSSREF_CONSTANTS, crossrefClient } from './constants';
 import { waitForRateLimit } from './rateLimiter';
 
 const CrossrefSearchInputSchema = z.strictObject({
-  query: z.string(),
+  query: z.string().describe('Bibliographic search query for Crossref works.'),
   rows: z
     .int()
     .positive()
     .max(CROSSREF_CONSTANTS.MAX_ROWS)
     .nullish()
-    .transform((v) => v ?? CROSSREF_CONSTANTS.DEFAULT_ROWS),
-  offset: z.int().min(0).nullish(),
-  sort: z.string().nullish(),
-  order: z.enum(['asc', 'desc']).nullish(),
+    .transform((v) => v ?? CROSSREF_CONSTANTS.DEFAULT_ROWS)
+    .describe('Maximum number of works to return.'),
+  offset: z
+    .int()
+    .min(0)
+    .nullish()
+    .describe('Zero-based result offset for pagination.'),
+  sort: z.string().nullish().describe('Crossref sort field to apply.'),
+  order: z.enum(['asc', 'desc']).nullish().describe('Crossref sort order.'),
   // Filter as Crossref filter string format (e.g., "from-pub-date:2023,has-orcid:true")
   // Object format removed due to OpenAI JSON Schema limitations with z.record()
-  filter: z.string().nullish(),
+  filter: z
+    .string()
+    .nullish()
+    .describe('Crossref filter string, e.g. "from-pub-date:2023".'),
 });
 
 export type CrossrefSearchInput = z.infer<typeof CrossrefSearchInputSchema>;
