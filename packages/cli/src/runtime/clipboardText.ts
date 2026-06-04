@@ -5,9 +5,19 @@ export type ClipboardTextWriteResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: string };
 
+const DEFAULT_CLIPBOARD_WRITE_TIMEOUT_MS = 5_000;
+
 interface ClipboardCommand {
   readonly command: string;
   readonly args: readonly string[];
+}
+
+type SpawnCommand = typeof spawn;
+
+interface ClipboardTextWriteOptions {
+  readonly platform?: NodeJS.Platform;
+  readonly spawnCommand?: SpawnCommand;
+  readonly timeoutMs?: number;
 }
 
 function normalizeClipboardText(text: string, platform = osPlatform()): string {
@@ -33,6 +43,7 @@ function clipboardCommandsForPlatform(
           command: 'powershell.exe',
           args: [
             '-NoProfile',
+            '-NonInteractive',
             '-Command',
             '[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false); Set-Clipboard -Value ([Console]::In.ReadToEnd())',
           ],
@@ -53,20 +64,58 @@ function missingClipboardToolsMessage(platform = osPlatform()): string {
 function writeWithCommand(
   candidate: ClipboardCommand,
   text: string,
+  {
+    spawnCommand = spawn,
+    timeoutMs = DEFAULT_CLIPBOARD_WRITE_TIMEOUT_MS,
+  }: Pick<ClipboardTextWriteOptions, 'spawnCommand' | 'timeoutMs'> = {},
 ): Promise<ClipboardTextWriteResult> {
   return new Promise((resolve) => {
     let settled = false;
     let stderr = '';
+    const deadlineMs = Math.max(1, Math.floor(timeoutMs));
+
+    let child: ReturnType<SpawnCommand>;
+    try {
+      child = spawnCommand(candidate.command, [...candidate.args], {
+        stdio: ['pipe', 'ignore', 'pipe'],
+        windowsHide: true,
+      });
+    } catch (error) {
+      resolve({
+        ok: false,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return;
+    }
+
+    const stdin = child.stdin;
+    if (!stdin) {
+      resolve({
+        ok: false,
+        reason: `${candidate.command} did not open stdin`,
+      });
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      try {
+        child.kill();
+      } catch {
+        // Best effort only; the result still needs to unblock the UI.
+      }
+      finish({
+        ok: false,
+        reason: `${candidate.command} timed out after ${deadlineMs}ms`,
+      });
+    }, deadlineMs);
     const finish = (result: ClipboardTextWriteResult): void => {
       if (settled) return;
       settled = true;
+      clearTimeout(timeout);
       resolve(result);
     };
 
-    const child = spawn(candidate.command, [...candidate.args], {
-      stdio: ['pipe', 'ignore', 'pipe'],
-    });
-    child.stdin.on('error', () => undefined);
+    stdin.on('error', () => undefined);
     child.stderr?.on('data', (chunk) => {
       stderr += String(chunk);
     });
@@ -89,14 +138,15 @@ function writeWithCommand(
       });
     });
 
-    child.stdin.end(text);
+    stdin.end(text, 'utf8');
   });
 }
 
 export async function writeClipboardText(
   text: string,
+  options: ClipboardTextWriteOptions = {},
 ): Promise<ClipboardTextWriteResult> {
-  const platform = osPlatform();
+  const platform = options.platform ?? osPlatform();
   const normalized = normalizeClipboardText(text, platform);
   const candidates = clipboardCommandsForPlatform(platform);
   if (candidates.length === 0) {
@@ -105,7 +155,7 @@ export async function writeClipboardText(
 
   let lastFailure = missingClipboardToolsMessage(platform);
   for (const candidate of candidates) {
-    const result = await writeWithCommand(candidate, normalized);
+    const result = await writeWithCommand(candidate, normalized, options);
     if (result.ok) return result;
     lastFailure = result.reason;
   }
