@@ -44,15 +44,16 @@ corepack pnpm --filter @texra-ai/cli validate:tui --snapshot-dir /tmp/texra-tui-
 
 Every pull request should keep the required checks green, including the Claude
 review jobs. One special case needs an explicit rule: a pull request may edit
-the review workflow, its local action, or its review prompts. In that case the
+the review workflow or its review prompts. In that case the
 review job must not run untrusted automation from the pull request itself.
 
 The repository handles this by running the pull request through trusted
-automation. The provider wrapper is an external, version-pinned action
-(`LionSR/agent-ci-actions@v1`), so a pull request cannot alter it. The in-repo
-prompts can still be edited by a pull request, so the `Claude Code Review`
-workflow checks out the base branch into `.trusted-actions` and runs with the
-prompt files from that directory. This means changes to
+automation. The provider wrapper is external to this repository
+(`LionSR/agent-ci-actions@v1`), so a pull request cannot alter its
+implementation in this tree. The in-repo prompts can still be edited by a pull
+request, so the `Claude Code Review` workflow checks out the base branch into
+`.trusted-actions` and runs with the prompt files from that directory. This
+means changes to
 `.github/workflows/claude-code-review.yml` or `.github/prompts/` are still
 reviewed, but the changed prompts only take effect after the PR is merged.
 
