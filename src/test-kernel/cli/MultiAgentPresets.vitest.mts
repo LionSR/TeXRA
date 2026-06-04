@@ -52,9 +52,12 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(presets.map((preset) => preset.id)).toContain('physicist');
-    expect(formatCliMultiAgentPresetList(plans)).toContain(
+    const output = formatCliMultiAgentPresetList(plans);
+
+    expect(output).toContain(
       'built-in\tphysicist\tPhysicist\tworkflow:4\ttool-use:9',
     );
+    expect(output).not.toContain('Hint:');
   });
 
   it('lists missing preset members as degraded availability', () => {
@@ -70,9 +73,12 @@ describe('CLI multi-agent presets', () => {
       ],
     });
 
-    expect(formatCliMultiAgentPresetList([plan])).toContain(
+    const output = formatCliMultiAgentPresetList([plan]);
+
+    expect(output).toContain(
       'built-in\tlean-project\tLean Project\tworkflow:0\ttool-use:2/7\tdegraded',
     );
+    expect(output).toContain('texra multi-agent inspect <preset>');
   });
 
   it('serializes planned availability for machine-readable list output', () => {
