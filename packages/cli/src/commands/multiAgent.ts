@@ -144,8 +144,13 @@ export async function loadCliMultiAgentPresetPlans(
   return plans;
 }
 
+interface MissingPresetAgentsWarningOptions {
+  readonly requestedRootAgent?: string;
+}
+
 export function writeMissingPresetAgents(
   plan: CliMultiAgentPresetRunPlan,
+  options: MissingPresetAgentsWarningOptions = {},
 ): void {
   const missing = [
     ...plan.missingWorkflowAgents.map((agent) => `workflow:${agent}`),
@@ -166,7 +171,7 @@ export function writeMissingPresetAgents(
   );
   if (!agentHasDelegationTools(plan.rootAgent)) {
     writeTextStderr(
-      `WARN team delegation unavailable for preset ${plan.preset.id}; running only root agent ${plan.rootAgent.name}. Enable a delegating team root or pass --agent to choose one.`,
+      `WARN team delegation unavailable for preset ${plan.preset.id}; running only root agent ${plan.rootAgent.name}. ${nonDelegatingRootAdvice(options)}`,
     );
     return;
   }
@@ -184,6 +189,14 @@ export function writeMissingPresetAgents(
   writeTextStderr(
     `WARN preset ${plan.preset.id} is degraded; running root agent ${plan.rootAgent.name} with ${availableText}.`,
   );
+}
+
+function nonDelegatingRootAdvice(
+  options: MissingPresetAgentsWarningOptions,
+): string {
+  return options.requestedRootAgent
+    ? 'The selected --agent root cannot delegate; choose a delegating root to run this as a team.'
+    : 'Enable a delegating team root or pass --agent to choose one.';
 }
 
 function writeApprovalUnavailableDelegationWarning(
@@ -307,7 +320,9 @@ export async function runMultiAgentPreset(
     );
     return CliExitCode.Usage;
   }
-  writeMissingPresetAgents(plan);
+  writeMissingPresetAgents(plan, {
+    requestedRootAgent: init.agent?.trim() || undefined,
+  });
 
   // A team run drives a tool-use orchestrator, so it follows the `chat`
   // (tool-use) model config rather than `run` (workflow agents). Resolve the
