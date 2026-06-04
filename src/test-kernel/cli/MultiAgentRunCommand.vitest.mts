@@ -83,6 +83,9 @@ vi.mock('@cli/runtime/multiAgentPresets', () => {
     formatCliMultiAgentPresetDetails: vi.fn(() => ''),
     formatCliMultiAgentPresetInspection: vi.fn(() => ''),
     formatCliMultiAgentPresetList: vi.fn(() => ''),
+    MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION:
+      'Root agent for the team run (defaults to the preset orchestrator)',
+    MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION: 'Model for the team root agent',
     planCliMultiAgentPresetRun: mocks.planCliMultiAgentPresetRun,
     readCliMultiAgentPresets: vi.fn(() => []),
     withCliMultiAgentPresetVisibility: vi.fn(
