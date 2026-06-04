@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   currentModelFromUserChannels,
-  withToolUseSharedModel,
+  setToolUseSharedModel,
 } from '@agent/implementations/flows/tooluse/modelSwitchState';
 import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
 
@@ -28,18 +28,19 @@ describe('tool-use model switch state helpers', () => {
       },
     } as unknown as ToolUseRunShared;
 
-    const updated = withToolUseSharedModel(shared, 'gpt55');
+    const updated = setToolUseSharedModel(shared, 'gpt55');
 
-    expect(updated?.stateSlices?.userChannels.input).toBe(input);
-    expect(updated?.stateSlices?.userChannels.transient.MODEL).toBe('gpt55');
+    expect(updated).toBe(true);
+    expect(shared.stateSlices?.userChannels.input).toBe(input);
+    expect(shared.stateSlices?.userChannels.transient.MODEL).toBe('gpt55');
   });
 
-  it('returns null when the flow has not reached resumable state', () => {
+  it('returns false when the flow has not reached resumable state', () => {
     expect(
-      withToolUseSharedModel(
+      setToolUseSharedModel(
         { messages: [], shouldSkipCycle: false, stateSlices: null },
         'gpt55',
       ),
-    ).toBeNull();
+    ).toBe(false);
   });
 });

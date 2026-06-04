@@ -41,7 +41,7 @@ import {
   migrateSharedState,
   type ToolUseRunShared,
 } from './nodes/types';
-import { withToolUseSharedModel } from './modelSwitchState';
+import { setToolUseSharedModel } from './modelSwitchState';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 import type { ToolUseServices } from './ToolUseServices';
@@ -91,6 +91,12 @@ export interface ToolUseFlowContext {
 
 export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
 
+type ToolUsePersistedFlow<C> = PersistedFlow<
+  ToolUseRunShared,
+  Record<string, unknown>,
+  ToolUseServices<C>
+>;
+
 const IMMEDIATE_COMPACTION_FOLLOW_UP =
   'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
 
@@ -134,21 +140,17 @@ export async function runToolUseFlow<C = unknown>(
     delegationTrimmed,
   };
   const switchedHandlers = new Set<ToolUseServices<C>['modelHandler']>();
+  let activePersistedFlow: ToolUsePersistedFlow<C> | undefined;
 
   const persistModelSwitch = async (model: string): Promise<void> => {
-    const key = flowKey(executionId);
-    const flowRecord = await kv.read<FlowRecord>(key);
-    const migrationResult = migrateSharedState(flowRecord?.shared);
-    const updatedShared = migrationResult
-      ? withToolUseSharedModel(migrationResult.data, model)
-      : null;
-    if (!flowRecord || !updatedShared) {
+    const flow = activePersistedFlow;
+    const liveShared = await flow?.getShared();
+    if (!flow || !liveShared || !setToolUseSharedModel(liveShared, model)) {
       throw new Error(
         'Cannot save the model switch because the resumable session state is unavailable.',
       );
     }
-    flowRecord.shared = updatedShared;
-    await kv.write(key, flowRecord);
+    await flow.setShared(liveShared);
   };
 
   const switchModel = async (model: string): Promise<void> => {
@@ -254,11 +256,8 @@ export async function runToolUseFlow<C = unknown>(
     prepareNode.next(cycleNode);
     cycleNode.next(waitNode);
     waitNode.on(FlowTransition.CONTINUE, cycleNode);
-    const pf = new PersistedFlow<
-      ToolUseRunShared,
-      Record<string, unknown>,
-      ToolUseServices<C>
-    >(prepareNode, kv);
+    const pf: ToolUsePersistedFlow<C> = new PersistedFlow(prepareNode, kv);
+    activePersistedFlow = pf;
     pf.setServices(services);
     pf.setProjection(async (s, store) => {
       const todos = s.stateSlices?.workspaceSnapshot?.workPlan?.todos;
@@ -304,6 +303,7 @@ export async function runToolUseFlow<C = unknown>(
         : undefined;
     }
   } finally {
+    activePersistedFlow = undefined;
     if (shared.userCancelledRetry) {
       logger.debug('Flow record preserved for resume after retry cancellation');
     } else {
