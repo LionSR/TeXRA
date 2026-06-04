@@ -2231,6 +2231,19 @@ function escapeHtml(value) {
     .replaceAll('"', '&quot;');
 }
 
+const SNAPSHOT_THEME = {
+  colorScheme: 'light',
+  pageBackground: '#f6f4ee',
+  text: '#24211c',
+  muted: '#6e675c',
+  cardBackground: '#fffdf8',
+  border: '#d8d0c3',
+  headerBorder: '#e4ddd2',
+  failedBorder: '#b55d54',
+  link: '#1b5e8f',
+  failureText: '#9b3d35',
+};
+
 function snapshotSvgDocument(name, frame) {
   const lines = frame.split('\n');
   const charWidth = 8.4;
@@ -2250,8 +2263,8 @@ function snapshotSvgDocument(name, frame) {
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title">
   <title id="title">${escapeHtml(name)} TUI snapshot</title>
-  <rect width="100%" height="100%" fill="#101216"/>
-  <text fill="#e8e4d8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="${fontSize}" xml:space="preserve">
+  <rect width="100%" height="100%" fill="${SNAPSHOT_THEME.cardBackground}"/>
+  <text fill="${SNAPSHOT_THEME.text}" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="${fontSize}" xml:space="preserve">
     ${tspans}
   </text>
 </svg>
@@ -2299,35 +2312,35 @@ function snapshotHtmlDocument(results) {
   <meta charset="utf-8">
   <title>TeXRA TUI snapshots</title>
   <style>
-    :root { color-scheme: dark; }
+    :root { color-scheme: ${SNAPSHOT_THEME.colorScheme}; }
     body {
       margin: 0;
-      background: #101216;
-      color: #e8e4d8;
+      background: ${SNAPSHOT_THEME.pageBackground};
+      color: ${SNAPSHOT_THEME.text};
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
     main { max-width: 1280px; margin: 0 auto; padding: 24px; }
     h1 { font-size: 20px; margin: 0 0 6px; }
-    .meta { color: #a8a293; margin: 0 0 24px; }
+    .meta { color: ${SNAPSHOT_THEME.muted}; margin: 0 0 24px; }
     .scenario {
-      border: 1px solid #3d424d;
+      border: 1px solid ${SNAPSHOT_THEME.border};
       border-radius: 8px;
       margin: 0 0 24px;
       overflow: hidden;
-      background: #171a20;
+      background: ${SNAPSHOT_THEME.cardBackground};
     }
-    .scenario.failed { border-color: #a95b5b; }
+    .scenario.failed { border-color: ${SNAPSHOT_THEME.failedBorder}; }
     header {
       align-items: center;
-      border-bottom: 1px solid #303540;
+      border-bottom: 1px solid ${SNAPSHOT_THEME.headerBorder};
       display: flex;
       justify-content: space-between;
       padding: 10px 14px;
     }
     h2 { font-size: 14px; margin: 0; }
     nav { display: flex; gap: 14px; }
-    a { color: #8cc8ff; text-decoration: none; }
-    ul { color: #ffb4a8; margin: 12px 14px 0; }
+    a { color: ${SNAPSHOT_THEME.link}; text-decoration: none; }
+    ul { color: ${SNAPSHOT_THEME.failureText}; margin: 12px 14px 0; }
     pre {
       line-height: 1.22;
       margin: 0;
