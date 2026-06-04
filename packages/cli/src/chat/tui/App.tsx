@@ -326,6 +326,23 @@ export function foregroundSurfaceKind({
   return undefined;
 }
 
+export function foregroundEscapeAction({
+  foregroundKind,
+  pending,
+}: {
+  readonly foregroundKind: ForegroundSurfaceKind | undefined;
+  readonly pending: PendingApproval | undefined;
+}): string | undefined {
+  if (foregroundKind !== 'approval') {
+    if (foregroundKind === undefined) return undefined;
+    return foregroundKind === 'childControls' ? 'panel' : 'close';
+  }
+  const kind = pending?.payload.kind;
+  return kind === 'externalInquiry' || kind === 'userQuestion'
+    ? 'skip'
+    : 'cancel';
+}
+
 export function childControlForegroundMaxRows({
   hasItems,
 }: {
@@ -759,6 +776,10 @@ export function App(props: AppProps): React.JSX.Element {
         <StreamTabsStrip items={streamTabItems} width={columns} />
         <StatusBar
           canStopActiveRun={canStopActiveRun}
+          foregroundEscapeAction={foregroundEscapeAction({
+            foregroundKind,
+            pending,
+          })}
           queuedFollowUpPreview={!queuedFollowUpPanelVisible}
           shortcutsActive={focusShortcutsActive}
         />
