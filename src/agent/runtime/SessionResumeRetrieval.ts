@@ -22,6 +22,7 @@ import {
   TOOL_USE_SNAPSHOT_VERSION,
   ToolUseSessionSnapshotSchema,
 } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
+import { currentModelFromUserChannels } from '@agent/implementations/flows/tooluse/modelSwitchState';
 import {
   isToolUseTaskState,
   isWorkflowTaskState,
@@ -174,6 +175,12 @@ async function retrieveToolUseResumeData(
     }
 
     const { messages, stateSlices } = parseResult.data;
+    const agentConfig = {
+      ...taskState.agentConfig,
+      model:
+        currentModelFromUserChannels(stateSlices.userChannels) ??
+        taskState.agentConfig.model,
+    };
 
     // Construct and validate the complete snapshot.
     // Validation provides defense-in-depth: even if flow record is valid,
@@ -182,7 +189,7 @@ async function retrieveToolUseResumeData(
       version: TOOL_USE_SNAPSHOT_VERSION,
       executionId,
       streamId,
-      agentConfig: taskState.agentConfig,
+      agentConfig,
       messages,
       run: stateSlices.runStateSnapshot,
       workspace: stateSlices.workspaceSnapshot,

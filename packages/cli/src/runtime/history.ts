@@ -11,10 +11,6 @@ import {
   type ResultMeta,
 } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { isToolUseTaskState } from '@agent/core/execution/TaskState';
-import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
-import { getStreamTabId } from '@agent/runtime/streamTab';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { isFileNotFoundError } from '@common/errors';
 import {
   EXECUTION_STATUS,
@@ -24,6 +20,8 @@ import {
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
+
+import { readCliToolUseResumeData } from './toolUseResumeData';
 
 const HISTORY_FILE_SCAN_DEPTH = 2;
 const CONVERSATION_PREVIEW_MESSAGE_LIMIT = 3;
@@ -61,6 +59,7 @@ export interface CliHistoryDetails {
   readonly conversationPreview: CliHistoryConversationPreview | null;
   readonly files: readonly CliHistoryFile[];
   readonly hasFlowRecord: boolean;
+  readonly currentModel?: string;
 }
 
 export interface CliHistoryConversationPreview {
@@ -139,7 +138,9 @@ export async function readCliHistoryDetails(
     store.readWorkspaceFiles(),
     listGeneratedFiles(id),
   ]);
-  const hasFlowRecord = await hasResumableCliFlowRecord(id, config);
+  const resumeData = config
+    ? await readCliToolUseResumeData(id, config)
+    : undefined;
   const conversationPreview = createConversationPreview(conversation);
   const workspaceFiles = await listWorkspaceToolFiles(
     config,
@@ -148,12 +149,12 @@ export async function readCliHistoryDetails(
   );
   const files = mergeHistoryFiles(generatedFiles, workspaceFiles);
 
-  if (!meta && !config && !conversationPreview && !hasFlowRecord) return null;
+  if (!meta && !config && !conversationPreview && !resumeData) return null;
   return {
     id,
     status: resolveCliHistoryStatus({
       terminalStatus: meta?.terminalStatus,
-      hasFlowRecord,
+      hasFlowRecord: !!resumeData,
     }),
     meta,
     config,
@@ -161,7 +162,8 @@ export async function readCliHistoryDetails(
     report,
     conversationPreview,
     files,
-    hasFlowRecord,
+    hasFlowRecord: !!resumeData,
+    currentModel: resumeData?.snapshot.agentConfig.model,
   };
 }
 
@@ -252,14 +254,22 @@ export function formatCliHistoryDetailsText(
   details: CliHistoryDetails,
 ): string {
   const { config, meta } = details;
+  const model = details.currentModel ?? config?.model;
   const lines = [
     `Execution: ${details.id}`,
     `Status: ${details.status}`,
     `Timestamp: ${meta?.timestamp ?? 'unknown'}`,
     `Agent: ${config?.agent ?? 'unknown'}`,
-    `Model: ${config?.model ?? 'unknown'}`,
+    `Model: ${model ?? 'unknown'}`,
   ];
 
+  if (
+    details.currentModel &&
+    config?.model &&
+    details.currentModel !== config.model
+  ) {
+    lines.push(`Startup model: ${config.model}`);
+  }
   if (config?.agentCategory) lines.push(`Category: ${config.agentCategory}`);
   if (meta?.parentExecutionId) lines.push(`Parent: ${meta.parentExecutionId}`);
   if (meta?.description) lines.push(`Description: ${meta.description}`);
@@ -286,40 +296,23 @@ async function toCliHistoryEntry(
   entry: ExecutionListingEntry,
 ): Promise<CliHistoryEntry> {
   const inputBasename = firstInputBasename(entry.agentConfig);
-  const hasFlowRecord =
-    entry.terminalStatus === undefined
-      ? await hasResumableCliFlowRecord(entry.id, entry.agentConfig)
-      : false;
+  const resumeData =
+    entry.terminalStatus === undefined && entry.agentConfig
+      ? await readCliToolUseResumeData(entry.id, entry.agentConfig)
+      : null;
   return {
     id: entry.id,
     timestamp: entry.timestamp,
     agent: entry.agent,
-    model: entry.model,
+    model: resumeData?.snapshot.agentConfig.model ?? entry.model,
     status: resolveCliHistoryStatus({
       terminalStatus: entry.terminalStatus,
-      hasFlowRecord,
+      hasFlowRecord: !!resumeData,
     }),
     inputBasename,
     category: entry.category,
     description: entry.description,
   };
-}
-
-async function hasResumableCliFlowRecord(
-  id: ExecutionId,
-  config?: AgentConfig | null,
-): Promise<boolean> {
-  const agentConfig = config ?? (await readCliHistoryConfig(id));
-  if (!agentConfig) return false;
-
-  const taskState = agentConfigToTaskState(agentConfig);
-  if (!isToolUseTaskState(taskState)) return false;
-
-  const streamId = getStreamTabId(agentConfig.agent, agentConfig.model, {
-    executionId: id,
-  });
-  const resume = await retrieveSessionResumeData(streamId, id, taskState);
-  return resume?.type === 'toolUse';
 }
 
 function firstInputBasename(config: AgentConfig | null): string {
