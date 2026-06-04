@@ -871,6 +871,7 @@ const SCENARIOS = [
     unexpect: [
       '└─Degenerate triples',
       '[/model]models',
+      '[Esc]panel',
       'Esc sk…',
       '1 approval',
     ],
@@ -896,6 +897,7 @@ const SCENARIOS = [
     unexpect: [
       '└─Degenerate triples',
       '[/model]models',
+      '[Esc]panel',
       'Esc sk…',
       '1 approval',
     ],
@@ -920,6 +922,7 @@ const SCENARIOS = [
     ],
     unexpect: [
       '[/model]models',
+      '[Esc]panel',
       'Context detail: the candidate proof',
       '1 approval',
     ],

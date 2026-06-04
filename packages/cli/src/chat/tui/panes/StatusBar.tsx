@@ -83,6 +83,9 @@ export interface StatusBarDisplayInput {
    *  slash palette, or reverse search) owns input and global chat shortcuts are
    *  intentionally inactive. */
   readonly shortcutsActive?: boolean;
+  /** Label for the foreground surface's Escape action while shortcutsActive is
+   *  false. */
+  readonly foregroundEscapeAction?: string;
 }
 
 export interface StatusBarDisplay {
@@ -462,9 +465,10 @@ function fitsStatusBindings(text: string, maxColumns: number | undefined) {
 function foregroundBindingsText(
   ctrlCAction: CtrlCAction,
   maxColumns?: number,
+  escapeAction = 'close',
 ): string {
   const ctrlCBinding = `[Ctrl-C]${ctrlCAction}`;
-  const escBinding = '[Esc]panel';
+  const escBinding = `[Esc]${escapeAction}`;
   const full = `Use foreground panel shortcuts  ${escBinding}  ${ctrlCBinding}`;
   if (fitsStatusBindings(full, maxColumns)) return full;
 
@@ -663,6 +667,7 @@ export function buildStatusBarDisplay(
               input.width === undefined
                 ? undefined
                 : Math.max(0, input.width - STATUS_BAR_HORIZONTAL_PADDING),
+              input.foregroundEscapeAction,
             )
           : statusBarBindingsText(
               input.taskControlsAvailable ?? true,
@@ -680,6 +685,7 @@ export function buildStatusBarDisplay(
 
 export interface StatusBarProps {
   readonly canStopActiveRun?: () => boolean;
+  readonly foregroundEscapeAction?: string;
   readonly queuedFollowUpPreview?: boolean;
   readonly shortcutsActive?: boolean;
 }
@@ -758,6 +764,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
         }),
       parentStream,
     }),
+    foregroundEscapeAction: props.foregroundEscapeAction,
     shortcutsActive: props.shortcutsActive,
   });
 
