@@ -13,6 +13,7 @@ import {
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { openRegisteredCliSlashForm } from '@cli/chat/tui/runChatTui';
 import { cliState, resetCliState } from '@cli/chat/tui/state/cliState';
+import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 
 afterEach(() => {
   for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
@@ -20,6 +21,23 @@ afterEach(() => {
 });
 
 describe('slashRegistry', () => {
+  function renderFormAdapter<TProps>(node: unknown): { props?: TProps } {
+    const element = node as {
+      type?: (props: unknown) => unknown;
+      props?: unknown;
+    };
+    if (typeof element.type !== 'function') {
+      throw new TypeError('Expected registered slash form adapter element');
+    }
+    return element.type(element.props) as { props?: TProps };
+  }
+
+  async function settleFormSelection(): Promise<void> {
+    for (let index = 0; index < 4; index += 1) {
+      await Promise.resolve();
+    }
+  }
+
   it('keeps the CLI session control commands registered', () => {
     registerBuiltinSlashCommands();
     expect(listSlashCommands().map((cmd) => cmd.name)).toEqual(
@@ -89,6 +107,135 @@ describe('slashRegistry', () => {
 
     expect(openRegisteredCliSlashForm(tools, '')).toBe(true);
     expect(cliState.activeForm.get()?.commandName).toBe('tools');
+  });
+
+  it('chains selectable agent picks into the API-mode-aware model picker', async () => {
+    resetCliState({
+      agent: 'chat',
+      model: 'deepseekT',
+      cwd: '/tmp/workspace',
+      apiMode: 'included',
+      canDelegate: false,
+      version: 'test',
+    });
+    registerBuiltinSlashCommands();
+    const agent = listSlashCommands().find((cmd) => cmd.name === 'agent');
+
+    if (!agent) throw new Error('Expected /agent to be registered');
+
+    expect(openRegisteredCliSlashForm(agent, '')).toBe(true);
+
+    const agentNode = renderFormAdapter<{
+      onSelect?: (value: string) => void;
+    }>(cliState.activeForm.get()?.render(() => {}, 20));
+    agentNode.props?.onSelect?.('review');
+    await settleFormSelection();
+
+    expect(cliState.sessionMeta.get().agent).toBe('review');
+    expect(cliState.activeForm.get()?.commandName).toBe('model');
+
+    const modelNode = renderFormAdapter<{
+      apiMode?: string;
+      selectable?: boolean;
+    }>(cliState.activeForm.get()?.render(() => {}, 20));
+    expect(modelNode.props).toMatchObject({
+      apiMode: 'included',
+      selectable: true,
+    });
+  });
+
+  it('marks the agent picker read-only when root selection is closed', () => {
+    resetCliState({
+      agent: 'chat',
+      model: 'deepseekT',
+      cwd: '/tmp/workspace',
+      apiMode: 'included',
+      canDelegate: false,
+      version: 'test',
+    });
+    registerBuiltinSlashCommands({
+      canSelectAgent: () => false,
+      canSelectModel: () => true,
+    });
+    const agent = listSlashCommands().find((cmd) => cmd.name === 'agent');
+
+    if (!agent) throw new Error('Expected /agent to be registered');
+
+    expect(openRegisteredCliSlashForm(agent, '')).toBe(true);
+
+    const agentNode = renderFormAdapter<{
+      selectable?: boolean;
+    }>(cliState.activeForm.get()?.render(() => {}, 20));
+
+    expect(agentNode.props).toMatchObject({ selectable: false });
+    expect(cliState.activeForm.get()?.commandName).toBe('agent');
+  });
+
+  it('routes API picker selection failures to the shared error handler', async () => {
+    resetCliState({
+      agent: 'chat',
+      model: 'deepseekT',
+      cwd: '/tmp/workspace',
+      apiMode: 'included',
+      canDelegate: false,
+      version: 'test',
+    });
+    const errors: string[] = [];
+    registerBuiltinSlashCommands({
+      onApiModeSelect: async () => {
+        throw new Error('api mode failed');
+      },
+      onError: (error) => {
+        errors.push(error instanceof Error ? error.message : String(error));
+      },
+    });
+    const api = listSlashCommands().find((cmd) => cmd.name === 'api');
+    let closed = false;
+
+    if (!api) throw new Error('Expected /api to be registered');
+
+    expect(openRegisteredCliSlashForm(api, '')).toBe(true);
+
+    const apiNode = renderFormAdapter<{
+      onSelect?: (value: CliApiMode) => void;
+    }>(
+      cliState.activeForm.get()?.render(() => {
+        closed = true;
+      }, 20),
+    );
+    apiNode.props?.onSelect?.('personal');
+    await settleFormSelection();
+
+    expect(errors).toEqual(['api mode failed']);
+    expect(closed).toBe(true);
+  });
+
+  it('closes the resume picker before running the resume action', async () => {
+    let closed = false;
+    let sawClosedBeforeResume = false;
+    registerBuiltinSlashCommands({
+      onResumeSelect: async () => {
+        sawClosedBeforeResume = closed;
+      },
+    });
+    const resume = listSlashCommands().find((cmd) => cmd.name === 'resume');
+
+    if (!resume) throw new Error('Expected /resume to be registered');
+
+    expect(openRegisteredCliSlashForm(resume, '')).toBe(true);
+
+    const resumeNode = renderFormAdapter<{
+      onSelect?: (id: string) => void;
+    }>(
+      cliState.activeForm.get()?.render(() => {
+        closed = true;
+      }, 20),
+    );
+    resumeNode.props?.onSelect?.('previous-session');
+    await settleFormSelection();
+
+    expect(closed).toBe(true);
+    expect(sawClosedBeforeResume).toBe(true);
   });
 
   it('matches by name prefix case-insensitively', () => {
