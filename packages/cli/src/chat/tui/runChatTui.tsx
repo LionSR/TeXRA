@@ -241,6 +241,22 @@ export function chatTuiCanStartRootRun(
   return !session.runPromise || session.runCompleted;
 }
 
+export function chatTuiCanSelectModel(input: {
+  readonly canStartRootRun: boolean;
+  readonly streamId: StreamTabId | undefined;
+  readonly status: StreamStatus | undefined;
+  readonly hasActiveToolUseFlow: boolean;
+}): boolean {
+  return (
+    input.canStartRootRun ||
+    Boolean(
+      input.streamId &&
+      input.status === STREAM_STATUS.WAITING &&
+      input.hasActiveToolUseFlow,
+    )
+  );
+}
+
 export type ChatTuiSigintAction =
   | 'clean-exit'
   | 'force-exit'
@@ -345,6 +361,7 @@ interface SlashCommandContext {
   readonly requestInputExit: () => void;
   readonly getApprovalPolicy: () => CliApprovalPolicy;
   readonly setApprovalPolicy: (policy: CliApprovalPolicy) => void;
+  readonly canSelectModel: () => boolean;
   readonly resetSession: () => void;
   readonly resumeExecution: (id: ExecutionId) => Promise<void>;
 }
@@ -377,27 +394,65 @@ function applyInitialCliAgentSelection(
   appendLocalAssistantTranscript(`Root agent set to ${nextAgent}.`);
 }
 
-async function applyInitialCliModelSelection(
+async function applyCliModelSelection(
   model: string,
   context: SlashCommandContext,
 ): Promise<void> {
-  if (!chatTuiCanStartRootRun(context.session)) {
+  const nextModel = model.trim();
+  if (chatTuiCanStartRootRun(context.session)) {
+    try {
+      await setCliHelperModel(nextModel);
+      cliState.sessionMeta.set({
+        ...cliState.sessionMeta.get(),
+        model: nextModel,
+      });
+      appendLocalAssistantTranscript(`Root model set to ${nextModel}.`);
+    } catch (error: unknown) {
+      appendLocalAssistantTranscript(toErrorMessage(error));
+    }
+    return;
+  }
+
+  if (!context.canSelectModel()) {
     appendLocalAssistantTranscript(
-      'Model changes are only available before the first message. Start a new chat with texra chat --model=<name> to choose a different root model.',
+      'Finish the active response before switching models.',
     );
     return;
   }
-  const nextModel = model.trim();
+
+  const activeFlow = context.session.streamId
+    ? getToolUseFlowContext(context.session.streamId)
+    : undefined;
+  if (!activeFlow) {
+    appendLocalAssistantTranscript(
+      'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
+    );
+    return;
+  }
+
   try {
-    await setCliHelperModel(nextModel);
+    await activeFlow.switchModel(nextModel);
     cliState.sessionMeta.set({
       ...cliState.sessionMeta.get(),
       model: nextModel,
     });
-    appendLocalAssistantTranscript(`Root model set to ${nextModel}.`);
   } catch (error: unknown) {
     appendLocalAssistantTranscript(toErrorMessage(error));
+    return;
   }
+
+  try {
+    await setCliHelperModel(nextModel);
+  } catch (error: unknown) {
+    appendLocalAssistantTranscript(
+      `Model switched to ${nextModel}. Could not persist it as the default helper model: ${toErrorMessage(error)}`,
+    );
+    return;
+  }
+
+  appendLocalAssistantTranscript(
+    `Model switched to ${nextModel}. Future turns will use it.`,
+  );
 }
 
 async function reconcileRootModelAfterApiModeChange(
@@ -926,6 +981,7 @@ export async function runChat(
     requestInputExit,
     getApprovalPolicy,
     setApprovalPolicy,
+    canSelectModel: canSelectCurrentModel,
     resetSession: resetSessionForClear,
     resumeExecution: resumeAgentRun,
   });
@@ -987,6 +1043,15 @@ export async function runChat(
       ? (cliState.streams.get().get(session.streamId)?.status ??
         StreamStatusService.get(session.streamId))
       : undefined;
+  const hasActiveToolUseFlow = (): boolean =>
+    Boolean(session.streamId && getToolUseFlowContext(session.streamId));
+  const canSelectCurrentModel = (): boolean =>
+    chatTuiCanSelectModel({
+      canStartRootRun: chatTuiCanStartRootRun(session),
+      streamId: session.streamId,
+      status: rootStreamStatus(),
+      hasActiveToolUseFlow: hasActiveToolUseFlow(),
+    });
   const canInterruptActiveRun = (): boolean =>
     chatTuiCanInterruptActiveRun(session);
   const canStopActiveRun = (): boolean =>
@@ -1222,9 +1287,9 @@ export async function runChat(
         `Approval mode set to ${formatApprovalPolicy(policy)}.`,
       );
     },
-    canSelectModel: () => chatTuiCanStartRootRun(session),
+    canSelectModel: canSelectCurrentModel,
     onModelSelect: (nextModel) =>
-      applyInitialCliModelSelection(nextModel, slashCommandContext()),
+      applyCliModelSelection(nextModel, slashCommandContext()),
     onApiModeSelect: (nextMode) =>
       applyCliApiModeSelection(nextMode, slashCommandContext()),
     onMemorySelect: showCliMemoryPreview,
