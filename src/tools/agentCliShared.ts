@@ -35,10 +35,14 @@ export function isLoopOwnedStatus(status: StreamStatus | undefined): boolean {
   return status === STREAM_STATUS.WAITING || status === STREAM_STATUS.RUNNING;
 }
 
-export function agentCliLoopTerminalStatus(
-  sawTurnFailure: boolean,
-): ExecutionStatus {
-  return sawTurnFailure ? EXECUTION_STATUS.ERROR : EXECUTION_STATUS.COMPLETED;
+export function agentCliLoopTerminalStatus(state: {
+  readonly interrupted: boolean;
+  readonly sawTurnFailure: boolean;
+}): ExecutionStatus {
+  if (state.sawTurnFailure) return EXECUTION_STATUS.ERROR;
+  return state.interrupted
+    ? EXECUTION_STATUS.INTERRUPTED
+    : EXECUTION_STATUS.COMPLETED;
 }
 
 export function markAgentCliLoopError(
