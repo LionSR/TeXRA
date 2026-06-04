@@ -432,17 +432,27 @@ async function applyCliModelSelection(
 
   try {
     await activeFlow.switchModel(nextModel);
-    await setCliHelperModel(nextModel);
     cliState.sessionMeta.set({
       ...cliState.sessionMeta.get(),
       model: nextModel,
     });
-    appendLocalAssistantTranscript(
-      `Model switched to ${nextModel}. Future turns will use it.`,
-    );
   } catch (error: unknown) {
     appendLocalAssistantTranscript(toErrorMessage(error));
+    return;
   }
+
+  try {
+    await setCliHelperModel(nextModel);
+  } catch (error: unknown) {
+    appendLocalAssistantTranscript(
+      `Model switched to ${nextModel}. Could not persist it as the default helper model: ${toErrorMessage(error)}`,
+    );
+    return;
+  }
+
+  appendLocalAssistantTranscript(
+    `Model switched to ${nextModel}. Future turns will use it.`,
+  );
 }
 
 async function reconcileRootModelAfterApiModeChange(
