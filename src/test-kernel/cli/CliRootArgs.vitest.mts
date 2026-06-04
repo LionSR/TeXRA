@@ -1247,6 +1247,11 @@ describe('runCli usage output stream routing', () => {
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('Run a multi-agent team preset');
     expect(stdout).toContain('USAGE texra multi-agent run');
+    expect(stdout).toContain(
+      'Root agent for the team run (defaults to the preset orchestrator)',
+    );
+    expect(stdout).toContain('Model for the team root agent');
+    expect(stdout).not.toContain('root tool-use agent');
     expect(stderr).toBe('');
   });
 
@@ -1269,7 +1274,7 @@ describe('runCli usage output stream routing', () => {
     const result = await runCli(['multi-agent', 'inspect', 'mathematician']);
     expect(result.exitCode).toBe(0);
     expect(stdout).toContain('Mathematician (mathematician)');
-    expect(stdout).toContain('Root tool-use agent:');
+    expect(stdout).toContain('Team root agent:');
     expect(stdout).toContain('Available workflow agents:');
     expect(stdout).toContain('Missing tool-use agents:');
     expect(stderr).toBe('');
