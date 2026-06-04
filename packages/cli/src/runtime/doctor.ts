@@ -123,12 +123,7 @@ function failFromError(
   message: string,
   error: unknown,
 ): DoctorCheck {
-  return fail(
-    id,
-    name,
-    message,
-    extractErrorMessage(error),
-  );
+  return fail(id, name, message, extractErrorMessage(error));
 }
 
 function checkNode(version: string): DoctorCheck {

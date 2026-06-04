@@ -474,9 +474,7 @@ export class LaTeXTab extends LitElement {
   /** Collect detected tool paths for a dependency. */
   private getDetectedPaths(dep: DependencyInfo): string[] {
     if (!dep.pathKeys) return [];
-    return dep.pathKeys
-      .map((k) => this.settings[k])
-      .filter(filterNotNullish);
+    return dep.pathKeys.map((k) => this.settings[k]).filter(filterNotNullish);
   }
 
   private renderDependencyCard(dep: DependencyInfo): TemplateResult {
