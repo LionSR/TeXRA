@@ -47,12 +47,14 @@ review jobs. One special case needs an explicit rule: a pull request may edit
 the review workflow, its local action, or its review prompts. In that case the
 review job must not run untrusted automation from the pull request itself.
 
-The repository handles this by running the pull request through the trusted
-automation from the base branch. The `Claude Code Review` workflow checks out
-the base branch into `.trusted-actions` and runs the review action and prompt
-files from that directory. This means changes to `.github/workflows/claude-code-review.yml`,
-`.github/actions/claude-code-with-provider/`, or `.github/prompts/` are still
-reviewed, but the changed automation only takes effect after the PR is merged.
+The repository handles this by running the pull request through trusted
+automation. The provider wrapper is an external, version-pinned action
+(`LionSR/agent-ci-actions@v1`), so a pull request cannot alter it. The in-repo
+prompts can still be edited by a pull request, so the `Claude Code Review`
+workflow checks out the base branch into `.trusted-actions` and runs with the
+prompt files from that directory. This means changes to
+`.github/workflows/claude-code-review.yml` or `.github/prompts/` are still
+reviewed, but the changed prompts only take effect after the PR is merged.
 
 If GitHub refuses to run a self-editing workflow, or if the provider-side review
 service is unavailable, do not treat the missing review as silently acceptable.
