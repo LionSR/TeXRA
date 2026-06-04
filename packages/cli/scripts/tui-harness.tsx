@@ -1208,17 +1208,12 @@ registerBuiltinSlashCommands({
       `Harness memory selected: ${storagePath}.`,
     );
   },
-  onMemoryError: (error) => {
-    appendHarnessAssistantTranscript(
-      `Memory command failed: ${formatHarnessError(error)}`,
-    );
-  },
   onResumeSelect: (id) => {
     appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
   },
-  onResumeError: (error) => {
+  onError: (error) => {
     appendHarnessAssistantTranscript(
-      `Resume command failed: ${formatHarnessError(error)}`,
+      `Slash command failed: ${formatHarnessError(error)}`,
     );
   },
 });
