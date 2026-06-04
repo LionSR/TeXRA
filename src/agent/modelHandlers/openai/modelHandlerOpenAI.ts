@@ -34,7 +34,6 @@ import { getConfig } from '@agent/core/config';
 import { toOpenAIReasoningEffort } from '@agent/runtime/reasoningEffort';
 import {
   getSdkErrorMessage,
-  isContextWindowError,
   isMissingFinishReasonError,
   attachPartialText,
   takeTail,
@@ -79,7 +78,6 @@ import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
   COMPACTION_SYSTEM_PROMPT,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-  TOOL_USE_SAFETY_BUFFER,
 } from '../contextManagementConstants';
 import type {
   CreateResponseOptions,
@@ -707,63 +705,25 @@ export class ModelHandlerOpenAI<
 
     // Phase 2: COUNT - Estimate input tokens if handler supports it
     // Phase 3: VALIDATE - Adjust max_tokens if needed
-    if (this.supportsTokenCounting) {
-      try {
-        const inputTokens = await this.estimateTokenCount(messages, {
-          client,
-          systemPrompt,
-          signal,
-        });
-
-        // Validate and adjust max_tokens if needed (throws if context window exceeded)
-        // Use larger safety buffer for tool-use mode
-        const maxTokensKey = this.isOReasoningModel
-          ? 'max_completion_tokens'
-          : 'max_tokens';
-        const currentMaxTokens = this.isOReasoningModel
-          ? (baseParams.max_completion_tokens ??
-            this.getEffectiveMaxOutputTokens())
-          : (baseParams.max_tokens ?? this.getEffectiveMaxOutputTokens());
-        const tokenBuffer = this.isToolUseMode()
-          ? TOOL_USE_SAFETY_BUFFER
-          : undefined;
-        const validation = this.validateTokenLimits(
-          inputTokens,
-          currentMaxTokens,
-          this.config.contextWindow,
-          tokenBuffer,
-        );
-
-        if (validation.adjustedMaxTokens !== currentMaxTokens) {
-          logContextManagementEvent(
-            this.logger,
-            `Token count (${inputTokens}) + ${maxTokensKey} (${currentMaxTokens}) exceeds context window (${this.config.contextWindow}). Reducing to ${validation.adjustedMaxTokens}.`,
-            {
-              action: 'max_tokens_reduced',
-              tokensBefore: inputTokens,
-              contextWindow: this.config.contextWindow,
-              utilizationBefore:
-                validation.utilizationPercent ??
-                (inputTokens / this.config.contextWindow) * 100,
-              originalMaxTokens: currentMaxTokens,
-              reducedMaxTokens: validation.adjustedMaxTokens,
-              details: `OpenAI: ${maxTokensKey} reduced to fit context window`,
-            },
-          );
-          if (this.isOReasoningModel) {
-            baseParams.max_completion_tokens = validation.adjustedMaxTokens;
-          } else {
-            baseParams.max_tokens = validation.adjustedMaxTokens;
-          }
+    const maxTokensKey = this.isOReasoningModel
+      ? 'max_completion_tokens'
+      : 'max_tokens';
+    await this.applyTokenCountLimit({
+      countTokens: () =>
+        this.estimateTokenCount(messages, { client, systemPrompt, signal }),
+      currentMaxTokens: this.isOReasoningModel
+        ? (baseParams.max_completion_tokens ?? this.getEffectiveMaxOutputTokens())
+        : (baseParams.max_tokens ?? this.getEffectiveMaxOutputTokens()),
+      contextWindow: this.config.contextWindow,
+      detailLabel: `OpenAI: ${maxTokensKey} reduced to fit context window`,
+      applyReduced: (adjusted) => {
+        if (this.isOReasoningModel) {
+          baseParams.max_completion_tokens = adjusted;
+        } else {
+          baseParams.max_tokens = adjusted;
         }
-      } catch (err) {
-        tagOpenAISdkError(err, this.config.provider);
-        if (isContextWindowError(err)) throw err;
-        this.logger.debug(
-          `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
-        );
-      }
-    }
+      },
+    });
 
     // Phase 4: EXECUTE
     const response = useStreaming

@@ -1234,23 +1234,31 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // NOTE: When previous_response_id is set, the API includes server-side history
     // (per OpenAI docs). However, there may be edge cases where token counting
     // doesn't match actual context usage. See PRD Known Issues for investigation.
-    if (this.supportsTokenCounting) {
-      try {
-        // Reuse built params for token counting (build once principle)
-        // IMPORTANT: Pass tools and systemPrompt for accurate count
-        const inputTokens = await this.estimateTokenCount(baseParams.input, {
+    await this.applyTokenCountLimit({
+      // Reuse built params for token counting (build once principle).
+      // IMPORTANT: Pass tools and systemPrompt for accurate count.
+      countTokens: () =>
+        this.estimateTokenCount(baseParams.input, {
           client,
           signal,
           systemPrompt,
           tools: convertedTools,
-        });
-
-        // DIAGNOSTIC: Log token count details for investigation
-        // Compare pre-flight estimate with cumulative tokens from previous response
+        }),
+      currentMaxTokens: maxOutputTokens,
+      contextWindow: this.config.contextWindow,
+      tokenBuffer: this.getTokenSafetyBuffer(),
+      detailLabel:
+        'OpenAI Response: max_output_tokens reduced to fit context window',
+      applyReduced: (adjusted) => {
+        maxOutputTokens = adjusted;
+      },
+      onCounted: (inputTokens) => {
+        // DIAGNOSTIC: Log token count details for investigation.
+        // Compare pre-flight estimate with cumulative tokens from prev response.
         const prevCumulative = this.conversationState.cumulativeInputTokens;
         const utilizationEstimate =
           (inputTokens / this.config.contextWindow) * 100;
-        this._diagPreFlightTokens = inputTokens; // Store for comparison in finalizeResponse
+        this._diagPreFlightTokens = inputTokens; // Compared in finalizeResponse
         this.logger.debug(
           `[TOKEN_DIAG] Pre-flight count: ${inputTokens} (${utilizationEstimate.toFixed(1)}% of ${this.config.contextWindow})`,
           {
@@ -1268,38 +1276,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             },
           },
         );
-
-        // Validate and adjust max_output_tokens if needed (throws if context window exceeded)
-        const tokenBuffer = this.getTokenSafetyBuffer();
-        const validation = this.validateTokenLimits(
-          inputTokens,
-          maxOutputTokens,
-          this.config.contextWindow,
-          tokenBuffer,
-        );
-
-        if (validation.adjustedMaxTokens !== maxOutputTokens) {
-          logContextManagementEvent(
-            this.logger,
-            `Token count (${inputTokens}) + max_output_tokens (${maxOutputTokens}) exceeds context window (${this.config.contextWindow}). Reducing to ${validation.adjustedMaxTokens}.`,
-            {
-              action: 'max_tokens_reduced',
-              tokensBefore: inputTokens,
-              contextWindow: this.config.contextWindow,
-              utilizationBefore:
-                validation.utilizationPercent ??
-                (inputTokens / this.config.contextWindow) * 100,
-              originalMaxTokens: maxOutputTokens,
-              reducedMaxTokens: validation.adjustedMaxTokens,
-              details:
-                'OpenAI Response: max_output_tokens reduced to fit context window',
-            },
-          );
-          maxOutputTokens = validation.adjustedMaxTokens;
-        }
-      } catch (err) {
-        tagOpenAISdkError(err, this.config.provider);
-        if (isContextWindowError(err)) throw err;
+      },
+      onCountFailure: (err) => {
         this.logger.debug(
           `Token counting failed: ${getSdkErrorMessage(err)}. Applying fallback cap.`,
         );
@@ -1317,8 +1295,8 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
             maxOutputTokens = capped;
           }
         }
-      }
-    }
+      },
+    });
 
     // Phase 4: EXECUTE - Build final params and make the API call
     const parallelToolCalls = getConfig<boolean>(
