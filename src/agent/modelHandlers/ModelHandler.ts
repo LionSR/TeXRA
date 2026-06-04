@@ -426,18 +426,25 @@ export abstract class ModelHandler<
     return this.config.provider === ModelProvider.GOOGLE;
   }
 
+  // The DeepSeek/Kimi/MiniMax provider checks below are intentionally
+  // `protected`: their only reader is `ModelHandlerOpenRouterNative` (a
+  // subclass), which maps them to capability getters for the providers it
+  // proxies. Keeping them off the public `IModelHandler` port avoids leaking
+  // provider identity into the SDK surface (the behavioral gates were already
+  // converted to capability flags — see the SDK-readiness audit §7/§12).
+
   /** Checks if the model is from DeepSeek provider. */
-  get isDeepSeek(): boolean {
+  protected get isDeepSeek(): boolean {
     return this.config.provider === ModelProvider.DEEPSEEK;
   }
 
   /** Checks if the model is from Moonshot/Kimi provider. */
-  get isKimi(): boolean {
+  protected get isKimi(): boolean {
     return this.config.provider === ModelProvider.MOONSHOT;
   }
 
   /** Checks if the model is from MiniMax provider. */
-  get isMiniMax(): boolean {
+  protected get isMiniMax(): boolean {
     return this.config.provider === ModelProvider.MINIMAX;
   }
 
