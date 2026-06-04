@@ -61,6 +61,7 @@ import {
   chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
   chatTuiCanStartRootRun,
+  chatTuiCanSelectModel,
   chatTuiSigintAction,
   chatTuiActiveChildFollowUpTarget,
   chatTuiRejectedChildFollowUpTarget,
@@ -796,6 +797,41 @@ describe('CLI TUI row allocation', () => {
         runPromise,
       }),
     ).toBe(true);
+  });
+
+  it('allows model selection before start or while a tool-use chat is waiting', () => {
+    expect(
+      chatTuiCanSelectModel({
+        canStartRootRun: true,
+        streamId: undefined,
+        status: undefined,
+        hasActiveToolUseFlow: false,
+      }),
+    ).toBe(true);
+    expect(
+      chatTuiCanSelectModel({
+        canStartRootRun: false,
+        streamId: root,
+        status: STREAM_STATUS.WAITING,
+        hasActiveToolUseFlow: true,
+      }),
+    ).toBe(true);
+    expect(
+      chatTuiCanSelectModel({
+        canStartRootRun: false,
+        streamId: root,
+        status: STREAM_STATUS.RUNNING,
+        hasActiveToolUseFlow: true,
+      }),
+    ).toBe(false);
+    expect(
+      chatTuiCanSelectModel({
+        canStartRootRun: false,
+        streamId: root,
+        status: STREAM_STATUS.WAITING,
+        hasActiveToolUseFlow: false,
+      }),
+    ).toBe(false);
   });
 
   it('only reports Ctrl-C stoppable while the root stream is actively responding', () => {

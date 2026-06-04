@@ -14,11 +14,13 @@ import {
   isEscapeInput,
   isUnhandledControlInput,
   isKittyKeypadEnter,
+  isKittyShiftEnter,
   isPlainReturnInput,
   isShiftReturnInput,
   metaChordDigit,
   metaChordInput,
   normalizedCtrlInput,
+  SYNTHETIC_SHIFT_RETURN_INPUT,
 } from '@cli/chat/tui/input/inputKeys';
 
 const ESC = String.fromCharCode(27);
@@ -38,19 +40,23 @@ describe('CLI TUI text input editing', () => {
 
   it('treats Shift+Enter as a newline, distinct from plain Enter and Ctrl-J', () => {
     expect(isShiftReturnInput('', { return: true, shift: true })).toBe(true);
+    expect(isShiftReturnInput(SYNTHETIC_SHIFT_RETURN_INPUT, {})).toBe(true);
     // Plain Enter, Ctrl-J, and Option+Enter are not Shift+Enter.
     expect(isShiftReturnInput('', { return: true })).toBe(false);
     expect(isShiftReturnInput('j', { ctrl: true })).toBe(false);
     expect(isShiftReturnInput('', { return: true, meta: true })).toBe(false);
   });
 
-  it('recognizes the Kitty keypad-Enter sequence for re-dispatch as Enter', () => {
+  it('recognizes Kitty Enter sequences for raw re-dispatch', () => {
     expect(isKittyKeypadEnter(`${ESC}[57414u`)).toBe(true);
     expect(isKittyKeypadEnter(`${ESC}[57414;1u`)).toBe(true);
+    expect(isKittyShiftEnter(`${ESC}[13;2u`)).toBe(true);
+    expect(isKittyShiftEnter(`${ESC}[13:2u`)).toBe(true);
     // Main Enter, plain CR, and modified keypad Enter must not match.
     expect(isKittyKeypadEnter('\r')).toBe(false);
     expect(isKittyKeypadEnter(`${ESC}[13u`)).toBe(false);
     expect(isKittyKeypadEnter(`${ESC}[57414;5u`)).toBe(false);
+    expect(isKittyShiftEnter(`${ESC}[13;5u`)).toBe(false);
   });
 
   it('recognizes Option/Alt chords from normalized meta and ESC-prefixed input', () => {

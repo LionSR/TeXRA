@@ -34,8 +34,10 @@ import { TodosPlanPanel, todosPlanPanelRowCount } from './panes/TodosPlanPanel';
 import { currentApproval, type PendingApproval } from './state/approvalQueue';
 import {
   isKittyKeypadEnter,
+  isKittyShiftEnter,
   metaChordDigit,
   metaChordInput,
+  SYNTHETIC_SHIFT_RETURN_INPUT,
 } from './input/inputKeys';
 import {
   hasChildControlItems,
@@ -386,14 +388,20 @@ export function App(props: AppProps): React.JSX.Element {
   const canStopActiveRun =
     props.canStopActiveRun ?? props.canInterruptActiveRun;
 
-  // Under the Kitty disambiguate flag (enabled in runChatTui for Shift+Enter),
-  // keypad Enter becomes its own key (codepoint 57414) that Ink parses but
-  // exposes no `useInput` field for — so it would silently stop submitting.
-  // Re-dispatch it on Ink's own input channel as a plain Enter (CR) so every
-  // submit/confirm path that keys off `key.return` keeps working. Inert when the
-  // protocol is off — the sequence never arrives. (Ctrl+C needs no such bridge:
-  // Ink decodes its CSI-u form to a normal ctrl+c key, handled in useInput below.)
   const stdin = useStdin();
+  const foregroundOpen =
+    pending !== undefined ||
+    activeForm !== undefined ||
+    childControlMode !== undefined ||
+    transcriptViewerOpen;
+  const inputDisabled = props.inputDisabled === true || foregroundOpen;
+  const inputBarVisible = !foregroundOpen;
+
+  // Under the Kitty disambiguate flag (enabled in runChatTui for Shift+Enter),
+  // some Enter variants arrive as CSI-u sequences that Ink parses incompletely.
+  // Re-dispatch keypad Enter as plain Enter so submit/confirm still works, and
+  // Shift+Enter as an internal newline token only while the main draft input is
+  // active so modals/selects keep treating Shift+Enter as ordinary confirmation.
   useEffect(() => {
     const emitter = (
       stdin as unknown as { internal_eventEmitter?: InputEventEmitterLike }
@@ -402,18 +410,15 @@ export function App(props: AppProps): React.JSX.Element {
     const onInput = (data: string): void => {
       if (isKittyKeypadEnter(data)) {
         emitter.emit('input', String.fromCharCode(13));
+        return;
+      }
+      if (!inputDisabled && isKittyShiftEnter(data)) {
+        emitter.emit('input', SYNTHETIC_SHIFT_RETURN_INPUT);
       }
     };
     emitter.on('input', onInput);
     return () => emitter.off('input', onInput);
-  }, [stdin]);
-  const foregroundOpen =
-    pending !== undefined ||
-    activeForm !== undefined ||
-    childControlMode !== undefined ||
-    transcriptViewerOpen;
-  const inputDisabled = props.inputDisabled === true || foregroundOpen;
-  const inputBarVisible = !foregroundOpen;
+  }, [inputDisabled, stdin]);
 
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const queuedFollowUpMessages = activeSlice?.queuedFollowUpMessages ?? [];
