@@ -9,12 +9,11 @@
 import { isToolUseTaskState } from '@agent/core/execution/TaskState';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse';
-import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
-import { getStreamTabId } from '@agent/runtime/streamTab';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import { readCliHistoryConfig } from './history';
+import { readCliToolUseResumeData } from './toolUseResumeData';
 
 export type CliResumeResolution =
   | {
@@ -39,15 +38,15 @@ export async function resolveCliResumeSnapshot(
   const taskState = agentConfigToTaskState(config);
   if (!isToolUseTaskState(taskState)) return { kind: 'workflow' };
 
-  // The original run derived its streamId deterministically from agent+model+id,
-  // so re-deriving it here reuses the same stream/transcript on resume.
-  const streamId = getStreamTabId(config.agent, config.model, {
-    executionId: id,
-  });
-  const resume = await retrieveSessionResumeData(streamId, id, taskState);
-  if (resume?.type !== 'toolUse') return { kind: 'no-snapshot' };
+  const resume = await readCliToolUseResumeData(id, config);
+  if (!resume) return { kind: 'no-snapshot' };
 
-  return { kind: 'toolUse', snapshot: resume.snapshot, streamId, config };
+  return {
+    kind: 'toolUse',
+    snapshot: resume.snapshot,
+    streamId: resume.streamId,
+    config: resume.config,
+  };
 }
 
 /** A user-facing line explaining why a non-tool-use resolution can't continue. */

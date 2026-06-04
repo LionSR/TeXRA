@@ -81,8 +81,12 @@ describe('resolveCliResumeSnapshot', () => {
   });
 
   it('returns toolUse with snapshot + streamId when a flow record exists', async () => {
-    const snapshot = { executionId: EXECUTION_ID, streamId: STREAM_ID };
     const config = toolUseConfig();
+    const snapshot = {
+      executionId: EXECUTION_ID,
+      streamId: STREAM_ID,
+      agentConfig: { ...config, model: 'gpt-5.5' },
+    };
     mocks.readCliHistoryConfig.mockResolvedValue(config);
     mocks.retrieveSessionResumeData.mockResolvedValue({
       type: 'toolUse',
@@ -95,7 +99,7 @@ describe('resolveCliResumeSnapshot', () => {
       kind: 'toolUse',
       snapshot,
       streamId: STREAM_ID,
-      config,
+      config: snapshot.agentConfig,
     });
     // The stream id is re-derived from agent + model + execution id so resume
     // reuses the original stream/transcript.
