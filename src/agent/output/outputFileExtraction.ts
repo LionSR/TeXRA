@@ -1,10 +1,12 @@
 /**
- * XML file extraction for output processing.
+ * Output file extraction orchestration.
  *
- * Extracts output files from XML responses.
- * All agents use the unified protocol and produce <documents><document name="...">
- * containers (N >= 1), extracted via the multi-document path regardless of output
- * file count.
+ * Drives the agent output pipeline: waits for workspace preparation, builds
+ * a ProcessingContext, then dispatches to OutputFileProcessor to unpack
+ * <documents><document name="..."> containers from the model's XML response.
+ *
+ * Note: this module is about the *agent output pipeline*, not general XML
+ * parsing. Low-level XML text utilities live in @utils/text/xmlExtraction.
  */
 
 import type { StageHandle } from '@agent/trace';

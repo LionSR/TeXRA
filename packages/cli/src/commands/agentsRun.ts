@@ -15,7 +15,6 @@ import {
   type CliContext,
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
 import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
 
 import {
@@ -90,7 +89,6 @@ async function runToolUseAgent(
     return CliExitCode.Usage;
   }
 
-  await initCliPlatform(runContext);
   await loadAgents({ includeRemote: false });
   const agent = await resolveAgentWithRemoteFallback(init.agent);
 
