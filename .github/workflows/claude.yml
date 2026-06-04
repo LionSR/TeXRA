@@ -68,24 +68,22 @@ jobs:
       - name: Check trusted provider wrapper
         id: trusted-provider-wrapper
         run: |
-          if [ -f .trusted-actions/.github/actions/claude-code-with-provider/action.yml ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping Claude Code: trusted base branch does not yet contain claude-code-with-provider."
-          fi
+          # claude-code-with-provider is now external (LionSR/agent-ci-actions@v1), always available;
+          # the legacy trusted base-ref presence check is obsolete.
+          echo "available=true" >> "$GITHUB_OUTPUT"
 
       - name: Run Claude Code
         id: claude
         if: steps.trusted-provider-wrapper.outputs.available == 'true'
         continue-on-error: true
-        uses: ./.trusted-actions/.github/actions/claude-code-with-provider
+        uses: LionSR/agent-ci-actions@v1
         with:
           provider: ${{ env.CLAUDE_CODE_PROVIDER }}
           model-tier: opus
           allowed-bots: 'claude[bot],cursor[bot],cursor,copilot-pull-request-reviewer[bot]'
           branch-name-template: '{{prefix}}{{entityType}}-{{entityNumber}}-{{description}}'
-          allowed-tools-preset: claude-interactive
+          allowed_tools_preset: claude-interactive
+          allowed_tools_preset_map_file: .trusted-actions/.github/allowed-tools.json
           additional-permissions: |
             actions: read
           system-prompt-file: .trusted-actions/.github/prompts/claude-code-system-prompt.md
@@ -121,7 +119,7 @@ jobs:
           env.BOT_PAT != '' &&
           (github.event_name == 'issues' ||
            (github.event_name == 'issue_comment' && !github.event.issue.pull_request))
-        uses: ./.github/actions/auto-create-issue-pr
+        uses: LionSR/agent-ci-actions/auto-create-issue-pr@v1
         with:
           issue-number: ${{ github.event.issue.number }}
           repo: ${{ github.repository }}
