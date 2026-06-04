@@ -4,7 +4,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';
 import {
   BUILTIN_DEFAULT_CHAT_AGENT,
-  defaultToolUseAgents,
+  implicitDefaultToolUseAgents,
 } from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
@@ -32,7 +32,7 @@ interface InitAgentOption {
 export function defaultInitAgentOptions(
   agents: readonly InitAgentOption[],
 ): InitAgentOption[] {
-  return defaultToolUseAgents(agents).map((agent) => ({
+  return implicitDefaultToolUseAgents(agents).map((agent) => ({
     name: agent.name,
     description: agent.description,
   }));
