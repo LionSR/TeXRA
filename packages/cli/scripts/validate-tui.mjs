@@ -28,13 +28,17 @@
 import {
   chmodSync,
   existsSync,
+  mkdtempSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
+  rmSync,
   statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -44,6 +48,7 @@ const ETX = String.fromCharCode(3); // Ctrl-C
 const DC2 = String.fromCharCode(18); // Ctrl-R
 const DC4 = String.fromCharCode(20); // Ctrl-T
 const NAK = String.fromCharCode(21); // Ctrl-U
+const EM = String.fromCharCode(25); // Ctrl-Y
 const UP = ESC + '[A';
 const DOWN = ESC + '[B';
 const PAGE_DOWN = ESC + '[6~';
@@ -911,6 +916,23 @@ const SCENARIOS = [
       'Esc sk…',
       '1 approval',
     ],
+  },
+  {
+    name: 'external-inquiry-copy-question',
+    rows: 24,
+    cols: 80,
+    env: { HARNESS_ENTRIES: '4', HARNESS_EXTERNAL_INQUIRY: '1' },
+    bootExpect: '[Ctrl-C]',
+    keys: [EM],
+    frame: 'tail',
+    fakeClipboard: {
+      expectIncludes: [
+        'Problem: Find all integer triples',
+        'whose perimeter is at most 120',
+      ],
+    },
+    expect: ['Agent asks: copied to clipboard', 'Ctrl-Y copy', '1 question'],
+    unexpect: ['copy failed', '[/model]models', '1 approval'],
   },
   {
     name: 'compact-user-question',
@@ -2062,6 +2084,36 @@ function expectedFrameTextVisible(scenario, frame) {
   return (scenario.expect ?? []).every((text) => frame.includes(text));
 }
 
+const FAKE_CLIPBOARD_COMMANDS = [
+  'pbcopy',
+  'wl-copy',
+  'xclip',
+  'xsel',
+  'powershell.exe',
+];
+
+function makeFakeClipboard() {
+  const dir = mkdtempSync(path.join(tmpdir(), 'texra-tui-clipboard-'));
+  const binDir = path.join(dir, 'bin');
+  const textFile = path.join(dir, 'clipboard.txt');
+  mkdirSync(binDir, { recursive: true });
+  writeFileSync(textFile, '');
+
+  const script = [
+    '#!/usr/bin/env sh',
+    'set -eu',
+    'cat > "$TEXRA_FAKE_CLIPBOARD_FILE"',
+    '',
+  ].join('\n');
+  for (const command of FAKE_CLIPBOARD_COMMANDS) {
+    const commandPath = path.join(binDir, command);
+    writeFileSync(commandPath, script);
+    chmodSync(commandPath, 0o755);
+  }
+
+  return { binDir, dir, textFile };
+}
+
 function blankLinesBetween(frame, from, to) {
   const lines = frame.split('\n');
   const toIndex = lines.findLastIndex((line) => line.includes(to));
@@ -2248,6 +2300,7 @@ async function runScenario(scenario) {
   const term = makeTerm(scenario);
   const cols = scenarioCols(scenario);
   const rows = scenarioRows(scenario);
+  const fakeClipboard = scenario.fakeClipboard ? makeFakeClipboard() : null;
   let lastData = Date.now();
   let exited = null;
   let writeQueue = Promise.resolve();
@@ -2263,6 +2316,10 @@ async function runScenario(scenario) {
     COLUMNS: String(cols),
     LINES: String(rows),
   };
+  if (fakeClipboard) {
+    childEnv.PATH = `${fakeClipboard.binDir}${path.delimiter}${childEnv.PATH ?? ''}`;
+    childEnv.TEXRA_FAKE_CLIPBOARD_FILE = fakeClipboard.textFile;
+  }
   // The validator intentionally exercises an interactive TTY. Inherited CI
   // markers make Ink choose a non-interactive render mode and hide the live
   // input/status surface this script is meant to inspect.
@@ -2401,6 +2458,17 @@ async function runScenario(scenario) {
       ? ` (exitCode ${exited.exitCode}, signal ${exited.signal || 'none'})`
       : '';
     failures.push(`exit keys did not close the TUI cleanly${exitDetails}`);
+  }
+  if (fakeClipboard) {
+    const copiedText = readFileSync(fakeClipboard.textFile, 'utf8');
+    for (const text of scenario.fakeClipboard.expectIncludes ?? []) {
+      if (!copiedText.includes(text)) {
+        failures.push(
+          `fake clipboard missing expected text: ${JSON.stringify(text)}`,
+        );
+      }
+    }
+    rmSync(fakeClipboard.dir, { recursive: true, force: true });
   }
 
   return {
