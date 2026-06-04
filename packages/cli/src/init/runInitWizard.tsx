@@ -7,7 +7,7 @@ import { render, Box, Text, useApp } from 'ink';
 import { useState } from 'react';
 
 import { KeyHints } from '../chat/tui/ui/KeyHints';
-import { Select } from '../chat/tui/ui/Select';
+import { Select, type SelectItem } from '../chat/tui/ui/Select';
 import { clearTerminalScrollback } from '../chat/tui/terminalCleanup';
 import {
   CLI_APPROVAL_POLICIES,
@@ -119,6 +119,20 @@ function firstAvailableIndex(models: readonly InitWizardModelOption[]): number {
   return index >= 0 ? index : 0;
 }
 
+export function initWizardModelSelectItems(
+  models: readonly InitWizardModelOption[],
+): ReadonlyArray<SelectItem<string>> {
+  const hasAvailableModel = models.some((model) => model.available);
+  return models.map((model) => ({
+    value: model.value,
+    label: model.label,
+    description: model.available
+      ? model.status
+      : `${model.status} (unavailable now)`,
+    disabled: hasAvailableModel && !model.available,
+  }));
+}
+
 function defaultAgentIndex(agents: readonly InitWizardAgentOption[]): number {
   const index = agents.findIndex(
     (agent) => agent.name === BUILTIN_DEFAULT_CHAT_AGENT,
@@ -206,13 +220,7 @@ function WizardApp(props: WizardAppProps): React.JSX.Element {
         <Select
           key={step}
           initialIndex={firstAvailableIndex(props.options.models)}
-          items={props.options.models.map((model) => ({
-            value: model.value,
-            label: model.label,
-            description: model.available
-              ? model.status
-              : `${model.status} (unavailable now)`,
-          }))}
+          items={initWizardModelSelectItems(props.options.models)}
           onSelect={(model) => commit({ model })}
           onCancel={cancel}
         />
