@@ -1078,6 +1078,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    *
    * @returns Result containing the response and optionally updated messages if compaction occurred
    */
+  protected override get sdkErrorTagger() {
+    return tagOpenAISdkError;
+  }
+
   override async createResponse(
     options: CreateResponseOptions<ResponseInputItem, OpenAI>,
   ): Promise<CreateResponseResult<Response, ResponseInputItem>> {
@@ -1093,7 +1097,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     this.inFlight = true;
     try {
       return await withSdkErrorTag(
-        tagOpenAISdkError,
+        this.sdkErrorTagger,
         this.config.provider,
         () => this.createResponseImpl(options),
       );
