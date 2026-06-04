@@ -274,6 +274,7 @@ export function registerBuiltinSlashCommands(options?: {
     name: 'approval',
     description: 'Switch approval policy',
     formComponent: ApprovalPolicyFormAdapter,
+    formEscapeAction: 'cancel',
   });
   registerSlashCommand({
     name: 'yolo',
