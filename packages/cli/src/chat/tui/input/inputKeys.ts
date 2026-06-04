@@ -79,7 +79,7 @@ export function metaChordDigit(
 // Deliberately shift-agnostic: in modals, Select, and the child-control picker
 // Shift+Enter has no newline meaning and must still confirm. The text editor is
 // the only place Shift+Enter differs (→ newline), and it discriminates by
-// testing `isShiftReturnInput` *before* this — so accepting shift here can't
+// testing `isTextInputNewlineInput` *before* this — so accepting shift here can't
 // make Shift+Enter also submit in the editor.
 export function isPlainReturnInput(
   input: string,
@@ -101,6 +101,23 @@ export function isShiftReturnInput(
   if (input === SYNTHETIC_SHIFT_RETURN_INPUT) return true;
   if (key.ctrl || key.meta || key.shift !== true) return false;
   return key.return === true || input === '\r' || input === '\n';
+}
+
+/**
+ * Text inputs treat Ctrl-J and Shift+Enter as literal newline insertion before
+ * the shared Return handler can submit. Raw Ctrl-J arrives from Ink as bare LF
+ * with no ctrl flag, while Kitty-capable terminals may surface either Ctrl+J as
+ * a ctrl chord or Shift+Enter as a modified return/synthetic token.
+ */
+export function isTextInputNewlineInput(
+  input: string,
+  key: ReturnKeyInput,
+): boolean {
+  return (
+    (input === '\n' && !key.meta) ||
+    isCtrlInput(input, key, 'j') ||
+    isShiftReturnInput(input, key)
+  );
 }
 
 // Under the Kitty disambiguate flag, terminals report keypad Enter as its own
