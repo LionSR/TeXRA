@@ -624,7 +624,10 @@ function startClaudeAgentLoop(params: {
       ToolUseFollowUpQueue.release(childStreamId);
       await writeTerminalStatus(
         executionId,
-        agentCliLoopTerminalStatus(sawTurnFailure),
+        agentCliLoopTerminalStatus({
+          interrupted: session.isInterrupted(),
+          sawTurnFailure,
+        }),
       ).catch(() => {});
       untrackExecution(executionId);
       finalizeAgentCliLoopStatus(childStreamId, runtimeHost);
