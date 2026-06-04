@@ -52,6 +52,7 @@ vi.mock('@cli/runtime/toolUseResumeData', () => ({
 }));
 
 // Imported after vi.mock so the mocked dependencies are in place.
+import { parseHistoryListLimit } from '@cli/commands/history';
 import {
   cliHistoryNdjsonRecords,
   deleteCliHistory,
@@ -125,6 +126,17 @@ describe('CLI history runtime', () => {
         entry: entries[0],
       },
     ]);
+  });
+
+  it('parses positive history list limits', () => {
+    expect(parseHistoryListLimit('1')).toBe(1);
+    expect(parseHistoryListLimit('25')).toBe(25);
+    expect(parseHistoryListLimit('0')).toBeUndefined();
+    expect(parseHistoryListLimit('-1')).toBeUndefined();
+    expect(parseHistoryListLimit('1.5')).toBeUndefined();
+    expect(parseHistoryListLimit('abc')).toBeUndefined();
+    expect(parseHistoryListLimit('')).toBeUndefined();
+    expect(parseHistoryListLimit(undefined)).toBeUndefined();
   });
 
   it('returns null for ids without persisted metadata, config, or flow state', async () => {
