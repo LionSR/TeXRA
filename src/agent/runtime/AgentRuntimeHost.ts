@@ -11,9 +11,11 @@ import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
  *
  * - **Essential streaming surface** (handle these to observe a run): stream
  *   lifecycle (`setActiveStream`, `updateStreamStatus`, `updateStreamUsage`,
- *   `setTaskState`), output/compile tracking, the `show*`/`resolve*` approval
- *   pairs, and conversation progress (`updateTodos`/`updatePlan`/
- *   `updateConversationProgress`).
+ *   `setTaskState`), output/compile tracking (`addOutputFiles`,
+ *   `updateMissingOutputs`, `updateCompileFailures`, `clearMissingOutputs`),
+ *   the `show*`/`resolve*` approval pairs, and conversation progress
+ *   (`updateTodos`/`updatePlan`/`updateConversationProgress`). See
+ *   {@link ProgressEventPayloads} for the complete, authoritative enumeration.
  * - **Frontend-bound, ignorable** (the `── Frontend-bound events ──` group in
  *   {@link ProgressEventPayloads}: `requestOpenFile`, `requestShowInstruction`,
  *   `showAgentConfigBanner`, `requestShowError`, `requestEnsureProgressView`,
