@@ -9,8 +9,8 @@ import which from 'which';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
-import { hasExtension } from '@utils/core/pathCore';
 import { AbsoluteFS } from '@utils/files';
+import { hasExtension } from '@utils/core/pathCore';
 
 /** Whether the current platform is Windows (cached at module load). */
 export const IS_WINDOWS = process.platform === 'win32';
