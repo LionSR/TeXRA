@@ -90,7 +90,29 @@ describe('finalizeCodexLoopStatus', () => {
   });
 
   it('maps loop failure state to persisted terminal status', () => {
-    expect(agentCliLoopTerminalStatus(false)).toBe('completed');
-    expect(agentCliLoopTerminalStatus(true)).toBe('error');
+    expect(
+      agentCliLoopTerminalStatus({
+        interrupted: false,
+        sawTurnFailure: false,
+      }),
+    ).toBe('completed');
+    expect(
+      agentCliLoopTerminalStatus({
+        interrupted: true,
+        sawTurnFailure: false,
+      }),
+    ).toBe('interrupted');
+    expect(
+      agentCliLoopTerminalStatus({
+        interrupted: false,
+        sawTurnFailure: true,
+      }),
+    ).toBe('error');
+    expect(
+      agentCliLoopTerminalStatus({
+        interrupted: true,
+        sawTurnFailure: true,
+      }),
+    ).toBe('error');
   });
 });

@@ -641,7 +641,10 @@ function startCodexLoop(params: {
       // notifyWaiters, so consumers must see the final status on disk.
       await writeTerminalStatus(
         executionId,
-        agentCliLoopTerminalStatus(sawTurnFailure),
+        agentCliLoopTerminalStatus({
+          interrupted: session.isInterrupted(),
+          sawTurnFailure,
+        }),
       ).catch(() => {});
       untrackExecution(executionId);
 
