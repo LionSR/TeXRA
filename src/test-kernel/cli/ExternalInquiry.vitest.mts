@@ -28,7 +28,7 @@ describe('CLI external inquiry modal', () => {
     );
 
     expect(text).toBe(
-      'PgUp/PgDn scroll · Enter submit answer · Ctrl-R reject with note · Esc skip',
+      'PgUp/PgDn scroll · Ctrl-Y copy · Enter submit · Ctrl-R reject · Esc skip',
     );
     expect(text.length).toBeLessThan(76);
   });
@@ -42,7 +42,7 @@ describe('CLI external inquiry modal', () => {
     );
 
     expect(text).toBe(
-      'PgUp/PgDn scroll · Enter submit answer · Ctrl-R reject with note · Esc skip',
+      'PgUp/PgDn scroll · Ctrl-Y copy · Enter submit · Ctrl-R reject · Esc skip',
     );
     expect(text.length).toBeLessThan(77);
   });
@@ -51,17 +51,17 @@ describe('CLI external inquiry modal', () => {
     const text = hintText(
       externalInquiryKeyHintsForWidth({
         questionScrollable: true,
-        maxColumns: 78,
+        maxColumns: 101,
       }),
     );
 
     expect(text).toBe(
-      'PgUp/PgDn question · Enter submit answer · Ctrl-R reject with note · Esc skip',
+      'PgUp/PgDn question · Ctrl-Y copy question · Enter submit answer · Ctrl-R reject with note · Esc skip',
     );
-    expect(text.length).toBeLessThan(78);
+    expect(text.length).toBeLessThan(101);
   });
 
-  it('preserves the scroll hint when compact action labels fit', () => {
+  it('keeps copy and core actions before scroll in tight modals', () => {
     const text = hintText(
       externalInquiryKeyHintsForWidth({
         questionScrollable: true,
@@ -69,9 +69,7 @@ describe('CLI external inquiry modal', () => {
       }),
     );
 
-    expect(text).toBe(
-      'PgUp/Dn scroll · Enter submit · Ctrl-R reject · Esc skip',
-    );
+    expect(text).toBe('Ctrl-Y copy · Enter submit · Ctrl-R reject · Esc skip');
     expect(text.length).toBeLessThan(58);
   });
 
@@ -83,7 +81,7 @@ describe('CLI external inquiry modal', () => {
       }),
     );
 
-    expect(text).toBe('Enter submit · Ctrl-R reject · Esc skip');
+    expect(text).toBe('Ctrl-Y copy · Enter submit · Ctrl-R reject · Esc skip');
     expect(text.length).toBeLessThan(56);
   });
 
@@ -294,8 +292,9 @@ describe('CLI external inquiry modal', () => {
       }),
     ).toEqual([
       { key: 'PgUp/PgDn', action: 'scroll' },
-      { key: 'Enter', action: 'submit answer' },
-      { key: 'Ctrl-R', action: 'reject with note' },
+      { key: 'Ctrl-Y', action: 'copy' },
+      { key: 'Enter', action: 'submit' },
+      { key: 'Ctrl-R', action: 'reject' },
       { key: 'Esc', action: 'skip' },
     ]);
 
@@ -305,6 +304,7 @@ describe('CLI external inquiry modal', () => {
         questionScrollable: true,
       }),
     ).toEqual([
+      { key: 'Ctrl-Y', action: 'copy' },
       { key: 'Enter', action: 'submit' },
       { key: 'Esc', action: 'skip' },
     ]);
@@ -317,6 +317,7 @@ describe('CLI external inquiry modal', () => {
         questionScrollable: false,
       }),
     ).toEqual([
+      { key: 'Ctrl-Y', action: 'copy' },
       { key: 'Enter', action: 'submit answer' },
       { key: 'Ctrl-R', action: 'reject with note' },
       { key: 'Esc', action: 'skip' },
