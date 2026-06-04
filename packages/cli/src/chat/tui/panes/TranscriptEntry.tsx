@@ -13,6 +13,19 @@ import { ToolUseRow } from './ToolUseRow';
 import { toolUseDisplayLines } from './toolRenderers';
 import type { ConversationEntry } from '../state/cliState';
 
+const INQUIRY_CONTINUATION_RE =
+  /^\[inquiry\]\s+\S+\s+(?:answered|dropped by user)\.(?:\n|$)/;
+
+export function isInquiryContinuationText(text: string): boolean {
+  return INQUIRY_CONTINUATION_RE.test(text);
+}
+
+function prefixedWrappedLines(text: string, cols: number): readonly string[] {
+  return wrapAnsiToWidth(text, Math.max(1, cols - 2))
+    .split('\n')
+    .map((line, index) => `${index === 0 ? '› ' : '  '}${line}`);
+}
+
 function UserEntryRow({
   entry,
   colorEnabled,
@@ -30,13 +43,36 @@ function UserEntryRow({
   // reprints. The `› ` chevron is 2 cols, matching the static row count in
   // transcriptLines.ts.
   const cols = Math.max(1, Math.floor(width ?? 80));
-  const body = wrapAnsiToWidth(entry.text, Math.max(1, cols - 2))
-    .split('\n')
-    .map((line, index) => `${index === 0 ? '› ' : '  '}${line}`)
-    .join('\n');
+  const body = prefixedWrappedLines(entry.text, cols).join('\n');
   return (
     <Box>
       <Text inverse={colorEnabled !== false}>{fillRows(body, cols)}</Text>
+    </Box>
+  );
+}
+
+function InquiryContinuationRow({
+  entry,
+  colorEnabled,
+  width,
+}: {
+  readonly entry: ConversationEntry;
+  readonly colorEnabled?: boolean;
+  readonly width?: number;
+}): React.JSX.Element {
+  const cols = Math.max(1, Math.floor(width ?? 80));
+  const lines = prefixedWrappedLines(entry.text, cols);
+  return (
+    <Box flexDirection="column">
+      {lines.map((line, index) => (
+        <Text
+          key={index}
+          color={colorEnabled !== false && index === 0 ? 'cyan' : undefined}
+          dimColor={colorEnabled !== false && index > 0}
+        >
+          {line}
+        </Text>
+      ))}
     </Box>
   );
 }
@@ -87,6 +123,15 @@ export function TranscriptEntry({
 }): React.JSX.Element {
   switch (entry.role) {
     case 'user':
+      if (isInquiryContinuationText(entry.text)) {
+        return (
+          <InquiryContinuationRow
+            entry={entry}
+            colorEnabled={colorEnabled}
+            width={width}
+          />
+        );
+      }
       return (
         <UserEntryRow entry={entry} colorEnabled={colorEnabled} width={width} />
       );
