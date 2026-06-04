@@ -135,7 +135,9 @@ describe('resolveCliRunModel precedence', () => {
         fallbackMode: 'silent',
       },
     );
-    expect(mocks.setCliHelperModel).toHaveBeenCalledWith(CLI_BUILTIN_DEFAULT_MODEL);
+    expect(mocks.setCliHelperModel).toHaveBeenCalledWith(
+      CLI_BUILTIN_DEFAULT_MODEL,
+    );
   });
 
   it('checks active API-mode access before returning the model', async () => {
