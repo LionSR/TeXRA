@@ -13,22 +13,20 @@ export function currentModelFromUserChannels(
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-export function withToolUseSharedModel(
+export function setToolUseSharedModel(
   shared: ToolUseRunShared,
   model: string,
-): ToolUseRunShared | null {
-  if (!shared.stateSlices) return null;
-  return {
-    ...shared,
-    stateSlices: {
-      ...shared.stateSlices,
-      userChannels: {
-        input: shared.stateSlices.userChannels.input,
-        transient: {
-          ...shared.stateSlices.userChannels.transient,
-          [MODEL_USER_VARIABLE]: model,
-        },
+): boolean {
+  if (!shared.stateSlices) return false;
+  shared.stateSlices = {
+    ...shared.stateSlices,
+    userChannels: {
+      input: shared.stateSlices.userChannels.input,
+      transient: {
+        ...shared.stateSlices.userChannels.transient,
+        [MODEL_USER_VARIABLE]: model,
       },
     },
   };
+  return true;
 }
