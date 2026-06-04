@@ -455,6 +455,42 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'model-form-selectable',
+    env: {
+      HARNESS_CAN_SELECT_MODEL: '1',
+      HARNESS_ENTRIES: '4',
+    },
+    keys: ['/model', '\r'],
+    frame: 'tail',
+    expect: [
+      '/model · personal API keys',
+      'Choose the model for future turns.',
+      '1-9/a-z',
+      'select',
+    ],
+    unexpect: [
+      'Finish the active response before switching models.',
+      'Enter close',
+      'Platform not initialized',
+      '/model - error',
+    ],
+  },
+  {
+    name: 'model-form-selectable-submit',
+    env: {
+      HARNESS_CAN_SELECT_MODEL: '1',
+      HARNESS_ENTRIES: '4',
+    },
+    keys: ['/model', '\r', '\r'],
+    frame: 'tail',
+    expect: ['Harness model selected. Future turns:'],
+    unexpect: [
+      'Finish the active response before switching models.',
+      'Platform not initialized',
+      '/model - error',
+    ],
+  },
+  {
     name: 'model-form-included-empty',
     env: {
       HARNESS_AUTHENTICATED: '1',
