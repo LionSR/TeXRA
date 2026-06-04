@@ -5,6 +5,7 @@ import {
 } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
+import { filterNotNull } from '@utils/core';
 import { compareByNewestCreationTime } from './streamOrdering';
 import type { ProgressViewState } from './state/ProgressViewState';
 
@@ -91,7 +92,7 @@ export function buildStreamInfos(
   const infos = state.streamLogs
     .keys()
     .map((id) => buildStreamInfo(state, id, filter))
-    .filter((info): info is StreamTabInfo => info !== null);
+    .filter(filterNotNull);
 
   return infos.sort(compareByNewestCreationTime);
 }

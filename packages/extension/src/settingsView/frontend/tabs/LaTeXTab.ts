@@ -44,6 +44,7 @@ import {
 } from '@shared/constants/latex';
 
 // Local imports - shared utilities
+import { filterNotNullish } from '@utils/core';
 import { copyTextToClipboard } from '@shared/utils/clipboard';
 import { createEvent } from '@shared/utils/events';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -475,7 +476,7 @@ export class LaTeXTab extends LitElement {
     if (!dep.pathKeys) return [];
     return dep.pathKeys
       .map((k) => this.settings[k])
-      .filter((v): v is string => v !== null && v !== undefined);
+      .filter(filterNotNullish);
   }
 
   private renderDependencyCard(dep: DependencyInfo): TemplateResult {
