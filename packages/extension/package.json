@@ -1603,7 +1603,7 @@
     "@typescript-eslint/parser": "^8.60.1",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.9.1",
+    "@vscode/vsce": "^3.9.2",
     "concurrently": "^10.0.3",
     "css-loader": "^7.1.4",
     "esbuild": "^0.28.0",
@@ -1624,7 +1624,7 @@
     "typescript-eslint": "^8.60.1",
     "vite": "^8.0.16",
     "vitest": "^4.1.8",
-    "vscode-languageserver-protocol": "^3.17.5",
+    "vscode-languageserver-protocol": "^3.18.0",
     "webpack": "^5.107.2",
     "webpack-cli": "^7.0.3",
     "zod-v3-to-v4": "^1.21.2"
