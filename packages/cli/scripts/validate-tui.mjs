@@ -1897,7 +1897,8 @@ function formatUsage() {
     '  --snapshot-dir DIR  Write per-scenario .txt/.svg frames and an index.html report',
     `  --no-build          Use the existing ${DEFAULT_HARNESS_RELATIVE_PATH} instead of rebuilding it`,
     '  --skip-if-missing-deps  Exit 0 instead of failing when PTY screenshot deps are unavailable',
-    '  --list              Print available scenario names and exit',
+    '  --list, --list-scenarios',
+    '                      Print available scenario names and exit',
     '  --list-selected     Print selected scenario names in run order and exit',
     '  -h, --help          Show this help',
     '',
@@ -1935,7 +1936,7 @@ function parseArgs(argv) {
       printUsage();
       process.exit(0);
     }
-    if (!endOfOptions && arg === '--list') {
+    if (!endOfOptions && (arg === '--list' || arg === '--list-scenarios')) {
       printScenarioList();
       process.exit(0);
     }
