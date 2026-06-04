@@ -43,13 +43,14 @@ export function FormFrame(props: FormFrameProps): React.JSX.Element {
 
 export function CompactFormKeyHints(props: {
   readonly primary: KeyHint;
+  readonly escapeAction?: string;
 }): React.JSX.Element {
   return (
     <KeyHints
       hints={[
         { key: '↑/↓', action: 'navigate' },
         props.primary,
-        { key: 'Esc', action: 'close' },
+        { key: 'Esc', action: props.escapeAction ?? 'close' },
       ]}
       confirmCancel={false}
     />

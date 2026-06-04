@@ -26,6 +26,11 @@ export interface SlashCommand {
    */
   readonly formComponent?: React.ComponentType<SlashFormProps>;
   /**
+   * Status-bar verb for Escape while `formComponent` owns input. Defaults to
+   * `close`; use `cancel` for forms where Escape discards a pending choice.
+   */
+  readonly formEscapeAction?: string;
+  /**
    * Set for commands that take a free-text inline argument (e.g. `/foo bar`).
    * When true, Enter in the palette *completes* the command into the input
    * (with a trailing space) so the user can type the argument, rather than
