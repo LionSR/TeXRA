@@ -390,8 +390,8 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '2' },
     keys: ['first line', KITTY_SHIFT_ENTER, 'second line', '\r'],
     frame: 'tail',
-    expect: ['Harness received: first line', 'second line'],
-    unexpect: ['13;2u', '[13', 'ERROR'],
+    expect: ['Harness received: first line\nsecond line'],
+    unexpect: ['first linesecond line', '13;2u', '[13', 'ERROR'],
   },
   {
     name: 'agent-form',
