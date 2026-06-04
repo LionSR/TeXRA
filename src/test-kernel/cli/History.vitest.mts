@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   listExecutions: vi.fn(),
   deleteExecution: vi.fn(),
   deleteAllExecutions: vi.fn(),
+  readCliToolUseResumeData: vi.fn(),
 }));
 
 vi.mock('@agent/storage', async () => {
@@ -44,6 +45,10 @@ vi.mock('@agent/storage', async () => {
 
 vi.mock('@utils/files/taskRunStorage', () => ({
   resolveStoragePath: vi.fn(async () => undefined),
+}));
+
+vi.mock('@cli/runtime/toolUseResumeData', () => ({
+  readCliToolUseResumeData: mocks.readCliToolUseResumeData,
 }));
 
 // Imported after vi.mock so the mocked dependencies are in place.
@@ -91,6 +96,7 @@ describe('CLI history runtime', () => {
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readReport.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);
+    mocks.readCliToolUseResumeData.mockResolvedValue(null);
   });
 
   it('formats history list rows with the stable tab-separated text shape', async () => {
@@ -135,6 +141,28 @@ describe('CLI history runtime', () => {
     await expect(readCliHistoryConfig('a1' as ExecutionId)).resolves.toEqual(
       config,
     );
+  });
+
+  it('shows the current resumable model without losing the startup model', async () => {
+    const toolUseConfig = {
+      ...config,
+      agent: 'chat',
+      model: 'gpt54',
+      agentCategory: 'toolUse',
+    } as AgentConfig;
+    mocks.readConfig.mockResolvedValue(toolUseConfig);
+    mocks.readCliToolUseResumeData.mockResolvedValue({
+      streamId: 'chat@gpt54#a1',
+      config: toolUseConfig,
+      snapshot: { agentConfig: { ...toolUseConfig, model: 'gpt55' } },
+    });
+
+    const details = await readCliHistoryDetails('a1' as ExecutionId);
+    const text = formatCliHistoryDetailsText(details!);
+
+    expect(details?.currentModel).toBe('gpt55');
+    expect(text).toContain('Model: gpt55');
+    expect(text).toContain('Startup model: gpt54');
   });
 
   it('shows a bounded final assistant preview when no report is stored', async () => {
