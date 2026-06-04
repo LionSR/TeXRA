@@ -11,9 +11,8 @@
  * LSP requests).
  */
 
-import type { Hover } from 'vscode-languageserver-protocol';
-
 import type { LeanFileCommand, LeanProjectCommand } from './leanConstants';
+import type { LspHover } from './lspTypes';
 import type {
   LeanDiagnostic,
   LspResult,
@@ -40,7 +39,7 @@ export interface LeanLanguageServices {
     filePath: string,
     line: number,
     column: number,
-  ): Promise<LspResult<Hover>>;
+  ): Promise<LspResult<LspHover>>;
   fetchDiagnosticsForFile(file: string): Promise<LeanDiagnostic[] | null>;
   navigateToFirstError(
     filePath: string,
