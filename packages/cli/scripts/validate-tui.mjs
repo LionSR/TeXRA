@@ -330,7 +330,13 @@ const SCENARIOS = [
     name: 'slash-palette',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/mo'],
-    expect: ['/model', 'List available models', 'navigate', 'Tab complete'],
+    expect: [
+      '/model',
+      'List available models',
+      'navigate',
+      'Esc close',
+      'Tab complete',
+    ],
   },
   {
     name: 'narrow-slash-palette-command-names',
@@ -610,6 +616,7 @@ const SCENARIOS = [
       'Show session details',
       '/exit',
       'Exit the CLI session',
+      'Esc close',
     ],
   },
   {
