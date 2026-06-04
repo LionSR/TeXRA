@@ -351,9 +351,6 @@ importers:
       vitest:
         specifier: ^4.1.8
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@22.19.17)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
-      vscode-languageserver-protocol:
-        specifier: ^3.18.0
-        version: 3.18.0
       webpack:
         specifier: ^5.107.2
         version: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.3)
@@ -794,9 +791,6 @@ importers:
       vitest:
         specifier: ^4.1.8
         version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.0.16(@types/node@22.19.17)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
-      vscode-languageserver-protocol:
-        specifier: ^3.18.0
-        version: 3.18.0
       webpack:
         specifier: ^5.107.2
         version: 5.107.2(esbuild@0.28.0)(postcss@8.5.13)(webpack-cli@7.0.3)
@@ -6425,16 +6419,6 @@ packages:
         optional: true
       jsdom:
         optional: true
-
-  vscode-jsonrpc@9.0.0:
-    resolution: {integrity: sha512-+VvMmQPJhtvJ+8O+zu2JKIRiLxXF8NW7krWgyMGeOHrp4Cn23T5hc0v2LknNeopDOB70wghHAds7mKtcZ0I4Sg==}
-    engines: {node: '>=14.0.0'}
-
-  vscode-languageserver-protocol@3.18.0:
-    resolution: {integrity: sha512-Zdz+kJ12Iz6tc11xfZyEo501bBATHXrCjmMfnaR3pMnf1CoqZBKIynba3P+/bi9VEdrMbNtAVKYpKhbODvqy+Q==}
-
-  vscode-languageserver-types@3.18.0:
-    resolution: {integrity: sha512-8TsGPNMIMiiBdkORgRSvLjuiEIiAFtO+KssmYWxQ+uSVvlf7RjK8YKCOjPzZ+YA04jXEV7+7LvkSmHkhpNS99g==}
 
   w3c-xmlserializer@5.0.0:
     resolution: {integrity: sha512-o8qghlI8NZHU1lLPrpi2+Uq7abh4GGPpYANlalzWxyWteJOCsr/P+oPBA49TOLu5FTZO4d3F9MnWJfiMo4BkmA==}
@@ -12713,15 +12697,6 @@ snapshots:
       jsdom: 29.1.1(@noble/hashes@2.2.0)
     transitivePeerDependencies:
       - msw
-
-  vscode-jsonrpc@9.0.0: {}
-
-  vscode-languageserver-protocol@3.18.0:
-    dependencies:
-      vscode-jsonrpc: 9.0.0
-      vscode-languageserver-types: 3.18.0
-
-  vscode-languageserver-types@3.18.0: {}
 
   w3c-xmlserializer@5.0.0:
     dependencies:
