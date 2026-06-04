@@ -228,6 +228,7 @@ export function SlashPalette(
               key: 'Enter',
               action: slashPaletteEnterHintAction(highlightedCommand),
             },
+            { key: 'Esc', action: 'close' },
             { key: 'Tab', action: 'complete' },
           ]}
           confirmCancel={false}
