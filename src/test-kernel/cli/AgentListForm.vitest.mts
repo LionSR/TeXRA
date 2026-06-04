@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   agentFormWidth,
+  agentPickerPrimarySectionTitle,
   agentSelectWindow,
   currentVisibleAgent,
   hiddenCurrentAgentHint,
@@ -34,6 +35,25 @@ describe('CLI AgentListForm row budget', () => {
       'Current: review (hidden from picker)',
     );
     expect(hiddenCurrentAgentHint(visibleAgents, 'chat')).toBeUndefined();
+  });
+
+  it('labels the primary agent section from the visible row kinds', () => {
+    expect(agentPickerPrimarySectionTitle([])).toBe('Tool-use agents');
+    expect(agentPickerPrimarySectionTitle([{ isOrchestrator: false }])).toBe(
+      'Tool-use agents',
+    );
+    expect(
+      agentPickerPrimarySectionTitle([{ isOrchestrator: undefined }]),
+    ).toBe('Tool-use agents');
+    expect(agentPickerPrimarySectionTitle([{ isOrchestrator: true }])).toBe(
+      'Orchestrator agents',
+    );
+    expect(
+      agentPickerPrimarySectionTitle([
+        { isOrchestrator: false },
+        { isOrchestrator: true },
+      ]),
+    ).toBe('Tool-use and orchestrator agents');
   });
 
   it('windows long agent lists inside the available foreground rows', () => {
