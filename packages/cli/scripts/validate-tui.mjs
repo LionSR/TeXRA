@@ -49,6 +49,7 @@ const DC2 = String.fromCharCode(18); // Ctrl-R
 const DC4 = String.fromCharCode(20); // Ctrl-T
 const NAK = String.fromCharCode(21); // Ctrl-U
 const EM = String.fromCharCode(25); // Ctrl-Y
+const KITTY_SHIFT_ENTER = ESC + '[13;2u';
 const UP = ESC + '[A';
 const DOWN = ESC + '[B';
 const PAGE_DOWN = ESC + '[6~';
@@ -382,6 +383,15 @@ const SCENARIOS = [
     frame: 'tail',
     expect: ['Harness received: prove the bounded case for n <= 20'],
     unexpect: ['signal read during notification phase', 'ERROR'],
+  },
+  {
+    name: 'kitty-shift-enter-newline',
+    cols: 120,
+    env: { HARNESS_ENTRIES: '2' },
+    keys: ['first line', KITTY_SHIFT_ENTER, 'second line', '\r'],
+    frame: 'tail',
+    expect: ['Harness received: first line\nsecond line'],
+    unexpect: ['first linesecond line', '13;2u', '[13', 'ERROR'],
   },
   {
     name: 'agent-form',
