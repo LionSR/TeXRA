@@ -11,7 +11,7 @@ import {
 } from './cliConfig';
 import {
   BUILTIN_DEFAULT_CHAT_AGENT,
-  normalizeDefaultToolUseAgent,
+  resolveImplicitToolUseAgentDefault,
 } from './defaultAgents';
 import type { CliModelSelectionSource } from './modelAccess';
 
@@ -54,7 +54,7 @@ function pickDefaults(parsed: unknown): PartialDefaults {
   const out: { -readonly [K in keyof PartialDefaults]: PartialDefaults[K] } =
     {};
   if (isNonEmptyString(record.agent)) {
-    const agent = normalizeDefaultToolUseAgent(record.agent);
+    const agent = resolveImplicitToolUseAgentDefault(record.agent);
     if (agent) out.agent = agent;
   }
   if (isNonEmptyString(record.model)) {
@@ -67,7 +67,7 @@ function pickDefaults(parsed: unknown): PartialDefaults {
 async function loadWorkspaceDefaults(cwd: string): Promise<PartialDefaults> {
   const loaded = await loadWorkspaceCliConfig(cwd);
   return {
-    agent: normalizeDefaultToolUseAgent(
+    agent: resolveImplicitToolUseAgentDefault(
       resolveConfiguredAgent(loaded.values, 'chat'),
     ),
     model: resolveConfiguredModel(loaded.values, 'chat'),
@@ -161,7 +161,7 @@ export async function resolveChatDefaults(
 ): Promise<ChatDefaults> {
   const overrideAgent = init.agentOverride?.trim();
   const overrideModel = init.modelOverride?.trim();
-  const envAgent = normalizeDefaultToolUseAgent(init.envAgent);
+  const envAgent = resolveImplicitToolUseAgentDefault(init.envAgent);
   const envModel = init.envModel?.trim();
   let agent = overrideAgent || envAgent;
   let model = overrideModel || envModel;
