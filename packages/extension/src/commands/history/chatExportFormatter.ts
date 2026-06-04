@@ -12,7 +12,6 @@
  * This module is VS Code-free — all platform wiring lives in the caller.
  */
 
-import { filterNotNullish } from '@utils/core';
 import { z } from 'zod';
 import {
   isAssistantMessage,
@@ -20,6 +19,7 @@ import {
 } from 'openai/lib/chatCompletionUtils';
 import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 import latexPreamble from '@resources/templates/chatExport.tex';
+import { filterNotNullish } from '@utils/core';
 import type { Part } from '@google/genai';
 import type {
   ChatCompletionMessageParam,

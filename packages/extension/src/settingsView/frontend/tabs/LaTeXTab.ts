@@ -44,9 +44,9 @@ import {
 } from '@shared/constants/latex';
 
 // Local imports - shared utilities
-import { filterNotNullish } from '@utils/core';
 import { copyTextToClipboard } from '@shared/utils/clipboard';
 import { createEvent } from '@shared/utils/events';
+import { filterNotNullish } from '@utils/core';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';

@@ -11,13 +11,13 @@ import {
   type CommandPaletteEntry,
 } from '@shared/wa/commandPalette';
 
+import { filterNotNullish } from '@utils/core';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
   type DesktopCommandActions,
   type DesktopCommandMenuEntry,
 } from '../desktopCommandSurface';
-import { filterNotNullish } from '@utils/core';
 import { getDefaultPlatform, getRendererPlatform } from './rendererPlatform';
 
 export interface DesktopCommandPaletteOptions {
