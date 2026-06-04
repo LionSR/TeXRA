@@ -30,11 +30,7 @@ import {
 
 // Local imports - agent
 import { ReasoningEffort } from 'llm-zoo';
-import {
-  logContextManagementEvent,
-  logSdkError,
-  type AgentTrace,
-} from '@agent/trace';
+import { logSdkError, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentSetting, hasEndTag } from '@agent/core/definition/AgentDataclass';
 import {
@@ -48,7 +44,6 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
   getSdkErrorMessage,
-  isContextWindowError,
   attachPartialText,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -68,7 +63,6 @@ import {
 } from './googleUsage';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagGoogleSdkError } from '../support/sdkErrorAdapters';
-import { TOOL_USE_SAFETY_BUFFER } from '../contextManagementConstants';
 
 // Local file imports
 import {
@@ -515,61 +509,23 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust maxOutputTokens if needed
-    if (this.supportsTokenCounting) {
-      try {
-        // Reuse built params for token counting (build once principle)
-        const totalTokens = await this.estimateTokenCount(history, {
+    await this.applyTokenCountLimit({
+      // Reuse built params for token counting (build once principle).
+      countTokens: () =>
+        this.estimateTokenCount(history, {
           client,
           systemPrompt,
           lastMessageParts,
           googleTools,
           signal,
-        });
-
-        // Validate and adjust maxOutputTokens if needed (throws if context window exceeded)
-        // Use larger safety buffer for tool-use mode
-        const originalMaxTokens = generationConfig.maxOutputTokens ?? 8192;
-        const tokenBuffer = this.isToolUseMode()
-          ? TOOL_USE_SAFETY_BUFFER
-          : undefined;
-        const validation = this.validateTokenLimits(
-          totalTokens,
-          originalMaxTokens,
-          this.config.contextWindow,
-          tokenBuffer,
-        );
-
-        if (validation.adjustedMaxTokens !== originalMaxTokens) {
-          logContextManagementEvent(
-            this.logger,
-            `Token count of message plus max tokens exceeds context window: ${totalTokens} + ${originalMaxTokens} > ${this.config.contextWindow}. Reducing max tokens to ${validation.adjustedMaxTokens}.`,
-            {
-              action: 'max_tokens_reduced',
-              tokensBefore: totalTokens,
-              contextWindow: this.config.contextWindow,
-              utilizationBefore:
-                validation.utilizationPercent ??
-                (totalTokens / this.config.contextWindow) * 100,
-              originalMaxTokens,
-              reducedMaxTokens: validation.adjustedMaxTokens,
-              details: 'Google: maxOutputTokens reduced to fit context window',
-            },
-          );
-          generationConfig.maxOutputTokens = validation.adjustedMaxTokens;
-        }
-      } catch (err) {
-        tagGoogleSdkError(err, this.config.provider);
-        // Re-throw context window violations - these are intentional validation errors
-        // that should fail fast, not be swallowed by soft failure
-        if (isContextWindowError(err)) {
-          throw err;
-        }
-        // Soft failure for token counting API errors - proceed without adjustment
-        this.logger.debug(
-          `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
-        );
-      }
-    }
+        }),
+      currentMaxTokens: generationConfig.maxOutputTokens ?? 8192,
+      contextWindow: this.config.contextWindow,
+      detailLabel: 'Google: maxOutputTokens reduced to fit context window',
+      applyReduced: (adjusted) => {
+        generationConfig.maxOutputTokens = adjusted;
+      },
+    });
 
     // Phase 4: EXECUTE - Make the API call
     const useStreaming = this.getStreamingConfig();
