@@ -24,11 +24,13 @@ import {
   appFocusShortcutsActive,
   approvalForegroundMaxRows,
   childControlForegroundMaxRows,
+  foregroundEscapeAction,
   foregroundSurfaceKind,
   shouldShowTipRow,
   shouldShowTodosPlanPanel,
   staticTranscriptRowBudget,
 } from '@cli/chat/tui/App';
+import type { PendingApproval } from '@cli/chat/tui/state/approvalQueue';
 import {
   nextFocusBack,
   nextFocusForward,
@@ -741,6 +743,38 @@ describe('CLI TUI row allocation', () => {
         transcriptViewerOpen: false,
       }),
     ).toBeUndefined();
+  });
+
+  it('labels foreground escape actions from the owning surface', () => {
+    const pending = (
+      kind: PendingApproval['payload']['kind'],
+    ): PendingApproval =>
+      ({
+        payload: { kind } as PendingApproval['payload'],
+        decide: () => undefined,
+      }) satisfies PendingApproval;
+
+    expect(
+      foregroundEscapeAction({
+        foregroundKind: 'childControls',
+        pending: undefined,
+      }),
+    ).toBe('panel');
+    expect(
+      foregroundEscapeAction({ foregroundKind: 'form', pending: undefined }),
+    ).toBe('close');
+    expect(
+      foregroundEscapeAction({
+        foregroundKind: 'approval',
+        pending: pending('externalInquiry'),
+      }),
+    ).toBe('skip');
+    expect(
+      foregroundEscapeAction({
+        foregroundKind: 'approval',
+        pending: pending('bash'),
+      }),
+    ).toBe('cancel');
   });
 
   it('only reports a chat run interruptible after stream resolution', () => {
