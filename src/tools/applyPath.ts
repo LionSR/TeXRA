@@ -9,7 +9,10 @@ import { executeCommand } from '@utils/system/execUtils';
 import { defineTool } from './core/define';
 
 const ApplyPathInputSchema = z.strictObject({
-  patch: z.string().min(1, 'patch content is required'),
+  patch: z
+    .string()
+    .min(1, 'patch content is required')
+    .describe('Unified diff patch content to apply with git apply.'),
 });
 
 export type ApplyPathInput = z.infer<typeof ApplyPathInputSchema>;

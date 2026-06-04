@@ -25,10 +25,21 @@ import { WorkspaceFS } from '@utils/files';
 import { defineTool } from './core/define';
 
 const EditInputSchema = z.strictObject({
-  path: z.string(),
-  old_str: z.string(),
-  new_str: z.string(),
-  replace_all: z.boolean().nullish(),
+  path: z
+    .string()
+    .describe('Workspace-relative or absolute file path to edit.'),
+  old_str: z
+    .string()
+    .describe('Exact literal text to replace, copied from read_file output.'),
+  new_str: z
+    .string()
+    .describe('Replacement text to write in place of old_str.'),
+  replace_all: z
+    .boolean()
+    .nullish()
+    .describe(
+      'Replace every occurrence instead of requiring one unique match.',
+    ),
 });
 
 export type EditInput = z.infer<typeof EditInputSchema>;
