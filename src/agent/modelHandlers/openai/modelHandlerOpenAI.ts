@@ -712,7 +712,8 @@ export class ModelHandlerOpenAI<
       countTokens: () =>
         this.estimateTokenCount(messages, { client, systemPrompt, signal }),
       currentMaxTokens: this.isOReasoningModel
-        ? (baseParams.max_completion_tokens ?? this.getEffectiveMaxOutputTokens())
+        ? (baseParams.max_completion_tokens ??
+          this.getEffectiveMaxOutputTokens())
         : (baseParams.max_tokens ?? this.getEffectiveMaxOutputTokens()),
       contextWindow: this.config.contextWindow,
       detailLabel: `OpenAI: ${maxTokensKey} reduced to fit context window`,
