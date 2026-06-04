@@ -18,13 +18,13 @@ import { runLakeCommand } from './lakeCommands';
 import { LeanSession } from './leanSession';
 import type { LeanFileCommand, LeanProjectCommand } from '../leanConstants';
 import type { LeanLanguageServices } from '../leanLanguageServices';
+import type { LspHover } from '../lspTypes';
 import type {
   LeanDiagnostic,
   LspResult,
   PlainGoal,
   PlainTermGoal,
 } from '../leanTypes';
-import type { Hover } from 'vscode-languageserver-protocol';
 
 const LOG_CHANNEL = 'lean.direct';
 
@@ -249,8 +249,8 @@ export function createDirectLspLeanAdapter(
       filePath: string,
       line: number,
       column: number,
-    ): Promise<LspResult<Hover>> {
-      return positionRequest<Hover>(filePath, (session) =>
+    ): Promise<LspResult<LspHover>> {
+      return positionRequest<LspHover>(filePath, (session) =>
         session.getHover(filePath, line, column),
       );
     },

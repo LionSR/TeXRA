@@ -105,7 +105,6 @@
     "typescript-eslint": "^8.60.1",
     "vite": "^8.0.16",
     "vitest": "^4.1.8",
-    "vscode-languageserver-protocol": "^3.18.0",
     "webpack": "^5.107.2",
     "webpack-cli": "^7.0.3",
     "zod-v3-to-v4": "^1.21.2"
