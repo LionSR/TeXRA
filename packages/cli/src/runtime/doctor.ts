@@ -14,6 +14,7 @@ import {
   TEXRA_CLI_SUPPORTED_NODE_RANGE,
   TEXRA_CLI_SUPPORTED_NODE_RANGE_DISPLAY,
 } from '@shared/constants/cliRuntime';
+import { extractErrorMessage } from '@utils/core';
 
 // Local imports - CLI runtime
 import { redactEmailAccountLabelsForDisplay } from './accountDisplay';
@@ -126,7 +127,7 @@ function failFromError(
     id,
     name,
     message,
-    error instanceof Error ? error.message : undefined,
+    extractErrorMessage(error),
   );
 }
 
