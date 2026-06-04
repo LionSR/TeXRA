@@ -218,7 +218,7 @@ describe('CLI multi-agent presets', () => {
     });
     const details = formatCliMultiAgentPresetInspection(plan);
 
-    expect(details).toContain('Root tool-use agent:\n  orchestrator');
+    expect(details).toContain('Team root agent:\n  orchestrator');
     expect(details).toContain(
       'Available workflow agents:\n  criticize\n  generic',
     );

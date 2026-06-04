@@ -29,6 +29,8 @@ import {
   planCliMultiAgentPresetRun,
   readCliMultiAgentPresets,
   withCliMultiAgentPresetVisibility,
+  MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION,
+  MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION,
   type CliMultiAgentPreset,
   type CliMultiAgentPresetRunPlan,
 } from '../runtime/multiAgentPresets';
@@ -450,13 +452,12 @@ const multiAgentRunCommand = defineCliCommand({
     },
     agent: {
       type: 'string',
-      description:
-        'Tool-use agent to start as the team root (defaults to the preset orchestrator)',
+      description: MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION,
     },
     model: {
       type: 'string',
       alias: 'm',
-      description: 'Model for the root tool-use agent',
+      description: MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION,
     },
     instruction: {
       type: 'string',
