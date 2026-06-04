@@ -24,6 +24,9 @@ import { GlobalStateKey } from '@common/state/stateKeys';
 // Local imports - logger
 import { setOutputChannelFactory } from '@logger/logUtils';
 
+// Local imports - telemetry
+import { UsageLogService } from '@telemetry/UsageLogService';
+
 // Local imports - tool integrations
 import { setTexraCliEntrypointChecker } from '@tools/externalToolDefs';
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
@@ -53,7 +56,7 @@ type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 
 type CliPlatformInitOptions = Pick<
   CliContext,
-  'apiMode' | 'cwd' | 'resourcesPath' | 'helperModel'
+  'apiMode' | 'cwd' | 'resourcesPath' | 'helperModel' | 'version'
 > & {
   readonly bestEffortIncludedModelAccess?: boolean;
   readonly installSignalHandlers?: boolean;
@@ -190,6 +193,16 @@ export async function initCliPlatform(
     // Attribute agent-authored commits to the TeXRA identity by default;
     // configurable via `.texra/config.json` `texra.git.markCommits`.
     applyCliGitAuthorConfig(config);
+
+    // Route CLI model traffic to the same Supabase usage log the extension
+    // writes to, tagged with editorType 'cli' and the CLI version so relay
+    // pricing stays version-aware. dispose() flushes any queued entries; it
+    // runs on normal exit (bin/texra.ts finally) and on signals, both of
+    // which call lifecycle.runShutdown().
+    UsageLogService.initialize({}, context.version, 'cli');
+    lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+      UsageLogService.dispose(),
+    );
   }
 
   if (!serverSideKeysInitialized) {

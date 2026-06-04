@@ -9,6 +9,7 @@ import { render } from 'ink';
 import PQueue from 'p-queue';
 
 import { flushPendingRunTraces, getDefaultStreamLogStore } from '@transcript';
+import { tryPlatform } from '@platform/platform';
 import { getAgent, loadAgents } from '@agent/index';
 import { type AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -1399,6 +1400,13 @@ export async function runChat(
     flushPendingRunTraces();
     return getDefaultStreamLogStore().flush();
   };
+  // These TUI exit paths call process.exit() directly, so bin/texra.ts's
+  // `finally` (which runs platform shutdown) never fires. Run it here too so
+  // shutdown handlers — notably UsageLogService.dispose(), which flushes any
+  // queued usage entries — execute before the process dies. runShutdown is
+  // idempotent, so the normal return path can still rely on bin/texra.ts.
+  const runPlatformShutdown = (): Promise<void> =>
+    tryPlatform()?.lifecycle.runShutdown() ?? Promise.resolve();
   const exitNow = (exitCode: number): void => {
     exiting = true;
     removeProcessHandlers();
@@ -1412,11 +1420,13 @@ export async function runChat(
     cleanupTerminalModes({ clearItermProgress });
     // Synchronous signal exits (SIGINT double-tap / SIGTERM / SIGHUP) own the
     // whole teardown here (the finally skips when `exiting`), so drain
-    // persistence before exiting. `.catch` keeps a flush failure from becoming
-    // an unhandled rejection under --unhandled-rejections=strict.
-    void drainPersistence()
-      .catch(() => {})
-      .finally(() => process.exit(exitCode));
+    // persistence and run platform shutdown before exiting. allSettled never
+    // rejects, so a flush failure can't become an unhandled rejection under
+    // --unhandled-rejections=strict.
+    void Promise.allSettled([
+      drainPersistence(),
+      runPlatformShutdown(),
+    ]).finally(() => process.exit(exitCode));
   };
   const armExit = (): void => {
     exitArmed = true;
@@ -1541,7 +1551,9 @@ export async function runChat(
         // The dangling runPromise keeps the event loop alive, so a normal return
         // would never let the process exit. Force-exit here, AFTER persistence
         // is flushed and the resume hint is printed, preserving the suspended
-        // flow record on disk for `texra --resume`.
+        // flow record on disk for `texra --resume`. Run platform shutdown first
+        // so queued usage logs flush — bin/texra.ts's finally won't on exit().
+        await runPlatformShutdown();
         process.exit(session.runExitCode);
       }
     }
