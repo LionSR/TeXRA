@@ -2297,10 +2297,23 @@ function writeSnapshotReport(results) {
 }
 
 async function runScenario(scenario) {
+  const fakeClipboard = scenario.fakeClipboard ? makeFakeClipboard() : null;
+  try {
+    return await runScenarioWithResources(scenario, fakeClipboard);
+  } finally {
+    cleanupFakeClipboard(fakeClipboard);
+  }
+}
+
+function cleanupFakeClipboard(fakeClipboard) {
+  if (!fakeClipboard) return;
+  rmSync(fakeClipboard.dir, { recursive: true, force: true });
+}
+
+async function runScenarioWithResources(scenario, fakeClipboard) {
   const term = makeTerm(scenario);
   const cols = scenarioCols(scenario);
   const rows = scenarioRows(scenario);
-  const fakeClipboard = scenario.fakeClipboard ? makeFakeClipboard() : null;
   let lastData = Date.now();
   let exited = null;
   let writeQueue = Promise.resolve();
@@ -2468,7 +2481,6 @@ async function runScenario(scenario) {
         );
       }
     }
-    rmSync(fakeClipboard.dir, { recursive: true, force: true });
   }
 
   return {
