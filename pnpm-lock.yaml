@@ -212,6 +212,9 @@ importers:
       turndown-plugin-gfm:
         specifier: ^1.0.2
         version: 1.0.2
+      which:
+        specifier: ^5.0.0
+        version: 5.0.0
       write-file-atomic:
         specifier: ^7.0.1
         version: 7.0.1
