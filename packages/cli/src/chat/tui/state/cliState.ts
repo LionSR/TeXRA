@@ -128,6 +128,8 @@ const PARENT_STREAM = signal<ReadonlyMap<StreamTabId, StreamTabId>>(new Map());
 export interface ActiveSlashForm {
   /** The slash command that mounted the form (for the header strip). */
   readonly commandName: string;
+  /** Status-bar verb for Escape while the form owns input. Defaults to close. */
+  readonly escapeAction?: string;
   /** Render the form body. Receives the close callback. */
   readonly render: (
     onDone: () => void,
