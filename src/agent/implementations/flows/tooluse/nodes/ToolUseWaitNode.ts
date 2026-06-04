@@ -2,6 +2,11 @@ import { Node } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { listIdleContinuationProviders } from '@agent/runtime/idleContinuation';
+import {
+  countMediaFilesNeedingVision,
+  formatMediaNeedsVisionWarning,
+  shouldWarnMediaNeedsVision,
+} from '@agent/runtime/mediaVisionWarning';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@shared/schemas';
 
@@ -191,6 +196,15 @@ export class ToolUseWaitNode<C> extends Node<
     // to the freshly-appended user message, reusing the same shared media path
     // as the reflection flow. No-ops when empty or the model lacks vision.
     if (execRes.mediaFiles?.length) {
+      const visionMediaCount = countMediaFilesNeedingVision(execRes.mediaFiles);
+      if (
+        shouldWarnMediaNeedsVision(
+          execRes.mediaFiles,
+          modelHandler.capabilities,
+        )
+      ) {
+        logger.warn(formatMediaNeedsVisionWarning(visionMediaCount, 'pasted'));
+      }
       await modelHandler.addMediaToUserMessage(
         shared.messages,
         execRes.mediaFiles.map((p) => fileService.createLocation(p)),
