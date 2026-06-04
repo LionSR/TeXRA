@@ -765,6 +765,13 @@ describe('CLI TUI row allocation', () => {
     ).toBe('close');
     expect(
       foregroundEscapeAction({
+        activeFormEscapeAction: 'cancel',
+        foregroundKind: 'form',
+        pending: undefined,
+      }),
+    ).toBe('cancel');
+    expect(
+      foregroundEscapeAction({
         foregroundKind: 'approval',
         pending: pending('externalInquiry'),
       }),

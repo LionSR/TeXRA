@@ -477,6 +477,8 @@ const SCENARIOS = [
       'Never',
       'Auto-approve',
       'Enter select highlighted',
+      'Esc cancel',
+      '[Esc]cancel',
     ],
   },
   {
@@ -576,7 +578,8 @@ const SCENARIOS = [
       'Auto-approve',
       '↑/↓ navigate',
       '1-3/Enter select',
-      'Esc close',
+      'Esc cancel',
+      '[Esc]cancel',
     ],
     unexpect: [
       'Choose when privileged actions prompt or auto-approve.',

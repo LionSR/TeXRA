@@ -327,14 +327,17 @@ export function foregroundSurfaceKind({
 }
 
 export function foregroundEscapeAction({
+  activeFormEscapeAction,
   foregroundKind,
   pending,
 }: {
+  readonly activeFormEscapeAction?: string;
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
   readonly pending: PendingApproval | undefined;
 }): string | undefined {
   if (foregroundKind !== 'approval') {
     if (foregroundKind === undefined) return undefined;
+    if (foregroundKind === 'form') return activeFormEscapeAction ?? 'close';
     return foregroundKind === 'childControls' ? 'panel' : 'close';
   }
   const kind = pending?.payload.kind;
@@ -777,6 +780,7 @@ export function App(props: AppProps): React.JSX.Element {
         <StatusBar
           canStopActiveRun={canStopActiveRun}
           foregroundEscapeAction={foregroundEscapeAction({
+            activeFormEscapeAction: activeForm?.escapeAction,
             foregroundKind,
             pending,
           })}

@@ -694,6 +694,7 @@ export function openRegisteredCliSlashForm(
   if (!Form) return false;
   cliState.activeForm.set({
     commandName: command.name,
+    escapeAction: command.formEscapeAction,
     render: (close, availableRows) => (
       <Form
         availableRows={availableRows}
