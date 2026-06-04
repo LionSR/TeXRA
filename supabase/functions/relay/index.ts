@@ -79,6 +79,10 @@ import {
   isJsonRecord,
   type ReasoningEffortCap,
 } from './reasoning.ts';
+import {
+  formatRequestBytes,
+  readRequestBodyWithinSizeLimit,
+} from './requestLimits.ts';
 
 // =============================================================================
 // Constants
@@ -633,12 +637,36 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     (prefix) => apiPath === prefix || apiPath.startsWith(prefix + '/'),
   );
 
-  let requestBody: string | null = null;
+  let requestBody: string | Uint8Array | null = null;
   let requestBodyJson: unknown = null;
   let modelName: string | null = null;
 
+  // Free relay users share one body-size boundary for all non-GET routes,
+  // including upload endpoints that skip model validation.
+  if (userTier === FREE_TIER && c.req.method !== 'GET') {
+    const requestSize = await readRequestBodyWithinSizeLimit(c.req.raw.body);
+    if (!requestSize.allowed) {
+      return jsonError(
+        `Free tier relay requests are limited to ${formatRequestBytes(requestSize.limitBytes)}. ` +
+          `The relay stopped reading after ${formatRequestBytes(requestSize.requestBytes)}. ` +
+          'Switch to your own API keys for larger requests.',
+        413,
+        {
+          requestTooLarge: true,
+          limitBytes: requestSize.limitBytes,
+          requestBytes: requestSize.requestBytes,
+        },
+      );
+    }
+    requestBody = requestSize.body;
+  }
+
   if (userTier !== ULTRA_TIER && c.req.method !== 'GET' && !isModelFreePath) {
-    requestBody = await c.req.text();
+    if (requestBody === null) {
+      requestBody = await c.req.text();
+    } else if (requestBody instanceof Uint8Array) {
+      requestBody = new TextDecoder().decode(requestBody);
+    }
 
     try {
       requestBodyJson = JSON.parse(requestBody);
