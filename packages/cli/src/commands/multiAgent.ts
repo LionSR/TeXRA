@@ -328,7 +328,6 @@ export async function runMultiAgentPreset(
         stdinInputFile,
       },
     );
-    await initCliPlatform(runContext);
     installCliApprovalHandlers(runContext);
     writeApprovalUnavailableDelegationWarning(runContext, plan);
 

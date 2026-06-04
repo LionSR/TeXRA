@@ -13,7 +13,6 @@ import { generateExecutionId } from '@utils/core/executionId';
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { CliUsageError, readCliStdinText } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
-import { initCliPlatform } from '../runtime/initPlatform';
 import { writeErrorStderr } from '../runtime/logSinks';
 
 import { missingAgentMessage } from './_helpers/agentLookupText';
@@ -76,7 +75,6 @@ async function runWorkflowAgent(
   // full agent run otherwise.
   await assertOutputFileAvailable(init.output, runContext.cwd);
 
-  await initCliPlatform(runContext);
   await loadAgents({ includeRemote: false });
   const agent = await resolveAgentWithRemoteFallback(init.agent);
   // Pre-validate the resolved agent so usage errors land before stdin is read
