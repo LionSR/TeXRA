@@ -191,6 +191,17 @@ export class ToolUseWaitNode<C> extends Node<
     // to the freshly-appended user message, reusing the same shared media path
     // as the reflection flow. No-ops when empty or the model lacks vision.
     if (execRes.mediaFiles?.length) {
+      if (
+        !modelHandler.capabilities.supportsVision &&
+        !modelHandler.capabilities.supportsNativeAudio
+      ) {
+        const n = execRes.mediaFiles.length;
+        logger.warn(
+          `Model has no vision support — ${n} pasted ` +
+            `${n === 1 ? 'image is' : 'images are'} not sent to the model. ` +
+            `Switch to a vision-capable model to use ${n === 1 ? 'it' : 'them'}.`,
+        );
+      }
       await modelHandler.addMediaToUserMessage(
         shared.messages,
         execRes.mediaFiles.map((p) => fileService.createLocation(p)),
