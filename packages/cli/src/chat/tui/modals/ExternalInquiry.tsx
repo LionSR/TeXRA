@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
+import { writeClipboardText } from '@cli/runtime/clipboardText';
 import type { ExternalInquiryPermission } from '@shared/schemas';
 
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
@@ -23,6 +24,8 @@ export interface ExternalInquiryDisplayLine {
   readonly kind: 'question' | 'overflow';
   readonly text: string;
 }
+
+type CopyStatus = 'idle' | 'copying' | 'copied' | 'failed';
 
 const MIN_EXTERNAL_INQUIRY_WIDTH = 20;
 const DEFAULT_EXTERNAL_INQUIRY_QUESTION_ROWS = 16;
@@ -52,24 +55,27 @@ export function externalInquiryKeyHintsForWidth({
   readonly maxColumns: number;
   readonly questionScrollable: boolean;
 }): readonly KeyHint[] {
-  const tailHints: readonly KeyHint[] = [
+  const actionHints: readonly KeyHint[] = [
     { key: 'Enter', action: 'submit answer' },
     { key: 'Ctrl-R', action: 'reject with note' },
     { key: 'Esc', action: 'skip' },
   ];
   const fullHints = [
     ...(questionScrollable ? [{ key: 'PgUp/PgDn', action: 'question' }] : []),
-    ...tailHints,
+    { key: 'Ctrl-Y', action: 'copy question' },
+    ...actionHints,
   ];
   if (keyHintsFit(fullHints, maxColumns)) return fullHints;
 
   const compactScrollHints = [
     ...(questionScrollable ? [{ key: 'PgUp/PgDn', action: 'scroll' }] : []),
-    ...tailHints,
+    { key: 'Ctrl-Y', action: 'copy' },
+    ...actionHints,
   ];
   if (keyHintsFit(compactScrollHints, maxColumns)) return compactScrollHints;
 
   const compactTailHints: readonly KeyHint[] = [
+    { key: 'Ctrl-Y', action: 'copy' },
     { key: 'Enter', action: 'submit' },
     { key: 'Ctrl-R', action: 'reject' },
     { key: 'Esc', action: 'skip' },
@@ -89,6 +95,7 @@ export function externalInquiryKeyHintsForWidth({
   if (keyHintsFit(compactTailHints, maxColumns)) return compactTailHints;
 
   const minimumHints: readonly KeyHint[] = [
+    { key: 'Ctrl-Y', action: 'copy' },
     { key: 'Enter', action: 'submit' },
     { key: 'Esc', action: 'skip' },
   ];
@@ -235,6 +242,7 @@ export function ExternalInquiry(
 ): React.JSX.Element {
   const { columns } = useWindowSize();
   const [answer, setAnswer] = useState('');
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>('idle');
   const [questionOffset, setQuestionOffset] = useState(0);
   const contentWidth = Math.max(
     MIN_EXTERNAL_INQUIRY_WIDTH,
@@ -279,6 +287,16 @@ export function ExternalInquiry(
     });
   }
 
+  async function copyQuestion(): Promise<void> {
+    setCopyStatus('copying');
+    const result = await writeClipboardText(props.payload.question);
+    if (result.ok) {
+      setCopyStatus('copied');
+      return;
+    }
+    setCopyStatus('failed');
+  }
+
   useEffect(() => {
     setQuestionOffset((current) =>
       Math.max(0, Math.min(maxQuestionOffset, current)),
@@ -302,6 +320,10 @@ export function ExternalInquiry(
       });
       return;
     }
+    if (key.ctrl && input.toLowerCase() === 'y') {
+      void copyQuestion();
+      return;
+    }
     if (key.pageDown) {
       scrollQuestion((current) => current + pageRows);
       return;
@@ -322,6 +344,18 @@ export function ExternalInquiry(
     >
       <Text bold color="green">
         Agent asks:
+        {copyStatus !== 'idle' ? (
+          <Text
+            color={copyStatus === 'failed' ? 'yellow' : 'green'}
+            dimColor={copyStatus === 'copying'}
+          >
+            {copyStatus === 'copying'
+              ? ' copying...'
+              : copyStatus === 'copied'
+                ? ' copied to clipboard'
+                : ' copy failed'}
+          </Text>
+        ) : null}
       </Text>
       <Box flexDirection="column">
         {questionDisplayLines.map((line, index) => (
