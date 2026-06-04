@@ -12,15 +12,17 @@ import { WorkspaceFS } from '@utils/files';
 import { toPosixPath } from '@utils/core/pathCore';
 
 const ArxivDownloadInputSchema = z.strictObject({
-  id: z.string(),
+  id: z.string().describe('arXiv identifier or URL for the source archive.'),
   autoIndent: z
     .boolean()
     .nullish()
-    .transform((v) => v ?? true),
+    .transform((v) => v ?? true)
+    .describe('Auto-indent extracted TeX files after downloading source.'),
   destination: z
     .enum(['root', 'references'])
     .nullish()
-    .transform((v) => v ?? ('references' as const)),
+    .transform((v) => v ?? ('references' as const))
+    .describe('Where to extract the source: workspace root or References/.'),
 });
 
 export type ArxivDownloadInput = z.infer<typeof ArxivDownloadInputSchema>;

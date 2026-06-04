@@ -12,7 +12,7 @@ import { CROSSREF_CONSTANTS, crossrefClient } from './constants';
 import { waitForRateLimit } from './rateLimiter';
 
 const CrossrefDoiInputSchema = z.strictObject({
-  doi: z.string(),
+  doi: z.string().describe('DOI to look up, with or without a DOI URL prefix.'),
 });
 
 export type CrossrefDoiInput = z.infer<typeof CrossrefDoiInputSchema>;

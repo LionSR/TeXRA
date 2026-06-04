@@ -29,26 +29,33 @@ const SortOrderSchema = z.enum(['ascending', 'descending']);
 const SearchFieldSchema = z.enum(['all', 'author', 'title', 'abstract']);
 
 const ArxivSearchInputSchema = z.strictObject({
-  query: z.string(),
+  query: z
+    .string()
+    .describe('Search query terms, title text, or author names.'),
   field: SearchFieldSchema.nullish()
     .transform((v) => v ?? 'all')
     .describe(
       'Search field: "author" for author names, "title" for paper titles, "abstract" for abstracts, "all" (default) for all fields',
     ),
-  categories: z.array(z.string()).nullish(),
+  categories: z
+    .array(z.string())
+    .nullish()
+    .describe('Optional arXiv category filters such as "math.NT" or "cs.AI".'),
   maxResults: z
     .int()
     .positive()
     .max(ARXIV_CONSTANTS.MAX_RESULTS)
     .nullish()
-    .transform((v) => v ?? ARXIV_CONSTANTS.DEFAULT_RESULTS),
+    .transform((v) => v ?? ARXIV_CONSTANTS.DEFAULT_RESULTS)
+    .describe('Maximum number of papers to return.'),
   start: z
     .int()
     .min(0)
     .nullish()
-    .transform((v) => v ?? 0),
-  sortBy: SortBySchema.nullish(),
-  sortOrder: SortOrderSchema.nullish(),
+    .transform((v) => v ?? 0)
+    .describe('Zero-based result offset for pagination.'),
+  sortBy: SortBySchema.nullish().describe('arXiv sort field to use.'),
+  sortOrder: SortOrderSchema.nullish().describe('Sort direction for results.'),
 });
 
 export type ArxivSearchInput = z.infer<typeof ArxivSearchInputSchema>;
