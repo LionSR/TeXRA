@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { isInquiryContinuationText } from '@cli/chat/tui/panes/TranscriptEntry';
 import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   appendStaticTranscriptItems,
@@ -379,6 +380,27 @@ describe('CLI conversation transcript splitting', () => {
     });
 
     expect(items.slice(1).map((item) => item.id)).toEqual(['u1']);
+  });
+
+  it('detects generated inquiry continuation rows only', () => {
+    expect(
+      isInquiryContinuationText(
+        '[inquiry] ei_123 answered.\nQ: Can this be simplified?\nA: Yes.',
+      ),
+    ).toBe(true);
+    expect(
+      isInquiryContinuationText(
+        '[inquiry] ei_456 dropped by user.\nQ: Should we proceed?',
+      ),
+    ).toBe(true);
+    expect(isInquiryContinuationText('[inquiry] ei_789 answered.')).toBe(true);
+    expect(
+      isInquiryContinuationText('[inquiry] ei_789 answered. extra text'),
+    ).toBe(false);
+    expect(isInquiryContinuationText(' [inquiry] ei_789 answered.')).toBe(
+      false,
+    );
+    expect(isInquiryContinuationText('Run the analysis')).toBe(false);
   });
 
   it('compacts adjacent one-line tool rows in the transcript viewer', () => {
