@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { defaultInitAgentOptions, initCommand } from '@cli/commands/init';
+import { initWizardModelSelectItems } from '@cli/init/runInitWizard';
 
 describe('CLI init command', () => {
   it('accepts global CLI flags while keeping init-specific cwd help', () => {
@@ -34,6 +35,70 @@ describe('CLI init command', () => {
     expect(options).toEqual([
       { name: 'chat', description: 'General chat' },
       { name: 'review', description: 'Code review' },
+    ]);
+  });
+
+  it('disables init model rows unavailable in the active API mode', () => {
+    expect(
+      initWizardModelSelectItems([
+        {
+          value: 'sonnet46T',
+          label: 'Sonnet',
+          available: true,
+          status: 'included access',
+        },
+        {
+          value: 'deepseekT',
+          label: 'DeepSeek',
+          available: false,
+          status: 'api key set',
+        },
+      ]),
+    ).toEqual([
+      {
+        value: 'sonnet46T',
+        label: 'Sonnet',
+        description: 'included access',
+        disabled: false,
+      },
+      {
+        value: 'deepseekT',
+        label: 'DeepSeek',
+        description: 'api key set (unavailable now)',
+        disabled: true,
+      },
+    ]);
+  });
+
+  it('keeps all-unavailable init model rows selectable as a fallback', () => {
+    expect(
+      initWizardModelSelectItems([
+        {
+          value: 'sonnet46T',
+          label: 'Sonnet',
+          available: false,
+          status: 'login required',
+        },
+        {
+          value: 'deepseekT',
+          label: 'DeepSeek',
+          available: false,
+          status: 'missing key',
+        },
+      ]),
+    ).toEqual([
+      {
+        value: 'sonnet46T',
+        label: 'Sonnet',
+        description: 'login required (unavailable now)',
+        disabled: false,
+      },
+      {
+        value: 'deepseekT',
+        label: 'DeepSeek',
+        description: 'missing key (unavailable now)',
+        disabled: false,
+      },
     ]);
   });
 });
