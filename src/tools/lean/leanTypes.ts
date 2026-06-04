@@ -4,7 +4,8 @@
  */
 
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
-import type { Hover } from 'vscode-languageserver-protocol';
+
+import type { LspHover } from './lspTypes';
 
 /** Response from $/lean/plainGoal LSP request */
 export interface PlainGoal {
@@ -32,7 +33,9 @@ export interface LeanDiagnostic extends GenericDiagnostic {
 }
 
 /** Extract text value from hover contents (handles all LSP content formats) */
-export function extractHoverText(contents: Hover['contents']): string | null {
+export function extractHoverText(
+  contents: LspHover['contents'],
+): string | null {
   if (typeof contents === 'string') {
     return contents;
   }

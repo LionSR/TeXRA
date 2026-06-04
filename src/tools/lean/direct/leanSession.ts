@@ -23,12 +23,12 @@ import {
   updateLeanServer,
 } from '../leanServerRegistry';
 import { JsonRpcConnection } from './jsonRpc';
-import type { LeanDiagnostic, PlainGoal, PlainTermGoal } from '../leanTypes';
 import type {
-  Diagnostic,
-  Hover,
-  PublishDiagnosticsParams,
-} from 'vscode-languageserver-protocol';
+  LspDiagnostic,
+  LspHover,
+  LspPublishDiagnosticsParams,
+} from '../lspTypes';
+import type { LeanDiagnostic, PlainGoal, PlainTermGoal } from '../leanTypes';
 
 const LOG_CHANNEL = 'lean.direct';
 
@@ -199,8 +199,8 @@ export class LeanSession {
     filePath: string,
     line: number,
     column: number,
-  ): Promise<Hover | null> {
-    return this.requestSettled<Hover | null>(
+  ): Promise<LspHover | null> {
+    return this.requestSettled<LspHover | null>(
       filePath,
       line,
       column,
@@ -279,7 +279,7 @@ export class LeanSession {
     const rpc = new JsonRpcConnection(child.stdin, child.stdout);
     this.rpc = rpc;
     rpc.onNotification('textDocument/publishDiagnostics', (params) =>
-      this.handlePublishDiagnostics(params as PublishDiagnosticsParams),
+      this.handlePublishDiagnostics(params as LspPublishDiagnosticsParams),
     );
     rpc.onNotification('window/logMessage', (params) => {
       debug(LOG_CHANNEL, `[${root}] ${JSON.stringify(params)}`);
@@ -395,7 +395,7 @@ export class LeanSession {
     }
   }
 
-  private handlePublishDiagnostics(params: PublishDiagnosticsParams): void {
+  private handlePublishDiagnostics(params: LspPublishDiagnosticsParams): void {
     const uri = params.uri;
     const absolute = fileUriToPath(uri);
     if (!absolute) return;
@@ -421,7 +421,7 @@ export class LeanSession {
   }
 }
 
-function toLeanDiagnostic(d: Diagnostic): LeanDiagnostic {
+function toLeanDiagnostic(d: LspDiagnostic): LeanDiagnostic {
   return {
     // LSP `DiagnosticSeverity` (Error=1) matches the VS Code numeric severity
     // (Error=0) shifted by one — translate to keep formatting consistent with

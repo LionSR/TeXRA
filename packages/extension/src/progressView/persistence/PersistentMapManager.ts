@@ -9,5 +9,5 @@ export interface MementoStorage {
    * Set a key's value, or pass `undefined` to delete the entry. Mirrors
    * `vscode.Memento.update`, which uses `undefined` as the delete sentinel.
    */
-  update<T>(key: string, value: T | undefined): Thenable<void>;
+  update<T>(key: string, value: T | undefined): PromiseLike<void>;
 }
