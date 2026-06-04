@@ -21,9 +21,9 @@ import {
 } from './textInputEditing';
 import {
   isPlainReturnInput,
-  isShiftReturnInput,
   isCtrlInput,
   isEscapeInput,
+  isTextInputNewlineInput,
   isUnhandledControlInput,
   metaChordInput,
 } from './inputKeys';
@@ -393,7 +393,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         return;
       }
 
-      if (isCtrlInput(input, key, 'j') || isShiftReturnInput(input, key)) {
+      if (isTextInputNewlineInput(input, key)) {
         // Ctrl-J (universal) or Shift+Enter (Kitty-protocol terminals) →
         // literal newline. Kills the legacy `/multi` ceremony.
         applyEdit(insertText(value, cursor, '\n'));
