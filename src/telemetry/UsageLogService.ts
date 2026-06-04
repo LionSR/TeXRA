@@ -201,6 +201,10 @@ class UsageLogServiceImpl {
     this.flushTimer = setInterval(() => {
       void this.flush();
     }, this.config.flushIntervalMs);
+    // Don't let the periodic flush keep a short-lived host (the CLI) alive: an
+    // active run keeps the loop running so the interval still fires, but at exit
+    // dispose() flushes and clears it rather than the timer blocking shutdown.
+    this.flushTimer.unref?.();
   }
 
   private stopFlushTimer(): void {
