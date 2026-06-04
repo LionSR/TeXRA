@@ -1,3 +1,5 @@
+import { normalizeLineEndings } from '@utils/text/stringUtils';
+
 export const COPY_RESET_DELAY_MS = 2000;
 
 /**
@@ -9,7 +11,7 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 
   try {
-    await navigator.clipboard.writeText(text.replaceAll(/\r?\n/g, '\n'));
+    await navigator.clipboard.writeText(normalizeLineEndings(text));
     return true;
   } catch {
     return false;

@@ -763,7 +763,7 @@ class ToolUseDispatchNode<C> extends BatchNode<
           }
         } catch (err) {
           options.logger.debug(
-            `Skipping inaccessible media file: ${attachment.path} (${err instanceof Error ? err.message : 'unknown error'})`,
+            `Skipping inaccessible media file: ${attachment.path} (${toErrorMessage(err)})`,
           );
         }
       }

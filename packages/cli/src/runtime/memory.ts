@@ -8,6 +8,7 @@ import {
   resolveMemoryStoragePath,
   toDisplayPath,
 } from '@tools/memory/memoryUtils';
+import { filterNotNullish } from '@utils/core';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 export const CLI_MEMORY_LIST_LIMIT = 50;
@@ -30,7 +31,7 @@ export function cliMemoryItemDescription(item: MemoryViewItem): string {
     formatSize(item.size),
     formatModifiedDate(item.mtime),
     item.modifiedBy ? `by ${item.modifiedBy}` : undefined,
-  ].filter((part): part is string => part != null);
+  ].filter(filterNotNullish);
   return truncateSummary(parts.join('; '), MEMORY_DESCRIPTION_MAX);
 }
 
