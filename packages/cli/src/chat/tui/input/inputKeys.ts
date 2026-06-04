@@ -6,6 +6,8 @@ export interface ReturnKeyInput {
   readonly escape?: boolean;
 }
 
+export const SYNTHETIC_SHIFT_RETURN_INPUT = '\uE000';
+
 const RAW_CONTROL_INPUTS = new Map<number, string>([
   [1, 'a'],
   [5, 'e'],
@@ -96,6 +98,7 @@ export function isShiftReturnInput(
   input: string,
   key: ReturnKeyInput,
 ): boolean {
+  if (input === SYNTHETIC_SHIFT_RETURN_INPUT) return true;
   if (key.ctrl || key.meta || key.shift !== true) return false;
   return key.return === true || input === '\r' || input === '\n';
 }
@@ -111,6 +114,15 @@ const KITTY_KEYPAD_ENTER = new Set([
   `${String.fromCharCode(27)}[57414;1u`,
 ]);
 
+const KITTY_SHIFT_ENTER = new Set([
+  `${String.fromCharCode(27)}[13;2u`,
+  `${String.fromCharCode(27)}[13:2u`,
+]);
+
 export function isKittyKeypadEnter(data: string): boolean {
   return KITTY_KEYPAD_ENTER.has(data);
+}
+
+export function isKittyShiftEnter(data: string): boolean {
+  return KITTY_SHIFT_ENTER.has(data);
 }

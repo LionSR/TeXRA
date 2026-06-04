@@ -32,16 +32,16 @@ describe('CLI API status text', () => {
     );
   });
 
-  it('redacts email account labels before showing auth status in the TUI', () => {
+  it('shows account labels plainly in auth status', () => {
     expect(formatCliAccountLabelForDisplay('sirui.lu.phys@gmail.com')).toBe(
-      's***@g***.com',
+      'sirui.lu.phys@gmail.com',
     );
     expect(
       formatCliAuthStatusLine({
         authenticated: true,
         accountLabel: 'user@example.edu',
       }),
-    ).toBe('auth: signed in as u***@e***.edu');
+    ).toBe('auth: signed in as user@example.edu');
   });
 
   it('keeps non-email account labels readable', () => {

@@ -171,6 +171,32 @@ describe('slashRegistry', () => {
     expect(cliState.activeForm.get()?.commandName).toBe('agent');
   });
 
+  it('keeps the model picker selectable after root agent selection is closed', () => {
+    resetCliState({
+      agent: 'chat',
+      model: 'deepseekT',
+      cwd: '/tmp/workspace',
+      apiMode: 'included',
+      canDelegate: false,
+      version: 'test',
+    });
+    registerBuiltinSlashCommands({
+      canSelectAgent: () => false,
+      canSelectModel: () => true,
+    });
+    const model = listSlashCommands().find((cmd) => cmd.name === 'model');
+
+    if (!model) throw new Error('Expected /model to be registered');
+
+    expect(openRegisteredCliSlashForm(model, '')).toBe(true);
+
+    const modelNode = renderFormAdapter<{
+      selectable?: boolean;
+    }>(cliState.activeForm.get()?.render(() => {}, 20));
+
+    expect(modelNode.props).toMatchObject({ selectable: true });
+  });
+
   it('routes API picker selection failures to the shared error handler', async () => {
     resetCliState({
       agent: 'chat',
