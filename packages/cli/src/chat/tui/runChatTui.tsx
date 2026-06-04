@@ -92,15 +92,7 @@ import { truncateSummary } from '@utils/text/stringUtils';
 
 import { App } from './App';
 import { assertNever } from './assertNever';
-import { AgentListForm } from './forms/AgentListForm';
-import { ApiModeForm } from './forms/ApiModeForm';
-import {
-  ApprovalPolicyForm,
-  formatApprovalPolicyForCli as formatApprovalPolicy,
-} from './forms/ApprovalPolicyForm';
-import { MemoryListForm } from './forms/MemoryListForm';
-import { ModelListForm } from './forms/ModelListForm';
-import { ResumeListForm } from './forms/ResumeListForm';
+import { formatApprovalPolicyForCli as formatApprovalPolicy } from './forms/ApprovalPolicyForm';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import {
   listSlashCommands,
@@ -384,25 +376,6 @@ function applyInitialCliAgentSelection(
   appendLocalAssistantTranscript(`Root agent set to ${nextAgent}.`);
 }
 
-function openCliAgentListForm(context: SlashCommandContext): void {
-  const selectable = chatTuiCanStartRootRun(context.session);
-  cliState.activeForm.set({
-    commandName: 'agent',
-    render: (close, availableRows) => (
-      <AgentListForm
-        currentAgent={cliState.sessionMeta.get().agent}
-        availableRows={availableRows}
-        selectable={selectable}
-        onSelect={(value) => {
-          applyInitialCliAgentSelection(value, context);
-          close();
-        }}
-        onClose={close}
-      />
-    ),
-  });
-}
-
 async function applyInitialCliModelSelection(
   model: string,
   context: SlashCommandContext,
@@ -451,25 +424,6 @@ async function reconcileRootModelAfterApiModeChange(
   return resolution.notice;
 }
 
-function openCliModelListForm(context: SlashCommandContext): void {
-  const selectable = chatTuiCanStartRootRun(context.session);
-  cliState.activeForm.set({
-    commandName: 'model',
-    render: (close, availableRows) => (
-      <ModelListForm
-        currentModel={cliState.sessionMeta.get().model}
-        apiMode={cliState.sessionMeta.get().apiMode}
-        availableRows={availableRows}
-        selectable={selectable}
-        onSelect={(value) => {
-          void applyInitialCliModelSelection(value, context).finally(close);
-        }}
-        onClose={close}
-      />
-    ),
-  });
-}
-
 async function applyCliApiModeSelection(
   mode: string | CliApiMode,
   context?: SlashCommandContext,
@@ -510,34 +464,6 @@ async function applyCliApiModeSelection(
   }
 
   appendLocalAssistantTranscript('Usage: /api personal | /api included');
-}
-
-function openCliApiModeForm(
-  onSelect: (mode: CliApiMode) => void | Promise<void>,
-): void {
-  cliState.activeForm.set({
-    commandName: 'api',
-    render: (close) => {
-      const current = cliState.sessionMeta.get().apiMode;
-      return (
-        <ApiModeForm
-          currentMode={current}
-          onSelect={(value) => {
-            void (async () => {
-              try {
-                await onSelect(value);
-              } catch (error: unknown) {
-                appendLocalAssistantTranscript(toErrorMessage(error));
-              } finally {
-                close();
-              }
-            })();
-          }}
-          onCancel={close}
-        />
-      );
-    },
-  });
 }
 
 async function showCliAuthStatus(): Promise<void> {
@@ -673,26 +599,6 @@ function parseApprovalPolicy(input: string): CliApprovalPolicy | undefined {
 
 const YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 
-function openCliApprovalPolicyForm(context: SlashCommandContext): void {
-  cliState.activeForm.set({
-    commandName: 'approval',
-    render: (close, availableRows) => (
-      <ApprovalPolicyForm
-        availableRows={availableRows}
-        currentPolicy={context.getApprovalPolicy()}
-        onSelect={(policy) => {
-          context.setApprovalPolicy(policy);
-          appendLocalAssistantTranscript(
-            `Approval mode set to ${formatApprovalPolicy(policy)}.`,
-          );
-          close();
-        }}
-        onCancel={close}
-      />
-    ),
-  });
-}
-
 function applyCliApprovalPolicySelection(
   input: string,
   context: SlashCommandContext,
@@ -700,7 +606,7 @@ function applyCliApprovalPolicySelection(
 ): void {
   const normalized = input.trim().toLowerCase();
   if (!normalized || normalized === 'status') {
-    openCliApprovalPolicyForm(context);
+    openRegisteredCliSlashCommandForm('approval', '');
     return;
   }
 
@@ -716,48 +622,12 @@ function applyCliApprovalPolicySelection(
   );
 }
 
-function openCliResumeListForm(context: SlashCommandContext): void {
-  cliState.activeForm.set({
-    commandName: 'resume',
-    render: (close, availableRows) => (
-      <ResumeListForm
-        availableRows={availableRows}
-        onSelect={(id) => {
-          close();
-          void context.resumeExecution(id).catch((error: unknown) => {
-            appendLocalAssistantTranscript(toErrorMessage(error));
-          });
-        }}
-        onClose={close}
-      />
-    ),
-  });
-}
-
 async function showCliMemoryList(): Promise<void> {
   appendLocalAssistantTranscript(formatCliMemoryList(await loadMemoryItems()));
 }
 
 async function showCliMemoryPreview(inputPath: string): Promise<void> {
   appendLocalAssistantTranscript(await formatCliMemoryPreview(inputPath));
-}
-
-function openCliMemoryListForm(): void {
-  cliState.activeForm.set({
-    commandName: 'memory',
-    render: (close, availableRows) => (
-      <MemoryListForm
-        availableRows={availableRows}
-        onSelect={(storagePath) => {
-          close();
-          void showCliMemoryPreview(storagePath).catch((error: unknown) => {
-            appendLocalAssistantTranscript(toErrorMessage(error));
-          });
-        }}
-        onClose={close}
-      />
-    ),
-  });
 }
 
 export function openRegisteredCliSlashForm(
@@ -777,6 +647,25 @@ export function openRegisteredCliSlashForm(
     ),
   });
   return true;
+}
+
+function findRegisteredCliSlashCommand(
+  commandName: string,
+): SlashCommand | undefined {
+  const lower = commandName.toLowerCase();
+  return listSlashCommands().find(
+    (cmd) =>
+      cmd.name.toLowerCase() === lower ||
+      cmd.aliases?.some((alias) => alias.toLowerCase() === lower) === true,
+  );
+}
+
+function openRegisteredCliSlashCommandForm(
+  commandName: string,
+  remainder: string,
+): boolean {
+  const registered = findRegisteredCliSlashCommand(commandName);
+  return registered ? openRegisteredCliSlashForm(registered, remainder) : false;
 }
 
 async function handleTuiSlashCommand(
@@ -823,16 +712,16 @@ async function handleTuiSlashCommand(
       } else if (rest) {
         applyInitialCliAgentSelection(rest, context);
       } else {
-        openCliAgentListForm(context);
+        openRegisteredCliSlashCommandForm('agent', rest);
       }
       return true;
     case 'model':
     case 'models':
-      openCliModelListForm(context);
+      openRegisteredCliSlashCommandForm('model', rest);
       return true;
     case 'api':
       if (!rest) {
-        openCliApiModeForm((mode) => applyCliApiModeSelection(mode, context));
+        openRegisteredCliSlashCommandForm('api', rest);
         return true;
       }
       try {
@@ -858,7 +747,7 @@ async function handleTuiSlashCommand(
       if (rest) {
         applyCliApprovalPolicySelection(rest, context);
       } else {
-        openCliApprovalPolicyForm(context);
+        openRegisteredCliSlashCommandForm('approval', rest);
       }
       return true;
     case 'yolo':
@@ -891,7 +780,7 @@ async function handleTuiSlashCommand(
     }
     case 'resume': {
       if (!rest) {
-        openCliResumeListForm(context);
+        openRegisteredCliSlashCommandForm('resume', rest);
         return true;
       }
       const id = parseCliHistoryId(rest);
@@ -905,7 +794,7 @@ async function handleTuiSlashCommand(
     case 'memory': {
       try {
         if (!rest) {
-          openCliMemoryListForm();
+          openRegisteredCliSlashCommandForm('memory', rest);
         } else if (rest.toLowerCase() === 'list') {
           await showCliMemoryList();
         } else {
@@ -925,12 +814,7 @@ async function handleTuiSlashCommand(
       });
       return true;
     default: {
-      const registered = listSlashCommands().find(
-        (cmd) =>
-          cmd.name.toLowerCase() === command ||
-          cmd.aliases?.some((alias) => alias.toLowerCase() === command) ===
-            true,
-      );
+      const registered = findRegisteredCliSlashCommand(command);
       if (registered) {
         if (openRegisteredCliSlashForm(registered, parsed.remainder)) {
           return true;
@@ -1343,11 +1227,8 @@ export async function runChat(
     onApiModeSelect: (nextMode) =>
       applyCliApiModeSelection(nextMode, slashCommandContext()),
     onMemorySelect: showCliMemoryPreview,
-    onMemoryError: (error) => {
-      appendLocalAssistantTranscript(toErrorMessage(error));
-    },
     onResumeSelect: resumeAgentRun,
-    onResumeError: (error) => {
+    onError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));
     },
   });
