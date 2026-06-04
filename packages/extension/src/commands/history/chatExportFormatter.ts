@@ -12,6 +12,7 @@
  * This module is VS Code-free — all platform wiring lives in the caller.
  */
 
+import { filterNotNullish } from '@utils/core';
 import { z } from 'zod';
 import {
   isAssistantMessage,
@@ -665,7 +666,7 @@ const MD_NODES: NodeRenderers = {
       content ? `\n\`\`\`\n${content}\n\`\`\`` : undefined,
       '',
     ]
-      .filter((l): l is string => l !== undefined)
+      .filter(filterNotNullish)
       .join('\n'),
 };
 
@@ -770,7 +771,7 @@ const TEX_NODES: NodeRenderers = {
       '\\end{websearchbox}',
       '',
     ]
-      .filter((l): l is string => l !== undefined)
+      .filter(filterNotNullish)
       .join('\n'),
 };
 

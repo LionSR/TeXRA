@@ -17,6 +17,7 @@ import {
   type DesktopCommandActions,
   type DesktopCommandMenuEntry,
 } from '../desktopCommandSurface';
+import { filterNotNullish } from '@utils/core';
 import { getDefaultPlatform, getRendererPlatform } from './rendererPlatform';
 
 export interface DesktopCommandPaletteOptions {
@@ -97,7 +98,7 @@ export function getDesktopCommandPaletteEntries({
 } = {}): CommandPaletteEntry[] {
   const desktopEntries = getDesktopCommandMenuEntries(undefined, platform)
     .map(toPaletteEntry)
-    .filter((entry): entry is CommandPaletteEntry => entry != null);
+    .filter(filterNotNullish);
   return [...desktopEntries, ...streams.map(toStreamPaletteEntry)];
 }
 
