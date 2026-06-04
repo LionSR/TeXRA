@@ -21,17 +21,32 @@ import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
-async function runHistoryList(context: CliContext): Promise<number> {
+export function parseHistoryListLimit(
+  value: string | undefined,
+): number | undefined {
+  if (!value) return undefined;
+  if (!/^\d+$/.test(value)) return undefined;
+  const limit = Number(value);
+  return Number.isSafeInteger(limit) && limit > 0 ? limit : undefined;
+}
+
+async function runHistoryList(
+  context: CliContext,
+  options: { limit?: number } = {},
+): Promise<number> {
   await initLocalCliPlatform(context);
   const entries = await listCliHistoryEntries();
+  const visibleEntries = options.limit !== undefined
+    ? entries.slice(0, options.limit)
+    : entries;
 
   emitCliResult(
     context,
     {
-      json: entries,
-      ndjson: cliHistoryNdjsonRecords(entries),
-      text: entries.length
-        ? formatCliHistoryText(entries)
+      json: visibleEntries,
+      ndjson: cliHistoryNdjsonRecords(visibleEntries),
+      text: visibleEntries.length
+        ? formatCliHistoryText(visibleEntries)
         : 'No execution history found.',
     },
     { paged: true },
@@ -125,8 +140,22 @@ const historyListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List stored executions' },
   args: {
     ...GLOBAL_ARGS,
+    limit: {
+      type: 'string',
+      alias: 'n',
+      valueHint: 'count',
+      description: 'Show at most this many executions',
+    },
   },
-  run: (context) => runHistoryList(context),
+  run: (context, ctx) => {
+    const limitValue = optString(ctx.args.limit);
+    const limit = parseHistoryListLimit(limitValue);
+    if (limitValue !== undefined && limit === undefined) {
+      writeTextStderr(`Invalid history limit: ${limitValue}`);
+      return Promise.resolve(CliExitCode.Usage);
+    }
+    return runHistoryList(context, { limit });
+  },
 });
 
 const historyShowCommand = defineCliCommand({
