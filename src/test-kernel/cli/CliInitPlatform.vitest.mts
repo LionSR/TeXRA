@@ -49,6 +49,10 @@ vi.mock('@tools/externalToolDefs', () => ({
   setTexraCliEntrypointChecker: vi.fn(),
 }));
 
+vi.mock('@telemetry/UsageLogService', () => ({
+  UsageLogService: { initialize: vi.fn(), dispose: vi.fn() },
+}));
+
 function cliContext(
   overrides: Partial<CliContext> & {
     bestEffortIncludedModelAccess?: boolean;
