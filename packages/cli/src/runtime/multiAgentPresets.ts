@@ -8,7 +8,7 @@ import {
   AgentModePresetSchema,
   type AgentModePreset,
 } from '@shared/schemas/agentPresets';
-import { defaultToolUseAgents } from './defaultAgents';
+import { implicitDefaultToolUseAgents } from './defaultAgents';
 
 export type CliMultiAgentPresetSource = 'built-in' | 'custom';
 
@@ -374,7 +374,7 @@ function selectPresetRootAgent(
     readonly presetSource: CliMultiAgentPresetSource;
   },
 ): AgentEntry | undefined {
-  const rootCandidates = defaultToolUseAgents(agents);
+  const rootCandidates = implicitDefaultToolUseAgents(agents);
   const delegatingAgents = rootCandidates.filter(agentHasDelegationTools);
   const preferredRoot = findPreferredRootAgent(
     delegatingAgents,
