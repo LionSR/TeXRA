@@ -9,7 +9,7 @@ import {
   setCompileFailures,
 } from '@agent/output/outputState';
 import { runCompileCheck } from '@agent/output/compileCheck';
-import { extractFilesFromXml } from '@agent/output/xmlExtraction';
+import { extractFilesFromXml } from '@agent/output/outputFileExtraction';
 import { traceFileLineage } from '@agent/output/lineageMapping';
 import { resolveBaseFilesForDiff } from '@agent/output/snapshotResolution';
 import { checkExpectedOutputs } from '@agent/output/outputValidation';
