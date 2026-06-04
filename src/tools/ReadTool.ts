@@ -43,8 +43,12 @@ const RangeSchema = z.preprocess(
   },
   z
     .strictObject({
-      start: z.int().min(1),
-      end: z.int().min(1).nullish(),
+      start: z.int().min(1).describe('First line to read, 1-indexed.'),
+      end: z
+        .int()
+        .min(1)
+        .nullish()
+        .describe('Last line to read, inclusive and 1-indexed.'),
     })
 
     .refine((value) => value.end == null || value.end >= value.start, {
@@ -54,8 +58,12 @@ const RangeSchema = z.preprocess(
 );
 
 const ReadInputSchema = z.strictObject({
-  path: z.string(),
-  range: RangeSchema.nullish(),
+  path: z
+    .string()
+    .describe('Workspace-relative or absolute file path to read.'),
+  range: RangeSchema.nullish().describe(
+    'Optional inclusive line range to read.',
+  ),
 });
 
 export type ReadInput = z.infer<typeof ReadInputSchema>;

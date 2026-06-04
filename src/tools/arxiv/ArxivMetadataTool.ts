@@ -16,12 +16,18 @@ import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { defineTool } from '@tools/core/define';
 
 const ArxivMetadataInputSchema = z.strictObject({
-  id: z.string(),
+  id: z.string().describe('arXiv identifier or URL for the paper.'),
   includeAbstract: z
     .boolean()
     .nullish()
-    .transform((v) => v ?? true),
-  maxAuthors: z.int().positive().max(ARXIV_CONSTANTS.MAX_AUTHORS).nullish(),
+    .transform((v) => v ?? true)
+    .describe('Include the paper abstract in the metadata response.'),
+  maxAuthors: z
+    .int()
+    .positive()
+    .max(ARXIV_CONSTANTS.MAX_AUTHORS)
+    .nullish()
+    .describe('Maximum number of authors to include before truncating.'),
 });
 
 export type ArxivMetadataInput = z.infer<typeof ArxivMetadataInputSchema>;

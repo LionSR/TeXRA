@@ -19,8 +19,14 @@ import { toPosixPath } from '@utils/core/pathCore';
 import { defineTool } from './core/define';
 
 const GlobInputSchema = z.strictObject({
-  pattern: z.string().min(1, 'pattern is required'),
-  path: z.string().nullish(),
+  pattern: z
+    .string()
+    .min(1, 'pattern is required')
+    .describe('Glob pattern to match, such as "**/*.tex" or "src/**/*.ts".'),
+  path: z
+    .string()
+    .nullish()
+    .describe('Directory to search within. Defaults to the workspace root.'),
 });
 
 export type GlobInput = z.infer<typeof GlobInputSchema>;

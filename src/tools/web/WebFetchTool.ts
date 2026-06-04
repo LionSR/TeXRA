@@ -21,8 +21,13 @@ const WebFetchInputSchema = z.strictObject({
     .refine(
       (value) => value.startsWith('http://') || value.startsWith('https://'),
       'URL must use HTTP or HTTPS protocol',
-    ),
-  prompt: z.string().min(1).nullish(),
+    )
+    .describe('Public HTTP or HTTPS URL to fetch.'),
+  prompt: z
+    .string()
+    .min(1)
+    .nullish()
+    .describe('Optional instruction describing what to extract from the page.'),
 });
 
 export type WebFetchInput = z.infer<typeof WebFetchInputSchema>;
