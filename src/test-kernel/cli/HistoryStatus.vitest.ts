@@ -46,6 +46,12 @@ describe('CLI history status formatting', () => {
         hasFlowRecord: true,
       }),
     ).toBe(EXECUTION_STATUS.ERROR);
+    expect(
+      resolveCliHistoryStatus({
+        terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+        hasFlowRecord: true,
+      }),
+    ).toBe(EXECUTION_STATUS.INTERRUPTED);
   });
 
   it('uses nullish fallback semantics for persisted terminal status', () => {
