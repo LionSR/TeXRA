@@ -183,4 +183,18 @@ printf '%s\\n' "\${COMPREPLY[@]}"
     expect(flagsFor('run')).toContain('output-format');
     expect(flagsFor('multi-agent run')).toContain('instruction-file');
   });
+
+  it('describes multi-agent root options without calling orchestrators tool-use agents', async () => {
+    const commands = await collectCommands(rootCommand);
+    const runFlags =
+      commands.find((command) => command.path.join(' ') === 'multi-agent run')
+        ?.flags ?? [];
+
+    expect(runFlags.find((flag) => flag.name === 'agent')?.description).toBe(
+      'Root agent for the team run (defaults to the preset orchestrator)',
+    );
+    expect(runFlags.find((flag) => flag.name === 'model')?.description).toBe(
+      'Model for the team root agent',
+    );
+  });
 });
