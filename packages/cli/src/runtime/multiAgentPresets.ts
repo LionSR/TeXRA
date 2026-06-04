@@ -133,16 +133,17 @@ export function formatCliMultiAgentPresetList(
 ): string {
   if (plans.length === 0) return 'No multi-agent presets found.';
 
-  return plans
-    .map((plan) =>
-      [
-        plan.preset.source,
-        plan.preset.id,
-        plan.preset.name,
-        ...cliMultiAgentPresetAvailabilityParts(plan),
-      ].join('\t'),
-    )
-    .join('\n');
+  const rows = plans.map((plan) =>
+    [
+      plan.preset.source,
+      plan.preset.id,
+      plan.preset.name,
+      ...cliMultiAgentPresetAvailabilityParts(plan),
+    ].join('\t'),
+  );
+
+  const hint = cliMultiAgentPresetListHint(plans);
+  return hint ? [...rows, '', hint].join('\n') : rows.join('\n');
 }
 
 export function formatCliMultiAgentPresetDetails(
@@ -458,6 +459,17 @@ function presetAgentAvailability(
 function formatAgentNames(names: readonly string[]): string {
   if (names.length === 0) return '  (none)';
   return names.map((name) => `  ${name}`).join('\n');
+}
+
+function cliMultiAgentPresetListHint(
+  plans: readonly CliMultiAgentPresetRunPlan[],
+): string | undefined {
+  const hasIncompletePreset = plans.some(
+    (plan) => cliMultiAgentPlanStatus(plan) !== 'available',
+  );
+  return hasIncompletePreset
+    ? 'Hint: run `texra multi-agent inspect <preset>` to see missing agents for degraded or unavailable presets.'
+    : undefined;
 }
 
 function lookupKey(value: string): string {
