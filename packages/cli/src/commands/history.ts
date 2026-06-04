@@ -36,9 +36,8 @@ async function runHistoryList(
 ): Promise<number> {
   await initLocalCliPlatform(context);
   const entries = await listCliHistoryEntries();
-  const visibleEntries = options.limit !== undefined
-    ? entries.slice(0, options.limit)
-    : entries;
+  const visibleEntries =
+    options.limit !== undefined ? entries.slice(0, options.limit) : entries;
 
   emitCliResult(
     context,
