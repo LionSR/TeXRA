@@ -20,6 +20,9 @@ export async function handleImagePaste(
 
   // Must run synchronously, before any await, to suppress the default paste.
   event.preventDefault();
+  // Chromium webviews move clipboard data into protected mode after the first
+  // async yield, so read plain text before the file reads below.
+  const pastedText = event.clipboardData?.getData('text/plain') || '';
 
   const pastedImageText = await Promise.all(
     images.map(async ({ file, type }) => {
@@ -41,7 +44,7 @@ export async function handleImagePaste(
   );
 
   const imageChips = pastedImageText.filter(Boolean).join(' ');
-  let insertText = event.clipboardData?.getData('text/plain') || '';
+  let insertText = pastedText;
   if (imageChips) {
     if (insertText && !insertText.endsWith(' ') && !insertText.endsWith('\n')) {
       insertText += ' ';
