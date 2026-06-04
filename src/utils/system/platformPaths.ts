@@ -5,6 +5,7 @@ import * as path from 'path';
 // Third-party imports
 import { globSync } from 'glob';
 import { execaSync } from 'execa';
+import which from 'which';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -292,32 +293,35 @@ function findToolInCommonPathsUncached(tool: string): string | null {
     }
   }
 
-  const execOptions = {
-    env: { ...process.env, PATH: extendEnvPath() },
-    reject: false,
-  };
+  const pathEnv = extendEnvPath();
 
-  // Try locating tools using external commands
-  const locateCmd = IS_WINDOWS ? 'where' : 'which';
-  const locateCommands = [
-    { cmd: 'kpsewhich', extractPath: (stdout: string) => stdout.trim() },
-    {
-      cmd: locateCmd,
-      extractPath: (stdout: string) => stdout.split(/\r?\n/)[0]?.trim() ?? '',
-    },
-  ];
-
-  for (const { cmd, extractPath } of locateCommands) {
-    for (const name of candidates) {
-      try {
-        const result = execaSync(cmd, [name], execOptions);
-        const found = extractPath(result.stdout);
-        if (result.exitCode === 0 && found) {
-          return found;
-        }
-      } catch (_err) {
-        // ignore command errors
+  // kpsewhich resolves files through the TeX database rather than PATH, so it
+  // stays a subprocess — npm `which` only searches PATH.
+  for (const name of candidates) {
+    try {
+      const result = execaSync('kpsewhich', [name], {
+        env: { ...process.env, PATH: pathEnv },
+        reject: false,
+      });
+      const found = result.stdout.trim();
+      if (result.exitCode === 0 && found) {
+        return found;
       }
+    } catch (_err) {
+      // ignore command errors
+    }
+  }
+
+  // PATH lookup via npm `which` (in-process; honors PATHEXT on Windows, so no
+  // `where`/`which` subprocess is needed). `nothrow` returns null on a miss.
+  for (const name of candidates) {
+    try {
+      const found = which.sync(name, { nothrow: true, path: pathEnv });
+      if (found) {
+        return found;
+      }
+    } catch (_err) {
+      // ignore resolution errors
     }
   }
 
