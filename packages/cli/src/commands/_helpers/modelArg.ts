@@ -4,7 +4,7 @@ import {
   resolveConfiguredModel,
 } from '@cli/runtime/cliConfig';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
-import { initCliPlatform } from '@cli/runtime/initPlatform';
+import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import { writeTextStderr } from '@cli/runtime/logSinks';
 import {
   cliRunnableModelOptionsForSource,
@@ -88,6 +88,7 @@ export async function resolveCliRunModel(
     if (resolution.notice && context.quietLogs !== true) {
       writeTextStderr(resolution.notice);
     }
+    await setCliHelperModel(resolution.model);
     return resolution.model;
   } catch (error: unknown) {
     throw new CliUsageError(toErrorMessage(error));
