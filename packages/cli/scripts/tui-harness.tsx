@@ -15,6 +15,7 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { isInFlightStatus } from '@common/constants/streamStatus';
+import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { tryPlatform } from '@platform/platform';
 import {
@@ -1076,10 +1077,6 @@ function applyHarnessApprovalPolicySelection(
   setHarnessApprovalPolicy(policy);
 }
 
-function formatHarnessError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function markHarnessExecutionStopped(executionId: string): void {
   const parentSlice = cliState.streams.get().get(STREAM_ID);
   if (!parentSlice) return;
@@ -1213,7 +1210,7 @@ registerBuiltinSlashCommands({
   },
   onError: (error) => {
     appendHarnessAssistantTranscript(
-      `Slash command failed: ${formatHarnessError(error)}`,
+      `Slash command failed: ${toErrorMessage(error)}`,
     );
   },
 });

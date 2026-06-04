@@ -19,6 +19,7 @@ import {
 } from 'openai/lib/chatCompletionUtils';
 import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 import latexPreamble from '@resources/templates/chatExport.tex';
+import { filterNotNullish } from '@utils/core';
 import type { Part } from '@google/genai';
 import type {
   ChatCompletionMessageParam,
@@ -665,7 +666,7 @@ const MD_NODES: NodeRenderers = {
       content ? `\n\`\`\`\n${content}\n\`\`\`` : undefined,
       '',
     ]
-      .filter((l): l is string => l !== undefined)
+      .filter(filterNotNullish)
       .join('\n'),
 };
 
@@ -770,7 +771,7 @@ const TEX_NODES: NodeRenderers = {
       '\\end{websearchbox}',
       '',
     ]
-      .filter((l): l is string => l !== undefined)
+      .filter(filterNotNullish)
       .join('\n'),
 };
 

@@ -7,6 +7,7 @@
  * paths (PR / repo / issue).
  */
 
+import { isNonEmptyString } from '@utils/core';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
 import type { GhIssueComment } from './prTypes';
 
@@ -58,9 +59,7 @@ export function authorOf(user: { login: string } | null | undefined): string {
 export function sections(
   ...parts: ReadonlyArray<string | null | undefined | false>
 ): string {
-  return parts
-    .filter((s): s is string => typeof s === 'string' && s.length > 0)
-    .join('\n\n');
+  return parts.filter(isNonEmptyString).join('\n\n');
 }
 
 export function truncate(s: string | null | undefined, max: number): string {

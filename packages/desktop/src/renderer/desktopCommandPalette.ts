@@ -11,6 +11,7 @@ import {
   type CommandPaletteEntry,
 } from '@shared/wa/commandPalette';
 
+import { filterNotNullish } from '@utils/core';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
@@ -97,7 +98,7 @@ export function getDesktopCommandPaletteEntries({
 } = {}): CommandPaletteEntry[] {
   const desktopEntries = getDesktopCommandMenuEntries(undefined, platform)
     .map(toPaletteEntry)
-    .filter((entry): entry is CommandPaletteEntry => entry != null);
+    .filter(filterNotNullish);
   return [...desktopEntries, ...streams.map(toStreamPaletteEntry)];
 }
 
