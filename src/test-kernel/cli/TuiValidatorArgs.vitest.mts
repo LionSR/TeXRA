@@ -29,6 +29,7 @@ describe('TUI validator args', () => {
     expect(result.stdout).toContain('--no-build');
     expect(result.stdout).toContain('--skip-if-missing-deps');
     expect(result.stdout).toContain('--list');
+    expect(result.stdout).toContain('--list-scenarios');
     expect(result.stdout).toContain('--list-selected');
     expect(result.stdout).toContain('Available scenarios:');
     expect(result.stdout).toContain('nested-subagent-picker');
@@ -52,6 +53,16 @@ describe('TUI validator args', () => {
     expect(result.stdout.split('\n')).toContain('nested-subagent-picker');
     expect(result.stdout).not.toContain('Available scenarios:');
     expect(result.stderr).not.toContain('building tui-harness bundle');
+  });
+
+  it('treats list-scenarios as a scenario list alias', () => {
+    const result = runValidator(['--list-scenarios']);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout.split('\n')).toContain('transcript');
+    expect(result.stdout.split('\n')).toContain('nested-subagent-picker');
+    expect(result.stdout).not.toContain('Available scenarios:');
+    expect(result.stderr).toBe('');
   });
 
   it('treats a leading package-manager separator as transparent for list', () => {
