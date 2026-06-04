@@ -14,6 +14,7 @@ import { resolveCliRunnableModel } from '@cli/runtime/modelAccess';
 
 const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
+  setCliHelperModel: vi.fn(),
   getCliApiMode: vi.fn(),
   resolveCliRunnableModel: vi.fn(),
   writeTextStderr: vi.fn(),
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
+  setCliHelperModel: mocks.setCliHelperModel,
 }));
 
 vi.mock('@cli/runtime/apiAccessMode', () => ({
@@ -64,10 +66,12 @@ const runConfig = (model: string): CliConfigValues => ({ run: { model } });
 describe('resolveCliRunModel precedence', () => {
   beforeEach(() => {
     mocks.initCliPlatform.mockReset();
+    mocks.setCliHelperModel.mockReset();
     mocks.getCliApiMode.mockReset();
     mocks.resolveCliRunnableModel.mockReset();
     mocks.writeTextStderr.mockReset();
     mocks.initCliPlatform.mockResolvedValue(undefined);
+    mocks.setCliHelperModel.mockResolvedValue(undefined);
     mocks.getCliApiMode.mockReturnValue('personal');
     resolveCliRunnableModelMock.mockImplementation(async (model) => ({
       model,
