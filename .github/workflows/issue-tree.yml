@@ -34,12 +34,13 @@ jobs:
         with:
           fetch-depth: 1
 
-      - uses: ./.github/actions/claude-code-with-provider
+      - uses: LionSR/agent-ci-actions@v1
         with:
           provider: ${{ env.CLAUDE_CODE_PROVIDER }}
           model-tier: sonnet
           allowed-bots: 'github-actions[bot]'
-          allowed-tools-preset: issue-tree
+          allowed_tools_preset: issue-tree
+          allowed_tools_preset_map_file: .github/allowed-tools.json
           claude-prompt-file: .github/prompts/issue-tree-prompt.md
           claude-prompt-context: |
             Repository: ${{ github.repository }}

@@ -94,23 +94,20 @@ jobs:
         if: steps.claude-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true'
         id: trusted-provider-wrapper
         run: |
-          if [ -f .trusted-actions/.github/actions/claude-code-with-provider/action.yml ]; then
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping Claude code review: trusted base branch does not yet contain claude-code-with-provider."
-          fi
+          # claude-code-with-provider is now external (LionSR/agent-ci-actions@v1), always available;
+          # the legacy trusted base-ref presence check is obsolete.
+          echo "available=true" >> "$GITHUB_OUTPUT"
 
       - name: Run Claude Code Review
         if: steps.claude-switch.outputs.skip != 'true' && steps.provider-token.outputs.skip != 'true' && steps.trusted-provider-wrapper.outputs.available == 'true'
         id: claude-review
         continue-on-error: true
-        uses: ./.trusted-actions/.github/actions/claude-code-with-provider
+        uses: LionSR/agent-ci-actions@v1
         with:
           provider: ${{ matrix.provider }}
           model-tier: opus
           allowed-bots: 'claude[bot],cursor[bot],cursor,copilot-pull-request-reviewer[bot]'
-          plugin-marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           claude-prompt-file: .trusted-actions/.github/prompts/claude-code-review-prompt.md
           claude-prompt-context: |
