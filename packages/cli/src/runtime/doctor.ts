@@ -17,7 +17,7 @@ import {
 import { extractErrorMessage } from '@utils/core';
 
 // Local imports - CLI runtime
-import { redactEmailAccountLabelsForDisplay } from './accountDisplay';
+import { formatCliAccountLabelForDisplay } from './accountDisplay';
 import { workspaceCliConfigPath } from './cliConfig';
 import { CliExitCode } from './exitCodes';
 import {
@@ -70,10 +70,42 @@ interface DoctorDependencies {
 
 type ResolvedDoctorDependencies = Required<DoctorDependencies>;
 
+const EMAIL_LIKE_DIAGNOSTIC_PATTERN =
+  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
+
 function isSupportedNodeVersion(version: string): boolean {
   return semverSatisfies(version, TEXRA_CLI_SUPPORTED_NODE_RANGE, {
     loose: true,
   });
+}
+
+function maskIdentifierPart(part: string): string {
+  return part ? `${part.at(0)}***` : '***';
+}
+
+function redactEmailDiagnosticValue(value: string): string {
+  const atIndex = value.indexOf('@');
+  const localPart = value.slice(0, atIndex);
+  const domain = value.slice(atIndex + 1);
+  const domainParts = domain.split('.');
+  const suffix = domainParts.length > 1 ? domainParts.at(-1) : undefined;
+  const domainName = suffix ? domainParts.slice(0, -1).join('.') : domain;
+  const maskedDomain = suffix
+    ? `${maskIdentifierPart(domainName)}.${suffix}`
+    : maskIdentifierPart(domainName);
+  return `${maskIdentifierPart(localPart)}@${maskedDomain}`;
+}
+
+function redactEmailDiagnostics(text: string): string {
+  return text.replaceAll(EMAIL_LIKE_DIAGNOSTIC_PATTERN, (value) =>
+    redactEmailDiagnosticValue(value),
+  );
+}
+
+function formatDoctorMessage(check: DoctorCheck): string {
+  return check.id === 'auth'
+    ? check.message
+    : redactEmailDiagnostics(check.message);
 }
 
 function check(
@@ -168,10 +200,13 @@ async function checkAuth(
     const profile = await deps.authProfile();
     if (profile.authenticated) {
       const tier = profile.tier ? `, ${profile.tier}` : '';
+      const accountLabel = profile.accountLabel
+        ? formatCliAccountLabelForDisplay(profile.accountLabel)
+        : 'unknown';
       return pass(
         'auth',
         'Included access',
-        `Stored sign-in found for ${profile.accountLabel ?? 'unknown'}${tier}.`,
+        `Stored sign-in found for ${accountLabel}${tier}.`,
       );
     }
     return warn(
@@ -340,10 +375,9 @@ export function formatDoctorText(
   };
   return report.checks
     .map((check) => {
-      const message = redactEmailAccountLabelsForDisplay(check.message);
-      const head = `${marker[check.status]} ${check.name}: ${message}`;
+      const head = `${marker[check.status]} ${check.name}: ${formatDoctorMessage(check)}`;
       return check.hint
-        ? `${head}\n     ${style.muted(redactEmailAccountLabelsForDisplay(check.hint))}`
+        ? `${head}\n     ${style.muted(redactEmailDiagnostics(check.hint))}`
         : head;
     })
     .join('\n');
