@@ -2084,15 +2084,19 @@ function expectedFrameTextVisible(scenario, frame) {
   return (scenario.expect ?? []).every((text) => frame.includes(text));
 }
 
-const FAKE_CLIPBOARD_COMMANDS = [
-  'pbcopy',
-  'wl-copy',
-  'xclip',
-  'xsel',
-  'powershell.exe',
-];
+const FAKE_CLIPBOARD_COMMANDS_BY_PLATFORM = {
+  darwin: ['pbcopy'],
+  linux: ['wl-copy', 'xclip', 'xsel'],
+};
 
-function makeFakeClipboard() {
+function fakeClipboardCommandsForPlatform(platform = process.platform) {
+  return FAKE_CLIPBOARD_COMMANDS_BY_PLATFORM[platform] ?? [];
+}
+
+function makeFakeClipboard(platform = process.platform) {
+  const commands = fakeClipboardCommandsForPlatform(platform);
+  if (commands.length === 0) return null;
+
   const dir = mkdtempSync(path.join(tmpdir(), 'texra-tui-clipboard-'));
   const binDir = path.join(dir, 'bin');
   const textFile = path.join(dir, 'clipboard.txt');
@@ -2105,7 +2109,7 @@ function makeFakeClipboard() {
     'cat > "$TEXRA_FAKE_CLIPBOARD_FILE"',
     '',
   ].join('\n');
-  for (const command of FAKE_CLIPBOARD_COMMANDS) {
+  for (const command of commands) {
     const commandPath = path.join(binDir, command);
     writeFileSync(commandPath, script);
     chmodSync(commandPath, 0o755);
@@ -2298,6 +2302,19 @@ function writeSnapshotReport(results) {
 
 async function runScenario(scenario) {
   const fakeClipboard = scenario.fakeClipboard ? makeFakeClipboard() : null;
+  if (scenario.fakeClipboard && !fakeClipboard) {
+    const skipReason = `fake clipboard is not supported on ${process.platform}`;
+    return {
+      name: scenario.name,
+      ok: true,
+      skipped: true,
+      skipReason,
+      failures: [],
+      frame: skipReason,
+      fullFrame: skipReason,
+      rows: scenarioRows(scenario),
+    };
+  }
   try {
     return await runScenarioWithResources(scenario, fakeClipboard);
   } finally {
@@ -2486,6 +2503,7 @@ async function runScenarioWithResources(scenario, fakeClipboard) {
   return {
     name: scenario.name,
     ok: failures.length === 0,
+    skipped: false,
     failures,
     frame,
     fullFrame,
@@ -2496,13 +2514,17 @@ async function runScenarioWithResources(scenario, fakeClipboard) {
 if (snapshotDir) resetSnapshotDir(snapshotDir);
 
 let failed = 0;
+let skipped = 0;
 const results = [];
 for (const [index, scenario] of scenarios.entries()) {
   // eslint-disable-next-line no-await-in-loop
   const result = await runScenario(scenario);
   results.push(result);
   writeSnapshot(index, result.name, result.fullFrame, result.rows);
-  if (result.ok) {
+  if (result.skipped) {
+    skipped += 1;
+    console.log(`- ${result.name} (skipped: ${result.skipReason})`);
+  } else if (result.ok) {
     console.log(`✓ ${result.name}`);
   } else {
     failed += 1;
@@ -2522,7 +2544,7 @@ writeSnapshotReport(results);
 console.log('');
 console.log(
   failed === 0
-    ? `validate-tui: all ${scenarios.length} scenarios passed`
+    ? `validate-tui: all ${scenarios.length - skipped} scenario(s) passed${skipped ? `, ${skipped} skipped` : ''}`
     : `validate-tui: ${failed}/${scenarios.length} scenario(s) FAILED`,
 );
 if (snapshotDir) {
