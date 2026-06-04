@@ -749,17 +749,22 @@ backlog's safest, behavior-neutral items** (below) so the ledger actually moves.
 
 ### Genuinely-new findings recorded for the backlog (none are blockers)
 
-- **`IModelHandler` leaks three internal provider booleans (low, surface trim).** The port
-  (`types/IModelHandler.ts`) still declares `isDeepSeek`/`isKimi`/`isMiniMax`; their **only**
-  reader is `openrouter/modelHandlerOpenRouterNative.ts` (internally, ~`:240/:250`). They are an
-  implementation detail on the public port — make them protected on the relevant classes, or
-  derive OpenRouter's check from `config.provider`. Complements §7 (the behavioral identity
-  gates are already converted; this is the residual port-shape trim). Low effort, low risk.
+- **`IModelHandler` leaks three internal provider booleans (low, surface trim).** _[APPLIED
+  2026-06-04 — see §13.]_ The port (`types/IModelHandler.ts`) declared `isDeepSeek`/`isKimi`/
+  `isMiniMax`; their **only** reader is `openrouter/modelHandlerOpenRouterNative.ts` (internally,
+  `:240/:250`). They were an implementation detail on the public port — now removed from the port
+  and made `protected` on the `ModelHandler` base. Complements §7 (the behavioral identity gates
+  were already converted; this was the residual port-shape trim).
 - **`RunStorageService` is a one-boolean port (low).** `runtime/RunStorageService.ts` (~24 LOC)
   is a full interface + module-global setter/getter + no-op default for a single `isViewVisible()`
-  read, with exactly one caller (`executeAgent.ts`, the `!getRunStorageService().isViewVisible()`
-  guard). Fold `isViewVisible` onto `AgentRuntimeHost` (already the per-run `emit` port threaded
-  everywhere) or pass a flag in `ExecuteAgentOptions`, and delete the file.
+  read. **Correction (2026-06-04): it has _two_ readers, not one** — `executeAgent.ts:445` **and**
+  `packages/extension/src/frontend/events/agentEventListeners.ts:115` (both the
+  `!getRunStorageService().isViewVisible()` fallback-notification guard) — plus two host
+  implementations (`desktopAgentExecution.ts:187` hardcodes `() => true`;
+  `ProgressViewProvider.ts:512`) and test mocks. Folding `isViewVisible` onto `AgentRuntimeHost`
+  therefore touches ~6 sites across both hosts + tests, not a single caller — it is a
+  behavior-sensitive host-port change, **not** the "delete 24 LOC" quick win this entry first
+  implied. Reassessed to **low value / skip unless reworking the host port**.
 - **`createChannelTrace` as a 26-site module-singleton logger (medium, judgment call).** 26
   modules do `const logger = createChannelTrace('X'); logger.info(…)`. For a plain log line that
   routes through the full `TraceEmitter` event/`AsyncLocalStorage`/subscriber path (~6 hops + an
@@ -824,7 +829,7 @@ above. No rewrite warranted.
 
 ---
 
-## 13. Re-verification addendum — 2026-06-04 (+ one tidy applied)
+## 13. Re-verification addendum — 2026-06-04 (+ two tidies applied, one ledger correction)
 
 An eighth pass — four parallel fresh-eyes audits (model handlers, agent core/runtime,
 logger/trace/eventBus, public surface) plus a direct line-by-line re-check of every open
@@ -862,6 +867,16 @@ _with_ the audit, not against it — none adds a wrapper, barrel, or surface:
   at `noopAgentRuntimeHost` as the valid drop-everything host. This is the same
   "document-the-contract, don't force structure" fix shape as §12's redaction contract — no
   behavior change, no event re-routing.
+- **`IModelHandler` port-boolean trim — applied (§12 new finding #1).** Removed
+  `isDeepSeek`/`isKimi`/`isMiniMax` from the public `IModelHandler` port
+  (`types/IModelHandler.ts`) and made the corresponding getters `protected` on the
+  `ModelHandler` base (`ModelHandler.ts`). Their sole reader is the
+  `ModelHandlerOpenRouterNative` subclass (`:240/:250`), which still reads them via `this.`;
+  `isGoogle`/`isOpenai`/`isAnthropic` stay on the port for their external display-flag callers
+  (§8/§10). Verified behavior-preserving: `config.provider` is unchanged, OpenRouter's
+  `requiresBatchedParallelToolResults`/`supportsReasoningLevelOverride` derivations are
+  identical, and no call site outside the handler hierarchy read these (grep clean).
+  `typecheck` + `eslint` green.
 
 ### Genuinely-new finding recorded for the backlog (not a blocker)
 
@@ -918,14 +933,16 @@ HEAD `bf32964`** so they are not re-litigated a ninth time:
   delete.
 - **§3.1** — still no `@agent/runtime/index.ts` barrel; still optional polish (the `@texra/core`
   - `src/platform/index.ts` surfaces already cover the underlying concern).
-- **§12 residual port trim** — `IModelHandler` still declares `isDeepSeek`/`isKimi`/`isMiniMax`
-  (`types/IModelHandler.ts:229-231`); their sole external reader is
-  `openrouter/modelHandlerOpenRouterNative.ts`. Make them protected on the relevant classes or
-  derive OpenRouter's check from `config.provider`. Low effort, low risk; unstarted.
-- **§12 `RunStorageService`** — still a one-boolean port (`runtime/RunStorageService.ts`,
-  24 LOC) with a single caller (`executeAgent.ts:445`, the `!getRunStorageService().isViewVisible()`
-  guard). Fold `isViewVisible` onto `AgentRuntimeHost` or `ExecuteAgentOptions` and delete the
-  file. Unstarted.
+- **§12 residual port trim** — **APPLIED this pass.** `isDeepSeek`/`isKimi`/`isMiniMax` removed
+  from the `IModelHandler` port and made `protected` on the `ModelHandler` base (see "Applied
+  this pass" above). `isGoogle`/`isOpenai`/`isAnthropic` remain on the port (external display
+  callers).
+- **§12 `RunStorageService`** — **corrected & reassessed (was overstated as "one caller").** It
+  has **two** `isViewVisible()` readers (`executeAgent.ts:445` + `agentEventListeners.ts:115`),
+  two host implementations (`desktopAgentExecution.ts:187`, `ProgressViewProvider.ts:512`), and
+  test mocks. Folding onto `AgentRuntimeHost` is a ~6-site, behavior-sensitive host-port change,
+  not a 24-LOC deletion — **reclassified low-value / skip** unless the host port is being
+  reworked anyway.
 - **§9 finding #1 (redaction contract)** — addressed 2026-06-03 (TSDoc on `logUtils`); unchanged.
 
 > **Latest-main note.** This addendum was rebased onto and re-verified against `origin/main`
@@ -1045,12 +1062,15 @@ background call) stay gated behind the same Step-7 coupling blocker (they read t
 
 **Net for 2026-06-04:** thesis reaffirmed for the eighth pass — incremental, not structural;
 the post-06-03 drift is pure simplification, moving the codebase further _toward_ the audit's
-target (re-verified on latest main `17d229860`). One additive tidy applied (`AgentRuntimeHost`
-headless contract). The two highest-value open items were traced to ground truth rather than
-carried by description: **§4** is a deliberately-gated two-sink fan-out (Finding A), so its fix is
-a sink consolidation that must preserve the workflow-only gate — not a duplicate deletion; and
-**§5/Step 7's** "concurrent-session blocker" narrows to ~3 unscoped sweep/list/subscribe seams
+target (re-verified on latest main `17d229860`). Two behavior-preserving tidies applied
+(`AgentRuntimeHost` headless-contract TSDoc; the `IModelHandler` provider-boolean port trim), and
+one ledger correction: the §12 `RunStorageService` item was overstated as "one caller" — it has
+two readers + two host impls + tests, so it is reclassified low-value/skip. The two highest-value
+open items were traced to ground truth rather than carried by description: **§4** is a
+deliberately-gated two-sink fan-out (Finding A), so its fix is a sink consolidation that must
+preserve the workflow-only gate — not a duplicate deletion; and **§5/Step 7's**
+"concurrent-session blocker" narrows to ~3 unscoped sweep/list/subscribe seams
 (`getActiveExecutionIds`, the `clearAll*` reset, the module-level status subscription) over
 otherwise concurrency-safe keyed registries (Finding B), so the minimal fix is to scope those
-seams by session, not relocate the registries. The rest of the ledger is unchanged: §2.6
-(relocate), and the small §12 trims (port booleans, `RunStorageService`). No rewrite warranted.
+seams by session, not relocate the registries. The remaining ledger is just §2.6 (relocate) plus
+the deliberately-deferred behavior-sensitive items (§4, §5/Step 7). No rewrite warranted.
