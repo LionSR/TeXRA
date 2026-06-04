@@ -412,6 +412,84 @@ describe('CLI multi-agent run command', () => {
     );
   });
 
+  it('does not suggest --agent again when the explicit root cannot delegate', async () => {
+    mocks.planCliMultiAgentPresetRun.mockReturnValue({
+      preset: {
+        id: 'mathematician',
+        name: 'Mathematician',
+        source: 'built-in',
+      },
+      rootAgent: {
+        name: 'review',
+        category: 'toolUse',
+        source: 'builtInToolUse',
+        path: '/agents/review.yaml',
+        tools: [],
+      },
+      missingWorkflowAgents: ['generic', 'devise', 'apply'],
+      missingToolUseAgents: ['simplifier', 'progressCheck', 'orchestrator'],
+      workflowAgentKeys: [],
+      toolUseAgentKeys: ['builtInToolUse:review'],
+    });
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    const exitCode = await runMultiAgentPreset(cliContext(), {
+      preset: 'mathematician',
+      inputFiles: [],
+      contextFiles: [],
+      agent: 'review',
+      model: 'deepseekT',
+      instruction: 'Solve a short math problem.',
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'WARN team delegation unavailable for preset mathematician; running only root agent review. The selected --agent root cannot delegate; choose a delegating root to run this as a team.',
+    );
+    expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
+      expect.stringContaining('pass --agent to choose one'),
+    );
+  });
+
+  it('does not treat whitespace-only --agent as an explicit root choice', async () => {
+    mocks.planCliMultiAgentPresetRun.mockReturnValue({
+      preset: {
+        id: 'mathematician',
+        name: 'Mathematician',
+        source: 'built-in',
+      },
+      rootAgent: {
+        name: 'lean',
+        category: 'toolUse',
+        source: 'builtInToolUse',
+        path: '/agents/lean.yaml',
+        tools: [],
+      },
+      missingWorkflowAgents: ['generic', 'devise', 'apply'],
+      missingToolUseAgents: ['simplifier', 'progressCheck', 'orchestrator'],
+      workflowAgentKeys: [],
+      toolUseAgentKeys: ['builtInToolUse:lean'],
+    });
+    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
+
+    const exitCode = await runMultiAgentPreset(cliContext(), {
+      preset: 'mathematician',
+      inputFiles: [],
+      contextFiles: [],
+      agent: '   ',
+      model: 'deepseekT',
+      instruction: 'Solve a short math problem.',
+    });
+
+    expect(exitCode).toBe(0);
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'WARN team delegation unavailable for preset mathematician; running only root agent lean. Enable a delegating team root or pass --agent to choose one.',
+    );
+    expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
+      expect.stringContaining('The selected --agent root cannot delegate'),
+    );
+  });
+
   it('keeps degraded-team wording when the root can delegate', async () => {
     mocks.planCliMultiAgentPresetRun.mockReturnValue({
       preset: {
