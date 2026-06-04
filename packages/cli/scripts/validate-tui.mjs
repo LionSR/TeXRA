@@ -382,7 +382,7 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
-      'Tool-use agents',
+      'Tool-use and orchestrator agents',
       'Current: chat (hidden from picker)',
       'texra chat --agent=<name>',
       'Esc close',
@@ -404,7 +404,7 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
-      'Tool-use agents',
+      'Tool-use and orchestrator agents',
       'Current: chat (hidden from picker)',
       'texra chat --agent=<name>',
       'Esc close',
@@ -503,7 +503,7 @@ const SCENARIOS = [
     expect: [
       '/agent',
       'Current: chat (hidden from picker)',
-      'Tool-use agents',
+      'Tool-use and orchestrator agents',
       '+8 more',
       '↑/↓ navigate',
       'Enter close',

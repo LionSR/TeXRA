@@ -31,6 +31,7 @@ interface AgentGroups {
 }
 
 type AgentIdentity = Pick<AgentOptionData, 'label' | 'value'>;
+type AgentOrchestrationFlag = Pick<AgentOptionData, 'isOrchestrator'>;
 
 const AGENT_FORM_MAX_WIDTH = 80;
 
@@ -48,8 +49,26 @@ function agentDescription(agent: AgentOptionData): string {
     : agent.isCustom
       ? 'custom'
       : 'built-in';
-  const kind = agent.isOrchestrator ? 'orchestrator' : 'tool-use';
+  const kind = isOrchestratorAgent(agent) ? 'orchestrator' : 'tool-use';
   return agent.description ? `${kind}; ${source}; ${agent.description}` : kind;
+}
+
+function isOrchestratorAgent(agent: AgentOrchestrationFlag): boolean {
+  return agent.isOrchestrator === true;
+}
+
+export function agentPickerPrimarySectionTitle(
+  agents: readonly AgentOrchestrationFlag[],
+): string {
+  const hasOrchestrators = agents.some(isOrchestratorAgent);
+  const hasToolUseSpecialists = agents.some(
+    (agent) => !isOrchestratorAgent(agent),
+  );
+
+  if (hasOrchestrators && hasToolUseSpecialists) {
+    return 'Tool-use and orchestrator agents';
+  }
+  return hasOrchestrators ? 'Orchestrator agents' : 'Tool-use agents';
 }
 
 export function currentVisibleAgent(
@@ -168,6 +187,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
 
   const agents: AgentGroups = data ?? { toolUse: [], workflow: [] };
   const selectable = props.selectable === true;
+  const primarySectionTitle = agentPickerPrimarySectionTitle(agents.toolUse);
   const items = agents.toolUse.map((agent) => ({
     value: agent.label,
     label: agent.label,
@@ -212,7 +232,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
             {currentAgentHint}
           </Text>
         ) : null}
-        <Text bold>Tool-use agents</Text>
+        <Text bold>{primarySectionTitle}</Text>
         <Select
           items={items.map(({ value, label }) => ({ value, label }))}
           activeValue={activeValue}
@@ -245,8 +265,8 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
       </Text>
       <Text dimColor wrap="truncate-end">
         {selectable
-          ? 'Choose the root tool-use agent for the first message.'
-          : 'Available agents. Start a new chat with texra chat --agent=<name> to choose the root tool-use agent.'}
+          ? 'Choose the root agent for the first message.'
+          : 'Available agents. Start a new chat with texra chat --agent=<name> to choose the root agent.'}
       </Text>
       {currentAgentHint ? (
         <Text dimColor wrap="truncate-end">
@@ -254,7 +274,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
         </Text>
       ) : null}
       <Box marginTop={1} flexDirection="column">
-        <Text bold>Tool-use agents</Text>
+        <Text bold>{primarySectionTitle}</Text>
         <Select
           items={items}
           activeValue={activeValue}
