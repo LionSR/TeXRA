@@ -26,8 +26,12 @@ const CHANNEL = 'DiagnosticsTool';
 logger.initialize(CHANNEL);
 
 export const DiagnosticsInputSchema = z.strictObject({
-  command: z.enum(['list', 'count']),
-  path: z.string(),
+  command: z
+    .enum(['list', 'count'])
+    .describe('Use "list" for full diagnostics or "count" for a summary.'),
+  path: z
+    .string()
+    .describe('Workspace-relative or absolute file path to check.'),
 });
 
 export type DiagnosticsInput = z.infer<typeof DiagnosticsInputSchema>;

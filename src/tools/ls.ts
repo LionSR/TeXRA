@@ -23,8 +23,15 @@ import { toPosixPath } from '@utils/core/pathCore';
 import { defineTool } from './core/define';
 
 const LsInputSchema = z.strictObject({
-  path: z.string(),
-  ignore: z.array(z.string()).prefault([]),
+  path: z
+    .string()
+    .describe(
+      'File or directory path to list, workspace-relative or absolute.',
+    ),
+  ignore: z
+    .array(z.string())
+    .prefault([])
+    .describe('Additional glob patterns or names to hide from the listing.'),
 });
 
 export type LsInput = z.infer<typeof LsInputSchema>;

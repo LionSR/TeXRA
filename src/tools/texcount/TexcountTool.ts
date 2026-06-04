@@ -7,12 +7,18 @@ import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
 const TexcountInputSchema = z.strictObject({
-  files: z.union([z.string(), z.array(z.string()).min(1)]),
+  files: z
+    .union([z.string(), z.array(z.string()).min(1)])
+    .describe('LaTeX file path or non-empty list of LaTeX files to count.'),
   mode: z
     .enum(['separate', 'include', 'sum'])
     .nullish()
-    .transform((v) => v ?? 'separate'),
-  format: z.enum(['raw', 'stats']).nullish(),
+    .transform((v) => v ?? 'separate')
+    .describe('How texcount should combine files: separate, include, or sum.'),
+  format: z
+    .enum(['raw', 'stats'])
+    .nullish()
+    .describe('Return raw texcount output or wrap it as stats.'),
 });
 
 type TexcountInput = z.infer<typeof TexcountInputSchema>;
