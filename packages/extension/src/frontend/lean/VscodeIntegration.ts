@@ -24,6 +24,7 @@ import {
   type LeanFileCommand,
   type LeanProjectCommand,
 } from '@tools/lean/leanConstants';
+import type { LspHover } from '@tools/lean/lspTypes';
 import type {
   LeanDiagnostic,
   LspResult,
@@ -98,8 +99,6 @@ export function clearVscodeLeanServerEntries(): void {
   }
   knownExtensionServers.clear();
 }
-
-type LspHover = import('vscode-languageserver-protocol').Hover;
 
 /**
  * Duck-typed FileUri compatible with the Lean 4 extension's ExtUri.
