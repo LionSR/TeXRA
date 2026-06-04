@@ -13,7 +13,7 @@ import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount, type TexcountMode } from '@latex/texcount';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
-import { delay } from '@utils/core';
+import { delay, filterNotNull } from '@utils/core';
 
 import { getIndentTeXNotification } from './latexHousekeepingNotifications';
 
@@ -211,7 +211,7 @@ export async function handleGetTeXCount(): Promise<void> {
                   ? { label: template.replace('$1', match[1]) }
                   : null;
               })
-              .filter((item): item is { label: string } => item !== null);
+              .filter(filterNotNull);
 
             await vscode.window.showQuickPick(stats, {
               placeHolder: 'TeXCount Results (press Esc to dismiss)',

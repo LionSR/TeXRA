@@ -46,6 +46,7 @@ import {
 // Local imports - shared utilities
 import { copyTextToClipboard } from '@shared/utils/clipboard';
 import { createEvent } from '@shared/utils/events';
+import { filterNotNullish } from '@utils/core';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
@@ -473,9 +474,7 @@ export class LaTeXTab extends LitElement {
   /** Collect detected tool paths for a dependency. */
   private getDetectedPaths(dep: DependencyInfo): string[] {
     if (!dep.pathKeys) return [];
-    return dep.pathKeys
-      .map((k) => this.settings[k])
-      .filter((v): v is string => v !== null && v !== undefined);
+    return dep.pathKeys.map((k) => this.settings[k]).filter(filterNotNullish);
   }
 
   private renderDependencyCard(dep: DependencyInfo): TemplateResult {
