@@ -1,3 +1,4 @@
+import { filterNotNullish } from '@utils/core';
 import { installDesktopHostBridge } from './hostBridge.js';
 import { createDesktopExecutionIpc } from './desktopExecutionIpc.js';
 import {
@@ -98,7 +99,7 @@ export function installDesktopMainViewIpc(
     logs,
     shell,
     execution,
-  ].filter((handler): handler is DesktopMessageHandler => handler != null);
+  ].filter(filterNotNullish);
 
   const dispose = () => {
     if (disposed) return;
