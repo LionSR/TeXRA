@@ -8,7 +8,7 @@ import {
 } from '@anthropic-ai/sdk';
 
 // Local imports - agent
-import { logContextManagementEvent, logSdkError } from '@agent/trace';
+import { logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   type AgentSetting,
@@ -30,7 +30,6 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { getConfig } from '@agent/core/config';
 import {
   getSdkErrorMessage,
-  isContextWindowError,
   attachStreamDiagnostics,
   attachPartialText,
   takeTail,
@@ -56,7 +55,6 @@ import {
 import {
   getAnthropicMaxPdfPages,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
-  TOOL_USE_SAFETY_BUFFER,
 } from '../contextManagementConstants';
 import { AnthropicStreamHandler } from '../support/AnthropicStreamHandler';
 import { toAnthropicTools } from '../toolConversion';
@@ -526,16 +524,14 @@ export class ModelHandlerAnthropic extends ModelHandler<
 
     // Phase 2: COUNT - Estimate input tokens using built params
     // Phase 3: VALIDATE - Adjust max_tokens if needed
-    if (this.supportsTokenCounting) {
-      if (documentAnalysis.hasFileSource) {
-        this.logger.debug(
-          'Skipping token counting because Anthropic countTokens does not support file-based document sources.',
-        );
-      } else {
-        // Token counting uses soft failure - if it fails, we proceed without adjustment
-        // and let the API enforce limits. This avoids unnecessary retries for non-critical operations.
-        try {
-          // Reuse built params for token counting (build once principle)
+    if (this.supportsTokenCounting && documentAnalysis.hasFileSource) {
+      this.logger.debug(
+        'Skipping token counting because Anthropic countTokens does not support file-based document sources.',
+      );
+    } else {
+      await this.applyTokenCountLimit({
+        // Reuse built params for token counting (build once principle).
+        countTokens: async () => {
           const inputTokens = await this.estimateTokenCount(messages, {
             client,
             systemPrompt,
@@ -546,65 +542,29 @@ export class ModelHandlerAnthropic extends ModelHandler<
             betas: options.betas,
           });
           measuredInputTokens = inputTokens;
+          return inputTokens;
+        },
+        currentMaxTokens: options.max_tokens,
+        contextWindow: effectiveContextWindow,
+        detailLabel: 'Anthropic: max_tokens reduced to fit context window',
+        applyReduced: (adjusted) => {
+          options.max_tokens = adjusted;
 
-          // Validate and adjust max_tokens if needed (throws if context window exceeded)
-          // Use larger safety buffer for tool-use mode
-          const tokenBuffer = this.isToolUseMode()
-            ? TOOL_USE_SAFETY_BUFFER
-            : undefined;
-          const validation = this.validateTokenLimits(
-            inputTokens,
-            options.max_tokens,
-            effectiveContextWindow,
-            tokenBuffer,
-          );
-
-          if (validation.adjustedMaxTokens !== options.max_tokens) {
-            const originalMaxTokens = options.max_tokens;
-            logContextManagementEvent(
-              this.logger,
-              `Token count of message plus max tokens exceeds context window: ${inputTokens} + ${originalMaxTokens} > ${effectiveContextWindow}. Reducing max tokens to ${validation.adjustedMaxTokens}.`,
-              {
-                action: 'max_tokens_reduced',
-                tokensBefore: inputTokens,
-                contextWindow: effectiveContextWindow,
-                utilizationBefore:
-                  validation.utilizationPercent ??
-                  (inputTokens / effectiveContextWindow) * 100,
-                originalMaxTokens,
-                reducedMaxTokens: validation.adjustedMaxTokens,
-                details: 'Anthropic: max_tokens reduced to fit context window',
-              },
+          // Only adjust thinking budget when using manual mode and it would
+          // violate API constraint (budget_tokens must be < max_tokens).
+          // Adaptive thinking has no budget_tokens to adjust.
+          if (
+            options.thinking?.type === 'enabled' &&
+            options.thinking.budget_tokens >= options.max_tokens
+          ) {
+            const newBudget = Math.max(1024, options.max_tokens - 1024);
+            this.logger.debug(
+              `Adjusted thinking budget from ${options.thinking.budget_tokens} to ${newBudget} due to reduced max_tokens`,
             );
-            options.max_tokens = validation.adjustedMaxTokens;
-
-            // Only adjust thinking budget when using manual mode and it would
-            // violate API constraint (budget_tokens must be < max_tokens).
-            // Adaptive thinking has no budget_tokens to adjust.
-            if (
-              options.thinking?.type === 'enabled' &&
-              options.thinking.budget_tokens >= options.max_tokens
-            ) {
-              const newBudget = Math.max(1024, options.max_tokens - 1024);
-              this.logger.debug(
-                `Adjusted thinking budget from ${options.thinking.budget_tokens} to ${newBudget} due to reduced max_tokens`,
-              );
-              options.thinking.budget_tokens = newBudget;
-            }
+            options.thinking.budget_tokens = newBudget;
           }
-        } catch (err) {
-          tagAnthropicSdkError(err, this.config.provider);
-          // Re-throw context window violations - these are intentional validation errors
-          // that should fail fast, not be swallowed by soft failure
-          if (isContextWindowError(err)) {
-            throw err;
-          }
-          // Soft failure for token counting API errors - proceed without adjustment
-          this.logger.debug(
-            `Token counting failed: ${getSdkErrorMessage(err)}. Proceeding without token adjustment.`,
-          );
-        }
-      }
+        },
+      });
     }
 
     if (documentAnalysis.hasBase64Pdf) {
