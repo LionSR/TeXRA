@@ -1,0 +1,236 @@
+# CLI Runtime Round Trips
+
+This note maps the current CLI startup, model/team selection, and chat TUI
+rendering paths. The goal is to make ownership and repeated work visible before
+refactoring the CLI further.
+
+## Startup And Selection
+
+```mermaid
+flowchart TD
+  user[User runs texra / texra orchestrate]
+  orch[commands/orchestrate.ts runOrchestration]
+  platform[runtime/initPlatform initCliPlatform]
+  onboarding[onboarding maybeRunCliOnboarding]
+  history[runtime/history listCliHistoryEntries]
+  presets[runtime/multiAgentPresets readCliMultiAgentPresets]
+  plans[commands/multiAgent loadCliMultiAgentPresetPlans]
+  agentsLocal[agentRegistry loadAgents includeRemote false]
+  auth[supabaseAuth isAuthenticated]
+  agentsRemote[agentRegistry loadAgents includeRemote true]
+  replan[planCliMultiAgentPresets replan]
+  items[runtime/orchestration buildCliOrchestrationItems]
+  modelList[runtime/modelAccess getCliModelAccessList]
+  defaultModel[resolveChatDefaults + resolveCliRunnableModelWithAccessList]
+  picker[orchestration/runOrchestrationTui]
+  chat[chat/tui/runChatTui runChat]
+  presetRun[commands/multiAgent fillMultiAgentRunPlanGaps]
+
+  user --> orch
+  orch --> platform
+  platform --> onboarding
+  onboarding --> history
+  onboarding --> presets
+  presets --> plans
+  plans --> agentsLocal
+  agentsLocal --> auth
+  auth -->|if authenticated and gaps exist| agentsRemote
+  agentsRemote --> replan
+  auth -->|otherwise| replan
+  replan --> items
+  history --> items
+  orch --> modelList
+  modelList --> defaultModel
+  items --> picker
+  defaultModel --> picker
+  picker -->|chat action| chat
+  picker -->|team action| presetRun
+  presetRun --> chat
+```
+
+Current ownership:
+
+- Terminal interactivity:
+  `commands/orchestrate.ts` and `chat/tui/runChatTui.tsx`.
+  Both entry points enforce TTY before mounting Ink.
+- First-run auth onboarding:
+  `commands/orchestrate.ts` and `chat/tui/runChatTui.tsx`.
+  The launcher can run onboarding, then a selected chat runs the same gate again.
+- Team availability:
+  `commands/multiAgent.ts` plus `runtime/multiAgentPresets.ts`.
+  List, inspect, and run all use the same planner, but launch replans after selection.
+- Agent registry load scope:
+  `agentRegistry.loadAgents()` call sites.
+  Local-only for list/display, remote reload only when authenticated and gaps exist.
+- API mode:
+  `runtime/apiAccessMode.ts`.
+  One persisted key-mode flag, with command/env override through `CliContext`.
+- Model availability:
+  `runtime/modelAccess.ts`.
+  The launcher, `/model`, and chat startup share this module, but can each load the model list.
+- Initial root agent/model defaults:
+  `runtime/chatDefaults.ts`.
+  Resolves workspace, user, history, then built-in defaults.
+
+## Chat TUI Runtime
+
+```mermaid
+flowchart LR
+  runtime[executeAgent / tool-use runtime]
+  host[runtimeHost + wrapRuntimeHost]
+  streamLog[StreamLogStore]
+  statusService[StreamStatusService]
+  cliState[chat/tui/state/cliState signals]
+  statusSub[subscribeStreamStatus]
+  logSub[subscribeStreamLog]
+  projection[transcriptProjection]
+  app[chat/tui/App]
+  viewport[transcriptViewportMode]
+  staticPane[StaticConversationTranscript]
+  livePane[ConversationPane]
+  statusBar[StatusBar / StreamTabsStrip / side panels]
+
+  runtime --> host
+  runtime --> streamLog
+  runtime --> statusService
+  host --> cliState
+  streamLog --> logSub --> cliState
+  statusService --> statusSub --> cliState
+  statusSub --> projection --> cliState
+  cliState --> app
+  app --> viewport
+  viewport -->|root scrollback| staticPane
+  viewport -->|root live tail| livePane
+  viewport -->|focused child scoped history| livePane
+  cliState --> statusBar
+```
+
+The transcript path intentionally has two render modes:
+
+- Root stream:
+  Finalized active-root entries print once through `<Static>`.
+  Pending root entries render in bounded live-tail mode.
+- Child stream:
+  `<StaticConversationTranscript>` is not mounted.
+  The child stream renders in scoped-history mode, using only that child slice.
+
+That means a focused-child tab should not read parent entries through
+`ConversationPane`. If parent output remains visible after focus changes, the
+likely root is terminal scrollback/static repaint behavior, not direct parent
+slice selection.
+
+## Model Selection Round Trips
+
+```mermaid
+sequenceDiagram
+  participant O as orchestrate
+  participant MA as modelAccess
+  participant UI as orchestration TUI
+  participant C as runChat
+  participant F as /model form
+  participant Flow as active tool-use flow
+
+  O->>MA: getCliModelAccessList(apiMode)
+  O->>MA: resolve default model against same list
+  O->>UI: pass model list for second-step picker
+  UI-->>C: chosen model or no override
+  C->>MA: resolveCliRunnableModel(default/override, apiMode)
+  C->>C: persist helper model + write cliState.sessionMeta
+  F->>MA: getCliModelAccessList(apiMode)
+  F-->>C: selected model
+  C->>Flow: switchModel(model), if a waiting flow exists
+  C->>C: persist helper model + write cliState.sessionMeta
+```
+
+The model filter itself is shared, which is good. The repeated work is around
+loading/reconciling the same `apiMode + selected model` pair at launcher,
+chat-start, submit-time, and `/model` form time.
+
+## Team Planning Round Trips
+
+```mermaid
+sequenceDiagram
+  participant L as multi-agent list / launcher
+  participant P as multiAgentPresets planner
+  participant A as agentRegistry
+  participant R as remote agent loader
+  participant Run as team run
+
+  L->>A: loadAgents({ includeRemote: false })
+  L->>P: plan presets with local agents
+  P-->>L: plans, gaps, local fallback roots
+  L->>R: maybe load remote agents if authenticated and gaps exist
+  R-->>P: replan with remote agents
+  L-->>Run: selected preset id
+  Run->>P: plan current preset again
+  Run->>R: maybe load remote agents again if gaps exist
+  Run->>P: replan current preset
+```
+
+The local CLI currently shows built-in teams as unavailable without relay-served
+agents. For example, `texra-local multi-agent inspect physicist` resolves
+`research` as a local root but still blocks team launch because that root cannot
+delegate and required specialists are missing. That behavior is internally
+consistent, but it is a UX pressure point because list output exposes a root
+agent while run output correctly says the team cannot launch.
+
+## Skills Protocol Implication
+
+Current public SKILL.md conventions treat a skill package as a `SKILL.md` file
+plus optional supporting files, with full instructions loaded only when the
+agent needs that workflow. TeXRA's CLI should keep the startup path metadata-only:
+
+```mermaid
+flowchart LR
+  discover[Discover skill metadata]
+  list[Show /skills or slash form]
+  activate[User or agent activates skill]
+  loadBody[Load SKILL.md and supporting references]
+  prompt[Inject activation into next tool-use prompt]
+
+  discover --> list
+  list --> activate
+  activate --> loadBody --> prompt
+```
+
+This argues against routing skill bodies through launcher, model selection, or
+team planning. Startup should need only names, descriptions, and availability.
+
+## Refactor Targets
+
+- Launcher-to-chat preflight:
+  `orchestrate` and `runChat` both run platform/onboarding/model checks.
+  Introduce a small `CliInteractivePreflight` result that standalone chat can compute
+  and launcher can pass through.
+- Team plan reload:
+  Listing builds a plan set, then selected team launch replans by preset id.
+  Return a `CliMultiAgentPlanSnapshot` from the planner and let launch validate or
+  reuse it unless registry/auth state changed.
+- Model selection ownership:
+  Startup, submit-time, and `/model` each reconcile model availability and persistence.
+  Add a `CliRootModelSelection` helper that owns `apiMode`, current model, runnable
+  list loading, and persistence.
+- Stream status lookup:
+  UI helpers read child status from parent slice, child slice, and `StreamStatusService`.
+  Normalize once in the subscriber and make UI read `StreamSlice` only. Keep the
+  service as an input source, not a UI fallback.
+- Transcript viewport repaint:
+  `App` detects root/scoped changes and calls back into `runChatTui` to repaint Ink.
+  Move viewport repaint ownership into a small TUI viewport controller so render mode
+  and terminal clear policy live together.
+- Slash command dispatch:
+  Built-in commands are registered, but `handleTuiSlashCommand` still owns a large
+  switch with special cases. Move command handlers into the registry incrementally,
+  keeping `runChatTui` as dispatcher plus session lifecycle owner.
+- Skills startup:
+  Skills should be discoverable without injecting bodies into every tool-use prompt.
+  Keep discovery metadata cached; load `SKILL.md` only on activation for the next message.
+
+## Suggested Order
+
+1. Normalize stream status ownership first. It is small and directly helps
+   subagent display/debuggability.
+2. Extract model selection ownership next. It addresses startup model selection,
+   `/model`, API-mode switching, and future relay/personal divergence.
+3. Consolidate team planning after that. It is higher blast radius because it
+   touches local/remote agent loading and multi-agent launch semantics.
