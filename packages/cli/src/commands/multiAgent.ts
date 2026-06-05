@@ -45,6 +45,7 @@ import {
 import { formatMultiAgentRunInstruction } from './_helpers/multiAgentInstruction';
 import { emitCliResult } from './_helpers/output';
 import {
+  AGENT_RUN_GLOBAL_ARGS,
   GLOBAL_ARGS,
   collectStringFlagValues,
   optionalStringFlagValue,
@@ -430,7 +431,7 @@ const multiAgentInspectCommand = defineCliCommand({
 const multiAgentRunCommand = defineCliCommand({
   meta: { name: 'run', description: 'Run a multi-agent team preset' },
   args: {
-    ...GLOBAL_ARGS,
+    ...AGENT_RUN_GLOBAL_ARGS,
     preset: {
       type: 'positional',
       required: true,

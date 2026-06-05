@@ -23,7 +23,7 @@ import {
 } from './_helpers/modelArg';
 import { emitCliResult } from './_helpers/output';
 import {
-  GLOBAL_ARGS,
+  AGENT_RUN_GLOBAL_ARGS,
   collectStringFlagValues,
   optionalStringFlagValue,
   optString,
@@ -181,7 +181,7 @@ async function runWorkflowAgent(
 export const runWorkflowCommand = defineCliCommand({
   meta: { name: 'run', description: 'Run a workflow agent' },
   args: {
-    ...GLOBAL_ARGS,
+    ...AGENT_RUN_GLOBAL_ARGS,
     agent: {
       type: 'positional',
       required: true,

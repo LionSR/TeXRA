@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { UsageLogService } from '@telemetry/UsageLogService';
+import { initCliPlatform } from '@cli/runtime/initPlatform';
 import type { CliContext } from '@cli/runtime/cliContext';
+import type { SkillSource } from '@skills/loadSkills';
 
 const mocks = vi.hoisted(() => ({
   authProvider: {
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   serverSideKeyService: {
     setUseIncludedModelAccess: vi.fn(),
   },
+  defaultSkillSources: vi.fn<() => SkillSource[]>(() => []),
   setRuntimeSkillSources: vi.fn(),
   tryPlatform: vi.fn(),
   // Collects callbacks registered via the (mocked) lifecycle host's onShutdown
@@ -46,7 +48,7 @@ vi.mock('@platform/platform', () => ({
 }));
 
 vi.mock('@skills/index', () => ({
-  defaultSkillSources: vi.fn(() => []),
+  defaultSkillSources: mocks.defaultSkillSources,
   setRuntimeSkillSources: mocks.setRuntimeSkillSources,
 }));
 
@@ -176,5 +178,39 @@ describe('CLI platform init', () => {
     expect(
       mocks.serverSideKeyService.setUseIncludedModelAccess,
     ).toHaveBeenCalledWith(false);
+  });
+
+  it('registers CLI runtime skill sources from context options', async () => {
+    const sources: SkillSource[] = [
+      {
+        scope: 'custom' as const,
+        path: '/tmp/project/vendor/skills',
+        label: 'custom',
+        required: true,
+      },
+    ];
+    mocks.defaultSkillSources.mockReturnValueOnce(sources);
+    mocks.authProvider.isAuthenticated.mockResolvedValueOnce(false);
+
+    await initCliPlatform(
+      cliContext({
+        skillSourceOptions: {
+          includeInterop: true,
+          additionalPaths: ['vendor/skills'],
+        },
+      }),
+    );
+
+    expect(mocks.defaultSkillSources).toHaveBeenCalledWith(
+      {
+        cwd: '/tmp/project',
+        resourcesPath: '/tmp/resources',
+      },
+      {
+        includeInterop: true,
+        additionalPaths: ['vendor/skills'],
+      },
+    );
+    expect(mocks.setRuntimeSkillSources).toHaveBeenCalledWith(sources);
   });
 });
