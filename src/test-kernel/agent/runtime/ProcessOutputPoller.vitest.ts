@@ -21,7 +21,6 @@ import type { StreamTabId } from '@shared/schemas';
 
 const tmpDirs: string[] = [];
 
-
 function createRuntimeHost(): {
   host: AgentRuntimeHost;
   events: Array<{ event: string; payload: unknown }>;
