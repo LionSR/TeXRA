@@ -91,7 +91,11 @@ export class ToolUseFollowUpQueue {
   static enqueue(
     streamId: StreamTabId,
     followUp: string,
-    options?: { force?: boolean; mediaFiles?: readonly string[] },
+    options?: {
+      force?: boolean;
+      mediaFiles?: readonly string[];
+      displayText?: string;
+    },
   ): boolean {
     if (this.released.has(streamId) && !options?.force) {
       logger.debug(
@@ -100,7 +104,7 @@ export class ToolUseFollowUpQueue {
       return false;
     }
     const queue = this.acquire(streamId);
-    queue.enqueue(followUp, options?.mediaFiles);
+    queue.enqueue(followUp, options?.mediaFiles, options?.displayText);
     logger.debug(`Queued follow-up for stream ${streamId}.`);
     return true;
   }
@@ -110,9 +114,11 @@ export class ToolUseFollowUpQueue {
   }
 
   /** Drain queued follow-ups with their media file paths (resume replay). */
-  static drainItems(
-    streamId: StreamTabId,
-  ): Array<{ text: string; mediaFiles?: readonly string[] }> {
+  static drainItems(streamId: StreamTabId): Array<{
+    text: string;
+    displayText?: string;
+    mediaFiles?: readonly string[];
+  }> {
     return this.queues.get(streamId)?.drainItems() ?? [];
   }
 
