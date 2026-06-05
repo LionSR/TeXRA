@@ -2,7 +2,7 @@
 import * as path from 'path';
 
 // Local imports - common
-import { getConfig } from '@agent/core/config';
+import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@common/errors';
 import {
   LaTeXCompileOptionsSchema,

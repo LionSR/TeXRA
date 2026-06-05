@@ -30,7 +30,7 @@ import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@agent/core/constants';
-import { getConfig } from '@agent/core/config';
+import { getConfig } from '@utils/config/configUtils';
 import { toOpenAIReasoningEffort } from '@agent/runtime/reasoningEffort';
 import {
   getSdkErrorMessage,

@@ -27,7 +27,7 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - common
-import { getConfig } from '@agent/core/config';
+import { getConfig } from '@utils/config/configUtils';
 import {
   getSdkErrorMessage,
   attachStreamDiagnostics,

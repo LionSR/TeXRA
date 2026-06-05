@@ -10,7 +10,7 @@ import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
-import { getConfig } from '@agent/core/config';
+import { getConfig } from '@utils/config/configUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Local imports - tools and utils
