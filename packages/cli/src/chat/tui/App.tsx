@@ -33,6 +33,7 @@ import { TipRow } from './panes/TipRow';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './panes/TodosPlanPanel';
 import { currentApproval, type PendingApproval } from './state/approvalQueue';
 import {
+  isEscapeInput,
   metaChordDigit,
   metaChordInput,
   rewriteKittyEnterInput,
@@ -708,7 +709,7 @@ export function App(props: AppProps): React.JSX.Element {
 
     // Escape interrupts an active run.
     if (
-      key.escape &&
+      isEscapeInput(input, key) &&
       appEscapeInterruptActive({
         inputDisabled,
         reverseSearchOpen,
