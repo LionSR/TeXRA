@@ -16,6 +16,7 @@ const RAW_CONTROL_INPUTS = new Map<number, string>([
   [11, 'k'],
   [18, 'r'],
   [21, 'u'],
+  [22, 'v'],
   [23, 'w'],
 ]);
 
