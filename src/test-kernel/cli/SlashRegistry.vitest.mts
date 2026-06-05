@@ -38,6 +38,33 @@ describe('slashRegistry', () => {
     }
   }
 
+  function deferredSelection(): {
+    readonly promise: Promise<void>;
+    readonly resolve: () => void;
+  } {
+    let resolveSelection: () => void = () => {};
+    const promise = new Promise<void>((resolve) => {
+      resolveSelection = resolve;
+    });
+    return { promise, resolve: resolveSelection };
+  }
+
+  function renderOpenForm<TProps>(): {
+    readonly props?: TProps;
+    readonly isClosed: () => boolean;
+  } {
+    let closed = false;
+    const node = renderFormAdapter<TProps>(
+      cliState.activeForm.get()?.render(() => {
+        closed = true;
+      }, 20),
+    );
+    return {
+      props: node.props,
+      isClosed: () => closed,
+    };
+  }
+
   it('keeps the CLI session control commands registered', () => {
     registerBuiltinSlashCommands();
     expect(listSlashCommands().map((cmd) => cmd.name)).toEqual(
@@ -239,6 +266,57 @@ describe('slashRegistry', () => {
     );
   });
 
+  it('keeps the model picker open until model selection commits', async () => {
+    const selection = deferredSelection();
+    registerBuiltinSlashCommands({
+      onModelSelect: () => selection.promise,
+    });
+    const model = listSlashCommands().find((cmd) => cmd.name === 'model');
+
+    if (!model) throw new Error('Expected /model to be registered');
+
+    expect(openRegisteredCliSlashForm(model, '')).toBe(true);
+
+    const modelNode = renderOpenForm<{
+      onSelect?: (value: string) => void;
+    }>();
+    modelNode.props?.onSelect?.('gpt55');
+    await settleFormSelection();
+
+    expect(modelNode.isClosed()).toBe(false);
+
+    selection.resolve();
+    await settleFormSelection();
+
+    expect(modelNode.isClosed()).toBe(true);
+  });
+
+  it('routes model picker selection failures to the shared error handler', async () => {
+    const errors: string[] = [];
+    registerBuiltinSlashCommands({
+      onModelSelect: async () => {
+        throw new Error('model failed');
+      },
+      onError: (error) => {
+        errors.push(error instanceof Error ? error.message : String(error));
+      },
+    });
+    const model = listSlashCommands().find((cmd) => cmd.name === 'model');
+
+    if (!model) throw new Error('Expected /model to be registered');
+
+    expect(openRegisteredCliSlashForm(model, '')).toBe(true);
+
+    const modelNode = renderOpenForm<{
+      onSelect?: (value: string) => void;
+    }>();
+    modelNode.props?.onSelect?.('gpt55');
+    await settleFormSelection();
+
+    expect(errors).toEqual(['model failed']);
+    expect(modelNode.isClosed()).toBe(true);
+  });
+
   it('routes API picker selection failures to the shared error handler', async () => {
     resetCliState({
       agent: 'chat',
@@ -258,24 +336,52 @@ describe('slashRegistry', () => {
       },
     });
     const api = listSlashCommands().find((cmd) => cmd.name === 'api');
-    let closed = false;
 
     if (!api) throw new Error('Expected /api to be registered');
 
     expect(openRegisteredCliSlashForm(api, '')).toBe(true);
 
-    const apiNode = renderFormAdapter<{
+    const apiNode = renderOpenForm<{
       onSelect?: (value: CliApiMode) => void;
-    }>(
-      cliState.activeForm.get()?.render(() => {
-        closed = true;
-      }, 20),
-    );
+    }>();
     apiNode.props?.onSelect?.('personal');
     await settleFormSelection();
 
     expect(errors).toEqual(['api mode failed']);
-    expect(closed).toBe(true);
+    expect(apiNode.isClosed()).toBe(true);
+  });
+
+  it('keeps the API picker open until API mode selection commits', async () => {
+    resetCliState({
+      agent: 'chat',
+      model: 'deepseekT',
+      cwd: '/tmp/workspace',
+      apiMode: 'included',
+      canDelegate: false,
+      version: 'test',
+    });
+    const selection = deferredSelection();
+    registerBuiltinSlashCommands({
+      onApiModeSelect: () => selection.promise,
+    });
+    const api = listSlashCommands().find((cmd) => cmd.name === 'api');
+
+    if (!api) throw new Error('Expected /api to be registered');
+
+    expect(openRegisteredCliSlashForm(api, '')).toBe(true);
+
+    const apiNode = renderOpenForm<{
+      onSelect?: (value: CliApiMode) => void;
+    }>();
+    apiNode.props?.onSelect?.('personal');
+    await settleFormSelection();
+
+    expect(apiNode.isClosed()).toBe(false);
+
+    selection.resolve();
+    await settleFormSelection();
+
+    expect(apiNode.isClosed()).toBe(true);
   });
 
   it('closes the resume picker before running the resume action', async () => {
