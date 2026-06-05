@@ -1,5 +1,5 @@
 import { ModelProvider } from 'llm-zoo';
-import { getConfig } from '@agent/core/config';
+import { getConfig } from '@utils/config/configUtils';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
 import {

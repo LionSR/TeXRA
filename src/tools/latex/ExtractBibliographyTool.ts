@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { getConfig } from '@agent/core/config';
+import { getConfig } from '@utils/config/configUtils';
 import {
   extractBibliographyContext,
   loadBibliographyEntries,

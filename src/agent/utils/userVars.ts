@@ -9,7 +9,7 @@ import {
   AgentPrompt,
   AgentCategory,
 } from '@agent/core/definition/AgentDataclass';
-import { getConfig } from '@agent/core/config';
+import { getConfig } from '@utils/config/configUtils';
 import type { FileListEntry } from '@shared/schemas';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';

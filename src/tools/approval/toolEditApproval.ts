@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { getConfig } from '@agent/core/config';
+import { getConfig } from '@utils/config/configUtils';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import {
   LineChangesSchema,
