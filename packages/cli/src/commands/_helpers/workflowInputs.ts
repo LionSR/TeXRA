@@ -29,12 +29,41 @@ function normalizeCliInputPath(candidate: string, cwd: string): string {
   return absolutePath;
 }
 
+function isPathInsideCwd(candidate: string, cwd: string): boolean {
+  const absolutePath = resolveAgainstCwd(candidate, cwd);
+  const relativePath = path.relative(cwd, absolutePath);
+  return (
+    relativePath === '' ||
+    (!!relativePath &&
+      !relativePath.startsWith('..') &&
+      !path.isAbsolute(relativePath))
+  );
+}
+
+function normalizeCliInputPathForRun(
+  candidate: string,
+  cwd: string,
+  flagLabel: string,
+  options: WorkflowInputExpansionOptions,
+): string {
+  if (
+    options.requireWorkspaceFiles === true &&
+    !isPathInsideCwd(candidate, cwd)
+  ) {
+    throw new CliUsageError(
+      `${flagLabel}: file is outside --cwd: ${candidate}`,
+    );
+  }
+  return normalizeCliInputPath(candidate, cwd);
+}
+
 function isStdinWorkflowInputSpec(inputSpec: string): boolean {
   return inputSpec.trim() === STDIN_INPUT_TOKEN;
 }
 
 export interface WorkflowInputExpansionOptions {
   readonly allowEmpty?: boolean;
+  readonly requireWorkspaceFiles?: boolean;
   readonly stdinInputFile?: () => Promise<string>;
 }
 
@@ -42,6 +71,7 @@ type WorkflowInputExpansionEntry = readonly string[] | 'stdin';
 
 interface PreparedWorkflowInputExpansion {
   readonly entries: WorkflowInputExpansionEntry[];
+  readonly flagLabel: string;
   readonly stdinInputFile?: () => Promise<string>;
 }
 
@@ -127,7 +157,14 @@ export async function expandWorkflowInputSpec(
 
   if (trimmed === STDIN_INPUT_TOKEN) {
     const stdinInputFile = requireStdinWorkflowInputFile(flagLabel, options);
-    return [normalizeCliInputPath(await stdinInputFile(), cwd)];
+    return [
+      normalizeCliInputPathForRun(
+        await stdinInputFile(),
+        cwd,
+        flagLabel,
+        options,
+      ),
+    ];
   }
 
   if (hasMagic(trimmed)) {
@@ -140,7 +177,11 @@ export async function expandWorkflowInputSpec(
     if (matches.length === 0) {
       throw new CliUsageError(`No input files matched: ${trimmed}`);
     }
-    return matches.sort().map((match) => normalizeCliInputPath(match, cwd));
+    return matches
+      .sort()
+      .map((match) =>
+        normalizeCliInputPathForRun(match, cwd, flagLabel, options),
+      );
   }
 
   const absolutePath = resolveAgainstCwd(trimmed, cwd);
@@ -166,7 +207,11 @@ export async function expandWorkflowInputSpec(
         `No .tex input files found in directory: ${trimmed}`,
       );
     }
-    return matches.sort().map((match) => normalizeCliInputPath(match, cwd));
+    return matches
+      .sort()
+      .map((match) =>
+        normalizeCliInputPathForRun(match, cwd, flagLabel, options),
+      );
   }
 
   // Fail fast with a Usage error (exit 2) instead of paying full platform
@@ -174,7 +219,7 @@ export async function expandWorkflowInputSpec(
   if (!stats) {
     throw new CliUsageError(`${flagLabel}: file not found: ${trimmed}`);
   }
-  return [normalizeCliInputPath(trimmed, cwd)];
+  return [normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options)];
 }
 
 export async function expandWorkflowInputSpecs(
@@ -204,9 +249,9 @@ async function prepareWorkflowInputExpansion(
       entries.push('stdin');
       continue;
     }
-    entries.push(await expandWorkflowInputSpec(spec, cwd, flagLabel));
+    entries.push(await expandWorkflowInputSpec(spec, cwd, flagLabel, options));
   }
-  return { entries, stdinInputFile };
+  return { entries, flagLabel, stdinInputFile };
 }
 
 async function finishWorkflowInputExpansion(
@@ -216,7 +261,12 @@ async function finishWorkflowInputExpansion(
 ): Promise<string[]> {
   const expanded: string[] = [];
   const stdinPath = prepared.stdinInputFile
-    ? normalizeCliInputPath(await prepared.stdinInputFile(), cwd)
+    ? normalizeCliInputPathForRun(
+        await prepared.stdinInputFile(),
+        cwd,
+        prepared.flagLabel,
+        options,
+      )
     : undefined;
   for (const entry of prepared.entries) {
     if (entry === 'stdin') {
@@ -244,6 +294,7 @@ export async function expandRunInputs(
   cwd: string,
   options: {
     readonly allowEmptyInput?: boolean;
+    readonly requireWorkspaceFiles?: boolean;
     readonly stdinInputFile?: () => Promise<string>;
   } = {},
 ): Promise<{ inputFiles: string[]; contextFiles: string[] }> {
@@ -260,17 +311,24 @@ export async function expandRunInputs(
     inputSpecs,
     cwd,
     '--input',
-    { stdinInputFile: options.stdinInputFile },
+    {
+      requireWorkspaceFiles: options.requireWorkspaceFiles,
+      stdinInputFile: options.stdinInputFile,
+    },
   );
   const contextExpansion = await prepareWorkflowInputExpansion(
     contextSpecs,
     cwd,
     '--context',
-    { stdinInputFile: options.stdinInputFile },
+    {
+      requireWorkspaceFiles: options.requireWorkspaceFiles,
+      stdinInputFile: options.stdinInputFile,
+    },
   );
 
   const inputFiles = await finishWorkflowInputExpansion(inputExpansion, cwd, {
     allowEmpty: options.allowEmptyInput,
+    requireWorkspaceFiles: options.requireWorkspaceFiles,
     stdinInputFile: options.stdinInputFile,
   });
   const contextFiles = await finishWorkflowInputExpansion(
@@ -278,6 +336,7 @@ export async function expandRunInputs(
     cwd,
     {
       allowEmpty: true,
+      requireWorkspaceFiles: options.requireWorkspaceFiles,
       stdinInputFile: options.stdinInputFile,
     },
   );
