@@ -1202,6 +1202,25 @@ const SCENARIOS = [
     unexpect: ['[Option-p]tasks', '[Option-s]subagents'],
   },
   {
+    name: 'failed-subagent-status',
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_FAILED_CHILD: 'reviewer',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    expect: [
+      'strategy running',
+      'leanSolver waiting',
+      'reviewer error',
+      '2 sub',
+      '[Tab]streams',
+      ']tasks',
+    ],
+    unexpect: ['reviewer running', '3 sub'],
+  },
+  {
     name: 'subagents-with-todos-compact',
     rows: 14,
     cols: 80,
