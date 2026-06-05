@@ -198,6 +198,44 @@ describe('CLI ModelListForm model visibility', () => {
     ]);
   });
 
+  it('marks API-mode-runnable models disabled when the live chat cannot switch formats', () => {
+    const items = modelSelectItemsForCliMode(
+      [
+        access({
+          value: 'sonnet46T',
+          label: 'Sonnet',
+          availability: 'provider-key',
+        }),
+        access({
+          value: 'gpt55',
+          label: 'GPT-5.5',
+          availability: 'provider-key',
+        }),
+      ],
+      'personal',
+      (model) =>
+        model === 'sonnet46T'
+          ? 'different conversation format; start new chat'
+          : undefined,
+    );
+
+    expect(items).toEqual([
+      {
+        value: 'sonnet46T',
+        label: 'Sonnet',
+        description:
+          'api: api key set; different conversation format; start new chat',
+        disabled: true,
+      },
+      {
+        value: 'gpt55',
+        label: 'GPT-5.5',
+        description: 'api: api key set',
+        disabled: false,
+      },
+    ]);
+  });
+
   it('treats filtered-empty lists as non-actionable', () => {
     expect(
       modelSelectItemsForCliMode(
