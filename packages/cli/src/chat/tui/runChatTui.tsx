@@ -5,7 +5,7 @@
 // non-TTY callers are pointed at `texra run` (which is what they actually
 // want for piping/scripting).
 
-import { render } from 'ink';
+import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
 import { flushPendingRunTraces, getDefaultStreamLogStore } from '@transcript';
@@ -137,6 +137,7 @@ import {
   cleanupTerminalModes,
   clearTerminalScrollback,
 } from './terminalCleanup';
+import type { TranscriptViewportChange } from './state/transcriptViewportMode';
 
 export interface ChatResult {
   exitCode: number;
@@ -1611,6 +1612,15 @@ export async function runChat(
   };
 
   const stdoutColorEnabled = context.stdoutColorEnabled ?? context.colorEnabled;
+  const inkRef: { current?: InkInstance } = {};
+  const repaintTranscriptViewport = (
+    change: TranscriptViewportChange,
+  ): void => {
+    inkRef.current?.repaint({
+      clearScrollback: change.enteredRootScrollback,
+      preserveStatic: false,
+    });
+  };
   const ink = render(
     <App
       onSubmit={handleSubmit}
@@ -1618,6 +1628,7 @@ export async function runChat(
       canStopActiveRun={canStopActiveRun}
       colorEnabled={stdoutColorEnabled}
       onInterruptActive={interruptActive}
+      onTranscriptViewportChange={repaintTranscriptViewport}
       onCtrlC={() => handleSigint()}
       onKillExecution={(executionId) => {
         clearApprovals();
@@ -1646,6 +1657,7 @@ export async function runChat(
       },
     },
   );
+  inkRef.current = ink;
 
   let pendingExitTimer: ReturnType<typeof setTimeout> | undefined;
   let exitArmed = false;

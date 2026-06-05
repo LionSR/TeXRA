@@ -1,5 +1,5 @@
-// Pure viewport math for the live transcript region. Finalized entries are
-// owned by `<Static>` scrollback; this module only sizes the in-flight tail.
+// Pure viewport math for bounded transcript panes. Root live mode sizes only
+// pending entries; focused child mode can size finalized scoped history too.
 
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
@@ -42,7 +42,7 @@ export function estimateTranscriptEntryRows(
   return estimateWrappedRows(entry.text, width) + 1;
 }
 
-function estimatePendingEntryRows(
+export function estimateLiveTranscriptEntryRows(
   entry: ConversationEntry,
   width = 80,
 ): number {
@@ -61,20 +61,32 @@ function estimatePendingEntryRows(
   return estimateTranscriptEntryRows(entry, width);
 }
 
-export interface PendingEntrySelection {
+export interface TranscriptEntrySelection {
   readonly entries: readonly ConversationEntry[];
   readonly rowLimits: ReadonlyMap<string, number>;
   readonly usedRows: number;
 }
 
-// Pick the newest live entries that fit in `maxRows`. Finalized entries do
-// not pass through this path; they are printed once by `<Static>` so ordinary
-// terminal scrollback is the source of truth for the conversation history.
-export function selectPendingEntriesForViewport(
+export type TranscriptViewportSizing = 'live-tail' | 'finalized-full';
+
+function estimateViewportEntryRows(
+  entry: ConversationEntry,
+  width: number,
+  sizing: TranscriptViewportSizing,
+): number {
+  return sizing === 'finalized-full' && entry.finalized
+    ? estimateTranscriptEntryRows(entry, width)
+    : estimateLiveTranscriptEntryRows(entry, width);
+}
+
+// Pick the newest entries that fit in `maxRows`. Root live mode passes only
+// pending rows; scoped child mode may pass finalized child history too.
+export function selectTranscriptEntriesForViewport(
   entries: readonly ConversationEntry[],
   maxRows: number,
   width = 80,
-): PendingEntrySelection {
+  sizing: TranscriptViewportSizing = 'live-tail',
+): TranscriptEntrySelection {
   if (!Number.isFinite(maxRows) || maxRows <= 0) {
     return { entries: [], rowLimits: new Map(), usedRows: 0 };
   }
@@ -84,12 +96,9 @@ export function selectPendingEntriesForViewport(
   let usedRows = 0;
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
-    const entryRows = estimatePendingEntryRows(entry, width);
+    const entryRows = estimateViewportEntryRows(entry, width, sizing);
     if (usedRows + entryRows > maxRows) {
-      if (
-        selected.length === 0 &&
-        (entry.role === 'assistant' || entry.role === 'tool')
-      ) {
+      if (selected.length === 0) {
         selected.unshift(entry);
         rowLimits.set(entry.id, maxRows);
         usedRows = maxRows;
