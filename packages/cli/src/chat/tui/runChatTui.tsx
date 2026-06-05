@@ -54,6 +54,8 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   cliRunnableModelOptionsForSource,
+  type CliModelFallbackMode,
+  type CliRunnableModelResolution,
   formatCliNoAvailableModelsRecovery,
   resolveCliRunnableModel,
 } from '@cli/runtime/modelAccess';
@@ -229,6 +231,17 @@ export function clearTuiSessionRunState(
   session.streamId = undefined;
   session.executionId = undefined;
   session.runPromise = undefined;
+  session.runExitCode = CliExitCode.Success;
+  session.runCompleted = false;
+  session.stopRequested = false;
+}
+
+export function markChatTuiRunPending(
+  session: ClearableTuiSessionState,
+  runPromise: Promise<void>,
+): void {
+  session.streamId = undefined;
+  session.runPromise = runPromise;
   session.runExitCode = CliExitCode.Success;
   session.runCompleted = false;
   session.stopRequested = false;
@@ -481,6 +494,25 @@ async function applyCliModelSelection(
   );
 }
 
+function chatApiModeRecoveryMessage(apiMode: CliApiMode): string {
+  return formatCliNoAvailableModelsRecovery(apiMode, {
+    includedModeAction: 'switch to included relay with `/api included`',
+    personalModeAction: 'switch to personal API keys with `/api personal`',
+  });
+}
+
+export async function resolveChatRootModelForApiMode(
+  model: string,
+  apiMode: CliApiMode,
+  fallbackMode: CliModelFallbackMode,
+): Promise<CliRunnableModelResolution> {
+  return resolveCliRunnableModel(model, {
+    fallbackMode,
+    apiMode,
+    noAvailableModelsMessage: chatApiModeRecoveryMessage(apiMode),
+  });
+}
+
 async function reconcileRootModelAfterApiModeChange(
   context: SlashCommandContext | undefined,
   apiMode: CliApiMode,
@@ -488,14 +520,11 @@ async function reconcileRootModelAfterApiModeChange(
   if (!context || !chatTuiCanStartRootRun(context.session)) return undefined;
 
   const currentModel = cliState.sessionMeta.get().model;
-  const resolution = await resolveCliRunnableModel(currentModel, {
-    fallbackMode: 'notice',
+  const resolution = await resolveChatRootModelForApiMode(
+    currentModel,
     apiMode,
-    noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(apiMode, {
-      includedModeAction: 'switch to included relay with `/api included`',
-      personalModeAction: 'switch to personal API keys with `/api personal`',
-    }),
-  });
+    'notice',
+  );
   if (resolution.model === currentModel) return undefined;
 
   await setCliHelperModel(resolution.model);
@@ -1130,12 +1159,6 @@ export async function runChat(
   };
 
   const startAgentRun = (config: AgentConfigPayload): void => {
-    followUpQueue.clear();
-    session.streamId = undefined;
-    session.runCompleted = false;
-    session.stopRequested = false;
-    session.runExitCode = CliExitCode.Success;
-
     const currentModel = config.model;
     const sessionContext = currentSessionContext(currentModel);
     cliState.sessionMeta.set({
@@ -1154,7 +1177,7 @@ export async function runChat(
     let agentSettled = false;
     session.executionId = executionId;
 
-    session.runPromise = setCliHelperModel(currentModel)
+    const runPromise = setCliHelperModel(currentModel)
       .then(() => registerFreshChatExecution(executionId, config))
       .then((registeredConfig) => {
         executionRegistered = true;
@@ -1226,6 +1249,7 @@ export async function runChat(
         session.runCompleted = true;
         void runtimeHost.close();
       });
+    markChatTuiRunPending(session, runPromise);
   };
 
   // Interactive resume: continue a suspended tool-use session by execution id.
@@ -1335,23 +1359,52 @@ export async function runChat(
     },
   });
 
-  const startSession = (
+  const startSession = async (
     instruction: string,
     mediaFiles?: readonly string[],
-  ): void => {
-    const meta = cliState.sessionMeta.get();
-    const currentAgent = meta.agent || agent;
-    const currentModel = meta.model || model;
-    startAgentRun(
-      buildInitialChatAgentConfig({
-        agent: currentAgent,
-        model: currentModel,
-        instruction,
-        mediaFiles,
-        workingDirectory: context.cwd,
-        cliMultiAgentPresetId: init.cliMultiAgentPresetId,
-      }),
-    );
+  ): Promise<void> => {
+    followUpQueue.clear();
+    session.executionId = undefined;
+    // Queue the async startup body after the reservation below so a second
+    // submit cannot pass chatTuiCanStartRootRun during model/auth resolution.
+    const pendingStart = Promise.resolve().then(async (): Promise<void> => {
+      try {
+        const meta = cliState.sessionMeta.get();
+        const currentAgent = meta.agent || agent;
+        const currentModel = meta.model || model;
+        const resolution = await resolveChatRootModelForApiMode(
+          currentModel,
+          meta.apiMode,
+          'reject',
+        );
+        if (session.stopRequested) {
+          session.runCompleted = true;
+          return;
+        }
+
+        startAgentRun(
+          buildInitialChatAgentConfig({
+            agent: currentAgent,
+            model: resolution.model,
+            instruction,
+            mediaFiles,
+            workingDirectory: context.cwd,
+            cliMultiAgentPresetId: init.cliMultiAgentPresetId,
+          }),
+        );
+      } catch (error: unknown) {
+        if (!session.stopRequested) {
+          appendLocalUserTranscript(instruction);
+          appendLocalErrorTranscript(toErrorMessage(error));
+        }
+        session.runExitCode = session.stopRequested
+          ? CliExitCode.Success
+          : CliExitCode.AgentError;
+        session.runCompleted = true;
+      }
+    });
+    markChatTuiRunPending(session, pendingStart);
+    await pendingStart;
   };
 
   const handleSubmit = (line: string, mediaFiles?: readonly string[]): void => {
@@ -1382,7 +1435,7 @@ export async function runChat(
     }
     const childFollowUpTarget = chatTuiActiveChildFollowUpTarget();
     if (!childFollowUpTarget && chatTuiCanStartRootRun(session)) {
-      startSession(line, mediaFiles);
+      await startSession(line, mediaFiles);
       return;
     }
     // PRD success criterion: follow-ups must not be silently dropped when the
