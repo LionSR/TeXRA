@@ -9,7 +9,7 @@ import {
   type SlashCommand,
   type SlashPickIntent,
 } from './slashRegistry';
-import { isPlainReturnInput } from '../input/inputKeys';
+import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { KeyHints } from '../ui/KeyHints';
 
 export interface SlashPaletteProps {
@@ -144,7 +144,7 @@ export function SlashPalette(
 
   useInput(
     (input, key) => {
-      if (key.escape) {
+      if (isEscapeInput(input, key)) {
         props.onCancel();
         return;
       }

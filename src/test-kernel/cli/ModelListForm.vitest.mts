@@ -7,6 +7,7 @@ import {
   modelSelectWindow,
   noRunnableModelAccessReason,
 } from '@cli/chat/tui/forms/ModelListForm';
+import { shouldCloseAsyncListFormOnInput } from '@cli/chat/tui/forms/_shared/useAsyncListForm';
 import {
   COMPACT_FORM_MAX_ROWS,
   isCompactFormRows,
@@ -380,6 +381,50 @@ describe('CLI ModelListForm empty state', () => {
     ).toBe(
       'No personal API-key models are runnable. Configure a provider key or switch with /api included.',
     );
+  });
+});
+
+describe('CLI async list form close input', () => {
+  it('treats normalized and raw Escape as close in non-actionable states', () => {
+    expect(
+      shouldCloseAsyncListFormOnInput({
+        input: '',
+        key: { escape: true },
+        loading: true,
+        error: undefined,
+        empty: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldCloseAsyncListFormOnInput({
+        input: '\u001B',
+        key: {},
+        loading: false,
+        error: 'failed',
+        empty: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldCloseAsyncListFormOnInput({
+        input: '\u001B',
+        key: {},
+        loading: false,
+        error: undefined,
+        empty: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('does not let Escape close an actionable list form', () => {
+    expect(
+      shouldCloseAsyncListFormOnInput({
+        input: '\u001B',
+        key: {},
+        loading: false,
+        error: undefined,
+        empty: false,
+      }),
+    ).toBe(false);
   });
 });
 
