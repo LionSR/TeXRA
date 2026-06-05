@@ -32,7 +32,7 @@ async function runSetup(context: CliContext): Promise<number> {
 
   await initCliPlatform({ ...context, quietLogs: true });
   const { runCliOnboarding } = await import('../onboarding/runOnboarding');
-  await runCliOnboarding();
+  await runCliOnboarding(context.stdoutColorEnabled ?? context.colorEnabled);
   return CliExitCode.Success;
 }
 
