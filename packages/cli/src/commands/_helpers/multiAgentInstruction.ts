@@ -2,6 +2,7 @@ import {
   formatUnavailableApprovalInstruction,
   type ApprovalInstructionContext,
 } from './approvalPolicyInstruction';
+import { formatCliRunFileInstruction } from './runFileInstruction';
 
 interface MultiAgentInstructionPreset {
   readonly name: string;
@@ -11,25 +12,11 @@ interface MultiAgentInstructionPreset {
 const COMPLETENESS_GUIDANCE =
   'Before claiming a result is complete, check the full domain stated by the user, including sign choices, zero and boundary cases, and symmetry branches.';
 
-function formatInputFileInstruction(
-  inputFiles: readonly string[],
-): string | undefined {
-  if (inputFiles.length === 0) return undefined;
-  const fileList = inputFiles
-    .map((file) => `- ${JSON.stringify(file)}`)
-    .join('\n');
-  return [
-    'Primary user input files:',
-    fileList,
-    "Treat these files as the user's task source. Read and use them before delegating work.",
-    'Do not substitute unrelated workspace files for the task.',
-  ].join('\n');
-}
-
 export function formatMultiAgentRunInstruction(
   preset: MultiAgentInstructionPreset,
   init: {
     readonly inputFiles: readonly string[];
+    readonly contextFiles: readonly string[];
     readonly instruction: string;
     readonly approvalContext: ApprovalInstructionContext;
   },
@@ -44,13 +31,16 @@ export function formatMultiAgentRunInstruction(
     init.approvalContext,
   );
   if (approvalInstruction) parts.push(approvalInstruction);
-  const inputFileInstruction = formatInputFileInstruction(init.inputFiles);
+  const inputFileInstruction = formatCliRunFileInstruction({
+    inputFiles: init.inputFiles,
+    contextFiles: init.contextFiles,
+  });
   if (inputFileInstruction) parts.push(inputFileInstruction);
 
   const instruction = init.instruction.trim();
   if (instruction) {
     parts.push(
-      init.inputFiles.length > 0
+      inputFileInstruction
         ? 'Additional user instruction:'
         : 'User instruction:',
       instruction,
