@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
     executeCliRequest: vi.fn(),
     expandRunInputs: vi.fn(),
     cliMultiAgentPlanHasGaps: vi.fn(),
+    cliMultiAgentPresetTeamLaunchBlockReason: vi.fn(),
     getToolUseAgents: vi.fn(),
     getWorkflowAgents: vi.fn(),
     initCliPlatform: vi.fn(),
@@ -73,6 +74,8 @@ vi.mock('@cli/runtime/multiAgentPresets', () => {
         agent.tools?.some((tool) => delegationTools.has(tool)) ?? false,
     ),
     cliMultiAgentPlanHasGaps: mocks.cliMultiAgentPlanHasGaps,
+    cliMultiAgentPresetTeamLaunchBlockReason:
+      mocks.cliMultiAgentPresetTeamLaunchBlockReason,
     cliMultiAgentPresetNdjsonRecords: vi.fn(() => []),
     findCliMultiAgentPreset: vi.fn(() => ({
       id: 'mathematician',
@@ -151,6 +154,7 @@ describe('CLI multi-agent run command', () => {
     });
     mocks.getWorkflowAgents.mockReturnValue([]);
     mocks.cliMultiAgentPlanHasGaps.mockReturnValue(false);
+    mocks.cliMultiAgentPresetTeamLaunchBlockReason.mockReturnValue(undefined);
     mocks.planCliMultiAgentPresets.mockImplementation((presets) =>
       presets.map((preset: unknown) =>
         mocks.planCliMultiAgentPresetRun(preset, {
@@ -446,7 +450,10 @@ describe('CLI multi-agent run command', () => {
     expect(mocks.expandRunInputs).not.toHaveBeenCalled();
   });
 
-  it('makes signed-out preset fallback to one root agent explicit', async () => {
+  it('refuses signed-out preset fallback to one root agent', async () => {
+    mocks.cliMultiAgentPresetTeamLaunchBlockReason.mockReturnValueOnce(
+      'root lean cannot delegate',
+    );
     mocks.planCliMultiAgentPresetRun.mockReturnValue({
       preset: {
         id: 'mathematician',
@@ -475,90 +482,13 @@ describe('CLI multi-agent run command', () => {
       instruction: 'Solve a short math problem.',
     });
 
-    expect(exitCode).toBe(0);
+    expect(exitCode).toBe(2);
+    expect(mocks.executeCliRequest).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'WARN preset mathematician references unavailable agents: workflow:generic, workflow:devise, workflow:apply, tool-use:simplifier, tool-use:progressCheck, tool-use:orchestrator',
-    );
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'WARN team delegation unavailable for preset mathematician; running only root agent lean. Enable a delegating team root or pass --agent to choose one.',
-    );
-  });
-
-  it('does not suggest --agent again when the explicit root cannot delegate', async () => {
-    mocks.planCliMultiAgentPresetRun.mockReturnValue({
-      preset: {
-        id: 'mathematician',
-        name: 'Mathematician',
-        source: 'built-in',
-      },
-      rootAgent: {
-        name: 'review',
-        category: 'toolUse',
-        source: 'builtInToolUse',
-        path: '/agents/review.yaml',
-        tools: [],
-      },
-      missingWorkflowAgents: ['generic', 'devise', 'apply'],
-      missingToolUseAgents: ['simplifier', 'progressCheck', 'orchestrator'],
-      workflowAgentKeys: [],
-      toolUseAgentKeys: ['builtInToolUse:review'],
-    });
-    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
-
-    const exitCode = await runMultiAgentPreset(cliContext(), {
-      preset: 'mathematician',
-      inputFiles: [],
-      contextFiles: [],
-      agent: 'review',
-      model: 'deepseekT',
-      instruction: 'Solve a short math problem.',
-    });
-
-    expect(exitCode).toBe(0);
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'WARN team delegation unavailable for preset mathematician; running only root agent review. The selected --agent root cannot delegate; choose a delegating root to run this as a team.',
+      'Multi-agent preset "mathematician" cannot start as a team: root lean cannot delegate. Run `texra multi-agent inspect mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent lean` if that is what you want.',
     );
     expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
-      expect.stringContaining('pass --agent to choose one'),
-    );
-  });
-
-  it('does not treat whitespace-only --agent as an explicit root choice', async () => {
-    mocks.planCliMultiAgentPresetRun.mockReturnValue({
-      preset: {
-        id: 'mathematician',
-        name: 'Mathematician',
-        source: 'built-in',
-      },
-      rootAgent: {
-        name: 'lean',
-        category: 'toolUse',
-        source: 'builtInToolUse',
-        path: '/agents/lean.yaml',
-        tools: [],
-      },
-      missingWorkflowAgents: ['generic', 'devise', 'apply'],
-      missingToolUseAgents: ['simplifier', 'progressCheck', 'orchestrator'],
-      workflowAgentKeys: [],
-      toolUseAgentKeys: ['builtInToolUse:lean'],
-    });
-    const { runMultiAgentPreset } = await import('@cli/commands/multiAgent');
-
-    const exitCode = await runMultiAgentPreset(cliContext(), {
-      preset: 'mathematician',
-      inputFiles: [],
-      contextFiles: [],
-      agent: '   ',
-      model: 'deepseekT',
-      instruction: 'Solve a short math problem.',
-    });
-
-    expect(exitCode).toBe(0);
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'WARN team delegation unavailable for preset mathematician; running only root agent lean. Enable a delegating team root or pass --agent to choose one.',
-    );
-    expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
-      expect.stringContaining('The selected --agent root cannot delegate'),
+      expect.stringContaining('WARN team delegation unavailable'),
     );
   });
 
@@ -597,7 +527,10 @@ describe('CLI multi-agent run command', () => {
     );
   });
 
-  it('does not show non-delegating fallback text for a delegating root', async () => {
+  it('refuses a delegating root with no available team members', async () => {
+    mocks.cliMultiAgentPresetTeamLaunchBlockReason.mockReturnValueOnce(
+      'no available team members',
+    );
     mocks.planCliMultiAgentPresetRun.mockReturnValue({
       preset: {
         id: 'mathematician',
@@ -626,9 +559,10 @@ describe('CLI multi-agent run command', () => {
       instruction: 'Solve a short math problem.',
     });
 
-    expect(exitCode).toBe(0);
+    expect(exitCode).toBe(2);
+    expect(mocks.executeCliRequest).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'WARN preset mathematician is missing team agents; running delegating root agent orchestrator.',
+      'Multi-agent preset "mathematician" cannot start as a team: no available team members. Run `texra multi-agent inspect mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent orchestrator` if that is what you want.',
     );
     expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
       expect.stringContaining('Enable a delegating team root'),
