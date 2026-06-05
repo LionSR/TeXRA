@@ -14,6 +14,7 @@ import {
 import {
   transcriptViewportChange,
   transcriptViewportKey,
+  transcriptViewportRepaintOptions,
 } from '@cli/chat/tui/state/transcriptViewportMode';
 import {
   estimateLiveTranscriptEntryRows,
@@ -489,6 +490,28 @@ describe('CLI conversation transcript splitting', () => {
         nextViewportKey: rootViewportKey,
       }),
     ).toMatchObject({ enteredRootScrollback: true });
+  });
+
+  it('repaints viewport switches without preserving stale Static output', () => {
+    const rootToChild = transcriptViewportChange({
+      previousViewportKey: 'root-scrollback',
+      nextViewportKey: 'scoped:child',
+    });
+    const childToRoot = transcriptViewportChange({
+      previousViewportKey: 'scoped:child',
+      nextViewportKey: 'root-scrollback',
+    });
+
+    expect(rootToChild).toBeDefined();
+    expect(childToRoot).toBeDefined();
+    expect(transcriptViewportRepaintOptions(rootToChild!)).toEqual({
+      clearScrollback: false,
+      preserveStatic: false,
+    });
+    expect(transcriptViewportRepaintOptions(childToRoot!)).toEqual({
+      clearScrollback: true,
+      preserveStatic: false,
+    });
   });
 
   it('detects generated inquiry continuation rows only', () => {
