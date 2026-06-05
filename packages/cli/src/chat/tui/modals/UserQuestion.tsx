@@ -16,7 +16,7 @@ import {
 } from './UserQuestionState';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
 import { BaseTextInput } from '../input/BaseTextInput';
-import { isPlainReturnInput } from '../input/inputKeys';
+import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { clipToWidth, textDisplayWidth } from '../render/terminalText';
 import {
@@ -351,7 +351,7 @@ function MultiSelectQuestion(
 
   useInput((input, key) => {
     // Esc cancels; Ctrl+C is owned by the App's unified handler (exits the app).
-    if (key.escape) {
+    if (isEscapeInput(input, key)) {
       props.onCancel();
       return;
     }
@@ -466,9 +466,9 @@ function FreeTextQuestion(props: FreeTextQuestionProps): React.JSX.Element {
     showOverflow: false,
     visibleItemCount: visibleOptions.length,
   });
-  useInput((_input, key) => {
+  useInput((input, key) => {
     // Esc cancels; Ctrl+C is owned by the App's unified handler (exits the app).
-    if (key.escape) {
+    if (isEscapeInput(input, key)) {
       props.onCancel();
     }
   });

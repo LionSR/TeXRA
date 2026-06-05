@@ -11,6 +11,7 @@ import {
   confirmCardKeyHintsForWidth,
 } from './ConfirmCardState';
 import { BaseTextInput } from '../input/BaseTextInput';
+import { isEscapeInput } from '../input/inputKeys';
 import { KEY_HINT_SEPARATOR, KeyHints } from '../ui/KeyHints';
 import type {
   ApprovalBypassKind,
@@ -74,7 +75,7 @@ export function ConfirmCard({
   useInput(
     (input, key) => {
       if (feedbackMode) {
-        if (key.escape) {
+        if (isEscapeInput(input, key)) {
           setFeedbackActive(false);
           updateFeedback('');
         }

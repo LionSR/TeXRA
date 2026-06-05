@@ -6,6 +6,7 @@ import type { ExternalInquiryPermission } from '@shared/schemas';
 
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
 import { BaseTextInput } from '../input/BaseTextInput';
+import { isEscapeInput } from '../input/inputKeys';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
   maxScrollableRowOffset,
@@ -304,7 +305,7 @@ export function ExternalInquiry(
   }, [maxQuestionOffset]);
 
   useInput((input, key) => {
-    if (key.escape) {
+    if (isEscapeInput(input, key)) {
       props.onDecide({
         accepted: false,
         userMessage: 'External inquiry skipped by user.',

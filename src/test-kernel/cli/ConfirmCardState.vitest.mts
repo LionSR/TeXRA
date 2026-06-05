@@ -13,6 +13,8 @@ describe('CLI confirm-card key handling', () => {
     expect(confirmCardKeyAction('Y', {}, false)).toBe('approve');
     expect(confirmCardKeyAction('n', {}, false)).toBe('reject');
     expect(confirmCardKeyAction('', { escape: true }, false)).toBe('reject');
+    expect(confirmCardKeyAction('\u001B', {}, false)).toBe('reject');
+    expect(confirmCardKeyAction('\u001Bn', {}, false)).toBe('ignore');
   });
 
   it('enters feedback mode with e', () => {

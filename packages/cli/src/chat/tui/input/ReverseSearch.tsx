@@ -9,7 +9,7 @@ import { Box, Text, useInput } from 'ink';
 
 import { KeyHints } from '../ui/KeyHints';
 import { BaseTextInput } from './BaseTextInput';
-import { isCtrlInput } from './inputKeys';
+import { isCtrlInput, isEscapeInput } from './inputKeys';
 import type { InputHistory } from '../history/inputHistory';
 
 export interface ReverseSearchProps {
@@ -30,7 +30,7 @@ export function ReverseSearch(props: ReverseSearchProps): React.JSX.Element {
   const match = props.history.reverseFind(query, cursor);
 
   useInput((input, key) => {
-    if (key.escape || isCtrlInput(input, key, 'g')) {
+    if (isEscapeInput(input, key) || isCtrlInput(input, key, 'g')) {
       props.onCancel();
       return;
     }

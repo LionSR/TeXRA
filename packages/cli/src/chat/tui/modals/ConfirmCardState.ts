@@ -1,4 +1,5 @@
 import { KEY_HINT_SEPARATOR } from '../ui/KeyHints';
+import { isEscapeInput } from '../input/inputKeys';
 
 export type ConfirmCardKeyAction =
   | 'approve'
@@ -34,7 +35,7 @@ export function confirmCardKeyAction(
   key: ConfirmCardKey,
   allowAlways: boolean,
 ): ConfirmCardKeyAction {
-  if (key.escape) return 'reject';
+  if (isEscapeInput(input, key)) return 'reject';
   if (key.ctrl || key.meta) return 'ignore';
   switch (input.toLowerCase()) {
     case 'y':
