@@ -7,7 +7,8 @@ import {
   appendStaticTranscriptItems,
   sessionHeaderIdentityLine,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
-import { selectPendingEntriesForViewport } from '@cli/chat/tui/panes/transcriptViewport';
+import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
+import { selectTranscriptEntriesForViewport } from '@cli/chat/tui/panes/transcriptViewport';
 import {
   cliState,
   patchStream,
@@ -242,7 +243,7 @@ describe('CLI conversation transcript splitting', () => {
       false,
     );
 
-    const selected = selectPendingEntriesForViewport([assistant], 4, 80);
+    const selected = selectTranscriptEntriesForViewport([assistant], 4, 80);
 
     expect(selected.entries.map((item) => item.id)).toEqual(['a1']);
     expect(selected.usedRows).toBe(4);
@@ -380,6 +381,25 @@ describe('CLI conversation transcript splitting', () => {
     });
 
     expect(items.slice(1).map((item) => item.id)).toEqual(['u1']);
+  });
+
+  it('separates root scrollback from scoped child transcript viewports', () => {
+    const ROOT = 'root-stream' as StreamTabId;
+    const CHILD = 'claude@agent-sdk#1' as StreamTabId;
+    const parentStream = new Map<StreamTabId, StreamTabId>([[CHILD, ROOT]]);
+
+    expect(
+      transcriptViewportKey({
+        activeStreamId: ROOT,
+        parentStream,
+      }),
+    ).toBe('root-scrollback');
+    expect(
+      transcriptViewportKey({
+        activeStreamId: CHILD,
+        parentStream,
+      }),
+    ).toBe(`scoped:${CHILD}`);
   });
 
   it('detects generated inquiry continuation rows only', () => {

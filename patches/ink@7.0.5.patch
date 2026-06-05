@@ -1,16 +1,40 @@
+diff --git a/build/ink.d.ts b/build/ink.d.ts
+index 273dd13875b9f0441d55fe0738975ca7695b39c1..c3114a970ac495f9c5f5dece35b437c4f1b47962 100644
+--- a/build/ink.d.ts
++++ b/build/ink.d.ts
+@@ -120,6 +120,11 @@ export default class Ink {
+     waitUntilExit(): Promise<unknown>;
+     waitUntilRenderFlush(): Promise<void>;
+     clear(): void;
++    repaint(options?: {
++        clearScrollback?: boolean;
++        emitLayout?: boolean;
++        preserveStatic?: boolean;
++    }): void;
+     patchConsole(): void;
+     private setAlternateScreen;
+     private resolveInteractiveOption;
 diff --git a/build/ink.js b/build/ink.js
-index b8fd45cc990adbc080eff28fc37463cd91337dff..39f2acb8bf923ef6d6bb8a158525fe03ecb94009 100644
+index b8fd45cc990adbc080eff28fc37463cd91337dff..cbef72ecef96a9153c7b501f6630e8e8a2e94643 100644
 --- a/build/ink.js
 +++ b/build/ink.js
-@@ -259,13 +259,45 @@ export default class Ink {
+@@ -259,18 +259,42 @@ export default class Ink {
          // error but consumers never call waitUntilExit().
          void this.exitPromise.catch(noop);
      }
 +    resizeTimer = undefined;
      resized = () => {
-+        const currentWidth = getWindowSize(this.options.stdout).columns;
-+        this.calculateLayout();
-+        dom.emitLayoutListeners(this.rootNode);
+         const currentWidth = getWindowSize(this.options.stdout).columns;
+-        if (currentWidth < this.lastTerminalWidth) {
+-            // We clear the screen when decreasing terminal width to prevent duplicate overlapping re-renders.
+-            this.log.clear();
+-            this.lastOutput = '';
+-            this.lastOutputToRender = '';
+-        }
+         this.calculateLayout();
+         dom.emitLayoutListeners(this.rootNode);
+-        this.onRender();
+-        this.lastTerminalWidth = currentWidth;
 +        if (currentWidth === this.lastTerminalWidth) {
 +            this.onRender();
 +            return;
@@ -21,7 +45,7 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..39f2acb8bf923ef6d6bb8a158525fe03
 +        // walks up and erases the <Static> header above. The reflow/scroll geometry
 +        // is owned by the emulator and not observable through a write-only stdout,
 +        // so the only terminal-independent fix is to redraw from a known origin:
-+        // clearTerminal homes the cursor and clears screen+scrollback, then we
++        // a full repaint homes the cursor and clears screen+scrollback, then we
 +        // reprint fullStaticOutput (header + finalized history, reflowed) and let
 +        // onRender draw the live region below it. Layout listeners still fire
 +        // synchronously above so components see the new terminal width immediately;
@@ -38,20 +62,14 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..39f2acb8bf923ef6d6bb8a158525fe03
 +        if (this.isUnmounted) {
 +            return;
 +        }
-         const currentWidth = getWindowSize(this.options.stdout).columns;
--        if (currentWidth < this.lastTerminalWidth) {
--            // We clear the screen when decreasing terminal width to prevent duplicate overlapping re-renders.
--            this.log.clear();
++        const currentWidth = getWindowSize(this.options.stdout).columns;
 +        if (currentWidth !== this.lastTerminalWidth) {
-+            this.log.reset();
-+            this.options.stdout.write(ansiEscapes.clearTerminal + (this.fullStaticOutput ?? ''));
-             this.lastOutput = '';
-             this.lastOutputToRender = '';
-+            this.lastOutputHeight = 0;
-         }
-         this.calculateLayout();
-         dom.emitLayoutListeners(this.rootNode);
-@@ -456,6 +479,13 @@ export default class Ink {
++            this.repaint({ clearScrollback: true });
++        }
+     };
+     resolveExitPromise = () => { };
+     rejectExitPromise = () => { };
+@@ -456,6 +480,13 @@ export default class Ink {
              return;
          }
          this.isUnmounting = true;
@@ -65,3 +83,73 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..39f2acb8bf923ef6d6bb8a158525fe03
          if (this.beforeExitHandler) {
              process.off('beforeExit', this.beforeExitHandler);
              this.beforeExitHandler = undefined;
+@@ -623,6 +654,42 @@ export default class Ink {
+             this.log.sync(this.lastOutputToRender || this.lastOutput + '\n');
+         }
+     }
++    repaint(options = {}) {
++        if (this.isUnmounted) {
++            return;
++        }
++        if (options.emitLayout !== false) {
++            this.calculateLayout();
++            dom.emitLayoutListeners(this.rootNode);
++        }
++        const startTime = performance.now();
++        const { output, outputHeight, staticOutput } = render(this.rootNode, this.isScreenReaderEnabled);
++        this.options.onRender?.({ renderTime: performance.now() - startTime });
++        const hasStaticOutput = staticOutput && staticOutput !== '\n';
++        const clearSequence = options.clearScrollback === true
++            ? ansiEscapes.clearTerminal
++            : ansiEscapes.clearViewport;
++        const nextStaticOutput = hasStaticOutput ? staticOutput : '';
++        const previousStaticOutput = options.preserveStatic === false
++            ? ''
++            : (this.fullStaticOutput ?? '');
++        if (options.preserveStatic === false) {
++            this.fullStaticOutput = nextStaticOutput;
++        }
++        else if (hasStaticOutput) {
++            this.fullStaticOutput += staticOutput;
++        }
++        const outputToRender = outputHeight >= getWindowSize(this.options.stdout).rows
++            ? output
++            : output + '\n';
++        this.log.reset();
++        this.options.stdout.write(clearSequence + previousStaticOutput + nextStaticOutput + outputToRender);
++        this.log.sync(outputToRender);
++        this.lastOutput = output;
++        this.lastOutputToRender = outputToRender;
++        this.lastOutputHeight = outputHeight;
++        this.lastTerminalWidth = getWindowSize(this.options.stdout).columns;
++    }
+     patchConsole() {
+         if (this.options.debug) {
+             return;
+diff --git a/build/render.d.ts b/build/render.d.ts
+index 867edcaf84fe7229c30fb072227a10c2a97ba1c1..d133a9833ec275a5126cf6ecafaaf6cfa7ff0fc0 100644
+--- a/build/render.d.ts
++++ b/build/render.d.ts
+@@ -168,6 +168,10 @@ export type Instance = {
+     Clear output.
+     */
+     clear: () => void;
++    /**
++    Repaint output from a known terminal origin.
++    */
++    repaint: Ink['repaint'];
+ };
+ /**
+ Mount a component and render the output.
+diff --git a/build/render.js b/build/render.js
+index 6f185f6212d7e1867fb5dc70d26cd64b3931c339..e57cf77f8e229538577140f876bfd095900d04ef 100644
+--- a/build/render.js
++++ b/build/render.js
+@@ -32,6 +32,7 @@ const render = (node, options) => {
+             instance.unmount();
+         },
+         clear: instance.clear,
++        repaint: instance.repaint,
+     };
+ };
+ export default render;

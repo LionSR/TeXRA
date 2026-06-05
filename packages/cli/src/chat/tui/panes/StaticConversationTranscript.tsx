@@ -135,7 +135,7 @@ export function appendStaticTranscriptItems({
   maxRows,
   width,
 }: {
-  readonly activeStreamId: string | undefined;
+  readonly activeStreamId: StreamTabId | undefined;
   readonly currentItems: readonly StaticTranscriptItem[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly meta: SessionMeta;
@@ -196,13 +196,22 @@ export function StaticConversationTranscript({
   const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
   const sessionMeta = useSignal(cliState.sessionMeta);
-  const [items, setItems] = useState<readonly StaticTranscriptItem[]>([]);
+  const [items, setItems] = useState<readonly StaticTranscriptItem[]>(() =>
+    appendStaticTranscriptItems({
+      activeStreamId,
+      currentItems: [],
+      streams,
+      meta: sessionMeta,
+      maxRows,
+      width,
+    }),
+  );
 
   useEffect(() => {
     // On a hard reset (e.g. /clear, picker-to-chat handoff) start the
     // items list from scratch so the header is the first thing the user
-    // sees after the scrollback was wiped. Otherwise extend the existing
-    // items so already-printed `<Static>` lines stay stable.
+    // sees after the scrollback was wiped. Focused child streams do not
+    // mount this static scrollback; they render their own bounded history.
     const isHardReset = streams.size === 0 && activeStreamId === undefined;
     setItems((currentItems) =>
       appendStaticTranscriptItems({
@@ -214,7 +223,7 @@ export function StaticConversationTranscript({
         width,
       }),
     );
-  }, [activeStreamId, maxRows, streams, sessionMeta, width]);
+  }, [activeStreamId, maxRows, sessionMeta, streams, width]);
 
   return (
     // Remount <Static> on a width change so Ink regenerates `fullStaticOutput`
