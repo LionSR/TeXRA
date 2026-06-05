@@ -37,6 +37,7 @@ import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { getDefaultStreamLogStore } from '@transcript';
 
 import { App } from '../src/chat/tui/App';
+import type { TranscriptViewportChange } from '../src/chat/tui/state/transcriptViewportMode';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
 import {
   listSlashCommands,
@@ -1358,7 +1359,16 @@ registerBuiltinSlashCommands({
   },
 });
 
-let ink: ReturnType<typeof render>;
+const inkRef: { current?: ReturnType<typeof render> } = {};
+function repaintHarnessTranscriptViewport(
+  change: TranscriptViewportChange,
+): void {
+  inkRef.current?.repaint({
+    clearScrollback: change.enteredRootScrollback,
+    preserveStatic: false,
+  });
+}
+
 function handleHarnessCtrlC(): void {
   if (canInterrupt) {
     markHarnessInterrupted();
@@ -1367,7 +1377,7 @@ function handleHarnessCtrlC(): void {
   void exitHarness(0);
 }
 
-ink = render(
+const ink = render(
   <App
     onSubmit={handleHarnessSubmit}
     onKillExecution={markHarnessExecutionStopped}
@@ -1375,6 +1385,7 @@ ink = render(
     canStopActiveRun={() => canInterrupt}
     colorEnabled={HARNESS_COLOR_ENABLED}
     onInterruptActive={markHarnessInterrupted}
+    onTranscriptViewportChange={repaintHarnessTranscriptViewport}
     onCtrlC={handleHarnessCtrlC}
   />,
   {
@@ -1384,6 +1395,7 @@ ink = render(
     exitOnCtrlC: false,
   },
 );
+inkRef.current = ink;
 
 let harnessExiting = false;
 async function exitHarness(exitCode: number): Promise<void> {
