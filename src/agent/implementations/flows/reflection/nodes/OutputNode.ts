@@ -18,11 +18,19 @@ import {
   getRoundOutput,
   type RoundSummary,
 } from '@agent/output/roundSummary';
+import {
+  formatCompileFailureRoundContext,
+  shouldUseCompileFailureRepairContext,
+} from '@agent/output/compileFailureRoundContext';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
-import type { CompileFailure, RoundOutput } from '@shared/schemas';
+import type {
+  CompileFailure,
+  CompileResult,
+  RoundOutput,
+} from '@shared/schemas';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import type { AgentFileLocation, FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
@@ -43,6 +51,7 @@ interface OutputExecResult {
   roundOutput: RoundOutput;
   summary: RoundSummary;
   compileFailures: CompileFailure[];
+  compileResult?: CompileResult;
   compiledArtifacts: CompiledPdfArtifact[];
   emitCompileFailures: boolean;
 }
@@ -93,6 +102,7 @@ export class OutputNode<C = unknown> extends Node<
 
     let mapping: RoundFileMapping | undefined;
     let compileFailures: CompileFailure[] = [];
+    let compileRoundResult: CompileResult | undefined;
     const compiledArtifacts: CompiledPdfArtifact[] = [];
     let emitCompileFailures = false;
 
@@ -152,6 +162,7 @@ export class OutputNode<C = unknown> extends Node<
               currentRound,
             );
             compileFailures = compileResult.failures;
+            compileRoundResult = compileResult.compileResult;
             compiledArtifacts.push(...compileResult.artifacts);
             setCompileFailures(outputState, currentRound, compileFailures);
             emitCompileFailures =
@@ -188,6 +199,7 @@ export class OutputNode<C = unknown> extends Node<
       roundOutput,
       summary,
       compileFailures,
+      compileResult: compileRoundResult,
       compiledArtifacts,
       emitCompileFailures,
     };
@@ -237,6 +249,7 @@ export class OutputNode<C = unknown> extends Node<
       },
       summary,
       compileFailures: [],
+      compileResult: undefined,
       compiledArtifacts: [],
       emitCompileFailures: false,
     };
@@ -318,6 +331,23 @@ export class OutputNode<C = unknown> extends Node<
 
     // Store round output
     shared.roundOutputs[currentRound] = roundOutput;
+    if (execRes.compileResult) {
+      shared.lastCompileResult = execRes.compileResult;
+      const compileFailureContext = shouldUseCompileFailureRepairContext(
+        execRes.compileResult,
+        shouldRejectOnCompileFailure(),
+      )
+        ? formatCompileFailureRoundContext(execRes.compileResult)
+        : undefined;
+      if (compileFailureContext) {
+        shared.compileFailureContext = compileFailureContext;
+      } else {
+        delete shared.compileFailureContext;
+      }
+    } else {
+      delete shared.lastCompileResult;
+      delete shared.compileFailureContext;
+    }
 
     return FlowTransition.DEFAULT;
   }
@@ -346,5 +376,12 @@ function shouldAutoOpenPdfOrLog(): boolean {
   return getWorkspaceState().get<boolean>(
     WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
     LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf,
+  );
+}
+
+function shouldRejectOnCompileFailure(): boolean {
+  return getWorkspaceState().get<boolean>(
+    WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+    LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure,
   );
 }
