@@ -130,6 +130,14 @@ export function isTextInputNewlineInput(
 const KITTY_KEYPAD_ENTER_INPUTS = [`${ESC}[57414u`, `${ESC}[57414;1u`];
 const KITTY_SHIFT_ENTER_INPUTS = [`${ESC}[13;2u`, `${ESC}[13:2u`];
 
+// Ink already turns a standalone Kitty Shift+Enter sequence into a shifted
+// return key. The raw-event shim only needs to rewrite sequences embedded in a
+// larger input chunk, where the normal key parser cannot represent both the
+// surrounding text and the modified return.
+function isStandaloneKittyShiftEnterInput(data: string): boolean {
+  return KITTY_SHIFT_ENTER_INPUTS.includes(data);
+}
+
 export function rewriteKittyEnterInput(
   data: string,
   options: { readonly shiftEnter: 'newline' | 'preserve' },
@@ -140,6 +148,9 @@ export function rewriteKittyEnterInput(
   }
   if (options.shiftEnter === 'preserve') {
     return rewritten === data ? undefined : rewritten;
+  }
+  if (isStandaloneKittyShiftEnterInput(rewritten)) {
+    return undefined;
   }
   for (const sequence of KITTY_SHIFT_ENTER_INPUTS) {
     rewritten = rewritten.replaceAll(sequence, SYNTHETIC_SHIFT_RETURN_INPUT);
