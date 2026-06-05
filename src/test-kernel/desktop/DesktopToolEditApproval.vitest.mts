@@ -4,7 +4,6 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { delay } from '@utils/core/async';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
   ProgressEventBusLike,
@@ -16,6 +15,7 @@ import type {
   DiffSource,
   DiffViewHost,
 } from '@hosts/diffViewHost';
+import { delay } from '@utils/core/async';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { delay } from '@utils/core/async';
 import {
   mapStreamTabStorage,
   STREAM_TAB_IO_CONCURRENCY,
 } from '@progressView/persistence/StreamTabStore';
 import type { StreamTabId } from '@shared/schemas';
+import { delay } from '@utils/core/async';
 
 describe('mapStreamTabStorage', () => {
   it('bounds concurrent per-stream storage work', async () => {

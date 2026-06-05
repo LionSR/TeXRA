@@ -2,7 +2,6 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - utils
-import { delay } from '@utils/core/async';
 
 // Local imports - auth
 import { FREE_TIER, ULTRA_TIER, type UserTier } from '@auth/config';
@@ -12,6 +11,7 @@ import {
   type ServerSideKeyState,
 } from '@auth/serverKeys/ServerSideKeyService';
 import type { TierService } from '@auth/tier/TierService';
+import { delay } from '@utils/core/async';
 
 const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
 

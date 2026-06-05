@@ -13,13 +13,13 @@ import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Type imports
 import { ensureArray } from '@utils/core';
-import { getExtensionLowercase } from '@utils/core/pathCore';
 import {
   AbsoluteFS,
   getMimeType,
   getShortDisplayPath,
   type FileLocation,
 } from '@utils/files';
+import { getExtensionLowercase } from '@utils/core/pathCore';
 import {
   countPdfPages,
   getBase64EncodedMedia,

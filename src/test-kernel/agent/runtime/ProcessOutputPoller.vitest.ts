@@ -7,7 +7,6 @@ import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
-import { delay } from '@utils/core/async';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { ProcessExecutionHandle } from '@agent/runtime/ExecutionHandle';
 import {
@@ -18,6 +17,7 @@ import {
 
 // Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
+import { delay } from '@utils/core/async';
 
 const tmpDirs: string[] = [];
 
