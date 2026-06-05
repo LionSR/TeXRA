@@ -11,12 +11,14 @@ const mocks = vi.hoisted(() => {
   return {
     executeCliRequest: vi.fn(),
     expandRunInputs: vi.fn(),
+    cliMultiAgentPlanHasGaps: vi.fn(),
     getToolUseAgents: vi.fn(),
     getWorkflowAgents: vi.fn(),
     initCliPlatform: vi.fn(),
     installCliApprovalHandlers: vi.fn(),
     isAuthenticated: vi.fn(),
     loadAgents: vi.fn(),
+    planCliMultiAgentPresets: vi.fn(),
     planCliMultiAgentPresetRun: vi.fn(),
     stdinInputFile,
     writeTextStderr: vi.fn(),
@@ -70,7 +72,7 @@ vi.mock('@cli/runtime/multiAgentPresets', () => {
       (agent: { tools?: readonly string[] }) =>
         agent.tools?.some((tool) => delegationTools.has(tool)) ?? false,
     ),
-    cliMultiAgentPlanHasGaps: vi.fn(() => false),
+    cliMultiAgentPlanHasGaps: mocks.cliMultiAgentPlanHasGaps,
     cliMultiAgentPresetNdjsonRecords: vi.fn(() => []),
     findCliMultiAgentPreset: vi.fn(() => ({
       id: 'mathematician',
@@ -86,6 +88,7 @@ vi.mock('@cli/runtime/multiAgentPresets', () => {
     MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION:
       'Root agent for the team run (defaults to the preset orchestrator)',
     MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION: 'Model for the team root agent',
+    planCliMultiAgentPresets: mocks.planCliMultiAgentPresets,
     planCliMultiAgentPresetRun: mocks.planCliMultiAgentPresetRun,
     readCliMultiAgentPresets: vi.fn(() => []),
     withCliMultiAgentPresetVisibility: vi.fn(
@@ -147,6 +150,15 @@ describe('CLI multi-agent run command', () => {
       contextFiles: [],
     });
     mocks.getWorkflowAgents.mockReturnValue([]);
+    mocks.cliMultiAgentPlanHasGaps.mockReturnValue(false);
+    mocks.planCliMultiAgentPresets.mockImplementation((presets) =>
+      presets.map((preset: unknown) =>
+        mocks.planCliMultiAgentPresetRun(preset, {
+          workflowAgents: mocks.getWorkflowAgents(),
+          toolUseAgents: mocks.getToolUseAgents(),
+        }),
+      ),
+    );
     mocks.getToolUseAgents.mockReturnValue([
       {
         name: 'orchestrator',
@@ -218,6 +230,63 @@ describe('CLI multi-agent run command', () => {
     expect(request?.config.instruction).toContain('Primary user input files:');
     expect(request?.config.instruction).toContain('- "problem.tex"');
     expect(mocks.stdinInputFile.cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks run-plan resolution when authenticated gaps triggered a remote load', async () => {
+    const { loadCliMultiAgentRunPlan } =
+      await import('@cli/commands/multiAgent');
+    mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
+    mocks.isAuthenticated.mockResolvedValueOnce(true);
+
+    const result = await loadCliMultiAgentRunPlan({
+      preset: 'mathematician',
+    });
+
+    expect(result.remoteAgentLoadAttempted).toBe(true);
+    expect(result.plan.rootAgent?.name).toBe('orchestrator');
+    expect(mocks.loadAgents).toHaveBeenCalledWith();
+    expect(mocks.planCliMultiAgentPresetRun).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not mark run-plan resolution when unauthenticated gaps stay local-only', async () => {
+    const { loadCliMultiAgentRunPlan } =
+      await import('@cli/commands/multiAgent');
+    mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
+    mocks.isAuthenticated.mockResolvedValueOnce(false);
+
+    const result = await loadCliMultiAgentRunPlan({
+      preset: 'mathematician',
+    });
+
+    expect(result.remoteAgentLoadAttempted).toBe(false);
+    expect(mocks.loadAgents).not.toHaveBeenCalled();
+    expect(mocks.planCliMultiAgentPresetRun).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks preset-list resolution when authenticated gaps triggered a remote load', async () => {
+    const { loadCliMultiAgentPresetPlanSet } =
+      await import('@cli/commands/multiAgent');
+    mocks.cliMultiAgentPlanHasGaps.mockReturnValueOnce(true);
+    mocks.isAuthenticated.mockResolvedValueOnce(true);
+
+    const result = await loadCliMultiAgentPresetPlanSet([
+      {
+        id: 'mathematician',
+        name: 'Mathematician',
+        description: 'For math papers.',
+        icon: 'codicon-symbol-operator',
+        workflowAgents: [],
+        toolUseAgents: ['orchestrator'],
+        source: 'built-in',
+      },
+    ]);
+
+    expect(result.remoteAgentLoadAttempted).toBe(true);
+    expect(mocks.loadAgents).toHaveBeenNthCalledWith(1, {
+      includeRemote: false,
+    });
+    expect(mocks.loadAgents).toHaveBeenNthCalledWith(2);
+    expect(mocks.planCliMultiAgentPresetRun).toHaveBeenCalledTimes(2);
   });
 
   it('warns when approval policy never blocks team delegation', async () => {

@@ -26,6 +26,10 @@ export interface CliMultiAgentPresetRunPlan {
   readonly missingToolUseAgents: readonly string[];
 }
 
+export interface CliMultiAgentPresetFormatOptions {
+  readonly includeLoginHint?: boolean;
+}
+
 export type CliMultiAgentPlanStatus = 'available' | 'degraded' | 'unavailable';
 
 export interface CliMultiAgentPresetAgentAvailability {
@@ -63,6 +67,10 @@ export const MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION =
   'Root agent for the team run (defaults to the preset orchestrator)';
 export const MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION =
   'Model for the team root agent';
+const MULTI_AGENT_INSPECT_HINT =
+  'Hint: run `texra multi-agent inspect <preset>` to see missing agents for degraded or unavailable presets.';
+const MULTI_AGENT_LOGIN_HINT =
+  'Hint: built-in teams may load additional relay-served agents after `texra login`.';
 
 export function parseCliCustomAgentPresets(raw: unknown): AgentModePreset[] {
   return AgentModePresetSchema.array().catch([]).parse(raw);
@@ -138,6 +146,7 @@ export function formatCliMultiAgentPresetLauncherSummary(
 
 export function formatCliMultiAgentPresetList(
   plans: readonly CliMultiAgentPresetRunPlan[],
+  options: CliMultiAgentPresetFormatOptions = {},
 ): string {
   if (plans.length === 0) return 'No multi-agent presets found.';
 
@@ -150,7 +159,7 @@ export function formatCliMultiAgentPresetList(
     ].join('\t'),
   );
 
-  const hint = cliMultiAgentPresetListHint(plans);
+  const hint = cliMultiAgentPresetListHint(plans, options);
   return hint ? [...rows, '', hint].join('\n') : rows.join('\n');
 }
 
@@ -170,6 +179,7 @@ export function formatCliMultiAgentPresetDetails(
 
 export function formatCliMultiAgentPresetInspection(
   plan: CliMultiAgentPresetRunPlan,
+  options: CliMultiAgentPresetFormatOptions = {},
 ): string {
   const availableWorkflowAgents = availablePresetAgents(
     plan.preset.workflowAgents,
@@ -180,7 +190,7 @@ export function formatCliMultiAgentPresetInspection(
     plan.missingToolUseAgents,
   );
 
-  return [
+  const lines = [
     `${plan.preset.name} (${plan.preset.id})`,
     `Source: ${plan.preset.source}`,
     `Description: ${plan.preset.description}`,
@@ -194,7 +204,11 @@ export function formatCliMultiAgentPresetInspection(
     formatAgentNames(plan.missingWorkflowAgents),
     'Missing tool-use agents:',
     formatAgentNames(plan.missingToolUseAgents),
-  ].join('\n');
+  ];
+  if (shouldIncludeBuiltInLoginHint(plan, options)) {
+    lines.push('', MULTI_AGENT_LOGIN_HINT);
+  }
+  return lines.join('\n');
 }
 
 export function cliMultiAgentPresetNdjsonRecords(
@@ -505,13 +519,29 @@ function formatAgentNames(names: readonly string[]): string {
 
 function cliMultiAgentPresetListHint(
   plans: readonly CliMultiAgentPresetRunPlan[],
+  options: CliMultiAgentPresetFormatOptions,
 ): string | undefined {
   const hasIncompletePreset = plans.some(
     (plan) => cliMultiAgentPlanStatus(plan) !== 'available',
   );
-  return hasIncompletePreset
-    ? 'Hint: run `texra multi-agent inspect <preset>` to see missing agents for degraded or unavailable presets.'
-    : undefined;
+  const hints = [
+    hasIncompletePreset ? MULTI_AGENT_INSPECT_HINT : undefined,
+    plans.some((plan) => shouldIncludeBuiltInLoginHint(plan, options))
+      ? MULTI_AGENT_LOGIN_HINT
+      : undefined,
+  ].filter((hint): hint is string => hint !== undefined);
+  return hints.length > 0 ? hints.join('\n') : undefined;
+}
+
+function shouldIncludeBuiltInLoginHint(
+  plan: CliMultiAgentPresetRunPlan,
+  options: CliMultiAgentPresetFormatOptions,
+): boolean {
+  return (options.includeLoginHint ?? true) && builtInPresetHasGaps(plan);
+}
+
+function builtInPresetHasGaps(plan: CliMultiAgentPresetRunPlan): boolean {
+  return plan.preset.source === 'built-in' && cliMultiAgentPlanHasGaps(plan);
 }
 
 function lookupKey(value: string): string {
