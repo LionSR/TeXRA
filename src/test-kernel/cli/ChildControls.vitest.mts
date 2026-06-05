@@ -846,6 +846,12 @@ describe('CLI child execution controls', () => {
     expect(childPickerKeyAction({ input: '', escape: true })).toEqual({
       kind: 'close',
     });
+    expect(childPickerKeyAction({ input: '\u001B' })).toEqual({
+      kind: 'close',
+    });
+    expect(childPickerKeyAction({ input: '\u001Bp' })).toEqual({
+      kind: 'ignore',
+    });
     expect(childPickerKeyAction({ input: '', return: true })).toEqual({
       kind: 'select',
     });

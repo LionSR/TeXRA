@@ -6,6 +6,11 @@
 import { useInput } from 'ink';
 import { useEffect, useState } from 'react';
 
+import {
+  isEscapeInput,
+  type ReturnKeyInput,
+} from '@cli/chat/tui/input/inputKeys';
+
 export interface AsyncListFormState<T> {
   readonly data: T | undefined;
   readonly loading: boolean;
@@ -30,6 +35,19 @@ export interface UseAsyncListFormOptions<T> {
   readonly isEmpty?: (data: T) => boolean;
 }
 
+export function shouldCloseAsyncListFormOnInput(args: {
+  readonly input: string;
+  readonly key: Pick<ReturnKeyInput, 'escape'>;
+  readonly loading: boolean;
+  readonly error: string | undefined;
+  readonly empty: boolean;
+}): boolean {
+  return (
+    (args.loading || args.error !== undefined || args.empty) &&
+    isEscapeInput(args.input, args.key)
+  );
+}
+
 /**
  * Run the form's loader on mount, expose `loading` / `error` / `data`, and wire
  * `Esc` to close while the panel is loading, errored, or empty. Matches the
@@ -47,7 +65,15 @@ export function useAsyncListForm<T>(
     data !== undefined && options.isEmpty ? options.isEmpty(data) : false;
 
   useInput((_input, key) => {
-    if ((loading || error !== undefined || empty) && key.escape) {
+    if (
+      shouldCloseAsyncListFormOnInput({
+        input: _input,
+        key,
+        loading,
+        error,
+        empty,
+      })
+    ) {
       options.onClose();
     }
   });
