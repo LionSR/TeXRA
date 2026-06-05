@@ -420,8 +420,9 @@ function selectPresetRootAgent(
     readonly presetSource: CliMultiAgentPresetSource;
   },
 ): AgentEntry | undefined {
-  const rootCandidates = implicitDefaultToolUseAgents(agents);
-  const delegatingAgents = rootCandidates.filter(agentHasDelegationTools);
+  const delegatingAgents = implicitDefaultToolUseAgents(agents).filter(
+    agentHasDelegationTools,
+  );
   const preferredRoot = findPreferredRootAgent(
     delegatingAgents,
     options.presetSource,
@@ -435,7 +436,7 @@ function selectPresetRootAgent(
     return undefined;
   }
 
-  return delegatingAgents[0] ?? rootCandidates[0];
+  return delegatingAgents[0];
 }
 
 function findPreferredRootAgent(
