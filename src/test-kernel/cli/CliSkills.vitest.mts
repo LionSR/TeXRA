@@ -48,10 +48,13 @@ afterEach(async () => {
 
 describe('CLI skills runtime', () => {
   it('resolves default, interop, and custom skill sources in precedence order', () => {
+    const cwd = '/tmp/project';
+    const resourcesPath = '/tmp/resources';
+    const bundledSourcePath = path.resolve(resourcesPath, '../../..', 'skills');
     const sources = defaultSkillSources(
       {
-        cwd: '/tmp/project',
-        resourcesPath: '/tmp/resources',
+        cwd,
+        resourcesPath,
       },
       {
         includeInterop: true,
@@ -59,26 +62,73 @@ describe('CLI skills runtime', () => {
       },
     );
 
-    expect(sources.map((source) => source.path)).toEqual(
-      expect.arrayContaining([
-        '/tmp/resources/skills',
-        path.join(os.homedir(), '.texra', 'skills'),
-        '/tmp/project/.texra/skills',
-        path.join(os.homedir(), '.claude', 'skills'),
-        '/tmp/project/.claude/skills',
-        path.join(os.homedir(), '.codex', 'skills'),
-        '/tmp/project/.codex/skills',
-        path.join(os.homedir(), '.gemini', 'skills'),
-        '/tmp/project/.gemini/skills',
-        '/tmp/project/vendor/skills',
-      ]),
-    );
+    expect(sources.map((source) => source.path)).toEqual([
+      '/tmp/project/vendor/skills',
+      '/tmp/project/.texra/skills',
+      '/tmp/project/.claude/skills',
+      '/tmp/project/.codex/skills',
+      '/tmp/project/.gemini/skills',
+      path.join(os.homedir(), '.texra', 'skills'),
+      path.join(os.homedir(), '.claude', 'skills'),
+      path.join(os.homedir(), '.codex', 'skills'),
+      path.join(os.homedir(), '.gemini', 'skills'),
+      '/tmp/resources/skills',
+      bundledSourcePath,
+    ]);
+    expect(sources.map((source) => source.scope)).toEqual([
+      'custom',
+      'project',
+      'interop',
+      'interop',
+      'interop',
+      'user',
+      'interop',
+      'interop',
+      'interop',
+      'bundled',
+      'bundled',
+    ]);
+    expect(sources.map((source) => source.label)).toEqual([
+      'custom',
+      'project',
+      '.claude project',
+      '.codex project',
+      '.gemini project',
+      'user',
+      '.claude user',
+      '.codex user',
+      '.gemini user',
+      'bundled',
+      'bundled source',
+    ]);
     expect(
       sources.find((source) => source.path === '/tmp/project/vendor/skills'),
     ).toMatchObject({ required: true, scope: 'custom' });
   });
 
-  it('lists bundled skills before custom duplicate names', async () => {
+  it('deduplicates repeated source paths while preserving required custom roots', () => {
+    const sources = defaultSkillSources(
+      {
+        cwd: '/tmp/project',
+        resourcesPath: '/tmp/resources',
+      },
+      {
+        additionalPaths: ['.texra/skills'],
+      },
+    );
+
+    expect(
+      sources.filter((source) => source.path === '/tmp/project/.texra/skills'),
+    ).toEqual([
+      expect.objectContaining({
+        scope: 'custom',
+        label: 'custom',
+        required: true,
+      }),
+    ]);
+  });
+
+  it('lists custom duplicate names before bundled skills', async () => {
     const resources = await createTempRoot();
     const custom = await createTempRoot();
     await fs.mkdir(path.join(resources, 'skills'));
@@ -102,17 +152,64 @@ describe('CLI skills runtime', () => {
 
     expect(result.skills.map(skillListRecord)).toMatchObject([
       {
-        name: 'shared-skill',
-        description: 'The bundled skill.',
-        scope: 'bundled',
-      },
-      {
         name: 'custom-only',
         description: 'The custom-only skill.',
         scope: 'custom',
       },
+      {
+        name: 'shared-skill',
+        description: 'The custom skill.',
+        scope: 'custom',
+      },
     ]);
     expect(formatCliSkillList(result.skills)).toContain(
+      'custom\tshared-skill\tThe custom skill.',
+    );
+    expect(formatCliSkillList(result.skills)).not.toContain(
+      'bundled\tshared-skill\tThe bundled skill.',
+    );
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        code: 'duplicate_name',
+        name: 'shared-skill',
+      }),
+    );
+  });
+
+  it('lists project duplicate names before bundled skills', async () => {
+    const project = await createTempRoot();
+    const resources = await createTempRoot();
+    await fs.mkdir(path.join(project, '.texra', 'skills'), {
+      recursive: true,
+    });
+    await fs.mkdir(path.join(resources, 'skills'));
+    await writeSkill(
+      path.join(resources, 'skills'),
+      'shared-skill',
+      'The bundled skill.',
+    );
+    await writeSkill(
+      path.join(project, '.texra', 'skills'),
+      'shared-skill',
+      'The project skill.',
+    );
+
+    const result = await readCliSkills({
+      cwd: project,
+      resourcesPath: resources,
+    });
+
+    expect(result.skills.map(skillListRecord)).toMatchObject([
+      {
+        name: 'shared-skill',
+        description: 'The project skill.',
+        scope: 'project',
+      },
+    ]);
+    expect(formatCliSkillList(result.skills)).toContain(
+      'project\tshared-skill\tThe project skill.',
+    );
+    expect(formatCliSkillList(result.skills)).not.toContain(
       'bundled\tshared-skill\tThe bundled skill.',
     );
     expect(result.errors).toContainEqual(
