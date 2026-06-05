@@ -136,7 +136,11 @@ async function runInit(
 
   if (interactive) {
     const { runInitWizard } = await import('../init/runInitWizard');
-    const result = await runInitWizard({ agents, models });
+    const result = await runInitWizard({
+      agents,
+      models,
+      colorEnabled: context.stdoutColorEnabled ?? context.colorEnabled,
+    });
     if (!result) {
       writeTextStderr('Cancelled. No config written.');
       return CliExitCode.Success;

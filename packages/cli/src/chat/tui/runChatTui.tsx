@@ -111,6 +111,7 @@ import {
 } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
+import { tuiOutputStreamForColor } from './render/noColorOutput';
 import { formatCliSessionStatus } from './sessionStatus';
 import { clearApprovals } from './state/approvalQueue';
 import { cliState, resetCliState } from './state/cliState';
@@ -1479,12 +1480,13 @@ export async function runChat(
     });
   };
 
+  const stdoutColorEnabled = context.stdoutColorEnabled ?? context.colorEnabled;
   const ink = render(
     <App
       onSubmit={handleSubmit}
       canInterruptActiveRun={canInterruptActiveRun}
       canStopActiveRun={canStopActiveRun}
-      colorEnabled={context.stdoutColorEnabled ?? context.colorEnabled}
+      colorEnabled={stdoutColorEnabled}
       onInterruptActive={interruptActive}
       onCtrlC={() => handleSigint()}
       onKillExecution={(executionId) => {
@@ -1494,7 +1496,7 @@ export async function runChat(
       history={inputHistory}
     />,
     {
-      stdout: process.stdout,
+      stdout: tuiOutputStreamForColor(process.stdout, stdoutColorEnabled),
       stderr: process.stderr,
       stdin: process.stdin,
       // Own Ctrl+C ourselves (App's unified useInput → exit()) instead of via

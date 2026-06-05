@@ -54,6 +54,7 @@ const KITTY_SHIFT_ENTER = ESC + '[13;2u';
 const UP = ESC + '[A';
 const DOWN = ESC + '[B';
 const PAGE_DOWN = ESC + '[6~';
+const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*m`, 'g');
 const LONG_BASH_APPROVAL_COMMAND = [
   "python3 << 'EOF'",
   'solutions = []',
@@ -463,6 +464,20 @@ const SCENARIOS = [
       'texra chat --model=<name>',
       'texra --model=<name>',
     ],
+  },
+  {
+    name: 'no-color-model-form',
+    colorEnabled: false,
+    env: { HARNESS_ENTRIES: '4' },
+    keys: ['/model', '\r'],
+    frame: 'tail',
+    expect: [
+      '/model · personal API keys',
+      'Available models. Finish the active response before switching models.',
+      'Enter close',
+    ],
+    unexpect: ['Platform not initialized', '/model - error'],
+    rawUnexpectSgr: true,
   },
   {
     name: 'model-form-selectable',
@@ -2409,6 +2424,7 @@ async function runScenarioWithResources(scenario, fakeClipboard) {
   const rows = scenarioRows(scenario);
   let lastData = Date.now();
   let exited = null;
+  let rawOutput = '';
   let writeQueue = Promise.resolve();
   const frameSnapshot = async () => {
     await writeQueue;
@@ -2418,10 +2434,18 @@ async function runScenarioWithResources(scenario, fakeClipboard) {
     ...process.env,
     ...scenario.env,
     TERM: 'xterm-256color',
-    FORCE_COLOR: '3',
     COLUMNS: String(cols),
     LINES: String(rows),
   };
+  if (scenario.colorEnabled === false) {
+    delete childEnv.FORCE_COLOR;
+    childEnv.NO_COLOR = '1';
+    childEnv.HARNESS_COLOR_ENABLED = '0';
+  } else {
+    childEnv.FORCE_COLOR = '3';
+    delete childEnv.NO_COLOR;
+    childEnv.HARNESS_COLOR_ENABLED ??= '1';
+  }
   if (fakeClipboard) {
     childEnv.PATH = `${fakeClipboard.binDir}${path.delimiter}${childEnv.PATH ?? ''}`;
     childEnv.TEXRA_FAKE_CLIPBOARD_FILE = fakeClipboard.textFile;
@@ -2430,7 +2454,6 @@ async function runScenarioWithResources(scenario, fakeClipboard) {
   // markers make Ink choose a non-interactive render mode and hide the live
   // input/status surface this script is meant to inspect.
   delete childEnv.CI;
-  delete childEnv.NO_COLOR;
   const child = ptySpawn(process.execPath, [HARNESS], {
     name: 'xterm-256color',
     cols,
@@ -2441,6 +2464,7 @@ async function runScenarioWithResources(scenario, fakeClipboard) {
   child.onExit((e) => (exited = e));
   child.onData((d) => {
     lastData = Date.now();
+    rawOutput += d;
     writeQueue = writeQueue.then(
       () => new Promise((resolve) => term.write(d, resolve)),
     );
@@ -2564,6 +2588,17 @@ async function runScenarioWithResources(scenario, fakeClipboard) {
       ? ` (exitCode ${exited.exitCode}, signal ${exited.signal || 'none'})`
       : '';
     failures.push(`exit keys did not close the TUI cleanly${exitDetails}`);
+  }
+  if (scenario.rawUnexpectSgr) {
+    const sgrSequences = [...new Set(rawOutput.match(ANSI_SGR_PATTERN) ?? [])];
+    if (sgrSequences.length > 0) {
+      failures.push(
+        `raw output contains SGR escapes: ${sgrSequences
+          .slice(0, 5)
+          .map((sequence) => JSON.stringify(sequence))
+          .join(', ')}`,
+      );
+    }
   }
   if (fakeClipboard) {
     const copiedText = readFileSync(fakeClipboard.textFile, 'utf8');
