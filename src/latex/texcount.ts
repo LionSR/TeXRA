@@ -6,7 +6,7 @@ import * as logger from '@logger/logUtils';
 import { flexibleFS, pathToLocation } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
-import { filterNotNull } from '@utils/core';
+import { filterNotNull, ensureArray } from '@utils/core';
 import { hasExtension } from '@utils/core/pathCore';
 
 const CHANNEL = 'LaTeXCommands';
@@ -237,7 +237,7 @@ export async function getTeXCount(
   const resolvedChannel = channel ?? CHANNEL;
 
   try {
-    const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
+    const paths = ensureArray(filePaths);
     const trimmedPaths = paths
       .map((filePath) => filePath.trim())
       .filter((filePath) => filePath.length > 0);

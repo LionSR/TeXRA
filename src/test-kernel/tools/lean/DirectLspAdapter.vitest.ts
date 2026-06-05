@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { fileUriToPath, LeanSession } from '@tools/lean/direct/leanSession';
+import { delay } from '@utils/core/async';
 
 const FAKE_LAKE = `#!/usr/bin/env node
 const fs = require('node:fs');
@@ -161,7 +162,7 @@ describe('createDirectLspLeanAdapter', () => {
     await session.ensureReady();
 
     const pendingDiagnostics = session.fetchDiagnostics(filePath);
-    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    await delay(100);
     await session.dispose();
 
     await expect(

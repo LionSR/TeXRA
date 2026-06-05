@@ -15,6 +15,7 @@ import type {
   DiffSource,
   DiffViewHost,
 } from '@hosts/diffViewHost';
+import { delay } from '@utils/core/async';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 
@@ -57,7 +58,7 @@ async function pathExists(filePath: string): Promise<boolean> {
 async function waitForEmptyDir(dir: string): Promise<void> {
   for (let attempt = 0; attempt < 20; attempt++) {
     if ((await readdir(dir)).length === 0) return;
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await delay(10);
   }
 }
 

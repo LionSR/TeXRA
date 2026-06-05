@@ -19,5 +19,6 @@ export {
   isFiniteNumber,
   filterNotNull,
   filterNotNullish,
+  ensureArray,
 } from './typeGuards';
 export { debounce, delay } from './async';

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 // Local imports - shared schemas
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
+import { delay } from '@utils/core/async';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
@@ -80,7 +81,7 @@ async function loadDesktopCommandPalette(): Promise<DesktopCommandPaletteModule>
 // those promise/timer callbacks resolve in jsdom (which has no real raf).
 async function flushDialogTicks(times = 5): Promise<void> {
   for (let i = 0; i < times; i += 1) {
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await delay(0);
   }
 }
 

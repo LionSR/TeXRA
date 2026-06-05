@@ -11,14 +11,15 @@ import { MediaEntry } from '@agent/utils/mediaTypes';
 import { toErrorMessage } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
-// Type imports
-import { getExtensionLowercase } from '@utils/core/pathCore';
+// Local imports - utils
+import { ensureArray } from '@utils/core';
 import {
   AbsoluteFS,
   getMimeType,
   getShortDisplayPath,
   type FileLocation,
 } from '@utils/files';
+import { getExtensionLowercase } from '@utils/core/pathCore';
 import {
   countPdfPages,
   getBase64EncodedMedia,
@@ -185,7 +186,7 @@ export class MediaAttachmentProcessor {
         results.push(result);
 
         if (entry) {
-          const entryList = Array.isArray(entry) ? entry : [entry];
+          const entryList = ensureArray(entry);
           entries.push(...entryList);
         }
       } else {
@@ -374,7 +375,7 @@ export class MediaAttachmentProcessor {
 
   /** Normalize data to array for consistent processing */
   private normalizeToArray(data: string | string[]): string[] {
-    return Array.isArray(data) ? data : [data];
+    return ensureArray(data);
   }
 
   /** Get the first data item (for single-item scenarios) */

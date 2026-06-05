@@ -15,6 +15,7 @@ import {
   type StreamLogEntry,
 } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
+import { delay } from '@utils/core/async';
 
 const STREAM_LOGS_DIR = 'streamLogs';
 const STREAM_LOG_SUMMARIES_DIR = 'streamLogSummaries';
@@ -187,7 +188,7 @@ async function waitForCondition(
 ): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (condition()) return;
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await delay(0);
   }
   throw new Error(message);
 }

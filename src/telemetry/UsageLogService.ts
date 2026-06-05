@@ -4,6 +4,7 @@ import { SupabaseClient } from '@auth/SupabaseClient';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { delay } from '@utils/core/async';
 
 import { UsageLogResponseSchema } from './UsageLogTypes';
 import type {
@@ -220,7 +221,7 @@ class UsageLogServiceImpl {
 
     const deadline = Date.now() + 5000;
     while (this.activeFlush && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      await delay(50);
     }
 
     if (this.activeFlush) {
