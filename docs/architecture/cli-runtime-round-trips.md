@@ -158,7 +158,7 @@ sequenceDiagram
 
   L->>A: loadAgents({ includeRemote: false })
   L->>P: plan presets with local agents
-  P-->>L: plans, gaps, local fallback roots
+  P-->>L: plans, gaps, explicit root availability
   L->>R: maybe load remote agents if authenticated and gaps exist
   R-->>P: replan with remote agents
   L-->>Run: selected preset id
@@ -167,12 +167,11 @@ sequenceDiagram
   Run->>P: replan current preset
 ```
 
-The local CLI currently shows built-in teams as unavailable without relay-served
-agents. For example, `texra-local multi-agent inspect physicist` resolves
-`research` as a local root but still blocks team launch because that root cannot
-delegate and required specialists are missing. That behavior is internally
-consistent, but it is a UX pressure point because list output exposes a root
-agent while run output correctly says the team cannot launch.
+The local CLI shows built-in teams as unavailable without relay-served
+orchestrators. Local specialists such as `lean`, `research`, and `numerics`
+remain visible as available members, but they are not promoted to team roots.
+That keeps list, launcher, and run output aligned: a built-in team either has a
+delegating orchestrator root or reports that no runnable team root is available.
 
 ## Skills Protocol Implication
 

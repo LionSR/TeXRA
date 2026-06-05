@@ -285,7 +285,7 @@ describe('CLI orchestration items', () => {
     );
   });
 
-  it('disables team presets that would launch only a fallback root', () => {
+  it('does not promote built-in team members to fallback roots', () => {
     const items = buildCliOrchestrationItems({
       presetPlans: [
         presetPlan(
@@ -307,8 +307,7 @@ describe('CLI orchestration items', () => {
     expect(items.find((item) => item.label === 'Team Lean Project')).toEqual(
       expect.objectContaining({
         disabled: true,
-        description:
-          'unavailable; root lean cannot delegate; 1/2 tool-use agents',
+        description: 'unavailable; no runnable team root; 1/2 tool-use agents',
       }),
     );
   });
@@ -394,8 +393,7 @@ describe('CLI orchestration items', () => {
       view.items.find((item) => item.label === 'Team Lean Project'),
     ).toMatchObject({
       disabled: true,
-      description:
-        'unavailable; root lean cannot delegate; 1/2 tool-use agents',
+      description: 'unavailable; no runnable team root; 1/2 tool-use agents',
     });
   });
 

@@ -231,7 +231,7 @@ const SCENARIOS = [
       'Team Lean Project',
       '2/7 tool-use agents',
       'unavailable',
-      'root lean cannot delegate',
+      'no runnable team root',
       'Team Physicist',
       'Team Computer Scientist…',
       'Help',
