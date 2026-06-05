@@ -116,10 +116,12 @@ export function TranscriptEntry({
   entry,
   width,
   colorEnabled,
+  fillWidth,
 }: {
   readonly entry: ConversationEntry;
   readonly width?: number;
   readonly colorEnabled?: boolean;
+  readonly fillWidth?: boolean;
 }): React.JSX.Element {
   switch (entry.role) {
     case 'user':
@@ -155,6 +157,7 @@ export function TranscriptEntry({
         content={entry.text}
         width={width}
         colorEnabled={colorEnabled}
+        fillWidth={fillWidth}
       />
     </Box>
   );
@@ -202,6 +205,7 @@ export function BoundedTranscriptEntry({
 }): React.JSX.Element {
   const rows = Math.max(1, maxRows);
   if (entry.role === 'assistant') {
+    const cols = Math.max(1, Math.floor(width ?? 80));
     // In-flight overflow tail (still streaming): plain tail wrap rather
     // than renderAnsiMarkdown over the full buffer (O(text^2), and the
     // tail slice discards markdown structure above it anyway). Finalized
@@ -210,8 +214,8 @@ export function BoundedTranscriptEntry({
       <Box flexDirection="column">
         <Text>
           {fillRows(
-            plainWrapTailLines(entry.text, width ?? 80, rows).join('\n'),
-            Math.max(1, Math.floor(width ?? 80)),
+            plainWrapTailLines(entry.text, cols, rows).join('\n'),
+            cols,
           )}
         </Text>
       </Box>
@@ -265,12 +269,11 @@ export function LiveTranscriptEntry({
   readonly entry: ConversationEntry;
   readonly width?: number;
 }): React.JSX.Element {
-  const rows = plainWrapTailLines(entry.text, width ?? 80, LIVE_TAIL_ROWS);
+  const cols = Math.max(1, Math.floor(width ?? 80));
+  const rows = plainWrapTailLines(entry.text, cols, LIVE_TAIL_ROWS);
   return (
     <Box flexDirection="column">
-      <Text>
-        {fillRows(rows.join('\n'), Math.max(1, Math.floor(width ?? 80)))}
-      </Text>
+      <Text>{fillRows(rows.join('\n'), cols)}</Text>
     </Box>
   );
 }
