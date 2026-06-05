@@ -80,6 +80,30 @@ describe('CLI multi-agent presets', () => {
       'built-in\tlean-project\tLean Project\tworkflow:0\ttool-use:2/7\tdegraded',
     );
     expect(output).toContain('texra multi-agent inspect <preset>');
+    expect(output).toContain(
+      'built-in teams may load additional relay-served agents after `texra login`',
+    );
+  });
+
+  it('omits the login recovery hint after a remote agent load was attempted', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'lean-project',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('lean', AgentCategory.ToolUse),
+        agent('latexFixer', AgentCategory.ToolUse),
+      ],
+    });
+
+    const output = formatCliMultiAgentPresetList([plan], {
+      includeLoginHint: false,
+    });
+
+    expect(output).toContain('texra multi-agent inspect <preset>');
+    expect(output).not.toContain('after `texra login`');
   });
 
   it('formats launcher team summaries as reader-facing status text', () => {
@@ -293,8 +317,28 @@ describe('CLI multi-agent presets', () => {
         '  simplifier',
         '  latexFixer',
         '  progressCheck',
+        '',
+        'Hint: built-in teams may load additional relay-served agents after `texra login`.',
       ].join('\n'),
     );
+  });
+
+  it('omits inspection login recovery hint after a remote agent load was attempted', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'physicist',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [agent('review', AgentCategory.ToolUse)],
+    });
+
+    const details = formatCliMultiAgentPresetInspection(plan, {
+      includeLoginHint: false,
+    });
+
+    expect(details).toContain('Missing tool-use agents:');
+    expect(details).not.toContain('after `texra login`');
   });
 
   it('plans a preset run with canonical visibility keys and an orchestrator root', () => {
