@@ -1,24 +1,96 @@
-// Live region of the chat transcript: in-flight assistant text and pending
-// tool rows only. Finalized entries print once through `<Static>` (see
-// `StaticConversationTranscript.tsx`) so the terminal owns transcript
-// scrollback. The bounded pane below is only for entries that may still
-// change between renders.
+// Bounded transcript region for the current stream. The root stream uses this
+// for in-flight assistant/tool rows only because finalized rows print once
+// through `<Static>`. Focused child streams use the same renderer in scoped
+// history mode so their visible pane contains only their own entries.
 
 import { Box } from 'ink';
 
-import { cliState } from '../state/cliState';
+import { cliState, type ConversationEntry } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
-import { BoundedTranscriptEntry, LiveTranscriptEntry } from './TranscriptEntry';
+import {
+  BoundedTranscriptEntry,
+  LiveTranscriptEntry,
+  TranscriptEntry,
+} from './TranscriptEntry';
 import { ToolUseRow } from './ToolUseRow';
 import { splitTranscriptEntries } from './transcriptEntries';
-import { selectPendingEntriesForViewport } from './transcriptViewport';
+import { selectTranscriptEntriesForViewport } from './transcriptViewport';
 
 const DEFAULT_TRANSCRIPT_ROWS = 24;
 const MIN_PENDING_ROWS = 1;
 
+export type ConversationPaneMode = 'live-pending' | 'scoped-history';
+
 export interface ConversationPaneProps {
   readonly width?: number;
   readonly maxRows?: number;
+  readonly mode?: ConversationPaneMode;
+  readonly colorEnabled?: boolean;
+}
+
+function entriesForConversationPane({
+  entries,
+  mode,
+  status,
+}: {
+  readonly entries: readonly ConversationEntry[];
+  readonly mode: ConversationPaneMode;
+  readonly status: Parameters<typeof splitTranscriptEntries>[1];
+}): readonly ConversationEntry[] {
+  if (mode === 'scoped-history') return entries;
+  return splitTranscriptEntries(entries, status).pending;
+}
+
+function renderConversationPaneEntry({
+  colorEnabled,
+  entry,
+  mode,
+  rowLimit,
+  width,
+}: {
+  readonly colorEnabled?: boolean;
+  readonly entry: ConversationEntry;
+  readonly mode: ConversationPaneMode;
+  readonly rowLimit?: number;
+  readonly width?: number;
+}): React.JSX.Element | null {
+  if (rowLimit !== undefined) {
+    return (
+      <BoundedTranscriptEntry
+        key={entry.id}
+        entry={entry}
+        maxRows={rowLimit}
+        width={width}
+      />
+    );
+  }
+  if (mode === 'scoped-history' && entry.finalized) {
+    return (
+      <TranscriptEntry
+        key={entry.id}
+        entry={entry}
+        width={width}
+        colorEnabled={colorEnabled}
+      />
+    );
+  }
+  if (entry.role === 'tool' && entry.toolUse) {
+    return <ToolUseRow key={entry.id} toolUse={entry.toolUse} />;
+  }
+  if (entry.role === 'assistant') {
+    return <LiveTranscriptEntry key={entry.id} entry={entry} width={width} />;
+  }
+  if (mode === 'scoped-history') {
+    return (
+      <TranscriptEntry
+        key={entry.id}
+        entry={entry}
+        width={width}
+        colorEnabled={colorEnabled}
+      />
+    );
+  }
+  return null;
 }
 
 export function ConversationPane(
@@ -28,50 +100,37 @@ export function ConversationPane(
   const streams = useSignal(cliState.streams);
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
-  const { pending } = splitTranscriptEntries(entries, slice?.status);
+  const mode = props.mode ?? 'live-pending';
+  const displayEntries = entriesForConversationPane({
+    entries,
+    mode,
+    status: slice?.status,
+  });
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
-  const visiblePending = selectPendingEntriesForViewport(
-    pending,
+  const visibleEntries = selectTranscriptEntriesForViewport(
+    displayEntries,
     maxRows,
     props.width,
   );
-  const pendingRows =
-    pending.length > 0
-      ? Math.max(MIN_PENDING_ROWS, visiblePending.usedRows)
+  const visibleRows =
+    displayEntries.length > 0
+      ? Math.max(MIN_PENDING_ROWS, visibleEntries.usedRows)
       : 0;
 
-  // `pending` interleaves the in-flight assistant entry with tool rows in
-  // stream order — rendering them as separate buckets would flip the
-  // visible order when the model emits text before a tool call. The
-  // explicit height keeps the input bar pinned and prevents tool bursts
-  // from stealing rows reserved for the footer chrome.
+  // Keep stream order intact. In live mode this interleaves in-flight text
+  // with tool rows; in scoped mode it preserves the child transcript slice.
+  // The explicit height keeps the input bar pinned and prevents bursts from
+  // stealing rows reserved for the footer chrome.
   return (
-    <Box flexDirection="column" height={pendingRows} overflowY="hidden">
-      {visiblePending.entries.map((entry) => {
-        const rowLimit = visiblePending.rowLimits.get(entry.id);
-        if (rowLimit !== undefined) {
-          return (
-            <BoundedTranscriptEntry
-              key={entry.id}
-              entry={entry}
-              maxRows={rowLimit}
-              width={props.width}
-            />
-          );
-        }
-        if (entry.role === 'tool' && entry.toolUse) {
-          return <ToolUseRow key={entry.id} toolUse={entry.toolUse} />;
-        }
-        if (entry.role === 'assistant') {
-          return (
-            <LiveTranscriptEntry
-              key={entry.id}
-              entry={entry}
-              width={props.width}
-            />
-          );
-        }
-        return null;
+    <Box flexDirection="column" height={visibleRows} overflowY="hidden">
+      {visibleEntries.entries.map((entry) => {
+        return renderConversationPaneEntry({
+          colorEnabled: props.colorEnabled,
+          entry,
+          mode,
+          rowLimit: visibleEntries.rowLimits.get(entry.id),
+          width: props.width,
+        });
       })}
     </Box>
   );

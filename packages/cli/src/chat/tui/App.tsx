@@ -3,7 +3,7 @@
 // Tab / Shift-Tab cycles focus across subagent streams.
 
 import { Box, useApp, useInput, useStdin, useWindowSize } from 'ink';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import {
   LIVE_ELAPSED_STREAM_STATUSES,
@@ -48,6 +48,10 @@ import {
 import { cliState } from './state/cliState';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { streamScopeDisplayLabel } from './state/streamLabels';
+import {
+  isScopedTranscriptViewport,
+  transcriptViewportKey,
+} from './state/transcriptViewportMode';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
 
@@ -382,6 +386,7 @@ export interface AppProps {
   readonly canStopActiveRun?: () => boolean;
   readonly colorEnabled?: boolean;
   readonly onInterruptActive: () => void;
+  readonly onTranscriptViewportChange?: () => void;
   readonly onCtrlC?: () => void;
   readonly inputDisabled?: boolean;
   readonly history?: InputHistory;
@@ -415,6 +420,10 @@ export function App(props: AppProps): React.JSX.Element {
     transcriptViewerOpen;
   const inputDisabled = props.inputDisabled === true || foregroundOpen;
   const inputBarVisible = !foregroundOpen;
+  const viewportKey = transcriptViewportKey({ activeStreamId, parentStream });
+  const scopedTranscript = isScopedTranscriptViewport(viewportKey);
+  const previousViewportKey = useRef<string | undefined>(undefined);
+  const onTranscriptViewportChange = props.onTranscriptViewportChange;
 
   // Under the Kitty disambiguate flag (enabled in runChatTui for Shift+Enter),
   // some Enter variants arrive as CSI-u sequences that Ink parses incompletely.
@@ -436,6 +445,13 @@ export function App(props: AppProps): React.JSX.Element {
     emitter.on('input', onInput);
     return () => emitter.off('input', onInput);
   }, [inputDisabled, stdin]);
+
+  useLayoutEffect(() => {
+    const previous = previousViewportKey.current;
+    previousViewportKey.current = viewportKey;
+    if (previous === undefined || previous === viewportKey) return;
+    onTranscriptViewportChange?.();
+  }, [onTranscriptViewportChange, viewportKey]);
 
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const queuedFollowUpMessages = activeSlice?.queuedFollowUpMessages ?? [];
@@ -459,17 +475,21 @@ export function App(props: AppProps): React.JSX.Element {
     ? Math.min(requestedQueuedFollowUpPanelRows, Math.max(0, rows - footerRows))
     : 0;
   const queuedFollowUpPanelVisible = queuedFollowUpPanelRows > 0;
-  const tipRowVisible = shouldShowTipRow({
-    foregroundOpen,
-    hasQueuedFollowUps: queuedFollowUpPanelWanted,
-  });
-  const staticTranscriptRows = staticTranscriptRowBudget({
-    footerRows,
-    foregroundOpen,
-    queuedFollowUpPanelRows,
-    rows,
-    tipVisible: tipRowVisible,
-  });
+  const tipRowVisible =
+    !scopedTranscript &&
+    shouldShowTipRow({
+      foregroundOpen,
+      hasQueuedFollowUps: queuedFollowUpPanelWanted,
+    });
+  const staticTranscriptRows = scopedTranscript
+    ? undefined
+    : staticTranscriptRowBudget({
+        footerRows,
+        foregroundOpen,
+        queuedFollowUpPanelRows,
+        rows,
+        tipVisible: tipRowVisible,
+      });
   const subagentControlTarget = resolveChildControlStreamTarget({
     activeStreamId,
     mode: 'subagents',
@@ -723,15 +743,19 @@ export function App(props: AppProps): React.JSX.Element {
 
   return (
     <>
-      <StaticConversationTranscript
-        colorEnabled={props.colorEnabled}
-        maxRows={staticTranscriptRows}
-        width={transcriptWidth}
-      />
+      {scopedTranscript ? null : (
+        <StaticConversationTranscript
+          colorEnabled={props.colorEnabled}
+          maxRows={staticTranscriptRows}
+          width={transcriptWidth}
+        />
+      )}
       <Box flexDirection="column">
         <Box flexDirection="column" overflowY="hidden">
           {conversationRows > 0 ? (
             <ConversationPane
+              colorEnabled={props.colorEnabled}
+              mode={scopedTranscript ? 'scoped-history' : 'live-pending'}
               width={transcriptWidth}
               maxRows={conversationRows}
             />

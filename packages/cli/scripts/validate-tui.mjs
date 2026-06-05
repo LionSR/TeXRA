@@ -1350,10 +1350,15 @@ const SCENARIOS = [
     frame: 'tail',
     expect: [
       'Please handle the harness-child-strategy sub-workflow.',
-      'strategy is checking the harness-child-strategy details',
       'Harness received: child follow-up on focused stream',
     ],
-    unexpect: ['signal read during notification phase', 'ERROR'],
+    unexpect: [
+      'entry-1 chat history line',
+      'entry-4 chat history line',
+      'ails and preparing a concise result',
+      'signal read during notification phase',
+      'ERROR',
+    ],
   },
   {
     name: 'subagent-picker-enter-views-subagent',

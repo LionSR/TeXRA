@@ -54,7 +54,7 @@ import {
 } from '@cli/chat/tui/state/completedProcessTranscript';
 import {
   estimateTranscriptEntryRows,
-  selectPendingEntriesForViewport,
+  selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
 import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
 import { renderAnsiMarkdown } from '@cli/chat/tui/render/ansiMarkdown';
@@ -1680,7 +1680,7 @@ describe('CLI transcript state', () => {
       },
     ] as const;
 
-    const selected = selectPendingEntriesForViewport(pending, 3, 80);
+    const selected = selectTranscriptEntriesForViewport(pending, 3, 80);
 
     expect(selected.entries.map((entry) => entry.id)).toEqual(['tool']);
     expect(selected.rowLimits.get('tool')).toBe(3);
@@ -1697,7 +1697,7 @@ describe('CLI transcript state', () => {
       },
     ] as const;
 
-    const selected = selectPendingEntriesForViewport(pending, 13, 80);
+    const selected = selectTranscriptEntriesForViewport(pending, 13, 80);
 
     expect(selected.usedRows).toBe(13);
     expect(selected.entries.map((entry) => entry.id)).toEqual(['assistant']);
