@@ -841,6 +841,14 @@ export class LaTeXTab extends LitElement {
         currentValue: cv.workflowAutoOpenPdf,
       })}
       ${this.renderBooleanSetting({
+        field: 'workflowRejectOnCompileFailure',
+        label: 'Reject rounds when compile fails',
+        description:
+          'When a LaTeX compile check fails, use the next planned round to repair the output with the compile log.',
+        defaultValue: LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure,
+        currentValue: cv.workflowRejectOnCompileFailure,
+      })}
+      ${this.renderBooleanSetting({
         field: 'latexdiffBetweenRounds',
         label: 'Generate diffs between consecutive rounds',
         description:
@@ -898,6 +906,7 @@ export class LaTeXTab extends LitElement {
     field:
       | 'workflowAutoCompile'
       | 'workflowAutoOpenPdf'
+      | 'workflowRejectOnCompileFailure'
       | 'latexdiffBetweenRounds'
       | 'latexdiffChangesOnly';
     label: string;
