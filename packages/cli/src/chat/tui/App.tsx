@@ -33,11 +33,9 @@ import { TipRow } from './panes/TipRow';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './panes/TodosPlanPanel';
 import { currentApproval, type PendingApproval } from './state/approvalQueue';
 import {
-  isKittyKeypadEnter,
-  isKittyShiftEnter,
   metaChordDigit,
   metaChordInput,
-  SYNTHETIC_SHIFT_RETURN_INPUT,
+  rewriteKittyEnterInput,
 } from './input/inputKeys';
 import {
   hasChildControlItems,
@@ -421,20 +419,18 @@ export function App(props: AppProps): React.JSX.Element {
   // some Enter variants arrive as CSI-u sequences that Ink parses incompletely.
   // Re-dispatch keypad Enter as plain Enter so submit/confirm still works, and
   // Shift+Enter as an internal newline token only while the main draft input is
-  // active so modals/selects keep treating Shift+Enter as ordinary confirmation.
+  // active. While modals/selects own input, leave Shift+Enter alone so the
+  // original parsed key can confirm exactly once.
   useEffect(() => {
     const emitter = (
       stdin as unknown as { internal_eventEmitter?: InputEventEmitterLike }
     ).internal_eventEmitter;
     if (!emitter) return;
     const onInput = (data: string): void => {
-      if (isKittyKeypadEnter(data)) {
-        emitter.emit('input', String.fromCharCode(13));
-        return;
-      }
-      if (!inputDisabled && isKittyShiftEnter(data)) {
-        emitter.emit('input', SYNTHETIC_SHIFT_RETURN_INPUT);
-      }
+      const rewritten = rewriteKittyEnterInput(data, {
+        shiftEnter: inputDisabled ? 'preserve' : 'newline',
+      });
+      if (rewritten !== undefined) emitter.emit('input', rewritten);
     };
     emitter.on('input', onInput);
     return () => emitter.off('input', onInput);

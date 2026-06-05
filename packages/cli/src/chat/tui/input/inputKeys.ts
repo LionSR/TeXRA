@@ -7,6 +7,7 @@ export interface ReturnKeyInput {
 }
 
 export const SYNTHETIC_SHIFT_RETURN_INPUT = '\uE000';
+const ESC = String.fromCharCode(27);
 
 const RAW_CONTROL_INPUTS = new Map<number, string>([
   [1, 'a'],
@@ -126,20 +127,22 @@ export function isTextInputNewlineInput(
 // silently stop submitting once the protocol is on. App.tsx re-dispatches this
 // raw sequence as a plain Enter. Matches only the unmodified form (bare, or the
 // explicit "no modifiers" `;1`) so Ctrl/Alt+keypad-Enter pass through untouched.
-const KITTY_KEYPAD_ENTER = new Set([
-  `${String.fromCharCode(27)}[57414u`,
-  `${String.fromCharCode(27)}[57414;1u`,
-]);
+const KITTY_KEYPAD_ENTER_INPUTS = [`${ESC}[57414u`, `${ESC}[57414;1u`];
+const KITTY_SHIFT_ENTER_INPUTS = [`${ESC}[13;2u`, `${ESC}[13:2u`];
 
-const KITTY_SHIFT_ENTER = new Set([
-  `${String.fromCharCode(27)}[13;2u`,
-  `${String.fromCharCode(27)}[13:2u`,
-]);
-
-export function isKittyKeypadEnter(data: string): boolean {
-  return KITTY_KEYPAD_ENTER.has(data);
-}
-
-export function isKittyShiftEnter(data: string): boolean {
-  return KITTY_SHIFT_ENTER.has(data);
+export function rewriteKittyEnterInput(
+  data: string,
+  options: { readonly shiftEnter: 'newline' | 'preserve' },
+): string | undefined {
+  let rewritten = data;
+  for (const sequence of KITTY_KEYPAD_ENTER_INPUTS) {
+    rewritten = rewritten.replaceAll(sequence, '\r');
+  }
+  if (options.shiftEnter === 'preserve') {
+    return rewritten === data ? undefined : rewritten;
+  }
+  for (const sequence of KITTY_SHIFT_ENTER_INPUTS) {
+    rewritten = rewritten.replaceAll(sequence, SYNTHETIC_SHIFT_RETURN_INPUT);
+  }
+  return rewritten === data ? undefined : rewritten;
 }

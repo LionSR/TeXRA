@@ -13,14 +13,13 @@ import {
   isCtrlInput,
   isEscapeInput,
   isUnhandledControlInput,
-  isKittyKeypadEnter,
-  isKittyShiftEnter,
   isPlainReturnInput,
   isShiftReturnInput,
   isTextInputNewlineInput,
   metaChordDigit,
   metaChordInput,
   normalizedCtrlInput,
+  rewriteKittyEnterInput,
   SYNTHETIC_SHIFT_RETURN_INPUT,
 } from '@cli/chat/tui/input/inputKeys';
 
@@ -60,15 +59,55 @@ describe('CLI TUI text input editing', () => {
   });
 
   it('recognizes Kitty Enter sequences for raw re-dispatch', () => {
-    expect(isKittyKeypadEnter(`${ESC}[57414u`)).toBe(true);
-    expect(isKittyKeypadEnter(`${ESC}[57414;1u`)).toBe(true);
-    expect(isKittyShiftEnter(`${ESC}[13;2u`)).toBe(true);
-    expect(isKittyShiftEnter(`${ESC}[13:2u`)).toBe(true);
+    expect(
+      rewriteKittyEnterInput(`${ESC}[57414u`, { shiftEnter: 'newline' }),
+    ).toBe('\r');
+    expect(
+      rewriteKittyEnterInput(`${ESC}[57414;1u`, { shiftEnter: 'newline' }),
+    ).toBe('\r');
+    expect(
+      rewriteKittyEnterInput(`${ESC}[13;2u`, { shiftEnter: 'newline' }),
+    ).toBe(SYNTHETIC_SHIFT_RETURN_INPUT);
+    expect(
+      rewriteKittyEnterInput(`${ESC}[13:2u`, { shiftEnter: 'newline' }),
+    ).toBe(SYNTHETIC_SHIFT_RETURN_INPUT);
     // Main Enter, plain CR, and modified keypad Enter must not match.
-    expect(isKittyKeypadEnter('\r')).toBe(false);
-    expect(isKittyKeypadEnter(`${ESC}[13u`)).toBe(false);
-    expect(isKittyKeypadEnter(`${ESC}[57414;5u`)).toBe(false);
-    expect(isKittyShiftEnter(`${ESC}[13;5u`)).toBe(false);
+    expect(
+      rewriteKittyEnterInput('\r', { shiftEnter: 'newline' }),
+    ).toBeUndefined();
+    expect(
+      rewriteKittyEnterInput(`${ESC}[13u`, { shiftEnter: 'newline' }),
+    ).toBeUndefined();
+    expect(
+      rewriteKittyEnterInput(`${ESC}[57414;5u`, { shiftEnter: 'newline' }),
+    ).toBeUndefined();
+    expect(
+      rewriteKittyEnterInput(`${ESC}[13;5u`, { shiftEnter: 'newline' }),
+    ).toBeUndefined();
+  });
+
+  it('rewrites batched Kitty Shift+Enter chunks before text editing', () => {
+    const rewritten = rewriteKittyEnterInput(`alpha${ESC}[13;2ubeta`, {
+      shiftEnter: 'newline',
+    });
+
+    expect(rewritten).toBe(`alpha${SYNTHETIC_SHIFT_RETURN_INPUT}beta`);
+    expect(applyTerminalInputChunk('', 0, rewritten ?? '')).toEqual({
+      value: 'alpha\nbeta',
+      cursor: 10,
+      submit: false,
+    });
+  });
+
+  it('preserves Shift+Enter while still rewriting keypad Enter', () => {
+    expect(
+      rewriteKittyEnterInput(`${ESC}[13:2u`, { shiftEnter: 'preserve' }),
+    ).toBeUndefined();
+    expect(
+      rewriteKittyEnterInput(`pick${ESC}[57414;1u`, {
+        shiftEnter: 'preserve',
+      }),
+    ).toBe('pick\r');
   });
 
   it('recognizes Option/Alt chords from normalized meta and ESC-prefixed input', () => {
