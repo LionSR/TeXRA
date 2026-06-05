@@ -483,16 +483,22 @@ describe('CLI conversation transcript splitting', () => {
         previousViewportKey: rootViewportKey,
         nextViewportKey: childViewportKey,
       }),
-    ).toMatchObject({ enteredRootScrollback: false });
+    ).toMatchObject({
+      previousViewportKey: rootViewportKey,
+      nextViewportKey: childViewportKey,
+    });
     expect(
       transcriptViewportChange({
         previousViewportKey: childViewportKey,
         nextViewportKey: rootViewportKey,
       }),
-    ).toMatchObject({ enteredRootScrollback: true });
+    ).toMatchObject({
+      previousViewportKey: childViewportKey,
+      nextViewportKey: rootViewportKey,
+    });
   });
 
-  it('repaints viewport switches without preserving stale Static output', () => {
+  it('repaints viewport switches from a clean scrollback owner', () => {
     const rootToChild = transcriptViewportChange({
       previousViewportKey: 'root-scrollback',
       nextViewportKey: 'scoped:child',
@@ -501,14 +507,23 @@ describe('CLI conversation transcript splitting', () => {
       previousViewportKey: 'scoped:child',
       nextViewportKey: 'root-scrollback',
     });
+    const childToChild = transcriptViewportChange({
+      previousViewportKey: 'scoped:child',
+      nextViewportKey: 'scoped:other-child',
+    });
 
     expect(rootToChild).toBeDefined();
     expect(childToRoot).toBeDefined();
+    expect(childToChild).toBeDefined();
     expect(transcriptViewportRepaintOptions(rootToChild!)).toEqual({
-      clearScrollback: false,
+      clearScrollback: true,
       preserveStatic: false,
     });
     expect(transcriptViewportRepaintOptions(childToRoot!)).toEqual({
+      clearScrollback: true,
+      preserveStatic: false,
+    });
+    expect(transcriptViewportRepaintOptions(childToChild!)).toEqual({
       clearScrollback: true,
       preserveStatic: false,
     });
