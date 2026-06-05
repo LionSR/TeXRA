@@ -23,7 +23,7 @@ import {
 } from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
-  GLOBAL_ARGS,
+  AGENT_RUN_GLOBAL_ARGS,
   collectStringFlagValues,
   optionalStringFlagValue,
   optString,
@@ -180,7 +180,7 @@ async function runToolUseAgent(
 export const agentsRunCommand = defineCliCommand({
   meta: { name: 'run', description: 'Run a tool-use agent headlessly' },
   args: {
-    ...GLOBAL_ARGS,
+    ...AGENT_RUN_GLOBAL_ARGS,
     name: {
       type: 'positional',
       required: true,
