@@ -382,6 +382,7 @@ export async function runMultiAgentPreset(
       contextFiles,
       instruction: formatMultiAgentRunInstruction(plan.preset, {
         inputFiles,
+        contextFiles,
         instruction,
         approvalContext: runContext,
       }),
