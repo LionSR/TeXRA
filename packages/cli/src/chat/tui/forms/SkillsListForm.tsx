@@ -1,11 +1,13 @@
 // `/skills` form. It lists discoverable runtime skills from the same source
-// registry that feeds prompt
-// injection instead of rediscovering paths from the UI layer.
+// registry that feeds prompt injection and builds activation payloads from the
+// shared runtime formatter instead of duplicating skill wiring in the UI layer.
 
 import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
 
+import { formatRuntimeSkillActivation } from '@skills/runtimeSkills';
 import { readCliRuntimeSkills, skillListRecord } from '@cli/runtime/skills';
+import { escapeText } from '@shared/utils/xmlEscape';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select, type SelectItem } from '../ui/Select';
@@ -23,7 +25,13 @@ import type {
 
 export interface SkillsListFormProps {
   readonly availableRows?: number;
+  readonly onSelect: (value: SkillSelectValue) => void;
   readonly onClose: () => void;
+}
+
+export interface SkillSelectValue {
+  readonly name: string;
+  readonly activationPrompt: string;
 }
 
 export function formatSkillDescriptionForTui(skill: SourcedSkill): string {
@@ -31,13 +39,35 @@ export function formatSkillDescriptionForTui(skill: SourcedSkill): string {
   return `${record.sourceLabel} · ${record.description}`;
 }
 
+export function formatSkillActivationPrompt(skill: SourcedSkill): string {
+  const activationInstruction = [
+    `The user selected the ${escapeText(skill.skill.name)} skill.`,
+    'Use these instructions for the next substantive user request.',
+    'Resolve relative file references against the skill_directory.',
+  ].join(' ');
+  return [
+    '<skill_activation>',
+    activationInstruction,
+    formatRuntimeSkillActivation(skill),
+    '</skill_activation>',
+  ].join('\n');
+}
+
+export function skillSelectValueForTui(skill: SourcedSkill): SkillSelectValue {
+  const record = skillListRecord(skill);
+  return {
+    name: record.name,
+    activationPrompt: formatSkillActivationPrompt(skill),
+  };
+}
+
 export function skillSelectItemsForTui(
   skills: readonly SourcedSkill[],
-): SelectItem<string>[] {
+): SelectItem<SkillSelectValue>[] {
   return skills.map((skill) => {
     const record = skillListRecord(skill);
     return {
-      value: record.path,
+      value: skillSelectValueForTui(skill),
       label: record.name,
       description: formatSkillDescriptionForTui(skill),
     };
@@ -105,22 +135,26 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
   });
   const items = skillSelectItemsForTui(skills);
 
+  function handleSelect(value: SkillSelectValue): void {
+    props.onSelect(value);
+  }
+
   if (isCompactFormRows(props.availableRows)) {
     return (
       <FormFrame color="cyan" title="/skills" showCloseHint={false}>
         <Text dimColor wrap="truncate-end">
-          Discoverable skills.
+          Select a skill to activate.
         </Text>
         {issueSummary ? <Text dimColor>{issueSummary}</Text> : null}
         <Select
           items={items}
           maxVisibleItems={1}
           showOverflow={false}
-          onSelect={props.onClose}
+          onSelect={handleSelect}
           onCancel={props.onClose}
         />
         <CompactFormKeyHints
-          primary={{ key: '1-9/a-z/Enter', action: 'close' }}
+          primary={{ key: '1-9/a-z/Enter', action: 'activate' }}
         />
       </FormFrame>
     );
@@ -128,20 +162,20 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
 
   return (
     <FormFrame color="cyan" title="/skills" showCloseHint={false}>
-      <Text dimColor>Discoverable skills from configured sources.</Text>
+      <Text dimColor>Select a skill to activate it.</Text>
       {issueSummary ? <Text dimColor>{issueSummary}</Text> : null}
       <Select
         items={items}
         maxVisibleItems={selectWindow.maxVisibleItems}
         showOverflow={selectWindow.showOverflow}
-        onSelect={props.onClose}
+        onSelect={handleSelect}
         onCancel={props.onClose}
       />
       <Box marginTop={1}>
         <KeyHints
           hints={[
             { key: '↑/↓', action: 'navigate' },
-            { key: 'Enter', action: 'close' },
+            { key: 'Enter', action: 'activate' },
             { key: 'Esc', action: 'close' },
           ]}
           confirmCancel={false}

@@ -243,9 +243,13 @@ async function assembleAgentLaunchContext(
 
   // Log the initial instruction as a user message so both workflow and
   // tool-use tabs display it inline with the stream log (no separate panel).
+  const displayInstruction =
+    config.displayInstruction == null
+      ? config.instruction?.trim()
+      : config.displayInstruction.trim();
   const initialInstruction =
-    config.instruction?.trim() && !input.streamTabIdOverride
-      ? config.instruction.trim()
+    displayInstruction && !input.streamTabIdOverride
+      ? displayInstruction
       : undefined;
 
   const parentStage = await beginRunStage(

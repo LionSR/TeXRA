@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import {
   clearRuntimeSkillSources,
+  formatRuntimeSkillActivation,
   loadRuntimeSkillCatalog,
   setRuntimeSkillSources,
 } from '@skills/runtimeSkills';
@@ -52,6 +53,33 @@ afterEach(async () => {
 });
 
 describe('runtime skills', () => {
+  it('formats selected skills for activation with skill directory substitution', () => {
+    const activation = formatRuntimeSkillActivation({
+      skill: {
+        name: 'proof-audit',
+        description: 'Review mathematical proof steps.',
+        body: 'Read ${TEXRA_SKILL_DIR}/references/checklist.md first & compare <proof>.',
+        baseDir: '/tmp/proof-audit',
+        path: '/tmp/proof-audit/SKILL.md',
+        frontmatter: {
+          name: 'proof-audit',
+          description: 'Review mathematical proof steps.',
+        },
+      },
+      source: {
+        scope: 'project',
+        path: '/tmp/.texra/skills',
+        label: 'project',
+      },
+    });
+
+    expect(activation).toContain('<skill name="proof-audit">');
+    expect(activation).toContain('<source>project</source>');
+    expect(activation).toContain(
+      'Read /tmp/proof-audit/references/checklist.md first &amp; compare &lt;proof>.',
+    );
+  });
+
   it('formats configured runtime skills for prompt injection', async () => {
     const root = await createTempRoot();
     const skillPath = await writeSkill(

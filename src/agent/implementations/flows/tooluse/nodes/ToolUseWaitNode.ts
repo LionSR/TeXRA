@@ -131,6 +131,7 @@ export class ToolUseWaitNode<C> extends Node<
     return {
       kind: 'continue',
       followUp: batch.items.join('\n\n'),
+      displayFollowUp: batch.displayItems.join('\n\n'),
       synthetic: batch.synthetic,
       mediaFiles: batch.mediaFiles,
     };
@@ -182,7 +183,7 @@ export class ToolUseWaitNode<C> extends Node<
     if (!execRes.synthetic) {
       shared.deliveredToOrchestrator = undefined;
       onFollowUpConsumed?.();
-      logUserMessage(logger, execRes.followUp);
+      logUserMessage(logger, execRes.displayFollowUp ?? execRes.followUp);
     }
     StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
       runtimeHost,

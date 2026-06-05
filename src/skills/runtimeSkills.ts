@@ -1,4 +1,5 @@
 import type { AgentTrace } from '@agent/trace';
+import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
 import {
   discoverSkillSources,
@@ -36,6 +37,26 @@ export function formatRuntimeSkillCatalog(
       return `- ${skill.name}: ${skill.description}\n  Source: ${sourceLabel}\n  Path: ${skill.path}`;
     })
     .join('\n');
+}
+
+export function formatRuntimeSkillActivation({
+  skill,
+  source,
+}: SourcedSkill): string {
+  const sourceLabel = source.label ?? source.scope;
+  const body = escapeText(
+    skill.body.replaceAll('${TEXRA_SKILL_DIR}', skill.baseDir),
+  );
+  return [
+    `<skill name="${escapeAttr(skill.name)}">`,
+    `<source>${escapeText(sourceLabel)}</source>`,
+    `<path>${escapeText(skill.path)}</path>`,
+    `<skill_directory>${escapeText(skill.baseDir)}</skill_directory>`,
+    '<instructions>',
+    body,
+    '</instructions>',
+    '</skill>',
+  ].join('\n');
 }
 
 export async function loadRuntimeSkillCatalog(

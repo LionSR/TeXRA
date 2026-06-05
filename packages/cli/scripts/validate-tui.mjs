@@ -608,10 +608,10 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/skills',
-      'Discoverable skills from configured sources.',
+      'Select a skill to activate it.',
       'proof-audit',
       'project · Review mathematical proof steps.',
-      'Enter close',
+      'Enter activate',
       'Esc close',
     ],
     unexpect: [
@@ -621,6 +621,19 @@ const SCENARIOS = [
     ],
     maxBlankLinesBetween: [
       { from: 'entry-4 chat history line', to: '/skills', max: 8 },
+    ],
+  },
+  {
+    name: 'skills-form-select-submit',
+    env: { HARNESS_ENTRIES: '4', HARNESS_PROJECT_SKILL: '1' },
+    keys: ['/skills', '\r', '\r'],
+    frame: 'tail',
+    settleMs: ASYNC_FORM_SETTLE_MS,
+    expect: ['Harness skill selected: proof-audit.'],
+    unexpect: [
+      'No skills found',
+      '/skills - error',
+      'Platform not initialized',
     ],
   },
   {
