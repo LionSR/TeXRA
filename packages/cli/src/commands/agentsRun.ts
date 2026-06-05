@@ -42,6 +42,7 @@ import {
   toolUseResultText,
   type CliRunResult,
 } from './_helpers/terminalStatus';
+import { formatToolUseAgentRunInstruction } from './_helpers/toolUseRunInstruction';
 import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
@@ -49,7 +50,7 @@ import {
 
 type CliToolUseRunResult = Extract<CliRunResult, { category: 'toolUse' }>;
 
-interface ToolUseAgentRunInit {
+export interface ToolUseAgentRunInit {
   readonly agent: string;
   readonly inputFiles: string[];
   readonly contextFiles: string[];
@@ -69,7 +70,7 @@ async function resolveToolUseInstruction(
   return instruction;
 }
 
-async function runToolUseAgent(
+export async function runToolUseAgent(
   context: CliContext,
   init: ToolUseAgentRunInit,
 ): Promise<number> {
@@ -115,6 +116,7 @@ async function runToolUseAgent(
         runContext.cwd,
         {
           allowEmptyInput: true,
+          requireWorkspaceFiles: true,
           stdinInputFile,
         },
       );
@@ -135,7 +137,12 @@ async function runToolUseAgent(
       model,
       inputFiles,
       contextFiles,
-      instruction,
+      instruction: formatToolUseAgentRunInstruction({
+        inputFiles,
+        contextFiles,
+        instruction,
+      }),
+      displayInstruction: instruction,
       workingDirectory: runContext.cwd,
       agentCategory: AgentCategory.ToolUse,
     };

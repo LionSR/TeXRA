@@ -368,6 +368,7 @@ export async function runMultiAgentPreset(
       runContext.cwd,
       {
         allowEmptyInput: hasInstruction,
+        requireWorkspaceFiles: true,
         stdinInputFile,
       },
     );
