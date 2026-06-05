@@ -56,6 +56,14 @@ function buildUserPrompt(
   return parts.join('\n');
 }
 
+export function getSessionDescriptionInstruction(
+  config: Pick<AgentConfig, 'displayInstruction' | 'instruction'>,
+): string {
+  const displayInstruction = config.displayInstruction?.trim();
+  if (displayInstruction) return displayInstruction;
+  return config.instruction?.trim() ?? '';
+}
+
 /**
  * Generate and persist a session description from the user's instruction.
  *
@@ -71,7 +79,7 @@ export async function generateSessionDescription(
   runtimeHost: AgentRuntimeHost,
 ): Promise<void> {
   try {
-    const instruction = config.instruction?.trim();
+    const instruction = getSessionDescriptionInstruction(config);
     if (!instruction) return;
 
     const agentEntry = getAgent(config.agent, true);
