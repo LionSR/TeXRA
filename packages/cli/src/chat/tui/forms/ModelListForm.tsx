@@ -8,12 +8,10 @@ import { Spinner } from '@inkjs/ui';
 
 import {
   getCliModelAccessList,
-  runnableCliModelAccessEntries,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
 import { formatCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
-import type { ModelAvailabilityKind } from '@shared/schemas';
-import { Select, type SelectItem } from '../ui/Select';
+import { Select } from '../ui/Select';
 import { KeyHints } from '../ui/KeyHints';
 import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
 import {
@@ -23,6 +21,10 @@ import {
 } from './_shared/selectWindow';
 import { useAsyncListForm } from './_shared/useAsyncListForm';
 import { isPlainReturnInput } from '../input/inputKeys';
+import {
+  emptyModelListMessageForCliMode,
+  modelSelectItemsForCliMode,
+} from '../modelAccessDisplay';
 
 export interface ModelListFormProps {
   readonly currentModel: string;
@@ -34,85 +36,12 @@ export interface ModelListFormProps {
   readonly onClose: () => void;
 }
 
-const RELAY_STATUS_BY_AVAILABILITY = {
-  'included-access': 'relay: included',
-  'not-included': 'relay: not included',
-  'included-login-required': 'relay: login required',
-  'relay-quota-exhausted': 'relay: quota exhausted',
-  'provider-key': 'relay: unavailable; api key set',
-  'openrouter-key': 'relay: unavailable; openrouter key set',
-  'missing-key': 'relay: unavailable; missing api key',
-} satisfies Record<ModelAvailabilityKind, string>;
-
-const EMPTY_MODEL_LIST_MESSAGES = {
-  includedLoginRequired:
-    'Included relay models require sign-in. Run /login or switch with /api personal.',
-  included:
-    'No included relay models are runnable. Switch with /api personal or try again later.',
-  personal:
-    'No personal API-key models are runnable. Configure a provider key or switch with /api included.',
-} satisfies Record<CliApiMode | 'includedLoginRequired', string>;
-
-export type NoRunnableModelAccessReason = CliApiMode | 'includedLoginRequired';
-
-export function noRunnableModelAccessReason(
-  models: readonly CliModelAccess[],
-  apiMode: CliApiMode,
-): NoRunnableModelAccessReason {
-  if (
-    apiMode === 'included' &&
-    models.some(
-      (model) => model.model.availability === 'included-login-required',
-    )
-  ) {
-    return 'includedLoginRequired';
-  }
-  return apiMode;
-}
-
-export function formatModelStatusForCliMode(
-  model: CliModelAccess,
-  apiMode: CliApiMode,
-): string {
-  if (apiMode === 'personal') return `api: ${model.status}`;
-
-  const availability = model.model.availability;
-  if (availability == null) return `relay: ${model.status}`;
-  return RELAY_STATUS_BY_AVAILABILITY[availability];
-}
-
 export function modelSelectWindow(args: {
   readonly availableRows: number | undefined;
   readonly itemCount: number;
 }): SelectWindowSize {
   // Border, title, description, and key hints are the irreducible chrome.
   return computeSelectWindowSize({ ...args, chromeRows: 5 });
-}
-
-export function modelSelectItemsForCliMode(
-  models: readonly CliModelAccess[],
-  apiMode: CliApiMode,
-  getModelSwitchDisabledReason?: (model: string) => string | undefined,
-): ReadonlyArray<SelectItem<string>> {
-  return runnableCliModelAccessEntries(models, apiMode).map((m) => {
-    const disabledReason = getModelSwitchDisabledReason?.(m.model.value);
-    const status = formatModelStatusForCliMode(m, apiMode);
-    return {
-      value: m.model.value,
-      label: m.model.label || m.model.value,
-      description: disabledReason ? `${status}; ${disabledReason}` : status,
-      disabled: disabledReason != null,
-    };
-  });
-}
-
-export function emptyModelListMessageForCliMode(
-  models: readonly CliModelAccess[],
-  apiMode: CliApiMode,
-): string {
-  return EMPTY_MODEL_LIST_MESSAGES[
-    noRunnableModelAccessReason(models, apiMode)
-  ];
 }
 
 function EmptyModelListState(props: {
