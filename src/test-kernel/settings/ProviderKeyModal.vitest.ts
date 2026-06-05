@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { delay } from '@utils/core/async';
 import { useLitComponentTestDom } from './litComponentTestUtils';
 
 type ProviderKeyModalElement = HTMLElement & {
@@ -15,7 +16,7 @@ type WaDialogElement = HTMLElement & { open: boolean };
 // those promise/timer callbacks resolve in jsdom (which has no real raf).
 async function flushDialogTicks(times = 5): Promise<void> {
   for (let i = 0; i < times; i += 1) {
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await delay(0);
   }
 }
 

@@ -9,6 +9,7 @@ import {
   type ServerSideKeyState,
 } from '@auth/serverKeys/ServerSideKeyService';
 import type { TierService } from '@auth/tier/TierService';
+import { delay } from '@utils/core/async';
 
 const USE_INCLUDED_ACCESS_KEY = 'texra.useIncludedModelAccess';
 
@@ -126,7 +127,7 @@ describe('ServerSideKeyService quota fallback', () => {
     service.initialize({ state });
 
     expect(await service.canUseServerSideKeys()).toBe(false);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await delay(0);
     expect(service.getUseIncludedModelAccess()).toBe(false);
     expect(service.wasQuotaAutoSwitched()).toBe(true);
     expect(service.isRelayQuotaExceeded()).toBe(true);
