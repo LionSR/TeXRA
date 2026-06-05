@@ -15,10 +15,10 @@ index 273dd13875b9f0441d55fe0738975ca7695b39c1..c3114a970ac495f9c5f5dece35b437c4
      private setAlternateScreen;
      private resolveInteractiveOption;
 diff --git a/build/ink.js b/build/ink.js
-index b8fd45cc990adbc080eff28fc37463cd91337dff..cbef72ecef96a9153c7b501f6630e8e8a2e94643 100644
+index b8fd45cc990adbc080eff28fc37463cd91337dff..6247734320667f28deb071a6fb5e9020bfe0afb6 100644
 --- a/build/ink.js
 +++ b/build/ink.js
-@@ -259,18 +259,42 @@ export default class Ink {
+@@ -259,18 +259,39 @@ export default class Ink {
          // error but consumers never call waitUntilExit().
          void this.exitPromise.catch(noop);
      }
@@ -35,7 +35,7 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..cbef72ecef96a9153c7b501f6630e8e8
          dom.emitLayoutListeners(this.rootNode);
 -        this.onRender();
 -        this.lastTerminalWidth = currentWidth;
-+        if (currentWidth === this.lastTerminalWidth) {
++        if (currentWidth === this.lastTerminalWidth && this.resizeTimer === undefined) {
 +            this.onRender();
 +            return;
 +        }
@@ -62,14 +62,11 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..cbef72ecef96a9153c7b501f6630e8e8
 +        if (this.isUnmounted) {
 +            return;
 +        }
-+        const currentWidth = getWindowSize(this.options.stdout).columns;
-+        if (currentWidth !== this.lastTerminalWidth) {
-+            this.repaint({ clearScrollback: true });
-+        }
++        this.repaint({ clearScrollback: true });
      };
      resolveExitPromise = () => { };
      rejectExitPromise = () => { };
-@@ -456,6 +480,13 @@ export default class Ink {
+@@ -456,6 +477,13 @@ export default class Ink {
              return;
          }
          this.isUnmounting = true;
@@ -83,7 +80,7 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..cbef72ecef96a9153c7b501f6630e8e8
          if (this.beforeExitHandler) {
              process.off('beforeExit', this.beforeExitHandler);
              this.beforeExitHandler = undefined;
-@@ -623,6 +654,42 @@ export default class Ink {
+@@ -623,6 +651,42 @@ export default class Ink {
              this.log.sync(this.lastOutputToRender || this.lastOutput + '\n');
          }
      }
