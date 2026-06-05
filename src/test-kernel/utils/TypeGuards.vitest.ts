@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { filterNotNull, filterNotNullish } from '@utils/core';
+import { ensureArray, filterNotNull, filterNotNullish } from '@utils/core';
 
 describe('core type guard predicates', () => {
   it('filters null values as an Array.filter predicate', () => {
@@ -18,5 +18,15 @@ describe('core type guard predicates', () => {
     ];
 
     expect(values.filter(filterNotNullish)).toEqual(['alpha', 'beta']);
+  });
+
+  it('returns array values unchanged', () => {
+    const values = ['alpha', 'beta'];
+
+    expect(ensureArray(values)).toBe(values);
+  });
+
+  it('wraps scalar values in an array', () => {
+    expect(ensureArray('alpha')).toEqual(['alpha']);
   });
 });

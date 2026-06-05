@@ -1,5 +1,6 @@
 // Local imports
 import { tryPlatform } from '@platform/platform';
+import { ensureArray } from '@utils/core';
 import type { ConfigTarget } from '@platform/interfaces/config';
 import type { Disposable } from '@platform/interfaces/disposable';
 
@@ -96,7 +97,7 @@ export function watchConfig(
   keys: string | string[],
   callback: () => void,
 ): Disposable {
-  const keyArray = Array.isArray(keys) ? keys : [keys];
+  const keyArray = ensureArray(keys);
   const provider = configProvider();
   const disposable = provider?.watch(keyArray, callback) ?? {
     dispose: () => {},

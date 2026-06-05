@@ -21,3 +21,8 @@ export function filterNotNull<T>(item: T | null): item is T {
 export function filterNotNullish<T>(item: T | null | undefined): item is T {
   return item != null;
 }
+
+/** Wrap a single value in an array, or return the array unchanged. */
+export function ensureArray<T>(value: T | T[]): T[] {
+  return Array.isArray(value) ? value : [value];
+}

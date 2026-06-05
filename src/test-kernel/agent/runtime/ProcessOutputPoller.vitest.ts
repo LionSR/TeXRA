@@ -17,12 +17,9 @@ import {
 
 // Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
+import { delay } from '@utils/core/async';
 
 const tmpDirs: string[] = [];
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function createRuntimeHost(): {
   host: AgentRuntimeHost;
