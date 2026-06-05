@@ -26,7 +26,7 @@ import {
   type UnknownCliFlag,
 } from './_helpers/dispatch';
 import { getExitCode, resetExitCode } from './_helpers/exitCode';
-import { GLOBAL_ARGS } from './_helpers/globalArgs';
+import { ROOT_ROUTING_ARGS } from './_helpers/globalArgs';
 
 import { agentsCommand } from './agents';
 import { authCommand, loginCommand, logoutCommand } from './auth';
@@ -67,7 +67,7 @@ export const rootCommand = withUsageSections(
     // agents list` mis-detects `ndjson` as the subcommand). The actual parsing
     // happens on each subcommand; root only acts as a routing layer.
     args: {
-      ...GLOBAL_ARGS,
+      ...ROOT_ROUTING_ARGS,
     },
     subCommands: {
       orchestrate: orchestrationCommand,
