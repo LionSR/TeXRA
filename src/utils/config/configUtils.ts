@@ -1,8 +1,8 @@
 // Local imports
 import { tryPlatform } from '@platform/platform';
+import { ensureArray } from '@utils/core';
 import type { ConfigTarget } from '@platform/interfaces/config';
 import type { Disposable } from '@platform/interfaces/disposable';
-import { ensureArray } from '@utils/core';
 
 interface ConfigSubscriptionContext {
   subscriptions: Disposable[];

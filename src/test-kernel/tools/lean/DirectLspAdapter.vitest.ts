@@ -11,9 +11,9 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { delay } from '@utils/core/async';
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { fileUriToPath, LeanSession } from '@tools/lean/direct/leanSession';
+import { delay } from '@utils/core/async';
 
 const FAKE_LAKE = `#!/usr/bin/env node
 const fs = require('node:fs');

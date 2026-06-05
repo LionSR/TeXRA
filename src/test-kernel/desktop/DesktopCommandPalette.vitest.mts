@@ -2,11 +2,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - utils
-import { delay } from '@utils/core/async';
 
 // Local imports - shared schemas
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
+import { delay } from '@utils/core/async';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
