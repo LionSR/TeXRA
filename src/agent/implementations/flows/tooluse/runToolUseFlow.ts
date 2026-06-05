@@ -1,7 +1,11 @@
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { getExecutionStore } from '@agent/storage';
-import { createModelHandler } from '@agent/runtime/ModelFactory';
+import {
+  activeModelHandlerCompatibilityKey,
+  createModelHandler,
+  modelHandlerCompatibilityKey,
+} from '@agent/runtime/ModelFactory';
 import {
   registerInterruptible,
   unregisterInterruptible,
@@ -86,6 +90,7 @@ export interface ToolUseFlowContext {
   readonly model: string;
   interrupt(): void;
   requestImmediateCompaction(): void;
+  modelSwitchDisabledReason(model: string): string | undefined;
   switchModel(model: string): Promise<void>;
 }
 
@@ -99,6 +104,10 @@ type ToolUsePersistedFlow<C> = PersistedFlow<
 
 const IMMEDIATE_COMPACTION_FOLLOW_UP =
   'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
+const MODEL_SWITCH_DIFFERENT_FORMAT_ERROR =
+  'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.';
+const MODEL_SWITCH_DIFFERENT_FORMAT_REASON =
+  'different conversation format; start new chat';
 
 export async function runToolUseFlow<C = unknown>(
   input: RunToolUseFlowInput<C>,
@@ -153,6 +162,25 @@ export async function runToolUseFlow<C = unknown>(
     await flow.setShared(liveShared);
   };
 
+  const modelSwitchDisabledReason = (model: string): string | undefined => {
+    if (services.config.model === model) return undefined;
+
+    const nextConfig = MODEL_CONFIGS[model];
+    if (!nextConfig) return `Model ${model} not found in MODEL_CONFIGS`;
+
+    const activeKey = activeModelHandlerCompatibilityKey(services.modelHandler);
+    if (!activeKey) {
+      // Non-factory handlers still reach switchModel's constructor-reference
+      // check. Keep the UI permissive rather than guessing their format here.
+      return undefined;
+    }
+    const nextKey = modelHandlerCompatibilityKey(nextConfig);
+    if (!nextKey) return `Unsupported model provider: ${nextConfig.provider}`;
+    return activeKey === nextKey
+      ? undefined
+      : MODEL_SWITCH_DIFFERENT_FORMAT_REASON;
+  };
+
   const switchModel = async (model: string): Promise<void> => {
     const nextConfig = MODEL_CONFIGS[model];
     if (!nextConfig) {
@@ -160,15 +188,24 @@ export async function runToolUseFlow<C = unknown>(
     }
     if (services.config.model === model) return;
 
+    const disabledReason = modelSwitchDisabledReason(model);
+    if (disabledReason) {
+      throw new Error(
+        disabledReason === MODEL_SWITCH_DIFFERENT_FORMAT_REASON
+          ? MODEL_SWITCH_DIFFERENT_FORMAT_ERROR
+          : disabledReason,
+      );
+    }
+
     const previousHandler = services.modelHandler;
     const nextHandler = (await createModelHandler(
       nextConfig,
     )) as ToolUseServices<C>['modelHandler'];
+    // Backstop for untagged/custom handlers and future route drift. This is a
+    // constructor-reference comparison, so CLI minification cannot affect it.
     if (nextHandler.constructor !== previousHandler.constructor) {
       nextHandler.dispose();
-      throw new Error(
-        'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.',
-      );
+      throw new Error(MODEL_SWITCH_DIFFERENT_FORMAT_ERROR);
     }
     try {
       await persistModelSwitch(model);
@@ -214,6 +251,7 @@ export async function runToolUseFlow<C = unknown>(
         );
       }
     },
+    modelSwitchDisabledReason,
     switchModel,
   };
 

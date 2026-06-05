@@ -205,6 +205,40 @@ describe('slashRegistry', () => {
     expect(modelNode.props).toMatchObject({ selectable: true });
   });
 
+  it('passes live model-switch disabled reasons into the model picker', () => {
+    resetCliState({
+      agent: 'chat',
+      model: 'gpt54',
+      cwd: '/tmp/workspace',
+      apiMode: 'personal',
+      canDelegate: false,
+      version: 'test',
+    });
+    registerBuiltinSlashCommands({
+      canSelectModel: () => true,
+      getModelSwitchDisabledReason: (model) =>
+        model === 'sonnet46T'
+          ? 'different conversation format; start new chat'
+          : undefined,
+    });
+    const model = listSlashCommands().find((cmd) => cmd.name === 'model');
+
+    if (!model) throw new Error('Expected /model to be registered');
+
+    expect(openRegisteredCliSlashForm(model, '')).toBe(true);
+
+    const modelNode = renderFormAdapter<{
+      getModelSwitchDisabledReason?: (model: string) => string | undefined;
+    }>(cliState.activeForm.get()?.render(() => {}, 20));
+
+    expect(modelNode.props?.getModelSwitchDisabledReason?.('sonnet46T')).toBe(
+      'different conversation format; start new chat',
+    );
+    expect(modelNode.props?.getModelSwitchDisabledReason?.('gpt55')).toBe(
+      undefined,
+    );
+  });
+
   it('routes API picker selection failures to the shared error handler', async () => {
     resetCliState({
       agent: 'chat',
