@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { isInquiryContinuationText } from '@cli/chat/tui/panes/TranscriptEntry';
+import {
+  boundedAssistantDisplayLines,
+  isInquiryContinuationText,
+} from '@cli/chat/tui/panes/TranscriptEntry';
 import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   appendStaticTranscriptItems,
@@ -278,6 +281,31 @@ describe('CLI conversation transcript splitting', () => {
     expect(selected.entries.map((item) => item.id)).toEqual(['a1']);
     expect(selected.usedRows).toBe(fullRows);
     expect(selected.rowLimits.has('a1')).toBe(false);
+  });
+
+  it('renders bounded finalized assistant tails through markdown', () => {
+    const text = ['intro line', 'middle line', '**bold tail marker**'].join(
+      '\n',
+    );
+
+    const finalizedTail = boundedAssistantDisplayLines({
+      colorEnabled: false,
+      finalized: true,
+      rows: 1,
+      text,
+      width: 80,
+    }).join('\n');
+    const streamingTail = boundedAssistantDisplayLines({
+      colorEnabled: false,
+      finalized: false,
+      rows: 1,
+      text,
+      width: 80,
+    }).join('\n');
+
+    expect(finalizedTail).toContain('bold tail marker');
+    expect(finalizedTail).not.toContain('**bold tail marker**');
+    expect(streamingTail).toContain('**bold tail marker**');
   });
 
   it('appends only finalized entries to terminal scrollback items', () => {

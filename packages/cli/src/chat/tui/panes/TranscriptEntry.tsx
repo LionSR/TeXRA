@@ -6,6 +6,7 @@
 import { Box, Text } from 'ink';
 
 import { Markdown } from '../render/Markdown';
+import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { fillRows } from '../render/terminalText';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
@@ -194,11 +195,36 @@ function plainWrapTailLines(
     .slice(-Math.max(1, tailRows));
 }
 
+export function boundedAssistantDisplayLines({
+  colorEnabled,
+  finalized,
+  rows,
+  text,
+  width,
+}: {
+  readonly colorEnabled?: boolean;
+  readonly finalized: boolean;
+  readonly rows: number;
+  readonly text: string;
+  readonly width?: number;
+}): readonly string[] {
+  const cols = Math.max(1, Math.floor(width ?? 80));
+  if (!finalized) {
+    return plainWrapTailLines(text, cols, rows);
+  }
+  return boundedLines(
+    renderAnsiMarkdown(text, { width: cols, colorEnabled }).split('\n'),
+    rows,
+  );
+}
+
 export function BoundedTranscriptEntry({
+  colorEnabled,
   entry,
   maxRows,
   width,
 }: {
+  readonly colorEnabled?: boolean;
   readonly entry: ConversationEntry;
   readonly maxRows: number;
   readonly width?: number;
@@ -206,15 +232,20 @@ export function BoundedTranscriptEntry({
   const rows = Math.max(1, maxRows);
   if (entry.role === 'assistant') {
     const cols = Math.max(1, Math.floor(width ?? 80));
-    // In-flight overflow tail (still streaming): plain tail wrap rather
-    // than renderAnsiMarkdown over the full buffer (O(text^2), and the
-    // tail slice discards markdown structure above it anyway). Finalized
-    // entries still render full markdown through `<Static>`.
+    // Streaming overflow stays plain for speed. Finalized overflow is only
+    // used by scoped child panes, so render cached Markdown first and then
+    // take the visible tail.
     return (
       <Box flexDirection="column">
         <Text>
           {fillRows(
-            plainWrapTailLines(entry.text, cols, rows).join('\n'),
+            boundedAssistantDisplayLines({
+              colorEnabled,
+              finalized: entry.finalized,
+              rows,
+              text: entry.text,
+              width: cols,
+            }).join('\n'),
             cols,
           )}
         </Text>
