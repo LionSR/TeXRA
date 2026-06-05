@@ -59,36 +59,7 @@ export function defaultSkillSources(
   options: SkillSourceOptions = {},
 ): SkillSource[] {
   const home = os.homedir();
-  const sources: SkillSource[] = [
-    ...bundledSkillSources(context.resourcesPath),
-    {
-      scope: 'user',
-      path: path.join(home, '.texra', 'skills'),
-      label: 'user',
-    },
-    {
-      scope: 'project',
-      path: path.join(context.cwd, '.texra', 'skills'),
-      label: 'project',
-    },
-  ];
-
-  if (options.includeInterop === true) {
-    for (const dir of INTEROP_SKILL_DIRS) {
-      sources.push(
-        {
-          scope: 'interop',
-          path: path.join(home, dir, 'skills'),
-          label: `${dir} user`,
-        },
-        {
-          scope: 'interop',
-          path: path.join(context.cwd, dir, 'skills'),
-          label: `${dir} project`,
-        },
-      );
-    }
-  }
+  const sources: SkillSource[] = [];
 
   for (const candidate of options.additionalPaths ?? []) {
     sources.push({
@@ -98,6 +69,40 @@ export function defaultSkillSources(
       required: true,
     });
   }
+
+  sources.push({
+    scope: 'project',
+    path: path.join(context.cwd, '.texra', 'skills'),
+    label: 'project',
+  });
+
+  if (options.includeInterop === true) {
+    for (const dir of INTEROP_SKILL_DIRS) {
+      sources.push({
+        scope: 'interop',
+        path: path.join(context.cwd, dir, 'skills'),
+        label: `${dir} project`,
+      });
+    }
+  }
+
+  sources.push({
+    scope: 'user',
+    path: path.join(home, '.texra', 'skills'),
+    label: 'user',
+  });
+
+  if (options.includeInterop === true) {
+    for (const dir of INTEROP_SKILL_DIRS) {
+      sources.push({
+        scope: 'interop',
+        path: path.join(home, dir, 'skills'),
+        label: `${dir} user`,
+      });
+    }
+  }
+
+  sources.push(...bundledSkillSources(context.resourcesPath));
 
   return uniqueSources(sources);
 }
