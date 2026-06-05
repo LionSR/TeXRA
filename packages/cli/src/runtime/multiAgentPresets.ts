@@ -67,6 +67,7 @@ export const MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION =
   'Root agent for the team run (defaults to the preset orchestrator)';
 export const MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION =
   'Model for the team root agent';
+const BUILT_IN_TEAM_ROOT_AGENT_NAMES = ['orchestrator', 'leanOrchestrator'];
 const MULTI_AGENT_INSPECT_HINT =
   'Hint: run `texra multi-agent inspect <preset>` to see missing agents for degraded or unavailable presets.';
 const MULTI_AGENT_LOGIN_HINT =
@@ -429,10 +430,9 @@ function selectPresetRootAgent(
   if (preferredRoot) return preferredRoot;
 
   if (options.presetSource === 'built-in') {
-    // Built-in teams name specialists as members. If their orchestrator is not
-    // available, fall back only to a plain local agent rather than promoting an
-    // arbitrary delegation specialist to team root.
-    return rootCandidates.find((agent) => !agentHasDelegationTools(agent));
+    // Built-in teams have dedicated orchestrator roots. Local specialists such
+    // as `lean`, `research`, or `numerics` are members, not safe root fallbacks.
+    return undefined;
   }
 
   return delegatingAgents[0] ?? rootCandidates[0];
@@ -445,8 +445,8 @@ function findPreferredRootAgent(
 ): AgentEntry | undefined {
   const searchOrder =
     presetSource === 'built-in'
-      ? ['orchestrator', 'leanOrchestrator']
-      : ['orchestrator', 'leanOrchestrator', ...presetOrder];
+      ? BUILT_IN_TEAM_ROOT_AGENT_NAMES
+      : [...BUILT_IN_TEAM_ROOT_AGENT_NAMES, ...presetOrder];
   for (const name of searchOrder) {
     const entry = agents.find((agent) => agent.name === name);
     if (entry) return entry;

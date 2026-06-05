@@ -123,7 +123,7 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
-      'unavailable; root lean cannot delegate; 2/7 tool-use agents',
+      'unavailable; no runnable team root; 2/7 tool-use agents',
     );
     expect(cliMultiAgentPresetCanLaunchTeam(plan)).toBe(false);
   });
@@ -221,12 +221,8 @@ describe('CLI multi-agent presets', () => {
         ],
         label: '2/7',
       },
-      rootAgent: {
-        key: 'builtInToolUse:lean',
-        name: 'lean',
-        source: 'builtInToolUse',
-      },
     });
+    expect(record.availability.rootAgent).toBeUndefined();
   });
 
   it('includes planned availability in ndjson preset records', () => {
@@ -396,24 +392,24 @@ describe('CLI multi-agent presets', () => {
     expect(plan.missingToolUseAgents).toContain('research');
   });
 
-  it('flags a gap when the preset has a root but missing members', () => {
+  it('flags a gap when a built-in preset has members but no root', () => {
     const preset = findCliMultiAgentPreset(
       cliMultiAgentPresets(undefined),
       'physicist',
     )!;
-    // A local-only registry: `review` can serve as root, but the orchestrator
-    // and the rest of the team are absent. The run should still be treated as
-    // having gaps so an authenticated user triggers a remote load.
+    // A local-only registry can expose team members before relay-served
+    // orchestrators are available. The members should still count as available,
+    // but they should not be promoted to the built-in team root.
     const plan = planCliMultiAgentPresetRun(preset, {
       workflowAgents: [],
       toolUseAgents: [agent('review', AgentCategory.ToolUse)],
     });
 
-    expect(plan.rootAgent?.name).toBe('review');
+    expect(plan.rootAgent).toBeUndefined();
     expect(cliMultiAgentPlanHasGaps(plan)).toBe(true);
   });
 
-  it('does not select simplifier as an implicit preset root', () => {
+  it('does not select built-in team specialists as implicit roots', () => {
     const preset = findCliMultiAgentPreset(
       cliMultiAgentPresets(undefined),
       'physicist',
@@ -432,9 +428,32 @@ describe('CLI multi-agent presets', () => {
       ],
     });
 
-    expect(plan.rootAgent?.name).toBe('review');
+    expect(plan.rootAgent).toBeUndefined();
     expect(onlySimplifierPlan.rootAgent).toBeUndefined();
     expect(cliMultiAgentPlanHasGaps(onlySimplifierPlan)).toBe(true);
+  });
+
+  it('allows custom presets to default to a delegating member root', () => {
+    const plan = planCliMultiAgentPresetRun(
+      {
+        id: 'custom-review',
+        name: 'Custom review',
+        description: 'User-authored review team.',
+        icon: 'codicon-symbol-method',
+        source: 'custom',
+        workflowAgents: [],
+        toolUseAgents: ['review'],
+      },
+      {
+        workflowAgents: [],
+        toolUseAgents: [
+          agent('review', AgentCategory.ToolUse, ['delegate_agent']),
+        ],
+      },
+    );
+
+    expect(plan.rootAgent?.name).toBe('review');
+    expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
   });
 
   it('does not allow custom presets to default to their simplifier agent', () => {

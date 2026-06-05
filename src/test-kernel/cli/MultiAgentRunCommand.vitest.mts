@@ -453,9 +453,9 @@ describe('CLI multi-agent run command', () => {
     expect(mocks.expandRunInputs).not.toHaveBeenCalled();
   });
 
-  it('refuses signed-out preset fallback to one root agent', async () => {
+  it('refuses built-in presets without a runnable root agent', async () => {
     mocks.cliMultiAgentPresetTeamLaunchBlockReason.mockReturnValueOnce(
-      'root lean cannot delegate',
+      'no runnable team root',
     );
     mocks.planCliMultiAgentPresetRun.mockReturnValue({
       preset: {
@@ -463,13 +463,7 @@ describe('CLI multi-agent run command', () => {
         name: 'Mathematician',
         source: 'built-in',
       },
-      rootAgent: {
-        name: 'lean',
-        category: 'toolUse',
-        source: 'builtInToolUse',
-        path: '/agents/lean.yaml',
-        tools: [],
-      },
+      rootAgent: undefined,
       missingWorkflowAgents: ['generic', 'devise', 'apply'],
       missingToolUseAgents: ['simplifier', 'progressCheck', 'orchestrator'],
       workflowAgentKeys: [],
@@ -488,7 +482,7 @@ describe('CLI multi-agent run command', () => {
     expect(exitCode).toBe(2);
     expect(mocks.executeCliRequest).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Multi-agent preset "mathematician" cannot start as a team: root lean cannot delegate. Run `texra multi-agent inspect mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent lean` if that is what you want.',
+      'Multi-agent preset "mathematician" cannot start as a team: no runnable team root. Run `texra multi-agent inspect mathematician` to see missing agents. Install or sign in for a runnable team root before launching this preset.',
     );
     expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
       expect.stringContaining('WARN team delegation unavailable'),
