@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { delay } from '@utils/core/async';
 
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';
@@ -18,6 +17,7 @@ import {
   type StreamLogEntry,
 } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
+import { delay } from '@utils/core/async';
 
 const STREAM_LOGS_DIR = 'streamLogs';
 const STREAM_LOG_SUMMARIES_DIR = 'streamLogSummaries';
