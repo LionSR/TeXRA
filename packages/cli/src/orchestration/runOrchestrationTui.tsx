@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { Select } from '../chat/tui/ui/Select';
 import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
+import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import {
   modelSelectItemsForCliMode,
@@ -202,6 +203,7 @@ export interface RunOrchestrationTuiOptions {
   readonly models: readonly CliModelAccess[];
   readonly apiMode: CliApiMode;
   readonly allowDefaultModelLaunch?: boolean;
+  readonly colorEnabled?: boolean;
 }
 
 export async function runOrchestrationTui(
@@ -224,7 +226,10 @@ export async function runOrchestrationTui(
         onResolve={record}
       />,
       {
-        stdout: process.stdout,
+        stdout: tuiOutputStreamForColor(
+          process.stdout,
+          options.colorEnabled ?? true,
+        ),
         stderr: process.stderr,
         stdin: process.stdin,
       },

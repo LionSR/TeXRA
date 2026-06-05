@@ -49,6 +49,7 @@ import {
 } from '../src/chat/tui/state/cliState';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
+import { tuiOutputStreamForColor } from '../src/chat/tui/render/noColorOutput';
 import {
   enqueueApproval,
   type ApprovalDecision,
@@ -149,6 +150,11 @@ const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
 // Keep platform state writes out of the repository unless a scenario opts in.
 const HARNESS_CWD =
   HARNESS_CWD_INPUT || mkdtempSync(path.join(tmpdir(), 'texra-tui-harness-'));
+const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
+const HARNESS_STDOUT = tuiOutputStreamForColor(
+  process.stdout,
+  HARNESS_COLOR_ENABLED,
+);
 if (!HARNESS_CWD_INPUT && process.env.HARNESS_KEEP_CWD !== '1') {
   process.once('exit', () => {
     rmSync(HARNESS_CWD, { recursive: true, force: true });
@@ -279,7 +285,7 @@ if (SHOW_ORCHESTRATION) {
       onResolve={() => undefined}
     />,
     {
-      stdout: process.stdout,
+      stdout: HARNESS_STDOUT,
       stderr: process.stderr,
       stdin: process.stdin,
     },
@@ -1238,11 +1244,12 @@ ink = render(
     onKillExecution={markHarnessExecutionStopped}
     canInterruptActiveRun={() => canInterrupt}
     canStopActiveRun={() => canInterrupt}
+    colorEnabled={HARNESS_COLOR_ENABLED}
     onInterruptActive={markHarnessInterrupted}
     onCtrlC={handleHarnessCtrlC}
   />,
   {
-    stdout: process.stdout,
+    stdout: HARNESS_STDOUT,
     stderr: process.stderr,
     stdin: process.stdin,
     exitOnCtrlC: false,
