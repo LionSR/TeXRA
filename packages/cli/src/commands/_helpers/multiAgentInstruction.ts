@@ -16,6 +16,7 @@ export function formatMultiAgentRunInstruction(
   preset: MultiAgentInstructionPreset,
   init: {
     readonly inputFiles: readonly string[];
+    readonly contextFiles: readonly string[];
     readonly instruction: string;
     readonly approvalContext: ApprovalInstructionContext;
   },
@@ -32,13 +33,14 @@ export function formatMultiAgentRunInstruction(
   if (approvalInstruction) parts.push(approvalInstruction);
   const inputFileInstruction = formatCliRunFileInstruction({
     inputFiles: init.inputFiles,
+    contextFiles: init.contextFiles,
   });
   if (inputFileInstruction) parts.push(inputFileInstruction);
 
   const instruction = init.instruction.trim();
   if (instruction) {
     parts.push(
-      init.inputFiles.length > 0
+      inputFileInstruction
         ? 'Additional user instruction:'
         : 'User instruction:',
       instruction,
