@@ -58,6 +58,7 @@ function renderConversationPaneEntry({
     return (
       <BoundedTranscriptEntry
         key={entry.id}
+        colorEnabled={colorEnabled}
         entry={entry}
         maxRows={rowLimit}
         width={width}
