@@ -299,6 +299,7 @@ export function clearTuiSessionRunState(
   session.runExitCode = CliExitCode.Success;
   session.runCompleted = false;
   session.stopRequested = false;
+  publishRootRunStartAvailability(session);
 }
 
 export function markChatTuiRunPending(
@@ -310,6 +311,7 @@ export function markChatTuiRunPending(
   session.runExitCode = CliExitCode.Success;
   session.runCompleted = false;
   session.stopRequested = false;
+  publishRootRunStartAvailability(session);
 }
 
 export function chatTuiCanInterruptActiveRun(
@@ -343,6 +345,17 @@ export function chatTuiCanStartRootRun(
   session: PendingTuiRunSessionState,
 ): boolean {
   return !session.runPromise || session.runCompleted;
+}
+
+function publishRootRunStartAvailability(
+  session: PendingTuiRunSessionState,
+): void {
+  cliState.rootRunStartAvailable.set(chatTuiCanStartRootRun(session));
+}
+
+function markChatTuiRunCompleted(session: PendingTuiRunSessionState): void {
+  session.runCompleted = true;
+  publishRootRunStartAvailability(session);
 }
 
 export function chatTuiCanSelectModel(input: {
@@ -1328,7 +1341,7 @@ export async function runChat(
           : CliExitCode.AgentError;
       })
       .finally(() => {
-        session.runCompleted = true;
+        markChatTuiRunCompleted(session);
         void runtimeHost.close();
       });
     markChatTuiRunPending(session, runPromise);
@@ -1359,6 +1372,7 @@ export async function runChat(
     clearLocalTranscript();
     followUpQueue.clear();
     session.runCompleted = false;
+    publishRootRunStartAvailability(session);
     session.stopRequested = false;
     session.runExitCode = CliExitCode.Success;
     session.streamId = resolution.streamId;
@@ -1413,9 +1427,10 @@ export async function runChat(
           : CliExitCode.AgentError;
       })
       .finally(() => {
-        session.runCompleted = true;
+        markChatTuiRunCompleted(session);
         void runtimeHost.close();
       });
+    publishRootRunStartAvailability(session);
     // Don't await session.runPromise here: a resumed session that suspends at
     // the WAIT node leaves runPromise unresolved (mirrors startAgentRun's
     // fire-and-forget). The exit `finally` handles the dangling-promise case.
@@ -1468,7 +1483,7 @@ export async function runChat(
           'reject',
         );
         if (session.stopRequested) {
-          session.runCompleted = true;
+          markChatTuiRunCompleted(session);
           return;
         }
 
@@ -1492,7 +1507,7 @@ export async function runChat(
         session.runExitCode = session.stopRequested
           ? CliExitCode.Success
           : CliExitCode.AgentError;
-        session.runCompleted = true;
+        markChatTuiRunCompleted(session);
       }
     });
     markChatTuiRunPending(session, pendingStart);

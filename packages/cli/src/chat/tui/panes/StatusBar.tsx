@@ -64,6 +64,7 @@ export interface StatusBarDisplayInput {
   readonly approvalDepth: number;
   readonly approvalKind?: ApprovalQueueStatusKind;
   readonly taskControlsAvailable?: boolean;
+  readonly agentSelectionAvailable?: boolean;
   readonly subagentControlsAvailable: boolean;
   /** True when more than the root stream exists, i.e. a subagent or
    *  child stream is live. Gates the stream-navigation hints, which are
@@ -363,6 +364,7 @@ function metaShortcutLabel(modifierLabel: string, key: string): string {
 
 export function statusBarBindingsText(
   taskControlsAvailable = true,
+  agentSelectionAvailable = false,
   subagentControlsAvailable: boolean,
   hasMultipleStreams: boolean,
   modifierLabel = defaultShortcutModifierLabel(),
@@ -379,6 +381,7 @@ export function statusBarBindingsText(
     ...(hasMultipleStreams ? ['[Tab]streams', `${focusBinding}focus`] : []),
     ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
     '[/status]details',
+    ...(agentSelectionAvailable ? ['[/agent]agents'] : []),
     '[/model]models',
     '[/api]api',
     shiftEnterNewline ? '[Shift-Enter]newline' : '[Ctrl-J]newline',
@@ -395,10 +398,22 @@ export function statusBarBindingsText(
   const fullBindings = joinStatusBindings(bindings);
   if (fitsStatusBindings(fullBindings, maxColumns)) return fullBindings;
 
+  if (agentSelectionAvailable) {
+    const setupBindings = joinStatusBindings([
+      '[/agent]agents',
+      '[/model]models',
+      '[/api]api',
+      shiftEnterNewline ? '[Shift-Enter]newline' : '[Ctrl-J]newline',
+      `[Ctrl-C]${ctrlCAction}`,
+    ]);
+    if (fitsStatusBindings(setupBindings, maxColumns)) return setupBindings;
+  }
+
   const compactBindings = joinStatusBindings([
     ...(hasMultipleStreams ? ['[Tab]streams'] : []),
     ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
     ...(subagentControlsAvailable ? [`${subagentsBinding}subagents`] : []),
+    ...(agentSelectionAvailable ? ['[/agent]agents'] : []),
     '[/status]details',
     `[Ctrl-C]${ctrlCAction}`,
   ]);
@@ -408,6 +423,7 @@ export function statusBarBindingsText(
     ...(hasMultipleStreams ? ['[Tab]streams'] : []),
     ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
     ...(subagentControlsAvailable ? [`${subagentsBinding}subagents`] : []),
+    ...(agentSelectionAvailable ? ['[/agent]agents'] : []),
     `[Ctrl-C]${ctrlCAction}`,
   ]);
   if (fitsStatusBindings(minimalBindings, maxColumns)) return minimalBindings;
@@ -686,6 +702,7 @@ export function buildStatusBarDisplay(
             )
           : statusBarBindingsText(
               input.taskControlsAvailable ?? true,
+              input.agentSelectionAvailable ?? false,
               input.subagentControlsAvailable,
               input.hasMultipleStreams,
               input.shortcutModifierLabel,
@@ -699,6 +716,7 @@ export function buildStatusBarDisplay(
 }
 
 export interface StatusBarProps {
+  readonly agentSelectionAvailable?: boolean;
   readonly canStopActiveRun?: () => boolean;
   readonly foregroundEscapeAction?: string;
   readonly queuedFollowUpPreview?: boolean;
@@ -758,6 +776,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       taskControlTarget.slice,
       'tasks',
     ),
+    agentSelectionAvailable: props.agentSelectionAvailable,
     subagentControlsAvailable: hasChildControlItems(
       subagentControlTarget.slice,
       'subagents',
