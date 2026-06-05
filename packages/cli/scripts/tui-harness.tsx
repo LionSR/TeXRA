@@ -37,6 +37,7 @@ import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { getDefaultStreamLogStore } from '@transcript';
 
 import { App } from '../src/chat/tui/App';
+import type { TranscriptViewportChange } from '../src/chat/tui/state/transcriptViewportMode';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
 import {
   listSlashCommands,
@@ -1359,8 +1360,13 @@ registerBuiltinSlashCommands({
 });
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
-function repaintHarnessTranscriptViewport(): void {
-  inkRef.current?.repaint({ clearScrollback: false, preserveStatic: false });
+function repaintHarnessTranscriptViewport(
+  change: TranscriptViewportChange,
+): void {
+  inkRef.current?.repaint({
+    clearScrollback: change.enteredRootScrollback,
+    preserveStatic: false,
+  });
 }
 
 function handleHarnessCtrlC(): void {
