@@ -186,6 +186,7 @@ export function registerBuiltinSlashCommands(options?: {
             action: () => onModelSelect(value),
             value,
             onDone: props.onDone,
+            onError: options?.onError,
           })
         }
         onClose={() => props.onDone(undefined)}
