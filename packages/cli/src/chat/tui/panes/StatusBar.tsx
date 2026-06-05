@@ -166,6 +166,7 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   usage: 40,
   queuedFollowUp: 50,
   approvalDepth: 60,
+  rootActive: 65,
   elapsed: 70,
 } as const;
 
@@ -493,12 +494,23 @@ export function ctrlCActionForFocus({
     : 'stop';
 }
 
-function statusBarCanStopStatus(status: StreamStatus | undefined): boolean {
+function statusBarCanStopStatus(status: string | undefined): boolean {
   return (
     status === STREAM_STATUS.INITIALIZING ||
     status === STREAM_STATUS.RUNNING ||
     status === STREAM_STATUS.RESUMING
   );
+}
+
+function rootActiveSegment(input: StatusBarDisplayInput) {
+  return input.ctrlCAction === 'stop root' &&
+    !statusBarCanStopStatus(input.status)
+    ? {
+        text: 'root active',
+        color: 'yellow' as const,
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.rootActive,
+      }
+    : undefined;
 }
 
 function statusBarCanRepresentLiveAncestor(
@@ -602,6 +614,9 @@ export function buildStatusBarDisplay(
       });
     }
   }
+
+  const rootActive = rootActiveSegment(input);
+  if (rootActive) left.push(rootActive);
 
   left.push({ text: input.apiMode, color: 'dim' });
 
