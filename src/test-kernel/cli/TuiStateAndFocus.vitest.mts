@@ -862,6 +862,25 @@ describe('CLI TUI row allocation', () => {
     expect(session.runCompleted).toBe(false);
     expect(session.stopRequested).toBe(false);
     expect(chatTuiCanStartRootRun(session)).toBe(false);
+    expect(cliState.rootRunStartAvailable.get()).toBe(false);
+  });
+
+  it('restores root run availability when clearing session run state', () => {
+    const startupPromise = new Promise<void>(() => {});
+    const session = {
+      streamId: root,
+      executionId: 'exec-old',
+      runPromise: startupPromise,
+      runExitCode: CliExitCode.AgentError,
+      runCompleted: false,
+      stopRequested: true,
+    };
+    markChatTuiRunPending(session, startupPromise);
+
+    clearTuiSessionRunState(session);
+
+    expect(chatTuiCanStartRootRun(session)).toBe(true);
+    expect(cliState.rootRunStartAvailable.get()).toBe(true);
   });
 
   it('allows model selection before start or while a tool-use chat is waiting', () => {

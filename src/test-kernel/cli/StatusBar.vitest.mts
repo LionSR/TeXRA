@@ -111,6 +111,7 @@ describe('CLI StatusBar display model', () => {
     expect(display.right).toBeUndefined();
     expect(display.bindings).toContain('[/api]api');
     expect(display.bindings).toContain('[/model]models');
+    expect(display.bindings).not.toContain('[/agent]agents');
     // [Ctrl-J]newline must be visible — the binding exists in BaseTextInput
     // (see #4399) but used to be discoverable only via source diving.
     expect(display.bindings).toContain('[Ctrl-J]newline');
@@ -122,6 +123,59 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).not.toContain('[Tab]streams');
     expect(display.bindings).not.toContain('[Alt-1..9]focus');
     expect(display.left.map(statusBarSegmentText)).not.toContain('deepseekT');
+  });
+
+  it('advertises root agent selection while setup can still change it', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.WAITING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      agentSelectionAvailable: true,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'gpt54',
+      apiMode: PERSONAL_API_MODE_LABEL,
+      shortcutModifierLabel: 'Alt',
+      width: 80,
+    });
+
+    expect(display.bindings).toBe(
+      '[/agent]agents  [/model]models  [/api]api  [Ctrl-J]newline  [Ctrl-C]exit',
+    );
+  });
+
+  it('keeps root agent selection visible when setup bindings get narrow', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.WAITING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      agentSelectionAvailable: true,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'gpt54',
+      apiMode: PERSONAL_API_MODE_LABEL,
+      shortcutModifierLabel: 'Alt',
+      width: 50,
+    });
+
+    expect(display.bindings).toContain('[/agent]agents');
+    expect(display.bindings).toContain('[Ctrl-C]exit');
+    expect(display.bindings).not.toContain('[/model]models');
+    expect(display.bindings).not.toContain('[/api]api');
   });
 
   it('hides task shortcuts when no task rows exist', () => {
