@@ -2,7 +2,7 @@
 // to the real terminal. Used to verify the ConversationPane viewport without
 // needing API access. Exits on Ctrl-C.
 
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -87,6 +87,7 @@ const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
 const PLAN_APPROVAL_ODYSSEY = process.env.HARNESS_PLAN_APPROVAL_ODYSSEY === '1';
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
+const SHOW_PROJECT_SKILL = process.env.HARNESS_PROJECT_SKILL === '1';
 const WIDE_TRANSCRIPT_SUFFIX =
   ' hidden-middle wide-column-A wide-column-B wide-column-C wide-column-D wide-column-E wide-column-F';
 const SHOW_REJECTED_BASH_TOOL = process.env.HARNESS_REJECTED_BASH_TOOL === '1';
@@ -170,6 +171,23 @@ for (const followUp of QUEUED_FOLLOW_UPS) {
   HARNESS_FOLLOW_UP_QUEUE.enqueue(followUp);
 }
 
+function seedHarnessProjectSkill(): void {
+  const skillDir = path.join(HARNESS_CWD, '.texra', 'skills', 'proof-audit');
+  mkdirSync(skillDir, { recursive: true });
+  writeFileSync(
+    path.join(skillDir, 'SKILL.md'),
+    [
+      '---',
+      'name: proof-audit',
+      'description: Review mathematical proof steps.',
+      '---',
+      '',
+      'Use this skill when checking proof structure, assumptions, and gaps.',
+      '',
+    ].join('\n'),
+  );
+}
+
 function parseList(value: string | undefined): string[] {
   if (!value) return [];
   return value
@@ -181,6 +199,10 @@ function parseList(value: string | undefined): string[] {
 const HARNESS_VISIBLE_TOOL_USE_AGENTS = parseList(
   process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS,
 );
+
+if (SHOW_PROJECT_SKILL) {
+  seedHarnessProjectSkill();
+}
 
 await initLocalCliPlatform({
   apiMode: HARNESS_API_MODE,
