@@ -1,8 +1,6 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
-// Local imports - utils
-
 // Local imports - auth
 import { FREE_TIER, ULTRA_TIER, type UserTier } from '@auth/config';
 import {
