@@ -566,6 +566,7 @@ export const LatexConfigValuesSchema = z.object({
     .min(LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min)
     .optional(),
   workflowAutoOpenPdf: z.boolean().optional(),
+  workflowRejectOnCompileFailure: z.boolean().optional(),
   latexdiffBetweenRounds: z.boolean().optional(),
   latexdiffTimeoutMs: z
     .int()
