@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { loginInitFromArgs, resolveLoginProvider } from '@cli/commands/auth';
+import { formatCliManualAuthUrlMessage } from '@cli/runtime/supabaseAuth';
 
 describe('CLI login arguments (texra login)', () => {
   it('defaults texra login to GitHub sign-in', () => {
@@ -51,5 +52,18 @@ describe('CLI login arguments (texra login)', () => {
     expect(loginInitFromArgs({ browser: false })).toMatchObject({
       noBrowser: true,
     });
+  });
+
+  it('describes manual login as a loopback callback, not any-device auth', () => {
+    const message = formatCliManualAuthUrlMessage(
+      'http://127.0.0.1:49152/auth-callback',
+    );
+
+    expect(message).toContain(
+      'Open this URL in a browser that can reach this terminal session:',
+    );
+    expect(message).toContain('http://127.0.0.1:49152/auth-callback');
+    expect(message).toContain('Remote SSH/container users');
+    expect(message).not.toContain('any device');
   });
 });

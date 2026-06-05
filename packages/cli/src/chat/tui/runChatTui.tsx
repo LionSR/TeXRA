@@ -62,6 +62,7 @@ import {
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
 import {
+  formatCliManualAuthUrlMessage,
   signInCliSupabase,
   signOutCliSupabase,
 } from '@cli/runtime/supabaseAuth';
@@ -660,7 +661,7 @@ async function loginFromChat(input: string): Promise<void> {
       manualBrowserHint: '/login --no-browser',
       onAuthUrl: (url) => {
         if (args.noBrowser) {
-          appendLocalAssistantTranscript(`Open this URL to sign in:\n${url}`);
+          appendLocalAssistantTranscript(formatCliManualAuthUrlMessage(url));
         }
       },
     });
