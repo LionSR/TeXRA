@@ -4,9 +4,9 @@ import {
   emptyModelListMessageForCliMode,
   formatModelStatusForCliMode,
   modelSelectItemsForCliMode,
-  modelSelectWindow,
   noRunnableModelAccessReason,
-} from '@cli/chat/tui/forms/ModelListForm';
+} from '@cli/chat/tui/modelAccessDisplay';
+import { modelSelectWindow } from '@cli/chat/tui/forms/ModelListForm';
 import { shouldCloseAsyncListFormOnInput } from '@cli/chat/tui/forms/_shared/useAsyncListForm';
 import {
   COMPACT_FORM_MAX_ROWS,
@@ -324,21 +324,18 @@ describe('CLI ModelListForm empty state', () => {
   });
 
   it('explains that included relay models require sign-in', () => {
-    expect(
-      emptyModelListMessageForCliMode(
-        [
-          access(
-            {
-              availability: 'included-login-required',
-              disabled: true,
-            },
-            'login required',
-            false,
-          ),
-        ],
-        'included',
+    const models = [
+      access(
+        {
+          availability: 'included-login-required',
+          disabled: true,
+        },
+        'login required',
+        false,
       ),
-    ).toBe(
+    ];
+
+    expect(emptyModelListMessageForCliMode(models, 'included')).toBe(
       'Included relay models require sign-in. Run /login or switch with /api personal.',
     );
   });
