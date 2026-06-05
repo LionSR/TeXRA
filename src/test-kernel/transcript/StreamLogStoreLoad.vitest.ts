@@ -4,6 +4,9 @@ import * as path from 'node:path';
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+// Local imports
+import { delay } from '@utils/core/async';
+
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';
 
@@ -187,7 +190,7 @@ async function waitForCondition(
 ): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (condition()) return;
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await delay(0);
   }
   throw new Error(message);
 }

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { getTeXCount } from '@latex/texcount';
 import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
+import { ensureArray } from '@utils/core';
 
 const TexcountInputSchema = z.strictObject({
   files: z
@@ -24,7 +25,7 @@ const TexcountInputSchema = z.strictObject({
 type TexcountInput = z.infer<typeof TexcountInputSchema>;
 
 function toFileArray(files: TexcountInput['files']): string[] {
-  return Array.isArray(files) ? files : [files];
+  return ensureArray(files);
 }
 
 function formatOutput(output: string, format: TexcountInput['format']): string {
