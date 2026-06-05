@@ -452,6 +452,7 @@ export const LATEX_CONFIG_DEFAULTS = {
   workflowAutoCompile: true,
   workflowAutoCompileTimeoutMs: 120000,
   workflowAutoOpenPdf: true,
+  workflowRejectOnCompileFailure: true,
   latexdiffBetweenRounds: false,
   latexdiffTimeoutMs: 10000,
   latexdiffMathMarkup: 'coarse' as LatexdiffMathMarkupValue,
@@ -475,6 +476,8 @@ export const LATEX_FIELD_TO_KEY = {
   workflowAutoCompileTimeoutMs:
     WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
   workflowAutoOpenPdf: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+  workflowRejectOnCompileFailure:
+    WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
   latexdiffBetweenRounds: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
   latexdiffTimeoutMs: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
   latexdiffMathMarkup: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,

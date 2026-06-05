@@ -74,6 +74,20 @@ export type FileLineage = z.infer<typeof FileLineageSchema>;
 export type OutputFileInfo = z.infer<typeof OutputFileInfoSchema>;
 export type CompileFailure = z.infer<typeof CompileFailureSchema>;
 
+export const CompileResultSchema = z.discriminatedUnion('status', [
+  z.strictObject({
+    status: z.literal('ok'),
+    round: z.number(),
+  }),
+  z.strictObject({
+    status: z.literal('failed'),
+    round: z.number(),
+    failures: z.array(CompileFailureSchema),
+    logExcerpt: z.string(),
+  }),
+]);
+export type CompileResult = z.infer<typeof CompileResultSchema>;
+
 export const OutputXmlSummarySchema = z.strictObject({
   tagContents: z
     .record(z.string(), z.union([z.string(), z.array(z.string())]))
