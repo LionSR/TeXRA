@@ -15,7 +15,7 @@ index 273dd13875b9f0441d55fe0738975ca7695b39c1..c3114a970ac495f9c5f5dece35b437c4
      private setAlternateScreen;
      private resolveInteractiveOption;
 diff --git a/build/ink.js b/build/ink.js
-index b8fd45cc990adbc080eff28fc37463cd91337dff..6247734320667f28deb071a6fb5e9020bfe0afb6 100644
+index b8fd45cc990adbc080eff28fc37463cd91337dff..7ec06768f5316b86e3c826d3c2de08df5065fe18 100644
 --- a/build/ink.js
 +++ b/build/ink.js
 @@ -259,18 +259,39 @@ export default class Ink {
@@ -80,7 +80,7 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..6247734320667f28deb071a6fb5e9020
          if (this.beforeExitHandler) {
              process.off('beforeExit', this.beforeExitHandler);
              this.beforeExitHandler = undefined;
-@@ -623,6 +651,42 @@ export default class Ink {
+@@ -623,6 +651,44 @@ export default class Ink {
              this.log.sync(this.lastOutputToRender || this.lastOutput + '\n');
          }
      }
@@ -96,6 +96,8 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..6247734320667f28deb071a6fb5e9020
 +        const { output, outputHeight, staticOutput } = render(this.rootNode, this.isScreenReaderEnabled);
 +        this.options.onRender?.({ renderTime: performance.now() - startTime });
 +        const hasStaticOutput = staticOutput && staticOutput !== '\n';
++        // ansi-escapes@7.3.0 exposes clearViewport for visible-screen-only
++        // repaints; keep it here so scoped transcript switches preserve scrollback.
 +        const clearSequence = options.clearScrollback === true
 +            ? ansiEscapes.clearTerminal
 +            : ansiEscapes.clearViewport;
