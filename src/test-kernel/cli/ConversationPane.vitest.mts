@@ -7,7 +7,10 @@ import {
   appendStaticTranscriptItems,
   sessionHeaderIdentityLine,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
-import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
+import {
+  transcriptViewportChange,
+  transcriptViewportKey,
+} from '@cli/chat/tui/state/transcriptViewportMode';
 import {
   estimateLiveTranscriptEntryRows,
   estimateTranscriptEntryRows,
@@ -414,19 +417,29 @@ describe('CLI conversation transcript splitting', () => {
     const ROOT = 'root-stream' as StreamTabId;
     const CHILD = 'claude@agent-sdk#1' as StreamTabId;
     const parentStream = new Map<StreamTabId, StreamTabId>([[CHILD, ROOT]]);
+    const rootViewportKey = transcriptViewportKey({
+      activeStreamId: ROOT,
+      parentStream,
+    });
+    const childViewportKey = transcriptViewportKey({
+      activeStreamId: CHILD,
+      parentStream,
+    });
 
+    expect(rootViewportKey).toBe('root-scrollback');
+    expect(childViewportKey).toBe(`scoped:${CHILD}`);
     expect(
-      transcriptViewportKey({
-        activeStreamId: ROOT,
-        parentStream,
+      transcriptViewportChange({
+        previousViewportKey: rootViewportKey,
+        nextViewportKey: childViewportKey,
       }),
-    ).toBe('root-scrollback');
+    ).toMatchObject({ enteredRootScrollback: false });
     expect(
-      transcriptViewportKey({
-        activeStreamId: CHILD,
-        parentStream,
+      transcriptViewportChange({
+        previousViewportKey: childViewportKey,
+        nextViewportKey: rootViewportKey,
       }),
-    ).toBe(`scoped:${CHILD}`);
+    ).toMatchObject({ enteredRootScrollback: true });
   });
 
   it('detects generated inquiry continuation rows only', () => {
