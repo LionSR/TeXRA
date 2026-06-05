@@ -197,6 +197,7 @@ export async function expandWorkflowInputSpec(
     }
   }
   if (stats?.isDirectory()) {
+    normalizeCliInputPathForRun(trimmed, cwd, flagLabel, options);
     const matches = await glob('**/*.tex', {
       cwd: absolutePath,
       absolute: true,
