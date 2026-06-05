@@ -37,7 +37,10 @@ import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { getDefaultStreamLogStore } from '@transcript';
 
 import { App } from '../src/chat/tui/App';
-import type { TranscriptViewportChange } from '../src/chat/tui/state/transcriptViewportMode';
+import {
+  transcriptViewportRepaintOptions,
+  type TranscriptViewportChange,
+} from '../src/chat/tui/state/transcriptViewportMode';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
 import {
   listSlashCommands,
@@ -1363,10 +1366,7 @@ const inkRef: { current?: ReturnType<typeof render> } = {};
 function repaintHarnessTranscriptViewport(
   change: TranscriptViewportChange,
 ): void {
-  inkRef.current?.repaint({
-    clearScrollback: change.enteredRootScrollback,
-    preserveStatic: false,
-  });
+  inkRef.current?.repaint(transcriptViewportRepaintOptions(change));
 }
 
 function handleHarnessCtrlC(): void {
