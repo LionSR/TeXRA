@@ -6,9 +6,9 @@ import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
 import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import {
+  modelAccessLaunchBlockDescriptionForCliMode,
   modelSelectItemsForCliMode,
-  noRunnableModelAccessReason,
-} from '../chat/tui/forms/ModelListForm';
+} from '../chat/tui/modelAccessDisplay';
 import { formatCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import type { CliModelAccess } from '../runtime/modelAccess';
 import type {
@@ -26,23 +26,6 @@ function isModelPickAction(
   action: CliOrchestrationAction,
 ): action is ModelPickAction {
   return action.kind === 'chat' || action.kind === 'preset';
-}
-
-function noRunnableModelLaunchDescription(
-  models: readonly CliModelAccess[],
-  apiMode: CliApiMode,
-): string {
-  const reason = noRunnableModelAccessReason(models, apiMode);
-  switch (reason) {
-    case 'includedLoginRequired':
-      return 'Sign in with texra login for included relay models';
-    case 'included':
-      return 'No included relay models are runnable';
-    case 'personal':
-      return 'No personal API-key models are runnable';
-  }
-  const exhaustive: never = reason;
-  return exhaustive;
 }
 
 export function orchestrationModelAccessView(
@@ -65,7 +48,10 @@ export function orchestrationModelAccessView(
     return { items, modelItems };
   }
 
-  const description = noRunnableModelLaunchDescription(models, apiMode);
+  const description = modelAccessLaunchBlockDescriptionForCliMode(
+    models,
+    apiMode,
+  );
   return {
     modelItems,
     items: items.map((item) =>
