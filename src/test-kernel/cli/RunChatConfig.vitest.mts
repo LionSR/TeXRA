@@ -125,10 +125,7 @@ describe('CLI chat run config', () => {
       ['proof-audit', '<skill_activation>proof</skill_activation>'],
     ]);
 
-    const prepared = takePendingSkillActivations(
-      pending,
-      'compare A < B & C',
-    );
+    const prepared = takePendingSkillActivations(pending, 'compare A < B & C');
 
     expect(prepared.displayInstruction).toBe('compare A < B & C');
     expect(prepared.instruction).toContain(
