@@ -2,6 +2,13 @@ import type { StreamTabId } from '@shared/schemas';
 
 export const ROOT_SCROLLBACK_VIEWPORT_KEY = 'root-scrollback';
 
+/**
+ * The root stream owns ordinary terminal scrollback through Ink `<Static>`.
+ * Focused child streams own a scoped, self-contained transcript surface.
+ * Moving between those viewports must redraw from a clean primary buffer so
+ * a child page cannot appear under stale root scrollback, and returning to the
+ * root can reprint the root static transcript as the active owner.
+ */
 export function transcriptViewportKey({
   activeStreamId,
   parentStream,
@@ -21,7 +28,6 @@ export function isScopedTranscriptViewport(viewportKey: string): boolean {
 export interface TranscriptViewportChange {
   readonly previousViewportKey: string;
   readonly nextViewportKey: string;
-  readonly enteredRootScrollback: boolean;
 }
 
 export interface TranscriptViewportRepaintOptions {
@@ -38,20 +44,14 @@ export function transcriptViewportChange({
 }): TranscriptViewportChange | undefined {
   if (previousViewportKey === undefined) return undefined;
   if (previousViewportKey === nextViewportKey) return undefined;
-  return {
-    previousViewportKey,
-    nextViewportKey,
-    enteredRootScrollback:
-      isScopedTranscriptViewport(previousViewportKey) &&
-      !isScopedTranscriptViewport(nextViewportKey),
-  };
+  return { previousViewportKey, nextViewportKey };
 }
 
 export function transcriptViewportRepaintOptions(
-  change: TranscriptViewportChange,
+  _change: TranscriptViewportChange,
 ): TranscriptViewportRepaintOptions {
   return {
-    clearScrollback: change.enteredRootScrollback,
+    clearScrollback: true,
     preserveStatic: false,
   };
 }
