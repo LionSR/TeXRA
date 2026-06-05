@@ -7,7 +7,7 @@ import {
   type CliMultiAgentPresetRunPlan,
 } from './multiAgentPresets';
 import { implicitDefaultToolUseAgents } from './defaultAgents';
-import { formatCliHistoryInputLabel } from './historyLabels';
+import { formatCliHistoryResumeInputLabel } from './historyLabels';
 import { resumableCliHistoryEntries, type CliHistoryEntry } from './history';
 
 export type CliOrchestrationAction =
@@ -70,7 +70,7 @@ function recentResumeItems(
     .map((entry) => ({
       value: { kind: 'resume', id: entry.id },
       label: `Resume ${entry.id}`,
-      description: `${entry.agent}; ${entry.status}; ${formatCliHistoryInputLabel(entry.inputBasename)}`,
+      description: `${entry.agent}; ${entry.status}; ${formatCliHistoryResumeInputLabel(entry)}`,
     }));
 }
 
