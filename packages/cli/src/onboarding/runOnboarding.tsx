@@ -25,6 +25,7 @@ import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
 
 import { assertNever } from '../chat/tui/assertNever';
 import { ApiKeyEntryForm } from '../chat/tui/forms/ApiKeyEntryForm';
+import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
 import { Select, type SelectItem } from '../chat/tui/ui/Select';
@@ -59,6 +60,8 @@ export interface OnboardingGateContext {
   readonly mode: 'headless' | 'interactive';
   readonly stdoutIsTty?: boolean;
   readonly termIsDumb?: boolean;
+  readonly stdoutColorEnabled?: boolean;
+  readonly colorEnabled?: boolean;
   readonly apiMode?: CliApiMode;
 }
 
@@ -99,7 +102,11 @@ export async function maybeRunCliOnboarding(
   if (await hasCliCredentialForApiMode(context.apiMode).catch(() => false)) {
     return NO_ONBOARDING_RESULT;
   }
-  return runOnboardingFlow({ firstRun: true, apiMode: context.apiMode });
+  return runOnboardingFlow({
+    firstRun: true,
+    apiMode: context.apiMode,
+    colorEnabled: context.stdoutColorEnabled ?? context.colorEnabled,
+  });
 }
 
 /**
@@ -107,14 +114,17 @@ export async function maybeRunCliOnboarding(
  * has-credentials / declined gate. Still TTY-only — the command rejects
  * headless before calling this.
  */
-export async function runCliOnboarding(): Promise<CliOnboardingResult> {
+export async function runCliOnboarding(
+  colorEnabled = true,
+): Promise<CliOnboardingResult> {
   if (!process.stdout.isTTY) return NO_ONBOARDING_RESULT;
-  return runOnboardingFlow({ firstRun: false });
+  return runOnboardingFlow({ firstRun: false, colorEnabled });
 }
 
 async function runOnboardingFlow(options: {
   readonly firstRun: boolean;
   readonly apiMode?: CliApiMode;
+  readonly colorEnabled?: boolean;
 }): Promise<CliOnboardingResult> {
   const pickerSubtitle = onboardingPickerSubtitle(options);
   const pickerItems = onboardingPickerItems(onboardingSetupPaths(options));
@@ -130,7 +140,10 @@ async function runOnboardingFlow(options: {
         onResolve={record}
       />,
       {
-        stdout: process.stdout,
+        stdout: tuiOutputStreamForColor(
+          process.stdout,
+          options.colorEnabled ?? true,
+        ),
         stderr: process.stderr,
         stdin: process.stdin,
       },
