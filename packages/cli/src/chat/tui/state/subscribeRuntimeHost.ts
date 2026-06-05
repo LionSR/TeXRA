@@ -13,6 +13,7 @@ import { appendTail } from '@utils/strings/appendTail';
 import {
   cliState,
   patchStream,
+  registerChildStreams,
   removeStream,
   setParentStream,
   type ProcessOutputTail,
@@ -125,6 +126,7 @@ function applyToState<K extends ProgressEvent>(
     }
     case 'updateActiveSubagents': {
       const p = payload as ProgressEventPayloads['updateActiveSubagents'];
+      registerChildStreams(p.parentStreamId, p.children);
       patchStream(p.parentStreamId, (s) => ({
         ...s,
         activeSubagents: p.children,
