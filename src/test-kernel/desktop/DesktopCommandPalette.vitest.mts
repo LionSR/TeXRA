@@ -1,8 +1,6 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-// Local imports - utils
-
 // Local imports - shared schemas
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
