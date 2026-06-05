@@ -4,6 +4,7 @@ import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   cliMultiAgentPlanHasGaps,
+  cliMultiAgentPresetCanLaunchTeam,
   cliMultiAgentPresetListRecord,
   cliMultiAgentPresetNdjsonRecords,
   cliMultiAgentPresets,
@@ -46,7 +47,9 @@ describe('CLI multi-agent presets', () => {
           agent(
             name,
             AgentCategory.ToolUse,
-            name === 'orchestrator' ? ['delegate_agent'] : [],
+            ['orchestrator', 'leanOrchestrator'].includes(name)
+              ? ['delegate_agent']
+              : [],
           ),
         ),
       ),
@@ -61,7 +64,7 @@ describe('CLI multi-agent presets', () => {
     expect(output).not.toContain('Hint:');
   });
 
-  it('lists missing preset members as degraded availability', () => {
+  it('lists missing preset members as unavailable when no team can launch', () => {
     const preset = findCliMultiAgentPreset(
       cliMultiAgentPresets(undefined),
       'lean-project',
@@ -77,7 +80,7 @@ describe('CLI multi-agent presets', () => {
     const output = formatCliMultiAgentPresetList([plan]);
 
     expect(output).toContain(
-      'built-in\tlean-project\tLean Project\tworkflow:0\ttool-use:2/7\tdegraded',
+      'built-in\tlean-project\tLean Project\tworkflow:0\ttool-use:2/7\tunavailable',
     );
     expect(output).toContain('texra multi-agent inspect <preset>');
     expect(output).toContain(
@@ -120,8 +123,28 @@ describe('CLI multi-agent presets', () => {
     });
 
     expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
-      'degraded; 2/7 tool-use agents',
+      'unavailable; root lean cannot delegate; 2/7 tool-use agents',
     );
+    expect(cliMultiAgentPresetCanLaunchTeam(plan)).toBe(false);
+  });
+
+  it('keeps degraded presets launchable when they still have delegation', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'physicist',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
+        agent('review', AgentCategory.ToolUse),
+      ],
+    });
+
+    expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
+      'degraded; 2/9 tool-use agents; 0/4 workflow agents',
+    );
+    expect(cliMultiAgentPresetCanLaunchTeam(plan)).toBe(true);
   });
 
   it('formats ready launcher team summaries without raw availability keys', () => {
@@ -179,7 +202,7 @@ describe('CLI multi-agent presets', () => {
     expect(record.id).toBe('lean-project');
     expect(record.toolUseAgents).toEqual(preset.toolUseAgents);
     expect(record.availability).toMatchObject({
-      status: 'degraded',
+      status: 'unavailable',
       workflow: {
         available: 0,
         total: 0,
@@ -223,7 +246,7 @@ describe('CLI multi-agent presets', () => {
         preset: expect.objectContaining({
           id: 'lean-project',
           availability: expect.objectContaining({
-            status: 'degraded',
+            status: 'unavailable',
             toolUse: expect.objectContaining({
               available: 1,
               total: 7,
