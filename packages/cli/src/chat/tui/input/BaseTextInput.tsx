@@ -339,12 +339,13 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
 
   const moveCursor = useCallback(
     (next: number) => {
-      const c = clampCursor(next, value.length);
-      latestStateRef.current = { value, cursor: c };
+      const latest = latestStateRef.current;
+      const c = clampCursor(next, latest.value.length);
+      latestStateRef.current = { value: latest.value, cursor: c };
       if (!isControlled) setInternalCursor(c);
       onCursorChange?.(c);
     },
-    [isControlled, value, onCursorChange],
+    [isControlled, onCursorChange],
   );
 
   const applyEdit = useCallback(
@@ -363,6 +364,14 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     (text: string) => {
       const { value: v, cursor: c } = latestStateRef.current;
       applyEdit(insertText(v, c, text));
+    },
+    [applyEdit],
+  );
+
+  const applyLatestEdit = useCallback(
+    (edit: (value: string, cursor: number) => TextEdit) => {
+      const { value: v, cursor: c } = latestStateRef.current;
+      applyEdit(edit(v, c));
     },
     [applyEdit],
   );
@@ -396,27 +405,27 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       if (isTextInputNewlineInput(input, key)) {
         // Ctrl-J (universal) or Shift+Enter (Kitty-protocol terminals) →
         // literal newline. Kills the legacy `/multi` ceremony.
-        applyEdit(insertText(value, cursor, '\n'));
+        insertIntoLatestDraft('\n');
         return;
       }
       if (isPlainReturnInput(input, key)) {
-        submitAfterImagePastes(onSubmit, value);
+        submitAfterImagePastes(onSubmit, latestStateRef.current.value);
         return;
       }
       if (key.backspace) {
-        applyEdit(deleteBeforeCursor(value, cursor));
+        applyLatestEdit(deleteBeforeCursor);
         return;
       }
       if (key.delete) {
-        applyEdit(deleteAtCursor(value, cursor));
+        applyLatestEdit(deleteAtCursor);
         return;
       }
       if (key.leftArrow) {
-        moveCursor(cursor - 1);
+        moveCursor(latestStateRef.current.cursor - 1);
         return;
       }
       if (key.rightArrow) {
-        moveCursor(cursor + 1);
+        moveCursor(latestStateRef.current.cursor + 1);
         return;
       }
       if (key.home || isCtrlInput(input, key, 'a')) {
@@ -424,19 +433,19 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         return;
       }
       if (key.end || isCtrlInput(input, key, 'e')) {
-        moveCursor(value.length);
+        moveCursor(latestStateRef.current.value.length);
         return;
       }
       if (isCtrlInput(input, key, 'u')) {
-        applyEdit(deleteToStart(value, cursor));
+        applyLatestEdit(deleteToStart);
         return;
       }
       if (isCtrlInput(input, key, 'k')) {
-        applyEdit(deleteToEnd(value, cursor));
+        applyLatestEdit(deleteToEnd);
         return;
       }
       if (isCtrlInput(input, key, 'w')) {
-        applyEdit(deletePreviousWord(value, cursor));
+        applyLatestEdit(deletePreviousWord);
         return;
       }
       if (isCtrlInput(input, key, 'v') && props.onImagePaste) {
@@ -464,12 +473,14 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
       ) {
         return;
       }
-      const edit = applyTerminalInputChunk(value, cursor, input);
+      const { value: latestValue, cursor: latestCursor } =
+        latestStateRef.current;
+      const edit = applyTerminalInputChunk(latestValue, latestCursor, input);
       if (edit.submit) {
         submitAfterImagePastes(onInputChunkSubmit ?? onSubmit, edit.value);
         return;
       }
-      if (edit.value === value && edit.cursor === cursor) return;
+      if (edit.value === latestValue && edit.cursor === latestCursor) return;
       applyEdit(edit);
     },
     { isActive: focus },
