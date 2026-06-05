@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { Box, Text, useInput } from 'ink';
 
+import { isEscapeInput } from '../input/inputKeys';
 import { KeyHints } from '../ui/KeyHints';
 import { transcriptToLines } from '../state/transcriptLines';
 import type { StreamSlice } from '../state/cliState';
@@ -80,7 +81,8 @@ export function TranscriptViewer({
   }, [maxOffset]);
 
   useInput((input, key) => {
-    if (key.escape || (key.ctrl && input.toLowerCase() === 't')) onClose();
+    if (isEscapeInput(input, key) || (key.ctrl && input.toLowerCase() === 't'))
+      onClose();
     else if (key.downArrow) scrollTo((current) => current + 1);
     else if (key.upArrow) scrollTo((current) => current - 1);
     else if (key.pageDown) scrollTo((current) => current + viewRows);

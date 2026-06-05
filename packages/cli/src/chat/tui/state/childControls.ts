@@ -10,7 +10,7 @@ import {
 import { formatDuration } from '@utils/core';
 
 // Local imports - CLI state
-import { isPlainReturnInput } from '../input/inputKeys';
+import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { visibleSubagentRows } from './childStreamMerge';
 import { orderedDescendantsFromTree } from './focusCycle';
 import { transcriptEntryLines } from './transcriptLines';
@@ -384,7 +384,7 @@ export function subagentPickerSelection(
 }
 
 export function childPickerKeyAction(key: PickerKeyInput): PickerKeyAction {
-  if (key.escape) return { kind: 'close' };
+  if (isEscapeInput(key.input, key)) return { kind: 'close' };
   if (key.upArrow) return { kind: 'up' };
   if (key.downArrow) return { kind: 'down' };
   if (isPlainReturnInput(key.input, key)) return { kind: 'select' };

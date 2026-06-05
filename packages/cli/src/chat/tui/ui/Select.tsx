@@ -11,7 +11,7 @@
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useState } from 'react';
 
-import { isPlainReturnInput } from '../input/inputKeys';
+import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 
 export const SELECT_LABEL_MAX_COLS = 24;
 
@@ -232,7 +232,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   });
 
   useInput((input, key) => {
-    if (key.escape) {
+    if (isEscapeInput(input, key)) {
       props.onCancel();
       return;
     }
