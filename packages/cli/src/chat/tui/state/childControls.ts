@@ -267,10 +267,7 @@ export function resolveChildControlStreamTarget({
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
 }): ChildControlStreamTarget {
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  const activeHasRows =
-    mode === 'subagents'
-      ? hasVisibleSubagents(activeSlice)
-      : hasVisibleTasks(activeSlice);
+  const activeHasRows = hasChildControlItems(activeSlice, mode);
   if (!activeStreamId || activeHasRows) {
     return { streamId: activeStreamId, slice: activeSlice };
   }
@@ -280,10 +277,7 @@ export function resolveChildControlStreamTarget({
   while (parentStreamId && !visited.has(parentStreamId)) {
     visited.add(parentStreamId);
     const parentSlice = streams.get(parentStreamId);
-    const parentHasRows =
-      mode === 'subagents'
-        ? hasVisibleSubagents(parentSlice)
-        : hasVisibleTasks(parentSlice);
+    const parentHasRows = hasChildControlItems(parentSlice, mode);
     if (!parentHasRows) {
       parentStreamId = parentStream.get(parentStreamId);
       continue;
