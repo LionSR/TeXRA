@@ -70,7 +70,9 @@ export function orchestrationModelAccessView(
     modelItems,
     items: items.map((item) =>
       isModelPickAction(item.value)
-        ? { ...item, description, disabled: true }
+        ? item.disabled
+          ? item
+          : { ...item, description, disabled: true }
         : item,
     ),
   };

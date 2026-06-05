@@ -3,6 +3,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ExecutionId } from '@shared/schemas';
 
 import {
+  cliMultiAgentPresetCanLaunchTeam,
   formatCliMultiAgentPresetLauncherSummary,
   type CliMultiAgentPresetRunPlan,
 } from './multiAgentPresets';
@@ -106,5 +107,6 @@ function presetItems(
     value: { kind: 'preset', preset: plan.preset.id },
     label: `Team ${plan.preset.name}`,
     description: formatCliMultiAgentPresetLauncherSummary(plan),
+    disabled: !cliMultiAgentPresetCanLaunchTeam(plan),
   }));
 }
