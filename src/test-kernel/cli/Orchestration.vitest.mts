@@ -197,6 +197,25 @@ describe('CLI orchestration items', () => {
     expect(items[1]?.description).toBe('review; resumable; paper.tex');
   });
 
+  it('uses the history description for resume launcher rows without input files', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [],
+      history: [
+        historyEntry('aaaaaaaaaaaa', {
+          agent: 'chat',
+          status: CLI_HISTORY_RESUMABLE_STATUS,
+          inputBasename: '-',
+          description: 'Sketching inductive Lean proof of Nat.add_comm.',
+        }),
+      ],
+      toolUseAgents: [toolUseAgent('chat')],
+    });
+
+    expect(items[1]?.description).toBe(
+      'chat; resumable; Sketching inductive Lean proof of Nat.add_comm.',
+    );
+  });
+
   it('filters recent agent entries to known tool-use agents', () => {
     const items = buildCliOrchestrationItems({
       presetPlans: [],
