@@ -7,13 +7,19 @@
 
 interface FollowUpQueueItem {
   readonly text: string;
+  readonly displayText?: string;
   readonly synthetic: boolean;
   /** Media file paths (e.g. pasted images) attached to this user follow-up. */
   readonly mediaFiles?: readonly string[];
 }
 
+function displayTextForItem(item: FollowUpQueueItem): string {
+  return item.displayText ?? item.text;
+}
+
 export interface FollowUpQueueBatch {
   readonly items: string[];
+  readonly displayItems: string[];
   readonly synthetic: boolean;
   /** Media file paths from the user follow-ups in this batch, flattened. */
   readonly mediaFiles: string[];
@@ -23,8 +29,17 @@ export class FollowUpQueue {
   private readonly queued: FollowUpQueueItem[] = [];
   private resolver: ((value: FollowUpQueueItem | null) => void) | null = null;
 
-  enqueue(value: string, mediaFiles?: readonly string[]): void {
-    this.enqueueItem({ text: value, synthetic: false, mediaFiles });
+  enqueue(
+    value: string,
+    mediaFiles?: readonly string[],
+    displayText?: string,
+  ): void {
+    this.enqueueItem({
+      text: value,
+      displayText,
+      synthetic: false,
+      mediaFiles,
+    });
   }
 
   enqueueSynthetic(value: string): void {
@@ -49,7 +64,7 @@ export class FollowUpQueue {
     return this.queued
       .splice(0)
       .filter((item) => !item.synthetic)
-      .map((item) => item.text);
+      .map(displayTextForItem);
   }
 
   /**
@@ -57,11 +72,19 @@ export class FollowUpQueue {
    * Used by resume to replay queued user input without losing pasted images;
    * the text-only {@link drain} stays for display/back-compat.
    */
-  drainItems(): Array<{ text: string; mediaFiles?: readonly string[] }> {
+  drainItems(): Array<{
+    text: string;
+    displayText?: string;
+    mediaFiles?: readonly string[];
+  }> {
     return this.queued
       .splice(0)
       .filter((item) => !item.synthetic)
-      .map((item) => ({ text: item.text, mediaFiles: item.mediaFiles }));
+      .map((item) => ({
+        text: item.text,
+        displayText: item.displayText,
+        mediaFiles: item.mediaFiles,
+      }));
   }
 
   waitForNext(
@@ -91,19 +114,26 @@ export class FollowUpQueue {
     const first = await this.waitForNext(checkInterruption);
     if (first === null) return null;
     if (first.synthetic) {
-      return { items: [first.text], synthetic: true, mediaFiles: [] };
+      return {
+        items: [first.text],
+        displayItems: [displayTextForItem(first)],
+        synthetic: true,
+        mediaFiles: [],
+      };
     }
 
     const items = [first.text];
+    const displayItems = [displayTextForItem(first)];
     const mediaFiles: string[] = [...(first.mediaFiles ?? [])];
     while (true) {
       const next = this.queued[0];
       if (!next || next.synthetic) break;
       const item = this.queued.shift()!;
       items.push(item.text);
+      displayItems.push(displayTextForItem(item));
       if (item.mediaFiles?.length) mediaFiles.push(...item.mediaFiles);
     }
-    return { items, synthetic: false, mediaFiles };
+    return { items, displayItems, synthetic: false, mediaFiles };
   }
 
   cancelWait(): void {
@@ -121,6 +151,6 @@ export class FollowUpQueue {
   getAll(): string[] {
     return this.queued
       .filter((item) => !item.synthetic)
-      .map((item) => item.text);
+      .map(displayTextForItem);
   }
 }

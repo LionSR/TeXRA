@@ -75,7 +75,9 @@ describe('ToolUseWaitNode', () => {
           if (waitCalls === 1) {
             return {
               items: ['synthetic continuation'],
+              displayItems: ['synthetic continuation'],
               synthetic: true,
+              mediaFiles: [],
             };
           }
           interrupted = true;

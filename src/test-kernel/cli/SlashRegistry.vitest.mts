@@ -306,6 +306,45 @@ describe('slashRegistry', () => {
     expect(sawClosedBeforeResume).toBe(true);
   });
 
+  it('routes skill picker selections through the shared handler', async () => {
+    const selected: string[] = [];
+    let closed = false;
+    let sawClosedBeforeSkillSelect = false;
+    registerBuiltinSlashCommands({
+      onSkillSelect: (value) => {
+        sawClosedBeforeSkillSelect = closed;
+        selected.push(value.activationPrompt);
+      },
+    });
+    const skills = listSlashCommands().find((cmd) => cmd.name === 'skills');
+
+    if (!skills) throw new Error('Expected /skills to be registered');
+
+    expect(openRegisteredCliSlashForm(skills, '')).toBe(true);
+
+    const skillsNode = renderFormAdapter<{
+      onSelect?: (value: {
+        readonly name: string;
+        readonly activationPrompt: string;
+      }) => void;
+    }>(
+      cliState.activeForm.get()?.render(() => {
+        closed = true;
+      }, 20),
+    );
+    skillsNode.props?.onSelect?.({
+      name: 'proof-audit',
+      activationPrompt: '<skill_activation>proof-audit</skill_activation>',
+    });
+    await settleFormSelection();
+
+    expect(selected).toEqual([
+      '<skill_activation>proof-audit</skill_activation>',
+    ]);
+    expect(closed).toBe(true);
+    expect(sawClosedBeforeSkillSelect).toBe(true);
+  });
+
   it('matches by name prefix case-insensitively', () => {
     registerSlashCommand({ name: 'model', description: 'pick a model' });
     registerSlashCommand({ name: 'agent', description: 'pick an agent' });

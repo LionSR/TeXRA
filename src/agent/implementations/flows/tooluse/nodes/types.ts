@@ -50,6 +50,8 @@ export type WaitExecResult =
   | {
       kind: 'continue';
       followUp: string;
+      /** User-facing text for logs when followUp contains injected context. */
+      displayFollowUp?: string;
       /**
        * True when `followUp` was synthesized by an idle-continuation provider
        * instead of being consumed from `session.waitForFollowUp()`. The

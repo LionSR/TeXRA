@@ -10,7 +10,7 @@ import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
-import { SkillsListForm } from '../forms/SkillsListForm';
+import { SkillsListForm, type SkillSelectValue } from '../forms/SkillsListForm';
 import { ToolsListForm } from '../forms/ToolsListForm';
 import { cliState } from '../state/cliState';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
@@ -23,6 +23,7 @@ type ModelSelectHandler = (value: string) => void | Promise<void>;
 type ApiModeSelectHandler = (value: CliApiMode) => void | Promise<void>;
 type MemorySelectHandler = (storagePath: string) => void | Promise<void>;
 type ResumeSelectHandler = (id: ExecutionId) => void | Promise<void>;
+type SkillSelectHandler = (value: SkillSelectValue) => void | Promise<void>;
 type ErrorHandler = (error: unknown) => void | Promise<void>;
 type SelectionCompletion = 'afterAction' | 'beforeAction';
 
@@ -79,6 +80,7 @@ export function registerBuiltinSlashCommands(options?: {
   onApiModeSelect?: ApiModeSelectHandler;
   onMemorySelect?: MemorySelectHandler;
   onResumeSelect?: ResumeSelectHandler;
+  onSkillSelect?: SkillSelectHandler;
   onError?: ErrorHandler;
 }): void {
   const onAgentSelect: AgentSelectHandler =
@@ -240,6 +242,15 @@ export function registerBuiltinSlashCommands(options?: {
     return (
       <SkillsListForm
         availableRows={props.availableRows}
+        onSelect={(value) =>
+          runFormSelection({
+            action: () => options?.onSkillSelect?.(value),
+            value,
+            onDone: props.onDone,
+            onError: options?.onError,
+            completion: 'beforeAction',
+          })
+        }
         onClose={() => props.onDone(undefined)}
       />
     );
