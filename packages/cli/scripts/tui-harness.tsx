@@ -28,10 +28,12 @@ import {
   TODO_STATUS,
   TOOL_USE_STATUS,
   type ActiveChildInfo,
+  type ExternalInquiryThreadId,
   type NormalizedToolUse,
   type RetryPermission,
   type UserQuestionPermission,
 } from '@shared/schemas';
+import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
 import { getDefaultStreamLogStore } from '@transcript';
 
 import { App } from '../src/chat/tui/App';
@@ -114,6 +116,7 @@ const EXTERNAL_INQUIRY_QUESTION =
     '',
     'Degenerate triples: (0,b,b) for 0 <= b <= 60.',
   ].join('\n');
+const EXTERNAL_INQUIRY_THREAD_ID = 'ei_123456abcdef' as ExternalInquiryThreadId;
 const USER_QUESTION_CONTEXT =
   process.env.HARNESS_USER_QUESTION_CONTEXT ??
   [
@@ -471,10 +474,14 @@ function isDifferentExecution(
   return child.executionId !== executionId;
 }
 
-function harnessMessageEntry(id: string, text: string): ConversationEntry {
+function harnessMessageEntry(
+  id: string,
+  text: string,
+  role: ConversationEntry['role'] = 'assistant',
+): ConversationEntry {
   return {
     id,
-    role: 'assistant',
+    role,
     text,
     finalized: true,
   };
@@ -646,6 +653,22 @@ function applyHarnessApprovalDecision(decision: ApprovalDecision): void {
       bypass: { ...slice.bypass, toolEdit: true },
     }));
   }
+}
+
+function appendHarnessExternalInquiryDecision(
+  decision: ApprovalDecision,
+): void {
+  appendHarnessUserTranscript(
+    buildContinuationText({
+      event: decision.accepted && decision.userMessage ? 'answered' : 'dropped',
+      threadId: EXTERNAL_INQUIRY_THREAD_ID,
+      question: EXTERNAL_INQUIRY_QUESTION,
+      ...(decision.accepted && decision.userMessage
+        ? { answer: decision.userMessage }
+        : {}),
+      stillOpen: [],
+    }),
+  );
 }
 
 function appendHarnessRetryDecision(decision: ApprovalDecision): void {
@@ -912,13 +935,13 @@ if (SHOW_EXTERNAL_INQUIRY) {
       payload: {
         requestId: 'harness-external-inquiry',
         question: EXTERNAL_INQUIRY_QUESTION,
-        threadId: 'ei_123456abcdef',
+        threadId: EXTERNAL_INQUIRY_THREAD_ID,
         allowBypass: false,
         streamId: STREAM_ID,
       },
     },
     { onPresent: () => notify({ kind: 'approvalNeeded' }) },
-  ).then(applyHarnessApprovalDecision);
+  ).then(appendHarnessExternalInquiryDecision);
 }
 
 if (SHOW_USER_QUESTION) {
@@ -989,6 +1012,17 @@ function markHarnessInterrupted(): void {
 }
 
 function appendHarnessAssistantTranscript(text: string): void {
+  appendHarnessTranscript('assistant', text);
+}
+
+function appendHarnessUserTranscript(text: string): void {
+  appendHarnessTranscript('user', text);
+}
+
+function appendHarnessTranscript(
+  role: ConversationEntry['role'],
+  text: string,
+): void {
   const streamId = cliState.activeStreamId.get() ?? STREAM_ID;
   patchStream(streamId, (slice) => ({
     ...slice,
@@ -997,6 +1031,7 @@ function appendHarnessAssistantTranscript(text: string): void {
       harnessMessageEntry(
         `harness-local-${Date.now()}-${slice.entries.length}`,
         text,
+        role,
       ),
     ],
   }));
