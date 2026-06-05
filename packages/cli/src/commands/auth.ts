@@ -18,6 +18,7 @@ import {
   type RelayUsageSummary,
 } from '../runtime/relayUsage';
 import {
+  formatCliManualAuthUrlMessage,
   getCliAuthProfile,
   signInCliSupabase,
   signOutCliSupabase,
@@ -102,7 +103,7 @@ async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
         if (init.noBrowser) {
           const writeAuthUrl =
             context.outputFormat === 'text' ? writeTextStdout : writeTextStderr;
-          writeAuthUrl(`Open this URL to sign in:\n${url}`);
+          writeAuthUrl(formatCliManualAuthUrlMessage(url));
         }
       },
     });
@@ -141,7 +142,8 @@ export const loginCommand = defineCliCommand({
     },
     'no-browser': {
       type: 'boolean',
-      description: 'Print the sign-in URL instead of opening a browser',
+      description:
+        'Print the loopback sign-in URL instead of opening a browser',
     },
     'select-account': {
       type: 'boolean',
