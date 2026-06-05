@@ -14,11 +14,11 @@ type LogUpdateRenderer = ((value: string) => boolean) & {
 // handling: instead of erasing the live region by logical line count — which is
 // wrong once the emulator reflows soft-wrapped lines at the new width (too few
 // rows leaves residue, too many eats the <Static> header) — it repaints from a
-// known origin (clearTerminal + reprint fullStaticOutput), debounced so a drag
-// collapses into one redraw. The runtime behaviour is verified by hand under a
-// real TTY; here we guard that the patch is actually applied to the installed
-// ink, so a future ink bump or a dropped patch fails loudly in CI rather than
-// silently reverting the resize fix.
+// known origin via the patched repaint primitive, debounced so a drag collapses
+// into one redraw. The runtime behaviour is verified by hand under a real TTY;
+// here we guard that the patch is actually applied to the installed ink, so a
+// future ink bump or a dropped patch fails loudly in CI rather than silently
+// reverting the resize fix.
 function inkBuildDir(): string {
   const cliRequire = createRequire(
     new URL('../../../packages/cli/package.json', import.meta.url),
@@ -50,9 +50,12 @@ describe('CLI Ink resize patch', () => {
 
   it('repaints from a known origin on resize instead of line-count erasing', () => {
     expect(source).toContain('repaintAfterResize');
+    expect(source).toContain('this.repaint({ clearScrollback: true });');
     expect(source).toContain(
-      "ansiEscapes.clearTerminal + (this.fullStaticOutput ?? '')",
+      'const clearSequence = options.clearScrollback === true',
     );
+    expect(source).toContain('ansiEscapes.clearTerminal');
+    expect(source).toContain('ansiEscapes.clearViewport');
     // Resets log-update's internal cursor/line bookkeeping before the repaint.
     expect(source).toContain('this.log.reset()');
   });
