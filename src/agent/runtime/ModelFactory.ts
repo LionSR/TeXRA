@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import * as path from 'node:path';
+
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
@@ -17,6 +20,33 @@ type ModelHandlerConstructor = new (
 ) => ModelHandler<ProviderMessage>;
 
 type ProviderHandlerLoader = () => Promise<ModelHandlerConstructor>;
+export type ModelHandlerCompatibilityKey =
+  | 'ModelHandlerValidation'
+  | 'ModelHandlerOpenAIResponse'
+  | 'ModelHandlerOpenRouterNative'
+  | 'ModelHandlerAnthropic'
+  | 'ModelHandlerOpenAI'
+  | 'ModelHandlerGoogleGenAI'
+  | 'ModelHandlerDeepSeek'
+  | 'ModelHandlerXAI'
+  | 'ModelHandlerKimi'
+  | 'ModelHandlerDashScope'
+  | 'ModelHandlerMiniMax'
+  | 'ModelHandlerGLM';
+
+interface ProviderHandlerRoute {
+  readonly load: ProviderHandlerLoader | null;
+  readonly compatibilityKey: ModelHandlerCompatibilityKey | null;
+}
+
+const MODEL_HANDLER_COMPATIBILITY_PROPERTY =
+  '__texraModelHandlerCompatibilityKey';
+
+type ModelHandlerCompatibilityTagged = object & {
+  readonly [MODEL_HANDLER_COMPATIBILITY_PROPERTY]?:
+    | ModelHandlerCompatibilityKey
+    | undefined;
+};
 
 const INCLUDE_INTERNAL_VALIDATION_MODEL_HANDLER =
   process.env.TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL === '1';
@@ -29,40 +59,73 @@ const INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT =
 
 // Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
 // A new enum value in llm-zoo without an entry here will fail typecheck.
-// `null` marks providers that have no direct handler (routed elsewhere or unsupported).
-const PROVIDER_HANDLERS: Record<ModelProvider, ProviderHandlerLoader | null> = {
-  [ModelProvider.ANTHROPIC]: async () =>
-    (await import('@agent/modelHandlers/anthropic/modelHandlerAnthropic'))
-      .ModelHandlerAnthropic,
-  [ModelProvider.OPENAI]: async () =>
-    (await import('@agent/modelHandlers/openai/modelHandlerOpenAI'))
-      .ModelHandlerOpenAI,
-  [ModelProvider.GOOGLE]: async () =>
-    (await import('@agent/modelHandlers/google/modelHandlerGoogleGenAI'))
-      .ModelHandlerGoogleGenAI,
-  [ModelProvider.DEEPSEEK]: async () =>
-    (await import('@agent/modelHandlers/openai/modelHandlerDeepSeek'))
-      .ModelHandlerDeepSeek,
-  [ModelProvider.XAI]: async () =>
-    (await import('@agent/modelHandlers/openai/modelHandlerXAI'))
-      .ModelHandlerXAI,
-  [ModelProvider.MOONSHOT]: async () =>
-    (await import('@agent/modelHandlers/openai/modelHandlerKimi'))
-      .ModelHandlerKimi,
-  [ModelProvider.DASHSCOPE]: async () =>
-    (await import('@agent/modelHandlers/openai/modelHandlerDashScope'))
-      .ModelHandlerDashScope,
-  [ModelProvider.MINIMAX]: async () =>
-    (await import('@agent/modelHandlers/openai/modelHandlerMiniMax'))
-      .ModelHandlerMiniMax,
-  [ModelProvider.GLM]: async () =>
-    (await import('@agent/modelHandlers/openai/modelHandlerGLM'))
-      .ModelHandlerGLM,
-  [ModelProvider.OTHERS]: async () =>
-    (
-      await import('@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative')
-    ).ModelHandlerOpenRouterNative,
-  [ModelProvider.COPILOT]: null,
+// `null` route fields mark providers that have no direct handler.
+const PROVIDER_HANDLER_ROUTES: Record<ModelProvider, ProviderHandlerRoute> = {
+  [ModelProvider.ANTHROPIC]: {
+    load: async () =>
+      (await import('@agent/modelHandlers/anthropic/modelHandlerAnthropic'))
+        .ModelHandlerAnthropic,
+    compatibilityKey: 'ModelHandlerAnthropic',
+  },
+  [ModelProvider.OPENAI]: {
+    load: async () =>
+      (await import('@agent/modelHandlers/openai/modelHandlerOpenAI'))
+        .ModelHandlerOpenAI,
+    compatibilityKey: 'ModelHandlerOpenAI',
+  },
+  [ModelProvider.GOOGLE]: {
+    load: async () =>
+      (await import('@agent/modelHandlers/google/modelHandlerGoogleGenAI'))
+        .ModelHandlerGoogleGenAI,
+    compatibilityKey: 'ModelHandlerGoogleGenAI',
+  },
+  [ModelProvider.DEEPSEEK]: {
+    load: async () =>
+      (await import('@agent/modelHandlers/openai/modelHandlerDeepSeek'))
+        .ModelHandlerDeepSeek,
+    compatibilityKey: 'ModelHandlerDeepSeek',
+  },
+  [ModelProvider.XAI]: {
+    load: async () =>
+      (await import('@agent/modelHandlers/openai/modelHandlerXAI'))
+        .ModelHandlerXAI,
+    compatibilityKey: 'ModelHandlerXAI',
+  },
+  [ModelProvider.MOONSHOT]: {
+    load: async () =>
+      (await import('@agent/modelHandlers/openai/modelHandlerKimi'))
+        .ModelHandlerKimi,
+    compatibilityKey: 'ModelHandlerKimi',
+  },
+  [ModelProvider.DASHSCOPE]: {
+    load: async () =>
+      (await import('@agent/modelHandlers/openai/modelHandlerDashScope'))
+        .ModelHandlerDashScope,
+    compatibilityKey: 'ModelHandlerDashScope',
+  },
+  [ModelProvider.MINIMAX]: {
+    load: async () =>
+      (await import('@agent/modelHandlers/openai/modelHandlerMiniMax'))
+        .ModelHandlerMiniMax,
+    compatibilityKey: 'ModelHandlerMiniMax',
+  },
+  [ModelProvider.GLM]: {
+    load: async () =>
+      (await import('@agent/modelHandlers/openai/modelHandlerGLM'))
+        .ModelHandlerGLM,
+    compatibilityKey: 'ModelHandlerGLM',
+  },
+  [ModelProvider.OTHERS]: {
+    load: async () =>
+      (
+        await import('@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative')
+      ).ModelHandlerOpenRouterNative,
+    compatibilityKey: 'ModelHandlerOpenRouterNative',
+  },
+  [ModelProvider.COPILOT]: {
+    load: null,
+    compatibilityKey: null,
+  },
 };
 
 /**
@@ -127,41 +190,22 @@ export function shouldUseResponsesAPI(
   );
 }
 
-/**
- * Apply the user's "prefer short model names" setting.
- * When enabled, uses the model's shortName (e.g. "gpt-5.5") instead of the
- * date-pinned fullName (e.g. "gpt-5.5-2026-04-15"). Useful for proxies/gateways
- * that only accept unpinned model identifiers.
- */
-function withShortModelName(config: ModelConfig): ModelConfig {
-  if (
-    !getGlobalState().get<boolean>(
-      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-      false,
-    )
-  ) {
-    return config;
-  }
+function applyShortModelNamePreference(
+  config: ModelConfig,
+  preferShortModelNames: boolean,
+): ModelConfig {
+  if (!preferShortModelNames) return config;
   const short = config.shortName;
   if (!short || short === config.fullName) return config;
-
-  logger.debug(
-    CHANNEL,
-    `Using short model name for ${config.name}: ${config.fullName} → ${short}`,
-  );
   return { ...config, fullName: short };
 }
 
-async function shouldUseInternalValidationModelHandler(): Promise<boolean> {
+function shouldUseInternalValidationModelHandler(): boolean {
   if (process.env[INTERNAL_VALIDATION_MODEL_HANDLER_ENV] !== '1') {
     return false;
   }
 
   const flagPath = process.env[INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV];
-  const [{ readFileSync }, path] = await Promise.all([
-    import('node:fs'),
-    import('node:path'),
-  ]);
   if (process.env.CI !== '1' || !flagPath || !path.isAbsolute(flagPath)) {
     throw new Error(
       `${INTERNAL_VALIDATION_MODEL_HANDLER_ENV}=1 is restricted to package validation with CI=1 and an absolute ${INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV} path.`,
@@ -187,6 +231,77 @@ async function shouldUseInternalValidationModelHandler(): Promise<boolean> {
   return true;
 }
 
+/** Returns the conversation-history format used by the handler for this model. */
+export function modelHandlerCompatibilityKey(
+  originalConfig: ModelConfig,
+  useOpenRouter = getUseOpenRouter(),
+  preferShortModelNames = getGlobalState().get<boolean>(
+    GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+    false,
+  ),
+): ModelHandlerCompatibilityKey | undefined {
+  if (
+    INCLUDE_INTERNAL_VALIDATION_MODEL_HANDLER &&
+    shouldUseInternalValidationModelHandler()
+  ) {
+    return 'ModelHandlerValidation';
+  }
+
+  const config = applyShortModelNamePreference(
+    originalConfig,
+    preferShortModelNames,
+  );
+  if (shouldUseResponsesAPI(config, useOpenRouter)) {
+    return 'ModelHandlerOpenAIResponse';
+  }
+  if (config.openRouterOnly || useOpenRouter) {
+    return 'ModelHandlerOpenRouterNative';
+  }
+  return PROVIDER_HANDLER_ROUTES[config.provider].compatibilityKey ?? undefined;
+}
+
+export function activeModelHandlerCompatibilityKey(
+  handler: object,
+): ModelHandlerCompatibilityKey | undefined {
+  return (handler as ModelHandlerCompatibilityTagged)[
+    MODEL_HANDLER_COMPATIBILITY_PROPERTY
+  ];
+}
+
+function withModelHandlerCompatibilityKey<T extends ModelHandler>(
+  handler: T,
+  compatibilityKey: ModelHandlerCompatibilityKey,
+): T {
+  Object.defineProperty(handler, MODEL_HANDLER_COMPATIBILITY_PROPERTY, {
+    value: compatibilityKey,
+    enumerable: false,
+  });
+  return handler;
+}
+
+/**
+ * Apply the user's "prefer short model names" setting.
+ * When enabled, uses the model's shortName (e.g. "gpt-5.5") instead of the
+ * date-pinned fullName (e.g. "gpt-5.5-2026-04-15"). Useful for proxies/gateways
+ * that only accept unpinned model identifiers.
+ */
+function withShortModelName(config: ModelConfig): ModelConfig {
+  const resolved = applyShortModelNamePreference(
+    config,
+    getGlobalState().get<boolean>(
+      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+      false,
+    ),
+  );
+  if (resolved === config) return config;
+
+  logger.debug(
+    CHANNEL,
+    `Using short model name for ${config.name}: ${config.fullName} → ${resolved.fullName}`,
+  );
+  return resolved;
+}
+
 /**
  * Creates a model handler instance based on provider and routing configuration.
  * Applies short model name preference and reasoning level overrides.
@@ -198,7 +313,7 @@ export async function createModelHandler(
 
   if (
     INCLUDE_INTERNAL_VALIDATION_MODEL_HANDLER &&
-    (await shouldUseInternalValidationModelHandler())
+    shouldUseInternalValidationModelHandler()
   ) {
     // Package validation still enters the real CLI and executeAgent path.
     // Only the provider boundary is deterministic, so this must not become
@@ -209,7 +324,10 @@ export async function createModelHandler(
     );
     const { ModelHandlerValidation } =
       await import('@agent/modelHandlers/modelHandlerValidation');
-    return new ModelHandlerValidation(config);
+    return withModelHandlerCompatibilityKey(
+      new ModelHandlerValidation(config),
+      'ModelHandlerValidation',
+    );
   }
 
   const useOpenRouter = getUseOpenRouter();
@@ -219,7 +337,10 @@ export async function createModelHandler(
     logger.debug(CHANNEL, 'Using OpenAI Responses API Handler');
     const { ModelHandlerOpenAIResponse } =
       await import('@agent/modelHandlers/openai/modelHandlerOpenAIResponse');
-    return withReasoningOverride(new ModelHandlerOpenAIResponse(config));
+    return withModelHandlerCompatibilityKey(
+      withReasoningOverride(new ModelHandlerOpenAIResponse(config)),
+      'ModelHandlerOpenAIResponse',
+    );
   }
 
   // Route through OpenRouter if configured
@@ -228,17 +349,23 @@ export async function createModelHandler(
       config.openrouterFullName ?? `${config.provider}/${config.fullName}`;
     const { ModelHandlerOpenRouterNative } =
       await import('@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative');
-    return withReasoningOverride(
-      new ModelHandlerOpenRouterNative({ ...config, openrouterFullName }),
+    return withModelHandlerCompatibilityKey(
+      withReasoningOverride(
+        new ModelHandlerOpenRouterNative({ ...config, openrouterFullName }),
+      ),
+      'ModelHandlerOpenRouterNative',
     );
   }
 
   // Direct provider handler
-  const loadHandler = PROVIDER_HANDLERS[config.provider];
-  if (!loadHandler) {
+  const route = PROVIDER_HANDLER_ROUTES[config.provider];
+  if (!route.load || !route.compatibilityKey) {
     throw new Error(`Unsupported model provider: ${config.provider}`);
   }
-  const HandlerClass = await loadHandler();
+  const HandlerClass = await route.load();
   logger.debug(CHANNEL, `Using Handler: ${HandlerClass.name}`);
-  return withReasoningOverride(new HandlerClass(config));
+  return withModelHandlerCompatibilityKey(
+    withReasoningOverride(new HandlerClass(config)),
+    route.compatibilityKey,
+  );
 }

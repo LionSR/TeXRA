@@ -75,6 +75,7 @@ export function registerBuiltinSlashCommands(options?: {
   onApprovalPolicySelect?: ApprovalPolicySelectHandler;
   onModelSelect?: ModelSelectHandler;
   canSelectModel?: () => boolean;
+  getModelSwitchDisabledReason?: (model: string) => string | undefined;
   onApiModeSelect?: ApiModeSelectHandler;
   onMemorySelect?: MemorySelectHandler;
   onResumeSelect?: ResumeSelectHandler;
@@ -177,6 +178,7 @@ export function registerBuiltinSlashCommands(options?: {
         apiMode={cliState.sessionMeta.get().apiMode}
         availableRows={props.availableRows}
         selectable={selectable}
+        getModelSwitchDisabledReason={options?.getModelSwitchDisabledReason}
         onSelect={(value) =>
           runFormSelection({
             action: () => onModelSelect(value),

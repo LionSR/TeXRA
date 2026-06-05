@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   MODEL_CONFIGS,
@@ -6,13 +10,18 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-import { shouldUseResponsesAPI } from '@agent/runtime/ModelFactory';
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
 import { ModelHandlerDeepSeek } from '@agent/modelHandlers/openai/modelHandlerDeepSeek';
 import { ModelHandlerKimi } from '@agent/modelHandlers/openai/modelHandlerKimi';
 import { ModelHandlerMiniMax } from '@agent/modelHandlers/openai/modelHandlerMiniMax';
+import {
+  activeModelHandlerCompatibilityKey,
+  createModelHandler,
+  modelHandlerCompatibilityKey,
+  shouldUseResponsesAPI,
+} from '@agent/runtime/ModelFactory';
 
 function modelConfig(
   provider: ModelProvider,
@@ -34,6 +43,10 @@ function modelConfig(
 }
 
 describe('OpenAI model handler routing', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('routes current GPT reasoning tool-use models to Responses by default', () => {
     expect(shouldUseResponsesAPI(MODEL_CONFIGS.gpt54, false)).toBe(true);
     expect(shouldUseResponsesAPI(MODEL_CONFIGS.gpt55, false)).toBe(true);
@@ -71,6 +84,107 @@ describe('OpenAI model handler routing', () => {
         false,
       ),
     ).toBe(false);
+  });
+
+  it('exposes the same compatibility key for switchable response models', () => {
+    expect(
+      modelHandlerCompatibilityKey(MODEL_CONFIGS.gpt54, false, false),
+    ).toBe('ModelHandlerOpenAIResponse');
+    expect(
+      modelHandlerCompatibilityKey(MODEL_CONFIGS.gpt55, false, false),
+    ).toBe('ModelHandlerOpenAIResponse');
+    expect(
+      modelHandlerCompatibilityKey(MODEL_CONFIGS.sonnet46T, false, false),
+    ).toBe('ModelHandlerAnthropic');
+  });
+
+  it('uses the OpenRouter compatibility key when models are proxied', () => {
+    expect(modelHandlerCompatibilityKey(MODEL_CONFIGS.gpt54, true, false)).toBe(
+      'ModelHandlerOpenRouterNative',
+    );
+    expect(
+      modelHandlerCompatibilityKey(MODEL_CONFIGS.deepseekT, true, false),
+    ).toBe('ModelHandlerOpenRouterNative');
+  });
+
+  it('uses short-name routing when computing compatibility keys', () => {
+    expect(
+      modelHandlerCompatibilityKey(
+        {
+          ...modelConfig(ModelProvider.OPENAI, {
+            supportsFunctionCalling: true,
+            supportsReasoningEffort: true,
+          }),
+          fullName: 'gpt-5-compatible-test',
+          shortName: 'legacy-chat-test',
+        },
+        false,
+        true,
+      ),
+    ).toBe('ModelHandlerOpenAI');
+  });
+
+  it('tags created handlers with a minifier-safe compatibility key', async () => {
+    const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+      import('@platform/platform'),
+      import('@test/support/FakePlatform'),
+    ]);
+    initPlatform(createFakePlatform());
+
+    const handler = await createModelHandler(MODEL_CONFIGS.gpt54);
+    try {
+      expect(activeModelHandlerCompatibilityKey(handler)).toBe(
+        'ModelHandlerOpenAIResponse',
+      );
+    } finally {
+      handler.dispose();
+    }
+  });
+
+  it('uses the validation compatibility key only after the validation gate passes', async () => {
+    const flagRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'texra-validation-handler-'),
+    );
+    const flagPath = path.join(flagRoot, 'flag');
+    await fs.writeFile(flagPath, 'texra-cli-run-validation\n');
+
+    vi.stubEnv('TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL', '1');
+    vi.stubEnv(
+      'TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_ENV',
+      'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER',
+    );
+    vi.stubEnv(
+      'TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_ENV',
+      'TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG',
+    );
+    vi.stubEnv(
+      'TEXRA_CLI_INTERNAL_VALIDATION_MODEL_HANDLER_FLAG_CONTENT',
+      'texra-cli-run-validation',
+    );
+    vi.stubEnv('TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER', '1');
+    vi.stubEnv('TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG', flagPath);
+    vi.stubEnv('CI', '1');
+
+    vi.resetModules();
+    const passingFactory = await import('@agent/runtime/ModelFactory');
+    expect(
+      passingFactory.modelHandlerCompatibilityKey(
+        MODEL_CONFIGS.gpt54,
+        false,
+        false,
+      ),
+    ).toBe('ModelHandlerValidation');
+
+    vi.stubEnv('TEXRA_INTERNAL_VALIDATE_MODEL_HANDLER_FLAG', '');
+    vi.resetModules();
+    const failingFactory = await import('@agent/runtime/ModelFactory');
+    expect(() =>
+      failingFactory.modelHandlerCompatibilityKey(
+        MODEL_CONFIGS.gpt54,
+        false,
+        false,
+      ),
+    ).toThrow(/restricted to package validation/);
   });
 });
 
