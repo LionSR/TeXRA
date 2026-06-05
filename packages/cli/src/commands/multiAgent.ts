@@ -19,6 +19,7 @@ import { writeTextStderr } from '../runtime/logSinks';
 import {
   agentHasDelegationTools,
   cliMultiAgentPlanHasGaps,
+  cliMultiAgentPresetTeamLaunchBlockReason,
   cliMultiAgentPresetNdjsonRecords,
   cliMultiAgentPresetListRecords,
   findCliMultiAgentPreset,
@@ -186,13 +187,8 @@ async function reloadRemoteAgentsForGaps<T>(
   return { value, remoteAgentLoadAttempted: false };
 }
 
-interface MissingPresetAgentsWarningOptions {
-  readonly requestedRootAgent?: string;
-}
-
 export function writeMissingPresetAgents(
   plan: CliMultiAgentPresetRunPlan,
-  options: MissingPresetAgentsWarningOptions = {},
 ): void {
   const missing = [
     ...plan.missingWorkflowAgents.map((agent) => `workflow:${agent}`),
@@ -211,18 +207,8 @@ export function writeMissingPresetAgents(
   availableTeamAgents.delete(
     agentKey(plan.rootAgent.source, plan.rootAgent.name),
   );
-  if (!agentHasDelegationTools(plan.rootAgent)) {
-    writeTextStderr(
-      `WARN team delegation unavailable for preset ${plan.preset.id}; running only root agent ${plan.rootAgent.name}. ${nonDelegatingRootAdvice(options)}`,
-    );
-    return;
-  }
-  if (availableTeamAgents.size === 0) {
-    writeTextStderr(
-      `WARN preset ${plan.preset.id} is missing team agents; running delegating root agent ${plan.rootAgent.name}.`,
-    );
-    return;
-  }
+  if (!agentHasDelegationTools(plan.rootAgent)) return;
+  if (availableTeamAgents.size === 0) return;
 
   const availableText =
     availableTeamAgents.size === 1
@@ -231,14 +217,6 @@ export function writeMissingPresetAgents(
   writeTextStderr(
     `WARN preset ${plan.preset.id} is degraded; running root agent ${plan.rootAgent.name} with ${availableText}.`,
   );
-}
-
-function nonDelegatingRootAdvice(
-  options: MissingPresetAgentsWarningOptions,
-): string {
-  return options.requestedRootAgent
-    ? 'The selected --agent root cannot delegate; choose a delegating root to run this as a team.'
-    : 'Enable a delegating team root or pass --agent to choose one.';
 }
 
 function writeApprovalUnavailableDelegationWarning(
@@ -361,15 +339,18 @@ export async function runMultiAgentPreset(
       missingToolUseAgentMessage(plan.missingAgentOverride),
     );
   }
-  if (!plan.rootAgent) {
+  const rootAgent = plan.rootAgent;
+  const teamLaunchBlockReason = cliMultiAgentPresetTeamLaunchBlockReason(plan);
+  if (teamLaunchBlockReason || !rootAgent) {
+    const singleAgentAdvice = rootAgent
+      ? `Start a single-agent chat with \`texra chat --agent ${rootAgent.name}\` if that is what you want.`
+      : 'Install or sign in for a runnable team root before launching this preset.';
     writeTextStderr(
-      `Multi-agent preset "${init.preset}" has no available tool-use agent to run. Use --agent with an installed tool-use agent, or enable a team with an orchestrator.`,
+      `Multi-agent preset "${init.preset}" cannot start as a team: ${teamLaunchBlockReason ?? 'no runnable team root'}. Run \`texra multi-agent inspect ${plan.preset.id}\` to see missing agents. ${singleAgentAdvice}`,
     );
     return CliExitCode.Usage;
   }
-  writeMissingPresetAgents(plan, {
-    requestedRootAgent: init.agent?.trim() || undefined,
-  });
+  writeMissingPresetAgents(plan);
 
   // A team run drives a tool-use orchestrator, so it follows the `chat`
   // (tool-use) model config rather than `run` (workflow agents). Resolve the
@@ -394,7 +375,7 @@ export async function runMultiAgentPreset(
     writeApprovalUnavailableDelegationWarning(runContext, plan);
 
     const config: AgentConfigPayload = {
-      agent: plan.rootAgent.name,
+      agent: rootAgent.name,
       model,
       inputFiles,
       contextFiles,

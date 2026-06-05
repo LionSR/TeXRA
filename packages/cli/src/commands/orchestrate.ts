@@ -12,6 +12,7 @@ import {
   interactiveTerminalFailure,
 } from '../runtime/terminalRequirements';
 import {
+  cliMultiAgentPresetTeamLaunchBlockReason,
   readCliMultiAgentPresets,
   withCliMultiAgentPresetVisibility,
 } from '../runtime/multiAgentPresets';
@@ -146,9 +147,11 @@ async function runOrchestration(context: CliContext): Promise<number> {
       // delegation specialists) and replan so the team starts with its real
       // root instead of silently degrading to the first local tool-use agent.
       const plan = await fillMultiAgentRunPlanGaps({ preset: action.preset });
-      if (!plan.rootAgent) {
+      const teamLaunchBlockReason =
+        cliMultiAgentPresetTeamLaunchBlockReason(plan);
+      if (teamLaunchBlockReason || !plan.rootAgent) {
         writeTextStderr(
-          `Multi-agent preset "${action.preset}" has no available tool-use agent to start.`,
+          `Multi-agent preset "${action.preset}" cannot start as a team: ${teamLaunchBlockReason ?? 'no runnable team root'}. Run \`texra multi-agent inspect ${plan.preset.id}\` to see missing agents.`,
         );
         return CliExitCode.Usage;
       }

@@ -99,6 +99,21 @@ function presetPlan(
   });
 }
 
+function readyPresetPlan(
+  overrides: Partial<CliMultiAgentPreset> = {},
+): CliMultiAgentPresetRunPlan {
+  return presetPlan(
+    { id: 'physicist', name: 'Physicist', ...overrides },
+    {
+      workflowAgents: [workflowAgent('criticize')],
+      toolUseAgents: [
+        toolUseAgent('orchestrator', ['delegate_agent']),
+        toolUseAgent('review'),
+      ],
+    },
+  );
+}
+
 describe('CLI orchestration items', () => {
   it('advertises the full direct-open hotkey range used by Select', () => {
     expect(orchestrationKeyHints()).toContainEqual({
@@ -253,18 +268,7 @@ describe('CLI orchestration items', () => {
 
   it('lists team presets as runnable orchestration actions', () => {
     const items = buildCliOrchestrationItems({
-      presetPlans: [
-        presetPlan(
-          { id: 'physicist' },
-          {
-            workflowAgents: [workflowAgent('criticize')],
-            toolUseAgents: [
-              toolUseAgent('orchestrator', ['delegate_agent']),
-              toolUseAgent('review'),
-            ],
-          },
-        ),
-      ],
+      presetPlans: [readyPresetPlan()],
       history: [],
       toolUseAgents: [],
     });
@@ -276,6 +280,35 @@ describe('CLI orchestration items', () => {
           preset: 'physicist',
         }),
         description: 'ready; 2 tool-use agents; 1 workflow agent',
+        disabled: false,
+      }),
+    );
+  });
+
+  it('disables team presets that would launch only a fallback root', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [
+        presetPlan(
+          {
+            id: 'lean-project',
+            name: 'Lean Project',
+            workflowAgents: [],
+            toolUseAgents: ['lean', 'leanSearch'],
+          },
+          {
+            toolUseAgents: [toolUseAgent('lean')],
+          },
+        ),
+      ],
+      history: [],
+      toolUseAgents: [],
+    });
+
+    expect(items.find((item) => item.label === 'Team Lean Project')).toEqual(
+      expect.objectContaining({
+        disabled: true,
+        description:
+          'unavailable; root lean cannot delegate; 1/2 tool-use agents',
       }),
     );
   });
@@ -298,7 +331,7 @@ describe('CLI orchestration items', () => {
   it('disables model-dependent launcher rows when no personal model can run', () => {
     const view = orchestrationModelAccessView(
       buildCliOrchestrationItems({
-        presetPlans: [presetPlan({ id: 'physicist', name: 'Physicist' })],
+        presetPlans: [readyPresetPlan()],
         history: [
           historyEntry('aaaaaaaaaaaa', {
             agent: 'review',
@@ -329,9 +362,46 @@ describe('CLI orchestration items', () => {
     expect(view.modelItems).toEqual([]);
   });
 
+  it('preserves unavailable team descriptions when model access is also blocked', () => {
+    const view = orchestrationModelAccessView(
+      buildCliOrchestrationItems({
+        presetPlans: [
+          presetPlan(
+            {
+              id: 'lean-project',
+              name: 'Lean Project',
+              workflowAgents: [],
+              toolUseAgents: ['lean', 'leanSearch'],
+            },
+            {
+              toolUseAgents: [toolUseAgent('lean')],
+            },
+          ),
+        ],
+        history: [],
+        toolUseAgents: [],
+      }),
+      [modelAccess('deepseekT', 'provider-key', false)],
+      'personal',
+    );
+
+    expect(view.items[0]).toMatchObject({
+      label: 'New chat',
+      disabled: true,
+      description: 'No personal API-key models are runnable',
+    });
+    expect(
+      view.items.find((item) => item.label === 'Team Lean Project'),
+    ).toMatchObject({
+      disabled: true,
+      description:
+        'unavailable; root lean cannot delegate; 1/2 tool-use agents',
+    });
+  });
+
   it('scopes startup model choices to the active API mode', () => {
     const items = buildCliOrchestrationItems({
-      presetPlans: [presetPlan({ id: 'physicist', name: 'Physicist' })],
+      presetPlans: [readyPresetPlan()],
       history: [historyEntry('aaaaaaaaaaaa', { agent: 'review' })],
       toolUseAgents: [toolUseAgent('review')],
     });
@@ -365,7 +435,7 @@ describe('CLI orchestration items', () => {
   it('keeps launcher rows active when model registry state is unknown', () => {
     const view = orchestrationModelAccessView(
       buildCliOrchestrationItems({
-        presetPlans: [presetPlan({ id: 'physicist', name: 'Physicist' })],
+        presetPlans: [readyPresetPlan()],
         history: [],
         toolUseAgents: [],
       }),
@@ -379,7 +449,7 @@ describe('CLI orchestration items', () => {
   it('keeps launcher rows active when a hidden runtime default can launch', () => {
     const view = orchestrationModelAccessView(
       buildCliOrchestrationItems({
-        presetPlans: [presetPlan({ id: 'physicist', name: 'Physicist' })],
+        presetPlans: [readyPresetPlan()],
         history: [],
         toolUseAgents: [],
       }),
