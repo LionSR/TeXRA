@@ -97,7 +97,7 @@ index b8fd45cc990adbc080eff28fc37463cd91337dff..7ec06768f5316b86e3c826d3c2de08df
 +        this.options.onRender?.({ renderTime: performance.now() - startTime });
 +        const hasStaticOutput = staticOutput && staticOutput !== '\n';
 +        // ansi-escapes@7.3.0 exposes clearViewport for visible-screen-only
-+        // repaints; keep it here so scoped transcript switches preserve scrollback.
++        // repaint callers; transcript switches request clearScrollback.
 +        const clearSequence = options.clearScrollback === true
 +            ? ansiEscapes.clearTerminal
 +            : ansiEscapes.clearViewport;
