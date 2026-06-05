@@ -53,6 +53,7 @@ describe('slashRegistry', () => {
         'status',
         'resume',
         'memory',
+        'skills',
         'tools',
         'compact',
       ]),
@@ -89,6 +90,13 @@ describe('slashRegistry', () => {
     expect(listSlashCommands().find((cmd) => cmd.name === 'tools')).toEqual(
       expect.objectContaining({
         description: 'List or toggle external integrations',
+        formComponent: expect.any(Function),
+      }),
+    );
+    expect(listSlashCommands().find((cmd) => cmd.name === 'skills')).toEqual(
+      expect.objectContaining({
+        description: 'List available skills',
+        aliases: ['skill'],
         formComponent: expect.any(Function),
       }),
     );

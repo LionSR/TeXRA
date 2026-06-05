@@ -6,7 +6,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { defaultSkillSources } from '@skills/skillSources';
 import {
+  clearRuntimeSkillSources,
+  setRuntimeSkillSources,
+} from '@skills/runtimeSkills';
+import {
   formatCliSkillList,
+  readCliRuntimeSkills,
   readCliSkills,
   skillListRecord,
 } from '@cli/runtime/skills';
@@ -33,6 +38,7 @@ async function writeSkill(
 }
 
 afterEach(async () => {
+  clearRuntimeSkillSources();
   await Promise.all(
     tempRoots.splice(0).map((root) => {
       return fs.rm(root, { recursive: true, force: true });
@@ -161,5 +167,29 @@ describe('CLI skills runtime', () => {
         path: sourceFile,
       }),
     );
+  });
+
+  it('reads the runtime skill source registry used by prompt injection', async () => {
+    const root = await createTempRoot();
+    await writeSkill(root, 'proof-audit', 'Review mathematical proof steps.');
+    setRuntimeSkillSources([
+      {
+        scope: 'project',
+        path: root,
+        label: 'project',
+      },
+    ]);
+
+    const result = await readCliRuntimeSkills();
+
+    expect(result.skills.map(skillListRecord)).toMatchObject([
+      {
+        name: 'proof-audit',
+        description: 'Review mathematical proof steps.',
+        scope: 'project',
+        sourceLabel: 'project',
+      },
+    ]);
+    expect(result.errors).toEqual([]);
   });
 });
