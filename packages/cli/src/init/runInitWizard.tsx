@@ -8,6 +8,7 @@ import { useState } from 'react';
 
 import { KeyHints } from '../chat/tui/ui/KeyHints';
 import { Select, type SelectItem } from '../chat/tui/ui/Select';
+import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
 import { clearTerminalScrollback } from '../chat/tui/terminalCleanup';
 import {
   CLI_APPROVAL_POLICIES,
@@ -33,6 +34,7 @@ export interface InitWizardModelOption {
 export interface InitWizardOptions {
   readonly agents: readonly InitWizardAgentOption[];
   readonly models: readonly InitWizardModelOption[];
+  readonly colorEnabled?: boolean;
 }
 
 export interface InitWizardResult {
@@ -309,7 +311,10 @@ export async function runInitWizard(
     const instance = render(
       <WizardApp options={options} onResolve={record} />,
       {
-        stdout: process.stdout,
+        stdout: tuiOutputStreamForColor(
+          process.stdout,
+          options.colorEnabled ?? true,
+        ),
         stderr: process.stderr,
         stdin: process.stdin,
       },
