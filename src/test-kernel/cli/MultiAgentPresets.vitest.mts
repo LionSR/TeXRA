@@ -433,6 +433,25 @@ describe('CLI multi-agent presets', () => {
     expect(cliMultiAgentPlanHasGaps(onlySimplifierPlan)).toBe(true);
   });
 
+  it('keeps delegating built-in specialists as members instead of roots', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'lean-project',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('lean', AgentCategory.ToolUse, ['delegate_agent']),
+        agent('latexFixer', AgentCategory.ToolUse),
+      ],
+    });
+
+    expect(plan.rootAgent).toBeUndefined();
+    expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
+      'unavailable; no runnable team root; 2/7 tool-use agents',
+    );
+  });
+
   it('allows custom presets to default to a delegating member root', () => {
     const plan = planCliMultiAgentPresetRun(
       {
@@ -454,6 +473,27 @@ describe('CLI multi-agent presets', () => {
 
     expect(plan.rootAgent?.name).toBe('review');
     expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
+  });
+
+  it('does not infer a non-delegating root for custom presets', () => {
+    const plan = planCliMultiAgentPresetRun(
+      {
+        id: 'custom-review',
+        name: 'Custom review',
+        description: 'User-authored review team.',
+        icon: 'codicon-symbol-method',
+        source: 'custom',
+        workflowAgents: [],
+        toolUseAgents: ['review'],
+      },
+      {
+        workflowAgents: [],
+        toolUseAgents: [agent('review', AgentCategory.ToolUse)],
+      },
+    );
+
+    expect(plan.rootAgent).toBeUndefined();
+    expect(cliMultiAgentPlanHasGaps(plan)).toBe(true);
   });
 
   it('does not allow custom presets to default to their simplifier agent', () => {
