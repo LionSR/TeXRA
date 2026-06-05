@@ -6,12 +6,15 @@ import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import { hasLatexCompiler } from '@latex/latexToolchain';
 import { compileLatex2Pdf } from '@latex/texTools';
-import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
+import type {
+  CompileFailure,
+  CompileResult,
+  OutputFileInfo,
+} from '@shared/schemas';
 import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_RANGES,
 } from '@shared/constants/latex';
-import { hasExtension } from '@utils/core/pathCore';
 import {
   createRunStorageLocation,
   flexibleFS,
@@ -19,6 +22,7 @@ import {
   pathToLocation,
   type TaskRunFileService,
 } from '@utils/files';
+import { hasExtension } from '@utils/core/pathCore';
 
 import {
   publishCompiledPdfArtifact,
@@ -34,11 +38,13 @@ export interface CompileCheckContext {
 }
 
 const LOG_TAIL_LINES = 200;
+const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
 const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
 export interface CompileCheckResult {
   failures: CompileFailure[];
   artifacts: CompiledPdfArtifact[];
+  compileResult?: CompileResult;
 }
 
 /**
@@ -110,6 +116,7 @@ export async function runCompileCheck(
   // the build succeeded.
   const compileRoot = path.join(runDirectory, 'compile');
   const failures: CompileFailure[] = [];
+  const failureLogExcerpts: string[] = [];
   const artifacts: CompiledPdfArtifact[] = [];
 
   for (const outputFile of texOutputs) {
@@ -126,7 +133,10 @@ export async function runCompileCheck(
           timeoutMs,
         },
       );
-      if (result.failure) failures.push(result.failure);
+      if (result.failure) {
+        failures.push(result.failure);
+        failureLogExcerpts.push(result.failureLogExcerpt);
+      }
       if (result.artifact) artifacts.push(result.artifact);
     } catch (err) {
       ctx.logger.warn(
@@ -135,7 +145,20 @@ export async function runCompileCheck(
     }
   }
 
-  return { failures, artifacts };
+  const compileResult: CompileResult =
+    failures.length > 0
+      ? {
+          status: 'failed',
+          round: currentRound,
+          failures,
+          logExcerpt: combineFailureLogExcerpts(failureLogExcerpts),
+        }
+      : {
+          status: 'ok',
+          round: currentRound,
+        };
+
+  return { failures, artifacts, compileResult };
 }
 
 interface PerFileOptions {
@@ -152,6 +175,7 @@ async function compileOne(
   opts: PerFileOptions,
 ): Promise<{
   failure: CompileFailure | null;
+  failureLogExcerpt: string;
   artifact: CompiledPdfArtifact | null;
 }> {
   // compiledBasename is the actual on-disk filename LaTeX engines use when
@@ -189,7 +213,7 @@ async function compileOne(
     ctx.logger.debug(
       `Compile check: ${displayName} has no \\documentclass, skipping`,
     );
-    return { failure: null, artifact: null };
+    return { failure: null, failureLogExcerpt: '', artifact: null };
   }
 
   // execa's timeout option kills the child process on expiry, so we don't
@@ -223,15 +247,13 @@ async function compileOne(
         `Compile check: ${displayName} PDF persisted at ${artifact.latestPdf.relativePath}`,
       );
     }
-    return { failure: null, artifact };
+    return { failure: null, failureLogExcerpt: '', artifact };
   }
 
   const tail = await readLogTail(buildDir, compiledBasename);
+  const failureLogExcerpt = `Compile check failed for ${displayName}\nBuild directory: ${buildDir}\n\n${tail}`;
   await flexibleFS.ensureDir(pathToLocation(opts.compileRoot));
-  await flexibleFS.write(
-    logDest,
-    `Compile check failed for ${displayName}\nBuild directory: ${buildDir}\n\n${tail}\n`,
-  );
+  await flexibleFS.write(logDest, `${failureLogExcerpt}\n`);
   ctx.logger.warn(
     `Compile check: ${displayName} failed — wrote ${path.relative(opts.runDirectory, logDest.absolutePath)}`,
   );
@@ -251,8 +273,19 @@ async function compileOne(
       log: logLocation,
       logRelativePath,
     },
+    failureLogExcerpt,
     artifact: null,
   };
+}
+
+function combineFailureLogExcerpts(excerpts: string[]): string {
+  const combined = excerpts.filter(Boolean).join('\n\n');
+  if (combined.length <= COMPILE_LOG_EXCERPT_CHAR_LIMIT) return combined;
+
+  return [
+    `[truncated to last ${COMPILE_LOG_EXCERPT_CHAR_LIMIT} characters]`,
+    combined.slice(-COMPILE_LOG_EXCERPT_CHAR_LIMIT),
+  ].join('\n');
 }
 
 async function readLogTail(

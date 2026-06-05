@@ -61,6 +61,7 @@ export enum WorkspaceStateKey {
   WORKFLOW_AUTO_COMPILE = 'texra.workflow.autoCompileAfterOutput',
   WORKFLOW_AUTO_COMPILE_TIMEOUT_MS = 'texra.workflow.autoCompileTimeoutMs',
   WORKFLOW_AUTO_OPEN_PDF = 'texra.workflow.autoOpenPdf',
+  WORKFLOW_REJECT_ON_COMPILE_FAILURE = 'texra.workflow.rejectOnCompileFailure',
   LATEXDIFF_BETWEEN_ROUNDS = 'texra.latexdiff.generateBetweenRoundDiffs',
   LATEXDIFF_TIMEOUT_MS = 'texra.latexdiff.timeoutMs',
   LATEXDIFF_MATH_MARKUP = 'texra.latexdiff.mathMarkup',
