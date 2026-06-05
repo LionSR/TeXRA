@@ -55,7 +55,10 @@ export function defineCliCommand<A extends ArgsDef>(
       // `ParsedGlobalArgs` shape; every command that uses this helper spreads
       // `GLOBAL_ARGS`, overriding individual entries such as `cwd` only when
       // it needs command-specific help text.
-      const context = await contextFromArgs(ctx.args as ParsedGlobalArgs);
+      const context = await contextFromArgs(
+        ctx.args as ParsedGlobalArgs,
+        ctx.rawArgs,
+      );
       if (options.catchExitCode === undefined) {
         setExitCode(await options.run(context, ctx as CliCommandRunContext<A>));
         return;

@@ -6,7 +6,7 @@ import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch';
 import { setExitCode } from './_helpers/exitCode';
 import {
-  INTERACTIVE_GLOBAL_ARGS,
+  INTERACTIVE_AGENT_GLOBAL_ARGS,
   optString,
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
@@ -16,7 +16,7 @@ export const chatCommand = withUsageSections(
   defineCommand({
     meta: { name: 'chat', description: 'Interactive tool-use chat session' },
     args: {
-      ...INTERACTIVE_GLOBAL_ARGS,
+      ...INTERACTIVE_AGENT_GLOBAL_ARGS,
       agent: { type: 'string', description: 'Tool-use agent for the session' },
       model: {
         type: 'string',
@@ -27,7 +27,7 @@ export const chatCommand = withUsageSections(
     async run(ctx) {
       rejectHeadlessOnlyFlags(ctx.rawArgs, 'chat');
       const modelOverride = assertExplicitModelKnown(optString(ctx.args.model));
-      const context = await contextFromArgs(ctx.args);
+      const context = await contextFromArgs(ctx.args, ctx.rawArgs);
       await notifyCliUpdate(context);
       const { runChat } = await import('../chat/tui/runChatTui');
       const result = await runChat(context, {

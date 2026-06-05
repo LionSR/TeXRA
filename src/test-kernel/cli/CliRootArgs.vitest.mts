@@ -27,6 +27,8 @@ import {
 } from '@cli/commands/_helpers/fetchSilencer';
 import {
   collectStringFlagValues,
+  GLOBAL_BOOL_FLAGS,
+  GLOBAL_VALUE_FLAGS,
   optionalStringFlagValue,
   rejectHeadlessOnlyFlags,
 } from '@cli/commands/_helpers/globalArgs';
@@ -47,7 +49,6 @@ import {
 import { isKnownCliModel } from '@cli/runtime/cliConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
-import { GLOBAL_BOOL_FLAGS } from '@cli/commands/_helpers/globalArgs';
 import { END_GROUP_STATUS, EXECUTION_STATUS } from '@shared/schemas';
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -154,6 +155,19 @@ describe('CLI root argument routing', () => {
     expect(
       reorderGlobalFlags(['--api-mode', 'personal', 'run', 'polish']),
     ).toEqual(['run', 'polish', '--api-mode', 'personal']);
+  });
+
+  it('keeps leading source flags attached to agent subcommands', () => {
+    expect(
+      reorderGlobalFlags(['--source', 'vendor/skills', 'run', 'polish']),
+    ).toEqual(['run', 'polish', '--source', 'vendor/skills']);
+    expect(
+      reorderGlobalFlags(['-s', 'vendor/skills', 'run', 'polish']),
+    ).toEqual(['run', 'polish', '-s', 'vendor/skills']);
+    expect(reorderGlobalFlags(['--include-interop', 'chat'])).toEqual([
+      'chat',
+      '--include-interop',
+    ]);
   });
 
   it('keeps unknown leading flags in place for citty to report', () => {
@@ -934,11 +948,35 @@ describe('CLI global color/input flags', () => {
     });
   });
 
+  it('maps runtime source flags to canonical knobs', () => {
+    expect(
+      pickGlobalArgs(
+        {
+          'include-interop': true,
+          source: 'fallback/skills',
+        },
+        { skillSourcePaths: ['vendor/skills', '/tmp/shared-skills'] },
+      ),
+    ).toMatchObject({
+      includeInteropSkills: true,
+      skillSourcePaths: ['vendor/skills', '/tmp/shared-skills'],
+    });
+    expect(
+      pickGlobalArgs({ source: ['one/skills', 'two/skills'] }),
+    ).toMatchObject({
+      includeInteropSkills: false,
+      skillSourcePaths: ['one/skills', 'two/skills'],
+    });
+  });
+
   it('registers global boolean spellings without stealing --input', () => {
     // Needed so `texra --no-color agents list` and
     // `texra --no-input agents list` reorder/dispatch correctly.
     expect(GLOBAL_BOOL_FLAGS.has('--no-color')).toBe(true);
     expect(GLOBAL_BOOL_FLAGS.has('--no-input')).toBe(true);
+    expect(GLOBAL_BOOL_FLAGS.has('--include-interop')).toBe(true);
+    expect(GLOBAL_VALUE_FLAGS.has('--source')).toBe(true);
+    expect(GLOBAL_VALUE_FLAGS.has('-s')).toBe(true);
     expect(GLOBAL_BOOL_FLAGS.has('--input')).toBe(false);
   });
 

@@ -46,6 +46,16 @@ type CliGlobalArgsDef = {
   };
 };
 
+type CliSkillSourceArgsDef = {
+  'include-interop': { type: 'boolean'; description: string };
+  source: {
+    type: 'string';
+    alias: 's';
+    valueHint: string;
+    description: string;
+  };
+};
+
 export const GLOBAL_ARGS: CliGlobalArgsDef = {
   print: {
     type: 'boolean',
@@ -91,6 +101,28 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
   },
 };
 
+export const SKILL_SOURCE_ARGS: CliSkillSourceArgsDef = {
+  'include-interop': {
+    type: 'boolean',
+    description:
+      'Also include .claude/skills, .codex/skills, and .gemini/skills from the workspace and home directory',
+  },
+  source: {
+    type: 'string',
+    alias: 's',
+    valueHint: 'directory',
+    description:
+      'Additional skill root; may be repeated and is resolved relative to --cwd',
+  },
+};
+
+export const AGENT_RUN_GLOBAL_ARGS = {
+  ...GLOBAL_ARGS,
+  ...SKILL_SOURCE_ARGS,
+} as const;
+
+export const ROOT_ROUTING_ARGS = AGENT_RUN_GLOBAL_ARGS;
+
 /**
  * Flags that are meaningful for commands which necessarily own the terminal.
  * In particular, `chat` and `orchestrate` cannot honor `--print`,
@@ -109,16 +141,25 @@ export const INTERACTIVE_GLOBAL_ARGS: Omit<
   color: GLOBAL_ARGS.color,
 };
 
-// Derived from `GLOBAL_ARGS` so adding/renaming a global flag in one place
-// flows through to `reorderGlobalFlags` automatically.
+export const INTERACTIVE_AGENT_GLOBAL_ARGS = {
+  ...INTERACTIVE_GLOBAL_ARGS,
+  ...SKILL_SOURCE_ARGS,
+} as const;
+
+// Derived from `ROOT_ROUTING_ARGS` so adding/renaming a leading-routable flag
+// in one place flows through to `reorderGlobalFlags` automatically. Commands
+// still choose which routed flags they accept through their own args objects.
 export const GLOBAL_VALUE_FLAGS = new Set<string>(
-  Object.entries(GLOBAL_ARGS)
-    .filter(([, def]) => def.type !== 'boolean')
-    .map(([name]) => `--${name}`),
+  Object.entries(ROOT_ROUTING_ARGS).flatMap(([name, def]) => {
+    if (def.type === 'boolean') return [];
+    const long = `--${name}`;
+    const alias = 'alias' in def ? def.alias : undefined;
+    return alias ? [long, `-${alias}`] : [long];
+  }),
 );
 
 export const GLOBAL_BOOL_FLAGS = new Set<string>(
-  Object.entries(GLOBAL_ARGS).flatMap(([name, def]) => {
+  Object.entries(ROOT_ROUTING_ARGS).flatMap(([name, def]) => {
     if (def.type !== 'boolean') return [];
     const long = `--${name}`;
     const alias = 'alias' in def ? def.alias : undefined;
