@@ -417,10 +417,10 @@ export function App(props: AppProps): React.JSX.Element {
 
   // Under the Kitty disambiguate flag (enabled in runChatTui for Shift+Enter),
   // some Enter variants arrive as CSI-u sequences that Ink parses incompletely.
-  // Re-dispatch keypad Enter as plain Enter so submit/confirm still works, and
-  // Shift+Enter as an internal newline token only while the main draft input is
-  // active. While modals/selects own input, leave Shift+Enter alone so the
-  // original parsed key can confirm exactly once.
+  // Re-dispatch keypad Enter as plain Enter so submit/confirm still works.
+  // Batched Shift+Enter sequences are rewritten into an internal newline token
+  // only while the main draft input is active; standalone Shift+Enter is
+  // already parsed by Ink and must not be emitted twice.
   useEffect(() => {
     const emitter = (
       stdin as unknown as { internal_eventEmitter?: InputEventEmitterLike }
