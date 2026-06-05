@@ -78,10 +78,25 @@ interface MultiAgentRunInit {
   readonly instructionFile?: string;
 }
 
+interface RemoteAgentPlanReloadResult<T> {
+  readonly value: T;
+  readonly remoteAgentLoadAttempted: boolean;
+}
+
+export interface MultiAgentRunPlanLoadResult {
+  readonly plan: CliMultiAgentPresetRunPlan;
+  readonly remoteAgentLoadAttempted: boolean;
+}
+
+export interface MultiAgentPresetPlansLoadResult {
+  readonly plans: readonly CliMultiAgentPresetRunPlan[];
+  readonly remoteAgentLoadAttempted: boolean;
+}
+
 const MULTI_AGENT_TASK_REQUIRED_MESSAGE =
   'Provide --input, --instruction, or --instruction-file for the team task. Example: texra multi-agent run physicist --instruction "Check this derivation"';
 
-function resolveMultiAgentRunPlan(
+function planCurrentMultiAgentRun(
   init: Pick<MultiAgentRunInit, 'preset' | 'agent'>,
 ): CliMultiAgentPresetRunPlan {
   const preset = findCliMultiAgentPreset(
@@ -121,30 +136,54 @@ function planLoadedCliMultiAgentPresets(
 export async function fillMultiAgentRunPlanGaps(
   init: Pick<MultiAgentRunInit, 'preset' | 'agent'>,
 ): Promise<CliMultiAgentPresetRunPlan> {
-  let plan = resolveMultiAgentRunPlan(init);
-  if (
-    cliMultiAgentPlanHasGaps(plan) &&
-    (await getCliAuthProvider().isAuthenticated())
-  ) {
-    await loadAgents();
-    plan = resolveMultiAgentRunPlan(init);
-  }
-  return plan;
+  return (await loadCliMultiAgentRunPlan(init)).plan;
+}
+
+export async function loadCliMultiAgentRunPlan(
+  init: Pick<MultiAgentRunInit, 'preset' | 'agent'>,
+): Promise<MultiAgentRunPlanLoadResult> {
+  const result = await reloadRemoteAgentsForGaps(
+    planCurrentMultiAgentRun(init),
+    cliMultiAgentPlanHasGaps,
+    () => planCurrentMultiAgentRun(init),
+  );
+  return {
+    plan: result.value,
+    remoteAgentLoadAttempted: result.remoteAgentLoadAttempted,
+  };
+}
+
+export async function loadCliMultiAgentPresetPlanSet(
+  presets: readonly CliMultiAgentPreset[],
+): Promise<MultiAgentPresetPlansLoadResult> {
+  await loadAgents({ includeRemote: false });
+  const result = await reloadRemoteAgentsForGaps(
+    planLoadedCliMultiAgentPresets(presets),
+    (plans) => plans.some(cliMultiAgentPlanHasGaps),
+    () => planLoadedCliMultiAgentPresets(presets),
+  );
+  return {
+    plans: result.value,
+    remoteAgentLoadAttempted: result.remoteAgentLoadAttempted,
+  };
 }
 
 export async function loadCliMultiAgentPresetPlans(
   presets: readonly CliMultiAgentPreset[],
-): Promise<CliMultiAgentPresetRunPlan[]> {
-  await loadAgents({ includeRemote: false });
-  let plans = planLoadedCliMultiAgentPresets(presets);
-  if (
-    plans.some(cliMultiAgentPlanHasGaps) &&
-    (await getCliAuthProvider().isAuthenticated())
-  ) {
+): Promise<readonly CliMultiAgentPresetRunPlan[]> {
+  return (await loadCliMultiAgentPresetPlanSet(presets)).plans;
+}
+
+async function reloadRemoteAgentsForGaps<T>(
+  value: T,
+  hasGaps: (value: T) => boolean,
+  replan: () => T,
+): Promise<RemoteAgentPlanReloadResult<T>> {
+  if (hasGaps(value) && (await getCliAuthProvider().isAuthenticated())) {
     await loadAgents();
-    plans = planLoadedCliMultiAgentPresets(presets);
+    return { value: replan(), remoteAgentLoadAttempted: true };
   }
-  return plans;
+  return { value, remoteAgentLoadAttempted: false };
 }
 
 interface MissingPresetAgentsWarningOptions {
@@ -248,13 +287,16 @@ function writeMultiAgentRunResult(
 async function runMultiAgentList(context: CliContext): Promise<number> {
   await initLocalCliPlatform(context);
   const presets = readCliMultiAgentPresets();
-  const plans = await loadCliMultiAgentPresetPlans(presets);
+  const { plans, remoteAgentLoadAttempted } =
+    await loadCliMultiAgentPresetPlanSet(presets);
   const records = cliMultiAgentPresetListRecords(plans);
 
   emitCliResult(context, {
     json: records,
     ndjson: cliMultiAgentPresetNdjsonRecords(plans),
-    text: formatCliMultiAgentPresetList(plans),
+    text: formatCliMultiAgentPresetList(plans, {
+      includeLoginHint: !remoteAgentLoadAttempted,
+    }),
   });
   return CliExitCode.Success;
 }
@@ -286,14 +328,16 @@ async function runMultiAgentInspect(
   await initCliPlatform({ ...context, quietLogs: true });
   await loadAgents({ includeRemote: false });
 
-  const plan = await fillMultiAgentRunPlanGaps({
+  const { plan, remoteAgentLoadAttempted } = await loadCliMultiAgentRunPlan({
     preset: presetIdOrName,
   });
 
   emitCliResult(context, {
     json: plan,
     ndjson: { kind: 'multi-agent-preset-inspection', plan },
-    text: formatCliMultiAgentPresetInspection(plan),
+    text: formatCliMultiAgentPresetInspection(plan, {
+      includeLoginHint: !remoteAgentLoadAttempted,
+    }),
   });
   return CliExitCode.Success;
 }
