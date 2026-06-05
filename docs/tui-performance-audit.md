@@ -29,7 +29,7 @@ These are not gaps — recording them so the report is honest about the baseline
 - **Finalized history belongs to the terminal.** Finalized entries print once
   via `<Static>` (`panes/StaticConversationTranscript.tsx`); the live region
   renders only in-flight content and is explicitly capped
-  (`selectPendingEntriesForViewport`, `BOTTOM_PANEL_MAX_ROWS`). Matches the
+  (`selectTranscriptEntriesForViewport`, `BOTTOM_PANEL_MAX_ROWS`). Matches the
   documented TUI discipline.
 - **Single keyboard owner (keybinding consistency).** One App-level `useInput`
   gates internally on `focusShortcutsActive` / `inputDisabled` instead of
@@ -86,7 +86,7 @@ on a hunch.
 
 ### 2. Viewport slice recomputed every render
 
-`selectPendingEntriesForViewport(pending, maxRows, width)` runs every render
+`selectTranscriptEntriesForViewport(pending, maxRows, width)` runs every render
 (`panes/ConversationPane.tsx:33`) with no `useMemo`.
 
 **Adversarial:** the obvious fix — `useMemo([pending, maxRows, width])` — is a

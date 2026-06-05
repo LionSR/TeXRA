@@ -1353,7 +1353,36 @@ const SCENARIOS = [
       'strategy is checking the harness-child-strategy details',
       'Harness received: child follow-up on focused stream',
     ],
-    unexpect: ['signal read during notification phase', 'ERROR'],
+    unexpect: [
+      'entry-1 chat history line',
+      'entry-4 chat history line',
+      'signal read during notification phase',
+      'ERROR',
+    ],
+  },
+  {
+    name: 'subagent-focus-return-root-scrollback-deduped',
+    cols: 120,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 's', 'f', '\t', '\t', '\t'],
+    expect: [
+      'entry-1 chat history line',
+      'entry-4 chat history line',
+      '[main]*',
+    ],
+    unexpect: [
+      'Please handle the harness-child-strategy sub-workflow.',
+      'strategy is checking the harness-child-strategy details',
+    ],
+    maxOccurrences: [
+      { text: 'entry-1 chat history line', max: 1 },
+      { text: 'entry-4 chat history line', max: 1 },
+    ],
   },
   {
     name: 'subagent-picker-enter-views-subagent',

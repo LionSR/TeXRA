@@ -6,11 +6,13 @@
 import { Text } from 'ink';
 
 import { renderAnsiMarkdown } from './ansiMarkdown';
+import { fillRows } from './terminalText';
 
 export interface MarkdownProps {
   readonly content: string;
   readonly width?: number;
   readonly colorEnabled?: boolean;
+  readonly fillWidth?: boolean;
 }
 
 export function Markdown(props: MarkdownProps): React.JSX.Element {
@@ -21,5 +23,15 @@ export function Markdown(props: MarkdownProps): React.JSX.Element {
     width: props.width,
     colorEnabled: props.colorEnabled,
   });
-  return <Text>{rendered}</Text>;
+  const columns =
+    props.width == null || !Number.isFinite(props.width)
+      ? undefined
+      : Math.max(1, Math.floor(props.width));
+  return (
+    <Text>
+      {props.fillWidth === true && columns !== undefined
+        ? fillRows(rendered, columns)
+        : rendered}
+    </Text>
+  );
 }
