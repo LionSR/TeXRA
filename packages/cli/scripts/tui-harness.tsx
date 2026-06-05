@@ -143,6 +143,7 @@ const AGENT_PROPOSAL_INSTRUCTION =
     '6. Include a short independent enumeration so the orchestrator can compare results.',
   ].join('\n');
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
+const CAN_SELECT_AGENT = process.env.HARNESS_CAN_SELECT_AGENT === '1';
 const CAN_SELECT_MODEL = process.env.HARNESS_CAN_SELECT_MODEL === '1';
 const DISABLED_MODEL_SWITCHES = new Set(
   parseList(process.env.HARNESS_DISABLED_MODEL_SWITCHES),
@@ -1327,7 +1328,7 @@ function handleHarnessSlashCommand(line: string): boolean {
 }
 
 registerBuiltinSlashCommands({
-  canSelectAgent: () => false,
+  canSelectAgent: () => CAN_SELECT_AGENT,
   canSelectModel: () => CAN_SELECT_MODEL,
   getModelSwitchDisabledReason: getHarnessModelSwitchDisabledReason,
   getApprovalPolicy: () => harnessApprovalPolicy,
@@ -1361,6 +1362,7 @@ registerBuiltinSlashCommands({
     );
   },
 });
+cliState.rootRunStartAvailable.set(CAN_SELECT_AGENT);
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
 function repaintHarnessTranscriptViewport(
