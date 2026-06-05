@@ -127,10 +127,11 @@ function planLoadedCliMultiAgentPresets(
  * Resolve a preset plan, then — when it still has gaps and the user is
  * authenticated — perform a remote load and replan. Relay-served premium agents
  * (the team orchestrator and delegation specialists most presets name) are only
- * visible after a remote load, so a local-only resolve silently degrades the
- * team (e.g. falling back to the first plain tool-use agent as root). Both the
- * headless `multi-agent run` path and the interactive `orchestrate` menu route
- * through here so they can't drift apart again.
+ * visible after a remote load. Until then, built-in presets report no runnable
+ * root instead of promoting a local specialist; custom presets can still use
+ * their own delegating member root. Both the headless `multi-agent run` path and
+ * the interactive `orchestrate` menu route through here so they can't drift
+ * apart again.
  *
  * Assumes local agents are already loaded by the caller.
  */
