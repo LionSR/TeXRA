@@ -32,7 +32,11 @@ import { formatCliAccountLabelForDisplay } from '../runtime/accountDisplay';
 import { type CliApiMode } from '../runtime/apiAccessMode';
 import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
-import { signInCliSupabase } from '../runtime/supabaseAuth';
+import {
+  CLI_MANUAL_AUTH_REMOTE_HINT,
+  CLI_MANUAL_AUTH_URL_PROMPT,
+  signInCliSupabase,
+} from '../runtime/supabaseAuth';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { saveProviderApiKey } from './applyOnboardingResult';
@@ -511,7 +515,7 @@ function RelayProgressStep(props: {
       <Box marginTop={1} flexDirection="column">
         <Text>
           {noBrowser
-            ? 'Open this URL on any device to sign in:'
+            ? CLI_MANUAL_AUTH_URL_PROMPT
             : `Opening your browser to sign in with ${provider}…`}
         </Text>
         {url ? (
@@ -523,6 +527,7 @@ function RelayProgressStep(props: {
               : "If it doesn't open, the URL will appear here."}
           </Text>
         )}
+        {noBrowser ? <Text dimColor>{CLI_MANUAL_AUTH_REMOTE_HINT}</Text> : null}
       </Box>
       <Box marginTop={1}>
         <Spinner label="Waiting for you to finish in the browser… (Ctrl-C cancels)" />
