@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { filledToolUseDisplayText } from '@cli/chat/tui/panes/ToolUseRow';
 import { toolUsePatchDisplayLines } from '@cli/chat/tui/panes/toolRenderers';
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
 
@@ -95,5 +96,18 @@ describe('ToolUseRow edit patch rendering', () => {
         ),
       ),
     ).toEqual([]);
+  });
+
+  it('pads compact tool display lines to the viewport width', () => {
+    expect(
+      filledToolUseDisplayText(
+        toolUse(
+          'Bash',
+          { command: 'ls' },
+          { status: TOOL_USE_STATUS.IN_PROGRESS },
+        ),
+        14,
+      ),
+    ).toBe('● Bash (ls)   ');
   });
 });

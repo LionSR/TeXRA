@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   boundedAssistantDisplayLines,
+  compactPrefixedDisplayRows,
   isInquiryContinuationText,
 } from '@cli/chat/tui/panes/TranscriptEntry';
 import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
@@ -306,6 +307,26 @@ describe('CLI conversation transcript splitting', () => {
     expect(finalizedTail).toContain('bold tail marker');
     expect(finalizedTail).not.toContain('**bold tail marker**');
     expect(streamingTail).toContain('**bold tail marker**');
+  });
+
+  it('pads compact prefixed rows to the viewport width', () => {
+    expect(
+      compactPrefixedDisplayRows({
+        fillWidth: true,
+        prefix: '! ',
+        text: 'bad',
+        width: 8,
+      }),
+    ).toBe('! bad   ');
+    expect(
+      compactPrefixedDisplayRows({
+        fillWidth: true,
+        maxRows: 1,
+        prefix: '! ',
+        text: 'abcdef',
+        width: 6,
+      }),
+    ).toBe('  ef  ');
   });
 
   it('appends only finalized entries to terminal scrollback items', () => {

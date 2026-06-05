@@ -77,7 +77,14 @@ function renderConversationPaneEntry({
     );
   }
   if (entry.role === 'tool' && entry.toolUse) {
-    return <ToolUseRow key={entry.id} toolUse={entry.toolUse} />;
+    return (
+      <ToolUseRow
+        key={entry.id}
+        fillWidth={mode === 'scoped-history'}
+        toolUse={entry.toolUse}
+        width={width}
+      />
+    );
   }
   if (entry.role === 'assistant') {
     return <LiveTranscriptEntry key={entry.id} entry={entry} width={width} />;
