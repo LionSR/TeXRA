@@ -33,7 +33,7 @@ vi.mock('@agent/core/stateStore', () => ({
   }),
 }));
 
-vi.mock('@agent/core/config', () => ({
+vi.mock('@utils/config/configUtils', () => ({
   getConfig: <T>(_key: string, fallback: T) => fallback,
 }));
 
