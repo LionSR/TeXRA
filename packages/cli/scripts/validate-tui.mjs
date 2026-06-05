@@ -501,6 +501,32 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'model-switch-compatible-only',
+    env: {
+      ANTHROPIC_API_KEY: 'harness-anthropic-key',
+      HARNESS_CAN_SELECT_MODEL: '1',
+      HARNESS_DISABLED_MODEL_SWITCHES: 'sonnet46T||opus48T',
+      HARNESS_ENTRIES: '4',
+      OPENAI_API_KEY: 'harness-openai-key',
+    },
+    keys: ['/model', '\r'],
+    frame: 'tail',
+    settleMs: ASYNC_FORM_SETTLE_MS,
+    expect: [
+      '/model · personal API keys',
+      'Choose the model for future turns.',
+      'Sonnet 4.6',
+      'different conversation format',
+      'GPT-5.5',
+    ],
+    unexpect: [
+      'Harness model selected.',
+      'Finish the active response before switching models.',
+      'Platform not initialized',
+      '/model - error',
+    ],
+  },
+  {
     name: 'model-form-selectable-submit',
     env: {
       HARNESS_CAN_SELECT_MODEL: '1',

@@ -140,6 +140,12 @@ const AGENT_PROPOSAL_INSTRUCTION =
   ].join('\n');
 const CAN_DELEGATE = process.env.HARNESS_CAN_DELEGATE === '1';
 const CAN_SELECT_MODEL = process.env.HARNESS_CAN_SELECT_MODEL === '1';
+const DISABLED_MODEL_SWITCHES = new Set(
+  parseList(process.env.HARNESS_DISABLED_MODEL_SWITCHES),
+);
+const DISABLED_MODEL_SWITCH_REASON =
+  process.env.HARNESS_DISABLED_MODEL_SWITCH_REASON ??
+  'different conversation format; start new chat';
 const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
@@ -1151,6 +1157,14 @@ function setHarnessApprovalPolicy(policy: CliApprovalPolicy): void {
   );
 }
 
+function getHarnessModelSwitchDisabledReason(
+  model: string,
+): string | undefined {
+  return DISABLED_MODEL_SWITCHES.has(model)
+    ? DISABLED_MODEL_SWITCH_REASON
+    : undefined;
+}
+
 function openHarnessSlashForm(
   command: SlashCommand,
   remainder: string,
@@ -1311,6 +1325,7 @@ function handleHarnessSlashCommand(line: string): boolean {
 registerBuiltinSlashCommands({
   canSelectAgent: () => false,
   canSelectModel: () => CAN_SELECT_MODEL,
+  getModelSwitchDisabledReason: getHarnessModelSwitchDisabledReason,
   getApprovalPolicy: () => harnessApprovalPolicy,
   onApprovalPolicySelect: setHarnessApprovalPolicy,
   onModelSelect: (model) => {
