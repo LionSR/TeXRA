@@ -227,6 +227,7 @@ describe('CLI multi-agent run command', () => {
       '/tmp/project',
       {
         allowEmptyInput: true,
+        requireWorkspaceFiles: true,
         stdinInputFile: mocks.stdinInputFile,
       },
     );
@@ -366,6 +367,7 @@ describe('CLI multi-agent run command', () => {
     expect(exitCode).toBe(0);
     expect(mocks.expandRunInputs).toHaveBeenCalledWith([], [], '/tmp/project', {
       allowEmptyInput: true,
+      requireWorkspaceFiles: true,
       stdinInputFile: mocks.stdinInputFile,
     });
     const request = mocks.executeCliRequest.mock.calls[0]?.[0];
@@ -402,6 +404,7 @@ describe('CLI multi-agent run command', () => {
       expect(exitCode).toBe(0);
       expect(mocks.expandRunInputs).toHaveBeenCalledWith([], [], root, {
         allowEmptyInput: true,
+        requireWorkspaceFiles: true,
         stdinInputFile: mocks.stdinInputFile,
       });
       const request = mocks.executeCliRequest.mock.calls[0]?.[0];
