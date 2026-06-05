@@ -65,12 +65,15 @@ describe('CLI TUI text input editing', () => {
     expect(
       rewriteKittyEnterInput(`${ESC}[57414;1u`, { shiftEnter: 'newline' }),
     ).toBe('\r');
+    // Ink already reports standalone Shift+Enter as a shifted return, so the
+    // raw-event shim must not emit a second synthetic newline for that exact
+    // chunk. Embedded sequences still need rewriting; see the batched test.
     expect(
       rewriteKittyEnterInput(`${ESC}[13;2u`, { shiftEnter: 'newline' }),
-    ).toBe(SYNTHETIC_SHIFT_RETURN_INPUT);
+    ).toBeUndefined();
     expect(
       rewriteKittyEnterInput(`${ESC}[13:2u`, { shiftEnter: 'newline' }),
-    ).toBe(SYNTHETIC_SHIFT_RETURN_INPUT);
+    ).toBeUndefined();
     // Main Enter, plain CR, and modified keypad Enter must not match.
     expect(
       rewriteKittyEnterInput('\r', { shiftEnter: 'newline' }),
