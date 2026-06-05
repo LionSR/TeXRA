@@ -1,13 +1,25 @@
 import { describe, expect, it } from 'vitest';
 
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { isInquiryContinuationText } from '@cli/chat/tui/panes/TranscriptEntry';
+import {
+  boundedAssistantDisplayLines,
+  compactPrefixedDisplayRows,
+  isInquiryContinuationText,
+} from '@cli/chat/tui/panes/TranscriptEntry';
 import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   appendStaticTranscriptItems,
   sessionHeaderIdentityLine,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
-import { selectPendingEntriesForViewport } from '@cli/chat/tui/panes/transcriptViewport';
+import {
+  transcriptViewportChange,
+  transcriptViewportKey,
+} from '@cli/chat/tui/state/transcriptViewportMode';
+import {
+  estimateLiveTranscriptEntryRows,
+  estimateTranscriptEntryRows,
+  selectTranscriptEntriesForViewport,
+} from '@cli/chat/tui/panes/transcriptViewport';
 import {
   cliState,
   patchStream,
@@ -242,11 +254,79 @@ describe('CLI conversation transcript splitting', () => {
       false,
     );
 
-    const selected = selectPendingEntriesForViewport([assistant], 4, 80);
+    const selected = selectTranscriptEntriesForViewport([assistant], 4, 80);
 
     expect(selected.entries.map((item) => item.id)).toEqual(['a1']);
     expect(selected.usedRows).toBe(4);
     expect(selected.rowLimits.get('a1')).toBe(4);
+  });
+
+  it('can size finalized scoped assistant history with the full markdown estimator', () => {
+    const assistant = entry(
+      'a1',
+      'assistant',
+      Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join('\n'),
+      true,
+    );
+
+    const liveRows = estimateLiveTranscriptEntryRows(assistant, 80);
+    const fullRows = estimateTranscriptEntryRows(assistant, 80);
+    const selected = selectTranscriptEntriesForViewport(
+      [assistant],
+      fullRows,
+      80,
+      'finalized-full',
+    );
+
+    expect(liveRows).toBeLessThan(fullRows);
+    expect(selected.entries.map((item) => item.id)).toEqual(['a1']);
+    expect(selected.usedRows).toBe(fullRows);
+    expect(selected.rowLimits.has('a1')).toBe(false);
+  });
+
+  it('renders bounded finalized assistant tails through markdown', () => {
+    const text = ['intro line', 'middle line', '**bold tail marker**'].join(
+      '\n',
+    );
+
+    const finalizedTail = boundedAssistantDisplayLines({
+      colorEnabled: false,
+      finalized: true,
+      rows: 1,
+      text,
+      width: 80,
+    }).join('\n');
+    const streamingTail = boundedAssistantDisplayLines({
+      colorEnabled: false,
+      finalized: false,
+      rows: 1,
+      text,
+      width: 80,
+    }).join('\n');
+
+    expect(finalizedTail).toContain('bold tail marker');
+    expect(finalizedTail).not.toContain('**bold tail marker**');
+    expect(streamingTail).toContain('**bold tail marker**');
+  });
+
+  it('pads compact prefixed rows to the viewport width', () => {
+    expect(
+      compactPrefixedDisplayRows({
+        fillWidth: true,
+        prefix: '! ',
+        text: 'bad',
+        width: 8,
+      }),
+    ).toBe('! bad   ');
+    expect(
+      compactPrefixedDisplayRows({
+        fillWidth: true,
+        maxRows: 1,
+        prefix: '! ',
+        text: 'abcdef',
+        width: 6,
+      }),
+    ).toBe('  ef  ');
   });
 
   it('appends only finalized entries to terminal scrollback items', () => {
@@ -380,6 +460,35 @@ describe('CLI conversation transcript splitting', () => {
     });
 
     expect(items.slice(1).map((item) => item.id)).toEqual(['u1']);
+  });
+
+  it('separates root scrollback from scoped child transcript viewports', () => {
+    const ROOT = 'root-stream' as StreamTabId;
+    const CHILD = 'claude@agent-sdk#1' as StreamTabId;
+    const parentStream = new Map<StreamTabId, StreamTabId>([[CHILD, ROOT]]);
+    const rootViewportKey = transcriptViewportKey({
+      activeStreamId: ROOT,
+      parentStream,
+    });
+    const childViewportKey = transcriptViewportKey({
+      activeStreamId: CHILD,
+      parentStream,
+    });
+
+    expect(rootViewportKey).toBe('root-scrollback');
+    expect(childViewportKey).toBe(`scoped:${CHILD}`);
+    expect(
+      transcriptViewportChange({
+        previousViewportKey: rootViewportKey,
+        nextViewportKey: childViewportKey,
+      }),
+    ).toMatchObject({ enteredRootScrollback: false });
+    expect(
+      transcriptViewportChange({
+        previousViewportKey: childViewportKey,
+        nextViewportKey: rootViewportKey,
+      }),
+    ).toMatchObject({ enteredRootScrollback: true });
   });
 
   it('detects generated inquiry continuation rows only', () => {

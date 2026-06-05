@@ -6,6 +6,7 @@
 import { Box, Text } from 'ink';
 
 import { Markdown } from '../render/Markdown';
+import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { fillRows } from '../render/terminalText';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
@@ -20,10 +21,64 @@ export function isInquiryContinuationText(text: string): boolean {
   return INQUIRY_CONTINUATION_RE.test(text);
 }
 
-function prefixedWrappedLines(text: string, cols: number): readonly string[] {
-  return wrapAnsiToWidth(text, Math.max(1, cols - 2))
+function prefixedWrappedLines(
+  text: string,
+  cols: number,
+  prefix = '› ',
+): readonly string[] {
+  const continuationPrefix = ' '.repeat(prefix.length);
+  return wrapAnsiToWidth(text, Math.max(1, cols - prefix.length))
     .split('\n')
-    .map((line, index) => `${index === 0 ? '› ' : '  '}${line}`);
+    .map(
+      (line, index) => `${index === 0 ? prefix : continuationPrefix}${line}`,
+    );
+}
+
+function displayRows({
+  lines,
+  fillWidth,
+  width,
+}: {
+  readonly lines: readonly string[];
+  readonly fillWidth?: boolean;
+  readonly width: number;
+}): string {
+  const text = lines.join('\n');
+  return fillWidth === true ? fillRows(text, width) : text;
+}
+
+export function compactPrefixedDisplayRows({
+  fillWidth,
+  maxRows,
+  prefix = '› ',
+  text,
+  width,
+}: {
+  readonly fillWidth?: boolean;
+  readonly maxRows?: number;
+  readonly prefix?: string;
+  readonly text: string;
+  readonly width: number;
+}): string {
+  const cols = Math.max(1, Math.floor(width));
+  const lines = prefixedWrappedLines(text, cols, prefix);
+  return displayRows({
+    fillWidth,
+    lines: maxRows === undefined ? lines : boundedLines(lines, maxRows),
+    width: cols,
+  });
+}
+
+function boundedDisplayRows({
+  lines,
+  maxRows,
+  width,
+}: {
+  readonly lines: readonly string[];
+  readonly maxRows: number;
+  readonly width: number;
+}): string {
+  return fillRows(boundedLines(lines, maxRows).join('\n'), width);
 }
 
 function UserEntryRow({
@@ -43,28 +98,37 @@ function UserEntryRow({
   // reprints. The `› ` chevron is 2 cols, matching the static row count in
   // transcriptLines.ts.
   const cols = Math.max(1, Math.floor(width ?? 80));
-  const body = prefixedWrappedLines(entry.text, cols).join('\n');
   return (
     <Box>
-      <Text inverse={colorEnabled !== false}>{fillRows(body, cols)}</Text>
+      <Text inverse={colorEnabled !== false}>
+        {compactPrefixedDisplayRows({
+          fillWidth: true,
+          text: entry.text,
+          width: cols,
+        })}
+      </Text>
     </Box>
   );
 }
 
 function InquiryContinuationRow({
   entry,
+  fillWidth,
   colorEnabled,
   width,
 }: {
   readonly entry: ConversationEntry;
+  readonly fillWidth?: boolean;
   readonly colorEnabled?: boolean;
   readonly width?: number;
 }): React.JSX.Element {
   const cols = Math.max(1, Math.floor(width ?? 80));
   const lines = prefixedWrappedLines(entry.text, cols);
+  const displayLines =
+    fillWidth === true ? fillRows(lines.join('\n'), cols).split('\n') : lines;
   return (
     <Box flexDirection="column">
-      {lines.map((line, index) => (
+      {displayLines.map((line, index) => (
         <Text
           key={index}
           color={colorEnabled !== false && index === 0 ? 'cyan' : undefined}
@@ -78,10 +142,25 @@ function InquiryContinuationRow({
 }
 
 function ProcessEntryRow({
+  fillWidth,
   process,
+  width,
 }: {
+  readonly fillWidth?: boolean;
   readonly process: NonNullable<ConversationEntry['process']>;
+  readonly width?: number;
 }): React.JSX.Element {
+  if (fillWidth === true) {
+    const cols = Math.max(1, Math.floor(width ?? 80) - 2);
+    return (
+      <Box marginBottom={1} paddingX={1} flexDirection="column">
+        <Text>
+          {fillRows(completedProcessDisplayLines(process).join('\n'), cols)}
+        </Text>
+      </Box>
+    );
+  }
+
   const color = process.isError ? 'red' : 'green';
   const [, ...tailLines] = completedProcessDisplayLines(process);
   return (
@@ -116,10 +195,12 @@ export function TranscriptEntry({
   entry,
   width,
   colorEnabled,
+  fillWidth,
 }: {
   readonly entry: ConversationEntry;
   readonly width?: number;
   readonly colorEnabled?: boolean;
+  readonly fillWidth?: boolean;
 }): React.JSX.Element {
   switch (entry.role) {
     case 'user':
@@ -127,6 +208,7 @@ export function TranscriptEntry({
         return (
           <InquiryContinuationRow
             entry={entry}
+            fillWidth={fillWidth}
             colorEnabled={colorEnabled}
             width={width}
           />
@@ -135,18 +217,42 @@ export function TranscriptEntry({
       return (
         <UserEntryRow entry={entry} colorEnabled={colorEnabled} width={width} />
       );
-    case 'error':
+    case 'error': {
+      const cols = Math.max(1, Math.floor(width ?? 80) - 2);
       return (
         <Box paddingX={1}>
-          <Text color="red">! </Text>
-          <Text color="red">{entry.text}</Text>
+          <Text color="red">
+            {compactPrefixedDisplayRows({
+              fillWidth,
+              prefix: '! ',
+              text: entry.text,
+              width: cols,
+            })}
+          </Text>
         </Box>
       );
+    }
     case 'tool':
-      if (entry.toolUse) return <ToolUseRow toolUse={entry.toolUse} />;
+      if (entry.toolUse) {
+        return (
+          <ToolUseRow
+            fillWidth={fillWidth}
+            toolUse={entry.toolUse}
+            width={width}
+          />
+        );
+      }
       break;
     case 'process':
-      if (entry.process) return <ProcessEntryRow process={entry.process} />;
+      if (entry.process) {
+        return (
+          <ProcessEntryRow
+            fillWidth={fillWidth}
+            process={entry.process}
+            width={width}
+          />
+        );
+      }
       break;
   }
   return (
@@ -155,6 +261,7 @@ export function TranscriptEntry({
         content={entry.text}
         width={width}
         colorEnabled={colorEnabled}
+        fillWidth={fillWidth}
       />
     </Box>
   );
@@ -191,45 +298,88 @@ function plainWrapTailLines(
     .slice(-Math.max(1, tailRows));
 }
 
+export function boundedAssistantDisplayLines({
+  colorEnabled,
+  finalized,
+  rows,
+  text,
+  width,
+}: {
+  readonly colorEnabled?: boolean;
+  readonly finalized: boolean;
+  readonly rows: number;
+  readonly text: string;
+  readonly width?: number;
+}): readonly string[] {
+  const cols = Math.max(1, Math.floor(width ?? 80));
+  if (!finalized) {
+    return plainWrapTailLines(text, cols, rows);
+  }
+  return boundedLines(
+    renderAnsiMarkdown(text, { width: cols, colorEnabled }).split('\n'),
+    rows,
+  );
+}
+
 export function BoundedTranscriptEntry({
+  colorEnabled,
   entry,
   maxRows,
   width,
 }: {
+  readonly colorEnabled?: boolean;
   readonly entry: ConversationEntry;
   readonly maxRows: number;
   readonly width?: number;
 }): React.JSX.Element {
   const rows = Math.max(1, maxRows);
   if (entry.role === 'assistant') {
-    // In-flight overflow tail (still streaming): plain tail wrap rather
-    // than renderAnsiMarkdown over the full buffer (O(text^2), and the
-    // tail slice discards markdown structure above it anyway). Finalized
-    // entries still render full markdown through `<Static>`.
+    const cols = Math.max(1, Math.floor(width ?? 80));
+    // Streaming overflow stays plain for speed. Finalized overflow is only
+    // used by scoped child panes, so render cached Markdown first and then
+    // take the visible tail.
     return (
       <Box flexDirection="column">
         <Text>
-          {plainWrapTailLines(entry.text, width ?? 80, rows).join('\n')}
+          {displayRows({
+            fillWidth: true,
+            lines: boundedAssistantDisplayLines({
+              colorEnabled,
+              finalized: entry.finalized,
+              rows,
+              text: entry.text,
+              width: cols,
+            }),
+            width: cols,
+          })}
         </Text>
       </Box>
     );
   }
   if (entry.role === 'tool' && entry.toolUse) {
+    const cols = Math.max(1, Math.floor(width ?? 80) - 2);
     return (
       <Box flexDirection="column" paddingX={1}>
         <Text>
-          {boundedLines(toolUseDisplayLines(entry.toolUse), rows).join('\n')}
+          {boundedDisplayRows({
+            lines: toolUseDisplayLines(entry.toolUse),
+            maxRows: rows,
+            width: cols,
+          })}
         </Text>
       </Box>
     );
   }
   if (entry.role === 'process' && entry.process) {
+    const cols = Math.max(1, Math.floor(width ?? 80) - 2);
     return (
       <Box flexDirection="column" paddingX={1}>
         <Text>
-          {boundedLines(completedProcessDisplayLines(entry.process), rows).join(
-            '\n',
-          )}
+          {boundedDisplayRows({
+            lines: completedProcessDisplayLines(entry.process),
+            maxRows: rows,
+            width: cols,
+          })}
         </Text>
       </Box>
     );
@@ -237,14 +387,17 @@ export function BoundedTranscriptEntry({
 
   const prefix = entry.role === 'error' ? '! ' : '› ';
   const color = entry.role === 'error' ? 'red' : undefined;
-  const cols = Math.max(1, (width ?? 80) - prefix.length - 2);
-  const lines = wrapAnsiToWidth(entry.text, cols).split('\n');
+  const cols = Math.max(1, Math.floor(width ?? 80) - 2);
   return (
     <Box paddingX={1}>
       <Text color={color}>
-        {boundedLines(lines, rows)
-          .map((line, index) => `${index === 0 ? prefix : '  '}${line}`)
-          .join('\n')}
+        {compactPrefixedDisplayRows({
+          fillWidth: true,
+          maxRows: rows,
+          prefix,
+          text: entry.text,
+          width: cols,
+        })}
       </Text>
     </Box>
   );
@@ -262,10 +415,11 @@ export function LiveTranscriptEntry({
   readonly entry: ConversationEntry;
   readonly width?: number;
 }): React.JSX.Element {
-  const rows = plainWrapTailLines(entry.text, width ?? 80, LIVE_TAIL_ROWS);
+  const cols = Math.max(1, Math.floor(width ?? 80));
+  const rows = plainWrapTailLines(entry.text, cols, LIVE_TAIL_ROWS);
   return (
     <Box flexDirection="column">
-      <Text>{rows.join('\n')}</Text>
+      <Text>{fillRows(rows.join('\n'), cols)}</Text>
     </Box>
   );
 }
