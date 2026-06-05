@@ -57,15 +57,17 @@ async function resumeFromSnapshot(
       streamId,
     });
 
-    await resumeToolUseFromSnapshot(snapshot, runtimeHost, (session) => {
-      const allFollowUps =
-        followUp !== undefined
-          ? [{ text: followUp }, ...queuedFollowUps]
-          : queuedFollowUps;
+    await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
+      setupSession: (session) => {
+        const allFollowUps =
+          followUp !== undefined
+            ? [{ text: followUp }, ...queuedFollowUps]
+            : queuedFollowUps;
 
-      for (const item of allFollowUps) {
-        session.appendFollowUp(item.text, item.mediaFiles, item.displayText);
-      }
+        for (const item of allFollowUps) {
+          session.appendFollowUp(item.text, item.mediaFiles, item.displayText);
+        }
+      },
     });
 
     return { success: true };
