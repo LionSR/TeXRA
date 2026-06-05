@@ -132,6 +132,9 @@ describe('CLI TUI text input editing', () => {
     expect(isCtrlInput('\u0015', {}, 'u')).toBe(true);
     expect(isCtrlInput('u', { ctrl: true }, 'u')).toBe(true);
     expect(isCtrlInput('\u0015', { meta: true }, 'u')).toBe(false);
+    expect(normalizedCtrlInput('\u0016', {})).toBe('v');
+    expect(isCtrlInput('\u0016', {}, 'v')).toBe(true);
+    expect(isCtrlInput('\u0016', { meta: true }, 'v')).toBe(false);
     expect(isEscapeInput('\u001B', {})).toBe(true);
     expect(isUnhandledControlInput('\u0006')).toBe(true);
     expect(isUnhandledControlInput('\t')).toBe(false);
