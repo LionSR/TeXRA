@@ -44,6 +44,7 @@ import {
   finalizeSettledPrefix,
   syncStreamLog,
 } from '@cli/chat/tui/state/subscribeStreamLog';
+import { transcriptViewportKey } from '@cli/chat/tui/state/transcriptViewportMode';
 import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import { wrapRuntimeHost } from '@cli/chat/tui/state/subscribeRuntimeHost';
@@ -244,6 +245,40 @@ describe('cliState Phase 4 fields', () => {
     setParentStream(child1, null);
 
     expect(cliState.parentStream.get().has(child1)).toBe(false);
+  });
+
+  it('registers subagent parent edges when active child rows arrive', () => {
+    const wrapped = wrapRuntimeHost({
+      emit: () => undefined,
+      close: async () => {},
+    } as unknown as CliRuntimeHost);
+
+    cliState.activeStreamId.set(root);
+    patchStream(child1, (s) => ({
+      ...s,
+      status: STREAM_STATUS.RUNNING,
+    }));
+
+    wrapped.emit('updateActiveSubagents', {
+      parentStreamId: root,
+      children: [
+        {
+          executionId: 'agent-1',
+          agentName: 'critic',
+          childStreamId: child1,
+          status: STREAM_STATUS.RUNNING,
+        },
+      ],
+    });
+
+    expect(cliState.parentStream.get().get(child1)).toBe(root);
+    expect(nextFocusForward()).toBe(child1);
+    expect(
+      transcriptViewportKey({
+        activeStreamId: child1,
+        parentStream: cliState.parentStream.get(),
+      }),
+    ).toBe(`scoped:${child1}`);
   });
 });
 
