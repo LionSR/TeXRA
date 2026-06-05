@@ -533,10 +533,16 @@ export async function executeAgent(
   });
 }
 
+export interface ResumeToolUseFromSnapshotOptions {
+  /** Hide tools whose approval prompts cannot be answered in this host mode. */
+  readonly approvalPromptsUnavailable?: boolean;
+  readonly setupSession?: (session: IToolUseSession) => void;
+}
+
 export async function resumeToolUseFromSnapshot(
   snapshot: ToolUseSessionSnapshot,
   runtimeHost: AgentRuntimeHost,
-  setupSession?: (session: IToolUseSession) => void,
+  options: ResumeToolUseFromSnapshotOptions = {},
 ): Promise<void> {
   const ctx = await buildAgentLaunchContext({
     configPayload: snapshot.agentConfig,
@@ -553,6 +559,7 @@ export async function resumeToolUseFromSnapshot(
   ctx.delegationDepth = await computeDelegationDepthFromStorage(
     snapshot.executionId,
   );
+  ctx.approvalPromptsUnavailable = options.approvalPromptsUnavailable;
   const { setting, streamId } = ctx;
 
   await withExecutionRunContext(ctx, async () => {
@@ -583,13 +590,16 @@ export async function resumeToolUseFromSnapshot(
             // would drop subagent-specific instructions (e.g. the shared
             // /memories protocol) that the fresh run had included.
             isSubagent: (ctx.delegationDepth ?? 0) > 0,
+            approvalPromptsUnavailable: options.approvalPromptsUnavailable,
             onFollowUpConsumed: () =>
               ctx.runtimeHost.emit('updateQueuedFollowUps', {
                 streamId: ctx.streamId,
               }),
           },
           undefined,
-          setupSession ? (context) => setupSession(context.session) : undefined,
+          options.setupSession
+            ? (context) => options.setupSession?.(context.session)
+            : undefined,
         );
         return {
           category: 'toolUse' as const,

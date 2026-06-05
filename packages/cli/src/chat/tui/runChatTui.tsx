@@ -41,6 +41,7 @@ import { isOAuthProvider, type OAuthProvider } from '@auth/sharedConfig';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import { formatCliAccountLabelForDisplay } from '@cli/runtime/accountDisplay';
 import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
+import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import {
   effectiveCliApiMode,
   formatCliApiMode,
@@ -1262,6 +1263,7 @@ export async function runChat(
     let executionRegistered = false;
     let agentSettled = false;
     session.executionId = executionId;
+    const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
 
     const runPromise = setCliHelperModel(currentModel)
       .then(() => registerFreshChatExecution(executionId, config))
@@ -1270,6 +1272,7 @@ export async function runChat(
         return executeAgent(registeredConfig, executionId, {
           runtimeHost: wrapped,
           enforceCategory: true,
+          approvalPromptsUnavailable: approvalsUnavailable,
           onStreamResolved: (resolvedStreamId) => {
             session.streamId = resolvedStreamId;
             moveLocalTranscriptToStream(resolvedStreamId);
@@ -1390,9 +1393,14 @@ export async function runChat(
     const wrapped = wrapRuntimeHost(runtimeHost);
     const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
     disposers.push(unbindApprovals);
+    const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
 
     session.runPromise = setCliHelperModel(currentModel)
-      .then(() => resumeToolUseFromSnapshot(resolution.snapshot, wrapped))
+      .then(() =>
+        resumeToolUseFromSnapshot(resolution.snapshot, wrapped, {
+          approvalPromptsUnavailable: approvalsUnavailable,
+        }),
+      )
       .then(() => {
         // resumeToolUseFromSnapshot resolves void (no result object), so the
         // streamId we already know is the only handle: flush the tail and
