@@ -8,6 +8,7 @@ import {
   cliMultiAgentPresetNdjsonRecords,
   cliMultiAgentPresets,
   findCliMultiAgentPreset,
+  formatCliMultiAgentPresetLauncherSummary,
   formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
@@ -79,6 +80,62 @@ describe('CLI multi-agent presets', () => {
       'built-in\tlean-project\tLean Project\tworkflow:0\ttool-use:2/7\tdegraded',
     );
     expect(output).toContain('texra multi-agent inspect <preset>');
+  });
+
+  it('formats launcher team summaries as reader-facing status text', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'lean-project',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('lean', AgentCategory.ToolUse),
+        agent('latexFixer', AgentCategory.ToolUse),
+      ],
+    });
+
+    expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
+      'degraded; 2/7 tool-use agents',
+    );
+  });
+
+  it('formats ready launcher team summaries without raw availability keys', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'physicist',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: preset.workflowAgents.map((name) =>
+        agent(name, AgentCategory.Workflow),
+      ),
+      toolUseAgents: preset.toolUseAgents.map((name) =>
+        agent(
+          name,
+          AgentCategory.ToolUse,
+          name === 'orchestrator' ? ['delegate_agent'] : [],
+        ),
+      ),
+    });
+
+    expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
+      'ready; 9 tool-use agents; 4 workflow agents',
+    );
+  });
+
+  it('formats unavailable launcher team summaries with root guidance', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'physicist',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [],
+    });
+
+    expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
+      'unavailable; no runnable team root; 0/9 tool-use agents; 0/4 workflow agents',
+    );
   });
 
   it('serializes planned availability for machine-readable list output', () => {

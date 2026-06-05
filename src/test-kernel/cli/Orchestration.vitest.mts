@@ -256,7 +256,7 @@ describe('CLI orchestration items', () => {
           kind: 'preset',
           preset: 'physicist',
         }),
-        description: 'built-in; workflow:1; tool-use:2',
+        description: 'ready; 2 tool-use agents; 1 workflow agent',
       }),
     );
   });
