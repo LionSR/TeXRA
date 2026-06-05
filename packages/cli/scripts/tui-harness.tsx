@@ -143,6 +143,7 @@ const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
 const SHOW_IDLE_TODOS = process.env.HARNESS_TODOS_IDLE === '1';
+const FAILED_CHILD_AGENT = process.env.HARNESS_FAILED_CHILD?.trim();
 const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
 let harnessApprovalPolicy: CliApprovalPolicy = 'ask';
@@ -769,12 +770,24 @@ if (SHOW_CHILDREN) {
       status: STREAM_STATUS.RUNNING,
       startedAt: startedAt + 12_000,
     },
-  ];
+  ].map((child) =>
+    child.agentName === FAILED_CHILD_AGENT
+      ? {
+          ...child,
+          status: STREAM_STATUS.ERROR,
+          startedAt: undefined,
+          elapsed: null,
+        }
+      : child,
+  );
+  const activeSubagents = childStreams.filter(
+    (child) => child.status !== STREAM_STATUS.ERROR,
+  );
   patchStream(STREAM_ID, (slice) => ({
     ...slice,
     status: STREAM_STATUS.RUNNING,
     runStartedAt: startedAt,
-    activeSubagents: childStreams,
+    activeSubagents,
     childStreams,
     activeProcesses: [
       {
