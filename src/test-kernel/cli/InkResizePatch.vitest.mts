@@ -10,6 +10,10 @@ type LogUpdateRenderer = ((value: string) => boolean) & {
   reset: () => void;
 };
 
+const cliRequire = createRequire(
+  new URL('../../../packages/cli/package.json', import.meta.url),
+);
+
 // The CLI vendors a patch (patches/ink@7.0.5.patch) that rewrites Ink's resize
 // handling: instead of erasing the live region by logical line count — which is
 // wrong once the emulator reflows soft-wrapped lines at the new width (too few
@@ -20,10 +24,11 @@ type LogUpdateRenderer = ((value: string) => boolean) & {
 // future ink bump or a dropped patch fails loudly in CI rather than silently
 // reverting the resize fix.
 function inkBuildDir(): string {
-  const cliRequire = createRequire(
-    new URL('../../../packages/cli/package.json', import.meta.url),
-  );
   return path.dirname(cliRequire.resolve('ink'));
+}
+
+function inkRequire(): NodeJS.Require {
+  return createRequire(path.join(inkBuildDir(), 'ink.js'));
 }
 
 function patchedInkSource(): string {
@@ -68,6 +73,15 @@ describe('CLI Ink resize patch', () => {
       render('hello');
       expect(() => render.reset()).not.toThrow();
     }
+  });
+
+  it('uses the installed ansi-escapes clearViewport sequence', () => {
+    const ansiEscapes = inkRequire()('ansi-escapes') as {
+      readonly clearViewport?: unknown;
+    };
+
+    expect(typeof ansiEscapes.clearViewport).toBe('string');
+    expect(ansiEscapes.clearViewport).toBe('\u001B[2J\u001B[H');
   });
 
   it('debounces the resize repaint so a drag-storm collapses to one redraw', () => {
