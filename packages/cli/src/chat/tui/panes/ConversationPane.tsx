@@ -54,6 +54,9 @@ function renderConversationPaneEntry({
   readonly rowLimit?: number;
   readonly width?: number;
 }): React.JSX.Element | null {
+  // When the newest entry alone overflows the pane, the bounded renderer is the
+  // paint contract. Apply it before role/mode branches so sizing and painting
+  // stay in lockstep.
   if (rowLimit !== undefined) {
     return (
       <BoundedTranscriptEntry

@@ -288,15 +288,53 @@ Never compensate for data model problems at render time. Renderers should only t
 
 ### Terminal UI (CLI / Ink) discipline
 
-The `texra` CLI ships an Ink (React) TUI under `packages/cli/src/chat/tui/`. It deliberately does **not** take over the viewport (no alternate screen); it appends finalized content to native scrollback and only repaints a small live region at the bottom. Keep it that way — the terminal already implements scrolling, search, and mouse-scroll, so don't reinvent them.
+The `texra` CLI ships an Ink (React) TUI under `packages/cli/src/chat/tui/`.
+It deliberately does **not** take over the viewport (no alternate screen); the
+root transcript appends finalized content to native scrollback and only repaints
+a small live region at the bottom. Focused child streams are the explicit
+exception: they use a bounded scoped-history pane so the child view contains
+only that child stream. Keep those two viewports distinct — the terminal already
+implements scrolling, search, and mouse-scroll for root history, so don't
+reinvent them.
 
-- **The terminal owns finalized history.** Every finalized transcript entry prints exactly once through Ink `<Static>` (`panes/StaticConversationTranscript.tsx`) so native scrollback / search / mouse-scroll keep working. Never re-render a finalized turn in the live region, and never reprint a `<Static>` item — dedupe by the entry's own stable id, not a stream-scoped key (see `appendStaticTranscriptItems`). The **sole sanctioned exception** is the on-resize full repaint (see the width-change bullet below): a terminal-width change reprints `fullStaticOutput` once from a known origin.
-- **Keep the live region minimal.** Only in-flight content belongs in the redrawn `<Box>` below `<Static>`: the streaming tail, spinners, side panels, input bar, and the active approval modal. A smaller live region flickers less and costs less to repaint. Size it explicitly (`selectTranscriptEntriesForViewport` in `panes/transcriptViewport.ts`) and cap panels (`BOTTOM_PANEL_MAX_ROWS`) so chrome never pushes the input off-screen. Don't park finalized content in the live region "for now."
+- **Root scrollback owns finalized root history.** In the root viewport, every
+  finalized root transcript entry prints exactly once through Ink `<Static>`
+  (`panes/StaticConversationTranscript.tsx`) so native scrollback / search /
+  mouse-scroll keep working. Never render a finalized root turn in the root live
+  region, and never reprint root `<Static>` items unless the repaint starts from
+  a known origin — dedupe by the entry's own stable id, not a stream-scoped key
+  (see `appendStaticTranscriptItems`). Focused child streams are separate scoped
+  viewports: `App` does not mount `<Static>` for them, and `ConversationPane`
+  renders finalized + pending child entries in `scoped-history` mode.
+- **Keep the live region minimal for the active viewport.** In root mode, only
+  in-flight content belongs in the redrawn `<Box>` below `<Static>`: the
+  streaming tail, spinners, side panels, input bar, and the active approval
+  modal. In scoped child mode, the bounded pane is the child transcript viewport
+  itself and may contain finalized child entries; it must still be explicitly
+  sized (`selectTranscriptEntriesForViewport` in `panes/transcriptViewport.ts`)
+  and padded so repainting does not leave stale terminal suffixes. Cap panels
+  (`BOTTOM_PANEL_MAX_ROWS`) so chrome never pushes the input off-screen. Don't
+  park finalized root content in the live region "for now."
 - **Stateless renderers.** Tool / diff / markdown components are props-in → JSX-out (the "Render-Time Workarounds" rule, applied to the TUI). No `Date.now()`, synthetic ids, or dedup at render time. Any view-level toggle (collapse/expand, focus) belongs in shared signal state (`state/cliState.ts`), not per-component local state.
 - **Defer non-terminal content to the host.** The TUI does not render PDFs, LaTeX figures, or inline images (iTerm2 / Kitty / Sixel). Hand previews to the webview/desktop or the OS opener. The terminal is for chat, text, and diffs; rebuilding a document viewer in cells is out of scope.
 - **Capability-gate terminal features.** Negotiate support via the DA1-sentinel discovery (`state/terminalCapabilities.ts`) before emitting Kitty-keyboard, OSC color, bracketed-paste, or notification sequences. No "assume a modern terminal" feature use.
 - **Headless parity is sacred.** The TUI runs only on an interactive TTY. `texra run`, `--print/-p`, and `--output-format json|ndjson` must stay byte-identical — never let Ink rendering, ANSI chrome, or spinners leak into the piped / non-TTY path.
-- **Width changes invalidate wrapped lines.** Soft-wrap is width-dependent: recompute live-region layout from `useWindowSize()` columns on every render; never cache wrapped output across a width change. On a width change the vendored `ink` patch (`patches/ink@7.0.5.patch`) deliberately does a **full repaint** — `ansiEscapes.clearTerminal` then reprint `fullStaticOutput` (header + finalized history, reflowed), with the live region drawn below — debounced so a drag-storm collapses into one redraw. This intentionally reprints `<Static>` history (the one place that does): line-count erasing of the live region can't survive reflow, because the emulator owns the reflow/scroll geometry and a write-only stdout can't observe it, so any fixed erase count either strands residue or walks up and eats the static header. Don't "fix" this back to line-count erasing; the no-repaint rule applies to steady-state rendering, not resize.
+- **Width changes and scoped returns invalidate wrapped lines.** Soft-wrap is
+  width-dependent: recompute live-region layout from `useWindowSize()` columns
+  on every render; never cache wrapped output across a width change. On a width
+  change the vendored `ink` patch (`patches/ink@7.0.5.patch`) deliberately does
+  a **full repaint** — `ansiEscapes.clearTerminal` then reprint
+  `fullStaticOutput` (header + finalized root history, reflowed), with the live
+  region drawn below — debounced so a drag-storm collapses into one redraw.
+  Returning from a scoped child viewport to root uses the same known-origin
+  pattern (`transcriptViewportChange().enteredRootScrollback`) before reprinting
+  root `<Static>` history; entering or switching child viewports uses
+  viewport-only clearing. Line-count erasing of the live region can't survive
+  reflow, because the emulator owns the reflow/scroll geometry and a write-only
+  stdout can't observe it, so any fixed erase count either strands residue or
+  walks up and eats the static header. Don't "fix" this back to line-count
+  erasing; the no-repaint rule applies to steady-state root rendering, not
+  resize or scoped-return repaint.
 
 ### CLI design (clig.dev)
 
