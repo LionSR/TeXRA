@@ -29,6 +29,7 @@ import {
   TOOL_USE_STATUS,
   type ActiveChildInfo,
   type NormalizedToolUse,
+  type RetryPermission,
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { getDefaultStreamLogStore } from '@transcript';
@@ -76,6 +77,7 @@ const HARNESS_YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const SHOW_BASH_APPROVAL = process.env.HARNESS_BASH_APPROVAL === '1';
+const SHOW_RETRY_APPROVAL = process.env.HARNESS_RETRY_APPROVAL === '1';
 const SHOW_EXTERNAL_INQUIRY = process.env.HARNESS_EXTERNAL_INQUIRY === '1';
 const SHOW_USER_QUESTION = process.env.HARNESS_USER_QUESTION === '1';
 const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
@@ -515,6 +517,19 @@ function makeBashApprovalPayload() {
   };
 }
 
+function makeRetryApprovalPayload(): RetryPermission {
+  return {
+    streamId: STREAM_ID,
+    operation: 'Tool-use call',
+    errorMessage: 'HTTP 429 Too Many Requests',
+    errorDetails: {
+      isCredentialExhausted: true,
+      isRelayError: true,
+      statusCode: 429,
+    },
+  };
+}
+
 function makePlanApprovalPayload() {
   return {
     approvalId: 'harness-plan-approval',
@@ -631,6 +646,20 @@ function applyHarnessApprovalDecision(decision: ApprovalDecision): void {
       bypass: { ...slice.bypass, toolEdit: true },
     }));
   }
+}
+
+function appendHarnessRetryDecision(decision: ApprovalDecision): void {
+  if (decision.accepted && decision.apiMode) {
+    cliState.sessionMeta.set({
+      ...cliState.sessionMeta.get(),
+      apiMode: decision.apiMode,
+    });
+    appendHarnessAssistantTranscript(`RETRY-API-MODE ${decision.apiMode}`);
+    return;
+  }
+  appendHarnessAssistantTranscript(
+    decision.accepted ? 'RETRY-APPROVED' : 'RETRY-REJECTED',
+  );
 }
 
 function appendHarnessPlanDecision(decision: ApprovalDecision): void {
@@ -864,6 +893,16 @@ if (SHOW_BASH_APPROVAL) {
     },
     { onPresent: () => notify({ kind: 'approvalNeeded' }) },
   ).then(applyHarnessApprovalDecision);
+}
+
+if (SHOW_RETRY_APPROVAL) {
+  void enqueueApproval(
+    {
+      kind: 'retry',
+      payload: makeRetryApprovalPayload(),
+    },
+    { onPresent: () => notify({ kind: 'approvalNeeded' }) },
+  ).then(appendHarnessRetryDecision);
 }
 
 if (SHOW_EXTERNAL_INQUIRY) {
