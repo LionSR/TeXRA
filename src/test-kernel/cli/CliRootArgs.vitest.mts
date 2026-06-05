@@ -687,6 +687,23 @@ describe('CLI root argument routing', () => {
     }
   });
 
+  it('rejects external directories before globbing their contents', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-inputs-'));
+    const externalDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'texra-cli-external-'),
+    );
+    try {
+      await expect(
+        expandRunInputs([externalDir], [], root, {
+          requireWorkspaceFiles: true,
+        }),
+      ).rejects.toThrow(/--input: file is outside --cwd:/);
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+      await fs.rm(externalDir, { recursive: true, force: true });
+    }
+  });
+
   it('uses the caller flag label when rejecting external stdin materialization', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'texra-cli-inputs-'));
     const externalDir = await fs.mkdtemp(
