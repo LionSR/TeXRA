@@ -416,6 +416,29 @@ describe('formatProviderHttpError', () => {
     expect(formatted.userRetryable).toBe(false);
   });
 
+  it('formats tagged Anthropic HTTP errors with status-derived metadata', () => {
+    const error = new AnthropicAuthenticationError(
+      401,
+      {
+        type: 'error',
+        error: { type: 'authentication_error', message: 'invalid key' },
+      },
+      'invalid key',
+      new Headers([['request-id', 'req_anthropic']]),
+    );
+    tagAnthropicSdkError(error, 'anthropic');
+
+    const formatted = formatProviderHttpError(error);
+
+    expect(formatted.provider).toBe('anthropic');
+    expect(formatted.statusCode).toBe(401);
+    expect(formatted.statusText).toBe('Unauthorized');
+    expect(formatted.message).toContain('HTTP 401 Unauthorized');
+    expect(formatted.message).toContain('invalid key');
+    expect(formatted.requestId).toBe('req_anthropic');
+    expect(formatted.userRetryable).toBe(false);
+  });
+
   it('formats tagged Google API errors with inferred kind from status', () => {
     const error = new GoogleApiError({
       message: 'quota exceeded',
