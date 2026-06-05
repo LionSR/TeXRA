@@ -137,6 +137,7 @@ import {
   cleanupTerminalModes,
   clearTerminalScrollback,
 } from './terminalCleanup';
+import type { TranscriptViewportChange } from './state/transcriptViewportMode';
 
 export interface ChatResult {
   exitCode: number;
@@ -1612,9 +1613,11 @@ export async function runChat(
 
   const stdoutColorEnabled = context.stdoutColorEnabled ?? context.colorEnabled;
   const inkRef: { current?: InkInstance } = {};
-  const repaintTranscriptViewport = (): void => {
+  const repaintTranscriptViewport = (
+    change: TranscriptViewportChange,
+  ): void => {
     inkRef.current?.repaint({
-      clearScrollback: false,
+      clearScrollback: change.enteredRootScrollback,
       preserveStatic: false,
     });
   };

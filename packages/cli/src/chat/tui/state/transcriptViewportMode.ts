@@ -17,3 +17,27 @@ export function transcriptViewportKey({
 export function isScopedTranscriptViewport(viewportKey: string): boolean {
   return viewportKey !== ROOT_SCROLLBACK_VIEWPORT_KEY;
 }
+
+export interface TranscriptViewportChange {
+  readonly previousViewportKey: string;
+  readonly nextViewportKey: string;
+  readonly enteredRootScrollback: boolean;
+}
+
+export function transcriptViewportChange({
+  nextViewportKey,
+  previousViewportKey,
+}: {
+  readonly nextViewportKey: string;
+  readonly previousViewportKey: string | undefined;
+}): TranscriptViewportChange | undefined {
+  if (previousViewportKey === undefined) return undefined;
+  if (previousViewportKey === nextViewportKey) return undefined;
+  return {
+    previousViewportKey,
+    nextViewportKey,
+    enteredRootScrollback:
+      isScopedTranscriptViewport(previousViewportKey) &&
+      !isScopedTranscriptViewport(nextViewportKey),
+  };
+}

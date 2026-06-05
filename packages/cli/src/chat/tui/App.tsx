@@ -50,7 +50,9 @@ import { nextFocusBack, nextFocusForward } from './state/focusCycle';
 import { streamScopeDisplayLabel } from './state/streamLabels';
 import {
   isScopedTranscriptViewport,
+  transcriptViewportChange,
   transcriptViewportKey,
+  type TranscriptViewportChange,
 } from './state/transcriptViewportMode';
 import { useSignal } from './state/useSignal';
 import type { InputHistory } from './history/inputHistory';
@@ -386,7 +388,9 @@ export interface AppProps {
   readonly canStopActiveRun?: () => boolean;
   readonly colorEnabled?: boolean;
   readonly onInterruptActive: () => void;
-  readonly onTranscriptViewportChange?: () => void;
+  readonly onTranscriptViewportChange?: (
+    change: TranscriptViewportChange,
+  ) => void;
   readonly onCtrlC?: () => void;
   readonly inputDisabled?: boolean;
   readonly history?: InputHistory;
@@ -449,8 +453,11 @@ export function App(props: AppProps): React.JSX.Element {
   useLayoutEffect(() => {
     const previous = previousViewportKey.current;
     previousViewportKey.current = viewportKey;
-    if (previous === undefined || previous === viewportKey) return;
-    onTranscriptViewportChange?.();
+    const change = transcriptViewportChange({
+      previousViewportKey: previous,
+      nextViewportKey: viewportKey,
+    });
+    if (change) onTranscriptViewportChange?.(change);
   }, [onTranscriptViewportChange, viewportKey]);
 
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
