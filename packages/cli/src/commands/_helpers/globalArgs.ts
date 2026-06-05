@@ -150,9 +150,12 @@ export const INTERACTIVE_AGENT_GLOBAL_ARGS = {
 // in one place flows through to `reorderGlobalFlags` automatically. Commands
 // still choose which routed flags they accept through their own args objects.
 export const GLOBAL_VALUE_FLAGS = new Set<string>(
-  Object.entries(ROOT_ROUTING_ARGS)
-    .filter(([, def]) => def.type !== 'boolean')
-    .map(([name]) => `--${name}`),
+  Object.entries(ROOT_ROUTING_ARGS).flatMap(([name, def]) => {
+    if (def.type === 'boolean') return [];
+    const long = `--${name}`;
+    const alias = 'alias' in def ? def.alias : undefined;
+    return alias ? [long, `-${alias}`] : [long];
+  }),
 );
 
 export const GLOBAL_BOOL_FLAGS = new Set<string>(

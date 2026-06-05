@@ -161,6 +161,9 @@ describe('CLI root argument routing', () => {
     expect(
       reorderGlobalFlags(['--skill-source', 'vendor/skills', 'run', 'polish']),
     ).toEqual(['run', 'polish', '--skill-source', 'vendor/skills']);
+    expect(
+      reorderGlobalFlags(['-S', 'vendor/skills', 'run', 'polish']),
+    ).toEqual(['run', 'polish', '-S', 'vendor/skills']);
     expect(reorderGlobalFlags(['--include-interop', 'chat'])).toEqual([
       'chat',
       '--include-interop',
@@ -973,6 +976,7 @@ describe('CLI global color/input flags', () => {
     expect(GLOBAL_BOOL_FLAGS.has('--no-input')).toBe(true);
     expect(GLOBAL_BOOL_FLAGS.has('--include-interop')).toBe(true);
     expect(GLOBAL_VALUE_FLAGS.has('--skill-source')).toBe(true);
+    expect(GLOBAL_VALUE_FLAGS.has('-S')).toBe(true);
     expect(GLOBAL_BOOL_FLAGS.has('--input')).toBe(false);
   });
 
