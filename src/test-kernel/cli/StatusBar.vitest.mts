@@ -481,7 +481,7 @@ describe('CLI StatusBar display model', () => {
       }),
     ).toBe('exit');
 
-    const display = buildStatusBarDisplay({
+    const baseDisplayInput = {
       status: STREAM_STATUS.STOPPED,
       pendingExitHint: false,
       pendingExitResumeId: undefined,
@@ -498,14 +498,32 @@ describe('CLI StatusBar display model', () => {
       apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       ctrlCAction: 'stop root',
-    });
+    } as const;
+    const display = buildStatusBarDisplay(baseDisplayInput);
 
     expect(display.left.map(statusBarSegmentText)).toEqual([
       '◆',
       'stopped',
+      'root active',
       PERSONAL_API_MODE_LABEL,
     ]);
     expect(display.bindings).toContain('[Ctrl-C]stop root');
+
+    const liveChildDisplay = buildStatusBarDisplay({
+      ...baseDisplayInput,
+      status: STREAM_STATUS.RUNNING,
+    });
+    expect(liveChildDisplay.left.map(statusBarSegmentText)).not.toContain(
+      'root active',
+    );
+
+    const stoppedRootDisplay = buildStatusBarDisplay({
+      ...baseDisplayInput,
+      ctrlCAction: 'stop',
+    });
+    expect(stoppedRootDisplay.left.map(statusBarSegmentText)).not.toContain(
+      'root active',
+    );
   });
 
   it('treats visible live stream status as stoppable', () => {
