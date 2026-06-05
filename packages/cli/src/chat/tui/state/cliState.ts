@@ -119,8 +119,10 @@ const ACTIVE_STREAM_ID = signal<StreamTabId | undefined>(undefined);
 const STREAMS = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
 const ROOT_RUN_START_AVAILABLE = signal<boolean>(true);
 
-/** child -> parent map populated from `setParentStream`. The focus cycle
- *  (Ctrl-A / Ctrl-B) walks this when stepping back to the parent. */
+/** child -> parent map populated from child stream ownership events. The focus
+ *  cycle (Ctrl-A / Ctrl-B) walks this when stepping back to the parent, and
+ *  transcript rendering uses it to keep child streams scoped to their own
+ *  history. */
 const PARENT_STREAM = signal<ReadonlyMap<StreamTabId, StreamTabId>>(new Map());
 
 /** Active inline slash form, or `undefined` when the chat input owns the
@@ -220,23 +222,57 @@ export function patchStream(
   cliState.streams.set(out);
 }
 
+interface ParentStreamEdgeUpdate {
+  readonly childStreamId?: StreamTabId;
+  readonly parentStreamId: StreamTabId | null | undefined;
+}
+
+function parentStreamMapUpdate(
+  current: ReadonlyMap<StreamTabId, StreamTabId>,
+  updates: readonly ParentStreamEdgeUpdate[],
+): Map<StreamTabId, StreamTabId> | undefined {
+  let out: Map<StreamTabId, StreamTabId> | undefined;
+  for (const { childStreamId, parentStreamId } of updates) {
+    if (!childStreamId) continue;
+    const readable = out ?? current;
+    if (parentStreamId == null || childStreamId === parentStreamId) {
+      if (!readable.has(childStreamId)) continue;
+      out ??= new Map(current);
+      out.delete(childStreamId);
+      continue;
+    }
+    if (readable.get(childStreamId) === parentStreamId) continue;
+    out ??= new Map(current);
+    out.set(childStreamId, parentStreamId);
+  }
+  return out;
+}
+
+function commitParentStreamEdges(
+  updates: readonly ParentStreamEdgeUpdate[],
+): void {
+  const next = parentStreamMapUpdate(cliState.parentStream.get(), updates);
+  if (next) cliState.parentStream.set(next);
+}
+
 export function setParentStream(
   childStreamId: StreamTabId,
   parentStreamId: StreamTabId | null | undefined,
 ): void {
-  const current = cliState.parentStream.get();
   // A null parent means the runtime promoted this child to a top-level stream.
-  if (parentStreamId == null || childStreamId === parentStreamId) {
-    if (!current.has(childStreamId)) return;
-    const out = new Map(current);
-    out.delete(childStreamId);
-    cliState.parentStream.set(out);
-    return;
-  }
-  if (current.get(childStreamId) === parentStreamId) return;
-  const out = new Map(current);
-  out.set(childStreamId, parentStreamId);
-  cliState.parentStream.set(out);
+  commitParentStreamEdges([{ childStreamId, parentStreamId }]);
+}
+
+export function registerChildStreams(
+  parentStreamId: StreamTabId,
+  children: readonly ActiveChildInfo[],
+): void {
+  commitParentStreamEdges(
+    children.map((child) => ({
+      childStreamId: child.childStreamId,
+      parentStreamId,
+    })),
+  );
 }
 
 export function removeStream(streamId: StreamTabId): void {
