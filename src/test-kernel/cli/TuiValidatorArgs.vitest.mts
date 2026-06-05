@@ -50,6 +50,7 @@ describe('TUI validator args', () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout.split('\n')).toContain('transcript');
+    expect(result.stdout.split('\n')).toContain('no-color-model-form');
     expect(result.stdout.split('\n')).toContain('nested-subagent-picker');
     expect(result.stdout).not.toContain('Available scenarios:');
     expect(result.stderr).not.toContain('building tui-harness bundle');

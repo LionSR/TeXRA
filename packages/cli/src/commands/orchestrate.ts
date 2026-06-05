@@ -129,6 +129,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
     models,
     apiMode,
     allowDefaultModelLaunch,
+    colorEnabled: context.stdoutColorEnabled ?? context.colorEnabled,
   });
 
   switch (action.kind) {
