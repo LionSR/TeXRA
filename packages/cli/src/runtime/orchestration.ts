@@ -3,7 +3,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { ExecutionId } from '@shared/schemas';
 
 import {
-  formatCliMultiAgentPresetPlanSummary,
+  formatCliMultiAgentPresetLauncherSummary,
   type CliMultiAgentPresetRunPlan,
 } from './multiAgentPresets';
 import { implicitDefaultToolUseAgents } from './defaultAgents';
@@ -105,6 +105,6 @@ function presetItems(
   return plans.slice(0, MAX_PRESET_ITEMS).map((plan) => ({
     value: { kind: 'preset', preset: plan.preset.id },
     label: `Team ${plan.preset.name}`,
-    description: formatCliMultiAgentPresetPlanSummary(plan),
+    description: formatCliMultiAgentPresetLauncherSummary(plan),
   }));
 }
