@@ -407,6 +407,7 @@ export function App(props: AppProps): React.JSX.Element {
   const slashPaletteOpen = useSignal(cliState.slashPaletteOpen);
   const reverseSearchOpen = useSignal(cliState.reverseSearchOpen);
   const transcriptViewerStreamId = useSignal(cliState.transcriptViewerStreamId);
+  const rootRunStartAvailable = useSignal(cliState.rootRunStartAvailable);
   const transcriptViewerOpen = transcriptViewerStreamId !== undefined;
   const { columns, rows } = useWindowSize();
   const { exit } = useApp();
@@ -415,6 +416,7 @@ export function App(props: AppProps): React.JSX.Element {
   >(undefined);
   const canStopActiveRun =
     props.canStopActiveRun ?? props.canInterruptActiveRun;
+  const agentSelectionAvailable = rootRunStartAvailable;
 
   const stdin = useStdin();
   const foregroundOpen =
@@ -790,7 +792,9 @@ export function App(props: AppProps): React.JSX.Element {
             <TodosPlanPanel maxRows={todosPlanRows} />
           </Box>
         ) : null}
-        {tipRowVisible ? <TipRow /> : null}
+        {tipRowVisible ? (
+          <TipRow agentSelectionAvailable={agentSelectionAvailable} />
+        ) : null}
         {queuedFollowUpPanelVisible ? (
           <QueuedFollowUpsPanel
             maxRows={queuedFollowUpPanelRows}
@@ -806,6 +810,7 @@ export function App(props: AppProps): React.JSX.Element {
         />
         <StreamTabsStrip items={streamTabItems} width={columns} />
         <StatusBar
+          agentSelectionAvailable={agentSelectionAvailable}
           canStopActiveRun={canStopActiveRun}
           foregroundEscapeAction={foregroundEscapeAction({
             activeFormEscapeAction: activeForm?.escapeAction,
