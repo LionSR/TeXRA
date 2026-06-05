@@ -2,7 +2,7 @@
 import type { ExecResult } from '@agent/types/ResultTypes';
 
 // Internal imports
-import { getConfig } from '@agent/core/config';
+import { getConfig } from '@utils/config/configUtils';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { WorkspaceStateKey } from '@common/state/stateKeys';
 import * as logger from '@logger/logUtils';

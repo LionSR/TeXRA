@@ -9,7 +9,7 @@ import path from 'path';
 import { sync as globSync } from 'glob';
 
 import { platform } from '@platform/platform';
-import { getConfig } from '@agent/core/config';
+import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@common/errors';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';

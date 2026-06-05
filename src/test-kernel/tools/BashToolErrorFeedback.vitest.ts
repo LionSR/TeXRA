@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 
 // Local imports - agent state
-import * as agentConfig from '@agent/core/config';
+import * as agentConfig from '@utils/config/configUtils';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 
 // Local imports - model handlers
