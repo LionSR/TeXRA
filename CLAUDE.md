@@ -326,15 +326,16 @@ reinvent them.
   a **full repaint** — `ansiEscapes.clearTerminal` then reprint
   `fullStaticOutput` (header + finalized root history, reflowed), with the live
   region drawn below — debounced so a drag-storm collapses into one redraw.
-  Returning from a scoped child viewport to root uses the same known-origin
-  pattern (`transcriptViewportChange().enteredRootScrollback`) before reprinting
-  root `<Static>` history; entering or switching child viewports uses
-  viewport-only clearing. Line-count erasing of the live region can't survive
-  reflow, because the emulator owns the reflow/scroll geometry and a write-only
-  stdout can't observe it, so any fixed erase count either strands residue or
-  walks up and eats the static header. Don't "fix" this back to line-count
-  erasing; the no-repaint rule applies to steady-state root rendering, not
-  resize or scoped-return repaint.
+  Any transcript viewport switch (`root` ↔ scoped child, or child ↔ child) uses
+  the same known-origin pattern: clear scrollback, drop cached static output,
+  then repaint the new viewport. Root viewports reprint root `<Static>` history;
+  scoped child viewports paint only the focused child's bounded transcript.
+  Line-count erasing of the live region can't survive reflow, because the
+  emulator owns the reflow/scroll geometry and a write-only stdout can't observe
+  it, so any fixed erase count either strands residue or walks up and eats the
+  static header. Don't "fix" this back to line-count erasing; the no-repaint
+  rule applies to steady-state rendering, not resize or transcript viewport
+  switches.
 
 ### CLI design (clig.dev)
 
