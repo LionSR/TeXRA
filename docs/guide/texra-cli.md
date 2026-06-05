@@ -77,8 +77,12 @@ with your own provider API keys — whichever you prefer.
 ```bash
 texra login                 # opens a browser to complete sign-in
 texra login github          # choose the OAuth provider explicitly
-texra login --no-browser    # print the sign-in URL if no browser is available
+texra login --no-browser    # print the loopback sign-in URL
 ```
+
+`--no-browser` still uses a local callback server. Open the printed URL in a
+browser that can reach the terminal session; SSH and container sessions may need
+callback port forwarding.
 
 ```bash
 texra auth status           # who am I signed in as?
