@@ -71,6 +71,7 @@ function renderConversationPaneEntry({
         entry={entry}
         width={width}
         colorEnabled={colorEnabled}
+        fillWidth
       />
     );
   }
@@ -87,6 +88,7 @@ function renderConversationPaneEntry({
         entry={entry}
         width={width}
         colorEnabled={colorEnabled}
+        fillWidth
       />
     );
   }
@@ -111,6 +113,7 @@ export function ConversationPane(
     displayEntries,
     maxRows,
     props.width,
+    mode === 'scoped-history' ? 'finalized-full' : 'live-tail',
   );
   const visibleRows =
     displayEntries.length > 0
