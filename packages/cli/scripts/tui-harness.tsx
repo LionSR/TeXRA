@@ -1343,6 +1343,11 @@ registerBuiltinSlashCommands({
       `Harness memory selected: ${storagePath}.`,
     );
   },
+  onSkillSelect: (selection) => {
+    appendHarnessAssistantTranscript(
+      `Harness skill selected: ${selection.name}.`,
+    );
+  },
   onResumeSelect: (id) => {
     appendHarnessAssistantTranscript(`Harness resume selected: ${id}.`);
   },

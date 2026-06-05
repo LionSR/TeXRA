@@ -218,12 +218,18 @@ class ToolUsePrepNode<C> extends BaseNode<
   async prep(_shared: ToolUseCycleShared): Promise<{
     interrupted: boolean;
     queuedFollowUp: string | null;
+    queuedFollowUpDisplay: string | null;
     synthetic: boolean;
   }> {
     const interrupted = this.services.checkInterruption();
 
     if (!this.services.session?.hasQueuedFollowUp()) {
-      return { interrupted, queuedFollowUp: null, synthetic: false };
+      return {
+        interrupted,
+        queuedFollowUp: null,
+        queuedFollowUpDisplay: null,
+        synthetic: false,
+      };
     }
 
     // Drain without waiting (we know there's something queued)
@@ -231,6 +237,7 @@ class ToolUsePrepNode<C> extends BaseNode<
     return {
       interrupted,
       queuedFollowUp: batch?.items.join('\n\n') ?? null,
+      queuedFollowUpDisplay: batch?.displayItems.join('\n\n') ?? null,
       synthetic: batch?.synthetic ?? false,
     };
   }
@@ -240,6 +247,7 @@ class ToolUsePrepNode<C> extends BaseNode<
     prepRes: {
       interrupted: boolean;
       queuedFollowUp: string | null;
+      queuedFollowUpDisplay: string | null;
       synthetic: boolean;
     },
   ): Promise<string | undefined> {
@@ -254,7 +262,10 @@ class ToolUsePrepNode<C> extends BaseNode<
     // before the model starts thinking/responding
     if (prepRes.queuedFollowUp) {
       if (!prepRes.synthetic) {
-        logUserMessage(this.services.logger, prepRes.queuedFollowUp);
+        logUserMessage(
+          this.services.logger,
+          prepRes.queuedFollowUpDisplay ?? prepRes.queuedFollowUp,
+        );
       }
       shared.messages =
         await this.services.modelHandler.createUserFollowUpMessages(

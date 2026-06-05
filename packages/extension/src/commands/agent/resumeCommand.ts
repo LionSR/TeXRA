@@ -48,6 +48,7 @@ async function resumeFromSnapshot(
 
   let queuedFollowUps: Array<{
     text: string;
+    displayText?: string;
     mediaFiles?: readonly string[];
   }> = [];
   try {
@@ -63,7 +64,7 @@ async function resumeFromSnapshot(
           : queuedFollowUps;
 
       for (const item of allFollowUps) {
-        session.appendFollowUp(item.text, item.mediaFiles);
+        session.appendFollowUp(item.text, item.mediaFiles, item.displayText);
       }
     });
 
