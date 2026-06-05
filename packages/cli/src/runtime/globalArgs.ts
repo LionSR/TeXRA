@@ -23,12 +23,28 @@ export interface ParsedGlobalArgs {
   // when the user passes `--no-color`.
   readonly color?: boolean;
   readonly 'no-input'?: boolean;
+  readonly 'include-interop'?: boolean;
+  readonly 'skill-source'?: string | string[];
   // citty treats every `--no-*` token as a negated positive flag before it
   // applies aliases, so `--no-input` can arrive as `input: false`.
   readonly input?: unknown;
 }
 
-export function pickGlobalArgs(args: ParsedGlobalArgs): CliGlobalArgs {
+interface PickGlobalArgsOptions {
+  readonly skillSourcePaths?: readonly string[];
+}
+
+function stringValues(value: string | string[] | undefined): string[] {
+  if (Array.isArray(value)) {
+    return value.filter(isNonEmptyString).map((entry) => entry.trim());
+  }
+  return isNonEmptyString(value) ? [value.trim()] : [];
+}
+
+export function pickGlobalArgs(
+  args: ParsedGlobalArgs,
+  options: PickGlobalArgsOptions = {},
+): CliGlobalArgs {
   return {
     print: args.print === true,
     quiet: args.quiet === true,
@@ -44,5 +60,8 @@ export function pickGlobalArgs(args: ParsedGlobalArgs): CliGlobalArgs {
     // because command-specific `--input <file>` arrives as a string/array.
     noColor: args.color === false,
     noInput: args['no-input'] === true || args.input === false,
+    includeInteropSkills: args['include-interop'] === true,
+    skillSourcePaths:
+      options.skillSourcePaths ?? stringValues(args['skill-source']),
   };
 }

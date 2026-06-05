@@ -31,7 +31,7 @@ import { contextFromArgs } from './_helpers/context';
 import { withUsageSections } from './_helpers/dispatch';
 import { setExitCode } from './_helpers/exitCode';
 import {
-  INTERACTIVE_GLOBAL_ARGS,
+  INTERACTIVE_AGENT_GLOBAL_ARGS,
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
 import {
@@ -184,11 +184,11 @@ export const orchestrationCommand = withUsageSections(
         'Interactive launcher (runs by default on bare `texra` in a TTY): pick a chat, resume, or team preset',
     },
     args: {
-      ...INTERACTIVE_GLOBAL_ARGS,
+      ...INTERACTIVE_AGENT_GLOBAL_ARGS,
     },
     async run(ctx) {
       rejectHeadlessOnlyFlags(ctx.rawArgs, 'orchestrate');
-      const context = await contextFromArgs(ctx.args);
+      const context = await contextFromArgs(ctx.args, ctx.rawArgs);
       setExitCode(await runOrchestration(context));
     },
   }),

@@ -46,6 +46,16 @@ type CliGlobalArgsDef = {
   };
 };
 
+type CliSkillSourceArgsDef = {
+  'include-interop': { type: 'boolean'; description: string };
+  'skill-source': {
+    type: 'string';
+    alias: 'S';
+    valueHint: string;
+    description: string;
+  };
+};
+
 export const GLOBAL_ARGS: CliGlobalArgsDef = {
   print: {
     type: 'boolean',
@@ -91,6 +101,26 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
   },
 };
 
+export const SKILL_SOURCE_ARGS: CliSkillSourceArgsDef = {
+  'include-interop': {
+    type: 'boolean',
+    description:
+      'Also import .claude/skills, .codex/skills, and .gemini/skills from the workspace and home directory',
+  },
+  'skill-source': {
+    type: 'string',
+    alias: 'S',
+    valueHint: 'directory',
+    description:
+      'Additional skill root to import into agent prompts; may be repeated and is resolved relative to --cwd',
+  },
+};
+
+export const AGENT_RUN_GLOBAL_ARGS = {
+  ...GLOBAL_ARGS,
+  ...SKILL_SOURCE_ARGS,
+} as const;
+
 /**
  * Flags that are meaningful for commands which necessarily own the terminal.
  * In particular, `chat` and `orchestrate` cannot honor `--print`,
@@ -108,6 +138,11 @@ export const INTERACTIVE_GLOBAL_ARGS: Omit<
   'approval-policy': GLOBAL_ARGS['approval-policy'],
   color: GLOBAL_ARGS.color,
 };
+
+export const INTERACTIVE_AGENT_GLOBAL_ARGS = {
+  ...INTERACTIVE_GLOBAL_ARGS,
+  ...SKILL_SOURCE_ARGS,
+} as const;
 
 // Derived from `GLOBAL_ARGS` so adding/renaming a global flag in one place
 // flows through to `reorderGlobalFlags` automatically.

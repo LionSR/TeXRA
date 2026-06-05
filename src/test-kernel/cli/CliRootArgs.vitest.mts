@@ -934,6 +934,27 @@ describe('CLI global color/input flags', () => {
     });
   });
 
+  it('maps runtime skill-source flags to canonical knobs', () => {
+    expect(
+      pickGlobalArgs(
+        {
+          'include-interop': true,
+          'skill-source': 'fallback/skills',
+        },
+        { skillSourcePaths: ['vendor/skills', '/tmp/shared-skills'] },
+      ),
+    ).toMatchObject({
+      includeInteropSkills: true,
+      skillSourcePaths: ['vendor/skills', '/tmp/shared-skills'],
+    });
+    expect(
+      pickGlobalArgs({ 'skill-source': ['one/skills', 'two/skills'] }),
+    ).toMatchObject({
+      includeInteropSkills: false,
+      skillSourcePaths: ['one/skills', 'two/skills'],
+    });
+  });
+
   it('registers global boolean spellings without stealing --input', () => {
     // Needed so `texra --no-color agents list` and
     // `texra --no-input agents list` reorder/dispatch correctly.
