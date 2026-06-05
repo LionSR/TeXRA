@@ -120,19 +120,18 @@ import { cliState, resetCliState } from './state/cliState';
 import { collectResumeTargets, formatResumeHint } from './state/resumeHint';
 import { installTuiApprovals } from './state/subscribeApprovals';
 import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
-import { subscribeStreamLog, syncStreamLog } from './state/subscribeStreamLog';
+import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import { requestCliCompaction } from './state/compactionRequest';
 import {
-  appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
   appendLocalUserTranscript,
   clearLocalTranscript,
-  finalizeAssistantTranscriptEntries,
   moveLocalTranscriptToStream,
 } from './state/transcript';
+import { projectStreamTranscript } from './state/transcriptProjection';
 import {
   cleanupTerminalModes,
   clearTerminalScrollback,
@@ -1233,8 +1232,8 @@ export async function runChat(
     pendingSkillActivations.clear();
     clearTuiSessionRunState(session);
     // StreamLogStore entries outlive resetCliState (which only clears the
-    // React/signal view). Drop them so syncStreamLog can't replay the
-    // cleared conversation into the fresh `<Static>` scrollback.
+    // React/signal view). Drop them so transcript projection can't replay
+    // the cleared conversation into the fresh `<Static>` scrollback.
     const store = getDefaultStreamLogStore();
     for (const streamId of cliState.streams.get().keys()) {
       store.delete(streamId).catch(() => {
@@ -1282,13 +1281,13 @@ export async function runChat(
           },
           onBeforeWaiting: (lastResponse) => {
             if (!session.streamId) return;
-            syncStreamLog(session.streamId);
-            appendAssistantTranscriptIfMissing(
-              session.streamId,
-              lastResponse,
-              `waiting:${executionId}:${waitingTurn++}`,
-            );
-            finalizeAssistantTranscriptEntries(session.streamId);
+            projectStreamTranscript(session.streamId, {
+              fallbackAssistant: {
+                text: lastResponse,
+                idPrefix: `waiting:${executionId}:${waitingTurn++}`,
+              },
+              finalize: true,
+            });
           },
         });
       })
@@ -1306,18 +1305,20 @@ export async function runChat(
         // this, a reply that finalized between sync ticks would never
         // hit the transcript.
         if (result.streamId) {
-          syncStreamLog(result.streamId);
-          // The run is definitively done — promote any still-deferred
-          // assistant/tool rows into `<Static>` even if the status-change
-          // path didn't fire its own finalize.
-          finalizeAssistantTranscriptEntries(result.streamId);
-        }
-        if (result.category === AgentCategory.ToolUse) {
-          appendAssistantTranscriptIfMissing(
-            result.streamId,
-            result.lastResponse,
-            `final:${result.executionId}`,
-          );
+          // The run is definitively done. Pull any final log chunks into
+          // cliState, add the result text only if the log did not render it,
+          // and promote deferred assistant/tool rows into `<Static>`.
+          projectStreamTranscript(result.streamId, {
+            finalize: true,
+            ...(result.category === AgentCategory.ToolUse
+              ? {
+                  fallbackAssistant: {
+                    text: result.lastResponse,
+                    idPrefix: `final:${result.executionId}`,
+                  },
+                }
+              : {}),
+          });
         }
         notify({ kind: 'agentFinished' });
       })
@@ -1383,11 +1384,11 @@ export async function runChat(
 
     // Rehydrate the prior transcript so the user sees the conversation they're
     // continuing. ensureLoaded pulls the persisted entries off disk into the
-    // store; syncStreamLog promotes them into `<Static>` scrollback. An older
-    // run with no persisted entries simply shows whatever exists (possibly
-    // nothing) — the continued turn streams in regardless.
+    // store; projection promotes already-final rows into `<Static>` scrollback.
+    // An older run with no persisted entries simply shows whatever exists
+    // (possibly nothing) — the continued turn streams in regardless.
     await getDefaultStreamLogStore().ensureLoaded(resolution.streamId);
-    syncStreamLog(resolution.streamId);
+    projectStreamTranscript(resolution.streamId);
     cliState.activeStreamId.set(resolution.streamId);
 
     const runtimeHost = createCliRuntimeHost(sessionContext);
@@ -1407,8 +1408,7 @@ export async function runChat(
         // streamId we already know is the only handle: flush the tail and
         // promote any deferred assistant/tool rows into `<Static>`.
         if (session.streamId) {
-          syncStreamLog(session.streamId);
-          finalizeAssistantTranscriptEntries(session.streamId);
+          projectStreamTranscript(session.streamId, { finalize: true });
         }
         session.runExitCode = CliExitCode.Success;
         notify({ kind: 'agentFinished' });

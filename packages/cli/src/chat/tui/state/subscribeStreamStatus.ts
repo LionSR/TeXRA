@@ -4,15 +4,11 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@shared/schemas';
 
 import { patchStream, updateChildStreamStatus } from './cliState';
-import { syncStreamLog } from './subscribeStreamLog';
-import {
-  finalizeAssistantTranscriptEntries,
-  isFinalTranscriptStatus,
-} from './transcript';
+import { projectStreamTranscriptForStatus } from './transcriptProjection';
 
 export function subscribeStreamStatus(): () => void {
   return StreamStatusService.onDidChange((change) => {
-    // Patch status BEFORE syncing so `syncStreamLog` derives
+    // Patch status BEFORE projection so the transcript projector derives
     // `finalizeDeferred` from the current status. A reused stream still
     // carrying `WAITING` from the previous turn would otherwise finalize
     // the next run's first chunks early, shoving partial text into
@@ -29,9 +25,6 @@ export function subscribeStreamStatus(): () => void {
       return { ...slice, status: change.status, runStartedAt };
     });
     updateChildStreamStatus(change.streamId, change.status);
-    syncStreamLog(change.streamId);
-    if (isFinalTranscriptStatus(change.status)) {
-      finalizeAssistantTranscriptEntries(change.streamId);
-    }
+    projectStreamTranscriptForStatus(change.streamId, change.status);
   });
 }
