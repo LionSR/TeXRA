@@ -20,8 +20,8 @@ import { createRequire } from 'node:module';
 
 import { describe, expect, it } from 'vitest';
 
-import { delay } from '@utils/core/async';
 import { fillRows } from '@cli/chat/tui/render/terminalText';
+import { delay } from '@utils/core/async';
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
