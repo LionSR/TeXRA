@@ -22,6 +22,7 @@ import {
   type CliOutputFormat,
 } from './cliConfig';
 import { resolveCliResourcesPath } from './resourcesPath';
+import type { SkillSourceOptions } from '@skills/skillSources';
 
 export type CliMode = 'headless' | 'interactive';
 
@@ -56,6 +57,7 @@ export interface CliContext {
   readonly configWarnings?: readonly string[];
   readonly envAgent?: string;
   readonly envModel?: string;
+  readonly skillSourceOptions?: SkillSourceOptions;
   readonly approvalPrompt?: (request: CliPromptRequest) => Promise<string>;
 }
 
@@ -260,6 +262,8 @@ export interface CliGlobalArgs {
    * user explicitly selects another approval policy.
    */
   readonly noInput?: boolean;
+  readonly includeInteropSkills?: boolean;
+  readonly skillSourcePaths?: readonly string[];
 }
 
 function cliMode(globalArgs: CliGlobalArgs, ambient: CliAmbientState): CliMode {
@@ -438,5 +442,9 @@ export async function buildCliContext(
     configWarnings,
     envAgent: envValue(env, 'TEXRA_AGENT'),
     envModel,
+    skillSourceOptions: {
+      includeInterop: init.globalArgs.includeInteropSkills === true,
+      additionalPaths: init.globalArgs.skillSourcePaths ?? [],
+    },
   };
 }

@@ -7,6 +7,9 @@ import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { initPlatform, tryPlatform } from '@platform/platform';
 
+// Local imports - telemetry
+import { UsageLogService } from '@telemetry/UsageLogService';
+
 // Local imports - agent index
 import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
@@ -23,9 +26,6 @@ import { GlobalStateKey } from '@common/state/stateKeys';
 
 // Local imports - logger
 import { setOutputChannelFactory } from '@logger/logUtils';
-
-// Local imports - telemetry
-import { UsageLogService } from '@telemetry/UsageLogService';
 
 // Local imports - tool integrations
 import { setTexraCliEntrypointChecker } from '@tools/externalToolDefs';
@@ -56,7 +56,12 @@ type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
 
 type CliPlatformInitOptions = Pick<
   CliContext,
-  'apiMode' | 'cwd' | 'resourcesPath' | 'helperModel' | 'version'
+  | 'apiMode'
+  | 'cwd'
+  | 'helperModel'
+  | 'resourcesPath'
+  | 'skillSourceOptions'
+  | 'version'
 > & {
   readonly bestEffortIncludedModelAccess?: boolean;
   readonly installSignalHandlers?: boolean;
@@ -247,9 +252,12 @@ export async function initCliPlatform(
   }
 
   setRuntimeSkillSources(
-    defaultSkillSources({
-      cwd: context.cwd,
-      resourcesPath: context.resourcesPath,
-    }),
+    defaultSkillSources(
+      {
+        cwd: context.cwd,
+        resourcesPath: context.resourcesPath,
+      },
+      context.skillSourceOptions,
+    ),
   );
 }

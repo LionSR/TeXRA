@@ -14,7 +14,11 @@ import {
 } from '../runtime/skills';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import { GLOBAL_ARGS, collectStringFlagValues } from './_helpers/globalArgs';
+import {
+  GLOBAL_ARGS,
+  SKILL_SOURCE_ARGS,
+  collectStringFlagValues,
+} from './_helpers/globalArgs';
 import type { CliContext } from '../runtime/cliContext';
 
 async function listSkills(
@@ -77,18 +81,7 @@ const skillsListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List available skills' },
   args: {
     ...GLOBAL_ARGS,
-    'include-interop': {
-      type: 'boolean',
-      description:
-        'Also scan .claude/skills, .codex/skills, and .gemini/skills under the workspace and home directory',
-    },
-    source: {
-      type: 'string',
-      alias: 's',
-      valueHint: 'directory',
-      description:
-        'Additional skill root to scan; may be repeated and is resolved relative to --cwd',
-    },
+    ...SKILL_SOURCE_ARGS,
   },
   run: (context, ctx) =>
     listSkills(context, {
