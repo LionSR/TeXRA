@@ -11,6 +11,7 @@ import { toErrorMessage } from '@common/errors';
 import { ToolResult } from '@tools/result';
 import { isTimeoutErrorCode } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
+import { ensureArray } from '@utils/core';
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 
@@ -201,7 +202,7 @@ Useful for finding the right lemma when you know roughly what type it should hav
 
   protected async execute(input: LeanLoogleInput): Promise<ToolResult> {
     const { query, limit } = input;
-    const queries = Array.isArray(query) ? query : [query];
+    const queries = ensureArray(query);
 
     // Single query: return directly (backward-compatible format)
     if (queries.length === 1) {

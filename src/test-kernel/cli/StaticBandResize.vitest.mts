@@ -20,6 +20,7 @@ import { createRequire } from 'node:module';
 
 import { describe, expect, it } from 'vitest';
 
+import { delay } from '@utils/core/async';
 import { fillRows } from '@cli/chat/tui/render/terminalText';
 
 const cliRequire = createRequire(
@@ -76,7 +77,7 @@ async function waitFor(
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (predicate()) return true;
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await delay(25);
   }
   return predicate();
 }

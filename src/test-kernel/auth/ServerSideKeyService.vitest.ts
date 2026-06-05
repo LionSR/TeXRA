@@ -1,6 +1,9 @@
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
+// Local imports - utils
+import { delay } from '@utils/core/async';
+
 // Local imports - auth
 import { FREE_TIER, ULTRA_TIER, type UserTier } from '@auth/config';
 import {
@@ -126,7 +129,7 @@ describe('ServerSideKeyService quota fallback', () => {
     service.initialize({ state });
 
     expect(await service.canUseServerSideKeys()).toBe(false);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await delay(0);
     expect(service.getUseIncludedModelAccess()).toBe(false);
     expect(service.wasQuotaAutoSwitched()).toBe(true);
     expect(service.isRelayQuotaExceeded()).toBe(true);

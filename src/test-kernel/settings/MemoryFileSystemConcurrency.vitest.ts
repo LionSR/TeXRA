@@ -13,6 +13,7 @@ import { FileType, type FileStat } from '@platform/interfaces/filesystem';
 import { walkMemoryDirectory } from '@tools/memory/memoryFileSystem';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { StorageFS } from '@utils/files';
+import { delay } from '@utils/core/async';
 
 const MEMORY_LISTING_CONCURRENCY = 8;
 const FILE_COUNT_PER_DIRECTORY = 12;
@@ -80,7 +81,7 @@ describe('memory filesystem listing', () => {
         activeMetadataReads,
       );
 
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      await delay(5);
       activeMetadataReads -= 1;
       return testFileStat();
     });

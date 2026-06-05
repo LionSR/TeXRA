@@ -11,6 +11,7 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { delay } from '@utils/core/async';
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { fileUriToPath, LeanSession } from '@tools/lean/direct/leanSession';
 
@@ -161,7 +162,7 @@ describe('createDirectLspLeanAdapter', () => {
     await session.ensureReady();
 
     const pendingDiagnostics = session.fetchDiagnostics(filePath);
-    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    await delay(100);
     await session.dispose();
 
     await expect(
