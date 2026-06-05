@@ -15,6 +15,7 @@ describe('FollowUpQueue', () => {
 
     await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
       items: ['first', 'second'],
+      displayItems: ['first', 'second'],
       synthetic: false,
       mediaFiles: [],
     });
@@ -30,11 +31,13 @@ describe('FollowUpQueue', () => {
 
     await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
       items: ['compact now'],
+      displayItems: ['compact now'],
       synthetic: true,
       mediaFiles: [],
     });
     await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
       items: ['user text'],
+      displayItems: ['user text'],
       synthetic: false,
       mediaFiles: [],
     });
@@ -48,8 +51,27 @@ describe('FollowUpQueue', () => {
 
     await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
       items: ['look at this', 'and this'],
+      displayItems: ['look at this', 'and this'],
       synthetic: false,
       mediaFiles: ['/tmp/pasted/a.png', '/tmp/pasted/b.png'],
+    });
+  });
+
+  it('keeps injected text separate from display text', async () => {
+    const queue = new FollowUpQueue();
+
+    queue.enqueue(
+      '<skill_activation>hidden</skill_activation>',
+      undefined,
+      'fix theorem',
+    );
+
+    expect(queue.getAll()).toEqual(['fix theorem']);
+    await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
+      items: ['<skill_activation>hidden</skill_activation>'],
+      displayItems: ['fix theorem'],
+      synthetic: false,
+      mediaFiles: [],
     });
   });
 
@@ -64,6 +86,7 @@ describe('FollowUpQueue', () => {
 
       await expect(session.waitForFollowUp(() => false)).resolves.toEqual({
         items: ['compact now'],
+        displayItems: ['compact now'],
         synthetic: true,
         mediaFiles: [],
       });
@@ -85,6 +108,7 @@ describe('FollowUpQueue', () => {
 
       await expect(session.waitForFollowUp(() => false)).resolves.toEqual({
         items: ['compact after interrupt'],
+        displayItems: ['compact after interrupt'],
         synthetic: true,
         mediaFiles: [],
       });
@@ -103,6 +127,7 @@ describe('FollowUpQueue', () => {
 
       await expect(session.waitForFollowUp(() => false)).resolves.toEqual({
         items: ['describe the figure'],
+        displayItems: ['describe the figure'],
         synthetic: false,
         mediaFiles: ['/tmp/pasted/fig.png'],
       });

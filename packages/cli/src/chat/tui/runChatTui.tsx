@@ -95,6 +95,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { escapeText } from '@shared/utils/xmlEscape';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 import { filterNotNullish } from '@utils/core';
 import { generateExecutionId } from '@utils/core/executionId';
@@ -164,6 +165,7 @@ export interface BuildInitialChatAgentConfigInput {
   readonly agent: string;
   readonly model: string;
   readonly instruction: string;
+  readonly displayInstruction?: string;
   readonly workingDirectory: string;
   readonly mediaFiles?: readonly string[];
   readonly cliMultiAgentPresetId?: string;
@@ -173,6 +175,7 @@ export function buildInitialChatAgentConfig({
   agent,
   model,
   instruction,
+  displayInstruction,
   workingDirectory,
   mediaFiles,
   cliMultiAgentPresetId,
@@ -181,11 +184,64 @@ export function buildInitialChatAgentConfig({
     agent,
     model,
     instruction,
+    ...(displayInstruction !== undefined ? { displayInstruction } : {}),
     agentCategory: AgentCategory.ToolUse,
     workingDirectory,
     ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
     ...(cliMultiAgentPresetId ? { cliMultiAgentPresetId } : {}),
   };
+}
+
+export interface ReservedSkillActivation {
+  readonly name: string;
+  readonly activationPrompt: string;
+}
+
+export interface PreparedChatInstruction {
+  readonly instruction: string;
+  readonly displayInstruction?: string;
+  readonly reservedSkillActivations: readonly ReservedSkillActivation[];
+}
+
+export function takePendingSkillActivations(
+  pendingSkillActivations: Map<string, string>,
+  line: string,
+): PreparedChatInstruction {
+  if (pendingSkillActivations.size === 0) {
+    return { instruction: line, reservedSkillActivations: [] };
+  }
+
+  const entries = [...pendingSkillActivations.entries()].map(
+    ([name, activationPrompt]) => ({ name, activationPrompt }),
+  );
+  for (const { name } of entries) {
+    pendingSkillActivations.delete(name);
+  }
+
+  const activations = entries
+    .map(({ activationPrompt }) => activationPrompt)
+    .join('\n\n');
+  return {
+    instruction: [
+      activations,
+      '<user_request>',
+      escapeText(line),
+      '</user_request>',
+    ].join('\n'),
+    displayInstruction: line,
+    reservedSkillActivations: entries,
+  };
+}
+
+export function restorePendingSkillActivations(
+  pendingSkillActivations: Map<string, string>,
+  activations: readonly ReservedSkillActivation[],
+): void {
+  for (const { name, activationPrompt } of activations) {
+    if (!pendingSkillActivations.has(name)) {
+      pendingSkillActivations.set(name, activationPrompt);
+    }
+  }
 }
 
 export async function registerFreshChatExecution(
@@ -1096,6 +1152,8 @@ export async function runChat(
   };
 
   const followUpQueue = new PQueue({ concurrency: 1 });
+  const pendingSkillActivations = new Map<string, string>();
+  let pendingSkillActivationClearEpoch = 0;
   const rootStreamStatus = (): StreamStatus | undefined =>
     session.streamId
       ? (cliState.streams.get().get(session.streamId)?.status ??
@@ -1120,6 +1178,19 @@ export async function runChat(
       ? getToolUseFlowContext(session.streamId)
       : undefined;
     return activeFlow?.modelSwitchDisabledReason(candidateModel);
+  };
+  const activateSkillForNextMessage = (selection: {
+    readonly name: string;
+    readonly activationPrompt: string;
+  }): void => {
+    const wasPending = pendingSkillActivations.has(selection.name);
+    pendingSkillActivations.set(selection.name, selection.activationPrompt);
+    appendLocalAssistantTranscript(
+      [
+        `Skill ${wasPending ? 'refreshed' : 'activated'}: ${selection.name}.`,
+        'It will be applied to your next message.',
+      ].join(' '),
+    );
   };
   const canInterruptActiveRun = (): boolean =>
     chatTuiCanInterruptActiveRun(session);
@@ -1156,6 +1227,8 @@ export async function runChat(
     if (isRunPending) interruptActive();
     clearApprovals();
     followUpQueue.clear();
+    pendingSkillActivationClearEpoch += 1;
+    pendingSkillActivations.clear();
     clearTuiSessionRunState(session);
     // StreamLogStore entries outlive resetCliState (which only clears the
     // React/signal view). Drop them so syncStreamLog can't replay the
@@ -1367,6 +1440,7 @@ export async function runChat(
     onApiModeSelect: (nextMode) =>
       applyCliApiModeSelection(nextMode, slashCommandContext()),
     onMemorySelect: showCliMemoryPreview,
+    onSkillSelect: activateSkillForNextMessage,
     onResumeSelect: resumeAgentRun,
     onError: (error) => {
       appendLocalAssistantTranscript(toErrorMessage(error));
@@ -1376,9 +1450,11 @@ export async function runChat(
   const startSession = async (
     instruction: string,
     mediaFiles?: readonly string[],
-  ): Promise<void> => {
+    displayInstruction?: string,
+  ): Promise<boolean> => {
     followUpQueue.clear();
     session.executionId = undefined;
+    let started = false;
     // Queue the async startup body after the reservation below so a second
     // submit cannot pass chatTuiCanStartRootRun during model/auth resolution.
     const pendingStart = Promise.resolve().then(async (): Promise<void> => {
@@ -1401,14 +1477,16 @@ export async function runChat(
             agent: currentAgent,
             model: resolution.model,
             instruction,
+            displayInstruction,
             mediaFiles,
             workingDirectory: context.cwd,
             cliMultiAgentPresetId: init.cliMultiAgentPresetId,
           }),
         );
+        started = true;
       } catch (error: unknown) {
         if (!session.stopRequested) {
-          appendLocalUserTranscript(instruction);
+          appendLocalUserTranscript(displayInstruction ?? instruction);
           appendLocalErrorTranscript(toErrorMessage(error));
         }
         session.runExitCode = session.stopRequested
@@ -1419,6 +1497,7 @@ export async function runChat(
     });
     markChatTuiRunPending(session, pendingStart);
     await pendingStart;
+    return started;
   };
 
   const handleSubmit = (line: string, mediaFiles?: readonly string[]): void => {
@@ -1448,8 +1527,26 @@ export async function runChat(
       return;
     }
     const childFollowUpTarget = chatTuiActiveChildFollowUpTarget();
+    const prepared = takePendingSkillActivations(pendingSkillActivations, line);
+    const skillActivationClearEpoch = pendingSkillActivationClearEpoch;
+    const restoreReservedSkillActivations = (): void => {
+      if (skillActivationClearEpoch !== pendingSkillActivationClearEpoch) {
+        return;
+      }
+      restorePendingSkillActivations(
+        pendingSkillActivations,
+        prepared.reservedSkillActivations,
+      );
+    };
     if (!childFollowUpTarget && chatTuiCanStartRootRun(session)) {
-      await startSession(line, mediaFiles);
+      const started = await startSession(
+        prepared.instruction,
+        mediaFiles,
+        prepared.displayInstruction,
+      );
+      if (!started) {
+        restoreReservedSkillActivations();
+      }
       return;
     }
     // PRD success criterion: follow-ups must not be silently dropped when the
@@ -1467,26 +1564,39 @@ export async function runChat(
       );
     }
     void followUpQueue.add(async () => {
+      let delivered = false;
       let followUpTarget = childFollowUpTarget;
-      while (
-        !followUpTarget &&
-        !session.stopRequested &&
-        !session.runCompleted
-      ) {
-        await new Promise<void>((resolve) => setTimeout(resolve, 25));
-        followUpTarget = session.streamId;
-      }
-      if (!followUpTarget || session.stopRequested) return;
-      const result = await sendFollowUp(followUpTarget, line, mediaFiles);
-      if (result.status === 'no_session') {
-        // Child stream ids are keys in parentStream; the root session id is not.
-        if (followUpTarget === session.streamId) {
-          session.stopRequested = true;
-        } else {
-          appendLocalAssistantTranscript(
-            'The selected subagent is no longer accepting follow-ups.',
-            followUpTarget,
-          );
+      try {
+        while (
+          !followUpTarget &&
+          !session.stopRequested &&
+          !session.runCompleted
+        ) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 25));
+          followUpTarget = session.streamId;
+        }
+        if (!followUpTarget || session.stopRequested) return;
+        const result = await sendFollowUp(
+          followUpTarget,
+          prepared.instruction,
+          mediaFiles,
+          prepared.displayInstruction,
+        );
+        delivered = result.status === 'sent' || result.status === 'queued';
+        if (result.status === 'no_session') {
+          // Child stream ids are keys in parentStream; the root session id is not.
+          if (followUpTarget === session.streamId) {
+            session.stopRequested = true;
+          } else {
+            appendLocalAssistantTranscript(
+              'The selected subagent is no longer accepting follow-ups.',
+              followUpTarget,
+            );
+          }
+        }
+      } finally {
+        if (!delivered) {
+          restoreReservedSkillActivations();
         }
       }
     });
