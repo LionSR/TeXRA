@@ -1784,7 +1784,12 @@ const SCENARIOS = [
     bootExpect: '[Tab]streams',
     keys: [ESC + 'p', 'k', ESC + 's', DOWN, DOWN, 'f'],
     frame: 'tail',
-    expect: ['[3:strategy](stopped)', '◆ stopped', '[Ctrl-C]stop root'],
+    expect: [
+      '[3:strategy](stopped)',
+      '◆ stopped',
+      'root active',
+      '[Ctrl-C]stop root',
+    ],
     unexpect: ['◆ running', '2 sub 1 proc'],
   },
   {
@@ -1810,6 +1815,7 @@ const SCENARIOS = [
     expect: [
       '[3:strategy](stopped)',
       '◆ stopped',
+      'root active',
       'The selected subagent is no longer accepting follow-ups.',
     ],
     unexpect: [
