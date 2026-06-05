@@ -10,6 +10,7 @@ import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
+import { SkillsListForm } from '../forms/SkillsListForm';
 import { ToolsListForm } from '../forms/ToolsListForm';
 import { cliState } from '../state/cliState';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
@@ -233,6 +234,15 @@ export function registerBuiltinSlashCommands(options?: {
     );
   }
 
+  function SkillsListFormAdapter(props: SlashFormProps): React.JSX.Element {
+    return (
+      <SkillsListForm
+        availableRows={props.availableRows}
+        onClose={() => props.onDone(undefined)}
+      />
+    );
+  }
+
   registerSlashCommand({
     name: 'help',
     description: 'Show available slash commands',
@@ -293,6 +303,12 @@ export function registerBuiltinSlashCommands(options?: {
     name: 'memory',
     description: 'List stored memories',
     formComponent: MemoryListFormAdapter,
+  });
+  registerSlashCommand({
+    name: 'skills',
+    description: 'List available skills',
+    aliases: ['skill'],
+    formComponent: SkillsListFormAdapter,
   });
   registerSlashCommand({
     name: 'tools',
