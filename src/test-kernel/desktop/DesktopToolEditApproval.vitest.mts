@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { delay } from '@utils/core/async';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type {
   ProgressEventBusLike,
@@ -57,7 +58,7 @@ async function pathExists(filePath: string): Promise<boolean> {
 async function waitForEmptyDir(dir: string): Promise<void> {
   for (let attempt = 0; attempt < 20; attempt++) {
     if ((await readdir(dir)).length === 0) return;
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await delay(10);
   }
 }
 

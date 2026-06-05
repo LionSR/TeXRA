@@ -12,6 +12,7 @@ import { toErrorMessage } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Type imports
+import { ensureArray } from '@utils/core';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import {
   AbsoluteFS,
@@ -185,7 +186,7 @@ export class MediaAttachmentProcessor {
         results.push(result);
 
         if (entry) {
-          const entryList = Array.isArray(entry) ? entry : [entry];
+          const entryList = ensureArray(entry);
           entries.push(...entryList);
         }
       } else {
@@ -374,7 +375,7 @@ export class MediaAttachmentProcessor {
 
   /** Normalize data to array for consistent processing */
   private normalizeToArray(data: string | string[]): string[] {
-    return Array.isArray(data) ? data : [data];
+    return ensureArray(data);
   }
 
   /** Get the first data item (for single-item scenarios) */
