@@ -24,6 +24,11 @@ export interface TranscriptViewportChange {
   readonly enteredRootScrollback: boolean;
 }
 
+export interface TranscriptViewportRepaintOptions {
+  readonly clearScrollback: boolean;
+  readonly preserveStatic: false;
+}
+
 export function transcriptViewportChange({
   nextViewportKey,
   previousViewportKey,
@@ -39,5 +44,14 @@ export function transcriptViewportChange({
     enteredRootScrollback:
       isScopedTranscriptViewport(previousViewportKey) &&
       !isScopedTranscriptViewport(nextViewportKey),
+  };
+}
+
+export function transcriptViewportRepaintOptions(
+  change: TranscriptViewportChange,
+): TranscriptViewportRepaintOptions {
+  return {
+    clearScrollback: change.enteredRootScrollback,
+    preserveStatic: false,
   };
 }
