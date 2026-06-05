@@ -2,6 +2,7 @@ import {
   isEscapeInput,
   isUnhandledControlInput,
   normalizedCtrlInput,
+  SYNTHETIC_SHIFT_RETURN_INPUT,
 } from './inputKeys';
 
 export interface TextEdit {
@@ -92,6 +93,10 @@ export function applyTerminalInputChunk(
   let submit = false;
 
   for (const ch of input) {
+    if (ch === SYNTHETIC_SHIFT_RETURN_INPUT) {
+      edit = insertText(edit.value, edit.cursor, '\n');
+      continue;
+    }
     if (ch === '\r' || ch === '\n') {
       submit = true;
       break;
