@@ -125,13 +125,15 @@ export function cliMultiAgentPresetAvailabilityParts(
   return parts;
 }
 
-export function formatCliMultiAgentPresetPlanSummary(
+export function formatCliMultiAgentPresetLauncherSummary(
   plan: CliMultiAgentPresetRunPlan,
 ): string {
-  return [
-    plan.preset.source,
-    ...cliMultiAgentPresetAvailabilityParts(plan),
-  ].join('; ');
+  const availability = cliMultiAgentPresetAvailability(plan);
+  const status =
+    availability.status === 'available' ? 'ready' : availability.status;
+  const details = formatPresetAvailabilityForLauncher(availability);
+
+  return [status, details].filter((part): part is string => !!part).join('; ');
 }
 
 export function formatCliMultiAgentPresetList(
@@ -460,6 +462,40 @@ function presetAgentAvailability(
     missing: [...missingAgents],
     label: missingAgents.length === 0 ? String(total) : `${available}/${total}`,
   };
+}
+
+function formatPresetAvailabilityForLauncher(
+  availability: CliMultiAgentPresetAvailability,
+): string | undefined {
+  const details: string[] = [];
+  if (!availability.rootAgent) details.push('no runnable team root');
+
+  const countStyle = availability.status === 'available' ? 'total' : 'ratio';
+  const parts = [
+    formatPresetAgentCountForLauncher('tool-use', availability.toolUse, {
+      countStyle,
+    }),
+    formatPresetAgentCountForLauncher('workflow', availability.workflow, {
+      countStyle,
+    }),
+  ].filter((part): part is string => part != null);
+
+  if (parts.length > 0) details.push(parts.join('; '));
+  return details.length > 0 ? details.join('; ') : undefined;
+}
+
+function formatPresetAgentCountForLauncher(
+  label: 'workflow' | 'tool-use',
+  availability: CliMultiAgentPresetAgentAvailability,
+  options: { readonly countStyle: 'total' | 'ratio' },
+): string | undefined {
+  if (availability.total === 0) return undefined;
+  const agentText = availability.total === 1 ? 'agent' : 'agents';
+  const count =
+    options.countStyle === 'total'
+      ? String(availability.total)
+      : `${availability.available}/${availability.total}`;
+  return `${count} ${label} ${agentText}`;
 }
 
 function formatAgentNames(names: readonly string[]): string {
