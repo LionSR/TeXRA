@@ -2,6 +2,7 @@ import { Node } from '@agent/node';
 import { ConversationRoundStateSnapshotSchema } from '@agent/core/execution/AgentState';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import { appendCompileFailureRoundContext } from '@agent/output/compileFailureRoundContext';
 
 import type {
   ReflectionFlowShared,
@@ -15,6 +16,7 @@ import type {
 interface PrepInput {
   currentRound: number;
   conversation: ProviderMessage[];
+  compileFailureContext?: string;
 }
 
 export class PrepareContextNode<C = unknown> extends Node<
@@ -26,12 +28,13 @@ export class PrepareContextNode<C = unknown> extends Node<
     return {
       currentRound: shared.currentRound,
       conversation: shared.conversation,
+      compileFailureContext: shared.compileFailureContext,
     };
   }
 
   async exec(prepRes: PrepInput): Promise<RoundContext> {
     const { promptBuilder, modelHandler, logger } = this.services;
-    const { currentRound, conversation } = prepRes;
+    const { currentRound, conversation, compileFailureContext } = prepRes;
 
     const stateRound = ConversationRoundStateSnapshotSchema.parse({
       roundIndex: currentRound,
@@ -50,9 +53,13 @@ export class PrepareContextNode<C = unknown> extends Node<
         systemPrompt,
       );
     } else {
+      const userRequest = appendCompileFailureRoundContext(
+        await promptBuilder.buildUserRequest(currentRound),
+        compileFailureContext,
+      );
       messages = await modelHandler.createRoundMessages(
         conversation,
-        await promptBuilder.buildUserRequest(currentRound),
+        userRequest,
         undefined,
       );
     }
@@ -84,6 +91,7 @@ export class PrepareContextNode<C = unknown> extends Node<
     context: RoundContext,
   ): Promise<string | undefined> {
     shared.context = context;
+    delete shared.compileFailureContext;
     return FlowTransition.DEFAULT;
   }
 }

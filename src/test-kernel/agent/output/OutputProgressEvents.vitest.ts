@@ -1,10 +1,11 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { OutputNode } from '@agent/implementations/flows/reflection/nodes/OutputNode';
+import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
 import { createOutputState, type RoundData } from '@agent/output/outputState';
 import {
@@ -13,8 +14,11 @@ import {
 } from '@agent/output/OutputFileProcessor';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { normalizeRunId } from '@common/constants/runIds';
+import { WorkspaceStateKey } from '@common/state/stateKeys';
 import type {
   AgentFileLocation,
+  CompileFailure,
+  CompileResult,
   FileLocation,
   OutputFileInfo,
   OutputXmlSummary,
@@ -37,7 +41,63 @@ const emptyXmlSummary: OutputXmlSummary = {
   sourceLocation: null,
 };
 
+function createCompileFailureFixture() {
+  const outputLocation = createAgentLocation('/tmp/output.xml');
+  const texLocation = createLocation('/tmp/rendered.tex');
+  const logLocation = createLocation('/tmp/compile.log');
+  const compileFailure: CompileFailure = {
+    round: 0,
+    displayName: 'rendered.tex',
+    output: texLocation,
+    log: logLocation,
+    logRelativePath: 'compile/r0_rendered.tex.log',
+  };
+  const compileResult: CompileResult = {
+    status: 'failed',
+    round: 0,
+    failures: [compileFailure],
+    logExcerpt: '! Missing $ inserted.',
+  };
+  const roundOutput: RoundOutput = {
+    round: 0,
+    rawOutput: outputLocation,
+    outputs: [],
+    compileFailures: [compileFailure],
+    xmlSummary: emptyXmlSummary,
+  };
+  const summary = {
+    storageKey: normalizeRunId('run:compile-context'),
+    currRound: 0,
+    fileInfos: [],
+    filesToOpen: [],
+    outputFile: outputLocation,
+    endTurn: false,
+  };
+
+  return {
+    outputLocation,
+    compileFailure,
+    compileResult,
+    roundOutput,
+    summary,
+  };
+}
+
+async function initFakePlatform(
+  workspaceState: Record<string, unknown> = {},
+): Promise<void> {
+  const [{ initPlatform }, { createFakePlatform }] = await Promise.all([
+    import('@platform/platform'),
+    import('@test/support/FakePlatform'),
+  ]);
+  initPlatform(createFakePlatform({ workspaceState }));
+}
+
 describe('output progress events', () => {
+  beforeEach(async () => {
+    await initFakePlatform();
+  });
+
   it('publishes reflection output-node events through the runtime host', async () => {
     const { events, host } = createRecordingHost();
     const outputNode = new OutputNode().setServices({
@@ -100,6 +160,131 @@ describe('output progress events', () => {
         payload: { location: openedLocation, preserveFocus: true },
       },
     ]);
+  });
+
+  it('stores compile failure context for the next reflection round', async () => {
+    const { host } = createRecordingHost();
+    const outputNode = new OutputNode().setServices({
+      streamId: 'stream:compile-context',
+      logger: { warn: () => {} },
+      outputState: createOutputState(),
+      runtimeHost: host,
+    } as unknown as ReflectionServices);
+    const {
+      outputLocation,
+      compileFailure,
+      compileResult,
+      roundOutput,
+      summary,
+    } = createCompileFailureFixture();
+    const shared = { roundOutputs: [] } as unknown as ReflectionFlowShared;
+
+    await outputNode.post(
+      shared,
+      {
+        outputLocation,
+        currentRound: 0,
+        endTurn: false,
+      },
+      {
+        roundOutput,
+        summary,
+        compileFailures: [compileFailure],
+        compileResult,
+        compiledArtifacts: [],
+        emitCompileFailures: false,
+      },
+    );
+
+    expect(shared.lastCompileResult).toEqual(compileResult);
+    expect(shared.compileFailureContext).toContain(
+      'previous workflow round was rejected',
+    );
+    expect(shared.compileFailureContext).toContain('! Missing $ inserted.');
+  });
+
+  it('honors disabled compile-failure repair context setting', async () => {
+    await initFakePlatform({
+      [WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE]: false,
+    });
+    const { host } = createRecordingHost();
+    const outputNode = new OutputNode().setServices({
+      streamId: 'stream:compile-context-disabled',
+      logger: { warn: () => {} },
+      outputState: createOutputState(),
+      runtimeHost: host,
+    } as unknown as ReflectionServices);
+    const {
+      outputLocation,
+      compileFailure,
+      compileResult,
+      roundOutput,
+      summary,
+    } = createCompileFailureFixture();
+    const shared = { roundOutputs: [] } as unknown as ReflectionFlowShared;
+
+    await outputNode.post(
+      shared,
+      {
+        outputLocation,
+        currentRound: 0,
+        endTurn: false,
+      },
+      {
+        roundOutput,
+        summary,
+        compileFailures: [compileFailure],
+        compileResult,
+        compiledArtifacts: [],
+        emitCompileFailures: false,
+      },
+    );
+
+    expect(shared.lastCompileResult).toEqual(compileResult);
+    expect(shared.compileFailureContext).toBeUndefined();
+  });
+
+  it('clears stale compile failure context after a successful compile result', async () => {
+    const { host } = createRecordingHost();
+    const outputNode = new OutputNode().setServices({
+      streamId: 'stream:compile-context-ok',
+      logger: { warn: () => {} },
+      outputState: createOutputState(),
+      runtimeHost: host,
+    } as unknown as ReflectionServices);
+    const { outputLocation, roundOutput, summary } =
+      createCompileFailureFixture();
+    const compileResult: CompileResult = { status: 'ok', round: 1 };
+    const shared = {
+      roundOutputs: [],
+      compileFailureContext: 'old context',
+      lastCompileResult: {
+        status: 'failed',
+        round: 0,
+        failures: [],
+        logExcerpt: 'old log',
+      },
+    } as unknown as ReflectionFlowShared;
+
+    await outputNode.post(
+      shared,
+      {
+        outputLocation,
+        currentRound: 1,
+        endTurn: false,
+      },
+      {
+        roundOutput: { ...roundOutput, round: 1, compileFailures: [] },
+        summary: { ...summary, currRound: 1 },
+        compileFailures: [],
+        compileResult,
+        compiledArtifacts: [],
+        emitCompileFailures: false,
+      },
+    );
+
+    expect(shared.lastCompileResult).toEqual(compileResult);
+    expect(shared.compileFailureContext).toBeUndefined();
   });
 
   it('publishes missing-output processing events through the runtime host', async () => {

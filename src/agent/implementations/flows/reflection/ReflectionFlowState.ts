@@ -10,6 +10,7 @@ import { AgentWorkspaceStateSnapshotSchema } from '@agent/core/execution/AgentWo
 import { ProviderMessageSchema } from '@agent/modelHandlers/types/ProviderMessage';
 import {
   AgentFileLocationSchema,
+  CompileResultSchema,
   RetryErrorInfoSchema,
   RoundOutputSchema,
 } from '@shared/schemas';
@@ -41,6 +42,12 @@ export const ReflectionFlowStateSchema = z.object({
 
   /** Distinguishes failure from cancellation during resume. */
   lastError: RetryErrorInfoSchema.optional(),
+
+  /** Final LaTeX compile status for the last completed round, when checked. */
+  lastCompileResult: CompileResultSchema.optional(),
+
+  /** One-shot repair context injected into the next round's user request. */
+  compileFailureContext: z.string().optional(),
 });
 
 export type ReflectionFlowState = z.infer<typeof ReflectionFlowStateSchema>;
