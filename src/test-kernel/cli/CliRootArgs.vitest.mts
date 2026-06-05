@@ -157,13 +157,13 @@ describe('CLI root argument routing', () => {
     ).toEqual(['run', 'polish', '--api-mode', 'personal']);
   });
 
-  it('keeps leading skill-source flags attached to agent subcommands', () => {
+  it('keeps leading source flags attached to agent subcommands', () => {
     expect(
-      reorderGlobalFlags(['--skill-source', 'vendor/skills', 'run', 'polish']),
-    ).toEqual(['run', 'polish', '--skill-source', 'vendor/skills']);
+      reorderGlobalFlags(['--source', 'vendor/skills', 'run', 'polish']),
+    ).toEqual(['run', 'polish', '--source', 'vendor/skills']);
     expect(
-      reorderGlobalFlags(['-S', 'vendor/skills', 'run', 'polish']),
-    ).toEqual(['run', 'polish', '-S', 'vendor/skills']);
+      reorderGlobalFlags(['-s', 'vendor/skills', 'run', 'polish']),
+    ).toEqual(['run', 'polish', '-s', 'vendor/skills']);
     expect(reorderGlobalFlags(['--include-interop', 'chat'])).toEqual([
       'chat',
       '--include-interop',
@@ -948,12 +948,12 @@ describe('CLI global color/input flags', () => {
     });
   });
 
-  it('maps runtime skill-source flags to canonical knobs', () => {
+  it('maps runtime source flags to canonical knobs', () => {
     expect(
       pickGlobalArgs(
         {
           'include-interop': true,
-          'skill-source': 'fallback/skills',
+          source: 'fallback/skills',
         },
         { skillSourcePaths: ['vendor/skills', '/tmp/shared-skills'] },
       ),
@@ -962,7 +962,7 @@ describe('CLI global color/input flags', () => {
       skillSourcePaths: ['vendor/skills', '/tmp/shared-skills'],
     });
     expect(
-      pickGlobalArgs({ 'skill-source': ['one/skills', 'two/skills'] }),
+      pickGlobalArgs({ source: ['one/skills', 'two/skills'] }),
     ).toMatchObject({
       includeInteropSkills: false,
       skillSourcePaths: ['one/skills', 'two/skills'],
@@ -975,8 +975,8 @@ describe('CLI global color/input flags', () => {
     expect(GLOBAL_BOOL_FLAGS.has('--no-color')).toBe(true);
     expect(GLOBAL_BOOL_FLAGS.has('--no-input')).toBe(true);
     expect(GLOBAL_BOOL_FLAGS.has('--include-interop')).toBe(true);
-    expect(GLOBAL_VALUE_FLAGS.has('--skill-source')).toBe(true);
-    expect(GLOBAL_VALUE_FLAGS.has('-S')).toBe(true);
+    expect(GLOBAL_VALUE_FLAGS.has('--source')).toBe(true);
+    expect(GLOBAL_VALUE_FLAGS.has('-s')).toBe(true);
     expect(GLOBAL_BOOL_FLAGS.has('--input')).toBe(false);
   });
 

@@ -24,7 +24,7 @@ export interface ParsedGlobalArgs {
   readonly color?: boolean;
   readonly 'no-input'?: boolean;
   readonly 'include-interop'?: boolean;
-  readonly 'skill-source'?: string | string[];
+  readonly source?: string | string[];
   // citty treats every `--no-*` token as a negated positive flag before it
   // applies aliases, so `--no-input` can arrive as `input: false`.
   readonly input?: unknown;
@@ -61,7 +61,6 @@ export function pickGlobalArgs(
     noColor: args.color === false,
     noInput: args['no-input'] === true || args.input === false,
     includeInteropSkills: args['include-interop'] === true,
-    skillSourcePaths:
-      options.skillSourcePaths ?? stringValues(args['skill-source']),
+    skillSourcePaths: options.skillSourcePaths ?? stringValues(args.source),
   };
 }

@@ -48,9 +48,9 @@ type CliGlobalArgsDef = {
 
 type CliSkillSourceArgsDef = {
   'include-interop': { type: 'boolean'; description: string };
-  'skill-source': {
+  source: {
     type: 'string';
-    alias: 'S';
+    alias: 's';
     valueHint: string;
     description: string;
   };
@@ -105,14 +105,14 @@ export const SKILL_SOURCE_ARGS: CliSkillSourceArgsDef = {
   'include-interop': {
     type: 'boolean',
     description:
-      'Also import .claude/skills, .codex/skills, and .gemini/skills from the workspace and home directory',
+      'Also include .claude/skills, .codex/skills, and .gemini/skills from the workspace and home directory',
   },
-  'skill-source': {
+  source: {
     type: 'string',
-    alias: 'S',
+    alias: 's',
     valueHint: 'directory',
     description:
-      'Additional skill root to import into agent prompts; may be repeated and is resolved relative to --cwd',
+      'Additional skill root; may be repeated and is resolved relative to --cwd',
   },
 };
 

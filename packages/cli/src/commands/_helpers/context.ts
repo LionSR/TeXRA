@@ -10,7 +10,7 @@ export async function contextFromArgs(
 ): Promise<CliContext> {
   const skillSourcePaths =
     rawArgs.length > 0
-      ? collectStringFlagValues(rawArgs, 'skill-source', 'S')
+      ? collectStringFlagValues(rawArgs, 'source', 's')
       : undefined;
   const context = await buildCliContext({
     globalArgs: pickGlobalArgs(args, { skillSourcePaths }),
