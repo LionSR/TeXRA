@@ -1,7 +1,7 @@
 import * as path from 'path';
 
 import type { AgentTrace } from '@agent/trace';
-import { getConfig } from '@agent/core/config';
+import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@common/errors';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceFS, StorageFS } from '@utils/files';

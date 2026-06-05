@@ -83,7 +83,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
       relativePath: filePath,
     };
   };
-  vi.doMock('@agent/core/config', () => ({
+  vi.doMock('@utils/config/configUtils', () => ({
     getConfig: vi.fn(() => 'sameDirectory'),
   }));
   vi.doMock('@agent/runtime/RunContext', async () => {
@@ -150,7 +150,7 @@ async function loadApprovalModules(workspacePath = '/workspace') {
 
 describe('desktop tool edit approval', () => {
   afterEach(() => {
-    vi.doUnmock('@agent/core/config');
+    vi.doUnmock('@utils/config/configUtils');
     vi.doUnmock('@agent/runtime/RunContext');
     vi.doUnmock('@utils/files');
     vi.restoreAllMocks();

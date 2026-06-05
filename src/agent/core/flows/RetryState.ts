@@ -6,7 +6,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { type RetryResult } from '@agent/runtime/RetryRequestCoordinator';
 import { waitForRetry } from '@agent/runtime/runCoordinators';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { getConfig } from '@agent/core/config';
+import { getConfig } from '@utils/config/configUtils';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   ensureError,

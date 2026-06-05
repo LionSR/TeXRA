@@ -11,7 +11,7 @@
 import axios from 'axios';
 
 // Local imports - core
-import { getConfig } from '@agent/core/config';
+import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
 import { isTimeoutErrorCode } from '@tools/timeouts';

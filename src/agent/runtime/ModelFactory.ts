@@ -3,7 +3,7 @@ import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { getGlobalState } from '@agent/core/stateStore';
-import { getConfig } from '@agent/core/config';
+import { getConfig } from '@utils/config/configUtils';
 import { GlobalStateKey } from '@common/state/stateKeys';
 import * as logger from '@logger/logUtils';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
