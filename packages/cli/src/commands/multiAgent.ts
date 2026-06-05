@@ -368,6 +368,7 @@ export async function runMultiAgentPreset(
       runContext.cwd,
       {
         allowEmptyInput: hasInstruction,
+        requireWorkspaceFiles: true,
         stdinInputFile,
       },
     );
@@ -381,6 +382,7 @@ export async function runMultiAgentPreset(
       contextFiles,
       instruction: formatMultiAgentRunInstruction(plan.preset, {
         inputFiles,
+        contextFiles,
         instruction,
         approvalContext: runContext,
       }),
