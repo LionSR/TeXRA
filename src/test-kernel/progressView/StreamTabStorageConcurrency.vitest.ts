@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { delay } from '@utils/core/async';
 import {
   mapStreamTabStorage,
   STREAM_TAB_IO_CONCURRENCY,
@@ -51,7 +52,7 @@ describe('mapStreamTabStorage', () => {
 async function waitFor(predicate: () => boolean): Promise<void> {
   for (let i = 0; i < 50; i++) {
     if (predicate()) return;
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await delay(0);
   }
   throw new Error('Timed out waiting for condition');
 }
