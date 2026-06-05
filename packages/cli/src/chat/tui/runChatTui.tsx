@@ -1110,6 +1110,17 @@ export async function runChat(
       status: rootStreamStatus(),
       hasActiveToolUseFlow: hasActiveToolUseFlow(),
     });
+  const getModelSwitchDisabledReason = (
+    candidateModel: string,
+  ): string | undefined => {
+    if (chatTuiCanStartRootRun(session) || !canSelectCurrentModel()) {
+      return undefined;
+    }
+    const activeFlow = session.streamId
+      ? getToolUseFlowContext(session.streamId)
+      : undefined;
+    return activeFlow?.modelSwitchDisabledReason(candidateModel);
+  };
   const canInterruptActiveRun = (): boolean =>
     chatTuiCanInterruptActiveRun(session);
   const canStopActiveRun = (): boolean =>
@@ -1350,6 +1361,7 @@ export async function runChat(
       );
     },
     canSelectModel: canSelectCurrentModel,
+    getModelSwitchDisabledReason,
     onModelSelect: (nextModel) =>
       applyCliModelSelection(nextModel, slashCommandContext()),
     onApiModeSelect: (nextMode) =>

@@ -29,6 +29,7 @@ export interface ModelListFormProps {
   readonly apiMode: CliApiMode;
   readonly availableRows?: number;
   readonly selectable?: boolean;
+  readonly getModelSwitchDisabledReason?: (model: string) => string | undefined;
   readonly onSelect?: (value: string) => void;
   readonly onClose: () => void;
 }
@@ -91,12 +92,18 @@ export function modelSelectWindow(args: {
 export function modelSelectItemsForCliMode(
   models: readonly CliModelAccess[],
   apiMode: CliApiMode,
+  getModelSwitchDisabledReason?: (model: string) => string | undefined,
 ): ReadonlyArray<SelectItem<string>> {
-  return runnableCliModelAccessEntries(models, apiMode).map((m) => ({
-    value: m.model.value,
-    label: m.model.label || m.model.value,
-    description: formatModelStatusForCliMode(m, apiMode),
-  }));
+  return runnableCliModelAccessEntries(models, apiMode).map((m) => {
+    const disabledReason = getModelSwitchDisabledReason?.(m.model.value);
+    const status = formatModelStatusForCliMode(m, apiMode);
+    return {
+      value: m.model.value,
+      label: m.model.label || m.model.value,
+      description: disabledReason ? `${status}; ${disabledReason}` : status,
+      disabled: disabledReason != null,
+    };
+  });
 }
 
 export function emptyModelListMessageForCliMode(
@@ -145,7 +152,11 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   }
 
   const models = data ?? [];
-  const items = modelSelectItemsForCliMode(models, props.apiMode);
+  const items = modelSelectItemsForCliMode(
+    models,
+    props.apiMode,
+    props.getModelSwitchDisabledReason,
+  );
   const selectable = props.selectable === true;
   const selectWindow = modelSelectWindow({
     availableRows: props.availableRows,
