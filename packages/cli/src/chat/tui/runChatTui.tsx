@@ -26,7 +26,6 @@ import {
   executeAgent,
   resumeToolUseFromSnapshot,
 } from '@agent/runtime/executeAgent';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   notifyFollowUpSent,
   sendFollowUp,
@@ -98,7 +97,6 @@ import {
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
-import { filterNotNullish } from '@utils/core';
 import { generateExecutionId } from '@utils/core/executionId';
 import { truncateSummary } from '@utils/text/stringUtils';
 
@@ -122,6 +120,11 @@ import { installTuiApprovals } from './state/subscribeApprovals';
 import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
+import {
+  onStreamStatusChange,
+  streamStatusForStream,
+  streamStatusSnapshot,
+} from './state/streamStatusSnapshot';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import { requestCliCompaction } from './state/compactionRequest';
 import {
@@ -407,18 +410,7 @@ function chatTuiActiveChildStreamId(): StreamTabId | undefined {
 }
 
 function chatTuiStreamStatuses(streamId: StreamTabId): readonly string[] {
-  const streams = cliState.streams.get();
-  const parentStreamId = cliState.parentStream.get().get(streamId);
-  const childStreamStatus = parentStreamId
-    ? streams
-        .get(parentStreamId)
-        ?.childStreams.find((child) => child.childStreamId === streamId)?.status
-    : undefined;
-  return [
-    childStreamStatus,
-    streams.get(streamId)?.status,
-    StreamStatusService.get(streamId),
-  ].filter(filterNotNullish);
+  return streamStatusSnapshot(streamId);
 }
 
 function chatTuiCanAcceptFollowUp(statuses: readonly string[]): boolean {
@@ -1159,10 +1151,7 @@ export async function runChat(
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
   const rootStreamStatus = (): StreamStatus | undefined =>
-    session.streamId
-      ? (cliState.streams.get().get(session.streamId)?.status ??
-        StreamStatusService.get(session.streamId))
-      : undefined;
+    session.streamId ? streamStatusForStream(session.streamId) : undefined;
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(session.streamId && getToolUseFlowContext(session.streamId));
   const canSelectCurrentModel = (): boolean =>
@@ -1210,8 +1199,7 @@ export async function runChat(
   const resetSessionForClear = (): void => {
     const activeStreamId = session.streamId ?? cliState.activeStreamId.get();
     const activeStatus = activeStreamId
-      ? (cliState.streams.get().get(activeStreamId)?.status ??
-        StreamStatusService.get(activeStreamId))
+      ? streamStatusForStream(activeStreamId)
       : undefined;
     const isRunPending = Boolean(session.runPromise && !session.runCompleted);
 
@@ -1801,7 +1789,7 @@ export async function runChat(
   // signals "your turn." Combined with the StatusBar pill, this replaces
   // the legacy reader.prompt() ergonomics.
   disposers.push(
-    StreamStatusService.onDidChange((change) => {
+    onStreamStatusChange((change) => {
       if (
         change.streamId === session.streamId &&
         change.status === STREAM_STATUS.WAITING &&
