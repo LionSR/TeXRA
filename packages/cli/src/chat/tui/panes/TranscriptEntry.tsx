@@ -209,7 +209,10 @@ export function BoundedTranscriptEntry({
     return (
       <Box flexDirection="column">
         <Text>
-          {plainWrapTailLines(entry.text, width ?? 80, rows).join('\n')}
+          {fillRows(
+            plainWrapTailLines(entry.text, width ?? 80, rows).join('\n'),
+            Math.max(1, Math.floor(width ?? 80)),
+          )}
         </Text>
       </Box>
     );
@@ -265,7 +268,9 @@ export function LiveTranscriptEntry({
   const rows = plainWrapTailLines(entry.text, width ?? 80, LIVE_TAIL_ROWS);
   return (
     <Box flexDirection="column">
-      <Text>{rows.join('\n')}</Text>
+      <Text>
+        {fillRows(rows.join('\n'), Math.max(1, Math.floor(width ?? 80)))}
+      </Text>
     </Box>
   );
 }

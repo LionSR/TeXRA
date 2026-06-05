@@ -1358,7 +1358,11 @@ registerBuiltinSlashCommands({
   },
 });
 
-let ink: ReturnType<typeof render>;
+const inkRef: { current?: ReturnType<typeof render> } = {};
+function repaintHarnessTranscriptViewport(): void {
+  inkRef.current?.repaint({ clearScrollback: false, preserveStatic: false });
+}
+
 function handleHarnessCtrlC(): void {
   if (canInterrupt) {
     markHarnessInterrupted();
@@ -1367,7 +1371,7 @@ function handleHarnessCtrlC(): void {
   void exitHarness(0);
 }
 
-ink = render(
+const ink = render(
   <App
     onSubmit={handleHarnessSubmit}
     onKillExecution={markHarnessExecutionStopped}
@@ -1375,6 +1379,7 @@ ink = render(
     canStopActiveRun={() => canInterrupt}
     colorEnabled={HARNESS_COLOR_ENABLED}
     onInterruptActive={markHarnessInterrupted}
+    onTranscriptViewportChange={repaintHarnessTranscriptViewport}
     onCtrlC={handleHarnessCtrlC}
   />,
   {
@@ -1384,6 +1389,7 @@ ink = render(
     exitOnCtrlC: false,
   },
 );
+inkRef.current = ink;
 
 let harnessExiting = false;
 async function exitHarness(exitCode: number): Promise<void> {

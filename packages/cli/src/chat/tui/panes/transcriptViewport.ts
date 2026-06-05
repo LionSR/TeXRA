@@ -61,20 +61,19 @@ function estimatePendingEntryRows(
   return estimateTranscriptEntryRows(entry, width);
 }
 
-export interface PendingEntrySelection {
+export interface TranscriptEntrySelection {
   readonly entries: readonly ConversationEntry[];
   readonly rowLimits: ReadonlyMap<string, number>;
   readonly usedRows: number;
 }
 
-// Pick the newest live entries that fit in `maxRows`. Finalized entries do
-// not pass through this path; they are printed once by `<Static>` so ordinary
-// terminal scrollback is the source of truth for the conversation history.
-export function selectPendingEntriesForViewport(
+// Pick the newest entries that fit in `maxRows`. Root live mode passes only
+// pending rows; scoped child mode may pass finalized child history too.
+export function selectTranscriptEntriesForViewport(
   entries: readonly ConversationEntry[],
   maxRows: number,
   width = 80,
-): PendingEntrySelection {
+): TranscriptEntrySelection {
   if (!Number.isFinite(maxRows) || maxRows <= 0) {
     return { entries: [], rowLimits: new Map(), usedRows: 0 };
   }
@@ -86,10 +85,7 @@ export function selectPendingEntriesForViewport(
     const entry = entries[index];
     const entryRows = estimatePendingEntryRows(entry, width);
     if (usedRows + entryRows > maxRows) {
-      if (
-        selected.length === 0 &&
-        (entry.role === 'assistant' || entry.role === 'tool')
-      ) {
+      if (selected.length === 0) {
         selected.unshift(entry);
         rowLimits.set(entry.id, maxRows);
         usedRows = maxRows;
