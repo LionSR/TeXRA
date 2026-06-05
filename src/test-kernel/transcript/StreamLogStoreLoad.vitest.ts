@@ -4,8 +4,6 @@ import * as path from 'node:path';
 // Third-party imports
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Local imports
-
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';
 
