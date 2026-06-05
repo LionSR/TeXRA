@@ -70,6 +70,7 @@ import {
   chatTuiShouldAnnounceQueuedFollowUp,
   parseChatLoginSlashArgs,
   clearTuiSessionRunState,
+  markChatTuiRunPending,
 } from '@cli/chat/tui/runChatTui';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
@@ -838,6 +839,28 @@ describe('CLI TUI row allocation', () => {
         runPromise,
       }),
     ).toBe(true);
+  });
+
+  it('marks a chat root run pending before async startup work resolves', () => {
+    const startupPromise = new Promise<void>(() => {});
+    const session = {
+      streamId: root,
+      executionId: 'exec-old',
+      runPromise: undefined,
+      runExitCode: CliExitCode.AgentError,
+      runCompleted: true,
+      stopRequested: true,
+    };
+
+    markChatTuiRunPending(session, startupPromise);
+
+    expect(session.streamId).toBeUndefined();
+    expect(session.executionId).toBe('exec-old');
+    expect(session.runPromise).toBe(startupPromise);
+    expect(session.runExitCode).toBe(CliExitCode.Success);
+    expect(session.runCompleted).toBe(false);
+    expect(session.stopRequested).toBe(false);
+    expect(chatTuiCanStartRootRun(session)).toBe(false);
   });
 
   it('allows model selection before start or while a tool-use chat is waiting', () => {
