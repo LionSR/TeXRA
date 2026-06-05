@@ -46,6 +46,18 @@ export interface CliLoginOptions {
   manualBrowserHint?: string;
 }
 
+export const CLI_MANUAL_AUTH_URL_PROMPT =
+  'Open this URL in a browser that can reach this terminal session:';
+
+export const CLI_MANUAL_AUTH_REMOTE_HINT =
+  'Remote SSH/container users may need to forward the callback port.';
+
+export function formatCliManualAuthUrlMessage(url: string): string {
+  return [CLI_MANUAL_AUTH_URL_PROMPT, url, CLI_MANUAL_AUTH_REMOTE_HINT].join(
+    '\n',
+  );
+}
+
 let coordinator: SupabaseSessionCoordinator | undefined;
 let activeAuthLog: LogBackend | undefined;
 const deferredAuthLog: LogBackend = {
