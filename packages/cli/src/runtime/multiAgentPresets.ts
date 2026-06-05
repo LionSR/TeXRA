@@ -139,7 +139,10 @@ export function formatCliMultiAgentPresetLauncherSummary(
   const availability = cliMultiAgentPresetAvailability(plan);
   const status =
     availability.status === 'available' ? 'ready' : availability.status;
-  const details = formatPresetAvailabilityForLauncher(availability);
+  const details = formatPresetAvailabilityForLauncher(
+    availability,
+    cliMultiAgentPresetTeamLaunchBlockReason(plan),
+  );
 
   return [status, details].filter((part): part is string => !!part).join('; ');
 }
@@ -244,8 +247,27 @@ export function cliMultiAgentPlanHasGaps(
 export function cliMultiAgentPlanStatus(
   plan: CliMultiAgentPresetRunPlan,
 ): CliMultiAgentPlanStatus {
-  if (!plan.rootAgent) return 'unavailable';
+  if (cliMultiAgentPresetTeamLaunchBlockReason(plan)) return 'unavailable';
   return cliMultiAgentPlanHasGaps(plan) ? 'degraded' : 'available';
+}
+
+export function cliMultiAgentPresetTeamLaunchBlockReason(
+  plan: CliMultiAgentPresetRunPlan,
+): string | undefined {
+  if (!plan.rootAgent) return 'no runnable team root';
+  if (!agentHasDelegationTools(plan.rootAgent)) {
+    return `root ${plan.rootAgent.name} cannot delegate`;
+  }
+  if (availablePresetTeamMemberCount(plan) === 0) {
+    return 'no available team members';
+  }
+  return undefined;
+}
+
+export function cliMultiAgentPresetCanLaunchTeam(
+  plan: CliMultiAgentPresetRunPlan,
+): boolean {
+  return cliMultiAgentPresetTeamLaunchBlockReason(plan) === undefined;
 }
 
 export function cliMultiAgentPresetAvailability(
@@ -441,6 +463,17 @@ function includeAgent(
     : [...agents, rootAgent];
 }
 
+function availablePresetTeamMemberCount(
+  plan: CliMultiAgentPresetRunPlan,
+): number {
+  const rootKey = plan.rootAgent ? toAgentKey(plan.rootAgent) : undefined;
+  const memberKeys = [
+    ...plan.workflowAgentKeys,
+    ...plan.toolUseAgentKeys.filter((key) => key !== rootKey),
+  ];
+  return new Set(memberKeys).size;
+}
+
 export function agentHasDelegationTools(agent: AgentEntry): boolean {
   return agent.tools?.some((tool) => DELEGATION_TOOLS.has(tool)) ?? false;
 }
@@ -480,9 +513,9 @@ function presetAgentAvailability(
 
 function formatPresetAvailabilityForLauncher(
   availability: CliMultiAgentPresetAvailability,
+  blockReason: string | undefined,
 ): string | undefined {
-  const details: string[] = [];
-  if (!availability.rootAgent) details.push('no runnable team root');
+  const details = blockReason ? [blockReason] : [];
 
   const countStyle = availability.status === 'available' ? 'total' : 'ratio';
   const parts = [
