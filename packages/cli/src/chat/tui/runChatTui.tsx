@@ -136,7 +136,10 @@ import {
   cleanupTerminalModes,
   clearTerminalScrollback,
 } from './terminalCleanup';
-import type { TranscriptViewportChange } from './state/transcriptViewportMode';
+import {
+  transcriptViewportRepaintOptions,
+  type TranscriptViewportChange,
+} from './state/transcriptViewportMode';
 
 export interface ChatResult {
   exitCode: number;
@@ -1616,10 +1619,7 @@ export async function runChat(
   const repaintTranscriptViewport = (
     change: TranscriptViewportChange,
   ): void => {
-    inkRef.current?.repaint({
-      clearScrollback: change.enteredRootScrollback,
-      preserveStatic: false,
-    });
+    inkRef.current?.repaint(transcriptViewportRepaintOptions(change));
   };
   const ink = render(
     <App
