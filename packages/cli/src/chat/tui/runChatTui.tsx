@@ -95,6 +95,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { escapeText } from '@shared/utils/xmlEscape';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 import { filterNotNullish } from '@utils/core';
 import { generateExecutionId } from '@utils/core/executionId';
@@ -183,7 +184,7 @@ export function buildInitialChatAgentConfig({
     agent,
     model,
     instruction,
-    ...(displayInstruction ? { displayInstruction } : {}),
+    ...(displayInstruction !== undefined ? { displayInstruction } : {}),
     agentCategory: AgentCategory.ToolUse,
     workingDirectory,
     ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
@@ -224,7 +225,7 @@ export function takePendingSkillActivations(
     instruction: [
       activations,
       '<user_request>',
-      line,
+      escapeText(line),
       '</user_request>',
     ].join('\n'),
     displayInstruction: line,
@@ -1152,6 +1153,7 @@ export async function runChat(
 
   const followUpQueue = new PQueue({ concurrency: 1 });
   const pendingSkillActivations = new Map<string, string>();
+  let pendingSkillActivationClearEpoch = 0;
   const rootStreamStatus = (): StreamStatus | undefined =>
     session.streamId
       ? (cliState.streams.get().get(session.streamId)?.status ??
@@ -1225,6 +1227,7 @@ export async function runChat(
     if (isRunPending) interruptActive();
     clearApprovals();
     followUpQueue.clear();
+    pendingSkillActivationClearEpoch += 1;
     pendingSkillActivations.clear();
     clearTuiSessionRunState(session);
     // StreamLogStore entries outlive resetCliState (which only clears the
@@ -1524,10 +1527,17 @@ export async function runChat(
       return;
     }
     const childFollowUpTarget = chatTuiActiveChildFollowUpTarget();
-    const prepared = takePendingSkillActivations(
-      pendingSkillActivations,
-      line,
-    );
+    const prepared = takePendingSkillActivations(pendingSkillActivations, line);
+    const skillActivationClearEpoch = pendingSkillActivationClearEpoch;
+    const restoreReservedSkillActivations = (): void => {
+      if (skillActivationClearEpoch !== pendingSkillActivationClearEpoch) {
+        return;
+      }
+      restorePendingSkillActivations(
+        pendingSkillActivations,
+        prepared.reservedSkillActivations,
+      );
+    };
     if (!childFollowUpTarget && chatTuiCanStartRootRun(session)) {
       const started = await startSession(
         prepared.instruction,
@@ -1535,10 +1545,7 @@ export async function runChat(
         prepared.displayInstruction,
       );
       if (!started) {
-        restorePendingSkillActivations(
-          pendingSkillActivations,
-          prepared.reservedSkillActivations,
-        );
+        restoreReservedSkillActivations();
       }
       return;
     }
@@ -1589,10 +1596,7 @@ export async function runChat(
         }
       } finally {
         if (!delivered) {
-          restorePendingSkillActivations(
-            pendingSkillActivations,
-            prepared.reservedSkillActivations,
-          );
+          restoreReservedSkillActivations();
         }
       }
     });

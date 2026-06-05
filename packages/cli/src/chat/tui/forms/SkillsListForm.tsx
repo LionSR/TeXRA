@@ -7,6 +7,7 @@ import { Spinner } from '@inkjs/ui';
 
 import { formatRuntimeSkillActivation } from '@skills/runtimeSkills';
 import { readCliRuntimeSkills, skillListRecord } from '@cli/runtime/skills';
+import { escapeText } from '@shared/utils/xmlEscape';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select, type SelectItem } from '../ui/Select';
@@ -40,7 +41,7 @@ export function formatSkillDescriptionForTui(skill: SourcedSkill): string {
 
 export function formatSkillActivationPrompt(skill: SourcedSkill): string {
   const activationInstruction = [
-    `The user selected the ${skill.skill.name} skill.`,
+    `The user selected the ${escapeText(skill.skill.name)} skill.`,
     'Use these instructions for the next substantive user request.',
     'Resolve relative file references against the skill_directory.',
   ].join(' ');

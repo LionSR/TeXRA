@@ -53,6 +53,21 @@ describe('CLI chat run config', () => {
     });
   });
 
+  it('preserves an empty display instruction instead of dropping it', () => {
+    expect(
+      buildInitialChatAgentConfig({
+        agent: 'chat',
+        model: 'deepseekT',
+        instruction: '<skill_activation>hidden</skill_activation>',
+        displayInstruction: '',
+        workingDirectory: '/tmp/project',
+      }),
+    ).toMatchObject({
+      instruction: '<skill_activation>hidden</skill_activation>',
+      displayInstruction: '',
+    });
+  });
+
   it('reserves pending skill activations for only one prepared message', () => {
     const pending = new Map([
       ['proof-audit', '<skill_activation>proof</skill_activation>'],
@@ -102,6 +117,22 @@ describe('CLI chat run config', () => {
 
     expect(pending.get('proof-audit')).toBe(
       '<skill_activation>new</skill_activation>',
+    );
+  });
+
+  it('escapes user request text inside skill activation wrappers', () => {
+    const pending = new Map([
+      ['proof-audit', '<skill_activation>proof</skill_activation>'],
+    ]);
+
+    const prepared = takePendingSkillActivations(
+      pending,
+      'compare A < B & C',
+    );
+
+    expect(prepared.displayInstruction).toBe('compare A < B & C');
+    expect(prepared.instruction).toContain(
+      '<user_request>\ncompare A &lt; B &amp; C\n</user_request>',
     );
   });
 });

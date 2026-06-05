@@ -80,6 +80,20 @@ describe('SkillsListForm helpers', () => {
     expect(prompt).toContain('Use proof-audit.');
   });
 
+  it('escapes skill names in activation prose defensively', () => {
+    const prompt = formatSkillActivationPrompt(
+      sourcedSkill({
+        name: 'proof<audit &',
+        description: 'Review mathematical proof steps.',
+        scope: 'project',
+      }),
+    );
+
+    expect(prompt).toContain(
+      'The user selected the proof&lt;audit &amp; skill.',
+    );
+  });
+
   it('reserves one extra row when import issues are visible', () => {
     expect(
       skillsSelectWindow({
