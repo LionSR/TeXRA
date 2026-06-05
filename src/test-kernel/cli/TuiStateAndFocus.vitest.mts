@@ -44,6 +44,7 @@ import {
   finalizeSettledPrefix,
   syncStreamLog,
 } from '@cli/chat/tui/state/subscribeStreamLog';
+import { projectStreamTranscript } from '@cli/chat/tui/state/transcriptProjection';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import { wrapRuntimeHost } from '@cli/chat/tui/state/subscribeRuntimeHost';
 import {
@@ -1455,6 +1456,37 @@ describe('CLI transcript state', () => {
       const entries = cliState.streams.get().get(root)?.entries ?? [];
       expect(entries.map((entry) => entry.text)).toEqual(['Done.']);
       expect(entries[0]?.synthetic).toBeUndefined();
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
+  it('projects a turn boundary without duplicating fallback assistant text', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info('What is 1 + 1?', {
+        messageType: MESSAGE_TYPES.USER_MESSAGE,
+      });
+      logger.info('2', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
+
+      projectStreamTranscript(root, {
+        fallbackAssistant: { text: '2', idPrefix: 'final:turn' },
+        finalize: true,
+      });
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        'What is 1 + 1?',
+        '2',
+      ]);
+      expect(entries.map((entry) => entry.finalized)).toEqual([true, true]);
+      expect(entries.some((entry) => entry.id === 'final:turn:root')).toBe(
+        false,
+      );
     } finally {
       setDefaultStreamLogStore(previousStore);
     }
