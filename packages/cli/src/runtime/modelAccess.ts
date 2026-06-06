@@ -56,6 +56,8 @@ export interface CliNoAvailableModelsRecoveryOptions {
   readonly personalModeAction?: string;
 }
 
+export type NoRunnableModelAccessReason = CliApiMode | 'includedLoginRequired';
+
 const CLI_MODEL_AVAILABILITY_BY_API_MODE = {
   included: new Set<ModelAvailabilityKind>(['included-access']),
   personal: new Set<ModelAvailabilityKind>(['provider-key', 'openrouter-key']),
@@ -96,6 +98,21 @@ export function runnableCliModelAccessEntries(
     (entry) =>
       entry.available && isCliModelOptionAllowedInMode(entry.model, apiMode),
   );
+}
+
+export function noRunnableModelAccessReason(
+  models: readonly CliModelAccess[],
+  apiMode: CliApiMode,
+): NoRunnableModelAccessReason {
+  if (
+    apiMode === 'included' &&
+    models.some(
+      (model) => model.model.availability === 'included-login-required',
+    )
+  ) {
+    return 'includedLoginRequired';
+  }
+  return apiMode;
 }
 
 function formatModelAccessStatus(model: ModelOptionData): string {
