@@ -36,3 +36,4 @@ export {
   streamDataDir,
   type StreamDataKey,
 } from './streamDataPaths';
+export { StreamSnapshotStore } from './StreamSnapshotStore';
