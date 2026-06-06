@@ -270,18 +270,29 @@ const usageCommand = defineCliCommand({
   },
 });
 
+const AUTH_SUBCOMMANDS = {
+  login: loginCommand,
+  logout: logoutCommand,
+  status: authStatusCommand,
+  usage: usageCommand,
+} as const;
+
+export const AUTH_SUBCOMMAND_NAMES = Object.keys(AUTH_SUBCOMMANDS);
+
 export const authCommand = defineCommand({
   meta: {
     name: 'auth',
     description: 'Sign in, sign out, and check TeXRA account status and usage',
   },
+  args: {
+    ...GLOBAL_ARGS,
+  },
   // Canonical home for every auth verb. `login`/`logout` are also exposed as
   // top-level shortcuts in root.ts (a common CLI convention); everything else
-  // lives only here so there is one predictable place to look.
-  subCommands: {
-    login: loginCommand,
-    logout: logoutCommand,
-    status: authStatusCommand,
-    usage: usageCommand,
-  },
+  // lives only here so there is one predictable place to look. Bare `texra
+  // auth` is the same status query as `texra auth status`, which keeps global
+  // flags like `--no-color` and `--output-format json` usable on the obvious
+  // command.
+  default: 'status',
+  subCommands: AUTH_SUBCOMMANDS,
 });
