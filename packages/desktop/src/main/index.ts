@@ -24,6 +24,7 @@ import { interruptAllClaudeAgentSessions } from '@tools/claudeAgent';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { createDesktopAgentExecution } from './desktopAgentExecution.js';
+import { setDesktopAgentResumeHandler } from './desktopAgentResume.js';
 import {
   openDesktopStreamSnapshotStore,
   type DesktopStreamSnapshotStore,
@@ -431,6 +432,9 @@ function createWindow(options: {
     showErrorMessage,
     streamSnapshotStore: options.streamSnapshotStore,
   });
+  const disposeAgentResumeHandler = setDesktopAgentResumeHandler((streamId) =>
+    agentExecution.progress.tryResumeStream(streamId),
+  );
   const fileSelection = createDesktopFileSelection({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     showOpenFileDialog: async (options) => {
@@ -595,6 +599,7 @@ function createWindow(options: {
     if (mainWindow === window) {
       mainWindow = null;
     }
+    disposeAgentResumeHandler();
     agentExecution.dispose();
     desktopAuth.dispose();
   });
