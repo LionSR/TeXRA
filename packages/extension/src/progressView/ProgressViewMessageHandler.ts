@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 
+import { createProgressViewLifecycleCommandHandlers } from '@controllers/progressView/ProgressViewLifecycleCommandHandlers';
 import { ProgressStreamLifecycleController } from '@controllers/progressView/ProgressStreamLifecycleController';
 import {
   ProgressFollowUpController,
@@ -175,13 +176,18 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.POP_BACK]: () => this.provider.popBackToSidebar(),
 
       // Stream management
-      [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
-        this.provider.setActiveStream(data.stream),
-      [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (data) =>
-        this.handleDeleteStream(data),
-      [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => this.handleDeleteAll(),
-      [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: (data) =>
-        this.streamLifecycleController.stopStream(data.stream),
+      ...createProgressViewLifecycleCommandHandlers({
+        setActiveStream: (stream) => this.provider.setActiveStream(stream),
+        setAgentFilter: (filter) => {
+          this.provider.state.agentCategoryFilter = filter;
+          this.provider.syncFullView();
+        },
+        deleteStream: (stream) =>
+          this.streamLifecycleController.deleteStream(stream),
+        deleteAllStreams: () => this.handleDeleteAll(),
+        stopStream: (stream) =>
+          this.streamLifecycleController.stopStream(stream),
+      }),
       [PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE]: async (data) =>
         vscode.commands.executeCommand('texra.compactResponse', data.stream),
 
@@ -196,10 +202,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.workflowActionsController.runFileOperation(data.stream, 'pack'),
       [PROGRESS_VIEW_COMMANDS.CLEAN_STREAM]: (data) =>
         this.workflowActionsController.runFileOperation(data.stream, 'clean'),
-      [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]: (data) => {
-        this.provider.state.agentCategoryFilter = data.filter;
-        this.provider.syncFullView();
-      },
       [PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST]: (data) =>
         this.handleRetryStreamRequest(data),
       [PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST]: (data) => {
