@@ -14,7 +14,6 @@ import {
 } from '@agent/output/OutputFileProcessor';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { normalizeRunId } from '@common/constants/runIds';
-import { WorkspaceStateKey } from '@common/state/stateKeys';
 import type {
   AgentFileLocation,
   CompileFailure,
@@ -24,6 +23,7 @@ import type {
   OutputXmlSummary,
   RoundOutput,
 } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { createRecordingHost } from '../progressTestUtils';
 
 function createLocation(path: string): FileLocation {

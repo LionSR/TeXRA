@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { GlobalStateKey } from '@common/state/stateKeys';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
 

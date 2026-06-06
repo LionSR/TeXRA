@@ -2,7 +2,7 @@ export {
   WorkspaceStateKey,
   GlobalStateKey,
   INSTRUCTION_PREFIX,
-} from './stateKeys';
+} from '@shared/state/stateKeys';
 
 // ⚠️  VS Code-free zones must NOT import workspaceSM/globalSM/initializeStateManagers
 // from this barrel — doing so pulls in 'vscode' at module load time.
