@@ -99,6 +99,13 @@ export class StreamSnapshotStore {
   // -- Per (stream, category) serialized write chains -----------------------
   private readonly pendingWrites = new Map<string, Promise<void>>();
 
+  // -- Lazy seeding: a stream's existing disk data is read into memory BEFORE
+  // the first bus-driven mutation so an accumulate/merge can't overwrite (erase)
+  // unloaded disk data. `seeded` = streams already in memory (via load or here);
+  // `seedChains` serializes seed-then-mutate per stream.
+  private readonly seeded = new Set<StreamTabId>();
+  private readonly seedChains = new Map<StreamTabId, Promise<void>>();
+
   private readonly kvCache = new Map<StreamTabId, KVStore>();
 
   private kv(streamId: StreamTabId): KVStore {
@@ -115,9 +122,10 @@ export class StreamSnapshotStore {
   // ==========================================================================
 
   /**
-   * Subscribe to the progress bus and persist durable per-stream state.
-   * Returns a disposer. Call {@link load} for any resumed streams BEFORE
-   * subscribing so usage continues accumulating on top of prior runs.
+   * Subscribe to the progress bus and persist durable per-stream state. Each
+   * mutation is gated on the stream being seeded from disk first (see
+   * {@link applySeeded}) so a bus-driven accumulate can never erase unloaded
+   * disk data. Returns a disposer.
    */
   subscribe(
     bus: ProgressEventBusLike,
@@ -127,53 +135,69 @@ export class StreamSnapshotStore {
       bus.on(
         'addOutputFiles',
         ({ streamId, filesByRound }) =>
-          this.addOutputFiles(streamId, filesByRound),
+          this.applySeeded(streamId, () =>
+            this.addOutputFiles(streamId, filesByRound),
+          ),
         options,
       ),
       bus.on(
         'updateMissingOutputs',
         ({ streamId, filesByRound }) =>
-          this.updateMissingOutputs(streamId, filesByRound),
+          this.applySeeded(streamId, () =>
+            this.updateMissingOutputs(streamId, filesByRound),
+          ),
         options,
       ),
       bus.on(
         'updateCompileFailures',
         ({ streamId, filesByRound }) =>
-          this.updateCompileFailures(streamId, filesByRound),
+          this.applySeeded(streamId, () =>
+            this.updateCompileFailures(streamId, filesByRound),
+          ),
         options,
       ),
       bus.on(
         'updateStreamUsage',
         ({ streamId, storageKey, usage }) =>
-          this.addUsage(streamId, storageKey, usage),
+          this.applySeeded(streamId, () =>
+            this.addUsage(streamId, storageKey, usage),
+          ),
         options,
       ),
       bus.on(
         'updateTodos',
-        ({ streamId, todos }) => this.setTodos(streamId, todos),
+        ({ streamId, todos }) =>
+          this.applySeeded(streamId, () => this.setTodos(streamId, todos)),
         options,
       ),
       bus.on(
         'updatePlan',
-        ({ streamId, plan }) => this.setPlan(streamId, plan),
+        ({ streamId, plan }) =>
+          this.applySeeded(streamId, () => this.setPlan(streamId, plan)),
         options,
       ),
       bus.on(
         'setTaskState',
         ({ streamId, executionId, taskState }) =>
-          this.setTaskState(streamId, taskState, executionId),
+          this.applySeeded(streamId, () =>
+            this.setTaskState(streamId, taskState, executionId),
+          ),
         options,
       ),
       bus.on(
         'updateStreamDescription',
         ({ streamId, description }) =>
-          this.setDescription(streamId, description),
+          this.applySeeded(streamId, () =>
+            this.setDescription(streamId, description),
+          ),
         options,
       ),
       bus.on(
         'setParentStream',
         ({ childStreamId, parentStreamId }) =>
-          this.setParentStream(childStreamId, parentStreamId),
+          this.applySeeded(childStreamId, () =>
+            this.setParentStream(childStreamId, parentStreamId),
+          ),
         options,
       ),
     ];
@@ -181,6 +205,24 @@ export class StreamSnapshotStore {
     return () => {
       for (const off of offs) off();
     };
+  }
+
+  /** Run `apply` after the stream is seeded from disk, serialized per stream. */
+  private applySeeded(stream: StreamTabId, apply: () => void): void {
+    const prev = this.seedChains.get(stream) ?? this.ensureSeeded(stream);
+    const next = prev.then(apply).catch((err: unknown) =>
+      logger.warn(CHANNEL, `Deferred update failed for stream ${stream}`, {
+        data: err,
+      }),
+    );
+    this.seedChains.set(stream, next);
+  }
+
+  /** Read a stream's existing disk data into memory once (no-op if loaded). */
+  private async ensureSeeded(stream: StreamTabId): Promise<void> {
+    if (this.seeded.has(stream)) return;
+    this.seeded.add(stream);
+    this.applyStreamData(stream, await readStreamData(this.kv(stream)));
   }
 
   // ==========================================================================
@@ -324,6 +366,8 @@ export class StreamSnapshotStore {
     this.workPlan.delete(stream);
     this.meta.delete(stream);
     this.taskStates.delete(stream);
+    this.seeded.delete(stream);
+    this.seedChains.delete(stream);
     this.kvCache.delete(stream);
     for (const key of [...this.pendingWrites.keys()]) {
       if (key.startsWith(`${stream}::`)) this.pendingWrites.delete(key);
@@ -338,6 +382,8 @@ export class StreamSnapshotStore {
     this.workPlan.clear();
     this.meta.clear();
     this.taskStates.clear();
+    this.seeded.clear();
+    this.seedChains.clear();
     this.kvCache.clear();
     this.pendingWrites.clear();
   }
@@ -524,8 +570,9 @@ export class StreamSnapshotStore {
     this.pendingWrites.set(chainKey, next);
   }
 
-  /** Await all in-flight writes (call before process exit). */
+  /** Await deferred (seed-gated) mutations, then all in-flight writes. */
   async flush(): Promise<void> {
+    await Promise.all(this.seedChains.values());
     await Promise.all(this.pendingWrites.values());
   }
 
@@ -546,32 +593,38 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * Seed in-memory accumulators from disk for resumed streams so subsequent
-   * usage deltas accumulate on top of prior runs. Call before {@link subscribe}.
+   * Seed in-memory accumulators from disk so subsequent usage deltas accumulate
+   * on top of prior runs (and bus mutations can't erase unloaded data). Streams
+   * not passed here are seeded lazily on their first bus event.
    */
   async load(streamIds: readonly StreamTabId[]): Promise<void> {
     for (const streamId of streamIds) {
-      const data = await readStreamData(this.kv(streamId));
-      this.outputFiles.set(streamId, data.outputFiles);
-      this.missingOutputs.set(streamId, data.missingOutputs);
-      this.compileFailures.set(streamId, data.compileFailures);
-      this.usage.set(
-        streamId,
-        new Map([...data.usage].filter(([, v]) => !isEmptyUsage(v))),
-      );
-      this.workPlan.set(streamId, data.workPlan);
-      if (data.meta) {
-        this.meta.set(streamId, data.meta);
-        if (data.meta.taskState !== undefined) {
-          const parsed = TaskStateSchema.safeParse(data.meta.taskState);
-          if (parsed.success) {
-            this.taskStates.set(streamId, parsed.data as TaskState);
-          }
-        }
-      }
-      this.persistLegacyFlattened(streamId, data);
+      this.applyStreamData(streamId, await readStreamData(this.kv(streamId)));
     }
     await this.backfillDescriptionsFromExecutionMeta();
+  }
+
+  /** Seed the in-memory accumulators for one stream + migrate legacy once. */
+  private applyStreamData(stream: StreamTabId, data: StreamData): void {
+    this.outputFiles.set(stream, data.outputFiles);
+    this.missingOutputs.set(stream, data.missingOutputs);
+    this.compileFailures.set(stream, data.compileFailures);
+    this.usage.set(
+      stream,
+      new Map([...data.usage].filter(([, v]) => !isEmptyUsage(v))),
+    );
+    this.workPlan.set(stream, data.workPlan);
+    if (data.meta) {
+      this.meta.set(stream, data.meta);
+      if (data.meta.taskState !== undefined) {
+        const parsed = TaskStateSchema.safeParse(data.meta.taskState);
+        if (parsed.success) {
+          this.taskStates.set(stream, parsed.data as TaskState);
+        }
+      }
+    }
+    this.seeded.add(stream);
+    this.persistLegacyFlattened(stream, data);
   }
 
   /** Rewrite any legacy-nested sidecar file to its flattened form (once). */

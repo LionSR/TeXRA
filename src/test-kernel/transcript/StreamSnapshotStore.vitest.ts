@@ -159,6 +159,35 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
+  it('seeds existing disk data before an unloaded bus mutation, so it is not erased', async () => {
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    await StorageFS.ensureDir(dir);
+    // A prior session persisted usage for run-1.
+    await StorageFS.write(
+      path.join(dir, 'usageStats.json'),
+      JSON.stringify({ 'run-1': usage(100, 20, 0.5) }),
+    );
+
+    // A fresh store (NOT load()ed) subscribes and gets a delta for a NEW run.
+    const store = new StreamSnapshotStore();
+    const off = store.subscribe(bus);
+    bus.emit('updateStreamUsage', {
+      streamId: STREAM,
+      storageKey: 'run-2' as StorageKey,
+      usage: usage(50, 10, 0.25),
+    });
+    await store.flush();
+    off();
+
+    // run-1 (prior) survives — the unseeded write did not clobber it.
+    const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
+    expect(raw).toMatchObject({
+      'run-1': { inputTokens: 100, outputTokens: 20, cost: 0.5 },
+      'run-2': { inputTokens: 50, outputTokens: 10, cost: 0.25 },
+    });
+  });
+
   it('degrades gracefully when workPlan.json is valid JSON but the wrong shape', async () => {
     await installPlatform();
     const dir = streamDataDir(STREAM);
