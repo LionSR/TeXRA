@@ -1269,6 +1269,7 @@ export async function runChat(
           approvalPromptsUnavailable: approvalsUnavailable,
           onStreamResolved: (resolvedStreamId) => {
             session.streamId = resolvedStreamId;
+            cliState.rootStreamId.set(resolvedStreamId);
             moveLocalTranscriptToStream(resolvedStreamId);
             cliState.activeStreamId.set(resolvedStreamId);
             if (session.stopRequested) interruptActive();
@@ -1367,6 +1368,7 @@ export async function runChat(
     session.runExitCode = CliExitCode.Success;
     session.streamId = resolution.streamId;
     session.executionId = resolution.snapshot.executionId;
+    cliState.rootStreamId.set(resolution.streamId);
 
     const currentModel = resolution.config.model;
     const sessionContext = currentSessionContext(currentModel);
