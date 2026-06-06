@@ -119,7 +119,6 @@ export class ProgressViewState {
   private _streamStates = new Map<StreamTabId, StreamExecutionState>();
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
-  private readonly storage: MementoStorage;
   private readonly logger: AgentTrace;
 
   constructor(storage?: MementoStorage) {
@@ -128,7 +127,6 @@ export class ProgressViewState {
       throw new Error('workspace state manager is not initialized');
     }
 
-    this.storage = resolvedStorage;
     this.logger = createChannelTrace('ProgressViewState');
     this._prefs = new PersistedState(
       createBackendStorage(resolvedStorage),
@@ -342,7 +340,7 @@ export class ProgressViewState {
     this.logger.info('[Persistence] Starting state load from storage');
 
     // Load stream logs first — they define the set of known streams
-    await this.streamLogs.load(this.storage);
+    await this.streamLogs.load();
 
     const streamIds = this.streamLogs.keys();
     this.logger.info(`[Persistence] Discovered ${streamIds.length} stream(s)`);
