@@ -27,11 +27,7 @@ import { STREAM_DATA_DIR, encodeStreamId } from '@transcript/streamDataPaths';
 import {
   StreamTabMetaSchema,
   LegacyInstructionsDataSchema,
-  OutputFilesDataSchema,
-  flattenLegacyRuns,
-  isLegacyNested,
   selectPreferredLegacyInstruction,
-  type OutputFileInfo,
   type StreamTabId,
   type LegacyInstructionEntry,
   type StreamTabMeta,
@@ -57,11 +53,6 @@ const KEYS = {
 } as const;
 
 const CHANNEL = 'StreamTabStore';
-
-// `STREAM_DATA_DIR` + `encodeStreamId` now live in the host-agnostic
-// `@transcript/streamDataPaths` so the CLI and desktop produce the identical
-// on-disk layout. Re-exported here for existing importers of this module.
-export { STREAM_DATA_DIR };
 
 // ============================================================================
 // Implementation
@@ -114,36 +105,14 @@ class StreamTabKVStore extends KVStore {
     await this.write(KEYS.META, meta);
   }
 
-  // -- Output files ---------------------------------------------------------
-
-  async readOutputFiles(): Promise<Map<number, OutputFileInfo[]> | null> {
-    const raw = await this.tryRead(KEYS.OUTPUT_FILES);
-    if (!raw) return null;
-    const migrated = await this.preferActiveRunFlattening(raw);
-    const result = OutputFilesDataSchema.safeParse(migrated);
-    return result.success && result.data.size > 0 ? result.data : null;
-  }
+  // -- Writes still used by one-time memento migration ----------------------
+  // Reads, per-stream + bulk deletion, and legacy-flattening all moved to
+  // StreamSnapshotStore — the sole owner of streamData/. This store now only
+  // WRITES during memento migration and manages legacy per-run instructions.
 
   async writeOutputFiles(data: OutputFilesRecord): Promise<void> {
     await this.write(KEYS.OUTPUT_FILES, data);
   }
-
-  /**
-   * Sole owner of legacy-record flattening. When a record is in legacy
-   * nested form (`{ runId: { round: items[] } }`), prefer the run selected
-   * by `meta.activeRunId` so hydration uses the run that was active when
-   * the tab was last viewed. Falls back to insertion order for meta
-   * without activeRunId. Already-flat records pass through unchanged, so
-   * the downstream schema never needs its own preprocess step.
-   */
-  private async preferActiveRunFlattening(raw: unknown): Promise<unknown> {
-    if (!isLegacyNested(raw)) return raw;
-    const meta = await this.readMeta();
-    return flattenLegacyRuns(raw, meta?.activeRunId);
-  }
-
-  // -- Writes still used by one-time memento migration ----------------------
-  // (Reads moved to StreamSnapshotStore; compile-failure write had no callers.)
 
   async writeMissingOutputs(data: MissingOutputsRecord): Promise<void> {
     await this.write(KEYS.MISSING_OUTPUTS, data);
@@ -196,12 +165,6 @@ class StreamTabKVStore extends KVStore {
     await this.write(KEYS.LEGACY_INSTRUCTIONS, oldData);
     await this.delete(KEYS.LEGACY_RUN_INSTRUCTIONS);
   }
-
-  // -- Lifecycle ------------------------------------------------------------
-
-  async clear(): Promise<void> {
-    await this.deleteDir();
-  }
 }
 
 // ============================================================================
@@ -235,12 +198,6 @@ export function getStreamTabStore(streamTabId: StreamTabId): StreamTabKVStore {
   const store = new StreamTabKVStore(streamTabId);
   storeCache.set(streamTabId, store);
   return store;
-}
-
-export async function deleteAllStreamData(): Promise<void> {
-  const rootKv = new KVStore(STREAM_DATA_DIR);
-  await rootKv.deleteDir();
-  storeCache.clear();
 }
 
 export type { StreamTabKVStore };

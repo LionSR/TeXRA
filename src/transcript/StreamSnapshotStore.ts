@@ -58,7 +58,11 @@ import {
   type WorkPlanSnapshot,
 } from '@shared/schemas';
 
-import { STREAM_DATA_KEYS, streamDataDir } from './streamDataPaths';
+import {
+  STREAM_DATA_DIR,
+  STREAM_DATA_KEYS,
+  streamDataDir,
+} from './streamDataPaths';
 
 /** Serialize a Map to a plain string-keyed Record for JSON persistence. */
 function mapToRecord<K extends string | number, V>(
@@ -356,6 +360,18 @@ export class StreamSnapshotStore {
     this.pendingWrites.clear();
   }
 
+  /** Delete a stream's on-disk sidecar directory + in-memory state. */
+  async deleteStream(stream: StreamTabId): Promise<void> {
+    await this.kv(stream).deleteDir();
+    this.evict(stream);
+  }
+
+  /** Delete the entire `streamData/` tree + all in-memory state. */
+  async deleteAll(): Promise<void> {
+    await new KVStore(STREAM_DATA_DIR).deleteDir();
+    this.evictAll();
+  }
+
   setTodos(stream: StreamTabId, todos: TodoItem[]): void {
     const next = { ...this.getWorkPlan(stream), todos };
     this.workPlan.set(stream, next);
@@ -601,6 +617,14 @@ export class StreamSnapshotStore {
       parentStreamId: metaRaw?.parentStreamId,
       description: metaRaw?.description,
     });
+  }
+
+  /** Read a stream's output files straight from disk (round → files). */
+  async readOutputFiles(
+    streamId: StreamTabId,
+  ): Promise<Map<number, OutputFileInfo[]>> {
+    const snap = await this.read(streamId);
+    return recordToRoundMap(snap.outputFilesByRound);
   }
 
   /**

@@ -17,7 +17,6 @@ import { createChannelTrace } from '@logger';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import {
   getStreamTabStore,
-  deleteAllStreamData,
   mapStreamTabStorage,
 } from '@progressView/persistence/StreamTabStore';
 import {
@@ -302,13 +301,15 @@ export class ProgressViewState {
   async clearStream(stream: StreamTabId): Promise<void> {
     // Clear in-memory state
     StreamStatusService.clear(stream, { emit: false });
-    this.snapshots.evict(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
 
-    // Delete from disk: stream log file + stream data directory
-    const store = getStreamTabStore(stream);
-    await Promise.all([this.streamLogs.delete(stream), store.clear()]);
+    // Delete from disk: stream log file + stream data directory (the snapshot
+    // store owns streamData/ — it evicts its own memory + removes the dir).
+    await Promise.all([
+      this.streamLogs.delete(stream),
+      this.snapshots.deleteStream(stream),
+    ]);
 
     // Update active stream *after* deletion so keys() no longer includes it.
     // `streamLogs.keys()` is ascending by creation time (load() sorts by
@@ -331,13 +332,12 @@ export class ProgressViewState {
 
     // Clear in-memory state
     StreamStatusService.clearAll({ emit: false });
-    this.snapshots.evictAll();
     this._sessionState.clear();
     this._streamStates.clear();
     this._prefs.reset();
 
-    // Delete from disk
-    await Promise.all([this.streamLogs.clear(), deleteAllStreamData()]);
+    // Delete from disk (snapshot store owns streamData/, evicts its own memory)
+    await Promise.all([this.streamLogs.clear(), this.snapshots.deleteAll()]);
 
     cleanupToolUseAgentRegistry(this.snapshots);
   }
