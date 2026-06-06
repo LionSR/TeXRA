@@ -8,9 +8,12 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 
-import { cliState, patchStream, updateChildStreamStatus } from './cliState';
+import { cliState, patchStream } from './cliState';
 
 export function applyStreamStatusChange(change: StreamStatusChange): void {
+  // StreamStatusService is the runtime source of truth. The slice status is a
+  // UI mirror used by panes that render one stream directly; child ownership
+  // rows project this value at read time instead of receiving copied updates.
   patchStream(change.streamId, (slice) => {
     if (slice.status === change.status) return slice;
     // Stamp the turn-start clock when entering RUNNING (keeping any prior
@@ -22,33 +25,15 @@ export function applyStreamStatusChange(change: StreamStatusChange): void {
         : undefined;
     return { ...slice, status: change.status, runStartedAt };
   });
-  updateChildStreamStatus(change.streamId, change.status);
 }
 
-export function streamStatusForStream(
+export function effectiveStreamStatus(
   streamId: StreamTabId,
 ): StreamStatus | undefined {
   return (
-    cliState.streams.get().get(streamId)?.status ??
-    StreamStatusService.get(streamId)
+    StreamStatusService.get(streamId) ??
+    cliState.streams.get().get(streamId)?.status
   );
-}
-
-export function streamStatusSnapshot(
-  streamId: StreamTabId,
-): readonly StreamStatus[] {
-  const streams = cliState.streams.get();
-  const parentStreamId = cliState.parentStream.get().get(streamId);
-  const childStreamStatus = parentStreamId
-    ? streams
-        .get(parentStreamId)
-        ?.childStreams.find((child) => child.childStreamId === streamId)?.status
-    : undefined;
-  return [
-    childStreamStatus,
-    streams.get(streamId)?.status,
-    StreamStatusService.get(streamId),
-  ].filter((status): status is StreamStatus => status != null);
 }
 
 export function onStreamStatusChange(
