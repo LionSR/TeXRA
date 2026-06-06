@@ -15,7 +15,11 @@ import pMap from 'p-map';
 
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
-import { STREAM_DATA_DIR, encodeStreamId } from '@transcript/streamDataPaths';
+import {
+  STREAM_DATA_DIR,
+  STREAM_DATA_KEYS,
+  encodeStreamId,
+} from '@transcript/streamDataPaths';
 
 import {
   StreamTabMetaSchema,
@@ -25,18 +29,6 @@ import {
   type LegacyInstructionEntry,
   type StreamTabMeta,
 } from '@shared/schemas';
-
-// ============================================================================
-// Key constants
-// ============================================================================
-
-const KEYS = {
-  META: 'meta',
-  /** Legacy per-run instruction text preserved from pre-refactor memento. */
-  LEGACY_INSTRUCTIONS: 'legacyInstructions',
-  /** On-disk key used by the pre-refactor store; read-only fallback. */
-  LEGACY_RUN_INSTRUCTIONS: 'runInstructions',
-} as const;
 
 const CHANNEL = 'StreamTabStore';
 
@@ -81,7 +73,7 @@ class StreamTabKVStore extends KVStore {
   // -- Meta -----------------------------------------------------------------
 
   async readMeta(): Promise<StreamTabMeta | null> {
-    const raw = await this.tryRead(KEYS.META);
+    const raw = await this.tryRead(STREAM_DATA_KEYS.META);
     if (!raw) return null;
     const result = StreamTabMetaSchema.safeParse(raw);
     return result.success ? result.data : null;
@@ -95,7 +87,7 @@ class StreamTabKVStore extends KVStore {
    * exists, otherwise falls back to the newest archived entry.
    */
   async readPreferredLegacyInstruction(): Promise<LegacyInstructionEntry | null> {
-    const raw = await this.tryRead(KEYS.LEGACY_INSTRUCTIONS);
+    const raw = await this.tryRead(STREAM_DATA_KEYS.LEGACY_INSTRUCTIONS);
     if (!raw) return null;
 
     const result = LegacyInstructionsDataSchema.safeParse(raw);
@@ -114,12 +106,16 @@ class StreamTabKVStore extends KVStore {
    * so the data is preserved under the canonical archival key.
    */
   async migrateOnDiskRunInstructions(): Promise<void> {
-    const existingLegacy = await this.tryRead(KEYS.LEGACY_INSTRUCTIONS);
+    const existingLegacy = await this.tryRead(
+      STREAM_DATA_KEYS.LEGACY_INSTRUCTIONS,
+    );
     if (existingLegacy) return;
-    const oldData = await this.tryRead(KEYS.LEGACY_RUN_INSTRUCTIONS);
+    const oldData = await this.tryRead(
+      STREAM_DATA_KEYS.LEGACY_RUN_INSTRUCTIONS,
+    );
     if (!oldData) return;
-    await this.write(KEYS.LEGACY_INSTRUCTIONS, oldData);
-    await this.delete(KEYS.LEGACY_RUN_INSTRUCTIONS);
+    await this.write(STREAM_DATA_KEYS.LEGACY_INSTRUCTIONS, oldData);
+    await this.delete(STREAM_DATA_KEYS.LEGACY_RUN_INSTRUCTIONS);
   }
 }
 

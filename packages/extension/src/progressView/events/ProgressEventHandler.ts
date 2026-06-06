@@ -9,7 +9,10 @@ import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import { WebviewBridge } from '@progressView/managers/WebviewBridge';
-import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
+import {
+  WebviewUpdater,
+  type LogContentExtras,
+} from '@progressView/managers/WebviewUpdater';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import {
   ProgressViewState,
@@ -497,9 +500,7 @@ export class ProgressEventHandler {
     const agentCategory = this.getStreamCategory(stream);
 
     // Optionally include active-stream state (replaces syncActiveStreamState).
-    let conversationProgress:
-      | import('@shared/schemas').ConversationProgress
-      | undefined;
+    let conversationProgress: ConversationProgress | undefined;
     let badges: StreamBadgeSnapshot | undefined;
     let parentStreamId: StreamTabId | undefined;
     if (includeActiveState) {
@@ -536,9 +537,7 @@ export class ProgressEventHandler {
     });
   }
 
-  private buildStreamSyncExtras(
-    stream: StreamTabId,
-  ): import('@progressView/managers/WebviewUpdater').LogContentExtras {
+  private buildStreamSyncExtras(stream: StreamTabId): LogContentExtras {
     // Workflow files/missing outputs are flat (one run per tab).
     const workflowFiles = mapToRecord(
       this.state.snapshots.getOutputFiles(stream),

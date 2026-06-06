@@ -347,7 +347,7 @@ export class ProgressViewState {
     const streamIds = this.streamLogs.keys();
     this.logger.info(`[Persistence] Discovered ${streamIds.length} stream(s)`);
 
-    await this.loadManagers(streamIds);
+    await this.snapshots.load(streamIds);
 
     // Promote any pre-existing `runInstructions.json` disk files (from the
     // earlier memento→StreamTabStore migration) to the archival
@@ -384,10 +384,6 @@ export class ProgressViewState {
   }
 
   // -- Private helpers --------------------------------------------------------
-
-  private async loadManagers(streamIds: StreamTabId[]): Promise<void> {
-    await this.snapshots.load(streamIds);
-  }
 
   private async backfillLegacyWorkflowInstructions(): Promise<number> {
     let restoredCount = 0;

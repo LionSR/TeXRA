@@ -609,18 +609,9 @@ export class StreamSnapshotStore {
     };
 
     const [outputFiles, missingOutputs, compileFailures] = await Promise.all([
-      flatten<Map<number, OutputFileInfo[]>>(
-        STREAM_DATA_KEYS.OUTPUT_FILES,
-        OutputFilesDataSchema,
-      ),
-      flatten<Map<number, string[]>>(
-        STREAM_DATA_KEYS.MISSING_OUTPUTS,
-        MissingOutputsDataSchema,
-      ),
-      flatten<Map<number, CompileFailure[]>>(
-        STREAM_DATA_KEYS.COMPILE_FAILURES,
-        CompileFailuresDataSchema,
-      ),
+      flatten(STREAM_DATA_KEYS.OUTPUT_FILES, OutputFilesDataSchema),
+      flatten(STREAM_DATA_KEYS.MISSING_OUTPUTS, MissingOutputsDataSchema),
+      flatten(STREAM_DATA_KEYS.COMPILE_FAILURES, CompileFailuresDataSchema),
     ]);
 
     const usageRaw = await this.tryRead(kv, STREAM_DATA_KEYS.USAGE_STATS);
