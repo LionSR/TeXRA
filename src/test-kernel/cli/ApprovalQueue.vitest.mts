@@ -7,16 +7,14 @@ vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
 }));
 
 import {
+  approvalPayloadStreamId,
   approvalQueueStatus,
   clearApprovals,
   currentApproval,
   enqueueApproval,
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
-import {
-  approvalPayloadStreamId,
-  enqueueTuiApproval,
-} from '@cli/chat/tui/state/subscribeApprovals';
+import { enqueueTuiApproval } from '@cli/chat/tui/state/subscribeApprovals';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 
 function bashPayload(streamId: string): ApprovalPayload {

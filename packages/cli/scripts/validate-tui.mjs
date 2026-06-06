@@ -1395,6 +1395,33 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'subagent-focused-own-scrollback-history',
+    cols: 120,
+    rows: 14,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_LONG_CHILD_OUTPUT: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: ['\t'],
+    expect: [
+      'Please handle the harness-child-strategy sub-workflow.',
+      'strategy detail line 01',
+      'strategy detail line 18',
+      '[1:strategy]*',
+    ],
+    unexpect: [
+      'entry-1 chat history line',
+      'entry-4 chat history line',
+      '[PgUp',
+      '[main]*',
+      'signal read during notification phase',
+      'ERROR',
+    ],
+  },
+  {
     name: 'subagent-focused-status-stays-scoped',
     cols: 120,
     env: {

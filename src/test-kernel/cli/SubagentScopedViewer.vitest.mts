@@ -16,7 +16,7 @@ function row(
 }
 
 describe('subagentPickerSelection (Enter behavior in the child-control picker)', () => {
-  it('opens the scoped transcript viewer for a subagent row backed by a stream', () => {
+  it('opens the transcript viewer for a subagent row backed by a stream', () => {
     expect(subagentPickerSelection('subagents', row())).toEqual({
       kind: 'view',
       streamId: 'reviewer@opus#exec-1',

@@ -34,8 +34,8 @@ export interface ChildControlPickerProps {
   readonly mode: ChildControlMode;
   readonly onClose: () => void;
   readonly onFocusStream: (streamId: StreamTabId) => void;
-  /** Open the chosen subagent's scoped transcript viewer (its independent
-   *  history). Falls back to focus when omitted. */
+  /** Open the chosen subagent's transcript viewer (its independent history).
+   *  Falls back to focus when omitted. */
   readonly onViewStream?: (streamId: StreamTabId) => void;
   readonly onKillExecution: (executionId: string) => void;
   readonly slice: StreamSlice | undefined;

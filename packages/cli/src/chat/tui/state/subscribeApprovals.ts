@@ -50,6 +50,7 @@ import { assertNever } from '../assertNever';
 import { notify } from '../notifications/terminalNotifier';
 import { cliState } from './cliState';
 import {
+  approvalPayloadStreamId,
   enqueueApproval,
   type ApprovalDecision,
   type ApprovalPayload,
@@ -215,24 +216,6 @@ function routeWithPolicy<K extends 'bash' | 'plan' | 'proposal' | 'retry', P>(
     markIfRejected(context, decision);
     dispatch(payload, decision);
   });
-}
-
-export function approvalPayloadStreamId(
-  payload: ApprovalPayload,
-): string | undefined {
-  switch (payload.kind) {
-    case 'bash':
-    case 'plan':
-    case 'proposal':
-    case 'retry':
-    case 'externalInquiry':
-    case 'userQuestion':
-      return payload.payload.streamId || undefined;
-    case 'toolEdit':
-      return payload.request.streamId || undefined;
-    default:
-      assertNever(payload, 'Unhandled approval payload kind');
-  }
 }
 
 export function enqueueTuiApproval(
