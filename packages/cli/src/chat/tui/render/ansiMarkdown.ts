@@ -422,12 +422,12 @@ export function renderAnsiMarkdown(
   options: RenderAnsiMarkdownOptions = {},
 ): string {
   const colorEnabled = options.colorEnabled ?? true;
-  const style = ansiMarkdownStyle(colorEnabled);
   if (
     !cachedProcessor ||
     cachedWidth !== options.width ||
     cachedColorEnabled !== colorEnabled
   ) {
+    const style = ansiMarkdownStyle(colorEnabled);
     const renderer = createMarkdownRenderer({
       highlight: (code, lang) => highlightForTui(code, lang, style),
       configure: (md) => configureAnsi(md, options.width, style),
