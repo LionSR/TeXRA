@@ -27,6 +27,10 @@ import {
 import { handleExternalInquiryAction } from '@tools/inquiry/ExternalInquiryTool';
 
 // Local imports - CLI runtime
+import {
+  isCliDecisionApprovalEvent,
+  type CliDecisionApprovalEvent,
+} from './approvalEvents';
 import { type CliContext, type CliPromptRequest } from './cliContext';
 import { askCliQuestion, writeTextStderr } from './logSinks';
 import { parseUserQuestionAnswer } from './userQuestionAnswer';
@@ -36,14 +40,6 @@ import { parseUserQuestionAnswer } from './userQuestionAnswer';
 // single source of truth for the decision vocabulary across hosts. See
 // docs/proposals/tui-extension-sharing.md (Rung 1).
 export type ApprovalDecision = SharedApprovalDecision;
-
-const APPROVAL_EVENTS = [
-  'showBashPermission',
-  'showPlanApproval',
-  'showAgentProposal',
-  'showRetryRequest',
-] as const;
-type ApprovalEvent = (typeof APPROVAL_EVENTS)[number];
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
 const TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS = 12_000;
@@ -56,12 +52,6 @@ const AGENT_PROPOSAL_FILE_GROUP_MAX_FILES = 10;
 
 export const CLI_PERSONAL_API_RETRY_HINT =
   'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to personal API keys.';
-
-function isApprovalEvent(
-  event: keyof ProgressEventPayloads,
-): event is ApprovalEvent {
-  return (APPROVAL_EVENTS as readonly string[]).includes(event);
-}
 
 const deniedApprovalContexts = new WeakSet<CliContext>();
 const cliPromptQueues = new WeakMap<CliContext, Promise<unknown>>();
@@ -146,8 +136,8 @@ export function immediateDecision(
  *  retry panel so the user can switch to personal API keys; non-interactive
  *  and auto-approval modes should not burn the retry budget. */
 function isUnretryableRetryRequest(
-  event: ApprovalEvent,
-  payload: ProgressEventPayloads[ApprovalEvent],
+  event: CliDecisionApprovalEvent,
+  payload: ProgressEventPayloads[CliDecisionApprovalEvent],
 ): boolean {
   if (event !== 'showRetryRequest') return false;
   const details = (payload as ProgressEventPayloads['showRetryRequest'])
@@ -159,8 +149,8 @@ function isUnretryableRetryRequest(
 }
 
 export function immediateDecisionForApproval(
-  event: ApprovalEvent,
-  payload: ProgressEventPayloads[ApprovalEvent],
+  event: CliDecisionApprovalEvent,
+  payload: ProgressEventPayloads[CliDecisionApprovalEvent],
   context: CliContext,
 ): ApprovalDecision | undefined {
   if (isUnretryableRetryRequest(event, payload)) {
@@ -289,7 +279,7 @@ export function formatAgentProposalApprovalSummary(
   ].join('\n');
 }
 
-function summarizeApprovalEvent<K extends ApprovalEvent>(
+function summarizeApprovalEvent<K extends CliDecisionApprovalEvent>(
   event: K,
   payload: ProgressEventPayloads[K],
 ): string {
@@ -327,7 +317,7 @@ export function formatRetryRequestMessage(
   return message;
 }
 
-function dispatchApprovalDecision<K extends ApprovalEvent>(
+function dispatchApprovalDecision<K extends CliDecisionApprovalEvent>(
   event: K,
   payload: ProgressEventPayloads[K],
   decision: ApprovalDecision,
@@ -656,7 +646,7 @@ export function handleCliApprovalEvent<K extends keyof ProgressEventPayloads>(
     return true;
   }
 
-  if (!isApprovalEvent(event)) return false;
+  if (!isCliDecisionApprovalEvent(event)) return false;
 
   const approvalPayload = payload as ProgressEventPayloads[typeof event];
 
