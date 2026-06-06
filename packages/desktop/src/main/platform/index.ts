@@ -11,10 +11,10 @@ import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
-import { registerAgentFeatures } from '@agent/features';
-import { bus } from '@eventBus/ProgressEventBus';
 import { StreamSnapshotStore } from '@transcript';
+import { registerAgentFeatures } from '@agent/features';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
+import { bus } from '@eventBus/ProgressEventBus';
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 
@@ -23,6 +23,7 @@ import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveResourcesPath, resolveWorkspacePath } from './paths.js';
 import { showSecretStorageWarningDialog } from './secretStorageWarningDialog.js';
+import { tryResumeDesktopStream } from '../desktopAgentResume.js';
 
 // Type imports - platform
 import type { LifecycleHost } from '@platform/interfaces/lifecycle';
@@ -72,7 +73,7 @@ export async function initializeElectronPlatform(
       showWarningMessage: showSecretStorageWarningDialog,
     }),
     lifecycle,
-    agentResume: { tryResumeStream: async () => false },
+    agentResume: { tryResumeStream: tryResumeDesktopStream },
   });
   registerAgentFeatures();
 
