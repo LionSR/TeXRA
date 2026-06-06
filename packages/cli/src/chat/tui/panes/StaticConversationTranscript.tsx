@@ -23,6 +23,7 @@ import {
 } from '../state/streamLabels';
 import { transcriptEntryLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
+import { EntryErrorBoundary } from './EntryErrorBoundary';
 import { TranscriptEntry } from './TranscriptEntry';
 
 export type StaticTranscriptItem =
@@ -305,21 +306,28 @@ export function StaticConversationTranscript({
       items={[...items]}
     >
       {(item: StaticTranscriptItem) => (
+        // Isolate per item: a throw here would otherwise crash the whole Ink
+        // tree, and `<Static>` commits each row to scrollback exactly once, so
+        // the fallback marker is printed once in place of the bad entry.
         <Box key={item.id} flexDirection="column">
-          {item.kind === 'header' ? (
-            <SessionHeaderBlock
-              compact={item.compact}
-              identityLine={item.identityLine}
-              meta={item.meta}
-              width={width}
-            />
-          ) : (
-            <TranscriptEntry
-              entry={item.entry}
-              width={width}
-              colorEnabled={colorEnabled}
-            />
-          )}
+          <EntryErrorBoundary
+            label={item.kind === 'header' ? 'session header' : item.entry.role}
+          >
+            {item.kind === 'header' ? (
+              <SessionHeaderBlock
+                compact={item.compact}
+                identityLine={item.identityLine}
+                meta={item.meta}
+                width={width}
+              />
+            ) : (
+              <TranscriptEntry
+                entry={item.entry}
+                width={width}
+                colorEnabled={colorEnabled}
+              />
+            )}
+          </EntryErrorBoundary>
         </Box>
       )}
     </Static>

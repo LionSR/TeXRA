@@ -5,6 +5,7 @@ import { Box } from 'ink';
 
 import { cliState, type ConversationEntry } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
+import { EntryErrorBoundary } from './EntryErrorBoundary';
 import { BoundedTranscriptEntry, LiveTranscriptEntry } from './TranscriptEntry';
 import { ToolUseRow } from './ToolUseRow';
 import { splitTranscriptEntries } from './transcriptEntries';
@@ -34,24 +35,33 @@ function renderConversationPaneEntry({
   // When the newest entry alone overflows the pane, the bounded renderer is the
   // paint contract. Apply it before role/mode branches so sizing and painting
   // stay in lockstep.
-  if (rowLimit !== undefined) {
-    return (
-      <BoundedTranscriptEntry
-        key={entry.id}
-        colorEnabled={colorEnabled}
-        entry={entry}
-        maxRows={rowLimit}
-        width={width}
-      />
-    );
-  }
-  if (entry.role === 'tool' && entry.toolUse) {
-    return <ToolUseRow key={entry.id} toolUse={entry.toolUse} width={width} />;
-  }
-  if (entry.role === 'assistant') {
-    return <LiveTranscriptEntry key={entry.id} entry={entry} width={width} />;
-  }
-  return null;
+  const content = ((): React.JSX.Element | null => {
+    if (rowLimit !== undefined) {
+      return (
+        <BoundedTranscriptEntry
+          colorEnabled={colorEnabled}
+          entry={entry}
+          maxRows={rowLimit}
+          width={width}
+        />
+      );
+    }
+    if (entry.role === 'tool' && entry.toolUse) {
+      return <ToolUseRow toolUse={entry.toolUse} width={width} />;
+    }
+    if (entry.role === 'assistant') {
+      return <LiveTranscriptEntry entry={entry} width={width} />;
+    }
+    return null;
+  })();
+  if (content === null) return null;
+  // Isolate per entry so a single throwing renderer can't blank the live pane.
+  // The key moves to the boundary since it is now the list child.
+  return (
+    <EntryErrorBoundary key={entry.id} label={entry.role}>
+      {content}
+    </EntryErrorBoundary>
+  );
 }
 
 export function ConversationPane(
