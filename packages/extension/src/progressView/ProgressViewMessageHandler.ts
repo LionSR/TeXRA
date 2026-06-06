@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 
+import { createProgressViewApprovalCommandHandlers } from '@controllers/progressView/ProgressViewApprovalCommandHandlers';
 import { createProgressViewFileCommandHandlers } from '@controllers/progressView/ProgressViewFileCommandHandlers';
 import { createProgressViewFollowUpCommandHandlers } from '@controllers/progressView/ProgressViewFollowUpCommandHandlers';
 import { createProgressViewLifecycleCommandHandlers } from '@controllers/progressView/ProgressViewLifecycleCommandHandlers';
@@ -249,8 +250,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: async (data) => {
         await vscode.window.showInformationMessage(data.text);
       },
-      [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (data) =>
-        handleProgressViewToolEditApprovalAction(data),
       [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: async (
         data,
       ) => {
@@ -307,9 +306,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           : 'Delegated task auto-approval disabled for this stream.';
         await vscode.window.showInformationMessage(msg);
       },
-      [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: async (data) => {
-        await this.agentProposalController.handleAction(data);
-      },
       [PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG]: async (data) => {
         const restored =
           await this.agentProposalController.restoreProposalConfig(
@@ -328,10 +324,20 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           );
         }
       },
-      [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]: (data) =>
-        handleProgressViewBashApprovalAction(data),
-      [PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION]: (data) =>
-        this.handlePlanApprovalAction(data),
+      ...createProgressViewApprovalCommandHandlers({
+        handleToolEditApprovalAction: async (message) => {
+          await handleProgressViewToolEditApprovalAction(message);
+          return true;
+        },
+        handleBashApprovalAction: (message) =>
+          handleProgressViewBashApprovalAction(message),
+        handlePlanApprovalAction: (message) =>
+          this.handlePlanApprovalAction(message),
+        handleUserQuestionAction: (message) =>
+          handleUserQuestionAction(message),
+        handleAgentProposalAction: (message) =>
+          this.agentProposalController.handleAction(message),
+      }),
       [PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION]: async (data) => {
         if (data.action === 'draft') {
           await persistOpenTurnDraft({
@@ -363,8 +369,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           feedback: data.feedback,
         });
       },
-      [PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION]: (data) =>
-        handleUserQuestionAction(data),
 
       // Profile & Memory - direct command execution
       [PROGRESS_VIEW_COMMANDS.OPEN_PROFILE]: async () => {
