@@ -11,10 +11,7 @@ import { formatDuration } from '@utils/core';
 
 // Local imports - CLI state
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
-import {
-  childWithEffectiveStatus,
-  visibleSubagentRows,
-} from './childStreamMerge';
+import { visibleSubagentRows } from './childStreamMerge';
 import { streamScopeDisplayLabel } from './streamLabels';
 import { orderedDescendantsFromTree } from './focusCycle';
 import { transcriptEntryLines } from './transcriptLines';
@@ -393,11 +390,8 @@ export function liveChildExecutionElapsedKey(
 
   const liveKeys: string[] = [];
   for (const child of slice.activeSubagents) {
-    const effectiveChild = childWithEffectiveStatus(child);
-    if (hasLiveChildElapsed(effectiveChild)) {
-      liveKeys.push(
-        `${effectiveChild.executionId}:${effectiveChild.startedAt}`,
-      );
+    if (hasLiveChildElapsed(child)) {
+      liveKeys.push(`${child.executionId}:${child.startedAt}`);
     }
   }
   for (const child of slice.activeProcesses) {
