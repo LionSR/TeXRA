@@ -1,3 +1,4 @@
+import { platform } from '@platform/platform';
 import { Node } from '@agent/node';
 import type { RoundFileMapping } from '@agent/output/types';
 import type { CompiledPdfArtifact } from '@agent/output/compiledPdfArtifacts';
@@ -23,7 +24,6 @@ import {
   shouldUseCompileFailureRepairContext,
 } from '@agent/output/compileFailureRoundContext';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
 import type {
   CompileFailure,
@@ -373,14 +373,14 @@ export class OutputNode<C = unknown> extends Node<
 }
 
 function shouldAutoOpenPdfOrLog(): boolean {
-  return getWorkspaceState().get<boolean>(
+  return platform().workspaceState.get<boolean>(
     WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
     LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf,
   );
 }
 
 function shouldRejectOnCompileFailure(): boolean {
-  return getWorkspaceState().get<boolean>(
+  return platform().workspaceState.get<boolean>(
     WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
     LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure,
   );

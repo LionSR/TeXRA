@@ -1,15 +1,11 @@
 /**
- * State store facade — convenience wrapper over platform().globalState / workspaceState.
+ * Bootstrap-tolerant workspace-state accessor.
+ *
+ * For initialized code paths, reach state directly via `platform().globalState`
+ * / `platform().workspaceState` (the documented `@platform` accessor). This
+ * module exists only for the pre-initialization escape hatch below.
  */
-import { platform, tryPlatform } from '@platform/platform';
-
-export function getGlobalState() {
-  return platform().globalState;
-}
-
-export function getWorkspaceState() {
-  return platform().workspaceState;
-}
+import { tryPlatform } from '@platform/platform';
 
 /**
  * Workspace-state accessor that tolerates pre-initialization.
@@ -18,7 +14,7 @@ export function getWorkspaceState() {
  * constants or class constructors that may be evaluated by the require graph
  * before `activate()` finishes wiring the platform. Callers must apply their
  * own default when null is returned. For runtime code paths that fire only
- * after activation, use `getWorkspaceState()` instead.
+ * after activation, use `platform().workspaceState` instead.
  */
 export function tryGetWorkspaceState() {
   return tryPlatform()?.workspaceState ?? null;
