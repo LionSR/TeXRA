@@ -73,6 +73,8 @@ export interface StatusBarDisplayInput {
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
    *  active; otherwise the universal Ctrl-J is the only reliable binding. */
   readonly shiftEnterNewline?: boolean;
+  /** True while a child stream owns the visible transcript pane. */
+  readonly scopedTranscriptScrollable?: boolean;
   /** Terminal width in columns. Used to keep right-side previews from
    *  colliding with durable left-side status segments. */
   readonly width?: number;
@@ -366,6 +368,7 @@ export function statusBarBindingsText(
   hasMultipleStreams: boolean,
   modifierLabel = defaultShortcutModifierLabel(),
   shiftEnterNewline = false,
+  scopedTranscriptScrollable = false,
   ctrlCAction: CtrlCAction = 'exit',
   maxColumns?: number,
 ): string {
@@ -376,6 +379,7 @@ export function statusBarBindingsText(
     // Stream cycling / numeric focus only do something when there is more
     // than one stream — hide the hints in a plain single-stream chat.
     ...(hasMultipleStreams ? ['[Tab]streams', `${focusBinding}focus`] : []),
+    ...(scopedTranscriptScrollable ? ['[PgUp/PgDn]scroll'] : []),
     ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
     '[/status]details',
     ...(agentSelectionAvailable ? ['[/agent]agents'] : []),
@@ -408,6 +412,7 @@ export function statusBarBindingsText(
 
   const compactBindings = joinStatusBindings([
     ...(hasMultipleStreams ? ['[Tab]streams'] : []),
+    ...(scopedTranscriptScrollable ? ['[PgUp/Dn]scroll'] : []),
     ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
     ...(subagentControlsAvailable ? [`${subagentsBinding}subagents`] : []),
     ...(agentSelectionAvailable ? ['[/agent]agents'] : []),
@@ -418,6 +423,7 @@ export function statusBarBindingsText(
 
   const minimalBindings = joinStatusBindings([
     ...(hasMultipleStreams ? ['[Tab]streams'] : []),
+    ...(scopedTranscriptScrollable ? ['[PgUp/Dn]scroll'] : []),
     ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
     ...(subagentControlsAvailable ? [`${subagentsBinding}subagents`] : []),
     ...(agentSelectionAvailable ? ['[/agent]agents'] : []),
@@ -428,6 +434,7 @@ export function statusBarBindingsText(
   if (hasMultipleStreams && taskControlsAvailable) {
     const taskFocusedBindings = joinStatusBindings([
       '[Tab]streams',
+      ...(scopedTranscriptScrollable ? ['[PgUp/Dn]scroll'] : []),
       `${tasksBinding}tasks`,
       `[Ctrl-C]${ctrlCAction}`,
     ]);
@@ -449,6 +456,7 @@ export function statusBarBindingsText(
   if (subagentControlsAvailable) {
     const subagentFocusedBindings = joinStatusBindings([
       ...(hasMultipleStreams ? ['[Tab]streams'] : []),
+      ...(scopedTranscriptScrollable ? ['[PgUp/Dn]scroll'] : []),
       `${subagentsBinding}subagents`,
       `[Ctrl-C]${ctrlCAction}`,
     ]);
@@ -704,6 +712,7 @@ export function buildStatusBarDisplay(
               input.hasMultipleStreams,
               input.shortcutModifierLabel,
               input.shiftEnterNewline,
+              input.scopedTranscriptScrollable,
               input.ctrlCAction,
               input.width === undefined
                 ? undefined
@@ -717,6 +726,7 @@ export interface StatusBarProps {
   readonly canStopActiveRun?: () => boolean;
   readonly foregroundEscapeAction?: string;
   readonly queuedFollowUpPreview?: boolean;
+  readonly scopedTranscriptScrollable?: boolean;
   readonly shortcutsActive?: boolean;
 }
 
@@ -769,6 +779,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
     shiftEnterNewline: caps.kittyKeyboard,
+    scopedTranscriptScrollable: props.scopedTranscriptScrollable,
     width: columns,
     ctrlCAction: ctrlCActionForFocus({
       activeStreamId,
