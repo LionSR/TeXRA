@@ -85,10 +85,7 @@ export class StreamSnapshotStore {
     StreamTabId,
     Map<number, CompileFailure[]>
   >();
-  private readonly usage = new Map<
-    StreamTabId,
-    Map<string, TokenUsageStats>
-  >();
+  private readonly usage = new Map<StreamTabId, Map<string, TokenUsageStats>>();
   private readonly workPlan = new Map<StreamTabId, WorkPlanSnapshot>();
   private readonly meta = new Map<StreamTabId, StreamTabMeta>();
 
@@ -255,7 +252,8 @@ export class StreamSnapshotStore {
     usage: TokenUsageStats,
   ): TokenUsageStats | undefined {
     const delta = TokenUsageStatsParsingSchema.parse(usage);
-    const current = this.usage.get(stream) ?? new Map<string, TokenUsageStats>();
+    const current =
+      this.usage.get(stream) ?? new Map<string, TokenUsageStats>();
     if (isEmptyUsage(delta)) return current.get(storageKey);
     const existing = current.get(storageKey) ?? emptyUsageStats();
     const accumulated = sumUsageStats([existing, delta]);
@@ -425,9 +423,7 @@ export class StreamSnapshotStore {
    * empty (but valid) snapshot when no sidecar exists yet. Liveness fields stay
    * at their defaults — callers layer log-derived + clamped-live state on top.
    */
-  private async readMetaFile(
-    kv: KVStore,
-  ): Promise<StreamTabMeta | undefined> {
+  private async readMetaFile(kv: KVStore): Promise<StreamTabMeta | undefined> {
     const raw = await this.tryRead(kv, STREAM_DATA_KEYS.META);
     if (raw === undefined) return undefined;
     const parsed = StreamTabMetaSchema.safeParse(raw);
@@ -504,10 +500,7 @@ export class StreamSnapshotStore {
   async load(streamIds: readonly StreamTabId[]): Promise<void> {
     for (const streamId of streamIds) {
       const snap = await this.read(streamId);
-      this.outputFiles.set(
-        streamId,
-        recordToRoundMap(snap.outputFilesByRound),
-      );
+      this.outputFiles.set(streamId, recordToRoundMap(snap.outputFilesByRound));
       this.missingOutputs.set(
         streamId,
         recordToRoundMap(snap.missingOutputsByRound),
