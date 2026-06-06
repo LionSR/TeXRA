@@ -73,10 +73,16 @@ export const MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION =
 export const MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION =
   'Model for the team root agent';
 const BUILT_IN_TEAM_ROOT_AGENT_NAMES = ['orchestrator', 'leanOrchestrator'];
-const MULTI_AGENT_INSPECT_HINT =
-  'Hint: run `texra multi-agent inspect <preset>` to see missing agents for degraded or unavailable presets.';
+const MULTI_AGENT_INSPECT_HINT = `Hint: run \`${formatCliMultiAgentInspectCommand('<preset>')}\` to see missing agents for degraded or unavailable presets.`;
 const MULTI_AGENT_LOGIN_HINT =
   'Hint: built-in teams may load additional relay-served agents after `texra login`.';
+const MULTI_AGENT_LAUNCHER_INSPECT_HINT = `Team setup: run ${formatCliMultiAgentInspectCommand('<preset>')}.`;
+const MULTI_AGENT_LAUNCHER_LOGIN_HINT =
+  'Relay teams may unlock more agents after texra login.';
+
+export function formatCliMultiAgentInspectCommand(preset: string): string {
+  return `texra multi-agent inspect ${preset}`;
+}
 
 export function parseCliCustomAgentPresets(raw: unknown): AgentModePreset[] {
   return AgentModePresetSchema.array().catch([]).parse(raw);
@@ -151,6 +157,20 @@ export function formatCliMultiAgentPresetLauncherSummary(
   );
 
   return [status, details].filter((part): part is string => !!part).join('; ');
+}
+
+export function formatCliMultiAgentPresetLauncherHints(
+  plan: CliMultiAgentPresetRunPlan,
+  options: CliMultiAgentPresetFormatOptions = {},
+): readonly string[] {
+  return [
+    cliMultiAgentPlanStatus(plan) !== 'available'
+      ? MULTI_AGENT_LAUNCHER_INSPECT_HINT
+      : undefined,
+    shouldIncludeBuiltInLoginHint(plan, options)
+      ? MULTI_AGENT_LAUNCHER_LOGIN_HINT
+      : undefined,
+  ].filter((hint): hint is string => hint !== undefined);
 }
 
 export function formatCliMultiAgentPresetList(
@@ -289,7 +309,7 @@ export function formatCliMultiAgentTeamLaunchBlockMessage(
   }
   const parts = [
     `Multi-agent preset "${preset}" cannot start as a team: ${reason}.`,
-    `Run \`texra multi-agent inspect ${plan.preset.id}\` to see missing agents.`,
+    `Run \`${formatCliMultiAgentInspectCommand(plan.preset.id)}\` to see missing agents.`,
     options.followUpAdvice,
   ];
   return parts.filter((part): part is string => !!part).join(' ');
