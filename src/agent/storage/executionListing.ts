@@ -11,11 +11,11 @@
 
 import pMap from 'p-map';
 
+import { platform } from '@platform/platform';
 import {
   type AgentConfig,
   AgentConfigSchema,
 } from '@agent/core/definition/AgentConfig';
-import { getWorkspaceState } from '@agent/core/stateStore';
 import { isFileNotFoundError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import * as logger from '@logger/logUtils';
@@ -249,13 +249,13 @@ async function migrateIndexJson(): Promise<void> {
 /** Migrate entries from workspace state into per-execution KV. */
 async function migrateWorkspaceState(): Promise<void> {
   const storageKey = getWorkspaceStorageKey();
-  const legacy = getWorkspaceState().get<unknown[]>(storageKey, []);
+  const legacy = platform().workspaceState.get<unknown[]>(storageKey, []);
   if (!Array.isArray(legacy) || legacy.length === 0) return;
 
   await backfillEntries(legacy);
 
   try {
-    await getWorkspaceState().update(storageKey, []);
+    await platform().workspaceState.update(storageKey, []);
   } catch (error) {
     logger.warn(
       CHANNEL,

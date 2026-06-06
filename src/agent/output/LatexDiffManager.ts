@@ -4,7 +4,6 @@ import { platform } from '@platform/platform';
 import type { StageHandle } from '@agent/trace';
 import { logLatexdiff, type AgentTrace } from '@agent/trace';
 import { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
-import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
@@ -191,7 +190,7 @@ export class LatexDiffManager {
       }
     }
 
-    const generateBetweenRoundDiffs = getWorkspaceState().get<boolean>(
+    const generateBetweenRoundDiffs = platform().workspaceState.get<boolean>(
       WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
       LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
     );
@@ -369,7 +368,7 @@ export class LatexDiffManager {
     // gets killed by execa instead of orphaning latexmk/pdflatex.
     const timeoutMs = Math.max(
       LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min,
-      getWorkspaceState().get<number>(
+      platform().workspaceState.get<number>(
         WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
         LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
       ),

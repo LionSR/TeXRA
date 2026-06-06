@@ -1,6 +1,6 @@
 import * as path from 'path';
 
-import { getWorkspaceState } from '@agent/core/stateStore';
+import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors';
 import { runLatexFormatter } from '@latex/texFormatter';
 import * as logger from '@logger/logUtils';
@@ -54,7 +54,7 @@ export async function indentLatexFilesInDirectory(
     `Starting LaTeX indentation process for directory: ${directory}`,
   );
 
-  const formatter = getWorkspaceState().get<string>(
+  const formatter = platform().workspaceState.get<string>(
     WorkspaceStateKey.LATEX_FORMATTER,
     LATEX_CONFIG_DEFAULTS.latexFormatter,
   );
