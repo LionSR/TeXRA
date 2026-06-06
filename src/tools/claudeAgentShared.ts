@@ -3,8 +3,17 @@
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
 import { truncateSummary } from '@utils/text/stringUtils';
 
+// Re-export native SDK types where our values match exactly.
+export type { EffortLevel as ClaudeAgentEffort } from '@anthropic-ai/claude-agent-sdk';
+
 export const CLAUDE_AGENT_NAME = 'claude_code';
 export const CLAUDE_AGENT_DISPLAY_MODEL = 'claude';
+
+/**
+ * Permission modes exposed in the settings UI.
+ * Subset of the SDK's PermissionMode — 'dontAsk' and 'auto' are internal only.
+ * The type is derived from this subset so it stays narrower than the SDK type.
+ */
 export const CLAUDE_AGENT_PERMISSION_MODES = [
   'default',
   'acceptEdits',
@@ -23,7 +32,6 @@ export const CLAUDE_AGENT_EFFORT_LEVELS = [
   'xhigh',
   'max',
 ] as const;
-export type ClaudeAgentEffort = (typeof CLAUDE_AGENT_EFFORT_LEVELS)[number];
 
 /** Canonical Claude model IDs surfaced by the settings dropdown.
  * The SDK accepts arbitrary model strings; this list is what we expose in the
