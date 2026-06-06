@@ -1,6 +1,6 @@
 # Agent SDK Readiness Audit
 
-_Audit date: 2026-05-28 · Scope: `src/agent/**`, `src/logger/**`, `src/eventBus/**`, plus extension/CLI entrypoints._
+_Audit date: 2026-05-28 · Re-verified through 2026-06-06 (§14) · Scope: `src/agent/**`, `src/logger/**`, `src/eventBus/**`, plus extension/CLI entrypoints._
 
 This is a **review + refactoring plan**, not an applied refactor. It identifies the
 texra agent core, model handlers, logger, and surface areas; flags abstractions
@@ -1074,3 +1074,162 @@ preserve the workflow-only gate — not a duplicate deletion; and **§5/Step 7's
 otherwise concurrency-safe keyed registries (Finding B), so the minimal fix is to scope those
 seams by session, not relocate the registries. The remaining ledger is just §2.6 (relocate) plus
 the deliberately-deferred behavior-sensitive items (§4, §5/Step 7). No rewrite warranted.
+
+---
+
+## 14. Re-verification addendum — 2026-06-06 (ninth pass — confirmation)
+
+A ninth pass — three parallel fresh-eyes audits (agent core/runtime, model handlers,
+logger/platform/surface) plus a direct line-by-line re-check of every open item against
+`main` at HEAD `f5d1fc6` (branched as `claude/eager-noether-vaT5l`). **All 2026-05-28 →
+06-04 findings hold without change. No new structural over-abstraction surfaced.** Each of
+the three independent audits, on its own, re-reached the standing verdict: TeXRA is
+well-architected and SDK-aligned; the gaps are incremental, not structural. Like the §10/§11
+confirmation passes (and unlike §12/§13, which had safe new tidies to apply), **this pass
+applies no refactor** — every remaining open item is either behavior-sensitive (§4, §5/Step 7)
+or non-trivial (§2.6 is CLI machinery; §5 is a multi-day primitive), exactly the items eight
+prior passes deliberately deferred, and the one genuinely-new candidate this pass (below) is a
+§2.4 _keep_, not a removal.
+
+### Drift since the 2026-06-04 pass (last verified main `17d229860` → HEAD `f5d1fc6`) — audited clean
+
+The 12 commits touching the audited tree (`src/agent`, `src/logger`, `src/platform`,
+`src/eventBus`, `packages/core/src`; net +904/−466 over 37 files) are CLI/webview fixes,
+**simplification** refactors that move _with_ the audit, and one new feature — none adds a
+wrapper, barrel, or run-entry indirection:
+
+- **`c9d7ae7` "Remove trivial `@agent/core/config` re-export, import `getConfig` directly"
+  (#5349) — closes half of SDK-008.** The proposal's SDK-008 item flagged `core/config.ts` and
+  `core/stateStore.ts` as pure passthroughs ("inline or drop"); `src/agent/core/config.ts` is
+  now **removed** (verified absent) and callers import `getConfig` directly. The `stateStore.ts`
+  half remains open (see ledger below).
+- **`aa9b79d` "simplify SDK error adapters" (#5381)** and **`ad44aa9` "consolidate `ensureArray`
+  utility"** are textbook applications of the repo's own flatten/anti-shim rules — reductions,
+  no new indirection.
+- **`acac22a` "repair compile-failed workflow rounds"** added the three new feature files
+  (`output/compileFailureRoundContext.ts`, `implementations/flows/tooluse/modelSwitchState.ts`,
+  `runtime/mediaVisionWarning.ts`) and the `xmlExtraction.ts` → `outputFileExtraction.ts` rename.
+  Feature work, not abstraction churn.
+- **Guardrails intact:** `git diff --name-status` over the audited dirs shows **no new
+  `index.ts` barrel and no new run-entry wrapper**; `@texra/core` is still the curated 13-export
+  barrel (not the old stub); and `src/agent`/`src/model`/`src/latex`/`src/tools` remain
+  **`vscode`-free** (grep clean).
+
+### Three parallel fresh-eyes audits — independently re-reached the verdict; re-surfaced the documented false-positives
+
+As in prior passes, the fresh audits re-discovered several items the ledger already
+adjudicated. Re-verified with fresh `file:line` evidence at HEAD `f5d1fc6` so they are not
+re-litigated a tenth time:
+
+- **"Consolidate `modelHandlerOpenAIResponse.ts` (~2.5k LOC) into the OpenAI base."**
+  **Re-confirmed reject** (proposal "Rejected findings"; §11): the two share mutable conversation
+  state, background polling spans the transports, and the test suite subclasses the handler —
+  a multi-day design migration, not a mechanical consolidation. Not a quick win.
+- **"`ReasoningModelHandlerOpenAI` (38 LOC) is a one-trick intermediate — collapse it."**
+  **Re-confirmed justified DRY base** (§13): it has **four** real subclasses
+  (`modelHandlerDeepSeek/Kimi/GLM/MiniMax`, verified by `extends ReasoningModelHandlerOpenAI`),
+  each carrying genuine deltas. A shared two-flag base across four subclasses is the DRY pattern,
+  not over-abstraction.
+- **"Thin OpenAI-compatible subclasses (DashScope/XAI/GLM) are wrapper-only — table them."**
+  **Re-confirmed lean-keep** (§9 #2/§12/§13): each maps 1:1 to a `ModelProvider` arm in the
+  exhaustive `PROVIDER_HANDLERS`; the prior OpenRouter merge of this flavor was deliberately
+  reverted. The collapse still needs a class per provider — trades small LOC for a less-obvious
+  dispatch table.
+- **"`ModelFactory` post-construction wrapping (`withReasoningOverride` /
+  `withModelHandlerCompatibilityKey`) is a two-layer factory — move into the constructor."**
+  **Rebutted, verified.** `withReasoningOverride` (`ModelFactory.ts:137`) is **capability-gated**
+  on `supportsReasoningLevelOverride` (`:138`, the §8 flag) and only mutates capabilities when
+  the handler opts in; `withModelHandlerCompatibilityKey` tags a cross-provider compatibility key.
+  These are capability-driven decorators applied by the §10 "single-purpose three-path router,"
+  not a `buildX→createX` two-layer factory — moving them into each provider constructor would
+  _duplicate_ the gate across every handler. Keep.
+- **"Most handlers don't use the `UsageNormalizer` template (partial adoption)."**
+  **Factually wrong — verified.** `support/UsageNormalizer.normalizeUsage` is imported and called
+  by `anthropic/anthropicUsage.ts:165`, `openai/openAIUsage.ts:68`, and `google/googleUsage.ts:90`
+  (each supplies only a per-provider `extract`/`computePrice` config). The template **is** the
+  single normalization path the prior passes described — no migration pending.
+- **"`IModelHandler` is a redundant duplicate of `ModelHandler`."** **Re-confirmed not a
+  duplicate** (§9/§12/§13): the optional `createBatchedToolUseFollowUpMessages?`
+  (`types/IModelHandler.ts:392`) is feature-detected on the port-typed handler at
+  `ToolUseCycleFlow.ts:822/826` and is **not** on the base class — re-typing those sites to the
+  concrete class fails to compile.
+
+The §13-applied tidies all remain in place: the `IModelHandler` port carries only
+`isOpenai`/`isAnthropic`/`isGoogle` (the three provider booleans are `protected` on the base,
+`ModelHandler.ts:437/442/447`), and the `AgentRuntimeHost` headless-contract TSDoc is present.
+
+### One genuinely-new candidate this pass — a §2.4 _keep_, recorded so it is not re-flagged as inline
+
+The agent-core audit flagged the two single-purpose `AgentFlowResult` builders in
+`runtime/executeAgent.ts` — `buildWorkflowFlowResult` (defined `:112`, called once at `:523`)
+and `buildTerminalFlowResult` (defined `:303`, called **twice** at `:267` and `:276`) — as
+candidates to inline at their call sites. **Recorded as a non-finding / keep.** This is exactly
+the §2.4 guidance ("extract the trivial result→`AgentFlowResult` mapping … so the _loop_ reads
+cleanly; leave the orchestration in place"): named result-mappers that keep the dispatch loop
+readable are endorsed to keep. Moreover `buildTerminalFlowResult` has two callers, so inlining it
+would _duplicate_ the mapping. No action; logged so a future pass does not re-propose the inline.
+
+### Open ledger at HEAD `f5d1fc6` (line numbers refreshed; all still present)
+
+- **§2.6** — `src/agent/modelHandlers/modelHandlerValidation.ts` still in the production handler
+  dir, gated by `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL` (`ModelFactory.ts:52`,
+  dynamic-imported `:326`). Relocate-with-injection (CLI machinery, not vitest-only) still
+  recommended; still low priority.
+- **§4** — token usage still two-sink fan-out in `src/agent/utils/UsageMonitor.ts`:
+  `runtimeHost.emit('updateStreamUsage', …)` `:155` (sidebar, all agents) and `logger.usage(…)`
+  `:164` gated to `AgentCategory.Workflow` `:160` (transcript stats line). Per §13 Finding A this
+  is a deliberate two-audience fan-out, not a duplicate — its fix is a sink consolidation onto
+  `AgentTrace` that preserves the workflow-only gate (a progress-view consumer rewire).
+- **§5 / proposal Step 7** — no `delegateTo(...)` primitive (`grep` over `src/**` + `packages/**`
+  empty); delegation remains a tool call. The three module-globals are unchanged:
+  `runCoordinators.bridgeState` (`:27`), `executionRegistry` module Maps, and the interrupt
+  registry still named `ToolUseAgentRegistry` (Step 7a rename not landed). Per §13 Finding B the
+  minimal correctness fix is scoping the ~3 unscoped sweep/list/subscribe seams by session, not
+  relocating the keyed registries.
+- **SDK-008 residual** — `core/config.ts` removed (`c9d7ae7`), but `core/stateStore.ts`'s
+  `getGlobalState()`/`getWorkspaceState()` passthroughs remain (~50 callers across
+  `src/agent`, `src/latex`, `src/model`). **Keep `tryGetWorkspaceState()`** (real pre-init
+  null-tolerance). The inline is a behavior-neutral 50-site find-replace across both packages —
+  the same large-churn category prior passes deferred (cf. the rejected `core/index.ts`
+  enforcement); not applied here. Recorded as half-closed.
+- **§3.1** — still no `@agent/runtime/index.ts` barrel; still optional polish (the `@texra/core`
+  - `src/platform/index.ts` surfaces already cover the underlying concern).
+- **§13 finding #1 (`AgentRuntimeHost.emit` mixes UI + essential events)** — unchanged;
+  addressed by the documented headless contract, structural split deferred.
+
+### Independently re-confirmed clean (recorded, not re-flagged)
+
+- **Agent core/runtime.** The two-tier run entry (`runAgent` → `executeAgent`/`runAgentStream`)
+  is the documented high/low split; `buildAgentLaunchContext`'s saga-style assembly and
+  `runFlowWithLifecycle`'s cross-cutting lifecycle are load-bearing (not wrappers to inline);
+  PocketFlow nodes create+run flows directly (`createToolUseCycleFlow`/`createResponseCycleFlow`
+  in `Node.exec`); `createRunContext` is the endorsed frozen-object factory (§2.5). No core
+  abstraction recommended for removal.
+- **Model handlers.** `ModelFactory` is the exhaustive three-path router; `support/` collaborators
+  (`AnthropicStreamHandler`, `MediaAttachmentProcessor`, `ProxyConfigResolver`, `UsageNormalizer`,
+  `sdkErrorAdapters`) are each multi-caller and correctly shared; tool conversion shares one schema
+  flattener (`convertToolSchema`) with per-provider formatters. The hand-rolled streaming is
+  necessary multi-provider glue, not a reimplementation of any single SDK's loop.
+- **Logger / trace / eventBus / platform.** `@logger` stays decoupled from `platform()` (single
+  `writeLine` emission point; host-injected sink); `AgentTrace` is the single per-instance
+  discriminated event channel (per-instance `AsyncLocalStorage` for stage isolation);
+  `@transcript` adds product subscribers without polluting the host-neutral trace; `ProgressEventBus`
+  is an orthogonal buffered pub/sub; `redaction.ts` centralized and **not** dead
+  (`desktopAppLog.ts` is the live consumer). The `Platform` 8-port composition root + frozen
+  single-call init + `src/platform/index.ts` surface remain the strongest SDK-aligned pieces.
+
+**Subagent split points — unchanged and accurate** (§5 + proposal): config-driven YAML agents
+over the two flows (reflection / tool-use) + the `delegate_*` tools are the existing subagent
+mechanism; the `agentCategory` dispatch in `executeAgent` is the cleanest internal seam; the
+helper-model tasks remain the lowest-risk tools-as-data extraction; the node-level candidates
+(`MediaExtractionNode`, `TeXCountNode`, `OutputNode`, the `sessionDescription` background call)
+stay gated behind the Step-7 coupling blocker.
+
+**Net for 2026-06-06:** thesis reaffirmed for the ninth pass — incremental, not structural. The
+post-06-04 drift is pure simplification + one feature, moving the codebase further _toward_ the
+audit's target, and it closed half of SDK-008 (`core/config.ts` removed). The three fresh audits
+re-surfaced only documented rejects/lean-keeps (re-rebutted with fresh line evidence) plus one new
+candidate that is a §2.4 _keep_. The remaining ledger is exactly §2.6 (relocate), §4 (gated
+two-sink consolidation), §5/Step 7 (multi-session isolation), and the SDK-008 `stateStore`
+residual (a deferred 50-site churn) — all behavior-sensitive or large-churn, consistent with the
+prior deferrals. No refactor applied this pass; no rewrite warranted.
