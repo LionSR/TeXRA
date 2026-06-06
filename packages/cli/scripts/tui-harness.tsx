@@ -61,7 +61,7 @@ import {
   type ApprovalDecision,
 } from '../src/chat/tui/state/approvalQueue';
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
-import { effectiveStreamStatus } from '../src/chat/tui/state/streamStatus';
+import { streamStatusFromState } from '../src/chat/tui/state/streamStatus';
 import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
 import { parseCliApiMode, type CliApiMode } from '../src/runtime/apiAccessMode';
@@ -1106,7 +1106,7 @@ function harnessActiveChildStreamId(): StreamTabId | undefined {
 }
 
 function harnessRejectsChildSubmit(childStreamId: StreamTabId): boolean {
-  const status = effectiveStreamStatus(childStreamId);
+  const status = streamStatusFromState(childStreamId);
   return status !== undefined && !isInFlightStatus(status);
 }
 

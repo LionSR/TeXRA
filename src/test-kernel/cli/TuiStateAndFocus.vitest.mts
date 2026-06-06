@@ -227,7 +227,7 @@ describe('cliState Phase 4 fields', () => {
 
       const parent = cliState.streams.get().get(root);
       expect(parent?.activeSubagents).toEqual([]);
-      expect(parent?.childStreams[0]?.status).toBe(STREAM_STATUS.RUNNING);
+      expect(parent?.childStreams[0]?.status).toBe(STREAM_STATUS.ERROR);
       expect(visibleSubagentRows(parent!)).toMatchObject([
         {
           executionId: 'agent-1',
@@ -1245,7 +1245,12 @@ describe('CLI TUI row allocation', () => {
     expect(chatTuiRejectedChildFollowUpTarget()).toBe(child1);
   });
 
-  it('uses StreamStatusService before stale slice status for focused children', () => {
+  it('mirrors running child status events into focused child routing', () => {
+    const wrapped = wrapRuntimeHost({
+      emit: () => undefined,
+      close: async () => {},
+    } as unknown as CliRuntimeHost);
+    const dispose = subscribeStreamStatus();
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
     patchStream(root, (s) => ({
       ...s,
@@ -1259,15 +1264,33 @@ describe('CLI TUI row allocation', () => {
       ],
     }));
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.STOPPED }));
-    StreamStatusService.set(child1, STREAM_STATUS.RUNNING, { emit: false });
     setParentStream(child1, root);
 
-    cliState.activeStreamId.set(child1);
-    expect(chatTuiActiveChildFollowUpTarget()).toBe(child1);
-    expect(chatTuiRejectedChildFollowUpTarget()).toBeUndefined();
+    try {
+      StreamStatusService.set(child1, STREAM_STATUS.RUNNING, {
+        runtimeHost: wrapped,
+      });
+
+      cliState.activeStreamId.set(child1);
+      expect(cliState.streams.get().get(child1)?.status).toBe(
+        STREAM_STATUS.RUNNING,
+      );
+      expect(cliState.streams.get().get(root)?.childStreams[0]?.status).toBe(
+        STREAM_STATUS.RUNNING,
+      );
+      expect(chatTuiActiveChildFollowUpTarget()).toBe(child1);
+      expect(chatTuiRejectedChildFollowUpTarget()).toBeUndefined();
+    } finally {
+      dispose();
+    }
   });
 
-  it('rejects focused children when only StreamStatusService is terminal', () => {
+  it('mirrors stopped child status events into focused child routing', () => {
+    const wrapped = wrapRuntimeHost({
+      emit: () => undefined,
+      close: async () => {},
+    } as unknown as CliRuntimeHost);
+    const dispose = subscribeStreamStatus();
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
     patchStream(root, (s) => ({
       ...s,
@@ -1281,12 +1304,25 @@ describe('CLI TUI row allocation', () => {
       ],
     }));
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.RUNNING }));
-    StreamStatusService.set(child1, STREAM_STATUS.STOPPED, { emit: false });
     setParentStream(child1, root);
 
-    cliState.activeStreamId.set(child1);
-    expect(chatTuiActiveChildFollowUpTarget()).toBeUndefined();
-    expect(chatTuiRejectedChildFollowUpTarget()).toBe(child1);
+    try {
+      StreamStatusService.set(child1, STREAM_STATUS.STOPPED, {
+        runtimeHost: wrapped,
+      });
+
+      cliState.activeStreamId.set(child1);
+      expect(cliState.streams.get().get(child1)?.status).toBe(
+        STREAM_STATUS.STOPPED,
+      );
+      expect(cliState.streams.get().get(root)?.childStreams[0]?.status).toBe(
+        STREAM_STATUS.STOPPED,
+      );
+      expect(chatTuiActiveChildFollowUpTarget()).toBeUndefined();
+      expect(chatTuiRejectedChildFollowUpTarget()).toBe(child1);
+    } finally {
+      dispose();
+    }
   });
 
   it('clears stale resume ids when clearing chat session run state', () => {

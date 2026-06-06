@@ -8,16 +8,17 @@
 import { signal, Signal } from '@lit-labs/signals';
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
-import type {
-  ActiveChildInfo,
-  AgentCategory,
-  ConversationProgress,
-  NormalizedToolUse,
-  Plan,
-  StreamStatus,
-  StreamTabId,
-  TodoItem,
-  TokenUsageStats,
+import {
+  STREAM_STATUS,
+  type ActiveChildInfo,
+  type AgentCategory,
+  type ConversationProgress,
+  type NormalizedToolUse,
+  type Plan,
+  type StreamStatus,
+  type StreamTabId,
+  type TodoItem,
+  type TokenUsageStats,
 } from '@shared/schemas';
 
 export interface ConversationEntry {
@@ -222,6 +223,89 @@ export function patchStream(
   const out = new Map(current);
   out.set(streamId, next);
   cliState.streams.set(out);
+}
+
+function streamSliceWithStatus(
+  slice: StreamSlice,
+  status: StreamStatus,
+  nowMs: number,
+): StreamSlice {
+  const runStartedAt =
+    status === STREAM_STATUS.RUNNING
+      ? (slice.runStartedAt ?? nowMs)
+      : undefined;
+  if (slice.status === status && slice.runStartedAt === runStartedAt) {
+    return slice;
+  }
+  return { ...slice, status, runStartedAt };
+}
+
+function updateChildStatusReferences(
+  children: readonly ActiveChildInfo[],
+  childStreamId: StreamTabId,
+  status: StreamStatus,
+): readonly ActiveChildInfo[] {
+  let out: ActiveChildInfo[] | undefined;
+  children.forEach((child, index) => {
+    if (child.childStreamId !== childStreamId || child.status === status) {
+      return;
+    }
+    out ??= [...children];
+    out[index] = { ...child, status };
+  });
+  return out ?? children;
+}
+
+function withMirroredChildStreamStatus(
+  slice: StreamSlice,
+  childStreamId: StreamTabId,
+  status: StreamStatus,
+): StreamSlice {
+  return mapChildStreamReferenceLists(slice, (children) =>
+    updateChildStatusReferences(children, childStreamId, status),
+  );
+}
+
+/**
+ * Apply a stream-status event once to the CLI state mirror.
+ *
+ * Runtime status still originates in StreamStatusService, but TUI renderers
+ * should read only StreamSlice data. Updating retained parent child rows here
+ * keeps side panels, tab labels, focus routing, and follow-up targeting on the
+ * same state snapshot instead of re-querying the runtime service at render time.
+ */
+export function setStreamStatusInCliState({
+  nowMs = Date.now(),
+  status,
+  streamId,
+}: {
+  readonly nowMs?: number;
+  readonly status: StreamStatus;
+  readonly streamId: StreamTabId;
+}): void {
+  const current = cliState.streams.get();
+  let out: Map<StreamTabId, StreamSlice> | undefined;
+
+  const existingSlice = current.get(streamId);
+  const targetSlice = streamSliceWithStatus(
+    existingSlice ?? emptySlice(streamId),
+    status,
+    nowMs,
+  );
+  if (targetSlice !== existingSlice) {
+    out = new Map(current);
+    out.set(streamId, targetSlice);
+  }
+
+  const readable = out ?? current;
+  for (const [id, slice] of readable) {
+    const next = withMirroredChildStreamStatus(slice, streamId, status);
+    if (next === slice) continue;
+    out ??= new Map(current);
+    out.set(id, next);
+  }
+
+  if (out) cliState.streams.set(out);
 }
 
 interface ParentStreamEdgeUpdate {
