@@ -26,6 +26,7 @@ import {
   type CliModelAccess,
 } from '../runtime/modelAccess';
 import { effectiveCliApiMode } from '../runtime/apiAccessMode';
+import { loadCliApiStatusLines } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 import { resolveChatDefaults } from '../runtime/chatDefaults';
 
@@ -122,6 +123,9 @@ async function runOrchestration(context: CliContext): Promise<number> {
   const models: readonly CliModelAccess[] = await getCliModelAccessList({
     apiMode,
   }).catch(() => []);
+  const statusLines = await loadCliApiStatusLines({
+    includeActionHint: true,
+  });
   const allowDefaultModelLaunch = await canLaunchWithDefaultModel(
     context,
     models,
@@ -132,6 +136,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
   const action = await runOrchestrationTui(items, {
     models,
     apiMode,
+    statusLines,
     allowDefaultModelLaunch,
     colorEnabled: context.stdoutColorEnabled ?? context.colorEnabled,
   });
