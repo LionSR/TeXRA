@@ -35,8 +35,8 @@ import type { MessageHandlerContext } from './messageDispatcher';
  * Context passed to frontend event handlers providing access to state and refs.
  *
  * Note: Named "FrontendEventHandlerContext" to distinguish from the backend
- * EventHandlerContext in src/progressView/events/EventHandlerContext.ts which
- * has different shape (state manager + webview updater vs getters/setters).
+ * EventHandlerContext in @shared/progressView/backend/events has different
+ * shape (state manager + webview updater vs getters/setters).
  */
 export interface FrontendEventHandlerContext {
   getState(): ProgressState;

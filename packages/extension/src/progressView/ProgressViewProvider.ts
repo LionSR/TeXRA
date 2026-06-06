@@ -31,6 +31,7 @@ import type {
 import { AGENT_CATEGORY } from '@shared/schemas';
 import { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
 import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
+import { ProgressEventHandler } from '@shared/progressView/backend/events/ProgressEventHandler';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
@@ -42,7 +43,6 @@ import {
   readExternalInquiryThread,
 } from '@tools/inquiry/externalInquiryStorage';
 
-import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 
@@ -245,7 +245,7 @@ export class ProgressViewProvider
 
   public async initialize(): Promise<void> {
     await this.state.load();
-    this._disposables.push(...this.eventHandler.setupEventListeners());
+    this._disposables.push(this.eventHandler.setupEventListeners());
     this.logger.debug('ProgressViewProvider initialized');
   }
 

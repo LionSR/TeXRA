@@ -1,23 +1,9 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('vscode', () => ({
-  default: {},
-  Disposable: class {
-    constructor(private readonly callback: () => void) {}
-
-    dispose(): void {
-      this.callback();
-    }
-  },
-  window: {},
-  workspace: {},
-  Uri: {},
-}));
-
 // Local imports
-import { ProgressEventHandler } from '@progressView/events/ProgressEventHandler';
 import type { Plan, TodoItem } from '@shared/schemas';
+import { ProgressEventHandler } from '@shared/progressView/backend/events/ProgressEventHandler';
 import type {
   SyncStreamContentPayload,
   WebviewUpdater,
@@ -54,9 +40,7 @@ const plan: Plan = {
       title: 'Sync active stream',
       description: 'Read todos and plan from ProgressViewState.workPlan.',
       status: 'pending',
-      files: [
-        'packages/extension/src/progressView/events/ProgressEventHandler.ts',
-      ],
+      files: ['src/shared/progressView/backend/events/ProgressEventHandler.ts'],
     },
   ],
 };
