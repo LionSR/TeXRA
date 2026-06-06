@@ -126,8 +126,7 @@ export class ProgressViewProvider
         const canSend = () => this.canSendToWebview();
         this.toolEditHandler = new ApprovalRequestHandler(
           'requestId',
-          (p) =>
-            u.showPermission({ kind: PERMISSION_KIND.TOOL_EDIT, data: p }),
+          (p) => u.showPermission({ kind: PERMISSION_KIND.TOOL_EDIT, data: p }),
           (id) => u.resolvePermission(PERMISSION_KIND.TOOL_EDIT, id),
           canSend,
         );
@@ -189,11 +188,9 @@ export class ProgressViewProvider
         return {
           callbacks: {
             showRetryRequest: (p) => this.retryRequestHandler.show(p),
-            resolveRetryRequest: (id) =>
-              this.retryRequestHandler.resolve(id),
+            resolveRetryRequest: (id) => this.retryRequestHandler.resolve(id),
             showToolEditPermission: (p) => this.toolEditHandler.show(p),
-            resolveToolEditPermission: (id) =>
-              this.toolEditHandler.resolve(id),
+            resolveToolEditPermission: (id) => this.toolEditHandler.resolve(id),
             updateToolEditApprovalBypassState: (streamId, bypassActive) => {
               if (canSend())
                 u.updateBypassState(streamId, 'toolEdit', bypassActive);
@@ -203,11 +200,9 @@ export class ProgressViewProvider
                 u.updateBypassState(streamId, 'superYolo', bypassActive);
             },
             showBashPermission: (p) => this.bashApprovalHandler.show(p),
-            resolveBashPermission: (id) =>
-              this.bashApprovalHandler.resolve(id),
+            resolveBashPermission: (id) => this.bashApprovalHandler.resolve(id),
             showAgentProposal: (p) => this.agentProposalHandler.show(p),
-            resolveAgentProposal: (id) =>
-              this.agentProposalHandler.resolve(id),
+            resolveAgentProposal: (id) => this.agentProposalHandler.resolve(id),
             showPlanApproval: (p) => this.planApprovalHandler.show(p),
             resolvePlanApproval: (id) => this.planApprovalHandler.resolve(id),
             showExternalInquiry: (p) => this.externalInquiryHandler.show(p),

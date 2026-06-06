@@ -47,12 +47,9 @@ export class ProgressBackend {
 
   constructor(options: ProgressBackendOptions) {
     this.state = new ProgressViewState(options.storage);
-    this.webviewUpdater = new WebviewUpdater(
-      (message) => {
-        void options.sendMessage(message);
-      },
-      options.hasTarget,
-    );
+    this.webviewUpdater = new WebviewUpdater((message) => {
+      void options.sendMessage(message);
+    }, options.hasTarget);
     this.webviewBridge = new WebviewBridge(
       this.state.streamLogs,
       options.sendMessage,
