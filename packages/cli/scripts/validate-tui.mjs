@@ -1427,6 +1427,33 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'hidden-root-approval-tab-return',
+    cols: 120,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+      HARNESS_BASH_APPROVAL: '1',
+      HARNESS_BASH_APPROVAL_AFTER_CHILD_FOCUS: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: ['\t', '\t', '\t', '\t'],
+    expect: [
+      'agent: chat · model: harness-model',
+      'Run bash command?',
+      '$ npm run compile:safe',
+      'y approve',
+      '[main]*',
+      'Use foreground panel shortcuts',
+    ],
+    unexpect: [
+      'subagent: strategy · parent: main · model: harness-model',
+      '[1:strategy]*',
+      'signal read during notification phase',
+      'ERROR',
+    ],
+  },
+  {
     name: 'subagent-focused-own-scrollback-history',
     cols: 120,
     rows: 14,
