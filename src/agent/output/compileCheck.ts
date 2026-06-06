@@ -1,7 +1,7 @@
 import * as path from 'path';
 
+import { platform } from '@platform/platform';
 import type { AgentTrace } from '@agent/trace';
-import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
 import { hasLatexCompiler } from '@latex/latexToolchain';
 import { compileLatex2Pdf } from '@latex/texTools';
@@ -76,7 +76,7 @@ export async function runCompileCheck(
   currentRound: number,
 ): Promise<CompileCheckResult> {
   if (
-    !getWorkspaceState().get<boolean>(
+    !platform().workspaceState.get<boolean>(
       WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
       LATEX_CONFIG_DEFAULTS.workflowAutoCompile,
     )
@@ -107,7 +107,7 @@ export async function runCompileCheck(
 
   const timeoutMs = Math.max(
     MIN_TIMEOUT_MS,
-    getWorkspaceState().get<number>(
+    platform().workspaceState.get<number>(
       WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
       LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
     ),

@@ -1,8 +1,6 @@
-// Local imports - log
-import type { ExecResult } from '@agent/types/ResultTypes';
-
 // Internal imports
-import { getWorkspaceState } from '@agent/core/stateStore';
+import { platform } from '@platform/platform';
+import type { ExecResult } from '@agent/types/ResultTypes';
 import * as logger from '@logger/logUtils';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
@@ -267,7 +265,7 @@ export class DiffCommandExecutor {
     pictureEnvs: string;
     subtype?: string;
   } {
-    const state = getWorkspaceState();
+    const state = platform().workspaceState;
     const changesOnly = state.get<boolean>(
       WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
       LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,

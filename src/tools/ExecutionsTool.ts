@@ -40,7 +40,6 @@ import {
   unbindExecutionSubscription,
 } from '@agent/runtime/ExecutionSubscriptionBinder';
 import { onFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
-import { getWorkspaceState } from '@agent/core/stateStore';
 
 // Local imports - utils
 import { toErrorMessage } from '@common/errors';
@@ -635,7 +634,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     // Only block subagent kills when the toggle is disabled; process kills are always allowed.
     if (
       target instanceof AgentExecutionHandle &&
-      !getWorkspaceState().get<boolean>(
+      !platform().workspaceState.get<boolean>(
         WorkspaceStateKey.ALLOW_ORCHESTRATOR_KILL,
         true,
       )
