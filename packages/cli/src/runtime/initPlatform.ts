@@ -22,10 +22,10 @@ import {
 
 // Local imports - common state
 import { toErrorMessage } from '@common/errors';
-import { setOutputChannelFactory } from '@logger/logUtils';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Local imports - logger
+import { setOutputChannelFactory } from '@logger/logUtils';
 
 // Local imports - tool integrations
 import { setTexraCliEntrypointChecker } from '@tools/externalToolDefs';
