@@ -62,6 +62,7 @@ import {
 } from '../src/chat/tui/state/approvalQueue';
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
 import { effectiveStreamStatus } from '../src/chat/tui/state/streamStatus';
+import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
 import { parseCliApiMode, type CliApiMode } from '../src/runtime/apiAccessMode';
 import type { CliModelAccess } from '../src/runtime/modelAccess';
@@ -1057,8 +1058,11 @@ function markHarnessInterrupted(): void {
   }
 }
 
-function appendHarnessAssistantTranscript(text: string): void {
-  appendHarnessTranscript('assistant', text);
+function appendHarnessAssistantTranscript(
+  text: string,
+  streamId?: StreamTabId,
+): void {
+  appendHarnessTranscript('assistant', text, streamId);
 }
 
 function appendHarnessUserTranscript(text: string): void {
@@ -1068,8 +1072,9 @@ function appendHarnessUserTranscript(text: string): void {
 function appendHarnessTranscript(
   role: ConversationEntry['role'],
   text: string,
+  explicitStreamId?: StreamTabId,
 ): void {
-  const streamId = cliState.activeStreamId.get() ?? STREAM_ID;
+  const streamId = explicitStreamId ?? defaultHarnessTranscriptStreamId();
   patchStream(streamId, (slice) => ({
     ...slice,
     entries: [
@@ -1083,6 +1088,15 @@ function appendHarnessTranscript(
   }));
 }
 
+function defaultHarnessTranscriptStreamId(): StreamTabId {
+  return resolveLocalTranscriptStreamId({
+    activeStreamId: cliState.activeStreamId.get(),
+    fallbackStreamId: STREAM_ID,
+    parentStream: cliState.parentStream.get(),
+    rootStreamId: cliState.rootStreamId.get(),
+  });
+}
+
 function harnessActiveChildStreamId(): StreamTabId | undefined {
   const activeStreamId = cliState.activeStreamId.get();
   if (!activeStreamId) return undefined;
@@ -1091,9 +1105,7 @@ function harnessActiveChildStreamId(): StreamTabId | undefined {
     : undefined;
 }
 
-function harnessRejectsFocusedChildSubmit(): boolean {
-  const childStreamId = harnessActiveChildStreamId();
-  if (!childStreamId) return false;
+function harnessRejectsChildSubmit(childStreamId: StreamTabId): boolean {
   const status = effectiveStreamStatus(childStreamId);
   return status !== undefined && !isInFlightStatus(status);
 }
@@ -1247,13 +1259,15 @@ function markHarnessExecutionStopped(executionId: string): void {
 
 function handleHarnessSubmit(line: string): void {
   if (handleHarnessSlashCommand(line)) return;
-  if (harnessRejectsFocusedChildSubmit()) {
+  const childStreamId = harnessActiveChildStreamId();
+  if (childStreamId && harnessRejectsChildSubmit(childStreamId)) {
     appendHarnessAssistantTranscript(
       'The selected subagent is no longer accepting follow-ups.',
+      childStreamId,
     );
     return;
   }
-  appendHarnessAssistantTranscript(`Harness received: ${line}`);
+  appendHarnessAssistantTranscript(`Harness received: ${line}`, childStreamId);
 }
 
 function appendHarnessStatus(): void {
