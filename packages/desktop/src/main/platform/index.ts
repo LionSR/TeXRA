@@ -12,6 +12,8 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { registerAgentFeatures } from '@agent/features';
+import { bus } from '@eventBus/ProgressEventBus';
+import { StreamSnapshotStore } from '@transcript';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
@@ -73,6 +75,15 @@ export async function initializeElectronPlatform(
     agentResume: { tryResumeStream: async () => false },
   });
   registerAgentFeatures();
+
+  // Persist per-stream sidecar data (todos, plan, usage, output files) via the
+  // shared, host-agnostic snapshot store so desktop sessions write the same
+  // streamData/{id}/* files the CLI and extension read — making a session's
+  // display restorable cross-host. Liveness is never persisted. Single writer,
+  // driven by the shared progress bus; flushed on shutdown.
+  const snapshotStore = new StreamSnapshotStore();
+  snapshotStore.subscribe(bus);
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => snapshotStore.flush());
 
   // Lean tools talk to `lake env lean --server` directly in the desktop build.
   // Servers are spawned lazily per Lake project root on first request.
