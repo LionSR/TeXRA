@@ -208,7 +208,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY]: (data) =>
         this.handleUseOwnApiKey(data),
       [PROGRESS_VIEW_COMMANDS.RESTORE_STATE]: async (data) => {
-        const taskState = this.provider.state.meta.getTaskState(data.stream);
+        const taskState = this.provider.state.snapshots.getTaskState(
+          data.stream,
+        );
         if (taskState) {
           await vscode.commands.executeCommand('texra.restoreState', taskState);
         }
@@ -452,7 +454,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         },
         hasStream: (stream) => this.provider.state.streamLogs.has(stream),
         hasTaskState: (stream) =>
-          Boolean(this.provider.state.meta.getTaskState(stream)),
+          Boolean(this.provider.state.snapshots.getTaskState(stream)),
         getStreamIds: () => this.provider.state.streamLogs.keys(),
         pickValidActiveStream: (streams) =>
           this.provider.state.pickValidActiveStream(streams),
@@ -469,13 +471,14 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private createWorkflowActionsController(): ProgressWorkflowActionsController {
     return new ProgressWorkflowActionsController({
       state: {
-        getTaskState: (stream) => this.provider.state.meta.getTaskState(stream),
+        getTaskState: (stream) =>
+          this.provider.state.snapshots.getTaskState(stream),
         getExecutionId: (stream) =>
-          this.provider.state.meta.getExecutionId(stream),
+          this.provider.state.snapshots.getExecutionId(stream),
         getOutputFiles: (stream) =>
-          this.provider.state.outputFiles.getFiles(stream),
+          this.provider.state.snapshots.getOutputFiles(stream),
         getKnownWorkspaceOutputPaths: (stream) =>
-          this.provider.state.outputFiles.getKnownFilePaths(stream, {
+          this.provider.state.snapshots.getKnownFilePaths(stream, {
             workspaceOnly: true,
           }),
       },
@@ -496,11 +499,11 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       state: {
         getActiveStream: () => this.provider.state.activeStream,
         getExecutionId: (stream) =>
-          this.provider.state.meta.getExecutionId(stream),
+          this.provider.state.snapshots.getExecutionId(stream),
         getOutputFiles: (stream) =>
-          this.provider.state.outputFiles.getFiles(stream),
+          this.provider.state.snapshots.getOutputFiles(stream),
         getAgentModel: (stream) => {
-          const taskState = this.provider.state.meta.getTaskState(stream);
+          const taskState = this.provider.state.snapshots.getTaskState(stream);
           return taskState
             ? {
                 agent: taskState.agentConfig.agent,
@@ -746,7 +749,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handlePolishFollowUp(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP>,
   ): Promise<void> {
-    const taskState = this.provider.state.meta.getTaskState(data.stream);
+    const taskState = this.provider.state.snapshots.getTaskState(data.stream);
     if (!taskState) return;
 
     const fileContext = buildFileContextFromTaskState(taskState);
@@ -866,9 +869,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       | MessageFor<typeof PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP>,
     executeImmediately: boolean,
   ): Promise<void> {
-    const taskState = this.provider.state.meta.getTaskState(data.stream);
+    const taskState = this.provider.state.snapshots.getTaskState(data.stream);
     const outputFiles = [
-      ...this.provider.state.outputFiles.getFiles(data.stream).values(),
+      ...this.provider.state.snapshots.getOutputFiles(data.stream).values(),
     ].flat();
     const { modelOptions } = await loadOptions();
 
@@ -882,15 +885,15 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         initialQuestion: data.initialQuestion,
         executeImmediately,
         modelOptions,
-        executionId: this.provider.state.meta.getExecutionId(data.stream),
+        executionId: this.provider.state.snapshots.getExecutionId(data.stream),
       }),
     );
   }
 
   private async handleRunCompileFixer(streamId: StreamTabId): Promise<void> {
-    const taskState = this.provider.state.meta.getTaskState(streamId);
+    const taskState = this.provider.state.snapshots.getTaskState(streamId);
     const compileFailures = [
-      ...this.provider.state.outputFiles.getCompileFailures(streamId).values(),
+      ...this.provider.state.snapshots.getCompileFailures(streamId).values(),
     ].flat();
     const { modelOptions } = await loadOptions();
 
@@ -899,9 +902,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         streamId,
         taskState,
         compileFailures,
-        runOutputs: this.provider.state.outputFiles.getFiles(streamId),
+        runOutputs: this.provider.state.snapshots.getOutputFiles(streamId),
         modelOptions,
-        executionId: this.provider.state.meta.getExecutionId(streamId),
+        executionId: this.provider.state.snapshots.getExecutionId(streamId),
       }),
     );
   }

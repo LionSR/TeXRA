@@ -503,7 +503,7 @@ export class ProgressViewProvider
 
   public async cleanupTasksAfterRestart(): Promise<void> {
     const waitingStreams = await detectWaitingStreams(
-      this.state.meta.getExecutionIdMap(),
+      this.state.snapshots.getExecutionIdMap(),
     );
     await this.resetRunningStreamStatuses(waitingStreams);
     this.syncFullView({ forceRebuild: true });

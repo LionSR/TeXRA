@@ -1,20 +1,13 @@
 /**
- * Per-stream-tab disk-backed storage.
+ * Legacy per-run-instruction reader for `streamData/{id}/`.
  *
- * Each stream tab gets its own directory under `streamData/`:
- *
- *   streamData/
- *     {encoded(streamTabId)}/
- *       meta.json              → StreamTabMeta
- *       outputFiles.json       → round → OutputFileInfo[]
- *       missingOutputs.json    → round → string[]
- *       compileFailures.json   → round → CompileFailure[]
- *       usageStats.json        → runId → TokenUsageStats
- *
- * Legacy data shapes (from before one-run-per-tab refactor) are transparently
- * migrated on read via preprocess helpers in streamTabSchemas.ts. New workflow
- * instructions live in the log stream; this store only retains archived legacy
- * instruction records so older tabs can be backfilled during load.
+ * `StreamSnapshotStore` (`@transcript`) is the single owner of `streamData/`:
+ * it reads, writes, and deletes every live per-stream sidecar file. This module
+ * survives only for one residual legacy concern — archival per-run instruction
+ * records (`legacyInstructions.json` / older `runInstructions.json`), read
+ * during load so workflow tabs created before the one-run-per-tab refactor
+ * (#3061, Apr 2026) can still backfill their original instruction into the log
+ * stream. It can be retired entirely once those pre-#3061 tabs age out.
  */
 
 import * as path from 'path';
@@ -22,61 +15,26 @@ import pMap from 'p-map';
 
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
+import {
+  STREAM_DATA_DIR,
+  STREAM_DATA_KEYS,
+  encodeStreamId,
+} from '@transcript/streamDataPaths';
 
-import type {
-  CompileFailure,
-  OutputFileInfo,
-  StreamTabId,
-  TokenUsageStats,
-} from '@shared/schemas';
 import {
   StreamTabMetaSchema,
   LegacyInstructionsDataSchema,
-  OutputFilesDataSchema,
-  MissingOutputsDataSchema,
-  CompileFailuresDataSchema,
-  UsageDataSchema,
-  flattenLegacyRuns,
-  isLegacyNested,
   selectPreferredLegacyInstruction,
+  type StreamTabId,
   type LegacyInstructionEntry,
   type StreamTabMeta,
-  type OutputFilesRecord,
-  type MissingOutputsRecord,
-  type CompileFailuresRecord,
-  type UsageStatsRecord,
-} from './streamTabSchemas';
+} from '@shared/schemas';
 
-// ============================================================================
-// Key constants
-// ============================================================================
-
-const KEYS = {
-  META: 'meta',
-  OUTPUT_FILES: 'outputFiles',
-  MISSING_OUTPUTS: 'missingOutputs',
-  COMPILE_FAILURES: 'compileFailures',
-  USAGE_STATS: 'usageStats',
-  /** Legacy per-run instruction text preserved from pre-refactor memento. */
-  LEGACY_INSTRUCTIONS: 'legacyInstructions',
-  /** On-disk key used by the pre-refactor store; read-only fallback. */
-  LEGACY_RUN_INSTRUCTIONS: 'runInstructions',
-} as const;
-
-export const STREAM_DATA_DIR = 'streamData';
 const CHANNEL = 'StreamTabStore';
 
 // ============================================================================
 // Implementation
 // ============================================================================
-
-/**
- * Encode a stream tab ID for safe use as a filesystem directory name.
- * Stream IDs can contain `:`, `/`, `#`, and other unsafe characters.
- */
-function encodeStreamId(id: string): string {
-  return encodeURIComponent(id);
-}
 
 /**
  * Disk-backed store for a single stream tab.
@@ -115,95 +73,13 @@ class StreamTabKVStore extends KVStore {
   // -- Meta -----------------------------------------------------------------
 
   async readMeta(): Promise<StreamTabMeta | null> {
-    const raw = await this.tryRead(KEYS.META);
+    const raw = await this.tryRead(STREAM_DATA_KEYS.META);
     if (!raw) return null;
     const result = StreamTabMetaSchema.safeParse(raw);
     return result.success ? result.data : null;
   }
 
-  async writeMeta(meta: StreamTabMeta): Promise<void> {
-    await this.write(KEYS.META, meta);
-  }
-
-  // -- Output files ---------------------------------------------------------
-
-  async readOutputFiles(): Promise<Map<number, OutputFileInfo[]> | null> {
-    const raw = await this.tryRead(KEYS.OUTPUT_FILES);
-    if (!raw) return null;
-    const migrated = await this.preferActiveRunFlattening(raw);
-    const result = OutputFilesDataSchema.safeParse(migrated);
-    return result.success && result.data.size > 0 ? result.data : null;
-  }
-
-  async writeOutputFiles(data: OutputFilesRecord): Promise<void> {
-    await this.write(KEYS.OUTPUT_FILES, data);
-  }
-
-  /**
-   * Sole owner of legacy-record flattening. When a record is in legacy
-   * nested form (`{ runId: { round: items[] } }`), prefer the run selected
-   * by `meta.activeRunId` so hydration uses the run that was active when
-   * the tab was last viewed. Falls back to insertion order for meta
-   * without activeRunId. Already-flat records pass through unchanged, so
-   * the downstream schema never needs its own preprocess step.
-   */
-  private async preferActiveRunFlattening(raw: unknown): Promise<unknown> {
-    if (!isLegacyNested(raw)) return raw;
-    const meta = await this.readMeta();
-    return flattenLegacyRuns(raw, meta?.activeRunId);
-  }
-
-  // -- Missing outputs ------------------------------------------------------
-
-  async readMissingOutputs(): Promise<Map<number, string[]> | null> {
-    const raw = await this.tryRead(KEYS.MISSING_OUTPUTS);
-    if (!raw) return null;
-    const migrated = await this.preferActiveRunFlattening(raw);
-    const result = MissingOutputsDataSchema.safeParse(migrated);
-    return result.success && result.data.size > 0 ? result.data : null;
-  }
-
-  async writeMissingOutputs(data: MissingOutputsRecord): Promise<void> {
-    await this.write(KEYS.MISSING_OUTPUTS, data);
-  }
-
-  // -- Compile failures -----------------------------------------------------
-
-  async readCompileFailures(): Promise<Map<number, CompileFailure[]> | null> {
-    const raw = await this.tryRead(KEYS.COMPILE_FAILURES);
-    if (!raw) return null;
-    const migrated = await this.preferActiveRunFlattening(raw);
-    const result = CompileFailuresDataSchema.safeParse(migrated);
-    return result.success && result.data.size > 0 ? result.data : null;
-  }
-
-  async writeCompileFailures(data: CompileFailuresRecord): Promise<void> {
-    await this.write(KEYS.COMPILE_FAILURES, data);
-  }
-
-  // -- Usage stats ----------------------------------------------------------
-
-  async readUsageStats(): Promise<Map<string, TokenUsageStats> | null> {
-    const raw = await this.tryRead(KEYS.USAGE_STATS);
-    if (!raw) return null;
-    const result = UsageDataSchema.safeParse(raw);
-    return result.success && result.data.size > 0 ? result.data : null;
-  }
-
-  async writeUsageStats(data: UsageStatsRecord): Promise<void> {
-    await this.write(KEYS.USAGE_STATS, data);
-  }
-
   // -- Legacy per-run instructions (preserved from pre-refactor memento) ---
-
-  /**
-   * Persist legacy `{ runId: InstructionUpdate }` data verbatim so migrated
-   * users don't lose the instruction text of older workflow tabs. Newer runs
-   * read from the log stream; legacy runs can still be backfilled from here.
-   */
-  async writeLegacyInstructions(data: unknown): Promise<void> {
-    await this.write(KEYS.LEGACY_INSTRUCTIONS, data);
-  }
 
   /**
    * Read the archived legacy instruction record and pick the run users most
@@ -211,7 +87,7 @@ class StreamTabKVStore extends KVStore {
    * exists, otherwise falls back to the newest archived entry.
    */
   async readPreferredLegacyInstruction(): Promise<LegacyInstructionEntry | null> {
-    const raw = await this.tryRead(KEYS.LEGACY_INSTRUCTIONS);
+    const raw = await this.tryRead(STREAM_DATA_KEYS.LEGACY_INSTRUCTIONS);
     if (!raw) return null;
 
     const result = LegacyInstructionsDataSchema.safeParse(raw);
@@ -230,18 +106,16 @@ class StreamTabKVStore extends KVStore {
    * so the data is preserved under the canonical archival key.
    */
   async migrateOnDiskRunInstructions(): Promise<void> {
-    const existingLegacy = await this.tryRead(KEYS.LEGACY_INSTRUCTIONS);
+    const existingLegacy = await this.tryRead(
+      STREAM_DATA_KEYS.LEGACY_INSTRUCTIONS,
+    );
     if (existingLegacy) return;
-    const oldData = await this.tryRead(KEYS.LEGACY_RUN_INSTRUCTIONS);
+    const oldData = await this.tryRead(
+      STREAM_DATA_KEYS.LEGACY_RUN_INSTRUCTIONS,
+    );
     if (!oldData) return;
-    await this.write(KEYS.LEGACY_INSTRUCTIONS, oldData);
-    await this.delete(KEYS.LEGACY_RUN_INSTRUCTIONS);
-  }
-
-  // -- Lifecycle ------------------------------------------------------------
-
-  async clear(): Promise<void> {
-    await this.deleteDir();
+    await this.write(STREAM_DATA_KEYS.LEGACY_INSTRUCTIONS, oldData);
+    await this.delete(STREAM_DATA_KEYS.LEGACY_RUN_INSTRUCTIONS);
   }
 }
 
@@ -276,12 +150,6 @@ export function getStreamTabStore(streamTabId: StreamTabId): StreamTabKVStore {
   const store = new StreamTabKVStore(streamTabId);
   storeCache.set(streamTabId, store);
   return store;
-}
-
-export async function deleteAllStreamData(): Promise<void> {
-  const rootKv = new KVStore(STREAM_DATA_DIR);
-  await rootKv.deleteDir();
-  storeCache.clear();
 }
 
 export type { StreamTabKVStore };

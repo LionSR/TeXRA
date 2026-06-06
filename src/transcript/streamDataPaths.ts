@@ -1,0 +1,56 @@
+/**
+ * Shared on-disk layout for per-stream sidecar data (`streamData/`).
+ *
+ * Host-agnostic so the CLI TUI, VS Code extension, and Electron desktop app
+ * all produce a byte-identical `streamData/{encodeStreamId(streamId)}/…`
+ * subtree under their respective platform storage roots. Only the absolute
+ * root differs per host; this relative layout is the same everywhere, which is
+ * what lets a session render/resume identically across hosts and keeps the
+ * future cross-host shared-root flip a configuration change, not a format one.
+ *
+ * The per-category file keys live here too (not just in the extension's
+ * `StreamTabStore`) so the shared `StreamSnapshotStore` and every host write
+ * the same filenames.
+ */
+
+import * as path from 'node:path';
+
+/** Root directory (relative to the platform storage root) for per-stream sidecar data. */
+export const STREAM_DATA_DIR = 'streamData';
+
+/**
+ * Per-category file keys within a stream's `streamData/{id}/` directory.
+ *
+ * The first five already exist on disk for extension users; `WORK_PLAN` is the
+ * one new file — todos/plan have no other durable home (they are ephemeral in
+ * every host today and are not recorded in the StreamLog).
+ */
+export const STREAM_DATA_KEYS = {
+  META: 'meta',
+  OUTPUT_FILES: 'outputFiles',
+  MISSING_OUTPUTS: 'missingOutputs',
+  COMPILE_FAILURES: 'compileFailures',
+  USAGE_STATS: 'usageStats',
+  /** NEW — durable todos/plan/planSummary. */
+  WORK_PLAN: 'workPlan',
+  /** Legacy per-run instruction text preserved from the pre-refactor memento. */
+  LEGACY_INSTRUCTIONS: 'legacyInstructions',
+  /** On-disk key used by the pre-refactor store; read-only fallback. */
+  LEGACY_RUN_INSTRUCTIONS: 'runInstructions',
+} as const;
+
+export type StreamDataKey =
+  (typeof STREAM_DATA_KEYS)[keyof typeof STREAM_DATA_KEYS];
+
+/**
+ * Encode a stream tab id for safe use as a filesystem directory name.
+ * Stream ids can contain `:`, `/`, `#`, and other unsafe characters.
+ */
+export function encodeStreamId(id: string): string {
+  return encodeURIComponent(id);
+}
+
+/** Build the relative directory path for a stream's sidecar data: `streamData/{encoded}`. */
+export function streamDataDir(streamId: string): string {
+  return path.join(STREAM_DATA_DIR, encodeStreamId(streamId));
+}

@@ -4,6 +4,7 @@ import {
   flushPendingRunTraces,
   setDefaultStreamLogStore,
   StreamLogStore,
+  StreamSnapshotStore,
 } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -13,19 +14,11 @@ import { toErrorMessage } from '@common/errors';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
-import { OutputFilesManager } from '@progressView/managers/OutputFilesManager';
-import { UsageStatsManager } from '@progressView/managers/UsageStatsManager';
-import { StreamMetaManager } from '@progressView/managers/StreamMetaManager';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import {
   getStreamTabStore,
-  deleteAllStreamData,
   mapStreamTabStorage,
 } from '@progressView/persistence/StreamTabStore';
-import {
-  needsMigrationFromMemento,
-  migrateFromMemento,
-} from '@progressView/persistence/mementoMigration';
 import {
   AgentCategoryFilterSchema,
   ContextStateDataSchema,
@@ -37,10 +30,6 @@ import {
   type ConversationProgress,
   type ContextStateData,
   type StreamTabId,
-  type TodoItem,
-  type Plan,
-  type WorkPlanSnapshot,
-  WorkPlanSnapshotSchema,
 } from '@shared/schemas';
 import {
   PersistedState,
@@ -59,7 +48,6 @@ export type StreamHints = z.infer<typeof StreamHintsSchema>;
 /** Ephemeral session state per stream (not persisted). */
 const StreamSessionStateSchema = z.object({
   hints: StreamHintsSchema.prefault({}),
-  workPlan: WorkPlanSnapshotSchema.prefault({}),
   contextState: ContextStateDataSchema.nullable().prefault(null),
 });
 
@@ -102,24 +90,27 @@ function createExecutionState(
 }
 
 /** Clean up tool-use agent registry based on currently active streams. */
-export function cleanupToolUseAgentRegistry(meta: StreamMetaManager): void {
-  cleanupInactiveAgents(meta.getActiveToolUseStreams());
+export function cleanupToolUseAgentRegistry(
+  snapshots: StreamSnapshotStore,
+): void {
+  cleanupInactiveAgents(snapshots.getActiveToolUseStreams());
 }
 
 /**
  * Core state management for the progress view.
  *
- * Coordinates four persistence managers (streamLogs, outputFiles, usageStats,
- * meta) plus ephemeral in-memory state and preferences. Workflow instructions
- * live in the log stream (new runs write them directly; legacy runs are
- * backfilled there during load), not in separate progress-view state.
+ * Coordinates two persistence stores — `streamLogs` (transcript) and
+ * `snapshots` (all per-stream sidecar: output files, usage, todos, plan, and
+ * meta) — plus ephemeral in-memory execution state and preferences. Workflow
+ * instructions live in the log stream (new runs write them directly; legacy
+ * runs are backfilled there during load), not in separate progress-view state.
  */
 export class ProgressViewState {
   // -- Persistence managers ---------------------------------------------------
   readonly streamLogs: StreamLogStore;
-  readonly outputFiles: OutputFilesManager;
-  readonly usageStats: UsageStatsManager;
-  readonly meta: StreamMetaManager;
+  /** Single owner of all per-stream sidecar state (output files, usage, todos,
+   * plan, taskState/executionId/parent/description + meta queries). */
+  readonly snapshots: StreamSnapshotStore;
 
   // -- Preferences ------------------------------------------------------------
   private _prefs!: PersistedState<ProgressViewPrefs>;
@@ -128,7 +119,6 @@ export class ProgressViewState {
   private _streamStates = new Map<StreamTabId, StreamExecutionState>();
   private _sessionState = new Map<StreamTabId, StreamSessionState>();
 
-  private readonly storage: MementoStorage;
   private readonly logger: AgentTrace;
 
   constructor(storage?: MementoStorage) {
@@ -137,7 +127,6 @@ export class ProgressViewState {
       throw new Error('workspace state manager is not initialized');
     }
 
-    this.storage = resolvedStorage;
     this.logger = createChannelTrace('ProgressViewState');
     this._prefs = new PersistedState(
       createBackendStorage(resolvedStorage),
@@ -146,9 +135,7 @@ export class ProgressViewState {
     );
     this.streamLogs = new StreamLogStore();
     setDefaultStreamLogStore(this.streamLogs);
-    this.outputFiles = new OutputFilesManager();
-    this.usageStats = new UsageStatsManager();
-    this.meta = new StreamMetaManager();
+    this.snapshots = new StreamSnapshotStore();
   }
 
   // -- Preferences ------------------------------------------------------------
@@ -229,29 +216,7 @@ export class ProgressViewState {
     }
   }
 
-  setTodos(stream: StreamTabId, todos: TodoItem[]): void {
-    const state = this.getOrCreateSession(stream);
-    state.workPlan = WorkPlanSnapshotSchema.parse({
-      ...state.workPlan,
-      todos,
-    });
-  }
-
-  setPlan(stream: StreamTabId, plan: Plan | null): void {
-    const state = this.getOrCreateSession(stream);
-    state.workPlan = WorkPlanSnapshotSchema.parse({
-      ...state.workPlan,
-      plan,
-      planSummary: plan?.summary ?? null,
-    });
-  }
-
-  getWorkPlan(stream: StreamTabId): WorkPlanSnapshot {
-    return (
-      this._sessionState.get(stream)?.workPlan ??
-      WorkPlanSnapshotSchema.parse({})
-    );
-  }
+  // todos/plan are owned + persisted by StreamSnapshotStore (workPlan.json).
 
   getContextState(stream: StreamTabId): ContextStateData | undefined {
     return this._sessionState.get(stream)?.contextState ?? undefined;
@@ -330,15 +295,15 @@ export class ProgressViewState {
   async clearStream(stream: StreamTabId): Promise<void> {
     // Clear in-memory state
     StreamStatusService.clear(stream, { emit: false });
-    this.outputFiles.evict(stream);
-    this.usageStats.evict(stream);
-    this.meta.evict(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
 
-    // Delete from disk: stream log file + stream data directory
-    const store = getStreamTabStore(stream);
-    await Promise.all([this.streamLogs.delete(stream), store.clear()]);
+    // Delete from disk: stream log file + stream data directory (the snapshot
+    // store owns streamData/ — it evicts its own memory + removes the dir).
+    await Promise.all([
+      this.streamLogs.delete(stream),
+      this.snapshots.deleteStream(stream),
+    ]);
 
     // Update active stream *after* deletion so keys() no longer includes it.
     // `streamLogs.keys()` is ascending by creation time (load() sorts by
@@ -350,7 +315,7 @@ export class ProgressViewState {
       });
     }
 
-    cleanupToolUseAgentRegistry(this.meta);
+    cleanupToolUseAgentRegistry(this.snapshots);
   }
 
   async clearAll(): Promise<void> {
@@ -361,43 +326,26 @@ export class ProgressViewState {
 
     // Clear in-memory state
     StreamStatusService.clearAll({ emit: false });
-    this.outputFiles.evictAll();
-    this.usageStats.evictAll();
-    this.meta.evictAll();
     this._sessionState.clear();
     this._streamStates.clear();
     this._prefs.reset();
 
-    // Delete from disk
-    await Promise.all([this.streamLogs.clear(), deleteAllStreamData()]);
+    // Delete from disk (snapshot store owns streamData/, evicts its own memory)
+    await Promise.all([this.streamLogs.clear(), this.snapshots.deleteAll()]);
 
-    cleanupToolUseAgentRegistry(this.meta);
+    cleanupToolUseAgentRegistry(this.snapshots);
   }
 
   async load(): Promise<void> {
     this.logger.info('[Persistence] Starting state load from storage');
 
     // Load stream logs first — they define the set of known streams
-    await this.streamLogs.load(this.storage);
+    await this.streamLogs.load();
 
     const streamIds = this.streamLogs.keys();
     this.logger.info(`[Persistence] Discovered ${streamIds.length} stream(s)`);
 
-    // Check if we need one-time migration from workspace state
-    const shouldMigrate = await needsMigrationFromMemento(
-      this.storage,
-      streamIds,
-    );
-    if (shouldMigrate) {
-      await migrateFromMemento(
-        this.storage,
-        this.streamLogs.keys(),
-        this.logger,
-      );
-      await this.loadManagers(this.streamLogs.keys());
-    } else {
-      await this.loadManagers(streamIds);
-    }
+    await this.snapshots.load(streamIds);
 
     // Promote any pre-existing `runInstructions.json` disk files (from the
     // earlier memento→StreamTabStore migration) to the archival
@@ -420,7 +368,7 @@ export class ProgressViewState {
     this.logger.info('[Persistence] Managers loaded');
 
     this.validateActiveStream();
-    cleanupToolUseAgentRegistry(this.meta);
+    cleanupToolUseAgentRegistry(this.snapshots);
 
     this.logger.info('[Persistence] State load complete');
   }
@@ -430,23 +378,10 @@ export class ProgressViewState {
    */
   async flush(): Promise<void> {
     flushPendingRunTraces();
-    await Promise.all([
-      this.streamLogs.flush(),
-      this.meta.flush(),
-      this.outputFiles.flush(),
-      this.usageStats.flush(),
-    ]);
+    await Promise.all([this.streamLogs.flush(), this.snapshots.flush()]);
   }
 
   // -- Private helpers --------------------------------------------------------
-
-  private async loadManagers(streamIds: StreamTabId[]): Promise<void> {
-    await Promise.all([
-      this.outputFiles.load(streamIds),
-      this.usageStats.load(streamIds),
-      this.meta.load(streamIds),
-    ]);
-  }
 
   private async backfillLegacyWorkflowInstructions(): Promise<number> {
     let restoredCount = 0;
