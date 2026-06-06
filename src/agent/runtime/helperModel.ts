@@ -8,9 +8,9 @@
 
 import { MODEL_CONFIGS } from 'llm-zoo';
 
+import { platform } from '@platform/platform';
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
-import { getGlobalState } from '@agent/core/stateStore';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
@@ -42,7 +42,7 @@ export type HelperModelResult =
  * only the model name (not a full handler) is needed.
  */
 export function getHelperModelName(): string {
-  const configuredModel = getGlobalState().get<string>(
+  const configuredModel = platform().globalState.get<string>(
     GlobalStateKey.HELPER_MODEL,
   );
   if (!isNonEmptyString(configuredModel)) {
@@ -55,7 +55,7 @@ export function getHelperModelName(): string {
   // The built-in default doesn't need to be in the list.
   if (resolved === DEFAULT_HELPER_MODEL) return resolved;
 
-  const enabledModels = getGlobalState().get<string[]>(
+  const enabledModels = platform().globalState.get<string[]>(
     GlobalStateKey.ENABLED_MODELS,
     [],
   );

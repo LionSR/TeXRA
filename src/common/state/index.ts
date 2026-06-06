@@ -8,8 +8,9 @@ export {
 // from this barrel — doing so pulls in 'vscode' at module load time.
 // VS Code-free consumers should:
 //   - import key constants from '@shared/state/stateKeys' (canonical, no vscode dependency)
-//   - access state via platform() from '@platform/platform' or the facades in
-//     '@agent/core/stateStore' (getWorkspaceState / getGlobalState)
+//   - access state via platform() from '@platform/platform'
+//     (platform().workspaceState / platform().globalState), or the
+//     pre-init-tolerant tryGetWorkspaceState() in '@agent/core/stateStore'
 // Only extension-host wiring (packages/extension/src/) may use these exports.
 export { workspaceSM, globalSM, initializeStateManagers } from './stateManager';
 export {
