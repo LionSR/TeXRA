@@ -23,6 +23,7 @@ import type {
 import { countByStatus, STATUS_DISPLAY } from '@shared/schemas/todoDisplay';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration } from '@utils/core';
+import { splitContentLines } from '@utils/text/stringUtils';
 import type { DiffFileInfo } from './subagentDiffs';
 
 // ============================================================================
@@ -442,6 +443,6 @@ function formatPlanContext(workPlan: WorkPlanSnapshot): string[] {
 }
 
 function lastNLines(text: string, n: number): string {
-  const lines = text.split('\n');
+  const lines = splitContentLines(text);
   return lines.length <= n ? text : lines.slice(-n).join('\n');
 }

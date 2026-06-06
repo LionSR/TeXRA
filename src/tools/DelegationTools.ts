@@ -55,7 +55,6 @@ import {
   evaluateDelegationGate,
   type NestedDelegationConfig,
 } from '@shared/constants/delegationPolicy';
-import { getBasename } from '@shared/utils/path';
 import { formatBytes } from '@shared/utils/string';
 
 // Local imports - tools
