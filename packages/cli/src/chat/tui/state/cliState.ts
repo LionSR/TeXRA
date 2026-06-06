@@ -301,23 +301,6 @@ export function removeStream(streamId: StreamTabId): void {
   if (nextParents) cliState.parentStream.set(nextParents);
 }
 
-export function updateChildStreamStatus(
-  childStreamId: StreamTabId,
-  status: StreamStatus,
-): void {
-  const current = cliState.streams.get();
-  let out: Map<StreamTabId, StreamSlice> | undefined;
-  for (const [streamId, slice] of current) {
-    const next = mapChildStreamReferenceLists(slice, (children) =>
-      updateChildStreamReferenceStatus(children, childStreamId, status),
-    );
-    if (next === slice) continue;
-    out ??= new Map(current);
-    out.set(streamId, next);
-  }
-  if (out) cliState.streams.set(out);
-}
-
 function scrubChildStreamReferences(
   slice: StreamSlice,
   streamId: StreamTabId,
@@ -352,25 +335,6 @@ function removeChildStreamReference(
 ): readonly ActiveChildInfo[] {
   const next = children.filter((child) => child.childStreamId !== streamId);
   return next.length === children.length ? children : next;
-}
-
-function updateChildStreamReferenceStatus(
-  children: readonly ActiveChildInfo[],
-  childStreamId: StreamTabId,
-  status: StreamStatus,
-): readonly ActiveChildInfo[] {
-  let next: ActiveChildInfo[] | undefined;
-  for (const [index, child] of children.entries()) {
-    const updated =
-      child.childStreamId === childStreamId && child.status !== status
-        ? { ...child, status }
-        : child;
-    if (!next && updated !== child) {
-      next = children.slice(0, index);
-    }
-    next?.push(updated);
-  }
-  return next ?? children;
 }
 
 function defaultSessionMeta(): SessionMeta {

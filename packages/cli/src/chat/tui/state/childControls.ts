@@ -11,7 +11,10 @@ import { formatDuration } from '@utils/core';
 
 // Local imports - CLI state
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
-import { visibleSubagentRows } from './childStreamMerge';
+import {
+  childWithEffectiveStatus,
+  visibleSubagentRows,
+} from './childStreamMerge';
 import { orderedDescendantsFromTree } from './focusCycle';
 import { transcriptEntryLines } from './transcriptLines';
 import type {
@@ -299,8 +302,11 @@ export function liveChildExecutionElapsedKey(
 
   const liveKeys: string[] = [];
   for (const child of slice.activeSubagents) {
-    if (hasLiveChildElapsed(child)) {
-      liveKeys.push(`${child.executionId}:${child.startedAt}`);
+    const effectiveChild = childWithEffectiveStatus(child);
+    if (hasLiveChildElapsed(effectiveChild)) {
+      liveKeys.push(
+        `${effectiveChild.executionId}:${effectiveChild.startedAt}`,
+      );
     }
   }
   for (const child of slice.activeProcesses) {

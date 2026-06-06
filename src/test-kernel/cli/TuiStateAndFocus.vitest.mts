@@ -226,6 +226,7 @@ describe('cliState Phase 4 fields', () => {
 
       const parent = cliState.streams.get().get(root);
       expect(parent?.activeSubagents).toEqual([]);
+      expect(parent?.childStreams[0]?.status).toBe(STREAM_STATUS.RUNNING);
       expect(visibleSubagentRows(parent!)).toMatchObject([
         {
           executionId: 'agent-1',
@@ -1180,7 +1181,7 @@ describe('CLI TUI row allocation', () => {
     expect(chatTuiRejectedChildFollowUpTarget()).toBeUndefined();
   });
 
-  it('rejects follow-ups to a focused stopped child stream', () => {
+  it('ignores stale child row status when routing focused child follow-ups', () => {
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
     patchStream(root, (s) => ({
       ...s,
@@ -1197,11 +1198,11 @@ describe('CLI TUI row allocation', () => {
     setParentStream(child1, root);
 
     cliState.activeStreamId.set(child1);
-    expect(chatTuiActiveChildFollowUpTarget()).toBeUndefined();
-    expect(chatTuiRejectedChildFollowUpTarget()).toBe(child1);
+    expect(chatTuiActiveChildFollowUpTarget()).toBe(child1);
+    expect(chatTuiRejectedChildFollowUpTarget()).toBeUndefined();
   });
 
-  it('rejects focused children when any known status source is terminal', () => {
+  it('uses child slice status as a fallback for focused child follow-ups', () => {
     patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
     patchStream(root, (s) => ({
       ...s,
@@ -1220,6 +1221,28 @@ describe('CLI TUI row allocation', () => {
     cliState.activeStreamId.set(child1);
     expect(chatTuiActiveChildFollowUpTarget()).toBeUndefined();
     expect(chatTuiRejectedChildFollowUpTarget()).toBe(child1);
+  });
+
+  it('uses StreamStatusService before stale slice status for focused children', () => {
+    patchStream(root, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
+    patchStream(root, (s) => ({
+      ...s,
+      childStreams: [
+        {
+          executionId: 'child-exec-1',
+          agentName: 'critic',
+          childStreamId: child1,
+          status: STREAM_STATUS.STOPPED,
+        },
+      ],
+    }));
+    patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.STOPPED }));
+    StreamStatusService.set(child1, STREAM_STATUS.RUNNING, { emit: false });
+    setParentStream(child1, root);
+
+    cliState.activeStreamId.set(child1);
+    expect(chatTuiActiveChildFollowUpTarget()).toBe(child1);
+    expect(chatTuiRejectedChildFollowUpTarget()).toBeUndefined();
   });
 
   it('rejects focused children when only StreamStatusService is terminal', () => {
