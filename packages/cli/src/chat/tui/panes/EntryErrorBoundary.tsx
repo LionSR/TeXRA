@@ -56,7 +56,9 @@ export class EntryErrorBoundary extends Component<
       logUtils.error(
         'cli.tui',
         `transcript entry render failed (${this.props.label ?? 'entry'}): ${
-          error instanceof Error ? (error.stack ?? error.message) : String(error)
+          error instanceof Error
+            ? (error.stack ?? error.message)
+            : String(error)
         }`,
       );
     } catch {
