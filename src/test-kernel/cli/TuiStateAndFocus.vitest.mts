@@ -82,6 +82,7 @@ import {
   clearLocalTranscript,
   CLI_LOCAL_STREAM_ID,
   moveLocalTranscriptToStream,
+  resolveLocalTranscriptStreamId,
 } from '@cli/chat/tui/state/transcript';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import {
@@ -1615,6 +1616,72 @@ describe('CLI transcript state', () => {
         .get(child1)
         ?.entries.map((entry) => entry.text),
     ).toEqual(['Child stream note.']);
+  });
+
+  it('keeps root local notices out of a focused child stream', () => {
+    cliState.rootStreamId.set(root);
+    setParentStream(child1, root);
+    cliState.activeStreamId.set(child1);
+
+    appendLocalAssistantTranscript('Available commands: /help');
+    appendLocalErrorTranscript('Model claude-opus-4-7 not found');
+
+    expect(
+      cliState.streams
+        .get()
+        .get(root)
+        ?.entries.map((entry) => [entry.role, entry.text]),
+    ).toEqual([
+      ['assistant', 'Available commands: /help'],
+      ['error', 'Model claude-opus-4-7 not found'],
+    ]);
+    expect(cliState.streams.get().get(child1)?.entries ?? []).toEqual([]);
+    expect(cliState.activeStreamId.get()).toBe(child1);
+  });
+
+  it('uses the focused child parent for local notices before root id is set', () => {
+    setParentStream(child1, root);
+    cliState.activeStreamId.set(child1);
+
+    appendLocalAssistantTranscript('Slash command output.');
+
+    expect(
+      cliState.streams
+        .get()
+        .get(root)
+        ?.entries.map((entry) => entry.text),
+    ).toEqual(['Slash command output.']);
+    expect(cliState.streams.get().get(child1)?.entries ?? []).toEqual([]);
+    expect(cliState.activeStreamId.get()).toBe(child1);
+  });
+
+  it('resolves root-owned local transcript targets before active children', () => {
+    const parentStream = new Map([[child1, root]]);
+
+    expect(
+      resolveLocalTranscriptStreamId({
+        activeStreamId: child1,
+        fallbackStreamId: CLI_LOCAL_STREAM_ID,
+        parentStream,
+        rootStreamId: 'root-from-session' as StreamTabId,
+      }),
+    ).toBe('root-from-session');
+    expect(
+      resolveLocalTranscriptStreamId({
+        activeStreamId: child1,
+        fallbackStreamId: CLI_LOCAL_STREAM_ID,
+        parentStream,
+        rootStreamId: undefined,
+      }),
+    ).toBe(root);
+    expect(
+      resolveLocalTranscriptStreamId({
+        activeStreamId: undefined,
+        fallbackStreamId: CLI_LOCAL_STREAM_ID,
+        parentStream,
+        rootStreamId: undefined,
+      }),
+    ).toBe(CLI_LOCAL_STREAM_ID);
   });
 
   it('adds local runtime errors to the transcript', () => {

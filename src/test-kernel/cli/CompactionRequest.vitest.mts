@@ -27,6 +27,7 @@ describe('requestCliCompaction', () => {
     expect(notifyFollowUpSent).not.toHaveBeenCalled();
     expect(appendTranscript).toHaveBeenCalledWith(
       'No active tool-use session found for context compaction.',
+      undefined,
     );
   });
 
@@ -46,6 +47,7 @@ describe('requestCliCompaction', () => {
     expect(notifyFollowUpSent).not.toHaveBeenCalled();
     expect(appendTranscript).toHaveBeenCalledWith(
       'No active tool-use session found for context compaction.',
+      'stream-1',
     );
   });
 
@@ -69,6 +71,7 @@ describe('requestCliCompaction', () => {
     expect(notifyFollowUpSent).not.toHaveBeenCalled();
     expect(appendTranscript).toHaveBeenCalledWith(
       'Manual context compaction is not available for the current model.',
+      'stream-1',
     );
   });
 
@@ -91,6 +94,7 @@ describe('requestCliCompaction', () => {
     );
     expect(appendTranscript).toHaveBeenCalledWith(
       'Context compaction requested. The agent will process it on the next model call.',
+      'stream-1',
     );
   });
 });
