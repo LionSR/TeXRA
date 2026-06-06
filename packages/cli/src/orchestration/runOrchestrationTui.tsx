@@ -71,6 +71,7 @@ export interface OrchestrationAppProps {
    *  a known list with no runnable model disables chat/team starts. */
   readonly models: readonly CliModelAccess[];
   readonly apiMode: CliApiMode;
+  readonly statusLines?: readonly string[];
   readonly allowDefaultModelLaunch?: boolean;
   readonly onResolve: (action: CliOrchestrationAction) => void;
 }
@@ -102,6 +103,10 @@ function orchestrationFooterRowCost(footerHints: readonly string[]): number {
   return footerHints.length === 0 ? 0 : footerHints.length + 1;
 }
 
+function orchestrationStatusRowCost(statusLines: readonly string[]): number {
+  return statusLines.length === 0 ? 0 : statusLines.length + 1;
+}
+
 function modelPickKeyHints(): readonly KeyHint[] {
   return [
     { key: '↑/↓', action: 'navigate' },
@@ -122,6 +127,7 @@ export function OrchestrationApp(
     { allowDefaultModelLaunch: props.allowDefaultModelLaunch },
   );
   const listFooterHints = orchestrationFooterHints(items);
+  const statusLines = props.statusLines ?? [];
   // When set, the launcher is on its second step: choosing the model for this
   // chat/team. Esc returns to the item list rather than exiting.
   const [pending, setPending] = useState<ModelPickAction | undefined>(
@@ -130,7 +136,10 @@ export function OrchestrationApp(
   const footerHints = pending ? [] : listFooterHints;
   const maxVisibleItems = Math.max(
     4,
-    rows - 8 - orchestrationFooterRowCost(footerHints),
+    rows -
+      8 -
+      orchestrationStatusRowCost(pending ? [] : statusLines) -
+      orchestrationFooterRowCost(footerHints),
   );
 
   const finish = (action: CliOrchestrationAction): void => {
@@ -191,6 +200,15 @@ export function OrchestrationApp(
         TeXRA
       </Text>
       <Text dimColor>Choose how to start this CLI session.</Text>
+      {statusLines.length > 0 ? (
+        <Box marginTop={1} flexDirection="column">
+          {statusLines.map((line, index) => (
+            <Text key={`${index}:${line}`} dimColor wrap="truncate-end">
+              {line}
+            </Text>
+          ))}
+        </Box>
+      ) : null}
       <Box marginTop={1}>
         <Select
           items={items}
@@ -223,6 +241,7 @@ export interface RunOrchestrationTuiOptions {
    *  hidden configured model. */
   readonly models: readonly CliModelAccess[];
   readonly apiMode: CliApiMode;
+  readonly statusLines?: readonly string[];
   readonly allowDefaultModelLaunch?: boolean;
   readonly colorEnabled?: boolean;
 }
@@ -243,6 +262,7 @@ export async function runOrchestrationTui(
         items={items}
         models={options.models}
         apiMode={options.apiMode}
+        statusLines={options.statusLines}
         allowDefaultModelLaunch={options.allowDefaultModelLaunch}
         onResolve={record}
       />,

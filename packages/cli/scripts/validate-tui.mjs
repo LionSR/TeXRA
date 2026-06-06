@@ -227,6 +227,9 @@ const SCENARIOS = [
     expect: [
       'TeXRA',
       'Choose how to start this CLI session.',
+      'api: personal API keys',
+      'auth: signed out',
+      'actions: configure a provider key, or run `texra login` for included relay',
       'New chat',
       'Team Lean Project',
       'unavailable',
@@ -253,6 +256,8 @@ const SCENARIOS = [
     expectExit: true,
     expect: [
       'Choose how to start this CLI session.',
+      'api: personal API keys',
+      'auth: signed out',
       'New chat',
       'Resume cccccccccccc',
       'Team Lean Project',
@@ -342,6 +347,8 @@ const SCENARIOS = [
     expectExit: true,
     expect: [
       'Choose how to start this CLI session.',
+      'api: personal API keys',
+      'auth: signed out',
       'New chat',
       'No personal API-key models are runnable',
       'Help',
