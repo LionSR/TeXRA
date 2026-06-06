@@ -19,10 +19,11 @@ import { writeTextStderr } from '../runtime/logSinks';
 import {
   agentHasDelegationTools,
   cliMultiAgentPlanHasGaps,
-  cliMultiAgentPresetTeamLaunchBlockReason,
+  cliMultiAgentPresetCanLaunchTeam,
   cliMultiAgentPresetNdjsonRecords,
   cliMultiAgentPresetListRecords,
   findCliMultiAgentPreset,
+  formatCliMultiAgentTeamLaunchBlockMessage,
   formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
@@ -340,17 +341,19 @@ export async function runMultiAgentPreset(
       missingToolUseAgentMessage(plan.missingAgentOverride),
     );
   }
-  const rootAgent = plan.rootAgent;
-  const teamLaunchBlockReason = cliMultiAgentPresetTeamLaunchBlockReason(plan);
-  if (teamLaunchBlockReason || !rootAgent) {
-    const singleAgentAdvice = rootAgent
-      ? `Start a single-agent chat with \`texra chat --agent ${rootAgent.name}\` if that is what you want.`
+  if (!cliMultiAgentPresetCanLaunchTeam(plan)) {
+    const singleAgentAdvice = plan.rootAgent
+      ? `Start a single-agent chat with \`texra chat --agent ${plan.rootAgent.name}\` if that is what you want.`
       : 'Install or sign in for a runnable team root before launching this preset.';
     writeTextStderr(
-      `Multi-agent preset "${init.preset}" cannot start as a team: ${teamLaunchBlockReason ?? 'no runnable team root'}. Run \`texra multi-agent inspect ${plan.preset.id}\` to see missing agents. ${singleAgentAdvice}`,
+      formatCliMultiAgentTeamLaunchBlockMessage(plan, {
+        requestedPreset: init.preset,
+        followUpAdvice: singleAgentAdvice,
+      }),
     );
     return CliExitCode.Usage;
   }
+  const rootAgent = plan.rootAgent;
   writeMissingPresetAgents(plan);
 
   // A team run drives a tool-use orchestrator, so it follows the `chat`

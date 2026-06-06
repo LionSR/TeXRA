@@ -9,6 +9,7 @@ import {
   cliMultiAgentPresetNdjsonRecords,
   cliMultiAgentPresets,
   findCliMultiAgentPreset,
+  formatCliMultiAgentTeamLaunchBlockMessage,
   formatCliMultiAgentPresetLauncherSummary,
   formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetInspection,
@@ -182,6 +183,48 @@ describe('CLI multi-agent presets', () => {
 
     expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
       'unavailable; no runnable team root; 0/9 tool-use agents; 0/4 workflow agents',
+    );
+  });
+
+  it('formats team launch block messages from the planned preset state', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'lean-project',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [agent('lean', AgentCategory.ToolUse)],
+    });
+
+    expect(
+      formatCliMultiAgentTeamLaunchBlockMessage(plan, {
+        requestedPreset: 'Lean Project',
+        followUpAdvice:
+          'Install or sign in for a runnable team root before launching this preset.',
+      }),
+    ).toBe(
+      'Multi-agent preset "Lean Project" cannot start as a team: no runnable team root. Run `texra multi-agent inspect lean-project` to see missing agents. Install or sign in for a runnable team root before launching this preset.',
+    );
+  });
+
+  it('rejects launch block message formatting for launchable plans', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'lean-project',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: preset.toolUseAgents.map((name) =>
+        agent(
+          name,
+          AgentCategory.ToolUse,
+          name === 'leanOrchestrator' ? ['delegate_agent'] : [],
+        ),
+      ),
+    });
+
+    expect(() => formatCliMultiAgentTeamLaunchBlockMessage(plan)).toThrow(
+      /launchable multi-agent preset "lean-project"/,
     );
   });
 
