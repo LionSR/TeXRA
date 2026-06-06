@@ -9,7 +9,7 @@ const FRAME_INTERVAL_MS = 16;
 
 export type ProgressViewMessageSender = (
   message: ProgressViewOutboundMessage,
-) => boolean | Promise<boolean>;
+) => boolean | PromiseLike<boolean>;
 
 export interface ProgressLogSource {
   readonly head: number;
