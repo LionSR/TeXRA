@@ -5,12 +5,12 @@ import {
   ServerSideKeyService,
   setServerSideKeyService,
 } from '@auth/serverKeys';
-import { GlobalStateKey } from '@common/state/stateKeys';
 import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
 import {
   computeModelOptionsData,
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 function installServerSideKeyService(options: {
   useIncludedAccess: boolean;

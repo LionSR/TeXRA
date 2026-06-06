@@ -1,5 +1,5 @@
 // Local imports - shared state keys (canonical git-author key names)
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Local imports - shared core schema
 import { CORE_SETTING_PATHS } from '@shared/schemas/coreSettings';

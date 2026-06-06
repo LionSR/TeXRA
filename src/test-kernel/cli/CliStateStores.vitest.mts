@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createCliStateStores } from '@cli/runtime/cliStateStores';
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 describe('CLI state stores', () => {
   it('persists workspace state across store instances', async () => {

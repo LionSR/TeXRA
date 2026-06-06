@@ -18,7 +18,7 @@ import {
   getVisibleAgents as getVisibleRegistryAgents,
   type AgentEntry,
 } from '@agent/index/agentRegistry';
-import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { AgentCategory, AgentSource } from '@shared/schemas/agent';
 
 import type { SettingsStatePorts } from './types';

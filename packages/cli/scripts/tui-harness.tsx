@@ -15,7 +15,7 @@ import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors';
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { tryPlatform } from '@platform/platform';
 import {
   AGENT_CATEGORY,

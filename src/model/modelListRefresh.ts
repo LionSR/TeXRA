@@ -1,4 +1,4 @@
-import { GlobalStateKey } from '@common/state/stateKeys';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import {
   DEFAULT_MODELS,

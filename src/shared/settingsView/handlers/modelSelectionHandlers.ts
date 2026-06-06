@@ -8,8 +8,8 @@ import {
   SettingsModelSelectionController,
   type SettingsModelSelectionControllerDeps,
 } from '@controllers/settingsView/SettingsModelSelectionController';
-import { GlobalStateKey } from '@common/state/stateKeys';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import type { UpdateModelSelectionMessage } from '@shared/schemas/settingsViewMessages';
 

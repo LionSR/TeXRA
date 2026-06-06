@@ -2,7 +2,7 @@
 import { tryGlobalState } from '@platform/platform';
 
 // Local imports - common
-import { GlobalStateKey } from '@common/state/stateKeys';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Local imports - config utils
 import { getConfig } from './configUtils';
