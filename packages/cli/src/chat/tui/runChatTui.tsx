@@ -120,8 +120,8 @@ import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import {
-  effectiveStreamStatus,
   onStreamStatusChange,
+  streamStatusFromState,
 } from './state/streamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import { requestCliCompaction } from './state/compactionRequest';
@@ -429,7 +429,7 @@ function chatTuiCanAcceptFollowUp(status: StreamStatus | undefined): boolean {
 export function chatTuiActiveChildFollowUpTarget(): StreamTabId | undefined {
   const activeStreamId = chatTuiActiveChildStreamId();
   if (!activeStreamId) return undefined;
-  return chatTuiCanAcceptFollowUp(effectiveStreamStatus(activeStreamId))
+  return chatTuiCanAcceptFollowUp(streamStatusFromState(activeStreamId))
     ? activeStreamId
     : undefined;
 }
@@ -438,13 +438,13 @@ export function chatTuiShouldAnnounceQueuedFollowUp(
   targetStreamId: StreamTabId | undefined,
 ): boolean {
   if (!targetStreamId) return true;
-  return effectiveStreamStatus(targetStreamId) !== STREAM_STATUS.WAITING;
+  return streamStatusFromState(targetStreamId) !== STREAM_STATUS.WAITING;
 }
 
 export function chatTuiRejectedChildFollowUpTarget(): StreamTabId | undefined {
   const activeStreamId = chatTuiActiveChildStreamId();
   if (!activeStreamId) return undefined;
-  return chatTuiCanAcceptFollowUp(effectiveStreamStatus(activeStreamId))
+  return chatTuiCanAcceptFollowUp(streamStatusFromState(activeStreamId))
     ? undefined
     : activeStreamId;
 }
@@ -1154,7 +1154,7 @@ export async function runChat(
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
   const rootStreamStatus = (): StreamStatus | undefined =>
-    session.streamId ? effectiveStreamStatus(session.streamId) : undefined;
+    session.streamId ? streamStatusFromState(session.streamId) : undefined;
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(session.streamId && getToolUseFlowContext(session.streamId));
   const canSelectCurrentModel = (): boolean =>
@@ -1202,7 +1202,7 @@ export async function runChat(
   const resetSessionForClear = (): void => {
     const activeStreamId = session.streamId ?? cliState.activeStreamId.get();
     const activeStatus = activeStreamId
-      ? effectiveStreamStatus(activeStreamId)
+      ? streamStatusFromState(activeStreamId)
       : undefined;
     const isRunPending = Boolean(session.runPromise && !session.runCompleted);
 
