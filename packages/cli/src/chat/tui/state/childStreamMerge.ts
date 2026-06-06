@@ -1,8 +1,6 @@
 // Local imports - shared schemas
 import type { ActiveChildInfo } from '@shared/schemas';
 
-import { effectiveStreamStatus } from './streamStatus';
-
 function childKey(child: ActiveChildInfo): string {
   return child.childStreamId ?? child.executionId;
 }
@@ -18,14 +16,6 @@ export function mergeChildStreams(
   return [...byStream.values()];
 }
 
-export function childWithEffectiveStatus(
-  child: ActiveChildInfo,
-): ActiveChildInfo {
-  if (!child.childStreamId) return child;
-  const status = effectiveStreamStatus(child.childStreamId) ?? child.status;
-  return status === child.status ? child : { ...child, status };
-}
-
 /** Active subagents followed by any retained child streams that are no longer
  *  active — so completed/waiting subagent pages stay listed and addressable. */
 export function visibleSubagentRows(slice: {
@@ -36,5 +26,5 @@ export function visibleSubagentRows(slice: {
   return [
     ...slice.activeSubagents,
     ...slice.childStreams.filter((child) => !activeKeys.has(childKey(child))),
-  ].map(childWithEffectiveStatus);
+  ];
 }
