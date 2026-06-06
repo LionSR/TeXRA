@@ -71,17 +71,6 @@ export const PersistedWorkPlanSchema = z.object({
   planSummary: z.string().nullable().catch(null),
 });
 
-export type PersistedWorkPlan = z.infer<typeof PersistedWorkPlanSchema>;
-
-export function emptyPersistedWorkPlan(): PersistedWorkPlan {
-  return {
-    schemaVersion: STREAM_SNAPSHOT_SCHEMA_VERSION,
-    todos: [],
-    plan: null,
-    planSummary: null,
-  };
-}
-
 // ============================================================================
 // StreamSnapshot — the assembled logical view (durable + log-derived + liveness)
 // ============================================================================
@@ -118,8 +107,3 @@ export const StreamSnapshotSchema = z.object({
 });
 
 export type StreamSnapshot = z.infer<typeof StreamSnapshotSchema>;
-
-/** A minimal valid snapshot for a stream with no persisted sidecar yet. */
-export function emptyStreamSnapshot(streamId: string): StreamSnapshot {
-  return StreamSnapshotSchema.parse({ streamId });
-}

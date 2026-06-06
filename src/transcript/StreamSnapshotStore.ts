@@ -17,6 +17,8 @@
  * `read()` returns durable display state only; hosts clamp liveness on hydrate.
  */
 
+import { z } from 'zod';
+
 import {
   TaskStateSchema,
   isToolUseTaskState,
@@ -26,6 +28,7 @@ import {
 import { getCleanAgentName } from '@agent/index';
 import { getExecutionStore } from '@agent/storage';
 import { KVStore } from '@common/storage/KVStore';
+import * as logger from '@logger/logUtils';
 import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
 import {
   CompileFailuresDataSchema,
@@ -44,7 +47,6 @@ import {
   sumUsageStats,
   TokenUsageStatsParsingSchema,
   UsageDataSchema,
-  WorkPlanSnapshotSchema,
   type CompileFailure,
   type ExecutionId,
   type OutputFileInfo,
@@ -63,6 +65,8 @@ import {
   STREAM_DATA_KEYS,
   streamDataDir,
 } from './streamDataPaths';
+
+const CHANNEL = 'StreamSnapshotStore';
 
 /** Serialize a Map to a plain string-keyed Record for JSON persistence. */
 function mapToRecord<K extends string | number, V>(
@@ -176,10 +180,8 @@ export class StreamSnapshotStore {
       ),
       bus.on(
         'setTaskState',
-        ({ streamId, executionId, taskState }) => {
-          this.setTaskState(streamId, taskState);
-          if (executionId) this.setExecutionId(streamId, executionId);
-        },
+        ({ streamId, executionId, taskState }) =>
+          this.setTaskState(streamId, taskState, executionId),
         options,
       ),
       bus.on(
@@ -411,9 +413,20 @@ export class StreamSnapshotStore {
   // Meta accessors, setters, and queries (replace StreamMetaManager)
   // ==========================================================================
 
-  setTaskState(stream: StreamTabId, taskState: TaskState): void {
+  /**
+   * Set task state, optionally with the execution id, in a SINGLE meta.json
+   * write (callers that have both should pass both so meta isn't written twice).
+   */
+  setTaskState(
+    stream: StreamTabId,
+    taskState: TaskState,
+    executionId?: ExecutionId,
+  ): void {
     this.taskStates.set(stream, taskState);
-    this.patchMeta(stream, { taskState });
+    this.patchMeta(
+      stream,
+      executionId ? { taskState, executionId } : { taskState },
+    );
   }
 
   setExecutionId(stream: StreamTabId, executionId: ExecutionId): void {
@@ -517,9 +530,17 @@ export class StreamSnapshotStore {
   private write(stream: StreamTabId, key: string, value: unknown): void {
     const chainKey = `${stream}::${key}`;
     const prev = this.pendingWrites.get(chainKey) ?? Promise.resolve();
+    // Best-effort: a failed sidecar write must not break the chain, but it is
+    // logged so silent data loss (disk full, permission denied) is diagnosable.
     const next = prev
       .then(() => this.kv(stream).write(key, value))
-      .catch(() => {});
+      .catch((err: unknown) =>
+        logger.warn(
+          CHANNEL,
+          `Failed to persist ${key}.json for stream ${stream}; sidecar may be stale.`,
+          { data: err },
+        ),
+      );
     this.pendingWrites.set(chainKey, next);
   }
 
@@ -539,7 +560,16 @@ export class StreamSnapshotStore {
     try {
       return await kv.read(key);
     } catch (error) {
-      if (error instanceof SyntaxError) return undefined; // corrupt = missing
+      // Corrupt/truncated JSON (crash mid-write) is treated as missing — the
+      // next write replaces it — but logged so it isn't silently swallowed.
+      if (error instanceof SyntaxError) {
+        logger.warn(
+          CHANNEL,
+          `Discarding unreadable ${key}.json; treating as missing.`,
+          { data: error },
+        );
+        return undefined;
+      }
       throw error;
     }
   }
@@ -561,17 +591,21 @@ export class StreamSnapshotStore {
     const metaRaw = await this.readMetaFile(kv);
     const activeRunId = metaRaw?.activeRunId ?? undefined;
 
-    const flatten = async <T>(
+    const flatten = async <T extends Map<number, unknown[]>>(
       key: string,
-      schema: { safeParse: (v: unknown) => { success: boolean; data?: T } },
+      schema: z.ZodType<T>,
     ): Promise<T | undefined> => {
       const raw = await this.tryRead(kv, key);
       if (raw === undefined) return undefined;
-      const migrated = isLegacyNested(raw)
-        ? flattenLegacyRuns(raw, activeRunId)
-        : raw;
+      const wasLegacy = isLegacyNested(raw);
+      const migrated = wasLegacy ? flattenLegacyRuns(raw, activeRunId) : raw;
       const parsed = schema.safeParse(migrated);
-      return parsed.success ? parsed.data : undefined;
+      if (!parsed.success) return undefined;
+      // Migrate the pre-#3061 nested `{runId:{round}}` shape to flat ONCE, at
+      // this read entry, by persisting the flattened form — so the conversion
+      // never runs again for this file (no repetitive resolve on every read).
+      if (wasLegacy) this.write(streamId, key, mapToRecord(parsed.data));
+      return parsed.data;
     };
 
     const [outputFiles, missingOutputs, compileFailures] = await Promise.all([
@@ -590,17 +624,21 @@ export class StreamSnapshotStore {
     ]);
 
     const usageRaw = await this.tryRead(kv, STREAM_DATA_KEYS.USAGE_STATS);
-    const usage =
-      usageRaw === undefined
-        ? undefined
-        : (UsageDataSchema.safeParse(usageRaw).data as
-            | Map<string, TokenUsageStats>
-            | undefined);
+    const usageParsed =
+      usageRaw === undefined ? undefined : UsageDataSchema.safeParse(usageRaw);
+    const usage = usageParsed?.success ? usageParsed.data : undefined;
 
+    // safeParse + per-field `.catch` (PersistedWorkPlanSchema) so a corrupt-but-
+    // valid-JSON workPlan.json degrades gracefully instead of throwing and
+    // aborting the whole read()/load(), matching every other category here.
     const workPlanRaw = await this.tryRead(kv, STREAM_DATA_KEYS.WORK_PLAN);
-    const workPlan = workPlanRaw
-      ? WorkPlanSnapshotSchema.parse(workPlanRaw)
-      : { todos: [], plan: null, planSummary: null };
+    const parsedWorkPlan = workPlanRaw
+      ? PersistedWorkPlanSchema.safeParse(workPlanRaw)
+      : undefined;
+    const workPlan =
+      parsedWorkPlan?.success === true
+        ? parsedWorkPlan.data
+        : { todos: [], plan: null, planSummary: null };
 
     return StreamSnapshotSchema.parse({
       streamId,

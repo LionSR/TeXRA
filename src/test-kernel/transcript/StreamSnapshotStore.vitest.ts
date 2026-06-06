@@ -133,4 +133,41 @@ describe('StreamSnapshotStore', () => {
     expect(snap.plan).toBeNull();
     expect(snap.runUsage).toEqual({});
   });
+
+  it('migrates the legacy nested {runId:{round}} shape to flat ONCE at read', async () => {
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'missingOutputs.json'),
+      JSON.stringify({ 'run-1': { '0': ['a.tex'], '1': ['b.tex'] } }),
+    );
+
+    const store = new StreamSnapshotStore();
+    const snap = await store.read(STREAM);
+    await store.flush();
+
+    // Flattened in the snapshot…
+    expect(snap.missingOutputsByRound).toEqual({
+      '0': ['a.tex'],
+      '1': ['b.tex'],
+    });
+    // …and the on-disk file is now FLAT — migrated once, never re-resolved.
+    const raw = await StorageFS.readJson(path.join(dir, 'missingOutputs.json'));
+    expect(raw).toEqual({ '0': ['a.tex'], '1': ['b.tex'] });
+  });
+
+  it('degrades gracefully when workPlan.json is valid JSON but the wrong shape', async () => {
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    await StorageFS.ensureDir(dir);
+    // Corrupt-but-parseable payload must NOT throw and abort read()/resume.
+    await StorageFS.write(
+      path.join(dir, 'workPlan.json'),
+      JSON.stringify({ todos: 'not-an-array', plan: 42 }),
+    );
+    const snap = await new StreamSnapshotStore().read(STREAM);
+    expect(snap.todos).toEqual([]);
+    expect(snap.plan).toBeNull();
+  });
 });

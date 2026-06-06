@@ -1404,11 +1404,14 @@ export async function runChat(
     const restored = await snapshotStore.read(resolution.streamId);
     patchStream(resolution.streamId, (slice) => {
       const runUsages = Object.values(restored.runUsage);
+      // The persisted snapshot is authoritative for this resumed stream — use
+      // its todos/plan verbatim (an intentionally-empty list must not fall back
+      // to stale slice state) rather than treating empty as "no data".
       return {
         ...slice,
         usage: runUsages.length ? sumUsageStats(runUsages) : slice.usage,
-        todos: restored.todos.length ? restored.todos : slice.todos,
-        plan: restored.plan ?? slice.plan,
+        todos: restored.todos,
+        plan: restored.plan,
       };
     });
     projectStreamTranscript(resolution.streamId);

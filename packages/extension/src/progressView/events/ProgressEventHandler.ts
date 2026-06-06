@@ -353,8 +353,9 @@ export class ProgressEventHandler {
     const category = taskState.agentConfig.agentCategory;
     const previousFilter = this.state.agentCategoryFilter;
 
-    // Coordinate persistence + ephemeral side effects (formerly state.setTaskState)
-    this.state.snapshots.setTaskState(streamId, taskState);
+    // Coordinate persistence + ephemeral side effects (formerly state.setTaskState).
+    // taskState + executionId go in a single meta.json write.
+    this.state.snapshots.setTaskState(streamId, taskState, executionId);
     this.state.clearStreamHints(streamId);
     this.state.getOrCreateStreamState(streamId, category);
     this.state.resetFinishedChildCounters(streamId);
@@ -362,10 +363,6 @@ export class ProgressEventHandler {
 
     if (isActiveStream) {
       this.maybeUpdateFilterForCategory(category);
-    }
-
-    if (executionId) {
-      this.state.snapshots.setExecutionId(streamId, executionId);
     }
 
     if (this.webviewUpdater.isAvailable()) {
