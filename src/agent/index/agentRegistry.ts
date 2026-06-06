@@ -474,7 +474,10 @@ function persistRemoteAgentMeta(
       {},
     ) ?? {};
   stored[agentName] = { ...stored[agentName], ...meta };
-  void platform().globalState.update(GlobalStateKey.REMOTE_AGENT_META_CACHE, stored);
+  void platform().globalState.update(
+    GlobalStateKey.REMOTE_AGENT_META_CACHE,
+    stored,
+  );
 }
 
 /** Load persisted remote agent metadata from globalState. */
