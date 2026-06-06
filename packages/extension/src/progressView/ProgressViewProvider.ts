@@ -29,11 +29,8 @@ import type {
   ToolEditPermission,
 } from '@shared/schemas';
 import { AGENT_CATEGORY } from '@shared/schemas';
-import { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
-import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
-import { ProgressEventHandler } from '@shared/progressView/backend/events/ProgressEventHandler';
+import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
-import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
 import {
   getOpenTurnDraft,
@@ -66,10 +63,11 @@ export class ProgressViewProvider
   public static readonly viewType = 'texra.progress';
   private static _instance: ProgressViewProvider | undefined;
 
-  public readonly state: ProgressViewState;
-  public readonly eventHandler: ProgressEventHandler;
-  public readonly webviewBridge: WebviewBridge;
-  public readonly webviewUpdater: WebviewUpdater;
+  public readonly backend: ProgressBackend;
+  public readonly state: ProgressBackend['state'];
+  public readonly eventHandler: ProgressBackend['eventHandler'];
+  public readonly webviewBridge: ProgressBackend['webviewBridge'];
+  public readonly webviewUpdater: ProgressBackend['webviewUpdater'];
 
   protected readonly contentProvider: ProgressViewContentProvider;
   protected readonly messageHandler: ProgressViewMessageHandler;
@@ -87,31 +85,31 @@ export class ProgressViewProvider
   private _sidebarWebviewGetter?: () => vscode.Webview | undefined;
   private _mainViewProvider?: MainViewProvider;
 
-  private readonly toolEditHandler: ApprovalRequestHandler<
+  private toolEditHandler!: ApprovalRequestHandler<
     ToolEditPermission,
     'requestId'
   >;
-  private readonly bashApprovalHandler: ApprovalRequestHandler<
+  private bashApprovalHandler!: ApprovalRequestHandler<
     BashPermission,
     'requestId'
   >;
-  private readonly retryRequestHandler: ApprovalRequestHandler<
+  private retryRequestHandler!: ApprovalRequestHandler<
     ProgressEventPayloads['showRetryRequest'],
     'streamId'
   >;
-  private readonly agentProposalHandler: ApprovalRequestHandler<
+  private agentProposalHandler!: ApprovalRequestHandler<
     AgentProposalPermission,
     'proposalId'
   >;
-  private readonly planApprovalHandler: ApprovalRequestHandler<
+  private planApprovalHandler!: ApprovalRequestHandler<
     PlanApprovalPermission,
     'approvalId'
   >;
-  private readonly externalInquiryHandler: ApprovalRequestHandler<
+  private externalInquiryHandler!: ApprovalRequestHandler<
     ExternalInquiryPermission,
     'requestId'
   >;
-  private readonly userQuestionHandler: ApprovalRequestHandler<
+  private userQuestionHandler!: ApprovalRequestHandler<
     ProgressEventPayloads['showUserQuestion'],
     'requestId'
   >;
@@ -120,109 +118,108 @@ export class ProgressViewProvider
     super(context);
     this.logger = createChannelTrace('ProgressViewProvider');
 
-    this.state = new ProgressViewState(workspaceSM);
-    this.webviewUpdater = new WebviewUpdater(
-      (message) => void this.sendToActiveProgressWebview(message),
-      () => this.getActiveWebview() !== undefined,
-    );
-    this.webviewBridge = new WebviewBridge(
-      this.state.streamLogs,
-      (message) => this.sendToActiveProgressWebview(message),
-      () => this.state.activeStream || null,
-    );
+    this.backend = new ProgressBackend({
+      storage: workspaceSM,
+      sendMessage: (message) => this.sendToActiveProgressWebview(message),
+      hasTarget: () => this.getActiveWebview() !== undefined,
+      configureUi: ({ webviewUpdater: u }) => {
+        const canSend = () => this.canSendToWebview();
+        this.toolEditHandler = new ApprovalRequestHandler(
+          'requestId',
+          (p) => u.showPermission({ kind: PERMISSION_KIND.TOOL_EDIT, data: p }),
+          (id) => u.resolvePermission(PERMISSION_KIND.TOOL_EDIT, id),
+          canSend,
+        );
+        this.bashApprovalHandler = new ApprovalRequestHandler(
+          'requestId',
+          (p) => u.showPermission({ kind: PERMISSION_KIND.BASH, data: p }),
+          (id) => u.resolvePermission(PERMISSION_KIND.BASH, id),
+          canSend,
+        );
+        this.retryRequestHandler = new ApprovalRequestHandler(
+          'streamId',
+          (p) => u.showPermission({ kind: PERMISSION_KIND.RETRY, data: p }),
+          (id) => u.resolvePermission(PERMISSION_KIND.RETRY, id),
+          canSend,
+        );
+        this.agentProposalHandler = new ApprovalRequestHandler(
+          'proposalId',
+          (p) => {
+            // Show proposal immediately with basic model dropdown (synchronous)
+            u.showPermission({
+              kind: PERMISSION_KIND.PROPOSAL,
+              data: p,
+              modelOptionsData: buildBasicModelOptionsData(),
+            });
+            // Then upgrade with availability metadata if possible
+            void this.sendProposalModelOptions(p);
+          },
+          (id) => u.resolvePermission(PERMISSION_KIND.PROPOSAL, id),
+          canSend,
+        );
+        this.planApprovalHandler = new ApprovalRequestHandler(
+          'approvalId',
+          (p) =>
+            u.showPermission({ kind: PERMISSION_KIND.PLAN_APPROVAL, data: p }),
+          (id) => u.resolvePermission(PERMISSION_KIND.PLAN_APPROVAL, id),
+          canSend,
+        );
+        this.externalInquiryHandler = new ApprovalRequestHandler(
+          'requestId',
+          (p) =>
+            u.showPermission({
+              kind: PERMISSION_KIND.EXTERNAL_INQUIRY,
+              data: p,
+            }),
+          (id) => u.resolvePermission(PERMISSION_KIND.EXTERNAL_INQUIRY, id),
+          canSend,
+        );
+        this.userQuestionHandler = new ApprovalRequestHandler(
+          'requestId',
+          (p) =>
+            u.showPermission({
+              kind: PERMISSION_KIND.USER_QUESTION,
+              data: p,
+            }),
+          (id) => u.resolvePermission(PERMISSION_KIND.USER_QUESTION, id),
+          canSend,
+        );
 
-    const canSend = () => this.canSendToWebview();
-    const u = this.webviewUpdater;
-    this.toolEditHandler = new ApprovalRequestHandler(
-      'requestId',
-      (p) => u.showPermission({ kind: PERMISSION_KIND.TOOL_EDIT, data: p }),
-      (id) => u.resolvePermission(PERMISSION_KIND.TOOL_EDIT, id),
-      canSend,
-    );
-    this.bashApprovalHandler = new ApprovalRequestHandler(
-      'requestId',
-      (p) => u.showPermission({ kind: PERMISSION_KIND.BASH, data: p }),
-      (id) => u.resolvePermission(PERMISSION_KIND.BASH, id),
-      canSend,
-    );
-    this.retryRequestHandler = new ApprovalRequestHandler(
-      'streamId',
-      (p) => u.showPermission({ kind: PERMISSION_KIND.RETRY, data: p }),
-      (id) => u.resolvePermission(PERMISSION_KIND.RETRY, id),
-      canSend,
-    );
-    this.agentProposalHandler = new ApprovalRequestHandler(
-      'proposalId',
-      (p) => {
-        // Show proposal immediately with basic model dropdown (synchronous)
-        u.showPermission({
-          kind: PERMISSION_KIND.PROPOSAL,
-          data: p,
-          modelOptionsData: buildBasicModelOptionsData(),
-        });
-        // Then upgrade with availability metadata if possible
-        void this.sendProposalModelOptions(p);
+        return {
+          callbacks: {
+            showRetryRequest: (p) => this.retryRequestHandler.show(p),
+            resolveRetryRequest: (id) => this.retryRequestHandler.resolve(id),
+            showToolEditPermission: (p) => this.toolEditHandler.show(p),
+            resolveToolEditPermission: (id) => this.toolEditHandler.resolve(id),
+            updateToolEditApprovalBypassState: (streamId, bypassActive) => {
+              if (canSend())
+                u.updateBypassState(streamId, 'toolEdit', bypassActive);
+            },
+            updateSuperYoloBypassState: (streamId, bypassActive) => {
+              if (canSend())
+                u.updateBypassState(streamId, 'superYolo', bypassActive);
+            },
+            showBashPermission: (p) => this.bashApprovalHandler.show(p),
+            resolveBashPermission: (id) => this.bashApprovalHandler.resolve(id),
+            showAgentProposal: (p) => this.agentProposalHandler.show(p),
+            resolveAgentProposal: (id) => this.agentProposalHandler.resolve(id),
+            showPlanApproval: (p) => this.planApprovalHandler.show(p),
+            resolvePlanApproval: (id) => this.planApprovalHandler.resolve(id),
+            showExternalInquiry: (p) => this.externalInquiryHandler.show(p),
+            resolveExternalInquiry: (id) =>
+              this.externalInquiryHandler.resolve(id),
+            showUserQuestion: (p) => this.userQuestionHandler.show(p),
+            resolveUserQuestion: (id) => this.userQuestionHandler.resolve(id),
+          },
+          hasPendingPermissions: (streamId) =>
+            this.hasPendingPermissionsForStream(streamId),
+        };
       },
-      (id) => u.resolvePermission(PERMISSION_KIND.PROPOSAL, id),
-      canSend,
-    );
-    this.planApprovalHandler = new ApprovalRequestHandler(
-      'approvalId',
-      (p) => u.showPermission({ kind: PERMISSION_KIND.PLAN_APPROVAL, data: p }),
-      (id) => u.resolvePermission(PERMISSION_KIND.PLAN_APPROVAL, id),
-      canSend,
-    );
-    this.externalInquiryHandler = new ApprovalRequestHandler(
-      'requestId',
-      (p) =>
-        u.showPermission({
-          kind: PERMISSION_KIND.EXTERNAL_INQUIRY,
-          data: p,
-        }),
-      (id) => u.resolvePermission(PERMISSION_KIND.EXTERNAL_INQUIRY, id),
-      canSend,
-    );
-    this.userQuestionHandler = new ApprovalRequestHandler(
-      'requestId',
-      (p) =>
-        u.showPermission({
-          kind: PERMISSION_KIND.USER_QUESTION,
-          data: p,
-        }),
-      (id) => u.resolvePermission(PERMISSION_KIND.USER_QUESTION, id),
-      canSend,
-    );
-
-    this.eventHandler = new ProgressEventHandler(
-      this.state,
-      this.webviewUpdater,
-      this.webviewBridge,
-      {
-        showRetryRequest: (p) => this.retryRequestHandler.show(p),
-        resolveRetryRequest: (id) => this.retryRequestHandler.resolve(id),
-        showToolEditPermission: (p) => this.toolEditHandler.show(p),
-        resolveToolEditPermission: (id) => this.toolEditHandler.resolve(id),
-        updateToolEditApprovalBypassState: (streamId, bypassActive) => {
-          if (canSend())
-            u.updateBypassState(streamId, 'toolEdit', bypassActive);
-        },
-        updateSuperYoloBypassState: (streamId, bypassActive) => {
-          if (canSend())
-            u.updateBypassState(streamId, 'superYolo', bypassActive);
-        },
-        showBashPermission: (p) => this.bashApprovalHandler.show(p),
-        resolveBashPermission: (id) => this.bashApprovalHandler.resolve(id),
-        showAgentProposal: (p) => this.agentProposalHandler.show(p),
-        resolveAgentProposal: (id) => this.agentProposalHandler.resolve(id),
-        showPlanApproval: (p) => this.planApprovalHandler.show(p),
-        resolvePlanApproval: (id) => this.planApprovalHandler.resolve(id),
-        showExternalInquiry: (p) => this.externalInquiryHandler.show(p),
-        resolveExternalInquiry: (id) => this.externalInquiryHandler.resolve(id),
-        showUserQuestion: (p) => this.userQuestionHandler.show(p),
-        resolveUserQuestion: (id) => this.userQuestionHandler.resolve(id),
-      },
-      (streamId) => this.hasPendingPermissionsForStream(streamId),
-    );
+    });
+    this.state = this.backend.state;
+    this.webviewUpdater = this.backend.webviewUpdater;
+    this.webviewBridge = this.backend.webviewBridge;
+    this.eventHandler = this.backend.eventHandler;
 
     this.contentProvider = new ProgressViewContentProvider(context);
     this.messageHandler = new ProgressViewMessageHandler(this, context);
@@ -232,7 +229,7 @@ export class ProgressViewProvider
 
     this._disposables.push(
       vscode.workspace.onDidChangeWorkspaceFolders(async () => {
-        await this.state.load();
+        await this.backend.load();
         this.syncFullView({ forceRebuild: true });
       }),
       vscode.window.onDidChangeActiveColorTheme(() => {
@@ -244,8 +241,8 @@ export class ProgressViewProvider
   }
 
   public async initialize(): Promise<void> {
-    await this.state.load();
-    this._disposables.push(this.eventHandler.setupEventListeners());
+    await this.backend.load();
+    this._disposables.push(this.backend.setupEventListeners());
     this.logger.debug('ProgressViewProvider initialized');
   }
 
@@ -678,7 +675,7 @@ export class ProgressViewProvider
 
   public override dispose(): void {
     this.disposePanelResources(true);
-    this.webviewBridge.dispose();
+    this.backend.dispose();
     super.dispose();
   }
 
