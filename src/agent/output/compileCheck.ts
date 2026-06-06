@@ -23,6 +23,7 @@ import {
   type TaskRunFileService,
 } from '@utils/files';
 import { hasExtension } from '@utils/core/pathCore';
+import { splitContentLines } from '@utils/text/stringUtils';
 
 import {
   publishCompiledPdfArtifact,
@@ -300,10 +301,13 @@ async function readLogTail(
   );
   try {
     const full = await flexibleFS.read(pathToLocation(latexLogAbs));
-    // Split on CRLF or LF so Windows logs produce clean lines; normalize the
-    // tail to LF when rejoining.
-    return full.split(/\r?\n/).slice(-LOG_TAIL_LINES).join('\n');
+    return formatCompileLogTail(full);
   } catch (err) {
     return `(no LaTeX log at ${latexLogAbs}: ${toErrorMessage(err)})`;
   }
+}
+
+/** Format the diagnostic tail of a LaTeX log for compile-failure reports. */
+export function formatCompileLogTail(fullLog: string): string {
+  return splitContentLines(fullLog).slice(-LOG_TAIL_LINES).join('\n');
 }
