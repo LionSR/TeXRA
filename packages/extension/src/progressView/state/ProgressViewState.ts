@@ -35,10 +35,6 @@ import {
   type ConversationProgress,
   type ContextStateData,
   type StreamTabId,
-  type TodoItem,
-  type Plan,
-  type WorkPlanSnapshot,
-  WorkPlanSnapshotSchema,
 } from '@shared/schemas';
 import {
   PersistedState,
@@ -57,7 +53,6 @@ export type StreamHints = z.infer<typeof StreamHintsSchema>;
 /** Ephemeral session state per stream (not persisted). */
 const StreamSessionStateSchema = z.object({
   hints: StreamHintsSchema.prefault({}),
-  workPlan: WorkPlanSnapshotSchema.prefault({}),
   contextState: ContextStateDataSchema.nullable().prefault(null),
 });
 
@@ -109,10 +104,11 @@ export function cleanupToolUseAgentRegistry(
 /**
  * Core state management for the progress view.
  *
- * Coordinates four persistence managers (streamLogs, outputFiles, usageStats,
- * meta) plus ephemeral in-memory state and preferences. Workflow instructions
- * live in the log stream (new runs write them directly; legacy runs are
- * backfilled there during load), not in separate progress-view state.
+ * Coordinates two persistence stores — `streamLogs` (transcript) and
+ * `snapshots` (all per-stream sidecar: output files, usage, todos, plan, and
+ * meta) — plus ephemeral in-memory execution state and preferences. Workflow
+ * instructions live in the log stream (new runs write them directly; legacy
+ * runs are backfilled there during load), not in separate progress-view state.
  */
 export class ProgressViewState {
   // -- Persistence managers ---------------------------------------------------
@@ -227,29 +223,7 @@ export class ProgressViewState {
     }
   }
 
-  setTodos(stream: StreamTabId, todos: TodoItem[]): void {
-    const state = this.getOrCreateSession(stream);
-    state.workPlan = WorkPlanSnapshotSchema.parse({
-      ...state.workPlan,
-      todos,
-    });
-  }
-
-  setPlan(stream: StreamTabId, plan: Plan | null): void {
-    const state = this.getOrCreateSession(stream);
-    state.workPlan = WorkPlanSnapshotSchema.parse({
-      ...state.workPlan,
-      plan,
-      planSummary: plan?.summary ?? null,
-    });
-  }
-
-  getWorkPlan(stream: StreamTabId): WorkPlanSnapshot {
-    return (
-      this._sessionState.get(stream)?.workPlan ??
-      WorkPlanSnapshotSchema.parse({})
-    );
-  }
+  // todos/plan are owned + persisted by StreamSnapshotStore (workPlan.json).
 
   getContextState(stream: StreamTabId): ContextStateData | undefined {
     return this._sessionState.get(stream)?.contextState ?? undefined;

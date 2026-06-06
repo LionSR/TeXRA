@@ -84,8 +84,8 @@ describe('progress view work-plan hydration', () => {
       () => false,
     );
 
-    state.setTodos('stream:work-plan', [todo]);
-    state.setPlan('stream:work-plan', plan);
+    state.snapshots.setTodos('stream:work-plan', [todo]);
+    state.snapshots.setPlan('stream:work-plan', plan);
     handler.syncStreamContent('stream:work-plan');
 
     expect(bridge.syncStream).toHaveBeenCalledWith('stream:work-plan');
@@ -95,7 +95,7 @@ describe('progress view work-plan hydration', () => {
       todos: [todo],
       plan,
     });
-    expect(state.getWorkPlan('stream:work-plan')).toEqual({
+    expect(state.snapshots.getWorkPlan('stream:work-plan')).toEqual({
       todos: [todo],
       plan,
       planSummary: plan.summary,

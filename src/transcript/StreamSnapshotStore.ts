@@ -372,7 +372,7 @@ export class StreamSnapshotStore {
     this.writeWorkPlan(stream, next);
   }
 
-  private getWorkPlan(stream: StreamTabId): WorkPlanSnapshot {
+  getWorkPlan(stream: StreamTabId): WorkPlanSnapshot {
     return (
       this.workPlan.get(stream) ?? { todos: [], plan: null, planSummary: null }
     );

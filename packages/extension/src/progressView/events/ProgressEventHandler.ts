@@ -206,7 +206,7 @@ export class ProgressEventHandler {
         },
         // Todo events
         updateTodos: (ctx, { streamId, todos }) => {
-          ctx.state.setTodos(streamId, todos);
+          ctx.state.snapshots.setTodos(streamId, todos);
           this.sendIfActive(streamId, () =>
             ctx.webviewUpdater.updateTodos(streamId, todos),
           );
@@ -218,7 +218,7 @@ export class ProgressEventHandler {
         // Unlike high-frequency log events, plan updates are rare and
         // critical for the approval UX.
         updatePlan: (ctx, { streamId, plan }) => {
-          ctx.state.setPlan(streamId, plan);
+          ctx.state.snapshots.setPlan(streamId, plan);
           if (this.webviewUpdater.isAvailable()) {
             ctx.webviewUpdater.updatePlan(streamId, plan);
           }
@@ -495,7 +495,7 @@ export class ProgressEventHandler {
     this.webviewBridge.syncStream(stream);
 
     const extras = this.buildStreamSyncExtras(stream);
-    const { todos, plan } = this.state.getWorkPlan(stream);
+    const { todos, plan } = this.state.snapshots.getWorkPlan(stream);
     const queuedFollowUps = ToolUseFollowUpQueue.getAll(stream);
     const agentCategory = this.getStreamCategory(stream);
 
