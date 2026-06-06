@@ -188,6 +188,10 @@ function pickConfigValues(record: Record<string, unknown>): CliConfigValues {
   };
 }
 
+export function parseCliConfigValues(value: unknown): CliConfigValues {
+  return isPlainRecord(value) ? pickConfigValues(value) : {};
+}
+
 export function workspaceCliConfigPath(cwd: string): string {
   return path.join(cwd, CLI_CONFIG_DIR, CLI_CONFIG_FILE);
 }
@@ -224,7 +228,7 @@ export async function loadWorkspaceCliConfig(
 
   return {
     path: filePath,
-    values: pickConfigValues(parsed),
+    values: parseCliConfigValues(parsed),
     warnings: collectValidationWarnings(filePath, parsed),
   };
 }
