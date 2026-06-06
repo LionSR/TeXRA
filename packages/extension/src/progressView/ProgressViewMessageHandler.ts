@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 
+import { createProgressViewFileCommandHandlers } from '@controllers/progressView/ProgressViewFileCommandHandlers';
 import { createProgressViewFollowUpCommandHandlers } from '@controllers/progressView/ProgressViewFollowUpCommandHandlers';
 import { createProgressViewLifecycleCommandHandlers } from '@controllers/progressView/ProgressViewLifecycleCommandHandlers';
 import { createProgressViewRunCommandHandlers } from '@controllers/progressView/ProgressViewRunCommandHandlers';
@@ -235,8 +236,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           );
         },
       }),
-      [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]: (data) =>
-        this.workflowFileActionsController.openTaskStorage(data.stream),
       [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]: (data) =>
         this.handlePolishFollowUp(data),
       [PROGRESS_VIEW_COMMANDS.START_RECORDING]: async () => {
@@ -386,29 +385,30 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.handleRunCompileFixer(data.stream),
 
       // File operations
-      [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: async (data) =>
-        vscode.commands.executeCommand('texra.openFile', data.file, data.line),
-      [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]: async (data) =>
-        vscode.commands.executeCommand('texra.openFileCompile', data.file),
-      [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]: (data) =>
-        this.workflowFileActionsController.compareOriginal(
-          data.file,
-          data.base,
-        ),
-      [PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS]: (data) =>
-        this.workflowFileActionsController.comparePrevious(
-          data.file,
-          data.base,
-          data.prev,
-        ),
-      [PROGRESS_VIEW_COMMANDS.ACCEPT_FILE]: (data) =>
-        this.workflowFileActionsController.acceptFile(data.file, data.base),
-      [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: (data) =>
-        this.workflowFileActionsController.mergeFile(data.file, data.base),
-      [PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE]: (data) =>
-        this.workflowFileActionsController.latexdiffFile(data.file, data.base),
-      [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: async (data) =>
-        this.workflowFileActionsController.openLabel(data.label),
+      ...createProgressViewFileCommandHandlers({
+        openFile: async (file, line) =>
+          vscode.commands.executeCommand('texra.openFile', file, line),
+        openFileCompile: async (file) =>
+          vscode.commands.executeCommand('texra.openFileCompile', file),
+        openTaskStorage: (stream) =>
+          this.workflowFileActionsController.openTaskStorage(stream),
+        compareOriginal: (file, base) =>
+          this.workflowFileActionsController.compareOriginal(file, base),
+        comparePrevious: (file, base, previous) =>
+          this.workflowFileActionsController.comparePrevious(
+            file,
+            base,
+            previous,
+          ),
+        acceptFile: (file, base) =>
+          this.workflowFileActionsController.acceptFile(file, base),
+        mergeFile: (file, base) =>
+          this.workflowFileActionsController.mergeFile(file, base),
+        latexdiffFile: (file, base) =>
+          this.workflowFileActionsController.latexdiffFile(file, base),
+        openLabel: (label) =>
+          this.workflowFileActionsController.openLabel(label),
+      }),
     };
   }
 
