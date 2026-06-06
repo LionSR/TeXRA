@@ -12,6 +12,10 @@ import {
 } from '@agent/modelHandlers/types/ServerToolTypes';
 import { MESSAGE_TYPES, type StreamDiagnostics } from '@shared/schemas';
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
+// BetaMessageStream is only exported from lib/ — not re-exported from the SDK's
+// public resources/ entry point. The BetaMessageStream class is what
+// client.beta.messages.stream() returns, and ./lib/* is in the SDK's exports
+// map, so this import is semantically correct even if the path is less stable.
 import type { BetaMessageStream } from '@anthropic-ai/sdk/lib/BetaMessageStream';
 import type {
   ServerToolUseBlock,
