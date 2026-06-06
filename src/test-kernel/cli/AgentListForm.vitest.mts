@@ -46,14 +46,14 @@ describe('CLI AgentListForm row budget', () => {
       agentPickerPrimarySectionTitle([{ isOrchestrator: undefined }]),
     ).toBe('Tool-use agents');
     expect(agentPickerPrimarySectionTitle([{ isOrchestrator: true }])).toBe(
-      'Orchestrator agents',
+      'Delegating agents',
     );
     expect(
       agentPickerPrimarySectionTitle([
         { isOrchestrator: false },
         { isOrchestrator: true },
       ]),
-    ).toBe('Tool-use and orchestrator agents');
+    ).toBe('Tool-use and delegating agents');
   });
 
   it('windows long agent lists inside the available foreground rows', () => {
