@@ -128,7 +128,9 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
   const parsedWorkPlan = workPlanRaw
     ? PersistedWorkPlanSchema.safeParse(workPlanRaw)
     : undefined;
-  const workPlan = parsedWorkPlan?.success ? parsedWorkPlan.data : EMPTY_WORK_PLAN;
+  const workPlan = parsedWorkPlan?.success
+    ? parsedWorkPlan.data
+    : EMPTY_WORK_PLAN;
 
   return {
     meta,
