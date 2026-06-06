@@ -1,17 +1,13 @@
 /**
- * Legacy `streamData/{id}/` accessor — NARROW scope.
+ * Legacy per-run-instruction reader for `streamData/{id}/`.
  *
- * `StreamSnapshotStore` (`@transcript`) is the single owner of `streamData/` at
- * runtime: it reads, writes, and deletes every per-stream sidecar file. This
- * module only retains the two responsibilities the snapshot store does not
- * cover, both legacy/one-time:
- *   - the field-scoped WRITES used by the one-time memento→disk migration
- *     (`mementoMigration.ts`): meta / outputFiles / missingOutputs / usageStats;
- *   - archival per-run instruction records (`legacyInstructions.json`), read
- *     during load so older workflow tabs can be backfilled into the log stream.
- *
- * When the memento migration is sunset, this file can be reduced to legacy
- * instructions alone (or retired entirely).
+ * `StreamSnapshotStore` (`@transcript`) is the single owner of `streamData/`:
+ * it reads, writes, and deletes every live per-stream sidecar file. This module
+ * survives only for one residual legacy concern — archival per-run instruction
+ * records (`legacyInstructions.json` / older `runInstructions.json`), read
+ * during load so workflow tabs created before the one-run-per-tab refactor
+ * (#3061, Apr 2026) can still backfill their original instruction into the log
+ * stream. It can be retired entirely once those pre-#3061 tabs age out.
  */
 
 import * as path from 'path';
@@ -28,9 +24,6 @@ import {
   type StreamTabId,
   type LegacyInstructionEntry,
   type StreamTabMeta,
-  type OutputFilesRecord,
-  type MissingOutputsRecord,
-  type UsageStatsRecord,
 } from '@shared/schemas';
 
 // ============================================================================
@@ -39,10 +32,6 @@ import {
 
 const KEYS = {
   META: 'meta',
-  OUTPUT_FILES: 'outputFiles',
-  MISSING_OUTPUTS: 'missingOutputs',
-  COMPILE_FAILURES: 'compileFailures',
-  USAGE_STATS: 'usageStats',
   /** Legacy per-run instruction text preserved from pre-refactor memento. */
   LEGACY_INSTRUCTIONS: 'legacyInstructions',
   /** On-disk key used by the pre-refactor store; read-only fallback. */
@@ -98,37 +87,7 @@ class StreamTabKVStore extends KVStore {
     return result.success ? result.data : null;
   }
 
-  async writeMeta(meta: StreamTabMeta): Promise<void> {
-    await this.write(KEYS.META, meta);
-  }
-
-  // -- Writes still used by one-time memento migration ----------------------
-  // Reads, per-stream + bulk deletion, and legacy-flattening all moved to
-  // StreamSnapshotStore — the sole owner of streamData/. This store now only
-  // WRITES during memento migration and manages legacy per-run instructions.
-
-  async writeOutputFiles(data: OutputFilesRecord): Promise<void> {
-    await this.write(KEYS.OUTPUT_FILES, data);
-  }
-
-  async writeMissingOutputs(data: MissingOutputsRecord): Promise<void> {
-    await this.write(KEYS.MISSING_OUTPUTS, data);
-  }
-
-  async writeUsageStats(data: UsageStatsRecord): Promise<void> {
-    await this.write(KEYS.USAGE_STATS, data);
-  }
-
   // -- Legacy per-run instructions (preserved from pre-refactor memento) ---
-
-  /**
-   * Persist legacy `{ runId: InstructionUpdate }` data verbatim so migrated
-   * users don't lose the instruction text of older workflow tabs. Newer runs
-   * read from the log stream; legacy runs can still be backfilled from here.
-   */
-  async writeLegacyInstructions(data: unknown): Promise<void> {
-    await this.write(KEYS.LEGACY_INSTRUCTIONS, data);
-  }
 
   /**
    * Read the archived legacy instruction record and pick the run users most

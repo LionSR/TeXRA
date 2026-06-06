@@ -20,10 +20,6 @@ import {
   mapStreamTabStorage,
 } from '@progressView/persistence/StreamTabStore';
 import {
-  needsMigrationFromMemento,
-  migrateFromMemento,
-} from '@progressView/persistence/mementoMigration';
-import {
   AgentCategoryFilterSchema,
   ContextStateDataSchema,
   LOG_LEVELS,
@@ -351,21 +347,7 @@ export class ProgressViewState {
     const streamIds = this.streamLogs.keys();
     this.logger.info(`[Persistence] Discovered ${streamIds.length} stream(s)`);
 
-    // Check if we need one-time migration from workspace state
-    const shouldMigrate = await needsMigrationFromMemento(
-      this.storage,
-      streamIds,
-    );
-    if (shouldMigrate) {
-      await migrateFromMemento(
-        this.storage,
-        this.streamLogs.keys(),
-        this.logger,
-      );
-      await this.loadManagers(this.streamLogs.keys());
-    } else {
-      await this.loadManagers(streamIds);
-    }
+    await this.loadManagers(streamIds);
 
     // Promote any pre-existing `runInstructions.json` disk files (from the
     // earlier memento→StreamTabStore migration) to the archival

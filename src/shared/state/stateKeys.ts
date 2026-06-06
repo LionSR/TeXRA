@@ -18,20 +18,12 @@ export enum WorkspaceStateKey {
   STREAM_LOGS = 'texra.streamLogs',
   STREAM_TABS = 'texra.streamTabs',
   TASK_GROUPS = 'texra.taskGroups',
-  OUTPUT_FILES = 'texra.outputFiles',
-  MISSING_OUTPUTS = 'texra.missingOutputs',
-  RUN_INSTRUCTIONS = 'texra.runInstructions',
-  ACTIVE_RUN_IDS = 'texra.activeRunIds',
-  TASK_STATES = 'texra.taskStates',
-  EXECUTION_IDS = 'texra.executionIds',
-  USAGE_STATS = 'texra.usageStats',
   /** Consolidated progress view preferences (replaces individual keys) */
   PROGRESS_VIEW_PREFS = 'texra.progressViewPrefs',
 
   // Agent visibility (migrated from VS Code config)
   ENABLED_AGENTS = 'texra.enabledAgents',
   ENABLED_TOOL_USE_AGENTS = 'texra.enabledToolUseAgents',
-  PARENT_STREAM_IDS = 'texra.parentStreamIds',
   SUPER_YOLO_ENABLED = 'texra.superYoloEnabled',
   ALLOW_ORCHESTRATOR_KILL = 'texra.allowOrchestratorKill',
   DETACH_SUBAGENTS_ON_STOP = 'texra.detachSubagentsOnStop',
