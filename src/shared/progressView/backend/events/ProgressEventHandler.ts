@@ -1,5 +1,3 @@
-import * as vscode from 'vscode';
-
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
@@ -50,6 +48,10 @@ type StreamBadgeSnapshot = {
   finishedProcessCount: StreamExecutionState['finishedProcessCount'];
 };
 
+export type ProgressEventSubscription = {
+  dispose(): void;
+};
+
 /** Handles progress event bus subscriptions for the progress view. */
 export class ProgressEventHandler {
   private readonly logger: AgentTrace;
@@ -80,7 +82,7 @@ export class ProgressEventHandler {
     }
   }
 
-  setupEventListeners(): vscode.Disposable[] {
+  setupEventListeners(): ProgressEventSubscription {
     const controller = new AbortController();
     const { signal } = controller;
 
@@ -241,8 +243,8 @@ export class ProgressEventHandler {
     // UI callback handlers (different pattern — no state, no active-stream guard)
     registerUIEvents(bus, this.uiCallbacks, signal);
 
-    return [
-      new vscode.Disposable(() => {
+    return {
+      dispose: () => {
         controller.abort();
         if (this.progressThrottleTimer) {
           clearTimeout(this.progressThrottleTimer);
@@ -250,8 +252,8 @@ export class ProgressEventHandler {
         }
         this.pendingProgressUpdates.clear();
         this.webviewBridge.clearAll();
-      }),
-    ];
+      },
+    };
   }
 
   /** Send to webview only if streamId is the active stream. */
