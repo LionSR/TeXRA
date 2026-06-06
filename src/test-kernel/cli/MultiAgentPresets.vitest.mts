@@ -185,6 +185,54 @@ describe('CLI multi-agent presets', () => {
     );
   });
 
+  it('keeps built-in teams unavailable until their orchestrator root is present', () => {
+    const plans = planCliMultiAgentPresets(cliMultiAgentPresets(undefined), {
+      workflowAgents: [
+        agent('correct', AgentCategory.Workflow),
+        agent('polish', AgentCategory.Workflow),
+      ],
+      toolUseAgents: [
+        agent('lean', AgentCategory.ToolUse),
+        agent('research', AgentCategory.ToolUse),
+        agent('numerics', AgentCategory.ToolUse),
+        agent('review', AgentCategory.ToolUse),
+        agent('search', AgentCategory.ToolUse),
+        agent('latexFixer', AgentCategory.ToolUse),
+      ],
+    });
+
+    const summaries = new Map(
+      plans.map((plan) => [
+        plan.preset.id,
+        formatCliMultiAgentPresetLauncherSummary(plan),
+      ]),
+    );
+
+    expect(summaries).toEqual(
+      new Map([
+        [
+          'lean-project',
+          'unavailable; no runnable team root; 2/7 tool-use agents',
+        ],
+        [
+          'physicist',
+          'unavailable; no runnable team root; 5/9 tool-use agents; 0/4 workflow agents',
+        ],
+        [
+          'mathematician',
+          'unavailable; no runnable team root; 4/7 tool-use agents; 2/5 workflow agents',
+        ],
+        [
+          'cs-ml',
+          'unavailable; no runnable team root; 4/8 tool-use agents; 1/5 workflow agents',
+        ],
+      ]),
+    );
+    for (const summary of summaries.values()) {
+      expect(summary).not.toContain('cannot delegate');
+    }
+  });
+
   it('serializes planned availability for machine-readable list output', () => {
     const preset = findCliMultiAgentPreset(
       cliMultiAgentPresets(undefined),

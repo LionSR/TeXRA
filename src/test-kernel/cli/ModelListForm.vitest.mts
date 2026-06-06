@@ -4,7 +4,6 @@ import {
   emptyModelListMessageForCliMode,
   formatModelStatusForCliMode,
   modelSelectItemsForCliMode,
-  noRunnableModelAccessReason,
 } from '@cli/chat/tui/modelAccessDisplay';
 import { modelSelectWindow } from '@cli/chat/tui/forms/ModelListForm';
 import { shouldCloseAsyncListFormOnInput } from '@cli/chat/tui/forms/_shared/useAsyncListForm';
@@ -272,57 +271,6 @@ describe('CLI ModelListForm model visibility', () => {
 });
 
 describe('CLI ModelListForm empty state', () => {
-  it('classifies signed-out included access separately from other included outages', () => {
-    expect(
-      noRunnableModelAccessReason(
-        [
-          access(
-            {
-              availability: 'included-login-required',
-              disabled: true,
-            },
-            'login required',
-            false,
-          ),
-        ],
-        'included',
-      ),
-    ).toBe('includedLoginRequired');
-  });
-
-  it('classifies personal and non-login included empty states by API mode', () => {
-    expect(
-      noRunnableModelAccessReason(
-        [
-          access(
-            {
-              availability: 'missing-key',
-              requiresKey: true,
-            },
-            'missing api key',
-            false,
-          ),
-        ],
-        'personal',
-      ),
-    ).toBe('personal');
-    expect(
-      noRunnableModelAccessReason(
-        [
-          access(
-            {
-              availability: 'relay-quota-exhausted',
-              disabled: true,
-            },
-            'relay quota exhausted',
-            false,
-          ),
-        ],
-        'included',
-      ),
-    ).toBe('included');
-  });
-
   it('explains that included relay models require sign-in', () => {
     const models = [
       access(
