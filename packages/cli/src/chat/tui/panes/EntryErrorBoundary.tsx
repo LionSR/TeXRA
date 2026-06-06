@@ -28,8 +28,13 @@ interface EntryErrorBoundaryState {
   readonly error: unknown;
 }
 
-function formatRenderError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
+export function formatRenderError(error: unknown): string {
+  let message = '';
+  try {
+    message = error instanceof Error ? error.message : String(error);
+  } catch {
+    return '';
+  }
   // The marker is a single line: collapse whitespace and cap length so a long
   // or multi-line message can't reflow the transcript.
   const oneLine = message.replaceAll(/\s+/g, ' ').trim();
