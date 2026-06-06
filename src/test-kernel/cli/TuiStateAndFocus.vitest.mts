@@ -22,7 +22,9 @@ import {
   allocateSidePanelRows,
   appEscapeInterruptActive,
   appFocusShortcutsActive,
+  approvalBlocksInput,
   approvalForegroundMaxRows,
+  approvalVisibleForActiveStream,
   childControlForegroundMaxRows,
   foregroundEscapeAction,
   foregroundSurfaceKind,
@@ -803,6 +805,76 @@ describe('CLI TUI row allocation', () => {
         transcriptViewerOpen: false,
       }),
     ).toBeUndefined();
+  });
+
+  it('shows stream-owned approvals only on their matching tab', () => {
+    const childApproval = {
+      payload: {
+        kind: 'bash',
+        payload: {
+          requestId: 'bash-1',
+          command: 'echo ok',
+          allowBypass: true,
+          streamId: 'child-1',
+        },
+      },
+      decide: () => undefined,
+    } satisfies PendingApproval;
+    const globalApproval = {
+      payload: {
+        kind: 'toolEdit',
+        request: {
+          path: 'paper.tex',
+          originalContent: '',
+          proposedContent: '',
+          sourceTool: 'edit',
+        },
+      },
+      decide: () => undefined,
+    } satisfies PendingApproval;
+
+    expect(
+      approvalVisibleForActiveStream({
+        activeStreamId: 'child-1',
+        pending: childApproval,
+      }),
+    ).toBe(true);
+    expect(
+      approvalVisibleForActiveStream({
+        activeStreamId: 'root',
+        pending: childApproval,
+      }),
+    ).toBe(false);
+    expect(
+      approvalVisibleForActiveStream({
+        activeStreamId: 'root',
+        pending: globalApproval,
+      }),
+    ).toBe(true);
+  });
+
+  it('blocks input for hidden stream-owned approvals', () => {
+    const childApproval = {
+      payload: {
+        kind: 'bash',
+        payload: {
+          requestId: 'bash-1',
+          command: 'echo ok',
+          allowBypass: true,
+          streamId: 'child-1',
+        },
+      },
+      decide: () => undefined,
+    } satisfies PendingApproval;
+
+    expect(
+      approvalVisibleForActiveStream({
+        activeStreamId: 'root',
+        pending: childApproval,
+      }),
+    ).toBe(false);
+    expect(approvalBlocksInput(childApproval)).toBe(true);
+    expect(approvalBlocksInput(undefined)).toBe(false);
   });
 
   it('labels foreground escape actions from the owning surface', () => {

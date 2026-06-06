@@ -34,6 +34,11 @@ export type StaticTranscriptItem =
       readonly entry: ConversationEntry;
     };
 
+interface StaticTranscriptState {
+  readonly ownerKey: string;
+  readonly items: readonly StaticTranscriptItem[];
+}
+
 function shortenCwd(cwd: string): string {
   const home = safeHomedir();
   if (!home) return cwd;
@@ -165,10 +170,9 @@ export function appendStaticTranscriptItems({
     }
   }
 
-  // Only the root scrollback owner feeds shared `<Static>` output. Dumping
-  // focused child streams here floods the main transcript with each subagent's
-  // tool calls and file reads. Subagent activity is rendered by its scoped
-  // conversation pane or transcript viewer.
+  // Only the selected scrollback owner feeds `<Static>` output. Root focus owns
+  // root history; child focus owns that child's history. Other streams stay
+  // available through their own focus or the transcript viewer.
   if (!scrollbackStreamId) return nextItems;
   const slice = streams.get(scrollbackStreamId);
   for (const entry of slice?.entries ?? []) {
@@ -196,8 +200,10 @@ export function StaticConversationTranscript({
 }): React.JSX.Element {
   const streams = useSignal(cliState.streams);
   const sessionMeta = useSignal(cliState.sessionMeta);
-  const [items, setItems] = useState<readonly StaticTranscriptItem[]>(() =>
-    appendStaticTranscriptItems({
+  const ownerKey = scrollbackStreamId ?? 'none';
+  const [state, setState] = useState<StaticTranscriptState>(() => ({
+    ownerKey,
+    items: appendStaticTranscriptItems({
       currentItems: [],
       streams,
       meta: sessionMeta,
@@ -205,32 +211,52 @@ export function StaticConversationTranscript({
       scrollbackStreamId,
       width,
     }),
-  );
+  }));
+
+  const items =
+    state.ownerKey === ownerKey
+      ? state.items
+      : appendStaticTranscriptItems({
+          currentItems: [],
+          streams,
+          meta: sessionMeta,
+          maxRows,
+          scrollbackStreamId,
+          width,
+        });
 
   useEffect(() => {
     // On a hard reset (e.g. /clear, picker-to-chat handoff) start the
     // items list from scratch so the header is the first thing the user
-    // sees after the scrollback was wiped. Focused child streams do not
-    // mount this static scrollback; they render their own bounded history.
+    // sees after the scrollback was wiped. A scrollback-owner switch also
+    // starts from scratch because root and child histories must not share
+    // append-only Static state.
     const isHardReset = streams.size === 0 && scrollbackStreamId === undefined;
-    setItems((currentItems) =>
-      appendStaticTranscriptItems({
-        currentItems: isHardReset ? [] : currentItems,
+    setState((current) => {
+      const ownerChanged = current.ownerKey !== ownerKey;
+      const nextItems = appendStaticTranscriptItems({
+        currentItems: isHardReset || ownerChanged ? [] : current.items,
         streams,
         meta: sessionMeta,
         maxRows,
         scrollbackStreamId,
         width,
-      }),
-    );
-  }, [maxRows, scrollbackStreamId, sessionMeta, streams, width]);
+      });
+      if (current.ownerKey === ownerKey && current.items === nextItems) {
+        return current;
+      }
+      return { ownerKey, items: nextItems };
+    });
+  }, [maxRows, ownerKey, scrollbackStreamId, sessionMeta, streams, width]);
 
   return (
-    // Remount <Static> on a width change so Ink regenerates `fullStaticOutput`
-    // at the new width (via its handleStaticChange identity-reset). Without this
-    // the resize full-repaint reprints the cached, baked-width static output, so
-    // fixed-width content (e.g. the full-width user-message band) can't reflow.
-    <Static key={Math.max(1, Math.floor(width ?? 80))} items={[...items]}>
+    // Remount <Static> on a width or owner change so Ink regenerates
+    // `fullStaticOutput` for the current stream. Without the owner key, a focus
+    // switch would keep the previous stream's append-only cache.
+    <Static
+      key={`${ownerKey}:${Math.max(1, Math.floor(width ?? 80))}`}
+      items={[...items]}
+    >
       {(item: StaticTranscriptItem) => (
         <Box key={item.id} flexDirection="column">
           {item.kind === 'header' ? (
