@@ -1,3 +1,4 @@
+import { createProgressViewApprovalCommandHandlers } from '@controllers/progressView/ProgressViewApprovalCommandHandlers';
 import { createProgressViewFileCommandHandlers } from '@controllers/progressView/ProgressViewFileCommandHandlers';
 import { createProgressViewFollowUpCommandHandlers } from '@controllers/progressView/ProgressViewFollowUpCommandHandlers';
 import { createProgressViewLifecycleCommandHandlers } from '@controllers/progressView/ProgressViewLifecycleCommandHandlers';
@@ -68,18 +69,19 @@ export function createDesktopProgressIpc(
       latexdiffFile: (file, base) => progress.latexdiffFile(file, base),
       openLabel: (label) => progress.openLabel(label),
     }),
-    [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (d) => {
-      if (!progress.handleToolEditApprovalAction(d)) onUnsupportedCommand(d);
-    },
-    [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]: (d) =>
-      progress.handleBashApprovalAction(d),
-    [PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION]: (d) =>
-      progress.handlePlanApprovalAction(d),
-    [PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION]: (d) =>
-      progress.handleUserQuestionAction(d),
-    [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: async (d) => {
-      await progress.handleAgentProposalAction(d);
-    },
+    ...createProgressViewApprovalCommandHandlers({
+      handleToolEditApprovalAction: (message) =>
+        progress.handleToolEditApprovalAction(message),
+      onUnsupportedToolEditApproval: (message) => onUnsupportedCommand(message),
+      handleBashApprovalAction: (message) =>
+        progress.handleBashApprovalAction(message),
+      handlePlanApprovalAction: (message) =>
+        progress.handlePlanApprovalAction(message),
+      handleUserQuestionAction: (message) =>
+        progress.handleUserQuestionAction(message),
+      handleAgentProposalAction: (message) =>
+        progress.handleAgentProposalAction(message),
+    }),
   };
 
   return {
