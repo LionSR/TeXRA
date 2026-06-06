@@ -15,6 +15,7 @@ import {
   childWithEffectiveStatus,
   visibleSubagentRows,
 } from './childStreamMerge';
+import { streamScopeDisplayLabel } from './streamLabels';
 import { orderedDescendantsFromTree } from './focusCycle';
 import { transcriptEntryLines } from './transcriptLines';
 import type {
@@ -43,6 +44,17 @@ export interface ChildControlStreamTarget {
   readonly slice: StreamSlice | undefined;
   readonly streamId: StreamTabId | undefined;
 }
+
+export interface ChildControlDisplayTarget extends ChildControlStreamTarget {
+  readonly hasItems: boolean;
+  readonly streamLabel: string | undefined;
+  readonly streamScopeDetail: string | undefined;
+}
+
+export type ChildControlDisplayTargets = Record<
+  ChildControlMode,
+  ChildControlDisplayTarget
+>;
 
 export interface PickerKeyInput {
   readonly input: string;
@@ -293,6 +305,85 @@ export function resolveChildControlStreamTarget({
   }
 
   return { streamId: activeStreamId, slice: activeSlice };
+}
+
+function childControlFallbackDetail(
+  mode: ChildControlMode,
+  fallbackFromStreamLabel: string | undefined,
+  targetStreamLabel: string | undefined,
+): string | undefined {
+  if (!fallbackFromStreamLabel || !targetStreamLabel) return undefined;
+  return mode === 'subagents'
+    ? `${fallbackFromStreamLabel} has no subagents`
+    : `${fallbackFromStreamLabel} has no tasks or sub-workflows`;
+}
+
+export function resolveChildControlDisplayTarget({
+  activeStreamId,
+  mode,
+  parentStream,
+  streams,
+}: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly mode: ChildControlMode;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+}): ChildControlDisplayTarget {
+  const target = resolveChildControlStreamTarget({
+    activeStreamId,
+    mode,
+    parentStream,
+    streams,
+  });
+  const streamLabel = target.streamId
+    ? streamScopeDisplayLabel({
+        parentStream,
+        streamId: target.streamId,
+        streams,
+      })
+    : undefined;
+  const fallbackFromStreamLabel = target.fallbackFromStreamId
+    ? streamScopeDisplayLabel({
+        parentStream,
+        streamId: target.fallbackFromStreamId,
+        streams,
+      })
+    : undefined;
+  return {
+    ...target,
+    hasItems: hasChildControlItems(target.slice, mode),
+    streamLabel,
+    streamScopeDetail: childControlFallbackDetail(
+      mode,
+      fallbackFromStreamLabel,
+      streamLabel,
+    ),
+  };
+}
+
+export function resolveChildControlDisplayTargets({
+  activeStreamId,
+  parentStream,
+  streams,
+}: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+}): ChildControlDisplayTargets {
+  return {
+    subagents: resolveChildControlDisplayTarget({
+      activeStreamId,
+      mode: 'subagents',
+      parentStream,
+      streams,
+    }),
+    tasks: resolveChildControlDisplayTarget({
+      activeStreamId,
+      mode: 'tasks',
+      parentStream,
+      streams,
+    }),
+  };
 }
 
 export function liveChildExecutionElapsedKey(
