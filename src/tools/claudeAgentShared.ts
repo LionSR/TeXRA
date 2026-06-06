@@ -3,9 +3,7 @@
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
 import { truncateSummary } from '@utils/text/stringUtils';
 
-import type {
-  EffortLevel,
-} from '@anthropic-ai/claude-agent-sdk';
+import type { EffortLevel } from '@anthropic-ai/claude-agent-sdk';
 
 // Re-export native SDK types where our values match exactly.
 export type ClaudeAgentEffort = EffortLevel;
