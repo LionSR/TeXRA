@@ -273,4 +273,24 @@ describe('CLI chat defaults', () => {
       source: 'workspace',
     });
   });
+
+  it('uses the shared config parser for prefixed user chat defaults', async () => {
+    mockedReadJson.mockResolvedValueOnce({
+      'texra.agent': 'generic',
+      'texra.model': 'gpt55',
+      'texra.chat': { agent: 'chat', model: 'deepseekT' },
+    });
+
+    await expect(
+      resolveChatDefaults({
+        cwd: '/tmp/no-such-texra-workspace',
+      }),
+    ).resolves.toMatchObject({
+      agent: 'chat',
+      model: 'deepseekT',
+      source: 'user',
+      agentSource: 'user',
+      modelSource: 'user',
+    });
+  });
 });

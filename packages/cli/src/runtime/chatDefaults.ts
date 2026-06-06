@@ -1,13 +1,14 @@
 import { listExecutions } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { isNonEmptyString } from '@utils/core/stringCore';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
-  isKnownCliModel,
+  CLI_CONFIG_FILE,
   loadWorkspaceCliConfig,
+  parseCliConfigValues,
   resolveConfiguredAgent,
   resolveConfiguredModel,
+  type CliConfigValues,
 } from './cliConfig';
 import {
   BUILTIN_DEFAULT_CHAT_AGENT,
@@ -46,37 +47,25 @@ interface PartialDefaults {
   readonly model?: string;
 }
 
-const CONFIG_FILE = 'config.json';
-
-function pickDefaults(parsed: unknown): PartialDefaults {
-  if (typeof parsed !== 'object' || parsed === null) return {};
-  const record = parsed as Record<string, unknown>;
-  const out: { -readonly [K in keyof PartialDefaults]: PartialDefaults[K] } =
-    {};
-  if (isNonEmptyString(record.agent)) {
-    const agent = resolveImplicitToolUseAgentDefault(record.agent);
-    if (agent) out.agent = agent;
-  }
-  if (isNonEmptyString(record.model)) {
-    const model = record.model.trim();
-    if (isKnownCliModel(model)) out.model = model;
-  }
-  return out;
+function defaultsFromConfigValues(values: CliConfigValues): PartialDefaults {
+  return {
+    agent: resolveImplicitToolUseAgentDefault(
+      resolveConfiguredAgent(values, 'chat'),
+    ),
+    model: resolveConfiguredModel(values, 'chat'),
+  };
 }
 
 async function loadWorkspaceDefaults(cwd: string): Promise<PartialDefaults> {
   const loaded = await loadWorkspaceCliConfig(cwd);
-  return {
-    agent: resolveImplicitToolUseAgentDefault(
-      resolveConfiguredAgent(loaded.values, 'chat'),
-    ),
-    model: resolveConfiguredModel(loaded.values, 'chat'),
-  };
+  return defaultsFromConfigValues(loaded.values);
 }
 
 async function loadUserDefaults(): Promise<PartialDefaults> {
   try {
-    return pickDefaults(await GlobalStorageFS.readJson(CONFIG_FILE));
+    return defaultsFromConfigValues(
+      parseCliConfigValues(await GlobalStorageFS.readJson(CLI_CONFIG_FILE)),
+    );
   } catch {
     return {};
   }
@@ -99,9 +88,12 @@ async function loadHistoryDefaults(): Promise<PartialDefaults> {
       );
     const mostRecent = candidates[0];
     if (!mostRecent?.agentConfig) return {};
-    return pickDefaults({
-      model: mostRecent.agentConfig.model,
-    });
+    return {
+      model: resolveConfiguredModel(
+        parseCliConfigValues({ model: mostRecent.agentConfig.model }),
+        'chat',
+      ),
+    };
   } catch {
     return {};
   }
