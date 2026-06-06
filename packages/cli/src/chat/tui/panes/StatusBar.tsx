@@ -28,10 +28,7 @@ import {
   type BypassState,
   type StreamSlice,
 } from '../state/cliState';
-import {
-  hasChildControlItems,
-  resolveChildControlStreamTarget,
-} from '../state/childControls';
+import { resolveChildControlDisplayTargets } from '../state/childControls';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 
@@ -739,15 +736,8 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     parentStream,
     streams,
   });
-  const subagentControlTarget = resolveChildControlStreamTarget({
+  const childControlTargets = resolveChildControlDisplayTargets({
     activeStreamId,
-    mode: 'subagents',
-    parentStream,
-    streams,
-  });
-  const taskControlTarget = resolveChildControlStreamTarget({
-    activeStreamId,
-    mode: 'tasks',
     parentStream,
     streams,
   });
@@ -772,15 +762,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     activeProcesses: statusSlice?.activeProcesses.length ?? 0,
     approvalDepth: approvals.depth,
     approvalKind: approvals.kind,
-    taskControlsAvailable: hasChildControlItems(
-      taskControlTarget.slice,
-      'tasks',
-    ),
+    taskControlsAvailable: childControlTargets.tasks.hasItems,
     agentSelectionAvailable: props.agentSelectionAvailable,
-    subagentControlsAvailable: hasChildControlItems(
-      subagentControlTarget.slice,
-      'subagents',
-    ),
+    subagentControlsAvailable: childControlTargets.subagents.hasItems,
     hasMultipleStreams: streams.size > 1,
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
