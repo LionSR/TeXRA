@@ -7,7 +7,7 @@
  * supply.
  */
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
-import { GlobalStateKey } from '@common/state/stateKeys';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   loadMemoryItems,
   loadMemoryPreview,

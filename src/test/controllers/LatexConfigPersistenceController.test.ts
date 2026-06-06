@@ -3,7 +3,7 @@ import { strict as assert } from 'assert';
 
 // Local imports - state keys
 import { LatexConfigPersistenceController } from '@controllers/settingsView/LatexConfigPersistenceController';
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Local imports - controllers
 
