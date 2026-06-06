@@ -115,6 +115,7 @@ const EMPTY_SESSION_META: SessionMeta = {
 const SESSION_META = signal<SessionMeta>(EMPTY_SESSION_META);
 
 const ACTIVE_STREAM_ID = signal<StreamTabId | undefined>(undefined);
+const ROOT_STREAM_ID = signal<StreamTabId | undefined>(undefined);
 
 const STREAMS = signal<ReadonlyMap<StreamTabId, StreamSlice>>(new Map());
 const ROOT_RUN_START_AVAILABLE = signal<boolean>(true);
@@ -164,6 +165,7 @@ const RESET_HOOKS = new Set<() => void>();
 export const cliState = {
   sessionMeta: SESSION_META as Signal.State<SessionMeta>,
   activeStreamId: ACTIVE_STREAM_ID as Signal.State<StreamTabId | undefined>,
+  rootStreamId: ROOT_STREAM_ID as Signal.State<StreamTabId | undefined>,
   streams: STREAMS as Signal.State<ReadonlyMap<StreamTabId, StreamSlice>>,
   rootRunStartAvailable: ROOT_RUN_START_AVAILABLE as Signal.State<boolean>,
   parentStream: PARENT_STREAM as Signal.State<
@@ -345,6 +347,7 @@ function defaultSessionMeta(): SessionMeta {
 export function resetCliState(sessionMeta = defaultSessionMeta()): void {
   cliState.sessionMeta.set(sessionMeta);
   cliState.activeStreamId.set(undefined);
+  cliState.rootStreamId.set(undefined);
   cliState.streams.set(new Map());
   cliState.rootRunStartAvailable.set(true);
   cliState.parentStream.set(new Map());
