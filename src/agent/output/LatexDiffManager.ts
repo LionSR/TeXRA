@@ -6,7 +6,7 @@ import { logLatexdiff, type AgentTrace } from '@agent/trace';
 import { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import {

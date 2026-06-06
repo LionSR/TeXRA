@@ -44,7 +44,7 @@ import { getWorkspaceState } from '@agent/core/stateStore';
 
 // Local imports - utils
 import { toErrorMessage } from '@common/errors';
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   STREAM_STATUS,
   ExecutionIdSchema,

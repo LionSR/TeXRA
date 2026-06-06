@@ -1,7 +1,7 @@
 import { MODEL_CONFIGS, hint, type ModelConfig } from 'llm-zoo';
 
 import { platform } from '@platform/platform';
-import { GlobalStateKey } from '@common/state/stateKeys';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { ModelOptionData } from '@shared/schemas';
 import {
   EXPENSIVE_MODEL_HINT,
