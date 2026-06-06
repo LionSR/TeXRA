@@ -65,7 +65,7 @@ export class LaTeXdiffService {
    * pre-initialization: `LaTeXdiffService` is instantiated at module scope in
    * `commands/latex/latexdiffCommands.ts` and `tools/approval/latexPreview.ts`,
    * which evaluate before `initPlatform()` runs in `activate()`. A throwing
-   * `getWorkspaceState()` would prevent the extension from activating; falling
+   * `platform().workspaceState` would prevent the extension from activating; falling
    * back to the documented default keeps construction safe. Called per-diff
    * so user updates take effect on the next invocation without any rebuild.
    */
