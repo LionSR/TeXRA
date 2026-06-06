@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { createProgressViewLifecycleCommandHandlers } from '@controllers/progressView/ProgressViewLifecycleCommandHandlers';
+import { createProgressViewRunCommandHandlers } from '@controllers/progressView/ProgressViewRunCommandHandlers';
 import { ProgressStreamLifecycleController } from '@controllers/progressView/ProgressStreamLifecycleController';
 import {
   ProgressFollowUpController,
@@ -192,10 +193,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         vscode.commands.executeCommand('texra.compactResponse', data.stream),
 
       // Actions
-      [PROGRESS_VIEW_COMMANDS.RESUME]: (data) =>
-        this.workflowActionsController.resume(data.stream),
-      [PROGRESS_VIEW_COMMANDS.RUN_NEW]: (data) =>
-        this.workflowActionsController.runNew(data.stream),
+      ...createProgressViewRunCommandHandlers({
+        resumeStream: (stream) => this.workflowActionsController.resume(stream),
+        runNewStream: (stream) => this.workflowActionsController.runNew(stream),
+      }),
       [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: (data) =>
         this.workflowActionsController.diffStream(data.stream),
       [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: (data) =>
