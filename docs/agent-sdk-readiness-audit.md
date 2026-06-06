@@ -1084,12 +1084,34 @@ logger/platform/surface) plus a direct line-by-line re-check of every open item 
 `main` at HEAD `f5d1fc6` (branched as `claude/eager-noether-vaT5l`). **All 2026-05-28 →
 06-04 findings hold without change. No new structural over-abstraction surfaced.** Each of
 the three independent audits, on its own, re-reached the standing verdict: TeXRA is
-well-architected and SDK-aligned; the gaps are incremental, not structural. Like the §10/§11
-confirmation passes (and unlike §12/§13, which had safe new tidies to apply), **this pass
-applies no refactor** — every remaining open item is either behavior-sensitive (§4, §5/Step 7)
-or non-trivial (§2.6 is CLI machinery; §5 is a multi-day primitive), exactly the items eight
-prior passes deliberately deferred, and the one genuinely-new candidate this pass (below) is a
-§2.4 _keep_, not a removal.
+well-architected and SDK-aligned; the gaps are incremental, not structural. Like §12/§13, this
+pass **applied one behavior-neutral refactor** — the SDK-008 `core/stateStore` inline (below),
+the documented next increment after #5349 removed the `core/config` sibling. The remaining open
+items stay deferred: each is either behavior-sensitive (§4, §5/Step 7) or non-trivial (§2.6 is
+CLI machinery; §5 is a multi-day primitive), exactly the items eight prior passes deliberately
+deferred, and the one genuinely-new audit candidate this pass (below) is a §2.4 _keep_, not a
+removal.
+
+### Applied this pass (behavior-preserving; root + test-kernel + extension + CLI `tsc --noEmit`, `eslint`, and the full Vitest test-kernel suite — 2013 pass — all green)
+
+- **SDK-008 `core/stateStore` inline — completed.** The proposal's SDK-008 item flagged the
+  `getGlobalState()` / `getWorkspaceState()` passthroughs over `platform().globalState` /
+  `platform().workspaceState` as removable ("inline or drop"); #5349 had already removed the
+  `core/config` sibling. This pass inlined the two state passthroughs at all repo call sites
+  found by `rg`, including the CLI TUI harness (`ModelFactory`, `helperModel`, `registerMemory`,
+  `agentRegistry`, `diffCommandExecutor`, `texFormatter`, `delegationPolicy`, `OutputNode`,
+  `LatexDiffManager`, `compileCheck`, `executionListing`, `indent`, `ExecutionsTool`,
+  `odysseyStore`, `enumConfig`, `tui-harness`)
+  to read `platform()` directly — the documented `@platform` accessor — and reduced
+  `stateStore.ts` to just `tryGetWorkspaceState()` (the genuine pre-initialization escape hatch,
+  which must stay). Behavior-preserving: every passthrough was a one-line return of the same
+  `platform()` field. The one test that double-mocked `@agent/core/stateStore`
+  (`LatexdiffShadowStorage.vitest.ts`) already installs a fake platform via `initPlatform`, so the
+  redundant module mock was dropped and the real `tryGetWorkspaceState` now reads that fake
+  platform (latex suite: 15 pass). Three stale doc-comment references to the removed accessors
+  were refreshed (`common/state/index.ts`, `agent/features/index.ts`, `latex/latexdiff.ts`,
+  `agent/core/README.md`). This is the same "remove the trivial passthrough, use the source
+  directly" shape as #5349; SDK-008 is now fully closed.
 
 ### Drift since the 2026-06-04 pass (last verified main `17d229860` → HEAD `f5d1fc6`) — audited clean
 
@@ -1186,12 +1208,10 @@ would _duplicate_ the mapping. No action; logged so a future pass does not re-pr
   registry still named `ToolUseAgentRegistry` (Step 7a rename not landed). Per §13 Finding B the
   minimal correctness fix is scoping the ~3 unscoped sweep/list/subscribe seams by session, not
   relocating the keyed registries.
-- **SDK-008 residual** — `core/config.ts` removed (`c9d7ae7`), but `core/stateStore.ts`'s
-  `getGlobalState()`/`getWorkspaceState()` passthroughs remain (~50 callers across
-  `src/agent`, `src/latex`, `src/model`). **Keep `tryGetWorkspaceState()`** (real pre-init
-  null-tolerance). The inline is a behavior-neutral 50-site find-replace across both packages —
-  the same large-churn category prior passes deferred (cf. the rejected `core/index.ts`
-  enforcement); not applied here. Recorded as half-closed.
+- **SDK-008 — CLOSED this pass.** `core/config.ts` removed (`c9d7ae7` / #5349); the
+  `core/stateStore.ts` `getGlobalState()`/`getWorkspaceState()` passthroughs are now inlined to
+  `platform()` at all repo call sites found by `rg` (see "Applied this pass"). Only
+  `tryGetWorkspaceState()` remains (real pre-init null-tolerance). No SDK-008 residual.
 - **§3.1** — still no `@agent/runtime/index.ts` barrel; still optional polish (the `@texra/core`
   - `src/platform/index.ts` surfaces already cover the underlying concern).
 - **§13 finding #1 (`AgentRuntimeHost.emit` mixes UI + essential events)** — unchanged;
@@ -1227,9 +1247,9 @@ stay gated behind the Step-7 coupling blocker.
 
 **Net for 2026-06-06:** thesis reaffirmed for the ninth pass — incremental, not structural. The
 post-06-04 drift is pure simplification + one feature, moving the codebase further _toward_ the
-audit's target, and it closed half of SDK-008 (`core/config.ts` removed). The three fresh audits
-re-surfaced only documented rejects/lean-keeps (re-rebutted with fresh line evidence) plus one new
-candidate that is a §2.4 _keep_. The remaining ledger is exactly §2.6 (relocate), §4 (gated
-two-sink consolidation), §5/Step 7 (multi-session isolation), and the SDK-008 `stateStore`
-residual (a deferred 50-site churn) — all behavior-sensitive or large-churn, consistent with the
-prior deferrals. No refactor applied this pass; no rewrite warranted.
+audit's target. The three fresh audits re-surfaced only documented rejects/lean-keeps (re-rebutted
+with fresh line evidence) plus one new candidate that is a §2.4 _keep_. **One behavior-neutral
+refactor was applied — the SDK-008 `core/stateStore` inline, closing SDK-008** (the `core/config`
+sibling had landed in #5349). The remaining ledger is exactly §2.6 (relocate), §4 (gated two-sink
+consolidation), and §5/Step 7 (multi-session isolation) — all behavior-sensitive or non-trivial,
+consistent with the prior deferrals. No rewrite warranted.

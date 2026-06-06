@@ -6,9 +6,9 @@
  * back through the tool registry.
  */
 
+import { platform } from '@platform/platform';
 import { getExecutionStore } from '@agent/storage';
 import type { ExecutionMeta } from '@agent/storage/ExecutionKVStore';
-import { getWorkspaceState } from '@agent/core/stateStore';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -19,7 +19,7 @@ import {
 
 /** Read the current delegation policy from workspace state. */
 export function readNestedDelegationConfig(): NestedDelegationConfig {
-  const state = getWorkspaceState();
+  const state = platform().workspaceState;
   const maxDepth = clampNestedDelegationDepth(
     state.get<number>(WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH, undefined),
   );
