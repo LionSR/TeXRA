@@ -29,3 +29,10 @@ export {
   flushPendingRunTraces,
   type RunTrace,
 } from './runTrace';
+export {
+  STREAM_DATA_DIR,
+  STREAM_DATA_KEYS,
+  encodeStreamId,
+  streamDataDir,
+  type StreamDataKey,
+} from './streamDataPaths';

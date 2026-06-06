@@ -22,6 +22,10 @@ import pMap from 'p-map';
 
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
+import {
+  STREAM_DATA_DIR,
+  encodeStreamId,
+} from '@transcript/streamDataPaths';
 
 import type {
   CompileFailure,
@@ -63,20 +67,16 @@ const KEYS = {
   LEGACY_RUN_INSTRUCTIONS: 'runInstructions',
 } as const;
 
-export const STREAM_DATA_DIR = 'streamData';
 const CHANNEL = 'StreamTabStore';
+
+// `STREAM_DATA_DIR` + `encodeStreamId` now live in the host-agnostic
+// `@transcript/streamDataPaths` so the CLI and desktop produce the identical
+// on-disk layout. Re-exported here for existing importers of this module.
+export { STREAM_DATA_DIR };
 
 // ============================================================================
 // Implementation
 // ============================================================================
-
-/**
- * Encode a stream tab ID for safe use as a filesystem directory name.
- * Stream IDs can contain `:`, `/`, `#`, and other unsafe characters.
- */
-function encodeStreamId(id: string): string {
-  return encodeURIComponent(id);
-}
 
 /**
  * Disk-backed store for a single stream tab.
