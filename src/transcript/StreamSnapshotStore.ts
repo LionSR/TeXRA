@@ -17,8 +17,6 @@
  * `read()` returns durable display state only; hosts clamp liveness on hydrate.
  */
 
-import { z } from 'zod';
-
 import {
   TaskStateSchema,
   isToolUseTaskState,
@@ -31,30 +29,22 @@ import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
 import {
-  CompileFailuresDataSchema,
   CompileFailureSchema,
   emptyUsageStats,
-  isLegacyNested,
-  flattenLegacyRuns,
   isEmptyUsage,
-  MissingOutputsDataSchema,
   OutputFileInfoListSchema,
-  OutputFilesDataSchema,
   PersistedWorkPlanSchema,
   RoundKeySchema,
-  StreamTabMetaSchema,
-  StreamSnapshotSchema,
   sumUsageStats,
   TokenUsageStatsParsingSchema,
-  UsageDataSchema,
   type CompileFailure,
   type ExecutionId,
   type OutputFileInfo,
   type Plan,
   type StorageKey,
-  type StreamTabMeta,
   type StreamSnapshot,
   type StreamTabId,
+  type StreamTabMeta,
   type TodoItem,
   type TokenUsageStats,
   type WorkPlanSnapshot,
@@ -65,24 +55,14 @@ import {
   STREAM_DATA_KEYS,
   streamDataDir,
 } from './streamDataPaths';
+import {
+  assembleSnapshot,
+  mapToRecord,
+  readStreamData,
+  type StreamData,
+} from './streamSnapshotRead';
 
 const CHANNEL = 'StreamSnapshotStore';
-
-/** Serialize a Map to a plain string-keyed Record for JSON persistence. */
-function mapToRecord<K extends string | number, V>(
-  map: Map<K, V>,
-): Record<string, V> {
-  return Object.fromEntries(Array.from(map, ([k, v]) => [String(k), v]));
-}
-
-/** Inverse of {@link mapToRecord} for round-keyed records. */
-function recordToRoundMap<V>(record: Record<string, V>): Map<number, V> {
-  const map = new Map<number, V>();
-  for (const [key, value] of Object.entries(record)) {
-    map.set(Number(key), value);
-  }
-  return map;
-}
 
 function normalizeOutputFiles(outputFiles?: readonly string[]): string[] {
   return (outputFiles ?? [])
@@ -550,110 +530,19 @@ export class StreamSnapshotStore {
   }
 
   // ==========================================================================
-  // Read — reassemble a durable StreamSnapshot for resume
+  // Read / load — disk reads delegate to the pure `streamSnapshotRead` module
   // ==========================================================================
 
-  private async tryRead(
-    kv: KVStore,
-    key: string,
-  ): Promise<unknown | undefined> {
-    try {
-      return await kv.read(key);
-    } catch (error) {
-      // Corrupt/truncated JSON (crash mid-write) is treated as missing — the
-      // next write replaces it — but logged so it isn't silently swallowed.
-      if (error instanceof SyntaxError) {
-        logger.warn(
-          CHANNEL,
-          `Discarding unreadable ${key}.json; treating as missing.`,
-          { data: error },
-        );
-        return undefined;
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Reassemble the durable display snapshot for a stream from disk. Returns an
-   * empty (but valid) snapshot when no sidecar exists yet. Liveness fields stay
-   * at their defaults — callers layer log-derived + clamped-live state on top.
-   */
-  private async readMetaFile(kv: KVStore): Promise<StreamTabMeta | undefined> {
-    const raw = await this.tryRead(kv, STREAM_DATA_KEYS.META);
-    if (raw === undefined) return undefined;
-    const parsed = StreamTabMetaSchema.safeParse(raw);
-    return parsed.success ? parsed.data : undefined;
-  }
-
+  /** Reassemble the durable display snapshot for a stream from disk. */
   async read(streamId: StreamTabId): Promise<StreamSnapshot> {
-    const kv = this.kv(streamId);
-    const metaRaw = await this.readMetaFile(kv);
-    const activeRunId = metaRaw?.activeRunId ?? undefined;
-
-    const flatten = async <T extends Map<number, unknown[]>>(
-      key: string,
-      schema: z.ZodType<T>,
-    ): Promise<T | undefined> => {
-      const raw = await this.tryRead(kv, key);
-      if (raw === undefined) return undefined;
-      const wasLegacy = isLegacyNested(raw);
-      const migrated = wasLegacy ? flattenLegacyRuns(raw, activeRunId) : raw;
-      const parsed = schema.safeParse(migrated);
-      if (!parsed.success) return undefined;
-      // Migrate the pre-#3061 nested `{runId:{round}}` shape to flat ONCE, at
-      // this read entry, by persisting the flattened form — so the conversion
-      // never runs again for this file (no repetitive resolve on every read).
-      if (wasLegacy) this.write(streamId, key, mapToRecord(parsed.data));
-      return parsed.data;
-    };
-
-    const [outputFiles, missingOutputs, compileFailures] = await Promise.all([
-      flatten(STREAM_DATA_KEYS.OUTPUT_FILES, OutputFilesDataSchema),
-      flatten(STREAM_DATA_KEYS.MISSING_OUTPUTS, MissingOutputsDataSchema),
-      flatten(STREAM_DATA_KEYS.COMPILE_FAILURES, CompileFailuresDataSchema),
-    ]);
-
-    const usageRaw = await this.tryRead(kv, STREAM_DATA_KEYS.USAGE_STATS);
-    const usageParsed =
-      usageRaw === undefined ? undefined : UsageDataSchema.safeParse(usageRaw);
-    const usage = usageParsed?.success ? usageParsed.data : undefined;
-
-    // safeParse + per-field `.catch` (PersistedWorkPlanSchema) so a corrupt-but-
-    // valid-JSON workPlan.json degrades gracefully instead of throwing and
-    // aborting the whole read()/load(), matching every other category here.
-    const workPlanRaw = await this.tryRead(kv, STREAM_DATA_KEYS.WORK_PLAN);
-    const parsedWorkPlan = workPlanRaw
-      ? PersistedWorkPlanSchema.safeParse(workPlanRaw)
-      : undefined;
-    const workPlan =
-      parsedWorkPlan?.success === true
-        ? parsedWorkPlan.data
-        : { todos: [], plan: null, planSummary: null };
-
-    return StreamSnapshotSchema.parse({
-      streamId,
-      todos: workPlan.todos,
-      plan: workPlan.plan,
-      planSummary: workPlan.planSummary,
-      outputFilesByRound: outputFiles ? mapToRecord(outputFiles) : {},
-      missingOutputsByRound: missingOutputs ? mapToRecord(missingOutputs) : {},
-      compileFailuresByRound: compileFailures
-        ? mapToRecord(compileFailures)
-        : {},
-      runUsage: usage ? mapToRecord(usage) : {},
-      executionId: metaRaw?.executionId,
-      parentStreamId: metaRaw?.parentStreamId,
-      description: metaRaw?.description,
-    });
+    return assembleSnapshot(streamId, await readStreamData(this.kv(streamId)));
   }
 
-  /** Read a stream's output files straight from disk (round → files). */
+  /** A stream's output files straight from disk (round → files). */
   async readOutputFiles(
     streamId: StreamTabId,
   ): Promise<Map<number, OutputFileInfo[]>> {
-    const snap = await this.read(streamId);
-    return recordToRoundMap(snap.outputFilesByRound);
+    return (await readStreamData(this.kv(streamId))).outputFiles;
   }
 
   /**
@@ -662,39 +551,46 @@ export class StreamSnapshotStore {
    */
   async load(streamIds: readonly StreamTabId[]): Promise<void> {
     for (const streamId of streamIds) {
-      const snap = await this.read(streamId);
-      this.outputFiles.set(streamId, recordToRoundMap(snap.outputFilesByRound));
-      this.missingOutputs.set(
-        streamId,
-        recordToRoundMap(snap.missingOutputsByRound),
-      );
-      this.compileFailures.set(
-        streamId,
-        recordToRoundMap(snap.compileFailuresByRound),
-      );
+      const data = await readStreamData(this.kv(streamId));
+      this.outputFiles.set(streamId, data.outputFiles);
+      this.missingOutputs.set(streamId, data.missingOutputs);
+      this.compileFailures.set(streamId, data.compileFailures);
       this.usage.set(
         streamId,
-        new Map(
-          Object.entries(snap.runUsage).filter(([, v]) => !isEmptyUsage(v)),
-        ),
+        new Map([...data.usage].filter(([, v]) => !isEmptyUsage(v))),
       );
-      this.workPlan.set(streamId, {
-        todos: snap.todos,
-        plan: snap.plan,
-        planSummary: snap.planSummary,
-      });
-      const meta = await this.readMetaFile(this.kv(streamId));
-      if (meta) {
-        this.meta.set(streamId, meta);
-        if (meta.taskState !== undefined) {
-          const parsed = TaskStateSchema.safeParse(meta.taskState);
+      this.workPlan.set(streamId, data.workPlan);
+      if (data.meta) {
+        this.meta.set(streamId, data.meta);
+        if (data.meta.taskState !== undefined) {
+          const parsed = TaskStateSchema.safeParse(data.meta.taskState);
           if (parsed.success) {
             this.taskStates.set(streamId, parsed.data as TaskState);
           }
         }
       }
+      this.persistLegacyFlattened(streamId, data);
     }
     await this.backfillDescriptionsFromExecutionMeta();
+  }
+
+  /** Rewrite any legacy-nested sidecar file to its flattened form (once). */
+  private persistLegacyFlattened(stream: StreamTabId, data: StreamData): void {
+    const byKey = new Map<string, Map<number, unknown>>([
+      [STREAM_DATA_KEYS.OUTPUT_FILES, data.outputFiles as Map<number, unknown>],
+      [
+        STREAM_DATA_KEYS.MISSING_OUTPUTS,
+        data.missingOutputs as Map<number, unknown>,
+      ],
+      [
+        STREAM_DATA_KEYS.COMPILE_FAILURES,
+        data.compileFailures as Map<number, unknown>,
+      ],
+    ]);
+    for (const key of data.legacyKeys) {
+      const map = byKey.get(key);
+      if (map) this.write(stream, key, mapToRecord(map));
+    }
   }
 
   /**
@@ -716,13 +612,5 @@ export class StreamSnapshotStore {
         // Best-effort; a missing/corrupt execution store just skips backfill.
       }
     }
-  }
-
-  /** Returns the resolved task state for a resumed stream, if persisted. */
-  async readTaskState(streamId: StreamTabId): Promise<TaskState | undefined> {
-    const metaRaw = await this.readMetaFile(this.kv(streamId));
-    if (metaRaw?.taskState === undefined) return undefined;
-    const parsed = TaskStateSchema.safeParse(metaRaw.taskState);
-    return parsed.success ? (parsed.data as TaskState) : undefined;
   }
 }

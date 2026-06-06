@@ -134,7 +134,7 @@ describe('StreamSnapshotStore', () => {
     expect(snap.runUsage).toEqual({});
   });
 
-  it('migrates the legacy nested {runId:{round}} shape to flat ONCE at read', async () => {
+  it('migrates the legacy nested {runId:{round}} shape to flat ONCE at the load entry', async () => {
     await installPlatform();
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
@@ -144,17 +144,19 @@ describe('StreamSnapshotStore', () => {
     );
 
     const store = new StreamSnapshotStore();
-    const snap = await store.read(STREAM);
+    await store.load([STREAM]);
     await store.flush();
 
-    // Flattened in the snapshot…
+    // The on-disk file is now FLAT — migrated once at the load entry, never
+    // re-resolved on subsequent reads.
+    const raw = await StorageFS.readJson(path.join(dir, 'missingOutputs.json'));
+    expect(raw).toEqual({ '0': ['a.tex'], '1': ['b.tex'] });
+    // …and a fresh read sees the flattened data.
+    const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.missingOutputsByRound).toEqual({
       '0': ['a.tex'],
       '1': ['b.tex'],
     });
-    // …and the on-disk file is now FLAT — migrated once, never re-resolved.
-    const raw = await StorageFS.readJson(path.join(dir, 'missingOutputs.json'));
-    expect(raw).toEqual({ '0': ['a.tex'], '1': ['b.tex'] });
   });
 
   it('degrades gracefully when workPlan.json is valid JSON but the wrong shape', async () => {
