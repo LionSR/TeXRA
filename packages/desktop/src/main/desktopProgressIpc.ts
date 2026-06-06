@@ -1,3 +1,4 @@
+import { createProgressViewLifecycleCommandHandlers } from '@controllers/progressView/ProgressViewLifecycleCommandHandlers';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import {
   dispatchProgressViewInbound,
@@ -36,14 +37,13 @@ export function createDesktopProgressIpc(
   const progress = options.progress;
 
   const progressHandlers: ProgressViewInboundHandlerRegistry = {
-    [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (d) =>
-      progress.setActiveStream(d.stream),
-    [PROGRESS_VIEW_COMMANDS.FILTER_STREAMS]: (d) =>
-      progress.setAgentFilter(d.filter),
-    [PROGRESS_VIEW_COMMANDS.DELETE_STREAM]: (d) =>
-      progress.deleteStream(d.stream),
-    [PROGRESS_VIEW_COMMANDS.DELETE_ALL]: () => progress.deleteAllStreams(),
-    [PROGRESS_VIEW_COMMANDS.STOP_STREAM]: (d) => progress.stopStream(d.stream),
+    ...createProgressViewLifecycleCommandHandlers({
+      setActiveStream: (stream) => progress.setActiveStream(stream),
+      setAgentFilter: (filter) => progress.setAgentFilter(filter),
+      deleteStream: (stream) => progress.deleteStream(stream),
+      deleteAllStreams: () => progress.deleteAllStreams(),
+      stopStream: (stream) => progress.stopStream(stream),
+    }),
     [PROGRESS_VIEW_COMMANDS.RESUME]: (d) => progress.resumeStream(d.stream),
     [PROGRESS_VIEW_COMMANDS.RUN_NEW]: (d) => progress.runNewStream(d.stream),
     [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: (d) =>
