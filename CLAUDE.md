@@ -291,11 +291,11 @@ Never compensate for data model problems at render time. Renderers should only t
 The `texra` CLI ships an Ink (React) TUI under `packages/cli/src/chat/tui/`.
 It deliberately does **not** take over the viewport (no alternate screen); the
 root transcript appends finalized content to native scrollback and only repaints
-a small live region at the bottom. Focused child streams are the explicit
-exception: they use a bounded scoped-history pane so the child view contains
-only that child stream. Keep those two viewports distinct — the terminal already
-implements scrolling, search, and mouse-scroll for root history, so don't
-reinvent them.
+a small live region at the bottom. Focused child streams use the same ownership
+model: the active viewport selects exactly one stream to feed native scrollback,
+and the live region only paints that stream's in-flight tail. Keep those
+viewports distinct — the terminal already implements scrolling, search, and
+mouse-scroll for finalized history, so don't reinvent them.
 
 - **Root scrollback owns finalized root history.** In the root viewport, every
   finalized root transcript entry prints exactly once through Ink `<Static>`
@@ -303,18 +303,18 @@ reinvent them.
   mouse-scroll keep working. Never render a finalized root turn in the root live
   region, and never reprint root `<Static>` items unless the repaint starts from
   a known origin — dedupe by the entry's own stable id, not a stream-scoped key
-  (see `appendStaticTranscriptItems`). Focused child streams are separate scoped
-  viewports: `App` does not mount `<Static>` for them, and `ConversationPane`
-  renders finalized + pending child entries in `scoped-history` mode.
+  (see `appendStaticTranscriptItems`). Focused child streams are separate
+  viewports that temporarily select the child as the `<Static>` scrollback
+  owner; root and child histories must not share append-only Static state.
 - **Keep the live region minimal for the active viewport.** In root mode, only
   in-flight content belongs in the redrawn `<Box>` below `<Static>`: the
   streaming tail, spinners, side panels, input bar, and the active approval
-  modal. In scoped child mode, the bounded pane is the child transcript viewport
-  itself and may contain finalized child entries; it must still be explicitly
-  sized (`selectTranscriptEntriesForViewport` in `panes/transcriptViewport.ts`)
-  and padded so repainting does not leave stale terminal suffixes. Cap panels
-  (`BOTTOM_PANEL_MAX_ROWS`) so chrome never pushes the input off-screen. Don't
-  park finalized root content in the live region "for now."
+  modal. In child focus, the same live region renders only the focused child's
+  pending entries and may overflow into native scrollback while the child is
+  still running; finalized child history belongs to that child's Static
+  scrollback owner. Cap root panels (`BOTTOM_PANEL_MAX_ROWS`) so chrome never
+  pushes the input off-screen. Don't park finalized content in the live region
+  "for now."
 - **Stateless renderers.** Tool / diff / markdown components are props-in → JSX-out (the "Render-Time Workarounds" rule, applied to the TUI). No `Date.now()`, synthetic ids, or dedup at render time. Any view-level toggle (collapse/expand, focus) belongs in shared signal state (`state/cliState.ts`), not per-component local state.
 - **Defer non-terminal content to the host.** The TUI does not render PDFs, LaTeX figures, or inline images (iTerm2 / Kitty / Sixel). Hand previews to the webview/desktop or the OS opener. The terminal is for chat, text, and diffs; rebuilding a document viewer in cells is out of scope.
 - **Capability-gate terminal features.** Negotiate support via the DA1-sentinel discovery (`state/terminalCapabilities.ts`) before emitting Kitty-keyboard, OSC color, bracketed-paste, or notification sequences. No "assume a modern terminal" feature use.
@@ -329,7 +329,7 @@ reinvent them.
   Any transcript viewport switch (`root` ↔ scoped child, or child ↔ child) uses
   the same known-origin pattern: clear scrollback, drop cached static output,
   then repaint the new viewport. Root viewports reprint root `<Static>` history;
-  scoped child viewports paint only the focused child's bounded transcript.
+  child viewports reprint only the focused child's `<Static>` history.
   Line-count erasing of the live region can't survive reflow, because the
   emulator owns the reflow/scroll geometry and a write-only stdout can't observe
   it, so any fixed erase count either strands residue or walks up and eats the

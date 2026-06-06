@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { scopedTranscriptVisibleLines } from '@cli/chat/tui/panes/ScopedTranscriptPane';
 import {
   initialTranscriptScrollState,
   maxTranscriptScrollOffset,
@@ -10,7 +9,7 @@ import {
 } from '@cli/chat/tui/state/transcriptScroll';
 
 describe('CLI transcript scroll state', () => {
-  it('opens scoped transcript history at the bottom', () => {
+  it('opens transcript history at the bottom', () => {
     const window = { lineCount: 20, viewRows: 5 };
 
     expect(maxTranscriptScrollOffset(window)).toBe(15);
@@ -61,16 +60,5 @@ describe('CLI transcript scroll state', () => {
         { lineCount: 12, viewRows: 8 },
       ),
     ).toEqual({ offset: 4, followBottom: false });
-  });
-
-  it('slices scoped transcript lines from the current scroll offset', () => {
-    const lines = ['first', 'second', 'third', 'fourth'];
-
-    expect(
-      scopedTranscriptVisibleLines({ lines, offset: 0, viewRows: 2 }),
-    ).toEqual(['first', 'second']);
-    expect(
-      scopedTranscriptVisibleLines({ lines, offset: 2, viewRows: 2 }),
-    ).toEqual(['third', 'fourth']);
   });
 });
