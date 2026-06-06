@@ -1,4 +1,5 @@
 import { createProgressViewApprovalCommandHandlers } from '@controllers/progressView/ProgressViewApprovalCommandHandlers';
+import { createProgressViewBypassCommandHandlers } from '@controllers/progressView/ProgressViewBypassCommandHandlers';
 import { createProgressViewFileCommandHandlers } from '@controllers/progressView/ProgressViewFileCommandHandlers';
 import { createProgressViewFollowUpCommandHandlers } from '@controllers/progressView/ProgressViewFollowUpCommandHandlers';
 import { createProgressViewLifecycleCommandHandlers } from '@controllers/progressView/ProgressViewLifecycleCommandHandlers';
@@ -56,6 +57,9 @@ export function createDesktopProgressIpc(
       sendFollowUp: ({ stream, text, mediaFiles }) =>
         progress.sendFollowUp(stream, text, mediaFiles),
       reportImageSaveError: (_image, error) => reportAsyncError(error),
+    }),
+    ...createProgressViewBypassCommandHandlers({
+      runtimeHost: progress.runtimeHost,
     }),
     ...createProgressViewFileCommandHandlers({
       openFile: (file, line) => progress.openFile(file, line),
