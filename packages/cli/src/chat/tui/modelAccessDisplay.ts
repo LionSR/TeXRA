@@ -1,8 +1,10 @@
-import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import {
+  noRunnableModelAccessReason,
   runnableCliModelAccessEntries,
   type CliModelAccess,
+  type NoRunnableModelAccessReason,
 } from '@cli/runtime/modelAccess';
+import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { ModelAvailabilityKind } from '@shared/schemas';
 
 import type { SelectItem } from './ui/Select';
@@ -34,23 +36,6 @@ const EMPTY_MODEL_LIST_RECOVERY = {
   included: 'Switch with /api personal or try again later.',
   personal: 'Configure a provider key or switch with /api included.',
 } satisfies Record<NoRunnableModelAccessReason, string>;
-
-export type NoRunnableModelAccessReason = CliApiMode | 'includedLoginRequired';
-
-export function noRunnableModelAccessReason(
-  models: readonly CliModelAccess[],
-  apiMode: CliApiMode,
-): NoRunnableModelAccessReason {
-  if (
-    apiMode === 'included' &&
-    models.some(
-      (model) => model.model.availability === 'included-login-required',
-    )
-  ) {
-    return 'includedLoginRequired';
-  }
-  return apiMode;
-}
 
 export function formatModelStatusForCliMode(
   model: CliModelAccess,
