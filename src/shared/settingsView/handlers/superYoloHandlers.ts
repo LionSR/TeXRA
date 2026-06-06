@@ -6,7 +6,7 @@
  * cap. Reliability settings are host-specific (VS Code config-backed in the
  * extension; absent in the desktop build), so callers supply them.
  */
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import {
   NESTED_DELEGATION_DEPTH_RANGE,

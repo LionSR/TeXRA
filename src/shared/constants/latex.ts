@@ -418,10 +418,7 @@ export function getInstallGuide(guide: Guide, platform: string): string {
 //   - the activation-time migration helper in src/frontend/setup.ts
 // so changing a default or range here propagates everywhere with no rot.
 //
-// Importing WorkspaceStateKey from @common/state/stateKeys keeps this module
-// vscode-free (the keys file has no vscode import).
-
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 /** Numeric range for a setting (used by Zod schemas and UI inputs). */
 export interface NumericRange {
