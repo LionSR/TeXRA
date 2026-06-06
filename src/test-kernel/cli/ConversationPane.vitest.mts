@@ -6,6 +6,7 @@ import {
   compactPrefixedDisplayRows,
   isInquiryContinuationText,
 } from '@cli/chat/tui/panes/TranscriptEntry';
+import { formatRenderError } from '@cli/chat/tui/panes/EntryErrorBoundary';
 import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
 import {
   appendStaticTranscriptItems,
@@ -263,6 +264,41 @@ describe('CLI conversation transcript splitting', () => {
     expect(selected.entries.map((item) => item.id)).toEqual(['a1']);
     expect(selected.usedRows).toBe(4);
     expect(selected.rowLimits.get('a1')).toBe(4);
+  });
+
+  it('falls back when a malformed tool entry cannot be estimated', () => {
+    const malformedTool = {
+      ...toolEntry('tool', TOOL_USE_STATUS.IN_PROGRESS).toolUse,
+      toolName: {} as string,
+    } as NormalizedToolUse;
+    const malformedEntry: ConversationEntry = {
+      id: 'tool',
+      role: 'tool',
+      text: '',
+      finalized: false,
+      toolUse: malformedTool,
+    };
+
+    expect(estimateTranscriptEntryRows(malformedEntry, 80)).toBe(1);
+
+    const selected = selectTranscriptEntriesForViewport(
+      [malformedEntry],
+      3,
+      80,
+    );
+    expect(selected.entries.map((item) => item.id)).toEqual(['tool']);
+    expect(selected.usedRows).toBe(1);
+    expect(selected.rowLimits.has('tool')).toBe(false);
+  });
+
+  it('formats unprintable render errors without throwing', () => {
+    const unprintable = {
+      toString() {
+        throw new Error('cannot stringify');
+      },
+    };
+
+    expect(formatRenderError(unprintable)).toBe('');
   });
 
   it('renders bounded finalized assistant tails through markdown', () => {
