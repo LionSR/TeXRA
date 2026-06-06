@@ -11,6 +11,7 @@ import {
   SIDEBAR_VIEWS,
   setActiveSidebarView,
 } from '@common/webview';
+import { workspaceSM } from '@common/state';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
@@ -31,6 +32,7 @@ import type {
 import { AGENT_CATEGORY } from '@shared/schemas';
 import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
 import {
   getOpenTurnDraft,
@@ -43,7 +45,6 @@ import {
 import { ProgressEventHandler } from './events/ProgressEventHandler';
 import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
-import { ProgressViewState } from './state/ProgressViewState';
 
 import type { MainViewProvider } from '../MainViewProvider';
 
@@ -119,7 +120,7 @@ export class ProgressViewProvider
     super(context);
     this.logger = createChannelTrace('ProgressViewProvider');
 
-    this.state = new ProgressViewState();
+    this.state = new ProgressViewState(workspaceSM);
     this.webviewUpdater = new WebviewUpdater(() => [this.getActiveWebview()]);
     this.webviewBridge = new WebviewBridge(
       this.state.streamLogs,

@@ -1,8 +1,8 @@
+import { buildStreamTabInfo } from '@agent/index/streamTabInfo';
 import {
-  buildStreamTabInfo,
   peekWorktreeInfo,
   resolveWorktreeInfo,
-} from '@agent/index';
+} from '@agent/index/worktreeInfo';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentCategoryFilter, StreamTabInfo } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
