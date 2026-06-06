@@ -13,13 +13,13 @@
 import * as path from 'path';
 import pMap from 'p-map';
 
-import { KVStore } from '@common/storage/KVStore';
-import * as logger from '@logger/logUtils';
 import {
   STREAM_DATA_DIR,
   STREAM_DATA_KEYS,
   encodeStreamId,
 } from '@transcript/streamDataPaths';
+import { KVStore } from '@common/storage/KVStore';
+import * as logger from '@logger/logUtils';
 
 import {
   StreamTabMetaSchema,

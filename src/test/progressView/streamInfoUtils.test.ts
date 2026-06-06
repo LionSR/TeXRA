@@ -2,8 +2,8 @@
 import { strict as assert } from 'assert';
 
 // Local imports
-import { compareByNewestCreationTime } from '@progressView/streamOrdering';
 import type { StreamTabInfo } from '@shared/schemas';
+import { compareByNewestCreationTime } from '@shared/progressView/backend/streamOrdering';
 
 function streamInfo(name: string, creationTimestamp: number): StreamTabInfo {
   return {
