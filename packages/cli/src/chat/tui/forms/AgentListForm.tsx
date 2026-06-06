@@ -31,7 +31,7 @@ interface AgentGroups {
 }
 
 type AgentIdentity = Pick<AgentOptionData, 'label' | 'value'>;
-type AgentOrchestrationFlag = Pick<AgentOptionData, 'isOrchestrator'>;
+type AgentDelegationFlag = Pick<AgentOptionData, 'isOrchestrator'>;
 
 const AGENT_FORM_MAX_WIDTH = 80;
 
@@ -49,26 +49,26 @@ function agentDescription(agent: AgentOptionData): string {
     : agent.isCustom
       ? 'custom'
       : 'built-in';
-  const kind = isOrchestratorAgent(agent) ? 'orchestrator' : 'tool-use';
+  const kind = isDelegatingAgent(agent) ? 'delegating' : 'tool-use';
   return agent.description ? `${kind}; ${source}; ${agent.description}` : kind;
 }
 
-function isOrchestratorAgent(agent: AgentOrchestrationFlag): boolean {
+function isDelegatingAgent(agent: AgentDelegationFlag): boolean {
   return agent.isOrchestrator === true;
 }
 
 export function agentPickerPrimarySectionTitle(
-  agents: readonly AgentOrchestrationFlag[],
+  agents: readonly AgentDelegationFlag[],
 ): string {
-  const hasOrchestrators = agents.some(isOrchestratorAgent);
+  const hasDelegatingAgents = agents.some(isDelegatingAgent);
   const hasToolUseSpecialists = agents.some(
-    (agent) => !isOrchestratorAgent(agent),
+    (agent) => !isDelegatingAgent(agent),
   );
 
-  if (hasOrchestrators && hasToolUseSpecialists) {
-    return 'Tool-use and orchestrator agents';
+  if (hasDelegatingAgents && hasToolUseSpecialists) {
+    return 'Tool-use and delegating agents';
   }
-  return hasOrchestrators ? 'Orchestrator agents' : 'Tool-use agents';
+  return hasDelegatingAgents ? 'Delegating agents' : 'Tool-use agents';
 }
 
 export function currentVisibleAgent(
