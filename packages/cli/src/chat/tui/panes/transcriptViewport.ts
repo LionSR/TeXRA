@@ -1,5 +1,5 @@
-// Pure viewport math for bounded transcript panes. Root live mode sizes only
-// pending entries; focused child mode can size finalized scoped history too.
+// Pure viewport math for bounded transcript panes. The normal conversation pane
+// sizes only pending entries; transcript viewers can size finalized history too.
 
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
@@ -79,8 +79,8 @@ function estimateViewportEntryRows(
     : estimateLiveTranscriptEntryRows(entry, width);
 }
 
-// Pick the newest entries that fit in `maxRows`. Root live mode passes only
-// pending rows; scoped child mode may pass finalized child history too.
+// Pick the newest entries that fit in `maxRows`. Conversation live mode passes
+// pending rows; full transcript surfaces may pass finalized history too.
 export function selectTranscriptEntriesForViewport(
   entries: readonly ConversationEntry[],
   maxRows: number,

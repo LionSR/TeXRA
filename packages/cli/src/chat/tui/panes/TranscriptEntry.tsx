@@ -335,9 +335,8 @@ export function BoundedTranscriptEntry({
   const rows = Math.max(1, maxRows);
   if (entry.role === 'assistant') {
     const cols = Math.max(1, Math.floor(width ?? 80));
-    // Streaming overflow stays plain for speed. Finalized overflow is only
-    // used by scoped child panes, so render cached Markdown first and then
-    // take the visible tail.
+    // Streaming overflow stays plain for speed. Finalized overflow renders
+    // cached Markdown first and then takes the visible tail.
     return (
       <Box flexDirection="column">
         <Text>
