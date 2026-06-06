@@ -30,6 +30,11 @@ export interface CliMultiAgentPresetFormatOptions {
   readonly includeLoginHint?: boolean;
 }
 
+export interface CliMultiAgentTeamLaunchBlockMessageOptions {
+  readonly requestedPreset?: string;
+  readonly followUpAdvice?: string;
+}
+
 export type CliMultiAgentPlanStatus = 'available' | 'degraded' | 'unavailable';
 
 export interface CliMultiAgentPresetAgentAvailability {
@@ -267,8 +272,27 @@ export function cliMultiAgentPresetTeamLaunchBlockReason(
 
 export function cliMultiAgentPresetCanLaunchTeam(
   plan: CliMultiAgentPresetRunPlan,
-): boolean {
+): plan is CliMultiAgentPresetRunPlan & { readonly rootAgent: AgentEntry } {
   return cliMultiAgentPresetTeamLaunchBlockReason(plan) === undefined;
+}
+
+export function formatCliMultiAgentTeamLaunchBlockMessage(
+  plan: CliMultiAgentPresetRunPlan,
+  options: CliMultiAgentTeamLaunchBlockMessageOptions = {},
+): string {
+  const preset = options.requestedPreset ?? plan.preset.id;
+  const reason = cliMultiAgentPresetTeamLaunchBlockReason(plan);
+  if (!reason) {
+    throw new Error(
+      `Cannot format team launch block for launchable multi-agent preset "${plan.preset.id}".`,
+    );
+  }
+  const parts = [
+    `Multi-agent preset "${preset}" cannot start as a team: ${reason}.`,
+    `Run \`texra multi-agent inspect ${plan.preset.id}\` to see missing agents.`,
+    options.followUpAdvice,
+  ];
+  return parts.filter((part): part is string => !!part).join(' ');
 }
 
 export function cliMultiAgentPresetAvailability(

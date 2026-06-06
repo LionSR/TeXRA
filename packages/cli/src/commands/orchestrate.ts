@@ -12,7 +12,8 @@ import {
   interactiveTerminalFailure,
 } from '../runtime/terminalRequirements';
 import {
-  cliMultiAgentPresetTeamLaunchBlockReason,
+  cliMultiAgentPresetCanLaunchTeam,
+  formatCliMultiAgentTeamLaunchBlockMessage,
   readCliMultiAgentPresets,
   withCliMultiAgentPresetVisibility,
 } from '../runtime/multiAgentPresets';
@@ -147,19 +148,20 @@ async function runOrchestration(context: CliContext): Promise<number> {
       // delegation specialists) and replan so the team starts with its real
       // root instead of silently degrading to the first local tool-use agent.
       const plan = await fillMultiAgentRunPlanGaps({ preset: action.preset });
-      const teamLaunchBlockReason =
-        cliMultiAgentPresetTeamLaunchBlockReason(plan);
-      if (teamLaunchBlockReason || !plan.rootAgent) {
+      if (!cliMultiAgentPresetCanLaunchTeam(plan)) {
         writeTextStderr(
-          `Multi-agent preset "${action.preset}" cannot start as a team: ${teamLaunchBlockReason ?? 'no runnable team root'}. Run \`texra multi-agent inspect ${plan.preset.id}\` to see missing agents.`,
+          formatCliMultiAgentTeamLaunchBlockMessage(plan, {
+            requestedPreset: action.preset,
+          }),
         );
         return CliExitCode.Usage;
       }
+      const rootAgent = plan.rootAgent;
       writeMissingPresetAgents(plan);
       const { runChat } = await import('../chat/tui/runChatTui');
       const result = await withCliMultiAgentPresetVisibility(plan, () =>
         runChat(context, {
-          agentOverride: plan.rootAgent?.name,
+          agentOverride: rootAgent.name,
           teamName: plan.preset.name,
           modelOverride: action.model,
           cliMultiAgentPresetId: plan.preset.id,
