@@ -11,14 +11,8 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
 import { toErrorMessage } from '@common/errors';
-import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
-import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
-import {
-  getStreamTabStore,
-  mapStreamTabStorage,
-} from '@progressView/persistence/StreamTabStore';
 import {
   AgentCategoryFilterSchema,
   ContextStateDataSchema,
@@ -31,10 +25,16 @@ import {
   type ContextStateData,
   type StreamTabId,
 } from '@shared/schemas';
+import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
+import {
+  getStreamTabStore,
+  mapStreamTabStorage,
+} from '@shared/progressView/backend/persistence/StreamTabStore';
 import {
   PersistedState,
   createBackendStorage,
 } from '@shared/state/PersistedState';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
 export const StreamHintsSchema = z.object({
@@ -121,15 +121,10 @@ export class ProgressViewState {
 
   private readonly logger: AgentTrace;
 
-  constructor(storage?: MementoStorage) {
-    const resolvedStorage = storage ?? workspaceSM;
-    if (!resolvedStorage) {
-      throw new Error('workspace state manager is not initialized');
-    }
-
+  constructor(storage: MementoStorage) {
     this.logger = createChannelTrace('ProgressViewState');
     this._prefs = new PersistedState(
-      createBackendStorage(resolvedStorage),
+      createBackendStorage(storage),
       WorkspaceStateKey.PROGRESS_VIEW_PREFS,
       ProgressViewPrefsSchema,
     );

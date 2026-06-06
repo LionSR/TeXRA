@@ -71,9 +71,9 @@ import {
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
-import { buildStreamInfo } from '@progressView/streamInfoUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import {
   dispatchSettingsViewInbound,
   type SettingsViewInboundHandlerRegistry,

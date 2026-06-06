@@ -12,13 +12,6 @@ import {
   WebviewUpdater,
   type LogContentExtras,
 } from '@progressView/managers/WebviewUpdater';
-import { mapToRecord } from '@progressView/persistence/serializationUtils';
-import {
-  ProgressViewState,
-  cleanupToolUseAgentRegistry,
-  type ActiveStreamId,
-  type StreamExecutionState,
-} from '@progressView/state/ProgressViewState';
 import {
   STREAM_STATUS,
   type ConversationProgress,
@@ -27,6 +20,13 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { mapToRecord } from '@shared/progressView/backend/persistence/serializationUtils';
+import {
+  ProgressViewState,
+  cleanupToolUseAgentRegistry,
+  type ActiveStreamId,
+  type StreamExecutionState,
+} from '@shared/progressView/backend/state/ProgressViewState';
 import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
 import { OdysseyStore, isOdysseyInFlight } from '@tools/odyssey';
 import {

@@ -1,11 +1,5 @@
 import * as vscode from 'vscode';
 
-import { buildStreamInfos } from '@progressView/streamInfoUtils';
-import {
-  type ActiveStreamId,
-  ProgressViewState,
-  type StreamExecutionState,
-} from '@progressView/state/ProgressViewState';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   AgentCategoryFilter,
@@ -26,6 +20,12 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
+import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
+import {
+  type ActiveStreamId,
+  ProgressViewState,
+  type StreamExecutionState,
+} from '@shared/progressView/backend/state/ProgressViewState';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import type { OdysseyStatus } from '@tools/odyssey';
 
