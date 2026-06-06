@@ -128,18 +128,18 @@ function staticTranscriptItemRowCount(
 }
 
 export function appendStaticTranscriptItems({
-  activeStreamId,
   currentItems,
   streams,
   meta,
   maxRows,
+  scrollbackStreamId,
   width,
 }: {
-  readonly activeStreamId: StreamTabId | undefined;
   readonly currentItems: readonly StaticTranscriptItem[];
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly meta: SessionMeta;
   readonly maxRows?: number;
+  readonly scrollbackStreamId: StreamTabId | undefined;
   readonly width?: number;
 }): readonly StaticTranscriptItem[] {
   const seen = new Set(currentItems.map((item) => item.id));
@@ -165,13 +165,12 @@ export function appendStaticTranscriptItems({
     }
   }
 
-  // Only the active stream feeds the shared `<Static>` scrollback. Dumping
-  // every stream here floods the main transcript with each subagent's tool
-  // calls and file reads, interleaving them with the live side panel.
-  // Subagent activity is surfaced in the live region when its tab is
-  // focused instead.
-  if (!activeStreamId) return nextItems;
-  const slice = streams.get(activeStreamId);
+  // Only the root scrollback owner feeds shared `<Static>` output. Dumping
+  // focused child streams here floods the main transcript with each subagent's
+  // tool calls and file reads. Subagent activity is rendered by its scoped
+  // conversation pane or transcript viewer.
+  if (!scrollbackStreamId) return nextItems;
+  const slice = streams.get(scrollbackStreamId);
   for (const entry of slice?.entries ?? []) {
     if (!entry.finalized) continue;
     if (seen.has(entry.id)) continue;
@@ -187,22 +186,23 @@ export function appendStaticTranscriptItems({
 export function StaticConversationTranscript({
   colorEnabled,
   maxRows,
+  scrollbackStreamId,
   width,
 }: {
   readonly colorEnabled?: boolean;
   readonly maxRows?: number;
+  readonly scrollbackStreamId: StreamTabId | undefined;
   readonly width?: number;
 }): React.JSX.Element {
-  const activeStreamId = useSignal(cliState.activeStreamId);
   const streams = useSignal(cliState.streams);
   const sessionMeta = useSignal(cliState.sessionMeta);
   const [items, setItems] = useState<readonly StaticTranscriptItem[]>(() =>
     appendStaticTranscriptItems({
-      activeStreamId,
       currentItems: [],
       streams,
       meta: sessionMeta,
       maxRows,
+      scrollbackStreamId,
       width,
     }),
   );
@@ -212,18 +212,18 @@ export function StaticConversationTranscript({
     // items list from scratch so the header is the first thing the user
     // sees after the scrollback was wiped. Focused child streams do not
     // mount this static scrollback; they render their own bounded history.
-    const isHardReset = streams.size === 0 && activeStreamId === undefined;
+    const isHardReset = streams.size === 0 && scrollbackStreamId === undefined;
     setItems((currentItems) =>
       appendStaticTranscriptItems({
-        activeStreamId,
         currentItems: isHardReset ? [] : currentItems,
         streams,
         meta: sessionMeta,
         maxRows,
+        scrollbackStreamId,
         width,
       }),
     );
-  }, [activeStreamId, maxRows, sessionMeta, streams, width]);
+  }, [maxRows, scrollbackStreamId, sessionMeta, streams, width]);
 
   return (
     // Remount <Static> on a width change so Ink regenerates `fullStaticOutput`

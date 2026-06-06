@@ -8,6 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   LIVE_ELAPSED_STREAM_STATUSES,
   type StreamStatus,
+  type StreamTabId,
 } from '@shared/schemas';
 
 import { assertNever } from './assertNever';
@@ -247,6 +248,20 @@ export function staticTranscriptRowBudget({
   return Math.max(0, optionalRows - liveTranscriptReserveRows);
 }
 
+export function staticScrollbackStreamId({
+  activeStreamId,
+  rootStreamId,
+}: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly rootStreamId: StreamTabId | undefined;
+}): StreamTabId | undefined {
+  if (rootStreamId) return rootStreamId;
+  // Before a root run resolves, local helper output and harness-built root
+  // streams still need static scrollback. Once `rootStreamId` is set, focused
+  // children can no longer redirect this owner.
+  return activeStreamId;
+}
+
 export function shouldShowTipRow({
   foregroundOpen,
   hasQueuedFollowUps = false,
@@ -400,6 +415,7 @@ export function App(props: AppProps): React.JSX.Element {
   // off the same read and InputBar can stay mounted but disabled.
   const pending = useSignal(currentApproval);
   const activeStreamId = useSignal(cliState.activeStreamId);
+  const rootStreamId = useSignal(cliState.rootStreamId);
   const streams = useSignal(cliState.streams);
   const parentStream = useSignal(cliState.parentStream);
   const activeForm = useSignal(cliState.activeForm);
@@ -427,6 +443,10 @@ export function App(props: AppProps): React.JSX.Element {
   const inputBarVisible = !foregroundOpen;
   const viewportKey = transcriptViewportKey({ activeStreamId, parentStream });
   const scopedTranscript = isScopedTranscriptViewport(viewportKey);
+  const scrollbackStreamId = staticScrollbackStreamId({
+    activeStreamId,
+    rootStreamId,
+  });
   const previousViewportKey = useRef<string | undefined>(undefined);
   const onTranscriptViewportChange = props.onTranscriptViewportChange;
 
@@ -715,6 +735,7 @@ export function App(props: AppProps): React.JSX.Element {
         <StaticConversationTranscript
           colorEnabled={props.colorEnabled}
           maxRows={staticTranscriptRows}
+          scrollbackStreamId={scrollbackStreamId}
           width={transcriptWidth}
         />
       )}
