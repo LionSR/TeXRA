@@ -9,8 +9,8 @@ import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { createFakePlatform } from '@test/support/FakePlatform';
-import { bus } from '@eventBus/ProgressEventBus';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
+import { bus } from '@eventBus/ProgressEventBus';
 import type {
   Plan,
   StorageKey,
@@ -44,6 +44,7 @@ async function installPlatform(): Promise<void> {
 
 const STREAM = 'polish@gpt#abc123def' as StreamTabId;
 const RUN = 'run-1' as StorageKey;
+const RUN_2 = 'run-2' as StorageKey;
 
 const TODO: TodoItem = {
   content: 'Write the introduction',
@@ -186,6 +187,79 @@ describe('StreamSnapshotStore', () => {
       'run-1': { inputTokens: 100, outputTokens: 20, cost: 0.5 },
       'run-2': { inputTokens: 50, outputTokens: 10, cost: 0.25 },
     });
+  });
+
+  it('seeds existing disk data before a direct mutator, so extension writes cannot erase it', async () => {
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'usageStats.json'),
+      JSON.stringify({ [RUN]: usage(100, 20, 0.5) }),
+    );
+
+    const store = new StreamSnapshotStore();
+    const immediate = store.addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
+    expect(immediate).toBeUndefined();
+    await store.flush();
+
+    const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
+    expect(raw).toMatchObject({
+      [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
+      [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
+    });
+  });
+
+  it('load refreshes already-seeded streams from disk instead of keeping stale memory', async () => {
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'usageStats.json'),
+      JSON.stringify({ [RUN]: usage(100, 20, 0.5) }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.load([STREAM]);
+    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject({
+      inputTokens: 100,
+      outputTokens: 20,
+      cost: 0.5,
+    });
+
+    await StorageFS.write(
+      path.join(dir, 'usageStats.json'),
+      JSON.stringify({ [RUN]: usage(3, 4, 0.01) }),
+    );
+    await store.load([STREAM]);
+
+    expect(store.getRunUsage(STREAM).get(RUN)).toMatchObject({
+      inputTokens: 3,
+      outputTokens: 4,
+      cost: 0.01,
+    });
+  });
+
+  it('treats streams created after load as new so direct mutators stay synchronous', async () => {
+    await installPlatform();
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+
+    store.setTodos(STREAM, [TODO]);
+    store.setPlan(STREAM, PLAN);
+
+    expect(store.getWorkPlan(STREAM)).toEqual({
+      todos: [TODO],
+      plan: PLAN,
+      planSummary: PLAN.summary,
+    });
+  });
+
+  it('returns a frozen shared empty work plan default', async () => {
+    await installPlatform();
+    const empty = new StreamSnapshotStore().getWorkPlan(STREAM);
+    expect(Object.isFrozen(empty)).toBe(true);
+    expect(Object.isFrozen(empty.todos)).toBe(true);
   });
 
   it('degrades gracefully when workPlan.json is valid JSON but the wrong shape', async () => {

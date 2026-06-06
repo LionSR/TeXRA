@@ -29,6 +29,7 @@ import {
   type StreamSnapshot,
   type StreamTabId,
   type StreamTabMeta,
+  type TodoItem,
   type TokenUsageStats,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
@@ -40,11 +41,12 @@ const CHANNEL = 'StreamSnapshotStore';
 
 /** The canonical empty work plan (no todos, no plan). Single source for the
  *  "no durable plan yet" value, reused by the store's in-memory default. */
-export const EMPTY_WORK_PLAN: WorkPlanSnapshot = {
-  todos: [],
+const EMPTY_TODOS = Object.freeze([]) as unknown as TodoItem[];
+export const EMPTY_WORK_PLAN = Object.freeze({
+  todos: EMPTY_TODOS,
   plan: null,
   planSummary: null,
-};
+}) as WorkPlanSnapshot;
 
 /** Per-stream sidecar data read from disk, flattened to canonical (flat) form. */
 export interface StreamData {
