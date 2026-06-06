@@ -613,20 +613,20 @@ export class DesktopProgressBridge {
       .read(streamId)
       .then((snap) => {
         if (streamId !== this.activeStream) return;
-        if (snap.todos.length > 0) {
-          this.send({
-            command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
-            stream: streamId,
-            todos: snap.todos,
-          });
-        }
-        if (snap.plan) {
-          this.send({
-            command: PROGRESS_VIEW_COMMANDS.UPDATE_PLAN,
-            stream: streamId,
-            plan: snap.plan,
-          });
-        }
+        // The persisted snapshot is authoritative for a restored stream: send
+        // todos/plan verbatim so an intentionally-empty list or null plan CLEARS
+        // any stale renderer state instead of being skipped — matching the CLI
+        // and extension resume paths (both restore the persisted value as-is).
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
+          stream: streamId,
+          todos: snap.todos,
+        });
+        this.send({
+          command: PROGRESS_VIEW_COMMANDS.UPDATE_PLAN,
+          stream: streamId,
+          plan: snap.plan,
+        });
         for (const [runId, usage] of Object.entries(snap.runUsage)) {
           this.send({
             command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
