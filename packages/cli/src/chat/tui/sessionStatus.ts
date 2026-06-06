@@ -1,5 +1,5 @@
-import { STREAM_STATUS } from '@shared/schemas';
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
+import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { truncateSummary } from '@utils/text/stringUtils';
 
 import type { BypassState } from './state/cliState';
@@ -18,20 +18,10 @@ export interface CliSessionStatusInput {
 }
 
 export function formatCliStatusLabel(status: string | undefined): string {
-  switch (status) {
-    case STREAM_STATUS.INITIALIZING:
-      return 'starting…';
-    case STREAM_STATUS.RUNNING:
-      return 'running';
-    case STREAM_STATUS.WAITING:
-      return 'idle';
-    case STREAM_STATUS.STOPPED:
-      return 'stopped';
-    case STREAM_STATUS.READY:
-      return 'ready';
-    default:
-      return status ?? '—';
-  }
+  return formatStreamStatusLabel(status, {
+    style: 'cli',
+    missingLabel: '—',
+  });
 }
 
 function queuedFollowUpStatusLines(messages: readonly string[]): string[] {
