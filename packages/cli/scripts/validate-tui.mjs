@@ -1417,14 +1417,41 @@ const SCENARIOS = [
     },
     bootExpect: '[Tab]streams',
     keys: [ESC + 's', '\r'],
-    frame: 'tail',
     expect: [
       'strategy',
       'Please handle the harness-child-strategy sub-workflow.',
       'strategy is checking the harness-child-strategy details',
       'Esc close',
     ],
-    unexpect: ['Harness received:'],
+    unexpect: [
+      'entry-1 chat history line',
+      'entry-4 chat history line',
+      'Harness received:',
+    ],
+  },
+  {
+    name: 'nested-subagent-picker-enter-views-subagent',
+    cols: 100,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_NESTED_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: [ESC + 's', 'f', ESC + 's', '\r'],
+    expect: [
+      'localChecker',
+      'Please handle the nested proof check sub-workflow.',
+      'localChecker is checking the nested proof check details',
+      'Esc close',
+    ],
+    unexpect: [
+      'entry-1 chat history line',
+      'entry-4 chat history line',
+      'Please handle the harness-child-strategy sub-workflow.',
+      'strategy is checking the harness-child-strategy details',
+    ],
   },
   {
     name: 'nested-subagent-picker',

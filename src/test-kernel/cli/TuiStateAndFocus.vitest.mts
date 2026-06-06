@@ -280,6 +280,13 @@ describe('cliState Phase 4 fields', () => {
         parentStream: cliState.parentStream.get(),
       }),
     ).toBe(`scoped:${child1}`);
+    expect(
+      transcriptViewportKey({
+        activeStreamId: root,
+        parentStream: cliState.parentStream.get(),
+        transcriptViewerStreamId: child1,
+      }),
+    ).toBe(`viewer:${child1}`);
   });
 });
 
@@ -330,6 +337,20 @@ describe('CLI TUI row allocation', () => {
 
     expect(layout.transcriptRows).toBe(1);
     expect(layout.foregroundRows).toBe(12);
+  });
+
+  it('lets transcript viewers own the full foreground region', () => {
+    const layout = allocateMiddleRows({
+      foregroundOpen: true,
+      reserveTranscriptRows: false,
+      reverseSearchOpen: false,
+      rows: 24,
+      slashPaletteOpen: false,
+      tipVisible: false,
+    });
+
+    expect(layout.transcriptRows).toBe(0);
+    expect(layout.foregroundRows).toBe(18);
   });
 
   it('uses a smaller row cap for empty child-control pickers', () => {
