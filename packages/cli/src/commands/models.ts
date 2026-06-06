@@ -7,6 +7,7 @@ import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import {
+  findCliModelAccessEntry,
   formatCliNoAvailableModelsRecovery,
   getCliModelAccessList,
   runnableCliModelAccessEntries,
@@ -22,7 +23,6 @@ import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 type ModelAccessList = Awaited<ReturnType<typeof getCliModelAccessList>>;
-type ModelAccessEntry = ModelAccessList[number];
 
 /**
  * Output projection for JSON/NDJSON: prefix the model record with `id` so the
@@ -110,17 +110,7 @@ async function listModels(
   return CliExitCode.Success;
 }
 
-function findModelById(
-  list: ModelAccessList,
-  id: string,
-): ModelAccessEntry | undefined {
-  const direct = list.find((entry) => entry.model.value === id);
-  if (direct) return direct;
-  const lower = id.toLowerCase();
-  return list.find((entry) => entry.model.value.toLowerCase() === lower);
-}
-
-function formatModelDetails(entry: ModelAccessEntry): string {
+function formatModelDetails(entry: ModelAccessList[number]): string {
   const { model, status } = entry;
   const lines: string[] = [];
   lines.push(`id: ${model.value}`);
@@ -145,7 +135,7 @@ async function showModel(context: CliContext, id: string): Promise<number> {
     return CliExitCode.ModelOrNetworkError;
   }
 
-  const entry = findModelById(result.models, id);
+  const entry = findCliModelAccessEntry(result.models, id);
   if (!entry) {
     writeTextStderr(`Model not found: ${id}`);
     return CliExitCode.Usage;

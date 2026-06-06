@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   cliModelFallbackModeForSource,
+  findCliModelAccessEntry,
   formatCliNoAvailableModelsRecovery,
   getCliModelAccessList,
   noRunnableModelAccessReason,
@@ -185,6 +186,15 @@ describe('CLI model access resolution', () => {
     expect(
       runnableCliModelAccessEntries(entries).map((entry) => entry.model.value),
     ).toEqual(['sonnet46T']);
+  });
+
+  it('finds model access entries by id case-insensitively', () => {
+    const entries = [model('sonnet46T'), model('deepseekT')];
+
+    expect(findCliModelAccessEntry(entries, 'DEEPSEEKT')?.model.value).toBe(
+      'deepseekT',
+    );
+    expect(findCliModelAccessEntry(entries, 'missing')).toBeUndefined();
   });
 
   it('filters runnable models by active API mode when requested', () => {
