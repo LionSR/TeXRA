@@ -1,4 +1,5 @@
 import { createProgressViewLifecycleCommandHandlers } from '@controllers/progressView/ProgressViewLifecycleCommandHandlers';
+import { createProgressViewRunCommandHandlers } from '@controllers/progressView/ProgressViewRunCommandHandlers';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import {
   dispatchProgressViewInbound,
@@ -44,8 +45,10 @@ export function createDesktopProgressIpc(
       deleteAllStreams: () => progress.deleteAllStreams(),
       stopStream: (stream) => progress.stopStream(stream),
     }),
-    [PROGRESS_VIEW_COMMANDS.RESUME]: (d) => progress.resumeStream(d.stream),
-    [PROGRESS_VIEW_COMMANDS.RUN_NEW]: (d) => progress.runNewStream(d.stream),
+    ...createProgressViewRunCommandHandlers({
+      resumeStream: (stream) => progress.resumeStream(stream),
+      runNewStream: (stream) => progress.runNewStream(stream),
+    }),
     [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: (d) =>
       progress.sendFollowUp(d.stream, d.text),
     [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (d) => {
