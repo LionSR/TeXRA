@@ -404,7 +404,7 @@ export type ClaudeAgentPermissionMode = z.infer<
   typeof ClaudeAgentPermissionModeSchema
 >;
 
-/** Claude Code CLI effort levels (mirrors CLAUDE_AGENT_EFFORT_LEVELS). */
+/** Claude Code CLI effort levels — derived from @anthropic-ai/claude-agent-sdk's EffortLevel. */
 export const ClaudeAgentEffortSchema = z.enum([
   'low',
   'medium',
