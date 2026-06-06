@@ -18,7 +18,7 @@ export interface CliCompactionRequestOptions {
     streamId: StreamTabId,
     runtimeHost?: AgentRuntimeHost,
   ) => void;
-  readonly appendTranscript: (message: string) => void;
+  readonly appendTranscript: (message: string, streamId?: StreamTabId) => void;
 }
 
 export function requestCliCompaction({
@@ -31,6 +31,7 @@ export function requestCliCompaction({
   if (!streamId || !flowContext) {
     appendTranscript(
       'No active tool-use session found for context compaction.',
+      streamId,
     );
     return;
   }
@@ -38,6 +39,7 @@ export function requestCliCompaction({
   if (!flowContext.modelHandler.supportsManualCompaction) {
     appendTranscript(
       'Manual context compaction is not available for the current model.',
+      streamId,
     );
     return;
   }
@@ -46,5 +48,6 @@ export function requestCliCompaction({
   notifyFollowUpSent(streamId, flowContext.runtimeHost);
   appendTranscript(
     'Context compaction requested. The agent will process it on the next model call.',
+    streamId,
   );
 }

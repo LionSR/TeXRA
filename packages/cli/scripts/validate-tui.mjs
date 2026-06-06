@@ -1384,6 +1384,32 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'subagent-focused-status-stays-scoped',
+    cols: 120,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: ['\t', '/status', '\r'],
+    frame: 'tail',
+    expect: [
+      'Please handle the harness-child-strategy sub-workflow.',
+      'strategy is checking the harness-child-strategy details',
+      '[1:strategy]*',
+    ],
+    unexpect: [
+      'agent: harness-agent',
+      'api: relay',
+      'entry-1 chat history line',
+      'entry-4 chat history line',
+      '[main]*',
+      'signal read during notification phase',
+      'ERROR',
+    ],
+  },
+  {
     name: 'subagent-focus-return-root-scrollback-deduped',
     cols: 120,
     env: {
