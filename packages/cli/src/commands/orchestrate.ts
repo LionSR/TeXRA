@@ -38,7 +38,7 @@ import {
 } from './_helpers/globalArgs';
 import {
   fillMultiAgentRunPlanGaps,
-  loadCliMultiAgentPresetPlans,
+  loadCliMultiAgentPresetPlanSet,
   writeMissingPresetAgents,
 } from './multiAgent';
 import { runResumeExecution } from './resume';
@@ -108,10 +108,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
   }
   const history = await listCliHistoryEntries();
   const presets = readCliMultiAgentPresets();
+  const presetPlanSet = await loadCliMultiAgentPresetPlanSet(presets);
   const items = buildCliOrchestrationItems({
-    presetPlans: await loadCliMultiAgentPresetPlans(presets),
+    presetPlans: presetPlanSet.plans,
     history,
     toolUseAgents: getVisibleAgents(AgentCategory.ToolUse),
+    includeMultiAgentLoginHint: !presetPlanSet.remoteAgentLoadAttempted,
   });
   // Load the model registry up front so the launcher can offer a model pick
   // after an agent/team choice. Best-effort: an unavailable registry just
