@@ -44,6 +44,19 @@ export function modelSelectWindow(args: {
   return computeSelectWindowSize({ ...args, chromeRows: 5 });
 }
 
+export function modelListDescription({
+  itemCount,
+  selectable,
+}: {
+  readonly itemCount: number;
+  readonly selectable: boolean;
+}): string {
+  if (itemCount === 0) return 'No model choices in this API mode.';
+  return selectable
+    ? 'Choose the model for future turns.'
+    : 'Available models. Finish the active response before switching models.';
+}
+
 function EmptyModelListState(props: {
   readonly models: readonly CliModelAccess[];
   readonly apiMode: CliApiMode;
@@ -91,6 +104,10 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     availableRows: props.availableRows,
     itemCount: items.length,
   });
+  const description = modelListDescription({
+    itemCount: items.length,
+    selectable,
+  });
 
   function handleSelect(value: string): void {
     if (selectable) {
@@ -137,11 +154,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
       <Text bold color="cyan">
         {`/model · ${formatCliApiMode(props.apiMode)}`}
       </Text>
-      <Text dimColor>
-        {selectable
-          ? 'Choose the model for future turns.'
-          : 'Available models. Finish the active response before switching models.'}
-      </Text>
+      <Text dimColor>{description}</Text>
       {items.length === 0 ? (
         <EmptyModelListState
           models={models}
