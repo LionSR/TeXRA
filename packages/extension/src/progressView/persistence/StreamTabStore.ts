@@ -1,20 +1,17 @@
 /**
- * Per-stream-tab disk-backed storage.
+ * Legacy `streamData/{id}/` accessor — NARROW scope.
  *
- * Each stream tab gets its own directory under `streamData/`:
+ * `StreamSnapshotStore` (`@transcript`) is the single owner of `streamData/` at
+ * runtime: it reads, writes, and deletes every per-stream sidecar file. This
+ * module only retains the two responsibilities the snapshot store does not
+ * cover, both legacy/one-time:
+ *   - the field-scoped WRITES used by the one-time memento→disk migration
+ *     (`mementoMigration.ts`): meta / outputFiles / missingOutputs / usageStats;
+ *   - archival per-run instruction records (`legacyInstructions.json`), read
+ *     during load so older workflow tabs can be backfilled into the log stream.
  *
- *   streamData/
- *     {encoded(streamTabId)}/
- *       meta.json              → StreamTabMeta
- *       outputFiles.json       → round → OutputFileInfo[]
- *       missingOutputs.json    → round → string[]
- *       compileFailures.json   → round → CompileFailure[]
- *       usageStats.json        → runId → TokenUsageStats
- *
- * Legacy data shapes (from before one-run-per-tab refactor) are transparently
- * migrated on read via preprocess helpers in streamTabSchemas.ts. New workflow
- * instructions live in the log stream; this store only retains archived legacy
- * instruction records so older tabs can be backfilled during load.
+ * When the memento migration is sunset, this file can be reduced to legacy
+ * instructions alone (or retired entirely).
  */
 
 import * as path from 'path';
