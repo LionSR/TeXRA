@@ -32,7 +32,6 @@ import type { RenderRule } from 'markdown-it/lib/renderer.mjs';
  *  raw control chars). */
 const ESC = String.fromCharCode(27);
 const sgr = (code: number): string => `${ESC}[${code}m`;
-const plain = (text: string): string => text;
 
 interface AnsiMarkdownStyle {
   readonly enabled: boolean;
@@ -44,28 +43,22 @@ interface AnsiMarkdownStyle {
   sgr(code: number): string;
 }
 
-const ColorAnsiStyle: AnsiMarkdownStyle = {
-  enabled: true,
-  bold: pico.bold,
-  cyan: pico.cyan,
-  dim: pico.dim,
-  gray: pico.gray,
-  underline: pico.underline,
-  sgr,
-};
-
-const PlainAnsiStyle: AnsiMarkdownStyle = {
-  enabled: false,
-  bold: plain,
-  cyan: plain,
-  dim: plain,
-  gray: plain,
-  underline: plain,
-  sgr: () => '',
-};
-
+// One color gate for the whole package: picocolors' `createColors(false)` hands
+// back identity functions, so there's no need to keep parallel on/off style
+// objects — same pattern as `runtime/style.ts`'s `createCliStyle`. Raw SGR codes
+// (strong/em/strikethrough/link) can't be neutered by `createColors`, so `sgr`
+// stays explicitly gated.
 function ansiMarkdownStyle(colorEnabled: boolean): AnsiMarkdownStyle {
-  return colorEnabled ? ColorAnsiStyle : PlainAnsiStyle;
+  const c = pico.createColors(colorEnabled);
+  return {
+    enabled: colorEnabled,
+    bold: c.bold,
+    cyan: c.cyan,
+    dim: c.dim,
+    gray: c.gray,
+    underline: c.underline,
+    sgr: colorEnabled ? sgr : () => '',
+  };
 }
 
 function highlightForTui(
