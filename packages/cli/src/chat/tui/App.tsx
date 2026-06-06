@@ -125,6 +125,7 @@ export function allocateMiddleRows({
   inputVisible = true,
   queuedFollowUpPanelRows = 0,
   reverseSearchOpen,
+  reserveTranscriptRows = true,
   rows,
   slashPaletteOpen,
   streamTabsVisible = true,
@@ -136,6 +137,7 @@ export function allocateMiddleRows({
   readonly inputVisible?: boolean;
   readonly queuedFollowUpPanelRows?: number;
   readonly reverseSearchOpen: boolean;
+  readonly reserveTranscriptRows?: boolean;
   readonly rows: number;
   readonly slashPaletteOpen: boolean;
   readonly streamTabsVisible?: boolean;
@@ -169,6 +171,7 @@ export function allocateMiddleRows({
   }
 
   const transcriptRows =
+    reserveTranscriptRows &&
     availableRows >= MIN_FOREGROUND_ROWS_WITH_TRANSCRIPT
       ? Math.min(FOREGROUND_TRANSCRIPT_ROWS, availableRows - 1)
       : 0;
@@ -441,7 +444,11 @@ export function App(props: AppProps): React.JSX.Element {
     transcriptViewerOpen;
   const inputDisabled = props.inputDisabled === true || foregroundOpen;
   const inputBarVisible = !foregroundOpen;
-  const viewportKey = transcriptViewportKey({ activeStreamId, parentStream });
+  const viewportKey = transcriptViewportKey({
+    activeStreamId,
+    parentStream,
+    transcriptViewerStreamId,
+  });
   const scopedTranscript = isScopedTranscriptViewport(viewportKey);
   const scrollbackStreamId = staticScrollbackStreamId({
     activeStreamId,
@@ -558,6 +565,7 @@ export function App(props: AppProps): React.JSX.Element {
     inputVisible: inputBarVisible,
     queuedFollowUpPanelRows,
     reverseSearchOpen,
+    reserveTranscriptRows: foregroundKind !== 'transcript',
     rows,
     slashPaletteOpen,
     streamTabsVisible,
@@ -741,7 +749,7 @@ export function App(props: AppProps): React.JSX.Element {
       )}
       <Box flexDirection="column">
         <Box flexDirection="column" overflowY="hidden">
-          {conversationRows > 0 ? (
+          {!transcriptViewerOpen && conversationRows > 0 ? (
             <ConversationPane
               colorEnabled={props.colorEnabled}
               mode={scopedTranscript ? 'scoped-history' : 'live-pending'}
