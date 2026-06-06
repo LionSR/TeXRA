@@ -179,6 +179,41 @@ describe('CLI orchestration items', () => {
     expect(items[2]?.description).toBe('orchestrator; resumable; no input');
   });
 
+  it('hides delegated child executions from startup recent rows', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [],
+      history: [
+        historyEntry('aaaaaaaaaaaa', {
+          agent: 'search',
+          status: CLI_HISTORY_RESUMABLE_STATUS,
+          parentExecutionId: 'root-session' as ExecutionId,
+          delegationDepth: 1,
+        }),
+        historyEntry('bbbbbbbbbbbb', {
+          agent: 'review',
+          status: CLI_HISTORY_RESUMABLE_STATUS,
+          delegationDepth: 1,
+        }),
+        historyEntry('cccccccccccc', {
+          agent: 'orchestrator',
+          status: CLI_HISTORY_RESUMABLE_STATUS,
+        }),
+      ],
+      toolUseAgents: [
+        toolUseAgent('search'),
+        toolUseAgent('review'),
+        toolUseAgent('orchestrator'),
+      ],
+    });
+
+    expect(items.map((item) => item.label)).toEqual([
+      'New chat',
+      'Resume cccccccccccc',
+      'Chat with orchestrator',
+      'Help',
+    ]);
+  });
+
   it('does not list completed executions as resume launcher rows', () => {
     const items = buildCliOrchestrationItems({
       presetPlans: [],

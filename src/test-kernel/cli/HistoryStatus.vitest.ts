@@ -11,6 +11,7 @@ import {
   resumableCliHistoryEntries,
   readCliHistoryDetails,
   resolveCliHistoryStatus,
+  userStartedCliHistoryEntries,
 } from '@cli/runtime/history';
 import { EXECUTION_STATUS, type ExecutionId } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
@@ -79,6 +80,17 @@ describe('CLI history status formatting', () => {
     ).toEqual([{ id: 'resume-me', status: CLI_HISTORY_RESUMABLE_STATUS }]);
   });
 
+  it('filters history entries to user-started sessions only', () => {
+    expect(
+      userStartedCliHistoryEntries([
+        { id: 'root' },
+        { id: 'root-with-depth', delegationDepth: 0 },
+        { id: 'child-with-parent', parentExecutionId: 'root' as ExecutionId },
+        { id: 'child-with-depth', delegationDepth: 1 },
+      ]),
+    ).toEqual([{ id: 'root' }, { id: 'root-with-depth', delegationDepth: 0 }]);
+  });
+
   it('keeps legacy terminal-status-free entries completed when no flow remains', () => {
     expect(resolveCliHistoryStatus({ hasFlowRecord: false })).toBe(
       EXECUTION_STATUS.COMPLETED,
@@ -92,6 +104,7 @@ describe('CLI history status formatting', () => {
       meta: {
         timestamp: '2026-06-03T05:03:06.717Z',
         category: 'toolUse',
+        delegationDepth: 0,
       },
       config: null,
       resultMeta: null,
@@ -102,6 +115,7 @@ describe('CLI history status formatting', () => {
     });
 
     expect(text).toContain('Status: resumable');
+    expect(text).toContain('Delegation depth: 0');
     expect(text).toContain('Resumable flow record: present');
     expect(text).not.toContain(`Status: ${EXECUTION_STATUS.COMPLETED}`);
   });
