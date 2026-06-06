@@ -1,4 +1,4 @@
-import { GlobalStateKey } from '@common/state/stateKeys';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { escapeRegExp } from '@utils/core/stringCore';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { StateStore } from '@platform/interfaces/state';

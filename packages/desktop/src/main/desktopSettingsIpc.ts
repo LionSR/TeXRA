@@ -17,7 +17,7 @@ import {
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { MAX_TIER, ULTRA_TIER } from '@auth/sharedConfig';
-import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   API_PROVIDERS,
   apiKeySecretName,

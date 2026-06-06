@@ -10,7 +10,7 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { getGlobalState, getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
-import { GlobalStateKey, WorkspaceStateKey } from '@common/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import * as logger from '@logger/logUtils';
 import type { AgentOptionData } from '@shared/schemas';
 import { AgentSource } from '@shared/schemas/agent';
