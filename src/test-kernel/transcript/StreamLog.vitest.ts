@@ -50,10 +50,15 @@ describe('StreamLog', () => {
     });
     expect(log.hasRunningGroup).toBe(false);
 
+    expect(log.getDirtyUpdates().map((entry) => entry.id)).toEqual([
+      'run',
+      'message-2500',
+    ]);
     expect(log.drainDirtyUpdates().map((entry) => entry.id)).toEqual([
       'run',
       'message-2500',
     ]);
+    expect(log.getDirtyUpdates()).toEqual([]);
   });
 
   it('does not mark no-op updates dirty', () => {

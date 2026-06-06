@@ -8,7 +8,6 @@ import { isInFlightStatus } from '@common/constants/streamStatus';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
-import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 import {
   WebviewUpdater,
   type LogContentExtras,
@@ -28,6 +27,7 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
+import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
 import { OdysseyStore, isOdysseyInFlight } from '@tools/odyssey';
 import {
   isApprovalBypassedForStream,
