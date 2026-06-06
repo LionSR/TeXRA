@@ -1,5 +1,3 @@
-import * as vscode from 'vscode';
-
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   AgentCategoryFilter,
@@ -28,6 +26,10 @@ import {
 } from '@shared/progressView/backend/state/ProgressViewState';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import type { OdysseyStatus } from '@tools/odyssey';
+
+export type ProgressViewMessageSender = (
+  message: ProgressViewOutboundMessage,
+) => void;
 
 /**
  * Extra content to include with log updates.
@@ -87,18 +89,18 @@ export interface SyncStreamContentPayload {
  * Targets a single active webview at a time (sidebar OR editor panel).
  */
 export class WebviewUpdater {
-  constructor(private getWebviews: () => (vscode.Webview | undefined)[]) {}
+  constructor(
+    private readonly send: ProgressViewMessageSender,
+    private readonly hasTarget: () => boolean,
+  ) {}
 
   /**
    * Helper to send typed messages to the current active webview target.
    * Uses ProgressViewOutboundMessage union type for compile-time safety.
    */
   private sendMessage(message: ProgressViewOutboundMessage): void {
-    for (const webview of this.getWebviews()) {
-      if (webview) {
-        webview.postMessage(message);
-      }
-    }
+    if (!this.hasTarget()) return;
+    this.send(message);
   }
 
   /**
@@ -463,6 +465,6 @@ export class WebviewUpdater {
   }
 
   isAvailable(): boolean {
-    return this.getWebviews().some((w) => w !== undefined);
+    return this.hasTarget();
   }
 }
