@@ -8,7 +8,7 @@
  */
 
 import { tryGlobalState } from '@platform/platform';
-import { GlobalStateKey } from '@common/state/stateKeys';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getConfig } from '@utils/config';
 
 /**

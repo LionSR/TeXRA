@@ -11,8 +11,8 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import type { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import { createModelHandler } from '@agent/runtime/ModelFactory';
 import { getGlobalState } from '@agent/core/stateStore';
-import { GlobalStateKey } from '@common/state/stateKeys';
 import { getModelUnavailableReason } from '@model/computeModelOptions';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { isNonEmptyString } from '@utils/core';
 

@@ -1,7 +1,6 @@
 import pMap from 'p-map';
 
 import { KVStore } from '@common/storage/KVStore';
-import { WorkspaceStateKey } from '@common/state/stateKeys';
 import * as log from '@logger/logUtils';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import {
@@ -11,6 +10,7 @@ import {
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { filterNotNull, isFiniteNumber, isObject } from '@utils/core';
 
 import {

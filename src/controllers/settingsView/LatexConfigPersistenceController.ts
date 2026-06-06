@@ -1,5 +1,5 @@
 // Local imports - state keys
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 // Local imports - shared constants
 import {
