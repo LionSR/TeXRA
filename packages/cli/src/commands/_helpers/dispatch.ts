@@ -83,6 +83,67 @@ export function reorderGlobalFlags(rawArgs: readonly string[]): string[] {
   return [...rawArgs.slice(restIndex), ...leadingGlobals];
 }
 
+export interface NestedGlobalFlagGroup {
+  readonly command: string;
+  readonly subCommands: readonly string[];
+}
+
+function firstPositionalIndex(rawArgs: readonly string[]): number | undefined {
+  for (let i = 0; i < rawArgs.length; ) {
+    const arg = rawArgs[i];
+    if (arg === undefined || arg === '--') return undefined;
+    if (!arg.startsWith('-')) return i;
+
+    const tokenCount = knownGlobalFlagTokenCount(rawArgs, i);
+    if (tokenCount === undefined) return undefined;
+    i += tokenCount;
+  }
+  return undefined;
+}
+
+/**
+ * Citty repeats the same routing behavior at nested command groups: parent
+ * args before an explicit child help find the child but are not forwarded to
+ * the child parser. Move known global flags from `texra auth --output-format
+ * json status`-style positions to `texra auth status --output-format json`,
+ * while leaving default subcommands untouched.
+ */
+export function reorderNestedGlobalFlags(
+  rawArgs: readonly string[],
+  group: NestedGlobalFlagGroup,
+): string[] {
+  const commandIndex = firstPositionalIndex(rawArgs);
+  if (commandIndex === undefined || rawArgs[commandIndex] !== group.command) {
+    return [...rawArgs];
+  }
+
+  const afterCommand = rawArgs.slice(commandIndex + 1);
+  const { leadingGlobals, restIndex, stoppedOnUnknownFlag } =
+    collectLeadingGlobalFlags(afterCommand);
+  if (
+    stoppedOnUnknownFlag ||
+    leadingGlobals.length === 0 ||
+    restIndex >= afterCommand.length
+  ) {
+    return [...rawArgs];
+  }
+
+  const explicitSubCommand = afterCommand[restIndex];
+  if (
+    explicitSubCommand === undefined ||
+    !group.subCommands.includes(explicitSubCommand)
+  ) {
+    return [...rawArgs];
+  }
+
+  return [
+    ...rawArgs.slice(0, commandIndex + 1),
+    explicitSubCommand,
+    ...leadingGlobals,
+    ...afterCommand.slice(restIndex + 1),
+  ];
+}
+
 export function normalizeRootShortcuts(rawArgs: readonly string[]): string[] {
   const { leadingGlobals, restIndex } = collectLeadingGlobalFlags(rawArgs);
   const shortcut = rawArgs[restIndex];

@@ -17,6 +17,7 @@ import {
   isCliError,
   normalizeRootShortcuts,
   reorderGlobalFlags,
+  reorderNestedGlobalFlags,
   resolveDeepestSubCommand,
   setUsageColorOverrideFromRawArgs,
   showUsage,
@@ -29,7 +30,12 @@ import { getExitCode, resetExitCode } from './_helpers/exitCode';
 import { ROOT_ROUTING_ARGS } from './_helpers/globalArgs';
 
 import { agentsCommand } from './agents';
-import { authCommand, loginCommand, logoutCommand } from './auth';
+import {
+  AUTH_SUBCOMMAND_NAMES,
+  authCommand,
+  loginCommand,
+  logoutCommand,
+} from './auth';
 import { chatCommand } from './chat';
 import { completionCommand } from './completion';
 import { doctorCommand } from './doctor';
@@ -135,8 +141,11 @@ export async function runCli(
   argv?: readonly string[],
 ): Promise<{ exitCode: number }> {
   resetExitCode();
-  const rawArgs = reorderGlobalFlags(
-    normalizeRootShortcuts(argv ? [...argv] : readCliArgv()),
+  const rawArgs = reorderNestedGlobalFlags(
+    reorderGlobalFlags(
+      normalizeRootShortcuts(argv ? [...argv] : readCliArgv()),
+    ),
+    { command: 'auth', subCommands: AUTH_SUBCOMMAND_NAMES },
   );
   setUsageColorOverrideFromRawArgs(rawArgs);
 
