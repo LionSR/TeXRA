@@ -473,9 +473,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         getExecutionId: (stream) =>
           this.provider.state.meta.getExecutionId(stream),
         getOutputFiles: (stream) =>
-          this.provider.state.outputFiles.getFiles(stream),
+          this.provider.state.snapshots.getOutputFiles(stream),
         getKnownWorkspaceOutputPaths: (stream) =>
-          this.provider.state.outputFiles.getKnownFilePaths(stream, {
+          this.provider.state.snapshots.getKnownFilePaths(stream, {
             workspaceOnly: true,
           }),
       },
@@ -498,7 +498,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         getExecutionId: (stream) =>
           this.provider.state.meta.getExecutionId(stream),
         getOutputFiles: (stream) =>
-          this.provider.state.outputFiles.getFiles(stream),
+          this.provider.state.snapshots.getOutputFiles(stream),
         getAgentModel: (stream) => {
           const taskState = this.provider.state.meta.getTaskState(stream);
           return taskState
@@ -868,7 +868,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     const taskState = this.provider.state.meta.getTaskState(data.stream);
     const outputFiles = [
-      ...this.provider.state.outputFiles.getFiles(data.stream).values(),
+      ...this.provider.state.snapshots.getOutputFiles(data.stream).values(),
     ].flat();
     const { modelOptions } = await loadOptions();
 
@@ -890,7 +890,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleRunCompileFixer(streamId: StreamTabId): Promise<void> {
     const taskState = this.provider.state.meta.getTaskState(streamId);
     const compileFailures = [
-      ...this.provider.state.outputFiles.getCompileFailures(streamId).values(),
+      ...this.provider.state.snapshots.getCompileFailures(streamId).values(),
     ].flat();
     const { modelOptions } = await loadOptions();
 
@@ -899,7 +899,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         streamId,
         taskState,
         compileFailures,
-        runOutputs: this.provider.state.outputFiles.getFiles(streamId),
+        runOutputs: this.provider.state.snapshots.getOutputFiles(streamId),
         modelOptions,
         executionId: this.provider.state.meta.getExecutionId(streamId),
       }),

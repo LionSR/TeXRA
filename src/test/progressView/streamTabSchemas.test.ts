@@ -2,7 +2,7 @@
 import { strict as assert } from 'assert';
 
 // Local imports
-import { selectPreferredLegacyInstruction } from '@progressView/persistence/streamTabSchemas';
+import { selectPreferredLegacyInstruction } from '@shared/schemas';
 
 describe('selectPreferredLegacyInstruction', () => {
   it('prefers the explicitly selected legacy run when available', () => {

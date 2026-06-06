@@ -32,55 +32,40 @@ import {
   OutputFilesDataSchema,
   PersistedWorkPlanSchema,
   RoundKeySchema,
+  StreamTabMetaSchema,
   StreamSnapshotSchema,
   sumUsageStats,
   TokenUsageStatsParsingSchema,
   UsageDataSchema,
   WorkPlanSnapshotSchema,
   type CompileFailure,
-  type ExecutionId,
   type OutputFileInfo,
   type Plan,
   type StorageKey,
+  type StreamTabMeta,
   type StreamSnapshot,
   type StreamTabId,
   type TodoItem,
   type TokenUsageStats,
+  type WorkPlanSnapshot,
 } from '@shared/schemas';
 
 import { STREAM_DATA_KEYS, streamDataDir } from './streamDataPaths';
-
-// ============================================================================
-// In-memory shapes (mirror the managers being consolidated)
-// ============================================================================
-
-interface WorkPlanState {
-  todos: TodoItem[];
-  plan: Plan | null;
-  planSummary: string | null;
-}
-
-interface MetaState {
-  taskState?: TaskState;
-  executionId?: ExecutionId;
-  parentStreamId?: StreamTabId;
-  description?: string;
-}
-
-/** Minimal on-disk meta shape (mirrors the extension's StreamTabMetaSchema). */
-interface MetaFile {
-  activeRunId?: string | null;
-  parentStreamId?: string;
-  executionId?: string;
-  taskState?: unknown;
-  description?: string;
-}
 
 /** Serialize a Map to a plain string-keyed Record for JSON persistence. */
 function mapToRecord<K extends string | number, V>(
   map: Map<K, V>,
 ): Record<string, V> {
   return Object.fromEntries(Array.from(map, ([k, v]) => [String(k), v]));
+}
+
+/** Inverse of {@link mapToRecord} for round-keyed records. */
+function recordToRoundMap<V>(record: Record<string, V>): Map<number, V> {
+  const map = new Map<number, V>();
+  for (const [key, value] of Object.entries(record)) {
+    map.set(Number(key), value);
+  }
+  return map;
 }
 
 export class StreamSnapshotStore {
@@ -101,8 +86,8 @@ export class StreamSnapshotStore {
     StreamTabId,
     Map<string, TokenUsageStats>
   >();
-  private readonly workPlan = new Map<StreamTabId, WorkPlanState>();
-  private readonly meta = new Map<StreamTabId, MetaState>();
+  private readonly workPlan = new Map<StreamTabId, WorkPlanSnapshot>();
+  private readonly meta = new Map<StreamTabId, StreamTabMeta>();
 
   // -- Per (stream, category) serialized write chains -----------------------
   private readonly pendingWrites = new Map<string, Promise<void>>();
@@ -257,19 +242,98 @@ export class StreamSnapshotStore {
     this.write(stream, STREAM_DATA_KEYS.COMPILE_FAILURES, mapToRecord(rounds));
   }
 
-  /** Accumulate usage per run (mirrors UsageStatsManager.setRunUsage). */
+  /**
+   * Accumulate usage per run (mirrors UsageStatsManager.setRunUsage). Returns
+   * the accumulated value for the run so callers can forward it to the UI.
+   */
   addUsage(
     stream: StreamTabId,
     storageKey: StorageKey,
     usage: TokenUsageStats,
-  ): void {
+  ): TokenUsageStats | undefined {
     const delta = TokenUsageStatsParsingSchema.parse(usage);
-    if (isEmptyUsage(delta)) return;
     const current = this.usage.get(stream) ?? new Map<string, TokenUsageStats>();
+    if (isEmptyUsage(delta)) return current.get(storageKey);
     const existing = current.get(storageKey) ?? emptyUsageStats();
-    current.set(storageKey, sumUsageStats([existing, delta]));
+    const accumulated = sumUsageStats([existing, delta]);
+    current.set(storageKey, accumulated);
     this.usage.set(stream, current);
     this.write(stream, STREAM_DATA_KEYS.USAGE_STATS, mapToRecord(current));
+    return accumulated;
+  }
+
+  // ==========================================================================
+  // Read accessors over in-memory accumulated state (replace manager getters)
+  // ==========================================================================
+
+  getOutputFiles(stream: StreamTabId): Map<number, OutputFileInfo[]> {
+    return new Map(this.outputFiles.get(stream) ?? []);
+  }
+
+  getMissingOutputs(stream: StreamTabId): Map<number, string[]> {
+    return new Map(this.missingOutputs.get(stream) ?? []);
+  }
+
+  getCompileFailures(stream: StreamTabId): Map<number, CompileFailure[]> {
+    return new Map(this.compileFailures.get(stream) ?? []);
+  }
+
+  getRunUsage(stream: StreamTabId): Map<string, TokenUsageStats> {
+    return new Map(this.usage.get(stream) ?? []);
+  }
+
+  /** Flattened set of known output-file paths for a stream. */
+  getKnownFilePaths(
+    stream: StreamTabId,
+    options: { workspaceOnly?: boolean } = {},
+  ): Set<string> {
+    const paths = new Set<string>();
+    const rounds = this.outputFiles.get(stream);
+    if (!rounds) return paths;
+    const workspaceOnly = options.workspaceOnly ?? false;
+    for (const infos of rounds.values()) {
+      for (const info of infos) {
+        if (!workspaceOnly || info.location.kind === 'workspace') {
+          paths.add(info.location.absolutePath);
+        }
+      }
+    }
+    return paths;
+  }
+
+  /** Clear the missing-outputs marker for a stream (memory + disk). */
+  clearMissingOutputs(stream: StreamTabId): void {
+    if (!this.missingOutputs.delete(stream)) return;
+    this.write(stream, STREAM_DATA_KEYS.MISSING_OUTPUTS, {});
+  }
+
+  // ==========================================================================
+  // Lifecycle (replace manager evict/evictAll)
+  // ==========================================================================
+
+  /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
+  evict(stream: StreamTabId): void {
+    this.outputFiles.delete(stream);
+    this.missingOutputs.delete(stream);
+    this.compileFailures.delete(stream);
+    this.usage.delete(stream);
+    this.workPlan.delete(stream);
+    this.meta.delete(stream);
+    this.kvCache.delete(stream);
+    for (const key of [...this.pendingWrites.keys()]) {
+      if (key.startsWith(`${stream}::`)) this.pendingWrites.delete(key);
+    }
+  }
+
+  evictAll(): void {
+    this.outputFiles.clear();
+    this.missingOutputs.clear();
+    this.compileFailures.clear();
+    this.usage.clear();
+    this.workPlan.clear();
+    this.meta.clear();
+    this.kvCache.clear();
+    this.pendingWrites.clear();
   }
 
   setTodos(stream: StreamTabId, todos: TodoItem[]): void {
@@ -288,17 +352,18 @@ export class StreamSnapshotStore {
     this.writeWorkPlan(stream, next);
   }
 
-  private getWorkPlan(stream: StreamTabId): WorkPlanState {
+  private getWorkPlan(stream: StreamTabId): WorkPlanSnapshot {
     return (
       this.workPlan.get(stream) ?? { todos: [], plan: null, planSummary: null }
     );
   }
 
-  private patchMeta(stream: StreamTabId, patch: Partial<MetaState>): void {
-    const next = { ...(this.meta.get(stream) ?? {}), ...patch };
+  private patchMeta(stream: StreamTabId, patch: Partial<StreamTabMeta>): void {
+    const next: StreamTabMeta = { ...(this.meta.get(stream) ?? {}), ...patch };
     this.meta.set(stream, next);
-    const file: MetaFile = {
-      ...(next.taskState && { taskState: next.taskState }),
+    // activeRunId is legacy and never re-written.
+    const file: StreamTabMeta = {
+      ...(next.taskState !== undefined && { taskState: next.taskState }),
       ...(next.executionId && { executionId: next.executionId }),
       ...(next.parentStreamId && { parentStreamId: next.parentStreamId }),
       ...(next.description && { description: next.description }),
@@ -310,7 +375,7 @@ export class StreamSnapshotStore {
   // Writes — serialized per (stream, category), evict-safe
   // ==========================================================================
 
-  private writeWorkPlan(stream: StreamTabId, plan: WorkPlanState): void {
+  private writeWorkPlan(stream: StreamTabId, plan: WorkPlanSnapshot): void {
     this.write(
       stream,
       STREAM_DATA_KEYS.WORK_PLAN,
@@ -357,11 +422,18 @@ export class StreamSnapshotStore {
    * empty (but valid) snapshot when no sidecar exists yet. Liveness fields stay
    * at their defaults — callers layer log-derived + clamped-live state on top.
    */
+  private async readMetaFile(
+    kv: KVStore,
+  ): Promise<StreamTabMeta | undefined> {
+    const raw = await this.tryRead(kv, STREAM_DATA_KEYS.META);
+    if (raw === undefined) return undefined;
+    const parsed = StreamTabMetaSchema.safeParse(raw);
+    return parsed.success ? parsed.data : undefined;
+  }
+
   async read(streamId: StreamTabId): Promise<StreamSnapshot> {
     const kv = this.kv(streamId);
-    const metaRaw = (await this.tryRead(kv, STREAM_DATA_KEYS.META)) as
-      | MetaFile
-      | undefined;
+    const metaRaw = await this.readMetaFile(kv);
     const activeRunId = metaRaw?.activeRunId ?? undefined;
 
     const flatten = async <T>(
@@ -429,6 +501,18 @@ export class StreamSnapshotStore {
   async load(streamIds: readonly StreamTabId[]): Promise<void> {
     for (const streamId of streamIds) {
       const snap = await this.read(streamId);
+      this.outputFiles.set(
+        streamId,
+        recordToRoundMap(snap.outputFilesByRound),
+      );
+      this.missingOutputs.set(
+        streamId,
+        recordToRoundMap(snap.missingOutputsByRound),
+      );
+      this.compileFailures.set(
+        streamId,
+        recordToRoundMap(snap.compileFailuresByRound),
+      );
       this.usage.set(
         streamId,
         new Map(
@@ -440,15 +524,15 @@ export class StreamSnapshotStore {
         plan: snap.plan,
         planSummary: snap.planSummary,
       });
+      const meta = await this.readMetaFile(this.kv(streamId));
+      if (meta) this.meta.set(streamId, meta);
     }
   }
 
   /** Returns the resolved task state for a resumed stream, if persisted. */
   async readTaskState(streamId: StreamTabId): Promise<TaskState | undefined> {
-    const metaRaw = (await this.tryRead(this.kv(streamId), STREAM_DATA_KEYS.META)) as
-      | MetaFile
-      | undefined;
-    if (!metaRaw?.taskState) return undefined;
+    const metaRaw = await this.readMetaFile(this.kv(streamId));
+    if (metaRaw?.taskState === undefined) return undefined;
     const parsed = TaskStateSchema.safeParse(metaRaw.taskState);
     return parsed.success ? (parsed.data as TaskState) : undefined;
   }

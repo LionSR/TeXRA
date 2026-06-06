@@ -141,48 +141,42 @@ export class ProgressEventHandler {
         },
         extensionDeactivating: () => this.markAllRunningTasksAsCancelled(),
         // Output events — workflow tabs hold one run; ignore the storageKey dim.
-        addOutputFiles: async (ctx, { streamId, filesByRound }) => {
-          await ctx.state.outputFiles.addFiles(streamId, filesByRound);
+        addOutputFiles: (ctx, { streamId, filesByRound }) => {
+          ctx.state.snapshots.addOutputFiles(streamId, filesByRound);
           this.sendIfActive(streamId, () => {
-            const rounds = ctx.state.outputFiles.getFiles(streamId);
+            const rounds = ctx.state.snapshots.getOutputFiles(streamId);
             ctx.webviewUpdater.updateFiles(streamId, {
               rounds: rounds.size ? mapToRecord(rounds) : undefined,
             });
           });
         },
-        updateMissingOutputs: async (ctx, { streamId, filesByRound }) => {
-          await ctx.state.outputFiles.updateMissingOutputs(
-            streamId,
-            filesByRound,
-          );
+        updateMissingOutputs: (ctx, { streamId, filesByRound }) => {
+          ctx.state.snapshots.updateMissingOutputs(streamId, filesByRound);
           this.sendIfActive(streamId, () => {
-            const rounds = ctx.state.outputFiles.getMissingOutputs(streamId);
+            const rounds = ctx.state.snapshots.getMissingOutputs(streamId);
             ctx.webviewUpdater.updateMissingOutputs(streamId, {
               rounds: rounds.size ? mapToRecord(rounds) : undefined,
             });
           });
         },
-        updateCompileFailures: async (ctx, { streamId, filesByRound }) => {
-          await ctx.state.outputFiles.updateCompileFailures(
-            streamId,
-            filesByRound,
-          );
+        updateCompileFailures: (ctx, { streamId, filesByRound }) => {
+          ctx.state.snapshots.updateCompileFailures(streamId, filesByRound);
           this.sendIfActive(streamId, () => {
-            const rounds = ctx.state.outputFiles.getCompileFailures(streamId);
+            const rounds = ctx.state.snapshots.getCompileFailures(streamId);
             ctx.webviewUpdater.updateCompileFailures(streamId, {
               rounds: rounds.size ? mapToRecord(rounds) : undefined,
               reset: true,
             });
           });
         },
-        clearMissingOutputs: async (ctx, payload) => {
+        clearMissingOutputs: (ctx, payload) => {
           const targets: StreamTabId[] = payload.streamId
             ? [payload.streamId]
             : payload.streamConfig
               ? ctx.state.meta.findWorkflowStreamsMatching(payload.streamConfig)
               : [];
           for (const streamId of targets) {
-            await ctx.state.outputFiles.clearMissingOutputs(streamId);
+            ctx.state.snapshots.clearMissingOutputs(streamId);
             this.sendIfActive(streamId, () =>
               ctx.webviewUpdater.updateMissingOutputs(streamId, {
                 reset: true,
@@ -192,8 +186,8 @@ export class ProgressEventHandler {
         },
         // Usage events — workflow tabs collapse to a single accumulated value;
         // tool-use tabs keep per-run accumulation (resume produces multiple runs).
-        updateStreamUsage: async (ctx, { streamId, usage, storageKey }) => {
-          const accumulated = await ctx.state.usageStats.setRunUsage(
+        updateStreamUsage: (ctx, { streamId, usage, storageKey }) => {
+          const accumulated = ctx.state.snapshots.addUsage(
             streamId,
             storageKey,
             usage,
@@ -547,18 +541,20 @@ export class ProgressEventHandler {
     stream: StreamTabId,
   ): import('@progressView/managers/WebviewUpdater').LogContentExtras {
     // Workflow files/missing outputs are flat (one run per tab).
-    const workflowFiles = mapToRecord(this.state.outputFiles.getFiles(stream));
+    const workflowFiles = mapToRecord(
+      this.state.snapshots.getOutputFiles(stream),
+    );
     const workflowMissingOutputs = mapToRecord(
-      this.state.outputFiles.getMissingOutputs(stream),
+      this.state.snapshots.getMissingOutputs(stream),
     );
     const workflowCompileFailures = mapToRecord(
-      this.state.outputFiles.getCompileFailures(stream),
+      this.state.snapshots.getCompileFailures(stream),
     );
 
     // Per-run usage map — shared by workflow and tool-use. Frontend derives
     // sessionUsage as the sum so cumulative totals survive resume.
     const runUsage = Object.fromEntries(
-      this.state.usageStats.getRunUsage(stream).entries(),
+      this.state.snapshots.getRunUsage(stream).entries(),
     ) as Record<string, TokenUsageStats>;
 
     const contextState = this.state.getContextState(stream);

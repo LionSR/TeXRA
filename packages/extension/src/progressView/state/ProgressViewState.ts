@@ -4,6 +4,7 @@ import {
   flushPendingRunTraces,
   setDefaultStreamLogStore,
   StreamLogStore,
+  StreamSnapshotStore,
 } from '@transcript';
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
@@ -13,8 +14,6 @@ import { toErrorMessage } from '@common/errors';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
-import { OutputFilesManager } from '@progressView/managers/OutputFilesManager';
-import { UsageStatsManager } from '@progressView/managers/UsageStatsManager';
 import { StreamMetaManager } from '@progressView/managers/StreamMetaManager';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import {
@@ -117,8 +116,8 @@ export function cleanupToolUseAgentRegistry(meta: StreamMetaManager): void {
 export class ProgressViewState {
   // -- Persistence managers ---------------------------------------------------
   readonly streamLogs: StreamLogStore;
-  readonly outputFiles: OutputFilesManager;
-  readonly usageStats: UsageStatsManager;
+  /** Owns output files, missing outputs, compile failures, and per-run usage. */
+  readonly snapshots: StreamSnapshotStore;
   readonly meta: StreamMetaManager;
 
   // -- Preferences ------------------------------------------------------------
@@ -146,8 +145,7 @@ export class ProgressViewState {
     );
     this.streamLogs = new StreamLogStore();
     setDefaultStreamLogStore(this.streamLogs);
-    this.outputFiles = new OutputFilesManager();
-    this.usageStats = new UsageStatsManager();
+    this.snapshots = new StreamSnapshotStore();
     this.meta = new StreamMetaManager();
   }
 
@@ -330,8 +328,7 @@ export class ProgressViewState {
   async clearStream(stream: StreamTabId): Promise<void> {
     // Clear in-memory state
     StreamStatusService.clear(stream, { emit: false });
-    this.outputFiles.evict(stream);
-    this.usageStats.evict(stream);
+    this.snapshots.evict(stream);
     this.meta.evict(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
@@ -361,8 +358,7 @@ export class ProgressViewState {
 
     // Clear in-memory state
     StreamStatusService.clearAll({ emit: false });
-    this.outputFiles.evictAll();
-    this.usageStats.evictAll();
+    this.snapshots.evictAll();
     this.meta.evictAll();
     this._sessionState.clear();
     this._streamStates.clear();
@@ -433,8 +429,7 @@ export class ProgressViewState {
     await Promise.all([
       this.streamLogs.flush(),
       this.meta.flush(),
-      this.outputFiles.flush(),
-      this.usageStats.flush(),
+      this.snapshots.flush(),
     ]);
   }
 
@@ -442,8 +437,7 @@ export class ProgressViewState {
 
   private async loadManagers(streamIds: StreamTabId[]): Promise<void> {
     await Promise.all([
-      this.outputFiles.load(streamIds),
-      this.usageStats.load(streamIds),
+      this.snapshots.load(streamIds),
       this.meta.load(streamIds),
     ]);
   }

@@ -14,14 +14,12 @@ import {
   StorageRecordSchema,
   type StreamTabId,
   type TokenUsageStats,
+  type StreamTabMeta,
+  type OutputFilesRecord,
+  type MissingOutputsRecord,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
 import { getStreamTabStore, mapStreamTabStorage } from './StreamTabStore';
-import type {
-  StreamTabMeta,
-  OutputFilesRecord,
-  MissingOutputsRecord,
-} from './streamTabSchemas';
 import type { MementoStorage } from './PersistentMapManager';
 
 /**

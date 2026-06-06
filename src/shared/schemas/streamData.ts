@@ -34,6 +34,29 @@ import { TokenUsageStatsSchema, type TokenUsageStats } from './usage';
 export const RoundKeySchema = z.coerce.number().int();
 
 // ============================================================================
+// Per-stream meta file (streamData/{id}/meta.json) — single source of truth
+// ============================================================================
+
+/**
+ * On-disk shape of `meta.json`. `taskState` is kept as `unknown` here so this
+ * schema stays `@agent`-free and can live in `@shared/schemas`; consumers that
+ * need the typed value parse it with `TaskStateSchema` (which depends on
+ * `@agent`). This is THE definition — `StreamTabStore`, `StreamMetaManager`, and
+ * the core `StreamSnapshotStore` all import it directly, never their own copy.
+ */
+export const StreamTabMetaSchema = z.object({
+  /** Legacy field — no longer written, tolerated on read so we can skip it. */
+  activeRunId: z.string().nullable().optional(),
+  parentStreamId: z.string().optional(),
+  executionId: z.string().optional(),
+  taskState: z.unknown().optional(),
+  /** AI-generated session description, mirrored from ExecutionMeta. */
+  description: z.string().optional(),
+});
+
+export type StreamTabMeta = z.infer<typeof StreamTabMetaSchema>;
+
+// ============================================================================
 // Legacy instructions: { runId: { text, timestamp?, ... } }
 // ============================================================================
 

@@ -64,11 +64,7 @@ const plan: Plan = {
 describe('progress view work-plan hydration', () => {
   it('syncs todos and plan from the current package progress-view state', async () => {
     const state = new ProgressViewState(new MemoryMementoStorage());
-    await Promise.all([
-      state.outputFiles.load([]),
-      state.usageStats.load([]),
-      state.meta.load([]),
-    ]);
+    await Promise.all([state.snapshots.load([]), state.meta.load([])]);
     const messages: SyncStreamContentPayload[] = [];
     const updater = {
       isAvailable: () => true,

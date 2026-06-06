@@ -12,9 +12,8 @@ import {
   getStreamTabStore,
   mapStreamTabStorage,
 } from '@progressView/persistence/StreamTabStore';
-import type { StreamTabMeta } from '@progressView/persistence/streamTabSchemas';
 import { chainStreamWrite } from '@progressView/persistence/writeChaining';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId, StreamTabMeta } from '@shared/schemas';
 
 /**
  * Manages per-stream metadata with disk-backed persistence via meta.json.

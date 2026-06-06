@@ -27,12 +27,6 @@ import {
   encodeStreamId,
 } from '@transcript/streamDataPaths';
 
-import type {
-  CompileFailure,
-  OutputFileInfo,
-  StreamTabId,
-  TokenUsageStats,
-} from '@shared/schemas';
 import {
   StreamTabMetaSchema,
   LegacyInstructionsDataSchema,
@@ -43,13 +37,17 @@ import {
   flattenLegacyRuns,
   isLegacyNested,
   selectPreferredLegacyInstruction,
+  type CompileFailure,
+  type OutputFileInfo,
+  type StreamTabId,
+  type TokenUsageStats,
   type LegacyInstructionEntry,
   type StreamTabMeta,
   type OutputFilesRecord,
   type MissingOutputsRecord,
   type CompileFailuresRecord,
   type UsageStatsRecord,
-} from './streamTabSchemas';
+} from '@shared/schemas';
 
 // ============================================================================
 // Key constants

@@ -38,8 +38,7 @@ import {
 } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
 import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
-import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
-import { ExecutionIdSchema } from '@shared/schemas';
+import { ExecutionIdSchema, RoundKeySchema } from '@shared/schemas';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { getConfig } from '@utils/config';
