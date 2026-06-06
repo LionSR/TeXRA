@@ -56,12 +56,33 @@ export interface CliNoAvailableModelsRecoveryOptions {
   readonly personalModeAction?: string;
 }
 
+export interface CliNoRunnableModelsMessageOptions extends CliNoAvailableModelsRecoveryOptions {
+  readonly loginAction?: string;
+}
+
 export type NoRunnableModelAccessReason = CliApiMode | 'includedLoginRequired';
 
 const CLI_MODEL_AVAILABILITY_BY_API_MODE = {
   included: new Set<ModelAvailabilityKind>(['included-access']),
   personal: new Set<ModelAvailabilityKind>(['provider-key', 'openrouter-key']),
 } satisfies Record<CliApiMode, ReadonlySet<ModelAvailabilityKind>>;
+
+const NO_RUNNABLE_MODEL_ACCESS_SUMMARIES = {
+  includedLoginRequired: 'Included relay models require sign-in.',
+  included: 'No included relay models are runnable.',
+  personal: 'No personal API-key models are runnable.',
+} satisfies Record<NoRunnableModelAccessReason, string>;
+
+const NO_RUNNABLE_MODEL_ACCESS_LAUNCH_BLOCKS = {
+  includedLoginRequired: 'Sign in with texra login for included relay models',
+  included: 'No included relay models are runnable',
+  personal: 'No personal API-key models are runnable',
+} satisfies Record<NoRunnableModelAccessReason, string>;
+
+function startSentence(text: string): string {
+  if (text.length === 0) return text;
+  return `${text[0]!.toUpperCase()}${text.slice(1)}`;
+}
 
 function isCliModelOptionBasicallyAvailable(model: ModelOptionData): boolean {
   return model.disabled !== true && model.requiresKey !== true;
@@ -113,6 +134,44 @@ export function noRunnableModelAccessReason(
     return 'includedLoginRequired';
   }
   return apiMode;
+}
+
+function formatCliNoRunnableModelsSummary(
+  reason: NoRunnableModelAccessReason,
+): string {
+  return NO_RUNNABLE_MODEL_ACCESS_SUMMARIES[reason];
+}
+
+export function formatCliNoRunnableModelsLaunchBlock(
+  reason: NoRunnableModelAccessReason,
+): string {
+  return NO_RUNNABLE_MODEL_ACCESS_LAUNCH_BLOCKS[reason];
+}
+
+function formatCliNoRunnableModelsRecovery(
+  reason: NoRunnableModelAccessReason,
+  options: CliNoRunnableModelsMessageOptions = {},
+): string {
+  const includedModeAction =
+    options.includedModeAction ?? 'retry with `--api-mode included`';
+  const loginAction = options.loginAction ?? 'Run `texra login`';
+  const personalModeAction =
+    options.personalModeAction ?? 'retry with `--api-mode personal`';
+
+  if (reason === 'includedLoginRequired') {
+    return `${loginAction} or ${personalModeAction}.`;
+  }
+  if (reason === 'included') {
+    return `${startSentence(personalModeAction)} or try again later.`;
+  }
+  return `Configure a provider key or ${includedModeAction}.`;
+}
+
+export function formatCliNoRunnableModelsMessage(
+  reason: NoRunnableModelAccessReason,
+  options: CliNoRunnableModelsMessageOptions = {},
+): string {
+  return `${formatCliNoRunnableModelsSummary(reason)} ${formatCliNoRunnableModelsRecovery(reason, options)}`;
 }
 
 function formatModelAccessStatus(model: ModelOptionData): string {
