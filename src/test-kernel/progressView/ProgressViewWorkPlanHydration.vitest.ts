@@ -21,9 +21,9 @@ import type {
   SyncStreamContentPayload,
   WebviewUpdater,
 } from '@progressView/managers/WebviewUpdater';
-import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
-import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { Plan, TodoItem } from '@shared/schemas';
+import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
+import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import type { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
 
 class MemoryMementoStorage implements MementoStorage {

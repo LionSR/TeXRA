@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import type { StreamTabId } from '@shared/schemas';
 import {
   mapStreamTabStorage,
   STREAM_TAB_IO_CONCURRENCY,
-} from '@progressView/persistence/StreamTabStore';
-import type { StreamTabId } from '@shared/schemas';
+} from '@shared/progressView/backend/persistence/StreamTabStore';
 import { delay } from '@utils/core/async';
 
 describe('mapStreamTabStorage', () => {

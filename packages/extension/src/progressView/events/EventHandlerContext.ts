@@ -13,7 +13,7 @@
  */
 
 import type { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
-import type { ProgressViewState } from '@progressView/state/ProgressViewState';
+import type { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 
 export interface EventHandlerContext {
   /** Progress view state manager */

@@ -4,12 +4,12 @@ import { clearRetryRequest } from '@agent/runtime/runCoordinators';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { isInFlightStatus } from '@common/constants/streamStatus';
+import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
 import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
 } from '@tools/approval';
 
-import { buildStreamInfos } from '../streamInfoUtils';
 import type { ProgressStreamLifecycleHost as ProgressStreamLifecycleHostPort } from '@controllers/progressView/ProgressStreamLifecycleController';
 import type { ProgressViewProvider } from '../ProgressViewProvider';
 
