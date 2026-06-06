@@ -623,10 +623,20 @@ export class StreamSnapshotStore {
     });
   }
 
-  /** A stream's output files straight from disk (round → files). */
+  /**
+   * A stream's output files (round → files). Served from the seeded in-memory
+   * accumulators when available — the single source of truth — so a caller that
+   * already `load()`ed the stream doesn't re-read all sidecars from disk; only
+   * an unseeded stream falls back to a disk read.
+   */
   async readOutputFiles(
     streamId: StreamTabId,
   ): Promise<Map<number, OutputFileInfo[]>> {
+    const seedChain = this.seedChains.get(streamId);
+    if (seedChain) {
+      await seedChain;
+      return this.getOutputFiles(streamId);
+    }
     return (await readStreamData(this.kv(streamId))).outputFiles;
   }
 
