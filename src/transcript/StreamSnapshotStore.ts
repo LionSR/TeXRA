@@ -59,6 +59,7 @@ import {
 } from './streamDataPaths';
 import {
   assembleSnapshot,
+  EMPTY_WORK_PLAN,
   mapToRecord,
   readStreamData,
   type StreamData,
@@ -423,9 +424,7 @@ export class StreamSnapshotStore {
   }
 
   getWorkPlan(stream: StreamTabId): WorkPlanSnapshot {
-    return (
-      this.workPlan.get(stream) ?? { todos: [], plan: null, planSummary: null }
-    );
+    return this.workPlan.get(stream) ?? EMPTY_WORK_PLAN;
   }
 
   private patchMeta(stream: StreamTabId, patch: Partial<StreamTabMeta>): void {
@@ -463,10 +462,6 @@ export class StreamSnapshotStore {
       stream,
       executionId ? { taskState, executionId } : { taskState },
     );
-  }
-
-  setExecutionId(stream: StreamTabId, executionId: ExecutionId): void {
-    this.patchMeta(stream, { executionId });
   }
 
   setParentStream(

@@ -38,7 +38,9 @@ import { STREAM_DATA_KEYS } from './streamDataPaths';
 
 const CHANNEL = 'StreamSnapshotStore';
 
-const EMPTY_WORK_PLAN: WorkPlanSnapshot = {
+/** The canonical empty work plan (no todos, no plan). Single source for the
+ *  "no durable plan yet" value, reused by the store's in-memory default. */
+export const EMPTY_WORK_PLAN: WorkPlanSnapshot = {
   todos: [],
   plan: null,
   planSummary: null,

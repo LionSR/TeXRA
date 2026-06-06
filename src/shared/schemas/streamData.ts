@@ -304,12 +304,3 @@ export const UsageDataSchema = z
     return map;
   })
   .catch(new Map()) as z.ZodType<Map<string, TokenUsageStats>>;
-
-// ============================================================================
-// Write-side types — shape contracts for data written to disk
-// ============================================================================
-
-export type OutputFilesRecord = Record<string, OutputFileInfo[]>;
-export type MissingOutputsRecord = Record<string, string[]>;
-export type CompileFailuresRecord = Record<string, CompileFailure[]>;
-export type UsageStatsRecord = Record<string, TokenUsageStats>;
