@@ -255,7 +255,12 @@ export function staticTranscriptRowBudget({
   return Math.max(0, optionalRows - liveTranscriptReserveRows);
 }
 
-export function staticScrollbackStreamId({
+export interface StaticScrollbackTarget {
+  readonly ownerKey: string;
+  readonly streamId: StreamTabId | undefined;
+}
+
+export function staticScrollbackTarget({
   activeStreamId,
   rootStreamId,
   scopedTranscript = false,
@@ -263,13 +268,21 @@ export function staticScrollbackStreamId({
   readonly activeStreamId: StreamTabId | undefined;
   readonly rootStreamId: StreamTabId | undefined;
   readonly scopedTranscript?: boolean;
-}): StreamTabId | undefined {
-  if (scopedTranscript) return activeStreamId;
-  if (rootStreamId) return rootStreamId;
+}): StaticScrollbackTarget {
+  if (scopedTranscript) {
+    return {
+      ownerKey: activeStreamId ? `stream:${activeStreamId}` : 'scoped:none',
+      streamId: activeStreamId,
+    };
+  }
   // Before a root run resolves, local helper output and harness-built root
-  // streams still need static scrollback. Once `rootStreamId` is set, focused
-  // children redirect this owner only while their scoped transcript is focused.
-  return activeStreamId;
+  // streams still need static scrollback. The root owner key is deliberately
+  // stable across the later rootStreamId resolution so Ink's append-only
+  // <Static> cache does not remount and print the session header twice.
+  return {
+    ownerKey: 'root',
+    streamId: rootStreamId ?? activeStreamId,
+  };
 }
 
 export function shouldShowTipRow({
@@ -299,15 +312,15 @@ export function shouldShowTodosPlanPanel({
 }
 
 export function appFocusShortcutsActive({
-  inputDisabled,
+  foregroundOpen,
   reverseSearchOpen,
   slashPaletteOpen,
 }: {
-  readonly inputDisabled: boolean;
+  readonly foregroundOpen: boolean;
   readonly reverseSearchOpen: boolean;
   readonly slashPaletteOpen: boolean;
 }): boolean {
-  return !inputDisabled && !slashPaletteOpen && !reverseSearchOpen;
+  return !foregroundOpen && !slashPaletteOpen && !reverseSearchOpen;
 }
 
 export function appEscapeInterruptActive({
@@ -322,12 +335,7 @@ export function appEscapeInterruptActive({
   readonly slashPaletteOpen: boolean;
 }): boolean {
   return (
-    runPending &&
-    appFocusShortcutsActive({
-      inputDisabled,
-      reverseSearchOpen,
-      slashPaletteOpen,
-    })
+    runPending && !inputDisabled && !slashPaletteOpen && !reverseSearchOpen
   );
 }
 
@@ -481,7 +489,7 @@ export function App(props: AppProps): React.JSX.Element {
     transcriptViewerStreamId,
   });
   const scopedTranscript = isScopedTranscriptViewport(viewportKey);
-  const scrollbackStreamId = staticScrollbackStreamId({
+  const scrollbackTarget = staticScrollbackTarget({
     activeStreamId,
     rootStreamId,
     scopedTranscript,
@@ -686,7 +694,7 @@ export function App(props: AppProps): React.JSX.Element {
   const foregroundSurface = renderForegroundSurface();
 
   const focusShortcutsActive = appFocusShortcutsActive({
-    inputDisabled,
+    foregroundOpen,
     reverseSearchOpen,
     slashPaletteOpen,
   });
@@ -775,7 +783,8 @@ export function App(props: AppProps): React.JSX.Element {
         <StaticConversationTranscript
           colorEnabled={props.colorEnabled}
           maxRows={staticTranscriptRows}
-          scrollbackStreamId={scrollbackStreamId}
+          ownerKey={scrollbackTarget.ownerKey}
+          scrollbackStreamId={scrollbackTarget.streamId}
           width={transcriptWidth}
         />
       )}
