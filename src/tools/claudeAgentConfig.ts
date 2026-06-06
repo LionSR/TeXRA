@@ -11,7 +11,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { createEnumParser, createEnumStateGetter } from './support/enumConfig';

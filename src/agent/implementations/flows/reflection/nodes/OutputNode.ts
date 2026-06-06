@@ -25,7 +25,7 @@ import {
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type {
   CompileFailure,
   CompileResult,
