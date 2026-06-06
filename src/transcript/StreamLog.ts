@@ -121,9 +121,7 @@ export class StreamLog {
     return this.entries.slice(safeFrom, safeTo);
   }
 
-  drainDirtyUpdates(
-    maxSeqInclusive: number = this.seqCounter,
-  ): StreamLogEntry[] {
+  getDirtyUpdates(maxSeqInclusive: number = this.seqCounter): StreamLogEntry[] {
     const updates: StreamLogEntry[] = [];
     for (const id of this.dirtyUpdates) {
       const index = this.indexById.get(id);
@@ -134,15 +132,44 @@ export class StreamLog {
       const entry = this.entries[index];
       if (entry.seqNo <= maxSeqInclusive) {
         updates.push(entry);
-        this.dirtyUpdates.delete(id);
       }
     }
     updates.sort((a, b) => a.seqNo - b.seqNo);
     return updates;
   }
 
-  clearDirtyUpdates(): void {
-    this.dirtyUpdates.clear();
+  drainDirtyUpdates(
+    maxSeqInclusive: number = this.seqCounter,
+  ): StreamLogEntry[] {
+    const updates = this.getDirtyUpdates(maxSeqInclusive);
+    this.ackDirtyUpdates(updates);
+    return updates;
+  }
+
+  clearDirtyUpdates(maxSeqInclusive: number = this.seqCounter): void {
+    for (const id of this.dirtyUpdates) {
+      const index = this.indexById.get(id);
+      if (index === undefined) {
+        this.dirtyUpdates.delete(id);
+        continue;
+      }
+      if (this.entries[index].seqNo <= maxSeqInclusive) {
+        this.dirtyUpdates.delete(id);
+      }
+    }
+  }
+
+  ackDirtyUpdates(updates: readonly StreamLogEntry[]): void {
+    for (const update of updates) {
+      const index = this.indexById.get(update.id);
+      if (index === undefined) {
+        this.dirtyUpdates.delete(update.id);
+        continue;
+      }
+      if (this.entries[index] === update) {
+        this.dirtyUpdates.delete(update.id);
+      }
+    }
   }
 
   toJSON(): StreamLogEntry[] {

@@ -17,7 +17,6 @@ vi.mock('vscode', () => ({
 
 // Local imports
 import { ProgressEventHandler } from '@progressView/events/ProgressEventHandler';
-import type { WebviewBridge } from '@progressView/managers/WebviewBridge';
 import type {
   SyncStreamContentPayload,
   WebviewUpdater,
@@ -25,6 +24,7 @@ import type {
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import { ProgressViewState } from '@progressView/state/ProgressViewState';
 import type { Plan, TodoItem } from '@shared/schemas';
+import type { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
 
 class MemoryMementoStorage implements MementoStorage {
   private readonly values = new Map<string, unknown>();
