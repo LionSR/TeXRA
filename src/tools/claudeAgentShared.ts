@@ -10,14 +10,19 @@ export type ClaudeAgentEffort = EffortLevel;
 
 /**
  * Compile-time guard: our const array and the SDK's `EffortLevel` union must
- * stay synchronized. If the SDK adds/removes an effort level, this line will
- * produce a type error, forcing a review of whether to adopt the new level.
+ * stay synchronized in both directions. If the SDK adds or removes an effort
+ * level, this line produces a type error so `CLAUDE_AGENT_EFFORT_LEVELS` and
+ * `ClaudeAgentEffortSchema` are reviewed together.
  */
-type _AssertEqual<T, U extends T> = true;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-type _EffortLevelsAligned = _AssertEqual<
-  ClaudeAgentEffort,
-  (typeof CLAUDE_AGENT_EFFORT_LEVELS)[number]
+type _AssertExact<T extends true> = T;
+type _IsExact<A, B> = [A] extends [B]
+  ? [B] extends [A]
+    ? true
+    : false
+  : false;
+
+type _EffortLevelsAligned = _AssertExact<
+  _IsExact<ClaudeAgentEffort, (typeof CLAUDE_AGENT_EFFORT_LEVELS)[number]>
 >;
 
 export const CLAUDE_AGENT_NAME = 'claude_code';
