@@ -1,6 +1,7 @@
 import { Box, Text } from 'ink';
 
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 
 import { cliState, type StreamSlice } from '../state/cliState';
 import { orderedDescendantsFromTree } from '../state/focusCycle';
@@ -24,23 +25,6 @@ const MAX_LABEL_WIDTH = 18;
 interface OrderedStreamTab {
   readonly id: StreamTabId;
   readonly shortcutIndex?: number;
-}
-
-function statusLabel(status: string | undefined): string | undefined {
-  switch (status) {
-    case STREAM_STATUS.INITIALIZING:
-      return 'starting';
-    case STREAM_STATUS.RUNNING:
-      return 'running';
-    case STREAM_STATUS.WAITING:
-      return 'idle';
-    case STREAM_STATUS.STOPPED:
-      return 'stopped';
-    case STREAM_STATUS.READY:
-      return 'ready';
-    default:
-      return status;
-  }
 }
 
 function truncate(value: string, maxWidth: number): string {
@@ -254,7 +238,9 @@ export function streamTabsDisplayItems(init: {
   const items = ordered.map((tab): StreamTabDisplayItem => {
     const { id } = tab;
     const slice = init.streams.get(id);
-    const status = statusLabel(slice?.status);
+    const status = formatStreamStatusLabel(slice?.status, {
+      style: 'cliCompact',
+    });
     return {
       id,
       label: truncate(
