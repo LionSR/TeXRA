@@ -2,15 +2,12 @@ import pMap from 'p-map';
 
 import { KVStore } from '@common/storage/KVStore';
 import * as log from '@logger/logUtils';
-import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import {
   PersistedStreamLogEntrySchema,
-  StorageRecordSchema,
   STREAM_LOG_ENTRY_TYPES,
   type StreamLogEntry,
   type StreamTabId,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { filterNotNull, isFiniteNumber, isObject } from '@utils/core';
 
 import {
@@ -365,11 +362,8 @@ export class StreamLogStore {
     return affected;
   }
 
-  /**
-   * Load stream logs from disk. If no on-disk data exists and a memento
-   * source is provided, performs a one-time migration from VS Code memento.
-   */
-  async load(migrationSource?: MementoStorage): Promise<void> {
+  /** Load stream-log summaries from disk. */
+  async load(): Promise<void> {
     this.logs.clear();
     this.summaries.clear();
     this.dirtyStreamIds.clear();
@@ -409,11 +403,6 @@ export class StreamLogStore {
       );
       this.loaded = true;
       return;
-    }
-
-    // 2. No on-disk data — try one-time migration from memento
-    if (migrationSource) {
-      await this.migrateFromMemento(migrationSource);
     }
 
     this.loaded = true;
@@ -696,74 +685,6 @@ export class StreamLogStore {
       const result = PersistedStreamLogEntrySchema.safeParse(raw);
       return result.success ? [result.data] : [];
     });
-  }
-
-  /**
-   * One-time migration from VS Code memento to file-backed storage.
-   * Handles monolithic STREAM_LOGS and legacy STREAM_TABS formats.
-   */
-  private async migrateFromMemento(storage: MementoStorage): Promise<void> {
-    if (
-      !this.loadFromMementoRecord(
-        storage,
-        WorkspaceStateKey.STREAM_LOGS,
-        'monolithic',
-      )
-    ) {
-      this.loadFromMementoRecord(
-        storage,
-        WorkspaceStateKey.STREAM_TABS,
-        'legacy STREAM_TABS',
-      );
-    }
-
-    if (this.logs.size === 0) return;
-
-    await Promise.all(
-      [...this.logs].map(([streamId, logInstance]) =>
-        this.writeStream(streamId, logInstance),
-      ),
-    );
-
-    log.info(
-      LOG_TAG,
-      `Migrated ${this.logs.size} streams to file-backed storage`,
-    );
-
-    // Clear memento keys after successful migration
-    await Promise.all([
-      storage.update(WorkspaceStateKey.STREAM_LOGS, undefined),
-      storage.update(WorkspaceStateKey.STREAM_TABS, undefined),
-    ]);
-
-    this.dirtyStreamIds.clear();
-  }
-
-  private loadFromMementoRecord(
-    storage: MementoStorage,
-    key: WorkspaceStateKey,
-    label: string,
-  ): boolean {
-    const raw = storage.get(key);
-    const record = StorageRecordSchema.catch({}).parse(raw);
-    if (Object.keys(record).length === 0) return false;
-
-    let totalEntries = 0;
-    for (const [streamId, rawEntries] of Object.entries(record)) {
-      const entries = this.parsePersistedEntries(rawEntries);
-      if (entries.length > 0) {
-        const logInstance = new StreamLog(entries);
-        this.logs.set(streamId as StreamTabId, logInstance);
-        this.refreshSummary(streamId as StreamTabId, logInstance);
-        totalEntries += entries.length;
-      }
-    }
-
-    log.info(
-      LOG_TAG,
-      `Loaded ${this.logs.size} streams, ${totalEntries} entries from memento (${label}, migrating)`,
-    );
-    return this.logs.size > 0;
   }
 
   private executeWrite(resolve: (() => void) | null): Promise<void> {

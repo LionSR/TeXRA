@@ -8,6 +8,7 @@ import type {
   ProgressEvent,
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
+import { bus } from '@eventBus/ProgressEventBus';
 import { appendTail } from '@utils/strings/appendTail';
 
 import {
@@ -65,6 +66,7 @@ export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
   const original = host.emit;
   const emit: Emit = (event, payload) => {
     applyToState(event, payload);
+    bus.emit(event, payload);
     return original(event, payload);
   };
   return { ...host, emit };
