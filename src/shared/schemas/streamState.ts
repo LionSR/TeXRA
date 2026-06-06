@@ -7,7 +7,7 @@ import {
   type AgentCategory,
 } from './agent';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
-import { StreamStatusSchema } from './stream';
+import { STREAM_STATUS, StreamStatusSchema } from './stream';
 import { TaskGroupSchema } from './taskGroup';
 import { PlanSchema } from './plan';
 import { TodoItemSchema } from './todo';
@@ -44,17 +44,27 @@ export const ConversationProgressSchema = z.object({
 
 export type ConversationProgress = z.infer<typeof ConversationProgressSchema>;
 
+export const DEFAULT_CONVERSATION_PROGRESS: ConversationProgress = {
+  conversationTurns: 0,
+  toolCallCount: 0,
+};
+
+export const DEFAULT_STREAM_METADATA_STATUS = STREAM_STATUS.READY;
+export const DEFAULT_FINISHED_CHILD_COUNT = 0;
+
 // Stream Metadata — the lightweight subset sent over postMessage in UPDATE_STREAMS.
 // Contains only backend-owned fields that mergeBackendOwnedState() actually reads.
 
 const BackendOwnedFieldsSchema = z.object({
-  status: StreamStatusSchema.optional(),
+  status: StreamStatusSchema.prefault(DEFAULT_STREAM_METADATA_STATUS),
   lastTimestamp: z.number().optional(),
-  conversationProgress: ConversationProgressSchema.prefault({}),
+  conversationProgress: ConversationProgressSchema.prefault(
+    DEFAULT_CONVERSATION_PROGRESS,
+  ),
   activeSubagents: z.array(ActiveChildInfoSchema).prefault([]),
-  finishedSubagentCount: z.number().prefault(0),
+  finishedSubagentCount: z.number().prefault(DEFAULT_FINISHED_CHILD_COUNT),
   activeProcesses: z.array(ActiveChildInfoSchema).prefault([]),
-  finishedProcessCount: z.number().prefault(0),
+  finishedProcessCount: z.number().prefault(DEFAULT_FINISHED_CHILD_COUNT),
 });
 
 export const StreamMetadataSchema = BackendOwnedFieldsSchema.extend({
