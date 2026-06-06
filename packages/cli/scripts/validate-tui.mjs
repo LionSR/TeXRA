@@ -542,11 +542,16 @@ const SCENARIOS = [
     frame: 'tail',
     expect: [
       '/model · included relay',
+      'No model choices in this API mode.',
       'No included relay models are runnable.',
       'Switch with /api personal or try again later.',
       'Enter close',
     ],
-    unexpect: ['No models are available in this API mode.'],
+    unexpect: [
+      'Available models.',
+      'Finish the active response before switching models.',
+      'No models are available in this API mode.',
+    ],
   },
   {
     name: 'api-form',
