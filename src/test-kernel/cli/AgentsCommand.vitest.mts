@@ -207,7 +207,7 @@ describe('CLI agents command', () => {
     );
   });
 
-  it('uses the local registry match for agent details before remote fallback', async () => {
+  it('uses the remote fallback resolver for agent details', async () => {
     const localAgent = {
       name: 'lean',
       source: 'builtInToolUse',
@@ -216,7 +216,7 @@ describe('CLI agents command', () => {
       description: 'Lean 4 proof assistant.',
       tools: ['lean_diagnostics'],
     };
-    mocks.getAgent.mockReturnValue(localAgent);
+    mocks.resolveAgentWithRemoteFallback.mockResolvedValue(localAgent);
     const { showAgent } = await import('@cli/commands/agents');
 
     const exitCode = await showAgent(cliContext(), 'lean');
@@ -224,12 +224,37 @@ describe('CLI agents command', () => {
     expect(exitCode).toBe(0);
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledTimes(1);
     expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
-    expect(mocks.getAgent).toHaveBeenCalledWith('lean');
-    expect(mocks.resolveAgentWithRemoteFallback).not.toHaveBeenCalled();
+    expect(mocks.getAgent).not.toHaveBeenCalled();
+    expect(mocks.resolveAgentWithRemoteFallback).toHaveBeenCalledWith('lean');
     expect(mocks.emitCliResult).toHaveBeenCalledWith(expect.anything(), {
       json: localAgent,
       ndjson: { kind: 'agent', agent: localAgent },
       text: expect.stringContaining('source: builtInToolUse'),
+    });
+  });
+
+  it('renders the agent returned by the resolver regardless of source', async () => {
+    const remoteAgent = {
+      name: 'lean',
+      source: 'remote',
+      path: '',
+      category: AgentCategory.ToolUse,
+      description: 'Relay-served Lean assistant.',
+      tools: ['delegate_agent', 'lean_diagnostics'],
+      visibility: ['public'],
+    };
+    mocks.resolveAgentWithRemoteFallback.mockResolvedValue(remoteAgent);
+    const { showAgent } = await import('@cli/commands/agents');
+
+    const exitCode = await showAgent(cliContext(), 'lean');
+
+    expect(exitCode).toBe(0);
+    expect(mocks.getAgent).not.toHaveBeenCalled();
+    expect(mocks.resolveAgentWithRemoteFallback).toHaveBeenCalledWith('lean');
+    expect(mocks.emitCliResult).toHaveBeenCalledWith(expect.anything(), {
+      json: remoteAgent,
+      ndjson: { kind: 'agent', agent: remoteAgent },
+      text: expect.stringContaining('source: remote'),
     });
   });
 
@@ -243,7 +268,6 @@ describe('CLI agents command', () => {
       tools: ['delegate_agent', 'delegate_workflow'],
       visibility: ['public'],
     };
-    mocks.getAgent.mockReturnValue(undefined);
     mocks.resolveAgentWithRemoteFallback.mockResolvedValue(remoteAgent);
     const { showAgent } = await import('@cli/commands/agents');
 
@@ -263,7 +287,6 @@ describe('CLI agents command', () => {
   });
 
   it('reports missing agents after the remote fallback is exhausted', async () => {
-    mocks.getAgent.mockReturnValue(undefined);
     mocks.resolveAgentWithRemoteFallback.mockResolvedValue(undefined);
     const { showAgent } = await import('@cli/commands/agents');
 
