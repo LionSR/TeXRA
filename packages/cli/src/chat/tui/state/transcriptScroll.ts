@@ -42,14 +42,6 @@ export function scrollTranscriptToOffset(
   };
 }
 
-export function moveTranscriptScrollState(
-  state: TranscriptScrollState,
-  window: TranscriptScrollWindow,
-  deltaRows: number,
-): TranscriptScrollState {
-  return scrollTranscriptToOffset(window, state.offset + deltaRows);
-}
-
 export function syncTranscriptScrollState(
   state: TranscriptScrollState,
   window: TranscriptScrollWindow,

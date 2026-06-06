@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   initialTranscriptScrollState,
   maxTranscriptScrollOffset,
-  moveTranscriptScrollState,
   scrollTranscriptToOffset,
   syncTranscriptScrollState,
 } from '@cli/chat/tui/state/transcriptScroll';
@@ -21,10 +20,9 @@ describe('CLI transcript scroll state', () => {
 
   it('preserves manual scroll position while new lines arrive', () => {
     const bottom = initialTranscriptScrollState({ lineCount: 20, viewRows: 5 });
-    const scrolled = moveTranscriptScrollState(
-      bottom,
+    const scrolled = scrollTranscriptToOffset(
       { lineCount: 20, viewRows: 5 },
-      -5,
+      bottom.offset - 5,
     );
 
     expect(scrolled).toEqual({ offset: 10, followBottom: false });
