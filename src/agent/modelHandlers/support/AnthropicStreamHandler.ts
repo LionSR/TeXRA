@@ -12,6 +12,11 @@ import {
 } from '@agent/modelHandlers/types/ServerToolTypes';
 import { MESSAGE_TYPES, type StreamDiagnostics } from '@shared/schemas';
 import type { BetaRawMessageStreamEvent } from '@anthropic-ai/sdk/resources/beta/messages';
+// BetaMessageStream is only exported from lib/ — not re-exported from the SDK's
+// public resources/ entry point. The BetaMessageStream class is what
+// client.beta.messages.stream() returns, and ./lib/* is in the SDK's exports
+// map, so this import is semantically correct even if the path is less stable.
+import type { BetaMessageStream } from '@anthropic-ai/sdk/lib/BetaMessageStream';
 import type {
   ServerToolUseBlock,
   WebSearchToolResultBlock,
@@ -21,15 +26,11 @@ import type {
 } from '@anthropic-ai/sdk/resources/messages';
 
 /**
- * Duck-typed interface for Anthropic message streams.
- * Allows us to work with the stream without importing SDK-internal types.
+ * Minimal stream interface derived from the Anthropic SDK's BetaMessageStream.
+ * Accepts any stream with the same typed `.on()` method — callers pass the
+ * SDK's BetaMessageStream directly; tests pass a compatible stub.
  */
-interface AnthropicMessageStream {
-  on(
-    event: 'streamEvent',
-    callback: (event: BetaRawMessageStreamEvent) => void,
-  ): void;
-}
+type AnthropicMessageStream = Pick<BetaMessageStream, 'on'>;
 
 /**
  * Maximum size for accumulated server tool input JSON (64KB).
