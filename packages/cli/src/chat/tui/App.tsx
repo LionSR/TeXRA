@@ -39,10 +39,9 @@ import {
   rewriteKittyEnterInput,
 } from './input/inputKeys';
 import {
-  hasChildControlItems,
   hasChildExecutionRows,
   numericFocusTargetForActiveStream,
-  resolveChildControlStreamTarget,
+  resolveChildControlDisplayTargets,
   type ChildControlMode,
 } from './state/childControls';
 import { cliState } from './state/cliState';
@@ -499,26 +498,13 @@ export function App(props: AppProps): React.JSX.Element {
         rows,
         tipVisible: tipRowVisible,
       });
-  const subagentControlTarget = resolveChildControlStreamTarget({
+  const childControlTargets = resolveChildControlDisplayTargets({
     activeStreamId,
-    mode: 'subagents',
     parentStream,
     streams,
   });
-  const taskControlTarget = resolveChildControlStreamTarget({
-    activeStreamId,
-    mode: 'tasks',
-    parentStream,
-    streams,
-  });
-  const taskControlsAvailable = hasChildControlItems(
-    taskControlTarget.slice,
-    'tasks',
-  );
-  const subagentControlsAvailable = hasChildControlItems(
-    subagentControlTarget.slice,
-    'subagents',
-  );
+  const taskControlsAvailable = childControlTargets.tasks.hasItems;
+  const subagentControlsAvailable = childControlTargets.subagents.hasItems;
   const hasSubagentPanel =
     !foregroundOpen && hasChildExecutionRows(activeSlice);
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
@@ -536,16 +522,9 @@ export function App(props: AppProps): React.JSX.Element {
   });
   const childControlTarget =
     childControlMode !== undefined
-      ? resolveChildControlStreamTarget({
-          activeStreamId,
-          mode: childControlMode,
-          parentStream,
-          streams,
-        })
+      ? childControlTargets[childControlMode]
       : undefined;
-  const childControlHasItems =
-    childControlMode !== undefined &&
-    hasChildControlItems(childControlTarget?.slice, childControlMode);
+  const childControlHasItems = childControlTarget?.hasItems ?? false;
   const { foregroundRows, transcriptRows } = allocateMiddleRows({
     foregroundMaxRows:
       foregroundKind === 'childControls'
@@ -612,30 +591,10 @@ export function App(props: AppProps): React.JSX.Element {
         if (!childControlMode) return null;
         const target = childControlTarget;
         if (!target) return null;
-        const targetStreamLabel = target.streamId
-          ? streamScopeDisplayLabel({
-              parentStream,
-              streamId: target.streamId,
-              streams,
-            })
-          : undefined;
-        const fallbackFromStreamLabel = target.fallbackFromStreamId
-          ? streamScopeDisplayLabel({
-              parentStream,
-              streamId: target.fallbackFromStreamId,
-              streams,
-            })
-          : undefined;
-        const streamScopeDetail =
-          targetStreamLabel && fallbackFromStreamLabel
-            ? childControlMode === 'subagents'
-              ? `${fallbackFromStreamLabel} has no subagents`
-              : `${fallbackFromStreamLabel} has no tasks or sub-workflows`
-            : undefined;
         return (
           <ChildControlPicker
             availableColumns={columns}
-            activeStreamLabel={targetStreamLabel}
+            streamLabel={target.streamLabel}
             activeStreamId={target.streamId}
             availableRows={foregroundRows}
             mode={childControlMode}
@@ -646,7 +605,7 @@ export function App(props: AppProps): React.JSX.Element {
             }
             onKillExecution={props.onKillExecution}
             slice={target.slice}
-            streamScopeDetail={streamScopeDetail}
+            streamScopeDetail={target.streamScopeDetail}
             streams={streams}
           />
         );
