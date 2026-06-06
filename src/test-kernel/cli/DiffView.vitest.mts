@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   boundedDiffDisplayLines,
   buildHunks,
-  DIFF_BAND_BG,
+  DIFF_LINE_STYLE,
   diffVisualRowCount,
   maxDiffScrollOffset,
   scrollBoundedDiffDisplayLines,
@@ -139,11 +139,24 @@ describe('CLI diff display', () => {
 });
 
 describe('full-width diff bands', () => {
-  it('only added/removed lines get a band background', () => {
-    expect(DIFF_BAND_BG.added).toBeDefined();
-    expect(DIFF_BAND_BG.removed).toBeDefined();
-    expect(DIFF_BAND_BG.context).toBeUndefined();
-    expect(DIFF_BAND_BG.header).toBeUndefined();
+  it('only added/removed lines get readable band styling', () => {
+    expect(DIFF_LINE_STYLE.added).toMatchObject({
+      backgroundColor: expect.any(String),
+      color: expect.any(String),
+    });
+    expect(DIFF_LINE_STYLE.removed).toMatchObject({
+      backgroundColor: expect.any(String),
+      color: expect.any(String),
+    });
+    expect(DIFF_LINE_STYLE.context).toBeUndefined();
+    expect(DIFF_LINE_STYLE.header).toBeUndefined();
+  });
+
+  it('does not rely on dark background-only diff bands', () => {
+    expect(DIFF_LINE_STYLE.added?.backgroundColor).not.toBe('#1f3a28');
+    expect(DIFF_LINE_STYLE.removed?.backgroundColor).not.toBe('#4a2526');
+    expect(DIFF_LINE_STYLE.added?.color).toBeDefined();
+    expect(DIFF_LINE_STYLE.removed?.color).toBeDefined();
   });
 
   it('pads a short row out to the full width so the band fills the row', () => {
