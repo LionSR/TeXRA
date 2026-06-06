@@ -231,7 +231,10 @@ describe('StreamSnapshotStore', () => {
     // so the rest of meta (description) still surfaces and resume never throws.
     await StorageFS.write(
       path.join(dir, 'meta.json'),
-      JSON.stringify({ executionId: 'not-hex!!', description: 'Prior session' }),
+      JSON.stringify({
+        executionId: 'not-hex!!',
+        description: 'Prior session',
+      }),
     );
     const snap = await new StreamSnapshotStore().read(STREAM);
     expect(snap.executionId).toBeUndefined();
