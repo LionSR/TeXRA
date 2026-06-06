@@ -26,6 +26,7 @@ import {
   TODO_STATUS,
   TOOL_USE_STATUS,
   type ActiveChildInfo,
+  type ExecutionId,
   type ExternalInquiryThreadId,
   type NormalizedToolUse,
   type RetryPermission,
@@ -72,6 +73,10 @@ import {
 } from '../src/runtime/multiAgentPresets';
 import { buildCliOrchestrationItems } from '../src/runtime/orchestration';
 import {
+  CLI_HISTORY_RESUMABLE_STATUS,
+  type CliHistoryEntry,
+} from '../src/runtime/history';
+import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
 } from '../src/schemas/cliSettings';
@@ -100,6 +105,8 @@ const SHOW_LONG_CHILD_OUTPUT = process.env.HARNESS_LONG_CHILD_OUTPUT === '1';
 const SHOW_WIDE_FIRST_CHILD_LINE =
   process.env.HARNESS_WIDE_FIRST_CHILD_LINE === '1';
 const SHOW_ORCHESTRATION = process.env.HARNESS_ORCHESTRATION === '1';
+const SHOW_DELEGATED_ORCHESTRATION_HISTORY =
+  process.env.HARNESS_DELEGATED_ORCHESTRATION_HISTORY === '1';
 const SHOW_NO_RUNNABLE_ORCHESTRATION_MODELS =
   process.env.HARNESS_NO_RUNNABLE_MODELS === '1';
 const HARNESS_API_MODE_FROM_ENV = parseCliApiMode(
@@ -237,9 +244,45 @@ const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
     workflowAgents: getWorkflowAgents(),
     toolUseAgents: getToolUseAgents(),
   }),
-  history: [],
+  history: harnessOrchestrationHistory(),
   toolUseAgents: getToolUseAgents(),
 });
+
+function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
+  if (!SHOW_DELEGATED_ORCHESTRATION_HISTORY) return [];
+  return [
+    {
+      id: 'aaaaaaaaaaaa' as ExecutionId,
+      timestamp: '2026-06-06T00:00:00Z',
+      agent: 'search',
+      model: 'harness-model',
+      status: CLI_HISTORY_RESUMABLE_STATUS,
+      inputBasename: '-',
+      category: AGENT_CATEGORY.TOOL_USE,
+      parentExecutionId: 'root-session' as ExecutionId,
+      delegationDepth: 1,
+    },
+    {
+      id: 'bbbbbbbbbbbb' as ExecutionId,
+      timestamp: '2026-06-06T00:01:00Z',
+      agent: 'review',
+      model: 'harness-model',
+      status: CLI_HISTORY_RESUMABLE_STATUS,
+      inputBasename: '-',
+      category: AGENT_CATEGORY.TOOL_USE,
+      delegationDepth: 1,
+    },
+    {
+      id: 'cccccccccccc' as ExecutionId,
+      timestamp: '2026-06-06T00:02:00Z',
+      agent: 'orchestrator',
+      model: 'harness-model',
+      status: CLI_HISTORY_RESUMABLE_STATUS,
+      inputBasename: '-',
+      category: AGENT_CATEGORY.TOOL_USE,
+    },
+  ];
+}
 
 type HarnessModelFixture = Readonly<{
   value: string;

@@ -47,6 +47,8 @@ export interface CliHistoryEntry {
   readonly inputBasename: string;
   readonly category?: string;
   readonly description?: string;
+  readonly parentExecutionId?: ExecutionId;
+  readonly delegationDepth?: number;
 }
 
 export interface CliHistoryDetails {
@@ -92,6 +94,20 @@ export function resumableCliHistoryEntries<
   T extends Pick<CliHistoryEntry, 'status'>,
 >(entries: readonly T[]): T[] {
   return entries.filter(isCliHistoryEntryResumable);
+}
+
+export function isCliHistoryEntryUserStarted(
+  entry: Pick<CliHistoryEntry, 'parentExecutionId' | 'delegationDepth'>,
+): boolean {
+  return (
+    entry.parentExecutionId === undefined && (entry.delegationDepth ?? 0) === 0
+  );
+}
+
+export function userStartedCliHistoryEntries<
+  T extends Pick<CliHistoryEntry, 'parentExecutionId' | 'delegationDepth'>,
+>(entries: readonly T[]): T[] {
+  return entries.filter(isCliHistoryEntryUserStarted);
 }
 
 export type CliHistoryDeleteResult =
@@ -272,6 +288,9 @@ export function formatCliHistoryDetailsText(
   }
   if (config?.agentCategory) lines.push(`Category: ${config.agentCategory}`);
   if (meta?.parentExecutionId) lines.push(`Parent: ${meta.parentExecutionId}`);
+  if (meta?.delegationDepth !== undefined) {
+    lines.push(`Delegation depth: ${meta.delegationDepth}`);
+  }
   if (meta?.description) lines.push(`Description: ${meta.description}`);
   if (details.resultMeta) {
     lines.push(`Result: ${JSON.stringify(details.resultMeta)}`);
@@ -312,6 +331,8 @@ async function toCliHistoryEntry(
     inputBasename,
     category: entry.category,
     description: entry.description,
+    parentExecutionId: entry.parentExecutionId,
+    delegationDepth: entry.delegationDepth,
   };
 }
 

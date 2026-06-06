@@ -243,6 +243,29 @@ const SCENARIOS = [
     unexpect: ['[/model]models', 'Tip:', 'tool-use:', 'workflow:'],
   },
   {
+    name: 'orchestrate-delegated-history',
+    env: {
+      HARNESS_ORCHESTRATION: '1',
+      HARNESS_DELEGATED_ORCHESTRATION_HISTORY: '1',
+    },
+    bootExpect: 'Choose how to start this CLI session.',
+    exitKeys: [ESC],
+    expectExit: true,
+    expect: [
+      'Choose how to start this CLI session.',
+      'New chat',
+      'Resume cccccccccccc',
+      'Team Lean Project',
+      'Help',
+    ],
+    unexpect: [
+      'Resume aaaaaaaaaaaa',
+      'Resume bbbbbbbbbbbb',
+      'Chat with search',
+      'Chat with review',
+    ],
+  },
+  {
     name: 'compact-orchestrate-launcher',
     rows: 10,
     cols: 80,

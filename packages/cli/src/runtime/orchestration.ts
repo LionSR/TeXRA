@@ -10,7 +10,11 @@ import {
 } from './multiAgentPresets';
 import { implicitDefaultToolUseAgents } from './defaultAgents';
 import { formatCliHistoryResumeInputLabel } from './historyLabels';
-import { resumableCliHistoryEntries, type CliHistoryEntry } from './history';
+import {
+  resumableCliHistoryEntries,
+  userStartedCliHistoryEntries,
+  type CliHistoryEntry,
+} from './history';
 
 export type CliOrchestrationAction =
   | { readonly kind: 'chat'; readonly agent?: string; readonly model?: string }
@@ -47,6 +51,7 @@ const MAX_PRESET_ITEMS = 6;
 export function buildCliOrchestrationItems(
   input: BuildCliOrchestrationItemsInput,
 ): CliOrchestrationItem[] {
+  const userStartedHistory = userStartedCliHistoryEntries(input.history);
   const items: CliOrchestrationItem[] = [
     {
       value: { kind: 'chat' },
@@ -55,8 +60,8 @@ export function buildCliOrchestrationItems(
     },
   ];
 
-  items.push(...recentResumeItems(input.history));
-  items.push(...recentAgentItems(input.history, input.toolUseAgents));
+  items.push(...recentResumeItems(userStartedHistory));
+  items.push(...recentAgentItems(userStartedHistory, input.toolUseAgents));
   items.push(
     ...presetItems(input.presetPlans, {
       includeLoginHint: input.includeMultiAgentLoginHint,
