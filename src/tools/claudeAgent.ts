@@ -268,11 +268,20 @@ type ClaudeToolLogRef = ToolUseCardRef & {
 };
 
 // ============================================================================
-// SDK type aliases — we keep these loose to avoid pulling the SDK's full type
-// surface (which depends on a private @anthropic-ai/sdk MessageParam shape)
-// into VS Code-free zones.
+// SDK type imports — previously we kept these loose to avoid pulling the SDK's
+// full type surface into VS Code-free zones. Using `import type` is safe because
+// it's erased at compile time and doesn't affect the runtime bundle.
 // ============================================================================
 
+import type { Options } from '@anthropic-ai/claude-agent-sdk';
+
+/**
+ * Local message view: a deliberately minimal subset of the SDK's full
+ * {@link import('@anthropic-ai/claude-agent-sdk').SDKMessage} discriminated
+ * union. Only the fields consumed by the streaming loop below are declared.
+ * Importing the full union would require narrowing before every field access,
+ * which is a larger refactor tracked separately.
+ */
 interface SdkMessage {
   type: string;
   subtype?: string;
@@ -309,7 +318,7 @@ export async function runStreamedTurn(params: {
 
   const query = await importClaudeAgentSdk();
 
-  const sdkOptions: Record<string, unknown> = {
+  const sdkOptions: Options = {
     abortController: params.abortController,
     model: params.model,
     permissionMode: params.permissionMode,

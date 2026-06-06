@@ -88,13 +88,20 @@ import {
 
 // Type-only imports (kept separate for bundler efficiency)
 import type {
+  ItemCompletedEvent,
+  ItemStartedEvent,
+  ItemUpdatedEvent,
   McpToolCallItem,
   RunResult,
   SandboxMode,
   Thread,
+  ThreadErrorEvent,
+  ThreadEvent,
   ThreadItem,
   ThreadOptions,
   TodoListItem,
+  TurnCompletedEvent,
+  TurnFailedEvent,
   WebSearchItem,
 } from '@openai/codex-sdk';
 
