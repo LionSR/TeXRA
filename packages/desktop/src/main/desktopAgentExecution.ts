@@ -70,6 +70,7 @@ import type { RestoredStreamSnapshot } from '@shared/schemas';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
+import { buildStreamMetadata as createStreamMetadata } from '@shared/streams/streamMetadata';
 import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
@@ -481,21 +482,17 @@ export class DesktopProgressBridge {
       this.taskStates.get(streamId)?.agentConfig.agentCategory ??
       this.categories.get(streamId) ??
       AGENT_CATEGORY.WORKFLOW;
-    return {
+    const badges = this.streamBadges.get(streamId);
+    return createStreamMetadata({
       kind: category,
-      status: this.statuses.get(streamId) ?? STREAM_STATUS.READY,
+      status: this.statuses.get(streamId),
       lastTimestamp: this.streamLogs.getLastTimestamp(streamId),
-      conversationProgress: this.conversationProgress.get(streamId) ?? {
-        conversationTurns: 0,
-        toolCallCount: 0,
-      },
-      activeSubagents: this.streamBadges.get(streamId)?.activeSubagents ?? [],
-      finishedSubagentCount:
-        this.streamBadges.get(streamId)?.finishedSubagentCount ?? 0,
-      activeProcesses: this.streamBadges.get(streamId)?.activeProcesses ?? [],
-      finishedProcessCount:
-        this.streamBadges.get(streamId)?.finishedProcessCount ?? 0,
-    };
+      conversationProgress: this.conversationProgress.get(streamId),
+      activeSubagents: badges?.activeSubagents,
+      finishedSubagentCount: badges?.finishedSubagentCount,
+      activeProcesses: badges?.activeProcesses,
+      finishedProcessCount: badges?.finishedProcessCount,
+    });
   }
 
   private updateActiveChildren(

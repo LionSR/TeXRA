@@ -7,7 +7,6 @@ import {
   type StreamExecutionState,
 } from '@progressView/state/ProgressViewState';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { STREAM_STATUS } from '@shared/schemas';
 import type {
   AgentCategoryFilter,
   ConversationProgress,
@@ -27,6 +26,7 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
+import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import type { OdysseyStatus } from '@tools/odyssey';
 
 /**
@@ -440,19 +440,16 @@ export class WebviewUpdater {
     const streamMetadata: Record<StreamTabId, StreamMetadata> = {};
     for (const { name, agentCategory } of streams) {
       const current = allStates[name];
-      streamMetadata[name] = {
+      streamMetadata[name] = buildStreamMetadata({
         kind: agentCategory,
-        status: statuses?.get(name) ?? STREAM_STATUS.READY,
+        status: statuses?.get(name),
         lastTimestamp: state.streamLogs.getLastTimestamp(name),
-        conversationProgress: current?.conversationProgress ?? {
-          conversationTurns: 0,
-          toolCallCount: 0,
-        },
-        activeSubagents: current?.activeSubagents ?? [],
-        finishedSubagentCount: current?.finishedSubagentCount ?? 0,
-        activeProcesses: current?.activeProcesses ?? [],
-        finishedProcessCount: current?.finishedProcessCount ?? 0,
-      };
+        conversationProgress: current?.conversationProgress,
+        activeSubagents: current?.activeSubagents,
+        finishedSubagentCount: current?.finishedSubagentCount,
+        activeProcesses: current?.activeProcesses,
+        finishedProcessCount: current?.finishedProcessCount,
+      });
     }
 
     this.updateStreams(
