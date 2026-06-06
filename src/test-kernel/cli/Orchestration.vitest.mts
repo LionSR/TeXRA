@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { AgentEntry } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
+  orchestrationFooterHints,
   orchestrationKeyHints,
   orchestrationModelAccessView,
 } from '@cli/orchestration/runOrchestrationTui';
@@ -308,8 +309,41 @@ describe('CLI orchestration items', () => {
       expect.objectContaining({
         disabled: true,
         description: 'unavailable; no runnable team root; 1/2 tool-use agents',
+        footerHints: [
+          'Team setup: run texra multi-agent inspect <preset>.',
+          'Relay teams may unlock more agents after texra login.',
+        ],
       }),
     );
+  });
+
+  it('dedupes launcher footer hints from unavailable teams', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [
+        presetPlan({ id: 'lean-project', name: 'Lean Project' }),
+        presetPlan({ id: 'physicist', name: 'Physicist' }),
+      ],
+      history: [],
+      toolUseAgents: [],
+    });
+
+    expect(orchestrationFooterHints(items)).toEqual([
+      'Team setup: run texra multi-agent inspect <preset>.',
+      'Relay teams may unlock more agents after texra login.',
+    ]);
+  });
+
+  it('omits the launcher login hint after a remote team load attempt', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [presetPlan({ id: 'lean-project', name: 'Lean Project' })],
+      history: [],
+      toolUseAgents: [],
+      includeMultiAgentLoginHint: false,
+    });
+
+    expect(orchestrationFooterHints(items)).toEqual([
+      'Team setup: run texra multi-agent inspect <preset>.',
+    ]);
   });
 
   it('keeps team launch actions keyed by preset id only', () => {
