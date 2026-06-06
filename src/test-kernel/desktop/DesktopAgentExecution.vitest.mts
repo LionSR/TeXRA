@@ -281,6 +281,27 @@ describe('DesktopProgressBridge', () => {
     vi.restoreAllMocks();
   });
 
+  it('mirrors runtime events to the shared progress bus', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+    const { bus } = await import('@eventBus/ProgressEventBus');
+    const seen: unknown[] = [];
+    const off = bus.on('updateTodos', (payload) => {
+      seen.push(payload);
+    });
+
+    try {
+      bridge.handleProgressEvent('updateTodos', {
+        streamId: 'parent',
+        todos: [],
+      });
+      expect(seen).toEqual([{ streamId: 'parent', todos: [] }]);
+    } finally {
+      off();
+      bridge.dispose();
+    }
+  });
+
   it('preserves progress and badge metadata across repeated stream syncs', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_000);
     const messages: unknown[] = [];

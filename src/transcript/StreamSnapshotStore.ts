@@ -112,6 +112,7 @@ export class StreamSnapshotStore {
   // refresh/seed/mutate per stream.
   private readonly seeded = new Set<StreamTabId>();
   private readonly seedChains = new Map<StreamTabId, Promise<void>>();
+  private readonly streamVersions = new Map<StreamTabId, number>();
   private hasLoadedKnownStreams = false;
 
   private readonly kvCache = new Map<StreamTabId, KVStore>();
@@ -123,6 +124,14 @@ export class StreamSnapshotStore {
       this.kvCache.set(streamId, store);
     }
     return store;
+  }
+
+  private streamVersion(stream: StreamTabId): number {
+    return this.streamVersions.get(stream) ?? 0;
+  }
+
+  private bumpStreamVersion(stream: StreamTabId): void {
+    this.streamVersions.set(stream, this.streamVersion(stream) + 1);
   }
 
   // ==========================================================================
@@ -205,6 +214,7 @@ export class StreamSnapshotStore {
    * mutate synchronously so UI callers can read back their own writes.
    */
   private mutate<T>(stream: StreamTabId, apply: () => T): T | undefined {
+    const version = this.streamVersion(stream);
     if (this.seeded.has(stream)) return apply();
 
     if (this.hasLoadedKnownStreams && !this.seedChains.has(stream)) {
@@ -213,8 +223,9 @@ export class StreamSnapshotStore {
     }
 
     let next: Promise<void> = Promise.resolve();
-    next = this.ensureSeeded(stream)
+    next = this.ensureSeeded(stream, version)
       .then(() => {
+        if (this.streamVersion(stream) !== version) return;
         if (!this.seeded.has(stream)) {
           if (this.seedChains.get(stream) === next) {
             this.seedChains.delete(stream);
@@ -236,17 +247,20 @@ export class StreamSnapshotStore {
   }
 
   /** Read a stream's existing disk data into memory once. */
-  private ensureSeeded(stream: StreamTabId): Promise<void> {
+  private ensureSeeded(stream: StreamTabId, version: number): Promise<void> {
     const existing = this.seedChains.get(stream);
     if (existing) return existing;
-    const seed = this.readSeed(stream);
+    const seed = this.readSeed(stream, version);
     this.seedChains.set(stream, seed);
     return seed;
   }
 
-  private async readSeed(stream: StreamTabId): Promise<void> {
+  private async readSeed(stream: StreamTabId, version: number): Promise<void> {
+    if (this.streamVersion(stream) !== version) return;
     if (this.seeded.has(stream)) return;
-    this.applyStreamData(stream, await readStreamData(this.kv(stream)));
+    const data = await readStreamData(this.kv(stream));
+    if (this.streamVersion(stream) !== version) return;
+    this.applyStreamData(stream, data);
   }
 
   // ==========================================================================
@@ -397,6 +411,7 @@ export class StreamSnapshotStore {
 
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
   evict(stream: StreamTabId): void {
+    this.bumpStreamVersion(stream);
     this.outputFiles.delete(stream);
     this.missingOutputs.delete(stream);
     this.compileFailures.delete(stream);
@@ -413,6 +428,19 @@ export class StreamSnapshotStore {
   }
 
   evictAll(): void {
+    const streams = new Set<StreamTabId>([
+      ...this.outputFiles.keys(),
+      ...this.missingOutputs.keys(),
+      ...this.compileFailures.keys(),
+      ...this.usage.keys(),
+      ...this.workPlan.keys(),
+      ...this.meta.keys(),
+      ...this.taskStates.keys(),
+      ...this.seeded,
+      ...this.seedChains.keys(),
+      ...this.kvCache.keys(),
+    ]);
+    for (const stream of streams) this.bumpStreamVersion(stream);
     this.outputFiles.clear();
     this.missingOutputs.clear();
     this.compileFailures.clear();
@@ -428,14 +456,18 @@ export class StreamSnapshotStore {
 
   /** Delete a stream's on-disk sidecar directory + in-memory state. */
   async deleteStream(stream: StreamTabId): Promise<void> {
-    await this.kv(stream).deleteDir();
+    const pending = this.cancelPendingWritesForStream(stream);
     this.evict(stream);
+    await Promise.all(pending);
+    await this.kv(stream).deleteDir();
   }
 
   /** Delete the entire `streamData/` tree + all in-memory state. */
   async deleteAll(): Promise<void> {
-    await new KVStore(STREAM_DATA_DIR).deleteDir();
+    const pending = [...this.pendingWrites.values()];
     this.evictAll();
+    await Promise.all(pending);
+    await new KVStore(STREAM_DATA_DIR).deleteDir();
   }
 
   setTodos(stream: StreamTabId, todos: TodoItem[]): void {
@@ -601,6 +633,7 @@ export class StreamSnapshotStore {
 
   private write(stream: StreamTabId, key: string, value: unknown): void {
     const chainKey = `${stream}::${key}`;
+    const version = this.streamVersion(stream);
     const prev = this.pendingWrites.get(chainKey) ?? Promise.resolve();
     // Best-effort: a failed sidecar write must not break the chain, but it is
     // logged so silent data loss (disk full, permission denied) is diagnosable.
@@ -610,6 +643,7 @@ export class StreamSnapshotStore {
         // write queued before that must NOT fire afterward, or a late `kv()`
         // would re-create the `streamData/{id}/` dir `deleteDir()` just removed.
         if (!this.pendingWrites.has(chainKey)) return;
+        if (this.streamVersion(stream) !== version) return;
         return this.kv(stream).write(key, value);
       })
       .catch((err: unknown) =>
@@ -629,6 +663,17 @@ export class StreamSnapshotStore {
         .filter(([key]) => key.startsWith(prefix))
         .map(([, pending]) => pending),
     );
+  }
+
+  private cancelPendingWritesForStream(stream: StreamTabId): Promise<void>[] {
+    const prefix = `${stream}::`;
+    const pending: Promise<void>[] = [];
+    for (const [key, write] of this.pendingWrites) {
+      if (!key.startsWith(prefix)) continue;
+      pending.push(write);
+      this.pendingWrites.delete(key);
+    }
+    return pending;
   }
 
   /** Await deferred (seed-gated) mutations, then all in-flight writes. */
@@ -729,12 +774,17 @@ export class StreamSnapshotStore {
   }
 
   private refreshSeed(stream: StreamTabId): Promise<void> {
+    const version = this.streamVersion(stream);
     this.seeded.delete(stream);
     const prev = this.seedChains.get(stream) ?? Promise.resolve();
     const next = prev.then(async () => {
+      if (this.streamVersion(stream) !== version) return;
       await this.flushWritesForStream(stream);
+      if (this.streamVersion(stream) !== version) return;
       this.kvCache.delete(stream);
-      this.applyStreamData(stream, await readStreamData(this.kv(stream)));
+      const data = await readStreamData(this.kv(stream));
+      if (this.streamVersion(stream) !== version) return;
+      this.applyStreamData(stream, data);
     });
     this.seedChains.set(stream, next);
     return next;

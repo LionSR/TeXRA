@@ -87,6 +87,7 @@ import {
   resolveLocalTranscriptStreamId,
 } from '@cli/chat/tui/state/transcript';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
+import { bus } from '@eventBus/ProgressEventBus';
 import {
   AGENT_CATEGORY,
   MESSAGE_TYPES,
@@ -2107,6 +2108,21 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
       close: async () => {},
     } as unknown as CliRuntimeHost;
   }
+
+  it('mirrors runtime events to the shared progress bus', () => {
+    const seen: unknown[] = [];
+    const off = bus.on('updateTodos', (payload) => {
+      seen.push(payload);
+    });
+    const wrapped = wrapRuntimeHost(makeHost());
+
+    try {
+      wrapped.emit('updateTodos', { streamId: root, todos: [] });
+      expect(seen).toEqual([{ streamId: root, todos: [] }]);
+    } finally {
+      off();
+    }
+  });
 
   it('registers suppressed child streams without switching away from the parent page', () => {
     const wrapped = wrapRuntimeHost(makeHost());

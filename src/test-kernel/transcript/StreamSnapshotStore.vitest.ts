@@ -255,6 +255,18 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
+  it('deleteStream cancels queued writes before removing the sidecar directory', async () => {
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    const store = new StreamSnapshotStore();
+    await store.load([]);
+
+    store.addUsage(STREAM, RUN, usage(1, 2, 0.03));
+    await store.deleteStream(STREAM);
+
+    expect(await StorageFS.exists(dir)).toBe(false);
+  });
+
   it('returns a frozen shared empty work plan default', async () => {
     await installPlatform();
     const empty = new StreamSnapshotStore().getWorkPlan(STREAM);

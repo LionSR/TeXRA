@@ -680,6 +680,7 @@ export class DesktopProgressBridge {
     event: K,
     payload: ProgressEventPayloads[K],
   ): void {
+    bus.emit(event, payload);
     this.progressEventHandlers[event]?.(payload);
   }
 
