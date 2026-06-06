@@ -406,7 +406,8 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
-      'Tool-use and orchestrator agents',
+      'Tool-use and delegating agents',
+      'delegating; built-in',
       'Current: chat (hidden from picker)',
       'texra chat --agent=<name>',
       'Esc close',
@@ -415,6 +416,7 @@ const SCENARIOS = [
       'Platform not initialized',
       '/agent - error',
       'texra --agent=<name>',
+      'orchestrator; built-in',
     ],
   },
   {
@@ -428,7 +430,8 @@ const SCENARIOS = [
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/agent',
-      'Tool-use and orchestrator agents',
+      'Tool-use and delegating agents',
+      'delegating; built-in',
       'Current: chat (hidden from picker)',
       'texra chat --agent=<name>',
       'Esc close',
@@ -437,6 +440,7 @@ const SCENARIOS = [
       'Platform not initialized',
       '/agent - error',
       'texra --agent=<name>',
+      'orchestrator; built-in',
     ],
     maxLineColumns: 80,
   },
@@ -647,7 +651,7 @@ const SCENARIOS = [
     expect: [
       '/agent',
       'Current: chat (hidden from picker)',
-      'Tool-use and orchestrator agents',
+      'Tool-use and delegating agents',
       '+8 more',
       '↑/↓ navigate',
       'Enter close',
