@@ -71,9 +71,12 @@ async function anyPersonalKeyPresent(): Promise<boolean> {
 }
 
 export async function loadCliApiStatusLines(
-  options: { readonly includeActionHint?: boolean } = {},
+  options: {
+    readonly apiMode?: CliApiMode;
+    readonly includeActionHint?: boolean;
+  } = {},
 ): Promise<string[]> {
-  const mode = getCliApiMode();
+  const mode = options.apiMode ?? getCliApiMode();
   const profile = await getCliAuthProfile();
   const lines = [
     `api: ${formatCliApiMode(mode)}`,
