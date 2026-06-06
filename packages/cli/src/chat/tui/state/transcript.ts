@@ -1,9 +1,6 @@
 import { getDefaultStreamLogStore } from '@transcript';
-import {
-  STREAM_STATUS,
-  type StreamStatus,
-  type StreamTabId,
-} from '@shared/schemas';
+import { isTerminalStatus } from '@common/constants/streamStatus';
+import { type StreamStatus, type StreamTabId } from '@shared/schemas';
 
 import {
   cliState,
@@ -15,19 +12,17 @@ import {
 
 export const CLI_LOCAL_STREAM_ID = 'cli-local' as StreamTabId;
 
-/** Stream statuses at which deferred-finalization entries (assistant text
- *  and tool rows) are promoted into `<Static>` scrollback. */
-const FINAL_TRANSCRIPT_STATUSES: ReadonlySet<StreamStatus> = new Set([
-  STREAM_STATUS.ERROR,
-  STREAM_STATUS.READY,
-  STREAM_STATUS.STOPPED,
-  STREAM_STATUS.WAITING,
-]);
-
+/**
+ * Stream statuses at which deferred-finalization entries (assistant text and
+ * tool rows) are promoted into `<Static>` scrollback. This is exactly the
+ * shared "execution ended" set ({@link isTerminalStatus}) — a terminal status
+ * means the current cycle is done, so its entries are safe to finalize. Aliased
+ * (not re-declared) so the membership stays single-sourced across all hosts.
+ */
 export function isFinalTranscriptStatus(
   status: StreamStatus | undefined,
 ): boolean {
-  return status !== undefined && FINAL_TRANSCRIPT_STATUSES.has(status);
+  return isTerminalStatus(status);
 }
 
 let localEntrySeq = 0;

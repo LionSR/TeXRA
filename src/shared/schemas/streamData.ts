@@ -1,28 +1,30 @@
 /**
- * Zod schemas for stream-tab persistence.
+ * Host-agnostic parsing schemas for per-stream sidecar data on disk
+ * (`streamData/{id}/{outputFiles,missingOutputs,compileFailures,usageStats}.json`).
  *
- * Single source of truth for all data shapes read from / written to disk
- * by StreamTabStore, OutputFilesManager, and UsageStatsManager.
+ * Relocated out of the extension's `streamTabSchemas.ts` so the shared
+ * `StreamSnapshotStore` (core) and the extension managers parse identical
+ * on-disk shapes — the CLI, extension, and desktop all read/write the same
+ * files. Only `@agent`-free schemas live here; `StreamTabMetaSchema` keeps its
+ * `TaskState` dependency in the extension layer.
  *
  * Legacy data (from before the one-run-per-tab refactor) was keyed by runId:
  *   - outputFiles.json / missingOutputs.json used `{ runId: { round: … } }`
  *   - usageStats.json used `{ runId: TokenUsageStats }` (still the stored shape)
  *
- * The preprocess helpers below detect the legacy nested shape and flatten
- * it to the new format by picking the most recent run (last-inserted key).
+ * The preprocess helpers below detect the legacy nested shape and flatten it to
+ * the new format by picking the most recent run (last-inserted key).
  */
 
 import { z } from 'zod';
 
-import { TaskStateSchema } from '@agent/core/execution/TaskState';
 import {
   CompileFailureSchema,
   OutputFileInfoSchema,
-  TokenUsageStatsSchema,
   type CompileFailure,
   type OutputFileInfo,
-  type TokenUsageStats,
-} from '@shared/schemas';
+} from './output';
+import { TokenUsageStatsSchema, type TokenUsageStats } from './usage';
 
 // ============================================================================
 // Shared: round key coercion
@@ -32,16 +34,24 @@ import {
 export const RoundKeySchema = z.coerce.number().int();
 
 // ============================================================================
-// Meta — small per-stream scalars consolidated into one file
+// Per-stream meta file (streamData/{id}/meta.json) — single source of truth
 // ============================================================================
 
+/**
+ * On-disk shape of `meta.json`. `taskState` is kept as `unknown` here so this
+ * schema stays `@agent`-free and can live in `@shared/schemas`; consumers that
+ * need the typed value parse it with `TaskStateSchema` (which depends on
+ * `@agent`). This is THE definition — the core `StreamSnapshotStore` /
+ * `streamSnapshotRead` and the legacy `StreamTabStore` reader all import it
+ * directly, never their own copy.
+ */
 export const StreamTabMetaSchema = z.object({
   /** Legacy field — no longer written, tolerated on read so we can skip it. */
   activeRunId: z.string().nullable().optional(),
   parentStreamId: z.string().optional(),
   executionId: z.string().optional(),
-  taskState: TaskStateSchema.optional(),
-  /** AI-generated session description, mirrored from ExecutionMeta for fast hydration. */
+  taskState: z.unknown().optional(),
+  /** AI-generated session description, mirrored from ExecutionMeta. */
   description: z.string().optional(),
 });
 
@@ -161,20 +171,20 @@ function recordToRoundMap<T>(record: Record<string, T[]>): Map<number, T[]> {
   return map;
 }
 
-// ============================================================================
-// Output files: { round: OutputFileInfo[] }
-// ============================================================================
-
 function warnDroppedItem(
   kind: string,
   error: { issues: readonly { path: PropertyKey[]; message: string }[] },
 ): void {
   console.warn(
-    `[streamTabSchemas] Dropping malformed ${kind} entry: ${error.issues
+    `[streamData] Dropping malformed ${kind} entry: ${error.issues
       .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
       .join('; ')}`,
   );
 }
+
+// ============================================================================
+// Output files: { round: OutputFileInfo[] }
+// ============================================================================
 
 const OutputFileListSchema = z
   .array(z.unknown())
@@ -294,12 +304,3 @@ export const UsageDataSchema = z
     return map;
   })
   .catch(new Map()) as z.ZodType<Map<string, TokenUsageStats>>;
-
-// ============================================================================
-// Write-side types — shape contracts for data written to disk
-// ============================================================================
-
-export type OutputFilesRecord = Record<string, OutputFileInfo[]>;
-export type MissingOutputsRecord = Record<string, string[]>;
-export type CompileFailuresRecord = Record<string, CompileFailure[]>;
-export type UsageStatsRecord = Record<string, TokenUsageStats>;
