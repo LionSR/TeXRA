@@ -18,7 +18,6 @@ import {
   transcriptViewportRepaintOptions,
 } from '@cli/chat/tui/state/transcriptViewportMode';
 import {
-  estimateLiveTranscriptEntryRows,
   estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
@@ -264,29 +263,6 @@ describe('CLI conversation transcript splitting', () => {
     expect(selected.entries.map((item) => item.id)).toEqual(['a1']);
     expect(selected.usedRows).toBe(4);
     expect(selected.rowLimits.get('a1')).toBe(4);
-  });
-
-  it('can size finalized scoped assistant history with the full markdown estimator', () => {
-    const assistant = entry(
-      'a1',
-      'assistant',
-      Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join('\n'),
-      true,
-    );
-
-    const liveRows = estimateLiveTranscriptEntryRows(assistant, 80);
-    const fullRows = estimateTranscriptEntryRows(assistant, 80);
-    const selected = selectTranscriptEntriesForViewport(
-      [assistant],
-      fullRows,
-      80,
-      'finalized-full',
-    );
-
-    expect(liveRows).toBeLessThan(fullRows);
-    expect(selected.entries.map((item) => item.id)).toEqual(['a1']);
-    expect(selected.usedRows).toBe(fullRows);
-    expect(selected.rowLimits.has('a1')).toBe(false);
   });
 
   it('renders bounded finalized assistant tails through markdown', () => {

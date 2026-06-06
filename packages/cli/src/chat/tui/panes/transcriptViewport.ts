@@ -1,5 +1,4 @@
-// Pure viewport math for bounded transcript panes. The normal conversation pane
-// sizes only pending entries; transcript viewers can size finalized history too.
+// Pure viewport math for bounded pending transcript panes.
 
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
@@ -67,25 +66,12 @@ export interface TranscriptEntrySelection {
   readonly usedRows: number;
 }
 
-export type TranscriptViewportSizing = 'live-tail' | 'finalized-full';
-
-function estimateViewportEntryRows(
-  entry: ConversationEntry,
-  width: number,
-  sizing: TranscriptViewportSizing,
-): number {
-  return sizing === 'finalized-full' && entry.finalized
-    ? estimateTranscriptEntryRows(entry, width)
-    : estimateLiveTranscriptEntryRows(entry, width);
-}
-
 // Pick the newest entries that fit in `maxRows`. Conversation live mode passes
-// pending rows; full transcript surfaces may pass finalized history too.
+// pending rows; finalized history is owned by Static/native scrollback.
 export function selectTranscriptEntriesForViewport(
   entries: readonly ConversationEntry[],
   maxRows: number,
   width = 80,
-  sizing: TranscriptViewportSizing = 'live-tail',
 ): TranscriptEntrySelection {
   if (!Number.isFinite(maxRows) || maxRows <= 0) {
     return { entries: [], rowLimits: new Map(), usedRows: 0 };
@@ -96,7 +82,7 @@ export function selectTranscriptEntriesForViewport(
   let usedRows = 0;
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
-    const entryRows = estimateViewportEntryRows(entry, width, sizing);
+    const entryRows = estimateLiveTranscriptEntryRows(entry, width);
     if (usedRows + entryRows > maxRows) {
       if (selected.length === 0) {
         selected.unshift(entry);

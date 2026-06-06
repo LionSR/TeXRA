@@ -81,7 +81,6 @@ export function ConversationPane(
     displayEntries,
     maxRows,
     props.width,
-    'live-tail',
   );
   const visibleRows =
     displayEntries.length > 0
