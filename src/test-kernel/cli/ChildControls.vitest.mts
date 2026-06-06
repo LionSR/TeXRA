@@ -33,6 +33,7 @@ import {
   liveChildExecutionElapsedKey,
   nextPickerIndex,
   numericFocusTargetForActiveStream,
+  resolveChildControlDisplayTargets,
   resolveChildControlStreamTarget,
 } from '@cli/chat/tui/state/childControls';
 import { visibleSubagentRows } from '@cli/chat/tui/state/childStreamMerge';
@@ -633,6 +634,45 @@ describe('CLI child execution controls', () => {
         streams,
       }),
     ).toBe('review');
+  });
+
+  it('resolves child-control display targets with labels and availability', () => {
+    const parent = slice({
+      streamId: 'main',
+      activeSubagents: [
+        {
+          executionId: 'agent-1',
+          agentName: 'review',
+          childStreamId: 'review-stream',
+          status: 'running',
+        },
+      ],
+    });
+    const child = slice({ streamId: 'review-stream' });
+    const parentStream = new Map([['review-stream', 'main']] as const);
+    const targets = resolveChildControlDisplayTargets({
+      activeStreamId: 'review-stream',
+      parentStream,
+      streams: new Map([
+        ['main', parent],
+        ['review-stream', child],
+      ] as const),
+    });
+
+    expect(targets.subagents).toMatchObject({
+      streamId: 'main',
+      fallbackFromStreamId: 'review-stream',
+      hasItems: true,
+      streamLabel: 'main',
+      streamScopeDetail: 'review has no subagents',
+    });
+    expect(targets.tasks).toMatchObject({
+      streamId: 'main',
+      fallbackFromStreamId: 'review-stream',
+      hasItems: true,
+      streamLabel: 'main',
+      streamScopeDetail: 'review has no tasks or sub-workflows',
+    });
   });
 
   it('keeps subagent controls on the focused child when it has descendants', () => {
