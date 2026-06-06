@@ -120,12 +120,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // after an agent/team choice. Best-effort: an unavailable registry just
   // launches with the default model instead of blocking the launcher.
   const apiMode = effectiveCliApiMode(context);
-  const models: readonly CliModelAccess[] = await getCliModelAccessList({
-    apiMode,
-  }).catch(() => []);
-  const statusLines = await loadCliApiStatusLines({
-    includeActionHint: true,
-  });
+  const [models, statusLines] = await Promise.all([
+    getCliModelAccessList({ apiMode }).catch(
+      (): readonly CliModelAccess[] => [],
+    ),
+    loadCliApiStatusLines({ apiMode, includeActionHint: true }),
+  ]);
   const allowDefaultModelLaunch = await canLaunchWithDefaultModel(
     context,
     models,
