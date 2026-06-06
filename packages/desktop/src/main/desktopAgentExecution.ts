@@ -1139,8 +1139,12 @@ export class DesktopProgressBridge {
     await this.runExecution({ config: taskState.agentConfig });
   }
 
-  async sendFollowUp(streamId: StreamTabId, text: string): Promise<void> {
-    const result = await sendFollowUp(streamId, text);
+  async sendFollowUp(
+    streamId: StreamTabId,
+    text: string,
+    mediaFiles?: readonly string[],
+  ): Promise<void> {
+    const result = await sendFollowUp(streamId, text, mediaFiles);
     if (result.status === 'sent' || result.status === 'queued') {
       this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
       return;

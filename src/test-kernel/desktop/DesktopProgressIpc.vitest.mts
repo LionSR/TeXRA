@@ -18,7 +18,11 @@ interface DesktopProgressIpcModule {
       stopStream(stream: string): void;
       resumeStream(stream: string): Promise<void>;
       runNewStream(stream: string): Promise<void>;
-      sendFollowUp(stream: string, text: string): Promise<void>;
+      sendFollowUp(
+        stream: string,
+        text: string,
+        mediaFiles?: readonly string[],
+      ): Promise<void>;
       openFile(file: string, line?: number): Promise<void>;
       openFileCompile(file: string): Promise<void>;
       openTaskStorage(stream: string): Promise<void>;
@@ -85,7 +89,13 @@ function createProgress() {
     stopStream: vi.fn(),
     resumeStream: vi.fn(async (_stream: string) => {}),
     runNewStream: vi.fn(async (_stream: string) => {}),
-    sendFollowUp: vi.fn(async (_stream: string, _text: string) => {}),
+    sendFollowUp: vi.fn(
+      async (
+        _stream: string,
+        _text: string,
+        _mediaFiles?: readonly string[],
+      ) => {},
+    ),
     openFile: vi.fn(async (_file: string, _line?: number) => {}),
     openFileCompile: vi.fn(async (_file: string) => {}),
     openTaskStorage: vi.fn(async (_stream: string) => {}),
@@ -328,12 +338,54 @@ describe('desktop Progress IPC', () => {
     await Promise.resolve();
     expect(progress.resumeStream).toHaveBeenCalledWith('run-1');
     expect(progress.runNewStream).toHaveBeenCalledWith('run-1');
-    expect(progress.sendFollowUp).toHaveBeenCalledWith(
+    expect(progress.sendFollowUp.mock.calls[0]?.slice(0, 2)).toEqual([
       'run-1',
       'continue please',
-    );
+    ]);
     expect(progress.openFile).toHaveBeenCalledWith('/tmp/out.tex', 4);
     expect(progress.openFileCompile).toHaveBeenCalledWith('/tmp/out.pdf');
+  });
+
+  it('passes pasted follow-up images through the desktop bridge', async () => {
+    vi.doMock('@utils/files/pastedImageUtils', () => ({
+      savePastedImageBase64: vi.fn(async () => '/tmp/pasted/fig.png'),
+    }));
+    try {
+      const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
+      const { savePastedImageBase64 } =
+        await import('@utils/files/pastedImageUtils');
+      const progress = createProgress();
+      const ipc = createDesktopProgressIpc({ progress });
+
+      expect(
+        ipc.handleMessage({
+          command: PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP,
+          stream: 'run-1',
+          text: 'look at this figure',
+          images: [
+            {
+              base64: 'encoded',
+              mediaType: 'image/png',
+              fileName: 'pasted_1.png',
+            },
+          ],
+        }),
+      ).toBe(true);
+
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(savePastedImageBase64).toHaveBeenCalledWith(
+        'encoded',
+        'pasted_1.png',
+      );
+      expect(progress.sendFollowUp).toHaveBeenCalledWith(
+        'run-1',
+        'look at this figure',
+        ['/tmp/pasted/fig.png'],
+      );
+    } finally {
+      vi.doUnmock('@utils/files/pastedImageUtils');
+    }
   });
 
   it('maps approval actions and reports desktop-only unsupported approval variants', async () => {

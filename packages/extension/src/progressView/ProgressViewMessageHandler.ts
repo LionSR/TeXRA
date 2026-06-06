@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 
+import { createProgressViewFollowUpCommandHandlers } from '@controllers/progressView/ProgressViewFollowUpCommandHandlers';
 import { createProgressViewLifecycleCommandHandlers } from '@controllers/progressView/ProgressViewLifecycleCommandHandlers';
 import { createProgressViewRunCommandHandlers } from '@controllers/progressView/ProgressViewRunCommandHandlers';
 import { ProgressStreamLifecycleController } from '@controllers/progressView/ProgressStreamLifecycleController';
@@ -58,7 +59,6 @@ import {
   pathToLocation,
   WorkspaceFS,
 } from '@utils/files';
-import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
 import {
   buildFileContextFromTaskState,
   polishTextWithAI,
@@ -218,31 +218,23 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           await vscode.commands.executeCommand('texra.restoreState', taskState);
         }
       },
-      [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: async (data) => {
-        // Persist any pasted follow-up images to the shared `pasted/` dir (the
-        // same path the main webview uses) and forward their file paths so they
-        // reach the model on this follow-up turn via addMediaToUserMessage.
-        const mediaFiles: string[] = [];
-        for (const img of data.images ?? []) {
-          try {
-            mediaFiles.push(
-              await savePastedImageBase64(img.base64, img.fileName),
-            );
-          } catch (err) {
-            // Best-effort: a failed image save must not block the text, but log
-            // it so a missing attachment is diagnosable.
-            this.logger.warn(
-              this.channel,
-              `Failed to save pasted follow-up image: ${toErrorMessage(err)}`,
-            );
-          }
-        }
-        await vscode.commands.executeCommand('texra.sendFollowUp', {
-          stream: data.stream,
-          text: data.text,
-          ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
-        });
-      },
+      ...createProgressViewFollowUpCommandHandlers({
+        sendFollowUp: async ({ stream, text, mediaFiles }) => {
+          await vscode.commands.executeCommand('texra.sendFollowUp', {
+            stream,
+            text,
+            ...(mediaFiles && mediaFiles.length > 0 ? { mediaFiles } : {}),
+          });
+        },
+        reportImageSaveError: (_image, error) => {
+          // Best-effort: a failed image save must not block the text, but log
+          // it so a missing attachment is diagnosable.
+          this.logger.warn(
+            this.channel,
+            `Failed to save pasted follow-up image: ${toErrorMessage(error)}`,
+          );
+        },
+      }),
       [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]: (data) =>
         this.workflowFileActionsController.openTaskStorage(data.stream),
       [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]: (data) =>

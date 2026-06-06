@@ -1,3 +1,4 @@
+import { createProgressViewFollowUpCommandHandlers } from '@controllers/progressView/ProgressViewFollowUpCommandHandlers';
 import { createProgressViewLifecycleCommandHandlers } from '@controllers/progressView/ProgressViewLifecycleCommandHandlers';
 import { createProgressViewRunCommandHandlers } from '@controllers/progressView/ProgressViewRunCommandHandlers';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
@@ -49,8 +50,11 @@ export function createDesktopProgressIpc(
       resumeStream: (stream) => progress.resumeStream(stream),
       runNewStream: (stream) => progress.runNewStream(stream),
     }),
-    [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: (d) =>
-      progress.sendFollowUp(d.stream, d.text),
+    ...createProgressViewFollowUpCommandHandlers({
+      sendFollowUp: ({ stream, text, mediaFiles }) =>
+        progress.sendFollowUp(stream, text, mediaFiles),
+      reportImageSaveError: (_image, error) => reportAsyncError(error),
+    }),
     [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (d) => {
       if (!progress.handleToolEditApprovalAction(d)) onUnsupportedCommand(d);
     },
