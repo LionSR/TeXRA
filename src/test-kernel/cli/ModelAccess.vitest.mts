@@ -4,6 +4,8 @@ import {
   cliModelFallbackModeForSource,
   findCliModelAccessEntry,
   formatCliNoAvailableModelsRecovery,
+  formatCliNoRunnableModelsLaunchBlock,
+  formatCliNoRunnableModelsMessage,
   getCliModelAccessList,
   noRunnableModelAccessReason,
   runnableCliModelAccessEntries,
@@ -277,6 +279,42 @@ describe('CLI model access resolution', () => {
         'included',
       ),
     ).toBe('included');
+  });
+
+  it('formats no-runnable model reasons for launch and model picker views', () => {
+    const interactiveRecovery = {
+      includedModeAction: 'switch with /api included',
+      loginAction: 'Run /login',
+      personalModeAction: 'switch with /api personal',
+    };
+
+    expect(formatCliNoRunnableModelsLaunchBlock('includedLoginRequired')).toBe(
+      'Sign in with texra login for included relay models',
+    );
+    expect(formatCliNoRunnableModelsLaunchBlock('included')).toBe(
+      'No included relay models are runnable',
+    );
+    expect(formatCliNoRunnableModelsLaunchBlock('personal')).toBe(
+      'No personal API-key models are runnable',
+    );
+    expect(
+      formatCliNoRunnableModelsMessage(
+        'includedLoginRequired',
+        interactiveRecovery,
+      ),
+    ).toBe(
+      'Included relay models require sign-in. Run /login or switch with /api personal.',
+    );
+    expect(
+      formatCliNoRunnableModelsMessage('included', interactiveRecovery),
+    ).toBe(
+      'No included relay models are runnable. Switch with /api personal or try again later.',
+    );
+    expect(
+      formatCliNoRunnableModelsMessage('personal', interactiveRecovery),
+    ).toBe(
+      'No personal API-key models are runnable. Configure a provider key or switch with /api included.',
+    );
   });
 
   it('rejects personal-key models in included relay mode', () => {
