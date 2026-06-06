@@ -261,6 +261,29 @@ describe('CLI multi-agent presets', () => {
     );
   });
 
+  it('formats explicit non-delegating team roots without old fallback wording', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'mathematician',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [agent('lean', AgentCategory.ToolUse)],
+      agentOverride: 'lean',
+    });
+
+    const message = formatCliMultiAgentTeamLaunchBlockMessage(plan, {
+      requestedPreset: 'mathematician',
+      followUpAdvice:
+        'Start a single-agent chat with `texra chat --agent lean` if that is what you want.',
+    });
+
+    expect(message).toBe(
+      'Multi-agent preset "mathematician" cannot start as a team: team root lean is not a delegating agent. Run `texra multi-agent inspect mathematician` to see missing agents. Start a single-agent chat with `texra chat --agent lean` if that is what you want.',
+    );
+    expect(message).not.toContain('cannot delegate');
+  });
+
   it('rejects launch block message formatting for launchable plans', () => {
     const preset = findCliMultiAgentPreset(
       cliMultiAgentPresets(undefined),
