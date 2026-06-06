@@ -24,15 +24,6 @@ vi.mock('@utils/system', () => ({
   executeCommand: mocks.executeCommand,
 }));
 
-vi.mock('@agent/core/stateStore', () => ({
-  getWorkspaceState: () => ({
-    get: <T>(_key: unknown, fallback: T) => fallback,
-  }),
-  tryGetWorkspaceState: () => ({
-    get: <T>(_key: unknown, fallback: T) => fallback,
-  }),
-}));
-
 vi.mock('@utils/config/configUtils', () => ({
   getConfig: <T>(_key: string, fallback: T) => fallback,
 }));

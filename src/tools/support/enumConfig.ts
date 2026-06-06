@@ -11,7 +11,7 @@
  * semantics identical across both tools.
  */
 
-import { getWorkspaceState } from '@agent/core/stateStore';
+import { platform } from '@platform/platform';
 
 /**
  * Build a parser that maps an arbitrary string onto a member of `values`,
@@ -40,7 +40,7 @@ export function createEnumStateGetter<T extends string>(
   parse: (raw: string) => T,
 ): () => T {
   return (): T => {
-    const raw = getWorkspaceState().get<string>(key, fallback);
+    const raw = platform().workspaceState.get<string>(key, fallback);
     return parse(raw);
   };
 }

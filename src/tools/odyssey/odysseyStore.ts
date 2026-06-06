@@ -1,9 +1,7 @@
 import { randomUUID } from 'crypto';
 
-import {
-  getWorkspaceState,
-  tryGetWorkspaceState,
-} from '@agent/core/stateStore';
+import { platform } from '@platform/platform';
+import { tryGetWorkspaceState } from '@agent/core/stateStore';
 import { bus } from '@eventBus/ProgressEventBus';
 import type { StreamTabId } from '@shared/schemas/identifiers';
 
@@ -48,7 +46,7 @@ function trimHistory(events: readonly OdysseyEvent[]): OdysseyEvent[] {
 function readRaw(streamId: StreamTabId): Odyssey | null {
   // tryGetWorkspaceState — bootstrap-tolerant: read-only paths called before
   // initPlatform() (e.g. early-stream syncs in some tests) return null
-  // rather than throwing. Write paths still use getWorkspaceState() which
+  // rather than throwing. Write paths still use platform().workspaceState which
   // does throw, surfacing the misuse.
   const state = tryGetWorkspaceState();
   if (!state) return null;
@@ -59,7 +57,7 @@ function readRaw(streamId: StreamTabId): Odyssey | null {
 }
 
 async function writeRaw(odyssey: Odyssey): Promise<void> {
-  await getWorkspaceState().update(streamKey(odyssey.streamId), odyssey);
+  await platform().workspaceState.update(streamKey(odyssey.streamId), odyssey);
 }
 
 function readIndex(): StreamTabId[] {
@@ -74,14 +72,14 @@ function readIndex(): StreamTabId[] {
 async function addToIndex(streamId: StreamTabId): Promise<void> {
   const index = readIndex();
   if (index.includes(streamId)) return;
-  await getWorkspaceState().update(INDEX_KEY, [...index, streamId]);
+  await platform().workspaceState.update(INDEX_KEY, [...index, streamId]);
 }
 
 async function removeFromIndex(streamId: StreamTabId): Promise<void> {
   const index = readIndex();
   const next = index.filter((id) => id !== streamId);
   if (next.length === index.length) return;
-  await getWorkspaceState().update(INDEX_KEY, next);
+  await platform().workspaceState.update(INDEX_KEY, next);
 }
 
 /**

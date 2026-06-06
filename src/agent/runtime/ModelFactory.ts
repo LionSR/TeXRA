@@ -2,10 +2,10 @@ import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
+import { platform } from '@platform/platform';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import { getGlobalState } from '@agent/core/stateStore';
 import * as logger from '@logger/logUtils';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { getConfig } from '@utils/config/configUtils';
@@ -137,7 +137,7 @@ const PROVIDER_HANDLER_ROUTES: Record<ModelProvider, ProviderHandlerRoute> = {
 function withReasoningOverride<T extends ModelHandler>(handler: T): T {
   if (!handler.supportsReasoningLevelOverride) return handler;
 
-  const level = getGlobalState().get<Record<string, string>>(
+  const level = platform().globalState.get<Record<string, string>>(
     GlobalStateKey.REASONING_LEVELS,
     {},
   )[handler.config.name];
@@ -235,7 +235,7 @@ function shouldUseInternalValidationModelHandler(): boolean {
 export function modelHandlerCompatibilityKey(
   originalConfig: ModelConfig,
   useOpenRouter = getUseOpenRouter(),
-  preferShortModelNames = getGlobalState().get<boolean>(
+  preferShortModelNames = platform().globalState.get<boolean>(
     GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
     false,
   ),
@@ -288,7 +288,7 @@ function withModelHandlerCompatibilityKey<T extends ModelHandler>(
 function withShortModelName(config: ModelConfig): ModelConfig {
   const resolved = applyShortModelNamePreference(
     config,
-    getGlobalState().get<boolean>(
+    platform().globalState.get<boolean>(
       GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
       false,
     ),
