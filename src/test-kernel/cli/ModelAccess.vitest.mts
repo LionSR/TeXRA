@@ -4,6 +4,7 @@ import {
   cliModelFallbackModeForSource,
   formatCliNoAvailableModelsRecovery,
   getCliModelAccessList,
+  noRunnableModelAccessReason,
   runnableCliModelAccessEntries,
   resolveCliRunnableModel,
   resolveCliRunnableModelFromAccessList,
@@ -215,6 +216,57 @@ describe('CLI model access resolution', () => {
         (entry) => entry.model.value,
       ),
     ).toEqual(['deepseekT', 'openrouterOnlyT']);
+  });
+
+  it('classifies signed-out included access separately from other included outages', () => {
+    expect(
+      noRunnableModelAccessReason(
+        [
+          model('sonnet46T', {
+            available: false,
+            status: 'login required',
+            model: modelOption('sonnet46T', {
+              availability: 'included-login-required',
+              disabled: true,
+            }),
+          }),
+        ],
+        'included',
+      ),
+    ).toBe('includedLoginRequired');
+  });
+
+  it('classifies personal and non-login included empty states by API mode', () => {
+    expect(
+      noRunnableModelAccessReason(
+        [
+          model('gemini31p', {
+            available: false,
+            status: 'missing api key',
+            model: modelOption('gemini31p', {
+              availability: 'missing-key',
+              requiresKey: true,
+            }),
+          }),
+        ],
+        'personal',
+      ),
+    ).toBe('personal');
+    expect(
+      noRunnableModelAccessReason(
+        [
+          model('deepseekT', {
+            available: false,
+            status: 'relay quota exhausted',
+            model: modelOption('deepseekT', {
+              availability: 'relay-quota-exhausted',
+              disabled: true,
+            }),
+          }),
+        ],
+        'included',
+      ),
+    ).toBe('included');
   });
 
   it('rejects personal-key models in included relay mode', () => {
