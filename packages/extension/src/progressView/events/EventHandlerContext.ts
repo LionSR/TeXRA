@@ -12,7 +12,7 @@
  * This avoids wasted serialization + frontend state churn for non-visible streams.
  */
 
-import type { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
+import type { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
 import type { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 
 export interface EventHandlerContext {
