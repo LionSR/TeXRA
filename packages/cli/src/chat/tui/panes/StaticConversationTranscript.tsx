@@ -17,6 +17,10 @@ import {
   type SessionMeta,
   type StreamSlice,
 } from '../state/cliState';
+import {
+  childStreamDisplayLabel,
+  streamScopeDisplayLabel,
+} from '../state/streamLabels';
 import { transcriptEntryLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 import { TranscriptEntry } from './TranscriptEntry';
@@ -26,6 +30,7 @@ export type StaticTranscriptItem =
       readonly id: string;
       readonly kind: 'header';
       readonly compact: boolean;
+      readonly identityLine: string;
       readonly meta: SessionMeta;
     }
   | {
@@ -50,8 +55,29 @@ function shortenCwd(cwd: string): string {
   return cwd;
 }
 
-export function sessionHeaderIdentityLine(meta: SessionMeta): string {
+export function sessionHeaderIdentityLine(
+  meta: SessionMeta,
+  context: {
+    readonly parentStream?: ReadonlyMap<StreamTabId, StreamTabId>;
+    readonly streamId?: StreamTabId;
+    readonly streams?: ReadonlyMap<StreamTabId, StreamSlice>;
+  } = {},
+): string {
   const model = meta.model || '—';
+  const parentStreamId =
+    context.streamId && context.parentStream?.get(context.streamId);
+  if (context.streamId && parentStreamId && context.streams) {
+    const parentLabel = streamScopeDisplayLabel({
+      parentStream: context.parentStream ?? new Map(),
+      streamId: parentStreamId,
+      streams: context.streams,
+    });
+    const childLabel = childStreamDisplayLabel(
+      context.streams.get(parentStreamId),
+      context.streamId,
+    );
+    return `subagent: ${childLabel} · parent: ${parentLabel} · model: ${model}`;
+  }
   if (meta.teamName) {
     return `team: ${meta.teamName} · root: ${meta.agent || 'chat'} · model: ${model}`;
   }
@@ -60,10 +86,12 @@ export function sessionHeaderIdentityLine(meta: SessionMeta): string {
 
 function SessionHeaderBlock({
   compact,
+  identityLine,
   meta,
   width,
 }: {
   readonly compact: boolean;
+  readonly identityLine: string;
   readonly meta: SessionMeta;
   readonly width?: number;
 }): React.JSX.Element {
@@ -77,7 +105,7 @@ function SessionHeaderBlock({
           </Text>{' '}
           <Text dimColor>v{meta.version}</Text>{' '}
           <Text dimColor>{shortCliApiMode(meta.apiMode)}</Text>{' '}
-          <Text>{sessionHeaderIdentityLine(meta)}</Text>
+          <Text>{identityLine}</Text>
         </Text>
       </Box>
     );
@@ -97,7 +125,7 @@ function SessionHeaderBlock({
           <Text dimColor>{shortCliApiMode(meta.apiMode)}</Text>
         </Box>
         <Box>
-          <Text wrap="truncate-end">{sessionHeaderIdentityLine(meta)}</Text>
+          <Text wrap="truncate-end">{identityLine}</Text>
         </Box>
         <Text dimColor wrap="truncate-end">
           {shortenCwd(meta.cwd)}
@@ -137,6 +165,7 @@ export function appendStaticTranscriptItems({
   streams,
   meta,
   maxRows,
+  parentStream = new Map(),
   scrollbackStreamId,
   width,
 }: {
@@ -144,6 +173,7 @@ export function appendStaticTranscriptItems({
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly meta: SessionMeta;
   readonly maxRows?: number;
+  readonly parentStream?: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly scrollbackStreamId: StreamTabId | undefined;
   readonly width?: number;
 }): readonly StaticTranscriptItem[] {
@@ -158,6 +188,11 @@ export function appendStaticTranscriptItems({
       id: SESSION_HEADER_ID,
       kind: 'header',
       compact: maxRows !== undefined && maxRows < FULL_SESSION_HEADER_ROWS,
+      identityLine: sessionHeaderIdentityLine(meta, {
+        parentStream,
+        streamId: scrollbackStreamId,
+        streams,
+      }),
       meta,
     };
     if (
@@ -200,6 +235,7 @@ export function StaticConversationTranscript({
 }): React.JSX.Element {
   const streams = useSignal(cliState.streams);
   const sessionMeta = useSignal(cliState.sessionMeta);
+  const parentStream = useSignal(cliState.parentStream);
   const ownerKey = scrollbackStreamId ?? 'none';
   const [state, setState] = useState<StaticTranscriptState>(() => ({
     ownerKey,
@@ -208,6 +244,7 @@ export function StaticConversationTranscript({
       streams,
       meta: sessionMeta,
       maxRows,
+      parentStream,
       scrollbackStreamId,
       width,
     }),
@@ -221,6 +258,7 @@ export function StaticConversationTranscript({
           streams,
           meta: sessionMeta,
           maxRows,
+          parentStream,
           scrollbackStreamId,
           width,
         });
@@ -239,6 +277,7 @@ export function StaticConversationTranscript({
         streams,
         meta: sessionMeta,
         maxRows,
+        parentStream,
         scrollbackStreamId,
         width,
       });
@@ -247,7 +286,15 @@ export function StaticConversationTranscript({
       }
       return { ownerKey, items: nextItems };
     });
-  }, [maxRows, ownerKey, scrollbackStreamId, sessionMeta, streams, width]);
+  }, [
+    maxRows,
+    ownerKey,
+    parentStream,
+    scrollbackStreamId,
+    sessionMeta,
+    streams,
+    width,
+  ]);
 
   return (
     // Remount <Static> on a width or owner change so Ink regenerates
@@ -262,6 +309,7 @@ export function StaticConversationTranscript({
           {item.kind === 'header' ? (
             <SessionHeaderBlock
               compact={item.compact}
+              identityLine={item.identityLine}
               meta={item.meta}
               width={width}
             />
