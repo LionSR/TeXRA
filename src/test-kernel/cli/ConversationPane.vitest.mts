@@ -11,6 +11,7 @@ import {
   appendStaticTranscriptItems,
   sessionHeaderIdentityLine,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
+import { staticScrollbackStreamId } from '@cli/chat/tui/App';
 import {
   transcriptViewportChange,
   transcriptViewportKey,
@@ -29,7 +30,10 @@ import {
   type StreamSlice,
 } from '@cli/chat/tui/state/cliState';
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
-import { finalizeAssistantTranscriptEntries } from '@cli/chat/tui/state/transcript';
+import {
+  CLI_LOCAL_STREAM_ID,
+  finalizeAssistantTranscriptEntries,
+} from '@cli/chat/tui/state/transcript';
 import { subscribeStreamStatus } from '@cli/chat/tui/state/subscribeStreamStatus';
 import {
   STREAM_STATUS,
@@ -335,7 +339,7 @@ describe('CLI conversation transcript splitting', () => {
     const assistant = entry('a1', 'assistant', 'A decomposition.', false);
 
     const first = appendStaticTranscriptItems({
-      activeStreamId: STREAM_ID,
+      scrollbackStreamId: STREAM_ID,
       currentItems: [],
       streams: streamsFromEntries(STREAM_ID, [user, assistant]),
       meta: SESSION_META,
@@ -345,7 +349,7 @@ describe('CLI conversation transcript splitting', () => {
     expect(first.slice(1).map((item) => item.id)).toEqual(['u1']);
 
     const second = appendStaticTranscriptItems({
-      activeStreamId: STREAM_ID,
+      scrollbackStreamId: STREAM_ID,
       currentItems: first,
       streams: streamsFromEntries(STREAM_ID, [
         user,
@@ -359,7 +363,7 @@ describe('CLI conversation transcript splitting', () => {
 
   it('shows the session header exactly once', () => {
     const first = appendStaticTranscriptItems({
-      activeStreamId: undefined,
+      scrollbackStreamId: undefined,
       currentItems: [],
       streams: new Map(),
       meta: SESSION_META,
@@ -367,7 +371,7 @@ describe('CLI conversation transcript splitting', () => {
     expect(first).toHaveLength(1);
 
     const again = appendStaticTranscriptItems({
-      activeStreamId: undefined,
+      scrollbackStreamId: undefined,
       currentItems: first,
       streams: new Map(),
       meta: { ...SESSION_META, model: 'sonnet' },
@@ -380,7 +384,7 @@ describe('CLI conversation transcript splitting', () => {
     const assistant = entry('a1', 'assistant', 'A decomposition.', true);
 
     const compact = appendStaticTranscriptItems({
-      activeStreamId: STREAM_ID,
+      scrollbackStreamId: STREAM_ID,
       currentItems: [],
       streams: streamsFromEntries(STREAM_ID, [user, assistant]),
       meta: SESSION_META,
@@ -398,7 +402,7 @@ describe('CLI conversation transcript splitting', () => {
 
     expect(
       appendStaticTranscriptItems({
-        activeStreamId: STREAM_ID,
+        scrollbackStreamId: STREAM_ID,
         currentItems: [],
         streams: streamsFromEntries(STREAM_ID, [user, assistant]),
         meta: SESSION_META,
@@ -414,7 +418,7 @@ describe('CLI conversation transcript splitting', () => {
     const later = entry('u2', 'user', 'later', true);
 
     const compact = appendStaticTranscriptItems({
-      activeStreamId: STREAM_ID,
+      scrollbackStreamId: STREAM_ID,
       currentItems: [],
       streams: streamsFromEntries(STREAM_ID, [first, large, later]),
       meta: SESSION_META,
@@ -443,7 +447,7 @@ describe('CLI conversation transcript splitting', () => {
     );
   });
 
-  it('only feeds the active stream into scrollback, not background subagents', () => {
+  it('only feeds the root scrollback stream, not background subagents', () => {
     const rootUser = entry('u1', 'user', 'do x', true);
     const childAssistant = entry('a1', 'assistant', 'done', true);
     const ROOT = 'root-stream' as StreamTabId;
@@ -454,13 +458,53 @@ describe('CLI conversation transcript splitting', () => {
     ]);
 
     const items = appendStaticTranscriptItems({
-      activeStreamId: ROOT,
+      scrollbackStreamId: ROOT,
       currentItems: [],
       streams,
       meta: SESSION_META,
     });
 
     expect(items.slice(1).map((item) => item.id)).toEqual(['u1']);
+  });
+
+  it('keeps child focus from changing the static scrollback owner', () => {
+    const rootUser = entry('u1', 'user', 'root prompt', true);
+    const childAssistant = entry('a1', 'assistant', 'child detail', true);
+    const ROOT = 'root-stream' as StreamTabId;
+    const CHILD = 'claude@agent-sdk#1' as StreamTabId;
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [ROOT, sliceWithEntries(ROOT, [rootUser])],
+      [CHILD, sliceWithEntries(CHILD, [childAssistant])],
+    ]);
+
+    const scrollbackStreamId = staticScrollbackStreamId({
+      activeStreamId: CHILD,
+      rootStreamId: ROOT,
+    });
+    const items = appendStaticTranscriptItems({
+      scrollbackStreamId,
+      currentItems: [],
+      streams,
+      meta: SESSION_META,
+    });
+
+    expect(scrollbackStreamId).toBe(ROOT);
+    expect(items.slice(1).map((item) => item.id)).toEqual(['u1']);
+  });
+
+  it('falls back to active stream only before the root owner resolves', () => {
+    expect(
+      staticScrollbackStreamId({
+        activeStreamId: STREAM_ID,
+        rootStreamId: undefined,
+      }),
+    ).toBe(STREAM_ID);
+    expect(
+      staticScrollbackStreamId({
+        activeStreamId: CLI_LOCAL_STREAM_ID,
+        rootStreamId: undefined,
+      }),
+    ).toBe(CLI_LOCAL_STREAM_ID);
   });
 
   it('separates root scrollback from scoped child transcript viewports', () => {
