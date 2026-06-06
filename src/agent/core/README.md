@@ -26,10 +26,11 @@ flows ──▶ execution ──▶ definition
 depend on neither. Don't introduce imports that point back outward (e.g.
 `definition` importing from `execution`).
 
-Files kept at the `core/` root are thin infrastructure facades or shared
+Files kept at the `core/` root are limited infrastructure helpers or shared
 constants, not domain types:
 
-- `config.ts`, `stateStore.ts` — platform facades over `@platform`.
+- `stateStore.ts` — pre-init tolerant workspace-state access; after platform
+  init, use `platform().workspaceState` / `platform().globalState` directly.
 - `constants.ts` — shared preview/threshold constants.
 
 ## Importing

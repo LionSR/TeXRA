@@ -4,11 +4,11 @@ import * as path from 'path';
 import { glob } from 'glob';
 import * as yaml from 'yaml';
 
+import { platform } from '@platform/platform';
 import {
   AgentCategory,
   AgentDefinitionSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { getGlobalState, getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { AgentOptionData } from '@shared/schemas';
@@ -45,7 +45,7 @@ function migrateLegacySourceKeys(): void {
     WorkspaceStateKey.ENABLED_AGENTS,
     WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
   ] as const) {
-    const stored = getWorkspaceState().get<string[]>(stateKey, []);
+    const stored = platform().workspaceState.get<string[]>(stateKey, []);
     if (!stored?.length) continue;
     if (!stored.some(isLegacyBuiltInKey)) continue;
 
@@ -54,7 +54,7 @@ function migrateLegacySourceKeys(): void {
         ? NEW_BUILTIN_PREFIX + k.slice(LEGACY_BUILTIN_PREFIX.length)
         : k,
     );
-    void getWorkspaceState().update(stateKey, migrated);
+    void platform().workspaceState.update(stateKey, migrated);
     logger.info(CHANNEL, `Migrated legacy builtIn keys in ${stateKey}`);
   }
 }
@@ -218,7 +218,7 @@ async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
 
   // Apply category overrides from config
   const toolUseOverrides = new Set(
-    getWorkspaceState().get<string[]>(
+    platform().workspaceState.get<string[]>(
       WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
       [],
     ),
@@ -469,18 +469,21 @@ function persistRemoteAgentMeta(
   meta: { tools?: string[]; defaultOutputFiles?: string[] },
 ): void {
   const stored =
-    getGlobalState().get<RemoteAgentMetaCache>(
+    platform().globalState.get<RemoteAgentMetaCache>(
       GlobalStateKey.REMOTE_AGENT_META_CACHE,
       {},
     ) ?? {};
   stored[agentName] = { ...stored[agentName], ...meta };
-  void getGlobalState().update(GlobalStateKey.REMOTE_AGENT_META_CACHE, stored);
+  void platform().globalState.update(
+    GlobalStateKey.REMOTE_AGENT_META_CACHE,
+    stored,
+  );
 }
 
 /** Load persisted remote agent metadata from globalState. */
 function getPersistedRemoteAgentMeta(): RemoteAgentMetaCache {
   return (
-    getGlobalState().get<RemoteAgentMetaCache>(
+    platform().globalState.get<RemoteAgentMetaCache>(
       GlobalStateKey.REMOTE_AGENT_META_CACHE,
       {},
     ) ?? {}
@@ -582,7 +585,7 @@ export function getVisibleAgents(
   const stateKey = isToolUse
     ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
     : WorkspaceStateKey.ENABLED_AGENTS;
-  const raw = getWorkspaceState().get<string[]>(stateKey);
+  const raw = platform().workspaceState.get<string[]>(stateKey);
   return filterVisible(entries, raw);
 }
 

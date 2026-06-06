@@ -10,13 +10,12 @@ import { render } from 'ink';
 import React from 'react';
 
 import { getToolUseAgents, getWorkflowAgents, loadAgents } from '@agent/index';
-import { getWorkspaceState } from '@agent/core/stateStore';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { tryPlatform } from '@platform/platform';
+import { platform, tryPlatform } from '@platform/platform';
 import {
   AGENT_CATEGORY,
   LOG_LEVELS,
@@ -232,7 +231,7 @@ await initLocalCliPlatform({
   helperModel: 'harness-model',
 });
 if (process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined) {
-  await getWorkspaceState().update(
+  await platform().workspaceState.update(
     WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
     HARNESS_VISIBLE_TOOL_USE_AGENTS,
   );
