@@ -208,7 +208,7 @@ export async function getCliModelAccessList(
   return access;
 }
 
-function findModelAccess(
+export function findCliModelAccessEntry(
   models: readonly CliModelAccess[],
   model: string,
 ): CliModelAccess | undefined {
@@ -227,7 +227,9 @@ function withModelAccess(
   models: readonly CliModelAccess[],
   entry: CliModelAccess | undefined,
 ): readonly CliModelAccess[] {
-  if (!entry || findModelAccess(models, entry.model.value)) return models;
+  if (!entry || findCliModelAccessEntry(models, entry.model.value)) {
+    return models;
+  }
   return [...models, entry];
 }
 
@@ -275,8 +277,8 @@ export function resolveCliRunnableModelFromAccessList(
     models,
     options.apiMode,
   );
-  const entry = findModelAccess(models, trimmed);
-  const runnableEntry = findModelAccess(runnableEntries, trimmed);
+  const entry = findCliModelAccessEntry(models, trimmed);
+  const runnableEntry = findCliModelAccessEntry(runnableEntries, trimmed);
   if (runnableEntry) return { model: runnableEntry.model.value };
 
   const availableIds = modelIds(runnableEntries);
@@ -313,7 +315,7 @@ export async function resolveCliRunnableModelWithAccessList(
 ): Promise<CliRunnableModelResolution> {
   const trimmed = model.trim();
   const hiddenModelId =
-    trimmed && !findModelAccess(models, trimmed)
+    trimmed && !findCliModelAccessEntry(models, trimmed)
       ? getCanonicalModelConfigId(trimmed)
       : undefined;
   let hiddenModel: CliModelAccess | undefined;
