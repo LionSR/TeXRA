@@ -3,7 +3,11 @@ import { toErrorMessage } from '@common/errors/errorMessage';
 import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 
 import { formatCliAccountLabelForDisplay } from './accountDisplay';
-import { formatCliApiMode, getCliApiMode } from './apiAccessMode';
+import {
+  formatCliApiMode,
+  getCliApiMode,
+  type CliApiMode,
+} from './apiAccessMode';
 import { fetchRelayUsageSummary, type RelayUsageSummary } from './relayUsage';
 import { getCliAuthProfile, type CliAuthProfile } from './supabaseAuth';
 
@@ -44,6 +48,20 @@ export function formatApiKeyShadowWarning(
   return 'note: a provider API key is set while signed in — `--api-mode` (or `/api`) controls which one is used.';
 }
 
+export function formatCliApiStatusActionHint(
+  mode: CliApiMode,
+  profile: Pick<CliAuthProfile, 'authenticated'>,
+): string {
+  if (mode === 'included') {
+    return profile.authenticated
+      ? 'actions: `texra login --select-account` changes account; `--api-mode personal` uses provider keys'
+      : 'actions: `texra login` enables included relay; `--api-mode personal` uses provider keys';
+  }
+  return profile.authenticated
+    ? 'actions: `--api-mode included` uses relay; `texra logout` signs out'
+    : 'actions: configure a provider key, or run `texra login` for included relay';
+}
+
 async function anyPersonalKeyPresent(): Promise<boolean> {
   const secrets = platform().secrets;
   const origins = await Promise.all(
@@ -52,13 +70,18 @@ async function anyPersonalKeyPresent(): Promise<boolean> {
   return origins.some((origin) => origin !== 'none');
 }
 
-export async function loadCliApiStatusLines(): Promise<string[]> {
+export async function loadCliApiStatusLines(
+  options: { readonly includeActionHint?: boolean } = {},
+): Promise<string[]> {
   const mode = getCliApiMode();
   const profile = await getCliAuthProfile();
   const lines = [
     `api: ${formatCliApiMode(mode)}`,
     formatCliAuthStatusLine(profile),
   ];
+  const actionHint = options.includeActionHint
+    ? formatCliApiStatusActionHint(mode, profile)
+    : undefined;
 
   if (profile.authenticated) {
     const shadowWarning = formatApiKeyShadowWarning(
@@ -69,7 +92,10 @@ export async function loadCliApiStatusLines(): Promise<string[]> {
   }
 
   if (profile.tier) lines.push(`tier: ${profile.tier}`);
-  if (!profile.authenticated || !profile.tier) return lines;
+  if (!profile.authenticated || !profile.tier) {
+    if (actionHint) lines.push(actionHint);
+    return lines;
+  }
 
   try {
     lines.push(
@@ -81,5 +107,6 @@ export async function loadCliApiStatusLines(): Promise<string[]> {
     lines.push(`relay usage: unavailable (${toErrorMessage(error)})`);
   }
 
+  if (actionHint) lines.push(actionHint);
   return lines;
 }
