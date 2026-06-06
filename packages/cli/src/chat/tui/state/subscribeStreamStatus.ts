@@ -1,10 +1,7 @@
 // Mirror `StreamStatusService.onDidChange` into the per-stream status signal.
 
 import { projectStreamTranscriptForStatus } from './transcriptProjection';
-import {
-  applyStreamStatusChange,
-  onStreamStatusChange,
-} from './streamStatusSnapshot';
+import { applyStreamStatusChange, onStreamStatusChange } from './streamStatus';
 
 export function subscribeStreamStatus(): () => void {
   return onStreamStatusChange((change) => {
