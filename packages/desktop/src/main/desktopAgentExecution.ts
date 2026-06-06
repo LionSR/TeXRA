@@ -16,6 +16,8 @@ import {
   StreamLogStore,
   StreamSnapshotStore,
 } from '@transcript';
+import { streamDataDir } from '@transcript/streamDataPaths';
+import { readMeta } from '@transcript/streamSnapshotRead';
 import {
   buildStreamTabInfo,
   peekWorktreeInfo,
@@ -23,13 +25,16 @@ import {
 } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
 import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
+import { TaskStateSchema } from '@agent/core/execution/TaskState';
 import {
   clearRetryRequest,
   resolvePlanApproval,
   resolveProposal,
 } from '@agent/runtime/runCoordinators';
+import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 import {
   detachActiveChildren,
   interruptActiveChildren,
@@ -38,12 +43,14 @@ import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { toErrorMessage } from '@common/errors';
 import {
   getFileListConfig,
   loadFileListSettings,
   type ListableFileType,
 } from '@common/files/fileListingRules';
 import { listWorkspaceFiles } from '@common/files/workspaceFileListing';
+import { KVStore } from '@common/storage/KVStore';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { DiffViewHost } from '@hosts/diffViewHost';
 import type { ExternalOpener } from '@hosts/externalOpener';
@@ -63,6 +70,7 @@ import {
   type ProgressViewOutboundMessage,
   type StreamMetadata,
   type StreamStatus,
+  type ExecutionId,
   type StreamTabId,
   type StreamTabInfo,
 } from '@shared/schemas';
@@ -128,6 +136,18 @@ type StreamBadgeSnapshot = {
   finishedProcessCount: number;
 };
 
+type ResumeState = {
+  taskState: TaskState;
+  executionId?: ExecutionId;
+};
+
+type PersistedResumeMeta = {
+  taskState?: TaskState;
+  executionId?: ExecutionId;
+  description?: string;
+  parentStreamId?: StreamTabId;
+};
+
 export interface DesktopProgressBridgeOptions {
   detachSubagentsOnStop?: boolean;
   openPath?: (filePath: string, line?: number) => Promise<void>;
@@ -161,6 +181,8 @@ export class DesktopProgressBridge {
   private readonly executionIds = new Map<StreamTabId, string>();
   private readonly descriptions = new Map<StreamTabId, string>();
   private readonly parentStreams = new Map<StreamTabId, StreamTabId>();
+  private readonly resumeAttempts = new Set<StreamTabId>();
+  private readonly deletedStreams = new Set<StreamTabId>();
   private readonly creationTimestamps = new Map<StreamTabId, number>();
   private readonly conversationProgress = new Map<
     StreamTabId,
@@ -1023,6 +1045,7 @@ export class DesktopProgressBridge {
       this.taskStates.has(streamId) ||
       this.restoredStreams.has(streamId);
     if (!hadStream) return;
+    this.deletedStreams.add(streamId);
     this.removePersistedStream(streamId);
 
     // Shared approval cleanup also owns retry/proposal/plan coordinator cleanup.
@@ -1072,6 +1095,9 @@ export class DesktopProgressBridge {
       ...this.restoredStreams.keys(),
     ]);
     for (const streamId of streamIds) {
+      this.deletedStreams.add(streamId);
+    }
+    for (const streamId of streamIds) {
       ToolUseFollowUpQueue.release(streamId);
     }
     await OdysseyStore.forgetMany([...streamIds]);
@@ -1112,24 +1138,177 @@ export class DesktopProgressBridge {
   }
 
   async resumeStream(streamId: StreamTabId): Promise<void> {
-    const taskState = this.taskStates.get(streamId);
-    if (!taskState) {
-      // Ghost stream from a prior launch: we don't have taskState in
-      // memory and reviving the runtime is out of scope (audit item
-      // D Phase 2). Surface a clear message rather than silently no-op.
-      if (this.restoredStreams.has(streamId)) {
-        await this.options.showInfoMessage?.(
-          'This run is from a previous session. Live resume is not yet supported — please start a fresh run.',
-        );
-      }
-      return;
+    await this.tryResumeStream(streamId);
+  }
+
+  async tryResumeStream(streamId: StreamTabId): Promise<boolean> {
+    if (
+      StreamStatusService.isActiveOrResuming(streamId) ||
+      this.resumeAttempts.has(streamId) ||
+      this.deletedStreams.has(streamId)
+    ) {
+      this.logger.debug(
+        `Stream ${streamId} cannot be resumed, skipping desktop resume`,
+      );
+      return false;
     }
 
+    this.resumeAttempts.add(streamId);
+    let ownsResumingStatus = false;
+    try {
+      const resumeState = await this.resolveResumeState(streamId);
+      if (!resumeState) {
+        await this.options.showInfoMessage?.(
+          'No persisted run state was found for this stream. Start a new run instead.',
+        );
+        return false;
+      }
+
+      const { taskState, executionId } = resumeState;
+      if (!executionId) {
+        await this.options.showInfoMessage?.(
+          'This stream has no persisted execution id. Start a new run instead.',
+        );
+        return false;
+      }
+
+      const resume = await retrieveSessionResumeData(
+        streamId,
+        executionId,
+        taskState,
+      );
+      if (!resume) {
+        await this.options.showInfoMessage?.(
+          'This run has no resumable session state. Start a new run instead.',
+        );
+        return false;
+      }
+
+      if (resume.type === 'toolUse') {
+        ToolUseFollowUpQueue.acquire(streamId);
+        ownsResumingStatus = true;
+        StreamStatusService.set(streamId, STREAM_STATUS.RESUMING, {
+          runtimeHost: this.runtimeHost,
+        });
+        const queuedFollowUps = ToolUseFollowUpQueue.drainItems(streamId);
+        this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
+        try {
+          await resumeToolUseFromSnapshot(resume.snapshot, this.runtimeHost, {
+            setupSession: (session) => {
+              for (const item of queuedFollowUps) {
+                session.appendFollowUp(
+                  item.text,
+                  item.mediaFiles,
+                  item.displayText,
+                );
+              }
+            },
+          });
+        } catch (error) {
+          for (const item of queuedFollowUps) {
+            ToolUseFollowUpQueue.enqueue(streamId, item.text, {
+              mediaFiles: item.mediaFiles,
+              displayText: item.displayText,
+            });
+          }
+          if (queuedFollowUps.length > 0) {
+            this.runtimeHost.emit('updateQueuedFollowUps', { streamId });
+          }
+          throw error;
+        }
+        return true;
+      }
+
+      ownsResumingStatus = true;
+      StreamStatusService.set(streamId, STREAM_STATUS.RESUMING, {
+        runtimeHost: this.runtimeHost,
+      });
+      await this.runExecution({
+        config: resume.agentConfig,
+        executionId: resume.executionId,
+      });
+      return true;
+    } catch (error) {
+      this.logger.error(`Failed to resume desktop stream ${streamId}`, {
+        data: error instanceof Error ? error : { error },
+      });
+      if (
+        ownsResumingStatus &&
+        StreamStatusService.get(streamId) === STREAM_STATUS.RESUMING
+      ) {
+        StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
+          runtimeHost: this.runtimeHost,
+        });
+      }
+      await this.options.showErrorMessage?.(
+        `Resume failed: ${toErrorMessage(error)}`,
+      );
+      return false;
+    } finally {
+      this.resumeAttempts.delete(streamId);
+    }
+  }
+
+  private async resolveResumeState(
+    streamId: StreamTabId,
+  ): Promise<ResumeState | undefined> {
+    const taskState = this.taskStates.get(streamId);
     const executionId = this.executionIds.get(streamId);
-    await this.runExecution({
-      config: taskState.agentConfig,
-      ...(executionId && { executionId }),
-    });
+    if (taskState && executionId) return { taskState, executionId };
+
+    const persisted = await this.readPersistedResumeMeta(streamId);
+
+    const restoredTaskState = taskState ?? persisted?.taskState;
+    if (!restoredTaskState) return undefined;
+
+    const restoredExecutionId = executionId ?? persisted?.executionId;
+    this.taskStates.set(streamId, restoredTaskState);
+    this.categories.set(streamId, restoredTaskState.agentConfig.agentCategory);
+    if (restoredExecutionId) {
+      this.executionIds.set(streamId, restoredExecutionId);
+    }
+
+    if (persisted?.description !== undefined) {
+      this.descriptions.set(streamId, persisted.description);
+    }
+    if (persisted?.parentStreamId !== undefined) {
+      this.parentStreams.set(streamId, persisted.parentStreamId);
+    }
+
+    return {
+      taskState: restoredTaskState,
+      ...(restoredExecutionId && { executionId: restoredExecutionId }),
+    };
+  }
+
+  private async readPersistedResumeMeta(
+    streamId: StreamTabId,
+  ): Promise<PersistedResumeMeta | undefined> {
+    try {
+      // Resume only needs meta.json. Read it directly so this bridge does not
+      // create a second StreamSnapshotStore loader/writer for streamData/.
+      const meta = await readMeta(new KVStore(streamDataDir(streamId)));
+      if (!meta) return undefined;
+
+      const taskState = TaskStateSchema.safeParse(meta.taskState);
+      return {
+        ...(taskState.success && { taskState: taskState.data }),
+        ...(meta.executionId && {
+          executionId: meta.executionId as ExecutionId,
+        }),
+        ...(meta.description !== undefined && {
+          description: meta.description,
+        }),
+        ...(meta.parentStreamId !== undefined && {
+          parentStreamId: meta.parentStreamId,
+        }),
+      };
+    } catch (error) {
+      this.logger.warn(`Failed to read persisted resume data for ${streamId}`, {
+        data: error instanceof Error ? error : { error },
+      });
+      return undefined;
+    }
   }
 
   async runNewStream(streamId: StreamTabId): Promise<void> {
