@@ -17,6 +17,7 @@ import {
   type ConversationProgress,
   type StreamTabInfo,
 } from '@shared/schemas';
+import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 import { statusIndicatorStyles } from '@shared/styles/statusIndicatorStyles';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 
@@ -43,17 +44,6 @@ interface ToolbarButton {
   disabled?: boolean;
   isToggle?: boolean;
 }
-
-/** Status display labels - extracted as constant to avoid recreation on each render */
-const STATUS_LABELS: Record<string, string> = {
-  [STREAM_STATUS.RUNNING]: 'Running',
-  [STREAM_STATUS.ERROR]: 'Error',
-  [STREAM_STATUS.STOPPED]: 'Stopped',
-  [STREAM_STATUS.READY]: 'Ready',
-  [STREAM_STATUS.WAITING]: 'Waiting for follow-up',
-  [STREAM_STATUS.RESUMING]: 'Resuming',
-  [STREAM_STATUS.INITIALIZING]: 'Initializing',
-};
 
 /**
  * Buttons enabled per status - pre-computed as Sets to avoid
@@ -341,7 +331,9 @@ export class StreamHeader extends LitElement {
     }
 
     const status = this.status || STREAM_STATUS.READY;
-    const statusLabel = STATUS_LABELS[status] ?? status;
+    const statusLabel = formatStreamStatusLabel(status, {
+      style: 'progressHeader',
+    });
     const hasExecutionId = Boolean(this.stream.executionId);
     const agentCategory = this.stream.agentCategory;
     const toolbarButtons =
