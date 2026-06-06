@@ -2175,6 +2175,30 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'duplicate-todos-plan',
+    cols: 120,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_TODOS: '1',
+      HARNESS_DUPLICATE_TODOS_PLAN: '1',
+    },
+    expect: [
+      'Replace AnthropicMessageStream duck type with BetaMessageStream',
+      'Replace local Claude SDK aliases with native types.',
+      '5. Verify compilation and clean up imports',
+    ],
+    maxOccurrences: [
+      {
+        text: 'Replace AnthropicMessageStream duck type with BetaMessageStream',
+        max: 1,
+      },
+      {
+        text: "Replace ClaudeAgentEffort with SDK's EffortLevel",
+        max: 1,
+      },
+    ],
+  },
+  {
     name: 'idle-todos-hidden',
     env: {
       HARNESS_ENTRIES: '4',

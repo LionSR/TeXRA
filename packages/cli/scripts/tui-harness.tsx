@@ -170,6 +170,8 @@ const SHOW_CHILDREN = process.env.HARNESS_CHILDREN === '1';
 const SHOW_NESTED_CHILDREN = process.env.HARNESS_NESTED_CHILDREN === '1';
 const SHOW_TODOS = process.env.HARNESS_TODOS === '1';
 const SHOW_IDLE_TODOS = process.env.HARNESS_TODOS_IDLE === '1';
+const SHOW_DUPLICATE_TODOS_PLAN =
+  process.env.HARNESS_DUPLICATE_TODOS_PLAN === '1';
 const FAILED_CHILD_AGENT = process.env.HARNESS_FAILED_CHILD?.trim();
 const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
@@ -963,42 +965,110 @@ if (SHOW_CHILDREN) {
 }
 
 if (SHOW_TODOS) {
-  patchStream(STREAM_ID, (slice) => ({
-    ...slice,
-    todos: [
-      {
-        content: 'Split theorem into algebraic and analytic checks',
-        activeForm: 'Splitting theorem into checks',
-        status: TODO_STATUS.COMPLETED,
-      },
-      {
-        content: 'Ask leanSolver to verify the finite case',
-        activeForm: 'Waiting for leanSolver',
-        status: TODO_STATUS.IN_PROGRESS,
-      },
-      {
-        content: 'Merge subagent conclusions into final answer',
-        activeForm: 'Merging subagent conclusions',
-        status: TODO_STATUS.PENDING,
-      },
-    ],
-    plan: {
-      summary: 'Coordinate a small math proof through nested CLI work.',
-      steps: [
+  const todos = SHOW_DUPLICATE_TODOS_PLAN
+    ? [
         {
-          title: 'Route proof obligations',
-          description: 'Choose the right specialist for each proof branch.',
-          files: [],
+          content:
+            'Replace AnthropicMessageStream duck type with BetaMessageStream',
+          activeForm:
+            'Replacing AnthropicMessageStream duck type with BetaMessageStream',
           status: TODO_STATUS.COMPLETED,
         },
         {
-          title: 'Check formalizable parts',
-          description: 'Have a subagent inspect the Lean-style finite case.',
-          files: [],
+          content: "Replace ClaudeAgentEffort with SDK's EffortLevel",
+          activeForm: "Replacing ClaudeAgentEffort with SDK's EffortLevel",
+          status: TODO_STATUS.COMPLETED,
+        },
+        {
+          content:
+            "Replace ClaudeAgentPermissionMode with SDK's PermissionMode",
+          activeForm:
+            "Replacing ClaudeAgentPermissionMode with SDK's PermissionMode",
+          status: TODO_STATUS.COMPLETED,
+        },
+        {
+          content: 'Audit remaining custom types for SDK-native equivalents',
+          activeForm:
+            'Auditing remaining custom types for SDK-native equivalents',
+          status: TODO_STATUS.COMPLETED,
+        },
+      ]
+    : [
+        {
+          content: 'Split theorem into algebraic and analytic checks',
+          activeForm: 'Splitting theorem into checks',
+          status: TODO_STATUS.COMPLETED,
+        },
+        {
+          content: 'Ask leanSolver to verify the finite case',
+          activeForm: 'Waiting for leanSolver',
           status: TODO_STATUS.IN_PROGRESS,
         },
-      ],
-    },
+        {
+          content: 'Merge subagent conclusions into final answer',
+          activeForm: 'Merging subagent conclusions',
+          status: TODO_STATUS.PENDING,
+        },
+      ];
+  const plan = SHOW_DUPLICATE_TODOS_PLAN
+    ? {
+        summary: 'Replace local Claude SDK aliases with native types.',
+        steps: [
+          {
+            title:
+              'Replace AnthropicMessageStream duck type with BetaMessageStream',
+            description: 'Use the SDK stream type directly.',
+            files: [],
+            status: TODO_STATUS.PENDING,
+          },
+          {
+            title: "Replace ClaudeAgentEffort with SDK's EffortLevel",
+            description: 'Use the SDK effort type directly.',
+            files: [],
+            status: TODO_STATUS.PENDING,
+          },
+          {
+            title:
+              "Replace ClaudeAgentPermissionMode with SDK's PermissionMode",
+            description: 'Use the SDK permission type directly.',
+            files: [],
+            status: TODO_STATUS.PENDING,
+          },
+          {
+            title: 'Audit remaining custom types for SDK-native equivalents',
+            description: 'Find any remaining local aliases.',
+            files: [],
+            status: TODO_STATUS.PENDING,
+          },
+          {
+            title: 'Verify compilation and clean up imports',
+            description: 'Run focused checks and remove stale imports.',
+            files: [],
+            status: TODO_STATUS.PENDING,
+          },
+        ],
+      }
+    : {
+        summary: 'Coordinate a small math proof through nested CLI work.',
+        steps: [
+          {
+            title: 'Route proof obligations',
+            description: 'Choose the right specialist for each proof branch.',
+            files: [],
+            status: TODO_STATUS.COMPLETED,
+          },
+          {
+            title: 'Check formalizable parts',
+            description: 'Have a subagent inspect the Lean-style finite case.',
+            files: [],
+            status: TODO_STATUS.IN_PROGRESS,
+          },
+        ],
+      };
+  patchStream(STREAM_ID, (slice) => ({
+    ...slice,
+    todos,
+    plan,
   }));
 }
 

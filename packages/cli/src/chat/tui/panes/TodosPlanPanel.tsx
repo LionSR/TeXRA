@@ -105,6 +105,52 @@ function compactRowPriority(row: CompactTodosPlanRow): number {
   return exhaustive;
 }
 
+function normalizedTaskLabel(value: string): string {
+  return value.trim().replaceAll(/\s+/g, ' ').toLowerCase();
+}
+
+function todoLabels(todos: readonly TodoItem[]): ReadonlySet<string> {
+  const labels = new Set<string>();
+  for (const todo of todos) {
+    labels.add(normalizedTaskLabel(todo.content));
+    labels.add(normalizedTaskLabel(todo.activeForm));
+  }
+  labels.delete('');
+  return labels;
+}
+
+export function todosPlanDisplayRows({
+  plan,
+  todos,
+}: {
+  readonly plan: Plan | null;
+  readonly todos: readonly TodoItem[];
+}): readonly CompactTodosPlanRow[] {
+  const rows: CompactTodosPlanRow[] = todos.map((todo, index) => ({
+    kind: 'todo',
+    sourceIndex: index,
+    todo,
+  }));
+  if (!plan) return rows;
+
+  const duplicateTodoLabels = todoLabels(todos);
+  rows.push({
+    kind: 'planSummary',
+    sourceIndex: rows.length,
+    summary: plan.summary,
+  });
+  for (const [stepIndex, step] of plan.steps.entries()) {
+    if (duplicateTodoLabels.has(normalizedTaskLabel(step.title))) continue;
+    rows.push({
+      kind: 'planStep',
+      sourceIndex: rows.length,
+      step,
+      stepIndex,
+    });
+  }
+  return rows;
+}
+
 export function compactTodosPlanRows({
   maxRows,
   plan,
@@ -118,26 +164,7 @@ export function compactTodosPlanRows({
   readonly rows: readonly CompactTodosPlanRow[];
 } {
   const rowBudget = Math.max(0, Math.floor(maxRows));
-  const allRows: CompactTodosPlanRow[] = todos.map((todo, index) => ({
-    kind: 'todo',
-    sourceIndex: index,
-    todo,
-  }));
-  if (plan) {
-    allRows.push({
-      kind: 'planSummary',
-      sourceIndex: allRows.length,
-      summary: plan.summary,
-    });
-    for (const [stepIndex, step] of plan.steps.entries()) {
-      allRows.push({
-        kind: 'planStep',
-        sourceIndex: allRows.length,
-        step,
-        stepIndex,
-      });
-    }
-  }
+  const allRows = todosPlanDisplayRows({ plan, todos });
 
   if (allRows.length <= rowBudget) {
     return { hiddenCount: 0, rows: allRows };
@@ -165,15 +192,15 @@ export function compactTodosPlanRows({
 }
 
 /**
- * Natural (uncapped) compact-row count for a slice's todos + plan: one row per
- * todo, plus the plan summary and one row per plan step. Drives the bottom-panel
- * reservation in App so the panel takes only the height it needs.
+ * Natural (uncapped) compact-row count for the deduplicated display model.
+ * Drives the bottom-panel reservation in App so the panel takes only the height
+ * it needs.
  */
 export function todosPlanPanelRowCount(
   todos: readonly TodoItem[],
   plan: Plan | null,
 ): number {
-  return todos.length + (plan ? 1 + plan.steps.length : 0);
+  return todosPlanDisplayRows({ plan, todos }).length;
 }
 
 function CompactRow({ row }: { row: CompactTodosPlanRow }): React.JSX.Element {
@@ -220,6 +247,10 @@ export function TodosPlanPanel(
       ? undefined
       : Math.max(0, Math.floor(props.maxRows));
   if (rowBudget !== undefined && rowBudget <= 0) return null;
+  const displayRows = todosPlanDisplayRows({ plan, todos });
+  if (displayRows.length === 0) return null;
+  const hasTodoRows = displayRows.some((row) => row.kind === 'todo');
+  const hasPlanRows = displayRows.some((row) => row.kind !== 'todo');
 
   if (rowBudget !== undefined) {
     const { hiddenCount, rows } = compactTodosPlanRows({
@@ -257,30 +288,44 @@ export function TodosPlanPanel(
       paddingX={1}
       marginBottom={props.maxRows === undefined ? 1 : 0}
     >
-      {todos.length > 0 ? (
+      {hasTodoRows ? (
         <Box flexDirection="column">
           <Text bold dimColor>
             Todos
           </Text>
-          {todos.map((todo, i) => (
-            <TodoRow key={i} todo={todo} />
-          ))}
+          {displayRows.map((row) =>
+            row.kind === 'todo' ? (
+              <TodoRow key={`todo:${row.sourceIndex}`} todo={row.todo} />
+            ) : null,
+          )}
         </Box>
       ) : null}
-      {plan ? (
-        <Box flexDirection="column" marginTop={todos.length > 0 ? 1 : 0}>
+      {hasPlanRows ? (
+        <Box flexDirection="column" marginTop={hasTodoRows ? 1 : 0}>
           <Text bold dimColor>
             Plan
           </Text>
-          <Text dimColor>{plan.summary}</Text>
-          {plan.steps.map((step, i) => (
-            <Box key={i}>
-              <Text color={todoColor(step.status)}>
-                {todoMarker(step.status)}{' '}
-              </Text>
-              <Text>{`${i + 1}. ${step.title}`}</Text>
-            </Box>
-          ))}
+          {displayRows.map((row) => {
+            switch (row.kind) {
+              case 'planSummary':
+                return (
+                  <Text key={`plan-summary:${row.sourceIndex}`} dimColor>
+                    {row.summary}
+                  </Text>
+                );
+              case 'planStep':
+                return (
+                  <Box key={`plan-step:${row.sourceIndex}`}>
+                    <Text color={todoColor(row.step.status)}>
+                      {todoMarker(row.step.status)}{' '}
+                    </Text>
+                    <Text>{`${row.stepIndex + 1}. ${row.step.title}`}</Text>
+                  </Box>
+                );
+              case 'todo':
+                return null;
+            }
+          })}
         </Box>
       ) : null}
     </Box>
