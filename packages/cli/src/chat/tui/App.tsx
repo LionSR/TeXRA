@@ -20,6 +20,7 @@ import { TranscriptViewer } from './modals/TranscriptViewer';
 import { ConversationPane } from './panes/ConversationPane';
 import { StaticConversationTranscript } from './panes/StaticConversationTranscript';
 import { InputBar } from './panes/InputBar';
+import { ScopedTranscriptPane } from './panes/ScopedTranscriptPane';
 import {
   QueuedFollowUpsPanel,
   queuedFollowUpPanelRowCount,
@@ -750,12 +751,21 @@ export function App(props: AppProps): React.JSX.Element {
       <Box flexDirection="column">
         <Box flexDirection="column" overflowY="hidden">
           {!transcriptViewerOpen && conversationRows > 0 ? (
-            <ConversationPane
-              colorEnabled={props.colorEnabled}
-              mode={scopedTranscript ? 'scoped-history' : 'live-pending'}
-              width={transcriptWidth}
-              maxRows={conversationRows}
-            />
+            scopedTranscript ? (
+              <ScopedTranscriptPane
+                isActive={focusShortcutsActive}
+                slice={activeSlice}
+                width={transcriptWidth}
+                maxRows={conversationRows}
+              />
+            ) : (
+              <ConversationPane
+                colorEnabled={props.colorEnabled}
+                mode="live-pending"
+                width={transcriptWidth}
+                maxRows={conversationRows}
+              />
+            )
           ) : null}
           {foregroundSurface ? (
             // Cap the modal area at its row budget but size to the surface's
@@ -807,6 +817,7 @@ export function App(props: AppProps): React.JSX.Element {
           })}
           queuedFollowUpPreview={!queuedFollowUpPanelVisible}
           shortcutsActive={focusShortcutsActive}
+          scopedTranscriptScrollable={scopedTranscript}
         />
       </Box>
     </>

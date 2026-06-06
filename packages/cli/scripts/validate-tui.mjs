@@ -53,6 +53,7 @@ const LF = String.fromCharCode(10); // Ctrl-J
 const KITTY_SHIFT_ENTER = ESC + '[13;2u';
 const UP = ESC + '[A';
 const DOWN = ESC + '[B';
+const PAGE_UP = ESC + '[5~';
 const PAGE_DOWN = ESC + '[6~';
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*m`, 'g');
 const LONG_BASH_APPROVAL_COMMAND = [
@@ -1384,6 +1385,33 @@ const SCENARIOS = [
     expect: [
       'Please handle the harness-child-strategy sub-workflow.',
       'strategy is checking the harness-child-strategy details',
+      '[1:strategy]*',
+    ],
+    unexpect: [
+      'entry-1 chat history line',
+      'entry-4 chat history line',
+      '[main]*',
+      'signal read during notification phase',
+      'ERROR',
+    ],
+  },
+  {
+    name: 'subagent-focused-page-up-history',
+    cols: 120,
+    rows: 14,
+    env: {
+      HARNESS_ENTRIES: '4',
+      HARNESS_CHILDREN: '1',
+      HARNESS_LONG_CHILD_OUTPUT: '1',
+      HARNESS_CAN_INTERRUPT: '1',
+    },
+    bootExpect: '[Tab]streams',
+    keys: ['\t', PAGE_UP, PAGE_UP],
+    expect: [
+      'Please handle the harness-child-strategy sub-workflow.',
+      'strategy detail line 01',
+      '[PgUp',
+      'scroll',
       '[1:strategy]*',
     ],
     unexpect: [
