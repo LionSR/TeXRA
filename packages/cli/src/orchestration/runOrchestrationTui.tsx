@@ -83,6 +83,25 @@ export function orchestrationKeyHints(): readonly KeyHint[] {
   ];
 }
 
+export function orchestrationFooterHints(
+  items: readonly CliOrchestrationItem[],
+): readonly string[] {
+  const seen = new Set<string>();
+  const hints: string[] = [];
+  for (const item of items) {
+    for (const hint of item.footerHints ?? []) {
+      if (seen.has(hint)) continue;
+      seen.add(hint);
+      hints.push(hint);
+    }
+  }
+  return hints;
+}
+
+function orchestrationFooterRowCost(footerHints: readonly string[]): number {
+  return footerHints.length === 0 ? 0 : footerHints.length + 1;
+}
+
 function modelPickKeyHints(): readonly KeyHint[] {
   return [
     { key: '↑/↓', action: 'navigate' },
@@ -96,17 +115,22 @@ export function OrchestrationApp(
 ): React.JSX.Element {
   const app = useApp();
   const { rows } = useWindowSize();
-  const maxVisibleItems = Math.max(4, rows - 8);
   const { items, modelItems } = orchestrationModelAccessView(
     props.items,
     props.models,
     props.apiMode,
     { allowDefaultModelLaunch: props.allowDefaultModelLaunch },
   );
+  const listFooterHints = orchestrationFooterHints(items);
   // When set, the launcher is on its second step: choosing the model for this
   // chat/team. Esc returns to the item list rather than exiting.
   const [pending, setPending] = useState<ModelPickAction | undefined>(
     undefined,
+  );
+  const footerHints = pending ? [] : listFooterHints;
+  const maxVisibleItems = Math.max(
+    4,
+    rows - 8 - orchestrationFooterRowCost(footerHints),
   );
 
   const finish = (action: CliOrchestrationAction): void => {
@@ -176,6 +200,15 @@ export function OrchestrationApp(
           onCancel={() => finish({ kind: 'exit' })}
         />
       </Box>
+      {footerHints.length > 0 ? (
+        <Box marginTop={1} flexDirection="column">
+          {footerHints.map((hint) => (
+            <Text key={hint} dimColor wrap="truncate-end">
+              {hint}
+            </Text>
+          ))}
+        </Box>
+      ) : null}
       <Box marginTop={1}>
         <KeyHints hints={orchestrationKeyHints()} confirmCancel={false} />
       </Box>
