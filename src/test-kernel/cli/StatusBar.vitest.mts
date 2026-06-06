@@ -237,7 +237,7 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
-  it('advertises scoped child transcript paging only when a child page is focused', () => {
+  it('does not advertise in-pane paging for focused child streams', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,
       pendingExitHint: false,
@@ -255,13 +255,12 @@ describe('CLI StatusBar display model', () => {
       model: 'deepseekT',
       apiMode: 'relay',
       shortcutModifierLabel: 'Option',
-      scopedTranscriptScrollable: true,
       ctrlCAction: 'stop root',
       width: 100,
     });
 
-    expect(display.bindings).toContain('PgUp');
-    expect(display.bindings).toContain('scroll');
+    expect(display.bindings).not.toContain('PgUp');
+    expect(display.bindings).not.toContain('scroll');
     expect(display.bindings).toContain('[Tab]streams');
     expect(display.bindings).toContain('[Ctrl-C]stop root');
   });
