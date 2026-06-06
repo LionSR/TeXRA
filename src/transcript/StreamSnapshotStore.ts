@@ -17,7 +17,10 @@
  * `read()` returns durable display state only; hosts clamp liveness on hydrate.
  */
 
-import { TaskStateSchema, type TaskState } from '@agent/core/execution/TaskState';
+import {
+  TaskStateSchema,
+  type TaskState,
+} from '@agent/core/execution/TaskState';
 import { KVStore } from '@common/storage/KVStore';
 import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
 import {

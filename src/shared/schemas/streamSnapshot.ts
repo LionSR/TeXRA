@@ -28,7 +28,10 @@ import { ExecutionIdSchema, StreamTabIdSchema } from './identifiers';
 import { OutputFileInfoSchema, CompileFailureSchema } from './output';
 import { PlanSchema } from './plan';
 import { StreamStatusSchema } from './stream';
-import { ActiveChildInfoSchema, ConversationProgressSchema } from './streamState';
+import {
+  ActiveChildInfoSchema,
+  ConversationProgressSchema,
+} from './streamState';
 import { TodoItemSchema } from './todo';
 import { TokenUsageStatsSchema } from './usage';
 
@@ -48,9 +51,7 @@ const MissingOutputsByRoundSchema = z
 const CompileFailuresByRoundSchema = z
   .record(z.string(), z.array(CompileFailureSchema))
   .prefault({});
-const RunUsageSchema = z
-  .record(z.string(), TokenUsageStatsSchema)
-  .prefault({});
+const RunUsageSchema = z.record(z.string(), TokenUsageStatsSchema).prefault({});
 
 // ============================================================================
 // Persisted workPlan.json — the one NEW durable file
