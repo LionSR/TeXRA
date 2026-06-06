@@ -89,7 +89,6 @@ import {
   EXECUTION_STATUS,
   LIVE_ELAPSED_STREAM_STATUSES,
   STREAM_STATUS,
-  StreamStatusSchema,
   type StreamStatus,
   type ExecutionId,
   type StreamTabId,
@@ -121,10 +120,9 @@ import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
 import { subscribeStreamStatus } from './state/subscribeStreamStatus';
 import {
+  effectiveStreamStatus,
   onStreamStatusChange,
-  streamStatusForStream,
-  streamStatusSnapshot,
-} from './state/streamStatusSnapshot';
+} from './state/streamStatus';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import { requestCliCompaction } from './state/compactionRequest';
 import {
@@ -422,24 +420,16 @@ function chatTuiActiveChildStreamId(): StreamTabId | undefined {
     : undefined;
 }
 
-function chatTuiStreamStatuses(streamId: StreamTabId): readonly string[] {
-  return streamStatusSnapshot(streamId);
-}
-
-function chatTuiCanAcceptFollowUp(statuses: readonly string[]): boolean {
-  // A focused child normally has at least one status source. Keep the previous
-  // permissive behavior during the brief edge where parent focus arrives first.
-  if (statuses.length === 0) return true;
-  return statuses.every((status) => {
-    const parsed = StreamStatusSchema.safeParse(status);
-    return parsed.success && isInFlightStatus(parsed.data);
-  });
+function chatTuiCanAcceptFollowUp(status: StreamStatus | undefined): boolean {
+  // A focused child normally has a status. Keep the previous permissive
+  // behavior during the brief edge where parent focus arrives first.
+  return status === undefined || isInFlightStatus(status);
 }
 
 export function chatTuiActiveChildFollowUpTarget(): StreamTabId | undefined {
   const activeStreamId = chatTuiActiveChildStreamId();
   if (!activeStreamId) return undefined;
-  return chatTuiCanAcceptFollowUp(chatTuiStreamStatuses(activeStreamId))
+  return chatTuiCanAcceptFollowUp(effectiveStreamStatus(activeStreamId))
     ? activeStreamId
     : undefined;
 }
@@ -448,13 +438,13 @@ export function chatTuiShouldAnnounceQueuedFollowUp(
   targetStreamId: StreamTabId | undefined,
 ): boolean {
   if (!targetStreamId) return true;
-  return !chatTuiStreamStatuses(targetStreamId).includes(STREAM_STATUS.WAITING);
+  return effectiveStreamStatus(targetStreamId) !== STREAM_STATUS.WAITING;
 }
 
 export function chatTuiRejectedChildFollowUpTarget(): StreamTabId | undefined {
   const activeStreamId = chatTuiActiveChildStreamId();
   if (!activeStreamId) return undefined;
-  return chatTuiCanAcceptFollowUp(chatTuiStreamStatuses(activeStreamId))
+  return chatTuiCanAcceptFollowUp(effectiveStreamStatus(activeStreamId))
     ? undefined
     : activeStreamId;
 }
@@ -1164,7 +1154,7 @@ export async function runChat(
   const pendingSkillActivations = new Map<string, string>();
   let pendingSkillActivationClearEpoch = 0;
   const rootStreamStatus = (): StreamStatus | undefined =>
-    session.streamId ? streamStatusForStream(session.streamId) : undefined;
+    session.streamId ? effectiveStreamStatus(session.streamId) : undefined;
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(session.streamId && getToolUseFlowContext(session.streamId));
   const canSelectCurrentModel = (): boolean =>
@@ -1212,7 +1202,7 @@ export async function runChat(
   const resetSessionForClear = (): void => {
     const activeStreamId = session.streamId ?? cliState.activeStreamId.get();
     const activeStatus = activeStreamId
-      ? streamStatusForStream(activeStreamId)
+      ? effectiveStreamStatus(activeStreamId)
       : undefined;
     const isRunPending = Boolean(session.runPromise && !session.runCompleted);
 
