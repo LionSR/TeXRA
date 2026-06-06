@@ -11,7 +11,6 @@ import React from 'react';
 
 import { getToolUseAgents, getWorkflowAgents, loadAgents } from '@agent/index';
 import { getWorkspaceState } from '@agent/core/stateStore';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { isInFlightStatus } from '@common/constants/streamStatus';
@@ -23,7 +22,6 @@ import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_STATUS,
-  StreamStatusSchema,
   STREAM_LOG_ENTRY_TYPES,
   TODO_STATUS,
   TOOL_USE_STATUS,
@@ -31,6 +29,7 @@ import {
   type ExternalInquiryThreadId,
   type NormalizedToolUse,
   type RetryPermission,
+  type StreamTabId,
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { buildContinuationText } from '@tools/inquiry/inquiryContinuation';
@@ -62,6 +61,7 @@ import {
   type ApprovalDecision,
 } from '../src/chat/tui/state/approvalQueue';
 import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
+import { effectiveStreamStatus } from '../src/chat/tui/state/streamStatus';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
 import { parseCliApiMode, type CliApiMode } from '../src/runtime/apiAccessMode';
 import type { CliModelAccess } from '../src/runtime/modelAccess';
@@ -1083,7 +1083,7 @@ function appendHarnessTranscript(
   }));
 }
 
-function harnessActiveChildStreamId(): string | undefined {
+function harnessActiveChildStreamId(): StreamTabId | undefined {
   const activeStreamId = cliState.activeStreamId.get();
   if (!activeStreamId) return undefined;
   return cliState.parentStream.get().has(activeStreamId)
@@ -1091,29 +1091,11 @@ function harnessActiveChildStreamId(): string | undefined {
     : undefined;
 }
 
-function harnessStreamStatuses(streamId: string): readonly string[] {
-  const streams = cliState.streams.get();
-  const parentStreamId = cliState.parentStream.get().get(streamId);
-  const childStreamStatus = parentStreamId
-    ? streams
-        .get(parentStreamId)
-        ?.childStreams.find((child) => child.childStreamId === streamId)?.status
-    : undefined;
-  return [
-    childStreamStatus,
-    streams.get(streamId)?.status,
-    StreamStatusService.get(streamId),
-  ].filter((status): status is string => status !== undefined);
-}
-
 function harnessRejectsFocusedChildSubmit(): boolean {
   const childStreamId = harnessActiveChildStreamId();
   if (!childStreamId) return false;
-  const statuses = harnessStreamStatuses(childStreamId);
-  return statuses.some((status) => {
-    const parsed = StreamStatusSchema.safeParse(status);
-    return !parsed.success || !isInFlightStatus(parsed.data);
-  });
+  const status = effectiveStreamStatus(childStreamId);
+  return status !== undefined && !isInFlightStatus(status);
 }
 
 function findRegisteredSlashCommand(name: string): SlashCommand | undefined {
