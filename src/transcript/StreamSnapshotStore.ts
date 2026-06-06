@@ -17,6 +17,8 @@
  * `read()` returns durable display state only; hosts clamp liveness on hydrate.
  */
 
+import pMap from 'p-map';
+
 import {
   TaskStateSchema,
   isToolUseTaskState,
@@ -63,6 +65,10 @@ import {
 } from './streamSnapshotRead';
 
 const CHANNEL = 'StreamSnapshotStore';
+
+/** Bounded fan-out for seeding many streams' sidecars (mirrors the retired
+ *  managers' `pMap` hydration so startup doesn't open a file handle per tab). */
+const SEED_IO_CONCURRENCY = 8;
 
 function normalizeOutputFiles(outputFiles?: readonly string[]): string[] {
   return (outputFiles ?? [])
@@ -425,12 +431,16 @@ export class StreamSnapshotStore {
   private patchMeta(stream: StreamTabId, patch: Partial<StreamTabMeta>): void {
     const next: StreamTabMeta = { ...(this.meta.get(stream) ?? {}), ...patch };
     this.meta.set(stream, next);
-    // activeRunId is legacy and never re-written.
+    // activeRunId is legacy and never re-written. Persist every explicitly-set
+    // field (`!== undefined`, not falsy) so on-disk and in-memory never diverge
+    // — e.g. clearing a description to "" must round-trip, not silently vanish.
     const file: StreamTabMeta = {
       ...(next.taskState !== undefined && { taskState: next.taskState }),
-      ...(next.executionId && { executionId: next.executionId }),
-      ...(next.parentStreamId && { parentStreamId: next.parentStreamId }),
-      ...(next.description && { description: next.description }),
+      ...(next.executionId !== undefined && { executionId: next.executionId }),
+      ...(next.parentStreamId !== undefined && {
+        parentStreamId: next.parentStreamId,
+      }),
+      ...(next.description !== undefined && { description: next.description }),
     };
     this.write(stream, STREAM_DATA_KEYS.META, file);
   }
@@ -475,11 +485,13 @@ export class StreamSnapshotStore {
   }
 
   getExecutionId(stream: StreamTabId): ExecutionId | undefined {
-    return this.meta.get(stream)?.executionId as ExecutionId | undefined;
+    // executionId is validated to a real ExecutionId at the single disk-read
+    // entry (`readMeta`), so no cast/re-validation is needed here.
+    return this.meta.get(stream)?.executionId;
   }
 
   getParentStreamId(stream: StreamTabId): StreamTabId | undefined {
-    return this.meta.get(stream)?.parentStreamId as StreamTabId | undefined;
+    return this.meta.get(stream)?.parentStreamId;
   }
 
   getDescription(stream: StreamTabId): string | undefined {
@@ -490,7 +502,7 @@ export class StreamSnapshotStore {
   getExecutionIdMap(): ReadonlyMap<StreamTabId, ExecutionId> {
     const map = new Map<StreamTabId, ExecutionId>();
     for (const [stream, meta] of this.meta) {
-      if (meta.executionId) map.set(stream, meta.executionId as ExecutionId);
+      if (meta.executionId) map.set(stream, meta.executionId);
     }
     return map;
   }
@@ -559,7 +571,13 @@ export class StreamSnapshotStore {
     // Best-effort: a failed sidecar write must not break the chain, but it is
     // logged so silent data loss (disk full, permission denied) is diagnosable.
     const next = prev
-      .then(() => this.kv(stream).write(key, value))
+      .then(() => {
+        // Eviction guard: `evict()`/`deleteStream()` drop this chain key. A
+        // write queued before that must NOT fire afterward, or a late `kv()`
+        // would re-create the `streamData/{id}/` dir `deleteDir()` just removed.
+        if (!this.pendingWrites.has(chainKey)) return;
+        return this.kv(stream).write(key, value);
+      })
       .catch((err: unknown) =>
         logger.warn(
           CHANNEL,
@@ -580,9 +598,34 @@ export class StreamSnapshotStore {
   // Read / load — disk reads delegate to the pure `streamSnapshotRead` module
   // ==========================================================================
 
-  /** Reassemble the durable display snapshot for a stream from disk. */
+  /**
+   * Reassemble the durable display snapshot for a stream. Once a stream is
+   * seeded (via {@link load} or a bus event) its in-memory accumulators are the
+   * single source of truth — they already hold the disk state plus any newer
+   * deltas — so we assemble from memory and skip a redundant disk re-read (the
+   * CLI resume path calls `load` then `read` back-to-back). Only an unseeded
+   * stream (a display-only read that was never resumed) hits disk.
+   */
   async read(streamId: StreamTabId): Promise<StreamSnapshot> {
+    const seedChain = this.seedChains.get(streamId);
+    if (seedChain) {
+      await seedChain;
+      return this.snapshotFromMemory(streamId);
+    }
     return assembleSnapshot(streamId, await readStreamData(this.kv(streamId)));
+  }
+
+  /** Assemble the snapshot from already-hydrated in-memory accumulators. */
+  private snapshotFromMemory(streamId: StreamTabId): StreamSnapshot {
+    return assembleSnapshot(streamId, {
+      meta: this.meta.get(streamId),
+      outputFiles: this.outputFiles.get(streamId) ?? new Map(),
+      missingOutputs: this.missingOutputs.get(streamId) ?? new Map(),
+      compileFailures: this.compileFailures.get(streamId) ?? new Map(),
+      usage: this.usage.get(streamId) ?? new Map(),
+      workPlan: this.getWorkPlan(streamId),
+      legacyKeys: [],
+    });
   }
 
   /** A stream's output files straight from disk (round → files). */
@@ -594,13 +637,26 @@ export class StreamSnapshotStore {
 
   /**
    * Seed in-memory accumulators from disk so subsequent usage deltas accumulate
-   * on top of prior runs (and bus mutations can't erase unloaded data). Streams
-   * not passed here are seeded lazily on their first bus event.
+   * on top of prior runs (and bus mutations can't erase unloaded data). Routed
+   * through the same per-stream seed machinery as bus mutations
+   * ({@link applySeeded}) so it is idempotent and order-independent: an
+   * already-seeded stream keeps its in-memory state (never clobbering a delta a
+   * bus event already applied), an unseeded one is read from disk exactly once.
+   * Bounded concurrency mirrors the retired managers' parallel hydration so
+   * startup doesn't serialize per-tab I/O. Streams not passed here are seeded
+   * lazily on their first bus event.
    */
   async load(streamIds: readonly StreamTabId[]): Promise<void> {
-    for (const streamId of streamIds) {
-      this.applyStreamData(streamId, await readStreamData(this.kv(streamId)));
-    }
+    await pMap(
+      streamIds,
+      (streamId) => {
+        const chain =
+          this.seedChains.get(streamId) ?? this.ensureSeeded(streamId);
+        this.seedChains.set(streamId, chain);
+        return chain;
+      },
+      { concurrency: SEED_IO_CONCURRENCY },
+    );
     await this.backfillDescriptionsFromExecutionMeta();
   }
 
@@ -655,9 +711,7 @@ export class StreamSnapshotStore {
     for (const [streamId, meta] of [...this.meta]) {
       if (!meta.executionId || meta.description) continue;
       try {
-        const execMeta = await getExecutionStore(
-          meta.executionId as ExecutionId,
-        ).readMeta();
+        const execMeta = await getExecutionStore(meta.executionId).readMeta();
         if (execMeta?.description) {
           this.setDescription(streamId, execMeta.description);
         }

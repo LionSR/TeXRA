@@ -35,7 +35,12 @@ import {
 import { TodoItemSchema } from './todo';
 import { TokenUsageStatsSchema } from './usage';
 
-/** Bump when the persisted shape changes; a downgraded reader detect-and-ignores. */
+/**
+ * Bump when the persisted shape changes. A reader enforces this as a
+ * forward-compat gate in `readPersistedWorkPlan` (`@transcript/streamSnapshotRead`):
+ * a file stamped with a NEWER version is ignored (read as empty) rather than
+ * having its unknown-shaped fields consumed as this version.
+ */
 export const STREAM_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 
 // ============================================================================
@@ -58,9 +63,14 @@ const RunUsageSchema = z.record(z.string(), TokenUsageStatsSchema).prefault({});
 // ============================================================================
 
 /**
- * On-disk shape of `streamData/{id}/workPlan.json`. todos/plan/planSummary have
- * no other durable home. `.catch` per field keeps one corrupt value from
- * nuking the rest; a missing/older `schemaVersion` is tolerated (treated as v1).
+ * On-disk shape of `streamData/{id}/workPlan.json` — the strict reader/writer
+ * for the one NEW durable file (todos/plan/planSummary have no other home). The
+ * lenient {@link WorkPlanSnapshotSchema} (in `@shared/schemas/workPlan`) is a
+ * deliberately separate role: it normalizes UNTRUSTED bus/agent input (deriving
+ * planSummary from the plan), whereas this schema reads/writes our own trusted
+ * disk format. `.catch` per field keeps one corrupt value from nuking the rest;
+ * a missing/older `schemaVersion` is tolerated (treated as v1), while a NEWER
+ * one is gated out upstream in `readPersistedWorkPlan` before this parse runs.
  */
 export const PersistedWorkPlanSchema = z.object({
   schemaVersion: z

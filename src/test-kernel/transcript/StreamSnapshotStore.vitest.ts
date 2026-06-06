@@ -201,4 +201,40 @@ describe('StreamSnapshotStore', () => {
     expect(snap.todos).toEqual([]);
     expect(snap.plan).toBeNull();
   });
+
+  it('ignores a workPlan.json stamped with a newer schemaVersion (forward-compat gate)', async () => {
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    await StorageFS.ensureDir(dir);
+    // A file from a FUTURE schema must be read as empty, not have its unknown
+    // shape consumed as v1 (the single forward-compat gate).
+    await StorageFS.write(
+      path.join(dir, 'workPlan.json'),
+      JSON.stringify({
+        schemaVersion: 999,
+        todos: [TODO],
+        plan: PLAN,
+        planSummary: PLAN.summary,
+      }),
+    );
+    const snap = await new StreamSnapshotStore().read(STREAM);
+    expect(snap.todos).toEqual([]);
+    expect(snap.plan).toBeNull();
+  });
+
+  it('drops a malformed executionId at the read entry without aborting the snapshot', async () => {
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    await StorageFS.ensureDir(dir);
+    // A legacy/corrupt executionId would trip the strict ExecutionIdSchema in
+    // assembleSnapshot; validating at the read entry drops just the bad pointer
+    // so the rest of meta (description) still surfaces and resume never throws.
+    await StorageFS.write(
+      path.join(dir, 'meta.json'),
+      JSON.stringify({ executionId: 'not-hex!!', description: 'Prior session' }),
+    );
+    const snap = await new StreamSnapshotStore().read(STREAM);
+    expect(snap.executionId).toBeUndefined();
+    expect(snap.description).toBe('Prior session');
+  });
 });

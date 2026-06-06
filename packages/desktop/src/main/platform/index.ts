@@ -82,8 +82,13 @@ export async function initializeElectronPlatform(
   // display restorable cross-host. Liveness is never persisted. Single writer,
   // driven by the shared progress bus; flushed on shutdown.
   const snapshotStore = new StreamSnapshotStore();
-  snapshotStore.subscribe(bus);
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => snapshotStore.flush());
+  const stopSnapshotSubscription = snapshotStore.subscribe(bus);
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => {
+    // Unsubscribe before the final flush so no late bus event re-queues a write,
+    // and so listeners don't accumulate if platform init is ever re-invoked.
+    stopSnapshotSubscription();
+    return snapshotStore.flush();
+  });
 
   // Lean tools talk to `lake env lean --server` directly in the desktop build.
   // Servers are spawned lazily per Lake project root on first request.

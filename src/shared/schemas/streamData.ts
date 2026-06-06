@@ -41,8 +41,9 @@ export const RoundKeySchema = z.coerce.number().int();
  * On-disk shape of `meta.json`. `taskState` is kept as `unknown` here so this
  * schema stays `@agent`-free and can live in `@shared/schemas`; consumers that
  * need the typed value parse it with `TaskStateSchema` (which depends on
- * `@agent`). This is THE definition — `StreamTabStore`, `StreamMetaManager`, and
- * the core `StreamSnapshotStore` all import it directly, never their own copy.
+ * `@agent`). This is THE definition — the core `StreamSnapshotStore` /
+ * `streamSnapshotRead` and the legacy `StreamTabStore` reader all import it
+ * directly, never their own copy.
  */
 export const StreamTabMetaSchema = z.object({
   /** Legacy field — no longer written, tolerated on read so we can skip it. */

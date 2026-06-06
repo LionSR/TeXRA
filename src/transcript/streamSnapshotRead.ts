@@ -14,9 +14,11 @@ import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
 import {
   CompileFailuresDataSchema,
+  ExecutionIdSchema,
   MissingOutputsDataSchema,
   OutputFilesDataSchema,
   PersistedWorkPlanSchema,
+  STREAM_SNAPSHOT_SCHEMA_VERSION,
   StreamSnapshotSchema,
   StreamTabMetaSchema,
   UsageDataSchema,
@@ -30,6 +32,7 @@ import {
   type TokenUsageStats,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
+import { isObject } from '@utils/core';
 
 import { STREAM_DATA_KEYS } from './streamDataPaths';
 
@@ -86,7 +89,37 @@ export async function readMeta(
   const raw = await tryRead(kv, STREAM_DATA_KEYS.META);
   if (raw === undefined) return undefined;
   const parsed = StreamTabMetaSchema.safeParse(raw);
-  return parsed.success ? parsed.data : undefined;
+  if (!parsed.success) return undefined;
+  // Validate the executionId VALUE at this single disk-read entry: a malformed
+  // or legacy id degrades to absent (taskState/description still survive) so
+  // every downstream consumer can trust it without re-validating — and the
+  // strict ExecutionIdSchema in assembleSnapshot can never throw on resume.
+  const meta = parsed.data;
+  if (
+    meta.executionId !== undefined &&
+    !ExecutionIdSchema.safeParse(meta.executionId).success
+  ) {
+    return { ...meta, executionId: undefined };
+  }
+  return meta;
+}
+
+/**
+ * Read `workPlan.json`. A file written by a NEWER `schemaVersion` is IGNORED
+ * (returns empty) rather than coerced, so we never consume a future shape's
+ * fields as v1 — this is the single forward-compat gate. Within a known
+ * version, `PersistedWorkPlanSchema`'s per-field `.catch` keeps one corrupt
+ * value from nuking the rest instead of throwing and aborting the read.
+ */
+function readPersistedWorkPlan(raw: unknown): WorkPlanSnapshot {
+  if (!raw) return EMPTY_WORK_PLAN;
+  const version =
+    isObject(raw) && typeof raw.schemaVersion === 'number'
+      ? raw.schemaVersion
+      : STREAM_SNAPSHOT_SCHEMA_VERSION;
+  if (version > STREAM_SNAPSHOT_SCHEMA_VERSION) return EMPTY_WORK_PLAN;
+  const parsed = PersistedWorkPlanSchema.safeParse(raw);
+  return parsed.success ? parsed.data : EMPTY_WORK_PLAN;
 }
 
 /** Read every per-stream sidecar file ONCE, flattening any legacy nested data. */
@@ -122,15 +155,9 @@ export async function readStreamData(kv: KVStore): Promise<StreamData> {
     ? usageParsed.data
     : new Map<string, TokenUsageStats>();
 
-  // PersistedWorkPlanSchema's per-field `.catch` degrades a corrupt-but-valid-
-  // JSON workPlan.json gracefully instead of throwing and aborting the read.
-  const workPlanRaw = await tryRead(kv, STREAM_DATA_KEYS.WORK_PLAN);
-  const parsedWorkPlan = workPlanRaw
-    ? PersistedWorkPlanSchema.safeParse(workPlanRaw)
-    : undefined;
-  const workPlan = parsedWorkPlan?.success
-    ? parsedWorkPlan.data
-    : EMPTY_WORK_PLAN;
+  const workPlan = readPersistedWorkPlan(
+    await tryRead(kv, STREAM_DATA_KEYS.WORK_PLAN),
+  );
 
   return {
     meta,
@@ -151,17 +178,29 @@ export function assembleSnapshot(
   streamId: StreamTabId,
   data: StreamData,
 ): StreamSnapshot {
-  return StreamSnapshotSchema.parse({
-    streamId,
-    todos: data.workPlan.todos,
-    plan: data.workPlan.plan,
-    planSummary: data.workPlan.planSummary,
-    outputFilesByRound: mapToRecord(data.outputFiles),
-    missingOutputsByRound: mapToRecord(data.missingOutputs),
-    compileFailuresByRound: mapToRecord(data.compileFailures),
-    runUsage: mapToRecord(data.usage),
-    executionId: data.meta?.executionId,
-    parentStreamId: data.meta?.parentStreamId,
-    description: data.meta?.description,
-  });
+  try {
+    return StreamSnapshotSchema.parse({
+      streamId,
+      todos: data.workPlan.todos,
+      plan: data.workPlan.plan,
+      planSummary: data.workPlan.planSummary,
+      outputFilesByRound: mapToRecord(data.outputFiles),
+      missingOutputsByRound: mapToRecord(data.missingOutputs),
+      compileFailuresByRound: mapToRecord(data.compileFailures),
+      runUsage: mapToRecord(data.usage),
+      executionId: data.meta?.executionId,
+      parentStreamId: data.meta?.parentStreamId,
+      description: data.meta?.description,
+    });
+  } catch (error) {
+    // Defense-in-depth for the unwrapped CLI resume path (`await store.read`):
+    // an unexpected on-disk shape degrades to an empty-but-valid snapshot,
+    // logged so it stays diagnosable, rather than aborting hydration.
+    logger.warn(
+      CHANNEL,
+      `Could not assemble snapshot for stream ${streamId}; using empty.`,
+      { data: error },
+    );
+    return StreamSnapshotSchema.parse({ streamId });
+  }
 }
