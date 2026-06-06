@@ -65,15 +65,16 @@ describe('CLI TUI text input editing', () => {
     expect(
       rewriteKittyEnterInput(`${ESC}[57414;1u`, { shiftEnter: 'newline' }),
     ).toBe('\r');
-    // Ink already reports standalone Shift+Enter as a shifted return, so the
-    // raw-event shim must not emit a second synthetic newline for that exact
-    // chunk. Embedded sequences still need rewriting; see the batched test.
+    // Ink reports the semicolon CSI-u spelling as shifted Return, so the raw
+    // shim must not emit a second synthetic newline for that exact chunk.
     expect(
       rewriteKittyEnterInput(`${ESC}[13;2u`, { shiftEnter: 'newline' }),
     ).toBeUndefined();
+    // The colon spelling is not parsed by Ink; normalize it at the raw-event
+    // layer so Shift+Enter still inserts a newline.
     expect(
       rewriteKittyEnterInput(`${ESC}[13:2u`, { shiftEnter: 'newline' }),
-    ).toBeUndefined();
+    ).toBe(SYNTHETIC_SHIFT_RETURN_INPUT);
     // Main Enter, plain CR, and modified keypad Enter must not match.
     expect(
       rewriteKittyEnterInput('\r', { shiftEnter: 'newline' }),
@@ -96,6 +97,17 @@ describe('CLI TUI text input editing', () => {
 
     expect(rewritten).toBe(`alpha${SYNTHETIC_SHIFT_RETURN_INPUT}beta`);
     expect(applyTerminalInputChunk('', 0, rewritten ?? '')).toEqual({
+      value: 'alpha\nbeta',
+      cursor: 10,
+      submit: false,
+    });
+
+    const colonRewritten = rewriteKittyEnterInput(`alpha${ESC}[13:2ubeta`, {
+      shiftEnter: 'newline',
+    });
+
+    expect(colonRewritten).toBe(`alpha${SYNTHETIC_SHIFT_RETURN_INPUT}beta`);
+    expect(applyTerminalInputChunk('', 0, colonRewritten ?? '')).toEqual({
       value: 'alpha\nbeta',
       cursor: 10,
       submit: false,
