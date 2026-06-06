@@ -38,7 +38,9 @@ async function lazyDetectWaitingStatus(
   }
 
   const executionId =
-    ProgressViewProvider.getInstance()?.state?.meta.getExecutionId(streamId);
+    ProgressViewProvider.getInstance()?.state?.snapshots.getExecutionId(
+      streamId,
+    );
   if (!executionId) {
     return false;
   }

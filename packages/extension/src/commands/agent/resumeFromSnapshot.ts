@@ -27,8 +27,8 @@ export async function tryResumeFromSnapshot(
   }
 
   const progressState = ProgressViewProvider.getInstance()?.state;
-  const executionId = progressState?.meta.getExecutionId(streamId);
-  const taskState = progressState?.meta.getTaskState(streamId);
+  const executionId = progressState?.snapshots.getExecutionId(streamId);
+  const taskState = progressState?.snapshots.getTaskState(streamId);
 
   if (!progressState) {
     logger.warn(`No ProgressViewProvider found for stream: ${streamId}`);

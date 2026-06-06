@@ -37,9 +37,8 @@ import {
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
-import { getStreamTabStore } from '@progressView/persistence/StreamTabStore';
-import { RoundKeySchema } from '@progressView/persistence/streamTabSchemas';
-import { ExecutionIdSchema } from '@shared/schemas';
+import { StreamSnapshotStore } from '@transcript';
+import { ExecutionIdSchema, RoundKeySchema } from '@shared/schemas';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { getConfig } from '@utils/config';
@@ -599,11 +598,12 @@ async function discoverLatestExecutionOutputs(query: {
       })
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
+    const snapshots = new StreamSnapshotStore();
     for (const candidate of candidates) {
       const streamId = getStreamTabId(candidate.agent, candidate.model, {
         executionId: candidate.id,
       });
-      const rounds = await getStreamTabStore(streamId).readOutputFiles();
+      const rounds = await snapshots.readOutputFiles(streamId);
       if (rounds && rounds.size > 0) {
         return { executionId: candidate.id, rounds };
       }

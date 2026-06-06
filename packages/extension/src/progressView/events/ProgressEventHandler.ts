@@ -9,7 +9,10 @@ import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import { WebviewBridge } from '@progressView/managers/WebviewBridge';
-import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
+import {
+  WebviewUpdater,
+  type LogContentExtras,
+} from '@progressView/managers/WebviewUpdater';
 import { mapToRecord } from '@progressView/persistence/serializationUtils';
 import {
   ProgressViewState,
@@ -125,13 +128,13 @@ export class ProgressEventHandler {
           }
         },
         updateStreamDescription: (_, { streamId, description }) => {
-          this.state.meta.setDescription(streamId, description);
+          this.state.snapshots.setDescription(streamId, description);
           if (this.webviewUpdater.isAvailable()) {
             this.webviewUpdater.updateStreamDescription(streamId, description);
           }
         },
         setParentStream: (_, { childStreamId, parentStreamId }) => {
-          this.state.meta.setParentStream(childStreamId, parentStreamId);
+          this.state.snapshots.setParentStream(childStreamId, parentStreamId);
           if (this.webviewUpdater.isAvailable()) {
             this.webviewUpdater.updateParentStream(
               childStreamId,
@@ -141,48 +144,44 @@ export class ProgressEventHandler {
         },
         extensionDeactivating: () => this.markAllRunningTasksAsCancelled(),
         // Output events — workflow tabs hold one run; ignore the storageKey dim.
-        addOutputFiles: async (ctx, { streamId, filesByRound }) => {
-          await ctx.state.outputFiles.addFiles(streamId, filesByRound);
+        addOutputFiles: (ctx, { streamId, filesByRound }) => {
+          ctx.state.snapshots.addOutputFiles(streamId, filesByRound);
           this.sendIfActive(streamId, () => {
-            const rounds = ctx.state.outputFiles.getFiles(streamId);
+            const rounds = ctx.state.snapshots.getOutputFiles(streamId);
             ctx.webviewUpdater.updateFiles(streamId, {
               rounds: rounds.size ? mapToRecord(rounds) : undefined,
             });
           });
         },
-        updateMissingOutputs: async (ctx, { streamId, filesByRound }) => {
-          await ctx.state.outputFiles.updateMissingOutputs(
-            streamId,
-            filesByRound,
-          );
+        updateMissingOutputs: (ctx, { streamId, filesByRound }) => {
+          ctx.state.snapshots.updateMissingOutputs(streamId, filesByRound);
           this.sendIfActive(streamId, () => {
-            const rounds = ctx.state.outputFiles.getMissingOutputs(streamId);
+            const rounds = ctx.state.snapshots.getMissingOutputs(streamId);
             ctx.webviewUpdater.updateMissingOutputs(streamId, {
               rounds: rounds.size ? mapToRecord(rounds) : undefined,
             });
           });
         },
-        updateCompileFailures: async (ctx, { streamId, filesByRound }) => {
-          await ctx.state.outputFiles.updateCompileFailures(
-            streamId,
-            filesByRound,
-          );
+        updateCompileFailures: (ctx, { streamId, filesByRound }) => {
+          ctx.state.snapshots.updateCompileFailures(streamId, filesByRound);
           this.sendIfActive(streamId, () => {
-            const rounds = ctx.state.outputFiles.getCompileFailures(streamId);
+            const rounds = ctx.state.snapshots.getCompileFailures(streamId);
             ctx.webviewUpdater.updateCompileFailures(streamId, {
               rounds: rounds.size ? mapToRecord(rounds) : undefined,
               reset: true,
             });
           });
         },
-        clearMissingOutputs: async (ctx, payload) => {
+        clearMissingOutputs: (ctx, payload) => {
           const targets: StreamTabId[] = payload.streamId
             ? [payload.streamId]
             : payload.streamConfig
-              ? ctx.state.meta.findWorkflowStreamsMatching(payload.streamConfig)
+              ? ctx.state.snapshots.findWorkflowStreamsMatching(
+                  payload.streamConfig,
+                )
               : [];
           for (const streamId of targets) {
-            await ctx.state.outputFiles.clearMissingOutputs(streamId);
+            ctx.state.snapshots.clearMissingOutputs(streamId);
             this.sendIfActive(streamId, () =>
               ctx.webviewUpdater.updateMissingOutputs(streamId, {
                 reset: true,
@@ -192,8 +191,8 @@ export class ProgressEventHandler {
         },
         // Usage events — workflow tabs collapse to a single accumulated value;
         // tool-use tabs keep per-run accumulation (resume produces multiple runs).
-        updateStreamUsage: async (ctx, { streamId, usage, storageKey }) => {
-          const accumulated = await ctx.state.usageStats.setRunUsage(
+        updateStreamUsage: (ctx, { streamId, usage, storageKey }) => {
+          const accumulated = ctx.state.snapshots.addUsage(
             streamId,
             storageKey,
             usage,
@@ -210,7 +209,7 @@ export class ProgressEventHandler {
         },
         // Todo events
         updateTodos: (ctx, { streamId, todos }) => {
-          ctx.state.setTodos(streamId, todos);
+          ctx.state.snapshots.setTodos(streamId, todos);
           this.sendIfActive(streamId, () =>
             ctx.webviewUpdater.updateTodos(streamId, todos),
           );
@@ -222,7 +221,7 @@ export class ProgressEventHandler {
         // Unlike high-frequency log events, plan updates are rare and
         // critical for the approval UX.
         updatePlan: (ctx, { streamId, plan }) => {
-          ctx.state.setPlan(streamId, plan);
+          ctx.state.snapshots.setPlan(streamId, plan);
           if (this.webviewUpdater.isAvailable()) {
             ctx.webviewUpdater.updatePlan(streamId, plan);
           }
@@ -357,19 +356,16 @@ export class ProgressEventHandler {
     const category = taskState.agentConfig.agentCategory;
     const previousFilter = this.state.agentCategoryFilter;
 
-    // Coordinate persistence + ephemeral side effects (formerly state.setTaskState)
-    this.state.meta.setTaskState(streamId, taskState);
+    // Coordinate persistence + ephemeral side effects (formerly state.setTaskState).
+    // taskState + executionId go in a single meta.json write.
+    this.state.snapshots.setTaskState(streamId, taskState, executionId);
     this.state.clearStreamHints(streamId);
     this.state.getOrCreateStreamState(streamId, category);
     this.state.resetFinishedChildCounters(streamId);
-    cleanupToolUseAgentRegistry(this.state.meta);
+    cleanupToolUseAgentRegistry(this.state.snapshots);
 
     if (isActiveStream) {
       this.maybeUpdateFilterForCategory(category);
-    }
-
-    if (executionId) {
-      this.state.meta.setExecutionId(streamId, executionId);
     }
 
     if (this.webviewUpdater.isAvailable()) {
@@ -499,14 +495,12 @@ export class ProgressEventHandler {
     this.webviewBridge.syncStream(stream);
 
     const extras = this.buildStreamSyncExtras(stream);
-    const { todos, plan } = this.state.getWorkPlan(stream);
+    const { todos, plan } = this.state.snapshots.getWorkPlan(stream);
     const queuedFollowUps = ToolUseFollowUpQueue.getAll(stream);
     const agentCategory = this.getStreamCategory(stream);
 
     // Optionally include active-stream state (replaces syncActiveStreamState).
-    let conversationProgress:
-      | import('@shared/schemas').ConversationProgress
-      | undefined;
+    let conversationProgress: ConversationProgress | undefined;
     let badges: StreamBadgeSnapshot | undefined;
     let parentStreamId: StreamTabId | undefined;
     if (includeActiveState) {
@@ -515,7 +509,7 @@ export class ProgressEventHandler {
         conversationProgress = streamState.conversationProgress;
         badges = this.toBadgeSnapshot(streamState);
       }
-      parentStreamId = this.state.meta.getParentStreamId(stream);
+      parentStreamId = this.state.snapshots.getParentStreamId(stream);
     }
 
     // Always include toggle bypass state so buttons render correctly on tab switch.
@@ -543,22 +537,22 @@ export class ProgressEventHandler {
     });
   }
 
-  private buildStreamSyncExtras(
-    stream: StreamTabId,
-  ): import('@progressView/managers/WebviewUpdater').LogContentExtras {
+  private buildStreamSyncExtras(stream: StreamTabId): LogContentExtras {
     // Workflow files/missing outputs are flat (one run per tab).
-    const workflowFiles = mapToRecord(this.state.outputFiles.getFiles(stream));
+    const workflowFiles = mapToRecord(
+      this.state.snapshots.getOutputFiles(stream),
+    );
     const workflowMissingOutputs = mapToRecord(
-      this.state.outputFiles.getMissingOutputs(stream),
+      this.state.snapshots.getMissingOutputs(stream),
     );
     const workflowCompileFailures = mapToRecord(
-      this.state.outputFiles.getCompileFailures(stream),
+      this.state.snapshots.getCompileFailures(stream),
     );
 
     // Per-run usage map — shared by workflow and tool-use. Frontend derives
     // sessionUsage as the sum so cumulative totals survive resume.
     const runUsage = Object.fromEntries(
-      this.state.usageStats.getRunUsage(stream).entries(),
+      this.state.snapshots.getRunUsage(stream).entries(),
     ) as Record<string, TokenUsageStats>;
 
     const contextState = this.state.getContextState(stream);
@@ -615,7 +609,7 @@ export class ProgressEventHandler {
   }
 
   private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {
-    const taskState = this.state.meta.getTaskState(streamId);
+    const taskState = this.state.snapshots.getTaskState(streamId);
     return (
       taskState?.agentConfig?.agentCategory ??
       this.state.getStreamHints(streamId).agentCategory
