@@ -1,3 +1,4 @@
+import { createProgressViewFileCommandHandlers } from '@controllers/progressView/ProgressViewFileCommandHandlers';
 import { createProgressViewFollowUpCommandHandlers } from '@controllers/progressView/ProgressViewFollowUpCommandHandlers';
 import { createProgressViewLifecycleCommandHandlers } from '@controllers/progressView/ProgressViewLifecycleCommandHandlers';
 import { createProgressViewRunCommandHandlers } from '@controllers/progressView/ProgressViewRunCommandHandlers';
@@ -55,6 +56,18 @@ export function createDesktopProgressIpc(
         progress.sendFollowUp(stream, text, mediaFiles),
       reportImageSaveError: (_image, error) => reportAsyncError(error),
     }),
+    ...createProgressViewFileCommandHandlers({
+      openFile: (file, line) => progress.openFile(file, line),
+      openFileCompile: (file) => progress.openFileCompile(file),
+      openTaskStorage: (stream) => progress.openTaskStorage(stream),
+      compareOriginal: (file, base) => progress.compareOriginal(file, base),
+      comparePrevious: (file, base, previous) =>
+        progress.comparePrevious(file, base, previous),
+      acceptFile: (file, base) => progress.acceptFile(file, base),
+      mergeFile: (file, base) => progress.mergeFile(file, base),
+      latexdiffFile: (file, base) => progress.latexdiffFile(file, base),
+      openLabel: (label) => progress.openLabel(label),
+    }),
     [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (d) => {
       if (!progress.handleToolEditApprovalAction(d)) onUnsupportedCommand(d);
     },
@@ -67,23 +80,6 @@ export function createDesktopProgressIpc(
     [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: async (d) => {
       await progress.handleAgentProposalAction(d);
     },
-    [PROGRESS_VIEW_COMMANDS.OPEN_FILE]: (d) =>
-      progress.openFile(d.file, d.line),
-    [PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE]: (d) =>
-      progress.openFileCompile(d.file),
-    [PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE]: (d) =>
-      progress.openTaskStorage(d.stream),
-    [PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL]: (d) =>
-      progress.compareOriginal(d.file, d.base),
-    [PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS]: (d) =>
-      progress.comparePrevious(d.file, d.base, d.prev),
-    [PROGRESS_VIEW_COMMANDS.ACCEPT_FILE]: (d) =>
-      progress.acceptFile(d.file, d.base),
-    [PROGRESS_VIEW_COMMANDS.MERGE_FILE]: (d) =>
-      progress.mergeFile(d.file, d.base),
-    [PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE]: (d) =>
-      progress.latexdiffFile(d.file, d.base),
-    [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: (d) => progress.openLabel(d.label),
   };
 
   return {
