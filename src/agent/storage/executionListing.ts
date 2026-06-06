@@ -44,6 +44,7 @@ export interface ExecutionListingEntry {
   id: ExecutionId;
   timestamp: string;
   parentExecutionId?: ExecutionId;
+  delegationDepth?: number;
   agent: string;
   model: string;
   agentConfig: AgentConfig | null;
@@ -134,6 +135,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
           id,
           timestamp: meta.timestamp,
           parentExecutionId: meta.parentExecutionId,
+          delegationDepth: meta.delegationDepth,
           agent: cfg?.agent ?? 'unknown',
           model: cfg?.model ?? 'unknown',
           agentConfig: cfg ?? null,
@@ -285,6 +287,7 @@ async function backfillEntries(entries: unknown[]): Promise<void> {
         agentConfig?: AgentConfig;
         config?: AgentConfig; // Legacy field name
         parentExecutionId?: ExecutionId;
+        delegationDepth?: number;
       };
 
       const rawConfig = candidate.agentConfig ?? candidate.config;
@@ -307,6 +310,7 @@ async function backfillEntries(entries: unknown[]): Promise<void> {
         store.writeMeta({
           timestamp: candidate.timestamp,
           parentExecutionId: candidate.parentExecutionId,
+          delegationDepth: candidate.delegationDepth,
         }),
         store.writeConfig(normalizedConfig),
       ]);
