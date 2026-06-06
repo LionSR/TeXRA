@@ -309,7 +309,7 @@ export async function runStreamedTurn(params: {
 
   const query = await importClaudeAgentSdk();
 
-  const sdkOptions: Record<string, unknown> = {
+  const sdkOptions: import('@anthropic-ai/claude-agent-sdk').Options = {
     abortController: params.abortController,
     model: params.model,
     permissionMode: params.permissionMode,

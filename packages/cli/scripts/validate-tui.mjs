@@ -227,6 +227,9 @@ const SCENARIOS = [
     expect: [
       'TeXRA',
       'Choose how to start this CLI session.',
+      'api: personal API keys',
+      'auth: signed out',
+      'actions: configure a provider key, or run `texra login` for included relay',
       'New chat',
       'Team Lean Project',
       'unavailable',
@@ -253,6 +256,8 @@ const SCENARIOS = [
     expectExit: true,
     expect: [
       'Choose how to start this CLI session.',
+      'api: personal API keys',
+      'auth: signed out',
       'New chat',
       'Resume cccccccccccc',
       'Team Lean Project',
@@ -342,6 +347,8 @@ const SCENARIOS = [
     expectExit: true,
     expect: [
       'Choose how to start this CLI session.',
+      'api: personal API keys',
+      'auth: signed out',
       'New chat',
       'No personal API-key models are runnable',
       'Help',
@@ -1405,11 +1412,13 @@ const SCENARIOS = [
     bootExpect: '[Tab]streams',
     keys: ['\t'],
     expect: [
+      'subagent: strategy · parent: main · model: harness-model',
       'Please handle the harness-child-strategy sub-workflow.',
       'strategy is checking the harness-child-strategy details',
       '[1:strategy]*',
     ],
     unexpect: [
+      'agent: chat · model: harness-model',
       'entry-1 chat history line',
       'entry-4 chat history line',
       '[main]*',

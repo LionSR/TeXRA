@@ -42,6 +42,10 @@ import {
 } from '@tools/odyssey';
 import { ToolError, type ToolResult } from '@tools/result';
 import { requireNonEmptyString } from '@tools/utils';
+import {
+  appendWorkPlanGranularityWarning,
+  formatWorkPlanGranularityWarning,
+} from '@tools/workPlanGranularityFeedback';
 import { defineTool } from '@tools/core/define';
 import { filterNotNull } from '@utils/core';
 
@@ -190,6 +194,10 @@ Best practices:
     }
 
     const isNewPlan = plan.steps.every((s) => s.status === TODO_STATUS.PENDING);
+    const granularityWarning = formatWorkPlanGranularityWarning(
+      callContext.workPlanState.todos,
+      plan,
+    );
 
     callContext.workPlanState.updatePlan(plan);
 
@@ -200,17 +208,21 @@ Best practices:
         );
       } else if (isProposalBypassedForStream(runContext.streamId)) {
         logger.info('Plan auto-approved via delegated-task auto-approval');
-        return this.buildApprovedResult({ autoApproved: true });
+        return this.buildApprovedResult({
+          autoApproved: true,
+          granularityWarning,
+        });
       } else {
         return this.requestApproval(
           plan,
           runContext.streamId,
           callContext.workPlanState,
+          granularityWarning,
         );
       }
     }
 
-    return this.buildProgressResult(plan);
+    return this.buildProgressResult(plan, granularityWarning);
   }
 
   private async executePause(
@@ -285,6 +297,7 @@ Best practices:
     plan: Plan,
     streamId: string,
     workPlanState: WorkPlanState,
+    granularityWarning?: string,
   ): Promise<ToolResult> {
     const approvalId = `plan-${Date.now().toString(36)}-${++approvalCounter}`;
     const odysseyEnabled = platform().config.get<boolean>(
@@ -302,12 +315,15 @@ Best practices:
 
     if (result.action === 'approve') {
       logger.info('Plan approved by user');
-      return this.buildApprovedResult({ autoApproved: false });
+      return this.buildApprovedResult({
+        autoApproved: false,
+        granularityWarning,
+      });
     }
 
     if (result.action === 'approve_and_odyssey') {
       logger.info('Plan approved by user with odyssey mode');
-      return this.startOdysseyForPlan(plan, streamId);
+      return this.startOdysseyForPlan(plan, streamId, granularityWarning);
     }
 
     // Rejected or timed out — clear the plan from UI
@@ -347,6 +363,7 @@ Best practices:
   private async startOdysseyForPlan(
     plan: Plan,
     streamId: string,
+    granularityWarning?: string,
   ): Promise<ToolResult> {
     const odysseyEnabled = platform().config.get<boolean>(
       ODYSSEY_FEATURE_FLAG_KEY,
@@ -359,12 +376,14 @@ Best practices:
       );
       return {
         summary: 'Plan approved — autonomous run unavailable',
-        output:
+        output: appendWorkPlanGranularityWarning(
           `The user selected Approve & Run, but the odyssey feature flag is ` +
-          `currently disabled. The plan is approved, but no autonomous ` +
-          `odyssey was started.\n\n` +
-          `Proceed with the plan steps as a normal turn-by-turn workflow. ` +
-          `Update plan step statuses as you go.`,
+            `currently disabled. The plan is approved, but no autonomous ` +
+            `odyssey was started.\n\n` +
+            `Proceed with the plan steps as a normal turn-by-turn workflow. ` +
+            `Update plan step statuses as you go.`,
+          granularityWarning,
+        ),
       };
     }
 
@@ -393,18 +412,20 @@ Best practices:
             : retargeted;
         return {
           summary: `Plan approved — odyssey ${active.odysseyId} retargeted`,
-          output:
+          output: appendWorkPlanGranularityWarning(
             `The user approved a new plan while odyssey ${active.odysseyId} ` +
-            `was already in flight. The odyssey has been retargeted to ` +
-            `the newly approved plan instead of leaving the old objective ` +
-            `active.\n\n` +
-            `${formatOdysseyView(active)}\n\n` +
-            `Discipline:\n` +
-            `- Work through the new plan steps and update their statuses with plan(command="update") as you progress.\n` +
-            `- Discard any progress that only served the previous objective.\n` +
-            `- Do not call plan(command="complete") until every step of the new plan is marked completed AND verified.\n` +
-            `- If you genuinely need user input to proceed, call plan(command="pause") with a reason.\n\n` +
-            `Objective:\n${objective}`,
+              `was already in flight. The odyssey has been retargeted to ` +
+              `the newly approved plan instead of leaving the old objective ` +
+              `active.\n\n` +
+              `${formatOdysseyView(active)}\n\n` +
+              `Discipline:\n` +
+              `- Work through the new plan steps and update their statuses with plan(command="update") as you progress.\n` +
+              `- Discard any progress that only served the previous objective.\n` +
+              `- Do not call plan(command="complete") until every step of the new plan is marked completed AND verified.\n` +
+              `- If you genuinely need user input to proceed, call plan(command="pause") with a reason.\n\n` +
+              `Objective:\n${objective}`,
+            granularityWarning,
+          ),
         };
       } catch (err) {
         const reason = toErrorMessage(err);
@@ -429,15 +450,17 @@ Best practices:
       const odyssey = await OdysseyStore.start(streamId, objective, { plan });
       return {
         summary: `Plan approved — odyssey ${odyssey.odysseyId} started`,
-        output:
+        output: appendWorkPlanGranularityWarning(
           `The user approved this plan and started an autonomous odyssey ` +
-          `(${odyssey.odysseyId}) toward the plan's stopping condition.\n\n` +
-          `Discipline:\n` +
-          `- Work through the plan steps and update their statuses with plan(command="update") as you progress.\n` +
-          `- Do not call plan(command="complete") until every plan step is marked completed AND the result is verified against current external state (file contents, command output, test results).\n` +
-          `- If you genuinely need user input to proceed, call plan(command="pause") with a reason describing what you need.\n` +
-          `- Otherwise, keep working in scoped checkpoints until the plan is finished.\n\n` +
-          `Objective:\n${objective}`,
+            `(${odyssey.odysseyId}) toward the plan's stopping condition.\n\n` +
+            `Discipline:\n` +
+            `- Work through the plan steps and update their statuses with plan(command="update") as you progress.\n` +
+            `- Do not call plan(command="complete") until every plan step is marked completed AND the result is verified against current external state (file contents, command output, test results).\n` +
+            `- If you genuinely need user input to proceed, call plan(command="pause") with a reason describing what you need.\n` +
+            `- Otherwise, keep working in scoped checkpoints until the plan is finished.\n\n` +
+            `Objective:\n${objective}`,
+          granularityWarning,
+        ),
       };
     } catch (err) {
       const reason = toErrorMessage(err);
@@ -458,8 +481,10 @@ Best practices:
 
   private buildApprovedResult({
     autoApproved,
+    granularityWarning,
   }: {
     autoApproved: boolean;
+    granularityWarning?: string;
   }): ToolResult {
     const prefix = autoApproved
       ? 'Plan auto-approved via delegated-task auto-approval (user did not review).'
@@ -468,18 +493,26 @@ Best practices:
       summary: autoApproved
         ? 'Plan auto-approved — proceed with implementation'
         : 'Plan approved — proceed with implementation',
-      output: `${prefix} You may now begin implementing the plan steps. Update step statuses as you work through them.`,
+      output: appendWorkPlanGranularityWarning(
+        `${prefix} You may now begin implementing the plan steps. Update step statuses as you work through them.`,
+        granularityWarning,
+      ),
     };
   }
 
-  private buildProgressResult(plan: Plan): ToolResult {
+  private buildProgressResult(
+    plan: Plan,
+    granularityWarning: string | undefined,
+  ): ToolResult {
     const { completed, inProgress, pending } = countByStatus(plan.steps);
 
     const summary = `Plan updated: ${completed} completed, ${inProgress} in progress, ${pending} pending`;
 
     return {
-      summary,
-      output: 'OK',
+      summary: granularityWarning
+        ? `${summary}; todo/plan granularity overlap`
+        : summary,
+      output: appendWorkPlanGranularityWarning('OK', granularityWarning),
     };
   }
 

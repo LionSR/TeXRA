@@ -42,6 +42,7 @@ const processOutputAllowedFiles = new Set([
   'packages/cli/src/orchestration/runOrchestrationTui.tsx',
   'packages/cli/src/init/runInitWizard.tsx',
   'packages/cli/src/onboarding/runOnboarding.tsx',
+  'packages/cli/src/commands/loginProviderPicker.tsx',
 ]);
 
 const processOutputPatterns = [

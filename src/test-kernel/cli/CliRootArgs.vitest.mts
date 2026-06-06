@@ -1060,7 +1060,10 @@ describe('CLI model flag validation contract', () => {
 
 describe('CLI login arguments', () => {
   it('prefers explicit provider flags over positional providers', () => {
-    expect(resolveLoginProvider('google', 'github')).toBe('github');
+    expect(resolveLoginProvider('google', 'github')).toEqual({
+      provider: 'github',
+      explicit: true,
+    });
   });
 });
 

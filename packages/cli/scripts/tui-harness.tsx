@@ -64,7 +64,15 @@ import { syncStreamLog } from '../src/chat/tui/state/subscribeStreamLog';
 import { streamStatusFromState } from '../src/chat/tui/state/streamStatus';
 import { resolveLocalTranscriptStreamId } from '../src/chat/tui/state/transcript';
 import { OrchestrationApp } from '../src/orchestration/runOrchestrationTui';
-import { parseCliApiMode, type CliApiMode } from '../src/runtime/apiAccessMode';
+import {
+  formatCliApiMode,
+  parseCliApiMode,
+  type CliApiMode,
+} from '../src/runtime/apiAccessMode';
+import {
+  formatCliApiStatusActionHint,
+  formatCliAuthStatusLine,
+} from '../src/runtime/apiStatus';
 import type { CliModelAccess } from '../src/runtime/modelAccess';
 import {
   cliMultiAgentPresets,
@@ -353,6 +361,19 @@ function harnessOrchestrationModels(
     : models;
 }
 
+function harnessOrchestrationStatusLines(): readonly string[] {
+  const authenticated = HARNESS_AUTHENTICATED === '1';
+  const profile = {
+    authenticated,
+    accountLabel: authenticated ? 'harness@example.edu' : undefined,
+  };
+  return [
+    `api: ${formatCliApiMode(HARNESS_API_MODE)}`,
+    formatCliAuthStatusLine(profile),
+    formatCliApiStatusActionHint(HARNESS_API_MODE, profile),
+  ];
+}
+
 if (SHOW_ORCHESTRATION) {
   const instance = render(
     <OrchestrationApp
@@ -363,6 +384,7 @@ if (SHOW_ORCHESTRATION) {
           : []
       }
       apiMode={HARNESS_API_MODE}
+      statusLines={harnessOrchestrationStatusLines()}
       allowDefaultModelLaunch={false}
       onResolve={() => undefined}
     />,
