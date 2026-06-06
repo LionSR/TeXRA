@@ -1,8 +1,10 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - webview command constants
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
+import { cleanupAllApprovals } from '@tools/approval';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
@@ -54,6 +56,12 @@ interface DesktopProgressIpcModule {
         action: string;
         feedback?: string;
       }): void;
+      handleUserQuestionAction(message: {
+        command: string;
+        questionId: string;
+        action: string;
+        answer?: string;
+      }): Promise<void>;
       handleAgentProposalAction(message: {
         command: string;
         proposalId: string;
@@ -62,6 +70,7 @@ interface DesktopProgressIpcModule {
         model?: string;
         agent?: string;
       }): Promise<boolean>;
+      runtimeHost: AgentRuntimeHost;
     };
     onUnsupportedCommand?: (message: { command: string }) => void;
     onAsyncError?: (error: unknown) => void;
@@ -110,11 +119,19 @@ function createProgress() {
     handleToolEditApprovalAction: vi.fn(() => true),
     handleBashApprovalAction: vi.fn(async () => {}),
     handlePlanApprovalAction: vi.fn(),
+    handleUserQuestionAction: vi.fn(async () => {}),
     handleAgentProposalAction: vi.fn(async () => true),
+    runtimeHost: {
+      emit: vi.fn(),
+    },
   };
 }
 
 describe('desktop Progress IPC', () => {
+  afterEach(() => {
+    cleanupAllApprovals();
+  });
+
   it('syncs Progress state on readiness while allowing shared view-state handling', async () => {
     const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
     const progress = createProgress();
@@ -451,6 +468,46 @@ describe('desktop Progress IPC', () => {
       requestId: 'edit-2',
       action: 'openDiff',
     });
+  });
+
+  it('handles bypass toggles through shared policy instead of unsupported fallback', async () => {
+    const { createDesktopProgressIpc } = await loadDesktopProgressIpc();
+    const progress = createProgress();
+    const onUnsupportedCommand = vi.fn();
+    const ipc = createDesktopProgressIpc({
+      progress,
+      onUnsupportedCommand,
+    });
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS,
+        stream: 'run-1',
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+    expect(onUnsupportedCommand).not.toHaveBeenCalled();
+    expect(progress.runtimeHost.emit).toHaveBeenCalledWith(
+      'updateToolEditApprovalBypassState',
+      { streamId: 'run-1', bypassActive: true },
+    );
+
+    expect(
+      ipc.handleMessage({
+        command: PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS,
+        stream: 'run-2',
+      }),
+    ).toBe(true);
+    await Promise.resolve();
+    expect(onUnsupportedCommand).not.toHaveBeenCalled();
+    expect(progress.runtimeHost.emit).toHaveBeenCalledWith(
+      'updateSuperYoloBypassState',
+      { streamId: 'run-2', bypassActive: true },
+    );
+    expect(progress.runtimeHost.emit).toHaveBeenCalledWith(
+      'updateToolEditApprovalBypassState',
+      { streamId: 'run-2', bypassActive: true },
+    );
   });
 
   it('routes agent proposal setup through the desktop bridge', async () => {
