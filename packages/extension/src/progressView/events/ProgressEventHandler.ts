@@ -9,10 +9,6 @@ import { bus } from '@eventBus/ProgressEventBus';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import {
-  WebviewUpdater,
-  type LogContentExtras,
-} from '@progressView/managers/WebviewUpdater';
-import {
   STREAM_STATUS,
   type ConversationProgress,
   type StorageKey,
@@ -20,6 +16,10 @@ import {
   type StreamTabId,
   type TokenUsageStats,
 } from '@shared/schemas';
+import {
+  WebviewUpdater,
+  type LogContentExtras,
+} from '@shared/progressView/backend/WebviewUpdater';
 import { mapToRecord } from '@shared/progressView/backend/persistence/serializationUtils';
 import {
   ProgressViewState,

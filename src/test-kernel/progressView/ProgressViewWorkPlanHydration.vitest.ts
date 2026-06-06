@@ -17,11 +17,11 @@ vi.mock('vscode', () => ({
 
 // Local imports
 import { ProgressEventHandler } from '@progressView/events/ProgressEventHandler';
+import type { Plan, TodoItem } from '@shared/schemas';
 import type {
   SyncStreamContentPayload,
   WebviewUpdater,
-} from '@progressView/managers/WebviewUpdater';
-import type { Plan, TodoItem } from '@shared/schemas';
+} from '@shared/progressView/backend/WebviewUpdater';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 import type { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
