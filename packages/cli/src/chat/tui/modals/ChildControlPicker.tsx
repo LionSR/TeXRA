@@ -28,7 +28,7 @@ import type { StreamSlice } from '../state/cliState';
 
 export interface ChildControlPickerProps {
   readonly availableColumns?: number;
-  readonly activeStreamLabel: string | undefined;
+  readonly streamLabel: string | undefined;
   readonly activeStreamId: StreamTabId | undefined;
   readonly availableRows?: number;
   readonly mode: ChildControlMode;
@@ -958,7 +958,7 @@ function TaskDetailView({
 
 export function ChildControlPicker({
   availableColumns,
-  activeStreamLabel,
+  streamLabel,
   activeStreamId,
   availableRows,
   mode,
@@ -980,7 +980,7 @@ export function ChildControlPicker({
   const [tailExecutionId, setTailExecutionId] = useState<string | undefined>(
     undefined,
   );
-  const streamScopeLabel = activeStreamLabel ?? activeStreamId;
+  const streamScopeLabel = streamLabel ?? activeStreamId;
   const selectedIndex = clampPickerIndex(highlight, items.length);
   const selectedItem = items[selectedIndex];
   const hasItems = items.length > 0;
