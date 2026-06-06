@@ -24,6 +24,7 @@ type Bridge = {
 
 type TestableBridge = Bridge & {
   handleProgressEvent(event: string, payload: unknown): void;
+  tryResumeStream(streamId: StreamTabId): Promise<boolean>;
   setActiveStream(streamId: StreamTabId): void;
   deleteStream(streamId: StreamTabId): Promise<void>;
   deleteAllStreams(): Promise<void>;
@@ -75,6 +76,13 @@ interface DesktopAgentExecutionModule {
   }): DesktopExecution;
 }
 
+type CreateBridgeOptions = {
+  kvRead?: (key: string) => Promise<unknown> | unknown;
+  retrieveSessionResumeData?: ReturnType<typeof vi.fn>;
+  resumeToolUseFromSnapshot?: ReturnType<typeof vi.fn>;
+  runAgent?: RunExecutionRequest;
+};
+
 type ProgressMessage = {
   command?: string;
   activeStream?: string;
@@ -85,18 +93,29 @@ type ProgressMessage = {
   streamStates?: Record<string, unknown>;
 };
 
-async function createBridge(messages: unknown[]): Promise<TestableBridge> {
+async function createBridge(
+  messages: unknown[],
+  options: CreateBridgeOptions = {},
+): Promise<TestableBridge> {
   vi.resetModules();
   vi.doMock('@agent/runtime/RunStorageService', () => ({
     setRunStorageService: vi.fn(),
   }));
+  vi.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
+    retrieveSessionResumeData:
+      options.retrieveSessionResumeData ?? vi.fn(async () => null),
+  }));
+  vi.doMock('@agent/runtime/executeAgent', () => ({
+    resumeToolUseFromSnapshot:
+      options.resumeToolUseFromSnapshot ?? vi.fn(async () => {}),
+  }));
   vi.doMock('@agent/runtime/runAgent', () => ({
-    runAgent: vi.fn(),
+    runAgent: options.runAgent ?? vi.fn(),
   }));
   vi.doMock('@common/storage/KVStore', () => ({
     KVStore: class {
-      async read(): Promise<undefined> {
-        return undefined;
+      async read(key: string): Promise<unknown> {
+        return options.kvRead?.(key);
       }
 
       async write(): Promise<void> {}
@@ -212,6 +231,12 @@ async function createExecution(options: {
   vi.doMock('@agent/runtime/RunStorageService', () => ({
     setRunStorageService: vi.fn(),
   }));
+  vi.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
+    retrieveSessionResumeData: vi.fn(async () => null),
+  }));
+  vi.doMock('@agent/runtime/executeAgent', () => ({
+    resumeToolUseFromSnapshot: vi.fn(async () => {}),
+  }));
   vi.doMock('@agent/runtime/runAgent', () => ({
     runAgent: options.runAgent ?? vi.fn(async () => {}),
   }));
@@ -273,6 +298,8 @@ function progressMessages(
 describe('DesktopProgressBridge', () => {
   afterEach(() => {
     vi.doUnmock('@agent/runtime/RunStorageService');
+    vi.doUnmock('@agent/runtime/SessionResumeRetrieval');
+    vi.doUnmock('@agent/runtime/executeAgent');
     vi.doUnmock('@agent/runtime/runAgent');
     vi.doUnmock('@common/storage/KVStore');
     vi.doUnmock('@controllers/mainView/MainViewExecutionController');
@@ -480,6 +507,50 @@ describe('DesktopProgressBridge', () => {
         streamId: 'first',
         entries: [expect.objectContaining({ text: 'first stream log' })],
       });
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('does not resume a stream deleted in this desktop session', async () => {
+    const taskState = {
+      agentConfig: {
+        agent: 'search',
+        model: 'deepseekproT',
+        agentCategory: AGENT_CATEGORY.TOOL_USE,
+      },
+    };
+    const retrieveSessionResumeData = vi.fn(async () => ({
+      type: 'toolUse',
+      snapshot: {
+        executionId: 'exec-1',
+        streamId: 'stream-1',
+        agentConfig: taskState.agentConfig,
+      },
+    }));
+    const bridge = await createBridge([], {
+      kvRead: vi.fn(async () => ({
+        executionId: 'exec-1',
+        taskState,
+      })),
+      retrieveSessionResumeData,
+    });
+
+    try {
+      bridge.handleProgressEvent('setTaskState', {
+        streamId: 'stream-1',
+        executionId: 'exec-1',
+        taskState,
+      });
+
+      await bridge.deleteStream('stream-1');
+      bridge.handleProgressEvent('setTaskState', {
+        streamId: 'stream-1',
+        executionId: 'exec-1',
+        taskState,
+      });
+      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
+      expect(retrieveSessionResumeData).not.toHaveBeenCalled();
     } finally {
       bridge.dispose();
     }
@@ -760,6 +831,276 @@ describe('DesktopProgressBridge', () => {
       );
     } finally {
       execution.dispose();
+    }
+  });
+
+  it('resumes workflow streams from persisted meta', async () => {
+    const executionId = 'abc123';
+    const taskState = {
+      agentConfig: {
+        agent: 'proofreader',
+        model: 'deepseekproT',
+        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        toolConfig: DEFAULT_TOOL_CONFIG,
+      },
+      activeFiles: {},
+    };
+    const retrieveSessionResumeData = vi.fn(async () => ({
+      type: 'workflow',
+      agentConfig: taskState.agentConfig,
+      executionId,
+    }));
+    const runAgent = vi.fn(async () => {});
+    const kvRead = vi.fn(async (key: string) =>
+      key === 'meta'
+        ? {
+            executionId,
+            taskState,
+            description: 'Persisted workflow',
+          }
+        : undefined,
+    );
+    const bridge = await createBridge([], {
+      kvRead,
+      retrieveSessionResumeData,
+      runAgent,
+    });
+    const { StreamStatusService } =
+      await import('@agent/runtime/StreamStatusService');
+
+    try {
+      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(true);
+      expect(kvRead).toHaveBeenCalledWith('meta');
+      expect(retrieveSessionResumeData).toHaveBeenCalledWith(
+        'stream-1',
+        executionId,
+        expect.objectContaining({
+          activeFiles: {},
+          agentConfig: expect.objectContaining(taskState.agentConfig),
+        }),
+      );
+      expect(runAgent).toHaveBeenCalledWith(
+        {
+          config: expect.objectContaining(taskState.agentConfig),
+          executionId,
+        },
+        expect.objectContaining({
+          runtimeHost: expect.objectContaining({ emit: expect.any(Function) }),
+          openWorkflowOutput: expect.any(Function),
+        }),
+      );
+    } finally {
+      StreamStatusService.clear('stream-1', { emit: false });
+      bridge.dispose();
+    }
+  });
+
+  it('resumes tool-use streams through the shared snapshot path', async () => {
+    const retrieveSessionResumeData = vi.fn(async () => ({
+      type: 'toolUse',
+      snapshot: {
+        executionId: 'exec-1',
+        streamId: 'stream-1',
+        agentConfig: {
+          agent: 'search',
+          model: 'deepseekproT',
+          agentCategory: AGENT_CATEGORY.TOOL_USE,
+        },
+      },
+    }));
+    const resumeToolUseFromSnapshot = vi.fn(async () => {});
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages, {
+      retrieveSessionResumeData,
+      resumeToolUseFromSnapshot,
+    });
+    const { ToolUseFollowUpQueue } =
+      await import('@agent/toolUse/ToolUseFollowUpQueueManager');
+    const { StreamStatusService } =
+      await import('@agent/runtime/StreamStatusService');
+    const taskState = {
+      agentConfig: {
+        agent: 'search',
+        model: 'deepseekproT',
+        agentCategory: AGENT_CATEGORY.TOOL_USE,
+      },
+    };
+
+    try {
+      bridge.handleProgressEvent('setTaskState', {
+        streamId: 'stream-1',
+        executionId: 'exec-1',
+        taskState,
+      });
+      ToolUseFollowUpQueue.enqueue('stream-1', 'queued follow-up', {
+        force: true,
+      });
+
+      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(true);
+      expect(retrieveSessionResumeData).toHaveBeenCalledWith(
+        'stream-1',
+        'exec-1',
+        taskState,
+      );
+      expect(resumeToolUseFromSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          executionId: 'exec-1',
+          streamId: 'stream-1',
+        }),
+        expect.objectContaining({ emit: expect.any(Function) }),
+        expect.objectContaining({ setupSession: expect.any(Function) }),
+      );
+      const [, , resumeOptions] = resumeToolUseFromSnapshot.mock
+        .calls[0] as unknown as [
+        unknown,
+        unknown,
+        {
+          setupSession(session: {
+            appendFollowUp(
+              text: string,
+              mediaFiles?: readonly string[],
+              displayText?: string,
+            ): void;
+          }): void;
+        },
+      ];
+      const appendFollowUp = vi.fn();
+      resumeOptions.setupSession({ appendFollowUp });
+      expect(appendFollowUp).toHaveBeenCalledWith(
+        'queued follow-up',
+        undefined,
+        undefined,
+      );
+    } finally {
+      ToolUseFollowUpQueue.release('stream-1');
+      StreamStatusService.clear('stream-1', { emit: false });
+      bridge.dispose();
+    }
+  });
+
+  it('keeps queued follow-ups when tool-use resume fails', async () => {
+    const retrieveSessionResumeData = vi.fn(async () => ({
+      type: 'toolUse',
+      snapshot: {
+        executionId: 'exec-1',
+        streamId: 'stream-1',
+        agentConfig: {
+          agent: 'search',
+          model: 'deepseekproT',
+          agentCategory: AGENT_CATEGORY.TOOL_USE,
+        },
+      },
+    }));
+    const resumeToolUseFromSnapshot = vi.fn(async () => {
+      throw new Error('resume failed');
+    });
+    const bridge = await createBridge([], {
+      retrieveSessionResumeData,
+      resumeToolUseFromSnapshot,
+    });
+    const { ToolUseFollowUpQueue } =
+      await import('@agent/toolUse/ToolUseFollowUpQueueManager');
+    const { StreamStatusService } =
+      await import('@agent/runtime/StreamStatusService');
+
+    try {
+      bridge.handleProgressEvent('setTaskState', {
+        streamId: 'stream-1',
+        executionId: 'exec-1',
+        taskState: {
+          agentConfig: {
+            agent: 'search',
+            model: 'deepseekproT',
+            agentCategory: AGENT_CATEGORY.TOOL_USE,
+          },
+        },
+      });
+      ToolUseFollowUpQueue.enqueue('stream-1', 'queued follow-up', {
+        force: true,
+      });
+
+      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
+      expect(ToolUseFollowUpQueue.getAll('stream-1')).toEqual([
+        'queued follow-up',
+      ]);
+      expect(StreamStatusService.get('stream-1')).toBe(STREAM_STATUS.WAITING);
+    } finally {
+      ToolUseFollowUpQueue.release('stream-1');
+      StreamStatusService.clear('stream-1', { emit: false });
+      bridge.dispose();
+    }
+  });
+
+  it('does not launch a duplicate resume for active streams', async () => {
+    const retrieveSessionResumeData = vi.fn(async () => null);
+    const bridge = await createBridge([], { retrieveSessionResumeData });
+    const { StreamStatusService } =
+      await import('@agent/runtime/StreamStatusService');
+
+    try {
+      StreamStatusService.set('stream-1', STREAM_STATUS.RUNNING, {
+        emit: false,
+      });
+
+      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
+      expect(retrieveSessionResumeData).not.toHaveBeenCalled();
+    } finally {
+      StreamStatusService.clear('stream-1', { emit: false });
+      bridge.dispose();
+    }
+  });
+
+  it('does not launch duplicate concurrent resume attempts', async () => {
+    let allowRetrieve: () => void = () => undefined;
+    const retrieveGate = new Promise<void>((resolve) => {
+      allowRetrieve = resolve;
+    });
+    let retrieveStarted: () => void = () => undefined;
+    const retrieveStartedPromise = new Promise<void>((resolve) => {
+      retrieveStarted = resolve;
+    });
+    const retrieveSessionResumeData = vi.fn(async () => {
+      retrieveStarted();
+      await retrieveGate;
+      return {
+        type: 'toolUse',
+        snapshot: {
+          executionId: 'exec-1',
+          streamId: 'stream-1',
+          agentConfig: {
+            agent: 'search',
+            model: 'deepseekproT',
+            agentCategory: AGENT_CATEGORY.TOOL_USE,
+          },
+        },
+      };
+    });
+    const bridge = await createBridge([], { retrieveSessionResumeData });
+    const { StreamStatusService } =
+      await import('@agent/runtime/StreamStatusService');
+
+    try {
+      bridge.handleProgressEvent('setTaskState', {
+        streamId: 'stream-1',
+        executionId: 'exec-1',
+        taskState: {
+          agentConfig: {
+            agent: 'search',
+            model: 'deepseekproT',
+            agentCategory: AGENT_CATEGORY.TOOL_USE,
+          },
+        },
+      });
+
+      const firstResume = bridge.tryResumeStream('stream-1');
+      await retrieveStartedPromise;
+      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
+      allowRetrieve();
+      await expect(firstResume).resolves.toBe(true);
+      expect(retrieveSessionResumeData).toHaveBeenCalledTimes(1);
+    } finally {
+      StreamStatusService.clear('stream-1', { emit: false });
+      bridge.dispose();
     }
   });
 
