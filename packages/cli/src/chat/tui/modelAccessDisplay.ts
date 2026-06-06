@@ -1,8 +1,9 @@
 import {
+  formatCliNoRunnableModelsLaunchBlock,
+  formatCliNoRunnableModelsMessage,
   noRunnableModelAccessReason,
   runnableCliModelAccessEntries,
   type CliModelAccess,
-  type NoRunnableModelAccessReason,
 } from '@cli/runtime/modelAccess';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 import type { ModelAvailabilityKind } from '@shared/schemas';
@@ -18,24 +19,6 @@ const RELAY_STATUS_BY_AVAILABILITY = {
   'openrouter-key': 'relay: unavailable; openrouter key set',
   'missing-key': 'relay: unavailable; missing api key',
 } satisfies Record<ModelAvailabilityKind, string>;
-
-const EMPTY_MODEL_LIST_SUMMARIES = {
-  includedLoginRequired: 'Included relay models require sign-in.',
-  included: 'No included relay models are runnable.',
-  personal: 'No personal API-key models are runnable.',
-} satisfies Record<NoRunnableModelAccessReason, string>;
-
-const MODEL_ACCESS_LAUNCH_BLOCK_DESCRIPTIONS = {
-  includedLoginRequired: 'Sign in with texra login for included relay models',
-  included: 'No included relay models are runnable',
-  personal: 'No personal API-key models are runnable',
-} satisfies Record<NoRunnableModelAccessReason, string>;
-
-const EMPTY_MODEL_LIST_RECOVERY = {
-  includedLoginRequired: 'Run /login or switch with /api personal.',
-  included: 'Switch with /api personal or try again later.',
-  personal: 'Configure a provider key or switch with /api included.',
-} satisfies Record<NoRunnableModelAccessReason, string>;
 
 export function formatModelStatusForCliMode(
   model: CliModelAccess,
@@ -69,15 +52,21 @@ export function modelAccessLaunchBlockDescriptionForCliMode(
   models: readonly CliModelAccess[],
   apiMode: CliApiMode,
 ): string {
-  return MODEL_ACCESS_LAUNCH_BLOCK_DESCRIPTIONS[
-    noRunnableModelAccessReason(models, apiMode)
-  ];
+  return formatCliNoRunnableModelsLaunchBlock(
+    noRunnableModelAccessReason(models, apiMode),
+  );
 }
 
 export function emptyModelListMessageForCliMode(
   models: readonly CliModelAccess[],
   apiMode: CliApiMode,
 ): string {
-  const reason = noRunnableModelAccessReason(models, apiMode);
-  return `${EMPTY_MODEL_LIST_SUMMARIES[reason]} ${EMPTY_MODEL_LIST_RECOVERY[reason]}`;
+  return formatCliNoRunnableModelsMessage(
+    noRunnableModelAccessReason(models, apiMode),
+    {
+      includedModeAction: 'switch with /api included',
+      loginAction: 'Run /login',
+      personalModeAction: 'switch with /api personal',
+    },
+  );
 }
