@@ -17,7 +17,6 @@ import { createChannelTrace } from '@logger';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
-import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
 import type {
   AgentProposalPermission,
   BashPermission,
@@ -30,6 +29,7 @@ import type {
   ToolEditPermission,
 } from '@shared/schemas';
 import { AGENT_CATEGORY } from '@shared/schemas';
+import { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
 import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
@@ -121,7 +121,10 @@ export class ProgressViewProvider
     this.logger = createChannelTrace('ProgressViewProvider');
 
     this.state = new ProgressViewState(workspaceSM);
-    this.webviewUpdater = new WebviewUpdater(() => [this.getActiveWebview()]);
+    this.webviewUpdater = new WebviewUpdater(
+      (message) => void this.sendToActiveProgressWebview(message),
+      () => this.getActiveWebview() !== undefined,
+    );
     this.webviewBridge = new WebviewBridge(
       this.state.streamLogs,
       (message) => this.sendToActiveProgressWebview(message),
