@@ -70,7 +70,9 @@ function usage(input: number, output: number, cost: number): TokenUsageStats {
 describe('StreamSnapshotStore', () => {
   afterEach(async () => {
     await Promise.all(
-      tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
+      tempDirs
+        .splice(0)
+        .map((dir) => rm(dir, { recursive: true, force: true })),
     );
   });
 
@@ -118,7 +120,9 @@ describe('StreamSnapshotStore', () => {
     // Cross-host identity: the exact field-scoped filenames every host shares.
     const dir = streamDataDir(STREAM);
     expect(await StorageFS.exists(path.join(dir, 'workPlan.json'))).toBe(true);
-    expect(await StorageFS.exists(path.join(dir, 'usageStats.json'))).toBe(true);
+    expect(await StorageFS.exists(path.join(dir, 'usageStats.json'))).toBe(
+      true,
+    );
   });
 
   it('returns an empty (valid) snapshot for a stream with no sidecar', async () => {

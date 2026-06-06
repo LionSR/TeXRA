@@ -17,7 +17,10 @@
  * `read()` returns durable display state only; hosts clamp liveness on hydrate.
  */
 
-import { TaskStateSchema, type TaskState } from '@agent/core/execution/TaskState';
+import {
+  TaskStateSchema,
+  type TaskState,
+} from '@agent/core/execution/TaskState';
 import { KVStore } from '@common/storage/KVStore';
 import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
 import {
@@ -97,10 +100,7 @@ export class StreamSnapshotStore {
     StreamTabId,
     Map<number, CompileFailure[]>
   >();
-  private readonly usage = new Map<
-    StreamTabId,
-    Map<string, TokenUsageStats>
-  >();
+  private readonly usage = new Map<StreamTabId, Map<string, TokenUsageStats>>();
   private readonly workPlan = new Map<StreamTabId, WorkPlanState>();
   private readonly meta = new Map<StreamTabId, MetaState>();
 
@@ -265,7 +265,8 @@ export class StreamSnapshotStore {
   ): void {
     const delta = TokenUsageStatsParsingSchema.parse(usage);
     if (isEmptyUsage(delta)) return;
-    const current = this.usage.get(stream) ?? new Map<string, TokenUsageStats>();
+    const current =
+      this.usage.get(stream) ?? new Map<string, TokenUsageStats>();
     const existing = current.get(storageKey) ?? emptyUsageStats();
     current.set(storageKey, sumUsageStats([existing, delta]));
     this.usage.set(stream, current);
@@ -445,9 +446,10 @@ export class StreamSnapshotStore {
 
   /** Returns the resolved task state for a resumed stream, if persisted. */
   async readTaskState(streamId: StreamTabId): Promise<TaskState | undefined> {
-    const metaRaw = (await this.tryRead(this.kv(streamId), STREAM_DATA_KEYS.META)) as
-      | MetaFile
-      | undefined;
+    const metaRaw = (await this.tryRead(
+      this.kv(streamId),
+      STREAM_DATA_KEYS.META,
+    )) as MetaFile | undefined;
     if (!metaRaw?.taskState) return undefined;
     const parsed = TaskStateSchema.safeParse(metaRaw.taskState);
     return parsed.success ? (parsed.data as TaskState) : undefined;

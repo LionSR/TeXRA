@@ -22,10 +22,7 @@ import pMap from 'p-map';
 
 import { KVStore } from '@common/storage/KVStore';
 import * as logger from '@logger/logUtils';
-import {
-  STREAM_DATA_DIR,
-  encodeStreamId,
-} from '@transcript/streamDataPaths';
+import { STREAM_DATA_DIR, encodeStreamId } from '@transcript/streamDataPaths';
 
 import type {
   CompileFailure,
