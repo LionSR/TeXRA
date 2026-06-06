@@ -30,6 +30,7 @@ All notable changes to this project will be documented in this file.
 ### Improvements
 
 - **Better defaults and guidance when starting a run** — multi-agent launches show a task example to guide what to type, the simplifier agent is no longer offered as a default team root, buffered menu hotkeys are handled correctly on startup, and setup/auth errors point you to `texra auth status`.
+- **Consistent user chat defaults** — CLI user `config.json` chat defaults now honor the same `chat` section and `texra.*` keys as workspace `.texra/config.json` files.
 - **User turns stand out in chat** — your messages now render as a full-width reverse-video band that adapts to your terminal's light/dark theme and reflows on resize, making them easy to pick out from the assistant's output when scrolling back.
 - **Clearer `texra doctor` diagnostics** — Node.js version reporting and the supported-version check are aligned and consistent across messages.
 - **Quieter, more predictable model selection** — the CLI no longer prints noise when it implicitly falls back to a default model, and personal-account model recovery hints are clearer when a configured model isn't available.
