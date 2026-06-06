@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { createProgressViewApprovalCommandHandlers } from '@controllers/progressView/ProgressViewApprovalCommandHandlers';
+import { createProgressViewBypassCommandHandlers } from '@controllers/progressView/ProgressViewBypassCommandHandlers';
 import { createProgressViewFileCommandHandlers } from '@controllers/progressView/ProgressViewFileCommandHandlers';
 import { createProgressViewFollowUpCommandHandlers } from '@controllers/progressView/ProgressViewFollowUpCommandHandlers';
 import { createProgressViewLifecycleCommandHandlers } from '@controllers/progressView/ProgressViewLifecycleCommandHandlers';
@@ -45,14 +46,7 @@ import {
 } from '@shared/schemas/progressView';
 import { handleExternalInquiryAction } from '@tools/inquiry';
 import { handleUserQuestionAction } from '@tools/userQuestion';
-import {
-  handleProgressViewBashApprovalAction,
-  toggleToolEditApprovalSessionBypass,
-  setToolEditApprovalSessionBypass,
-  setBashApprovalSessionBypass,
-  isApprovalBypassedForStream,
-  toggleProposalBypass,
-} from '@tools/approval';
+import { handleProgressViewBashApprovalAction } from '@tools/approval';
 import { OdysseyStore, isOdysseyInFlight } from '@tools/odyssey';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import {
@@ -250,62 +244,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: async (data) => {
         await vscode.window.showInformationMessage(data.text);
       },
-      [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: async (
-        data,
-      ) => {
-        const isNowEnabled = toggleToolEditApprovalSessionBypass(
-          data.stream,
-          extensionAgentRuntimeHost,
-        );
-        // Keep bash approval symmetric with tool edits: the single YOLO shield
-        // covers both. Bash gained an independent per-stream flag in #4739 and
-        // the extension has no separate bash toggle, so mirror it here. Silent
-        // because the shield's active state renders from the tool-edit flag.
-        setBashApprovalSessionBypass(
-          data.stream,
-          isNowEnabled,
-          extensionAgentRuntimeHost,
-          { silent: true },
-        );
-        const msg = isNowEnabled
-          ? 'YOLO mode enabled: Tool actions and bash commands will be auto-approved for this stream.'
-          : 'YOLO mode disabled: Tool actions and bash commands will prompt for approval.';
-        await vscode.window.showInformationMessage(msg);
-      },
-      [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: async (data) => {
-        const isNowEnabled = toggleProposalBypass(
-          data.stream,
-          extensionAgentRuntimeHost,
-        );
-        if (isNowEnabled) {
-          // Delegation auto-approval also accepts tool edits in this stream.
-          if (!isApprovalBypassedForStream(data.stream)) {
-            setToolEditApprovalSessionBypass(
-              data.stream,
-              true,
-              extensionAgentRuntimeHost,
-            );
-          }
-        } else {
-          // Returning to manual task approval also restores edit prompts.
-          setToolEditApprovalSessionBypass(
-            data.stream,
-            false,
-            extensionAgentRuntimeHost,
-          );
-        }
-        // Bash bypass stays symmetric with the tool-edit bypass above.
-        setBashApprovalSessionBypass(
-          data.stream,
-          isNowEnabled,
-          extensionAgentRuntimeHost,
-          { silent: true },
-        );
-        const msg = isNowEnabled
-          ? 'Delegated task auto-approval enabled for this stream.'
-          : 'Delegated task auto-approval disabled for this stream.';
-        await vscode.window.showInformationMessage(msg);
-      },
+      ...createProgressViewBypassCommandHandlers({
+        runtimeHost: extensionAgentRuntimeHost,
+        showInfo: (message) => vscode.window.showInformationMessage(message),
+      }),
       [PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG]: async (data) => {
         const restored =
           await this.agentProposalController.restoreProposalConfig(
