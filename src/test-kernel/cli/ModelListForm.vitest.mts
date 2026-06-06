@@ -5,7 +5,10 @@ import {
   formatModelStatusForCliMode,
   modelSelectItemsForCliMode,
 } from '@cli/chat/tui/modelAccessDisplay';
-import { modelSelectWindow } from '@cli/chat/tui/forms/ModelListForm';
+import {
+  modelListDescription,
+  modelSelectWindow,
+} from '@cli/chat/tui/forms/ModelListForm';
 import { shouldCloseAsyncListFormOnInput } from '@cli/chat/tui/forms/_shared/useAsyncListForm';
 import {
   COMPACT_FORM_MAX_ROWS,
@@ -271,6 +274,21 @@ describe('CLI ModelListForm model visibility', () => {
 });
 
 describe('CLI ModelListForm empty state', () => {
+  it('uses a truthful description for empty and non-empty model lists', () => {
+    expect(modelListDescription({ itemCount: 0, selectable: false })).toBe(
+      'No model choices in this API mode.',
+    );
+    expect(modelListDescription({ itemCount: 0, selectable: true })).toBe(
+      'No model choices in this API mode.',
+    );
+    expect(modelListDescription({ itemCount: 2, selectable: false })).toBe(
+      'Available models. Finish the active response before switching models.',
+    );
+    expect(modelListDescription({ itemCount: 2, selectable: true })).toBe(
+      'Choose the model for future turns.',
+    );
+  });
+
   it('explains that included relay models require sign-in', () => {
     const models = [
       access(
