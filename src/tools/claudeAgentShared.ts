@@ -3,8 +3,24 @@
 import type { TokenUsageStats, ToolUseLog } from '@shared/schemas';
 import { truncateSummary } from '@utils/text/stringUtils';
 
+import type {
+  EffortLevel,
+} from '@anthropic-ai/claude-agent-sdk';
+
 // Re-export native SDK types where our values match exactly.
-export type { EffortLevel as ClaudeAgentEffort } from '@anthropic-ai/claude-agent-sdk';
+export type ClaudeAgentEffort = EffortLevel;
+
+/**
+ * Compile-time guard: our const array and the SDK's `EffortLevel` union must
+ * stay synchronized. If the SDK adds/removes an effort level, this line will
+ * produce a type error, forcing a review of whether to adopt the new level.
+ */
+type _AssertEqual<T, U extends T> = true;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _EffortLevelsAligned = _AssertEqual<
+  ClaudeAgentEffort,
+  (typeof CLAUDE_AGENT_EFFORT_LEVELS)[number]
+>;
 
 export const CLAUDE_AGENT_NAME = 'claude_code';
 export const CLAUDE_AGENT_DISPLAY_MODEL = 'claude';
