@@ -6,6 +6,16 @@ import { LIVE_TAIL_ROWS, tailWindow } from './TranscriptEntry';
 import { toolUseDisplayLines } from './toolRenderers';
 import type { ConversationEntry } from '../state/cliState';
 
+const FAILED_ENTRY_ESTIMATE_ROWS = 1;
+
+function estimateEntryRows(computeRows: () => number): number {
+  try {
+    return computeRows();
+  } catch {
+    return FAILED_ENTRY_ESTIMATE_ROWS;
+  }
+}
+
 function estimateWrappedRows(text: string, width: number): number {
   const cols = Math.max(1, width);
   const lines = text.length > 0 ? text.split('\n') : [''];
@@ -20,15 +30,23 @@ export function estimateTranscriptEntryRows(
   width = 80,
 ): number {
   if (entry.role === 'tool' && entry.toolUse) {
-    const lines = toolUseDisplayLines(entry.toolUse);
-    return lines.length + (lines.length > 1 ? 1 : 0);
+    const toolUse = entry.toolUse;
+    return estimateEntryRows(() => {
+      const lines = toolUseDisplayLines(toolUse);
+      return lines.length + (lines.length > 1 ? 1 : 0);
+    });
   }
   if (entry.role === 'process' && entry.process) {
-    return Math.max(1, completedProcessDisplayLines(entry.process).length) + 1;
+    const process = entry.process;
+    return estimateEntryRows(() => {
+      return Math.max(1, completedProcessDisplayLines(process).length) + 1;
+    });
   }
   if (entry.role === 'assistant') {
-    const rendered = renderAnsiMarkdown(entry.text, { width });
-    return Math.max(1, rendered.split('\n').length) + 1;
+    return estimateEntryRows(() => {
+      const rendered = renderAnsiMarkdown(entry.text, { width });
+      return Math.max(1, rendered.split('\n').length) + 1;
+    });
   }
   // User / error rows render without a trailing margin (compact mode) so
   // chat-heavy sessions don't burn half the viewport on blank gaps. Their
@@ -51,11 +69,13 @@ export function estimateLiveTranscriptEntryRows(
   // multi-MB reply never gets split in full just for an estimate that
   // discards everything above the tail.
   if (entry.role === 'assistant') {
-    const cols = Math.max(1, width);
-    return Math.min(
-      LIVE_TAIL_ROWS,
-      estimateWrappedRows(tailWindow(entry.text, cols, LIVE_TAIL_ROWS), cols),
-    );
+    return estimateEntryRows(() => {
+      const cols = Math.max(1, width);
+      return Math.min(
+        LIVE_TAIL_ROWS,
+        estimateWrappedRows(tailWindow(entry.text, cols, LIVE_TAIL_ROWS), cols),
+      );
+    });
   }
   return estimateTranscriptEntryRows(entry, width);
 }
