@@ -23,6 +23,7 @@
 
 // Third-party imports
 import { z } from 'zod';
+import type { Options } from '@anthropic-ai/claude-agent-sdk';
 
 // Local imports
 import {
@@ -268,12 +269,10 @@ type ClaudeToolLogRef = ToolUseCardRef & {
 };
 
 // ============================================================================
-// SDK type imports — previously we kept these loose to avoid pulling the SDK's
-// full type surface into VS Code-free zones. Using `import type` is safe because
-// it's erased at compile time and doesn't affect the runtime bundle.
+// SDK type surface — `Options` is imported above alongside the other SDK types.
+// The local `SdkMessage` interface remains as a deliberately minimal subset
+// (see JSDoc below).
 // ============================================================================
-
-import type { Options } from '@anthropic-ai/claude-agent-sdk';
 
 /**
  * Local message view: a deliberately minimal subset of the SDK's full
