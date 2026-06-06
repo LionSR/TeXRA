@@ -20,6 +20,10 @@ import {
   type TodoItem,
 } from '@shared/schemas';
 import { type ToolResult } from '@tools/result';
+import {
+  appendWorkPlanGranularityWarning,
+  formatWorkPlanGranularityWarning,
+} from '@tools/workPlanGranularityFeedback';
 import { defineTool } from '@tools/core/define';
 
 const logger = createChannelTrace('TodoWriteTool');
@@ -98,6 +102,10 @@ Best practices:
     // Update the todos in workspace state
     // This triggers the onUpdate callback which emits events to the UI
     context.workPlanState.updateTodos(input.todos);
+    const granularityWarning = formatWorkPlanGranularityWarning(
+      input.todos,
+      context.workPlanState.plan,
+    );
 
     const { completed, inProgress, pending } = countByStatus(input.todos);
 
@@ -105,8 +113,10 @@ Best practices:
 
     // Return minimal output - the UI already shows the input, no need to repeat the list
     return {
-      summary,
-      output: 'OK',
+      summary: granularityWarning
+        ? `${summary}; todo/plan granularity overlap`
+        : summary,
+      output: appendWorkPlanGranularityWarning('OK', granularityWarning),
     };
   }
 
