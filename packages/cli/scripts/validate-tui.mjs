@@ -1412,11 +1412,13 @@ const SCENARIOS = [
     bootExpect: '[Tab]streams',
     keys: ['\t'],
     expect: [
+      'subagent: strategy · parent: main · model: harness-model',
       'Please handle the harness-child-strategy sub-workflow.',
       'strategy is checking the harness-child-strategy details',
       '[1:strategy]*',
     ],
     unexpect: [
+      'agent: chat · model: harness-model',
       'entry-1 chat history line',
       'entry-4 chat history line',
       '[main]*',

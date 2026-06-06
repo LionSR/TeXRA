@@ -423,6 +423,48 @@ describe('CLI conversation transcript splitting', () => {
     );
   });
 
+  it('labels focused subagent scrollback with the child stream identity', () => {
+    const ROOT = 'root-stream' as StreamTabId;
+    const CHILD = 'search-stream' as StreamTabId;
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [
+        ROOT,
+        sliceWithEntries(ROOT, [entry('u1', 'user', 'send scouts', true)], {
+          activeSubagents: [
+            {
+              executionId: 'ei_search',
+              agentName: 'search',
+              childStreamId: CHILD,
+              status: STREAM_STATUS.RUNNING,
+            },
+          ],
+        }),
+      ],
+      [CHILD, sliceWithEntries(CHILD, [entry('a1', 'assistant', 'ok', true)])],
+    ]);
+
+    expect(
+      sessionHeaderIdentityLine(SESSION_META, {
+        parentStream: new Map([[CHILD, ROOT]]),
+        streamId: CHILD,
+        streams,
+      }),
+    ).toBe('subagent: search · parent: main · model: deepseekT');
+
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: CHILD,
+        currentItems: [],
+        streams,
+        meta: SESSION_META,
+        parentStream: new Map([[CHILD, ROOT]]),
+      })[0],
+    ).toMatchObject({
+      kind: 'header',
+      identityLine: 'subagent: search · parent: main · model: deepseekT',
+    });
+  });
+
   it('only feeds the root scrollback stream, not background subagents', () => {
     const rootUser = entry('u1', 'user', 'do x', true);
     const childAssistant = entry('a1', 'assistant', 'done', true);
@@ -650,6 +692,7 @@ describe('CLI conversation transcript splitting', () => {
 function sliceWithEntries(
   streamId: StreamTabId,
   entries: readonly ConversationEntry[],
+  init: Partial<StreamSlice> = {},
 ): StreamSlice {
   return {
     streamId,
@@ -669,6 +712,7 @@ function sliceWithEntries(
     plan: null,
     processOutput: new Map(),
     bypass: { bash: false, toolEdit: false, superYolo: false },
+    ...init,
   };
 }
 
