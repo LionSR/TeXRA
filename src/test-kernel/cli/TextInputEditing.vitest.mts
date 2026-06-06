@@ -112,6 +112,31 @@ describe('CLI TUI text input editing', () => {
       cursor: 10,
       submit: false,
     });
+
+    const associatedTextRewritten = rewriteKittyEnterInput(
+      `alpha${ESC}[13;2;13ubeta`,
+      { shiftEnter: 'newline' },
+    );
+
+    expect(associatedTextRewritten).toBe(
+      `alpha${SYNTHETIC_SHIFT_RETURN_INPUT}beta`,
+    );
+    expect(
+      applyTerminalInputChunk('', 0, associatedTextRewritten ?? ''),
+    ).toEqual({
+      value: 'alpha\nbeta',
+      cursor: 10,
+      submit: false,
+    });
+
+    const pressEventRewritten = rewriteKittyEnterInput(
+      `alpha${ESC}[13;2:1ubeta`,
+      { shiftEnter: 'newline' },
+    );
+
+    expect(pressEventRewritten).toBe(
+      `alpha${SYNTHETIC_SHIFT_RETURN_INPUT}beta`,
+    );
   });
 
   it('preserves Shift+Enter while still rewriting keypad Enter', () => {
@@ -123,6 +148,32 @@ describe('CLI TUI text input editing', () => {
         shiftEnter: 'preserve',
       }),
     ).toBe('pick\r');
+  });
+
+  it('does not rewrite Kitty Enter forms that Ink can handle or should ignore', () => {
+    expect(
+      rewriteKittyEnterInput(`${ESC}[13;2;13u`, { shiftEnter: 'newline' }),
+    ).toBeUndefined();
+    expect(
+      rewriteKittyEnterInput(`alpha${ESC}[13;2:3ubeta`, {
+        shiftEnter: 'newline',
+      }),
+    ).toBeUndefined();
+    expect(
+      rewriteKittyEnterInput(`alpha${ESC}[13;6ubeta`, {
+        shiftEnter: 'newline',
+      }),
+    ).toBeUndefined();
+    expect(
+      rewriteKittyEnterInput(`alpha${ESC}[57414;5ubeta`, {
+        shiftEnter: 'newline',
+      }),
+    ).toBeUndefined();
+    expect(
+      rewriteKittyEnterInput(`alpha${ESC}[57414;1:3ubeta`, {
+        shiftEnter: 'newline',
+      }),
+    ).toBeUndefined();
   });
 
   it('recognizes Option/Alt chords from normalized meta and ESC-prefixed input', () => {
