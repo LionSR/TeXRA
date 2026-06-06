@@ -9,8 +9,8 @@
 import { getExecutionStore } from '@agent/storage';
 import type { ExecutionMeta } from '@agent/storage/ExecutionKVStore';
 import { getWorkspaceState } from '@agent/core/stateStore';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { ExecutionId } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   clampNestedDelegationDepth,
   type NestedDelegationConfig,

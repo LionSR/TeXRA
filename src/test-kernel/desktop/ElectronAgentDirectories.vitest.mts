@@ -18,7 +18,7 @@ import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 
 // Local imports - test support
 import { FakeConfigProvider, FakeSecrets } from '@test/support/FakePlatform';
-import { GlobalStateKey } from '@common/state/stateKeys';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 import { loadDesktopPlatformModule } from './loadDesktopPlatformModule.mjs';
 import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';

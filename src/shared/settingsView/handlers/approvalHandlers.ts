@@ -6,7 +6,7 @@
  * state shape — the only host-specific dependency is the bash-approval flag,
  * which lives in `ConfigProvider` rather than workspace state.
  */
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import type { UpdateApprovalSettingsMessage } from '@shared/schemas/settingsViewMessages';
 import {
