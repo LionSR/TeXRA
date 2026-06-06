@@ -91,10 +91,10 @@ export function ScopedTranscriptPane({
   }
 
   const visibleRows = Math.min(viewRows, lines.length);
-  const renderOffset = clampTranscriptScrollOffset(
-    scrollState.offset,
-    { lineCount: lines.length, viewRows: visibleRows },
-  );
+  const renderOffset = clampTranscriptScrollOffset(scrollState.offset, {
+    lineCount: lines.length,
+    viewRows: visibleRows,
+  });
   const visible = scopedTranscriptVisibleLines({
     lines,
     offset: renderOffset,
