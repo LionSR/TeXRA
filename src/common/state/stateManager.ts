@@ -1,10 +1,11 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
+// Local imports - shared state
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+
 // Local imports - state
 import { WorktreeMemento } from './worktreeMemento';
-
-import { WorkspaceStateKey } from './stateKeys';
 
 /**
  * WorkspaceStateKeys that represent repository-level configuration rather

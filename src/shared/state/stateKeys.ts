@@ -1,17 +1,16 @@
 /**
- * State storage keys — vscode-free.
+ * State storage key enums — vscode-free.
  *
- * These enums are pure data (string constants) so vscode-free zones such as
- * `src/agent/`, `src/latex/`, `src/model/`, `src/tools/` can name workspace
- * and global state slots without pulling in the VS Code module. The runtime
- * managers (`workspaceSM`, `globalSM`, `initializeStateManagers`) live in
- * `stateManager.ts`, which does import `vscode` and therefore must only be
- * touched from VS Code-allowed zones (extension host wiring, command handlers,
- * webview backends).
+ * Lives in `@shared` so that vscode-free zones (`src/agent/`, `src/latex/`,
+ * `src/model/`, `src/tools/`) can name workspace and global state slots via the
+ * natural `@shared/state/stateKeys` import path, without any risk of pulling in
+ * the VS Code module.
  *
- * Vscode-free consumers should import from `@common/state/stateKeys` directly,
- * not from the `@common/state` barrel — the barrel re-exports the runtime
- * managers and would re-couple the importer to vscode at module-load time.
+ * The runtime managers (`workspaceSM`, `globalSM`, `initializeStateManagers`)
+ * live in `@common/state/stateManager`, which does import `vscode` and must
+ * only be touched from VS Code-allowed zones (extension host wiring, command
+ * handlers, webview backends). Those zones import from the `@common/state`
+ * barrel, which re-exports both these keys and the vscode-coupled managers.
  */
 
 export enum WorkspaceStateKey {

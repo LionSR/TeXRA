@@ -6,9 +6,9 @@ import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import { getGlobalState } from '@agent/core/stateStore';
-import { getConfig } from '@utils/config/configUtils';
-import { GlobalStateKey } from '@common/state/stateKeys';
 import * as logger from '@logger/logUtils';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { getConfig } from '@utils/config/configUtils';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { LEVEL_TO_EFFORT } from './reasoningEffort';
 

@@ -1,6 +1,6 @@
 import { platform } from '@platform/platform';
 import type { AgentEntry } from '@agent/index';
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { agentKey } from '@shared/schemas/agent';
 import {
