@@ -23,6 +23,7 @@ import {
   signInCliSupabase,
   signOutCliSupabase,
 } from '../runtime/supabaseAuth';
+import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
@@ -32,14 +33,19 @@ import type { CliContext } from '../runtime/cliContext';
 export function resolveLoginProvider(
   positional: string | undefined,
   flag: string | undefined,
-): string {
-  if (isNonEmptyString(flag)) return flag.trim();
-  if (isNonEmptyString(positional)) return positional.trim();
-  return DEFAULT_OAUTH_PROVIDER;
+): { readonly provider: string; readonly explicit: boolean } {
+  if (isNonEmptyString(flag)) {
+    return { provider: flag.trim(), explicit: true };
+  }
+  if (isNonEmptyString(positional)) {
+    return { provider: positional.trim(), explicit: true };
+  }
+  return { provider: DEFAULT_OAUTH_PROVIDER, explicit: false };
 }
 
 export interface LoginInit {
   readonly provider: string;
+  readonly providerExplicit: boolean;
   readonly noBrowser: boolean;
   readonly selectAccount: boolean;
   readonly loginHint?: string;
@@ -66,13 +72,30 @@ function readStringArg(
 export function loginInitFromArgs(args: LoginCommandArgs): LoginInit {
   const positional = optString(args.providerArg);
   const flag = optString(args.provider);
+  const provider = resolveLoginProvider(positional, flag);
   return {
-    provider: resolveLoginProvider(positional, flag),
+    provider: provider.provider,
+    providerExplicit: provider.explicit,
     noBrowser:
       readBooleanArg(args, 'no-browser', 'noBrowser') || args.browser === false,
     selectAccount: readBooleanArg(args, 'select-account', 'selectAccount'),
     loginHint: readStringArg(args, 'login-hint', 'loginHint'),
   };
+}
+
+export function shouldPromptForLoginProvider(
+  context: Pick<
+    CliContext,
+    'mode' | 'outputFormat' | 'stdoutIsTty' | 'termIsDumb'
+  >,
+  init: Pick<LoginInit, 'providerExplicit' | 'noBrowser'>,
+): boolean {
+  return (
+    !init.providerExplicit &&
+    !init.noBrowser &&
+    context.outputFormat === 'text' &&
+    interactiveTerminalFailure(context) === undefined
+  );
 }
 
 async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
@@ -157,9 +180,28 @@ export const loginCommand = defineCliCommand({
     },
   },
   run: (context, ctx) => {
-    return runLogin(context, loginInitFromArgs(ctx.args));
+    return runLoginCommand(context, loginInitFromArgs(ctx.args));
   },
 });
+
+async function runLoginCommand(
+  context: CliContext,
+  init: LoginInit,
+): Promise<number> {
+  if (!shouldPromptForLoginProvider(context, init)) {
+    return runLogin(context, init);
+  }
+
+  const { promptForLoginProvider } = await import('./loginProviderPicker');
+  const provider = await promptForLoginProvider(
+    context.stdoutColorEnabled ?? context.colorEnabled,
+  );
+  if (!provider) {
+    writeTextStderr('Cancelled. No sign-in started.');
+    return CliExitCode.Success;
+  }
+  return runLogin(context, { ...init, provider, providerExplicit: true });
+}
 
 export const logoutCommand = defineCliCommand({
   meta: { name: 'logout', description: 'Sign out of TeXRA' },
