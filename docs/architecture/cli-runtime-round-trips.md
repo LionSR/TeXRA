@@ -99,25 +99,27 @@ flowchart LR
   statusSub --> projection --> cliState
   cliState --> app
   app --> viewport
-  viewport -->|root scrollback| staticPane
-  viewport -->|root live tail| livePane
-  viewport -->|focused child scoped history| livePane
+  viewport -->|selected scrollback owner| staticPane
+  viewport -->|active stream live tail| livePane
   cliState --> statusBar
 ```
 
 The transcript path intentionally has two render modes:
 
-- Root stream:
-  Finalized active-root entries print once through `<Static>`.
-  Pending root entries render in bounded live-tail mode.
-- Child stream:
-  `<StaticConversationTranscript>` is not mounted.
-  The child stream renders in scoped-history mode, using only that child slice.
+- Static scrollback owner:
+  The active viewport selects exactly one stream to feed `<Static>`. Root focus
+  owns root history; focused child streams temporarily own their own finalized
+  history so native terminal scrollback contains that child transcript.
+- Live tail:
+  `ConversationPane` always renders only pending entries from the active stream.
+  It does not render finalized history. Root focus bounds this pending tail so
+  the input stays pinned; focused child streams allow pending output to overflow
+  into native terminal scrollback so a running child transcript can be reviewed
+  before it finalizes.
 
-That means a focused-child tab should not read parent entries through
-`ConversationPane`. If parent output remains visible after focus changes, the
-likely root is terminal scrollback/static repaint behavior, not direct parent
-slice selection.
+That means a focused-child tab should not read parent entries through either
+renderer. If parent output remains visible after focus changes, the likely root
+is scrollback-owner reset/repaint behavior, not direct child slice selection.
 
 ## Model Selection Round Trips
 
