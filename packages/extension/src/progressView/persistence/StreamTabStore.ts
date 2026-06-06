@@ -31,21 +31,15 @@ import {
   StreamTabMetaSchema,
   LegacyInstructionsDataSchema,
   OutputFilesDataSchema,
-  MissingOutputsDataSchema,
-  CompileFailuresDataSchema,
-  UsageDataSchema,
   flattenLegacyRuns,
   isLegacyNested,
   selectPreferredLegacyInstruction,
-  type CompileFailure,
   type OutputFileInfo,
   type StreamTabId,
-  type TokenUsageStats,
   type LegacyInstructionEntry,
   type StreamTabMeta,
   type OutputFilesRecord,
   type MissingOutputsRecord,
-  type CompileFailuresRecord,
   type UsageStatsRecord,
 } from '@shared/schemas';
 
@@ -151,41 +145,11 @@ class StreamTabKVStore extends KVStore {
     return flattenLegacyRuns(raw, meta?.activeRunId);
   }
 
-  // -- Missing outputs ------------------------------------------------------
-
-  async readMissingOutputs(): Promise<Map<number, string[]> | null> {
-    const raw = await this.tryRead(KEYS.MISSING_OUTPUTS);
-    if (!raw) return null;
-    const migrated = await this.preferActiveRunFlattening(raw);
-    const result = MissingOutputsDataSchema.safeParse(migrated);
-    return result.success && result.data.size > 0 ? result.data : null;
-  }
+  // -- Writes still used by one-time memento migration ----------------------
+  // (Reads moved to StreamSnapshotStore; compile-failure write had no callers.)
 
   async writeMissingOutputs(data: MissingOutputsRecord): Promise<void> {
     await this.write(KEYS.MISSING_OUTPUTS, data);
-  }
-
-  // -- Compile failures -----------------------------------------------------
-
-  async readCompileFailures(): Promise<Map<number, CompileFailure[]> | null> {
-    const raw = await this.tryRead(KEYS.COMPILE_FAILURES);
-    if (!raw) return null;
-    const migrated = await this.preferActiveRunFlattening(raw);
-    const result = CompileFailuresDataSchema.safeParse(migrated);
-    return result.success && result.data.size > 0 ? result.data : null;
-  }
-
-  async writeCompileFailures(data: CompileFailuresRecord): Promise<void> {
-    await this.write(KEYS.COMPILE_FAILURES, data);
-  }
-
-  // -- Usage stats ----------------------------------------------------------
-
-  async readUsageStats(): Promise<Map<string, TokenUsageStats> | null> {
-    const raw = await this.tryRead(KEYS.USAGE_STATS);
-    if (!raw) return null;
-    const result = UsageDataSchema.safeParse(raw);
-    return result.success && result.data.size > 0 ? result.data : null;
   }
 
   async writeUsageStats(data: UsageStatsRecord): Promise<void> {
