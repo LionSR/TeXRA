@@ -32,7 +32,11 @@ import {
 import { SubagentList, subagentPanelRowCount } from './panes/SubagentList';
 import { TipRow } from './panes/TipRow';
 import { TodosPlanPanel, todosPlanPanelRowCount } from './panes/TodosPlanPanel';
-import { currentApproval, type PendingApproval } from './state/approvalQueue';
+import {
+  approvalPayloadStreamId,
+  currentApproval,
+  type PendingApproval,
+} from './state/approvalQueue';
 import {
   isEscapeInput,
   metaChordDigit,
@@ -254,14 +258,17 @@ export function staticTranscriptRowBudget({
 export function staticScrollbackStreamId({
   activeStreamId,
   rootStreamId,
+  scopedTranscript = false,
 }: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly rootStreamId: StreamTabId | undefined;
+  readonly scopedTranscript?: boolean;
 }): StreamTabId | undefined {
+  if (scopedTranscript) return activeStreamId;
   if (rootStreamId) return rootStreamId;
   // Before a root run resolves, local helper output and harness-built root
   // streams still need static scrollback. Once `rootStreamId` is set, focused
-  // children can no longer redirect this owner.
+  // children redirect this owner only while their scoped transcript is focused.
   return activeStreamId;
 }
 
@@ -346,6 +353,24 @@ export function foregroundSurfaceKind({
   if (activeFormOpen) return 'form';
   if (pendingApproval) return 'approval';
   return undefined;
+}
+
+export function approvalVisibleForActiveStream({
+  activeStreamId,
+  pending,
+}: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly pending: PendingApproval | undefined;
+}): boolean {
+  if (!pending) return false;
+  const streamId = approvalPayloadStreamId(pending.payload);
+  return streamId === undefined || streamId === activeStreamId;
+}
+
+export function approvalBlocksInput(
+  pending: PendingApproval | undefined,
+): boolean {
+  return pending !== undefined;
 }
 
 export function foregroundEscapeAction({
@@ -435,14 +460,20 @@ export function App(props: AppProps): React.JSX.Element {
   const canStopActiveRun =
     props.canStopActiveRun ?? props.canInterruptActiveRun;
   const agentSelectionAvailable = rootRunStartAvailable;
+  const activeApprovalVisible = approvalVisibleForActiveStream({
+    activeStreamId,
+    pending,
+  });
+  const approvalInputBlocked = approvalBlocksInput(pending);
 
   const stdin = useStdin();
   const foregroundOpen =
-    pending !== undefined ||
+    activeApprovalVisible ||
     activeForm !== undefined ||
     childControlMode !== undefined ||
     transcriptViewerOpen;
-  const inputDisabled = props.inputDisabled === true || foregroundOpen;
+  const inputDisabled =
+    props.inputDisabled === true || foregroundOpen || approvalInputBlocked;
   const inputBarVisible = !foregroundOpen;
   const viewportKey = transcriptViewportKey({
     activeStreamId,
@@ -453,6 +484,7 @@ export function App(props: AppProps): React.JSX.Element {
   const scrollbackStreamId = staticScrollbackStreamId({
     activeStreamId,
     rootStreamId,
+    scopedTranscript,
   });
   const previousViewportKey = useRef<string | undefined>(undefined);
   const onTranscriptViewportChange = props.onTranscriptViewportChange;
@@ -544,7 +576,7 @@ export function App(props: AppProps): React.JSX.Element {
   const foregroundKind = foregroundSurfaceKind({
     activeFormOpen: activeForm !== undefined,
     childControlMode,
-    pendingApproval: pending !== undefined,
+    pendingApproval: activeApprovalVisible,
     transcriptViewerOpen,
   });
   const childControlTarget =
@@ -644,7 +676,7 @@ export function App(props: AppProps): React.JSX.Element {
           foregroundRows,
         );
       case 'approval':
-        return pending ? (
+        return activeApprovalVisible && pending ? (
           <ApprovalModal pending={pending} availableRows={foregroundRows} />
         ) : null;
       case undefined:
@@ -739,7 +771,7 @@ export function App(props: AppProps): React.JSX.Element {
 
   return (
     <>
-      {scopedTranscript ? null : (
+      {transcriptViewerOpen ? null : (
         <StaticConversationTranscript
           colorEnabled={props.colorEnabled}
           maxRows={staticTranscriptRows}
@@ -751,8 +783,8 @@ export function App(props: AppProps): React.JSX.Element {
         <Box flexDirection="column" overflowY="hidden">
           {!transcriptViewerOpen && conversationRows > 0 ? (
             <ConversationPane
+              allowNativeScrollbackOverflow={scopedTranscript}
               colorEnabled={props.colorEnabled}
-              mode={scopedTranscript ? 'scoped-history' : 'live-pending'}
               width={transcriptWidth}
               maxRows={conversationRows}
             />
@@ -803,7 +835,7 @@ export function App(props: AppProps): React.JSX.Element {
           foregroundEscapeAction={foregroundEscapeAction({
             activeFormEscapeAction: activeForm?.escapeAction,
             foregroundKind,
-            pending,
+            pending: activeApprovalVisible ? pending : undefined,
           })}
           queuedFollowUpPreview={!queuedFollowUpPanelVisible}
           shortcutsActive={focusShortcutsActive}

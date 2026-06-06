@@ -237,6 +237,34 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
+  it('does not advertise in-pane paging for focused child streams', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 1,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      taskControlsAvailable: false,
+      subagentControlsAvailable: true,
+      hasMultipleStreams: true,
+      model: 'deepseekT',
+      apiMode: 'relay',
+      shortcutModifierLabel: 'Option',
+      ctrlCAction: 'stop root',
+      width: 100,
+    });
+
+    expect(display.bindings).not.toContain('PgUp');
+    expect(display.bindings).not.toContain('scroll');
+    expect(display.bindings).toContain('[Tab]streams');
+    expect(display.bindings).toContain('[Ctrl-C]stop root');
+  });
+
   it('advertises Shift-Enter for newline when the Kitty protocol is active', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.WAITING,

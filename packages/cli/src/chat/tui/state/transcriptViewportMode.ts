@@ -4,9 +4,10 @@ export const ROOT_SCROLLBACK_VIEWPORT_KEY = 'root-scrollback';
 
 /**
  * The root stream owns ordinary terminal scrollback through Ink `<Static>`.
- * Focused child streams own a scoped, self-contained transcript surface.
- * Explicit transcript viewers also own a scoped surface, even when focus stays
- * on the parent stream.
+ * Focused child streams temporarily become that same scrollback owner so their
+ * history is visible through native terminal scrollback. Explicit transcript
+ * viewers own a separate foreground surface, even when focus stays on the
+ * parent stream.
  * Moving between those viewports must redraw from a clean primary buffer so
  * a child page cannot appear under stale root scrollback, and returning to the
  * root can reprint the root static transcript as the active owner.
