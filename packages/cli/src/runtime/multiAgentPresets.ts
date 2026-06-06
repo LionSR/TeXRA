@@ -282,7 +282,7 @@ export function cliMultiAgentPresetTeamLaunchBlockReason(
 ): string | undefined {
   if (!plan.rootAgent) return 'no runnable team root';
   if (!agentHasDelegationTools(plan.rootAgent)) {
-    return `root ${plan.rootAgent.name} cannot delegate`;
+    return `team root ${plan.rootAgent.name} is not a delegating agent`;
   }
   if (availablePresetTeamMemberCount(plan) === 0) {
     return 'no available team members';
