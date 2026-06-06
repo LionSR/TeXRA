@@ -317,14 +317,27 @@ export function DiffView(props: DiffViewProps): React.JSX.Element {
   );
 }
 
+interface DiffLineStyle {
+  readonly backgroundColor: string;
+  readonly color: string;
+}
+
 /**
- * Full-width band backgrounds for changed lines — a muted green/red that fills
- * the whole row (GitHub/Codex-style), so additions and removals read as solid
- * bands rather than just tinted text. Context lines stay un-banded and dim.
+ * Full-width bands for changed lines. Use light backgrounds plus explicit
+ * foreground colors so text stays readable on both light and dark terminals.
+ * Context lines stay un-banded and dim.
  */
-export const DIFF_BAND_BG: Partial<Record<DiffDisplayLine['kind'], string>> = {
-  added: '#1f3a28',
-  removed: '#4a2526',
+export const DIFF_LINE_STYLE: Partial<
+  Record<DiffDisplayLine['kind'], DiffLineStyle>
+> = {
+  added: {
+    backgroundColor: '#dff4e8',
+    color: '#16351f',
+  },
+  removed: {
+    backgroundColor: '#f7d9dc',
+    color: '#4a171b',
+  },
 };
 
 function DiffLine({
@@ -335,9 +348,13 @@ function DiffLine({
   readonly width: number;
 }): React.JSX.Element {
   const content = wrapAnsiToWidth(line.text, width);
-  const bg = DIFF_BAND_BG[line.kind];
-  if (bg) {
-    return <Text backgroundColor={bg}>{fillRows(content, width)}</Text>;
+  const style = DIFF_LINE_STYLE[line.kind];
+  if (style) {
+    return (
+      <Text color={style.color} backgroundColor={style.backgroundColor}>
+        {fillRows(content, width)}
+      </Text>
+    );
   }
   return <Text dimColor>{content}</Text>;
 }
