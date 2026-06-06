@@ -125,13 +125,13 @@ export class ProgressEventHandler {
           }
         },
         updateStreamDescription: (_, { streamId, description }) => {
-          this.state.meta.setDescription(streamId, description);
+          this.state.snapshots.setDescription(streamId, description);
           if (this.webviewUpdater.isAvailable()) {
             this.webviewUpdater.updateStreamDescription(streamId, description);
           }
         },
         setParentStream: (_, { childStreamId, parentStreamId }) => {
-          this.state.meta.setParentStream(childStreamId, parentStreamId);
+          this.state.snapshots.setParentStream(childStreamId, parentStreamId);
           if (this.webviewUpdater.isAvailable()) {
             this.webviewUpdater.updateParentStream(
               childStreamId,
@@ -173,7 +173,9 @@ export class ProgressEventHandler {
           const targets: StreamTabId[] = payload.streamId
             ? [payload.streamId]
             : payload.streamConfig
-              ? ctx.state.meta.findWorkflowStreamsMatching(payload.streamConfig)
+              ? ctx.state.snapshots.findWorkflowStreamsMatching(
+                  payload.streamConfig,
+                )
               : [];
           for (const streamId of targets) {
             ctx.state.snapshots.clearMissingOutputs(streamId);
@@ -352,18 +354,18 @@ export class ProgressEventHandler {
     const previousFilter = this.state.agentCategoryFilter;
 
     // Coordinate persistence + ephemeral side effects (formerly state.setTaskState)
-    this.state.meta.setTaskState(streamId, taskState);
+    this.state.snapshots.setTaskState(streamId, taskState);
     this.state.clearStreamHints(streamId);
     this.state.getOrCreateStreamState(streamId, category);
     this.state.resetFinishedChildCounters(streamId);
-    cleanupToolUseAgentRegistry(this.state.meta);
+    cleanupToolUseAgentRegistry(this.state.snapshots);
 
     if (isActiveStream) {
       this.maybeUpdateFilterForCategory(category);
     }
 
     if (executionId) {
-      this.state.meta.setExecutionId(streamId, executionId);
+      this.state.snapshots.setExecutionId(streamId, executionId);
     }
 
     if (this.webviewUpdater.isAvailable()) {
@@ -509,7 +511,7 @@ export class ProgressEventHandler {
         conversationProgress = streamState.conversationProgress;
         badges = this.toBadgeSnapshot(streamState);
       }
-      parentStreamId = this.state.meta.getParentStreamId(stream);
+      parentStreamId = this.state.snapshots.getParentStreamId(stream);
     }
 
     // Always include toggle bypass state so buttons render correctly on tab switch.
@@ -611,7 +613,7 @@ export class ProgressEventHandler {
   }
 
   private getStreamCategory(streamId: StreamTabId): AgentCategory | undefined {
-    const taskState = this.state.meta.getTaskState(streamId);
+    const taskState = this.state.snapshots.getTaskState(streamId);
     return (
       taskState?.agentConfig?.agentCategory ??
       this.state.getStreamHints(streamId).agentCategory

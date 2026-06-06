@@ -19,8 +19,12 @@
 
 import {
   TaskStateSchema,
+  isToolUseTaskState,
+  isWorkflowTaskState,
   type TaskState,
 } from '@agent/core/execution/TaskState';
+import { getCleanAgentName } from '@agent/index';
+import { getExecutionStore } from '@agent/storage';
 import { KVStore } from '@common/storage/KVStore';
 import type { ProgressEventBusLike } from '@eventBus/ProgressEventBus';
 import {
@@ -42,6 +46,7 @@ import {
   UsageDataSchema,
   WorkPlanSnapshotSchema,
   type CompileFailure,
+  type ExecutionId,
   type OutputFileInfo,
   type Plan,
   type StorageKey,
@@ -71,6 +76,18 @@ function recordToRoundMap<V>(record: Record<string, V>): Map<number, V> {
   return map;
 }
 
+function normalizeOutputFiles(outputFiles?: readonly string[]): string[] {
+  return (outputFiles ?? [])
+    .map((file) => file.replaceAll('\\', '/'))
+    .filter((file) => file.length > 0)
+    .sort();
+}
+
+function sameOutputFiles(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((file, index) => file === right[index]);
+}
+
 export class StreamSnapshotStore {
   // -- In-memory accumulators (one entry per stream that has emitted) --------
   private readonly outputFiles = new Map<
@@ -88,6 +105,8 @@ export class StreamSnapshotStore {
   private readonly usage = new Map<StreamTabId, Map<string, TokenUsageStats>>();
   private readonly workPlan = new Map<StreamTabId, WorkPlanSnapshot>();
   private readonly meta = new Map<StreamTabId, StreamTabMeta>();
+  /** Typed task states (parsed once) backing the tool-use/workflow queries. */
+  private readonly taskStates = new Map<StreamTabId, TaskState>();
 
   // -- Per (stream, category) serialized write chains -----------------------
   private readonly pendingWrites = new Map<string, Promise<void>>();
@@ -154,23 +173,21 @@ export class StreamSnapshotStore {
       bus.on(
         'setTaskState',
         ({ streamId, executionId, taskState }) => {
-          this.patchMeta(streamId, { taskState });
-          if (executionId) this.patchMeta(streamId, { executionId });
+          this.setTaskState(streamId, taskState);
+          if (executionId) this.setExecutionId(streamId, executionId);
         },
         options,
       ),
       bus.on(
         'updateStreamDescription',
         ({ streamId, description }) =>
-          this.patchMeta(streamId, { description }),
+          this.setDescription(streamId, description),
         options,
       ),
       bus.on(
         'setParentStream',
         ({ childStreamId, parentStreamId }) =>
-          this.patchMeta(childStreamId, {
-            parentStreamId: parentStreamId ?? undefined,
-          }),
+          this.setParentStream(childStreamId, parentStreamId),
         options,
       ),
     ];
@@ -320,6 +337,7 @@ export class StreamSnapshotStore {
     this.usage.delete(stream);
     this.workPlan.delete(stream);
     this.meta.delete(stream);
+    this.taskStates.delete(stream);
     this.kvCache.delete(stream);
     for (const key of [...this.pendingWrites.keys()]) {
       if (key.startsWith(`${stream}::`)) this.pendingWrites.delete(key);
@@ -333,6 +351,7 @@ export class StreamSnapshotStore {
     this.usage.clear();
     this.workPlan.clear();
     this.meta.clear();
+    this.taskStates.clear();
     this.kvCache.clear();
     this.pendingWrites.clear();
   }
@@ -370,6 +389,97 @@ export class StreamSnapshotStore {
       ...(next.description && { description: next.description }),
     };
     this.write(stream, STREAM_DATA_KEYS.META, file);
+  }
+
+  // ==========================================================================
+  // Meta accessors, setters, and queries (replace StreamMetaManager)
+  // ==========================================================================
+
+  setTaskState(stream: StreamTabId, taskState: TaskState): void {
+    this.taskStates.set(stream, taskState);
+    this.patchMeta(stream, { taskState });
+  }
+
+  setExecutionId(stream: StreamTabId, executionId: ExecutionId): void {
+    this.patchMeta(stream, { executionId });
+  }
+
+  setParentStream(
+    child: StreamTabId,
+    parent: StreamTabId | null | undefined,
+  ): void {
+    this.patchMeta(child, { parentStreamId: parent ?? undefined });
+  }
+
+  setDescription(stream: StreamTabId, description: string): void {
+    this.patchMeta(stream, { description });
+  }
+
+  getTaskState(stream: StreamTabId): TaskState | undefined {
+    return this.taskStates.get(stream);
+  }
+
+  getExecutionId(stream: StreamTabId): ExecutionId | undefined {
+    return this.meta.get(stream)?.executionId as ExecutionId | undefined;
+  }
+
+  getParentStreamId(stream: StreamTabId): StreamTabId | undefined {
+    return this.meta.get(stream)?.parentStreamId as StreamTabId | undefined;
+  }
+
+  getDescription(stream: StreamTabId): string | undefined {
+    return this.meta.get(stream)?.description;
+  }
+
+  /** Read-only view of stream→executionId for waiting-stream detection. */
+  getExecutionIdMap(): ReadonlyMap<StreamTabId, ExecutionId> {
+    const map = new Map<StreamTabId, ExecutionId>();
+    for (const [stream, meta] of this.meta) {
+      if (meta.executionId) map.set(stream, meta.executionId as ExecutionId);
+    }
+    return map;
+  }
+
+  /** Stream IDs with active tool-use sessions. */
+  getActiveToolUseStreams(): Set<StreamTabId> {
+    return new Set(
+      [...this.taskStates]
+        .filter(([, state]) => isToolUseTaskState(state))
+        .map(([stream]) => stream),
+    );
+  }
+
+  /**
+   * Workflow stream IDs whose taskState's agentConfig matches `match`. Used by
+   * command-palette pack/clean to clear missing-output markers across every tab
+   * that surfaced markers for the cleaned files. Both sides are canonicalized
+   * (agent source prefixes stripped, paths normalized to forward slashes).
+   */
+  findWorkflowStreamsMatching(match: {
+    agent: string;
+    model: string;
+    inputFile: string;
+    outputFiles?: readonly string[];
+  }): StreamTabId[] {
+    const wantAgent = getCleanAgentName(match.agent);
+    const wantFile = match.inputFile.replaceAll('\\', '/');
+    const wantOutputFiles = normalizeOutputFiles(match.outputFiles);
+    const result: StreamTabId[] = [];
+    for (const [stream, state] of this.taskStates) {
+      if (!isWorkflowTaskState(state)) continue;
+      const cfg = state.agentConfig;
+      const cfgPrimaryInput = (cfg.inputFiles[0] ?? '').replaceAll('\\', '/');
+      if (
+        getCleanAgentName(cfg.agent) !== wantAgent ||
+        cfg.model !== match.model ||
+        cfgPrimaryInput !== wantFile ||
+        !sameOutputFiles(normalizeOutputFiles(cfg.outputFiles), wantOutputFiles)
+      ) {
+        continue;
+      }
+      result.push(stream);
+    }
+    return result;
   }
 
   // ==========================================================================
@@ -521,7 +631,37 @@ export class StreamSnapshotStore {
         planSummary: snap.planSummary,
       });
       const meta = await this.readMetaFile(this.kv(streamId));
-      if (meta) this.meta.set(streamId, meta);
+      if (meta) {
+        this.meta.set(streamId, meta);
+        if (meta.taskState !== undefined) {
+          const parsed = TaskStateSchema.safeParse(meta.taskState);
+          if (parsed.success) {
+            this.taskStates.set(streamId, parsed.data as TaskState);
+          }
+        }
+      }
+    }
+    await this.backfillDescriptionsFromExecutionMeta();
+  }
+
+  /**
+   * One-time backfill for streams with an executionId but no description in
+   * meta.json: read it from ExecutionMeta and persist so future loads skip the
+   * extra I/O. (Ported from StreamMetaManager.)
+   */
+  private async backfillDescriptionsFromExecutionMeta(): Promise<void> {
+    for (const [streamId, meta] of [...this.meta]) {
+      if (!meta.executionId || meta.description) continue;
+      try {
+        const execMeta = await getExecutionStore(
+          meta.executionId as ExecutionId,
+        ).readMeta();
+        if (execMeta?.description) {
+          this.setDescription(streamId, execMeta.description);
+        }
+      } catch {
+        // Best-effort; a missing/corrupt execution store just skips backfill.
+      }
     }
   }
 

@@ -14,7 +14,6 @@ import { toErrorMessage } from '@common/errors';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
-import { StreamMetaManager } from '@progressView/managers/StreamMetaManager';
 import type { MementoStorage } from '@progressView/persistence/PersistentMapManager';
 import {
   getStreamTabStore,
@@ -101,8 +100,10 @@ function createExecutionState(
 }
 
 /** Clean up tool-use agent registry based on currently active streams. */
-export function cleanupToolUseAgentRegistry(meta: StreamMetaManager): void {
-  cleanupInactiveAgents(meta.getActiveToolUseStreams());
+export function cleanupToolUseAgentRegistry(
+  snapshots: StreamSnapshotStore,
+): void {
+  cleanupInactiveAgents(snapshots.getActiveToolUseStreams());
 }
 
 /**
@@ -116,9 +117,9 @@ export function cleanupToolUseAgentRegistry(meta: StreamMetaManager): void {
 export class ProgressViewState {
   // -- Persistence managers ---------------------------------------------------
   readonly streamLogs: StreamLogStore;
-  /** Owns output files, missing outputs, compile failures, and per-run usage. */
+  /** Single owner of all per-stream sidecar state (output files, usage, todos,
+   * plan, taskState/executionId/parent/description + meta queries). */
   readonly snapshots: StreamSnapshotStore;
-  readonly meta: StreamMetaManager;
 
   // -- Preferences ------------------------------------------------------------
   private _prefs!: PersistedState<ProgressViewPrefs>;
@@ -146,7 +147,6 @@ export class ProgressViewState {
     this.streamLogs = new StreamLogStore();
     setDefaultStreamLogStore(this.streamLogs);
     this.snapshots = new StreamSnapshotStore();
-    this.meta = new StreamMetaManager();
   }
 
   // -- Preferences ------------------------------------------------------------
@@ -329,7 +329,6 @@ export class ProgressViewState {
     // Clear in-memory state
     StreamStatusService.clear(stream, { emit: false });
     this.snapshots.evict(stream);
-    this.meta.evict(stream);
     this._sessionState.delete(stream);
     this._streamStates.delete(stream);
 
@@ -347,7 +346,7 @@ export class ProgressViewState {
       });
     }
 
-    cleanupToolUseAgentRegistry(this.meta);
+    cleanupToolUseAgentRegistry(this.snapshots);
   }
 
   async clearAll(): Promise<void> {
@@ -359,7 +358,6 @@ export class ProgressViewState {
     // Clear in-memory state
     StreamStatusService.clearAll({ emit: false });
     this.snapshots.evictAll();
-    this.meta.evictAll();
     this._sessionState.clear();
     this._streamStates.clear();
     this._prefs.reset();
@@ -367,7 +365,7 @@ export class ProgressViewState {
     // Delete from disk
     await Promise.all([this.streamLogs.clear(), deleteAllStreamData()]);
 
-    cleanupToolUseAgentRegistry(this.meta);
+    cleanupToolUseAgentRegistry(this.snapshots);
   }
 
   async load(): Promise<void> {
@@ -416,7 +414,7 @@ export class ProgressViewState {
     this.logger.info('[Persistence] Managers loaded');
 
     this.validateActiveStream();
-    cleanupToolUseAgentRegistry(this.meta);
+    cleanupToolUseAgentRegistry(this.snapshots);
 
     this.logger.info('[Persistence] State load complete');
   }
@@ -426,20 +424,13 @@ export class ProgressViewState {
    */
   async flush(): Promise<void> {
     flushPendingRunTraces();
-    await Promise.all([
-      this.streamLogs.flush(),
-      this.meta.flush(),
-      this.snapshots.flush(),
-    ]);
+    await Promise.all([this.streamLogs.flush(), this.snapshots.flush()]);
   }
 
   // -- Private helpers --------------------------------------------------------
 
   private async loadManagers(streamIds: StreamTabId[]): Promise<void> {
-    await Promise.all([
-      this.snapshots.load(streamIds),
-      this.meta.load(streamIds),
-    ]);
+    await this.snapshots.load(streamIds);
   }
 
   private async backfillLegacyWorkflowInstructions(): Promise<number> {
