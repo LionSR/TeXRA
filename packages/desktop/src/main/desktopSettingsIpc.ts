@@ -17,7 +17,6 @@ import {
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
 import { MAX_TIER, ULTRA_TIER } from '@auth/sharedConfig';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   API_PROVIDERS,
   apiKeySecretName,
@@ -30,6 +29,7 @@ import {
   invalidateModelOptionsCache,
 } from '@model/computeModelOptions';
 import type { ExecutionId } from '@shared/schemas';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 import {

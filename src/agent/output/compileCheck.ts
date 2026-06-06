@@ -3,7 +3,6 @@ import * as path from 'path';
 import type { AgentTrace } from '@agent/trace';
 import { getWorkspaceState } from '@agent/core/stateStore';
 import { toErrorMessage } from '@common/errors';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasLatexCompiler } from '@latex/latexToolchain';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type {
@@ -11,6 +10,7 @@ import type {
   CompileResult,
   OutputFileInfo,
 } from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   LATEX_CONFIG_DEFAULTS,
   LATEX_CONFIG_RANGES,
