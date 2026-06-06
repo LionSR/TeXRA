@@ -26,6 +26,11 @@ import {
   markApprovalDenied,
 } from '@cli/runtime/approvalAdapter';
 import { setCliApiMode } from '@cli/runtime/apiAccessMode';
+import {
+  cliApprovalEventKind,
+  isCliApprovalEvent,
+  type CliApprovalEvent,
+} from '@cli/runtime/approvalEvents';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import type {
@@ -55,19 +60,6 @@ type Emit = <K extends ProgressEvent>(
   payload: ProgressEventPayloads[K],
 ) => void;
 
-const APPROVAL_EVENTS = [
-  'showBashPermission',
-  'showPlanApproval',
-  'showAgentProposal',
-  'showRetryRequest',
-  'showExternalInquiry',
-  'showUserQuestion',
-] as const;
-
-type ApprovalEvent = (typeof APPROVAL_EVENTS)[number];
-
-const APPROVAL_EVENT_SET: ReadonlySet<ProgressEvent> = new Set(APPROVAL_EVENTS);
-
 /**
  * Install the typed approval pipeline. Returns an `unbind` callback that
  * restores the original emit + clears the tool-edit handler.
@@ -84,10 +76,10 @@ export function installTuiApprovals(
     // via the legacy stderr prompt — racing the TUI modal for the same
     // resolver. Non-approval events (status, usage, log) keep flowing
     // through the original chain.
-    if (isApprovalEvent(event)) {
+    if (isCliApprovalEvent(event)) {
       routeApproval(
         event,
-        payload as ProgressEventPayloads[ApprovalEvent],
+        payload as ProgressEventPayloads[CliApprovalEvent],
         context,
         host,
       );
@@ -120,13 +112,9 @@ export function installTuiApprovals(
   };
 }
 
-function isApprovalEvent(event: ProgressEvent): event is ApprovalEvent {
-  return APPROVAL_EVENT_SET.has(event);
-}
-
 function routeApproval(
-  event: ApprovalEvent,
-  payload: ProgressEventPayloads[ApprovalEvent],
+  event: CliApprovalEvent,
+  payload: ProgressEventPayloads[CliApprovalEvent],
   context: CliContext,
   host: CliRuntimeHost,
 ): void {
@@ -135,7 +123,7 @@ function routeApproval(
       routeWithPolicy(
         context,
         host,
-        'bash',
+        cliApprovalEventKind(event),
         payload as ProgressEventPayloads['showBashPermission'],
         (bashPayload, decision) => {
           if (
@@ -153,7 +141,7 @@ function routeApproval(
       routeWithPolicy(
         context,
         host,
-        'plan',
+        cliApprovalEventKind(event),
         payload as ProgressEventPayloads['showPlanApproval'],
         dispatchPlan,
       );
@@ -162,7 +150,7 @@ function routeApproval(
       routeWithPolicy(
         context,
         host,
-        'proposal',
+        cliApprovalEventKind(event),
         payload as ProgressEventPayloads['showAgentProposal'],
         dispatchProposal,
       );
@@ -171,7 +159,7 @@ function routeApproval(
       routeWithPolicy(
         context,
         host,
-        'retry',
+        cliApprovalEventKind(event),
         payload as ProgressEventPayloads['showRetryRequest'],
         dispatchRetry,
       );
