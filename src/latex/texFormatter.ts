@@ -1,6 +1,6 @@
 // Local imports - formatter implementations
 import { getWorkspaceState } from '@agent/core/stateStore';
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 
 // Local file imports

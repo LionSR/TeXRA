@@ -22,7 +22,7 @@ import {
 
 // Local imports - common state
 import { toErrorMessage } from '@common/errors';
-import { GlobalStateKey } from '@common/state/stateKeys';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Local imports - logger
 import { setOutputChannelFactory } from '@logger/logUtils';

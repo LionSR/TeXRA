@@ -4,7 +4,7 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 // Internal imports
 import { getConfig } from '@utils/config/configUtils';
 import { getWorkspaceState } from '@agent/core/stateStore';
-import { WorkspaceStateKey } from '@common/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import * as logger from '@logger/logUtils';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { executeCommand } from '@utils/system';
