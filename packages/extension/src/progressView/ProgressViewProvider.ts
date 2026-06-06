@@ -16,19 +16,20 @@ import { createChannelTrace } from '@logger';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { ApprovalRequestHandler } from '@progressView/managers/ApprovalRequestHandler';
-import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 import { WebviewUpdater } from '@progressView/managers/WebviewUpdater';
 import type {
   AgentProposalPermission,
   BashPermission,
   ExternalInquiryPermission,
   PlanApprovalPermission,
+  ProgressViewOutboundMessage,
   ProgressViewPlacement,
   StorageKey,
   StreamTabId,
   ToolEditPermission,
 } from '@shared/schemas';
 import { AGENT_CATEGORY } from '@shared/schemas';
+import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
 import {
@@ -122,7 +123,7 @@ export class ProgressViewProvider
     this.webviewUpdater = new WebviewUpdater(() => [this.getActiveWebview()]);
     this.webviewBridge = new WebviewBridge(
       this.state.streamLogs,
-      () => [this.getActiveWebview()],
+      (message) => this.sendToActiveProgressWebview(message),
       () => this.state.activeStream || null,
     );
 
@@ -700,6 +701,18 @@ export class ProgressViewProvider
     if (this._mainViewProvider?.getActiveMode() !== 'progress')
       return undefined;
     return this._sidebarWebviewGetter?.();
+  }
+
+  private async sendToActiveProgressWebview(
+    message: ProgressViewOutboundMessage,
+  ): Promise<boolean> {
+    const webview = this.getActiveWebview();
+    if (!webview) return false;
+    try {
+      return await webview.postMessage(message);
+    } catch {
+      return false;
+    }
   }
 
   private isViewActiveTarget(

@@ -1,19 +1,40 @@
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import type { StreamTabId } from '@shared/schemas';
-import type { StreamLogStore } from '@transcript';
-import type * as vscode from 'vscode';
+import type {
+  ProgressViewOutboundMessage,
+  StreamLogEntry,
+  StreamTabId,
+} from '@shared/schemas';
 
 const FRAME_INTERVAL_MS = 16;
+
+export type ProgressViewMessageSender = (
+  message: ProgressViewOutboundMessage,
+) => boolean | Promise<boolean>;
+
+export interface ProgressLogSource {
+  readonly head: number;
+  getRange(fromSeq: number, toSeq: number): StreamLogEntry[];
+  getDirtyUpdates(maxSeqInclusive: number): StreamLogEntry[];
+  ackDirtyUpdates(updates: readonly StreamLogEntry[]): void;
+}
+
+export interface ProgressLogStore {
+  onChange(listener: (streamId: StreamTabId) => void): () => void;
+  get(streamId: StreamTabId): ProgressLogSource | undefined;
+  clearDirtyUpdates(streamId: StreamTabId): void;
+}
 
 export class WebviewBridge {
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly changedStreams = new Set<StreamTabId>();
   private readonly cursors = new Map<StreamTabId, number>();
   private readonly unsubscribe: () => void;
+  private flushInProgress = false;
+  private flushRequested = false;
 
   constructor(
-    private readonly store: StreamLogStore,
-    private readonly getWebviews: () => (vscode.Webview | undefined)[],
+    private readonly store: ProgressLogStore,
+    private readonly sendMessage: ProgressViewMessageSender,
     private readonly getActiveStream: () => StreamTabId | null,
   ) {
     this.unsubscribe = this.store.onChange((streamId) => {
@@ -60,27 +81,42 @@ export class WebviewBridge {
   }
 
   private scheduleFlush(): void {
+    if (this.flushInProgress) {
+      this.flushRequested = true;
+      return;
+    }
     if (this.flushTimer) return;
     this.flushTimer = setTimeout(() => {
       this.flushTimer = null;
-      this.flush();
+      void this.runFlush();
     }, FRAME_INTERVAL_MS);
   }
 
-  private flush(): void {
-    const activeStream = this.getActiveStream();
-    if (!activeStream) return;
-    if (!this.changedStreams.has(activeStream)) return;
+  private async runFlush(): Promise<void> {
+    if (this.flushInProgress) {
+      this.flushRequested = true;
+      return;
+    }
+    this.flushInProgress = true;
+    const delivered = await this.flush();
+    this.flushInProgress = false;
+    if (delivered && this.flushRequested) {
+      this.flushRequested = false;
+      this.scheduleFlush();
+    } else if (!delivered) {
+      this.flushRequested = false;
+    }
+  }
 
-    const webviews = this.getWebviews().filter((wv): wv is vscode.Webview =>
-      Boolean(wv),
-    );
-    if (webviews.length === 0) return;
+  private async flush(): Promise<boolean> {
+    const activeStream = this.getActiveStream();
+    if (!activeStream) return true;
+    if (!this.changedStreams.has(activeStream)) return true;
 
     const log = this.store.get(activeStream);
     if (!log) {
       this.changedStreams.delete(activeStream);
-      return;
+      return true;
     }
 
     // `changedStreams` is a subset of `cursors`: onChange only enqueues a
@@ -89,12 +125,13 @@ export class WebviewBridge {
     // cursor here. The `?? 0` is therefore unreachable, kept only to satisfy
     // the type.
     const cursor = this.cursors.get(activeStream) ?? 0;
-    const entries = log.getRange(cursor, log.head);
-    const updates = log.drainDirtyUpdates(cursor);
+    const nextCursor = log.head;
+    const entries = log.getRange(cursor, nextCursor);
+    const updates = log.getDirtyUpdates(cursor);
 
     if (entries.length === 0 && updates.length === 0) {
       this.changedStreams.delete(activeStream);
-      return;
+      return true;
     }
 
     const payload = {
@@ -104,11 +141,25 @@ export class WebviewBridge {
       updates,
     } as const;
 
-    for (const webview of webviews) {
-      webview.postMessage(payload);
-    }
+    if (!(await this.deliver(payload))) return false;
 
-    this.cursors.set(activeStream, log.head);
-    this.changedStreams.delete(activeStream);
+    log.ackDirtyUpdates(updates);
+    this.cursors.set(activeStream, nextCursor);
+    if (this.flushRequested) {
+      this.changedStreams.add(activeStream);
+    } else {
+      this.changedStreams.delete(activeStream);
+    }
+    return true;
+  }
+
+  private async deliver(
+    message: ProgressViewOutboundMessage,
+  ): Promise<boolean> {
+    try {
+      return await this.sendMessage(message);
+    } catch {
+      return false;
+    }
   }
 }

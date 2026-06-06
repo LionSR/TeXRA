@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - common webview
 import { StreamLogStore, type StreamLogAppendInput } from '@transcript';
-import { WebviewBridge } from '@progressView/managers/WebviewBridge';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - progress view
@@ -15,6 +14,7 @@ import {
   STREAM_LOG_ENTRY_TYPES,
   type StreamTabId,
 } from '@shared/schemas';
+import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
 
 function logEntry(
   id: string,
@@ -31,6 +31,17 @@ function logEntry(
   };
 }
 
+function deferredBoolean(): {
+  promise: Promise<boolean>;
+  resolve: (value: boolean) => void;
+} {
+  let resolve!: (value: boolean) => void;
+  const promise = new Promise<boolean>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
 describe('WebviewBridge', () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -40,18 +51,14 @@ describe('WebviewBridge', () => {
     vi.useFakeTimers();
     const store = new StreamLogStore();
     const activeStream = 'active' as StreamTabId;
-    const postMessage = vi.fn();
-    const bridge = new WebviewBridge(
-      store,
-      () => [{ postMessage } as never],
-      () => activeStream,
-    );
+    const sendMessage = vi.fn(() => true);
+    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
 
     bridge.syncStream(activeStream);
     store.append(activeStream, logEntry('active-1', 'active log', 100));
     await vi.advanceTimersByTimeAsync(20);
 
-    expect(postMessage).toHaveBeenCalledWith({
+    expect(sendMessage).toHaveBeenCalledWith({
       command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
       streamId: activeStream,
       entries: [
@@ -70,12 +77,8 @@ describe('WebviewBridge', () => {
     vi.useFakeTimers();
     const store = new StreamLogStore();
     let activeStream = 'active' as StreamTabId;
-    const postMessage = vi.fn();
-    const bridge = new WebviewBridge(
-      store,
-      () => [{ postMessage } as never],
-      () => activeStream,
-    );
+    const sendMessage = vi.fn(() => true);
+    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
 
     store.append(
       'inactive' as StreamTabId,
@@ -84,7 +87,7 @@ describe('WebviewBridge', () => {
     activeStream = 'inactive' as StreamTabId;
     await vi.advanceTimersByTimeAsync(20);
 
-    expect(postMessage).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
 
     bridge.dispose();
   });
@@ -93,12 +96,8 @@ describe('WebviewBridge', () => {
     vi.useFakeTimers();
     const store = new StreamLogStore();
     let activeStream = 'active' as StreamTabId;
-    const postMessage = vi.fn();
-    const bridge = new WebviewBridge(
-      store,
-      () => [{ postMessage } as never],
-      () => activeStream,
-    );
+    const sendMessage = vi.fn(() => true);
+    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
 
     store.append(
       'inactive' as StreamTabId,
@@ -109,7 +108,7 @@ describe('WebviewBridge', () => {
     bridge.syncStream(activeStream);
     await vi.advanceTimersByTimeAsync(20);
 
-    expect(postMessage).toHaveBeenCalledWith({
+    expect(sendMessage).toHaveBeenCalledWith({
       command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
       streamId: activeStream,
       entries: [
@@ -119,6 +118,92 @@ describe('WebviewBridge', () => {
         }),
       ],
       updates: [],
+    });
+
+    bridge.dispose();
+  });
+
+  it('keeps the cursor and dirty updates when no target accepts a log delta', async () => {
+    vi.useFakeTimers();
+    const store = new StreamLogStore();
+    const activeStream = 'active' as StreamTabId;
+    const sendMessage = vi
+      .fn()
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+
+    bridge.syncStream(activeStream);
+    store.append(activeStream, logEntry('active-1', 'active log', 100));
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+
+    store.update(activeStream, 'active-1', { text: 'edited log' });
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+
+    store.append(activeStream, logEntry('active-2', 'retry trigger', 200));
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage).toHaveBeenLastCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId: activeStream,
+      entries: [
+        expect.objectContaining({
+          id: 'active-2',
+          text: 'retry trigger',
+        }),
+      ],
+      updates: [
+        expect.objectContaining({
+          id: 'active-1',
+          text: 'edited log',
+        }),
+      ],
+    });
+
+    bridge.dispose();
+  });
+
+  it('serializes async flushes and preserves updates made during delivery', async () => {
+    vi.useFakeTimers();
+    const store = new StreamLogStore();
+    const activeStream = 'active' as StreamTabId;
+    const firstDelivery = deferredBoolean();
+    const sendMessage = vi
+      .fn()
+      .mockReturnValueOnce(firstDelivery.promise)
+      .mockResolvedValue(true);
+    const bridge = new WebviewBridge(store, sendMessage, () => activeStream);
+
+    bridge.syncStream(activeStream);
+    store.append(activeStream, logEntry('active-1', 'active log', 100));
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+
+    store.update(activeStream, 'active-1', { text: 'edited while sending' });
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+
+    firstDelivery.resolve(true);
+    await vi.advanceTimersByTimeAsync(20);
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage).toHaveBeenLastCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+      streamId: activeStream,
+      entries: [],
+      updates: [
+        expect.objectContaining({
+          id: 'active-1',
+          text: 'edited while sending',
+        }),
+      ],
     });
 
     bridge.dispose();
