@@ -453,8 +453,8 @@ export type SubagentPickerSelection =
   | { readonly kind: 'detail'; readonly executionId: string };
 
 /** What pressing Enter on a child-control row should do. In subagents mode a
- *  row backed by a child stream opens that subagent's scoped transcript
- *  viewer (its independent history); everything else (tasks/processes, or a
+ *  row backed by a child stream opens that subagent's transcript viewer
+ *  (its independent history); everything else (tasks/processes, or a
  *  stream-less row) drops into the inline tail detail view. Pure so the
  *  picker's key handling stays unit-testable. */
 export function subagentPickerSelection(

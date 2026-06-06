@@ -11,6 +11,11 @@ import { Box, Text, useInput } from 'ink';
 
 import { isEscapeInput } from '../input/inputKeys';
 import { KeyHints } from '../ui/KeyHints';
+import {
+  initialTranscriptScrollState,
+  scrollTranscriptToOffset,
+  syncTranscriptScrollState,
+} from '../state/transcriptScroll';
 import { transcriptToLines } from '../state/transcriptLines';
 import type { StreamSlice } from '../state/cliState';
 
@@ -22,11 +27,6 @@ export interface TranscriptViewerProps {
   /** Optional header label naming the stream being viewed (e.g. the subagent
    *  label) so a scoped viewer makes clear whose transcript this is. */
   readonly title?: string;
-}
-
-interface ScrollState {
-  readonly offset: number;
-  readonly followBottom: boolean;
 }
 
 export function TranscriptViewer({
@@ -51,34 +51,28 @@ export function TranscriptViewer({
   const maxOffset = Math.max(0, lines.length - viewRows);
   // Open pinned to the bottom — the latest output is what the user just asked
   // to inspect.
-  const [{ offset }, setScrollState] = useState<ScrollState>(() => ({
-    offset: maxOffset,
-    followBottom: true,
-  }));
-
-  function clampOffset(next: number): number {
-    return Math.max(0, Math.min(maxOffset, next));
-  }
+  const [{ offset }, setScrollState] = useState(() =>
+    initialTranscriptScrollState({ lineCount: lines.length, viewRows }),
+  );
 
   function scrollTo(next: number | ((currentOffset: number) => number)): void {
     setScrollState((current) => {
       const requested =
         typeof next === 'function' ? next(current.offset) : next;
-      const offset = clampOffset(requested);
-      return { offset, followBottom: offset >= maxOffset };
+      return scrollTranscriptToOffset(
+        { lineCount: lines.length, viewRows },
+        requested,
+      );
     });
   }
 
   // React to content growth / resize: follow the tail when armed, otherwise
   // just clamp so the offset never points past the end.
   useEffect(() => {
-    setScrollState((current) => {
-      const offset = current.followBottom
-        ? maxOffset
-        : Math.min(current.offset, maxOffset);
-      return offset === current.offset ? current : { ...current, offset };
-    });
-  }, [maxOffset]);
+    setScrollState((current) =>
+      syncTranscriptScrollState(current, { lineCount: lines.length, viewRows }),
+    );
+  }, [lines.length, viewRows]);
 
   useInput((input, key) => {
     if (isEscapeInput(input, key) || (key.ctrl && input.toLowerCase() === 't'))

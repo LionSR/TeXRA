@@ -11,6 +11,7 @@ import { signal, type Signal } from '@lit-labs/signals';
 import PQueue from 'p-queue';
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
+import type { StreamTabId } from '@shared/schemas';
 import type {
   AgentProposalPermission,
   ApprovalDecision as SharedApprovalDecision,
@@ -117,6 +118,24 @@ function approvalQueueStatusKind(
     if (sawApproval && sawQuestion) return 'request';
   }
   return sawQuestion ? 'question' : 'approval';
+}
+
+export function approvalPayloadStreamId(
+  payload: ApprovalPayload,
+): StreamTabId | undefined {
+  switch (payload.kind) {
+    case 'bash':
+    case 'plan':
+    case 'proposal':
+    case 'retry':
+    case 'externalInquiry':
+    case 'userQuestion':
+      return payload.payload.streamId || undefined;
+    case 'toolEdit':
+      return payload.request.streamId || undefined;
+    default:
+      return assertNever(payload, 'Unhandled approval payload kind');
+  }
 }
 
 function syncApprovalStatus(): void {

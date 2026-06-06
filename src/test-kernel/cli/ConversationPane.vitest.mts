@@ -18,7 +18,6 @@ import {
   transcriptViewportRepaintOptions,
 } from '@cli/chat/tui/state/transcriptViewportMode';
 import {
-  estimateLiveTranscriptEntryRows,
   estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
 } from '@cli/chat/tui/panes/transcriptViewport';
@@ -266,29 +265,6 @@ describe('CLI conversation transcript splitting', () => {
     expect(selected.rowLimits.get('a1')).toBe(4);
   });
 
-  it('can size finalized scoped assistant history with the full markdown estimator', () => {
-    const assistant = entry(
-      'a1',
-      'assistant',
-      Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join('\n'),
-      true,
-    );
-
-    const liveRows = estimateLiveTranscriptEntryRows(assistant, 80);
-    const fullRows = estimateTranscriptEntryRows(assistant, 80);
-    const selected = selectTranscriptEntriesForViewport(
-      [assistant],
-      fullRows,
-      80,
-      'finalized-full',
-    );
-
-    expect(liveRows).toBeLessThan(fullRows);
-    expect(selected.entries.map((item) => item.id)).toEqual(['a1']);
-    expect(selected.usedRows).toBe(fullRows);
-    expect(selected.rowLimits.has('a1')).toBe(false);
-  });
-
   it('renders bounded finalized assistant tails through markdown', () => {
     const text = ['intro line', 'middle line', '**bold tail marker**'].join(
       '\n',
@@ -467,7 +443,7 @@ describe('CLI conversation transcript splitting', () => {
     expect(items.slice(1).map((item) => item.id)).toEqual(['u1']);
   });
 
-  it('keeps child focus from changing the static scrollback owner', () => {
+  it('keeps background children out of the root scrollback owner', () => {
     const rootUser = entry('u1', 'user', 'root prompt', true);
     const childAssistant = entry('a1', 'assistant', 'child detail', true);
     const ROOT = 'root-stream' as StreamTabId;
@@ -480,6 +456,7 @@ describe('CLI conversation transcript splitting', () => {
     const scrollbackStreamId = staticScrollbackStreamId({
       activeStreamId: CHILD,
       rootStreamId: ROOT,
+      scopedTranscript: false,
     });
     const items = appendStaticTranscriptItems({
       scrollbackStreamId,
@@ -490,6 +467,32 @@ describe('CLI conversation transcript splitting', () => {
 
     expect(scrollbackStreamId).toBe(ROOT);
     expect(items.slice(1).map((item) => item.id)).toEqual(['u1']);
+  });
+
+  it('uses the focused child as the static scrollback owner in scoped view', () => {
+    const rootUser = entry('u1', 'user', 'root prompt', true);
+    const childAssistant = entry('a1', 'assistant', 'child detail', true);
+    const ROOT = 'root-stream' as StreamTabId;
+    const CHILD = 'claude@agent-sdk#1' as StreamTabId;
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [ROOT, sliceWithEntries(ROOT, [rootUser])],
+      [CHILD, sliceWithEntries(CHILD, [childAssistant])],
+    ]);
+
+    const scrollbackStreamId = staticScrollbackStreamId({
+      activeStreamId: CHILD,
+      rootStreamId: ROOT,
+      scopedTranscript: true,
+    });
+    const items = appendStaticTranscriptItems({
+      scrollbackStreamId,
+      currentItems: [],
+      streams,
+      meta: SESSION_META,
+    });
+
+    expect(scrollbackStreamId).toBe(CHILD);
+    expect(items.slice(1).map((item) => item.id)).toEqual(['a1']);
   });
 
   it('falls back to active stream only before the root owner resolves', () => {
