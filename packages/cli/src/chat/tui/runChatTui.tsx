@@ -8,7 +8,13 @@
 import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
-import { flushPendingRunTraces, getDefaultStreamLogStore } from '@transcript';
+import {
+  flushPendingRunTraces,
+  getDefaultStreamLogStore,
+  StreamSnapshotStore,
+} from '@transcript';
+import { bus } from '@eventBus/ProgressEventBus';
+import { sumUsageStats } from '@shared/schemas';
 import { tryPlatform } from '@platform/platform';
 import { getAgent, loadAgents } from '@agent/index';
 import { registerExecution, writeTerminalStatus } from '@agent/storage';
@@ -113,7 +119,7 @@ import { notify } from './notifications/terminalNotifier';
 import { tuiOutputStreamForColor } from './render/noColorOutput';
 import { formatCliSessionStatus } from './sessionStatus';
 import { clearApprovals } from './state/approvalQueue';
-import { cliState, resetCliState } from './state/cliState';
+import { cliState, patchStream, resetCliState } from './state/cliState';
 import { collectResumeTargets, formatResumeHint } from './state/resumeHint';
 import { installTuiApprovals } from './state/subscribeApprovals';
 import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
@@ -1137,9 +1143,15 @@ export async function runChat(
     // Persistence stays disabled; the session still runs in-memory as before.
   }
 
+  // Persist per-stream sidecar data (todos, plan, usage, output files) via the
+  // shared, host-agnostic snapshot store so a `texra resume` restores the full
+  // display — the same streamData/{id}/* files the extension/desktop read.
+  const snapshotStore = new StreamSnapshotStore();
+
   const disposers: Array<() => void> = [];
   disposers.push(subscribeStreamLog());
   disposers.push(subscribeStreamStatus());
+  disposers.push(snapshotStore.subscribe(bus));
 
   const session: TuiSession = {
     streamId: undefined,
@@ -1385,6 +1397,20 @@ export async function runChat(
     // An older run with no persisted entries simply shows whatever exists
     // (possibly nothing) — the continued turn streams in regardless.
     await getDefaultStreamLogStore().ensureLoaded(resolution.streamId);
+    // Restore the durable per-stream display (todos/plan/usage) the previous
+    // run persisted, so resume shows more than just the transcript. Liveness is
+    // never persisted, so nothing stale (running badges, RUNNING status) leaks.
+    await snapshotStore.load([resolution.streamId]);
+    const restored = await snapshotStore.read(resolution.streamId);
+    patchStream(resolution.streamId, (slice) => {
+      const runUsages = Object.values(restored.runUsage);
+      return {
+        ...slice,
+        usage: runUsages.length ? sumUsageStats(runUsages) : slice.usage,
+        todos: restored.todos.length ? restored.todos : slice.todos,
+        plan: restored.plan ?? slice.plan,
+      };
+    });
     projectStreamTranscript(resolution.streamId);
     cliState.activeStreamId.set(resolution.streamId);
 
@@ -1690,9 +1716,12 @@ export async function runChat(
   // writes so the tail of the session isn't lost (SAVE_DEBOUNCE_MS window).
   // flush() is bounded (MAX_WRITE_RETRIES) and a no-op when persistence never
   // loaded, so this can neither hang nor affect headless paths.
-  const drainPersistence = (): Promise<void> => {
+  const drainPersistence = async (): Promise<void> => {
     flushPendingRunTraces();
-    return getDefaultStreamLogStore().flush();
+    await Promise.all([
+      getDefaultStreamLogStore().flush(),
+      snapshotStore.flush(),
+    ]);
   };
   // These TUI exit paths call process.exit() directly, so bin/texra.ts's
   // `finally` (which runs platform shutdown) never fires. Run it here too so
