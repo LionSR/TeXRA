@@ -97,8 +97,7 @@ function appendLocalTranscriptEntry(
   const normalized = normalizeTranscriptText(text);
   if (!normalized) return;
 
-  const streamId =
-    explicitStreamId ?? cliState.activeStreamId.get() ?? CLI_LOCAL_STREAM_ID;
+  const streamId = explicitStreamId ?? defaultLocalTranscriptStreamId();
   if (!cliState.activeStreamId.get()) cliState.activeStreamId.set(streamId);
   const syntheticAfterSeq = getDefaultStreamLogStore().get(streamId)?.head ?? 0;
 
@@ -113,6 +112,35 @@ function appendLocalTranscriptEntry(
       syntheticAfterSeq,
     };
     return { ...slice, entries: [...slice.entries, entry] };
+  });
+}
+
+/**
+ * Local UI notices are root-owned unless a caller explicitly targets a child.
+ * A focused child should not receive session-level slash/status/error rows.
+ */
+export function resolveLocalTranscriptStreamId({
+  activeStreamId,
+  fallbackStreamId,
+  parentStream,
+  rootStreamId,
+}: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly fallbackStreamId: StreamTabId;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly rootStreamId: StreamTabId | undefined;
+}): StreamTabId {
+  if (rootStreamId) return rootStreamId;
+  if (!activeStreamId) return fallbackStreamId;
+  return parentStream.get(activeStreamId) ?? activeStreamId;
+}
+
+function defaultLocalTranscriptStreamId(): StreamTabId {
+  return resolveLocalTranscriptStreamId({
+    activeStreamId: cliState.activeStreamId.get(),
+    fallbackStreamId: CLI_LOCAL_STREAM_ID,
+    parentStream: cliState.parentStream.get(),
+    rootStreamId: cliState.rootStreamId.get(),
   });
 }
 
