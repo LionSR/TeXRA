@@ -11,7 +11,11 @@ import { ProgressAgentProposalController } from '@controllers/progressView/Progr
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform, tryPlatform } from '@platform/platform';
-import { setDefaultStreamLogStore, StreamLogStore } from '@transcript';
+import {
+  setDefaultStreamLogStore,
+  StreamLogStore,
+  StreamSnapshotStore,
+} from '@transcript';
 import {
   buildStreamTabInfo,
   peekWorktreeInfo,
@@ -176,6 +180,16 @@ export class DesktopProgressBridge {
     StreamTabId,
     RestoredStreamSnapshot
   >();
+  /**
+   * Durable per-stream sidecar reader. Restores a ghost (prior-session)
+   * stream's persisted display — todos/plan/usage/output files — when it first
+   * becomes active, the same data the CLI/extension show on resume. Reads are
+   * stateless disk reads, so a local instance is fine alongside the platform's
+   * bus-driven writer.
+   */
+  private readonly durableSnapshots = new StreamSnapshotStore();
+  /** Ghost streams whose persisted display has already been restored this session. */
+  private readonly restoredDisplaySent = new Set<StreamTabId>();
 
   readonly runtimeHost: AgentRuntimeHost;
 
@@ -395,6 +409,7 @@ export class DesktopProgressBridge {
     this.conversationProgress.clear();
     this.streamBadges.clear();
     this.restoredStreams.clear();
+    this.restoredDisplaySent.clear();
   }
 
   private send(message: ProgressViewOutboundMessage): void {
@@ -564,6 +579,7 @@ export class DesktopProgressBridge {
 
   private flushLogs(streamId: StreamTabId): void {
     if (streamId !== this.activeStream) return;
+    this.sendRestoredDisplay(streamId);
     const log = this.streamLogs.get(streamId);
     if (!log) return;
     const cursor = this.cursors.get(streamId) ?? 0;
@@ -577,6 +593,76 @@ export class DesktopProgressBridge {
       updates,
     });
     this.cursors.set(streamId, log.head);
+  }
+
+  /**
+   * Restore a ghost (prior-session) stream's persisted sidecar display from
+   * `streamData/` the first time it becomes active — todos / plan / per-run
+   * usage / output files — matching what the CLI and extension show on resume.
+   * Sent once per stream; only durable data is restored (no liveness).
+   */
+  private sendRestoredDisplay(streamId: StreamTabId): void {
+    if (
+      !this.restoredStreams.has(streamId) ||
+      this.restoredDisplaySent.has(streamId)
+    ) {
+      return;
+    }
+    this.restoredDisplaySent.add(streamId);
+    void this.durableSnapshots
+      .read(streamId)
+      .then((snap) => {
+        if (streamId !== this.activeStream) return;
+        if (snap.todos.length > 0) {
+          this.send({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
+            stream: streamId,
+            todos: snap.todos,
+          });
+        }
+        if (snap.plan) {
+          this.send({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_PLAN,
+            stream: streamId,
+            plan: snap.plan,
+          });
+        }
+        for (const [runId, usage] of Object.entries(snap.runUsage)) {
+          this.send({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
+            stream: streamId,
+            runId,
+            usage,
+          });
+        }
+        if (Object.keys(snap.outputFilesByRound).length > 0) {
+          this.send({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
+            stream: streamId,
+            rounds: snap.outputFilesByRound,
+          });
+        }
+        if (Object.keys(snap.missingOutputsByRound).length > 0) {
+          this.send({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
+            stream: streamId,
+            rounds: snap.missingOutputsByRound,
+          });
+        }
+        if (Object.keys(snap.compileFailuresByRound).length > 0) {
+          this.send({
+            command: PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
+            stream: streamId,
+            rounds: snap.compileFailuresByRound,
+            reset: true,
+          });
+        }
+      })
+      .catch((error: unknown) => {
+        this.logger.warn(`Failed to restore display for ${streamId}`, {
+          data: error,
+        });
+      });
   }
 
   private updateOdysseyActiveFromStore(streamId: StreamTabId): void {
@@ -995,6 +1081,7 @@ export class DesktopProgressBridge {
     // for the next launch to hydrate, otherwise users would see the
     // ghosts come back zombie-style after relaunch.
     this.restoredStreams.clear();
+    this.restoredDisplaySent.clear();
     if (this.options.streamSnapshotStore) {
       void this.options.streamSnapshotStore
         .replaceAll([])
