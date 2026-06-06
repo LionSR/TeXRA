@@ -123,6 +123,8 @@ const HARNESS_API_MODE: CliApiMode = HARNESS_API_MODE_FROM_ENV ?? 'personal';
 const HARNESS_AUTHENTICATED = process.env.HARNESS_AUTHENTICATED?.trim();
 const BASH_APPROVAL_COMMAND =
   process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
+const SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS =
+  process.env.HARNESS_BASH_APPROVAL_AFTER_CHILD_FOCUS === '1';
 const EXTERNAL_INQUIRY_QUESTION =
   process.env.HARNESS_EXTERNAL_INQUIRY_QUESTION ??
   [
@@ -1020,13 +1022,31 @@ if (SHOW_EDIT_APPROVAL) {
 }
 
 if (SHOW_BASH_APPROVAL) {
-  void enqueueApproval(
-    {
-      kind: 'bash',
-      payload: makeBashApprovalPayload(),
-    },
-    { onPresent: () => notify({ kind: 'approvalNeeded' }) },
-  ).then(applyHarnessApprovalDecision);
+  const showApproval = () =>
+    void enqueueApproval(
+      {
+        kind: 'bash',
+        payload: makeBashApprovalPayload(),
+      },
+      { onPresent: () => notify({ kind: 'approvalNeeded' }) },
+    ).then(applyHarnessApprovalDecision);
+
+  if (SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS) {
+    let pollCount = 0;
+    const timer = setInterval(() => {
+      pollCount += 1;
+      const activeStreamId = cliState.activeStreamId.get();
+      if (activeStreamId === undefined || activeStreamId === STREAM_ID) {
+        if (pollCount >= 200) clearInterval(timer);
+        return;
+      }
+      clearInterval(timer);
+      showApproval();
+    }, 25);
+    timer.unref?.();
+  } else {
+    showApproval();
+  }
 }
 
 if (SHOW_RETRY_APPROVAL) {

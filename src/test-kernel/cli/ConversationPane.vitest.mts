@@ -12,7 +12,7 @@ import {
   appendStaticTranscriptItems,
   sessionHeaderIdentityLine,
 } from '@cli/chat/tui/panes/StaticConversationTranscript';
-import { staticScrollbackStreamId } from '@cli/chat/tui/App';
+import { staticScrollbackTarget } from '@cli/chat/tui/App';
 import {
   transcriptViewportChange,
   transcriptViewportKey,
@@ -531,19 +531,19 @@ describe('CLI conversation transcript splitting', () => {
       [CHILD, sliceWithEntries(CHILD, [childAssistant])],
     ]);
 
-    const scrollbackStreamId = staticScrollbackStreamId({
+    const scrollbackTarget = staticScrollbackTarget({
       activeStreamId: CHILD,
       rootStreamId: ROOT,
       scopedTranscript: false,
     });
     const items = appendStaticTranscriptItems({
-      scrollbackStreamId,
+      scrollbackStreamId: scrollbackTarget.streamId,
       currentItems: [],
       streams,
       meta: SESSION_META,
     });
 
-    expect(scrollbackStreamId).toBe(ROOT);
+    expect(scrollbackTarget).toEqual({ ownerKey: 'root', streamId: ROOT });
     expect(items.slice(1).map((item) => item.id)).toEqual(['u1']);
   });
 
@@ -557,35 +557,44 @@ describe('CLI conversation transcript splitting', () => {
       [CHILD, sliceWithEntries(CHILD, [childAssistant])],
     ]);
 
-    const scrollbackStreamId = staticScrollbackStreamId({
+    const scrollbackTarget = staticScrollbackTarget({
       activeStreamId: CHILD,
       rootStreamId: ROOT,
       scopedTranscript: true,
     });
     const items = appendStaticTranscriptItems({
-      scrollbackStreamId,
+      scrollbackStreamId: scrollbackTarget.streamId,
       currentItems: [],
       streams,
       meta: SESSION_META,
     });
 
-    expect(scrollbackStreamId).toBe(CHILD);
+    expect(scrollbackTarget).toEqual({
+      ownerKey: `stream:${CHILD}`,
+      streamId: CHILD,
+    });
     expect(items.slice(1).map((item) => item.id)).toEqual(['a1']);
   });
 
-  it('falls back to active stream only before the root owner resolves', () => {
+  it('keeps the root static owner stable while the root stream resolves', () => {
     expect(
-      staticScrollbackStreamId({
+      staticScrollbackTarget({
         activeStreamId: STREAM_ID,
         rootStreamId: undefined,
       }),
-    ).toBe(STREAM_ID);
+    ).toEqual({ ownerKey: 'root', streamId: STREAM_ID });
     expect(
-      staticScrollbackStreamId({
+      staticScrollbackTarget({
         activeStreamId: CLI_LOCAL_STREAM_ID,
         rootStreamId: undefined,
       }),
-    ).toBe(CLI_LOCAL_STREAM_ID);
+    ).toEqual({ ownerKey: 'root', streamId: CLI_LOCAL_STREAM_ID });
+    expect(
+      staticScrollbackTarget({
+        activeStreamId: STREAM_ID,
+        rootStreamId: 'resolved-root' as StreamTabId,
+      }),
+    ).toEqual({ ownerKey: 'root', streamId: 'resolved-root' });
   });
 
   it('separates root scrollback from scoped child transcript viewports', () => {

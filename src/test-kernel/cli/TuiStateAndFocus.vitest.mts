@@ -694,23 +694,30 @@ describe('CLI TUI row allocation', () => {
   it('lets input overlays own focus shortcuts', () => {
     expect(
       appFocusShortcutsActive({
-        inputDisabled: false,
+        foregroundOpen: false,
         reverseSearchOpen: false,
         slashPaletteOpen: false,
       }),
     ).toBe(true);
     expect(
       appFocusShortcutsActive({
-        inputDisabled: false,
+        foregroundOpen: false,
         reverseSearchOpen: true,
         slashPaletteOpen: false,
       }),
     ).toBe(false);
     expect(
       appFocusShortcutsActive({
-        inputDisabled: false,
+        foregroundOpen: false,
         reverseSearchOpen: false,
         slashPaletteOpen: true,
+      }),
+    ).toBe(false);
+    expect(
+      appFocusShortcutsActive({
+        foregroundOpen: true,
+        reverseSearchOpen: false,
+        slashPaletteOpen: false,
       }),
     ).toBe(false);
   });
@@ -875,6 +882,36 @@ describe('CLI TUI row allocation', () => {
     ).toBe(false);
     expect(approvalBlocksInput(childApproval)).toBe(true);
     expect(approvalBlocksInput(undefined)).toBe(false);
+  });
+
+  it('keeps stream focus shortcuts available for hidden approvals', () => {
+    const childApproval = {
+      payload: {
+        kind: 'bash',
+        payload: {
+          requestId: 'bash-1',
+          command: 'echo ok',
+          allowBypass: true,
+          streamId: 'child-1',
+        },
+      },
+      decide: () => undefined,
+    } satisfies PendingApproval;
+
+    expect(
+      approvalVisibleForActiveStream({
+        activeStreamId: 'root',
+        pending: childApproval,
+      }),
+    ).toBe(false);
+    expect(approvalBlocksInput(childApproval)).toBe(true);
+    expect(
+      appFocusShortcutsActive({
+        foregroundOpen: false,
+        reverseSearchOpen: false,
+        slashPaletteOpen: false,
+      }),
+    ).toBe(true);
   });
 
   it('labels foreground escape actions from the owning surface', () => {
