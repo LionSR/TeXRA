@@ -1,7 +1,6 @@
 import { defineCommand } from 'citty';
 
 import {
-  getAgent,
   getToolUseAgents,
   getVisibleAgents,
   getWorkflowAgents,
@@ -161,7 +160,7 @@ export async function showAgent(
   await initLocalCliPlatform(context);
   await loadAgents({ includeRemote: false });
 
-  const entry = getAgent(name) ?? (await resolveAgentWithRemoteFallback(name));
+  const entry = await resolveAgentWithRemoteFallback(name);
   if (!entry) {
     writeTextStderr(missingAgentMessage(name));
     return CliExitCode.Usage;
