@@ -26,6 +26,7 @@ import {
   type CliModelAccess,
 } from '../runtime/modelAccess';
 import { effectiveCliApiMode } from '../runtime/apiAccessMode';
+import { loadCliApiStatusLines } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 import { resolveChatDefaults } from '../runtime/chatDefaults';
 
@@ -119,9 +120,12 @@ async function runOrchestration(context: CliContext): Promise<number> {
   // after an agent/team choice. Best-effort: an unavailable registry just
   // launches with the default model instead of blocking the launcher.
   const apiMode = effectiveCliApiMode(context);
-  const models: readonly CliModelAccess[] = await getCliModelAccessList({
-    apiMode,
-  }).catch(() => []);
+  const [models, statusLines] = await Promise.all([
+    getCliModelAccessList({ apiMode }).catch(
+      (): readonly CliModelAccess[] => [],
+    ),
+    loadCliApiStatusLines({ apiMode, includeActionHint: true }),
+  ]);
   const allowDefaultModelLaunch = await canLaunchWithDefaultModel(
     context,
     models,
@@ -132,6 +136,7 @@ async function runOrchestration(context: CliContext): Promise<number> {
   const action = await runOrchestrationTui(items, {
     models,
     apiMode,
+    statusLines,
     allowDefaultModelLaunch,
     colorEnabled: context.stdoutColorEnabled ?? context.colorEnabled,
   });
