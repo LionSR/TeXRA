@@ -15,7 +15,7 @@ export function maxTranscriptScrollOffset({
   return Math.max(0, Math.floor(lineCount) - Math.max(1, Math.floor(viewRows)));
 }
 
-export function clampTranscriptScrollOffset(
+function clampTranscriptScrollOffset(
   offset: number,
   window: TranscriptScrollWindow,
 ): number {
