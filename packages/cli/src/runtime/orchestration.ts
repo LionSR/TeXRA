@@ -4,6 +4,7 @@ import type { ExecutionId } from '@shared/schemas';
 
 import {
   cliMultiAgentPresetCanLaunchTeam,
+  formatCliMultiAgentPresetLauncherHints,
   formatCliMultiAgentPresetLauncherSummary,
   type CliMultiAgentPresetRunPlan,
 } from './multiAgentPresets';
@@ -29,12 +30,14 @@ export interface CliOrchestrationItem {
   readonly label: string;
   readonly description: string;
   readonly disabled?: boolean;
+  readonly footerHints?: readonly string[];
 }
 
 export interface BuildCliOrchestrationItemsInput {
   readonly presetPlans: readonly CliMultiAgentPresetRunPlan[];
   readonly history: readonly CliHistoryEntry[];
   readonly toolUseAgents: readonly AgentEntry[];
+  readonly includeMultiAgentLoginHint?: boolean;
 }
 
 const MAX_RECENT_RESUME_ITEMS = 3;
@@ -54,7 +57,11 @@ export function buildCliOrchestrationItems(
 
   items.push(...recentResumeItems(input.history));
   items.push(...recentAgentItems(input.history, input.toolUseAgents));
-  items.push(...presetItems(input.presetPlans));
+  items.push(
+    ...presetItems(input.presetPlans, {
+      includeLoginHint: input.includeMultiAgentLoginHint,
+    }),
+  );
   items.push({
     value: { kind: 'help' },
     label: 'Help',
@@ -102,11 +109,15 @@ function recentAgentItems(
 
 function presetItems(
   plans: readonly CliMultiAgentPresetRunPlan[],
+  options: { readonly includeLoginHint?: boolean },
 ): CliOrchestrationItem[] {
   return plans.slice(0, MAX_PRESET_ITEMS).map((plan) => ({
     value: { kind: 'preset', preset: plan.preset.id },
     label: `Team ${plan.preset.name}`,
     description: formatCliMultiAgentPresetLauncherSummary(plan),
     disabled: !cliMultiAgentPresetCanLaunchTeam(plan),
+    footerHints: formatCliMultiAgentPresetLauncherHints(plan, {
+      includeLoginHint: options.includeLoginHint,
+    }),
   }));
 }

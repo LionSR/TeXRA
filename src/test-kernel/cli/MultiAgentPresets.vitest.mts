@@ -9,7 +9,9 @@ import {
   cliMultiAgentPresetNdjsonRecords,
   cliMultiAgentPresets,
   findCliMultiAgentPreset,
+  formatCliMultiAgentInspectCommand,
   formatCliMultiAgentTeamLaunchBlockMessage,
+  formatCliMultiAgentPresetLauncherHints,
   formatCliMultiAgentPresetLauncherSummary,
   formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetInspection,
@@ -127,6 +129,58 @@ describe('CLI multi-agent presets', () => {
       'unavailable; no runnable team root; 2/7 tool-use agents',
     );
     expect(cliMultiAgentPresetCanLaunchTeam(plan)).toBe(false);
+  });
+
+  it('formats launcher team footer hints from preset status', () => {
+    const leanPreset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'lean-project',
+    )!;
+    const leanUnavailable = planCliMultiAgentPresetRun(leanPreset, {
+      workflowAgents: [],
+      toolUseAgents: [agent('lean', AgentCategory.ToolUse)],
+    });
+    expect(formatCliMultiAgentInspectCommand('lean-project')).toBe(
+      'texra multi-agent inspect lean-project',
+    );
+    expect(formatCliMultiAgentPresetLauncherHints(leanUnavailable)).toEqual([
+      'Team setup: run texra multi-agent inspect <preset>.',
+      'Relay teams may unlock more agents after texra login.',
+    ]);
+    expect(
+      formatCliMultiAgentPresetLauncherHints(leanUnavailable, {
+        includeLoginHint: false,
+      }),
+    ).toEqual(['Team setup: run texra multi-agent inspect <preset>.']);
+
+    const physicistPreset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'physicist',
+    )!;
+    const degraded = planCliMultiAgentPresetRun(physicistPreset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
+        agent('review', AgentCategory.ToolUse),
+      ],
+    });
+    expect(formatCliMultiAgentPresetLauncherHints(degraded)).toContain(
+      'Team setup: run texra multi-agent inspect <preset>.',
+    );
+
+    const ready = planCliMultiAgentPresetRun(physicistPreset, {
+      workflowAgents: physicistPreset.workflowAgents.map((name) =>
+        agent(name, AgentCategory.Workflow),
+      ),
+      toolUseAgents: physicistPreset.toolUseAgents.map((name) =>
+        agent(
+          name,
+          AgentCategory.ToolUse,
+          name === 'orchestrator' ? ['delegate_agent'] : [],
+        ),
+      ),
+    });
+    expect(formatCliMultiAgentPresetLauncherHints(ready)).toEqual([]);
   });
 
   it('keeps degraded presets launchable when they still have delegation', () => {

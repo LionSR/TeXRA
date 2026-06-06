@@ -171,12 +171,6 @@ export async function loadCliMultiAgentPresetPlanSet(
   };
 }
 
-export async function loadCliMultiAgentPresetPlans(
-  presets: readonly CliMultiAgentPreset[],
-): Promise<readonly CliMultiAgentPresetRunPlan[]> {
-  return (await loadCliMultiAgentPresetPlanSet(presets)).plans;
-}
-
 async function reloadRemoteAgentsForGaps<T>(
   value: T,
   hasGaps: (value: T) => boolean,
