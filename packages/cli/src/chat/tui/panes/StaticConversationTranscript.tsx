@@ -226,18 +226,19 @@ export function appendStaticTranscriptItems({
 export function StaticConversationTranscript({
   colorEnabled,
   maxRows,
+  ownerKey,
   scrollbackStreamId,
   width,
 }: {
   readonly colorEnabled?: boolean;
   readonly maxRows?: number;
+  readonly ownerKey: string;
   readonly scrollbackStreamId: StreamTabId | undefined;
   readonly width?: number;
 }): React.JSX.Element {
   const streams = useSignal(cliState.streams);
   const sessionMeta = useSignal(cliState.sessionMeta);
   const parentStream = useSignal(cliState.parentStream);
-  const ownerKey = scrollbackStreamId ?? 'none';
   const [state, setState] = useState<StaticTranscriptState>(() => ({
     ownerKey,
     items: appendStaticTranscriptItems({
