@@ -12,8 +12,12 @@ import {
 describe('CLI approval event taxonomy', () => {
   it('keeps decision and human-input approvals as disjoint subsets', () => {
     expect(CLI_APPROVAL_EVENTS).toEqual([
-      ...CLI_DECISION_APPROVAL_EVENTS,
-      ...CLI_HUMAN_INPUT_APPROVAL_EVENTS,
+      'showBashPermission',
+      'showPlanApproval',
+      'showAgentProposal',
+      'showRetryRequest',
+      'showExternalInquiry',
+      'showUserQuestion',
     ]);
 
     const decisionEvents: ReadonlySet<string> = new Set(

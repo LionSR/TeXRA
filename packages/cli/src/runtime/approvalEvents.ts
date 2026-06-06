@@ -3,6 +3,9 @@ import type {
   ProgressEventPayloads,
 } from '@eventBus/ProgressEventBus';
 
+// CLI hosts share the same progress-event names, but not the same handling.
+// Decision approvals can be auto-approved or denied by policy; human-input
+// prompts must be surfaced to the user when an interactive TTY is available.
 export const CLI_DECISION_APPROVAL_EVENTS = [
   'showBashPermission',
   'showPlanApproval',
