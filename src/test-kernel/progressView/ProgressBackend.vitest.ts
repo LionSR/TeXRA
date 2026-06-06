@@ -101,4 +101,30 @@ describe('ProgressBackend', () => {
 
     backend.dispose();
   });
+
+  it('contains updater transport failures', async () => {
+    const sent = vi
+      .fn<() => boolean | Promise<boolean>>()
+      .mockImplementationOnce(() => {
+        throw new Error('closed transport');
+      })
+      .mockRejectedValueOnce(new Error('closed transport'));
+
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      sendMessage: sent,
+      hasTarget: () => true,
+      configureUi: () => createUiConfig(),
+    });
+
+    expect(() =>
+      backend.webviewUpdater.updateStreams([], '', 'all'),
+    ).not.toThrow();
+    backend.webviewUpdater.updateStreams([], '', 'all');
+    await Promise.resolve();
+
+    expect(sent).toHaveBeenCalledTimes(2);
+
+    backend.dispose();
+  });
 });

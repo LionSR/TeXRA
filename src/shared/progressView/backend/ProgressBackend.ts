@@ -1,6 +1,9 @@
 // Local imports - shared progress backend
 import type { ProgressViewOutboundMessage } from '@shared/schemas';
-import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
+import {
+  WebviewBridge,
+  type ProgressViewMessageSender,
+} from '@shared/progressView/backend/WebviewBridge';
 import { WebviewUpdater } from '@shared/progressView/backend/WebviewUpdater';
 import {
   ProgressEventHandler,
@@ -10,9 +13,7 @@ import {
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
 
-export type ProgressBackendMessageSender = (
-  message: ProgressViewOutboundMessage,
-) => boolean | Promise<boolean>;
+export type ProgressBackendMessageSender = ProgressViewMessageSender;
 
 export interface ProgressBackendServices {
   state: ProgressViewState;
@@ -32,6 +33,17 @@ export interface ProgressBackendOptions {
   configureUi(services: ProgressBackendServices): ProgressBackendUiConfig;
 }
 
+function sendUpdaterMessage(
+  sendMessage: ProgressBackendMessageSender,
+  message: ProgressViewOutboundMessage,
+): void {
+  try {
+    void Promise.resolve(sendMessage(message)).catch(() => undefined);
+  } catch {
+    // View refreshes are best-effort; a closed transport must not take down the backend.
+  }
+}
+
 /**
  * Host-neutral progress-view backend composition.
  *
@@ -48,7 +60,7 @@ export class ProgressBackend {
   constructor(options: ProgressBackendOptions) {
     this.state = new ProgressViewState(options.storage);
     this.webviewUpdater = new WebviewUpdater((message) => {
-      void options.sendMessage(message);
+      sendUpdaterMessage(options.sendMessage, message);
     }, options.hasTarget);
     this.webviewBridge = new WebviewBridge(
       this.state.streamLogs,
