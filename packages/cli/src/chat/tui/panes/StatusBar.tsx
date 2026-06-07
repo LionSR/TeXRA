@@ -28,7 +28,6 @@ import {
   type BypassState,
   type StreamSlice,
 } from '../state/cliState';
-import { resolveChildControlDisplayTargets } from '../state/childControls';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 
@@ -718,6 +717,8 @@ export interface StatusBarProps {
   readonly foregroundEscapeAction?: string;
   readonly queuedFollowUpPreview?: boolean;
   readonly shortcutsActive?: boolean;
+  readonly subagentControlsAvailable: boolean;
+  readonly taskControlsAvailable: boolean;
 }
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
@@ -732,11 +733,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const statusSlice = statusBarDisplaySlice({
-    activeStreamId,
-    parentStream,
-    streams,
-  });
-  const childControlTargets = resolveChildControlDisplayTargets({
     activeStreamId,
     parentStream,
     streams,
@@ -762,9 +758,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     activeProcesses: statusSlice?.activeProcesses.length ?? 0,
     approvalDepth: approvals.depth,
     approvalKind: approvals.kind,
-    taskControlsAvailable: childControlTargets.tasks.hasItems,
+    taskControlsAvailable: props.taskControlsAvailable,
     agentSelectionAvailable: props.agentSelectionAvailable,
-    subagentControlsAvailable: childControlTargets.subagents.hasItems,
+    subagentControlsAvailable: props.subagentControlsAvailable,
     hasMultipleStreams: streams.size > 1,
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
