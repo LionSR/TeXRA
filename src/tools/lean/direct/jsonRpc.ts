@@ -1,280 +1,144 @@
 /**
- * Minimal LSP-style JSON-RPC framing over a Node duplex stream.
+ * LSP-style JSON-RPC framing over a Node duplex stream, backed by vscode-jsonrpc.
  *
  * The Lean language server speaks the standard LSP wire format:
- * `Content-Length: <n>\r\n\r\n<json>`. This module owns the framing and
- * routing layer so callers only deal with typed JSON-RPC payloads.
- *
- * Kept dependency-free (no `vscode-jsonrpc`) so it can ship in the CLI and
- * Electron desktop builds without dragging in VS Code's language client.
+ * `Content-Length: <n>\r\n\r\n<json>`. vscode-jsonrpc handles the framing and
+ * routing; this module exposes a simple typed API over those primitives.
  */
 
-import { toErrorMessage } from '@common/errors';
-import { debug } from '@logger/logUtils';
-import type { Readable, Writable } from 'node:stream';
+import { type Readable, Writable } from 'node:stream';
 
-export type RpcId = number | string;
+import {
+  ConnectionErrors,
+  createMessageConnection,
+  StreamMessageReader,
+  StreamMessageWriter,
+  type MessageConnection,
+} from 'vscode-jsonrpc/node';
 
-export interface RpcRequest {
-  jsonrpc: '2.0';
-  id: RpcId;
-  method: string;
-  params?: unknown;
-}
-
-export interface RpcNotification {
-  jsonrpc: '2.0';
-  method: string;
-  params?: unknown;
-}
-
-export interface RpcResponse {
-  jsonrpc: '2.0';
-  id: RpcId;
-  result?: unknown;
-  error?: { code: number; message: string; data?: unknown };
-}
-
-type RpcMessage = RpcRequest | RpcNotification | RpcResponse;
+import * as logger from '@logger/logUtils';
 
 export type NotificationHandler = (params: unknown) => void;
 export type ServerRequestHandler = (params: unknown) => Promise<unknown>;
 
-interface PendingRequest {
-  resolve: (value: unknown) => void;
-  reject: (error: Error) => void;
-}
-
 export class JsonRpcConnection {
-  private nextId = 1;
-  private readonly chunks: Buffer[] = [];
-  private bufferedLength = 0;
-  private pendingBodyLength: number | undefined;
-  private readonly pending = new Map<RpcId, PendingRequest>();
-  private readonly notificationHandlers = new Map<
-    string,
-    NotificationHandler
-  >();
-  private readonly serverRequestHandlers = new Map<
-    string,
-    ServerRequestHandler
-  >();
-  private closed = false;
-  private closeError?: Error;
+  private readonly conn: MessageConnection;
+  private disposed = false;
+  private disposeError?: Error;
 
-  constructor(
-    private readonly stdin: Writable,
-    stdout: Readable,
-  ) {
-    stdout.on('data', (chunk: Buffer) => this.onData(chunk));
-    stdout.on('close', () => this.onClose(new Error('LSP stdout closed')));
-    stdout.on('error', (err) => this.onClose(err));
-    stdin.on('error', (err) => this.onClose(err));
+  constructor(stdin: Writable, stdout: Readable) {
+    this.conn = createMessageConnection(
+      new StreamMessageReader(stdout),
+      new StreamMessageWriter(this.createGuardedWritable(stdin)),
+    );
+    this.conn.onError(([err]) => {
+      this.logLiveError('connection error', err);
+    });
+    this.conn.listen();
   }
 
   onNotification(method: string, handler: NotificationHandler): void {
-    this.notificationHandlers.set(method, handler);
+    this.conn.onNotification(method, handler);
   }
 
   onServerRequest(method: string, handler: ServerRequestHandler): void {
-    this.serverRequestHandlers.set(method, handler);
+    this.conn.onRequest(method, (params: unknown) => handler(params));
   }
 
   notify(method: string, params?: unknown): void {
-    this.write({ jsonrpc: '2.0', method, params });
+    if (this.disposed) return;
+    const p =
+      params === undefined
+        ? this.conn.sendNotification(method)
+        : this.conn.sendNotification(method, params);
+    p.catch((err) => {
+      this.logLiveError('notification failed', err);
+    });
   }
 
   async request<T>(method: string, params?: unknown): Promise<T> {
-    if (this.closed) {
-      throw this.closeError ?? new Error('LSP connection is closed');
+    if (this.disposed) {
+      throw this.disposeError ?? new Error('JsonRpcConnection is disposed');
     }
-    const id = this.nextId++;
-    const promise = new Promise<unknown>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
-    });
-    this.write({ jsonrpc: '2.0', id, method, params });
-    return promise as Promise<T>;
-  }
-
-  dispose(reason: string = 'JsonRpcConnection.dispose'): void {
-    this.onClose(new Error(reason));
-  }
-
-  private write(message: RpcMessage): void {
-    if (this.closed) return;
-    const json = JSON.stringify(message);
-    const body = Buffer.from(json, 'utf8');
-    const header = Buffer.from(
-      `Content-Length: ${body.length}\r\n\r\n`,
-      'ascii',
-    );
-    this.stdin.write(header);
-    this.stdin.write(body);
-  }
-
-  private onData(chunk: Buffer): void {
-    this.chunks.push(chunk);
-    this.bufferedLength += chunk.length;
-    // Drain as many complete messages as we have in the buffer.
-    for (;;) {
-      if (this.pendingBodyLength !== undefined) {
-        if (this.bufferedLength < this.pendingBodyLength) return;
-        this.dispatchBody(this.consumeBytes(this.pendingBodyLength));
-        this.pendingBodyLength = undefined;
-        continue;
-      }
-
-      const headerEnd = this.findHeaderEnd();
-      if (headerEnd < 0) return;
-      const headerText = this.consumeBytes(headerEnd).toString('ascii');
-      this.discardBytes(4);
-      const match = headerText.match(/Content-Length: (\d+)/i);
-      if (!match) {
-        // Malformed header — drop and resync at the next blank line.
-        continue;
-      }
-      const length = Number.parseInt(match[1]!, 10);
-      if (this.bufferedLength < length) {
-        this.pendingBodyLength = length;
-        return;
-      }
-      this.dispatchBody(this.consumeBytes(length));
-    }
-  }
-
-  private dispatchBody(body: Buffer): void {
-    let parsed: RpcMessage | undefined;
     try {
-      parsed = JSON.parse(body.toString('utf8')) as RpcMessage;
-    } catch (error) {
-      // Drop malformed payload and keep going; benign in normal operation.
-      debug('lean.jsonRpc', 'Dropping malformed JSON-RPC payload', {
-        data: error,
-      });
+      return await (params === undefined
+        ? this.conn.sendRequest<T>(method)
+        : this.conn.sendRequest<T>(method, params));
+    } catch (err) {
+      // Propagate the caller's dispose reason rather than vscode-jsonrpc's
+      // generic "connection got disposed" message.
+      if (
+        this.disposed &&
+        this.disposeError &&
+        isConnectionDisposedError(err)
+      ) {
+        throw this.disposeError;
+      }
+      throw err;
     }
-    if (parsed) this.dispatch(parsed);
   }
 
-  private findHeaderEnd(): number {
-    const delimiter = [13, 10, 13, 10];
-    let matched = 0;
-    let offset = 0;
-    for (const chunk of this.chunks) {
-      for (const byte of chunk) {
-        if (byte === delimiter[matched]) {
-          matched += 1;
-          if (matched === delimiter.length) {
-            return offset - delimiter.length + 1;
-          }
-        } else {
-          matched = byte === delimiter[0] ? 1 : 0;
+  dispose(reason?: string): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.disposeError = new Error(reason ?? 'JsonRpcConnection disposed');
+    this.conn.dispose();
+  }
+
+  /**
+   * Drops writes after the Lean server's stdin is gone. vscode-jsonrpc writes
+   * from async internals, so stream teardown errors need to be absorbed here.
+   */
+  private createGuardedWritable(target: Writable): Writable {
+    target.on('error', (err) => {
+      this.logLiveError('stdin stream error', err);
+    });
+
+    return new Writable({
+      write: (chunk, _encoding, callback) => {
+        if (target.destroyed || !target.writable) {
+          callback();
+          return;
         }
-        offset += 1;
-      }
-    }
-    return -1;
+        try {
+          target.write(chunk, (err?: Error | null) => {
+            this.logLiveError('stdin write failed', err);
+            callback();
+          });
+        } catch (err) {
+          this.logLiveError('stdin write failed', err);
+          callback();
+        }
+      },
+      final: (callback) => {
+        if (target.destroyed || !target.writable) {
+          callback();
+          return;
+        }
+        try {
+          target.end(callback);
+        } catch (err) {
+          this.logLiveError('stdin close failed', err);
+          callback();
+        }
+      },
+    });
   }
 
-  private consumeBytes(length: number): Buffer {
-    if (length === 0) return Buffer.alloc(0);
-    const parts: Buffer[] = [];
-    let remaining = length;
-    while (remaining > 0) {
-      const head = this.chunks[0];
-      if (!head) {
-        throw new Error('JSON-RPC buffer underflow');
-      }
-      if (head.length <= remaining) {
-        parts.push(head);
-        this.chunks.shift();
-        this.bufferedLength -= head.length;
-        remaining -= head.length;
-      } else {
-        parts.push(head.subarray(0, remaining));
-        this.chunks[0] = head.subarray(remaining);
-        this.bufferedLength -= remaining;
-        remaining = 0;
-      }
-    }
-    return parts.length === 1 ? parts[0]! : Buffer.concat(parts, length);
+  private logLiveError(context: string, err: unknown): void {
+    if (this.disposed || !err) return;
+    logger.debug('JsonRpcConnection', `${context}: ${errorMessage(err)}`);
   }
+}
 
-  private discardBytes(length: number): void {
-    let remaining = length;
-    while (remaining > 0) {
-      const head = this.chunks[0];
-      if (!head) {
-        throw new Error('JSON-RPC buffer underflow');
-      }
-      if (head.length <= remaining) {
-        this.chunks.shift();
-        this.bufferedLength -= head.length;
-        remaining -= head.length;
-      } else {
-        this.chunks[0] = head.subarray(remaining);
-        this.bufferedLength -= remaining;
-        remaining = 0;
-      }
-    }
+function isConnectionDisposedError(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (code === ConnectionErrors.Disposed || code === ConnectionErrors.Closed) {
+    return true;
   }
+  return /\bconnection\b.*\b(disposed|closed)\b/i.test(errorMessage(err));
+}
 
-  private dispatch(message: RpcMessage): void {
-    if ('id' in message && 'method' in message) {
-      // Server-to-client request.
-      const handler = this.serverRequestHandlers.get(message.method);
-      if (!handler) {
-        this.write({
-          jsonrpc: '2.0',
-          id: message.id,
-          error: {
-            code: -32601,
-            message: `Unhandled method: ${message.method}`,
-          },
-        });
-        return;
-      }
-      handler(message.params).then(
-        (result) => this.write({ jsonrpc: '2.0', id: message.id, result }),
-        (error: unknown) =>
-          this.write({
-            jsonrpc: '2.0',
-            id: message.id,
-            error: { code: -32603, message: toErrorMessage(error) },
-          }),
-      );
-      return;
-    }
-    if ('id' in message) {
-      const pending = this.pending.get(message.id);
-      if (!pending) return;
-      this.pending.delete(message.id);
-      if (message.error) {
-        pending.reject(
-          new Error(
-            `LSP error ${message.error.code}: ${message.error.message}`,
-          ),
-        );
-      } else {
-        pending.resolve(message.result);
-      }
-      return;
-    }
-    if ('method' in message) {
-      const handler = this.notificationHandlers.get(message.method);
-      if (handler) handler(message.params);
-    }
-  }
-
-  private onClose(error: Error): void {
-    if (this.closed) return;
-    this.closed = true;
-    this.closeError = error;
-    this.chunks.length = 0;
-    this.bufferedLength = 0;
-    this.pendingBodyLength = undefined;
-    for (const pending of this.pending.values()) {
-      pending.reject(error);
-    }
-    this.pending.clear();
-  }
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
