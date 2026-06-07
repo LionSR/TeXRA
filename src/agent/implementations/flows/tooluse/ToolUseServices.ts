@@ -1,6 +1,7 @@
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
+import type { IdleContinuationRegistry } from '@agent/runtime/idleContinuation';
 import type { ToolDefinition } from '@model';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files';
@@ -34,6 +35,7 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly stopAfterCycle?: boolean;
   /** Persist todos to the execution KV store. Injected by runToolUseFlow. */
   readonly persistTodos?: (todos: TodoItem[]) => Promise<void>;
+  readonly idleContinuations: IdleContinuationRegistry;
   /** True when this agent was launched as a subagent by an orchestrator. */
   readonly isSubagent?: boolean;
   /**
