@@ -1,11 +1,10 @@
 /**
  * Polymorphic execution handles.
  *
- * Replaces data-oriented maps with handles that know how to report status,
- * interrupt/kill, and describe themselves.
+ * Replaces data-oriented maps with handles that know how to report status and
+ * describe themselves. Termination policy lives with the owning registry.
  */
 
-import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
@@ -39,9 +38,6 @@ export interface ExecutionHandle {
   readonly runtimeHost: AgentRuntimeHost;
 
   getStatus(): ExecutionStatusInfo;
-
-  /** Interrupt or kill. Returns true if the call had an effect. */
-  terminate(): boolean;
 
   getProgress(): { currentRound?: number; totalRounds?: number };
 
@@ -92,16 +88,6 @@ export class AgentExecutionHandle implements ExecutionHandle {
       status,
       elapsed: formatDuration(Date.now() - this.startedAt),
     };
-  }
-
-  terminate(): boolean {
-    const interruptible = interruptRegistry.get(this.childStreamId);
-    if (!interruptible) return false;
-    interruptible.interrupt();
-    StreamStatusService.set(this.childStreamId, STREAM_STATUS.STOPPED, {
-      runtimeHost: this.runtimeHost,
-    });
-    return true;
   }
 
   getProgress(): { currentRound?: number; totalRounds?: number } {
@@ -159,7 +145,7 @@ export class ProcessExecutionHandle implements ExecutionHandle {
 }
 
 /** True when the handle is a child of parentStreamId (not the parent itself). */
-function isChildOf(
+export function isChildExecution(
   handle: ExecutionHandle,
   parentStreamId: StreamTabId,
 ): boolean {
@@ -172,22 +158,6 @@ function isChildOf(
   return true;
 }
 
-/**
- * Interrupt all active subagents of a parent stream. Called before
- * interrupting the parent so subagents stop promptly instead of running to
- * completion.
- */
-export function interruptActiveChildren(
-  parentStreamId: StreamTabId,
-  handles: Iterable<ExecutionHandle>,
-): void {
-  for (const handle of handles) {
-    if (isChildOf(handle, parentStreamId)) {
-      handle.terminate();
-    }
-  }
-}
-
 /** Collect {executionId, agentName, ...} for handles matching a class under a parent stream. */
 export function collectChildSummary(
   parentStreamId: StreamTabId,
@@ -196,7 +166,10 @@ export function collectChildSummary(
 ): ActiveChildInfo[] {
   const result: ActiveChildInfo[] = [];
   for (const handle of handles) {
-    if (!(handle instanceof ctor) || !isChildOf(handle, parentStreamId)) {
+    if (
+      !(handle instanceof ctor) ||
+      !isChildExecution(handle, parentStreamId)
+    ) {
       continue;
     }
     const { status, elapsed } = handle.getStatus();
