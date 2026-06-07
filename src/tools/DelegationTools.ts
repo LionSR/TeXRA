@@ -22,7 +22,7 @@ import {
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
-import { waitForProposal } from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 import {
   getHandle,
@@ -733,7 +733,7 @@ async function proposeAndExecute(
 
   const proposalId = randomUUID();
 
-  const result = await waitForProposal(streamId, {
+  const result = await runCoordinatorBridge.waitForProposal(streamId, {
     proposalId,
     proposal,
   });

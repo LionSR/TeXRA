@@ -21,11 +21,7 @@ import { readMeta } from '@transcript/streamSnapshotRead';
 import type { AgentTrace } from '@agent/trace';
 import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
 import { TaskStateSchema } from '@agent/core/execution/TaskState';
-import {
-  clearRetryRequest,
-  resolvePlanApproval,
-  resolveProposal,
-} from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
@@ -379,7 +375,7 @@ export class DesktopProgressBridge {
         return true;
       },
       resolveProposal: (proposalId, result) => {
-        resolveProposal(proposalId, result);
+        runCoordinatorBridge.resolveProposal(proposalId, result);
       },
       onMissingProposal: (proposalId) => {
         this.logger.warn(
@@ -488,7 +484,7 @@ export class DesktopProgressBridge {
         handleBashApprovalAction: (message) =>
           handleProgressViewBashApprovalAction(message),
         handlePlanApprovalAction: (message) => {
-          resolvePlanApproval(message.approvalId, {
+          runCoordinatorBridge.resolvePlanApproval(message.approvalId, {
             action: message.action,
             ...(message.action === 'reject' && {
               feedback: message.feedback,
@@ -856,7 +852,7 @@ export class DesktopProgressBridge {
   }
 
   private stopStream(streamId: StreamTabId): void {
-    clearRetryRequest(streamId);
+    runCoordinatorBridge.clearRetryRequest(streamId);
     if (this.options.detachSubagentsOnStop === true) {
       detachActiveChildren(streamId, this.runtimeHost);
     } else {
