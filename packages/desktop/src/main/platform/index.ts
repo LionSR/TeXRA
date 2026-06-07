@@ -14,7 +14,6 @@ import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { StreamSnapshotStore } from '@transcript';
 import { registerAgentFeatures } from '@agent/features';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
-import { bus } from '@eventBus/ProgressEventBus';
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 
@@ -31,6 +30,7 @@ import type { LifecycleHost } from '@platform/interfaces/lifecycle';
 export interface ElectronPlatformInitResult {
   workspacePath: string | undefined;
   lifecycle: LifecycleHost;
+  progressSnapshotStore: StreamSnapshotStore;
 }
 
 export async function initializeElectronPlatform(
@@ -78,16 +78,11 @@ export async function initializeElectronPlatform(
   registerAgentFeatures();
 
   // Persist per-stream sidecar data (todos, plan, usage, output files) via the
-  // shared, host-agnostic snapshot store so desktop sessions write the same
-  // streamData/{id}/* files the CLI and extension read — making a session's
-  // display restorable cross-host. Liveness is never persisted. Single writer,
-  // driven by the shared progress bus; flushed on shutdown.
+  // shared, host-agnostic snapshot store. The desktop progress backend owns the
+  // bus event handling; the platform owns lifecycle flushing so app shutdown
+  // drains the same writer instead of creating a second bus subscriber.
   const snapshotStore = new StreamSnapshotStore();
-  const stopSnapshotSubscription = snapshotStore.subscribe(bus);
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => {
-    // Unsubscribe before the final flush so no late bus event re-queues a write,
-    // and so listeners don't accumulate if platform init is ever re-invoked.
-    stopSnapshotSubscription();
     return snapshotStore.flush();
   });
 
@@ -102,5 +97,5 @@ export async function initializeElectronPlatform(
     app.getVersion(),
   );
 
-  return { workspacePath, lifecycle };
+  return { workspacePath, lifecycle, progressSnapshotStore: snapshotStore };
 }

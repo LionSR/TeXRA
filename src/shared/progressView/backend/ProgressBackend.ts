@@ -12,6 +12,7 @@ import {
 } from '@shared/progressView/backend/events/ProgressEventHandler';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { ProgressViewState } from '@shared/progressView/backend/state/ProgressViewState';
+import type { StreamSnapshotStore } from '@transcript';
 
 export type ProgressBackendMessageSender = ProgressViewMessageSender;
 
@@ -28,6 +29,7 @@ export interface ProgressBackendUiConfig {
 
 export interface ProgressBackendOptions {
   storage: MementoStorage;
+  snapshots?: StreamSnapshotStore;
   sendMessage: ProgressBackendMessageSender;
   hasTarget(): boolean;
   configureUi(services: ProgressBackendServices): ProgressBackendUiConfig;
@@ -58,7 +60,7 @@ export class ProgressBackend {
   readonly eventHandler: ProgressEventHandler;
 
   constructor(options: ProgressBackendOptions) {
-    this.state = new ProgressViewState(options.storage);
+    this.state = new ProgressViewState(options.storage, options.snapshots);
     this.webviewUpdater = new WebviewUpdater((message) => {
       sendUpdaterMessage(options.sendMessage, message);
     }, options.hasTarget);
