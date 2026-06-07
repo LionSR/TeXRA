@@ -9,7 +9,7 @@ import {
   resumableCliHistoryEntries,
   type CliHistoryEntry,
 } from '@cli/runtime/history';
-import { formatCliHistoryResumeInputLabel } from '@cli/runtime/historyLabels';
+import { formatCliHistoryResumeSummary } from '@cli/runtime/historyLabels';
 import type { ExecutionId } from '@shared/schemas';
 
 import { KeyHints } from '../ui/KeyHints';
@@ -35,8 +35,7 @@ export function resumeSelectWindow(args: {
 }
 
 export function resumeEntryDescription(entry: CliHistoryEntry): string {
-  const input = formatCliHistoryResumeInputLabel(entry);
-  return `${entry.timestamp}; ${entry.agent}; ${entry.status}; ${input}`;
+  return `${entry.timestamp}; ${formatCliHistoryResumeSummary(entry)}`;
 }
 
 export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
