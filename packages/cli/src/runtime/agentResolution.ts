@@ -1,6 +1,6 @@
 import { getAgent, loadAgents, type AgentEntry } from '@agent/index';
 
-import { getCliAuthProvider } from '@cli/runtime/supabaseAuth';
+import { getCliAuthProvider } from './supabaseAuth';
 
 export async function shouldHonorRemoteAgentPriority(
   agentName: string,
