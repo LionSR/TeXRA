@@ -216,6 +216,24 @@ describe('CLI TUI text input editing', () => {
     });
   });
 
+  it('keeps LF and embedded CRLF as newlines inside raw text chunks', () => {
+    expect(applyTerminalInputChunk('', 0, 'alpha\nbeta')).toEqual({
+      value: 'alpha\nbeta',
+      cursor: 10,
+      submit: false,
+    });
+    expect(applyTerminalInputChunk('', 0, 'alpha\nbeta\r')).toEqual({
+      value: 'alpha\nbeta',
+      cursor: 10,
+      submit: true,
+    });
+    expect(applyTerminalInputChunk('', 0, 'alpha\r\nbeta\r')).toEqual({
+      value: 'alpha\nbeta',
+      cursor: 10,
+      submit: true,
+    });
+  });
+
   it('inserts pasted multi-line text without submitting embedded newlines', () => {
     expect(insertText('ab', 1, 'x\ny')).toEqual({
       value: 'ax\nyb',
