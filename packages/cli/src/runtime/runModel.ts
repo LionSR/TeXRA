@@ -1,19 +1,20 @@
+import { toErrorMessage } from '@common/errors/errorMessage';
+
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
   isKnownCliModel,
   resolveConfiguredModel,
-} from '@cli/runtime/cliConfig';
-import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
-import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
-import { writeTextStderr } from '@cli/runtime/logSinks';
+} from './cliConfig';
+import { CliUsageError, type CliContext } from './cliContext';
+import { initCliPlatform, setCliHelperModel } from './initPlatform';
+import { writeTextStderr } from './logSinks';
 import {
   cliRunnableModelOptionsForSource,
   resolveCliRunnableModel,
   type CliModelSelectionSource,
-} from '@cli/runtime/modelAccess';
-import { shouldRenderRunProgress } from '@cli/runtime/runProgressRenderer';
-import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
-import { toErrorMessage } from '@common/errors/errorMessage';
+} from './modelAccess';
+import { shouldRenderRunProgress } from './runProgressRenderer';
+import { effectiveCliApiMode } from './apiAccessMode';
 
 export type CliRunModelCandidateSource = Extract<
   CliModelSelectionSource,

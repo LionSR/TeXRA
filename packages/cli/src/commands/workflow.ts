@@ -10,16 +10,20 @@ import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
 
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
-import { CliUsageError, readCliStdinText } from '../runtime/cliContext';
+import {
+  CliUsageError,
+  readCliStdinText,
+  type CliContext,
+} from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import { writeErrorStderr } from '../runtime/logSinks';
-
-import { missingAgentMessage } from './_helpers/agentLookupText';
-import { defineCliCommand } from './_helpers/defineCliCommand';
 import {
   buildHeadlessRunContext,
   resolveCliRunModel,
-} from './_helpers/modelArg';
+} from '../runtime/runModel';
+
+import { missingAgentMessage } from './_helpers/agentLookupText';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { emitCliResult } from './_helpers/output';
 import {
   AGENT_RUN_GLOBAL_ARGS,
@@ -45,7 +49,6 @@ import {
   formatWorkflowTextResult,
   resolveWorkflowOutput,
 } from './_helpers/workflowOutput';
-import type { CliContext } from '../runtime/cliContext';
 
 interface WorkflowRunInit {
   readonly agent: string;
