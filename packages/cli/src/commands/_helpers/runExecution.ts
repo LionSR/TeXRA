@@ -5,12 +5,11 @@ import type { ValidatedExecutionRequest } from '@agent/core/execution/executionR
 import type { CliContext } from '@cli/runtime/cliContext';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
-import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
-
 import {
   readCliTerminalStatus,
   type ExecuteAgentResult,
-} from './terminalStatus';
+} from '@cli/runtime/terminalStatus';
+import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 
 export interface CliExecuteOptions {
   /** Forwarded to `runAgent`. */
