@@ -30,6 +30,11 @@ export type ActiveStreamScope =
       readonly streamId: StreamTabId;
     };
 
+export interface ActiveStreamAncestor<T> {
+  readonly streamId: StreamTabId;
+  readonly value: T;
+}
+
 export function activeStreamScope(init: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
@@ -58,6 +63,28 @@ export function activeStreamParentOrSelfId(init: {
   const scope = activeStreamScope(init);
   if (scope.kind === 'none') return undefined;
   return scope.kind === 'child' ? scope.parentStreamId : scope.streamId;
+}
+
+export function nearestActiveStreamAncestor<T>(init: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+  readonly values: ReadonlyMap<StreamTabId, T>;
+  readonly canUseValue: (value: T) => boolean;
+}): ActiveStreamAncestor<T> | undefined {
+  const activeStreamId = init.activeStreamId;
+  if (activeStreamId === undefined) return undefined;
+
+  const visited = new Set<StreamTabId>([activeStreamId]);
+  let parentStreamId = init.parentStream.get(activeStreamId);
+  while (parentStreamId && !visited.has(parentStreamId)) {
+    visited.add(parentStreamId);
+    const value = init.values.get(parentStreamId);
+    if (value !== undefined && init.canUseValue(value)) {
+      return { streamId: parentStreamId, value };
+    }
+    parentStreamId = init.parentStream.get(parentStreamId);
+  }
+  return undefined;
 }
 
 function childReferenceKey(child: ActiveChildInfo): string {
