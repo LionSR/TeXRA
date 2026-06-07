@@ -3,10 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - agent
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import {
-  detachActiveChildren,
-  interruptActiveChildren,
-} from '@agent/runtime/executionRegistry';
+import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { notifyFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
 import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
@@ -18,9 +15,9 @@ export function stopAgent(streamId: StreamTabId): void {
   if (
     workspaceSM.get<boolean>(WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP, false)
   ) {
-    detachActiveChildren(streamId, extensionAgentRuntimeHost);
+    executionRegistry.detachActiveChildren(streamId, extensionAgentRuntimeHost);
   } else {
-    interruptActiveChildren(streamId);
+    executionRegistry.interruptActiveChildren(streamId);
   }
   interruptRegistry.get(streamId)?.interrupt();
   StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, {

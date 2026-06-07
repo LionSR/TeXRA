@@ -8,8 +8,7 @@ import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   AgentExecutionHandle,
-  trackExecution,
-  untrackExecution,
+  executionRegistry,
 } from '@agent/runtime/executionRegistry';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
@@ -81,7 +80,7 @@ describe('ToolUseFollowUp', () => {
       'toolUse',
       noopAgentRuntimeHost,
     );
-    trackExecution(handle);
+    executionRegistry.track(handle);
 
     try {
       const result = await sendFollowUp(parentStreamId, 'hello while running');
@@ -94,7 +93,7 @@ describe('ToolUseFollowUp', () => {
         'hello while running',
       ]);
     } finally {
-      untrackExecution(executionId);
+      executionRegistry.untrack(executionId);
       ToolUseFollowUpQueue.release(parentStreamId);
     }
   });
@@ -114,7 +113,7 @@ describe('ToolUseFollowUp', () => {
       'toolUse',
       noopAgentRuntimeHost,
     );
-    trackExecution(handle);
+    executionRegistry.track(handle);
     ToolUseFollowUpQueue.release(parentStreamId);
 
     try {
@@ -128,7 +127,7 @@ describe('ToolUseFollowUp', () => {
         'after release',
       ]);
     } finally {
-      untrackExecution(executionId);
+      executionRegistry.untrack(executionId);
       ToolUseFollowUpQueue.release(parentStreamId);
     }
   });
