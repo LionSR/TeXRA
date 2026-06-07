@@ -10,6 +10,7 @@
  */
 
 import { toErrorMessage } from '@common/errors';
+import { debug } from '@logger/logUtils';
 import type { Readable, Writable } from 'node:stream';
 
 export type RpcId = number | string;
@@ -145,8 +146,11 @@ export class JsonRpcConnection {
     let parsed: RpcMessage | undefined;
     try {
       parsed = JSON.parse(body.toString('utf8')) as RpcMessage;
-    } catch {
-      // Drop malformed payload and keep going.
+    } catch (error) {
+      // Drop malformed payload and keep going; benign in normal operation.
+      debug('lean.jsonRpc', 'Dropping malformed JSON-RPC payload', {
+        data: error,
+      });
     }
     if (parsed) this.dispatch(parsed);
   }

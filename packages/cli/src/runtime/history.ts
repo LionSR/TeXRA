@@ -21,7 +21,7 @@ import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 
-import { readCliToolUseResumeData } from './toolUseResumeData';
+import { readCliToolUseResumeDataForListing } from './toolUseResumeData';
 
 const HISTORY_FILE_SCAN_DEPTH = 2;
 const CONVERSATION_PREVIEW_MESSAGE_LIMIT = 3;
@@ -155,7 +155,7 @@ export async function readCliHistoryDetails(
     listGeneratedFiles(id),
   ]);
   const resumeData = config
-    ? await readCliToolUseResumeData(id, config)
+    ? await readCliToolUseResumeDataForListing(id, config)
     : undefined;
   const conversationPreview = createConversationPreview(conversation);
   const workspaceFiles = await listWorkspaceToolFiles(
@@ -317,7 +317,7 @@ async function toCliHistoryEntry(
   const inputBasename = firstInputBasename(entry.agentConfig);
   const resumeData =
     entry.terminalStatus === undefined && entry.agentConfig
-      ? await readCliToolUseResumeData(entry.id, entry.agentConfig)
+      ? await readCliToolUseResumeDataForListing(entry.id, entry.agentConfig)
       : null;
   return {
     id: entry.id,

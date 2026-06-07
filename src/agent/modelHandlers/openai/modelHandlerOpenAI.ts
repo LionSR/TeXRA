@@ -30,7 +30,6 @@ import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@agent/core/constants';
-import { getConfig } from '@utils/config/configUtils';
 import { toOpenAIReasoningEffort } from '@agent/runtime/reasoningEffort';
 import {
   getSdkErrorMessage,
@@ -47,6 +46,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
+import { getConfig } from '@utils/config/configUtils';
 import { extractMimeSubtype, objectToLogString } from '@utils/text/stringUtils';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagOpenAISdkError } from '../support/sdkErrorAdapters';
@@ -514,8 +514,14 @@ export class ModelHandlerOpenAI<
         try {
           const totalUsage = await stream.totalUsage();
           finalResponse = { ...finalResponse, usage: totalUsage };
-        } catch (_err) {
-          // totalUsage() may fail if stream ended abnormally
+        } catch (err) {
+          // totalUsage() may fail if stream ended abnormally — leave usage
+          // unset, but log so missing token accounting is traceable.
+          this.logger.debug(
+            `totalUsage() fallback failed; usage unavailable: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
         }
       }
 

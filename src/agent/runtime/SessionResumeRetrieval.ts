@@ -112,7 +112,10 @@ const WorkflowFlowRecordStateSchema = z.object({
  * @param streamId - Stream tab ID (used for logging and tool-use snapshot)
  * @param executionId - The execution ID for the stream
  * @param taskState - The persisted task state
- * @returns The resume data, or null if retrieval fails
+ * @returns The resume data, or `null` when there is no resumable session
+ *   (missing/invalid flow record). Throws when retrieval fails unexpectedly
+ *   (e.g. a transient KV/IO error) so the caller can distinguish "nothing to
+ *   resume" from "resume failed" instead of silently abandoning the session.
  */
 export async function retrieveSessionResumeData(
   streamId: StreamTabId,
@@ -208,13 +211,13 @@ async function retrieveToolUseResumeData(
     logger.debug(`Retrieved tool-use resume data for stream: ${streamId}`);
     return { type: 'toolUse', snapshot: snapshotResult.data };
   } catch (error) {
-    logger.error(
+    // An unexpected failure here (KV/IO error) is NOT the same as "no session
+    // to resume" — propagate it so the resume boundary surfaces it rather than
+    // silently falling back to "start a new run".
+    throw new Error(
       `Failed to retrieve tool-use resume data for stream: ${streamId}`,
-      {
-        data: error,
-      },
+      { cause: error },
     );
-    return null;
   }
 }
 
@@ -253,12 +256,12 @@ async function retrieveWorkflowResumeData(
       executionId,
     };
   } catch (error) {
-    logger.error(
+    // Unexpected failure (KV/IO error) is distinct from "no session to resume":
+    // propagate so the resume boundary surfaces it instead of silently
+    // degrading to "start a new run".
+    throw new Error(
       `Failed to retrieve workflow resume data for stream: ${streamId}`,
-      {
-        data: error,
-      },
+      { cause: error },
     );
-    return null;
   }
 }

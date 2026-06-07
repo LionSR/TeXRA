@@ -1,6 +1,7 @@
 import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
+import * as logger from '@logger/logUtils';
 import type { StreamTabId } from '@shared/schemas';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -162,8 +163,15 @@ export class ProcessOutputPoller {
           stdout: out.text,
           stderr: err.text,
         });
-      } catch {
-        // File may have been deleted between check and read.
+      } catch (err) {
+        // Benign race: file may have been deleted between check and read.
+        // Log at debug so a persistent read failure is still observable.
+        logger.debug(
+          'ProcessOutputPoller',
+          `Process output read failed for ${executionId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
       }
     })();
 

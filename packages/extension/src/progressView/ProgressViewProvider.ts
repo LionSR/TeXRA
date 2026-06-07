@@ -429,7 +429,10 @@ export class ProgressViewProvider
     let open;
     try {
       open = await listOpenThreads();
-    } catch {
+    } catch (error) {
+      // A storage read failure here silently skips inquiry hydration; log
+      // it so the missing panel reappearance is diagnosable.
+      this.logger.debug(`Failed to list open inquiry threads: ${error}`);
       return;
     }
 

@@ -49,7 +49,7 @@ export class LaTeXdiffService {
   private readonly commandExecutor: DiffCommandExecutor;
 
   constructor(private readonly channel: string = CHANNEL) {
-    this.fileProcessor = new DiffFileProcessor(channel);
+    this.fileProcessor = new DiffFileProcessor();
     // Pass a thunk so DiffCommandExecutor reads the current workspace value
     // each time it runs a diff. Module-scope instances (in latexdiffCommands.ts
     // and latexPreview.ts) construct before `initPlatform()` runs, so a value
