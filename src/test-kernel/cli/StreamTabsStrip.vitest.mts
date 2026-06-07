@@ -4,6 +4,7 @@ import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
   activeStreamParentOrSelfId,
   activeStreamScope,
+  nearestActiveStreamAncestor,
 } from '@cli/chat/tui/state/streamViews';
 import {
   streamTabSegmentText,
@@ -93,6 +94,71 @@ describe('active stream scope', () => {
     expect(
       activeStreamParentOrSelfId({ activeStreamId: child1, parentStream }),
     ).toBe(root);
+  });
+
+  it('owns nearest active ancestor traversal', () => {
+    const root = streamId('root');
+    const child1 = streamId('child-1');
+    const child2 = streamId('child-2');
+    const grandchild = streamId('grandchild');
+    const parentStream = new Map<StreamTabId, StreamTabId>([
+      [child1, root],
+      [child2, root],
+      [grandchild, child1],
+    ]);
+    const values = new Map([
+      [root, { usable: true }],
+      [child1, { usable: false }],
+      [child2, { usable: true }],
+      [grandchild, { usable: false }],
+    ]);
+
+    expect(
+      nearestActiveStreamAncestor({
+        activeStreamId: grandchild,
+        parentStream,
+        values,
+        canUseValue: (value) => value.usable,
+      }),
+    ).toEqual({ streamId: root, value: { usable: true } });
+    expect(
+      nearestActiveStreamAncestor({
+        activeStreamId: child2,
+        parentStream,
+        values,
+        canUseValue: (value) => value.usable,
+      }),
+    ).toEqual({ streamId: root, value: { usable: true } });
+    expect(
+      nearestActiveStreamAncestor({
+        activeStreamId: undefined,
+        parentStream,
+        values,
+        canUseValue: (value) => value.usable,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('stops nearest active ancestor traversal at parent cycles', () => {
+    const child1 = streamId('child-1');
+    const child2 = streamId('child-2');
+    const parentStream = new Map<StreamTabId, StreamTabId>([
+      [child1, child2],
+      [child2, child1],
+    ]);
+    const values = new Map([
+      [child1, { usable: true }],
+      [child2, { usable: false }],
+    ]);
+
+    expect(
+      nearestActiveStreamAncestor({
+        activeStreamId: child1,
+        parentStream,
+        values,
+        canUseValue: (value) => value.usable,
+      }),
+    ).toBeUndefined();
   });
 });
 
