@@ -16,13 +16,16 @@ import { createChannelTrace } from '@logger';
 import {
   AgentCategoryFilterSchema,
   ContextStateDataSchema,
+  ExecutionIdSchema,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
+  StreamTabIdSchema,
   type ActiveChildInfo,
   type AgentCategoryFilter,
   type ConversationProgress,
   type ContextStateData,
+  type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
@@ -38,9 +41,14 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 /** Ephemeral stream metadata hints, displayed before TaskState is fully populated. */
 export const StreamHintsSchema = z.object({
+  agent: z.string().optional(),
   agentCategory: z.enum(AgentCategory).optional(),
+  inputFile: z.string().optional(),
   isRemote: z.boolean().optional(),
   creationTimestamp: z.number().optional(),
+  executionId: ExecutionIdSchema.optional(),
+  parentStreamId: StreamTabIdSchema.optional(),
+  description: z.string().optional(),
 });
 
 export type StreamHints = z.infer<typeof StreamHintsSchema>;
@@ -121,7 +129,7 @@ export class ProgressViewState {
 
   private readonly logger: AgentTrace;
 
-  constructor(storage: MementoStorage) {
+  constructor(storage: MementoStorage, snapshots = new StreamSnapshotStore()) {
     this.logger = createChannelTrace('ProgressViewState');
     this._prefs = new PersistedState(
       createBackendStorage(storage),
@@ -130,7 +138,7 @@ export class ProgressViewState {
     );
     this.streamLogs = new StreamLogStore();
     setDefaultStreamLogStore(this.streamLogs);
-    this.snapshots = new StreamSnapshotStore();
+    this.snapshots = snapshots;
   }
 
   // -- Preferences ------------------------------------------------------------
