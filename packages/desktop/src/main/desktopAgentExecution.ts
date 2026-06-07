@@ -8,6 +8,7 @@ import {
 
 import { buildMainViewState } from '@controllers/mainView/MainViewStateRestoreController';
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
+import { createProgressViewCommandHandlers } from '@controllers/progressView/ProgressViewCommandHandlers';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform, tryPlatform } from '@platform/platform';
@@ -57,12 +58,12 @@ import {
   type AgentProposalPermission,
   type AgentCategory,
   type AgentCategoryFilter,
-  type ProgressViewInboundMessage,
   type ProgressViewOutboundMessage,
   type ExecutionId,
+  type RestoredStreamSnapshot,
   type StreamTabId,
 } from '@shared/schemas';
-import type { RestoredStreamSnapshot } from '@shared/schemas';
+import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
@@ -205,6 +206,7 @@ export class DesktopProgressBridge {
   private readonly restoredDisplayInFlight = new Set<StreamTabId>();
 
   readonly runtimeHost: AgentRuntimeHost;
+  readonly progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
 
   constructor(
     private readonly postToRenderer: (message: unknown) => void,
@@ -398,6 +400,7 @@ export class DesktopProgressBridge {
         );
       },
     });
+    this.progressViewInboundHandlers = this.createProgressViewInboundHandlers();
 
     // Hydrate previously-persisted "ghost" streams so the rail shows
     // the user's prior runs at launch (audit item D / trajectory #19).
@@ -424,6 +427,80 @@ export class DesktopProgressBridge {
         emit: false,
       });
     }
+  }
+
+  private createProgressViewInboundHandlers(): ProgressViewInboundHandlerRegistry {
+    return createProgressViewCommandHandlers({
+      lifecycle: {
+        setActiveStream: (stream) => this.setActiveStream(stream),
+        setAgentFilter: (filter) => this.setAgentFilter(filter),
+        deleteStream: (stream) => this.deleteStream(stream),
+        deleteAllStreams: () => this.deleteAllStreams(),
+        stopStream: (stream) => this.stopStream(stream),
+      },
+      run: {
+        resumeStream: (stream) => this.tryResumeStream(stream),
+        runNewStream: (stream) => this.runNewStream(stream),
+      },
+      followUp: {
+        sendFollowUp: ({ stream, text, mediaFiles }) =>
+          this.sendFollowUp(stream, text, mediaFiles),
+        reportImageSaveError: (image, error) => {
+          this.logger.warn(
+            `Failed to save pasted follow-up image ${image.fileName}`,
+            { data: error instanceof Error ? error : { error } },
+          );
+        },
+      },
+      bypass: {
+        runtimeHost: this.runtimeHost,
+      },
+      file: {
+        openFile: async (file, line) => {
+          await this.options.openPath?.(file, line);
+        },
+        openFileCompile: (file) => this.openFileCompile(file),
+        openTaskStorage: (stream) =>
+          this.workflowFileActions.openTaskStorage(stream),
+        compareOriginal: (file, base) =>
+          this.workflowFileActions.compareOriginal(file, base),
+        comparePrevious: (file, base, previous) =>
+          this.workflowFileActions.comparePrevious(file, base, previous),
+        acceptFile: (file, base) =>
+          this.workflowFileActions.acceptFile(file, base),
+        mergeFile: (file, base) =>
+          this.workflowFileActions.mergeFile(file, base),
+        latexdiffFile: (file, base) =>
+          this.workflowFileActions.latexdiffFile(file, base),
+        openLabel: (label) => this.workflowFileActions.openLabel(label),
+      },
+      approval: {
+        handleToolEditApprovalAction: (message) =>
+          this.toolEditApprovals.handleAction(message),
+        onUnsupportedToolEditApproval: (message) => {
+          this.logger.warn('Unsupported desktop tool-edit approval action', {
+            data: {
+              requestId: message.requestId,
+              action: message.action,
+            },
+          });
+        },
+        handleBashApprovalAction: (message) =>
+          handleProgressViewBashApprovalAction(message),
+        handlePlanApprovalAction: (message) => {
+          resolvePlanApproval(message.approvalId, {
+            action: message.action,
+            ...(message.action === 'reject' && {
+              feedback: message.feedback,
+            }),
+          });
+        },
+        handleUserQuestionAction: (message) =>
+          handleUserQuestionAction(message),
+        handleAgentProposalAction: (message) =>
+          this.agentProposalController.handleAction(message),
+      },
+    });
   }
 
   private persistStreamSnapshot(streamId: StreamTabId): void {
@@ -686,7 +763,7 @@ export class DesktopProgressBridge {
     this.syncStreamContent(streamId);
   }
 
-  setAgentFilter(filter: AgentCategoryFilter): void {
+  private setAgentFilter(filter: AgentCategoryFilter): void {
     this.state.agentCategoryFilter = filter;
     const activeStream = this.backend.webviewUpdater.sendStreamMetadata(
       this.state,
@@ -778,7 +855,7 @@ export class DesktopProgressBridge {
     });
   }
 
-  stopStream(streamId: StreamTabId): void {
+  private stopStream(streamId: StreamTabId): void {
     clearRetryRequest(streamId);
     if (this.options.detachSubagentsOnStop === true) {
       detachActiveChildren(streamId, this.runtimeHost);
@@ -789,10 +866,6 @@ export class DesktopProgressBridge {
     StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, {
       runtimeHost: this.runtimeHost,
     });
-  }
-
-  async resumeStream(streamId: StreamTabId): Promise<void> {
-    await this.tryResumeStream(streamId);
   }
 
   async tryResumeStream(streamId: StreamTabId): Promise<boolean> {
@@ -968,14 +1041,14 @@ export class DesktopProgressBridge {
     }
   }
 
-  async runNewStream(streamId: StreamTabId): Promise<void> {
+  private async runNewStream(streamId: StreamTabId): Promise<void> {
     const taskState = this.state.snapshots.getTaskState(streamId);
     if (!taskState) return;
 
     await this.runExecution({ config: taskState.agentConfig });
   }
 
-  async sendFollowUp(
+  private async sendFollowUp(
     streamId: StreamTabId,
     text: string,
     mediaFiles?: readonly string[],
@@ -991,10 +1064,6 @@ export class DesktopProgressBridge {
     );
   }
 
-  async openFile(filePath: string, line?: number): Promise<void> {
-    await this.options.openPath?.(filePath, line);
-  }
-
   async openFileCompile(filePath: string): Promise<void> {
     if (this.options.openBuildDisplay) {
       await this.options.openBuildDisplay(toFileLocation(filePath));
@@ -1003,86 +1072,6 @@ export class DesktopProgressBridge {
     await this.options.showErrorMessage?.(
       'Desktop LaTeX preview is unavailable. Cannot compile and open this file.',
     );
-  }
-
-  async openTaskStorage(streamId: StreamTabId): Promise<void> {
-    await this.workflowFileActions.openTaskStorage(streamId);
-  }
-
-  async compareOriginal(file: string, base?: string): Promise<void> {
-    await this.workflowFileActions.compareOriginal(file, base);
-  }
-
-  async comparePrevious(
-    file: string,
-    base?: string,
-    previous?: string,
-  ): Promise<void> {
-    await this.workflowFileActions.comparePrevious(file, base, previous);
-  }
-
-  async acceptFile(file: string, base?: string): Promise<void> {
-    await this.workflowFileActions.acceptFile(file, base);
-  }
-
-  async mergeFile(file: string, base?: string): Promise<void> {
-    await this.workflowFileActions.mergeFile(file, base);
-  }
-
-  async latexdiffFile(file: string, base?: string): Promise<void> {
-    await this.workflowFileActions.latexdiffFile(file, base);
-  }
-
-  async openLabel(label: string): Promise<void> {
-    await this.workflowFileActions.openLabel(label);
-  }
-
-  async handleBashApprovalAction(
-    message: Extract<
-      ProgressViewInboundMessage,
-      { command: typeof PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION }
-    >,
-  ): Promise<void> {
-    await handleProgressViewBashApprovalAction(message);
-  }
-
-  handleToolEditApprovalAction(
-    message: Extract<
-      ProgressViewInboundMessage,
-      { command: typeof PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION }
-    >,
-  ): boolean {
-    return this.toolEditApprovals.handleAction(message);
-  }
-
-  handlePlanApprovalAction(
-    message: Extract<
-      ProgressViewInboundMessage,
-      { command: typeof PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION }
-    >,
-  ): void {
-    resolvePlanApproval(message.approvalId, {
-      action: message.action,
-      ...(message.action === 'reject' && { feedback: message.feedback }),
-    });
-  }
-
-  async handleUserQuestionAction(
-    message: Extract<
-      ProgressViewInboundMessage,
-      { command: typeof PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION }
-    >,
-  ): Promise<void> {
-    await handleUserQuestionAction(message);
-  }
-
-  async handleAgentProposalAction(
-    message: Extract<
-      ProgressViewInboundMessage,
-      { command: typeof PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION }
-    >,
-  ): Promise<boolean> {
-    return this.agentProposalController.handleAction(message);
   }
 
   async runExecution(request: ValidatedExecutionRequest): Promise<void> {
