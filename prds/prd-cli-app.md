@@ -104,7 +104,7 @@ The runtime has 7 user-facing gates today (Electron PRD §9 #18 inventory + scou
 | Agent proposal (delegation) | `AgentProposalCoordinator`                                          | **Fully host-neutral.**                    | Same pattern                                                             |
 | Retry request               | `RetryRequestCoordinator`                                           | **Fully host-neutral.**                    | Same pattern                                                             |
 | External inquiry            | `awaitExternalInquiryResponse` + `showExternalInquiry` event        | Coordinator yes                            | CLI prompts on stderr + reads stdin                                      |
-| Proposal bypass (YOLO)      | `toggleProposalBypass`, per-stream                                  | Pure state                                 | CLI exposes via `--yolo` / `--allow-delegation` flags                    |
+| Proposal bypass (YOLO)      | `proposalApprovalState.toggleBypass`, per-stream                    | Pure state                                 | CLI exposes via `--yolo` / `--allow-delegation` flags                    |
 
 The current approval _config_ is binary: `texra.toolUse.requireEditApproval` and `texra.toolUse.requireBashApproval` are bool. CI usage demands richer policies — see §9.
 
@@ -1056,19 +1056,19 @@ Things explicitly out of scope for v1.
 
 From the parallel scout:
 
-| Metric                                                          | Value                                                                                                                                                                       |
-| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Total TS files in `src/` (today, pre-monorepo-split)            | 853                                                                                                                                                                         |
-| Files importing `vscode` reachable from `executeAgent()`        | **0**                                                                                                                                                                       |
-| Platform interface LOC                                          | ~470                                                                                                                                                                        |
-| Existing Node-default platform impls (`src/platform/defaults/`) | ~462 LOC across 6 files                                                                                                                                                     |
-| Of which CLI reuses byte-for-byte                               | 5 of 6 (`consoleLog`, `memoryState`, `nodeFilesystem`, `nodeStorage`, `nodeWorkspace`); `EnvSecrets` is replaced by `KeyringSecrets`                                        |
-| New CLI-side platform adapters needed                           | 2 (`ConfConfigProvider`, `KeyringSecrets`) at ~180 LOC combined                                                                                                             |
-| Tool surfaces fully reused (no CLI shim)                        | 14 of the 16 listed in §4.2 (every entry except the 2 explicitly marked as needing a CLI handler)                                                                           |
-| Approval gates fully host-neutral today                         | 5 of 7 (3 standalone `BasePromiseCoordinator`s — plan, proposal, retry — plus the `awaitExternalInquiryResponse` event pattern and the `toggleProposalBypass` state toggle) |
-| Approval gates needing CLI-specific settle path                 | 2 of 7 (edit, bash — both have host-neutral controllers; the _handler_ is what's host-specific)                                                                             |
-| Approval gates needing CLI-specific handler                     | 2 (edit, bash)                                                                                                                                                              |
-| Pre-refactorings still required in `core/`                      | 6 small items (~430 LOC + a server-side edge function)                                                                                                                      |
+| Metric                                                          | Value                                                                                                                                                                        |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Total TS files in `src/` (today, pre-monorepo-split)            | 853                                                                                                                                                                          |
+| Files importing `vscode` reachable from `executeAgent()`        | **0**                                                                                                                                                                        |
+| Platform interface LOC                                          | ~470                                                                                                                                                                         |
+| Existing Node-default platform impls (`src/platform/defaults/`) | ~462 LOC across 6 files                                                                                                                                                      |
+| Of which CLI reuses byte-for-byte                               | 5 of 6 (`consoleLog`, `memoryState`, `nodeFilesystem`, `nodeStorage`, `nodeWorkspace`); `EnvSecrets` is replaced by `KeyringSecrets`                                         |
+| New CLI-side platform adapters needed                           | 2 (`ConfConfigProvider`, `KeyringSecrets`) at ~180 LOC combined                                                                                                              |
+| Tool surfaces fully reused (no CLI shim)                        | 14 of the 16 listed in §4.2 (every entry except the 2 explicitly marked as needing a CLI handler)                                                                            |
+| Approval gates fully host-neutral today                         | 5 of 7 (3 standalone `BasePromiseCoordinator`s — plan, proposal, retry — plus the `awaitExternalInquiryResponse` event pattern and the `proposalApprovalState` state toggle) |
+| Approval gates needing CLI-specific settle path                 | 2 of 7 (edit, bash — both have host-neutral controllers; the _handler_ is what's host-specific)                                                                              |
+| Approval gates needing CLI-specific handler                     | 2 (edit, bash)                                                                                                                                                               |
+| Pre-refactorings still required in `core/`                      | 6 small items (~430 LOC + a server-side edge function)                                                                                                                       |
 
 ### 19.1 Effort-by-the-numbers (LOC budget)
 

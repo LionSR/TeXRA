@@ -60,8 +60,8 @@ import { formatBytes } from '@shared/utils/string';
 // Local imports - tools
 import type { ToolResult } from '@tools/result';
 import {
-  isProposalBypassedForStream,
   isApprovalBypassedForStream,
+  proposalApprovalState,
   enableYoloOnChildStream,
   inheritBashBypassOnChildStream,
 } from '@tools/approval';
@@ -711,7 +711,7 @@ async function proposeAndExecute(
   agentName: string,
   streamId: StreamTabId,
 ): Promise<ToolResult> {
-  if (isProposalBypassedForStream(streamId)) {
+  if (proposalApprovalState.isBypassed(streamId)) {
     return executeSubagent(toConfigPayload(proposal), agentName, streamId, {
       enableYoloOnChild: true,
       approvalMeta: { autoApproved: true },
