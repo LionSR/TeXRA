@@ -37,8 +37,6 @@ const DOCUMENT_END_FIXES: Array<[RegExp, string]> = [
 ];
 
 export class DiffFileProcessor {
-  constructor(private readonly channel: string) {}
-
   // Intentionally does not swallow failures: a read/transform/write error here
   // means the diff output is missing or corrupt, so it must propagate to the
   // caller (LaTeXdiffService.runDiff*/), whose catch turns it into a

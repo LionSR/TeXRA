@@ -150,15 +150,15 @@ export function createDirectLspLeanAdapter(
         const session = await getSession(file);
         return await session.fetchDiagnostics(file);
       } catch (error) {
-        // Log operationally, then propagate: `null` means "no diagnostics",
-        // so swallowing a session/IO failure into it would make a broken Lean
-        // server look like a clean file. LeanDiagnosticsTool surfaces the real
-        // error detail to the agent.
+        // Return null (LeanDiagnosticsTool surfaces it as a failure result) and
+        // log the cause. The interface contract is `LeanDiagnostic[] | null`;
+        // honoring it keeps a missing/broken `lake` from throwing out of the
+        // JSON-RPC path.
         warn(
           LOG_CHANNEL,
           `fetchDiagnosticsForFile failed for ${file}: ${toErrorMessage(error)}`,
         );
-        throw error;
+        return null;
       }
     },
 
@@ -178,14 +178,14 @@ export function createDirectLspLeanAdapter(
         await session.restartFile(filePath);
         return true;
       } catch (error) {
-        // Log operationally, then propagate: `false` means "command had no
-        // effect", so swallowing a real failure into it hides the cause.
-        // LeanFileTool surfaces the real error detail to the agent.
+        // Return false (LeanFileTool surfaces it as a failure result) and log
+        // the cause. Honors the `Promise<boolean>` contract so a missing/broken
+        // `lake` doesn't throw out of the JSON-RPC path.
         warn(
           LOG_CHANNEL,
           `executeFileCommand(${command}) failed for ${filePath}: ${toErrorMessage(error)}`,
         );
-        throw error;
+        return false;
       }
     },
 

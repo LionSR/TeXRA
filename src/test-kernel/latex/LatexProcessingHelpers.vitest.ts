@@ -66,7 +66,7 @@ async function installPlatform(workspaceDir: string): Promise<void> {
 
 function processLineByLine(content: string): string {
   return (
-    new DiffFileProcessor('test') as unknown as DiffFileProcessorInternals
+    new DiffFileProcessor() as unknown as DiffFileProcessorInternals
   ).processLineByLine(content);
 }
 

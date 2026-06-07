@@ -447,10 +447,18 @@ function pathToUri(absolute: string): string {
 }
 
 export function fileUriToPath(uri: string): string | null {
-  // The `file://` prefix is already validated, so fileURLToPath won't throw;
-  // null is reserved for non-file URIs the caller intentionally skips.
   if (!uri.startsWith('file://')) return null;
-  return fileURLToPath(uri);
+  try {
+    return fileURLToPath(uri);
+  } catch (err) {
+    // Malformed or non-local file URIs from an external Lean LSP server
+    // (e.g. `file://host/path`, bad percent-encoding) make fileURLToPath
+    // throw. This runs on the JSON-RPC notification path, so map to null
+    // (an untracked URI the caller skips) rather than letting the exception
+    // escape and break diagnostics handling.
+    debug(LOG_CHANNEL, `Ignoring unmappable file URI ${uri}`, { data: err });
+    return null;
+  }
 }
 
 function withTimeout<T>(
