@@ -1,5 +1,6 @@
 import { defineCommand } from 'citty';
 
+import { assertExplicitModelKnown } from '../runtime/runModel';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 
 import { contextFromArgs } from './_helpers/context';
@@ -10,7 +11,6 @@ import {
   optString,
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
-import { assertExplicitModelKnown } from './_helpers/modelArg';
 
 export const chatCommand = withUsageSections(
   defineCommand({

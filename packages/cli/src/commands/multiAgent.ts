@@ -10,9 +10,13 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { EXECUTION_STATUS } from '@shared/schemas';
 import { generateExecutionId } from '@utils/core/executionId';
-import { CliUsageError, readCliStdinText } from '../runtime/cliContext';
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
 import { approvalPromptsUnavailable } from '../runtime/approvalPolicyAvailability';
+import {
+  CliUsageError,
+  readCliStdinText,
+  type CliContext,
+} from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
@@ -37,14 +41,14 @@ import {
   type CliMultiAgentPreset,
   type CliMultiAgentPresetRunPlan,
 } from '../runtime/multiAgentPresets';
+import {
+  buildHeadlessRunContext,
+  resolveCliRunModel,
+} from '../runtime/runModel';
 import { getCliAuthProvider } from '../runtime/supabaseAuth';
 
 import { missingToolUseAgentMessage } from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
-import {
-  buildHeadlessRunContext,
-  resolveCliRunModel,
-} from './_helpers/modelArg';
 import { formatMultiAgentRunInstruction } from './_helpers/multiAgentInstruction';
 import { emitCliResult } from './_helpers/output';
 import {
@@ -66,7 +70,6 @@ import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
 } from './_helpers/workflowInputs';
-import type { CliContext } from '../runtime/cliContext';
 
 type CliToolUseRunResult = Extract<CliRunResult, { category: 'toolUse' }>;
 
