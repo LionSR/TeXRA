@@ -14,7 +14,7 @@ A multi-agent read-only audit: three parallel deep agents each owned a non-overl
 TeXRA already has **one genuinely clean DI seam**: `platform()` (`src/platform/platform.ts`) — a frozen, single-call composition root over small vscode-free ports. The problem is that **three other dependency-flow mechanisms grew up around it** instead of through it, and they now overlap:
 
 1. **A fat context bag** (`AgentCore` → `*Services`): 13 declared fields that balloon to **~31–35 at runtime** because the bag is spread wholesale into nested flows. Nodes read **3–9** fields while carrying 31–35 — **~70–90% is dead weight** at each node.
-2. **24 module-level `set*` singletons** (service-locator style): host capabilities injected via mutable module globals. **9 have silent no-op defaults**; several are unavailable in at least one non-extension host, so they silently no-op outside the happy path. **8 are written from multiple composition roots.**
+2. **22 module-level `set*` singletons** (service-locator style): host capabilities injected via mutable module globals. **7 have silent no-op defaults**; several are unavailable in at least one non-extension host, so they silently no-op outside the happy path. **8 are written from multiple composition roots.**
 3. **Ambient state** (AsyncLocalStorage + 7 process-global registries): `RunContext` and `ToolCallContext` plus the runtime registries that — per [`agent-sdk-readiness.md`](./agent-sdk-readiness.md) — block concurrent in-process sessions.
 
 **The headline finding:** mechanisms A and C carry **the same 7–8 fields at once**, and the two halves of the codebase disagree on which is canonical — **flow nodes read them from the bag, tools read them from `RunContext`**. That split-brain is the strongest evidence that bag-threading those fields is redundant, and it tells us the migration target is already chosen by the code.
@@ -37,14 +37,14 @@ flowchart TB
         AC["AgentCore (13)\n→ ~31-35 at runtime"]
     end
     subgraph B["B · set* singletons (invisible)"]
-        SET["24 module-level setters\n9 silent no-op defaults"]
+        SET["22 module-level setters\n7 silent no-op defaults"]
     end
     subgraph C["C · Ambient (invisible)"]
         RC["RunContext (ALS)"]
         REG["7 process-global registries"]
     end
 
-    EXT -->|"20 P-setters"| SET
+    EXT -->|"18 P-setters"| SET
     DESK -->|"re-wires 8"| SET
     CLI -->|"re-wires some,\nmisses others"| SET
 
@@ -61,7 +61,7 @@ flowchart TB
 | Mechanism                                        | Count                      | Visibility at call site            | Lifetime scope   | Verdict                                                                |
 | ------------------------------------------------ | -------------------------- | ---------------------------------- | ---------------- | ---------------------------------------------------------------------- |
 | **A. Fat context bag** (`AgentCore`→`*Services`) | 13 fields → ~31–35 runtime | Visible in types (but understated) | Per run          | Over-carried; split into cohesive objects + narrow interfaces          |
-| **B. `set*` module singletons**                  | 24 injectors               | Invisible                          | Process (mostly) | Fold 20 into `Platform`; scope 1 to `RunContext`; 3 are test-only      |
+| **B. `set*` module singletons**                  | 22 injectors               | Invisible                          | Process (mostly) | Fold 18 into `Platform`; scope 1 to `RunContext`; 3 are test-only      |
 | **C. ALS + process registries**                  | 3 ALS + 7 registries       | Invisible                          | Run / process    | Keep `RunContext` (good), de-dup vs. bag; registries block concurrency |
 
 ---
@@ -167,7 +167,7 @@ flowchart LR
 
 ---
 
-## Finding B — the 24 `set*` module singletons
+## Finding B — the 22 `set*` module singletons
 
 ### Pattern: service locator with a silent default
 
@@ -194,7 +194,7 @@ flowchart TB
 
 ### Classification
 
-- **20 → `Platform` ports (P):** process-lifetime host capabilities that belong on the frozen `Platform` object.
+- **18 → `Platform` ports (P):** process-lifetime host capabilities that belong on the frozen `Platform` object.
 - **1 → `RunContext` (R):** `setToolEditApprovalHandler` — conceptually the _active session's_ approval channel, currently a single module global mutated by whichever host UI is active.
 - **3 → test-only / justified lazy singleton (T):** `setDefaultStreamLogStore`, `setTierService`, `setServerSideKeyService`.
 
@@ -209,8 +209,6 @@ flowchart TB
 | `setToolMissingHandler` `utils/system/toolUtils.ts:58`               | `() => {}`                | P           | —                     | **yes**                  |
 | `setToolNotificationHandler` `toolUnavailableNotification.ts:28`     | `() => {}`                | P           | —                     | **yes**                  |
 | `setGitHubTokenProvider` `github/githubAuth.ts:15`                   | `() => undefined`         | P           | —                     | **yes**                  |
-| `setExtensionChecker` `externalToolDefs.ts:60`                       | `() => false`             | P           | —                     | **yes**                  |
-| `setTexraCliEntrypointChecker` `externalToolDefs.ts:67`              | `() => false`             | P           | cli only              | **yes**                  |
 | `setLeanLanguageServices` `lean/leanLanguageServices.ts:53`          | undefined (getter throws) | P           | **ext+desktop+cli**   | no                       |
 | `setSetupPlatform` `setup/platform.ts:104`                           | undefined (getter throws) | P           | —                     | no                       |
 | `setRunStorageService` `runtime/RunStorageService.ts:17`             | `isViewVisible:()=>false` | P           | **ext+desktop**       | **yes**                  |
@@ -236,7 +234,7 @@ flowchart TB
 
 ### The silent-no-op trap
 
-9 setters default to a no-op. Depending on host, examples such as the linter, manual criticism, build display, tool-missing toasts, tool-unavailable notifications, and the GitHub token are **silently absent with no error**. Folding into typed `Platform` ports turns each missing wiring into a compile error instead of a silent runtime gap.
+7 setters default to a no-op. Depending on host, examples such as the linter, manual criticism, build display, tool-missing toasts, tool-unavailable notifications, and the GitHub token are **silently absent with no error**. Folding into typed `Platform` ports turns each missing wiring into a compile error instead of a silent runtime gap.
 
 ---
 
@@ -290,7 +288,7 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    P1["20 P-setters"] -->|fold into| PORTS["frozen Platform ports"]
+    P1["18 P-setters"] -->|fold into| PORTS["frozen Platform ports"]
     P2["setToolEditApprovalHandler"] -->|scope to| RUN["RunContext (per-run)"]
     P2B["7 registries"] -->|scope to| SESSION["per-session runtime owner"]
     P3["7-8 duplicated bag fields"] -->|drop from bag,\nread like tools do| RUN
@@ -308,7 +306,7 @@ flowchart LR
 
 Sequenced so nothing breaks, lowest-risk first:
 
-1. **Fold the 20 P-class setters into `Platform` ports.** _(Highest leverage, mostly mechanical.)_ Most consumers sit 1–2 hops from the setter (often the same file). Precedent already exists (`fs`, `workspace`, `secrets`). Eliminates the entire silent-no-op class at once — a missing wiring becomes a type error. Do the 6 ext-only no-op setters first (clearest user-facing bug surface in CLI/desktop).
+1. **Fold the 18 P-class setters into `Platform` ports.** _(Highest leverage, mostly mechanical.)_ Most consumers sit 1–2 hops from the setter (often the same file). Precedent already exists (`fs`, `workspace`, `secrets`). Eliminates the entire silent-no-op class at once — a missing wiring becomes a type error. Do the 5 ext-only no-op setters first (clearest user-facing bug surface in CLI/desktop).
 2. **De-duplicate the split-brain fields.** Stop threading the 7–8 fields already in `RunContext`; let flow nodes read them the way tools already do. This shrinks every flow-service interface for free.
 3. **Cohesion-split `AgentCore`** into `RunIdentity` / `DelegationPolicy` / `AgentDefinition` + ambient `logger`. The wholesale re-spread at the 2 nesting sites becomes `setServices({ identity, delegation, agent })`.
 4. **Narrow node interfaces (ISP).** A node reading 3 fields should declare those 3, not `ReflectionServices`. This removes the pressure to forward the whole bag.
