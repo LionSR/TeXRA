@@ -2,6 +2,77 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.38.6] - 2026-06-07
+
+### CLI
+
+#### Features
+
+- **Switch between compatible models during a chat** — use `/model` mid-session to switch to another model from the same provider (e.g., one Anthropic model to another); the change takes effect immediately and persists on resume. Models with a different conversation format are disabled in the picker with a note to start a new chat, and the picker explains when no models are available in the current API mode.
+- **Focused subagent view** — focusing a subagent shows only its own transcript; scroll back through earlier output with normal terminal scrolling, search, and mouse wheel. The header names the subagent and its parent, newly started subagents can be focused right away, and tool calls and file reads no longer flood the main conversation while a subagent runs.
+- **Skills in chat** — a new `/skills` command lists available skills from your configured sources; picking one applies its instructions to your next request. Any agent run can pull in extra skill folders with `--source`, and `--include-interop` brings in `.claude`, `.codex`, and `.gemini` skills.
+- **Startup launcher shows auth and API status** — the launcher now shows your API mode, sign-in status, and a next-step hint at session start so you can see your account state before choosing how to begin.
+- **Interactive provider choice on login** — running `texra login` without naming a provider now lets you pick GitHub or Google interactively instead of silently defaulting.
+- **Limit history list length** — `texra history list` now accepts `--limit` (or `-n`) to show only the most recent executions.
+- **Copy an agent's question from the inquiry prompt** — the inquiry prompt now offers `Ctrl+Y` to copy the agent's full question to your clipboard, with a brief copied or copy-failed indicator.
+
+#### Bug Fixes
+
+- **Reliable multi-line input** — `Shift+Enter` and `Ctrl+J` insert a newline without submitting, and no longer lose text, add a stray line break, or fail in terminals that report these keys in alternate forms. Enter and keypad Enter now submit predictably across more terminals, and pasting multi-line text keeps every line break instead of collapsing lines or submitting early.
+- **Escape reliably closes menus and dialogs** — pressing `Escape` now consistently cancels the slash palette, selection menus, approval cards, and other dialogs even in terminals that report Escape differently.
+- **Image paste recognizes `Ctrl+V`** — `Ctrl+V` now triggers image paste in the chat input across terminals that send the raw control code.
+- **Teams that cannot launch are blocked clearly** — a team no longer silently starts behind a specialist that cannot delegate or degrades to a single agent; teams missing their orchestrator show as unavailable across the list, launcher, and run output and refuse to start with a clear explanation. Read-only context files you provide are now included in the instruction the team receives.
+- **Steadier terminal resize** — resizing the terminal no longer causes the chat view to flicker or repaint repeatedly.
+- **Resume hint stays on exit** — the `texra --resume <id>` line shown when you leave a chat session no longer flashes and disappears in Ghostty, iTerm2, or Terminal.app; it stays in your terminal scrollback so you can read and copy it.
+- **Resilient chat transcript** — a single malformed chat entry now shows a short inline error instead of crashing the whole chat session.
+- **Record interrupted subagent runs as interrupted** — a subagent run you interrupt is now saved with an interrupted status in history instead of being marked as completed.
+- **Anchored headless inputs** — headless agent runs now reliably read the input and context files you provide and reject files outside the working directory with a clear error.
+- **Honor no-color mode** — the interactive chat, setup, init, and orchestration screens now drop colors and styling when you run with `NO_COLOR` or otherwise disable color, instead of emitting color codes anyway.
+- **Launcher list shows the right runs** — the recent and resume lists now show only the runs you started yourself (not subagent sessions spawned by team runs), and resumable runs with no input file show their saved description instead of listing no input.
+- **Init wizard disables unavailable models** — the `texra init` wizard now greys out models you cannot currently use so you can only select one that will actually run.
+- **Bare auth command shows status** — running `texra auth` on its own now reports your account status and accepts flags like `--output-format json`, matching `texra auth status`.
+- **Prefer your local skills** — when skills share a name, your project and user skills now take precedence over the bundled ones.
+- **Guard the model after changing API mode** — starting a chat after switching between the included relay and personal API keys now checks that your model is available and tells you how to recover if it is not.
+
+#### Improvements
+
+- **Clearer team status and recovery hints** — the launcher now describes each team's status in plain language (ready or unavailable) with readable agent counts, and when a team cannot start because its root cannot delegate, it says the team root is not a delegating agent. The list and inspect output point you to inspecting a preset to see which agents are missing, and suggest signing in to load relay-served agents when a built-in team is incomplete.
+- **Clearer agent and team labels** — the agent picker now titles its list by what is available, calls out orchestrator and tool-use agents, labels orchestrators as delegating agents, and refers to the root agent in its guidance. Multi-agent run help, completions, and inspect output now consistently refer to the team root agent, and the status bar and rotating tips point you to `/agent` for choosing the root agent while it can still be changed.
+- **Escape hints match what Escape does** — the status bar now shows the correct Escape action for the open panel (skip, cancel, or close), the approval menu labels Escape as cancel, and the slash command palette shows an Escape hint.
+- **Tidier slash pickers** — the `/model` and `/agent` pickers no longer stretch across the full width of wide terminals and now share a consistent bordered frame.
+- **Readable diff colors** — added and removed lines now use lighter backgrounds with explicit text colors so they stay legible on both light and dark terminals.
+- **Cleaner inquiry transcript** — answered and dropped inquiry notices now appear as quiet cyan summary lines instead of looking like a message you typed; question and answer previews collapse to a single line so embedded code blocks no longer break the layout, with each notice pointing to the command for reading the full thread.
+- **Root active indicator** — when you focus a stopped subagent while the main run continues, the status bar now shows that the root is still active.
+- **Show your account email plainly in doctor** — the `texra doctor` report now displays your signed-in account email in full instead of masking it, while still hiding email addresses that appear elsewhere in the diagnostics.
+- **Clearer manual sign-in guidance** — the `--no-browser` login flow now explains that the printed URL must open in a browser that can reach your terminal session, and notes that remote SSH or container users may need to forward the callback port.
+
+### Desktop
+
+#### Features
+
+- **Resume runs from a previous session** — the desktop app can now continue a run started in an earlier session instead of asking you to start over.
+
+### Extension (VS Code)
+
+#### Features
+
+- **Review pasted images before sending** — interactive agents now show pasted images in a Files group so you can review or remove them, and warn you when the selected model cannot read attached images.
+
+#### Bug Fixes
+
+- **Mixed image-and-text paste keeps your text** — pasting an image together with text in the webview no longer drops the text.
+
+### Shared (all surfaces)
+
+#### Features
+
+- **Repair workflow rounds when compilation fails** — when a LaTeX compile check fails, the workflow uses the next round to repair the output from the compile log; a new setting lets you turn this on or off.
+- **Free relay request size limit** — requests through the included free model access are now capped at 2 MiB, with a clear message suggesting your own API keys for larger requests.
+
+#### Improvements
+
+- **Cleaner session labels** — the short AI-generated session labels shown in the stream tab, history, and progress views are now based on your actual instruction rather than internal prompt scaffolding, so they describe the task more accurately.
+
 ## [0.38.5] - 2026-06-04
 
 ### Features

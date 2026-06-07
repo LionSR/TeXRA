@@ -1,7 +1,14 @@
 import { writeSync } from 'node:fs';
 
-const RESET_TERMINAL_MODES =
-  '\x1b[?1000;1003;1006l\x1b[?1049l\x1b[<u\x1b[?2004l\x1b[?25h';
+// Undo exactly the input/display modes the TUI turns on: mouse tracking
+// (1000/1003/1006), the kitty keyboard stack (<u), bracketed paste (2004), and
+// cursor visibility (25h). The TUI deliberately never enters the alternate
+// screen (?1049h is never sent), so it must NOT emit ?1049l here: terminals that
+// honor rmcup restore the primary screen grid to the snapshot from the last
+// smcup — which, with no smcup this session, is a stale grid that wipes whatever
+// was just printed at the bottom (notably the "texra --resume …" hint). tmux
+// masks this by ignoring an unmatched rmcup; Ghostty/iTerm2/Terminal.app do not.
+const RESET_TERMINAL_MODES = '\x1b[?1000;1003;1006l\x1b[<u\x1b[?2004l\x1b[?25h';
 const CLEAR_ITERM_PROGRESS = '\x1b]9;4;0\x07';
 // Clear visible screen + erase scrollback + home cursor. Required by
 // `/clear` since the TUI no longer uses the alternate screen, so prior
