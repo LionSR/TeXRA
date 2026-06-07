@@ -356,7 +356,6 @@ export class ProgressEventHandler {
     const { streamId, executionId, taskState } = data;
     const isActiveStream = this.state.activeStream === streamId;
     const category = taskState.agentConfig.agentCategory;
-    const previousFilter = this.state.agentCategoryFilter;
 
     // Coordinate persistence + ephemeral side effects (formerly state.setTaskState).
     // taskState + executionId go in a single meta.json write.
@@ -371,17 +370,15 @@ export class ProgressEventHandler {
     }
 
     if (this.webviewUpdater.isAvailable()) {
-      const filterChanged = this.state.agentCategoryFilter !== previousFilter;
-      if (filterChanged || isActiveStream) {
-        // sendStreamMetadata rebuilds StreamTabInfo[] for all visible streams.
-        // This fires once per run start (not during streaming) so the O(N)
-        // cost is acceptable. We need it here because setTaskState may change
-        // agentConfig (agent name, model, label) which the frontend tabs display.
-        this.webviewUpdater.sendStreamMetadata(
-          this.state,
-          StreamStatusService.getAll(),
-        );
-      }
+      // sendStreamMetadata rebuilds StreamTabInfo[] for all visible streams.
+      // This fires once per run start (not during streaming) so the O(N)
+      // cost is acceptable. We need it here because setTaskState may change
+      // agentConfig (agent name, model, label) which the frontend tabs display,
+      // including for background subagents that are not the active stream.
+      this.webviewUpdater.sendStreamMetadata(
+        this.state,
+        StreamStatusService.getAll(),
+      );
     }
   }
 
