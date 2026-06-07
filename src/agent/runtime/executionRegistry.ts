@@ -6,7 +6,10 @@
  */
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import {
+  StreamStatusService,
+  type StreamStatusRegistry,
+} from '@agent/runtime/StreamStatusService';
 import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
 import {
   type ExecutionHandle,
@@ -47,29 +50,27 @@ export class ExecutionRegistry {
     Set<(handle: ExecutionHandle | undefined) => void>
   >();
 
-  constructor() {
+  constructor(streamStatus: StreamStatusRegistry = StreamStatusService) {
     // Notify waiters and refresh UI badges when stream status changes
     // (e.g. RUNNING → WAITING). Without this, waitForChange only resolves
     // on progress/kill/untrack, and the background-tasks panel shows stale badges.
-    this.disposeStatusListener = StreamStatusService.onDidChange(
-      ({ streamId }) => {
-        for (const [executionId, handle] of this.handles) {
-          if (
-            handle instanceof AgentExecutionHandle &&
-            handle.childStreamId === streamId
-          ) {
-            this.notifyWaiters(executionId);
-            if (handle.parentStreamId !== handle.childStreamId) {
-              this.emitActiveSubagentsUpdate(
-                handle.parentStreamId,
-                handle.runtimeHost,
-              );
-            }
-            break;
+    this.disposeStatusListener = streamStatus.onDidChange(({ streamId }) => {
+      for (const [executionId, handle] of this.handles) {
+        if (
+          handle instanceof AgentExecutionHandle &&
+          handle.childStreamId === streamId
+        ) {
+          this.notifyWaiters(executionId);
+          if (handle.parentStreamId !== handle.childStreamId) {
+            this.emitActiveSubagentsUpdate(
+              handle.parentStreamId,
+              handle.runtimeHost,
+            );
           }
+          break;
         }
-      },
-    );
+      }
+    });
   }
 
   dispose(): void {

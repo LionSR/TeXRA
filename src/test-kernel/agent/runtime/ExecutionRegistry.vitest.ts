@@ -6,7 +6,7 @@ import {
   AgentExecutionHandle,
   ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -97,7 +97,8 @@ describe('executionRegistry', () => {
 
   it('detaches its stream-status listener when disposed', () => {
     const explicit = createRecordingHost();
-    const registry = new ExecutionRegistry();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry(streamStatus);
     const executionId = 'exec-dispose-runtime-host-test';
     const parentStreamId = 'parent-dispose-runtime-host-test' as StreamTabId;
     const childStreamId = 'child-dispose-runtime-host-test' as StreamTabId;
@@ -115,7 +116,7 @@ describe('executionRegistry', () => {
     registry.dispose();
     explicit.events.length = 0;
 
-    StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING, {
+    streamStatus.set(childStreamId, STREAM_STATUS.WAITING, {
       runtimeHost: explicit.host,
     });
 
