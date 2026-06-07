@@ -14,24 +14,21 @@ export interface ConditionalToolInjection {
   shouldInject(): boolean;
 }
 
-const injections: ConditionalToolInjection[] = [];
+export class ToolInjectionRegistry {
+  private readonly injections: ConditionalToolInjection[] = [];
 
-export function registerToolInjection(
-  injection: ConditionalToolInjection,
-): void {
-  if (injections.some((i) => i.toolName === injection.toolName)) {
-    throw new Error(
-      `Duplicate conditional tool injection: ${injection.toolName}`,
-    );
+  register(injection: ConditionalToolInjection): void {
+    if (this.injections.some((i) => i.toolName === injection.toolName)) {
+      throw new Error(
+        `Duplicate conditional tool injection: ${injection.toolName}`,
+      );
+    }
+    this.injections.push(injection);
   }
-  injections.push(injection);
+
+  list(): readonly ConditionalToolInjection[] {
+    return [...this.injections];
+  }
 }
 
-export function listToolInjections(): readonly ConditionalToolInjection[] {
-  return [...injections];
-}
-
-/** Test-only — clears the registry so suites don't leak across runs. */
-export function __resetToolInjectionRegistry(): void {
-  injections.length = 0;
-}
+export const toolInjectionRegistry = new ToolInjectionRegistry();
