@@ -26,7 +26,7 @@ vi.mock('@cli/runtime/approvalAdapter', () => ({
   installCliApprovalHandlers: mocks.installCliApprovalHandlers,
 }));
 
-vi.mock('@cli/commands/_helpers/modelArg', () => ({
+vi.mock('@cli/runtime/runModel', () => ({
   buildHeadlessRunContext: vi.fn((context: CliContext, model: string) => ({
     ...context,
     helperModel: model,
