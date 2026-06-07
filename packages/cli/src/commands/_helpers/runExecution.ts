@@ -3,10 +3,10 @@ import { runAgent } from '@agent/runtime/runAgent';
 import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
 
 import type { CliContext } from '@cli/runtime/cliContext';
+import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 
-import { approvalPromptsUnavailable } from './approvalPolicyInstruction';
 import {
   readCliTerminalStatus,
   type ExecuteAgentResult,
