@@ -17,10 +17,7 @@ import {
   type SessionMeta,
   type StreamSlice,
 } from '../state/cliState';
-import {
-  childStreamDisplayLabel,
-  streamScopeDisplayLabel,
-} from '../state/streamLabels';
+import { streamViewForId } from '../state/streamViews';
 import { transcriptEntryLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
@@ -65,19 +62,17 @@ export function sessionHeaderIdentityLine(
   } = {},
 ): string {
   const model = meta.model || '—';
+  const parentStream = context.parentStream;
   const parentStreamId =
-    context.streamId && context.parentStream?.get(context.streamId);
-  if (context.streamId && parentStreamId && context.streams) {
-    const parentLabel = streamScopeDisplayLabel({
-      parentStream: context.parentStream ?? new Map(),
-      streamId: parentStreamId,
+    context.streamId && parentStream?.get(context.streamId);
+  if (context.streamId && parentStreamId && parentStream && context.streams) {
+    const view = streamViewForId({
+      activeStreamId: context.streamId,
+      parentStream,
+      streamId: context.streamId,
       streams: context.streams,
     });
-    const childLabel = childStreamDisplayLabel(
-      context.streams.get(parentStreamId),
-      context.streamId,
-    );
-    return `subagent: ${childLabel} · parent: ${parentLabel} · model: ${model}`;
+    return `subagent: ${view.label} · parent: ${view.parentLabel} · model: ${model}`;
   }
   if (meta.teamName) {
     return `team: ${meta.teamName} · root: ${meta.agent || 'chat'} · model: ${model}`;

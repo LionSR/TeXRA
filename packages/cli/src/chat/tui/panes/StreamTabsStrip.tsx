@@ -4,11 +4,7 @@ import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 
 import { cliState, type StreamSlice } from '../state/cliState';
-import { orderedDescendantsFromTree } from '../state/focusCycle';
-import {
-  childStreamDisplayLabel,
-  streamScopeDisplayLabel,
-} from '../state/streamLabels';
+import { activeStreamTreeViews } from '../state/streamViews';
 import { useSignal } from '../state/useSignal';
 
 export interface StreamTabDisplayItem {
@@ -22,38 +18,10 @@ export interface StreamTabDisplayItem {
 
 const MAX_LABEL_WIDTH = 18;
 
-interface OrderedStreamTab {
-  readonly id: StreamTabId;
-  readonly shortcutIndex?: number;
-}
-
 function truncate(value: string, maxWidth: number): string {
   if (value.length <= maxWidth) return value;
   if (maxWidth <= 1) return '…';
   return `${value.slice(0, maxWidth - 1)}…`;
-}
-
-function orderedStreamTree(init: {
-  readonly root: StreamTabId;
-  readonly rootSlice: StreamSlice | undefined;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-}): OrderedStreamTab[] {
-  const ordered = orderedDescendantsFromTree({
-    parent: init.root,
-    parentSlice: init.rootSlice,
-    parentStream: init.parentStream,
-    streams: init.streams,
-  });
-  const out: OrderedStreamTab[] = [];
-  if (init.streams.has(init.root)) out.push({ id: init.root });
-  for (const [index, id] of ordered.entries()) {
-    if (!init.streams.has(id)) continue;
-    const position = index + 1;
-    const shortcutIndex = position <= 0 || position > 9 ? undefined : position;
-    out.push({ id, shortcutIndex });
-  }
-  return out;
 }
 
 export function streamTabSegmentText(item: StreamTabDisplayItem): string {
@@ -173,15 +141,6 @@ function streamTabsTextLength(items: readonly StreamTabDisplayItem[]): number {
   return streamTabsLineText(items).length;
 }
 
-function activeTreeRoot(
-  activeStreamId: StreamTabId | undefined,
-  parentStream: ReadonlyMap<StreamTabId, StreamTabId>,
-  streams: ReadonlyMap<StreamTabId, StreamSlice>,
-): StreamTabId | undefined {
-  if (!activeStreamId) return streams.keys().next().value;
-  return parentStream.get(activeStreamId) ?? activeStreamId;
-}
-
 function collapseMiddle(
   items: readonly StreamTabDisplayItem[],
   width: number,
@@ -221,41 +180,18 @@ export function streamTabsDisplayItems(init: {
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly width: number;
 }): readonly StreamTabDisplayItem[] {
-  const root = activeTreeRoot(
-    init.activeStreamId,
-    init.parentStream,
-    init.streams,
-  );
-  if (!root) return [];
-  const rootSlice = init.streams.get(root);
-  const ordered = orderedStreamTree({
-    root,
-    rootSlice,
-    parentStream: init.parentStream,
-    streams: init.streams,
-  });
-  if (ordered.length < 2) return [];
-  const items = ordered.map((tab): StreamTabDisplayItem => {
-    const { id } = tab;
-    const slice = init.streams.get(id);
+  const views = activeStreamTreeViews(init);
+  const items = views.map((view): StreamTabDisplayItem => {
+    const slice = view.slice;
     const status = formatStreamStatusLabel(slice?.status, {
       style: 'cliCompact',
     });
     return {
-      id,
-      label: truncate(
-        id === root
-          ? streamScopeDisplayLabel({
-              parentStream: init.parentStream,
-              streamId: id,
-              streams: init.streams,
-            })
-          : childStreamDisplayLabel(rootSlice, id),
-        MAX_LABEL_WIDTH,
-      ),
-      active: id === init.activeStreamId,
+      id: view.id,
+      label: truncate(view.label, MAX_LABEL_WIDTH),
+      active: view.active,
       running: slice?.status === STREAM_STATUS.RUNNING,
-      shortcutIndex: tab.shortcutIndex,
+      shortcutIndex: view.shortcutIndex,
       status,
     };
   });
