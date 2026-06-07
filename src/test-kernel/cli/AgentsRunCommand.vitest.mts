@@ -9,14 +9,13 @@ const mocks = vi.hoisted(() => {
     executeCliRequest: vi.fn(),
     expandRunInputs: vi.fn(),
     installCliApprovalHandlers: vi.fn(),
-    loadAgents: vi.fn(),
-    resolveAgentWithRemoteFallback: vi.fn(),
+    resolveCliAgent: vi.fn(),
     stdinInputFile,
   };
 });
 
 vi.mock('@agent/index', () => ({
-  loadAgents: mocks.loadAgents,
+  loadAgents: vi.fn(),
 }));
 
 vi.mock('@agent/storage', () => ({
@@ -43,8 +42,8 @@ vi.mock('@cli/commands/_helpers/output', () => ({
   emitCliResult: vi.fn(),
 }));
 
-vi.mock('@cli/commands/_helpers/remoteAgents', () => ({
-  resolveAgentWithRemoteFallback: mocks.resolveAgentWithRemoteFallback,
+vi.mock('@cli/commands/_helpers/agentResolution', () => ({
+  resolveCliAgent: mocks.resolveCliAgent,
 }));
 
 vi.mock('@cli/commands/_helpers/runExecution', () => ({
@@ -81,7 +80,7 @@ describe('CLI agents run command', () => {
       inputFiles: ['problem.md'],
       contextFiles: ['notes.md'],
     });
-    mocks.resolveAgentWithRemoteFallback.mockResolvedValue({
+    mocks.resolveCliAgent.mockResolvedValue({
       name: 'chat',
       category: AgentCategory.ToolUse,
       source: 'builtInToolUse',

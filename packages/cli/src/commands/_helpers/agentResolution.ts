@@ -10,14 +10,17 @@ export async function shouldHonorRemoteAgentPriority(
 }
 
 /**
- * Resolve an agent from the local registry, falling back to a full
- * (remote-inclusive) reload when it is missing or remote agents should take
- * priority. Callers must populate the local registry first (typically via
- * `loadAgents({ includeRemote: false })`).
+ * Resolve a CLI launch target from the agent registry.
+ *
+ * The lookup owns the full local/remote loading policy: commands do not
+ * pre-load agents before calling it. Local built-ins are loaded first; then a
+ * full remote-inclusive reload runs when the agent is missing locally or an
+ * authenticated relay session should prefer remote agent definitions.
  */
-export async function resolveAgentWithRemoteFallback(
+export async function resolveCliAgent(
   name: string,
 ): Promise<AgentEntry | undefined> {
+  await loadAgents({ includeRemote: false });
   let agent = getAgent(name);
   if (!agent || (await shouldHonorRemoteAgentPriority(name))) {
     await loadAgents();
