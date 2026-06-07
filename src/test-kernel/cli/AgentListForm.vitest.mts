@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  agentFormWidth,
   agentPickerPrimarySectionTitle,
   agentSelectWindow,
   currentVisibleAgent,
   hiddenCurrentAgentHint,
 } from '@cli/chat/tui/forms/AgentListForm';
+import { formFrameWidth } from '@cli/chat/tui/forms/_shared/FormFrame';
 
 describe('CLI AgentListForm row budget', () => {
   const visibleAgents = [
@@ -15,9 +15,9 @@ describe('CLI AgentListForm row budget', () => {
   ];
 
   it('clamps the regular form width to the terminal columns', () => {
-    expect(agentFormWidth(120)).toBe(80);
-    expect(agentFormWidth(80)).toBe(80);
-    expect(agentFormWidth(60)).toBe(60);
+    expect(formFrameWidth(120)).toBe(80);
+    expect(formFrameWidth(80)).toBe(80);
+    expect(formFrameWidth(60)).toBe(60);
   });
 
   it('resolves the current visible agent from bare names or canonical keys', () => {
