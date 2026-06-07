@@ -5,6 +5,7 @@ import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
+import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability';
 import { initPlatform, tryPlatform } from '@platform/platform';
 
 // Local imports - telemetry
@@ -22,13 +23,14 @@ import {
 
 // Local imports - common state
 import { toErrorMessage } from '@common/errors';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Local imports - logger
 import { setOutputChannelFactory } from '@logger/logUtils';
 
+// Local imports - shared state
+import { GlobalStateKey } from '@shared/state/stateKeys';
+
 // Local imports - tool integrations
-import { setTexraCliEntrypointChecker } from '@tools/externalToolDefs';
 import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
 import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
 
@@ -148,9 +150,6 @@ export async function initCliPlatform(
 ): Promise<void> {
   cliWorkspaceCwd = context.cwd;
   quietPlatformLogs = context.quietLogs ?? false;
-  setTexraCliEntrypointChecker(() =>
-    isTexraCliEntrypointPath(readCliEntrypointPath()),
-  );
   setOutputChannelFactory(
     quietPlatformLogs ? () => ({ appendLine: () => undefined }) : null,
   );
@@ -183,6 +182,11 @@ export async function initCliPlatform(
       secrets: getCliSecrets(),
       lifecycle,
       agentResume: { tryResumeStream: async () => false },
+      toolAvailability: {
+        ...NO_TOOL_AVAILABILITY_HOST,
+        isTexraCliEntrypoint: () =>
+          isTexraCliEntrypointPath(readCliEntrypointPath()),
+      },
     });
     if (context.installSignalHandlers !== false) {
       installCliShutdownSignalHandlers(lifecycle);
