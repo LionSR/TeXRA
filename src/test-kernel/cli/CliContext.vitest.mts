@@ -169,6 +169,29 @@ describe('CLI context config defaults', () => {
     expect(loaded.warnings).toEqual([]);
   });
 
+  it('prefers prefixed config keys over legacy bare keys', async () => {
+    const workspace = await workspaceWithConfig(
+      JSON.stringify({
+        agent: 'legacy-agent',
+        model: 'gpt55',
+        chat: { agent: 'legacy-chat', model: 'sonnet46T' },
+        'texra.agent': 'generic',
+        'texra.model': 'deepseekT',
+        'texra.chat': { agent: 'chat', model: 'gpt55' },
+      }),
+    );
+
+    const loaded = await loadWorkspaceCliConfig(workspace);
+
+    expect(loaded.values.agent).toBe('generic');
+    expect(loaded.values.model).toBe('deepseekT');
+    expect(loaded.values.chat).toEqual({
+      agent: 'chat',
+      model: 'gpt55',
+    });
+    expect(loaded.warnings).toEqual([]);
+  });
+
   it('canonicalizes existing workspace paths before reading config', async () => {
     const root = await mkdtemp(join(tmpdir(), 'texra-cli-context-link-'));
     const workspace = join(root, 'workspace');
