@@ -91,7 +91,10 @@ describe('JsonRpcConnection', () => {
     });
     const err = await pending;
     expect(err).toBeInstanceOf(Error);
+    // vscode-jsonrpc surfaces the code on the ResponseError object separately
+    // from the message string.
     expect((err as Error).message).toContain('unknown method');
+    expect((err as { code?: number }).code).toBe(-32601);
   });
 
   it('routes notifications from the server to subscribed handlers', async () => {
@@ -198,5 +201,6 @@ describe('JsonRpcConnection', () => {
     connection.dispose('test teardown');
     const err = await pending;
     expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toBe('test teardown');
   });
 });
