@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import { defaultInitAgentOptions, initCommand } from '@cli/commands/init';
 import { initWizardModelSelectItems } from '@cli/init/runInitWizard';
+import type { CliModelAccess } from '@cli/runtime/modelAccess';
+
+function modelAccess(
+  value: string,
+  overrides: Partial<CliModelAccess> = {},
+): CliModelAccess {
+  return {
+    model: { value, label: value },
+    available: true,
+    status: 'available',
+    ...overrides,
+  };
+}
 
 describe('CLI init command', () => {
   it('accepts global CLI flags while keeping init-specific cwd help', () => {
@@ -41,18 +54,16 @@ describe('CLI init command', () => {
   it('disables init model rows unavailable in the active API mode', () => {
     expect(
       initWizardModelSelectItems([
-        {
-          value: 'sonnet46T',
-          label: 'Sonnet',
+        modelAccess('sonnet46T', {
+          model: { value: 'sonnet46T', label: 'Sonnet' },
           available: true,
           status: 'included access',
-        },
-        {
-          value: 'deepseekT',
-          label: 'DeepSeek',
+        }),
+        modelAccess('deepseekT', {
+          model: { value: 'deepseekT', label: 'DeepSeek' },
           available: false,
           status: 'api key set',
-        },
+        }),
       ]),
     ).toEqual([
       {
@@ -73,18 +84,16 @@ describe('CLI init command', () => {
   it('keeps all-unavailable init model rows selectable as a fallback', () => {
     expect(
       initWizardModelSelectItems([
-        {
-          value: 'sonnet46T',
-          label: 'Sonnet',
+        modelAccess('sonnet46T', {
+          model: { value: 'sonnet46T', label: 'Sonnet' },
           available: false,
           status: 'login required',
-        },
-        {
-          value: 'deepseekT',
-          label: 'DeepSeek',
+        }),
+        modelAccess('deepseekT', {
+          model: { value: 'deepseekT', label: 'DeepSeek' },
           available: false,
           status: 'missing key',
-        },
+        }),
       ]),
     ).toEqual([
       {

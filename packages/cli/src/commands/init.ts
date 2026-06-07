@@ -10,7 +10,10 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
-import { getCliModelAccessList } from '../runtime/modelAccess';
+import {
+  getCliModelAccessList,
+  type CliModelAccess,
+} from '../runtime/modelAccess';
 import {
   buildInitConfig,
   configFileExists,
@@ -40,33 +43,21 @@ export function defaultInitAgentOptions(
 
 async function gatherOptions(apiMode: CliApiMode): Promise<{
   agents: InitAgentOption[];
-  models: {
-    value: string;
-    label: string;
-    available: boolean;
-    status: string;
-  }[];
+  models: CliModelAccess[];
 }> {
   await loadAgents({ includeRemote: false });
   const agents = defaultInitAgentOptions(
     getVisibleAgents(AgentCategory.ToolUse),
   );
-  const models = (await getCliModelAccessList({ apiMode })).map((entry) => ({
-    value: entry.model.value,
-    label: entry.model.label ?? entry.model.value,
-    available: entry.available,
-    status: entry.status,
-  }));
+  const models = await getCliModelAccessList({ apiMode });
   return { agents, models };
 }
 
-function defaultAnswers(
-  models: { value: string; available: boolean }[],
-): InitAnswers {
+function defaultAnswers(models: readonly CliModelAccess[]): InitAnswers {
   const firstAvailable = models.find((model) => model.available);
   return {
     agent: BUILTIN_DEFAULT_CHAT_AGENT,
-    model: firstAvailable?.value ?? CLI_BUILTIN_DEFAULT_MODEL,
+    model: firstAvailable?.model.value ?? CLI_BUILTIN_DEFAULT_MODEL,
     // Match the runtime default (see buildCliContext). `ask` prompts in
     // interactive runs and safely denies in headless ones — unlike `never`,
     // which silently denies every privileged action.
@@ -78,7 +69,7 @@ function defaultAnswers(
 function printSummary(
   filePath: string,
   answers: InitAnswers,
-  models: { value: string; available: boolean }[],
+  models: readonly CliModelAccess[],
 ): void {
   const lines = [
     `Wrote ${filePath}`,
@@ -87,7 +78,7 @@ function printSummary(
     `  approval: ${answers.approvalPolicy}`,
     `  output: ${answers.outputFormat}`,
   ];
-  const chosen = models.find((model) => model.value === answers.model);
+  const chosen = models.find((model) => model.model.value === answers.model);
   if (chosen && !chosen.available) {
     lines.push(
       '',
