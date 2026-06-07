@@ -70,6 +70,7 @@ import {
   withNewWindowWorkspaceArgs,
   withWorkspacePathArg,
 } from '../workspacePath.js';
+import type { StreamSnapshotStore } from '@transcript';
 
 const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
 const __dirname = findDesktopMainDir(moduleDirname);
@@ -238,6 +239,7 @@ function createWindow(options: {
   authCallbackState: DesktopAuthCallbackState;
   initializeCrashReporting: () => Promise<void>;
   streamSnapshotStore?: DesktopStreamSnapshotStore;
+  progressSnapshotStore: StreamSnapshotStore;
 }): void {
   const window = new BrowserWindow({
     width: 960,
@@ -431,6 +433,7 @@ function createWindow(options: {
     },
     showErrorMessage,
     streamSnapshotStore: options.streamSnapshotStore,
+    progressSnapshotStore: options.progressSnapshotStore,
   });
   const disposeAgentResumeHandler = setDesktopAgentResumeHandler((streamId) =>
     agentExecution.progress.tryResumeStream(streamId),
@@ -699,6 +702,7 @@ if (protocolLifecycle.shouldContinue) {
           authCallbackState,
           initializeCrashReporting,
           streamSnapshotStore,
+          progressSnapshotStore: platformInit.progressSnapshotStore,
         });
       reopenMainWindow();
 
