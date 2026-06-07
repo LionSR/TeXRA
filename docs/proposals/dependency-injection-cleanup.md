@@ -14,7 +14,7 @@ A multi-agent read-only audit: three parallel deep agents each owned a non-overl
 TeXRA already has **one genuinely clean DI seam**: `platform()` (`src/platform/platform.ts`) — a frozen, single-call composition root over small vscode-free ports. The problem is that **three other dependency-flow mechanisms grew up around it** instead of through it, and they now overlap:
 
 1. **A fat context bag** (`AgentCore` → `*Services`): 13 declared fields that balloon to **~31–35 at runtime** because the bag is spread wholesale into nested flows. Nodes read **3–9** fields while carrying 31–35 — **~70–90% is dead weight** at each node.
-2. **24 module-level `set*` singletons** (service-locator style): host capabilities injected via mutable module globals. **9 have silent no-op defaults**; **6 are unavailable in at least one non-extension host**, so they silently no-op outside the happy path. **8 are written from multiple composition roots.**
+2. **24 module-level `set*` singletons** (service-locator style): host capabilities injected via mutable module globals. **9 have silent no-op defaults**; several are unavailable in at least one non-extension host, so they silently no-op outside the happy path. **8 are written from multiple composition roots.**
 3. **Ambient state** (AsyncLocalStorage + 7 process-global registries): `RunContext` and `ToolCallContext` plus the runtime registries that — per [`agent-sdk-readiness.md`](./agent-sdk-readiness.md) — block concurrent in-process sessions.
 
 **The headline finding:** mechanisms A and C carry **the same 7–8 fields at once**, and the two halves of the codebase disagree on which is canonical — **flow nodes read them from the bag, tools read them from `RunContext`**. That split-brain is the strongest evidence that bag-threading those fields is redundant, and it tells us the migration target is already chosen by the code.
@@ -142,9 +142,9 @@ flowchart LR
     subgraph AFTER["4 cohesive objects"]
         direction TB
         RI["RunIdentity\n{runtimeHost, streamId, executionId}"]
-        DP["DelegationPolicy\n{depth, config}"]
+        DP["DelegationPolicy\n{depth, config,\napprovalPromptsUnavailable}"]
         AD["AgentDefinition\n{config, setting, prompt,\nmodelHandler, userVarChannels}"]
-        AMB["ambient: logger\n(genuine cross-cutting)"]
+        AMB["ambient: logger,\nworkingDirectory\n(genuine cross-cutting)"]
     end
 
     f1 & f2 & f3 --> RI
@@ -236,7 +236,7 @@ flowchart TB
 
 ### The silent-no-op trap
 
-9 setters default to a no-op. Six of those are unavailable in at least one non-extension host, so depending on host, the linter, manual criticism, build display, tool-missing toasts, tool-unavailable notifications, and the GitHub token are **silently absent with no error**. Folding into typed `Platform` ports turns each missing wiring into a compile error instead of a silent runtime gap.
+9 setters default to a no-op. Depending on host, examples such as the linter, manual criticism, build display, tool-missing toasts, tool-unavailable notifications, and the GitHub token are **silently absent with no error**. Folding into typed `Platform` ports turns each missing wiring into a compile error instead of a silent runtime gap.
 
 ---
 
