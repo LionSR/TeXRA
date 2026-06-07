@@ -6,6 +6,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseWaitNode';
 import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
+import { IdleContinuationRegistry } from '@agent/runtime/idleContinuation';
 
 describe('ToolUseWaitNode', () => {
   it('marks a delivered subagent cycle before stopping on interruption', async () => {
@@ -19,6 +20,7 @@ describe('ToolUseWaitNode', () => {
 
     const services = {
       checkInterruption: () => interrupted,
+      idleContinuations: new IdleContinuationRegistry(),
       isSubagent: true,
       logger: { error: vi.fn() },
       modelHandler: { extractAssistantText: () => undefined },
@@ -60,6 +62,7 @@ describe('ToolUseWaitNode', () => {
 
     const services = {
       checkInterruption: () => interrupted,
+      idleContinuations: new IdleContinuationRegistry(),
       isSubagent: true,
       logger: { error: vi.fn(), info: vi.fn() },
       modelHandler: {

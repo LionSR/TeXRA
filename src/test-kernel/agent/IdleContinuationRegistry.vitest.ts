@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  __resetIdleContinuationRegistry,
-  listIdleContinuationProviders,
-  registerIdleContinuation,
+  IdleContinuationRegistry,
   type IdleContinuationContext,
+  type IdleContinuationProvider,
 } from '@agent/runtime/idleContinuation';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -15,34 +14,36 @@ function emptyContext(): IdleContinuationContext {
 }
 
 describe('idle-continuation registry', () => {
+  let registry: IdleContinuationRegistry;
+
   beforeEach(() => {
-    __resetIdleContinuationRegistry();
+    registry = new IdleContinuationRegistry();
   });
 
   it('registers providers and returns them in insertion order', () => {
-    registerIdleContinuation({
+    registry.register({
       source: 'first',
       build: async () => null,
     });
-    registerIdleContinuation({
+    registry.register({
       source: 'second',
       build: async () => null,
     });
 
-    const sources = listIdleContinuationProviders().map((p) => p.source);
+    const sources = registry.list().map((p) => p.source);
     expect(sources).toEqual(['first', 'second']);
   });
 
   it('rejects duplicate `source` registrations', () => {
-    registerIdleContinuation({ source: 'dup', build: async () => null });
+    registry.register({ source: 'dup', build: async () => null });
     expect(() =>
-      registerIdleContinuation({ source: 'dup', build: async () => null }),
+      registry.register({ source: 'dup', build: async () => null }),
     ).toThrow(/Duplicate idle-continuation provider/);
   });
 
   it('lets a provider synthesize a continuation that the wait-node can commit', async () => {
     let committed = false;
-    registerIdleContinuation({
+    registry.register({
       source: 'test',
       build: async () => ({
         source: 'test',
@@ -53,10 +54,23 @@ describe('idle-continuation registry', () => {
       }),
     });
 
-    const [provider] = listIdleContinuationProviders();
+    const [provider] = registry.list();
     const result = await provider.build(emptyContext());
     expect(result?.followUp).toBe('keep going');
     await result?.commit();
     expect(committed).toBe(true);
+  });
+
+  it('keeps providers scoped to each registry instance', () => {
+    const other = new IdleContinuationRegistry();
+    const provider: IdleContinuationProvider = {
+      source: 'test',
+      build: async () => null,
+    };
+
+    registry.register(provider);
+
+    expect(registry.list()).toEqual([provider]);
+    expect(other.list()).toEqual([]);
   });
 });

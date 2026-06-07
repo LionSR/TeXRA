@@ -35,22 +35,21 @@ export interface IdleContinuationProvider {
   build(ctx: IdleContinuationContext): Promise<IdleContinuation | null>;
 }
 
-const providers: IdleContinuationProvider[] = [];
+export class IdleContinuationRegistry {
+  private readonly providers: IdleContinuationProvider[] = [];
 
-export function registerIdleContinuation(
-  provider: IdleContinuationProvider,
-): void {
-  if (providers.some((p) => p.source === provider.source)) {
-    throw new Error(`Duplicate idle-continuation provider: ${provider.source}`);
+  register(provider: IdleContinuationProvider): void {
+    if (this.providers.some((p) => p.source === provider.source)) {
+      throw new Error(
+        `Duplicate idle-continuation provider: ${provider.source}`,
+      );
+    }
+    this.providers.push(provider);
   }
-  providers.push(provider);
+
+  list(): readonly IdleContinuationProvider[] {
+    return [...this.providers];
+  }
 }
 
-export function listIdleContinuationProviders(): readonly IdleContinuationProvider[] {
-  return [...providers];
-}
-
-/** Test-only — clears the registry so suites don't leak across runs. */
-export function __resetIdleContinuationRegistry(): void {
-  providers.length = 0;
-}
+export const idleContinuationRegistry = new IdleContinuationRegistry();

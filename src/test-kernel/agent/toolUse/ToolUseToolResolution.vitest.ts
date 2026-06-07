@@ -2,10 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
-import {
-  __resetToolInjectionRegistry,
-  registerToolInjection,
-} from '@agent/runtime/toolInjection';
+import { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import type { ToolDefinition } from '@model';
 import type { ToolResult } from '@tools/result';
 
@@ -32,8 +29,10 @@ function toolDefs(names: readonly string[]): ToolDefinition[] {
 }
 
 describe('tool-use tool resolution', () => {
+  let toolInjections: ToolInjectionRegistry;
+
   beforeEach(() => {
-    __resetToolInjectionRegistry();
+    toolInjections = new ToolInjectionRegistry();
   });
 
   it('filters approval-gated tools when approval prompts are unavailable', async () => {
@@ -65,6 +64,7 @@ describe('tool-use tool resolution', () => {
       ]),
       registry,
       logger,
+      toolInjections,
       approvalPromptsUnavailable: true,
       delegationBlocked: false,
     });
@@ -96,6 +96,7 @@ describe('tool-use tool resolution', () => {
       ]),
       registry,
       logger,
+      toolInjections,
       approvalPromptsUnavailable: false,
       delegationBlocked: false,
     });
@@ -118,6 +119,7 @@ describe('tool-use tool resolution', () => {
       tools: toolDefs(['delegate_agent', 'grep']),
       registry,
       logger,
+      toolInjections,
       approvalPromptsUnavailable: false,
       delegationBlocked: true,
     });
@@ -133,6 +135,7 @@ describe('tool-use tool resolution', () => {
       tools: toolDefs(['bash', 'delegate_agent', 'grep']),
       registry,
       logger,
+      toolInjections,
       approvalPromptsUnavailable: true,
       delegationBlocked: true,
     });
@@ -143,7 +146,7 @@ describe('tool-use tool resolution', () => {
 
   it('also trims injected delegation tools by delegation depth', async () => {
     const registry = registryFor(['delegate_agent', 'grep']);
-    registerToolInjection({
+    toolInjections.register({
       toolName: 'delegate_agent',
       shouldInject: () => true,
     });
@@ -152,6 +155,7 @@ describe('tool-use tool resolution', () => {
       tools: toolDefs(['grep']),
       registry,
       logger,
+      toolInjections,
       approvalPromptsUnavailable: false,
       delegationBlocked: true,
     });
@@ -162,7 +166,7 @@ describe('tool-use tool resolution', () => {
 
   it('filters injected approval-gated tools when approval prompts are unavailable', async () => {
     const registry = registryFor(['grep', 'update_config']);
-    registerToolInjection({
+    toolInjections.register({
       toolName: 'update_config',
       shouldInject: () => true,
     });
@@ -171,6 +175,7 @@ describe('tool-use tool resolution', () => {
       tools: toolDefs(['grep']),
       registry,
       logger,
+      toolInjections,
       approvalPromptsUnavailable: true,
       delegationBlocked: false,
     });
