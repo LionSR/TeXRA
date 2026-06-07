@@ -4,7 +4,6 @@ import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { isOAuthProvider } from '@auth/sharedConfig';
 import { isNonEmptyString } from '@utils/core/stringCore';
 
-import { formatCliAccountLabelForDisplay } from '../runtime/accountDisplay';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import {
@@ -17,6 +16,7 @@ import {
   parseUtcMonth,
   type RelayUsageSummary,
 } from '../runtime/relayUsage';
+import { CLI_OAUTH_PROVIDER_INPUTS } from '../runtime/oauthProviderDisplay';
 import {
   formatCliManualAuthUrlMessage,
   getCliAuthProfile,
@@ -101,7 +101,7 @@ export function shouldPromptForLoginProvider(
 async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
   if (!isOAuthProvider(init.provider)) {
     writeTextStderr(
-      `Unsupported provider: ${init.provider}. Expected github or google.`,
+      `Unsupported provider: ${init.provider}. Expected ${CLI_OAUTH_PROVIDER_INPUTS}.`,
     );
     return CliExitCode.Usage;
   }
@@ -155,13 +155,12 @@ export const loginCommand = defineCliCommand({
     ...GLOBAL_ARGS,
     provider: {
       type: 'string',
-      description:
-        'OAuth provider: github or google (alternative to positional)',
+      description: `OAuth provider: ${CLI_OAUTH_PROVIDER_INPUTS} (alternative to positional)`,
     },
     providerArg: {
       type: 'positional',
       required: false,
-      description: 'OAuth provider: github or google',
+      description: `OAuth provider: ${CLI_OAUTH_PROVIDER_INPUTS}`,
     },
     'no-browser': {
       type: 'boolean',
@@ -245,11 +244,7 @@ const authStatusCommand = defineCliCommand({
       json: profile,
       ndjson: { kind: 'auth-status', ...profile },
       text: profile.authenticated
-        ? `Signed in as ${
-            profile.accountLabel
-              ? formatCliAccountLabelForDisplay(profile.accountLabel)
-              : 'unknown'
-          } (${profile.tier ?? 'unknown'}).`
+        ? `Signed in as ${profile.accountLabel || 'unknown'} (${profile.tier ?? 'unknown'}).`
         : 'Not signed in.',
     });
     return CliExitCode.Success;
