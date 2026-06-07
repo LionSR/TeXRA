@@ -123,16 +123,13 @@ export function getAuthCallbackUri(uriScheme: string): string {
 }
 
 /**
- * Result of parsing the external auth callback URI.
- * In Codespaces, VS Code adds a state parameter that must be preserved
- * for the callback routing to work.
+ * Result of resolving the external auth callback URI.
+ * In Codespaces, VS Code adds a ?state= routing token to the URL that must be
+ * preserved on redirect_to for the callback to route back into the editor, so
+ * the OAuth flow uses this full URL (token included) as its redirectTo.
  */
 export interface ExternalAuthCallbackInfo {
-  /** Base URL without query params (for Supabase redirectTo) */
-  baseUrl: string;
-  /** VS Code's state parameter (must be passed through OAuth flow) */
-  vscodeState: string | null;
-  /** Full URL with state (for logging/debugging) */
+  /** Full callback URL, including any VS Code ?state= routing token. */
   fullUrl: string;
 }
 
@@ -167,8 +164,7 @@ export function setExternalAuthCallbackResolver(
  */
 export async function getExternalAuthCallbackInfo(): Promise<ExternalAuthCallbackInfo> {
   if (!externalAuthCallbackResolver) {
-    const baseUrl = getAuthCallbackUri('vscode');
-    return { baseUrl, vscodeState: null, fullUrl: baseUrl };
+    return { fullUrl: getAuthCallbackUri('vscode') };
   }
   return externalAuthCallbackResolver();
 }
