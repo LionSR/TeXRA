@@ -50,7 +50,6 @@ import {
   formatMediaNeedsVisionWarning,
   shouldWarnMediaNeedsVision,
 } from './mediaVisionWarning';
-import { runCoordinatorBridge } from './runCoordinators';
 import { getStreamTabId } from './streamTab';
 import { StreamStatusService } from './StreamStatusService';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -98,8 +97,6 @@ export async function withExecutionRunContext<T>(
   ctx: AgentLaunchContext,
   fn: () => T | Promise<T>,
 ): Promise<T> {
-  // Build the run context first: createRunContext throws on a null
-  // runtimeHost, and we must not retain a coordinator we can't release.
   const runContext = createRunContext({
     runtimeHost: ctx.runtimeHost,
     streamId: ctx.streamId,
@@ -114,15 +111,7 @@ export async function withExecutionRunContext<T>(
     approvalPromptsUnavailable: ctx.approvalPromptsUnavailable,
     stopAfterCycle: ctx.stopAfterCycle,
   });
-  const release = runCoordinatorBridge.retainForStream(
-    ctx.streamId,
-    ctx.coordinators,
-  );
-  try {
-    return await withRunContext(runContext, fn);
-  } finally {
-    release();
-  }
+  return await withRunContext(runContext, fn);
 }
 
 export async function getAgentPath(
