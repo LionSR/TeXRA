@@ -38,7 +38,7 @@ import {
 } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { untrackExecution } from '@agent/runtime/executionRegistry';
+import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import {
@@ -627,7 +627,7 @@ function startClaudeAgentLoop(params: {
           sawTurnFailure,
         }),
       ).catch(() => {});
-      untrackExecution(executionId);
+      executionRegistry.untrack(executionId);
       finalizeAgentCliLoopStatus(childStreamId, runtimeHost);
       disposeTrace();
     }

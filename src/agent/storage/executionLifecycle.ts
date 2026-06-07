@@ -129,7 +129,7 @@ export async function registerExecution(
  * Serialized with other meta updates for the same execution to prevent
  * read-modify-write races (e.g. with writeSessionDescription).
  * Never throws — storage failures are swallowed so callers' lifecycle
- * logic (untrackExecution, follow-up delivery) always runs.
+ * logic (registry untrack, follow-up delivery) always runs.
  */
 export async function writeTerminalStatus(
   executionId: ExecutionId,

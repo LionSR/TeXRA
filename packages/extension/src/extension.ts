@@ -17,7 +17,7 @@ import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import { initializeOdysseyPrompts } from '@agent/odyssey';
-import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
+import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import {
   getServerSideKeyService,
@@ -187,7 +187,9 @@ export async function activate(context: vscode.ExtensionContext) {
   });
   registerAgentFeatures();
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => disposeStatusListener?.());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killBackgroundProcesses());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+    executionRegistry.killBackgroundProcesses(),
+  );
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
     interruptAllCodexSessions(),
   );

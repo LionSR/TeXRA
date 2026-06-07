@@ -26,10 +26,7 @@ import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
-import {
-  detachActiveChildren,
-  interruptActiveChildren,
-} from '@agent/runtime/executionRegistry';
+import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
 import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
@@ -854,9 +851,9 @@ export class DesktopProgressBridge {
   private stopStream(streamId: StreamTabId): void {
     runCoordinatorBridge.clearRetryRequest(streamId);
     if (this.options.detachSubagentsOnStop === true) {
-      detachActiveChildren(streamId, this.runtimeHost);
+      executionRegistry.detachActiveChildren(streamId, this.runtimeHost);
     } else {
-      interruptActiveChildren(streamId);
+      executionRegistry.interruptActiveChildren(streamId);
     }
     interruptRegistry.get(streamId)?.interrupt();
     StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, {
