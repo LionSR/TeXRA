@@ -1,11 +1,10 @@
 // Node.js built-in imports
 import * as assert from 'assert';
 
-// Local imports - tools
-import {
-  findExternalToolDef,
-  setTexraCliEntrypointChecker,
-} from '@tools/externalToolDefs';
+// Local imports - platform/test support/tools
+import { initPlatform, tryPlatform } from '@platform/platform';
+import { createFakePlatform } from '@test/support/FakePlatform';
+import { findExternalToolDef } from '@tools/externalToolDefs';
 
 describe('external tool definitions', () => {
   it('keeps Zotero visible as a user-toggleable tool group', () => {
@@ -39,7 +38,18 @@ describe('external tool definitions', () => {
   it('detects the current TeXRA CLI process through the host checker', async () => {
     const texraCli = findExternalToolDef('texra-cli');
     assert.ok(texraCli, 'TeXRA CLI tool definition should exist');
-    setTexraCliEntrypointChecker(() => true);
+    const previousPlatform = tryPlatform();
+    initPlatform(
+      createFakePlatform(
+        {},
+        {
+          toolAvailability: {
+            isVscodeExtensionInstalled: () => false,
+            isTexraCliEntrypoint: () => true,
+          },
+        },
+      ),
+    );
 
     try {
       const probeResult = await texraCli.probe?.();
@@ -51,7 +61,7 @@ describe('external tool definitions', () => {
         'Detected; integration coming soon',
       );
     } finally {
-      setTexraCliEntrypointChecker(() => false);
+      initPlatform(previousPlatform ?? createFakePlatform());
     }
   });
 });

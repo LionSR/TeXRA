@@ -20,7 +20,7 @@ The kernel migration is independently valuable to all three hosts (extension, de
 
 ## 2. Goals
 
-- Replace every implicit lookup of `defaultProgressSink`, `defaultAgentRuntimeHost`, `runStorageService`, the singleton approval coordinators (`planApprovalCoordinator`, `proposalCoordinator`, `retryCoordinator`), and per-domain setters (`setToolEditApprovalHandler`, `setGitHubTokenProvider`, `setExtensionChecker`, …) with explicit `RunContext` access.
+- Replace every implicit lookup of `defaultProgressSink`, `defaultAgentRuntimeHost`, `runStorageService`, the singleton approval coordinators (`planApprovalCoordinator`, `proposalCoordinator`, `retryCoordinator`), and per-run/per-domain setters (`setToolEditApprovalHandler`, `setGitHubTokenProvider`, …) with explicit `RunContext` access. Process-lifetime host capabilities such as external tool availability belong on `Platform` ports instead.
 - Provide a single ALS scope at the outermost agent-execution boundary so existing call sites can adopt `RunContext` mechanically without a 30-file PR.
 - Delete the singletons in retirement waves; each wave is independently mergeable and shrinks the ambient surface monotonically.
 - Lock in the three-ring structure under `packages/core/` (pure logic / runtime orchestration / platform defaults) so a new host adapter (Tauri, daemon, embedded SDK) needs only Ring 3 + a thin host package — no Ring 1 or Ring 2 changes.
@@ -55,7 +55,7 @@ A May 2026 audit of `src/agent/`, `src/tools/approval/`, `src/auth/`, `src/event
 | Tool-edit approval handler      | `setToolEditApprovalHandler`      | `src/tools/approval/toolEditApproval.ts:74,113`    |
 | Latex build-display handler     | `setOpenBuildDisplay`             | `src/tools/approval/latexPreview.ts:22,24`         |
 | GitHub token provider           | `setGitHubTokenProvider`          | `src/tools/github/githubAuth.ts:13`                |
-| Extension checker               | `setExtensionChecker`             | `src/tools/externalToolDefs.ts:35`                 |
+| External tool host availability | `platform().toolAvailability`     | `src/platform/interfaces/toolAvailability.ts`      |
 | Linter provider                 | `setLinterProvider`               | `src/tools/DiagnosticsTool.ts:10,12`               |
 | Lean VS Code services           | `setLeanVscodeServices`           | `src/tools/lean/leanVscodeServices.ts:45,47`       |
 | Setup platform                  | `setSetupPlatform`                | `src/tools/setup/platform.ts:108,111`              |
@@ -122,7 +122,7 @@ export interface RunContext {
   /** Workspace root (cwd) for this run — per-run override of WorkspaceProvider. */
   readonly workspaceRoot: string;
 
-  /** Runtime-resolved capabilities. Replaces setExtensionChecker, setGitHubTokenProvider, … */
+  /** Runtime-resolved capabilities. Replaces per-run lookups such as setGitHubTokenProvider, … */
   readonly capabilities: RunCapabilities;
 
   /** Coordinators bound to this run's progress sink. Replaces the three exported singletons in §4.3. */
@@ -216,7 +216,7 @@ Each phase is independently mergeable and ships a concrete kernel improvement.
 
 ### Phase 3 — Approval handlers + capabilities injection (~1 week)
 
-- `setToolEditApprovalHandler` (`toolEditApproval.ts:74`), `setLatexBuildDisplay` (`latexPreview.ts:21`), `setGitHubTokenProvider` (`githubAuth.ts:13`), `setExtensionChecker` (`externalToolDefs.ts:35`) — replaced by `RunCapabilities` injection.
+- `setToolEditApprovalHandler` (`toolEditApproval.ts:74`), `setLatexBuildDisplay` (`latexPreview.ts:21`), `setGitHubTokenProvider` (`githubAuth.ts:13`) — replaced by `RunCapabilities` injection. Process-lifetime host checks should remain on typed `Platform` ports.
 - The host adapter populates `RunCapabilities` once when building the `RunContext`. No more "the global was set during boot but the test forgot to clear it."
 - **Exit criteria:** the four setters and their backing `let` declarations are deleted; `RunCapabilities` covers their use cases.
 
