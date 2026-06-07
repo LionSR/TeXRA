@@ -38,7 +38,7 @@ import {
 } from '@cli/chat/tui/state/childControls';
 import { visibleSubagentRows } from '@cli/chat/tui/state/childStreamMerge';
 import { NO_BYPASS } from '@cli/chat/tui/state/cliState';
-import { streamScopeDisplayLabel } from '@cli/chat/tui/state/streamLabels';
+import { streamDisplayLabel } from '@cli/chat/tui/state/streamViews';
 import type {
   ProcessOutputTail,
   StreamSlice,
@@ -621,14 +621,14 @@ describe('CLI child execution controls', () => {
     ] as const);
 
     expect(
-      streamScopeDisplayLabel({
+      streamDisplayLabel({
         parentStream,
         streamId: 'main',
         streams,
       }),
     ).toBe('main');
     expect(
-      streamScopeDisplayLabel({
+      streamDisplayLabel({
         parentStream,
         streamId: 'review-stream',
         streams,
