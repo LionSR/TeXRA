@@ -12,7 +12,7 @@ import { formatDuration } from '@utils/core';
 // Local imports - CLI state
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { visibleSubagentRows } from './childStreamMerge';
-import { streamDisplayLabel } from './streamViews';
+import { activeStreamParentOrSelfId, streamDisplayLabel } from './streamViews';
 import { orderedDescendantsFromTree } from './focusCycle';
 import { transcriptEntryLines } from './transcriptLines';
 import type {
@@ -420,9 +420,12 @@ export function numericFocusTargetForActiveStream(init: {
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly zeroBasedIndex: number;
 }): StreamTabId | undefined {
-  if (!init.activeStreamId || init.zeroBasedIndex < 0) return undefined;
-  const root =
-    init.parentStream.get(init.activeStreamId) ?? init.activeStreamId;
+  const activeStreamId = init.activeStreamId;
+  if (!activeStreamId || init.zeroBasedIndex < 0) return undefined;
+  const root = activeStreamParentOrSelfId({
+    activeStreamId,
+    parentStream: init.parentStream,
+  });
   return orderedDescendantsFromTree({
     parent: root,
     parentSlice: init.streams.get(root),
