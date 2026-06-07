@@ -224,9 +224,10 @@ async function createBridge(
   const { DesktopProgressBridge } = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
-  return new DesktopProgressBridge((message) => messages.push(message), {
-    streamSnapshotStore: options.streamSnapshotStore,
-  }) as TestableBridge;
+  return new DesktopProgressBridge(
+    (message) => messages.push(message),
+    { streamSnapshotStore: options.streamSnapshotStore },
+  ) as TestableBridge;
 }
 
 async function createExecution(options: {
@@ -368,7 +369,7 @@ function expectWorkflowResume(
 
 async function settleProgressEvents(): Promise<void> {
   await Promise.resolve();
-  await new Promise((resolve) => setTimeout(resolve, 25));
+  await new Promise((resolve) => setImmediate(resolve));
 }
 
 describe('DesktopProgressBridge', () => {
@@ -533,6 +534,31 @@ describe('DesktopProgressBridge', () => {
     }
   });
 
+  it('does not route to progress for suppressed background stream switches', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      bridge.handleProgressEvent('setActiveStream', {
+        streamId: 'child-stream',
+        agentCategory: AGENT_CATEGORY.TOOL_USE,
+        suppressViewSwitch: true,
+      });
+      await settleProgressEvents();
+
+      expect(
+        messages.some(
+          (message) =>
+            (message as ProgressMessage).command ===
+              DESKTOP_SHELL_COMMANDS.SET_ROUTE &&
+            (message as { route?: string }).route === 'progress',
+        ),
+      ).toBe(false);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
   it('emits delete-stream cleanup and flushes fallback active stream logs', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_000);
     const messages: unknown[] = [];
@@ -560,14 +586,16 @@ describe('DesktopProgressBridge', () => {
       await bridge.deleteStream('second');
       await settleProgressEvents();
 
-      expect(
-        messages.map((message) => (message as ProgressMessage).command),
-      ).toEqual([
-        PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
-        PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-        PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
-        PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      ]);
+      await vi.waitFor(() =>
+        expect(
+          messages.map((message) => (message as ProgressMessage).command),
+        ).toEqual([
+          PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+          PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+          PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+          PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+        ]),
+      );
       expect(messages[0]).toMatchObject({
         command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
         stream: 'second',
