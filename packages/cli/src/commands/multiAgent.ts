@@ -65,7 +65,7 @@ import {
   terminalStatusExitCode,
   toolUseResultText,
   type CliRunResult,
-} from './_helpers/terminalStatus';
+} from '../runtime/terminalStatus';
 import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
