@@ -19,6 +19,7 @@ import {
   requestApprovedEditContent,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
+import { countLines } from '@utils/text/stringUtils';
 import { WorkspaceFS } from '@utils/files';
 
 // Local file imports
@@ -87,8 +88,8 @@ export class WriteFileTool extends defineTool({
     );
     const output = userDiffNote ? `written\n\n${userDiffNote}` : 'written';
 
-    const originalLineCount = originalContent.split('\n').length;
-    const newLineCount = appliedContent.split('\n').length;
+    const originalLineCount = countLines(originalContent);
+    const newLineCount = countLines(appliedContent);
     const action = exists ? 'Overwrote' : 'Created';
     const summary = `${action} ${displayPath} (${newLineCount} lines)`;
     const userInstruction =
