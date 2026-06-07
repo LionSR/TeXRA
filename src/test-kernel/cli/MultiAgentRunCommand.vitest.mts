@@ -254,7 +254,11 @@ describe('CLI multi-agent run command', () => {
 
     expect(result.remoteAgentLoadAttempted).toBe(true);
     expect(result.plan.rootAgent?.name).toBe('orchestrator');
-    expect(mocks.loadAgents).toHaveBeenCalledWith();
+    expect(mocks.loadAgents).toHaveBeenNthCalledWith(1, {
+      includeRemote: false,
+    });
+    // The second call is the remote-inclusive reload: `loadAgents()`.
+    expect(mocks.loadAgents).toHaveBeenNthCalledWith(2);
     expect(mocks.planCliMultiAgentPresetRun).toHaveBeenCalledTimes(2);
   });
 
@@ -269,7 +273,8 @@ describe('CLI multi-agent run command', () => {
     });
 
     expect(result.remoteAgentLoadAttempted).toBe(false);
-    expect(mocks.loadAgents).not.toHaveBeenCalled();
+    expect(mocks.loadAgents).toHaveBeenCalledOnce();
+    expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
     expect(mocks.planCliMultiAgentPresetRun).toHaveBeenCalledTimes(1);
   });
 
