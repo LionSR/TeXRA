@@ -114,7 +114,7 @@ export class StreamSnapshotStore {
   private readonly seedChains = new Map<StreamTabId, Promise<void>>();
   private readonly metaOverlays = new Set<StreamTabId>();
   private readonly streamVersions = new Map<StreamTabId, number>();
-  private hasLoadedKnownStreams = false;
+  private hasAuthoritativeStreamSet = false;
 
   private readonly kvCache = new Map<StreamTabId, KVStore>();
 
@@ -210,15 +210,17 @@ export class StreamSnapshotStore {
   }
 
   /**
-   * Run a mutation only after existing disk state has been loaded. After the
-   * authoritative startup load, streams not seen on disk are treated as new and
-   * mutate synchronously so UI callers can read back their own writes.
+   * Run a mutation only after existing disk state has been loaded. After an
+   * authoritative full load, streams outside that loaded set are treated as new
+   * and mutate synchronously so UI callers can read back their own writes.
+   * Partial preloads intentionally do not enable this fast path because other
+   * streams may still have sidecars on disk.
    */
   private mutate<T>(stream: StreamTabId, apply: () => T): T | undefined {
     const version = this.streamVersion(stream);
     if (this.seeded.has(stream)) return apply();
 
-    if (this.hasLoadedKnownStreams && !this.seedChains.has(stream)) {
+    if (this.hasAuthoritativeStreamSet && !this.seedChains.has(stream)) {
       this.seeded.add(stream);
       return apply();
     }
@@ -769,13 +771,28 @@ export class StreamSnapshotStore {
    * per-stream chain and apply after the disk snapshot.
    */
   async load(streamIds: readonly StreamTabId[]): Promise<void> {
-    this.hasLoadedKnownStreams = false;
+    this.hasAuthoritativeStreamSet = false;
     this.evictStreamsExcept(new Set(streamIds));
+    await this.seedStreams(streamIds);
+    this.hasAuthoritativeStreamSet = true;
+    await this.backfillDescriptionsFromExecutionMeta();
+  }
+
+  /**
+   * Warm selected stream sidecars without claiming that `streamIds` is the full
+   * stream set. Use this when a host only has a partial rail snapshot at
+   * startup; later mutations for other streams must still seed from disk before
+   * writing.
+   */
+  async preload(streamIds: readonly StreamTabId[]): Promise<void> {
+    await this.seedStreams(streamIds);
+    await this.backfillDescriptionsFromExecutionMeta();
+  }
+
+  private async seedStreams(streamIds: readonly StreamTabId[]): Promise<void> {
     await pMap(streamIds, (streamId) => this.refreshSeed(streamId), {
       concurrency: SEED_IO_CONCURRENCY,
     });
-    this.hasLoadedKnownStreams = true;
-    await this.backfillDescriptionsFromExecutionMeta();
   }
 
   private evictStreamsExcept(keep: ReadonlySet<StreamTabId>): void {
