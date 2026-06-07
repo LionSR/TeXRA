@@ -58,7 +58,9 @@ export async function runResumeExecution(
   const resolution = await resolveCliResumeSnapshot(id);
   if (resolution.kind !== 'toolUse') {
     writeTextStderr(explainNonResumable(resolution, id));
-    return CliExitCode.Usage;
+    return resolution.kind === 'load-failed'
+      ? CliExitCode.AgentError
+      : CliExitCode.Usage;
   }
 
   const { runChat } = await import('../chat/tui/runChatTui');

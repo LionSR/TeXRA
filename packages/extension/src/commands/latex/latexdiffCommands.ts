@@ -412,11 +412,11 @@ async function collectTexFiles(dir: string, prefix = ''): Promise<string[]> {
   try {
     entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
   } catch (error) {
-    // A missing directory legitimately means "no .tex files"; any other
-    // read error (permissions, etc.) is a real failure we must not mask.
+    // This is a recovery scan: a missing/unreadable subtree means this subtree
+    // contributes no outputs, but other rounds/subtrees may still be useful.
     if (isFileNotFoundError(error)) return [];
-    logger.warn(CHANNEL, `Failed to read directory '${dir}': ${error}`);
-    throw error;
+    logger.warn(CHANNEL, `Skipping unreadable directory '${dir}': ${error}`);
+    return [];
   }
   const results: string[] = [];
   for (const [name, type] of entries) {
