@@ -2,6 +2,7 @@
 import * as path from 'path';
 
 // Local imports - utils
+import { warn } from '@logger/logUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { filterNotNull } from '@utils/core';
 import { splitContentLines } from '@utils/text/stringUtils';
@@ -195,7 +196,12 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
       },
       ignoreFiles: sources.map((source) => source.absolutePath),
     };
-  } catch {
+  } catch (error) {
+    // Falling back to the empty matcher silently disables ALL gitignore
+    // filtering, so surface this rather than hiding a degraded mode.
+    warn('gitignore', 'Failed to load .gitignore rules; ignoring nothing', {
+      data: error,
+    });
     return EMPTY_GITIGNORE_MATCHER;
   }
 }

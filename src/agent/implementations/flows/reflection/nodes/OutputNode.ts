@@ -223,7 +223,16 @@ export class OutputNode<C = unknown> extends Node<
         currentRound,
         { endTurn, isRewrite: setting.isRewrite },
       );
-    } catch {
+    } catch (summaryError) {
+      // Double-fault: summarizeRound failed during fallback, so we drop the
+      // round's file infos. Log it so silently-missing output files are visible.
+      logger.warn(
+        `Output fallback summary failed; output files may be dropped: ${
+          summaryError instanceof Error
+            ? summaryError.message
+            : String(summaryError)
+        }`,
+      );
       summary = {
         storageKey: getStorageKey(outputState),
         currRound: currentRound,

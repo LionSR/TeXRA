@@ -117,4 +117,24 @@ describe('runResumeExecution', () => {
       'texra resume needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with `TERM=xterm-256color`. For non-interactive runs, use `texra run`.',
     );
   });
+
+  it('reports resume snapshot load failures as operational errors', async () => {
+    mocks.resolveCliResumeSnapshot.mockResolvedValue({
+      kind: 'load-failed',
+      reason: 'KV timeout',
+    });
+    mocks.explainNonResumable.mockReturnValue(
+      `Failed to load resumable session ${EXECUTION_ID}: KV timeout`,
+    );
+    const { runResumeExecution } = await import('@cli/commands/resume');
+
+    await expect(
+      runResumeExecution(cliContext({ stdoutIsTty: true }), EXECUTION_ID),
+    ).resolves.toBe(1);
+
+    expect(mocks.runChat).not.toHaveBeenCalled();
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      `Failed to load resumable session ${EXECUTION_ID}: KV timeout`,
+    );
+  });
 });

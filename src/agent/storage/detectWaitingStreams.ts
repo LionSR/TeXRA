@@ -6,6 +6,7 @@
  */
 
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
+import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
 import { getExecutionStore } from './ExecutionKVStore';
@@ -31,7 +32,15 @@ export async function hasPersistedFlowRecord(
     // Use truthy check to match resume logic in SessionResumeRetrieval.ts
     // This rejects null, undefined, and empty objects consistently
     return !!flowRecord?.shared;
-  } catch {
+  } catch (err) {
+    // A corrupted/unreadable record means the stream isn't resumable; treat as
+    // no record, but log so silent KV-read failures are diagnosable.
+    logger.debug(
+      'DetectWaitingStreams',
+      `Failed to read persisted flow record for ${executionId}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
     return false;
   }
 }

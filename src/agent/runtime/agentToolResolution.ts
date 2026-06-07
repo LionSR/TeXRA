@@ -23,6 +23,7 @@
 
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
+import * as logUtils from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
@@ -78,7 +79,15 @@ async function availableDelegationModelNamesForTools(
 
   try {
     return availableModelNamesFromOptions(await computeModelOptionsData());
-  } catch {
+  } catch (err) {
+    // Couldn't load model options — skip the delegation annotation rather than
+    // fail the run, but log so the missing "Available models:" line is traceable.
+    logUtils.warn(
+      'AgentToolResolution',
+      `Could not load model options for delegation annotation: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
     return null;
   }
 }

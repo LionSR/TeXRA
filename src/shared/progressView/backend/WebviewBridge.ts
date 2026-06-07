@@ -1,9 +1,12 @@
+import * as logger from '@logger/logUtils';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   ProgressViewOutboundMessage,
   StreamLogEntry,
   StreamTabId,
 } from '@shared/schemas';
+
+const CHANNEL = 'WebviewBridge';
 
 const FRAME_INTERVAL_MS = 16;
 
@@ -158,7 +161,11 @@ export class WebviewBridge {
   ): Promise<boolean> {
     try {
       return await this.sendMessage(message);
-    } catch {
+    } catch (error) {
+      // Webview may be disposed/unreachable; drop the frame and retry next flush.
+      logger.debug(CHANNEL, 'Failed to deliver message to webview', {
+        data: error,
+      });
       return false;
     }
   }
