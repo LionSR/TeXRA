@@ -1,7 +1,5 @@
 import * as path from 'path';
 
-import { writeTerminalStatus } from '@agent/storage';
-import { logSdkError } from '@agent/trace';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import {
   runToolUseFlow,
@@ -16,24 +14,13 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
-import {
-  AgentCategory,
-  isWorkflowSetting,
-} from '@agent/core/definition/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import {
-  AgentError,
-  classifyAgentError,
-  getSdkErrorMessage,
-} from '@common/errors';
-import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
+import { AgentError } from '@common/errors';
 import { createChannelTrace } from '@logger';
 import {
   STREAM_STATUS,
-  END_GROUP_STATUS,
-  EXECUTION_STATUS,
-  type EndGroupStatus,
   type StreamTabId,
   type ExecutionId,
   type OutputFileInfo,
@@ -48,8 +35,9 @@ import {
   withExecutionRunContext,
   type AgentLaunchContext,
 } from './AgentLaunchContext';
+import { runFlowWithLifecycle } from './AgentRunLifecycle';
+import { executionRegistry } from './executionRegistry';
 import { createInterruptCallbacks } from './InterruptManager';
-import { AgentExecutionHandle, executionRegistry } from './executionRegistry';
 import { generateSessionDescription } from './sessionDescription';
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
@@ -160,161 +148,6 @@ function createUsageRecordingCallback(
   };
 }
 
-async function runFlowWithLifecycle(
-  ctx: AgentLaunchContext,
-  streamId: StreamTabId,
-  agentName: string,
-  runner: () => Promise<AgentFlowResult>,
-  options?: {
-    isSubagent?: boolean;
-    category?: 'workflow' | 'toolUse';
-    parentStreamId?: StreamTabId;
-    onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
-    onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
-  },
-): Promise<AgentFlowResult> {
-  const category = options?.category ?? 'workflow';
-  const parentStreamId = options?.parentStreamId ?? streamId;
-  const handle = new AgentExecutionHandle(
-    ctx.executionId,
-    parentStreamId,
-    streamId,
-    agentName,
-    category,
-    ctx.runtimeHost,
-    ctx.coordinators,
-  );
-  executionRegistry.track(handle);
-  try {
-    const result = await runner();
-    await options?.onCompleted?.(result);
-    const terminalStatus =
-      result.status === END_GROUP_STATUS.ERROR
-        ? EXECUTION_STATUS.ERROR
-        : EXECUTION_STATUS.COMPLETED;
-    await writeTerminalStatus(ctx.executionId, terminalStatus).catch(() => {});
-
-    executionRegistry.untrack(ctx.executionId);
-    ctx.parentStage.end(result.status);
-
-    if (!StreamStatusService.shouldPreserveOnCompletion(streamId)) {
-      const status =
-        result.status === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
-      StreamStatusService.set(streamId, status, {
-        runtimeHost: ctx.runtimeHost,
-        terminalStatus,
-      });
-    }
-    logger.debug(`Task completed with status: ${result.status}`);
-    return result;
-  } catch (err) {
-    const kind = classifyAgentError(err);
-    const status =
-      kind === 'abort' ? END_GROUP_STATUS.STOPPED : END_GROUP_STATUS.ERROR;
-    const terminalStatus =
-      kind === 'abort' ? EXECUTION_STATUS.INTERRUPTED : EXECUTION_STATUS.ERROR;
-    const streamStatus =
-      kind === 'abort' ? STREAM_STATUS.STOPPED : STREAM_STATUS.ERROR;
-    await writeTerminalStatus(ctx.executionId, terminalStatus).catch(() => {});
-    executionRegistry.untrack(ctx.executionId);
-    const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
-
-    // Root-agent failures are surfaced in the stream log. Subagent failures
-    // are delivered to the orchestrator below, so avoid adding a second
-    // wrapper error that makes a child failure look like the parent failed.
-    if (kind !== 'abort' && !options?.isSubagent) {
-      logSdkError(ctx.logger, errorMsg, err, {
-        operation: `execute ${agentName}`,
-      });
-    }
-
-    ctx.parentStage.end(status);
-    StreamStatusService.set(streamId, streamStatus, {
-      runtimeHost: ctx.runtimeHost,
-      terminalStatus,
-    });
-
-    // Subagents propagate errors to the orchestrator via FollowUpQueue —
-    // don't show VS Code popups that would confuse the user.
-    if (!options?.isSubagent) {
-      if (kind === 'disk-full') {
-        ctx.runtimeHost.emit('requestShowError', {
-          message: getSdkErrorMessage(err),
-        });
-      } else if (kind === 'missing-api-key') {
-        ctx.runtimeHost.emit('requestShowInstruction', {
-          key: 'missingApiKey',
-          message:
-            'API key not found. Set your API key in the extension settings and run again.',
-          actions: [
-            INSTRUCTION_ACTION.SET_API_KEY,
-            INSTRUCTION_ACTION.OPEN_CONFIGURATION_GUIDE,
-          ],
-          showSuppress: false,
-        });
-      } else if (kind === 'unexpected') {
-        ctx.runtimeHost.emit('requestShowError', {
-          message: errorMsg,
-        });
-      }
-    }
-
-    if (kind === 'abort') {
-      return buildTerminalFlowResult(
-        category,
-        END_GROUP_STATUS.STOPPED,
-        ctx.executionId,
-        streamId,
-      );
-    }
-
-    if (options?.isSubagent) {
-      const result = buildTerminalFlowResult(
-        category,
-        END_GROUP_STATUS.ERROR,
-        ctx.executionId,
-        streamId,
-      );
-      try {
-        await options.onError?.(err, result);
-      } catch (deliveryError) {
-        logger.warn(
-          `Failed to deliver subagent error for ${agentName}: ${getSdkErrorMessage(deliveryError)}`,
-        );
-      }
-      return result;
-    }
-
-    throw new AgentError(errorMsg, { cause: err });
-  } finally {
-    // Release long-lived resources (e.g., WebSocket connections, keepalive intervals)
-    // to prevent leaks when handler instances are discarded after execution.
-    ctx.modelHandler.dispose();
-    // Drop the run-trace subscribers (channel sink + transcript recorder) so
-    // they don't pile up across many agent runs.
-    ctx.disposeTrace();
-  }
-}
-
-function buildTerminalFlowResult(
-  category: 'workflow' | 'toolUse',
-  status: EndGroupStatus,
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-): AgentFlowResult {
-  if (category === 'toolUse') {
-    return { category, status, executionId, streamId };
-  }
-  return {
-    category,
-    status,
-    executionId,
-    streamId,
-    outputs: [],
-    compileFailures: [],
-  };
-}
-
 function buildFallbackNotification(config: AgentConfig): {
   agentName: string;
   modelName: string;
@@ -405,10 +238,7 @@ export async function executeAgent(
   ctx.stopAfterCycle = options.stopAfterCycle;
   return withExecutionRunContext(ctx, async () => {
     const { setting, streamId, config } = ctx;
-    const { agent: agentName } = config;
     const { isSubagent } = options;
-    const category =
-      setting.agentCategory === AgentCategory.ToolUse ? 'toolUse' : 'workflow';
 
     // Fire-and-forget: generate AI session description from the user's instruction.
     // Triggered at the start so cancelled/errored sessions still get descriptions.
@@ -422,8 +252,6 @@ export async function executeAgent(
     ).catch(() => {});
     return runFlowWithLifecycle(
       ctx,
-      streamId,
-      agentName,
       async () => {
         // Pre-execution UI setup
         if (executionId) await ensureRunDir(executionId);
@@ -449,7 +277,7 @@ export async function executeAgent(
           taskState: agentConfigToTaskState(config),
         });
 
-        logger.info(`Executing ${agentName} with model ${config.model}`);
+        logger.info(`Executing ${config.agent} with model ${config.model}`);
         const interrupts = createInterruptCallbacks();
 
         if (setting.agentCategory === AgentCategory.ToolUse) {
@@ -520,7 +348,6 @@ export async function executeAgent(
       },
       {
         isSubagent,
-        category,
         parentStreamId: options.parentStreamId,
         onCompleted: options.onCompleted,
         onError: options.onError,
@@ -565,48 +392,42 @@ export async function resumeToolUseFromSnapshot(
       );
     }
 
-    await runFlowWithLifecycle(
-      ctx,
-      streamId,
-      snapshot.agentConfig.agent,
-      async () => {
-        StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
-          runtimeHost: ctx.runtimeHost,
-        });
+    await runFlowWithLifecycle(ctx, async () => {
+      StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
+        runtimeHost: ctx.runtimeHost,
+      });
 
-        const result = await runToolUseFlow(
-          {
-            ...ctx,
-            ...createInterruptCallbacks(),
-            onRoundFinalized: createUsageRecordingCallback(ctx),
-            setting,
-            resumeSnapshot: snapshot,
-            // Derive from the recovered parent chain: any execution with a
-            // parent is a subagent. Without this, the rebuilt system prompt
-            // would drop subagent-specific instructions (e.g. the shared
-            // /memories protocol) that the fresh run had included.
-            isSubagent: (ctx.delegationDepth ?? 0) > 0,
-            approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-            onFollowUpConsumed: () =>
-              ctx.runtimeHost.emit('updateQueuedFollowUps', {
-                streamId: ctx.streamId,
-              }),
-          },
-          undefined,
-          options.setupSession
-            ? (context) => options.setupSession?.(context.session)
-            : undefined,
-        );
-        return {
-          category: 'toolUse' as const,
-          status: result.status,
-          lastResponse: result.lastResponse,
-          touchedFiles: result.touchedFiles,
-          executionId: ctx.executionId,
-          streamId,
-        };
-      },
-      { category: 'toolUse' },
-    );
+      const result = await runToolUseFlow(
+        {
+          ...ctx,
+          ...createInterruptCallbacks(),
+          onRoundFinalized: createUsageRecordingCallback(ctx),
+          setting,
+          resumeSnapshot: snapshot,
+          // Derive from the recovered parent chain: any execution with a
+          // parent is a subagent. Without this, the rebuilt system prompt
+          // would drop subagent-specific instructions (e.g. the shared
+          // /memories protocol) that the fresh run had included.
+          isSubagent: (ctx.delegationDepth ?? 0) > 0,
+          approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+          onFollowUpConsumed: () =>
+            ctx.runtimeHost.emit('updateQueuedFollowUps', {
+              streamId: ctx.streamId,
+            }),
+        },
+        undefined,
+        options.setupSession
+          ? (context) => options.setupSession?.(context.session)
+          : undefined,
+      );
+      return {
+        category: 'toolUse' as const,
+        status: result.status,
+        lastResponse: result.lastResponse,
+        touchedFiles: result.touchedFiles,
+        executionId: ctx.executionId,
+        streamId,
+      };
+    });
   });
 }
