@@ -33,7 +33,7 @@ function useRunCoordinators(): RunCoordinators {
  * the process-wide request id index while each entry still points at a concrete
  * AgentLaunchContext's coordinators.
  */
-class RunCoordinatorBridge {
+export class RunCoordinatorBridge {
   private readonly runStreams = new Map<string, RunCoordinators>();
   private readonly planApprovals = new Map<string, RunCoordinators>();
   private readonly planApprovalStreams = new Map<string, string>();

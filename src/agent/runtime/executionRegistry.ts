@@ -36,9 +36,10 @@ export {
  * the mutable maps and status subscription now live behind one explicit owner
  * instead of free module state.
  */
-class ExecutionRegistry {
+export class ExecutionRegistry {
   private readonly handles = new Map<string, ExecutionHandle>();
   private readonly changeCallbacks = new Map<string, Array<() => void>>();
+  private readonly disposeStatusListener: () => void;
   // Persistent listeners stay attached across notifications (unlike one-shot
   // waiters in `changeCallbacks`). Used by the executions subscribe action.
   private readonly persistentListeners = new Map<
@@ -50,23 +51,34 @@ class ExecutionRegistry {
     // Notify waiters and refresh UI badges when stream status changes
     // (e.g. RUNNING → WAITING). Without this, waitForChange only resolves
     // on progress/kill/untrack, and the background-tasks panel shows stale badges.
-    StreamStatusService.onDidChange(({ streamId }) => {
-      for (const [executionId, handle] of this.handles) {
-        if (
-          handle instanceof AgentExecutionHandle &&
-          handle.childStreamId === streamId
-        ) {
-          this.notifyWaiters(executionId);
-          if (handle.parentStreamId !== handle.childStreamId) {
-            this.emitActiveSubagentsUpdate(
-              handle.parentStreamId,
-              handle.runtimeHost,
-            );
+    this.disposeStatusListener = StreamStatusService.onDidChange(
+      ({ streamId }) => {
+        for (const [executionId, handle] of this.handles) {
+          if (
+            handle instanceof AgentExecutionHandle &&
+            handle.childStreamId === streamId
+          ) {
+            this.notifyWaiters(executionId);
+            if (handle.parentStreamId !== handle.childStreamId) {
+              this.emitActiveSubagentsUpdate(
+                handle.parentStreamId,
+                handle.runtimeHost,
+              );
+            }
+            break;
           }
-          break;
         }
-      }
-    });
+      },
+    );
+  }
+
+  dispose(): void {
+    this.disposeStatusListener();
+    for (const executionId of [...this.handles.keys()]) {
+      this.untrack(executionId);
+    }
+    this.changeCallbacks.clear();
+    this.persistentListeners.clear();
   }
 
   /** Register an execution handle. */
