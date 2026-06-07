@@ -36,7 +36,7 @@ import { executeCliRequest } from './_helpers/runExecution';
 import {
   terminalStatusExitCode,
   type CliRunResult,
-} from './_helpers/terminalStatus';
+} from '../runtime/terminalStatus';
 import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,

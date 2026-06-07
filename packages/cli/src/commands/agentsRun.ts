@@ -40,7 +40,7 @@ import {
   terminalStatusExitCode,
   toolUseResultText,
   type CliRunResult,
-} from './_helpers/terminalStatus';
+} from '../runtime/terminalStatus';
 import { formatToolUseAgentRunInstruction } from './_helpers/toolUseRunInstruction';
 import {
   createStdinWorkflowInputMaterializer,
