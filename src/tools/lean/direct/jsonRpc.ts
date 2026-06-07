@@ -29,8 +29,7 @@ export class JsonRpcConnection {
   }
 
   onNotification(method: string, handler: NotificationHandler): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.conn.onNotification(method, handler as any);
+    this.conn.onNotification(method, handler);
   }
 
   onServerRequest(method: string, handler: ServerRequestHandler): void {
@@ -41,8 +40,7 @@ export class JsonRpcConnection {
     if (params === undefined) {
       this.conn.sendNotification(method);
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.conn.sendNotification(method, params as any);
+      this.conn.sendNotification(method, params);
     }
   }
 
@@ -50,8 +48,7 @@ export class JsonRpcConnection {
     if (params === undefined) {
       return this.conn.sendRequest<T>(method);
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return this.conn.sendRequest<T>(method, params as any);
+    return this.conn.sendRequest<T>(method, params);
   }
 
   dispose(_reason?: string): void {

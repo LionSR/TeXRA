@@ -2,8 +2,8 @@ import { StringDecoder } from 'node:string_decoder';
 
 import pMap from 'p-map';
 
-import * as logger from '@logger/logUtils';
 import { platform } from '@platform/platform';
+import * as logger from '@logger/logUtils';
 import type { StreamTabId } from '@shared/schemas';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
