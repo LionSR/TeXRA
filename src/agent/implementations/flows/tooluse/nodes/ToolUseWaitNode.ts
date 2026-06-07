@@ -1,7 +1,6 @@
 import { Node } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { listIdleContinuationProviders } from '@agent/runtime/idleContinuation';
 import {
   countMediaFilesNeedingVision,
   formatMediaNeedsVisionWarning,
@@ -100,7 +99,7 @@ export class ToolUseWaitNode<C> extends Node<
     // arrived during the build win the race; providers do their persistent
     // side effects in `commit()` so a loser leaves no audit trace.
     if (!prepRes.afterError) {
-      for (const provider of listIdleContinuationProviders()) {
+      for (const provider of this.services.idleContinuations.list()) {
         const continuation = await provider.build({
           streamId,
           isSubagent: !!isSubagent,
