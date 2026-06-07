@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  approvalPromptsUnavailable,
-  formatUnavailableApprovalInstruction,
-} from '@cli/commands/_helpers/approvalPolicyInstruction';
+import { formatUnavailableApprovalInstruction } from '@cli/commands/_helpers/approvalPolicyInstruction';
 import { formatMultiAgentRunInstruction } from '@cli/commands/_helpers/multiAgentInstruction';
 import { formatCliRunFileInstruction } from '@cli/commands/_helpers/runFileInstruction';
 import { formatToolUseAgentRunInstruction } from '@cli/commands/_helpers/toolUseRunInstruction';
+import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 
 const preset = {
   id: 'mathematician',
