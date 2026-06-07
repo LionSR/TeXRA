@@ -1,6 +1,7 @@
 // Shared layout for inline wa-callout banners. wa-callout owns the variant
-// color, border, and padding; this stylesheet handles host display and the
-// row layout for the message + action buttons inside the callout's default slot.
+// color and border; we override its padding here (its :host hardcodes 1em),
+// and this stylesheet handles host display and the row layout for the message
+// + action buttons inside the callout's default slot.
 
 import { css, type CSSResult } from 'lit';
 
@@ -28,11 +29,14 @@ export const bannerStyles: CSSResult = css`
 
   wa-callout {
     margin-bottom: var(--wa-space-s);
-    --padding: var(--wa-space-2xs) var(--wa-space-xs);
+    /* wa-callout's :host hardcodes padding: 1em and never reads a --padding
+       custom property, so set the real padding to keep the banner compact.
+       Outer-scope rules win over the component's :host via shadow encapsulation. */
+    padding: var(--wa-space-xs) var(--wa-space-s);
   }
 
   wa-callout::part(message) {
-    padding-block: var(--wa-space-2xs);
+    padding-block: 0;
     line-height: var(--line-height-normal);
   }
 
