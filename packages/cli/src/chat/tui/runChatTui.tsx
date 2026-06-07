@@ -1736,12 +1736,11 @@ export async function runChat(
     removeProcessHandlers();
     clearPendingExit();
     ink.unmount();
-    // Print the resume hint while the cursor is still parked at the bottom of
-    // the unmounted frame — BEFORE cleanupTerminalModes, whose `?1049l` jumps
-    // the cursor mid-screen on this (never-alt-screen) TUI and makes the hint
-    // overprint the transcript. Mirrors the requestInputExit path's order.
-    printResumeHintOnExit();
     cleanupTerminalModes({ clearItermProgress });
+    // Print the resume hint last, after Ink has torn down and the terminal modes
+    // are restored, so it lands at the bottom of the transcript and stays in
+    // scrollback (copyable). cleanupTerminalModes no longer disturbs the screen.
+    printResumeHintOnExit();
     // Synchronous signal exits (SIGINT double-tap / SIGTERM / SIGHUP) own the
     // whole teardown here (the finally skips when `exiting`), so drain
     // persistence and run platform shutdown before exiting. allSettled never
@@ -1868,9 +1867,11 @@ export async function runChat(
         await session.runPromise;
       }
       await drainPersistence();
+      cleanupTerminalModes({ clearItermProgress });
+      // Print the resume hint after the terminal modes are restored, but before
+      // resetCliState() clears the stream tree the hint is built from.
       printResumeHintOnExit();
       resetCliState();
-      cleanupTerminalModes({ clearItermProgress });
       if (resumableIdle) {
         // The dangling runPromise keeps the event loop alive, so a normal return
         // would never let the process exit. Force-exit here, AFTER persistence
