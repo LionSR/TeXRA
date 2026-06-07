@@ -23,7 +23,6 @@ import { getCleanAgentName } from '@agent/index';
 import { getExecutionStore } from '@agent/storage';
 import {
   TaskStateSchema,
-  isToolUseTaskState,
   isWorkflowTaskState,
   type TaskState,
 } from '@agent/core/execution/TaskState';
@@ -723,13 +722,9 @@ export class StreamSnapshotStore {
     return map;
   }
 
-  /** Stream IDs with active tool-use sessions. */
-  getActiveToolUseStreams(): Set<StreamTabId> {
-    return new Set(
-      [...this.taskStates]
-        .filter(([, state]) => isToolUseTaskState(state))
-        .map(([stream]) => stream),
-    );
+  /** Stream IDs that still have execution sidecar state. */
+  getTaskStateStreams(): Set<StreamTabId> {
+    return new Set(this.taskStates.keys());
   }
 
   /**

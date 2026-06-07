@@ -5,7 +5,7 @@
  * interrupt/kill, and describe themselves.
  */
 
-import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
+import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
@@ -93,7 +93,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
   }
 
   terminate(): boolean {
-    const interruptible = getInterruptible(this.childStreamId);
+    const interruptible = interruptRegistry.get(this.childStreamId);
     if (!interruptible) return false;
     interruptible.interrupt();
     StreamStatusService.set(this.childStreamId, STREAM_STATUS.STOPPED, {
