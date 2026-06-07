@@ -7,10 +7,7 @@
  * Import cleanup helpers from here, not from individual modules.
  */
 
-import {
-  cleanupAllCoordinatorRequests,
-  cleanupCoordinatorRequestsForStream,
-} from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import type { StreamTabId } from '@shared/schemas';
 import {
   _rejectAllPendingUserQuestions,
@@ -39,7 +36,7 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
   toolEditApprovalController.clearBypassForStream(streamId);
   bashApprovalController.clearBypassForStream(streamId);
   _clearProposalBypassForStream(streamId);
-  cleanupCoordinatorRequestsForStream(streamId);
+  runCoordinatorBridge.cleanupRequestsForStream(streamId);
 }
 
 /**
@@ -53,7 +50,7 @@ export function cleanupAllApprovals(): void {
   toolEditApprovalController.clearAllBypass();
   bashApprovalController.clearAllBypass();
   _clearAllProposalBypass();
-  cleanupAllCoordinatorRequests();
+  runCoordinatorBridge.cleanupAllRequests();
 }
 
 export { enableYoloOnChildStream, inheritBashBypassOnChildStream };
