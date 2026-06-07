@@ -79,6 +79,10 @@ export class ProcessOutputPoller {
     if (state) {
       const outTail = state.stdout.decoder.end();
       const errTail = state.stderr.decoder.end();
+      // Reset decoders so a subsequent flush() or poll can call decoder.write()
+      // safely — Node.js docs treat write() after end() as undefined behavior.
+      state.stdout.decoder = new StringDecoder('utf8');
+      state.stderr.decoder = new StringDecoder('utf8');
       if (outTail || errTail) {
         runtimeHost.emit('updateProcessOutput', {
           parentStreamId: handle.parentStreamId,
