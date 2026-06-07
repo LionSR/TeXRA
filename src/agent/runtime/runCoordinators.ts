@@ -1,4 +1,5 @@
 import { useRunContext, type RunCoordinators } from './RunContext';
+import { executionRegistry, type ExecutionRegistry } from './executionRegistry';
 import type {
   ProposalRequestOptions,
   ProposalResult,
@@ -30,19 +31,16 @@ function useRunCoordinators(): RunCoordinators {
  * AgentLaunchContext's coordinators.
  */
 export class RunCoordinatorBridge {
-  private readonly streamCoordinators = new Map<string, RunCoordinators>();
   private readonly planApprovals = new Map<string, CoordinatorRequest>();
   private readonly proposals = new Map<string, CoordinatorRequest>();
   private readonly retries = new Map<string, RunCoordinators>();
 
-  retainForStream(streamId: string, coordinators: RunCoordinators): () => void {
-    this.streamCoordinators.set(streamId, coordinators);
-    return () => {
-      if (this.streamCoordinators.get(streamId) === coordinators) {
-        this.streamCoordinators.delete(streamId);
-      }
-    };
-  }
+  constructor(
+    private readonly registry: Pick<
+      ExecutionRegistry,
+      'getAgentHandleByStream' | 'getAgentHandles'
+    > = executionRegistry,
+  ) {}
 
   async waitForPlanApproval(
     streamId: string,
@@ -72,7 +70,7 @@ export class RunCoordinatorBridge {
       this.planApprovals.delete(approvalId);
     }
     if (entries.length === 0) {
-      this.streamCoordinators.get(streamId)?.plan.clearForStream(streamId);
+      this.coordinatorsForStream(streamId)?.plan.clearForStream(streamId);
     }
   }
 
@@ -127,7 +125,7 @@ export class RunCoordinatorBridge {
     const coordinators = new Set<RunCoordinators>();
     const mappedCoordinators = this.retries.get(streamId);
     if (mappedCoordinators) coordinators.add(mappedCoordinators);
-    const runCoordinators = this.streamCoordinators.get(streamId);
+    const runCoordinators = this.coordinatorsForStream(streamId);
     if (runCoordinators) coordinators.add(runCoordinators);
     for (const coordinator of coordinators) {
       coordinator.retry.clearRequest(streamId);
@@ -151,7 +149,7 @@ export class RunCoordinatorBridge {
     const coordinators = new Set(
       [...this.planApprovals.values()].map((entry) => entry.coordinators),
     );
-    for (const runCoordinators of this.streamCoordinators.values()) {
+    for (const runCoordinators of this.activeCoordinators()) {
       coordinators.add(runCoordinators);
     }
     for (const coordinator of coordinators) {
@@ -182,7 +180,7 @@ export class RunCoordinatorBridge {
 
   private clearAllRetryRequests(): void {
     const coordinators = new Set<RunCoordinators>();
-    for (const runCoordinators of this.streamCoordinators.values()) {
+    for (const runCoordinators of this.activeCoordinators()) {
       coordinators.add(runCoordinators);
     }
     for (const runCoordinators of this.retries.values()) {
@@ -192,6 +190,16 @@ export class RunCoordinatorBridge {
       coordinator.retry.clearAll();
     }
     this.retries.clear();
+  }
+
+  private coordinatorsForStream(streamId: string): RunCoordinators | undefined {
+    return this.registry.getAgentHandleByStream(streamId)?.coordinators;
+  }
+
+  private activeCoordinators(): RunCoordinators[] {
+    return this.registry
+      .getAgentHandles()
+      .flatMap((handle) => (handle.coordinators ? [handle.coordinators] : []));
   }
 }
 
