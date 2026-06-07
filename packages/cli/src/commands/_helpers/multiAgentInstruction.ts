@@ -1,7 +1,6 @@
-import {
-  formatUnavailableApprovalInstruction,
-  type ApprovalInstructionContext,
-} from './approvalPolicyInstruction';
+import type { ApprovalInstructionContext } from '@cli/runtime/approvalPolicyAvailability';
+
+import { formatUnavailableApprovalInstruction } from './approvalPolicyInstruction';
 import { formatCliRunFileInstruction } from './runFileInstruction';
 
 interface MultiAgentInstructionPreset {

@@ -13,6 +13,7 @@ import { agentKey } from '@shared/schemas/agent';
 import { generateExecutionId } from '@utils/core/executionId';
 import { CliUsageError, readCliStdinText } from '../runtime/cliContext';
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
+import { approvalPromptsUnavailable } from '../runtime/approvalPolicyAvailability';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform, initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
@@ -61,7 +62,6 @@ import {
   toolUseResultText,
   type CliRunResult,
 } from './_helpers/terminalStatus';
-import { approvalPromptsUnavailable } from './_helpers/approvalPolicyInstruction';
 import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
