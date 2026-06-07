@@ -12,17 +12,11 @@ import { ProgressWorkflowFileActionsController } from '@controllers/progressView
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform, tryPlatform } from '@platform/platform';
 import {
-  setDefaultStreamLogStore,
-  StreamLogStore,
   StreamSnapshotStore,
+  type StreamSnapshotStore as SnapshotStore,
 } from '@transcript';
 import { streamDataDir } from '@transcript/streamDataPaths';
 import { readMeta } from '@transcript/streamSnapshotRead';
-import {
-  buildStreamTabInfo,
-  peekWorktreeInfo,
-  resolveWorktreeInfo,
-} from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
 import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
 import { TaskStateSchema } from '@agent/core/execution/TaskState';
@@ -60,25 +54,22 @@ import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
 import { createChannelTrace } from '@logger';
 import {
   STREAM_STATUS,
-  type ActiveChildInfo,
   type AgentProposalPermission,
   type AgentCategory,
   type AgentCategoryFilter,
-  type ConversationProgress,
-  type OutputFileInfo,
   type ProgressViewInboundMessage,
   type ProgressViewOutboundMessage,
-  type StreamMetadata,
-  type StreamStatus,
   type ExecutionId,
   type StreamTabId,
-  type StreamTabInfo,
 } from '@shared/schemas';
 import type { RestoredStreamSnapshot } from '@shared/schemas';
+import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
+import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
+import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 import { AGENT_CATEGORY } from '@shared/schemas/agent';
-import { buildStreamMetadata as createStreamMetadata } from '@shared/streams/streamMetadata';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   cleanupAllApprovals,
   cleanupApprovalsForStream,
@@ -118,6 +109,7 @@ export interface DesktopAgentExecutionOptions {
    * previously-persisted "ghost" streams in the rail at launch.
    */
   streamSnapshotStore?: DesktopStreamSnapshotStore;
+  progressSnapshotStore?: SnapshotStore;
 }
 
 export interface DesktopAgentExecution {
@@ -127,14 +119,6 @@ export interface DesktopAgentExecution {
 }
 
 type TaskState = ProgressEventPayloads['setTaskState']['taskState'];
-type OutputFilesByRound = Map<number, OutputFileInfo[]>;
-
-type StreamBadgeSnapshot = {
-  activeSubagents: ActiveChildInfo[];
-  finishedSubagentCount: number;
-  activeProcesses: ActiveChildInfo[];
-  finishedProcessCount: number;
-};
 
 type ResumeState = {
   taskState: TaskState;
@@ -154,9 +138,10 @@ export interface DesktopProgressBridgeOptions {
   openBuildDisplay?: BuildDisplayFn;
   openDiff?: DiffViewHost['openDiff'];
   confirmAcceptFile?: (message: string) => Promise<boolean>;
-  showInfoMessage?: (message: string) => Promise<void>;
-  showErrorMessage?: (message: string) => Promise<void>;
+  showInfoMessage?: (message: string) => Promise<void> | void;
+  showErrorMessage?: (message: string) => Promise<void> | void;
   streamSnapshotStore?: DesktopStreamSnapshotStore;
+  progressSnapshotStore?: SnapshotStore;
 }
 
 function toFileLocation(filePath: string): FileLocation {
@@ -165,32 +150,36 @@ function toFileLocation(filePath: string): FileLocation {
     : pathToLocation(filePath);
 }
 
+class MemoryProgressStorage implements MementoStorage {
+  private readonly values = new Map<string, unknown>();
+
+  get<T>(key: string): T | undefined;
+  get<T>(key: string, defaultValue: T): T;
+  get<T>(key: string, defaultValue?: T): T | undefined {
+    return this.values.has(key) ? (this.values.get(key) as T) : defaultValue;
+  }
+
+  async update<T>(key: string, value: T | undefined): Promise<void> {
+    if (value === undefined) {
+      this.values.delete(key);
+      return;
+    }
+    this.values.set(key, value);
+  }
+}
+
 export class DesktopProgressBridge {
-  private readonly streamLogs = new StreamLogStore();
   private readonly logger: AgentTrace = createChannelTrace(
     'DesktopProgressBridge',
   );
+  private readonly backend: ProgressBackend;
+  private readonly state: ProgressBackend['state'];
+  readonly streamLogs: ProgressBackend['state']['streamLogs'];
   private readonly agentProposalController: ProgressAgentProposalController;
   private readonly workflowFileActions: ProgressWorkflowFileActionsController;
-  private readonly cursors = new Map<StreamTabId, number>();
-  private readonly taskStates = new Map<StreamTabId, TaskState>();
   private readonly agentProposals = new Map<string, AgentProposalPermission>();
-  private readonly outputFiles = new Map<StreamTabId, OutputFilesByRound>();
-  private readonly statuses = new Map<StreamTabId, StreamStatus>();
-  private readonly categories = new Map<StreamTabId, AgentCategory>();
-  private readonly executionIds = new Map<StreamTabId, string>();
-  private readonly descriptions = new Map<StreamTabId, string>();
-  private readonly parentStreams = new Map<StreamTabId, StreamTabId>();
   private readonly resumeAttempts = new Set<StreamTabId>();
   private readonly deletedStreams = new Set<StreamTabId>();
-  private readonly creationTimestamps = new Map<StreamTabId, number>();
-  private readonly conversationProgress = new Map<
-    StreamTabId,
-    ConversationProgress
-  >();
-  private readonly streamBadges = new Map<StreamTabId, StreamBadgeSnapshot>();
-  private activeStream: StreamTabId | '' = '';
-  private agentFilter: AgentCategoryFilter = 'all';
   private readonly unsubscribe: () => void;
   private readonly toolEditApprovals: DesktopToolEditApprovalController;
   /**
@@ -207,8 +196,7 @@ export class DesktopProgressBridge {
    * Durable per-stream sidecar reader. Restores a ghost (prior-session)
    * stream's persisted display — todos/plan/usage/output files — when it first
    * becomes active, the same data the CLI/extension show on resume. Reads are
-   * stateless disk reads, so a local instance is fine alongside the platform's
-   * bus-driven writer.
+   * stateless disk reads used only for restored rows from a previous launch.
    */
   private readonly durableSnapshots = new StreamSnapshotStore();
   /** Ghost streams whose persisted display has already been restored this session. */
@@ -220,17 +208,101 @@ export class DesktopProgressBridge {
     private readonly postToRenderer: (message: unknown) => void,
     private readonly options: DesktopProgressBridgeOptions = {},
   ) {
-    setDefaultStreamLogStore(this.streamLogs);
     setRunStorageService({ isViewVisible: () => true });
-    const unsubscribeStreamLogs = this.streamLogs.onChange((streamId) =>
-      this.flushLogs(streamId),
-    );
+    this.backend = new ProgressBackend({
+      storage: tryPlatform()?.workspaceState ?? new MemoryProgressStorage(),
+      snapshots: options.progressSnapshotStore ?? new StreamSnapshotStore(),
+      sendMessage: (message) => this.postToRenderer(message),
+      hasTarget: () => true,
+      configureUi: ({ webviewUpdater }) => ({
+        callbacks: {
+          showRetryRequest: () => undefined,
+          resolveRetryRequest: () => undefined,
+          showToolEditPermission: (payload) =>
+            webviewUpdater.showPermission({
+              kind: PERMISSION_KIND.TOOL_EDIT,
+              data: payload,
+            }),
+          resolveToolEditPermission: (requestId) =>
+            webviewUpdater.resolvePermission(
+              PERMISSION_KIND.TOOL_EDIT,
+              requestId,
+            ),
+          updateToolEditApprovalBypassState: (streamId, bypassActive) =>
+            webviewUpdater.updateBypassState(
+              streamId,
+              'toolEdit',
+              bypassActive,
+            ),
+          updateSuperYoloBypassState: (streamId, bypassActive) =>
+            webviewUpdater.updateBypassState(
+              streamId,
+              'superYolo',
+              bypassActive,
+            ),
+          showBashPermission: (payload) =>
+            webviewUpdater.showPermission({
+              kind: PERMISSION_KIND.BASH,
+              data: payload,
+            }),
+          resolveBashPermission: (requestId) =>
+            webviewUpdater.resolvePermission(PERMISSION_KIND.BASH, requestId),
+          showAgentProposal: (payload) => {
+            this.agentProposals.set(payload.proposalId, payload);
+            webviewUpdater.showPermission({
+              kind: PERMISSION_KIND.PROPOSAL,
+              data: payload,
+            });
+          },
+          resolveAgentProposal: (proposalId) => {
+            this.agentProposals.delete(proposalId);
+            webviewUpdater.resolvePermission(
+              PERMISSION_KIND.PROPOSAL,
+              proposalId,
+            );
+          },
+          showPlanApproval: (payload) =>
+            webviewUpdater.showPermission({
+              kind: PERMISSION_KIND.PLAN_APPROVAL,
+              data: payload,
+            }),
+          resolvePlanApproval: (approvalId) =>
+            webviewUpdater.resolvePermission(
+              PERMISSION_KIND.PLAN_APPROVAL,
+              approvalId,
+            ),
+          showExternalInquiry: () => undefined,
+          resolveExternalInquiry: () => undefined,
+          showUserQuestion: (payload) =>
+            webviewUpdater.showPermission({
+              kind: PERMISSION_KIND.USER_QUESTION,
+              data: payload,
+            }),
+          resolveUserQuestion: (requestId) =>
+            webviewUpdater.resolvePermission(
+              PERMISSION_KIND.USER_QUESTION,
+              requestId,
+            ),
+        },
+        hasPendingPermissions: () => false,
+      }),
+    });
+    this.state = this.backend.state;
+    this.streamLogs = this.state.streamLogs;
+    const backendSubscription = this.backend.setupEventListeners();
     const unsubscribeOdyssey = bus.on('odysseyStateChanged', ({ streamId }) => {
       this.updateOdysseyActiveFromStore(streamId);
     });
+    const unsubscribeEnsureProgress = bus.on(
+      'requestEnsureProgressView',
+      () => {
+        this.routeToProgress();
+      },
+    );
     this.unsubscribe = () => {
-      unsubscribeStreamLogs();
+      backendSubscription.dispose();
       unsubscribeOdyssey();
+      unsubscribeEnsureProgress();
     };
     this.runtimeHost = {
       emit: (event, payload) => this.handleProgressEvent(event, payload),
@@ -240,15 +312,14 @@ export class DesktopProgressBridge {
       openPath: options.openPath,
       openBuildDisplay: options.openBuildDisplay,
       openDiff: options.openDiff,
-      showErrorMessage: async (message) => {
-        await this.options.showErrorMessage?.(message);
-      },
+      showErrorMessage: this.options.showErrorMessage,
     });
     this.workflowFileActions = new ProgressWorkflowFileActionsController({
       state: {
-        getActiveStream: () => this.activeStream,
-        getExecutionId: (stream) => this.executionIds.get(stream),
-        getOutputFiles: (stream) => new Map(this.outputFiles.get(stream) ?? []),
+        getActiveStream: () => this.state.activeStream,
+        getExecutionId: (stream) => this.getStreamExecutionId(stream),
+        getOutputFiles: (stream) =>
+          new Map(this.state.snapshots.getOutputFiles(stream)),
         // The desktop bridge has no quick-pick UI, so Accept always replaces
         // the workspace file. Returning undefined keeps the controller from
         // building copy metadata that the desktop host would silently drop.
@@ -337,58 +408,48 @@ export class DesktopProgressBridge {
     const hydrated = options.streamSnapshotStore?.hydrated ?? [];
     for (const snapshot of hydrated) {
       this.restoredStreams.set(snapshot.streamId, snapshot);
-      this.creationTimestamps.set(
-        snapshot.streamId,
-        snapshot.creationTimestamp,
-      );
-      this.categories.set(snapshot.streamId, snapshot.agentCategory);
-      this.statuses.set(snapshot.streamId, snapshot.lastKnownStatus);
-      if (snapshot.description) {
-        this.descriptions.set(snapshot.streamId, snapshot.description);
-      }
-      if (snapshot.executionId) {
-        this.executionIds.set(snapshot.streamId, snapshot.executionId);
-      }
-      if (snapshot.parentStreamId) {
-        this.parentStreams.set(snapshot.streamId, snapshot.parentStreamId);
-      }
+      this.state.streamLogs.ensureStream(snapshot.streamId);
+      this.state.updateStreamHints(snapshot.streamId, {
+        agent: snapshot.agent,
+        agentCategory: snapshot.agentCategory,
+        inputFile: snapshot.inputFile,
+        creationTimestamp: snapshot.creationTimestamp,
+        executionId: snapshot.executionId,
+        parentStreamId: snapshot.parentStreamId,
+        description: snapshot.description,
+      });
+      StreamStatusService.set(snapshot.streamId, snapshot.lastKnownStatus, {
+        emit: false,
+      });
     }
   }
 
-  /**
-   * Build a RestoredStreamSnapshot for `streamId` from current bridge
-   * state and forward it to the persistence store. Best-effort: any
-   * write error is logged but never thrown — persistence problems
-   * must not break agent execution.
-   */
   private persistStreamSnapshot(streamId: StreamTabId): void {
     const store = this.options.streamSnapshotStore;
     if (!store) return;
 
-    const taskState = this.taskStates.get(streamId);
+    const taskState = this.state.snapshots.getTaskState(streamId);
+    const info = buildStreamInfo(this.state, streamId, 'all');
     const restored = this.restoredStreams.get(streamId);
-    const category =
-      taskState?.agentConfig.agentCategory ??
-      this.categories.get(streamId) ??
-      restored?.agentCategory ??
-      AGENT_CATEGORY.WORKFLOW;
-    const info = this.buildStreamInfo(streamId);
     const snapshot: RestoredStreamSnapshot = {
       streamId,
-      label: info.label,
-      agent: info.agent ?? restored?.agent,
-      agentCategory: category,
-      inputFile: info.inputFile || restored?.inputFile,
+      label: info?.label ?? restored?.label ?? streamId,
+      agent: info?.agent ?? restored?.agent,
+      agentCategory:
+        info?.agentCategory ??
+        restored?.agentCategory ??
+        AGENT_CATEGORY.WORKFLOW,
+      inputFile: info?.inputFile || restored?.inputFile,
       instruction: taskState?.agentConfig.instruction || restored?.instruction,
       lastKnownStatus:
-        this.statuses.get(streamId) ??
+        StreamStatusService.get(streamId) ??
         restored?.lastKnownStatus ??
         STREAM_STATUS.STOPPED,
-      description: this.descriptions.get(streamId) ?? restored?.description,
-      executionId: this.executionIds.get(streamId) ?? restored?.executionId,
-      parentStreamId:
-        this.parentStreams.get(streamId) ?? restored?.parentStreamId,
-      creationTimestamp: this.getCreationTimestamp(streamId),
+      description: info?.description ?? restored?.description,
+      executionId: info?.executionId ?? restored?.executionId,
+      parentStreamId: info?.parentStreamId ?? restored?.parentStreamId,
+      creationTimestamp:
+        info?.creationTimestamp ?? restored?.creationTimestamp ?? Date.now(),
       lastTimestamp:
         this.streamLogs.getLastTimestamp(streamId) ?? restored?.lastTimestamp,
       persistedAt: Date.now(),
@@ -414,23 +475,18 @@ export class DesktopProgressBridge {
   dispose(): void {
     this.toolEditApprovals.dispose();
     this.unsubscribe();
-    this.clearAllStreamMaps();
+    this.backend.dispose();
+    this.clearDesktopSessionMaps();
     this.workflowFileActions.clearAllBackups();
+    void this.state.flush().catch((error: unknown) => {
+      this.logger.warn('Failed to flush desktop progress state', {
+        data: error instanceof Error ? error : { error },
+      });
+    });
   }
 
-  private clearAllStreamMaps(): void {
+  private clearDesktopSessionMaps(): void {
     this.agentProposals.clear();
-    this.cursors.clear();
-    this.taskStates.clear();
-    this.outputFiles.clear();
-    this.statuses.clear();
-    this.categories.clear();
-    this.executionIds.clear();
-    this.descriptions.clear();
-    this.parentStreams.clear();
-    this.creationTimestamps.clear();
-    this.conversationProgress.clear();
-    this.streamBadges.clear();
     this.restoredStreams.clear();
     this.restoredDisplaySent.clear();
   }
@@ -439,179 +495,18 @@ export class DesktopProgressBridge {
     this.postToRenderer(message);
   }
 
+  private getStreamExecutionId(streamId: StreamTabId): ExecutionId | undefined {
+    return (
+      this.state.snapshots.getExecutionId(streamId) ??
+      this.state.getStreamHints(streamId).executionId
+    );
+  }
+
   private routeToProgress(): void {
     this.postToRenderer({
       command: DESKTOP_SHELL_COMMANDS.SET_ROUTE,
       route: 'progress',
     });
-  }
-
-  private ensureStream(
-    streamId: StreamTabId,
-    category: AgentCategory = AGENT_CATEGORY.WORKFLOW,
-  ): void {
-    this.getCreationTimestamp(streamId);
-    this.streamLogs.ensureStream(streamId);
-    if (!this.categories.has(streamId)) {
-      this.categories.set(streamId, category);
-    }
-  }
-
-  private getCreationTimestamp(streamId: StreamTabId): number {
-    const existing = this.creationTimestamps.get(streamId);
-    if (existing != null) return existing;
-    const createdAt = this.streamLogs.getFirstTimestamp(streamId) ?? Date.now();
-    this.creationTimestamps.set(streamId, createdAt);
-    return createdAt;
-  }
-
-  private buildStreamInfo(streamId: StreamTabId): StreamTabInfo {
-    const taskState = this.taskStates.get(streamId);
-    const restored = this.restoredStreams.get(streamId);
-    const workingDirectory =
-      taskState?.agentConfig.workingDirectory ?? undefined;
-    let worktreeInfo;
-    if (workingDirectory) {
-      worktreeInfo = peekWorktreeInfo(workingDirectory);
-      this.ensureWorktreeProbe(workingDirectory);
-    }
-    return buildStreamTabInfo({
-      streamId,
-      config: taskState?.agentConfig,
-      hints: {
-        agent: restored?.agent,
-        agentCategory: this.categories.get(streamId) ?? restored?.agentCategory,
-        inputFile: restored?.inputFile,
-      },
-      creationTimestamp: this.getCreationTimestamp(streamId),
-      executionId: this.executionIds.get(streamId),
-      parentStreamId: this.parentStreams.get(streamId),
-      description: this.descriptions.get(streamId),
-      worktreeInfo,
-    });
-  }
-
-  private ensureWorktreeProbe(workingDirectory: string): void {
-    // Fire-and-forget; the resolver owns TTL/in-flight de-duplication. Calling
-    // it on each render lets branch/dirty state refresh after the cache expires.
-    void resolveWorktreeInfo(workingDirectory).catch(() => {
-      /* best-effort chip enrichment */
-    });
-  }
-
-  private buildStreamMetadata(streamId: StreamTabId): StreamMetadata {
-    const category =
-      this.taskStates.get(streamId)?.agentConfig.agentCategory ??
-      this.categories.get(streamId) ??
-      AGENT_CATEGORY.WORKFLOW;
-    const badges = this.streamBadges.get(streamId);
-    return createStreamMetadata({
-      kind: category,
-      status: this.statuses.get(streamId),
-      lastTimestamp: this.streamLogs.getLastTimestamp(streamId),
-      conversationProgress: this.conversationProgress.get(streamId),
-      activeSubagents: badges?.activeSubagents,
-      finishedSubagentCount: badges?.finishedSubagentCount,
-      activeProcesses: badges?.activeProcesses,
-      finishedProcessCount: badges?.finishedProcessCount,
-    });
-  }
-
-  private updateActiveChildren(
-    parentStreamId: StreamTabId,
-    opts: {
-      activeField: 'activeSubagents' | 'activeProcesses';
-      countField: 'finishedSubagentCount' | 'finishedProcessCount';
-      next: ActiveChildInfo[];
-    },
-  ): StreamBadgeSnapshot {
-    this.ensureStream(parentStreamId);
-    const previous = this.streamBadges.get(parentStreamId) ?? {
-      activeSubagents: [],
-      finishedSubagentCount: 0,
-      activeProcesses: [],
-      finishedProcessCount: 0,
-    };
-    const previousIds = new Set(
-      previous[opts.activeField].map((child) => child.executionId),
-    );
-    const nextIds = new Set(opts.next.map((child) => child.executionId));
-    const newlyFinished = [...previousIds].filter(
-      (id) => !nextIds.has(id),
-    ).length;
-    const nextBadges = {
-      ...previous,
-      [opts.activeField]: opts.next,
-      [opts.countField]: previous[opts.countField] + newlyFinished,
-    };
-    this.streamBadges.set(parentStreamId, nextBadges);
-    return nextBadges;
-  }
-
-  private syncStreams(): void {
-    const liveIds = new Set(this.streamLogs.keys());
-    const liveStreams = [...liveIds].map((id) => this.buildStreamInfo(id));
-
-    // Restored "ghost" entries that haven't been replaced by live
-    // events yet. We surface them on the rail so the user can see the
-    // runs they had going (audit item D / trajectory #19). Skipping
-    // ghosts whose id is already in `liveIds` prevents duplicates when
-    // a previous run resumed in the same launch.
-    const ghostStreams: StreamTabInfo[] = [];
-    for (const [id, snapshot] of this.restoredStreams) {
-      if (liveIds.has(id)) continue;
-      ghostStreams.push(this.buildGhostStreamInfo(snapshot));
-    }
-
-    const streams = [...liveStreams, ...ghostStreams];
-    const streamStates = Object.fromEntries(
-      streams.map((stream) => [
-        stream.name,
-        this.buildStreamMetadata(stream.name),
-      ]),
-    );
-    this.send({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-      streams,
-      activeStream: this.activeStream,
-      agentFilter: this.agentFilter,
-      streamStates,
-    });
-  }
-
-  private buildGhostStreamInfo(
-    snapshot: RestoredStreamSnapshot,
-  ): StreamTabInfo {
-    return buildStreamTabInfo({
-      streamId: snapshot.streamId,
-      hints: {
-        agent: snapshot.agent,
-        agentCategory: snapshot.agentCategory,
-        inputFile: snapshot.inputFile,
-      },
-      creationTimestamp: snapshot.creationTimestamp,
-      executionId: snapshot.executionId,
-      parentStreamId: snapshot.parentStreamId,
-      description: snapshot.description,
-    });
-  }
-
-  private flushLogs(streamId: StreamTabId): void {
-    if (streamId !== this.activeStream) return;
-    this.sendRestoredDisplay(streamId);
-    const log = this.streamLogs.get(streamId);
-    if (!log) return;
-    const cursor = this.cursors.get(streamId) ?? 0;
-    const entries = log.getRange(cursor, log.head);
-    const updates = log.drainDirtyUpdates(cursor);
-    if (entries.length === 0 && updates.length === 0) return;
-    this.send({
-      command: PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      streamId,
-      entries,
-      updates,
-    });
-    this.cursors.set(streamId, log.head);
   }
 
   /**
@@ -631,7 +526,7 @@ export class DesktopProgressBridge {
     void this.durableSnapshots
       .read(streamId)
       .then((snap) => {
-        if (streamId !== this.activeStream) return;
+        if (streamId !== this.state.activeStream) return;
         // The persisted snapshot is authoritative for a restored stream: send
         // todos/plan verbatim so an intentionally-empty list or null plan CLEARS
         // any stale renderer state instead of being skipped — matching the CLI
@@ -686,13 +581,14 @@ export class DesktopProgressBridge {
 
   private updateOdysseyActiveFromStore(streamId: StreamTabId): void {
     const odyssey = OdysseyStore.getForStream(streamId);
-    this.send({
-      command: PROGRESS_VIEW_COMMANDS.ODYSSEY_ACTIVE_UPDATED,
-      stream: streamId,
-      active: isOdysseyInFlight(odyssey),
-      ...(odyssey?.status ? { status: odyssey.status } : {}),
-      ...(odyssey?.objective ? { objective: odyssey.objective } : {}),
-    });
+    this.backend.webviewUpdater.updateOdysseyActive(
+      streamId,
+      isOdysseyInFlight(odyssey),
+      {
+        status: odyssey?.status,
+        objective: odyssey?.objective,
+      },
+    );
   }
 
   private handleProgressEvent<K extends keyof ProgressEventPayloads>(
@@ -700,351 +596,96 @@ export class DesktopProgressBridge {
     payload: ProgressEventPayloads[K],
   ): void {
     bus.emit(event, payload);
-    this.progressEventHandlers[event]?.(payload);
+    this.updateDesktopRailForProgressEvent(event, payload);
   }
 
-  private sendActiveChildrenBadges(
-    parentStreamId: StreamTabId,
-    opts: {
-      activeField: 'activeSubagents' | 'activeProcesses';
-      countField: 'finishedSubagentCount' | 'finishedProcessCount';
-      next: ActiveChildInfo[];
-    },
-  ): void {
-    const badges = this.updateActiveChildren(parentStreamId, opts);
-    this.syncStreams();
-    this.send({
-      command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
-      stream: parentStreamId,
-      ...badges,
-    });
-  }
-
-  // Maps each progress event to its desktop-side handler. A `null` entry is an
-  // explicit no-op: the event is either dispatched elsewhere (e.g.
-  // `odysseyStateChanged` via `bus.on` in the constructor; `runtimeHost.emit`
-  // is never its producer) or carries no desktop progress-mirror side effect.
-  // The map is exhaustive over `ProgressEventPayloads`, so adding a new event
-  // is a compile error until it is handled or explicitly marked `null` here.
-  private readonly progressEventHandlers: {
-    [K in keyof ProgressEventPayloads]:
-      | ((payload: ProgressEventPayloads[K]) => void)
-      | null;
-  } = {
-    requestEnsureProgressView: () => this.routeToProgress(),
-    setActiveStream: (data) => {
-      if (!data.streamId) {
-        this.activeStream = '';
-        this.send({
-          command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-          activeStream: '',
-        });
+  private updateDesktopRailForProgressEvent<
+    K extends keyof ProgressEventPayloads,
+  >(event: K, payload: ProgressEventPayloads[K]): void {
+    switch (event) {
+      case 'setActiveStream': {
+        const data = payload as ProgressEventPayloads['setActiveStream'];
+        if (!data.streamId) {
+          this.state.activeStream = '';
+          this.send({
+            command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
+            activeStream: '',
+          });
+          return;
+        }
+        if (data.suppressViewSwitch !== true) {
+          this.routeToProgress();
+          this.sendRestoredDisplay(data.streamId);
+        }
         return;
       }
-      this.ensureStream(
-        data.streamId,
-        data.agentCategory ?? AGENT_CATEGORY.WORKFLOW,
-      );
-      this.activeStream = data.streamId;
-      this.routeToProgress();
-      this.syncStreams();
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-        activeStream: data.streamId,
-      });
-      this.flushLogs(data.streamId);
-    },
-    setTaskState: (data) => {
-      this.ensureStream(
-        data.streamId,
-        data.taskState.agentConfig.agentCategory,
-      );
-      this.taskStates.set(data.streamId, data.taskState);
-      if (data.executionId)
-        this.executionIds.set(data.streamId, data.executionId);
-      // Live event arrived for what may have been a ghost. Drop the
-      // ghost entry — the live stream owns the rail row now.
-      this.restoredStreams.delete(data.streamId);
-      this.persistStreamSnapshot(data.streamId);
-      this.syncStreams();
-    },
-    updateStreamStatus: (data) => {
-      const wasKnownStream = this.streamLogs.has(data.streamId);
-      this.ensureStream(data.streamId);
-      this.statuses.set(data.streamId, data.status);
-      this.restoredStreams.delete(data.streamId);
-      this.persistStreamSnapshot(data.streamId);
-      if (!wasKnownStream) {
-        this.syncStreams();
+      case 'setTaskState': {
+        const data = payload as ProgressEventPayloads['setTaskState'];
+        this.streamLogs.ensureStream(data.streamId);
+        this.restoredStreams.delete(data.streamId);
+        this.persistStreamSnapshot(data.streamId);
+        return;
       }
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
-        stream: data.streamId,
-        status: data.status,
-        lastTimestamp: this.streamLogs.getLastTimestamp(data.streamId),
-      });
-    },
-    updateConversationProgress: (data) => {
-      this.conversationProgress.set(data.streamId, data.progress);
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_CONVERSATION_PROGRESS,
-        stream: data.streamId,
-        progress: data.progress,
-      });
-    },
-    updateTodos: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
-        stream: data.streamId,
-        todos: data.todos,
-      });
-    },
-    updatePlan: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PLAN,
-        stream: data.streamId,
-        plan: data.plan,
-      });
-    },
-    updateStreamUsage: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE,
-        stream: data.streamId,
-        runId: data.executionId ?? data.storageKey,
-        usage: data.usage,
-      });
-    },
-    addOutputFiles: (data) => {
-      const existing = this.outputFiles.get(data.streamId) ?? new Map();
-      for (const [round, files] of Object.entries(data.filesByRound)) {
-        existing.set(Number(round), files);
+      case 'updateStreamStatus': {
+        const data = payload as ProgressEventPayloads['updateStreamStatus'];
+        this.restoredStreams.delete(data.streamId);
+        this.persistStreamSnapshot(data.streamId);
+        return;
       }
-      this.outputFiles.set(data.streamId, existing);
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_FILES,
-        stream: data.streamId,
-        rounds: data.filesByRound,
-      });
-    },
-    updateMissingOutputs: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS,
-        stream: data.streamId,
-        rounds: data.filesByRound,
-      });
-    },
-    updateCompileFailures: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES,
-        stream: data.streamId,
-        rounds: data.filesByRound,
-        reset: true,
-      });
-    },
-    updateStreamDescription: (data) => {
-      this.descriptions.set(data.streamId, data.description);
-      this.persistStreamSnapshot(data.streamId);
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_DESCRIPTION,
-        stream: data.streamId,
-        description: data.description,
-      });
-    },
-    setParentStream: (data) => {
-      if (data.parentStreamId == null) {
-        this.parentStreams.delete(data.childStreamId);
-      } else {
-        this.parentStreams.set(data.childStreamId, data.parentStreamId);
+      case 'updateStreamDescription': {
+        const data =
+          payload as ProgressEventPayloads['updateStreamDescription'];
+        this.persistStreamSnapshot(data.streamId);
+        return;
       }
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PARENT_STREAM,
-        stream: data.childStreamId,
-        parentStreamId: data.parentStreamId ?? undefined,
-      });
-      this.persistStreamSnapshot(data.childStreamId);
-    },
-    updateActiveSubagents: (data) =>
-      this.sendActiveChildrenBadges(data.parentStreamId, {
-        activeField: 'activeSubagents',
-        countField: 'finishedSubagentCount',
-        next: data.children,
-      }),
-    updateActiveProcesses: (data) =>
-      this.sendActiveChildrenBadges(data.parentStreamId, {
-        activeField: 'activeProcesses',
-        countField: 'finishedProcessCount',
-        next: data.processes,
-      }),
-    updateProcessOutput: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PROCESS_OUTPUT,
-        stream: data.parentStreamId,
-        executionId: data.executionId,
-        stdout: data.stdout,
-        stderr: data.stderr,
-      });
-    },
-    showToolEditPermission: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-        action: 'show',
-        permission: { kind: 'toolEdit', data },
-      });
-    },
-    resolveToolEditPermission: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-        action: 'resolve',
-        kind: 'toolEdit',
-        id: data.requestId,
-      });
-    },
-    updateToolEditApprovalBypassState: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
-        stream: data.streamId,
-        type: 'toolEdit',
-        bypassActive: data.bypassActive,
-      });
-    },
-    showBashPermission: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-        action: 'show',
-        permission: { kind: 'bash', data },
-      });
-    },
-    resolveBashPermission: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-        action: 'resolve',
-        kind: 'bash',
-        id: data.requestId,
-      });
-    },
-    showAgentProposal: (data) => {
-      this.agentProposals.set(data.proposalId, data);
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-        action: 'show',
-        permission: { kind: 'proposal', data },
-      });
-    },
-    resolveAgentProposal: (data) => {
-      this.agentProposals.delete(data.proposalId);
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-        action: 'resolve',
-        kind: 'proposal',
-        id: data.proposalId,
-      });
-    },
-    showPlanApproval: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-        action: 'show',
-        permission: { kind: 'planApproval', data },
-      });
-    },
-    resolvePlanApproval: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-        action: 'resolve',
-        kind: 'planApproval',
-        id: data.approvalId,
-      });
-    },
-    showUserQuestion: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-        action: 'show',
-        permission: { kind: 'userQuestion', data },
-      });
-    },
-    resolveUserQuestion: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_PERMISSION,
-        action: 'resolve',
-        kind: 'userQuestion',
-        id: data.requestId,
-      });
-    },
-    updateSuperYoloBypassState: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_BYPASS,
-        stream: data.streamId,
-        type: 'superYolo',
-        bypassActive: data.bypassActive,
-      });
-    },
-    updateQueuedFollowUps: (data) => {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.UPDATE_QUEUED_FOLLOW_UPS,
-        stream: data.streamId,
-        messages: ToolUseFollowUpQueue.getAll(data.streamId),
-      });
-    },
-    // No-op events: produced elsewhere or with no desktop progress-mirror
-    // side effect. Kept as explicit `null` to preserve exhaustiveness.
-    odysseyStateChanged: null,
-    clearMissingOutputs: null,
-    updateBashApprovalBypassState: null,
-    showRetryRequest: null,
-    resolveRetryRequest: null,
-    showExternalInquiry: null,
-    resolveExternalInquiry: null,
-    inquiryThreadUpdated: null,
-    followUpSent: null,
-    removeStream: null,
-    extensionDeactivating: null,
-    githubTokenInvalid: null,
-    prSubscriptionsChanged: null,
-    prSubscriptionBindingsChanged: null,
-    repoSubscriptionsChanged: null,
-    repoSubscriptionBindingsChanged: null,
-    issueSubscriptionsChanged: null,
-    issueSubscriptionBindingsChanged: null,
-    toolAvailabilityChanged: null,
-    workspaceFilesWritten: null,
-    requestOpenFile: null,
-    requestShowInstruction: null,
-    showAgentConfigBanner: null,
-    requestShowError: null,
-  };
+      case 'setParentStream': {
+        const data = payload as ProgressEventPayloads['setParentStream'];
+        this.persistStreamSnapshot(data.childStreamId);
+        return;
+      }
+      default:
+        return;
+    }
+  }
 
   syncFullView(): void {
-    this.syncStreams();
-    if (this.activeStream) this.flushLogs(this.activeStream);
+    const activeStream = this.backend.webviewUpdater.sendStreamMetadata(
+      this.state,
+      this.backend.eventHandler.getAllStreamStatuses(),
+    );
+    this.syncStreamContent(activeStream);
   }
 
   setActiveStream(streamId: StreamTabId): void {
-    if (
-      !this.streamLogs.has(streamId) &&
-      !this.taskStates.has(streamId) &&
-      !this.restoredStreams.has(streamId)
-    ) {
+    if (!this.streamLogs.has(streamId)) {
       return;
     }
-    this.activeStream = streamId;
-    this.syncStreams();
-    this.send({
-      command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-      activeStream: streamId,
-    });
-    this.flushLogs(streamId);
+    const previous = this.state.activeStream;
+    if (previous && previous !== streamId) {
+      this.state.releasePreviousActive(previous);
+    }
+    this.state.activeStream = streamId;
+    this.backend.webviewUpdater.sendStreamMetadata(
+      this.state,
+      this.backend.eventHandler.getAllStreamStatuses(),
+    );
+    this.backend.webviewUpdater.setActiveStream(streamId);
+    this.syncStreamContent(streamId);
   }
 
   setAgentFilter(filter: AgentCategoryFilter): void {
-    this.agentFilter = filter;
-    this.syncStreams();
+    this.state.agentCategoryFilter = filter;
+    const activeStream = this.backend.webviewUpdater.sendStreamMetadata(
+      this.state,
+      this.backend.eventHandler.getAllStreamStatuses(),
+    );
+    this.syncStreamContent(activeStream);
   }
 
   async deleteStream(streamId: StreamTabId): Promise<void> {
-    const hadStream =
-      this.streamLogs.has(streamId) ||
-      this.taskStates.has(streamId) ||
-      this.restoredStreams.has(streamId);
-    if (!hadStream) return;
+    if (!this.streamLogs.has(streamId) && !this.restoredStreams.has(streamId)) {
+      return;
+    }
     this.deletedStreams.add(streamId);
     this.removePersistedStream(streamId);
 
@@ -1052,38 +693,20 @@ export class DesktopProgressBridge {
     cleanupApprovalsForStream(streamId);
     ToolUseFollowUpQueue.release(streamId);
 
-    await this.streamLogs.delete(streamId);
-    this.taskStates.delete(streamId);
-    this.outputFiles.delete(streamId);
-    this.statuses.delete(streamId);
-    this.categories.delete(streamId);
-    this.executionIds.delete(streamId);
     this.deleteAgentProposalsForStream(streamId);
-    this.descriptions.delete(streamId);
-    this.parentStreams.delete(streamId);
-    this.creationTimestamps.delete(streamId);
-    this.conversationProgress.delete(streamId);
-    this.streamBadges.delete(streamId);
     this.workflowFileActions.clearStreamBackups(streamId);
-    this.cursors.delete(streamId);
+    this.restoredDisplaySent.delete(streamId);
     await OdysseyStore.forget(streamId);
-
-    const shouldSelectFallback = this.activeStream === streamId;
-    if (shouldSelectFallback) {
-      this.activeStream = this.streamLogs.keys()[0] ?? '';
-    }
+    await this.state.clearStream(streamId);
     this.send({
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
       stream: streamId,
     });
-    this.syncStreams();
-    if (shouldSelectFallback && this.activeStream) {
-      this.send({
-        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-        activeStream: this.activeStream,
-      });
-      this.flushLogs(this.activeStream);
-    }
+    const activeStream = this.backend.webviewUpdater.sendStreamMetadata(
+      this.state,
+      this.backend.eventHandler.getAllStreamStatuses(),
+    );
+    this.syncStreamContent(activeStream);
   }
 
   async deleteAllStreams(): Promise<void> {
@@ -1091,7 +714,6 @@ export class DesktopProgressBridge {
     cleanupAllApprovals();
     const streamIds = new Set<StreamTabId>([
       ...this.streamLogs.keys(),
-      ...this.taskStates.keys(),
       ...this.restoredStreams.keys(),
     ]);
     for (const streamId of streamIds) {
@@ -1116,12 +738,29 @@ export class DesktopProgressBridge {
         });
     }
 
-    await this.streamLogs.clear();
-    this.clearAllStreamMaps();
+    await this.state.clearAll();
+    this.clearDesktopSessionMaps();
     this.workflowFileActions.clearAllBackups();
-    this.activeStream = '';
     this.send({ command: PROGRESS_VIEW_COMMANDS.DELETE_ALL });
-    this.syncStreams();
+    this.backend.webviewUpdater.sendStreamMetadata(
+      this.state,
+      this.backend.eventHandler.getAllStreamStatuses(),
+    );
+  }
+
+  private syncStreamContent(streamId: StreamTabId | ''): void {
+    if (!streamId) {
+      this.backend.eventHandler.syncStreamContent('');
+      return;
+    }
+
+    void this.streamLogs.ensureLoaded(streamId).then(() => {
+      if (this.state.activeStream !== streamId) return;
+      this.backend.eventHandler.syncStreamContent(streamId, {
+        includeActiveState: true,
+      });
+      this.sendRestoredDisplay(streamId);
+    });
   }
 
   stopStream(streamId: StreamTabId): void {
@@ -1252,8 +891,8 @@ export class DesktopProgressBridge {
   private async resolveResumeState(
     streamId: StreamTabId,
   ): Promise<ResumeState | undefined> {
-    const taskState = this.taskStates.get(streamId);
-    const executionId = this.executionIds.get(streamId);
+    const taskState = this.state.snapshots.getTaskState(streamId);
+    const executionId = this.getStreamExecutionId(streamId);
     if (taskState && executionId) return { taskState, executionId };
 
     const persisted = await this.readPersistedResumeMeta(streamId);
@@ -1262,17 +901,20 @@ export class DesktopProgressBridge {
     if (!restoredTaskState) return undefined;
 
     const restoredExecutionId = executionId ?? persisted?.executionId;
-    this.taskStates.set(streamId, restoredTaskState);
-    this.categories.set(streamId, restoredTaskState.agentConfig.agentCategory);
-    if (restoredExecutionId) {
-      this.executionIds.set(streamId, restoredExecutionId);
-    }
-
+    this.state.streamLogs.ensureStream(streamId);
+    this.state.updateStreamHints(streamId, {
+      agentCategory: restoredTaskState.agentConfig.agentCategory,
+    });
+    this.state.snapshots.setTaskState(
+      streamId,
+      restoredTaskState,
+      restoredExecutionId,
+    );
     if (persisted?.description !== undefined) {
-      this.descriptions.set(streamId, persisted.description);
+      this.state.snapshots.setDescription(streamId, persisted.description);
     }
     if (persisted?.parentStreamId !== undefined) {
-      this.parentStreams.set(streamId, persisted.parentStreamId);
+      this.state.snapshots.setParentStream(streamId, persisted.parentStreamId);
     }
 
     return {
@@ -1312,7 +954,7 @@ export class DesktopProgressBridge {
   }
 
   async runNewStream(streamId: StreamTabId): Promise<void> {
-    const taskState = this.taskStates.get(streamId);
+    const taskState = this.state.snapshots.getTaskState(streamId);
     if (!taskState) return;
 
     await this.runExecution({ config: taskState.agentConfig });
@@ -1614,9 +1256,10 @@ export function createDesktopAgentExecution(
     openBuildDisplay: options.opener?.openBuildDisplay,
     openDiff: options.diff?.openDiff,
     confirmAcceptFile: options.confirmAcceptFile,
-    showInfoMessage: async (message) => options.showInfoMessage?.(message),
-    showErrorMessage: async (message) => options.showErrorMessage?.(message),
+    showInfoMessage: options.showInfoMessage,
+    showErrorMessage: options.showErrorMessage,
     streamSnapshotStore: options.streamSnapshotStore,
+    progressSnapshotStore: options.progressSnapshotStore,
   });
 
   return {

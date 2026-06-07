@@ -8,6 +8,7 @@ import {
   LOG_LEVELS,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_STATUS,
+  type RestoredStreamSnapshot,
   type StreamTabId,
 } from '@shared/schemas';
 import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
@@ -24,6 +25,7 @@ type Bridge = {
 
 type TestableBridge = Bridge & {
   handleProgressEvent(event: string, payload: unknown): void;
+  syncFullView(): void;
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
   setActiveStream(streamId: StreamTabId): void;
   deleteStream(streamId: StreamTabId): Promise<void>;
@@ -65,6 +67,7 @@ type RunExecutionRequest = (
 interface DesktopAgentExecutionModule {
   DesktopProgressBridge: new (
     postToRenderer: (message: unknown) => void,
+    options?: { streamSnapshotStore?: TestDesktopStreamSnapshotStore },
   ) => Bridge;
   createDesktopAgentExecution(options: {
     postToRenderer(message: unknown): void;
@@ -81,6 +84,15 @@ type CreateBridgeOptions = {
   retrieveSessionResumeData?: ReturnType<typeof vi.fn>;
   resumeToolUseFromSnapshot?: ReturnType<typeof vi.fn>;
   runAgent?: RunExecutionRequest;
+  streamSnapshotStore?: TestDesktopStreamSnapshotStore;
+};
+
+type TestDesktopStreamSnapshotStore = {
+  readonly hydrated: readonly RestoredStreamSnapshot[];
+  upsert(snapshot: RestoredStreamSnapshot): Promise<void>;
+  remove(streamId: StreamTabId): Promise<void>;
+  replaceAll(snapshots: RestoredStreamSnapshot[]): Promise<void>;
+  getAll(): RestoredStreamSnapshot[];
 };
 
 type ProgressMessage = {
@@ -212,9 +224,9 @@ async function createBridge(
   const { DesktopProgressBridge } = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
-  return new DesktopProgressBridge((message) =>
-    messages.push(message),
-  ) as TestableBridge;
+  return new DesktopProgressBridge((message) => messages.push(message), {
+    streamSnapshotStore: options.streamSnapshotStore,
+  }) as TestableBridge;
 }
 
 async function createExecution(options: {
@@ -295,6 +307,70 @@ function progressMessages(
   );
 }
 
+function createStreamSnapshotStore(
+  hydrated: readonly RestoredStreamSnapshot[],
+): TestDesktopStreamSnapshotStore {
+  const live = new Map(
+    hydrated.map((snapshot) => [snapshot.streamId, snapshot]),
+  );
+  return {
+    hydrated,
+    upsert: vi.fn(async (snapshot: RestoredStreamSnapshot) => {
+      live.set(snapshot.streamId, snapshot);
+    }),
+    remove: vi.fn(async (streamId: StreamTabId) => {
+      live.delete(streamId);
+    }),
+    replaceAll: vi.fn(async (snapshots: RestoredStreamSnapshot[]) => {
+      live.clear();
+      for (const snapshot of snapshots) live.set(snapshot.streamId, snapshot);
+    }),
+    getAll: () => [...live.values()],
+  };
+}
+
+function workflowTaskState(): {
+  agentConfig: {
+    agent: string;
+    model: string;
+    agentCategory: typeof AGENT_CATEGORY.WORKFLOW;
+    toolConfig: typeof DEFAULT_TOOL_CONFIG;
+  };
+  activeFiles: Record<string, boolean>;
+} {
+  return {
+    agentConfig: {
+      agent: 'proofreader',
+      model: 'deepseekproT',
+      agentCategory: AGENT_CATEGORY.WORKFLOW,
+      toolConfig: DEFAULT_TOOL_CONFIG,
+    },
+    activeFiles: {},
+  };
+}
+
+function expectWorkflowResume(
+  runAgent: ReturnType<typeof vi.fn>,
+  taskState: ReturnType<typeof workflowTaskState>,
+  executionId: string,
+): void {
+  expect(runAgent).toHaveBeenCalledWith(
+    {
+      config: expect.objectContaining(taskState.agentConfig),
+      executionId,
+    },
+    expect.objectContaining({
+      runtimeHost: expect.objectContaining({ emit: expect.any(Function) }),
+      openWorkflowOutput: expect.any(Function),
+    }),
+  );
+}
+
+async function settleProgressEvents(): Promise<void> {
+  await Promise.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
 describe('DesktopProgressBridge', () => {
   afterEach(() => {
     vi.doUnmock('@agent/runtime/RunStorageService');
@@ -353,6 +429,9 @@ describe('DesktopProgressBridge', () => {
         parentStreamId: 'parent',
         children: [{ executionId: 'agent-1', agentName: 'reviewer' }],
       });
+      await settleProgressEvents();
+      messages.length = 0;
+      bridge.syncFullView();
 
       const streamSync = progressMessages(
         messages,
@@ -431,10 +510,7 @@ describe('DesktopProgressBridge', () => {
 
       expect(
         messages.map((message) => (message as ProgressMessage).command),
-      ).toEqual([
-        PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-        PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_STATUS,
-      ]);
+      ).toEqual([PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS]);
       expect(
         progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS)[0]
           ?.streamStates?.['new-stream'],
@@ -452,6 +528,31 @@ describe('DesktopProgressBridge', () => {
       bridge.setActiveStream('ghost-stream');
 
       expect(messages).toEqual([]);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('does not route to progress for suppressed background stream switches', async () => {
+    const messages: unknown[] = [];
+    const bridge = await createBridge(messages);
+
+    try {
+      bridge.handleProgressEvent('setActiveStream', {
+        streamId: 'child-stream',
+        agentCategory: AGENT_CATEGORY.TOOL_USE,
+        suppressViewSwitch: true,
+      });
+      await settleProgressEvents();
+
+      expect(
+        messages.some(
+          (message) =>
+            (message as ProgressMessage).command ===
+              DESKTOP_SHELL_COMMANDS.SET_ROUTE &&
+            (message as { route?: string }).route === 'progress',
+        ),
+      ).toBe(false);
     } finally {
       bridge.dispose();
     }
@@ -478,28 +579,28 @@ describe('DesktopProgressBridge', () => {
         timestamp: 1_500,
         text: 'first stream log',
       });
+      await settleProgressEvents();
       messages.length = 0;
 
       await bridge.deleteStream('second');
+      await settleProgressEvents();
 
-      expect(
-        messages.map((message) => (message as ProgressMessage).command),
-      ).toEqual([
-        PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
-        PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-        PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-        PROGRESS_VIEW_COMMANDS.LOG_DELTA,
-      ]);
+      await vi.waitFor(() =>
+        expect(
+          messages.map((message) => (message as ProgressMessage).command),
+        ).toEqual([
+          PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
+          PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+          PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT,
+          PROGRESS_VIEW_COMMANDS.LOG_DELTA,
+        ]),
+      );
       expect(messages[0]).toMatchObject({
         command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
         stream: 'second',
       });
       expect(messages[1]).toMatchObject({
         command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
-        activeStream: 'first',
-      });
-      expect(messages[2]).toMatchObject({
-        command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
         activeStream: 'first',
       });
       expect(messages[3]).toMatchObject({
@@ -573,6 +674,7 @@ describe('DesktopProgressBridge', () => {
         streamId: 'third',
         agentCategory: AGENT_CATEGORY.WORKFLOW,
       });
+      await settleProgressEvents();
       bridge.setActiveStream('second');
       messages.length = 0;
 
@@ -613,6 +715,7 @@ describe('DesktopProgressBridge', () => {
         streamId: 'second',
         agentCategory: AGENT_CATEGORY.WORKFLOW,
       });
+      await settleProgressEvents();
       bridge.setActiveStream('first');
       messages.length = 0;
 
@@ -628,10 +731,6 @@ describe('DesktopProgressBridge', () => {
       ).toEqual([
         {
           activeStream: 'second',
-          command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
-        },
-        {
-          activeStream: 'first',
           command: PROGRESS_VIEW_COMMANDS.SET_ACTIVE_STREAM,
         },
       ]);
@@ -657,6 +756,7 @@ describe('DesktopProgressBridge', () => {
         streamId: 'active',
         agentCategory: AGENT_CATEGORY.WORKFLOW,
       });
+      await settleProgressEvents();
       messages.length = 0;
 
       await bridge.deleteAllStreams();
@@ -836,15 +936,7 @@ describe('DesktopProgressBridge', () => {
 
   it('resumes workflow streams from persisted meta', async () => {
     const executionId = 'abc123';
-    const taskState = {
-      agentConfig: {
-        agent: 'proofreader',
-        model: 'deepseekproT',
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
-        toolConfig: DEFAULT_TOOL_CONFIG,
-      },
-      activeFiles: {},
-    };
+    const taskState = workflowTaskState();
     const retrieveSessionResumeData = vi.fn(async () => ({
       type: 'workflow',
       agentConfig: taskState.agentConfig,
@@ -879,16 +971,61 @@ describe('DesktopProgressBridge', () => {
           agentConfig: expect.objectContaining(taskState.agentConfig),
         }),
       );
-      expect(runAgent).toHaveBeenCalledWith(
+      expectWorkflowResume(runAgent, taskState, executionId);
+    } finally {
+      StreamStatusService.clear('stream-1', { emit: false });
+      bridge.dispose();
+    }
+  });
+
+  it('resumes hydrated ghost streams using hinted execution ids', async () => {
+    const executionId = 'abc123';
+    const taskState = workflowTaskState();
+    const retrieveSessionResumeData = vi.fn(async () => ({
+      type: 'workflow',
+      agentConfig: taskState.agentConfig,
+      executionId,
+    }));
+    const runAgent = vi.fn(async () => {});
+    const kvRead = vi.fn(async (key: string) =>
+      key === 'meta'
+        ? {
+            taskState,
+            description: 'Persisted workflow',
+          }
+        : undefined,
+    );
+    const bridge = await createBridge([], {
+      kvRead,
+      retrieveSessionResumeData,
+      runAgent,
+      streamSnapshotStore: createStreamSnapshotStore([
         {
-          config: expect.objectContaining(taskState.agentConfig),
+          streamId: 'stream-1',
+          label: 'proofreader',
+          agent: 'proofreader',
+          agentCategory: AGENT_CATEGORY.WORKFLOW,
+          lastKnownStatus: STREAM_STATUS.STOPPED,
           executionId,
+          creationTimestamp: 1_000,
+          persistedAt: 2_000,
         },
+      ]),
+    });
+    const { StreamStatusService } =
+      await import('@agent/runtime/StreamStatusService');
+
+    try {
+      await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(true);
+      expect(retrieveSessionResumeData).toHaveBeenCalledWith(
+        'stream-1',
+        executionId,
         expect.objectContaining({
-          runtimeHost: expect.objectContaining({ emit: expect.any(Function) }),
-          openWorkflowOutput: expect.any(Function),
+          activeFiles: {},
+          agentConfig: expect.objectContaining(taskState.agentConfig),
         }),
       );
+      expectWorkflowResume(runAgent, taskState, executionId);
     } finally {
       StreamStatusService.clear('stream-1', { emit: false });
       bridge.dispose();
