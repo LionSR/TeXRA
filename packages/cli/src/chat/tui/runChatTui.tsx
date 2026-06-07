@@ -410,41 +410,39 @@ export function chatTuiIsResumableIdleOnExit(input: {
   return input.canInterruptActiveRun && !input.canStopActiveRun;
 }
 
-function chatTuiActiveChildStreamId(): StreamTabId | undefined {
-  const activeStreamId = cliState.activeStreamId.get();
-  if (!activeStreamId) return undefined;
-  return cliState.parentStream.get().has(activeStreamId)
-    ? activeStreamId
-    : undefined;
-}
+export type ChatTuiFocusedChildFollowUpRoute =
+  | { readonly kind: 'none' }
+  | {
+      readonly kind: 'accept';
+      readonly streamId: StreamTabId;
+      readonly shouldAnnounceQueuedFollowUp: boolean;
+    }
+  | { readonly kind: 'reject'; readonly streamId: StreamTabId };
 
-function chatTuiCanAcceptFollowUp(status: StreamStatus | undefined): boolean {
+export function chatTuiFocusedChildFollowUpRoute(): ChatTuiFocusedChildFollowUpRoute {
+  const activeStreamId = cliState.activeStreamId.get();
+  if (!activeStreamId || !cliState.parentStream.get().has(activeStreamId)) {
+    return { kind: 'none' };
+  }
+
+  const status = streamStatusFromState(activeStreamId);
   // A focused child normally has a status. Keep the previous permissive
   // behavior during the brief edge where parent focus arrives first.
-  return status === undefined || isInFlightStatus(status);
+  if (status !== undefined && !isInFlightStatus(status)) {
+    return { kind: 'reject', streamId: activeStreamId };
+  }
+  return {
+    kind: 'accept',
+    streamId: activeStreamId,
+    shouldAnnounceQueuedFollowUp: status !== STREAM_STATUS.WAITING,
+  };
 }
 
-export function chatTuiActiveChildFollowUpTarget(): StreamTabId | undefined {
-  const activeStreamId = chatTuiActiveChildStreamId();
-  if (!activeStreamId) return undefined;
-  return chatTuiCanAcceptFollowUp(streamStatusFromState(activeStreamId))
-    ? activeStreamId
-    : undefined;
-}
-
-export function chatTuiShouldAnnounceQueuedFollowUp(
+function shouldAnnounceQueuedFollowUpToStream(
   targetStreamId: StreamTabId | undefined,
 ): boolean {
   if (!targetStreamId) return true;
   return streamStatusFromState(targetStreamId) !== STREAM_STATUS.WAITING;
-}
-
-export function chatTuiRejectedChildFollowUpTarget(): StreamTabId | undefined {
-  const activeStreamId = chatTuiActiveChildStreamId();
-  if (!activeStreamId) return undefined;
-  return chatTuiCanAcceptFollowUp(streamStatusFromState(activeStreamId))
-    ? undefined
-    : activeStreamId;
 }
 
 interface SlashCommandContext {
@@ -1547,15 +1545,18 @@ export async function runChat(
     line: string,
     mediaFiles?: readonly string[],
   ): Promise<void> => {
-    const rejectedChildFollowUpTarget = chatTuiRejectedChildFollowUpTarget();
-    if (rejectedChildFollowUpTarget) {
+    const focusedChildRoute = chatTuiFocusedChildFollowUpRoute();
+    if (focusedChildRoute.kind === 'reject') {
       appendLocalAssistantTranscript(
         'The selected subagent is no longer accepting follow-ups.',
-        rejectedChildFollowUpTarget,
+        focusedChildRoute.streamId,
       );
       return;
     }
-    const childFollowUpTarget = chatTuiActiveChildFollowUpTarget();
+    const childFollowUpTarget =
+      focusedChildRoute.kind === 'accept'
+        ? focusedChildRoute.streamId
+        : undefined;
     const prepared = takePendingSkillActivations(pendingSkillActivations, line);
     const skillActivationClearEpoch = pendingSkillActivationClearEpoch;
     const restoreReservedSkillActivations = (): void => {
@@ -1583,7 +1584,11 @@ export async function runChat(
     // p-queue serializes work but doesn't have an "await predicate" primitive,
     // so the task itself waits for the stream id via a tiny poll loop.
     const initialFollowUpTarget = childFollowUpTarget ?? session.streamId;
-    if (chatTuiShouldAnnounceQueuedFollowUp(initialFollowUpTarget)) {
+    const shouldAnnounceQueuedFollowUp =
+      focusedChildRoute.kind === 'accept'
+        ? focusedChildRoute.shouldAnnounceQueuedFollowUp
+        : shouldAnnounceQueuedFollowUpToStream(initialFollowUpTarget);
+    if (shouldAnnounceQueuedFollowUp) {
       appendLocalAssistantTranscript(
         `Queued follow-up: ${truncateSummary(
           line,
