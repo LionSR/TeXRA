@@ -14,7 +14,7 @@ A multi-agent read-only audit: three parallel deep agents each owned a non-overl
 TeXRA already has **one genuinely clean DI seam**: `platform()` (`src/platform/platform.ts`) — a frozen, single-call composition root over small vscode-free ports. The problem is that **three other dependency-flow mechanisms grew up around it** instead of through it, and they now overlap:
 
 1. **A fat context bag** (`AgentCore` → `*Services`): 13 declared fields that balloon to **~31–35 at runtime** because the bag is spread wholesale into nested flows. Nodes read **3–9** fields while carrying 31–35 — **~70–90% is dead weight** at each node.
-2. **24 module-level `set*` singletons** (service-locator style): host capabilities injected via mutable module globals. **9 have silent no-op defaults**; **6 are wired only in `extension.ts`**, so they silently no-op in the CLI and desktop hosts. **8 are written from multiple composition roots.**
+2. **24 module-level `set*` singletons** (service-locator style): host capabilities injected via mutable module globals. **9 have silent no-op defaults**; **6 are unavailable in at least one non-extension host**, so they silently no-op outside the happy path. **8 are written from multiple composition roots.**
 3. **Ambient state** (AsyncLocalStorage + 7 process-global registries): `RunContext` and `ToolCallContext` plus the runtime registries that — per [`agent-sdk-readiness.md`](./agent-sdk-readiness.md) — block concurrent in-process sessions.
 
 **The headline finding:** mechanisms A and C carry **the same 7–8 fields at once**, and the two halves of the codebase disagree on which is canonical — **flow nodes read them from the bag, tools read them from `RunContext`**. That split-brain is the strongest evidence that bag-threading those fields is redundant, and it tells us the migration target is already chosen by the code.
@@ -148,9 +148,9 @@ flowchart LR
     end
 
     f1 & f2 & f3 --> RI
-    f4 & f5 --> DP
+    f4 & f5 & f13 --> DP
     f6 & f7 & f8 & f9 & f10 --> AD
-    f11 --> AMB
+    f11 & f12 --> AMB
 
     style RI fill:#def,stroke:#36b
     style DP fill:#fed,stroke:#b83
@@ -204,7 +204,7 @@ flowchart TB
 | -------------------------------------------------------------------- | ------------------------- | ----------- | --------------------- | ------------------------ |
 | `setLinterProvider` `DiagnosticsTool.ts:12`                          | `async () => []`          | P           | —                     | **yes**                  |
 | `setAddCriticismSink` `AddCriticismTool.ts:48`                       | `{accepted:false}`        | P           | —                     | **yes**                  |
-| `setOpenPdfOpener` `OpenPdfTool.ts:42`                               | undefined                 | P           | —                     | yes                      |
+| `setOpenPdfOpener` `OpenPdfTool.ts:42`                               | undefined                 | P           | —                     | no (guarded error)       |
 | `setOpenBuildDisplay` `approval/latexPreview.ts:34`                  | `async () => {}`          | P           | **ext+desktop**       | **yes** (no-ops in CLI)  |
 | `setToolMissingHandler` `utils/system/toolUtils.ts:58`               | `() => {}`                | P           | —                     | **yes**                  |
 | `setToolNotificationHandler` `toolUnavailableNotification.ts:28`     | `() => {}`                | P           | —                     | **yes**                  |
@@ -236,7 +236,7 @@ flowchart TB
 
 ### The silent-no-op trap
 
-9 setters default to a no-op. Six of those are wired **only in `extension.ts`**, so in CLI/desktop the linter, manual criticism, PDF opening, tool-missing toasts, tool-unavailable notifications, and the GitHub token are **silently absent with no error**. Folding into typed `Platform` ports turns each missing wiring into a compile error instead of a silent runtime gap.
+9 setters default to a no-op. Six of those are unavailable in at least one non-extension host, so depending on host, the linter, manual criticism, build display, tool-missing toasts, tool-unavailable notifications, and the GitHub token are **silently absent with no error**. Folding into typed `Platform` ports turns each missing wiring into a compile error instead of a silent runtime gap.
 
 ---
 
@@ -291,13 +291,15 @@ flowchart TB
 ```mermaid
 flowchart LR
     P1["20 P-setters"] -->|fold into| PORTS["frozen Platform ports"]
-    P2["setToolEditApprovalHandler\n+ 7 registries"] -->|scope to| RUN["RunContext (per-run)"]
+    P2["setToolEditApprovalHandler"] -->|scope to| RUN["RunContext (per-run)"]
+    P2B["7 registries"] -->|scope to| SESSION["per-session runtime owner"]
     P3["7-8 duplicated bag fields"] -->|drop from bag,\nread like tools do| RUN
     P4["13-field AgentCore"] -->|cohesion split| FOUR["4 objects + ambient logger"]
     P5["wholesale {...services}\nre-spread ×2"] -->|narrow interfaces| ISP["nodes declare only\nwhat they read"]
 
     PORTS --> WIN["✓ typed wiring\n✓ no silent no-ops\n✓ concurrent sessions\n✓ ~80% less carried"]
     RUN --> WIN
+    SESSION --> WIN
     FOUR --> WIN
     ISP --> WIN
 
