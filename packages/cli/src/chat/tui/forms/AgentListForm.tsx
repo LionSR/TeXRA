@@ -10,7 +10,11 @@ import { agentName } from '@shared/schemas/agent';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
-import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
+import {
+  CompactFormKeyHints,
+  FormFrame,
+  formFrameWidth,
+} from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
@@ -32,16 +36,6 @@ interface AgentGroups {
 
 type AgentIdentity = Pick<AgentOptionData, 'label' | 'value'>;
 type AgentDelegationFlag = Pick<AgentOptionData, 'isOrchestrator'>;
-
-const AGENT_FORM_MAX_WIDTH = 80;
-
-export function agentFormWidth(columns: number | undefined): number {
-  const normalized =
-    columns != null && Number.isFinite(columns) && columns > 0
-      ? Math.floor(columns)
-      : AGENT_FORM_MAX_WIDTH;
-  return Math.max(1, Math.min(normalized, AGENT_FORM_MAX_WIDTH));
-}
 
 function agentDescription(agent: AgentOptionData): string {
   const source = agent.isRemote
@@ -258,7 +252,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
       borderColor="cyan"
       flexDirection="column"
       paddingX={1}
-      width={agentFormWidth(columns)}
+      width={formFrameWidth(columns)}
     >
       <Text bold color="cyan">
         /agent
