@@ -1,5 +1,5 @@
 // Third-party imports
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
 import type { AgentTrace } from '@agent/trace';
@@ -12,7 +12,7 @@ import {
   withRunContext,
   type RunCoordinators,
 } from '@agent/runtime/RunContext';
-import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
+import { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
   AGENT_CATEGORY,
   TODO_STATUS,
@@ -59,30 +59,27 @@ function createLogger(): AgentTrace {
 }
 
 describe('runCoordinators', () => {
-  afterEach(() => {
-    runCoordinatorBridge.cleanupAllRequests();
-  });
-
   it('does not fall back to default coordinators when a run has none', async () => {
     const active = createRecordingHost();
+    const bridge = new RunCoordinatorBridge();
 
     await withRunContext(
       createRunContext({ runtimeHost: active.host }),
       async () => {
         await expect(
-          runCoordinatorBridge.waitForPlanApproval(streamId, {
+          bridge.waitForPlanApproval(streamId, {
             approvalId: 'approval:missing-coordinators',
             plan,
           }),
         ).rejects.toThrow(/active run coordinators/);
         await expect(
-          runCoordinatorBridge.waitForProposal(streamId, {
+          bridge.waitForProposal(streamId, {
             proposalId: 'proposal:missing-coordinators',
             proposal,
           }),
         ).rejects.toThrow(/active run coordinators/);
         await expect(
-          runCoordinatorBridge.waitForRetry(streamId, {
+          bridge.waitForRetry(streamId, {
             operation: 'Model invocation',
             logger: createLogger(),
           }),
@@ -95,6 +92,7 @@ describe('runCoordinators', () => {
 
   it('routes waits and resolver bridge events through active run coordinators', async () => {
     const active = createRecordingHost();
+    const bridge = new RunCoordinatorBridge();
     const coordinators = createCoordinators(active.host);
     const context = createRunContext({
       runtimeHost: active.host,
@@ -102,26 +100,26 @@ describe('runCoordinators', () => {
     });
 
     const planResult = withRunContext(context, () =>
-      runCoordinatorBridge.waitForPlanApproval(streamId, {
+      bridge.waitForPlanApproval(streamId, {
         approvalId: 'approval:active-coordinator',
         plan,
       }),
     );
     expect(
-      runCoordinatorBridge.resolvePlanApproval('approval:active-coordinator', {
+      bridge.resolvePlanApproval('approval:active-coordinator', {
         action: 'approve',
       }),
     ).toBe(true);
     await expect(planResult).resolves.toEqual({ action: 'approve' });
 
     const proposalResult = withRunContext(context, () =>
-      runCoordinatorBridge.waitForProposal(streamId, {
+      bridge.waitForProposal(streamId, {
         proposalId: 'proposal:active-coordinator',
         proposal,
       }),
     );
     expect(
-      runCoordinatorBridge.resolveProposal('proposal:active-coordinator', {
+      bridge.resolveProposal('proposal:active-coordinator', {
         action: 'approve',
         agent: 'reviewer',
         model: 'test-model',
@@ -134,14 +132,12 @@ describe('runCoordinators', () => {
     });
 
     const retryResult = withRunContext(context, () =>
-      runCoordinatorBridge.waitForRetry(streamId, {
+      bridge.waitForRetry(streamId, {
         operation: 'Model invocation',
         logger: createLogger(),
       }),
     );
-    expect(
-      runCoordinatorBridge.triggerRetry(streamId, 'try the request again'),
-    ).toBe(true);
+    expect(bridge.triggerRetry(streamId, 'try the request again')).toBe(true);
     await expect(retryResult).resolves.toEqual({
       action: 'retry',
       feedback: 'try the request again',
