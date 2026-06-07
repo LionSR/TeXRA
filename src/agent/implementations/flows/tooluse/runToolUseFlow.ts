@@ -6,10 +6,7 @@ import {
   createModelHandler,
   modelHandlerCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
-import {
-  registerInterruptible,
-  unregisterInterruptible,
-} from '@agent/toolUse/ToolUseAgentRegistry';
+import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import {
   clearPlanApprovalForStream,
   clearRetryRequest,
@@ -266,7 +263,7 @@ export async function runToolUseFlow<C = unknown>(
   };
 
   try {
-    registerInterruptible(streamId, flowContext);
+    interruptRegistry.register(streamId, flowContext);
     onSetup?.(flowContext);
     let flowRecord: FlowRecord | null = null;
     try {
@@ -354,7 +351,7 @@ export async function runToolUseFlow<C = unknown>(
 
     sessionLifecycle.dispose();
     clearPlanApprovalForStream(streamId);
-    unregisterInterruptible(streamId);
+    interruptRegistry.unregister(streamId);
     for (const handler of switchedHandlers) {
       handler.dispose();
     }

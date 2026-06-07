@@ -42,11 +42,9 @@ import { untrackExecution } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import {
-  getInterruptible,
-  registerInterruptible,
-  unregisterInterruptible,
+  interruptRegistry,
   type IInterruptible,
-} from '@agent/toolUse/ToolUseAgentRegistry';
+} from '@agent/runtime/InterruptRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
@@ -165,7 +163,7 @@ function storeSession(sessionId: string, entry: ActiveSession): void {
 
 export function interruptAllClaudeAgentSessions(): void {
   for (const { childStreamId } of [...sessionRegistry.values()]) {
-    getInterruptible(childStreamId)?.interrupt();
+    interruptRegistry.get(childStreamId)?.interrupt();
   }
 }
 
@@ -499,7 +497,7 @@ function startClaudeAgentLoop(params: {
   const session = new ClaudeAgentSession();
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
   session.setQueue(queue);
-  registerInterruptible(childStreamId, session);
+  interruptRegistry.register(childStreamId, session);
 
   // The child session runs on its own trace, whose per-instance stage scope is
   // empty here, so this opens as a root with no cross-trace parent.
@@ -620,7 +618,7 @@ function startClaudeAgentLoop(params: {
       for (const sessionId of storedSessionIds) {
         sessionRegistry.delete(sessionId);
       }
-      unregisterInterruptible(childStreamId);
+      interruptRegistry.unregister(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
       await writeTerminalStatus(
         executionId,

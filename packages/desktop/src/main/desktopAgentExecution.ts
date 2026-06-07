@@ -35,7 +35,7 @@ import {
   interruptActiveChildren,
 } from '@agent/runtime/executionRegistry';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
-import { getInterruptible } from '@agent/toolUse/ToolUseAgentRegistry';
+import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { toErrorMessage } from '@common/errors';
@@ -862,7 +862,7 @@ export class DesktopProgressBridge {
     } else {
       interruptActiveChildren(streamId);
     }
-    getInterruptible(streamId)?.interrupt();
+    interruptRegistry.get(streamId)?.interrupt();
     StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, {
       runtimeHost: this.runtimeHost,
     });
