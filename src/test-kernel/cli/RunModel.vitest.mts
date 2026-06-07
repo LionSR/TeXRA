@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CliUsageError } from '@cli/runtime/cliContext';
-import { assertExplicitModelKnown } from '@cli/commands/_helpers/modelArg';
+import { assertExplicitModelKnown } from '@cli/runtime/runModel';
 
 describe('assertExplicitModelKnown', () => {
   it('returns undefined when no model flag was passed', () => {
