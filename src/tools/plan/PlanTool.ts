@@ -31,7 +31,7 @@ import {
   countByStatus,
   type Plan,
 } from '@shared/schemas';
-import { isProposalBypassedForStream } from '@tools/approval';
+import { proposalApprovalState } from '@tools/approval';
 import {
   ODYSSEY_FEATURE_FLAG_KEY,
   OdysseyStore,
@@ -206,7 +206,7 @@ Best practices:
         logger.warn(
           'New plan created without streamId — skipping approval gate',
         );
-      } else if (isProposalBypassedForStream(runContext.streamId)) {
+      } else if (proposalApprovalState.isBypassed(runContext.streamId)) {
         logger.info('Plan auto-approved via delegated-task auto-approval');
         return this.buildApprovedResult({
           autoApproved: true,
