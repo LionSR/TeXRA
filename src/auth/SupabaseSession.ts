@@ -18,7 +18,7 @@ export const SupabaseSessionSchema = z.object({
   refreshToken: z.string(),
   account: z.object({
     id: z.string(),
-    label: z.string(),
+    label: z.string().transform((label) => label.trim()),
   }),
   expiresAt: z.number(),
   useCustomRefresh: z.boolean().optional(),
@@ -98,6 +98,16 @@ export type SupabaseCallbackResult =
 interface StableSessionSnapshot {
   session: SupabaseSession | null;
   version: number;
+}
+
+function firstAccountLabel(
+  ...candidates: readonly (string | null | undefined)[]
+): string {
+  for (const candidate of candidates) {
+    const label = candidate?.trim();
+    if (label) return label;
+  }
+  return 'unknown';
 }
 
 /**
@@ -221,7 +231,7 @@ export function toStorableSupabaseSession(
     refreshToken: nativeSession.refresh_token,
     account: {
       id: nativeSession.user.id,
-      label: nativeSession.user.email || nativeSession.user.id,
+      label: firstAccountLabel(nativeSession.user.email, nativeSession.user.id),
     },
     expiresAt: nativeSession.expires_at
       ? nativeSession.expires_at * 1000
@@ -242,7 +252,7 @@ export function toStorableGitHubTokenExchangeSession(
     refreshToken: data.refresh_token,
     account: {
       id: data.user.id,
-      label: data.user.email || fallbackLabel,
+      label: firstAccountLabel(data.user.email, fallbackLabel, data.user.id),
     },
     expiresAt: data.expires_at
       ? data.expires_at * 1000
@@ -342,7 +352,7 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
         refreshToken,
         account: {
           id: data.user.id,
-          label: data.user.email || data.user.id,
+          label: firstAccountLabel(data.user.email, data.user.id),
         },
         expiresAt,
       },
