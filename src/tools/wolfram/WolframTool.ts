@@ -6,7 +6,10 @@ import { ToolResult, ToolError } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 
 // Local imports - utils
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import {
+  splitContentLines,
+  truncateWithEllipsis,
+} from '@utils/text/stringUtils';
 
 // Local file imports
 import {
@@ -21,11 +24,8 @@ import {
  * line of the code so multi-line scripts still get a meaningful header.
  */
 export function wolframRunSummary(code: string): string {
-  const firstLine = code
-    .split('\n')
-    .map((line) => line.trim())
-    .find((line) => line.length > 0);
-  const preview = firstLine ? truncateWithEllipsis(firstLine, 60) : '';
+  const firstLine = splitContentLines(code).find((line) => line.trim());
+  const preview = firstLine ? truncateWithEllipsis(firstLine.trim(), 60) : '';
   return preview ? `Executed: ${preview}` : 'Executed';
 }
 
