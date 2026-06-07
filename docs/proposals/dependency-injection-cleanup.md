@@ -17,7 +17,7 @@ TeXRA already has **one genuinely clean DI seam**: `platform()` (`src/platform/p
 2. **24 module-level `set*` singletons** (service-locator style): host capabilities injected via mutable module globals. **9 have silent no-op defaults**; **6 are wired only in `extension.ts`**, so they silently no-op in the CLI and desktop hosts. **8 are written from multiple composition roots.**
 3. **Ambient state** (AsyncLocalStorage + 7 process-global registries): `RunContext` and `ToolCallContext` plus the runtime registries that — per [`agent-sdk-readiness.md`](./agent-sdk-readiness.md) — block concurrent in-process sessions.
 
-**The headline finding:** mechanisms A and C carry **the same 8–9 fields at once**, and the two halves of the codebase disagree on which is canonical — **flow nodes read them from the bag, tools read them from `RunContext`**. That split-brain is the strongest evidence that bag-threading those fields is redundant, and it tells us the migration target is already chosen by the code.
+**The headline finding:** mechanisms A and C carry **the same 7–8 fields at once**, and the two halves of the codebase disagree on which is canonical — **flow nodes read them from the bag, tools read them from `RunContext`**. That split-brain is the strongest evidence that bag-threading those fields is redundant, and it tells us the migration target is already chosen by the code.
 
 **The fundamentals** (Mark Seemann, _Dependency Injection_; ISP; functional-core/imperative-shell) all point the same way: depend on narrow interfaces, wire once at one root, scope to the right lifetime, carry only what you read.
 
@@ -49,7 +49,7 @@ flowchart TB
     CLI -->|"re-wires some,\nmisses others"| SET
 
     EXT --> AC
-    AC -. "8-9 fields duplicated" .-> RC
+    AC -. "7-8 fields duplicated" .-> RC
     SET -. "should fold into" .-> PORT["frozen Platform ports"]
 
     style A fill:#fde,stroke:#b36
@@ -92,7 +92,7 @@ flowchart LR
     RF --> CN["ToolUseCycleNode\ncarries ~33 · reads 9"]
     CN -->|"hop 3\nre-spread {...this.services}\nToolUseCycleNode.ts:75"| CF["inner cycle flow"]
     CF -->|"hop 4\nframework copies again"| MI["ModelInvocationNode\ncarries ~35 · reads 4"]
-    CF --> DN["ToolUseDispatchNode\ncarries ~35 · reads 6"]
+    CF --> DN["ToolUseDispatchNode\nToolUseCycleFlow.ts:511\ncarries ~35 · reads 6"]
 
     style MI fill:#fdd,stroke:#c33
     style DN fill:#fdd,stroke:#c33
@@ -103,18 +103,18 @@ The two re-spread sites are `ResponseCycleNode.ts:94` and `ToolUseCycleNode.ts:7
 
 ### Read-vs-carried per node
 
-| Node                  | File             | Carries | Reads (distinct) |
-| --------------------- | ---------------- | ------- | ---------------- |
-| `MediaExtractionNode` | reflection/nodes | ~26     | 4                |
-| `OutputNode`          | reflection/nodes | ~26     | 6                |
-| `PrepareContextNode`  | reflection/nodes | ~26     | 3                |
-| `TeXCountNode`        | reflection/nodes | ~26     | 3                |
-| `ResponseCycleNode`   | reflection/nodes | ~26     | 6 (+re-spreads)  |
-| `ToolUsePrepareNode`  | tooluse/nodes    | ~33     | 9                |
-| `ToolUseCycleNode`    | tooluse/nodes    | ~33     | 9 (+re-spreads)  |
-| `ToolUseWaitNode`     | tooluse/nodes    | ~33     | 5                |
-| `ModelInvocationNode` | core/flows       | ~35     | 4                |
-| `ToolUseDispatchNode` | core/flows       | ~35     | 6                |
+| Node                  | File                                   | Carries | Reads (distinct) |
+| --------------------- | -------------------------------------- | ------- | ---------------- |
+| `MediaExtractionNode` | reflection/nodes                       | ~26     | 4                |
+| `OutputNode`          | reflection/nodes                       | ~26     | 6                |
+| `PrepareContextNode`  | reflection/nodes                       | ~26     | 3                |
+| `TeXCountNode`        | reflection/nodes                       | ~26     | 3                |
+| `ResponseCycleNode`   | reflection/nodes                       | ~26     | 6 (+re-spreads)  |
+| `ToolUsePrepareNode`  | tooluse/nodes                          | ~33     | 9                |
+| `ToolUseCycleNode`    | tooluse/nodes                          | ~33     | 9 (+re-spreads)  |
+| `ToolUseWaitNode`     | tooluse/nodes                          | ~33     | 5                |
+| `ModelInvocationNode` | core/flows                             | ~35     | 4                |
+| `ToolUseDispatchNode` | core/flows (`ToolUseCycleFlow.ts:511`) | ~35     | 6                |
 
 ```mermaid
 %%{init: {'theme':'neutral'}}%%
@@ -158,12 +158,12 @@ flowchart LR
     style AMB fill:#eee,stroke:#888
 ```
 
-| Group              | Fields                                                                               | Evidence of co-usage                                                                         |
-| ------------------ | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| `RunIdentity`      | `runtimeHost, streamId, executionId`                                                 | `ToolUseCycleNode.ts:45-62`, `OutputNode.ts:263`, `contextHelpers.ts:36-48`                  |
-| `DelegationPolicy` | `delegationDepth, delegationConfig` (+ `approvalPromptsUnavailable, stopAfterCycle`) | `DelegationTools.ts:354-359, 1070-1073`; `AgentLaunchContext.ts:112-115`                     |
-| `AgentDefinition`  | `config, setting, prompt` (+ `modelHandler, userVarChannels`)                        | `ResponseCycleNode.ts:69-71`, `AgentLaunchContext.ts:281-298`, `ToolUsePrepareNode.ts:24-78` |
-| ambient            | `logger` (read by nearly every node), `workingDirectory` (tools only)                | n/a — genuine cross-cutting                                                                  |
+| Group              | Fields                                                                                                        | Evidence of co-usage                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `RunIdentity`      | `runtimeHost, streamId, executionId`                                                                          | `ToolUseCycleNode.ts:45-62`, `OutputNode.ts:263`, `contextHelpers.ts:36-48`                  |
+| `DelegationPolicy` | `delegationDepth, delegationConfig` (+ `approvalPromptsUnavailable`; `stopAfterCycle` is launch-context only) | `DelegationTools.ts:354-359, 1070-1073`; `AgentLaunchContext.ts:112-115`                     |
+| `AgentDefinition`  | `config, setting, prompt` (+ `modelHandler, userVarChannels`)                                                 | `ResponseCycleNode.ts:69-71`, `AgentLaunchContext.ts:281-298`, `ToolUsePrepareNode.ts:24-78` |
+| ambient            | `logger` (read by nearly every node), `workingDirectory` (tools only)                                         | n/a — genuine cross-cutting                                                                  |
 
 ---
 
@@ -256,7 +256,7 @@ flowchart TB
 
     FN -. "same values" .- TL
 
-    DUP["runtimeHost · streamId · executionId\ndelegationDepth · delegationConfig\nworkingDirectory · stopAfterCycle\napprovalPromptsUnavailable · logger"]
+    DUP["runtimeHost · streamId · executionId\ndelegationDepth · delegationConfig\nworkingDirectory\napprovalPromptsUnavailable · logger/trace"]
     BAG --- DUP
     RC --- DUP
 
@@ -265,19 +265,19 @@ flowchart TB
     style TL fill:#efe,stroke:#3b6
 ```
 
-**8–9 of `AgentCore`'s 13 fields are also in `RunContext`** (`RunContext.ts:18-49`, populated from the same `ctx` at `AgentLaunchContext.ts:103-116`): `runtimeHost`, `streamId`, `executionId`, `delegationDepth`, `delegationConfig`, `workingDirectory`, `approvalPromptsUnavailable`, `stopAfterCycle`, `logger`/`trace`. Flow nodes read them from the bag; tools read them from `RunContext` (`contextHelpers.ts:23,41,48`, `DelegationTools.ts:353-359`). Same data, two paths.
+**7–8 of `AgentCore`'s 13 fields are also in `RunContext`** (`RunContext.ts:18-49`, populated from the same `ctx` at `AgentLaunchContext.ts:103-116`): `runtimeHost`, `streamId`, `executionId`, `delegationDepth`, `delegationConfig`, `workingDirectory`, `approvalPromptsUnavailable`, plus `logger`/`trace` if counted as the same underlying trace object. Flow nodes read them from the bag; tools read them from `RunContext` (`contextHelpers.ts:23,41,48`, `DelegationTools.ts:353-359`). Same data, two paths.
 
 ### The three AsyncLocalStorage instances
 
 | ALS                 | File:line                          | Shape                 | Assessment                                                                                                                                           |
 | ------------------- | ---------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `runContextScope`   | `RunContext.ts:70`                 | single value, per run | Good seam; but duplicates 8–9 bag fields. `tryUseRunContext()` silently returns `undefined` outside scope.                                           |
+| `runContextScope`   | `RunContext.ts:70`                 | single value, per run | Good seam; but duplicates 7–8 bag fields. `tryUseRunContext()` silently returns `undefined` outside scope.                                           |
 | `contextStackScope` | `ToolFileInteractionContext.ts:34` | **stack**             | `getCurrentToolCallContext()` reads `.at(-1)` (`:49`) — a tool that spawns a sub-cycle then reads context gets the **child's** tracker, not its own. |
 | `stageScope`        | `TraceEmitter.ts:49`               | per-instance          | **Correct by design** — per-instance prevents cross-trace stage leakage. Do not make module-global.                                                  |
 
 ### Process-global registries (the concurrency blocker)
 
-`runCoordinatorBridge` (`runCoordinators.ts:212`), `executionRegistry` (`executionRegistry.ts:392`), `interruptRegistry` (`InterruptRegistry.ts:49`), `idleContinuationRegistry` (`idleContinuation.ts:55`), `toolInjectionRegistry` (`toolInjection.ts:34`), `StreamStatusService` (`StreamStatusService.ts:123`), `subagentDeliveryRegistry` (`subagentDeliveryState.ts:69`). These make the runtime a per-process singleton — documented as the blocker for concurrent in-process sessions in [`agent-sdk-readiness.md`](./agent-sdk-readiness.md) (§ "Host↔core coordination is process-global"). Tracked there; cross-referenced here for completeness.
+`runCoordinatorBridge` (`runCoordinators.ts:220`), `executionRegistry` (`executionRegistry.ts:451`), `interruptRegistry` (`InterruptRegistry.ts:49`), `idleContinuationRegistry` (`idleContinuation.ts:55`), `toolInjectionRegistry` (`toolInjection.ts:34`), `StreamStatusService` (`StreamStatusService.ts:123`), `subagentDeliveryRegistry` (`subagentDeliveryState.ts:69`). These make the runtime a per-process singleton — documented as the blocker for concurrent in-process sessions in [`agent-sdk-readiness.md`](./agent-sdk-readiness.md) (§ "Host↔core coordination is process-global"). Tracked there; cross-referenced here for completeness.
 
 ### Rejected suspicions (traps)
 
@@ -292,7 +292,7 @@ flowchart TB
 flowchart LR
     P1["20 P-setters"] -->|fold into| PORTS["frozen Platform ports"]
     P2["setToolEditApprovalHandler\n+ 7 registries"] -->|scope to| RUN["RunContext (per-run)"]
-    P3["8-9 duplicated bag fields"] -->|drop from bag,\nread like tools do| RUN
+    P3["7-8 duplicated bag fields"] -->|drop from bag,\nread like tools do| RUN
     P4["13-field AgentCore"] -->|cohesion split| FOUR["4 objects + ambient logger"]
     P5["wholesale {...services}\nre-spread ×2"] -->|narrow interfaces| ISP["nodes declare only\nwhat they read"]
 
@@ -307,7 +307,7 @@ flowchart LR
 Sequenced so nothing breaks, lowest-risk first:
 
 1. **Fold the 20 P-class setters into `Platform` ports.** _(Highest leverage, mostly mechanical.)_ Most consumers sit 1–2 hops from the setter (often the same file). Precedent already exists (`fs`, `workspace`, `secrets`). Eliminates the entire silent-no-op class at once — a missing wiring becomes a type error. Do the 6 ext-only no-op setters first (clearest user-facing bug surface in CLI/desktop).
-2. **De-duplicate the split-brain fields.** Stop threading the 8–9 fields already in `RunContext`; let flow nodes read them the way tools already do. This shrinks every flow-service interface for free.
+2. **De-duplicate the split-brain fields.** Stop threading the 7–8 fields already in `RunContext`; let flow nodes read them the way tools already do. This shrinks every flow-service interface for free.
 3. **Cohesion-split `AgentCore`** into `RunIdentity` / `DelegationPolicy` / `AgentDefinition` + ambient `logger`. The wholesale re-spread at the 2 nesting sites becomes `setServices({ identity, delegation, agent })`.
 4. **Narrow node interfaces (ISP).** A node reading 3 fields should declare those 3, not `ReflectionServices`. This removes the pressure to forward the whole bag.
 5. **Scope `setToolEditApprovalHandler` to `RunContext`** (the one R-class setter).
