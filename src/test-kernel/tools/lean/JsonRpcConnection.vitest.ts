@@ -24,30 +24,32 @@ function makePair(): {
     serverOut.write(body);
   };
 
-  const collectClientFrames = async (): Promise<
-    Array<Record<string, unknown>>
-  > => {
-    // Flush so all `write` callbacks have run, then parse what's in the buffer.
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    const raw = serverIn.read();
-    if (!raw) return [];
-    const text: string = Buffer.isBuffer(raw) ? raw.toString('utf8') : raw;
-    const frames: Array<Record<string, unknown>> = [];
-    let offset = 0;
-    while (offset < text.length) {
-      const headerEnd = text.indexOf('\r\n\r\n', offset);
-      if (headerEnd < 0) break;
-      const header = text.slice(offset, headerEnd);
-      const lengthMatch = header.match(/Content-Length: (\d+)/i);
-      if (!lengthMatch) break;
-      const length = Number.parseInt(lengthMatch[1]!, 10);
-      const bodyStart = headerEnd + 4;
-      const body = text.slice(bodyStart, bodyStart + length);
-      frames.push(JSON.parse(body));
-      offset = bodyStart + length;
-    }
-    return frames;
-  };
+  /** Wait until serverIn has data, then parse and return all LSP frames. */
+  const collectClientFrames = () =>
+    vi.waitFor(
+      (): Array<Record<string, unknown>> => {
+        const raw = serverIn.read() as Buffer | string | null;
+        if (!raw) throw new Error('no data in serverIn yet');
+        const text = Buffer.isBuffer(raw) ? raw.toString('utf8') : raw;
+        const frames: Array<Record<string, unknown>> = [];
+        let offset = 0;
+        while (offset < text.length) {
+          const headerEnd = text.indexOf('\r\n\r\n', offset);
+          if (headerEnd < 0) break;
+          const header = text.slice(offset, headerEnd);
+          const lengthMatch = header.match(/Content-Length: (\d+)/i);
+          if (!lengthMatch) break;
+          const length = Number.parseInt(lengthMatch[1]!, 10);
+          const bodyStart = headerEnd + 4;
+          const body = text.slice(bodyStart, bodyStart + length);
+          frames.push(JSON.parse(body) as Record<string, unknown>);
+          offset = bodyStart + length;
+        }
+        if (frames.length === 0) throw new Error('no complete frames yet');
+        return frames;
+      },
+      { timeout: 500, interval: 5 },
+    );
 
   return {
     connection,
@@ -89,7 +91,10 @@ describe('JsonRpcConnection', () => {
     });
     const err = await pending;
     expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toMatch(/-32601.*unknown method/);
+    // vscode-jsonrpc surfaces the code on the ResponseError object separately
+    // from the message string.
+    expect((err as Error).message).toContain('unknown method');
+    expect((err as { code?: number }).code).toBe(-32601);
   });
 
   it('routes notifications from the server to subscribed handlers', async () => {
@@ -103,8 +108,9 @@ describe('JsonRpcConnection', () => {
       params: { type: 3, message: 'hello' },
     });
 
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    expect(handler).toHaveBeenCalledWith({ type: 3, message: 'hello' });
+    await vi.waitFor(() => {
+      expect(handler).toHaveBeenCalledWith({ type: 3, message: 'hello' });
+    });
   });
 
   it('reassembles a frame whose body arrives across multiple chunks', async () => {
@@ -120,8 +126,9 @@ describe('JsonRpcConnection', () => {
     serverOut.write(body.slice(0, 5));
     serverOut.write(body.slice(5));
 
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    expect(handler).toHaveBeenCalledWith({ ok: true });
+    await vi.waitFor(() => {
+      expect(handler).toHaveBeenCalledWith({ ok: true });
+    });
   });
 
   it('reassembles a frame whose header arrives across multiple chunks', async () => {
@@ -142,8 +149,9 @@ describe('JsonRpcConnection', () => {
     serverOut.write(header.subarray(6));
     serverOut.write(body);
 
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    expect(handler).toHaveBeenCalledWith({ ok: true });
+    await vi.waitFor(() => {
+      expect(handler).toHaveBeenCalledWith({ ok: true });
+    });
   });
 
   it('reassembles two frames written back-to-back', async () => {
@@ -156,9 +164,10 @@ describe('JsonRpcConnection', () => {
     serverSends({ jsonrpc: '2.0', method: 'a', params: 1 });
     serverSends({ jsonrpc: '2.0', method: 'b', params: 2 });
 
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    expect(a).toHaveBeenCalledWith(1);
-    expect(b).toHaveBeenCalledWith(2);
+    await vi.waitFor(() => {
+      expect(a).toHaveBeenCalledWith(1);
+      expect(b).toHaveBeenCalledWith(2);
+    });
   });
 
   it('replies to server-to-client requests via the registered handler', async () => {
@@ -176,9 +185,6 @@ describe('JsonRpcConnection', () => {
       params: { hello: 'world' },
     });
 
-    // Give the handler microtask a chance to run before reading the reply.
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    await new Promise<void>((resolve) => setImmediate(resolve));
     const frames = await collectClientFrames();
     expect(frames).toEqual([
       {

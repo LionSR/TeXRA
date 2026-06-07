@@ -1,3 +1,5 @@
+import { StringDecoder } from 'node:string_decoder';
+
 import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
@@ -21,12 +23,19 @@ const MAX_READ_PER_POLL = 128 * 1024;
 /** Max process output sources read concurrently on each poll tick. */
 const OUTPUT_POLL_CONCURRENCY = 8;
 
+interface FileReadState {
+  offset: number;
+  decoder: StringDecoder;
+}
+
+interface OutputState {
+  stdout: FileReadState;
+  stderr: FileReadState;
+}
+
 export class ProcessOutputPoller {
-  /** Tracks byte offsets already sent per executionId per stream. */
-  private readonly outputOffsets = new Map<
-    string,
-    { stdout: number; stderr: number }
-  >();
+  /** Tracks byte offsets and UTF-8 decoder state per executionId. */
+  private readonly outputStates = new Map<string, OutputState>();
 
   private readonly processOutputs = new Map<string, ProcessOutputSource>();
   private readonly readingInProgress = new Map<string, Promise<void>>();
@@ -46,7 +55,7 @@ export class ProcessOutputPoller {
 
   unregister(executionId: string): void {
     this.processOutputs.delete(executionId);
-    this.outputOffsets.delete(executionId);
+    this.outputStates.delete(executionId);
     this.reconcile();
   }
 
@@ -63,6 +72,26 @@ export class ProcessOutputPoller {
       handle.outputPaths.stderr,
       runtimeHost,
     );
+
+    // Flush any incomplete UTF-8 sequences that StringDecoder buffered
+    // internally when the file stopped growing mid-sequence.
+    const state = this.outputStates.get(handle.executionId);
+    if (state) {
+      const outTail = state.stdout.decoder.end();
+      const errTail = state.stderr.decoder.end();
+      // Reset decoders so a subsequent flush() or poll can call decoder.write()
+      // safely — Node.js docs treat write() after end() as undefined behavior.
+      state.stdout.decoder = new StringDecoder('utf8');
+      state.stderr.decoder = new StringDecoder('utf8');
+      if (outTail || errTail) {
+        runtimeHost.emit('updateProcessOutput', {
+          parentStreamId: handle.parentStreamId,
+          executionId: handle.executionId,
+          stdout: outTail,
+          stderr: errTail,
+        });
+      }
+    }
   }
 
   dispose(): void {
@@ -70,10 +99,22 @@ export class ProcessOutputPoller {
       clearTimeout(this.outputPollTimer);
       this.outputPollTimer = null;
     }
-    this.outputOffsets.clear();
+    this.outputStates.clear();
     this.processOutputs.clear();
     this.readingInProgress.clear();
     this.pollInFlight = false;
+  }
+
+  private getOrCreateState(executionId: string): OutputState {
+    let state = this.outputStates.get(executionId);
+    if (!state) {
+      state = {
+        stdout: { offset: 0, decoder: new StringDecoder('utf8') },
+        stderr: { offset: 0, decoder: new StringDecoder('utf8') },
+      };
+      this.outputStates.set(executionId, state);
+    }
+    return state;
   }
 
   private reconcile(): void {
@@ -136,32 +177,18 @@ export class ProcessOutputPoller {
 
     const work = (async () => {
       try {
-        const prev = this.outputOffsets.get(executionId) ?? {
-          stdout: 0,
-          stderr: 0,
-        };
-        const [out, err] = await Promise.all([
-          readTail(stdoutPath, prev.stdout).catch(() => ({
-            text: '',
-            newOffset: prev.stdout,
-          })),
-          readTail(stderrPath, prev.stderr).catch(() => ({
-            text: '',
-            newOffset: prev.stderr,
-          })),
+        const state = this.getOrCreateState(executionId);
+        const [outText, errText] = await Promise.all([
+          readTail(stdoutPath, state.stdout).catch(() => ''),
+          readTail(stderrPath, state.stderr).catch(() => ''),
         ]);
-        if (!out.text && !err.text) return;
-
-        this.outputOffsets.set(executionId, {
-          stdout: out.newOffset,
-          stderr: err.newOffset,
-        });
+        if (!outText && !errText) return;
 
         runtimeHost.emit('updateProcessOutput', {
           parentStreamId,
           executionId,
-          stdout: out.text,
-          stderr: err.text,
+          stdout: outText,
+          stderr: errText,
         });
       } catch (err) {
         // Benign race: file may have been deleted between check and read.
@@ -187,46 +214,19 @@ export class ProcessOutputPoller {
 }
 
 /**
- * Find the last byte index that ends a complete UTF-8 character.
- * If the buffer ends mid-character, those trailing bytes are excluded
- * so the next read starts at the right boundary.
+ * Read new bytes from a file starting at `state.offset`, decode as UTF-8
+ * (StringDecoder buffers any trailing incomplete multibyte sequence internally
+ * and completes it on the next call), advance the offset, and return the text.
  */
-function lastCompleteUtf8(buf: Buffer, bytesRead: number): number {
-  if (bytesRead === 0) return 0;
-  // Walk backward (max 3 bytes: longest UTF-8 lead) looking for
-  // a continuation byte. If we find a lead byte, check whether the
-  // sequence is complete.
-  for (let i = bytesRead - 1; i >= Math.max(0, bytesRead - 3); i--) {
-    const b = buf[i];
-    if (b < 0x80) return bytesRead;
-    if ((b & 0xc0) === 0x80) continue;
-
-    let seqLen: number;
-    if ((b & 0xe0) === 0xc0) seqLen = 2;
-    else if ((b & 0xf0) === 0xe0) seqLen = 3;
-    else if ((b & 0xf8) === 0xf0) seqLen = 4;
-    else return bytesRead;
-
-    return i + seqLen <= bytesRead ? bytesRead : i;
-  }
-  return bytesRead;
-}
-
-async function readTail(
-  path: string,
-  byteOffset: number,
-): Promise<{ text: string; newOffset: number }> {
+async function readTail(path: string, state: FileReadState): Promise<string> {
   const { size } = await platform().fs.stat(path);
-  if (size <= byteOffset) return { text: '', newOffset: byteOffset };
+  if (size <= state.offset) return '';
 
-  const toRead = Math.min(size - byteOffset, MAX_READ_PER_POLL);
-  const bytes = await platform().fs.readFileChunk(path, byteOffset, toRead);
+  const toRead = Math.min(size - state.offset, MAX_READ_PER_POLL);
+  const bytes = await platform().fs.readFileChunk(path, state.offset, toRead);
   const buf = Buffer.from(bytes);
-  const safeEnd = lastCompleteUtf8(buf, buf.length);
-  return {
-    text: buf.toString('utf-8', 0, safeEnd),
-    newOffset: byteOffset + safeEnd,
-  };
+  state.offset += buf.length;
+  return state.decoder.write(buf);
 }
 
 export const processOutputPoller = new ProcessOutputPoller();
