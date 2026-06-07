@@ -8,10 +8,7 @@ import {
   interruptActiveChildren,
 } from '@agent/runtime/executionRegistry';
 import { notifyFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
-import {
-  getInterruptible,
-  getToolUseFlowContext,
-} from '@agent/toolUse/ToolUseAgentRegistry';
+import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { STREAM_STATUS } from '@shared/schemas';
@@ -25,14 +22,14 @@ export function stopAgent(streamId: StreamTabId): void {
   } else {
     interruptActiveChildren(streamId);
   }
-  getInterruptible(streamId)?.interrupt();
+  interruptRegistry.get(streamId)?.interrupt();
   StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, {
     runtimeHost: extensionAgentRuntimeHost,
   });
 }
 
 export async function compactResponse(streamId: StreamTabId): Promise<void> {
-  const flowContext = getToolUseFlowContext(streamId);
+  const flowContext = interruptRegistry.getToolUseFlowContext(streamId);
   if (!flowContext) {
     await vscode.window.showInformationMessage(
       'No active tool-use session found for this stream.',
