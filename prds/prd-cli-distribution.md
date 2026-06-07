@@ -39,7 +39,7 @@ additive: Tier 1's tap and release automation carry forward into Tier 2.
 - Let macOS/Linux users install with a package manager: `brew install texra`.
 - Keep updates automated so the Homebrew artifact trails an npm release by at most
   one auto-generated PR. No hand-edited formulas per release.
-- Preserve the existing `npm i -g @texra-ai/cli` experience byte-for-byte.
+- Preserve the existing `npm i -g @texra-ai/cli` command and user-facing behavior.
 - Keep headless parity sacred: distribution changes must not alter `texra run`,
   `--print`, or `--output-format json|ndjson` behavior.
 
@@ -95,9 +95,8 @@ Three takeaways that shape this PRD:
 
 1. **Homebrew for a prebuilt binary is a cask, not a formula.** A formula is meant to
    build from source; a cask installs a precompiled artifact. This also matches
-   GoReleaser's v2.10 addition of `homebrew_casks` for casks, separate from the
-   `brews` section used for formulas. Tier 1's formula is the entry-tier
-   compromise; Tier 2 uses a cask.
+   GoReleaser's current split between `homebrew_casks` for casks and `brews` for
+   formulas. Tier 1's formula is the entry-tier compromise; Tier 2 uses a cask.
 2. **npm stays alive as a binary delivery vector.** The npm package stops _being_ the
    app and instead declares per-platform packages (e.g.
    `@texra-ai/cli-darwin-arm64`) as `optionalDependencies`; npm installs only the
@@ -130,13 +129,14 @@ Only if "needs Node" or cold-start becomes a real complaint. Work items:
    entry as CommonJS (§8.1).
 2. Add an embedded-asset branch to `resourcesPath.ts` (§8.3) reading via
    `node:sea` `getAsset()`.
-3. Build per-platform binaries in a CI matrix (§8.2), codesign on macOS, attach to a
-   GitHub release.
+3. Build per-platform binaries in a CI matrix (§8.2), codesign and notarize on
+   macOS, attach to a GitHub release.
 4. Add a macOS Homebrew **cask** that fans out by Apple Silicon vs Intel release
    assets. Linux release assets are still used by the npm shim and optional
    `curl | bash` installer, not by Homebrew casks.
 5. Convert the npm package to the per-platform optionalDependencies shim so
-   `npm i -g` delivers the binary unchanged for users.
+   `npm i -g` remains the same install command and exposes the same `texra` binary
+   behavior, even though the tarball layout changes.
 6. Optionally add a `curl | bash` installer.
 
 ## 7. Keeping it updated (automation)
@@ -176,7 +176,8 @@ Caveats:
 - SEA **does not cross-compile**: each target binary is the host's `node`, so the CI
   matrix must run on macos-arm64, macos-x64, and Linux runners. (This is the main
   ergonomic loss versus `bun --compile`, which cross-compiles from one host.)
-- macOS requires re-`codesign` after `postject`, or Gatekeeper kills the binary.
+- macOS requires re-`codesign` after `postject` and notarization before cask
+  distribution, or Gatekeeper can reject the quarantined binary.
 
 ### 8.2 Build matrix
 
@@ -229,8 +230,9 @@ and it is the only part no off-the-shelf tool can do for us.
 - **Two-channel drift in Tier 2.** Once npm delivers a binary via the shim, the
   optionalDependencies versions must stay lockstep with the main package version;
   the publish script must bump all platform packages together.
-- **macOS notarization.** Codesigning satisfies Gatekeeper for a cask install;
-  full notarization may be wanted if the binary is distributed outside Homebrew.
+- **macOS notarization.** Treat notarization as required for cask distribution, not
+  an optional polish step; otherwise quarantined downloads can fail Gatekeeper even
+  when they are Developer ID signed.
 - **Channels.** Claude Code ships stable + `@latest` casks. Decide whether TeXRA
   wants a single channel or a stable/edge split before building the cask.
 
@@ -249,7 +251,7 @@ class Texra < Formula
     regex(/"version"\s*:\s*"([^"]+)"/i)
   end
 
-  depends_on "node"
+  depends_on "node@22"
 
   def install
     system "npm", "install", *std_npm_args
