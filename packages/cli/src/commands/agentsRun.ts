@@ -15,6 +15,10 @@ import {
 } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
+import {
+  buildHeadlessRunContext,
+  resolveCliRunModel,
+} from '../runtime/runModel';
 
 import {
   TOOL_USE_AGENT_NAME_DESCRIPTION,
@@ -28,10 +32,6 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import {
-  buildHeadlessRunContext,
-  resolveCliRunModel,
-} from './_helpers/modelArg';
 import { emitCliResult } from './_helpers/output';
 import { resolveCliAgent } from './_helpers/agentResolution';
 import { executeCliRequest } from './_helpers/runExecution';

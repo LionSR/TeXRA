@@ -4,7 +4,7 @@ import {
   buildHeadlessRunContext,
   resolveCliRunModelCandidate,
   resolveCliRunModel,
-} from '@cli/commands/_helpers/modelArg';
+} from '@cli/runtime/runModel';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
   type CliConfigValues,
