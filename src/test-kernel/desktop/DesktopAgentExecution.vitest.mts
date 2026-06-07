@@ -13,6 +13,7 @@ import {
 } from '@shared/schemas';
 import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
+import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 // Local imports - desktop test paths
@@ -30,11 +31,7 @@ type TestableBridge = Bridge & {
   setActiveStream(streamId: StreamTabId): void;
   deleteStream(streamId: StreamTabId): Promise<void>;
   deleteAllStreams(): Promise<void>;
-  handleAgentProposalAction(message: {
-    command: typeof PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION;
-    proposalId: string;
-    action: 'setup';
-  }): Promise<boolean>;
+  progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
   streamLogs: {
     append(
       streamId: StreamTabId,
@@ -1610,13 +1607,16 @@ describe('DesktopProgressBridge', () => {
       });
       messages.length = 0;
 
-      await expect(
-        bridge.handleAgentProposalAction({
-          command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
-          proposalId: 'proposal-1',
-          action: 'setup',
-        }),
-      ).resolves.toBe(true);
+      const handleProposal =
+        bridge.progressViewInboundHandlers[
+          PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION
+        ];
+      expect(handleProposal).toBeTypeOf('function');
+      await handleProposal?.({
+        command: PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION,
+        proposalId: 'proposal-1',
+        action: 'setup',
+      });
 
       expect(messages).toEqual([
         { command: DESKTOP_SHELL_COMMANDS.SET_ROUTE, route: 'main' },
