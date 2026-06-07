@@ -194,12 +194,10 @@ export class ProgressEventHandler {
         // Usage events — workflow tabs collapse to a single accumulated value;
         // tool-use tabs keep per-run accumulation (resume produces multiple runs).
         updateStreamUsage: (ctx, { streamId, usage, storageKey }) => {
-          const accumulated = ctx.state.snapshots.addUsage(
-            streamId,
-            storageKey,
-            usage,
-          );
-          if (accumulated) {
+          void Promise.resolve(
+            ctx.state.snapshots.addUsage(streamId, storageKey, usage),
+          ).then((accumulated) => {
+            if (!accumulated) return;
             this.sendIfActive(streamId, () =>
               ctx.webviewUpdater.updateRunUsage(
                 streamId,
@@ -207,7 +205,7 @@ export class ProgressEventHandler {
                 accumulated,
               ),
             );
-          }
+          });
         },
         // Todo events
         updateTodos: (ctx, { streamId, todos }) => {
