@@ -4,8 +4,8 @@ import {
   cliModelRecord,
   formatNoListableModelsMessage,
   listableModelAccessEntries,
-} from '@cli/commands/models';
-import type { CliModelAccess } from '@cli/runtime/modelAccess';
+  type CliModelAccess,
+} from '@cli/runtime/modelAccess';
 import type { ModelOptionData } from '@shared/schemas';
 
 function model(overrides: Partial<ModelOptionData> = {}): ModelOptionData {
