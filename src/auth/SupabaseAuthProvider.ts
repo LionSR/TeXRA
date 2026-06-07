@@ -256,12 +256,16 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
         'SupabaseAuthProvider',
         `OAuth callback URI (web): ${callbackInfo.fullUrl}`,
       );
-      return callbackInfo.vscodeState
-        ? {
-            redirectTo: callbackInfo.baseUrl,
-            queryParams: { state: callbackInfo.vscodeState },
-          }
-        : { redirectTo: callbackInfo.baseUrl };
+      // In Codespaces/web the tunnel routing token must ride on redirect_to
+      // (fullUrl already carries ?state=TUNNEL). Passing it as queryParams.state
+      // instead overwrites GoTrue's own OAuth state on /authorize, which makes
+      // the callback fail with bad_oauth_state ("OAuth state not found or
+      // expired"). With no tunnel state, fullUrl is just the bare callback URL,
+      // so this is also correct for plain web.
+      // NOTE: assumes the implicit flow (tokens in the URL fragment). If the
+      // client is ever switched to PKCE, tokens arrive as ?code= and the
+      // fragment-first callback parser would need to exchange the code instead.
+      return { redirectTo: callbackInfo.fullUrl };
     }
 
     const redirectTo = getAuthCallbackUri(vscode.env.uriScheme);
