@@ -27,7 +27,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { getActiveExecutionIds } from '@agent/runtime/executionRegistry';
+import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { FREE_TIER, ULTRA_TIER, MAX_TIER } from '@auth/config';
@@ -1198,7 +1198,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT>,
   ): Promise<void> {
     try {
-      const activeIds = getActiveExecutionIds();
+      const activeIds = executionRegistry.getActiveIds();
       if (activeIds.includes(data.historyId)) {
         await vscode.window.showWarningMessage(
           'Cannot delete a running execution',
@@ -1224,7 +1224,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
   private async handleClearHistory(): Promise<void> {
     try {
-      await deleteAllExecutions(new Set(getActiveExecutionIds()));
+      await deleteAllExecutions(new Set(executionRegistry.getActiveIds()));
       await vscode.window.showInformationMessage('Agent history cleared');
       await this.withActiveWebview(async (w) => {
         await w.postMessage({

@@ -10,7 +10,7 @@
  * showing appropriate UI notifications based on the returned result.
  */
 
-import { getActiveChildren } from '@agent/runtime/executionRegistry';
+import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
@@ -75,7 +75,7 @@ export async function sendFollowUp(
   displayText?: string,
 ): Promise<SendFollowUpResult> {
   const status = StreamStatusService.get(streamId);
-  const activeChildren = getActiveChildren(streamId);
+  const activeChildren = executionRegistry.getActiveChildren(streamId);
   const hasActiveChildren =
     activeChildren.subagents.length > 0 || activeChildren.processes.length > 0;
   const queueOptions = { mediaFiles, displayText };

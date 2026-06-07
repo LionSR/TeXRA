@@ -15,7 +15,7 @@ import {
 import { platform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
-import { killBackgroundProcesses } from '@agent/runtime/executionRegistry';
+import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import type { TerminalRunResult } from '@hosts/terminalHost';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
@@ -625,7 +625,7 @@ if (protocolLifecycle.shouldContinue) {
       const platformInit = await initializeElectronPlatform(__dirname);
       const { lifecycle } = platformInit;
       lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-        killBackgroundProcesses(),
+        executionRegistry.killBackgroundProcesses(),
       );
       lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
         interruptAllCodexSessions(),

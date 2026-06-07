@@ -25,8 +25,8 @@ import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 import {
-  getHandle,
   AgentExecutionHandle,
+  executionRegistry,
 } from '@agent/runtime/executionRegistry';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
@@ -1087,7 +1087,7 @@ Git worktree support: ${
     );
     if (gated) return gated;
 
-    const handle = getHandle(executionId);
+    const handle = executionRegistry.getHandle(executionId);
     if (!(handle instanceof AgentExecutionHandle)) {
       throw new Error(
         `Execution '${executionId}' not found or not an agent execution. Use the executions tool to check status.`,
