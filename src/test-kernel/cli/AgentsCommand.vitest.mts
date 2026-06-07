@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   getWorkflowAgents: vi.fn(),
   initLocalCliPlatform: vi.fn(),
   loadAgents: vi.fn(),
-  resolveAgentWithRemoteFallback: vi.fn(),
+  resolveCliAgent: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
 
@@ -35,8 +35,8 @@ vi.mock('@cli/commands/_helpers/output', () => ({
   emitCliResult: mocks.emitCliResult,
 }));
 
-vi.mock('@cli/commands/_helpers/remoteAgents', () => ({
-  resolveAgentWithRemoteFallback: mocks.resolveAgentWithRemoteFallback,
+vi.mock('@cli/commands/_helpers/agentResolution', () => ({
+  resolveCliAgent: mocks.resolveCliAgent,
 }));
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -207,7 +207,7 @@ describe('CLI agents command', () => {
     );
   });
 
-  it('uses the remote fallback resolver for agent details', async () => {
+  it('uses the CLI agent resolver for agent details', async () => {
     const localAgent = {
       name: 'lean',
       source: 'builtInToolUse',
@@ -216,16 +216,15 @@ describe('CLI agents command', () => {
       description: 'Lean 4 proof assistant.',
       tools: ['lean_diagnostics'],
     };
-    mocks.resolveAgentWithRemoteFallback.mockResolvedValue(localAgent);
+    mocks.resolveCliAgent.mockResolvedValue(localAgent);
     const { showAgent } = await import('@cli/commands/agents');
 
     const exitCode = await showAgent(cliContext(), 'lean');
 
     expect(exitCode).toBe(0);
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledTimes(1);
-    expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
     expect(mocks.getAgent).not.toHaveBeenCalled();
-    expect(mocks.resolveAgentWithRemoteFallback).toHaveBeenCalledWith('lean');
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith('lean');
     expect(mocks.emitCliResult).toHaveBeenCalledWith(expect.anything(), {
       json: localAgent,
       ndjson: { kind: 'agent', agent: localAgent },
@@ -243,14 +242,14 @@ describe('CLI agents command', () => {
       tools: ['delegate_agent', 'lean_diagnostics'],
       visibility: ['public'],
     };
-    mocks.resolveAgentWithRemoteFallback.mockResolvedValue(remoteAgent);
+    mocks.resolveCliAgent.mockResolvedValue(remoteAgent);
     const { showAgent } = await import('@cli/commands/agents');
 
     const exitCode = await showAgent(cliContext(), 'lean');
 
     expect(exitCode).toBe(0);
     expect(mocks.getAgent).not.toHaveBeenCalled();
-    expect(mocks.resolveAgentWithRemoteFallback).toHaveBeenCalledWith('lean');
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith('lean');
     expect(mocks.emitCliResult).toHaveBeenCalledWith(expect.anything(), {
       json: remoteAgent,
       ndjson: { kind: 'agent', agent: remoteAgent },
@@ -258,7 +257,7 @@ describe('CLI agents command', () => {
     });
   });
 
-  it('uses the remote fallback resolver when local lookup misses', async () => {
+  it('uses the CLI agent resolver when local lookup misses', async () => {
     const remoteAgent = {
       name: 'orchestrator',
       source: 'remote',
@@ -268,17 +267,14 @@ describe('CLI agents command', () => {
       tools: ['delegate_agent', 'delegate_workflow'],
       visibility: ['public'],
     };
-    mocks.resolveAgentWithRemoteFallback.mockResolvedValue(remoteAgent);
+    mocks.resolveCliAgent.mockResolvedValue(remoteAgent);
     const { showAgent } = await import('@cli/commands/agents');
 
     const exitCode = await showAgent(cliContext(), 'orchestrator');
 
     expect(exitCode).toBe(0);
     expect(mocks.initLocalCliPlatform).toHaveBeenCalledTimes(1);
-    expect(mocks.loadAgents).toHaveBeenCalledWith({ includeRemote: false });
-    expect(mocks.resolveAgentWithRemoteFallback).toHaveBeenCalledWith(
-      'orchestrator',
-    );
+    expect(mocks.resolveCliAgent).toHaveBeenCalledWith('orchestrator');
     expect(mocks.emitCliResult).toHaveBeenCalledWith(expect.anything(), {
       json: remoteAgent,
       ndjson: { kind: 'agent', agent: remoteAgent },
@@ -286,8 +282,8 @@ describe('CLI agents command', () => {
     });
   });
 
-  it('reports missing agents after the remote fallback is exhausted', async () => {
-    mocks.resolveAgentWithRemoteFallback.mockResolvedValue(undefined);
+  it('reports missing agents after CLI agent resolution misses', async () => {
+    mocks.resolveCliAgent.mockResolvedValue(undefined);
     const { showAgent } = await import('@cli/commands/agents');
 
     const exitCode = await showAgent(cliContext(), 'missing-agent');
