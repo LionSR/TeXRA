@@ -9,7 +9,7 @@ import {
 import type { AgentTrace } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { cleanupInactiveAgents } from '@agent/toolUse/ToolUseAgentRegistry';
+import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { toErrorMessage } from '@common/errors';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
@@ -97,13 +97,6 @@ function createExecutionState(
   };
 }
 
-/** Clean up tool-use agent registry based on currently active streams. */
-export function cleanupToolUseAgentRegistry(
-  snapshots: StreamSnapshotStore,
-): void {
-  cleanupInactiveAgents(snapshots.getActiveToolUseStreams());
-}
-
 /**
  * Core state management for the progress view.
  *
@@ -139,6 +132,11 @@ export class ProgressViewState {
     this.streamLogs = new StreamLogStore();
     setDefaultStreamLogStore(this.streamLogs);
     this.snapshots = snapshots;
+  }
+
+  /** Drop interruptible handles whose stream sidecar was removed. */
+  pruneInterruptHandles(): void {
+    interruptRegistry.retainOnly(this.snapshots.getTaskStateStreams());
   }
 
   // -- Preferences ------------------------------------------------------------
@@ -318,7 +316,7 @@ export class ProgressViewState {
       });
     }
 
-    cleanupToolUseAgentRegistry(this.snapshots);
+    this.pruneInterruptHandles();
   }
 
   async clearAll(): Promise<void> {
@@ -336,7 +334,7 @@ export class ProgressViewState {
     // Delete from disk (snapshot store owns streamData/, evicts its own memory)
     await Promise.all([this.streamLogs.clear(), this.snapshots.deleteAll()]);
 
-    cleanupToolUseAgentRegistry(this.snapshots);
+    this.pruneInterruptHandles();
   }
 
   async load(): Promise<void> {
@@ -371,7 +369,7 @@ export class ProgressViewState {
     this.logger.info('[Persistence] Managers loaded');
 
     this.validateActiveStream();
-    cleanupToolUseAgentRegistry(this.snapshots);
+    this.pruneInterruptHandles();
 
     this.logger.info('[Persistence] State load complete');
   }
