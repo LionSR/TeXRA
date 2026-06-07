@@ -28,7 +28,10 @@ import {
   type BypassState,
   type StreamSlice,
 } from '../state/cliState';
-import { activeStreamScope } from '../state/streamViews';
+import {
+  activeStreamScope,
+  nearestActiveStreamAncestor,
+} from '../state/streamViews';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 
@@ -551,19 +554,12 @@ function statusBarFindAncestorStream<T extends StatusBarVisibleStream>({
   readonly streams: ReadonlyMap<StreamTabId, T>;
   readonly canUseStream: (stream: T) => boolean;
 }): T | undefined {
-  if (activeStreamId === undefined) return undefined;
-
-  const visited = new Set<StreamTabId>([activeStreamId]);
-  let parentStreamId = parentStream.get(activeStreamId);
-  while (parentStreamId && !visited.has(parentStreamId)) {
-    visited.add(parentStreamId);
-    const parentStreamSlice = streams.get(parentStreamId);
-    if (parentStreamSlice && canUseStream(parentStreamSlice)) {
-      return parentStreamSlice;
-    }
-    parentStreamId = parentStream.get(parentStreamId);
-  }
-  return undefined;
+  return nearestActiveStreamAncestor({
+    activeStreamId,
+    parentStream,
+    values: streams,
+    canUseValue: canUseStream,
+  })?.value;
 }
 
 export function statusBarCanStopVisibleRun({
