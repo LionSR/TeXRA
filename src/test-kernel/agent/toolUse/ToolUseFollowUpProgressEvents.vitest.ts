@@ -6,8 +6,7 @@ import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   AgentExecutionHandle,
-  trackExecution,
-  untrackExecution,
+  executionRegistry,
 } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
@@ -114,7 +113,7 @@ describe('tool-use follow-up progress events', () => {
     StreamStatusService.set(parentStreamId, STREAM_STATUS.STOPPED, {
       emit: false,
     });
-    trackExecution(handle);
+    executionRegistry.track(handle);
 
     try {
       const result = await sendFollowUp(parentStreamId, 'continue child');
@@ -127,7 +126,7 @@ describe('tool-use follow-up progress events', () => {
         'continue child',
       ]);
     } finally {
-      untrackExecution(executionId);
+      executionRegistry.untrack(executionId);
       ToolUseFollowUpQueue.release(parentStreamId);
     }
   });
