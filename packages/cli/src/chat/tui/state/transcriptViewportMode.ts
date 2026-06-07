@@ -1,5 +1,7 @@
 import type { StreamTabId } from '@shared/schemas';
 
+import { activeStreamScope } from './streamViews';
+
 export const ROOT_SCROLLBACK_VIEWPORT_KEY = 'root-scrollback';
 
 /**
@@ -22,8 +24,9 @@ export function transcriptViewportKey({
   readonly transcriptViewerStreamId?: StreamTabId;
 }): string {
   if (transcriptViewerStreamId) return `viewer:${transcriptViewerStreamId}`;
-  return activeStreamId && parentStream.has(activeStreamId)
-    ? `scoped:${activeStreamId}`
+  const scope = activeStreamScope({ activeStreamId, parentStream });
+  return scope.kind === 'child'
+    ? `scoped:${scope.streamId}`
     : ROOT_SCROLLBACK_VIEWPORT_KEY;
 }
 

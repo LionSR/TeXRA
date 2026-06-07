@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
+  activeStreamParentOrSelfId,
+  activeStreamScope,
+} from '@cli/chat/tui/state/streamViews';
+import {
   streamTabSegmentText,
   streamTabsLineSegments,
   streamTabsLineText,
@@ -58,6 +62,39 @@ function slice(
     ...init,
   };
 }
+
+describe('active stream scope', () => {
+  it('owns the active stream child/root projection', () => {
+    const root = streamId('root');
+    const child1 = streamId('child-1');
+    const parentStream = new Map<StreamTabId, StreamTabId>([[child1, root]]);
+
+    expect(
+      activeStreamScope({ activeStreamId: undefined, parentStream }),
+    ).toEqual({ kind: 'none' });
+    expect(activeStreamScope({ activeStreamId: root, parentStream })).toEqual({
+      kind: 'root',
+      streamId: root,
+    });
+    expect(activeStreamScope({ activeStreamId: child1, parentStream })).toEqual(
+      {
+        kind: 'child',
+        parentStreamId: root,
+        streamId: child1,
+      },
+    );
+
+    expect(
+      activeStreamParentOrSelfId({ activeStreamId: undefined, parentStream }),
+    ).toBeUndefined();
+    expect(
+      activeStreamParentOrSelfId({ activeStreamId: root, parentStream }),
+    ).toBe(root);
+    expect(
+      activeStreamParentOrSelfId({ activeStreamId: child1, parentStream }),
+    ).toBe(root);
+  });
+});
 
 describe('CLI stream tabs strip', () => {
   it('suppresses the strip for a single stream', () => {
