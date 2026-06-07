@@ -7,10 +7,7 @@ import {
   modelHandlerCompatibilityKey,
 } from '@agent/runtime/ModelFactory';
 import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
-import {
-  clearPlanApprovalForStream,
-  clearRetryRequest,
-} from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
   PersistedFlow,
   flowKey,
@@ -236,8 +233,8 @@ export async function runToolUseFlow<C = unknown>(
     },
     interrupt(): void {
       onInterrupt?.();
-      clearRetryRequest(streamId);
-      clearPlanApprovalForStream(streamId);
+      runCoordinatorBridge.clearRetryRequest(streamId);
+      runCoordinatorBridge.clearPlanApprovalForStream(streamId);
       sessionLifecycle.interrupt();
     },
     requestImmediateCompaction(): void {
@@ -350,7 +347,7 @@ export async function runToolUseFlow<C = unknown>(
     }
 
     sessionLifecycle.dispose();
-    clearPlanApprovalForStream(streamId);
+    runCoordinatorBridge.clearPlanApprovalForStream(streamId);
     interruptRegistry.unregister(streamId);
     for (const handler of switchedHandlers) {
       handler.dispose();

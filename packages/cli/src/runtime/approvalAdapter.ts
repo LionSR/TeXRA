@@ -2,12 +2,7 @@
 import { structuredPatch } from 'diff';
 
 // Local imports - runtime
-import {
-  cancelRetry,
-  resolvePlanApproval,
-  resolveProposal,
-  triggerRetry,
-} from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
   agentProposalCategoryLabel,
@@ -336,7 +331,7 @@ function dispatchApprovalDecision<K extends CliDecisionApprovalEvent>(
     }
     case 'showPlanApproval': {
       const data = payload as ProgressEventPayloads['showPlanApproval'];
-      resolvePlanApproval(data.approvalId, {
+      runCoordinatorBridge.resolvePlanApproval(data.approvalId, {
         action,
         ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
       });
@@ -344,7 +339,7 @@ function dispatchApprovalDecision<K extends CliDecisionApprovalEvent>(
     }
     case 'showAgentProposal': {
       const data = payload as ProgressEventPayloads['showAgentProposal'];
-      resolveProposal(data.proposalId, {
+      runCoordinatorBridge.resolveProposal(data.proposalId, {
         action,
         ...(decision.userMessage ? { feedback: decision.userMessage } : {}),
       });
@@ -353,7 +348,7 @@ function dispatchApprovalDecision<K extends CliDecisionApprovalEvent>(
     case 'showRetryRequest': {
       const data = payload as ProgressEventPayloads['showRetryRequest'];
       if (decision.accepted) {
-        triggerRetry(data.streamId);
+        runCoordinatorBridge.triggerRetry(data.streamId);
         return;
       }
       if (options.writeRejectionToStderr) {
@@ -364,7 +359,7 @@ function dispatchApprovalDecision<K extends CliDecisionApprovalEvent>(
             : summary,
         );
       }
-      cancelRetry(data.streamId);
+      runCoordinatorBridge.cancelRetry(data.streamId);
       return;
     }
     default: {
