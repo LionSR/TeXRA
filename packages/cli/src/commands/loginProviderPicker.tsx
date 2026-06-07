@@ -6,12 +6,8 @@ import type { OAuthProvider } from '@auth/sharedConfig';
 import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import { KeyHints } from '../chat/tui/ui/KeyHints';
-import { Select, type SelectItem } from '../chat/tui/ui/Select';
-
-const LOGIN_PROVIDER_ITEMS = [
-  { value: 'github', label: 'GitHub' },
-  { value: 'google', label: 'Google' },
-] as const satisfies readonly SelectItem<OAuthProvider>[];
+import { Select } from '../chat/tui/ui/Select';
+import { CLI_OAUTH_PROVIDER_ITEMS } from '../runtime/oauthProviderDisplay';
 
 function LoginProviderPicker(props: {
   readonly onSelect: (provider: OAuthProvider | undefined) => void;
@@ -35,7 +31,7 @@ function LoginProviderPicker(props: {
       <Text dimColor>Choose a provider to sign in with:</Text>
       <Box marginTop={1} flexDirection="column">
         <Select<OAuthProvider>
-          items={LOGIN_PROVIDER_ITEMS}
+          items={CLI_OAUTH_PROVIDER_ITEMS}
           activeValue={DEFAULT_OAUTH_PROVIDER}
           onSelect={finish}
           onCancel={() => finish(undefined)}
@@ -45,7 +41,10 @@ function LoginProviderPicker(props: {
         <KeyHints
           hints={[
             { key: '↑/↓', action: 'navigate' },
-            { key: '1-2/Enter', action: 'select' },
+            {
+              key: `1-${CLI_OAUTH_PROVIDER_ITEMS.length}/Enter`,
+              action: 'select',
+            },
             { key: 'Esc', action: 'cancel' },
           ]}
           confirmCancel={false}

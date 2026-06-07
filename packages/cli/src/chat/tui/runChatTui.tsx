@@ -36,7 +36,6 @@ import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { isOAuthProvider, type OAuthProvider } from '@auth/sharedConfig';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
-import { formatCliAccountLabelForDisplay } from '@cli/runtime/accountDisplay';
 import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import {
@@ -716,7 +715,7 @@ async function loginFromChat(input: string): Promise<void> {
     });
     appendLocalAssistantTranscript(
       [
-        `Signed in as ${formatCliAccountLabelForDisplay(session.account.label)}.`,
+        `Signed in as ${session.account.label}.`,
         ...(await loadCliApiStatusLines()),
       ].join('\n'),
     );
