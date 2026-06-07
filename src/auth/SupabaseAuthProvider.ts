@@ -260,8 +260,8 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       // (fullUrl already carries ?state=TUNNEL). Passing it as queryParams.state
       // instead overwrites GoTrue's own OAuth state on /authorize, which makes
       // the callback fail with bad_oauth_state ("OAuth state not found or
-      // expired"). fullUrl === baseUrl when there is no tunnel state, so this is
-      // also correct for plain web.
+      // expired"). With no tunnel state, fullUrl is just the bare callback URL,
+      // so this is also correct for plain web.
       // NOTE: assumes the implicit flow (tokens in the URL fragment). If the
       // client is ever switched to PKCE, tokens arrive as ?code= and the
       // fragment-first callback parser would need to exchange the code instead.
