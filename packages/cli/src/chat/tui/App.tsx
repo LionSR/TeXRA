@@ -51,7 +51,7 @@ import {
 } from './state/childControls';
 import { cliState } from './state/cliState';
 import { nextFocusBack, nextFocusForward } from './state/focusCycle';
-import { streamScopeDisplayLabel } from './state/streamLabels';
+import { streamDisplayLabel } from './state/streamViews';
 import {
   isScopedTranscriptViewport,
   transcriptViewportChange,
@@ -646,7 +646,7 @@ export function App(props: AppProps): React.JSX.Element {
             availableRows={foregroundRows}
             onClose={() => cliState.transcriptViewerStreamId.set(undefined)}
             slice={streams.get(transcriptViewerStreamId)}
-            title={streamScopeDisplayLabel({
+            title={streamDisplayLabel({
               parentStream,
               streamId: transcriptViewerStreamId,
               streams,
