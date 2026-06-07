@@ -13,12 +13,7 @@
 // it returns a typed Promise<ToolEditApprovalResult>, not a fire-and-forget
 // event).
 
-import {
-  cancelRetry,
-  resolvePlanApproval,
-  resolveProposal,
-  triggerRetry,
-} from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
   denyMessage,
   immediateDecision,
@@ -255,7 +250,7 @@ function dispatchPlan(
   decision: ApprovalDecision,
 ): void {
   const feedback = feedbackOnReject(decision);
-  resolvePlanApproval(payload.approvalId, {
+  runCoordinatorBridge.resolvePlanApproval(payload.approvalId, {
     action: decision.accepted ? (decision.planAction ?? 'approve') : 'reject',
     ...(feedback ? { feedback } : {}),
   });
@@ -266,7 +261,7 @@ function dispatchProposal(
   decision: ApprovalDecision,
 ): void {
   const feedback = feedbackOnReject(decision);
-  resolveProposal(payload.proposalId, {
+  runCoordinatorBridge.resolveProposal(payload.proposalId, {
     action: decision.accepted ? 'approve' : 'reject',
     ...(feedback ? { feedback } : {}),
   });
@@ -279,7 +274,7 @@ function dispatchRetry(
   if (decision.accepted) {
     void applyRetryDecision(payload, decision);
   } else {
-    cancelRetry(payload.streamId);
+    runCoordinatorBridge.cancelRetry(payload.streamId);
   }
 }
 
@@ -294,7 +289,7 @@ async function applyRetryDecision(
       apiMode: decision.apiMode,
     });
   }
-  triggerRetry(payload.streamId, decision.userMessage);
+  runCoordinatorBridge.triggerRetry(payload.streamId, decision.userMessage);
 }
 
 function handleExternalInquiry(

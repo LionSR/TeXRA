@@ -50,7 +50,7 @@ import {
   formatMediaNeedsVisionWarning,
   shouldWarnMediaNeedsVision,
 } from './mediaVisionWarning';
-import { retainRunCoordinatorsForStream } from './runCoordinators';
+import { runCoordinatorBridge } from './runCoordinators';
 import { getStreamTabId } from './streamTab';
 import { StreamStatusService } from './StreamStatusService';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -114,7 +114,7 @@ export async function withExecutionRunContext<T>(
     approvalPromptsUnavailable: ctx.approvalPromptsUnavailable,
     stopAfterCycle: ctx.stopAfterCycle,
   });
-  const release = retainRunCoordinatorsForStream(
+  const release = runCoordinatorBridge.retainForStream(
     ctx.streamId,
     ctx.coordinators,
   );

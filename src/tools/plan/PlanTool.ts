@@ -19,7 +19,7 @@ import { z } from 'zod';
 import { platform } from '@platform/platform';
 import type { WorkPlanState } from '@agent/core/execution/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
-import { waitForPlanApproval } from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import type { CurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import { toErrorMessage } from '@common/errors';
@@ -307,11 +307,12 @@ Best practices:
 
     logger.info(`Requesting approval for plan: ${plan.summary}`);
 
-    const result: PlanApprovalResult = await waitForPlanApproval(streamId, {
-      approvalId,
-      plan,
-      odysseyEnabled,
-    });
+    const result: PlanApprovalResult =
+      await runCoordinatorBridge.waitForPlanApproval(streamId, {
+        approvalId,
+        plan,
+        odysseyEnabled,
+      });
 
     if (result.action === 'approve') {
       logger.info('Plan approved by user');
