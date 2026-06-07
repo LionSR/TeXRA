@@ -24,10 +24,7 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import {
-  interruptActiveChildren,
-  killExecution,
-} from '@agent/runtime/executionRegistry';
+import { executionRegistry } from '@agent/runtime/executionRegistry';
 import {
   executeAgent,
   resumeToolUseFromSnapshot,
@@ -1208,7 +1205,7 @@ export async function runChat(
   const interruptActive = (): void => {
     clearApprovals();
     if (!session.streamId) return;
-    interruptActiveChildren(session.streamId);
+    executionRegistry.interruptActiveChildren(session.streamId);
     interruptRegistry.get(session.streamId)?.interrupt();
   };
 
@@ -1657,7 +1654,7 @@ export async function runChat(
       onCtrlC={() => handleSigint()}
       onKillExecution={(executionId) => {
         clearApprovals();
-        killExecution(executionId);
+        executionRegistry.kill(executionId);
       }}
       history={inputHistory}
     />,

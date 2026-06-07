@@ -29,11 +29,7 @@ import {
   ACTIVE_STATUSES,
   AgentExecutionHandle,
   ProcessExecutionHandle,
-  getHandle,
-  getActiveExecutionIds,
-  waitForExecutionChange,
-  waitForAnyExecutionChange,
-  killExecution,
+  executionRegistry,
 } from '@agent/runtime/executionRegistry';
 import {
   bindExecutionSubscription,
@@ -206,7 +202,7 @@ export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
  * One getHandle + one getStatus per call — no redundant lookups.
  */
 function shouldSkipWait(executionId: string): boolean {
-  const handle = getHandle(executionId);
+  const handle = executionRegistry.getHandle(executionId);
   if (!handle) return true;
 
   const { status } = handle.getStatus();
@@ -378,7 +374,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
   ): Promise<void> {
     const candidateIds = ids?.length
       ? [...new Set(ids)]
-      : getActiveExecutionIds();
+      : executionRegistry.getActiveIds();
     if (candidateIds.length === 0) return;
 
     // Exclude executions that are already effectively done
@@ -391,7 +387,10 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     // Abort early if a follow-up is sent to this stream (user wants to break the wait)
     const cleanupFollowUp = listenForFollowUp(ac);
     // Register callback before re-checking to close the race window
-    const waitPromise = waitForAnyExecutionChange(pendingIds, ac.signal);
+    const waitPromise = executionRegistry.waitForAnyChange(
+      pendingIds,
+      ac.signal,
+    );
     // Re-check after registration: if all resolved in the gap, abort.
     if (pendingIds.every(shouldSkipWait)) ac.abort();
     await waitPromise;
@@ -411,7 +410,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     // Abort early if a follow-up is sent to this stream (user wants to break the wait)
     const cleanupFollowUp = listenForFollowUp(ac);
     // Register callback before re-checking to close the race window
-    const waitPromise = waitForExecutionChange(executionId, ac.signal);
+    const waitPromise = executionRegistry.waitForChange(executionId, ac.signal);
     // Re-check after registration: if state changed in the gap, abort.
     if (shouldSkipWait(executionId)) ac.abort();
     await waitPromise;
@@ -437,9 +436,9 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     const lines = page.map(formatListingLine);
 
     // Count active background processes for the header
-    const activeIds = getActiveExecutionIds();
+    const activeIds = executionRegistry.getActiveIds();
     const bgCount = activeIds.filter(
-      (id) => getHandle(id)?.category === 'process',
+      (id) => executionRegistry.getHandle(id)?.category === 'process',
     ).length;
     const bgSuffix =
       bgCount > 0
@@ -454,7 +453,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
 
   private async showSummary(executionId: ExecutionId): Promise<ToolResult> {
     // Check in-memory handle first (free) — running executions have everything we need
-    const handle = getHandle(executionId);
+    const handle = executionRegistry.getHandle(executionId);
 
     if (handle) {
       // Running execution: agent/status from handle, only fetch live data from KV
@@ -615,7 +614,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       };
     }
 
-    const target = getHandle(executionId);
+    const target = executionRegistry.getHandle(executionId);
     if (!target) {
       return {
         output: `Execution ${executionId} not found or already completed.`,
@@ -646,7 +645,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       };
     }
 
-    const success = killExecution(executionId);
+    const success = executionRegistry.kill(executionId);
     if (success) {
       return { output: `Execution ${executionId} terminated.` };
     }
@@ -697,7 +696,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     viewRange?: number[],
   ): Promise<ToolResult> {
     // Running process: read live output from ephemeral temp files
-    const handle = getHandle(executionId);
+    const handle = executionRegistry.getHandle(executionId);
     if (handle instanceof ProcessExecutionHandle && handle.outputPaths) {
       const [stdout, stderr] = await Promise.all([
         platform()

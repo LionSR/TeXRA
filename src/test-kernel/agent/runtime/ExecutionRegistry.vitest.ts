@@ -4,9 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import {
   AgentExecutionHandle,
-  detachActiveChildren,
-  trackExecution,
-  untrackExecution,
+  executionRegistry,
 } from '@agent/runtime/executionRegistry';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -29,8 +27,8 @@ describe('executionRegistry', () => {
         explicit.host,
       );
 
-      trackExecution(handle);
-      untrackExecution(executionId);
+      executionRegistry.track(handle);
+      executionRegistry.untrack(executionId);
 
       expect(explicit.events.map((entry) => entry.event)).toEqual([
         'updateActiveSubagents',
@@ -52,7 +50,7 @@ describe('executionRegistry', () => {
         children: [],
       });
     } finally {
-      untrackExecution(executionId);
+      executionRegistry.untrack(executionId);
     }
   });
 
@@ -72,8 +70,8 @@ describe('executionRegistry', () => {
         explicit.host,
       );
 
-      trackExecution(handle);
-      detachActiveChildren(parentStreamId, explicit.host);
+      executionRegistry.track(handle);
+      executionRegistry.detachActiveChildren(parentStreamId, explicit.host);
 
       expect(explicit.events.map((entry) => entry.event)).toEqual([
         'updateActiveSubagents',
@@ -90,7 +88,7 @@ describe('executionRegistry', () => {
         children: [],
       });
     } finally {
-      untrackExecution(executionId);
+      executionRegistry.untrack(executionId);
     }
   });
 });
