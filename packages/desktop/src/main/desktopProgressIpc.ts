@@ -1,9 +1,4 @@
-import { createProgressViewApprovalCommandHandlers } from '@controllers/progressView/ProgressViewApprovalCommandHandlers';
-import { createProgressViewBypassCommandHandlers } from '@controllers/progressView/ProgressViewBypassCommandHandlers';
-import { createProgressViewFileCommandHandlers } from '@controllers/progressView/ProgressViewFileCommandHandlers';
-import { createProgressViewFollowUpCommandHandlers } from '@controllers/progressView/ProgressViewFollowUpCommandHandlers';
-import { createProgressViewLifecycleCommandHandlers } from '@controllers/progressView/ProgressViewLifecycleCommandHandlers';
-import { createProgressViewRunCommandHandlers } from '@controllers/progressView/ProgressViewRunCommandHandlers';
+import { createProgressViewCommandHandlers } from '@controllers/progressView/ProgressViewCommandHandlers';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import {
   dispatchProgressViewInbound,
@@ -41,52 +36,54 @@ export function createDesktopProgressIpc(
     options.onUnsupportedCommand ?? defaultUnsupportedCommand;
   const progress = options.progress;
 
-  const progressHandlers: ProgressViewInboundHandlerRegistry = {
-    ...createProgressViewLifecycleCommandHandlers({
-      setActiveStream: (stream) => progress.setActiveStream(stream),
-      setAgentFilter: (filter) => progress.setAgentFilter(filter),
-      deleteStream: (stream) => progress.deleteStream(stream),
-      deleteAllStreams: () => progress.deleteAllStreams(),
-      stopStream: (stream) => progress.stopStream(stream),
-    }),
-    ...createProgressViewRunCommandHandlers({
-      resumeStream: (stream) => progress.resumeStream(stream),
-      runNewStream: (stream) => progress.runNewStream(stream),
-    }),
-    ...createProgressViewFollowUpCommandHandlers({
-      sendFollowUp: ({ stream, text, mediaFiles }) =>
-        progress.sendFollowUp(stream, text, mediaFiles),
-      reportImageSaveError: (_image, error) => reportAsyncError(error),
-    }),
-    ...createProgressViewBypassCommandHandlers({
-      runtimeHost: progress.runtimeHost,
-    }),
-    ...createProgressViewFileCommandHandlers({
-      openFile: (file, line) => progress.openFile(file, line),
-      openFileCompile: (file) => progress.openFileCompile(file),
-      openTaskStorage: (stream) => progress.openTaskStorage(stream),
-      compareOriginal: (file, base) => progress.compareOriginal(file, base),
-      comparePrevious: (file, base, previous) =>
-        progress.comparePrevious(file, base, previous),
-      acceptFile: (file, base) => progress.acceptFile(file, base),
-      mergeFile: (file, base) => progress.mergeFile(file, base),
-      latexdiffFile: (file, base) => progress.latexdiffFile(file, base),
-      openLabel: (label) => progress.openLabel(label),
-    }),
-    ...createProgressViewApprovalCommandHandlers({
-      handleToolEditApprovalAction: (message) =>
-        progress.handleToolEditApprovalAction(message),
-      onUnsupportedToolEditApproval: (message) => onUnsupportedCommand(message),
-      handleBashApprovalAction: (message) =>
-        progress.handleBashApprovalAction(message),
-      handlePlanApprovalAction: (message) =>
-        progress.handlePlanApprovalAction(message),
-      handleUserQuestionAction: (message) =>
-        progress.handleUserQuestionAction(message),
-      handleAgentProposalAction: (message) =>
-        progress.handleAgentProposalAction(message),
-    }),
-  };
+  const progressHandlers: ProgressViewInboundHandlerRegistry =
+    createProgressViewCommandHandlers({
+      lifecycle: {
+        setActiveStream: (stream) => progress.setActiveStream(stream),
+        setAgentFilter: (filter) => progress.setAgentFilter(filter),
+        deleteStream: (stream) => progress.deleteStream(stream),
+        deleteAllStreams: () => progress.deleteAllStreams(),
+        stopStream: (stream) => progress.stopStream(stream),
+      },
+      run: {
+        resumeStream: (stream) => progress.resumeStream(stream),
+        runNewStream: (stream) => progress.runNewStream(stream),
+      },
+      followUp: {
+        sendFollowUp: ({ stream, text, mediaFiles }) =>
+          progress.sendFollowUp(stream, text, mediaFiles),
+        reportImageSaveError: (_image, error) => reportAsyncError(error),
+      },
+      bypass: {
+        runtimeHost: progress.runtimeHost,
+      },
+      file: {
+        openFile: (file, line) => progress.openFile(file, line),
+        openFileCompile: (file) => progress.openFileCompile(file),
+        openTaskStorage: (stream) => progress.openTaskStorage(stream),
+        compareOriginal: (file, base) => progress.compareOriginal(file, base),
+        comparePrevious: (file, base, previous) =>
+          progress.comparePrevious(file, base, previous),
+        acceptFile: (file, base) => progress.acceptFile(file, base),
+        mergeFile: (file, base) => progress.mergeFile(file, base),
+        latexdiffFile: (file, base) => progress.latexdiffFile(file, base),
+        openLabel: (label) => progress.openLabel(label),
+      },
+      approval: {
+        handleToolEditApprovalAction: (message) =>
+          progress.handleToolEditApprovalAction(message),
+        onUnsupportedToolEditApproval: (message) =>
+          onUnsupportedCommand(message),
+        handleBashApprovalAction: (message) =>
+          progress.handleBashApprovalAction(message),
+        handlePlanApprovalAction: (message) =>
+          progress.handlePlanApprovalAction(message),
+        handleUserQuestionAction: (message) =>
+          progress.handleUserQuestionAction(message),
+        handleAgentProposalAction: (message) =>
+          progress.handleAgentProposalAction(message),
+      },
+    });
 
   return {
     handleMessage(message: DesktopCommandMessage): boolean {
