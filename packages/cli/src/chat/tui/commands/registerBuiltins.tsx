@@ -89,6 +89,8 @@ export function registerBuiltinSlashCommands(options?: {
     options?.onModelSelect ?? ((value) => patchSessionMeta('model', value));
   const onApiModeSelect: ApiModeSelectHandler =
     options?.onApiModeSelect ?? ((value) => patchSessionMeta('apiMode', value));
+  const canSelectAgent = options?.canSelectAgent ?? (() => true);
+  const canSelectModel = options?.canSelectModel ?? (() => true);
 
   // Picking the root agent and the root model is a single up-front choice
   // before the first message, so advance straight from the agent picker into
@@ -108,7 +110,7 @@ export function registerBuiltinSlashCommands(options?: {
 
   function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = cliState.sessionMeta.get().agent;
-    const selectable = options?.canSelectAgent?.() ?? true;
+    const selectable = canSelectAgent();
     return (
       <AgentListForm
         currentAgent={current}
@@ -117,10 +119,7 @@ export function registerBuiltinSlashCommands(options?: {
         onSelect={(value) => {
           // Chain into the model picker only while still choosing the root
           // (before the first message) and model selection is available.
-          // Mirror ModelListFormAdapter's own default (`?? true`) so the two
-          // agree on what "model selection available" means; otherwise close.
-          const advanceToModel =
-            selectable && (options?.canSelectModel?.() ?? true);
+          const advanceToModel = selectable && canSelectModel();
           runFormSelection({
             action: () => onAgentSelect(value),
             value,
@@ -173,7 +172,7 @@ export function registerBuiltinSlashCommands(options?: {
 
   function ModelListFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = cliState.sessionMeta.get().model;
-    const selectable = options?.canSelectModel?.() ?? true;
+    const selectable = canSelectModel();
     return (
       <ModelListForm
         currentModel={current}
