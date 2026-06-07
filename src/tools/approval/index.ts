@@ -15,10 +15,7 @@ import {
 } from '@tools/userQuestion';
 
 import { bashApprovalController } from './bashApproval';
-import {
-  _clearAllProposalBypass,
-  _clearProposalBypassForStream,
-} from './proposalApproval';
+import { proposalApprovalState } from './proposalApproval';
 import {
   toolEditApprovalController,
   enableYoloOnChildStream,
@@ -35,7 +32,7 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
   _rejectPendingUserQuestionsForStream(streamId);
   toolEditApprovalController.clearBypassForStream(streamId);
   bashApprovalController.clearBypassForStream(streamId);
-  _clearProposalBypassForStream(streamId);
+  proposalApprovalState.clearForStream(streamId);
   runCoordinatorBridge.cleanupRequestsForStream(streamId);
 }
 
@@ -49,7 +46,7 @@ export function cleanupAllApprovals(): void {
   _rejectAllPendingUserQuestions();
   toolEditApprovalController.clearAllBypass();
   bashApprovalController.clearAllBypass();
-  _clearAllProposalBypass();
+  proposalApprovalState.clearAll();
   runCoordinatorBridge.cleanupAllRequests();
 }
 
@@ -73,8 +70,7 @@ export {
 
 export {
   // Proposal approval
-  toggleProposalBypass,
-  isProposalBypassedForStream,
+  proposalApprovalState,
 } from './proposalApproval';
 
 export {
