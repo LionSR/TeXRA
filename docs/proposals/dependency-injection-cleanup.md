@@ -19,7 +19,7 @@ TeXRA already has **one genuinely clean DI seam**: `platform()` (`src/platform/p
 
 **The headline finding:** mechanisms A and C carry **the same 8–9 fields at once**, and the two halves of the codebase disagree on which is canonical — **flow nodes read them from the bag, tools read them from `RunContext`**. That split-brain is the strongest evidence that bag-threading those fields is redundant, and it tells us the migration target is already chosen by the code.
 
-**The fundamentals** (Mark Seemann, *Dependency Injection*; ISP; functional-core/imperative-shell) all point the same way: depend on narrow interfaces, wire once at one root, scope to the right lifetime, carry only what you read.
+**The fundamentals** (Mark Seemann, _Dependency Injection_; ISP; functional-core/imperative-shell) all point the same way: depend on narrow interfaces, wire once at one root, scope to the right lifetime, carry only what you read.
 
 ---
 
@@ -58,11 +58,11 @@ flowchart TB
     style PORT fill:#dfd,stroke:#3b6
 ```
 
-| Mechanism | Count | Visibility at call site | Lifetime scope | Verdict |
-| --- | --- | --- | --- | --- |
-| **A. Fat context bag** (`AgentCore`→`*Services`) | 13 fields → ~31–35 runtime | Visible in types (but understated) | Per run | Over-carried; split into cohesive objects + narrow interfaces |
-| **B. `set*` module singletons** | 24 injectors | Invisible | Process (mostly) | Fold 20 into `Platform`; scope 1 to `RunContext`; 3 are test-only |
-| **C. ALS + process registries** | 3 ALS + 7 registries | Invisible | Run / process | Keep `RunContext` (good), de-dup vs. bag; registries block concurrency |
+| Mechanism                                        | Count                      | Visibility at call site            | Lifetime scope   | Verdict                                                                |
+| ------------------------------------------------ | -------------------------- | ---------------------------------- | ---------------- | ---------------------------------------------------------------------- |
+| **A. Fat context bag** (`AgentCore`→`*Services`) | 13 fields → ~31–35 runtime | Visible in types (but understated) | Per run          | Over-carried; split into cohesive objects + narrow interfaces          |
+| **B. `set*` module singletons**                  | 24 injectors               | Invisible                          | Process (mostly) | Fold 20 into `Platform`; scope 1 to `RunContext`; 3 are test-only      |
+| **C. ALS + process registries**                  | 3 ALS + 7 registries       | Invisible                          | Run / process    | Keep `RunContext` (good), de-dup vs. bag; registries block concurrency |
 
 ---
 
@@ -81,7 +81,7 @@ AgentCore (13)                         BaseFlowServices.ts:18
             └─ ToolUseCycleServices    CycleServices.ts:30           → 23 declared / ~35 runtime
 ```
 
-The inheritance is only **3 levels deep**, but the *runtime* object is larger than the declared interface because the outer bag is **spread wholesale** into the inner cycle (`{...this.services, ...}`) rather than narrowed. TypeScript understates what is actually carried.
+The inheritance is only **3 levels deep**, but the _runtime_ object is larger than the declared interface because the outer bag is **spread wholesale** into the inner cycle (`{...this.services, ...}`) rather than narrowed. TypeScript understates what is actually carried.
 
 ### The bag travels 4 hops and is re-spread twice
 
@@ -99,22 +99,22 @@ flowchart LR
     style CN fill:#fe9,stroke:#b83
 ```
 
-The two re-spread sites are `ResponseCycleNode.ts:94` and `ToolUseCycleNode.ts:75`. The other `setServices` calls are the initial injection or framework plumbing (`persistedFlow.ts:185`, `node/index.ts:292`) that hands the *same* bag to every node in a flow.
+The two re-spread sites are `ResponseCycleNode.ts:94` and `ToolUseCycleNode.ts:75`. The other `setServices` calls are the initial injection or framework plumbing (`persistedFlow.ts:185`, `node/index.ts:292`) that hands the _same_ bag to every node in a flow.
 
 ### Read-vs-carried per node
 
-| Node | File | Carries | Reads (distinct) |
-| --- | --- | --- | --- |
-| `MediaExtractionNode` | reflection/nodes | ~26 | 4 |
-| `OutputNode` | reflection/nodes | ~26 | 6 |
-| `PrepareContextNode` | reflection/nodes | ~26 | 3 |
-| `TeXCountNode` | reflection/nodes | ~26 | 3 |
-| `ResponseCycleNode` | reflection/nodes | ~26 | 6 (+re-spreads) |
-| `ToolUsePrepareNode` | tooluse/nodes | ~33 | 9 |
-| `ToolUseCycleNode` | tooluse/nodes | ~33 | 9 (+re-spreads) |
-| `ToolUseWaitNode` | tooluse/nodes | ~33 | 5 |
-| `ModelInvocationNode` | core/flows | ~35 | 4 |
-| `ToolUseDispatchNode` | core/flows | ~35 | 6 |
+| Node                  | File             | Carries | Reads (distinct) |
+| --------------------- | ---------------- | ------- | ---------------- |
+| `MediaExtractionNode` | reflection/nodes | ~26     | 4                |
+| `OutputNode`          | reflection/nodes | ~26     | 6                |
+| `PrepareContextNode`  | reflection/nodes | ~26     | 3                |
+| `TeXCountNode`        | reflection/nodes | ~26     | 3                |
+| `ResponseCycleNode`   | reflection/nodes | ~26     | 6 (+re-spreads)  |
+| `ToolUsePrepareNode`  | tooluse/nodes    | ~33     | 9                |
+| `ToolUseCycleNode`    | tooluse/nodes    | ~33     | 9 (+re-spreads)  |
+| `ToolUseWaitNode`     | tooluse/nodes    | ~33     | 5                |
+| `ModelInvocationNode` | core/flows       | ~35     | 4                |
+| `ToolUseDispatchNode` | core/flows       | ~35     | 6                |
 
 ```mermaid
 %%{init: {'theme':'neutral'}}%%
@@ -158,12 +158,12 @@ flowchart LR
     style AMB fill:#eee,stroke:#888
 ```
 
-| Group | Fields | Evidence of co-usage |
-| --- | --- | --- |
-| `RunIdentity` | `runtimeHost, streamId, executionId` | `ToolUseCycleNode.ts:45-62`, `OutputNode.ts:263`, `contextHelpers.ts:36-48` |
-| `DelegationPolicy` | `delegationDepth, delegationConfig` (+ `approvalPromptsUnavailable, stopAfterCycle`) | `DelegationTools.ts:354-359, 1070-1073`; `AgentLaunchContext.ts:112-115` |
-| `AgentDefinition` | `config, setting, prompt` (+ `modelHandler, userVarChannels`) | `ResponseCycleNode.ts:69-71`, `AgentLaunchContext.ts:281-298`, `ToolUsePrepareNode.ts:24-78` |
-| ambient | `logger` (read by nearly every node), `workingDirectory` (tools only) | n/a — genuine cross-cutting |
+| Group              | Fields                                                                               | Evidence of co-usage                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `RunIdentity`      | `runtimeHost, streamId, executionId`                                                 | `ToolUseCycleNode.ts:45-62`, `OutputNode.ts:263`, `contextHelpers.ts:36-48`                  |
+| `DelegationPolicy` | `delegationDepth, delegationConfig` (+ `approvalPromptsUnavailable, stopAfterCycle`) | `DelegationTools.ts:354-359, 1070-1073`; `AgentLaunchContext.ts:112-115`                     |
+| `AgentDefinition`  | `config, setting, prompt` (+ `modelHandler, userVarChannels`)                        | `ResponseCycleNode.ts:69-71`, `AgentLaunchContext.ts:281-298`, `ToolUsePrepareNode.ts:24-78` |
+| ambient            | `logger` (read by nearly every node), `workingDirectory` (tools only)                | n/a — genuine cross-cutting                                                                  |
 
 ---
 
@@ -195,37 +195,37 @@ flowchart TB
 ### Classification
 
 - **20 → `Platform` ports (P):** process-lifetime host capabilities that belong on the frozen `Platform` object.
-- **1 → `RunContext` (R):** `setToolEditApprovalHandler` — conceptually the *active session's* approval channel, currently a single module global mutated by whichever host UI is active.
+- **1 → `RunContext` (R):** `setToolEditApprovalHandler` — conceptually the _active session's_ approval channel, currently a single module global mutated by whichever host UI is active.
 - **3 → test-only / justified lazy singleton (T):** `setDefaultStreamLogStore`, `setTierService`, `setServerSideKeyService`.
 
 ### Full inventory
 
-| Setter (file:line) | Default | Class | Multi-root? | Silent no-op? |
-| --- | --- | --- | --- | --- |
-| `setLinterProvider` `DiagnosticsTool.ts:12` | `async () => []` | P | — | **yes** |
-| `setAddCriticismSink` `AddCriticismTool.ts:48` | `{accepted:false}` | P | — | **yes** |
-| `setOpenPdfOpener` `OpenPdfTool.ts:42` | undefined | P | — | yes |
-| `setOpenBuildDisplay` `approval/latexPreview.ts:34` | `async () => {}` | P | **ext+desktop** | **yes** (no-ops in CLI) |
-| `setToolMissingHandler` `utils/system/toolUtils.ts:58` | `() => {}` | P | — | **yes** |
-| `setToolNotificationHandler` `toolUnavailableNotification.ts:28` | `() => {}` | P | — | **yes** |
-| `setGitHubTokenProvider` `github/githubAuth.ts:15` | `() => undefined` | P | — | **yes** |
-| `setExtensionChecker` `externalToolDefs.ts:60` | `() => false` | P | — | **yes** |
-| `setTexraCliEntrypointChecker` `externalToolDefs.ts:67` | `() => false` | P | — | **yes** |
-| `setLeanLanguageServices` `lean/leanLanguageServices.ts:53` | undefined (getter throws) | P | **ext+desktop+cli** | no |
-| `setSetupPlatform` `setup/platform.ts:104` | undefined (getter throws) | P | — | no |
-| `setRunStorageService` `runtime/RunStorageService.ts:17` | `isViewVisible:()=>false` | P | **ext+desktop** | **yes** |
-| `setGitAuthorEnv` `utils/system/gitAuthorEnv.ts:16` | `{}` | P | **3 funnels** | benign |
-| `setWorktreeSupportEnabled` `worktreeConfig.ts:14` | `false` | P | **3 funnels** | intended off |
-| `setOutputChannelFactory` `logger/logUtils.ts:140` | `null` | P | **ext+cli** | null sink (desktop) |
-| `setAgentDirectories` `index/agentDirectoriesRegistry.ts:11` | `null` (getter throws) | P | **ext + core module** | no |
-| `setRuntimeSkillSources` `skills/runtimeSkills.ts:13` | `[]` | P | cli only | silent (cli-only) |
-| `setRuntimeExtensionId` `auth/config.ts:102` | `null` (const fallback) | P | — | benign |
-| `setExternalAuthCallbackResolver` `auth/config.ts:151` | `null` | P | — | benign |
-| `setToolEditApprovalHandler` `approval/toolEditApproval.ts:118` | undefined | **R** | **4 sites / 3 hosts** | falls back to controller |
-| `setDesktopAgentResumeHandler` `desktop/.../desktopAgentResume.ts:7` | undefined (`?? false`) | P (desktop) | — | benign |
-| `setDefaultStreamLogStore` `transcript/StreamLogStore.ts:789` | lazy `new` | T | — | no |
-| `setTierService` `auth/tier/index.ts:46` | lazy `new` | T | — | no |
-| `setServerSideKeyService` `auth/serverKeys/index.ts:52` | `null` (getter throws) | T | — | no |
+| Setter (file:line)                                                   | Default                   | Class       | Multi-root?           | Silent no-op?            |
+| -------------------------------------------------------------------- | ------------------------- | ----------- | --------------------- | ------------------------ |
+| `setLinterProvider` `DiagnosticsTool.ts:12`                          | `async () => []`          | P           | —                     | **yes**                  |
+| `setAddCriticismSink` `AddCriticismTool.ts:48`                       | `{accepted:false}`        | P           | —                     | **yes**                  |
+| `setOpenPdfOpener` `OpenPdfTool.ts:42`                               | undefined                 | P           | —                     | yes                      |
+| `setOpenBuildDisplay` `approval/latexPreview.ts:34`                  | `async () => {}`          | P           | **ext+desktop**       | **yes** (no-ops in CLI)  |
+| `setToolMissingHandler` `utils/system/toolUtils.ts:58`               | `() => {}`                | P           | —                     | **yes**                  |
+| `setToolNotificationHandler` `toolUnavailableNotification.ts:28`     | `() => {}`                | P           | —                     | **yes**                  |
+| `setGitHubTokenProvider` `github/githubAuth.ts:15`                   | `() => undefined`         | P           | —                     | **yes**                  |
+| `setExtensionChecker` `externalToolDefs.ts:60`                       | `() => false`             | P           | —                     | **yes**                  |
+| `setTexraCliEntrypointChecker` `externalToolDefs.ts:67`              | `() => false`             | P           | —                     | **yes**                  |
+| `setLeanLanguageServices` `lean/leanLanguageServices.ts:53`          | undefined (getter throws) | P           | **ext+desktop+cli**   | no                       |
+| `setSetupPlatform` `setup/platform.ts:104`                           | undefined (getter throws) | P           | —                     | no                       |
+| `setRunStorageService` `runtime/RunStorageService.ts:17`             | `isViewVisible:()=>false` | P           | **ext+desktop**       | **yes**                  |
+| `setGitAuthorEnv` `utils/system/gitAuthorEnv.ts:16`                  | `{}`                      | P           | **3 funnels**         | benign                   |
+| `setWorktreeSupportEnabled` `worktreeConfig.ts:14`                   | `false`                   | P           | **3 funnels**         | intended off             |
+| `setOutputChannelFactory` `logger/logUtils.ts:140`                   | `null`                    | P           | **ext+cli**           | null sink (desktop)      |
+| `setAgentDirectories` `index/agentDirectoriesRegistry.ts:11`         | `null` (getter throws)    | P           | **ext + core module** | no                       |
+| `setRuntimeSkillSources` `skills/runtimeSkills.ts:13`                | `[]`                      | P           | cli only              | silent (cli-only)        |
+| `setRuntimeExtensionId` `auth/config.ts:102`                         | `null` (const fallback)   | P           | —                     | benign                   |
+| `setExternalAuthCallbackResolver` `auth/config.ts:151`               | `null`                    | P           | —                     | benign                   |
+| `setToolEditApprovalHandler` `approval/toolEditApproval.ts:118`      | undefined                 | **R**       | **4 sites / 3 hosts** | falls back to controller |
+| `setDesktopAgentResumeHandler` `desktop/.../desktopAgentResume.ts:7` | undefined (`?? false`)    | P (desktop) | —                     | benign                   |
+| `setDefaultStreamLogStore` `transcript/StreamLogStore.ts:789`        | lazy `new`                | T           | —                     | no                       |
+| `setTierService` `auth/tier/index.ts:46`                             | lazy `new`                | T           | —                     | no                       |
+| `setServerSideKeyService` `auth/serverKeys/index.ts:52`              | `null` (getter throws)    | T           | —                     | no                       |
 
 **Correctly-scoped already (not the anti-pattern, listed for completeness):** `setBashApprovalSessionBypass` / `setToolEditApprovalSessionBypass` are stream-keyed controllers (`createStreamApprovalController` map keyed by `streamId`), not singletons.
 
@@ -269,11 +269,11 @@ flowchart TB
 
 ### The three AsyncLocalStorage instances
 
-| ALS | File:line | Shape | Assessment |
-| --- | --- | --- | --- |
-| `runContextScope` | `RunContext.ts:70` | single value, per run | Good seam; but duplicates 8–9 bag fields. `tryUseRunContext()` silently returns `undefined` outside scope. |
-| `contextStackScope` | `ToolFileInteractionContext.ts:34` | **stack** | `getCurrentToolCallContext()` reads `.at(-1)` (`:49`) — a tool that spawns a sub-cycle then reads context gets the **child's** tracker, not its own. |
-| `stageScope` | `TraceEmitter.ts:49` | per-instance | **Correct by design** — per-instance prevents cross-trace stage leakage. Do not make module-global. |
+| ALS                 | File:line                          | Shape                 | Assessment                                                                                                                                           |
+| ------------------- | ---------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runContextScope`   | `RunContext.ts:70`                 | single value, per run | Good seam; but duplicates 8–9 bag fields. `tryUseRunContext()` silently returns `undefined` outside scope.                                           |
+| `contextStackScope` | `ToolFileInteractionContext.ts:34` | **stack**             | `getCurrentToolCallContext()` reads `.at(-1)` (`:49`) — a tool that spawns a sub-cycle then reads context gets the **child's** tracker, not its own. |
+| `stageScope`        | `TraceEmitter.ts:49`               | per-instance          | **Correct by design** — per-instance prevents cross-trace stage leakage. Do not make module-global.                                                  |
 
 ### Process-global registries (the concurrency blocker)
 
@@ -306,7 +306,7 @@ flowchart LR
 
 Sequenced so nothing breaks, lowest-risk first:
 
-1. **Fold the 20 P-class setters into `Platform` ports.** *(Highest leverage, mostly mechanical.)* Most consumers sit 1–2 hops from the setter (often the same file). Precedent already exists (`fs`, `workspace`, `secrets`). Eliminates the entire silent-no-op class at once — a missing wiring becomes a type error. Do the 6 ext-only no-op setters first (clearest user-facing bug surface in CLI/desktop).
+1. **Fold the 20 P-class setters into `Platform` ports.** _(Highest leverage, mostly mechanical.)_ Most consumers sit 1–2 hops from the setter (often the same file). Precedent already exists (`fs`, `workspace`, `secrets`). Eliminates the entire silent-no-op class at once — a missing wiring becomes a type error. Do the 6 ext-only no-op setters first (clearest user-facing bug surface in CLI/desktop).
 2. **De-duplicate the split-brain fields.** Stop threading the 8–9 fields already in `RunContext`; let flow nodes read them the way tools already do. This shrinks every flow-service interface for free.
 3. **Cohesion-split `AgentCore`** into `RunIdentity` / `DelegationPolicy` / `AgentDefinition` + ambient `logger`. The wholesale re-spread at the 2 nesting sites becomes `setServices({ identity, delegation, agent })`.
 4. **Narrow node interfaces (ISP).** A node reading 3 fields should declare those 3, not `ReflectionServices`. This removes the pressure to forward the whole bag.
@@ -315,14 +315,14 @@ Sequenced so nothing breaks, lowest-risk first:
 
 ### Fundamentals these steps apply
 
-| Step | Principle |
-| --- | --- |
+| Step | Principle                                                                     |
+| ---- | ----------------------------------------------------------------------------- |
 | 1, 5 | Single composition root; dependency injection over service location (Seemann) |
-| 1 | Immutable, set-once wiring (frozen `Platform`) over mutable module globals |
-| 2 | One canonical source of truth per datum |
-| 3 | Introduce Parameter Object **by cohesion**, not by aggregation |
-| 4 | Interface Segregation — depend on the narrowest contract you use |
-| 6 | Scope state to its real lifetime (per-run/per-session, not per-process) |
+| 1    | Immutable, set-once wiring (frozen `Platform`) over mutable module globals    |
+| 2    | One canonical source of truth per datum                                       |
+| 3    | Introduce Parameter Object **by cohesion**, not by aggregation                |
+| 4    | Interface Segregation — depend on the narrowest contract you use              |
+| 6    | Scope state to its real lifetime (per-run/per-session, not per-process)       |
 
 ## What NOT to change
 
