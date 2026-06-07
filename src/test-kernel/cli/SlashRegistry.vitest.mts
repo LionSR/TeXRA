@@ -179,6 +179,35 @@ describe('slashRegistry', () => {
     });
   });
 
+  it('does not advance agent picks into the model form when model selection is unavailable', async () => {
+    resetCliState({
+      agent: 'chat',
+      model: 'deepseekT',
+      cwd: '/tmp/workspace',
+      apiMode: 'included',
+      canDelegate: false,
+      version: 'test',
+    });
+    registerBuiltinSlashCommands({
+      canSelectModel: () => false,
+    });
+    const agent = listSlashCommands().find((cmd) => cmd.name === 'agent');
+
+    if (!agent) throw new Error('Expected /agent to be registered');
+
+    expect(openRegisteredCliSlashForm(agent, '')).toBe(true);
+
+    const agentNode = renderOpenForm<{
+      onSelect?: (value: string) => void;
+    }>();
+    agentNode.props?.onSelect?.('review');
+    await settleFormSelection();
+
+    expect(cliState.sessionMeta.get().agent).toBe('review');
+    expect(agentNode.isClosed()).toBe(true);
+    expect(cliState.activeForm.get()?.commandName).toBe('agent');
+  });
+
   it('marks the agent picker read-only when root selection is closed', () => {
     resetCliState({
       agent: 'chat',
