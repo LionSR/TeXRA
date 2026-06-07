@@ -696,8 +696,7 @@ if (protocolLifecycle.shouldContinue) {
         console.warn('Failed to open desktop stream snapshot store', error);
       }
       await platformInit.progressSnapshotStore.load(
-        streamSnapshotStore?.hydrated.map((snapshot) => snapshot.streamId) ??
-          [],
+        streamSnapshotStore?.hydrated.map((snapshot) => snapshot.streamId) ?? [],
       );
       reopenMainWindow = () =>
         createWindow({

@@ -224,9 +224,10 @@ async function createBridge(
   const { DesktopProgressBridge } = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
-  return new DesktopProgressBridge((message) => messages.push(message), {
-    streamSnapshotStore: options.streamSnapshotStore,
-  }) as TestableBridge;
+  return new DesktopProgressBridge(
+    (message) => messages.push(message),
+    { streamSnapshotStore: options.streamSnapshotStore },
+  ) as TestableBridge;
 }
 
 async function createExecution(options: {
