@@ -71,6 +71,12 @@ const CHANNEL = 'StreamSnapshotStore';
  *  managers' `pMap` hydration so startup doesn't open a file handle per tab). */
 const SEED_IO_CONCURRENCY = 8;
 
+type OutputFilesPatch = Map<number, OutputFileInfo[] | null>;
+type UsageUpdateResult =
+  | TokenUsageStats
+  | undefined
+  | Promise<TokenUsageStats | undefined>;
+
 function normalizeOutputFiles(outputFiles?: readonly string[]): string[] {
   return (outputFiles ?? [])
     .map((file) => file.replaceAll('\\', '/'))
@@ -113,6 +119,14 @@ export class StreamSnapshotStore {
   private readonly seeded = new Set<StreamTabId>();
   private readonly seedChains = new Map<StreamTabId, Promise<void>>();
   private readonly metaOverlays = new Set<StreamTabId>();
+  private readonly outputFileOverlays = new Map<
+    StreamTabId,
+    OutputFilesPatch
+  >();
+  private readonly usageOverlays = new Map<
+    StreamTabId,
+    Map<StorageKey, TokenUsageStats>
+  >();
   private readonly streamVersions = new Map<StreamTabId, number>();
   private hasAuthoritativeStreamSet = false;
 
@@ -133,6 +147,17 @@ export class StreamSnapshotStore {
 
   private bumpStreamVersion(stream: StreamTabId): void {
     this.streamVersions.set(stream, this.streamVersion(stream) + 1);
+  }
+
+  private canMutateSynchronously(stream: StreamTabId): boolean {
+    if (this.seeded.has(stream)) return true;
+
+    if (this.hasAuthoritativeStreamSet && !this.seedChains.has(stream)) {
+      this.seeded.add(stream);
+      return true;
+    }
+
+    return false;
   }
 
   // ==========================================================================
@@ -170,8 +195,9 @@ export class StreamSnapshotStore {
       ),
       bus.on(
         'updateStreamUsage',
-        ({ streamId, storageKey, usage }) =>
-          this.addUsage(streamId, storageKey, usage),
+        ({ streamId, storageKey, usage }) => {
+          void this.addUsage(streamId, storageKey, usage);
+        },
         options,
       ),
       bus.on(
@@ -218,13 +244,17 @@ export class StreamSnapshotStore {
    */
   private mutate<T>(stream: StreamTabId, apply: () => T): T | undefined {
     const version = this.streamVersion(stream);
-    if (this.seeded.has(stream)) return apply();
+    if (this.canMutateSynchronously(stream)) return apply();
 
-    if (this.hasAuthoritativeStreamSet && !this.seedChains.has(stream)) {
-      this.seeded.add(stream);
-      return apply();
-    }
+    this.queueAfterSeed(stream, version, apply);
+    return undefined;
+  }
 
+  private queueAfterSeed(
+    stream: StreamTabId,
+    version: number,
+    apply: () => unknown,
+  ): Promise<void> {
     let next: Promise<void> = Promise.resolve();
     next = this.ensureSeeded(stream, version)
       .then(() => {
@@ -246,7 +276,7 @@ export class StreamSnapshotStore {
         });
       });
     this.seedChains.set(stream, next);
-    return undefined;
+    return next;
   }
 
   /** Read a stream's existing disk data into memory once. */
@@ -282,23 +312,108 @@ export class StreamSnapshotStore {
     return inner;
   }
 
+  private parseOutputFilesPatch(filesByRound: {
+    [key: number]: OutputFileInfo[];
+  }): OutputFilesPatch {
+    const patch: OutputFilesPatch = new Map();
+    for (const [round, files] of Object.entries(filesByRound)) {
+      const key = RoundKeySchema.safeParse(round);
+      if (!key.success) continue;
+      const normalized = OutputFileInfoListSchema.parse(
+        Array.isArray(files) ? files : [],
+      );
+      patch.set(key.data, normalized.length === 0 ? null : normalized);
+    }
+    return patch;
+  }
+
+  private applyOutputFilesPatch(
+    stream: StreamTabId,
+    patch: OutputFilesPatch,
+  ): Map<number, OutputFileInfo[]> {
+    const rounds = this.getOrCreate(this.outputFiles, stream);
+    for (const [round, files] of patch) {
+      if (files === null) rounds.delete(round);
+      else rounds.set(round, files);
+    }
+    return rounds;
+  }
+
+  private addOutputFilesOverlay(
+    stream: StreamTabId,
+    patch: OutputFilesPatch,
+  ): void {
+    if (patch.size === 0) return;
+    const overlay =
+      this.outputFileOverlays.get(stream) ??
+      new Map<number, OutputFileInfo[] | null>();
+    for (const [round, files] of patch) overlay.set(round, files);
+    this.outputFileOverlays.set(stream, overlay);
+  }
+
+  private writeOutputFiles(stream: StreamTabId): void {
+    this.write(
+      stream,
+      STREAM_DATA_KEYS.OUTPUT_FILES,
+      mapToRecord(this.outputFiles.get(stream) ?? new Map()),
+    );
+  }
+
+  private applyUsageDeltaMemory(
+    stream: StreamTabId,
+    storageKey: StorageKey,
+    delta: TokenUsageStats,
+  ): TokenUsageStats | undefined {
+    const current =
+      this.usage.get(stream) ?? new Map<string, TokenUsageStats>();
+    if (isEmptyUsage(delta)) return current.get(storageKey);
+    const existing = current.get(storageKey) ?? emptyUsageStats();
+    const accumulated = sumUsageStats([existing, delta]);
+    current.set(storageKey, accumulated);
+    this.usage.set(stream, current);
+    return accumulated;
+  }
+
+  private addUsageOverlay(
+    stream: StreamTabId,
+    storageKey: StorageKey,
+    delta: TokenUsageStats,
+  ): void {
+    if (isEmptyUsage(delta)) return;
+    const overlay =
+      this.usageOverlays.get(stream) ?? new Map<StorageKey, TokenUsageStats>();
+    overlay.set(
+      storageKey,
+      sumUsageStats([overlay.get(storageKey) ?? emptyUsageStats(), delta]),
+    );
+    this.usageOverlays.set(stream, overlay);
+  }
+
+  private writeUsage(stream: StreamTabId): void {
+    this.write(
+      stream,
+      STREAM_DATA_KEYS.USAGE_STATS,
+      mapToRecord(this.usage.get(stream) ?? new Map()),
+    );
+  }
+
   addOutputFiles(
     stream: StreamTabId,
     filesByRound: { [key: number]: OutputFileInfo[] },
   ): void {
-    this.mutate(stream, () => {
-      const rounds = this.getOrCreate(this.outputFiles, stream);
-      for (const [round, files] of Object.entries(filesByRound)) {
-        const key = RoundKeySchema.safeParse(round);
-        if (!key.success) continue;
-        const normalized = OutputFileInfoListSchema.parse(
-          Array.isArray(files) ? files : [],
-        );
-        if (normalized.length === 0) rounds.delete(key.data);
-        else rounds.set(key.data, normalized);
-      }
-      this.write(stream, STREAM_DATA_KEYS.OUTPUT_FILES, mapToRecord(rounds));
-    });
+    const patch = this.parseOutputFilesPatch(filesByRound);
+    if (patch.size === 0) return;
+
+    if (this.canMutateSynchronously(stream)) {
+      this.applyOutputFilesPatch(stream, patch);
+      this.writeOutputFiles(stream);
+      return;
+    }
+
+    const version = this.streamVersion(stream);
+    this.applyOutputFilesPatch(stream, patch);
+    this.addOutputFilesOverlay(stream, patch);
+    this.queueAfterSeed(stream, version, () => undefined);
   }
 
   updateMissingOutputs(
@@ -346,18 +461,22 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     storageKey: StorageKey,
     usage: TokenUsageStats,
-  ): TokenUsageStats | undefined {
-    return this.mutate(stream, () => {
-      const delta = TokenUsageStatsParsingSchema.parse(usage);
-      const current =
-        this.usage.get(stream) ?? new Map<string, TokenUsageStats>();
-      if (isEmptyUsage(delta)) return current.get(storageKey);
-      const existing = current.get(storageKey) ?? emptyUsageStats();
-      const accumulated = sumUsageStats([existing, delta]);
-      current.set(storageKey, accumulated);
-      this.usage.set(stream, current);
-      this.write(stream, STREAM_DATA_KEYS.USAGE_STATS, mapToRecord(current));
+  ): UsageUpdateResult {
+    const delta = TokenUsageStatsParsingSchema.parse(usage);
+    if (this.canMutateSynchronously(stream)) {
+      const accumulated = this.applyUsageDeltaMemory(stream, storageKey, delta);
+      if (!isEmptyUsage(delta)) this.writeUsage(stream);
       return accumulated;
+    }
+
+    const version = this.streamVersion(stream);
+    this.applyUsageDeltaMemory(stream, storageKey, delta);
+    this.addUsageOverlay(stream, storageKey, delta);
+    return this.queueAfterSeed(stream, version, () => undefined).then(() => {
+      if (this.streamVersion(stream) !== version || !this.seeded.has(stream)) {
+        return undefined;
+      }
+      return this.usage.get(stream)?.get(storageKey);
     });
   }
 
@@ -425,6 +544,8 @@ export class StreamSnapshotStore {
     this.seeded.delete(stream);
     this.seedChains.delete(stream);
     this.metaOverlays.delete(stream);
+    this.outputFileOverlays.delete(stream);
+    this.usageOverlays.delete(stream);
     this.kvCache.delete(stream);
     for (const key of [...this.pendingWrites.keys()]) {
       if (key.startsWith(`${stream}::`)) this.pendingWrites.delete(key);
@@ -442,6 +563,8 @@ export class StreamSnapshotStore {
       ...this.taskStates.keys(),
       ...this.seeded,
       ...this.seedChains.keys(),
+      ...this.outputFileOverlays.keys(),
+      ...this.usageOverlays.keys(),
       ...this.kvCache.keys(),
     ]);
     for (const stream of streams) this.bumpStreamVersion(stream);
@@ -455,6 +578,8 @@ export class StreamSnapshotStore {
     this.seeded.clear();
     this.seedChains.clear();
     this.metaOverlays.clear();
+    this.outputFileOverlays.clear();
+    this.usageOverlays.clear();
     this.kvCache.clear();
     this.pendingWrites.clear();
   }
@@ -806,6 +931,8 @@ export class StreamSnapshotStore {
       ...this.taskStates.keys(),
       ...this.seeded,
       ...this.seedChains.keys(),
+      ...this.outputFileOverlays.keys(),
+      ...this.usageOverlays.keys(),
       ...this.kvCache.keys(),
     ]);
     for (const stream of streams) {
@@ -835,6 +962,9 @@ export class StreamSnapshotStore {
     const metaOverlay = this.metaOverlays.has(stream)
       ? this.meta.get(stream)
       : undefined;
+    const outputFileOverlay = this.outputFileOverlays.get(stream);
+    const usageOverlay = this.usageOverlays.get(stream);
+    const sidecarsToWrite = new Set(data.legacyKeys);
     this.outputFiles.set(stream, data.outputFiles);
     this.missingOutputs.set(stream, data.missingOutputs);
     this.compileFailures.set(stream, data.compileFailures);
@@ -859,24 +989,46 @@ export class StreamSnapshotStore {
       this.meta.delete(stream);
     }
     this.metaOverlays.delete(stream);
+    if (outputFileOverlay) {
+      this.applyOutputFilesPatch(stream, outputFileOverlay);
+      sidecarsToWrite.add(STREAM_DATA_KEYS.OUTPUT_FILES);
+      this.outputFileOverlays.delete(stream);
+    }
+    if (usageOverlay) {
+      for (const [storageKey, delta] of usageOverlay) {
+        this.applyUsageDeltaMemory(stream, storageKey, delta);
+      }
+      sidecarsToWrite.add(STREAM_DATA_KEYS.USAGE_STATS);
+      this.usageOverlays.delete(stream);
+    }
     this.seeded.add(stream);
-    this.persistLegacyFlattened(stream, data);
+    this.writeMergedSidecars(stream, sidecarsToWrite);
   }
 
-  /** Rewrite any legacy-nested sidecar file to its flattened form (once). */
-  private persistLegacyFlattened(stream: StreamTabId, data: StreamData): void {
-    const byKey = new Map<string, Map<number, unknown>>([
-      [STREAM_DATA_KEYS.OUTPUT_FILES, data.outputFiles as Map<number, unknown>],
+  /** Persist sidecars from merged memory after seeding and overlays converge. */
+  private writeMergedSidecars(
+    stream: StreamTabId,
+    keys: Iterable<string>,
+  ): void {
+    const byKey = new Map<string, Map<number | string, unknown> | undefined>([
+      [
+        STREAM_DATA_KEYS.OUTPUT_FILES,
+        this.outputFiles.get(stream) as Map<number, unknown> | undefined,
+      ],
       [
         STREAM_DATA_KEYS.MISSING_OUTPUTS,
-        data.missingOutputs as Map<number, unknown>,
+        this.missingOutputs.get(stream) as Map<number, unknown> | undefined,
       ],
       [
         STREAM_DATA_KEYS.COMPILE_FAILURES,
-        data.compileFailures as Map<number, unknown>,
+        this.compileFailures.get(stream) as Map<number, unknown> | undefined,
+      ],
+      [
+        STREAM_DATA_KEYS.USAGE_STATS,
+        this.usage.get(stream) as Map<string, unknown> | undefined,
       ],
     ]);
-    for (const key of data.legacyKeys) {
+    for (const key of keys) {
       const map = byKey.get(key);
       if (map) this.write(stream, key, mapToRecord(map));
     }
