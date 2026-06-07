@@ -1,14 +1,14 @@
 import { defineCommand } from 'citty';
 
 import {
-  getToolUseAgents,
-  getVisibleAgents,
-  getWorkflowAgents,
-  loadAgents,
-} from '@agent/index';
-import type { AgentEntry } from '@agent/index';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-
+  CLI_AGENT_CATEGORY_FILTER_VALUES,
+  formatCliAgentDetails,
+  formatCliAgentList,
+  formatCliHiddenAgentsNotice,
+  loadCliAgentList,
+  parseCliAgentCategoryFilter,
+  type CliAgentListOptions,
+} from '../runtime/agents';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
@@ -24,133 +24,28 @@ import { resolveCliAgent } from './_helpers/agentResolution';
 import { agentsRunCommand } from './agentsRun';
 import type { CliContext } from '../runtime/cliContext';
 
-interface ListAgentsOptions {
-  readonly includeHidden?: boolean;
-  readonly category?: AgentCategory;
-}
-
-const AGENT_CATEGORY_FILTER_ALIASES = [
-  [AgentCategory.Workflow, AgentCategory.Workflow],
-  [AgentCategory.ToolUse, AgentCategory.ToolUse],
-  ['tool-use', AgentCategory.ToolUse],
-  ['tool_use', AgentCategory.ToolUse],
-] as const satisfies readonly (readonly [string, AgentCategory])[];
-
-const AGENT_CATEGORY_FILTER_VALUES = AGENT_CATEGORY_FILTER_ALIASES.map(
-  ([value]) => value,
-);
-
-const AGENT_CATEGORY_FILTERS = new Map<string, AgentCategory>(
-  AGENT_CATEGORY_FILTER_ALIASES.map(([value, category]) => [
-    value.toLowerCase(),
-    category,
-  ]),
-);
-
-const ALL_AGENT_LOADERS = {
-  [AgentCategory.Workflow]: getWorkflowAgents,
-  [AgentCategory.ToolUse]: getToolUseAgents,
-} satisfies Record<AgentCategory, () => AgentEntry[]>;
-
-function collectAgents(
-  source: 'all' | 'visible',
-  categoryFilter?: AgentCategory,
-): (AgentEntry & { readonly category: AgentCategory })[] {
-  const categories = categoryFilter
-    ? [categoryFilter]
-    : [AgentCategory.Workflow, AgentCategory.ToolUse];
-  return categories.flatMap((category) => {
-    const agents =
-      source === 'visible'
-        ? getVisibleAgents(category)
-        : ALL_AGENT_LOADERS[category]();
-
-    return agents.map((agent) => ({
-      ...agent,
-      category,
-    }));
-  });
-}
-
-export function parseAgentCategoryFilter(
-  input: string | undefined,
-): AgentCategory | undefined {
-  const normalized = input?.trim();
-  if (!normalized) return undefined;
-  return AGENT_CATEGORY_FILTERS.get(normalized.toLowerCase());
-}
-
-function formatAgentListText(
-  agents: readonly (AgentEntry & { readonly category: AgentCategory })[],
-): string {
-  return agents
-    .map(
-      (agent) => `${agent.category}\t${agent.name}\t${agent.description ?? ''}`,
-    )
-    .join('\n');
-}
-
 export async function listAgents(
   context: CliContext,
-  options: ListAgentsOptions = {},
+  options: CliAgentListOptions = {},
 ): Promise<number> {
   await initLocalCliPlatform(context);
-  const includeHidden = options.includeHidden === true;
-  await loadAgents(includeHidden ? undefined : { includeRemote: false });
-  const agents = collectAgents(
-    includeHidden ? 'all' : 'visible',
-    options.category,
-  );
+  const result = await loadCliAgentList(options);
 
-  if (!includeHidden && context.outputFormat === 'text') {
-    const hiddenCount =
-      collectAgents('all', options.category).length - agents.length;
-    if (hiddenCount > 0) {
-      writeTextStderr(
-        `Showing visible agents only; ${hiddenCount} hidden agent${hiddenCount === 1 ? '' : 's'} omitted. Use \`texra agents list --all\` to show the full catalog.`,
-      );
-    }
+  if (context.outputFormat === 'text') {
+    const hiddenNotice = formatCliHiddenAgentsNotice(result.hiddenCount);
+    if (hiddenNotice) writeTextStderr(hiddenNotice);
   }
 
   emitCliResult(
     context,
     {
-      json: agents,
-      ndjson: agents.map((agent) => ({ kind: 'agent', agent })),
-      text: formatAgentListText(agents),
+      json: result.agents,
+      ndjson: result.agents.map((agent) => ({ kind: 'agent', agent })),
+      text: formatCliAgentList(result.agents),
     },
     { paged: true },
   );
   return CliExitCode.Success;
-}
-
-function formatAgentDetails(entry: AgentEntry): string {
-  const lines: string[] = [];
-  lines.push(`name: ${entry.name}`);
-  lines.push(`category: ${entry.category}`);
-  lines.push(`source: ${entry.source}`);
-  if (entry.path) lines.push(`path: ${entry.path}`);
-  if (entry.description) {
-    lines.push('');
-    lines.push(entry.description);
-  }
-  const metadataLines: string[] = [];
-  if (entry.tools && entry.tools.length > 0) {
-    metadataLines.push(`tools: ${entry.tools.join(', ')}`);
-  }
-  if (entry.defaultOutputFiles && entry.defaultOutputFiles.length > 0) {
-    metadataLines.push(
-      `defaultOutputFiles: ${entry.defaultOutputFiles.join(', ')}`,
-    );
-  }
-  if (entry.visibility && entry.visibility.length > 0) {
-    metadataLines.push(`visibility: ${entry.visibility.join(', ')}`);
-  }
-  if (metadataLines.length > 0) {
-    lines.push('');
-    lines.push(...metadataLines);
-  }
-  return lines.join('\n');
 }
 
 export async function showAgent(
@@ -167,7 +62,7 @@ export async function showAgent(
   emitCliResult(context, {
     json: entry,
     ndjson: { kind: 'agent', agent: entry },
-    text: formatAgentDetails(entry),
+    text: formatCliAgentDetails(entry),
   });
   return CliExitCode.Success;
 }
@@ -183,7 +78,7 @@ const agentsListCommand = defineCliCommand({
     },
     category: {
       type: 'enum',
-      options: AGENT_CATEGORY_FILTER_VALUES,
+      options: CLI_AGENT_CATEGORY_FILTER_VALUES,
       description:
         'Only list one category: workflow or toolUse (also accepts tool-use/tool_use)',
     },
@@ -191,7 +86,7 @@ const agentsListCommand = defineCliCommand({
   run: (context, ctx) => {
     return listAgents(context, {
       includeHidden: ctx.args.all === true,
-      category: parseAgentCategoryFilter(optString(ctx.args.category)),
+      category: parseCliAgentCategoryFilter(optString(ctx.args.category)),
     });
   },
 });
