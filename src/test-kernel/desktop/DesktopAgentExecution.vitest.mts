@@ -100,6 +100,8 @@ type ProgressMessage = {
   activeStream?: string;
   stream?: string;
   streamId?: string;
+  todos?: unknown[];
+  plan?: unknown;
   entries?: Array<{ text?: string }>;
   streams?: Array<{ name: string; creationTimestamp: number }>;
   streamStates?: Record<string, unknown>;
@@ -528,6 +530,223 @@ describe('DesktopProgressBridge', () => {
       bridge.setActiveStream('ghost-stream');
 
       expect(messages).toEqual([]);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('retries ghost display restore after a durable read failure', async () => {
+    const messages: unknown[] = [];
+    let failed = false;
+    const kvRead = vi.fn(async (key: string) => {
+      if (!failed) {
+        failed = true;
+        throw new Error('temporary read failure');
+      }
+      if (key === 'workPlan') {
+        return {
+          todos: [
+            {
+              content: 'Persisted todo',
+              status: 'pending',
+              activeForm: 'Restoring persisted todo',
+            },
+          ],
+          plan: null,
+          planSummary: null,
+        };
+      }
+      return undefined;
+    });
+    const bridge = await createBridge(messages, {
+      kvRead,
+      streamSnapshotStore: createStreamSnapshotStore([
+        {
+          streamId: 'ghost-stream',
+          label: 'ghost-stream',
+          agentCategory: AGENT_CATEGORY.WORKFLOW,
+          lastKnownStatus: STREAM_STATUS.STOPPED,
+          creationTimestamp: 1_000,
+          persistedAt: 2_000,
+        },
+      ]),
+    });
+
+    try {
+      bridge.setActiveStream('ghost-stream');
+      await settleProgressEvents();
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_TODOS),
+      ).toHaveLength(0);
+
+      messages.length = 0;
+      bridge.setActiveStream('ghost-stream');
+      await settleProgressEvents();
+
+      expect(kvRead).toHaveBeenCalledWith('workPlan');
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_TODOS).at(-1),
+      ).toMatchObject({
+        stream: 'ghost-stream',
+        todos: [
+          expect.objectContaining({
+            content: 'Persisted todo',
+          }),
+        ],
+      });
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('deduplicates overlapping ghost display restores', async () => {
+    const messages: unknown[] = [];
+    let releaseRead: () => void = () => undefined;
+    const firstRead = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    let shouldDelayFirstWorkPlanRead = true;
+    const kvRead = vi.fn(async (key: string) => {
+      if (key === 'workPlan' && shouldDelayFirstWorkPlanRead) {
+        shouldDelayFirstWorkPlanRead = false;
+        await firstRead;
+      }
+      if (key === 'workPlan') {
+        return {
+          todos: [
+            {
+              content: 'Single restored todo',
+              status: 'pending',
+              activeForm: 'Restoring once',
+            },
+          ],
+          plan: null,
+          planSummary: null,
+        };
+      }
+      return undefined;
+    });
+    const bridge = await createBridge(messages, {
+      kvRead,
+      streamSnapshotStore: createStreamSnapshotStore([
+        {
+          streamId: 'ghost-stream',
+          label: 'ghost-stream',
+          agentCategory: AGENT_CATEGORY.WORKFLOW,
+          lastKnownStatus: STREAM_STATUS.STOPPED,
+          creationTimestamp: 1_000,
+          persistedAt: 2_000,
+        },
+      ]),
+    });
+
+    try {
+      bridge.setActiveStream('ghost-stream');
+      bridge.setActiveStream('ghost-stream');
+      await settleProgressEvents();
+      releaseRead();
+      await settleProgressEvents();
+
+      const todoUpdates = progressMessages(
+        messages,
+        PROGRESS_VIEW_COMMANDS.UPDATE_TODOS,
+      ).filter((message) => message.stream === 'ghost-stream');
+      expect(todoUpdates).toHaveLength(1);
+      expect(todoUpdates[0]).toMatchObject({
+        todos: [
+          expect.objectContaining({
+            content: 'Single restored todo',
+          }),
+        ],
+      });
+      expect(
+        kvRead.mock.calls.filter(([key]) => key === 'workPlan'),
+      ).toHaveLength(1);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('retries ghost display restore after a stale async read', async () => {
+    const messages: unknown[] = [];
+    let releaseRead: () => void = () => undefined;
+    let markReadStarted: () => void = () => undefined;
+    const firstRead = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    const firstReadStarted = new Promise<void>((resolve) => {
+      markReadStarted = resolve;
+    });
+    let shouldDelayFirstWorkPlanRead = true;
+    const kvRead = vi.fn(async (key: string) => {
+      if (key === 'workPlan' && shouldDelayFirstWorkPlanRead) {
+        shouldDelayFirstWorkPlanRead = false;
+        markReadStarted();
+        await firstRead;
+      }
+      if (key === 'workPlan') {
+        return {
+          todos: [
+            {
+              content: 'Delayed todo',
+              status: 'pending',
+              activeForm: 'Restoring delayed todo',
+            },
+          ],
+          plan: null,
+          planSummary: null,
+        };
+      }
+      return undefined;
+    });
+    const bridge = await createBridge(messages, {
+      kvRead,
+      streamSnapshotStore: createStreamSnapshotStore([
+        {
+          streamId: 'ghost-one',
+          label: 'ghost-one',
+          agentCategory: AGENT_CATEGORY.WORKFLOW,
+          lastKnownStatus: STREAM_STATUS.STOPPED,
+          creationTimestamp: 1_000,
+          persistedAt: 2_000,
+        },
+        {
+          streamId: 'ghost-two',
+          label: 'ghost-two',
+          agentCategory: AGENT_CATEGORY.WORKFLOW,
+          lastKnownStatus: STREAM_STATUS.STOPPED,
+          creationTimestamp: 1_100,
+          persistedAt: 2_100,
+        },
+      ]),
+    });
+
+    try {
+      bridge.setActiveStream('ghost-one');
+      await firstReadStarted;
+      bridge.setActiveStream('ghost-two');
+      releaseRead();
+      await settleProgressEvents();
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_TODOS).filter(
+          (message) => message.stream === 'ghost-one',
+        ),
+      ).toHaveLength(0);
+
+      messages.length = 0;
+      bridge.setActiveStream('ghost-one');
+      await settleProgressEvents();
+
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_TODOS).at(-1),
+      ).toMatchObject({
+        stream: 'ghost-one',
+        todos: [
+          expect.objectContaining({
+            content: 'Delayed todo',
+          }),
+        ],
+      });
     } finally {
       bridge.dispose();
     }
