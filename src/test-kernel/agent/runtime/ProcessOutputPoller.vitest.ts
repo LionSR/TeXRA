@@ -35,7 +35,11 @@ function createRuntimeHost(): {
 
 async function makeProcessHandle(
   runtimeHost: AgentRuntimeHost,
-  options: { assignOutputPaths?: boolean } = {},
+  options: {
+    assignOutputPaths?: boolean;
+    stdout?: string | Buffer;
+    stderr?: string | Buffer;
+  } = {},
 ): Promise<{
   handle: ProcessExecutionHandle;
   stdoutPath: string;
@@ -45,8 +49,8 @@ async function makeProcessHandle(
   tmpDirs.push(dir);
   const stdoutPath = path.join(dir, 'stdout.log');
   const stderrPath = path.join(dir, 'stderr.log');
-  await fs.writeFile(stdoutPath, 'out-1');
-  await fs.writeFile(stderrPath, 'err-1');
+  await fs.writeFile(stdoutPath, options.stdout ?? 'out-1');
+  await fs.writeFile(stderrPath, options.stderr ?? 'err-1');
 
   const handle = new ProcessExecutionHandle(
     'exec-1',
@@ -177,6 +181,29 @@ describe('ProcessOutputPoller', () => {
           executionId: 'exec-1',
           stdout: 'out-1',
           stderr: 'err-1',
+        },
+      },
+    ]);
+  });
+
+  it('flushes buffered incomplete UTF-8 when process output ends', async () => {
+    const { host, events } = createRuntimeHost();
+    const incompleteEmoji = Buffer.from('🙂').subarray(0, 2);
+    const { handle } = await makeProcessHandle(host, {
+      stdout: incompleteEmoji,
+      stderr: '',
+    });
+
+    await poller.flush(handle, host);
+
+    expect(events).toEqual([
+      {
+        event: 'updateProcessOutput',
+        payload: {
+          parentStreamId: 'parent-stream',
+          executionId: 'exec-1',
+          stdout: '\uFFFD',
+          stderr: '',
         },
       },
     ]);
