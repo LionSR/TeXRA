@@ -1,11 +1,6 @@
 import * as vscode from 'vscode';
 
-import { createProgressViewApprovalCommandHandlers } from '@controllers/progressView/ProgressViewApprovalCommandHandlers';
-import { createProgressViewBypassCommandHandlers } from '@controllers/progressView/ProgressViewBypassCommandHandlers';
-import { createProgressViewFileCommandHandlers } from '@controllers/progressView/ProgressViewFileCommandHandlers';
-import { createProgressViewFollowUpCommandHandlers } from '@controllers/progressView/ProgressViewFollowUpCommandHandlers';
-import { createProgressViewLifecycleCommandHandlers } from '@controllers/progressView/ProgressViewLifecycleCommandHandlers';
-import { createProgressViewRunCommandHandlers } from '@controllers/progressView/ProgressViewRunCommandHandlers';
+import { createProgressViewCommandHandlers } from '@controllers/progressView/ProgressViewCommandHandlers';
 import { ProgressStreamLifecycleController } from '@controllers/progressView/ProgressStreamLifecycleController';
 import {
   ProgressFollowUpController,
@@ -172,27 +167,90 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.POP_OUT]: () => this.provider.popOutToEditor(),
       [PROGRESS_VIEW_COMMANDS.POP_BACK]: () => this.provider.popBackToSidebar(),
 
-      // Stream management
-      ...createProgressViewLifecycleCommandHandlers({
-        setActiveStream: (stream) => this.provider.setActiveStream(stream),
-        setAgentFilter: (filter) => {
-          this.provider.state.agentCategoryFilter = filter;
-          this.provider.syncFullView();
+      // Shared progress command groups
+      ...createProgressViewCommandHandlers({
+        lifecycle: {
+          setActiveStream: (stream) => this.provider.setActiveStream(stream),
+          setAgentFilter: (filter) => {
+            this.provider.state.agentCategoryFilter = filter;
+            this.provider.syncFullView();
+          },
+          deleteStream: (stream) =>
+            this.streamLifecycleController.deleteStream(stream),
+          deleteAllStreams: () => this.handleDeleteAll(),
+          stopStream: (stream) =>
+            this.streamLifecycleController.stopStream(stream),
         },
-        deleteStream: (stream) =>
-          this.streamLifecycleController.deleteStream(stream),
-        deleteAllStreams: () => this.handleDeleteAll(),
-        stopStream: (stream) =>
-          this.streamLifecycleController.stopStream(stream),
+        run: {
+          resumeStream: (stream) =>
+            this.workflowActionsController.resume(stream),
+          runNewStream: (stream) =>
+            this.workflowActionsController.runNew(stream),
+        },
+        followUp: {
+          sendFollowUp: async ({ stream, text, mediaFiles }) => {
+            await vscode.commands.executeCommand('texra.sendFollowUp', {
+              stream,
+              text,
+              ...(mediaFiles && mediaFiles.length > 0 ? { mediaFiles } : {}),
+            });
+          },
+          reportImageSaveError: (_image, error) => {
+            // Best-effort: a failed image save must not block the text, but log
+            // it so a missing attachment is diagnosable.
+            this.logger.warn(
+              this.channel,
+              `Failed to save pasted follow-up image: ${toErrorMessage(error)}`,
+            );
+          },
+        },
+        bypass: {
+          runtimeHost: extensionAgentRuntimeHost,
+          showInfo: (message) => vscode.window.showInformationMessage(message),
+        },
+        file: {
+          openFile: async (file, line) =>
+            vscode.commands.executeCommand('texra.openFile', file, line),
+          openFileCompile: async (file) =>
+            vscode.commands.executeCommand('texra.openFileCompile', file),
+          openTaskStorage: (stream) =>
+            this.workflowFileActionsController.openTaskStorage(stream),
+          compareOriginal: (file, base) =>
+            this.workflowFileActionsController.compareOriginal(file, base),
+          comparePrevious: (file, base, previous) =>
+            this.workflowFileActionsController.comparePrevious(
+              file,
+              base,
+              previous,
+            ),
+          acceptFile: (file, base) =>
+            this.workflowFileActionsController.acceptFile(file, base),
+          mergeFile: (file, base) =>
+            this.workflowFileActionsController.mergeFile(file, base),
+          latexdiffFile: (file, base) =>
+            this.workflowFileActionsController.latexdiffFile(file, base),
+          openLabel: (label) =>
+            this.workflowFileActionsController.openLabel(label),
+        },
+        approval: {
+          handleToolEditApprovalAction: async (message) => {
+            await handleProgressViewToolEditApprovalAction(message);
+            return true;
+          },
+          handleBashApprovalAction: (message) =>
+            handleProgressViewBashApprovalAction(message),
+          handlePlanApprovalAction: (message) =>
+            this.handlePlanApprovalAction(message),
+          handleUserQuestionAction: (message) =>
+            handleUserQuestionAction(message),
+          handleAgentProposalAction: (message) =>
+            this.agentProposalController.handleAction(message),
+        },
       }),
       [PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE]: async (data) =>
         vscode.commands.executeCommand('texra.compactResponse', data.stream),
 
       // Actions
-      ...createProgressViewRunCommandHandlers({
-        resumeStream: (stream) => this.workflowActionsController.resume(stream),
-        runNewStream: (stream) => this.workflowActionsController.runNew(stream),
-      }),
       [PROGRESS_VIEW_COMMANDS.DIFF_STREAM]: (data) =>
         this.workflowActionsController.diffStream(data.stream),
       [PROGRESS_VIEW_COMMANDS.PACK_STREAM]: (data) =>
@@ -214,23 +272,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           await vscode.commands.executeCommand('texra.restoreState', taskState);
         }
       },
-      ...createProgressViewFollowUpCommandHandlers({
-        sendFollowUp: async ({ stream, text, mediaFiles }) => {
-          await vscode.commands.executeCommand('texra.sendFollowUp', {
-            stream,
-            text,
-            ...(mediaFiles && mediaFiles.length > 0 ? { mediaFiles } : {}),
-          });
-        },
-        reportImageSaveError: (_image, error) => {
-          // Best-effort: a failed image save must not block the text, but log
-          // it so a missing attachment is diagnosable.
-          this.logger.warn(
-            this.channel,
-            `Failed to save pasted follow-up image: ${toErrorMessage(error)}`,
-          );
-        },
-      }),
       [PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP]: (data) =>
         this.handlePolishFollowUp(data),
       [PROGRESS_VIEW_COMMANDS.START_RECORDING]: async () => {
@@ -244,10 +285,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE]: async (data) => {
         await vscode.window.showInformationMessage(data.text);
       },
-      ...createProgressViewBypassCommandHandlers({
-        runtimeHost: extensionAgentRuntimeHost,
-        showInfo: (message) => vscode.window.showInformationMessage(message),
-      }),
       [PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG]: async (data) => {
         const restored =
           await this.agentProposalController.restoreProposalConfig(
@@ -266,20 +303,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           );
         }
       },
-      ...createProgressViewApprovalCommandHandlers({
-        handleToolEditApprovalAction: async (message) => {
-          await handleProgressViewToolEditApprovalAction(message);
-          return true;
-        },
-        handleBashApprovalAction: (message) =>
-          handleProgressViewBashApprovalAction(message),
-        handlePlanApprovalAction: (message) =>
-          this.handlePlanApprovalAction(message),
-        handleUserQuestionAction: (message) =>
-          handleUserQuestionAction(message),
-        handleAgentProposalAction: (message) =>
-          this.agentProposalController.handleAction(message),
-      }),
       [PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION]: async (data) => {
         if (data.action === 'draft') {
           await persistOpenTurnDraft({
@@ -329,32 +352,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         this.processToolUseFollowup(data, true),
       [PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER]: (data) =>
         this.handleRunCompileFixer(data.stream),
-
-      // File operations
-      ...createProgressViewFileCommandHandlers({
-        openFile: async (file, line) =>
-          vscode.commands.executeCommand('texra.openFile', file, line),
-        openFileCompile: async (file) =>
-          vscode.commands.executeCommand('texra.openFileCompile', file),
-        openTaskStorage: (stream) =>
-          this.workflowFileActionsController.openTaskStorage(stream),
-        compareOriginal: (file, base) =>
-          this.workflowFileActionsController.compareOriginal(file, base),
-        comparePrevious: (file, base, previous) =>
-          this.workflowFileActionsController.comparePrevious(
-            file,
-            base,
-            previous,
-          ),
-        acceptFile: (file, base) =>
-          this.workflowFileActionsController.acceptFile(file, base),
-        mergeFile: (file, base) =>
-          this.workflowFileActionsController.mergeFile(file, base),
-        latexdiffFile: (file, base) =>
-          this.workflowFileActionsController.latexdiffFile(file, base),
-        openLabel: (label) =>
-          this.workflowFileActionsController.openLabel(label),
-      }),
     };
   }
 
