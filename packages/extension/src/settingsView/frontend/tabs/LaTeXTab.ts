@@ -324,7 +324,8 @@ export class LaTeXTab extends LitElement {
          inline command text live here. */
       wa-callout.prerequisite-hint {
         margin-bottom: var(--wa-space-xs);
-        --padding: var(--wa-space-xs);
+        /* wa-callout ignores --padding; set the real property (its :host hardcodes 1em). */
+        padding: var(--wa-space-xs);
       }
 
       .hint-title {
