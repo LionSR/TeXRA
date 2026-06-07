@@ -1,7 +1,13 @@
-import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { test, expect } from '@playwright/test';
 
@@ -25,34 +31,52 @@ const MEMORY_FILE_CONTENT = `${MEMORY_PREVIEW_TEXT}
 It verifies that the same workspace storage is read after relaunch.
 `;
 
-// Mirror of `workspaceStorageId` from
-// `src/platform/defaults/workspaceStorage.ts`. Inlined because Playwright's
-// ESM loader cannot safely import root TypeScript modules through `.js`
-// specifiers during test discovery.
-function workspaceStorageId(workspacePath: string | undefined): string {
-  const source = workspacePath?.trim() || 'no-workspace';
-  const hash = createHash('sha256').update(source).digest('hex').slice(0, 8);
-  const stem =
-    source === 'no-workspace'
-      ? 'no-workspace'
-      : basename(source)
-          .replaceAll(/[^A-Za-z0-9._-]/g, '-')
-          .replaceAll(/-+/g, '-')
-          .replaceAll(/^-|-$/g, '') || 'workspace';
-  return `${stem}-${hash}`;
+function tryReadWorkspaceSidecar(path: string): string | undefined {
+  try {
+    const sidecar = JSON.parse(readFileSync(path, 'utf8')) as {
+      path?: unknown;
+    };
+    return typeof sidecar.path === 'string' ? resolve(sidecar.path) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function findWorkspaceStoragePath(input: {
+  userDataPath: string;
+  workspacePath: string;
+}): string {
+  const targetWorkspacePath = resolve(input.workspacePath);
+
+  for (const storageRoot of readdirSync(input.userDataPath, {
+    withFileTypes: true,
+  })) {
+    if (!storageRoot.isDirectory()) continue;
+
+    const storageRootPath = join(input.userDataPath, storageRoot.name);
+    for (const candidate of readdirSync(storageRootPath, {
+      withFileTypes: true,
+    })) {
+      if (!candidate.isDirectory()) continue;
+
+      const candidatePath = join(storageRootPath, candidate.name);
+      const sidecarPath = join(candidatePath, '_workspace.json');
+      if (tryReadWorkspaceSidecar(sidecarPath) === targetWorkspacePath) {
+        return candidatePath;
+      }
+    }
+  }
+
+  throw new Error(
+    `No TeXRA workspace storage directory found for ${targetWorkspacePath}`,
+  );
 }
 
 function writeMemoryEntry(input: {
   userDataPath: string;
   workspacePath: string;
 }): void {
-  const workspaceId = workspaceStorageId(resolve(input.workspacePath));
-  const memoryDir = join(
-    input.userDataPath,
-    'workspace-storage',
-    workspaceId,
-    'memories',
-  );
+  const memoryDir = join(findWorkspaceStoragePath(input), 'memories');
   mkdirSync(memoryDir, { recursive: true });
   writeFileSync(join(memoryDir, MEMORY_FILE_NAME), MEMORY_FILE_CONTENT, 'utf8');
 }
