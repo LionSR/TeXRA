@@ -6,8 +6,7 @@
  * routing; this module exposes a simple typed API over those primitives.
  */
 
-import { Writable } from 'node:stream';
-import type { Readable } from 'node:stream';
+import { type Readable, Writable } from 'node:stream';
 
 import {
   createMessageConnection,
