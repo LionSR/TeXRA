@@ -12,7 +12,7 @@ import { formatDuration } from '@utils/core';
 // Local imports - CLI state
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { visibleSubagentRows } from './childStreamMerge';
-import { streamScopeDisplayLabel } from './streamLabels';
+import { streamDisplayLabel } from './streamViews';
 import { orderedDescendantsFromTree } from './focusCycle';
 import { transcriptEntryLines } from './transcriptLines';
 import type {
@@ -333,14 +333,14 @@ export function resolveChildControlDisplayTarget({
     streams,
   });
   const streamLabel = target.streamId
-    ? streamScopeDisplayLabel({
+    ? streamDisplayLabel({
         parentStream,
         streamId: target.streamId,
         streams,
       })
     : undefined;
   const fallbackFromStreamLabel = target.fallbackFromStreamId
-    ? streamScopeDisplayLabel({
+    ? streamDisplayLabel({
         parentStream,
         streamId: target.fallbackFromStreamId,
         streams,
