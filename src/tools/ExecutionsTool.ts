@@ -31,10 +31,7 @@ import {
   ProcessExecutionHandle,
   executionRegistry,
 } from '@agent/runtime/executionRegistry';
-import {
-  bindExecutionSubscription,
-  unbindExecutionSubscription,
-} from '@agent/runtime/ExecutionSubscriptionBinder';
+import { executionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
 import { onFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
 
 // Local imports - utils
@@ -667,7 +664,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       );
     }
     try {
-      bindExecutionSubscription(streamId, executionId, ctx.runtimeHost);
+      executionSubscriptionBinder.bind(streamId, executionId, ctx.runtimeHost);
     } catch (err) {
       throw new ToolError(toErrorMessage(err));
     }
@@ -684,7 +681,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         'unsubscribe must be called from within an agent stream.',
       );
     }
-    const removed = unbindExecutionSubscription(streamId, executionId);
+    const removed = executionSubscriptionBinder.unbind(streamId, executionId);
     return {
       output: removed
         ? `Unsubscribed from ${executionId}.`
