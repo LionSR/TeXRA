@@ -15,12 +15,12 @@ import { shouldRenderRunProgress } from '@cli/runtime/runProgressRenderer';
 import { effectiveCliApiMode } from '@cli/runtime/apiAccessMode';
 import { toErrorMessage } from '@common/errors/errorMessage';
 
-type CliRunModelCandidateSource = Extract<
+export type CliRunModelCandidateSource = Extract<
   CliModelSelectionSource,
   'override' | 'env' | 'config' | 'builtin'
 >;
 
-interface CliRunModelCandidate {
+export interface CliRunModelCandidate {
   readonly model: string;
   readonly source: CliRunModelCandidateSource;
 }
@@ -39,7 +39,13 @@ export function assertExplicitModelKnown(
   return trimmed;
 }
 
-function resolveCliRunModelCandidateDetails(
+/**
+ * Resolve the model candidate for a headless runner with the shared
+ * precedence: explicit `-m` > `TEXRA_MODEL` env > configured `chat`/`run`
+ * model > builtin. The source is part of the contract because model access
+ * fallback policy depends on where the value came from.
+ */
+export function resolveCliRunModelCandidate(
   context: CliContext,
   modelOverride: string | undefined,
   role: 'chat' | 'run',
@@ -54,28 +60,12 @@ function resolveCliRunModelCandidateDetails(
   return { model: CLI_BUILTIN_DEFAULT_MODEL, source: 'builtin' };
 }
 
-/**
- * Resolve the model for a headless runner with the shared precedence:
- * explicit `-m` > `TEXRA_MODEL` env > configured `chat`/`run` model > builtin.
- */
-export function resolveCliRunModelCandidate(
-  context: CliContext,
-  modelOverride: string | undefined,
-  role: 'chat' | 'run',
-): string {
-  return resolveCliRunModelCandidateDetails(context, modelOverride, role).model;
-}
-
 export async function resolveCliRunModel(
   context: CliContext,
   modelOverride: string | undefined,
   role: 'chat' | 'run',
 ): Promise<string> {
-  const candidate = resolveCliRunModelCandidateDetails(
-    context,
-    modelOverride,
-    role,
-  );
+  const candidate = resolveCliRunModelCandidate(context, modelOverride, role);
   await initCliPlatform({ ...context, quietLogs: true });
   const apiMode = effectiveCliApiMode(context);
   try {

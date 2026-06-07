@@ -83,9 +83,10 @@ describe('resolveCliRunModel precedence', () => {
       envModel: OTHER_MODEL,
       cliConfig: runConfig('deepseekR'),
     });
-    expect(resolveCliRunModelCandidate(context, KNOWN_MODEL, 'run')).toBe(
-      KNOWN_MODEL,
-    );
+    expect(resolveCliRunModelCandidate(context, KNOWN_MODEL, 'run')).toEqual({
+      model: KNOWN_MODEL,
+      source: 'override',
+    });
   });
 
   it('falls back to env when no explicit model is given', () => {
@@ -93,34 +94,41 @@ describe('resolveCliRunModel precedence', () => {
       envModel: OTHER_MODEL,
       cliConfig: runConfig('deepseekR'),
     });
-    expect(resolveCliRunModelCandidate(context, undefined, 'run')).toBe(
-      OTHER_MODEL,
-    );
+    expect(resolveCliRunModelCandidate(context, undefined, 'run')).toEqual({
+      model: OTHER_MODEL,
+      source: 'env',
+    });
   });
 
   it('uses the configured model when no explicit or env model', () => {
     const context = makeContext({ cliConfig: runConfig('deepseekR') });
-    expect(resolveCliRunModelCandidate(context, undefined, 'run')).toBe(
-      'deepseekR',
-    );
+    expect(resolveCliRunModelCandidate(context, undefined, 'run')).toEqual({
+      model: 'deepseekR',
+      source: 'config',
+    });
   });
 
   it('reads the role-specific config section', () => {
     const context = makeContext({
       cliConfig: { chat: { model: OTHER_MODEL }, run: { model: 'deepseekR' } },
     });
-    expect(resolveCliRunModelCandidate(context, undefined, 'chat')).toBe(
-      OTHER_MODEL,
-    );
-    expect(resolveCliRunModelCandidate(context, undefined, 'run')).toBe(
-      'deepseekR',
-    );
+    expect(resolveCliRunModelCandidate(context, undefined, 'chat')).toEqual({
+      model: OTHER_MODEL,
+      source: 'config',
+    });
+    expect(resolveCliRunModelCandidate(context, undefined, 'run')).toEqual({
+      model: 'deepseekR',
+      source: 'config',
+    });
   });
 
   it('falls back to the builtin default when nothing else is set', () => {
-    expect(resolveCliRunModelCandidate(makeContext(), undefined, 'run')).toBe(
-      CLI_BUILTIN_DEFAULT_MODEL,
-    );
+    expect(
+      resolveCliRunModelCandidate(makeContext(), undefined, 'run'),
+    ).toEqual({
+      model: CLI_BUILTIN_DEFAULT_MODEL,
+      source: 'builtin',
+    });
   });
 
   it('suppresses fallback notices for the implicit builtin default', async () => {
