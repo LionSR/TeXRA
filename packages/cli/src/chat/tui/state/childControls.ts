@@ -12,7 +12,11 @@ import { formatDuration } from '@utils/core';
 // Local imports - CLI state
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { visibleSubagentRows } from './childStreamMerge';
-import { activeStreamParentOrSelfId, streamDisplayLabel } from './streamViews';
+import {
+  activeStreamParentOrSelfId,
+  nearestActiveStreamAncestor,
+  streamDisplayLabel,
+} from './streamViews';
 import { orderedDescendantsFromTree } from './focusCycle';
 import { transcriptEntryLines } from './transcriptLines';
 import type {
@@ -284,20 +288,17 @@ export function resolveChildControlStreamTarget({
     return { streamId: activeStreamId, slice: activeSlice };
   }
 
-  const visited = new Set<StreamTabId>([activeStreamId]);
-  let parentStreamId = parentStream.get(activeStreamId);
-  while (parentStreamId && !visited.has(parentStreamId)) {
-    visited.add(parentStreamId);
-    const parentSlice = streams.get(parentStreamId);
-    const parentHasRows = hasChildControlItems(parentSlice, mode);
-    if (!parentHasRows) {
-      parentStreamId = parentStream.get(parentStreamId);
-      continue;
-    }
+  const ancestor = nearestActiveStreamAncestor({
+    activeStreamId,
+    parentStream,
+    values: streams,
+    canUseValue: (slice) => hasChildControlItems(slice, mode),
+  });
+  if (ancestor) {
     return {
       fallbackFromStreamId: activeStreamId,
-      streamId: parentStreamId,
-      slice: parentSlice,
+      streamId: ancestor.streamId,
+      slice: ancestor.value,
     };
   }
 
