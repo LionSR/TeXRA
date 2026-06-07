@@ -2,7 +2,18 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { Plan, TodoItem } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
+import type {
+  ActiveChildInfo,
+  CompileFailure,
+  FileLocation,
+  OutputFileInfo,
+  Plan,
+  StorageKey,
+  StreamTabId,
+  TodoItem,
+  TokenUsageStats,
+} from '@shared/schemas';
 import { ProgressEventHandler } from '@shared/progressView/backend/events/ProgressEventHandler';
 import type {
   SyncStreamContentPayload,
@@ -45,8 +56,47 @@ const plan: Plan = {
   ],
 };
 
-describe('progress view work-plan hydration', () => {
-  it('syncs todos and plan from the current package progress-view state', async () => {
+const stream = 'stream:shared-snapshot' as StreamTabId;
+const parentStream = 'stream:parent' as StreamTabId;
+const runId = 'run-1' as StorageKey;
+const activeSubagent: ActiveChildInfo = {
+  executionId: 'child-1',
+  agentName: 'search',
+  childStreamId: 'stream:child',
+};
+
+function workspaceFile(relativePath: string): FileLocation {
+  return {
+    kind: 'workspace',
+    absolutePath: `/workspace/${relativePath}`,
+    relativePath,
+  };
+}
+
+const usage: TokenUsageStats = {
+  inputTokens: 120,
+  outputTokens: 40,
+  cost: 0.16,
+};
+
+const outputFile: OutputFileInfo = {
+  source: 'document',
+  location: workspaceFile('paper.tex'),
+  round: 1,
+  lineage: null,
+  diff: null,
+};
+
+const compileFailure: CompileFailure = {
+  round: 1,
+  displayName: 'paper.tex',
+  output: workspaceFile('paper.pdf'),
+  log: workspaceFile('paper.log'),
+  logRelativePath: 'paper.log',
+};
+
+describe('progress view snapshot hydration', () => {
+  it('syncs the durable display snapshot from the shared progress-view backend', async () => {
     const state = new ProgressViewState(new MemoryMementoStorage());
     await state.snapshots.load([]);
     const messages: SyncStreamContentPayload[] = [];
@@ -68,18 +118,54 @@ describe('progress view work-plan hydration', () => {
       () => false,
     );
 
-    state.snapshots.setTodos('stream:work-plan', [todo]);
-    state.snapshots.setPlan('stream:work-plan', plan);
-    handler.syncStreamContent('stream:work-plan');
+    state.snapshots.addOutputFiles(stream, { 1: [outputFile] });
+    state.snapshots.updateMissingOutputs(stream, { 1: ['paper.pdf'] });
+    state.snapshots.updateCompileFailures(stream, { 1: [compileFailure] });
+    state.snapshots.addUsage(stream, runId, usage);
+    state.snapshots.setTodos(stream, [todo]);
+    state.snapshots.setPlan(stream, plan);
+    state.snapshots.setParentStream(stream, parentStream);
+    state.updateStreamHints(stream, { agentCategory: AgentCategory.ToolUse });
+    state.getOrCreateStreamState(stream, AgentCategory.ToolUse);
+    state.updateStreamState(stream, (prev) => ({
+      ...prev,
+      conversationProgress: { conversationTurns: 3, toolCallCount: 5 },
+      activeSubagents: [activeSubagent],
+      finishedSubagentCount: 2,
+    }));
 
-    expect(bridge.syncStream).toHaveBeenCalledWith('stream:work-plan');
+    handler.syncStreamContent(stream, { includeActiveState: true });
+
+    expect(bridge.syncStream).toHaveBeenCalledWith(stream);
     expect(messages.at(-1)).toMatchObject({
-      stream: 'stream:work-plan',
+      stream,
       action: 'render',
+      workflowFiles: {
+        1: [outputFile],
+      },
+      workflowMissingOutputs: {
+        1: ['paper.pdf'],
+      },
+      workflowCompileFailures: {
+        1: [compileFailure],
+      },
+      runUsage: {
+        [runId]: usage,
+      },
       todos: [todo],
       plan,
+      queuedFollowUps: [],
+      agentCategory: AgentCategory.ToolUse,
+      conversationProgress: { conversationTurns: 3, toolCallCount: 5 },
+      badges: {
+        activeSubagents: [activeSubagent],
+        finishedSubagentCount: 2,
+        activeProcesses: [],
+        finishedProcessCount: 0,
+      },
+      parentStreamId: parentStream,
     });
-    expect(state.snapshots.getWorkPlan('stream:work-plan')).toEqual({
+    expect(state.snapshots.getWorkPlan(stream)).toEqual({
       todos: [todo],
       plan,
       planSummary: plan.summary,
