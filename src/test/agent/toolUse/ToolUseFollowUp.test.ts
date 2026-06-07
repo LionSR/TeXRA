@@ -14,8 +14,9 @@ import {
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 // Type imports
+import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-import * as AgentRegistry from '@agent/toolUse/ToolUseAgentRegistry';
+import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import type { StreamTabId } from '@shared/schemas';
 
 describe('ToolUseFollowUp', () => {
@@ -44,21 +45,21 @@ describe('ToolUseFollowUp', () => {
     lastUpdated: Date.now(),
   };
 
-  const originalGetFlowContext = AgentRegistry.getToolUseFlowContext;
-
   afterEach(() => {
-    (AgentRegistry as any).getToolUseFlowContext = originalGetFlowContext;
+    interruptRegistry.unregister(streamId);
   });
 
   it('sends follow-ups to active flow contexts', async () => {
     const calls: string[] = [];
-    (AgentRegistry as any).getToolUseFlowContext = () => ({
+    interruptRegistry.register(streamId, {
       session: {
         appendFollowUp: (text: string) => {
           calls.push(text);
         },
       },
-    });
+      modelHandler: {},
+      interrupt: () => {},
+    } as unknown as ToolUseFlowContext);
 
     const result = await sendFollowUp(streamId, 'hello');
 
@@ -68,8 +69,6 @@ describe('ToolUseFollowUp', () => {
   });
 
   it('queues follow-ups when children are still running', async () => {
-    (AgentRegistry as any).getToolUseFlowContext = () => undefined;
-
     const parentStreamId = 'parent-stream-children' as StreamTabId;
     const childStreamId = 'child-stream-children' as StreamTabId;
     const executionId = 'exec-children-running';
@@ -103,8 +102,6 @@ describe('ToolUseFollowUp', () => {
   it('survives prior queue release when children are running', async () => {
     // Regression: without force:true, enqueue() silently drops messages
     // on streams previously released by sessionLifecycle.dispose().
-    (AgentRegistry as any).getToolUseFlowContext = () => undefined;
-
     const parentStreamId = 'parent-stream-released' as StreamTabId;
     const childStreamId = 'child-stream-released' as StreamTabId;
     const executionId = 'exec-released';
