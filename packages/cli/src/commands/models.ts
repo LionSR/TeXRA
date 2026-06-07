@@ -1,16 +1,17 @@
 import { defineCommand } from 'citty';
 
-import type { ModelOptionData } from '@shared/schemas';
-
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { writeTextStderr } from '../runtime/logSinks';
 import { effectiveCliApiMode } from '../runtime/apiAccessMode';
 import {
+  cliModelRecord,
   findCliModelAccessEntry,
-  formatCliNoAvailableModelsRecovery,
+  formatCliModelDetails,
   getCliModelAccessList,
-  runnableCliModelAccessEntries,
+  formatNoListableModelsMessage,
+  listableModelAccessEntries,
+  type CliModelListOptions,
 } from '../runtime/modelAccess';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -23,43 +24,6 @@ import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 type ModelAccessList = Awaited<ReturnType<typeof getCliModelAccessList>>;
-
-/**
- * Output projection for JSON/NDJSON: prefix the model record with `id` so the
- * model id is addressable under the same key (`.id`) as every other CLI
- * resource (`agents`, `multi-agent`, `history`). `value` is kept for backward
- * compatibility with existing scripts.
- */
-export function cliModelRecord(
-  model: ModelOptionData,
-): { id: string } & ModelOptionData {
-  return { id: model.value, ...model };
-}
-
-export function listableModelAccessEntries(
-  models: ModelAccessList,
-  options: {
-    readonly includeUnavailable?: boolean;
-  } = {},
-): ModelAccessList {
-  if (options.includeUnavailable === true) return models;
-  return runnableCliModelAccessEntries(models);
-}
-
-export function formatNoListableModelsMessage(
-  apiMode: CliContext['apiMode'],
-  options: { readonly includeUnavailable?: boolean } = {},
-): string {
-  const statusHint =
-    options.includeUnavailable === true
-      ? 'No model records were returned for this installation.'
-      : 'Run `texra models list --all` to see unavailable models and access status.';
-  return [
-    'No models are currently available.',
-    statusHint,
-    formatCliNoAvailableModelsRecovery(apiMode),
-  ].join('\n');
-}
 
 async function loadModelAccessList(context: CliContext): Promise<
   | { models: ModelAccessList; apiMode: CliContext['apiMode'] }
@@ -81,7 +45,7 @@ async function loadModelAccessList(context: CliContext): Promise<
 
 async function listModels(
   context: CliContext,
-  options: { readonly includeUnavailable?: boolean } = {},
+  options: CliModelListOptions = {},
 ): Promise<number> {
   const result = await loadModelAccessList(context);
   if ('error' in result) {
@@ -110,24 +74,6 @@ async function listModels(
   return CliExitCode.Success;
 }
 
-function formatModelDetails(entry: ModelAccessList[number]): string {
-  const { model, status } = entry;
-  const lines: string[] = [];
-  lines.push(`id: ${model.value}`);
-  lines.push(`label: ${model.label}`);
-  if (model.provider) lines.push(`provider: ${model.provider}`);
-  lines.push(`status: ${status}`);
-  if (model.availabilityLabel)
-    lines.push(`availability: ${model.availabilityLabel}`);
-  if (model.context) lines.push(`context: ${model.context}`);
-  if (model.cost) lines.push(`cost: ${model.cost}`);
-  if (model.hint) {
-    lines.push('');
-    lines.push(model.hint);
-  }
-  return lines.join('\n');
-}
-
 async function showModel(context: CliContext, id: string): Promise<number> {
   const result = await loadModelAccessList(context);
   if ('error' in result) {
@@ -144,7 +90,7 @@ async function showModel(context: CliContext, id: string): Promise<number> {
   emitCliResult(context, {
     json: cliModelRecord(entry.model),
     ndjson: { kind: 'model', model: cliModelRecord(entry.model) },
-    text: formatModelDetails(entry),
+    text: formatCliModelDetails(entry),
   });
   return CliExitCode.Success;
 }
