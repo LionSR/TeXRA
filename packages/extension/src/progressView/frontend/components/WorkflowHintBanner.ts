@@ -26,7 +26,8 @@ export class WorkflowHintBanner extends LitElement {
     }
     wa-callout {
       margin: 0 0 var(--wa-space-2xs) 0;
-      --padding: var(--wa-space-2xs) var(--wa-space-xs);
+      /* wa-callout ignores --padding; set the real property (its :host hardcodes 1em). */
+      padding: var(--wa-space-2xs) var(--wa-space-xs);
     }
     .banner-row {
       display: flex;
