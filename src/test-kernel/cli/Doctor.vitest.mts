@@ -312,6 +312,34 @@ describe('CLI doctor', () => {
     );
   });
 
+  it('falls back to unknown for an empty auth account label', async () => {
+    const report = await buildDoctorReport(context, {
+      nodeVersion: '24.15.0',
+      authProfile: async () => ({
+        authenticated: true,
+        accountLabel: '',
+      }),
+      modelAccessList: async () =>
+        [
+          {
+            available: true,
+            status: 'available',
+            model: { value: 'deepseekT', label: 'DeepSeek T' },
+          },
+        ] as never,
+      latexToolchain: async () => ({
+        ...latexProbe,
+        tools: latexProbe.tools.map((tool) => ({ ...tool, installed: true })),
+      }),
+      pathStat: async () => directory,
+      pathAccess: async () => undefined,
+    });
+
+    expect(report.checks.find((check) => check.id === 'auth')?.message).toBe(
+      'Stored sign-in found for unknown.',
+    );
+  });
+
   it('emits stable ndjson record kinds', async () => {
     const report = await buildDoctorReport(context, {
       nodeVersion: '24.15.0',

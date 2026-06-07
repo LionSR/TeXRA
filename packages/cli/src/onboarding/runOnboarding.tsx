@@ -29,10 +29,10 @@ import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
 import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
 import { Select, type SelectItem } from '../chat/tui/ui/Select';
-import { formatCliAccountLabelForDisplay } from '../runtime/accountDisplay';
 import { type CliApiMode } from '../runtime/apiAccessMode';
 import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
+import { CLI_OAUTH_PROVIDER_ITEMS } from '../runtime/oauthProviderDisplay';
 import {
   CLI_MANUAL_AUTH_REMOTE_HINT,
   CLI_MANUAL_AUTH_URL_PROMPT,
@@ -253,9 +253,7 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
           finish({
             configured: true,
             declined: false,
-            summary: `Signed in as ${formatCliAccountLabelForDisplay(
-              label,
-            )}. Included relay access is active.`,
+            summary: `Signed in as ${label}. Included relay access is active.`,
           })
         }
         onError={(message) => {
@@ -460,16 +458,13 @@ function RelayProviderStep(props: {
       error={props.error}
       hints={[
         { key: '↑/↓', action: 'navigate' },
-        { key: '1-2/Enter', action: 'select' },
+        { key: `1-${CLI_OAUTH_PROVIDER_ITEMS.length}/Enter`, action: 'select' },
         { key: 'n', action: 'no-browser' },
         { key: 'Esc', action: 'back' },
       ]}
     >
       <Select<OAuthProvider>
-        items={[
-          { value: 'github', label: 'GitHub' },
-          { value: 'google', label: 'Google' },
-        ]}
+        items={CLI_OAUTH_PROVIDER_ITEMS}
         activeValue={props.activeProvider}
         onSelect={props.onSelect}
         onCancel={props.onCancel}
