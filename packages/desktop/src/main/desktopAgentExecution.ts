@@ -201,6 +201,8 @@ export class DesktopProgressBridge {
   private readonly durableSnapshots = new StreamSnapshotStore();
   /** Ghost streams whose persisted display has already been restored this session. */
   private readonly restoredDisplaySent = new Set<StreamTabId>();
+  /** Ghost streams with an async persisted-display restore already pending. */
+  private readonly restoredDisplayInFlight = new Set<StreamTabId>();
 
   readonly runtimeHost: AgentRuntimeHost;
 
@@ -489,6 +491,7 @@ export class DesktopProgressBridge {
     this.agentProposals.clear();
     this.restoredStreams.clear();
     this.restoredDisplaySent.clear();
+    this.restoredDisplayInFlight.clear();
   }
 
   private send(message: ProgressViewOutboundMessage): void {
@@ -518,15 +521,21 @@ export class DesktopProgressBridge {
   private sendRestoredDisplay(streamId: StreamTabId): void {
     if (
       !this.restoredStreams.has(streamId) ||
-      this.restoredDisplaySent.has(streamId)
+      this.restoredDisplaySent.has(streamId) ||
+      this.restoredDisplayInFlight.has(streamId)
     ) {
       return;
     }
-    this.restoredDisplaySent.add(streamId);
+    this.restoredDisplayInFlight.add(streamId);
     void this.durableSnapshots
       .read(streamId)
       .then((snap) => {
-        if (streamId !== this.state.activeStream) return;
+        if (
+          streamId !== this.state.activeStream ||
+          !this.restoredStreams.has(streamId)
+        ) {
+          return;
+        }
         // The persisted snapshot is authoritative for a restored stream: send
         // todos/plan verbatim so an intentionally-empty list or null plan CLEARS
         // any stale renderer state instead of being skipped — matching the CLI
@@ -571,11 +580,15 @@ export class DesktopProgressBridge {
             reset: true,
           });
         }
+        this.restoredDisplaySent.add(streamId);
       })
       .catch((error: unknown) => {
         this.logger.warn(`Failed to restore display for ${streamId}`, {
           data: error,
         });
+      })
+      .finally(() => {
+        this.restoredDisplayInFlight.delete(streamId);
       });
   }
 
@@ -696,6 +709,7 @@ export class DesktopProgressBridge {
     this.deleteAgentProposalsForStream(streamId);
     this.workflowFileActions.clearStreamBackups(streamId);
     this.restoredDisplaySent.delete(streamId);
+    this.restoredDisplayInFlight.delete(streamId);
     await OdysseyStore.forget(streamId);
     await this.state.clearStream(streamId);
     this.send({
@@ -728,6 +742,7 @@ export class DesktopProgressBridge {
     // ghosts come back zombie-style after relaunch.
     this.restoredStreams.clear();
     this.restoredDisplaySent.clear();
+    this.restoredDisplayInFlight.clear();
     if (this.options.streamSnapshotStore) {
       void this.options.streamSnapshotStore
         .replaceAll([])
