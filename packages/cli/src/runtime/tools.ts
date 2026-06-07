@@ -27,6 +27,13 @@ export interface CliToolStatusRecord {
   readonly note?: string;
 }
 
+export type CliToolGuideKind = 'install' | 'auth';
+
+export interface CliToolGuide {
+  readonly text: string;
+  readonly command?: string;
+}
+
 const cliToolDefs = (): ExternalToolDef[] =>
   EXTERNAL_TOOL_DEFS.filter(
     (def) => !def.hideFromDashboard && !def.hideFromCli,
@@ -97,6 +104,33 @@ export function cliToolIds(): string[] {
   return cliToolDefs().map((def) => def.id);
 }
 
+export function readCliToolGuide(
+  id: string,
+  kind: CliToolGuideKind,
+): CliToolGuide | undefined {
+  const def = findCliToolDef(id);
+  if (!def) return undefined;
+
+  if (kind === 'install') {
+    const lines = [def.installGuide ?? def.configNotes ?? 'No install guide.'];
+    if (def.installCommand) {
+      lines.push('');
+      lines.push(`Command: ${def.installCommand}`);
+    }
+    if (def.installUrl) {
+      lines.push(`URL: ${def.installUrl}`);
+    }
+    return { text: lines.join('\n'), command: def.installCommand };
+  }
+
+  const lines = [def.authNote ?? def.configNotes ?? 'No auth guide.'];
+  if (def.authCommand) {
+    lines.push('');
+    lines.push(`Command: ${def.authCommand}`);
+  }
+  return { text: lines.join('\n'), command: def.authCommand };
+}
+
 export async function setCliToolEnabled(
   id: string,
   enabled: boolean,
@@ -110,6 +144,18 @@ export async function setCliToolEnabled(
 export function formatCliBoolean(value: boolean | null): string {
   if (value == null) return '-';
   return value ? 'yes' : 'no';
+}
+
+export function formatCliToolNotFoundMessage(id: string): string {
+  return `Tool integration not found: ${id}`;
+}
+
+export function formatCliToolNotToggleableMessage(id: string): string {
+  return `Tool integration is not toggleable: ${id}`;
+}
+
+export function formatCliToolMissingInstallCommandMessage(id: string): string {
+  return `No install command is registered for ${id}.`;
 }
 
 export function formatCliToolList(

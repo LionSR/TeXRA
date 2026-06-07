@@ -10,9 +10,12 @@ import {
   writeTextStdout,
 } from '../runtime/logSinks';
 import {
-  findCliToolDef,
   formatCliToolList,
+  formatCliToolMissingInstallCommandMessage,
+  formatCliToolNotFoundMessage,
+  formatCliToolNotToggleableMessage,
   formatCliToolStatus,
+  readCliToolGuide,
   readCliToolStatus,
   readCliToolStatuses,
   setCliToolEnabled,
@@ -39,7 +42,7 @@ async function showTool(context: CliContext, id: string): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
   const record = await readCliToolStatus(id);
   if (!record) {
-    writeTextStderr(`Tool integration not found: ${id}`);
+    writeTextStderr(formatCliToolNotFoundMessage(id));
     return CliExitCode.Usage;
   }
 
@@ -59,34 +62,11 @@ async function toggleTool(
   await initCliPlatform({ ...context, quietLogs: true });
   const ok = await setCliToolEnabled(id, enabled);
   if (!ok) {
-    writeTextStderr(`Tool integration is not toggleable: ${id}`);
+    writeTextStderr(formatCliToolNotToggleableMessage(id));
     return CliExitCode.Usage;
   }
   writeTextStdout(`${enabled ? 'Enabled' : 'Disabled'} ${id}.`);
   return CliExitCode.Success;
-}
-
-function formatGuide(id: string, kind: 'install' | 'auth'): string | undefined {
-  const def = findCliToolDef(id);
-  if (!def) return undefined;
-  if (kind === 'install') {
-    const lines = [def.installGuide ?? def.configNotes ?? 'No install guide.'];
-    if (def.installCommand) {
-      lines.push('');
-      lines.push(`Command: ${def.installCommand}`);
-    }
-    if (def.installUrl) {
-      lines.push(`URL: ${def.installUrl}`);
-    }
-    return lines.join('\n');
-  }
-
-  const lines = [def.authNote ?? def.configNotes ?? 'No auth guide.'];
-  if (def.authCommand) {
-    lines.push('');
-    lines.push(`Command: ${def.authCommand}`);
-  }
-  return lines.join('\n');
 }
 
 function shellRun(command: string): Promise<number> {
@@ -106,33 +86,33 @@ async function installTool(
   run: boolean,
 ): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
-  const def = findCliToolDef(id);
-  if (!def) {
-    writeTextStderr(`Tool integration not found: ${id}`);
+  const guide = readCliToolGuide(id, 'install');
+  if (!guide) {
+    writeTextStderr(formatCliToolNotFoundMessage(id));
     return CliExitCode.Usage;
   }
 
-  writeTextStdout(formatGuide(id, 'install') ?? '');
+  writeTextStdout(guide.text);
   if (!run) return CliExitCode.Success;
-  if (!def.installCommand) {
-    writeTextStderr(`No install command is registered for ${id}.`);
+  if (!guide.command) {
+    writeTextStderr(formatCliToolMissingInstallCommandMessage(id));
     return CliExitCode.Usage;
   }
-  return shellRun(def.installCommand);
+  return shellRun(guide.command);
 }
 
 async function authTool(context: CliContext, id: string): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
-  const def = findCliToolDef(id);
-  if (!def) {
-    writeTextStderr(`Tool integration not found: ${id}`);
+  const guide = readCliToolGuide(id, 'auth');
+  if (!guide) {
+    writeTextStderr(formatCliToolNotFoundMessage(id));
     return CliExitCode.Usage;
   }
 
-  writeTextStdout(formatGuide(id, 'auth') ?? '');
-  if (!def.authCommand) return CliExitCode.Success;
+  writeTextStdout(guide.text);
+  if (!guide.command) return CliExitCode.Success;
   try {
-    return await shellRun(def.authCommand);
+    return await shellRun(guide.command);
   } catch (error) {
     writeErrorStderr(error);
     return CliExitCode.AgentError;
