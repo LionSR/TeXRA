@@ -2,11 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   cliModelFallbackModeForSource,
+  emptyModelListMessageForCliMode,
   findCliModelAccessEntry,
   formatCliNoAvailableModelsRecovery,
   formatCliNoRunnableModelsLaunchBlock,
   formatCliNoRunnableModelsMessage,
+  formatModelStatusForCliMode,
   getCliModelAccessList,
+  modelSelectItemsForCliMode,
   noRunnableModelAccessReason,
   runnableCliModelAccessEntries,
   resolveCliRunnableModel,
@@ -230,6 +233,234 @@ describe('CLI model access resolution', () => {
     ).toEqual(['deepseekT', 'openrouterOnlyT']);
   });
 
+  it('formats model picker status by active API mode', () => {
+    expect(
+      formatModelStatusForCliMode(
+        model('deepseekT', {
+          model: modelOption('deepseekT', { availability: 'provider-key' }),
+          status: 'api key set',
+        }),
+        'personal',
+      ),
+    ).toBe('api: api key set');
+    expect(
+      formatModelStatusForCliMode(
+        model('sonnet46T', {
+          model: modelOption('sonnet46T', {
+            availability: 'included-access',
+          }),
+          status: 'included access',
+        }),
+        'included',
+      ),
+    ).toBe('relay: included');
+    expect(
+      formatModelStatusForCliMode(
+        model('deepseekT', {
+          model: modelOption('deepseekT', { availability: 'provider-key' }),
+          status: 'api key set',
+        }),
+        'included',
+      ),
+    ).toBe('relay: unavailable; api key set');
+    expect(
+      formatModelStatusForCliMode(
+        model('deepseekT', {
+          model: modelOption('deepseekT', {
+            availability: 'relay-quota-exhausted',
+            availabilityLabel: 'Relay quota exhausted',
+            disabled: true,
+          }),
+          status: 'relay quota exhausted',
+        }),
+        'included',
+      ),
+    ).toBe('relay: quota exhausted');
+    expect(
+      formatModelStatusForCliMode(
+        model('sonnet46T', {
+          model: modelOption('sonnet46T', {
+            availability: 'included-login-required',
+            availabilityLabel: 'Login required',
+            disabled: true,
+          }),
+          status: 'login required',
+        }),
+        'included',
+      ),
+    ).toBe('relay: login required');
+  });
+
+  it('builds model picker rows from the access-list source of truth', () => {
+    const rows = modelSelectItemsForCliMode(
+      [
+        model('sonnet46T', {
+          model: modelOption('sonnet46T', {
+            label: 'Sonnet',
+            availability: 'included-access',
+          }),
+        }),
+        model('deepseekT', {
+          model: modelOption('deepseekT', {
+            label: 'DeepSeek',
+            availability: 'provider-key',
+          }),
+        }),
+        model('openrouterOnlyT', {
+          model: modelOption('openrouterOnlyT', {
+            label: 'OpenRouter Only',
+            availability: 'openrouter-key',
+          }),
+          status: 'openrouter key',
+        }),
+        model('opus48T', {
+          available: false,
+          model: modelOption('opus48T', {
+            label: 'Opus',
+            availability: 'not-included',
+            disabled: true,
+          }),
+          status: 'not included',
+        }),
+        model('gpt54', {
+          model: modelOption('gpt54', {
+            label: 'GPT-5.4',
+            availability: 'included-access',
+          }),
+        }),
+      ],
+      'included',
+    );
+
+    expect(rows.map((row) => row.value)).toEqual(['sonnet46T', 'gpt54']);
+    expect(rows.map((row) => row.description)).toEqual([
+      'relay: included',
+      'relay: included',
+    ]);
+  });
+
+  it('shows personal-key model picker rows for personal API mode', () => {
+    const rows = modelSelectItemsForCliMode(
+      [
+        model('sonnet46T', {
+          model: modelOption('sonnet46T', {
+            label: 'Sonnet',
+            availability: 'included-access',
+          }),
+          status: 'included access',
+        }),
+        model('deepseekT', {
+          model: modelOption('deepseekT', {
+            label: 'DeepSeek',
+            availability: 'provider-key',
+          }),
+          status: 'api key set',
+        }),
+        model('openrouterOnlyT', {
+          model: modelOption('openrouterOnlyT', {
+            label: 'OpenRouter Only',
+            availability: 'openrouter-key',
+          }),
+          status: 'openrouter key',
+        }),
+        model('gemini31p', {
+          available: false,
+          model: modelOption('gemini31p', {
+            label: 'Gemini',
+            availability: 'missing-key',
+            requiresKey: true,
+          }),
+          status: 'missing api key',
+        }),
+      ],
+      'personal',
+    );
+
+    expect(rows.map((row) => row.value)).toEqual([
+      'deepseekT',
+      'openrouterOnlyT',
+    ]);
+    expect(rows.map((row) => row.description)).toEqual([
+      'api: api key set',
+      'api: openrouter key',
+    ]);
+  });
+
+  it('marks runnable model picker rows disabled when a live chat cannot switch formats', () => {
+    expect(
+      modelSelectItemsForCliMode(
+        [
+          model('sonnet46T', {
+            model: modelOption('sonnet46T', {
+              label: 'Sonnet',
+              availability: 'provider-key',
+            }),
+            status: 'api key set',
+          }),
+          model('gpt55', {
+            model: modelOption('gpt55', {
+              label: 'GPT-5.5',
+              availability: 'provider-key',
+            }),
+            status: 'api key set',
+          }),
+        ],
+        'personal',
+        (candidate) =>
+          candidate === 'sonnet46T'
+            ? 'different conversation format; start new chat'
+            : undefined,
+      ),
+    ).toEqual([
+      {
+        value: 'sonnet46T',
+        label: 'Sonnet',
+        description:
+          'api: api key set; different conversation format; start new chat',
+        disabled: true,
+      },
+      {
+        value: 'gpt55',
+        label: 'GPT-5.5',
+        description: 'api: api key set',
+        disabled: false,
+      },
+    ]);
+  });
+
+  it('treats filtered-empty model picker rows as non-actionable', () => {
+    expect(
+      modelSelectItemsForCliMode(
+        [
+          model('deepseekT', {
+            available: false,
+            model: modelOption('deepseekT', {
+              availability: 'provider-key',
+            }),
+            status: 'api key set',
+          }),
+          model('gemini31p', {
+            available: false,
+            model: modelOption('gemini31p', {
+              availability: 'missing-key',
+              requiresKey: true,
+            }),
+            status: 'missing api key',
+          }),
+          model('opus48T', {
+            available: false,
+            model: modelOption('opus48T', {
+              availability: 'not-included',
+              disabled: true,
+            }),
+            status: 'not included',
+          }),
+        ],
+        'included',
+      ),
+    ).toEqual([]);
+  });
+
   it('classifies signed-out included access separately from other included outages', () => {
     expect(
       noRunnableModelAccessReason(
@@ -312,6 +543,69 @@ describe('CLI model access resolution', () => {
     );
     expect(
       formatCliNoRunnableModelsMessage('personal', interactiveRecovery),
+    ).toBe(
+      'No personal API-key models are runnable. Configure a provider key or switch with /api included.',
+    );
+  });
+
+  it('formats empty model picker messages with caller-owned recovery actions', () => {
+    const interactiveRecovery = {
+      includedModeAction: 'switch with /api included',
+      loginAction: 'Run /login',
+      personalModeAction: 'switch with /api personal',
+    };
+
+    expect(
+      emptyModelListMessageForCliMode(
+        [
+          model('sonnet46T', {
+            available: false,
+            model: modelOption('sonnet46T', {
+              availability: 'included-login-required',
+              disabled: true,
+            }),
+            status: 'login required',
+          }),
+        ],
+        'included',
+        interactiveRecovery,
+      ),
+    ).toBe(
+      'Included relay models require sign-in. Run /login or switch with /api personal.',
+    );
+    expect(
+      emptyModelListMessageForCliMode(
+        [
+          model('opus48T', {
+            available: false,
+            model: modelOption('opus48T', {
+              availability: 'not-included',
+              disabled: true,
+            }),
+            status: 'not included',
+          }),
+        ],
+        'included',
+        interactiveRecovery,
+      ),
+    ).toBe(
+      'No included relay models are runnable. Switch with /api personal or try again later.',
+    );
+    expect(
+      emptyModelListMessageForCliMode(
+        [
+          model('gemini31p', {
+            available: false,
+            model: modelOption('gemini31p', {
+              availability: 'missing-key',
+              requiresKey: true,
+            }),
+            status: 'missing api key',
+          }),
+        ],
+        'personal',
+        interactiveRecovery,
+      ),
     ).toBe(
       'No personal API-key models are runnable. Configure a provider key or switch with /api included.',
     );
