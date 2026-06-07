@@ -38,7 +38,7 @@ import {
   rejectHeadlessOnlyFlags,
 } from './_helpers/globalArgs';
 import {
-  fillMultiAgentRunPlanGaps,
+  loadCliMultiAgentRunPlan,
   loadCliMultiAgentPresetPlanSet,
   writeMissingPresetAgents,
 } from './multiAgent';
@@ -154,7 +154,9 @@ async function runOrchestration(context: CliContext): Promise<number> {
       // Match the headless path: load remote premium agents (orchestrator,
       // delegation specialists) and replan so the team starts with its real
       // root instead of silently degrading to the first local tool-use agent.
-      const plan = await fillMultiAgentRunPlanGaps({ preset: action.preset });
+      const { plan } = await loadCliMultiAgentRunPlan({
+        preset: action.preset,
+      });
       if (!cliMultiAgentPresetCanLaunchTeam(plan)) {
         writeTextStderr(
           formatCliMultiAgentTeamLaunchBlockMessage(plan, {
