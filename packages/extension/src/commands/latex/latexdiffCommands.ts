@@ -6,6 +6,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 // Local imports
+import { StreamSnapshotStore } from '@transcript';
 import { listExecutions } from '@agent/storage';
 import {
   WORKFLOW_OUTPUT_BASENAME,
@@ -16,6 +17,7 @@ import {
 import { getStreamTabId } from '@agent/runtime/streamTab';
 import { registerCommands } from '@commands/_shared/registerCommands';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
+import { isFileNotFoundError } from '@common/errors';
 import {
   showLoggedErrorMessage,
   showLoggedInfoMessage,
@@ -37,7 +39,6 @@ import {
   type MathMarkupOption,
 } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
-import { StreamSnapshotStore } from '@transcript';
 import { ExecutionIdSchema, RoundKeySchema } from '@shared/schemas';
 import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
@@ -410,8 +411,12 @@ async function collectTexFiles(dir: string, prefix = ''): Promise<string[]> {
   let entries: [string, vscode.FileType][];
   try {
     entries = await vscode.workspace.fs.readDirectory(vscode.Uri.file(dir));
-  } catch {
-    return [];
+  } catch (error) {
+    // A missing directory legitimately means "no .tex files"; any other
+    // read error (permissions, etc.) is a real failure we must not mask.
+    if (isFileNotFoundError(error)) return [];
+    logger.warn(CHANNEL, `Failed to read directory '${dir}': ${error}`);
+    throw error;
   }
   const results: string[] = [];
   for (const [name, type] of entries) {
@@ -1046,7 +1051,13 @@ async function runLatexdiffViaWorkspaceScan(params: {
         roundEntries = await vscode.workspace.fs.readDirectory(
           vscode.Uri.file(roundAbsoluteDir),
         );
-      } catch {
+      } catch (error) {
+        // Skip unreadable round dirs but record which one so a missing
+        // round output isn't silently invisible during diagnosis.
+        logger.debug(
+          CHANNEL,
+          `Skipping round dir '${roundAbsoluteDir}': ${error}`,
+        );
         continue;
       }
       const match = roundEntries.find(

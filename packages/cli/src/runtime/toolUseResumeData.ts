@@ -30,3 +30,20 @@ export async function readCliToolUseResumeData(
     config: resume.snapshot.agentConfig,
   };
 }
+
+/**
+ * Listing-safe variant. History listings enrich many entries at once, so a
+ * single unreadable/corrupt flow record must not abort the whole listing:
+ * degrade to `null` on retrieval failure. Use {@link readCliToolUseResumeData}
+ * (which propagates) on the active-resume path, where a failure must surface.
+ */
+export async function readCliToolUseResumeDataForListing(
+  id: ExecutionId,
+  config: AgentConfig,
+): Promise<CliToolUseResumeData | null> {
+  try {
+    return await readCliToolUseResumeData(id, config);
+  } catch {
+    return null;
+  }
+}

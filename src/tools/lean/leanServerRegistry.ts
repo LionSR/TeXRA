@@ -11,6 +11,8 @@
  * surface across all three builds.
  */
 
+import { warn } from '@logger/logUtils';
+
 import { LEAN_SERVER_MODE_LABELS } from './leanConstants';
 
 export type LeanServerMode = keyof typeof LEAN_SERVER_MODE_LABELS;
@@ -44,8 +46,12 @@ function notify(): void {
   for (const listener of listeners) {
     try {
       listener(view);
-    } catch {
-      // Ignore listener failures so one bad observer can't break the others.
+    } catch (error) {
+      // Isolate observers so one bad listener can't break the others, but
+      // surface the failure since a throwing listener is unexpected.
+      warn('lean.serverRegistry', 'Lean server listener threw', {
+        data: error,
+      });
     }
   }
 }

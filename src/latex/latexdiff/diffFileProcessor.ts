@@ -1,6 +1,3 @@
-// Local imports - log
-import { toErrorMessage } from '@common/errors';
-import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import { flexibleFS, type FileLocation } from '@utils/files';
 
@@ -42,20 +39,17 @@ const DOCUMENT_END_FIXES: Array<[RegExp, string]> = [
 export class DiffFileProcessor {
   constructor(private readonly channel: string) {}
 
+  // Intentionally does not swallow failures: a read/transform/write error here
+  // means the diff output is missing or corrupt, so it must propagate to the
+  // caller (LaTeXdiffService.runDiff*/), whose catch turns it into a
+  // `{ success: false }` result. Swallowing it would falsely report success.
   async processDiffFile(diffFileLocation: FileLocation): Promise<void> {
-    try {
-      const content = await flexibleFS.read(diffFileLocation);
-      let processedContent = this.processStarEnvironments(content);
-      processedContent = this.processLineByLine(processedContent);
-      processedContent = replacementEngine.applyAll(processedContent);
-      await flexibleFS.write(diffFileLocation, processedContent);
-      await this.processTikzPictureEndings(diffFileLocation);
-    } catch (err) {
-      logger.error(
-        this.channel,
-        `Error processing diff file: ${toErrorMessage(err)}`,
-      );
-    }
+    const content = await flexibleFS.read(diffFileLocation);
+    let processedContent = this.processStarEnvironments(content);
+    processedContent = this.processLineByLine(processedContent);
+    processedContent = replacementEngine.applyAll(processedContent);
+    await flexibleFS.write(diffFileLocation, processedContent);
+    await this.processTikzPictureEndings(diffFileLocation);
   }
 
   private processStarEnvironments(content: string): string {

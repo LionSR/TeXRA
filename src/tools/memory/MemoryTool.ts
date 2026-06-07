@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 // Local imports
 import { tryUseRunContext } from '@agent/runtime/RunContext';
+import { debug } from '@logger/logUtils';
 import { formatRelativeTime } from '@shared/utils/string';
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -525,8 +526,13 @@ Use \`pin\` to mark a memory as a core long-term insight (techniques, strategies
               by = formatAttribution(meta);
               if (meta.pinned) display += ' [pinned]';
             }
-          } catch {
-            // Unreadable file — skip attribution
+          } catch (error) {
+            // Unreadable file — skip attribution (benign: listing still works)
+            debug(
+              'memory',
+              `Skipping attribution for unreadable memory file ${entry.path}`,
+              { data: error },
+            );
           }
         }
         return `${formatSize(entry.size)}\t${age}\t${by}\t${display}`;

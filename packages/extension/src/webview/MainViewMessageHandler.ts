@@ -381,6 +381,11 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.channel,
         `Failed to compute options: ${toErrorMessage(error)}`,
       );
+      // Without this the model/agent pickers render empty with no explanation;
+      // tell the user why so the failure is actionable rather than silent.
+      void vscode.window.showErrorMessage(
+        `TeXRA failed to load model and agent options: ${toErrorMessage(error)}`,
+      );
     }
   }
 }

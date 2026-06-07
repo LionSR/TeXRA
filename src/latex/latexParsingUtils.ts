@@ -9,6 +9,7 @@
 import * as path from 'path';
 
 import { platform } from '@platform/platform';
+import * as logger from '@logger/logUtils';
 import { flexibleFS } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
@@ -36,7 +37,14 @@ const BIB_DIRECTIVE_PATTERN = new RegExp(
 export async function resolveLatexDir(absolutePath: string): Promise<string> {
   const resolved = await platform()
     .fs.realPath(absolutePath)
-    .catch(() => absolutePath);
+    .catch((error: unknown) => {
+      logger.debug(
+        'LatexParsing',
+        `realPath failed for ${absolutePath}; falling back to literal dirname`,
+        { data: error },
+      );
+      return absolutePath;
+    });
   return path.dirname(resolved);
 }
 

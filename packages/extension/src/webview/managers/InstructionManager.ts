@@ -125,6 +125,11 @@ export class InstructionManager extends BaseWebviewManager {
         CHANNEL,
         `Error handling clipboard image: ${toErrorMessage(err)}`,
       );
+      // Surface to the user — otherwise the paste silently does nothing and
+      // they have no idea the image was dropped.
+      void vscode.window.showErrorMessage(
+        `Failed to paste image: ${toErrorMessage(err)}`,
+      );
     }
   }
 }

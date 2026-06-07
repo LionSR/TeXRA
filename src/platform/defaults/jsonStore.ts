@@ -4,6 +4,9 @@ import { dirname } from 'node:path';
 import writeFileAtomic from 'write-file-atomic';
 
 import { isFileNotFoundError } from '@common/errors';
+import * as logger from '@logger/logUtils';
+
+const CHANNEL = 'JsonStore';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -16,7 +19,14 @@ async function readJsonRecord(filePath: string): Promise<JsonRecord> {
       : {};
   } catch (error) {
     if (isFileNotFoundError(error)) return {};
-    if (error instanceof SyntaxError) return {};
+    if (error instanceof SyntaxError) {
+      logger.warn(
+        CHANNEL,
+        `Discarding unreadable ${filePath}; treating as empty.`,
+        { data: error },
+      );
+      return {};
+    }
     throw error;
   }
 }

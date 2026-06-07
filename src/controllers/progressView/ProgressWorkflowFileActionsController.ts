@@ -2,6 +2,7 @@ import path from 'path';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
+import * as logger from '@logger/logUtils';
 
 // Local imports - shared
 import type { OutputFileInfo, StreamTabId } from '@shared/schemas';
@@ -136,7 +137,12 @@ export class ProgressWorkflowFileActionsController {
     if (backup) {
       try {
         currentContent = await this.deps.host.readFile(file);
-      } catch {
+      } catch (error) {
+        logger.debug(
+          'ProgressWorkflowFileActions',
+          `Could not read current content of ${file} before accept`,
+          { data: error },
+        );
         currentContent = undefined;
       }
     }

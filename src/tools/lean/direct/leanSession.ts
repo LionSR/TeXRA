@@ -447,12 +447,10 @@ function pathToUri(absolute: string): string {
 }
 
 export function fileUriToPath(uri: string): string | null {
+  // The `file://` prefix is already validated, so fileURLToPath won't throw;
+  // null is reserved for non-file URIs the caller intentionally skips.
   if (!uri.startsWith('file://')) return null;
-  try {
-    return fileURLToPath(uri);
-  } catch {
-    return null;
-  }
+  return fileURLToPath(uri);
 }
 
 function withTimeout<T>(

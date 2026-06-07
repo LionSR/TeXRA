@@ -93,7 +93,15 @@ export class ToolUseCycleNode<C> extends Node<
         if (persistTodos) {
           todoPersistChain = todoPersistChain
             .then(() => persistTodos(todos))
-            .catch(() => {});
+            // Best-effort todo persistence — log so swallowed write failures
+            // are diagnosable without disrupting the update stream.
+            .catch((err: unknown) => {
+              this.services.logger.debug(
+                `Failed to persist todos: ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              );
+            });
         }
         onProgress?.({ kind: 'todos', todos });
       },

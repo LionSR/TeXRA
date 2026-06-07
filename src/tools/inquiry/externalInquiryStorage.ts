@@ -181,6 +181,8 @@ async function hydrateAnswersFromDisk(
         );
         return { ...turn, answer: content };
       } catch {
+        // Answer file unreadable/missing — leave the turn unhydrated (benign:
+        // the manifest still loads, the answer is simply not inlined yet).
         return turn;
       }
     }),

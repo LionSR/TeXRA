@@ -1,6 +1,5 @@
 import { Buffer } from 'node:buffer';
 
-import { extractMimeSubtype } from '@utils/text/stringUtils';
 
 // Third-party imports
 import { toFile } from '@anthropic-ai/sdk';
@@ -11,6 +10,7 @@ import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Type imports - agent and tools
 import type { ToolFileAttachment } from '@tools/result';
+import { extractMimeSubtype } from '@utils/text/stringUtils';
 
 // Local imports - model handlers
 import { FILES_API_BETA } from './anthropicContextManagement';
@@ -130,7 +130,12 @@ export async function uploadToolAttachments(
         base64Data,
         mediaType: normalized,
       });
-    } catch {
+    } catch (err) {
+      // Upload failed — degrade to unsupported, but log so a dropped
+      // attachment isn't silently omitted from the request.
+      logger.warn(
+        `Failed to upload attachment ${attachment.path ?? 'attachment'}: ${getSdkErrorMessage(err)}`,
+      );
       unsupported.push(attachment);
     } finally {
       if (buffer) {

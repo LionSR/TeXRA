@@ -282,7 +282,13 @@ export class ServerSideKeyService {
       this.accessResult = true;
       this.userTier = tier || FREE_TIER;
       return true;
-    } catch {
+    } catch (error) {
+      // Denied by error (auth/network failure), not by policy — log so the two
+      // are distinguishable. The interface exposes only info/error levels.
+      this.logger.error(
+        CHANNEL,
+        `Access check failed, treating as denied: ${toErrorMessage(error)}`,
+      );
       return this.setAccessDenied();
     }
   }

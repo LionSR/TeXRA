@@ -150,11 +150,15 @@ export function createDirectLspLeanAdapter(
         const session = await getSession(file);
         return await session.fetchDiagnostics(file);
       } catch (error) {
+        // Log operationally, then propagate: `null` means "no diagnostics",
+        // so swallowing a session/IO failure into it would make a broken Lean
+        // server look like a clean file. LeanDiagnosticsTool surfaces the real
+        // error detail to the agent.
         warn(
           LOG_CHANNEL,
           `fetchDiagnosticsForFile failed for ${file}: ${toErrorMessage(error)}`,
         );
-        return null;
+        throw error;
       }
     },
 
@@ -174,11 +178,14 @@ export function createDirectLspLeanAdapter(
         await session.restartFile(filePath);
         return true;
       } catch (error) {
+        // Log operationally, then propagate: `false` means "command had no
+        // effect", so swallowing a real failure into it hides the cause.
+        // LeanFileTool surfaces the real error detail to the agent.
         warn(
           LOG_CHANNEL,
           `executeFileCommand(${command}) failed for ${filePath}: ${toErrorMessage(error)}`,
         );
-        return false;
+        throw error;
       }
     },
 
