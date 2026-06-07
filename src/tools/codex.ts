@@ -39,11 +39,9 @@ import { untrackExecution } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import {
-  getInterruptible,
-  registerInterruptible,
-  unregisterInterruptible,
+  interruptRegistry,
   type IInterruptible,
-} from '@agent/toolUse/ToolUseAgentRegistry';
+} from '@agent/runtime/InterruptRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
@@ -172,7 +170,7 @@ function storeThread(threadId: string, entry: ActiveThread): void {
 /** Prevents codex streams from remaining in stale WAITING state during reload. */
 export function interruptAllCodexSessions(): void {
   for (const { childStreamId } of [...threadRegistry.values()]) {
-    getInterruptible(childStreamId)?.interrupt();
+    interruptRegistry.get(childStreamId)?.interrupt();
   }
 }
 
@@ -181,12 +179,11 @@ export function interruptAllCodexSessions(): void {
 // ============================================================================
 
 /**
- * Lightweight interruptible registered with the ToolUseAgentRegistry so the
+ * Lightweight interruptible registered with the InterruptRegistry so the
  * stop button works on codex child streams.
  *
  * Does NOT implement the session duck-type (no `session.appendFollowUp`),
- * which prevents `getToolUseFlowContext()` from matching it — commands like
- * `compactResponse` that access `flowContext.modelHandler` won't crash.
+ * so flow-only commands such as context compaction ignore it.
  *
  * Follow-ups route through the WAITING state queue path:
  * `sendFollowUp()` → stream is WAITING → `ToolUseFollowUpQueue.enqueue()`.
@@ -518,7 +515,7 @@ function startCodexLoop(params: {
   const session = new CodexFollowUpSession();
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
   session.setQueue(queue);
-  registerInterruptible(childStreamId, session);
+  interruptRegistry.register(childStreamId, session);
 
   // Start a log group so endRunningGroups() marks it as errored on reload,
   // giving the user a visual cue that the session was interrupted.
@@ -633,7 +630,7 @@ function startCodexLoop(params: {
       }
     } finally {
       sessionStage.end(sawTurnFailure ? 'error' : 'stopped');
-      unregisterInterruptible(childStreamId);
+      interruptRegistry.unregister(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
       const threadId = thread.id;
       if (threadId) threadRegistry.delete(threadId);
