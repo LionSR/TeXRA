@@ -19,7 +19,6 @@ import { z } from 'zod';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 
-
 const OdysseyPromptsYamlSchema = z.object({
   continuation: z.object({ template: z.string().min(1) }),
   objective_updated: z.object({ template: z.string().min(1) }),
