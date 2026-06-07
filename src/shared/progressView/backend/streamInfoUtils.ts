@@ -71,13 +71,16 @@ export function buildStreamInfo(
     streamId: id,
     config,
     hints: {
+      agent: hints.agent,
       agentCategory: hints.agentCategory,
+      inputFile: hints.inputFile,
       isRemote: hints.isRemote,
     },
     creationTimestamp,
-    executionId: state.snapshots.getExecutionId(id),
-    parentStreamId: state.snapshots.getParentStreamId(id),
-    description: state.snapshots.getDescription(id),
+    executionId: state.snapshots.getExecutionId(id) ?? hints.executionId,
+    parentStreamId:
+      state.snapshots.getParentStreamId(id) ?? hints.parentStreamId,
+    description: state.snapshots.getDescription(id) ?? hints.description,
     worktreeInfo,
   });
 }

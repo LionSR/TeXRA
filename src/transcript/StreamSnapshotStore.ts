@@ -112,6 +112,7 @@ export class StreamSnapshotStore {
   // refresh/seed/mutate per stream.
   private readonly seeded = new Set<StreamTabId>();
   private readonly seedChains = new Map<StreamTabId, Promise<void>>();
+  private readonly metaOverlays = new Set<StreamTabId>();
   private readonly streamVersions = new Map<StreamTabId, number>();
   private hasLoadedKnownStreams = false;
 
@@ -421,6 +422,7 @@ export class StreamSnapshotStore {
     this.taskStates.delete(stream);
     this.seeded.delete(stream);
     this.seedChains.delete(stream);
+    this.metaOverlays.delete(stream);
     this.kvCache.delete(stream);
     for (const key of [...this.pendingWrites.keys()]) {
       if (key.startsWith(`${stream}::`)) this.pendingWrites.delete(key);
@@ -450,6 +452,7 @@ export class StreamSnapshotStore {
     this.taskStates.clear();
     this.seeded.clear();
     this.seedChains.clear();
+    this.metaOverlays.clear();
     this.kvCache.clear();
     this.pendingWrites.clear();
   }
@@ -494,9 +497,16 @@ export class StreamSnapshotStore {
     return this.workPlan.get(stream) ?? EMPTY_WORK_PLAN;
   }
 
-  private patchMeta(stream: StreamTabId, patch: Partial<StreamTabMeta>): void {
+  private patchMetaMemory(
+    stream: StreamTabId,
+    patch: Partial<StreamTabMeta>,
+  ): StreamTabMeta {
     const next: StreamTabMeta = { ...(this.meta.get(stream) ?? {}), ...patch };
     this.meta.set(stream, next);
+    return next;
+  }
+
+  private writeMeta(stream: StreamTabId, next: StreamTabMeta): void {
     // activeRunId is legacy and never re-written. Persist every explicitly-set
     // field (`!== undefined`, not falsy) so on-disk and in-memory never diverge
     // — e.g. clearing a description to "" must round-trip, not silently vanish.
@@ -509,6 +519,23 @@ export class StreamSnapshotStore {
       ...(next.description !== undefined && { description: next.description }),
     };
     this.write(stream, STREAM_DATA_KEYS.META, file);
+  }
+
+  private patchMeta(stream: StreamTabId, patch: Partial<StreamTabMeta>): void {
+    this.writeMeta(stream, this.patchMetaMemory(stream, patch));
+  }
+
+  private queueMetaPatch(
+    stream: StreamTabId,
+    patch: Partial<StreamTabMeta>,
+  ): void {
+    this.patchMetaMemory(stream, patch);
+    this.metaOverlays.add(stream);
+    const applied = this.mutate(stream, () => {
+      this.patchMeta(stream, patch);
+      return true;
+    });
+    if (applied) this.metaOverlays.delete(stream);
   }
 
   // ==========================================================================
@@ -524,26 +551,22 @@ export class StreamSnapshotStore {
     taskState: TaskState,
     executionId?: ExecutionId,
   ): void {
-    this.mutate(stream, () => {
-      this.taskStates.set(stream, taskState);
-      this.patchMeta(
-        stream,
-        executionId ? { taskState, executionId } : { taskState },
-      );
-    });
+    this.taskStates.set(stream, taskState);
+    this.queueMetaPatch(
+      stream,
+      executionId ? { taskState, executionId } : { taskState },
+    );
   }
 
   setParentStream(
     child: StreamTabId,
     parent: StreamTabId | null | undefined,
   ): void {
-    this.mutate(child, () =>
-      this.patchMeta(child, { parentStreamId: parent ?? undefined }),
-    );
+    this.queueMetaPatch(child, { parentStreamId: parent ?? undefined });
   }
 
   setDescription(stream: StreamTabId, description: string): void {
-    this.mutate(stream, () => this.patchMeta(stream, { description }));
+    this.queueMetaPatch(stream, { description });
   }
 
   getTaskState(stream: StreamTabId): TaskState | undefined {
@@ -792,6 +815,9 @@ export class StreamSnapshotStore {
 
   /** Seed the in-memory accumulators for one stream + migrate legacy once. */
   private applyStreamData(stream: StreamTabId, data: StreamData): void {
+    const metaOverlay = this.metaOverlays.has(stream)
+      ? this.meta.get(stream)
+      : undefined;
     this.outputFiles.set(stream, data.outputFiles);
     this.missingOutputs.set(stream, data.missingOutputs);
     this.compileFailures.set(stream, data.compileFailures);
@@ -801,10 +827,13 @@ export class StreamSnapshotStore {
     );
     this.workPlan.set(stream, data.workPlan);
     this.taskStates.delete(stream);
-    if (data.meta) {
-      this.meta.set(stream, data.meta);
-      if (data.meta.taskState !== undefined) {
-        const parsed = TaskStateSchema.safeParse(data.meta.taskState);
+    const meta = metaOverlay
+      ? { ...(data.meta ?? {}), ...metaOverlay }
+      : data.meta;
+    if (meta) {
+      this.meta.set(stream, meta);
+      if (meta.taskState !== undefined) {
+        const parsed = TaskStateSchema.safeParse(meta.taskState);
         if (parsed.success) {
           this.taskStates.set(stream, parsed.data as TaskState);
         }
@@ -812,6 +841,7 @@ export class StreamSnapshotStore {
     } else {
       this.meta.delete(stream);
     }
+    this.metaOverlays.delete(stream);
     this.seeded.add(stream);
     this.persistLegacyFlattened(stream, data);
   }
