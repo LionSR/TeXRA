@@ -294,7 +294,7 @@ flowchart LR
     P2["setToolEditApprovalHandler"] -->|scope to| RUN["RunContext (per-run)"]
     P2B["7 registries"] -->|scope to| SESSION["per-session runtime owner"]
     P3["7-8 duplicated bag fields"] -->|drop from bag,\nread like tools do| RUN
-    P4["13-field AgentCore"] -->|cohesion split| FOUR["4 objects + ambient logger"]
+    P4["13-field AgentCore"] -->|cohesion split| FOUR["4 cohesive groups"]
     P5["wholesale {...services}\nre-spread ×2"] -->|narrow interfaces| ISP["nodes declare only\nwhat they read"]
 
     PORTS --> WIN["✓ typed wiring\n✓ no silent no-ops\n✓ concurrent sessions\n✓ ~80% less carried"]
