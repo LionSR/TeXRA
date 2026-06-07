@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { clearRetryRequest } from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { isInFlightStatus } from '@common/constants/streamStatus';
@@ -41,7 +41,7 @@ export class ProgressStreamLifecycleHost implements ProgressStreamLifecycleHostP
     options: { clearRetryRequest?: boolean } = {},
   ): Promise<void> {
     if (options.clearRetryRequest === true) {
-      clearRetryRequest(stream);
+      runCoordinatorBridge.clearRetryRequest(stream);
     }
     await vscode.commands.executeCommand('texra.stopAgent', stream);
   }
