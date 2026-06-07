@@ -134,17 +134,13 @@ function planLoadedCliMultiAgentPresets(
  * the interactive `orchestrate` menu route through here so they can't drift
  * apart again.
  *
- * Assumes local agents are already loaded by the caller.
+ * Owns the local agent registry load (`loadAgents({ includeRemote: false })`)
+ * before planning, so callers no longer need to pre-load local agents.
  */
-export async function fillMultiAgentRunPlanGaps(
-  init: Pick<MultiAgentRunInit, 'preset' | 'agent'>,
-): Promise<CliMultiAgentPresetRunPlan> {
-  return (await loadCliMultiAgentRunPlan(init)).plan;
-}
-
 export async function loadCliMultiAgentRunPlan(
   init: Pick<MultiAgentRunInit, 'preset' | 'agent'>,
 ): Promise<MultiAgentRunPlanLoadResult> {
+  await loadAgents({ includeRemote: false });
   const result = await reloadRemoteAgentsForGaps(
     planCurrentMultiAgentRun(init),
     cliMultiAgentPlanHasGaps,
@@ -300,7 +296,6 @@ async function runMultiAgentInspect(
   presetIdOrName: string,
 ): Promise<number> {
   await initCliPlatform({ ...context, quietLogs: true });
-  await loadAgents({ includeRemote: false });
 
   const { plan, remoteAgentLoadAttempted } = await loadCliMultiAgentRunPlan({
     preset: presetIdOrName,
@@ -327,9 +322,8 @@ export async function runMultiAgentPreset(
   }
 
   await initCliPlatform({ ...context, quietLogs: true });
-  await loadAgents({ includeRemote: false });
 
-  const plan = await fillMultiAgentRunPlanGaps(init);
+  const { plan } = await loadCliMultiAgentRunPlan(init);
   if (plan.missingAgentOverride) {
     throw new CliUsageError(
       missingToolUseAgentMessage(plan.missingAgentOverride),
