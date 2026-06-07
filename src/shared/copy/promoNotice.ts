@@ -8,13 +8,16 @@
  */
 
 /**
- * Short one-liner suitable for a banner subtitle (sign-in callout, getting
- * started). Plain text — no HTML.
+ * Short banner copy (sign-in callout), split into a value `lead` and a lighter
+ * privacy `fineprint` so the banner can render a clear two-tier hierarchy.
+ * Plain text — no HTML.
  */
-export const PROMO_NOTICE_SHORT =
-  'Sign in for free access to GPT-5, Claude Sonnet 4.6, Gemini, and more. ' +
-  'Your messages go directly to the model provider — TeXRA never stores or ' +
-  'trains on your conversations.';
+export const PROMO_NOTICE_SHORT = {
+  lead: 'Free access to GPT-5, Claude, Gemini, DeepSeek, and more.',
+  fineprint:
+    'Your messages go directly to the model provider — TeXRA never stores or ' +
+    'trains on your conversations.',
+} as const;
 
 /**
  * Structured fragments for the full Settings → Profile notice. Strings are
