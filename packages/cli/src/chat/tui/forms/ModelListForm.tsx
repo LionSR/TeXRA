@@ -145,15 +145,11 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   }
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor="cyan"
-      flexDirection="column"
-      paddingX={1}
+    <FormFrame
+      color="cyan"
+      title={`/model · ${formatCliApiMode(props.apiMode)}`}
+      showCloseHint={false}
     >
-      <Text bold color="cyan">
-        {`/model · ${formatCliApiMode(props.apiMode)}`}
-      </Text>
       <Text dimColor>{description}</Text>
       {items.length === 0 ? (
         <EmptyModelListState
@@ -200,6 +196,6 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
           />
         )}
       </Box>
-    </Box>
+    </FormFrame>
   );
 }
