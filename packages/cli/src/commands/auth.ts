@@ -1,11 +1,14 @@
 import { defineCommand } from 'citty';
 
-import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
-import { isOAuthProvider } from '@auth/sharedConfig';
-import { isNonEmptyString } from '@utils/core/stringCore';
-
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
+import {
+  githubSelectAccountWarning,
+  isCliLoginProvider,
+  resolveLoginProvider,
+  unsupportedLoginProviderMessage,
+  type CliLoginInit,
+} from '../runtime/loginOptions';
 import {
   writeErrorStderr,
   writeTextStderr,
@@ -30,27 +33,6 @@ import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
-export function resolveLoginProvider(
-  positional: string | undefined,
-  flag: string | undefined,
-): { readonly provider: string; readonly explicit: boolean } {
-  if (isNonEmptyString(flag)) {
-    return { provider: flag.trim(), explicit: true };
-  }
-  if (isNonEmptyString(positional)) {
-    return { provider: positional.trim(), explicit: true };
-  }
-  return { provider: DEFAULT_OAUTH_PROVIDER, explicit: false };
-}
-
-export interface LoginInit {
-  readonly provider: string;
-  readonly providerExplicit: boolean;
-  readonly noBrowser: boolean;
-  readonly selectAccount: boolean;
-  readonly loginHint?: string;
-}
-
 type LoginCommandArgs = Record<string, unknown>;
 
 function readBooleanArg(
@@ -69,7 +51,7 @@ function readStringArg(
   return optString(args[hyphenKey]) ?? optString(args[camelKey]);
 }
 
-export function loginInitFromArgs(args: LoginCommandArgs): LoginInit {
+export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
   const positional = optString(args.providerArg);
   const flag = optString(args.provider);
   const provider = resolveLoginProvider(positional, flag);
@@ -88,7 +70,7 @@ export function shouldPromptForLoginProvider(
     CliContext,
     'mode' | 'outputFormat' | 'stdoutIsTty' | 'termIsDumb'
   >,
-  init: Pick<LoginInit, 'providerExplicit' | 'noBrowser'>,
+  init: Pick<CliLoginInit, 'providerExplicit' | 'noBrowser'>,
 ): boolean {
   return (
     !init.providerExplicit &&
@@ -98,19 +80,17 @@ export function shouldPromptForLoginProvider(
   );
 }
 
-async function runLogin(context: CliContext, init: LoginInit): Promise<number> {
-  if (!isOAuthProvider(init.provider)) {
-    writeTextStderr(
-      `Unsupported provider: ${init.provider}. Expected ${CLI_OAUTH_PROVIDER_INPUTS}.`,
-    );
+async function runLogin(
+  context: CliContext,
+  init: CliLoginInit,
+): Promise<number> {
+  if (!isCliLoginProvider(init.provider)) {
+    writeTextStderr(unsupportedLoginProviderMessage(init.provider));
     return CliExitCode.Usage;
   }
   await initCliPlatform({ ...context, quietLogs: true });
-  if (init.provider === 'github' && init.selectAccount && !init.loginHint) {
-    writeTextStderr(
-      'GitHub does not support --select-account by itself. Use --login-hint <username> to request a specific GitHub account.',
-    );
-  }
+  const accountWarning = githubSelectAccountWarning(init);
+  if (accountWarning) writeTextStderr(accountWarning);
   if (context.outputFormat === 'text' && !init.noBrowser) {
     writeTextStdout(`Opening browser for TeXRA ${init.provider} sign-in...`);
   }
@@ -185,7 +165,7 @@ export const loginCommand = defineCliCommand({
 
 async function runLoginCommand(
   context: CliContext,
-  init: LoginInit,
+  init: CliLoginInit,
 ): Promise<number> {
   if (!shouldPromptForLoginProvider(context, init)) {
     return runLogin(context, init);
