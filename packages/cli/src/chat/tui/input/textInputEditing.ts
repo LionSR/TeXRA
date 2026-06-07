@@ -92,12 +92,23 @@ export function applyTerminalInputChunk(
   let edit: TextEdit = { value, cursor: clampCursor(cursor, value.length) };
   let submit = false;
 
-  for (const ch of input) {
+  const chars = [...input];
+  for (let index = 0; index < chars.length; index += 1) {
+    const ch = chars[index];
     if (ch === SYNTHETIC_SHIFT_RETURN_INPUT) {
       edit = insertText(edit.value, edit.cursor, '\n');
       continue;
     }
-    if (ch === '\r' || ch === '\n') {
+    if (ch === '\n') {
+      edit = insertText(edit.value, edit.cursor, '\n');
+      continue;
+    }
+    if (ch === '\r') {
+      if (chars[index + 1] === '\n' && index + 2 < chars.length) {
+        edit = insertText(edit.value, edit.cursor, '\n');
+        index += 1;
+        continue;
+      }
       submit = true;
       break;
     }
