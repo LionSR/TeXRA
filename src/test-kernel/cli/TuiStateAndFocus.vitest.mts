@@ -69,9 +69,7 @@ import {
   chatTuiCanStartRootRun,
   chatTuiCanSelectModel,
   chatTuiSigintAction,
-  chatTuiActiveChildFollowUpTarget,
-  chatTuiRejectedChildFollowUpTarget,
-  chatTuiShouldAnnounceQueuedFollowUp,
+  chatTuiFocusedChildFollowUpRoute,
   parseChatLoginSlashArgs,
   clearTuiSessionRunState,
   markChatTuiRunPending,
@@ -1305,12 +1303,14 @@ describe('CLI TUI row allocation', () => {
     setParentStream(child1, root);
 
     cliState.activeStreamId.set(root);
-    expect(chatTuiActiveChildFollowUpTarget()).toBeUndefined();
-    expect(chatTuiRejectedChildFollowUpTarget()).toBeUndefined();
+    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({ kind: 'none' });
 
     cliState.activeStreamId.set(child1);
-    expect(chatTuiActiveChildFollowUpTarget()).toBe(child1);
-    expect(chatTuiRejectedChildFollowUpTarget()).toBeUndefined();
+    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+      kind: 'accept',
+      streamId: child1,
+      shouldAnnounceQueuedFollowUp: false,
+    });
   });
 
   it('ignores stale child row status when routing focused child follow-ups', () => {
@@ -1330,8 +1330,11 @@ describe('CLI TUI row allocation', () => {
     setParentStream(child1, root);
 
     cliState.activeStreamId.set(child1);
-    expect(chatTuiActiveChildFollowUpTarget()).toBe(child1);
-    expect(chatTuiRejectedChildFollowUpTarget()).toBeUndefined();
+    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+      kind: 'accept',
+      streamId: child1,
+      shouldAnnounceQueuedFollowUp: true,
+    });
   });
 
   it('uses child slice status as a fallback for focused child follow-ups', () => {
@@ -1351,8 +1354,10 @@ describe('CLI TUI row allocation', () => {
     setParentStream(child1, root);
 
     cliState.activeStreamId.set(child1);
-    expect(chatTuiActiveChildFollowUpTarget()).toBeUndefined();
-    expect(chatTuiRejectedChildFollowUpTarget()).toBe(child1);
+    expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+      kind: 'reject',
+      streamId: child1,
+    });
   });
 
   it('mirrors running child status events into focused child routing', () => {
@@ -1388,8 +1393,11 @@ describe('CLI TUI row allocation', () => {
       expect(cliState.streams.get().get(root)?.childStreams[0]?.status).toBe(
         STREAM_STATUS.RUNNING,
       );
-      expect(chatTuiActiveChildFollowUpTarget()).toBe(child1);
-      expect(chatTuiRejectedChildFollowUpTarget()).toBeUndefined();
+      expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+        kind: 'accept',
+        streamId: child1,
+        shouldAnnounceQueuedFollowUp: true,
+      });
     } finally {
       dispose();
     }
@@ -1428,8 +1436,10 @@ describe('CLI TUI row allocation', () => {
       expect(cliState.streams.get().get(root)?.childStreams[0]?.status).toBe(
         STREAM_STATUS.STOPPED,
       );
-      expect(chatTuiActiveChildFollowUpTarget()).toBeUndefined();
-      expect(chatTuiRejectedChildFollowUpTarget()).toBe(child1);
+      expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
+        kind: 'reject',
+        streamId: child1,
+      });
     } finally {
       dispose();
     }
