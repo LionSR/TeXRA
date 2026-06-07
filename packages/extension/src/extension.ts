@@ -289,7 +289,11 @@ export async function activate(context: vscode.ExtensionContext) {
       const vscodeState = new URLSearchParams(externalUri.query).get('state');
       const baseUrl = `${externalUri.scheme}://${externalUri.authority}${externalUri.path}`;
 
-      return { baseUrl, vscodeState, fullUrl: externalUri.toString() };
+      // skipEncoding (toString(true)) so auth-js's encodeURIComponent over the
+      // redirectTo does not double-encode the already percent-encoded tunnel
+      // ?state= token; double-encoding corrupts the routing token and the
+      // callback never makes it back to the editor (silent timeout).
+      return { baseUrl, vscodeState, fullUrl: externalUri.toString(true) };
     });
 
     if (!isSupabaseConfigured()) {
