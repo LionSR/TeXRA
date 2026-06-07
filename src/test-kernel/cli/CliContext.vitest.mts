@@ -200,6 +200,19 @@ describe('CLI context config defaults', () => {
     expect(loaded.warnings.join('\n')).toContain('Could not parse');
   });
 
+  it('reports unreadable workspace config files without treating them as absent', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'texra-cli-context-'));
+    await mkdir(join(workspace, '.texra', 'config.json'), {
+      recursive: true,
+    });
+
+    const loaded = await loadWorkspaceCliConfig(workspace);
+
+    expect(loaded.values).toEqual({});
+    expect(loaded.path).toContain('.texra/config.json');
+    expect(loaded.warnings.join('\n')).toContain('Could not read');
+  });
+
   it('ignores unknown TEXRA_MODEL values before they reach runtime', async () => {
     const context = await buildCliContext({
       ambient,
