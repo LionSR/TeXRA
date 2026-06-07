@@ -6,7 +6,11 @@ import {
   findCliToolDef,
   formatCliBoolean,
   formatCliToolList,
+  formatCliToolMissingInstallCommandMessage,
+  formatCliToolNotFoundMessage,
+  formatCliToolNotToggleableMessage,
   formatCliToolStatus,
+  readCliToolGuide,
   type CliToolStatusRecord,
 } from '@cli/runtime/tools';
 
@@ -54,6 +58,32 @@ describe('CLI tools runtime', () => {
     expect(
       formatCliToolStatus(record({ statusDetail: 'Codex not found.' })),
     ).toContain('authCommand: codex login\n\nCodex not found.');
+  });
+
+  it('formats tool command errors from the runtime owner', () => {
+    expect(formatCliToolNotFoundMessage('missing')).toBe(
+      'Tool integration not found: missing',
+    );
+    expect(formatCliToolNotToggleableMessage('lean4')).toBe(
+      'Tool integration is not toggleable: lean4',
+    );
+    expect(formatCliToolMissingInstallCommandMessage('external-inquiry')).toBe(
+      'No install command is registered for external-inquiry.',
+    );
+  });
+
+  it('reads install and auth guides from external tool definitions', () => {
+    const installGuide = readCliToolGuide('codex', 'install');
+    expect(installGuide?.text).toContain(
+      'Command: npm install -g @openai/codex',
+    );
+    expect(installGuide?.command).toBe('npm install -g @openai/codex');
+
+    const authGuide = readCliToolGuide('codex', 'auth');
+    expect(authGuide?.text).toContain('Command: codex login');
+    expect(authGuide?.command).toBe('codex login');
+
+    expect(readCliToolGuide('texra-cli', 'install')).toBeUndefined();
   });
 
   it('formats interactive tool descriptions with human state labels', () => {
