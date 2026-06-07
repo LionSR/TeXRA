@@ -7,7 +7,9 @@ import { Box, Text, useInput } from 'ink';
 import { Spinner } from '@inkjs/ui';
 
 import {
+  emptyModelListMessageForCliMode,
   getCliModelAccessList,
+  modelSelectItemsForCliMode,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
 import { formatCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
@@ -21,10 +23,12 @@ import {
 } from './_shared/selectWindow';
 import { useAsyncListForm } from './_shared/useAsyncListForm';
 import { isPlainReturnInput } from '../input/inputKeys';
-import {
-  emptyModelListMessageForCliMode,
-  modelSelectItemsForCliMode,
-} from '../modelAccessDisplay';
+
+const TUI_MODEL_EMPTY_RECOVERY = {
+  includedModeAction: 'switch with /api included',
+  loginAction: 'Run /login',
+  personalModeAction: 'switch with /api personal',
+};
 
 export interface ModelListFormProps {
   readonly currentModel: string;
@@ -67,7 +71,13 @@ function EmptyModelListState(props: {
   });
 
   return (
-    <Text>{emptyModelListMessageForCliMode(props.models, props.apiMode)}</Text>
+    <Text>
+      {emptyModelListMessageForCliMode(
+        props.models,
+        props.apiMode,
+        TUI_MODEL_EMPTY_RECOVERY,
+      )}
+    </Text>
   );
 }
 

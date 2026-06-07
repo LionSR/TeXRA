@@ -15,6 +15,13 @@ export interface CliModelAccess {
   readonly status: string;
 }
 
+export interface CliModelPickerItem {
+  readonly value: string;
+  readonly label: string;
+  readonly description: string;
+  readonly disabled?: boolean;
+}
+
 export interface CliRunnableModelResolution {
   readonly model: string;
   readonly notice?: string;
@@ -66,6 +73,16 @@ const CLI_MODEL_AVAILABILITY_BY_API_MODE = {
   included: new Set<ModelAvailabilityKind>(['included-access']),
   personal: new Set<ModelAvailabilityKind>(['provider-key', 'openrouter-key']),
 } satisfies Record<CliApiMode, ReadonlySet<ModelAvailabilityKind>>;
+
+const RELAY_STATUS_BY_AVAILABILITY = {
+  'included-access': 'relay: included',
+  'not-included': 'relay: not included',
+  'included-login-required': 'relay: login required',
+  'relay-quota-exhausted': 'relay: quota exhausted',
+  'provider-key': 'relay: unavailable; api key set',
+  'openrouter-key': 'relay: unavailable; openrouter key set',
+  'missing-key': 'relay: unavailable; missing api key',
+} satisfies Record<ModelAvailabilityKind, string>;
 
 const NO_RUNNABLE_MODEL_ACCESS_SUMMARIES = {
   includedLoginRequired: 'Included relay models require sign-in.',
@@ -182,6 +199,54 @@ function formatModelAccessStatus(model: ModelOptionData): string {
     return `missing ${provider}key`;
   }
   return 'unavailable';
+}
+
+export function formatModelStatusForCliMode(
+  model: CliModelAccess,
+  apiMode: CliApiMode,
+): string {
+  if (apiMode === 'personal') return `api: ${model.status}`;
+
+  const availability = model.model.availability;
+  if (availability == null) return `relay: ${model.status}`;
+  return RELAY_STATUS_BY_AVAILABILITY[availability];
+}
+
+export function modelSelectItemsForCliMode(
+  models: readonly CliModelAccess[],
+  apiMode: CliApiMode,
+  getModelSwitchDisabledReason?: (model: string) => string | undefined,
+): readonly CliModelPickerItem[] {
+  return runnableCliModelAccessEntries(models, apiMode).map((model) => {
+    const disabledReason = getModelSwitchDisabledReason?.(model.model.value);
+    const status = formatModelStatusForCliMode(model, apiMode);
+    return {
+      value: model.model.value,
+      label: model.model.label || model.model.value,
+      description: disabledReason ? `${status}; ${disabledReason}` : status,
+      disabled: disabledReason != null,
+    };
+  });
+}
+
+export function modelAccessLaunchBlockDescriptionForCliMode(
+  models: readonly CliModelAccess[],
+  apiMode: CliApiMode,
+): string {
+  return formatCliNoRunnableModelsLaunchBlock(
+    noRunnableModelAccessReason(models, apiMode),
+  );
+}
+
+export function emptyModelListMessageForCliMode(
+  models: readonly CliModelAccess[],
+  apiMode: CliApiMode,
+  options: CliNoRunnableModelsMessageOptions = {},
+): string {
+  return formatCliNoRunnableModelsMessage(
+    noRunnableModelAccessReason(models, apiMode),
+    options,
+  );
 }
 
 export function cliModelFallbackModeForSource(
