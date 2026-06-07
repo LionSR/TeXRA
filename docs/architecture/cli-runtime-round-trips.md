@@ -24,7 +24,7 @@ flowchart TD
   defaultModel[resolveChatDefaults + resolveCliRunnableModelWithAccessList]
   picker[orchestration/runOrchestrationTui]
   chat[chat/tui/runChatTui runChat]
-  presetRun[commands/multiAgent fillMultiAgentRunPlanGaps]
+  presetRun[commands/multiAgent loadCliMultiAgentRunPlan]
 
   user --> orch
   orch --> platform
@@ -164,6 +164,7 @@ sequenceDiagram
   L->>R: maybe load remote agents if authenticated and gaps exist
   R-->>P: replan with remote agents
   L-->>Run: selected preset id
+  Run->>A: loadAgents({ includeRemote: false })
   Run->>P: plan current preset again
   Run->>R: maybe load remote agents again if gaps exist
   Run->>P: replan current preset
