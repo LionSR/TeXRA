@@ -14,6 +14,10 @@ import {
 } from '@agent/runtime/RunContext';
 import { RunCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
+  AgentExecutionHandle,
+  ExecutionRegistry,
+} from '@agent/runtime/executionRegistry';
+import {
   AGENT_CATEGORY,
   TODO_STATUS,
   type AgentProposal,
@@ -159,14 +163,24 @@ describe('runCoordinators', () => {
 
   it('cleans pending requests for one stream through their owning coordinators', async () => {
     const active = createRecordingHost();
-    const bridge = new RunCoordinatorBridge();
+    const registry = new ExecutionRegistry();
+    const bridge = new RunCoordinatorBridge(registry);
     const coordinators = createCoordinators(active.host);
     const context = createRunContext({
       runtimeHost: active.host,
       coordinators,
     });
+    const handle = new AgentExecutionHandle(
+      'execution:cleanup-stream',
+      streamId,
+      streamId,
+      'orchestrator',
+      'toolUse',
+      active.host,
+      coordinators,
+    );
 
-    const release = bridge.retainForStream(streamId, coordinators);
+    registry.track(handle);
     try {
       const planResult = withRunContext(context, () =>
         bridge.waitForPlanApproval(streamId, {
@@ -204,7 +218,42 @@ describe('runCoordinators', () => {
         }),
       ).toBe(false);
     } finally {
-      release();
+      registry.dispose();
+    }
+  });
+
+  it('clears active-handle coordinator requests even without a bridge request index', async () => {
+    const active = createRecordingHost();
+    const registry = new ExecutionRegistry();
+    const bridge = new RunCoordinatorBridge(registry);
+    const coordinators = createCoordinators(active.host);
+    const handle = new AgentExecutionHandle(
+      'execution:direct-plan-clear',
+      streamId,
+      streamId,
+      'orchestrator',
+      'toolUse',
+      active.host,
+      coordinators,
+    );
+
+    registry.track(handle);
+    try {
+      const planResult = coordinators.plan.waitForApproval(streamId, {
+        approvalId: 'approval:direct-plan-clear',
+        plan,
+      });
+
+      bridge.clearPlanApprovalForStream(streamId);
+
+      await expect(planResult).resolves.toEqual({ action: 'reject' });
+      expect(
+        bridge.resolvePlanApproval('approval:direct-plan-clear', {
+          action: 'approve',
+        }),
+      ).toBe(false);
+    } finally {
+      registry.dispose();
     }
   });
 });

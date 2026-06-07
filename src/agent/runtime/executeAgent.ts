@@ -182,6 +182,7 @@ async function runFlowWithLifecycle(
     agentName,
     category,
     ctx.runtimeHost,
+    ctx.coordinators,
   );
   executionRegistry.track(handle);
   try {
