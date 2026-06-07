@@ -1,17 +1,50 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import {
   AgentExecutionHandle,
   ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
+import { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
 
 describe('executionRegistry', () => {
+  it('uses its interrupt registry when terminating agent handles', () => {
+    const explicit = createRecordingHost();
+    const interrupts = new InterruptRegistry();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ interrupts, streamStatus });
+    const executionId = 'exec-injected-interrupt-test';
+    const parentStreamId = 'parent-injected-interrupt-test' as StreamTabId;
+    const childStreamId = 'child-injected-interrupt-test' as StreamTabId;
+    const interrupt = vi.fn();
+
+    try {
+      interrupts.register(childStreamId, { interrupt });
+      const handle = new AgentExecutionHandle(
+        executionId,
+        parentStreamId,
+        childStreamId,
+        'test-subagent',
+        'toolUse',
+        explicit.host,
+      );
+      registry.track(handle);
+
+      expect(registry.kill(executionId)).toBe(true);
+
+      expect(interrupt).toHaveBeenCalledOnce();
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.STOPPED);
+    } finally {
+      registry.dispose();
+      interrupts.unregister(childStreamId);
+    }
+  });
+
   it('publishes handle updates through the handle runtime host', () => {
     const explicit = createRecordingHost();
     const registry = new ExecutionRegistry();
