@@ -10,7 +10,7 @@ import {
   cleanupAllApprovals,
   isApprovalBypassedForStream,
   isBashApprovalBypassedForStream,
-  isProposalBypassedForStream,
+  proposalApprovalState,
 } from '@tools/approval';
 
 function createRecordingRuntimeHost(): {
@@ -104,7 +104,7 @@ describe('createProgressViewBypassCommandHandlers', () => {
     ).toBe(true);
     await Promise.resolve();
 
-    expect(isProposalBypassedForStream(stream)).toBe(true);
+    expect(proposalApprovalState.isBypassed(stream)).toBe(true);
     expect(isApprovalBypassedForStream(stream)).toBe(true);
     expect(isBashApprovalBypassedForStream(stream)).toBe(true);
     expect(events).toEqual([
@@ -132,7 +132,7 @@ describe('createProgressViewBypassCommandHandlers', () => {
     ).toBe(true);
     await Promise.resolve();
 
-    expect(isProposalBypassedForStream(stream)).toBe(false);
+    expect(proposalApprovalState.isBypassed(stream)).toBe(false);
     expect(isApprovalBypassedForStream(stream)).toBe(false);
     expect(isBashApprovalBypassedForStream(stream)).toBe(false);
     expect(events.slice(-2)).toEqual([
