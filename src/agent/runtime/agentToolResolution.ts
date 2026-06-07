@@ -37,7 +37,10 @@ import {
   withDelegationModelAvailability,
 } from '@tools/delegationModelAvailability';
 import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
-import { listToolInjections } from './toolInjection';
+import {
+  toolInjectionRegistry,
+  type ToolInjectionRegistry,
+} from './toolInjection';
 
 export interface ResolveAgentToolsInput {
   tools: AgentToolUseSetting['tools'];
@@ -48,6 +51,8 @@ export interface ResolveAgentToolsInput {
   delegationBlocked: boolean;
   /** When true, approval-gated tools are filtered out before model invocation. */
   approvalPromptsUnavailable?: boolean;
+  /** Conditional runtime tool injections. Defaults to the shared registry. */
+  toolInjections?: ToolInjectionRegistry;
 }
 
 export interface ResolvedAgentTools {
@@ -91,6 +96,7 @@ export async function resolveAgentTools({
   logger,
   delegationBlocked,
   approvalPromptsUnavailable,
+  toolInjections = toolInjectionRegistry,
 }: ResolveAgentToolsInput): Promise<ResolvedAgentTools> {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
   const disabled = getDisabledToolNames();
@@ -123,7 +129,7 @@ export async function resolveAgentTools({
     resolved.push(def);
     resolvedNames.add(def.name);
   }
-  for (const injection of listToolInjections()) {
+  for (const injection of toolInjections.list()) {
     if (!injection.shouldInject()) continue;
     if (resolvedNames.has(injection.toolName)) continue;
     if (DELEGATION_TOOLS.has(injection.toolName) && delegationBlocked) {
