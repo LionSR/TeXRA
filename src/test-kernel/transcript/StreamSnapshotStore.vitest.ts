@@ -10,14 +10,20 @@ import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { StreamSnapshotStore, streamDataDir } from '@transcript';
+import {
+  TaskStateSchema,
+  type TaskState,
+} from '@agent/core/execution/TaskState';
 import { bus } from '@eventBus/ProgressEventBus';
 import type {
+  ExecutionId,
   Plan,
   StorageKey,
   StreamTabId,
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
+import { AGENT_CATEGORY } from '@shared/schemas/agent';
 import { StorageFS } from '@utils/files';
 
 const tempDirs: string[] = [];
@@ -43,6 +49,7 @@ async function installPlatform(): Promise<void> {
 }
 
 const STREAM = 'polish@gpt#abc123def' as StreamTabId;
+const OTHER_STREAM = 'review@gpt#fed321cba' as StreamTabId;
 const RUN = 'run-1' as StorageKey;
 const RUN_2 = 'run-2' as StorageKey;
 
@@ -203,6 +210,63 @@ describe('StreamSnapshotStore', () => {
     expect(immediate).toBeUndefined();
     await store.flush();
 
+    const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
+    expect(raw).toMatchObject({
+      [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
+      [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
+    });
+  });
+
+  it('keeps seed-before-write for streams outside a partial preload', async () => {
+    await installPlatform();
+    const dir = streamDataDir(OTHER_STREAM);
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'usageStats.json'),
+      JSON.stringify({ [RUN]: usage(100, 20, 0.5) }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    const immediate = store.addUsage(OTHER_STREAM, RUN_2, usage(50, 10, 0.25));
+    expect(immediate).toBeUndefined();
+    await store.flush();
+
+    const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
+    expect(raw).toMatchObject({
+      [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
+      [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
+    });
+  });
+
+  it('makes task state readable immediately while preserving later seeded sidecars', async () => {
+    await installPlatform();
+    const dir = streamDataDir(STREAM);
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'usageStats.json'),
+      JSON.stringify({ [RUN]: usage(100, 20, 0.5) }),
+    );
+
+    const store = new StreamSnapshotStore();
+    const taskState = TaskStateSchema.parse({
+      agentConfig: {
+        agent: 'search',
+        model: 'deepseekproT',
+        agentCategory: AGENT_CATEGORY.TOOL_USE,
+      },
+    }) as TaskState;
+    const executionId = 'abc123' as ExecutionId;
+
+    store.setTaskState(STREAM, taskState, executionId);
+    expect(store.getTaskState(STREAM)).toEqual(taskState);
+    expect(store.getExecutionId(STREAM)).toBe(executionId);
+    expect(store.addUsage(STREAM, RUN_2, usage(50, 10, 0.25))).toBeUndefined();
+    await store.flush();
+
+    expect(store.getTaskState(STREAM)).toEqual(taskState);
+    expect(store.getExecutionId(STREAM)).toBe(executionId);
     const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
     expect(raw).toMatchObject({
       [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
