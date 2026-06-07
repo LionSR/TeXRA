@@ -12,6 +12,7 @@ import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
 } from '@platform/interfaces/lifecycle';
+import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability';
 import { UsageLogService } from '@telemetry/UsageLogService';
 import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
@@ -76,7 +77,6 @@ import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
 import { interruptAllCodexSessions } from '@tools/codex';
 import { interruptAllClaudeAgentSessions } from '@tools/claudeAgent';
-import { setExtensionChecker } from '@tools/externalToolDefs';
 import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup';
@@ -183,6 +183,11 @@ export async function activate(context: vscode.ExtensionContext) {
     lifecycle,
     agentResume: {
       tryResumeStream: (streamId) => tryResumeFromSnapshot(streamId),
+    },
+    toolAvailability: {
+      ...NO_TOOL_AVAILABILITY_HOST,
+      isVscodeExtensionInstalled: (id) =>
+        vscode.extensions.getExtension(id) !== undefined,
     },
   });
   registerAgentFeatures();
@@ -349,7 +354,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
   initializeNativeToolEditApproval(context, extensionAgentRuntimeHost);
   setLeanLanguageServices(leanVscodeIntegration);
-  setExtensionChecker((id) => vscode.extensions.getExtension(id) !== undefined);
   setOpenPdfOpener(async ({ location, preserveFocus }) => {
     await vscode.commands.executeCommand(
       'vscode.open',

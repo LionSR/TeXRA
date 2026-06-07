@@ -6,6 +6,7 @@ import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { JsonStateStore } from '@platform/defaults/jsonStateStore';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
@@ -74,6 +75,7 @@ export async function initializeElectronPlatform(
     }),
     lifecycle,
     agentResume: { tryResumeStream: tryResumeDesktopStream },
+    toolAvailability: NO_TOOL_AVAILABILITY_HOST,
   });
   registerAgentFeatures();
 
