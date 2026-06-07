@@ -11,7 +11,6 @@ import {
   detectUnknownCliFlag,
   runCli,
 } from '@cli/commands/root';
-import { resolveLoginProvider } from '@cli/commands/auth';
 import { doctorPlatformInitContext } from '@cli/commands/doctor';
 import {
   formatUnknownCliCommand,
@@ -21,6 +20,7 @@ import {
   reorderGlobalFlags,
 } from '@cli/commands/_helpers/dispatch';
 import { CliUsageError, formatCrashReportLine } from '@cli/runtime/cliContext';
+import { resolveLoginProvider } from '@cli/runtime/loginOptions';
 import {
   formatCliModelListError,
   isCliFetchStackLog,
