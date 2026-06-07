@@ -9,6 +9,7 @@ import {
   registerCliStateResetHook,
   type ConversationEntry,
 } from './cliState';
+import { activeStreamParentOrSelfId } from './streamViews';
 
 export const CLI_LOCAL_STREAM_ID = 'cli-local' as StreamTabId;
 
@@ -126,8 +127,10 @@ export function resolveLocalTranscriptStreamId({
   readonly rootStreamId: StreamTabId | undefined;
 }): StreamTabId {
   if (rootStreamId) return rootStreamId;
-  if (!activeStreamId) return fallbackStreamId;
-  return parentStream.get(activeStreamId) ?? activeStreamId;
+  return (
+    activeStreamParentOrSelfId({ activeStreamId, parentStream }) ??
+    fallbackStreamId
+  );
 }
 
 function defaultLocalTranscriptStreamId(): StreamTabId {
