@@ -102,7 +102,11 @@ type ProgressMessage = {
   streamId?: string;
   todos?: unknown[];
   plan?: unknown;
+  runId?: string;
+  usage?: unknown;
   entries?: Array<{ text?: string }>;
+  rounds?: Record<string, unknown>;
+  reset?: boolean;
   streams?: Array<{ name: string; creationTimestamp: number }>;
   streamStates?: Record<string, unknown>;
 };
@@ -530,6 +534,131 @@ describe('DesktopProgressBridge', () => {
       bridge.setActiveStream('ghost-stream');
 
       expect(messages).toEqual([]);
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('restores a ghost stream display from shared streamData sidecars', async () => {
+    const messages: unknown[] = [];
+    const plan = {
+      summary: 'Restore the prior display state.',
+      steps: [
+        {
+          title: 'Read sidecars',
+          description: 'Load all durable progress-view sidecar fields.',
+          status: 'pending',
+          files: ['paper.tex'],
+        },
+      ],
+    };
+    const outputLocation = {
+      kind: 'workspace',
+      absolutePath: '/workspace/out/paper.pdf',
+      relativePath: 'out/paper.pdf',
+    };
+    const logLocation = {
+      kind: 'workspace',
+      absolutePath: '/workspace/out/paper.log',
+      relativePath: 'out/paper.log',
+    };
+    const sidecars: Record<string, unknown> = {
+      workPlan: {
+        todos: [
+          {
+            content: 'Persisted todo',
+            status: 'pending',
+            activeForm: 'Restoring persisted todo',
+          },
+        ],
+        plan,
+        planSummary: plan.summary,
+      },
+      usageStats: {
+        'run-1': {
+          inputTokens: 42,
+          outputTokens: 7,
+          cost: 0.12,
+        },
+      },
+      outputFiles: {
+        '1': [
+          {
+            source: 'paper.tex',
+            location: outputLocation,
+            round: 1,
+            lineage: null,
+            diff: null,
+          },
+        ],
+      },
+      missingOutputs: { '1': ['out/missing.pdf'] },
+      compileFailures: {
+        '1': [
+          {
+            round: 1,
+            displayName: 'paper.tex',
+            output: outputLocation,
+            log: logLocation,
+            logRelativePath: 'out/paper.log',
+          },
+        ],
+      },
+    };
+    const bridge = await createBridge(messages, {
+      kvRead: (key) => sidecars[key],
+      streamSnapshotStore: createStreamSnapshotStore([
+        {
+          streamId: 'ghost-stream',
+          label: 'ghost-stream',
+          agentCategory: AGENT_CATEGORY.WORKFLOW,
+          lastKnownStatus: STREAM_STATUS.STOPPED,
+          creationTimestamp: 1_000,
+          persistedAt: 2_000,
+        },
+      ]),
+    });
+
+    try {
+      bridge.setActiveStream('ghost-stream');
+      await settleProgressEvents();
+      const last = (command: string) =>
+        progressMessages(messages, command).at(-1);
+
+      expect(last(PROGRESS_VIEW_COMMANDS.UPDATE_TODOS)).toMatchObject({
+        stream: 'ghost-stream',
+        todos: [expect.objectContaining({ content: 'Persisted todo' })],
+      });
+      expect(last(PROGRESS_VIEW_COMMANDS.UPDATE_PLAN)).toMatchObject({
+        stream: 'ghost-stream',
+        plan,
+      });
+      expect(last(PROGRESS_VIEW_COMMANDS.UPDATE_RUN_USAGE)).toMatchObject({
+        stream: 'ghost-stream',
+        runId: 'run-1',
+        usage: { inputTokens: 42, outputTokens: 7, cost: 0.12 },
+      });
+      expect(last(PROGRESS_VIEW_COMMANDS.UPDATE_FILES)).toMatchObject({
+        stream: 'ghost-stream',
+        rounds: {
+          '1': [expect.objectContaining({ source: 'paper.tex', round: 1 })],
+        },
+      });
+      expect(last(PROGRESS_VIEW_COMMANDS.UPDATE_MISSING_OUTPUTS)).toMatchObject(
+        {
+          stream: 'ghost-stream',
+          rounds: { '1': ['out/missing.pdf'] },
+        },
+      );
+      expect(
+        last(PROGRESS_VIEW_COMMANDS.UPDATE_COMPILE_FAILURES),
+      ).toMatchObject({
+        stream: 'ghost-stream',
+        rounds: {
+          '1': [expect.objectContaining({ logRelativePath: 'out/paper.log' })],
+        },
+        reset: true,
+      });
     } finally {
       bridge.dispose();
     }
