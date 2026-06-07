@@ -848,6 +848,8 @@ export function App(props: AppProps): React.JSX.Element {
           })}
           queuedFollowUpPreview={!queuedFollowUpPanelVisible}
           shortcutsActive={focusShortcutsActive}
+          subagentControlsAvailable={subagentControlsAvailable}
+          taskControlsAvailable={taskControlsAvailable}
         />
       </Box>
     </>
