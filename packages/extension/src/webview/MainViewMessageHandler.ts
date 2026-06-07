@@ -12,6 +12,7 @@ import { agentDirectories } from '@frontend/agents';
 import { loadOptions } from '@frontend/agents/optionsLoader';
 import { RecordingManager } from '@frontend/media/RecordingManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { showInstructionWithSuppress } from '@frontend/ui/instruction';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import {
@@ -377,14 +378,12 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         webviewView.webview.postMessage(message);
       }
     } catch (error) {
-      this.logger.error(
-        this.channel,
-        `Failed to compute options: ${toErrorMessage(error)}`,
-      );
       // Without this the model/agent pickers render empty with no explanation;
       // tell the user why so the failure is actionable rather than silent.
-      void vscode.window.showErrorMessage(
-        `TeXRA failed to load model and agent options: ${toErrorMessage(error)}`,
+      await showLoggedErrorMessage(
+        this.channel,
+        'TeXRA failed to load model and agent options',
+        error,
       );
     }
   }

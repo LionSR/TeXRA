@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { toErrorMessage } from '@common/errors';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import type { MainViewInboundMessage } from '@shared/schemas';
@@ -121,15 +122,9 @@ export class InstructionManager extends BaseWebviewManager {
         file: fileName,
       });
     } catch (err) {
-      logger.error(
-        CHANNEL,
-        `Error handling clipboard image: ${toErrorMessage(err)}`,
-      );
       // Surface to the user — otherwise the paste silently does nothing and
       // they have no idea the image was dropped.
-      void vscode.window.showErrorMessage(
-        `Failed to paste image: ${toErrorMessage(err)}`,
-      );
+      await showLoggedErrorMessage(CHANNEL, 'Failed to paste image', err);
     }
   }
 }
