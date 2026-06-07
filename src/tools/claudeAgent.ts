@@ -73,6 +73,7 @@ import {
   findClaudeBinaryPath,
 } from './claudeAgentImport';
 import { createChildStream } from './childStream';
+import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import {
   agentCliLoopTerminalStatus,
   finalizeAgentCliLoopStatus,
@@ -152,19 +153,12 @@ interface ActiveSession {
   additionalDirectories?: string[];
 }
 
-const sessionRegistry = new Map<string, ActiveSession>();
-
-function storeSession(sessionId: string, entry: ActiveSession): void {
-  sessionRegistry.set(sessionId, entry);
-  void getExecutionStore(entry.executionId)
-    .write('claude_agent_session_id', sessionId)
-    .catch(() => {});
-}
+const claudeAgentSessions = new AgentCliSessionRegistry<ActiveSession>(
+  'claude_agent_session_id',
+);
 
 export function interruptAllClaudeAgentSessions(): void {
-  for (const { childStreamId } of [...sessionRegistry.values()]) {
-    interruptRegistry.get(childStreamId)?.interrupt();
-  }
+  claudeAgentSessions.interruptAll();
 }
 
 // ============================================================================
@@ -562,9 +556,9 @@ function startClaudeAgentLoop(params: {
         if (
           !turnFailed &&
           turn?.sessionId &&
-          !sessionRegistry.has(turn.sessionId)
+          !claudeAgentSessions.isActive(turn.sessionId)
         ) {
-          storeSession(turn.sessionId, {
+          claudeAgentSessions.register(turn.sessionId, {
             childStreamId,
             parentStreamId,
             executionId,
@@ -615,9 +609,7 @@ function startClaudeAgentLoop(params: {
       }
     } finally {
       sessionStage.end(sawTurnFailure ? 'error' : 'stopped');
-      for (const sessionId of storedSessionIds) {
-        sessionRegistry.delete(sessionId);
-      }
+      claudeAgentSessions.releaseMany(storedSessionIds);
       interruptRegistry.unregister(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
       await writeTerminalStatus(
@@ -775,7 +767,7 @@ function resumeClaudeAgentSession(
   prompt: string,
   callerStreamId: StreamTabId | undefined,
 ): ToolResult {
-  const stored = sessionRegistry.get(sessionId);
+  const stored = claudeAgentSessions.lookup(sessionId);
   if (!stored) {
     throw new ToolError(
       `Claude Code CLI session '${sessionId}' is not active. It may have completed or been stopped; start a new session without session_id.`,
