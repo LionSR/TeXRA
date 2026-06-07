@@ -405,7 +405,7 @@ For good separation of concerns, testability, and platform independence, core bu
 - Use `isFile()` / `isDirectory()` from `@utils/files/fsEntryType` instead of `vscode.FileType`
 - Use `isFileNotFoundError()` from `@common/errors` instead of `instanceof vscode.FileSystemError`
 - Return error results instead of calling `vscode.window.show*Message()` from business logic — let the caller (command layer) handle UI
-- Use injectable callbacks (like `setExtensionChecker()` in `externalToolDefs.ts`) for platform-specific capabilities needed in agnostic code
+- Add typed `Platform` ports (like `toolAvailability.isVscodeExtensionInstalled`) for platform-specific capabilities needed in agnostic code
 
 ### Path Aliases
 

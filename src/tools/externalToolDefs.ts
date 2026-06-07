@@ -49,25 +49,6 @@ const TEXRA_LOCAL_CLI_CHECK = {
   errorMessage: 'TeXRA local CLI is not installed or not on PATH.',
 } as const;
 
-/**
- * Pluggable check for VS Code extension availability.
- * Set by the extension host at activation; defaults to false (not available).
- */
-let extensionChecker: (extensionId: string) => boolean = () => false;
-let texraCliEntrypointChecker: () => boolean = () => false;
-
-/** Register a platform-specific extension availability checker. */
-export function setExtensionChecker(
-  checker: (extensionId: string) => boolean,
-): void {
-  extensionChecker = checker;
-}
-
-/** Register a host-specific check for whether this process is already TeXRA CLI. */
-export function setTexraCliEntrypointChecker(checker: () => boolean): void {
-  texraCliEntrypointChecker = checker;
-}
-
 // ============================================================
 // Type
 // ============================================================
@@ -183,7 +164,7 @@ async function resolveGitHubPRPrerequisites(
 }
 
 async function probeTexraCli(): Promise<boolean> {
-  if (texraCliEntrypointChecker()) return true;
+  if (platform().toolAvailability.isTexraCliEntrypoint()) return true;
   if (await checkToolInstalled(TEXRA_CLI_CHECK, false)) return true;
   return checkToolInstalled(TEXRA_LOCAL_CLI_CHECK, false);
 }
@@ -332,7 +313,10 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       'VS Code build: requires the leanprover.lean4 extension. ' +
       'CLI / desktop builds: requires `lake` on PATH; each Lake project root gets its own language server, surfaced below.',
     probe: async () => {
-      const extensionAvailable = extensionChecker(LEAN4_EXTENSION_ID);
+      const extensionAvailable =
+        platform().toolAvailability.isVscodeExtensionInstalled(
+          LEAN4_EXTENSION_ID,
+        );
       const lakeAvailable = await checkToolInstalled(
         { command: 'lake --version', errorMessage: 'lake not on PATH' },
         false,
