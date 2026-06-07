@@ -286,10 +286,14 @@ export async function activate(context: vscode.ExtensionContext) {
         getAuthCallbackUri(vscode.env.uriScheme),
       );
       const externalUri = await vscode.env.asExternalUri(baseCallbackUri);
-      const vscodeState = new URLSearchParams(externalUri.query).get('state');
-      const baseUrl = `${externalUri.scheme}://${externalUri.authority}${externalUri.path}`;
 
-      return { baseUrl, vscodeState, fullUrl: externalUri.toString() };
+      // asExternalUri adds a ?state= routing token in Codespaces; carrying it on
+      // fullUrl (used as redirectTo) is what routes the callback back into the
+      // editor. skipEncoding (toString(true)) so auth-js's encodeURIComponent
+      // over redirectTo does not double-encode the already percent-encoded
+      // token; double-encoding corrupts it and the callback never returns
+      // (silent timeout).
+      return { fullUrl: externalUri.toString(true) };
     });
 
     if (!isSupabaseConfigured()) {
