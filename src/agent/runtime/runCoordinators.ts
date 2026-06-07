@@ -1,8 +1,4 @@
-import {
-  tryUseRunContext,
-  useRunContext,
-  type RunCoordinators,
-} from './RunContext';
+import { useRunContext, type RunCoordinators } from './RunContext';
 import type {
   ProposalRequestOptions,
   ProposalResult,
@@ -34,20 +30,16 @@ function useRunCoordinators(): RunCoordinators {
  * AgentLaunchContext's coordinators.
  */
 export class RunCoordinatorBridge {
-  private readonly runStreams = new Map<string, RunCoordinators>();
-  private readonly planApprovals = new Map<string, RunCoordinators>();
-  private readonly planApprovalStreams = new Map<string, string>();
-  private readonly planStreams = new Map<string, RunCoordinators>();
-  private readonly proposals = new Map<string, RunCoordinators>();
-  private readonly proposalStreams = new Map<string, string>();
+  private readonly streamCoordinators = new Map<string, RunCoordinators>();
+  private readonly planApprovals = new Map<string, CoordinatorRequest>();
+  private readonly proposals = new Map<string, CoordinatorRequest>();
   private readonly retries = new Map<string, RunCoordinators>();
-  private readonly retryCoordinatorRefs = new Map<RunCoordinators, number>();
 
   retainForStream(streamId: string, coordinators: RunCoordinators): () => void {
-    this.runStreams.set(streamId, coordinators);
+    this.streamCoordinators.set(streamId, coordinators);
     return () => {
-      if (this.runStreams.get(streamId) === coordinators) {
-        this.runStreams.delete(streamId);
+      if (this.streamCoordinators.get(streamId) === coordinators) {
+        this.streamCoordinators.delete(streamId);
       }
     };
   }
@@ -57,15 +49,11 @@ export class RunCoordinatorBridge {
     options: PlanApprovalRequestOptions,
   ): Promise<PlanApprovalResult> {
     const coordinators = useRunCoordinators();
-    this.planApprovals.set(options.approvalId, coordinators);
-    this.planApprovalStreams.set(options.approvalId, streamId);
-    this.planStreams.set(streamId, coordinators);
+    this.planApprovals.set(options.approvalId, { streamId, coordinators });
     try {
       return await coordinators.plan.waitForApproval(streamId, options);
     } finally {
       this.planApprovals.delete(options.approvalId);
-      this.planApprovalStreams.delete(options.approvalId);
-      this.planStreams.delete(streamId);
     }
   }
 
@@ -73,17 +61,19 @@ export class RunCoordinatorBridge {
     return (
       this.planApprovals
         .get(approvalId)
-        ?.plan.resolveRequest(approvalId, result) ?? false
+        ?.coordinators.plan.resolveRequest(approvalId, result) ?? false
     );
   }
 
   clearPlanApprovalForStream(streamId: string): void {
-    (
-      this.planStreams.get(streamId)?.plan ??
-      this.runStreams.get(streamId)?.plan ??
-      tryUseRunContext()?.coordinators?.plan
-    )?.clearForStream(streamId);
-    this.clearPlanBridgeForStream(streamId);
+    const entries = matchingRequests(this.planApprovals, streamId);
+    for (const [approvalId, entry] of entries) {
+      entry.coordinators.plan.clearRequest(approvalId);
+      this.planApprovals.delete(approvalId);
+    }
+    if (entries.length === 0) {
+      this.streamCoordinators.get(streamId)?.plan.clearForStream(streamId);
+    }
   }
 
   async waitForProposal(
@@ -91,13 +81,11 @@ export class RunCoordinatorBridge {
     options: ProposalRequestOptions,
   ): Promise<ProposalResult> {
     const coordinators = useRunCoordinators();
-    this.proposals.set(options.proposalId, coordinators);
-    this.proposalStreams.set(options.proposalId, streamId);
+    this.proposals.set(options.proposalId, { streamId, coordinators });
     try {
       return await coordinators.proposal.waitForProposal(streamId, options);
     } finally {
       this.proposals.delete(options.proposalId);
-      this.proposalStreams.delete(options.proposalId);
     }
   }
 
@@ -105,7 +93,7 @@ export class RunCoordinatorBridge {
     return (
       this.proposals
         .get(proposalId)
-        ?.proposal.resolveRequest(proposalId, result) ?? false
+        ?.coordinators.proposal.resolveRequest(proposalId, result) ?? false
     );
   }
 
@@ -114,13 +102,13 @@ export class RunCoordinatorBridge {
     options: RetryRequestOptions,
   ): Promise<RetryResult> {
     const coordinators = useRunCoordinators();
-    this.retainRetryCoordinator(coordinators);
     this.retries.set(streamId, coordinators);
     try {
       return await coordinators.retry.waitForRetry(streamId, options);
     } finally {
-      this.retries.delete(streamId);
-      this.releaseRetryCoordinator(coordinators);
+      if (this.retries.get(streamId) === coordinators) {
+        this.retries.delete(streamId);
+      }
     }
   }
 
@@ -139,10 +127,8 @@ export class RunCoordinatorBridge {
     const coordinators = new Set<RunCoordinators>();
     const mappedCoordinators = this.retries.get(streamId);
     if (mappedCoordinators) coordinators.add(mappedCoordinators);
-    const runCoordinators = this.runStreams.get(streamId);
+    const runCoordinators = this.streamCoordinators.get(streamId);
     if (runCoordinators) coordinators.add(runCoordinators);
-    const ambient = tryUseRunContext()?.coordinators;
-    if (ambient) coordinators.add(ambient);
     for (const coordinator of coordinators) {
       coordinator.retry.clearRequest(streamId);
     }
@@ -161,69 +147,42 @@ export class RunCoordinatorBridge {
     this.clearAllRetryRequests();
   }
 
-  private retainRetryCoordinator(coordinators: RunCoordinators): void {
-    this.retryCoordinatorRefs.set(
-      coordinators,
-      (this.retryCoordinatorRefs.get(coordinators) ?? 0) + 1,
-    );
-  }
-
-  private releaseRetryCoordinator(coordinators: RunCoordinators): void {
-    const nextCount = (this.retryCoordinatorRefs.get(coordinators) ?? 0) - 1;
-    if (nextCount > 0) {
-      this.retryCoordinatorRefs.set(coordinators, nextCount);
-    } else {
-      this.retryCoordinatorRefs.delete(coordinators);
-    }
-  }
-
-  private clearPlanBridgeForStream(streamId: string): void {
-    this.planStreams.delete(streamId);
-    const approvalIds = [...this.planApprovalStreams.entries()]
-      .filter(([, approvalStreamId]) => approvalStreamId === streamId)
-      .map(([approvalId]) => approvalId);
-    for (const approvalId of approvalIds) {
-      this.planApprovals.delete(approvalId);
-      this.planApprovalStreams.delete(approvalId);
-    }
-  }
-
   private clearAllPlanApprovals(): void {
-    const coordinators = new Set(this.planStreams.values());
-    for (const runCoordinators of this.runStreams.values()) {
+    const coordinators = new Set(
+      [...this.planApprovals.values()].map((entry) => entry.coordinators),
+    );
+    for (const runCoordinators of this.streamCoordinators.values()) {
       coordinators.add(runCoordinators);
     }
     for (const coordinator of coordinators) {
       coordinator.plan.clearAll();
     }
     this.planApprovals.clear();
-    this.planApprovalStreams.clear();
-    this.planStreams.clear();
   }
 
   private clearProposalForStream(streamId: string): void {
-    const proposalIds = [...this.proposalStreams.entries()]
-      .filter(([, proposalStreamId]) => proposalStreamId === streamId)
-      .map(([proposalId]) => proposalId);
-    for (const proposalId of proposalIds) {
-      this.proposals.get(proposalId)?.proposal.clearRequest(proposalId);
+    for (const [proposalId, entry] of matchingRequests(
+      this.proposals,
+      streamId,
+    )) {
+      entry.coordinators.proposal.clearRequest(proposalId);
       this.proposals.delete(proposalId);
-      this.proposalStreams.delete(proposalId);
     }
   }
 
   private clearAllProposals(): void {
-    const coordinators = new Set(this.proposals.values());
+    const coordinators = new Set(
+      [...this.proposals.values()].map((entry) => entry.coordinators),
+    );
     for (const coordinator of coordinators) {
       coordinator.proposal.clearAll();
     }
     this.proposals.clear();
-    this.proposalStreams.clear();
   }
 
   private clearAllRetryRequests(): void {
-    const coordinators = new Set(this.retryCoordinatorRefs.keys());
-    for (const runCoordinators of this.runStreams.values()) {
+    const coordinators = new Set<RunCoordinators>();
+    for (const runCoordinators of this.streamCoordinators.values()) {
       coordinators.add(runCoordinators);
     }
     for (const runCoordinators of this.retries.values()) {
@@ -232,9 +191,22 @@ export class RunCoordinatorBridge {
     for (const coordinator of coordinators) {
       coordinator.retry.clearAll();
     }
-    this.retryCoordinatorRefs.clear();
     this.retries.clear();
   }
+}
+
+interface CoordinatorRequest {
+  readonly streamId: string;
+  readonly coordinators: RunCoordinators;
+}
+
+function matchingRequests(
+  requests: ReadonlyMap<string, CoordinatorRequest>,
+  streamId: string,
+): Array<[string, CoordinatorRequest]> {
+  return [...requests.entries()].filter(
+    ([, entry]) => entry.streamId === streamId,
+  );
 }
 
 export const runCoordinatorBridge = new RunCoordinatorBridge();
