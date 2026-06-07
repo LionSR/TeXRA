@@ -70,18 +70,18 @@ flowchart TB
 
 ### The inheritance chain
 
-The root is `AgentCore<C>` (`src/agent/implementations/flows/common/BaseFlowServices.ts:18`). Every flow-service interface extends it through `BaseFlowContextInit`:
+The root is `AgentCore<C>` (`src/agent/implementations/flows/common/BaseFlowServices.ts:18`). Every flow-service interface extends it through `BaseFlowContextInit`, but the cycle-service interfaces are siblings of the flow-specific interfaces, not children of them:
 
 ```
 AgentCore (13)                         BaseFlowServices.ts:18
   └─ BaseFlowContextInit (+4 = 17)     BaseFlowServices.ts:53
        ├─ ReflectionServices (+~9)     ReflectionServices.ts:18      → ~26 declared
-       │    └─ ResponseCycleServices   CycleServices.ts:19           → 22 declared / ~31 runtime
-       └─ ToolUseServices (+~16)       ToolUseServices.ts:15         → ~33 declared
-            └─ ToolUseCycleServices    CycleServices.ts:30           → 23 declared / ~35 runtime
+       ├─ ToolUseServices (+~16)       ToolUseServices.ts:15         → ~33 declared
+       ├─ ResponseCycleServices (+5)   CycleServices.ts:19           → 22 declared / ~31 runtime
+       └─ ToolUseCycleServices (+6)    CycleServices.ts:30           → 23 declared / ~35 runtime
 ```
 
-The inheritance is only **3 levels deep**, but the _runtime_ object is larger than the declared interface because the outer bag is **spread wholesale** into the inner cycle (`{...this.services, ...}`) rather than narrowed. TypeScript understates what is actually carried.
+The declared inheritance is only **2 levels deep** after `AgentCore`, but the _runtime_ object is larger than the declared cycle interface because the outer bag is **spread wholesale** into the inner cycle (`{...this.services, ...}`) rather than narrowed. TypeScript understates what is actually carried.
 
 ### The bag travels 4 hops and is re-spread twice
 
@@ -236,7 +236,7 @@ flowchart TB
 
 ### The silent-no-op trap
 
-9 setters default to a no-op. Six of those are wired **only in `extension.ts`**, so in CLI/desktop the linter, manual criticism, tool-missing toasts, tool-unavailable notifications, and the GitHub token are **silently absent with no error**. Folding into typed `Platform` ports turns each missing wiring into a compile error instead of a silent runtime gap.
+9 setters default to a no-op. Six of those are wired **only in `extension.ts`**, so in CLI/desktop the linter, manual criticism, PDF opening, tool-missing toasts, tool-unavailable notifications, and the GitHub token are **silently absent with no error**. Folding into typed `Platform` ports turns each missing wiring into a compile error instead of a silent runtime gap.
 
 ---
 
