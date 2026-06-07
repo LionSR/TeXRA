@@ -6,19 +6,29 @@
  */
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import type { ActiveChildInfo, StreamTabId } from '@shared/schemas';
+import {
+  StreamStatusService,
+  type StreamStatusRegistry,
+} from '@agent/runtime/StreamStatusService';
+import {
+  interruptRegistry,
+  type InterruptRegistry,
+} from '@agent/runtime/InterruptRegistry';
+import {
+  STREAM_STATUS,
+  type ActiveChildInfo,
+  type StreamTabId,
+} from '@shared/schemas';
 import {
   type ExecutionHandle,
   AgentExecutionHandle,
   ProcessExecutionHandle,
   collectChildSummary,
-  interruptActiveChildren as interruptChildren,
+  isChildExecution,
 } from './ExecutionHandle';
 import {
-  flushProcessOutput,
-  registerProcessOutput,
-  unregisterProcessOutput,
+  processOutputPoller,
+  type ProcessOutputPoller,
 } from './ProcessOutputPoller';
 
 export type { ExecutionHandle } from './ExecutionHandle';
@@ -40,6 +50,9 @@ export class ExecutionRegistry {
   private readonly handles = new Map<string, ExecutionHandle>();
   private readonly changeCallbacks = new Map<string, Array<() => void>>();
   private readonly disposeStatusListener: () => void;
+  private readonly processOutput: ProcessOutputPoller;
+  private readonly streamStatus: StreamStatusRegistry;
+  private readonly interrupts: InterruptRegistry;
   // Persistent listeners stay attached across notifications (unlike one-shot
   // waiters in `changeCallbacks`). Used by the executions subscribe action.
   private readonly persistentListeners = new Map<
@@ -47,11 +60,22 @@ export class ExecutionRegistry {
     Set<(handle: ExecutionHandle | undefined) => void>
   >();
 
-  constructor() {
+  constructor({
+    interrupts = interruptRegistry,
+    processOutput = processOutputPoller,
+    streamStatus = StreamStatusService,
+  }: {
+    readonly interrupts?: InterruptRegistry;
+    readonly processOutput?: ProcessOutputPoller;
+    readonly streamStatus?: StreamStatusRegistry;
+  } = {}) {
+    this.interrupts = interrupts;
+    this.processOutput = processOutput;
+    this.streamStatus = streamStatus;
     // Notify waiters and refresh UI badges when stream status changes
     // (e.g. RUNNING → WAITING). Without this, waitForChange only resolves
     // on progress/kill/untrack, and the background-tasks panel shows stale badges.
-    this.disposeStatusListener = StreamStatusService.onDidChange(
+    this.disposeStatusListener = this.streamStatus.onDidChange(
       ({ streamId }) => {
         for (const [executionId, handle] of this.handles) {
           if (
@@ -95,7 +119,7 @@ export class ExecutionRegistry {
         });
       }
     } else if (handle instanceof ProcessExecutionHandle) {
-      registerProcessOutput(handle, runtimeHost);
+      this.processOutput.register(handle, runtimeHost);
       this.emitActiveProcessesUpdate(handle.parentStreamId, runtimeHost);
     }
   }
@@ -120,11 +144,11 @@ export class ExecutionRegistry {
       // The final read must complete before the badge update, because the
       // badge handler prunes output entries for processes no longer active.
       const finalize = (): void => {
-        unregisterProcessOutput(executionId);
+        this.processOutput.unregister(executionId);
         this.emitActiveProcessesUpdate(handle.parentStreamId, runtimeHost);
       };
       if (handle.outputPaths) {
-        void flushProcessOutput(handle, runtimeHost).finally(finalize);
+        void this.processOutput.flush(handle, runtimeHost).finally(finalize);
       } else {
         finalize();
       }
@@ -135,11 +159,32 @@ export class ExecutionRegistry {
     return this.handles.get(executionId);
   }
 
+  getAgentHandleByStream(
+    streamId: StreamTabId,
+  ): AgentExecutionHandle | undefined {
+    for (const handle of this.handles.values()) {
+      if (
+        handle instanceof AgentExecutionHandle &&
+        handle.childStreamId === streamId
+      ) {
+        return handle;
+      }
+    }
+    return undefined;
+  }
+
+  getAgentHandles(): AgentExecutionHandle[] {
+    return [...this.handles.values()].filter(
+      (handle): handle is AgentExecutionHandle =>
+        handle instanceof AgentExecutionHandle,
+    );
+  }
+
   /** Terminate an execution via its handle. Returns true on success. */
   kill(executionId: string): boolean {
     const handle = this.handles.get(executionId);
     if (!handle) return false;
-    const result = handle.terminate();
+    const result = this.terminate(handle);
     // Always notify waiters — even if terminate() returned false (e.g. PID not
     // yet assigned), callers blocking on this execution should be unblocked.
     this.notifyWaiters(executionId);
@@ -235,7 +280,11 @@ export class ExecutionRegistry {
 
   /** Interrupt all active subagents of a parent stream. */
   interruptActiveChildren(parentStreamId: StreamTabId): void {
-    interruptChildren(parentStreamId, this.handles.values());
+    for (const handle of this.handles.values()) {
+      if (isChildExecution(handle, parentStreamId)) {
+        this.terminate(handle);
+      }
+    }
   }
 
   /**
@@ -260,7 +309,7 @@ export class ExecutionRegistry {
           parentStreamId: null,
         });
       } else if (handle instanceof ProcessExecutionHandle) {
-        handle.terminate();
+        this.terminate(handle);
       }
     }
     this.emitActiveSubagentsUpdate(parentStreamId, runtimeHost);
@@ -336,6 +385,24 @@ export class ExecutionRegistry {
         ProcessExecutionHandle,
       ),
     });
+  }
+
+  private terminate(handle: ExecutionHandle): boolean {
+    if (handle instanceof AgentExecutionHandle) {
+      const interruptible = this.interrupts.get(handle.childStreamId);
+      if (!interruptible) return false;
+      interruptible.interrupt();
+      this.streamStatus.set(handle.childStreamId, STREAM_STATUS.STOPPED, {
+        runtimeHost: handle.runtimeHost,
+      });
+      return true;
+    }
+
+    if (handle instanceof ProcessExecutionHandle) {
+      return handle.terminate();
+    }
+
+    return false;
   }
 
   private addChangeCallback(executionId: string, cb: () => void): void {

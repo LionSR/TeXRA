@@ -13,6 +13,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 
+import * as logger from '@logger/logUtils';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
 
 import type {
@@ -75,8 +76,16 @@ export class TraceEmitter implements AgentTrace {
     for (const sub of this.subscribers) {
       try {
         sub(stamped);
-      } catch {
-        // A misbehaving subscriber must not break the run.
+      } catch (err) {
+        // A misbehaving subscriber must not break the run. Log via the
+        // output-channel logger (not back through this emitter) so a throwing
+        // sink is diagnosable without recursing into the trace stream.
+        logger.debug(
+          'TraceEmitter',
+          `Trace subscriber threw while handling event: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
       }
     }
   }

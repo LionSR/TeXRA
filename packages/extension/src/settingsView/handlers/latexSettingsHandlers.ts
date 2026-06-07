@@ -96,23 +96,28 @@ export class LatexSettingsHandlers {
       !this.latexSettingsCache ||
       now - this.latexSettingsCache.timestamp >= LATEX_SETTINGS_CACHE_TTL
     ) {
-      let settings: LatexSettingsStatus;
       try {
-        settings = await this.toolingController.detectStatus();
+        const settings = await this.toolingController.detectStatus();
+        this.latexSettingsCache = { settings, timestamp: now };
       } catch (error) {
+        // Detection failed (e.g. a tool probe threw). Do NOT cache a fabricated
+        // "nothing installed" status: caching it would mislead the user for the
+        // whole TTL — making an installed setup look broken — and hide the real
+        // failure. Post a best-effort default for this render only and retry
+        // detection on the next open.
         this.ctx.logger.error(
           this.ctx.channel,
           `Failed to load LaTeX settings status: ${toErrorMessage(error)}`,
         );
-        settings = {
-          ...DEFAULT_LATEX_SETTINGS_STATUS,
-          platform: normalizePlatform(process.platform),
-        };
+        await webview.postMessage({
+          command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
+          settings: {
+            ...DEFAULT_LATEX_SETTINGS_STATUS,
+            platform: normalizePlatform(process.platform),
+          },
+        });
+        return;
       }
-      this.latexSettingsCache = {
-        settings,
-        timestamp: now,
-      };
     }
 
     await webview.postMessage({

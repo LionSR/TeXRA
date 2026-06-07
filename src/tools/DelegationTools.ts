@@ -60,8 +60,8 @@ import { formatBytes } from '@shared/utils/string';
 // Local imports - tools
 import type { ToolResult } from '@tools/result';
 import {
-  isProposalBypassedForStream,
   isApprovalBypassedForStream,
+  proposalApprovalState,
   enableYoloOnChildStream,
   inheritBashBypassOnChildStream,
 } from '@tools/approval';
@@ -73,9 +73,8 @@ import {
   formatFollowUpInstruction,
 } from '@tools/subagentResults';
 import {
-  resolveSubagentBeforeWaitingDelivery,
   SUBAGENT_DELIVERY_DECISION,
-  type SubagentDeliveryState,
+  subagentDeliveryRegistry,
 } from '@tools/subagentDeliveryState';
 import {
   availableModelNamesFromOptions,
@@ -104,12 +103,6 @@ const LOG_CHANNEL = 'DelegationTools';
 logger.initialize(LOG_CHANNEL);
 
 const LARGE_BIB_LIMIT_BYTES = 100 * 1024;
-
-// ============================================================================
-// Subagent delivery state tracking
-// ============================================================================
-
-const activeSubagentDelivery = new Map<string, SubagentDeliveryState>();
 
 /**
  * Shared Zod field for the `memories` parameter on delegation tools.
@@ -456,24 +449,21 @@ async function executeSubagent(
     }
   }
 
-  // Track delivery state in the module-level map so delegate_agent (resume)
-  // can find live subagents and enqueue follow-up instructions.
-  // The flag prevents duplicate delivery of the same result via both
-  // onBeforeWaiting and onCompleted. When a follow-up is consumed, the next
-  // onBeforeWaiting will deliver the resumed cycle's result.
-  const deliveryState: SubagentDeliveryState = { hasDelivered: false };
-  activeSubagentDelivery.set(executionId, deliveryState);
+  // Register delivery state so delegate_agent (resume) can find live subagents.
+  // The state object owns duplicate-delivery protection between onBeforeWaiting
+  // and onCompleted. When a follow-up is consumed, the next onBeforeWaiting
+  // delivers the resumed cycle's result.
+  const deliveryState = subagentDeliveryRegistry.start(executionId);
   let childStreamId: StreamTabId | undefined;
 
   function onProgress(update: SubagentProgressUpdate): void {
-    if (deliveryState.hasDelivered) return;
+    if (deliveryState.isDelivered()) return;
     const msg = formatSubagentProgress(executionId, agentName, update);
     ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
   }
 
   function deliverSubagentError(err: unknown): void {
-    if (deliveryState.hasDelivered) return;
-    deliveryState.hasDelivered = true;
+    if (!deliveryState.markDelivered()) return;
     const wallTimeMs = Date.now() - startedAt;
     const msg = formatSubagentError(executionId, agentName, err, {
       wallTimeMs,
@@ -501,13 +491,11 @@ async function executeSubagent(
     },
     onProgress,
     onFollowUpConsumed: () => {
-      deliveryState.hasDelivered = false;
+      deliveryState.markPending();
     },
     onBeforeWaiting: async (lastResponse, touchedFiles) => {
-      const deliveryDecision = resolveSubagentBeforeWaitingDelivery(
-        deliveryState,
-        childStreamId,
-      );
+      const deliveryDecision =
+        deliveryState.resolveBeforeWaiting(childStreamId);
       if (deliveryDecision === SUBAGENT_DELIVERY_DECISION.AlreadyDelivered) {
         return true;
       }
@@ -541,13 +529,12 @@ async function executeSubagent(
       }
       // Mark delivered and enqueue only after the write attempt so that
       // onCompleted can still act as a fallback if we somehow never reach here.
-      deliveryState.hasDelivered = true;
+      if (!deliveryState.markDelivered()) return true;
       ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
       return true;
     },
     onCompleted: async (result) => {
-      if (deliveryState.hasDelivered) return;
-      deliveryState.hasDelivered = true;
+      if (!deliveryState.markDelivered()) return;
 
       // For workflow results, compute diffs and write them as files to the
       // execution's run directory. The delivery references diff file paths
@@ -584,7 +571,7 @@ async function executeSubagent(
       deliverSubagentError(err);
     })
     .finally(() => {
-      activeSubagentDelivery.delete(executionId);
+      subagentDeliveryRegistry.finish(executionId);
     });
   const isToolUse = configPayload.agentCategory === AgentCategory.ToolUse;
   const meta = options?.approvalMeta;
@@ -724,7 +711,7 @@ async function proposeAndExecute(
   agentName: string,
   streamId: StreamTabId,
 ): Promise<ToolResult> {
-  if (isProposalBypassedForStream(streamId)) {
+  if (proposalApprovalState.isBypassed(streamId)) {
     return executeSubagent(toConfigPayload(proposal), agentName, streamId, {
       enableYoloOnChild: true,
       approvalMeta: { autoApproved: true },
@@ -1100,7 +1087,7 @@ Git worktree support: ${
       );
     }
 
-    const deliveryState = activeSubagentDelivery.get(executionId);
+    const deliveryState = subagentDeliveryRegistry.getActive(executionId);
     if (!deliveryState) {
       throw new Error(
         `Execution '${executionId}' is no longer tracked for delivery. It may have already completed.`,
@@ -1112,7 +1099,7 @@ Git worktree support: ${
 
     switch (result.status) {
       case 'sent':
-        deliveryState.hasDelivered = false;
+        deliveryState.markPending();
         return {
           summary: `Follow-up sent to '${handle.agentName}'`,
           output: [
@@ -1121,7 +1108,7 @@ Git worktree support: ${
           ].join('\n'),
         };
       case 'queued':
-        deliveryState.hasDelivered = false;
+        deliveryState.markPending();
         return {
           summary: `Follow-up queued for '${handle.agentName}'`,
           output: [

@@ -71,5 +71,12 @@ export function buildTerminalFlowResult(
   if (category === 'toolUse') {
     return { category, status, executionId, streamId };
   }
-  return { category, status, executionId, streamId, outputs: [], compileFailures: [] };
+  return {
+    category,
+    status,
+    executionId,
+    streamId,
+    outputs: [],
+    compileFailures: [],
+  };
 }

@@ -17,7 +17,10 @@ import {
 
 import { AgentExecutionHandle, executionRegistry } from './executionRegistry';
 import { StreamStatusService } from './StreamStatusService';
-import { buildTerminalFlowResult, type AgentFlowResult } from './AgentFlowResult';
+import {
+  buildTerminalFlowResult,
+  type AgentFlowResult,
+} from './AgentFlowResult';
 import type { AgentLaunchContext } from './AgentLaunchContext';
 
 const logger = createChannelTrace('agentRunLifecycle');
@@ -46,7 +49,9 @@ export async function runFlowWithLifecycle(
   const { streamId } = ctx;
   const agentName = ctx.config.agent;
   const category =
-    ctx.setting.agentCategory === AgentCategory.ToolUse ? 'toolUse' : 'workflow';
+    ctx.setting.agentCategory === AgentCategory.ToolUse
+      ? 'toolUse'
+      : 'workflow';
   const parentStreamId = options?.parentStreamId ?? streamId;
   const handle = new AgentExecutionHandle(
     ctx.executionId,
@@ -55,6 +60,7 @@ export async function runFlowWithLifecycle(
     agentName,
     category,
     ctx.runtimeHost,
+    ctx.coordinators,
   );
   executionRegistry.track(handle);
   try {

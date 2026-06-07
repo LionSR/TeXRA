@@ -10,6 +10,7 @@ import {
 import { z } from 'zod';
 
 // Local imports
+import { warn } from '@logger/logUtils';
 import { pluralize } from '@tools/formatting';
 import { requireNonEmptyString, wrapApiCall } from '@tools/utils';
 import { ARXIV_CONSTANTS } from '@tools/citation/constants';
@@ -99,7 +100,13 @@ export class ArxivSearchTool extends defineTool({
             // and rely on the library's runtime validation (caught below).
             categoryFilters.push(catQuery(trimmed as Category));
           } catch (error) {
-            // Skip invalid categories silently - they won't be used in the query
+            // Skip invalid categories — log so a silently-dropped filter is
+            // traceable rather than mysteriously absent from the query.
+            warn(
+              'arxiv.search',
+              `Ignoring invalid arxiv category filter "${trimmed}"`,
+              { data: error },
+            );
             continue;
           }
         }

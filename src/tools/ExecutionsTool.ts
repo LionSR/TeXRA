@@ -31,10 +31,7 @@ import {
   ProcessExecutionHandle,
   executionRegistry,
 } from '@agent/runtime/executionRegistry';
-import {
-  bindExecutionSubscription,
-  unbindExecutionSubscription,
-} from '@agent/runtime/ExecutionSubscriptionBinder';
+import { executionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
 import { onFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
 
 // Local imports - utils
@@ -51,6 +48,7 @@ import { isDirectory } from '@utils/files/fsEntryType';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
 import { formatTimestamp, splitContentLines } from '@utils/text/stringUtils';
+import { formatSize } from './memory/memoryUtils';
 import {
   formatListingLine,
   formatProgressLine,
@@ -666,7 +664,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       );
     }
     try {
-      bindExecutionSubscription(streamId, executionId, ctx.runtimeHost);
+      executionSubscriptionBinder.bind(streamId, executionId, ctx.runtimeHost);
     } catch (err) {
       throw new ToolError(toErrorMessage(err));
     }
@@ -683,7 +681,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         'unsubscribe must be called from within an agent stream.',
       );
     }
-    const removed = unbindExecutionSubscription(streamId, executionId);
+    const removed = executionSubscriptionBinder.unbind(streamId, executionId);
     return {
       output: removed
         ? `Unsubscribed from ${executionId}.`
@@ -894,7 +892,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     }
 
     const lines = entries.map((entry) => {
-      const sizeStr = entry.isDir ? '<dir>' : this.formatSize(entry.size);
+      const sizeStr = entry.isDir ? '<dir>' : formatSize(entry.size);
       return `${sizeStr.padStart(8)}  ${entry.path}`;
     });
 
@@ -993,7 +991,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     }
 
     const lines = entries.map((entry) => {
-      const sizeStr = entry.isDirectory ? '<dir>' : this.formatSize(entry.size);
+      const sizeStr = entry.isDirectory ? '<dir>' : formatSize(entry.size);
       return `${sizeStr.padStart(8)}  ${entry.path}`;
     });
 
@@ -1070,12 +1068,6 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         return resolved ? [resolved.path] : [];
       }),
     );
-  }
-
-  private formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes}B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}K`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)}M`;
   }
 
   private applyViewRange(output: string, viewRange?: number[]): string {

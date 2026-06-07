@@ -1,6 +1,7 @@
 import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
+import * as logger from '@logger/logUtils';
 import type { StreamTabId } from '@shared/schemas';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
@@ -20,96 +21,169 @@ const MAX_READ_PER_POLL = 128 * 1024;
 /** Max process output sources read concurrently on each poll tick. */
 const OUTPUT_POLL_CONCURRENCY = 8;
 
-/** Tracks byte offsets already sent per executionId per stream. */
-const outputOffsets = new Map<string, { stdout: number; stderr: number }>();
+export class ProcessOutputPoller {
+  /** Tracks byte offsets already sent per executionId per stream. */
+  private readonly outputOffsets = new Map<
+    string,
+    { stdout: number; stderr: number }
+  >();
 
-const processOutputs = new Map<string, ProcessOutputSource>();
+  private readonly processOutputs = new Map<string, ProcessOutputSource>();
+  private readonly readingInProgress = new Map<string, Promise<void>>();
+  private outputPollTimer: ReturnType<typeof setTimeout> | null = null;
+  private pollInFlight = false;
 
-let outputPollTimer: ReturnType<typeof setTimeout> | null = null;
-let pollInFlight = false;
-
-/**
- * Tracks in-flight reads per executionId so concurrent calls can await
- * rather than silently skipping final tail output.
- */
-const readingInProgress = new Map<string, Promise<void>>();
-
-export function registerProcessOutput(
-  handle: ProcessExecutionHandle,
-  runtimeHost: AgentRuntimeHost,
-): void {
-  processOutputs.set(handle.executionId, {
-    handle,
-    runtimeHost,
-  });
-  reconcileOutputPoller();
-}
-
-export function unregisterProcessOutput(executionId: string): void {
-  processOutputs.delete(executionId);
-  outputOffsets.delete(executionId);
-  reconcileOutputPoller();
-}
-
-export async function flushProcessOutput(
-  handle: ProcessExecutionHandle,
-  runtimeHost: AgentRuntimeHost,
-): Promise<void> {
-  if (!handle.outputPaths) return;
-
-  await readIncremental(
-    handle.executionId,
-    handle.parentStreamId,
-    handle.outputPaths.stdout,
-    handle.outputPaths.stderr,
-    runtimeHost,
-  );
-}
-
-function reconcileOutputPoller(): void {
-  const active = processOutputs.size > 0;
-  if (active && !outputPollTimer) {
-    schedulePoll();
-  } else if (!active && outputPollTimer) {
-    clearTimeout(outputPollTimer);
-    outputPollTimer = null;
+  register(
+    handle: ProcessExecutionHandle,
+    runtimeHost: AgentRuntimeHost,
+  ): void {
+    this.processOutputs.set(handle.executionId, {
+      handle,
+      runtimeHost,
+    });
+    this.reconcile();
   }
-}
 
-/** Schedule the next poll cycle; the next poll waits for the current one. */
-function schedulePoll(): void {
-  outputPollTimer = setTimeout(async () => {
-    outputPollTimer = null;
-    if (pollInFlight) {
-      schedulePoll();
-      return;
+  unregister(executionId: string): void {
+    this.processOutputs.delete(executionId);
+    this.outputOffsets.delete(executionId);
+    this.reconcile();
+  }
+
+  async flush(
+    handle: ProcessExecutionHandle,
+    runtimeHost: AgentRuntimeHost,
+  ): Promise<void> {
+    if (!handle.outputPaths) return;
+
+    await this.readIncremental(
+      handle.executionId,
+      handle.parentStreamId,
+      handle.outputPaths.stdout,
+      handle.outputPaths.stderr,
+      runtimeHost,
+    );
+  }
+
+  dispose(): void {
+    if (this.outputPollTimer) {
+      clearTimeout(this.outputPollTimer);
+      this.outputPollTimer = null;
     }
-    pollInFlight = true;
+    this.outputOffsets.clear();
+    this.processOutputs.clear();
+    this.readingInProgress.clear();
+    this.pollInFlight = false;
+  }
+
+  private reconcile(): void {
+    const active = this.processOutputs.size > 0;
+    if (active && !this.outputPollTimer) {
+      this.schedule();
+    } else if (!active && this.outputPollTimer) {
+      clearTimeout(this.outputPollTimer);
+      this.outputPollTimer = null;
+    }
+  }
+
+  /** Schedule the next poll cycle; the next poll waits for the current one. */
+  private schedule(): void {
+    this.outputPollTimer = setTimeout(async () => {
+      this.outputPollTimer = null;
+      if (this.pollInFlight) {
+        this.schedule();
+        return;
+      }
+      this.pollInFlight = true;
+      try {
+        await this.pollProcessOutputs();
+      } finally {
+        this.pollInFlight = false;
+        this.reconcile();
+      }
+    }, OUTPUT_POLL_INTERVAL_MS);
+  }
+
+  private async pollProcessOutputs(): Promise<void> {
+    await pMap(
+      [...this.processOutputs.values()],
+      (source) => {
+        const { outputPaths } = source.handle;
+        if (!outputPaths) return Promise.resolve();
+        return this.readIncremental(
+          source.handle.executionId,
+          source.handle.parentStreamId,
+          outputPaths.stdout,
+          outputPaths.stderr,
+          source.runtimeHost,
+        );
+      },
+      { concurrency: OUTPUT_POLL_CONCURRENCY },
+    );
+  }
+
+  private async readIncremental(
+    executionId: string,
+    parentStreamId: StreamTabId,
+    stdoutPath: string,
+    stderrPath: string,
+    runtimeHost: AgentRuntimeHost,
+  ): Promise<void> {
+    const inflight = this.readingInProgress.get(executionId);
+    if (inflight) {
+      await inflight;
+    }
+
+    const work = (async () => {
+      try {
+        const prev = this.outputOffsets.get(executionId) ?? {
+          stdout: 0,
+          stderr: 0,
+        };
+        const [out, err] = await Promise.all([
+          readTail(stdoutPath, prev.stdout).catch(() => ({
+            text: '',
+            newOffset: prev.stdout,
+          })),
+          readTail(stderrPath, prev.stderr).catch(() => ({
+            text: '',
+            newOffset: prev.stderr,
+          })),
+        ]);
+        if (!out.text && !err.text) return;
+
+        this.outputOffsets.set(executionId, {
+          stdout: out.newOffset,
+          stderr: err.newOffset,
+        });
+
+        runtimeHost.emit('updateProcessOutput', {
+          parentStreamId,
+          executionId,
+          stdout: out.text,
+          stderr: err.text,
+        });
+      } catch (err) {
+        // Benign race: file may have been deleted between check and read.
+        // Log at debug so a persistent read failure is still observable.
+        logger.debug(
+          'ProcessOutputPoller',
+          `Process output read failed for ${executionId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    })();
+
+    this.readingInProgress.set(executionId, work);
     try {
-      await pollProcessOutputs();
+      await work;
     } finally {
-      pollInFlight = false;
-      reconcileOutputPoller();
+      if (this.readingInProgress.get(executionId) === work) {
+        this.readingInProgress.delete(executionId);
+      }
     }
-  }, OUTPUT_POLL_INTERVAL_MS);
-}
-
-async function pollProcessOutputs(): Promise<void> {
-  await pMap(
-    [...processOutputs.values()],
-    (source) => {
-      const { outputPaths } = source.handle;
-      if (!outputPaths) return Promise.resolve();
-      return readIncremental(
-        source.handle.executionId,
-        source.handle.parentStreamId,
-        outputPaths.stdout,
-        outputPaths.stderr,
-        source.runtimeHost,
-      );
-    },
-    { concurrency: OUTPUT_POLL_CONCURRENCY },
-  );
+  }
 }
 
 /**
@@ -155,55 +229,4 @@ async function readTail(
   };
 }
 
-async function readIncremental(
-  executionId: string,
-  parentStreamId: StreamTabId,
-  stdoutPath: string,
-  stderrPath: string,
-  runtimeHost: AgentRuntimeHost,
-): Promise<void> {
-  const inflight = readingInProgress.get(executionId);
-  if (inflight) {
-    await inflight;
-  }
-
-  const work = (async () => {
-    try {
-      const prev = outputOffsets.get(executionId) ?? { stdout: 0, stderr: 0 };
-      const [out, err] = await Promise.all([
-        readTail(stdoutPath, prev.stdout).catch(() => ({
-          text: '',
-          newOffset: prev.stdout,
-        })),
-        readTail(stderrPath, prev.stderr).catch(() => ({
-          text: '',
-          newOffset: prev.stderr,
-        })),
-      ]);
-      if (!out.text && !err.text) return;
-
-      outputOffsets.set(executionId, {
-        stdout: out.newOffset,
-        stderr: err.newOffset,
-      });
-
-      runtimeHost.emit('updateProcessOutput', {
-        parentStreamId,
-        executionId,
-        stdout: out.text,
-        stderr: err.text,
-      });
-    } catch {
-      // File may have been deleted between check and read.
-    }
-  })();
-
-  readingInProgress.set(executionId, work);
-  try {
-    await work;
-  } finally {
-    if (readingInProgress.get(executionId) === work) {
-      readingInProgress.delete(executionId);
-    }
-  }
-}
+export const processOutputPoller = new ProcessOutputPoller();

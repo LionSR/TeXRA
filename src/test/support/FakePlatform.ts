@@ -8,6 +8,7 @@ import {
   type FileSystemProvider,
 } from '@platform/interfaces/filesystem';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability';
 import type {
   ConfigInspection,
   ConfigProvider,
@@ -734,6 +735,7 @@ export function createFakePlatform(
     secrets: new FakeSecrets(options.secrets),
     lifecycle: createLifecycleHost(),
     agentResume: { tryResumeStream: async () => false },
+    toolAvailability: NO_TOOL_AVAILABILITY_HOST,
     ...overrides,
   };
 }

@@ -58,11 +58,9 @@ function extractApiMessage(data: unknown, fallback: string): string {
     const rec = data as { message?: unknown };
     if (typeof rec.message === 'string' && rec.message.trim())
       return rec.message;
-    try {
-      return JSON.stringify(data);
-    } catch {
-      /* fall through */
-    }
+    // `data` is a plain GitHub error object (already JSON-parsed), so
+    // stringifying it can't realistically throw — no guard needed.
+    return JSON.stringify(data);
   }
   return fallback;
 }

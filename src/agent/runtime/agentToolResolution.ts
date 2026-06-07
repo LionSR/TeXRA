@@ -23,6 +23,7 @@
 
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
+import * as logUtils from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
@@ -37,7 +38,10 @@ import {
   withDelegationModelAvailability,
 } from '@tools/delegationModelAvailability';
 import { isApprovalGatedToolName } from '@tools/approvalGatedTools';
-import { listToolInjections } from './toolInjection';
+import {
+  toolInjectionRegistry,
+  type ToolInjectionRegistry,
+} from './toolInjection';
 
 export interface ResolveAgentToolsInput {
   tools: AgentToolUseSetting['tools'];
@@ -48,6 +52,8 @@ export interface ResolveAgentToolsInput {
   delegationBlocked: boolean;
   /** When true, approval-gated tools are filtered out before model invocation. */
   approvalPromptsUnavailable?: boolean;
+  /** Conditional runtime tool injections. Defaults to the shared registry. */
+  toolInjections?: ToolInjectionRegistry;
 }
 
 export interface ResolvedAgentTools {
@@ -73,7 +79,15 @@ async function availableDelegationModelNamesForTools(
 
   try {
     return availableModelNamesFromOptions(await computeModelOptionsData());
-  } catch {
+  } catch (err) {
+    // Couldn't load model options — skip the delegation annotation rather than
+    // fail the run, but log so the missing "Available models:" line is traceable.
+    logUtils.warn(
+      'AgentToolResolution',
+      `Could not load model options for delegation annotation: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
     return null;
   }
 }
@@ -91,6 +105,7 @@ export async function resolveAgentTools({
   logger,
   delegationBlocked,
   approvalPromptsUnavailable,
+  toolInjections = toolInjectionRegistry,
 }: ResolveAgentToolsInput): Promise<ResolvedAgentTools> {
   const effectiveRegistry = registry ?? getDefaultToolRegistry();
   const disabled = getDisabledToolNames();
@@ -123,7 +138,7 @@ export async function resolveAgentTools({
     resolved.push(def);
     resolvedNames.add(def.name);
   }
-  for (const injection of listToolInjections()) {
+  for (const injection of toolInjections.list()) {
     if (!injection.shouldInject()) continue;
     if (resolvedNames.has(injection.toolName)) continue;
     if (DELEGATION_TOOLS.has(injection.toolName) && delegationBlocked) {

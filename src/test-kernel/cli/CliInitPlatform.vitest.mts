@@ -52,10 +52,6 @@ vi.mock('@skills/index', () => ({
   setRuntimeSkillSources: mocks.setRuntimeSkillSources,
 }));
 
-vi.mock('@tools/externalToolDefs', () => ({
-  setTexraCliEntrypointChecker: vi.fn(),
-}));
-
 vi.mock('@telemetry/UsageLogService', () => ({
   UsageLogService: { initialize: vi.fn(), dispose: vi.fn() },
 }));

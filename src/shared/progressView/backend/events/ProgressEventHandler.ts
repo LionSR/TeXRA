@@ -28,7 +28,7 @@ import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
 import { OdysseyStore, isOdysseyInFlight } from '@tools/odyssey';
 import {
   isApprovalBypassedForStream,
-  isProposalBypassedForStream,
+  proposalApprovalState,
 } from '@tools/approval';
 
 import { registerHandlers } from './registerHandlers';
@@ -510,7 +510,7 @@ export class ProgressEventHandler {
 
     // Always include toggle bypass state so buttons render correctly on tab switch.
     const toolEditBypass = isApprovalBypassedForStream(stream);
-    const superYoloBypass = isProposalBypassedForStream(stream);
+    const superYoloBypass = proposalApprovalState.isBypassed(stream);
     const odyssey = OdysseyStore.getForStream(stream);
     const odysseyActive = isOdysseyInFlight(odyssey);
 

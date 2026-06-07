@@ -2,6 +2,10 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { getExecutionStore } from '@agent/storage';
 import {
+  idleContinuationRegistry,
+  type IdleContinuationRegistry,
+} from '@agent/runtime/idleContinuation';
+import {
   activeModelHandlerCompatibilityKey,
   createModelHandler,
   modelHandlerCompatibilityKey,
@@ -18,6 +22,7 @@ import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
+import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import {
@@ -68,6 +73,10 @@ export interface RunToolUseFlowInput<
     modelHandler: ToolUseServices['modelHandler'],
     model: string,
   ) => void;
+  /** Runtime feature registry for auto-injected tools. */
+  toolInjections?: ToolInjectionRegistry;
+  /** Runtime feature registry for synthetic idle continuations. */
+  idleContinuations?: IdleContinuationRegistry;
 }
 
 export interface RunToolUseFlowResult {
@@ -124,6 +133,7 @@ export async function runToolUseFlow<C = unknown>(
     logger,
     delegationBlocked: !delegationGate.allowed,
     approvalPromptsUnavailable: input.approvalPromptsUnavailable,
+    toolInjections: input.toolInjections,
   });
 
   const kv = getExecutionStore(executionId);
@@ -138,6 +148,7 @@ export async function runToolUseFlow<C = unknown>(
     onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
     persistTodos: (todos) => kv.writeTodos(todos),
     fileService: new TaskRunFileService(executionId),
+    idleContinuations: input.idleContinuations ?? idleContinuationRegistry,
     delegationDepth,
     delegationConfig,
     delegationTrimmed,

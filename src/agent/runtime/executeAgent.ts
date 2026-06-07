@@ -392,46 +392,42 @@ export async function resumeToolUseFromSnapshot(
       );
     }
 
-    await runFlowWithLifecycle(
-      ctx,
-      async () => {
-        StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
-          runtimeHost: ctx.runtimeHost,
-        });
+    await runFlowWithLifecycle(ctx, async () => {
+      StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
+        runtimeHost: ctx.runtimeHost,
+      });
 
-        const result = await runToolUseFlow(
-          {
-            ...ctx,
-            ...createInterruptCallbacks(),
-            onRoundFinalized: createUsageRecordingCallback(ctx),
-            setting,
-            resumeSnapshot: snapshot,
-            // Derive from the recovered parent chain: any execution with a
-            // parent is a subagent. Without this, the rebuilt system prompt
-            // would drop subagent-specific instructions (e.g. the shared
-            // /memories protocol) that the fresh run had included.
-            isSubagent: (ctx.delegationDepth ?? 0) > 0,
-            approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-            onFollowUpConsumed: () =>
-              ctx.runtimeHost.emit('updateQueuedFollowUps', {
-                streamId: ctx.streamId,
-              }),
-          },
-          undefined,
-          options.setupSession
-            ? (context) => options.setupSession?.(context.session)
-            : undefined,
-        );
-        return {
-          category: 'toolUse' as const,
-          status: result.status,
-          lastResponse: result.lastResponse,
-          touchedFiles: result.touchedFiles,
-          executionId: ctx.executionId,
-          streamId,
-        };
-      },
-    );
-
+      const result = await runToolUseFlow(
+        {
+          ...ctx,
+          ...createInterruptCallbacks(),
+          onRoundFinalized: createUsageRecordingCallback(ctx),
+          setting,
+          resumeSnapshot: snapshot,
+          // Derive from the recovered parent chain: any execution with a
+          // parent is a subagent. Without this, the rebuilt system prompt
+          // would drop subagent-specific instructions (e.g. the shared
+          // /memories protocol) that the fresh run had included.
+          isSubagent: (ctx.delegationDepth ?? 0) > 0,
+          approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+          onFollowUpConsumed: () =>
+            ctx.runtimeHost.emit('updateQueuedFollowUps', {
+              streamId: ctx.streamId,
+            }),
+        },
+        undefined,
+        options.setupSession
+          ? (context) => options.setupSession?.(context.session)
+          : undefined,
+      );
+      return {
+        category: 'toolUse' as const,
+        status: result.status,
+        lastResponse: result.lastResponse,
+        touchedFiles: result.touchedFiles,
+        executionId: ctx.executionId,
+        streamId,
+      };
+    });
   });
 }

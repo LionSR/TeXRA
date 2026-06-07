@@ -1042,8 +1042,13 @@ export class StreamSnapshotStore {
         if (execMeta?.description) {
           this.setDescription(streamId, execMeta.description);
         }
-      } catch {
+      } catch (err) {
         // Best-effort; a missing/corrupt execution store just skips backfill.
+        logger.debug(
+          CHANNEL,
+          `Skipping description backfill for stream ${streamId}`,
+          { data: err },
+        );
       }
     }
   }
