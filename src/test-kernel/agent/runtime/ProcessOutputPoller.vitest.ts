@@ -9,17 +9,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports - runtime
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { ProcessExecutionHandle } from '@agent/runtime/ExecutionHandle';
-import {
-  flushProcessOutput,
-  registerProcessOutput,
-  unregisterProcessOutput,
-} from '@agent/runtime/ProcessOutputPoller';
+import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
 
 // Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
 import { delay } from '@utils/core/async';
 
 const tmpDirs: string[] = [];
+let poller: ProcessOutputPoller;
 
 function createRuntimeHost(): {
   host: AgentRuntimeHost;
@@ -65,7 +62,7 @@ async function makeProcessHandle(
 }
 
 afterEach(async () => {
-  unregisterProcessOutput('exec-1');
+  poller.dispose();
   vi.useRealTimers();
   await Promise.all(
     tmpDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true })),
@@ -74,6 +71,7 @@ afterEach(async () => {
 
 describe('ProcessOutputPoller', () => {
   beforeEach(async () => {
+    poller = new ProcessOutputPoller();
     const [{ initPlatform }, { nodeFilesystem }, { createFakePlatform }] =
       await Promise.all([
         import('@platform/platform'),
@@ -87,10 +85,10 @@ describe('ProcessOutputPoller', () => {
     const { host, events } = createRuntimeHost();
     const { handle, stdoutPath, stderrPath } = await makeProcessHandle(host);
 
-    await flushProcessOutput(handle, host);
+    await poller.flush(handle, host);
     await fs.appendFile(stdoutPath, 'out-2');
     await fs.appendFile(stderrPath, 'err-2');
-    await flushProcessOutput(handle, host);
+    await poller.flush(handle, host);
 
     expect(events).toEqual([
       {
@@ -120,7 +118,7 @@ describe('ProcessOutputPoller', () => {
       assignOutputPaths: false,
     });
 
-    registerProcessOutput(handle, host);
+    poller.register(handle, host);
     handle.outputPaths = { stdout: stdoutPath, stderr: stderrPath };
 
     await delay(550);
@@ -145,6 +143,40 @@ describe('ProcessOutputPoller', () => {
           executionId: 'exec-1',
           stdout: 'out-2',
           stderr: 'err-2',
+        },
+      },
+    ]);
+  });
+
+  it('keeps output offsets per instance', async () => {
+    const { host, events } = createRuntimeHost();
+    const { handle } = await makeProcessHandle(host);
+    const otherPoller = new ProcessOutputPoller();
+
+    try {
+      await poller.flush(handle, host);
+      await otherPoller.flush(handle, host);
+    } finally {
+      otherPoller.dispose();
+    }
+
+    expect(events).toEqual([
+      {
+        event: 'updateProcessOutput',
+        payload: {
+          parentStreamId: 'parent-stream',
+          executionId: 'exec-1',
+          stdout: 'out-1',
+          stderr: 'err-1',
+        },
+      },
+      {
+        event: 'updateProcessOutput',
+        payload: {
+          parentStreamId: 'parent-stream',
+          executionId: 'exec-1',
+          stdout: 'out-1',
+          stderr: 'err-1',
         },
       },
     ]);

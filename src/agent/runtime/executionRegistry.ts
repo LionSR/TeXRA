@@ -19,9 +19,8 @@ import {
   interruptActiveChildren as interruptChildren,
 } from './ExecutionHandle';
 import {
-  flushProcessOutput,
-  registerProcessOutput,
-  unregisterProcessOutput,
+  processOutputPoller,
+  type ProcessOutputPoller,
 } from './ProcessOutputPoller';
 
 export type { ExecutionHandle } from './ExecutionHandle';
@@ -43,6 +42,7 @@ export class ExecutionRegistry {
   private readonly handles = new Map<string, ExecutionHandle>();
   private readonly changeCallbacks = new Map<string, Array<() => void>>();
   private readonly disposeStatusListener: () => void;
+  private readonly processOutput: ProcessOutputPoller;
   // Persistent listeners stay attached across notifications (unlike one-shot
   // waiters in `changeCallbacks`). Used by the executions subscribe action.
   private readonly persistentListeners = new Map<
@@ -50,7 +50,14 @@ export class ExecutionRegistry {
     Set<(handle: ExecutionHandle | undefined) => void>
   >();
 
-  constructor(streamStatus: StreamStatusRegistry = StreamStatusService) {
+  constructor({
+    processOutput = processOutputPoller,
+    streamStatus = StreamStatusService,
+  }: {
+    readonly processOutput?: ProcessOutputPoller;
+    readonly streamStatus?: StreamStatusRegistry;
+  } = {}) {
+    this.processOutput = processOutput;
     // Notify waiters and refresh UI badges when stream status changes
     // (e.g. RUNNING → WAITING). Without this, waitForChange only resolves
     // on progress/kill/untrack, and the background-tasks panel shows stale badges.
@@ -96,7 +103,7 @@ export class ExecutionRegistry {
         });
       }
     } else if (handle instanceof ProcessExecutionHandle) {
-      registerProcessOutput(handle, runtimeHost);
+      this.processOutput.register(handle, runtimeHost);
       this.emitActiveProcessesUpdate(handle.parentStreamId, runtimeHost);
     }
   }
@@ -121,11 +128,11 @@ export class ExecutionRegistry {
       // The final read must complete before the badge update, because the
       // badge handler prunes output entries for processes no longer active.
       const finalize = (): void => {
-        unregisterProcessOutput(executionId);
+        this.processOutput.unregister(executionId);
         this.emitActiveProcessesUpdate(handle.parentStreamId, runtimeHost);
       };
       if (handle.outputPaths) {
-        void flushProcessOutput(handle, runtimeHost).finally(finalize);
+        void this.processOutput.flush(handle, runtimeHost).finally(finalize);
       } else {
         finalize();
       }
