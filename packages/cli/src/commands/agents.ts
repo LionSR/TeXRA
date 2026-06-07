@@ -20,7 +20,7 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
-import { resolveCliAgent } from './_helpers/agentResolution';
+import { resolveCliAgent } from '../runtime/agentResolution';
 import { agentsRunCommand } from './agentsRun';
 import type { CliContext } from '../runtime/cliContext';
 
