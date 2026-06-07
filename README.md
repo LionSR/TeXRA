@@ -7,7 +7,7 @@
 [![Open VSX Version](https://img.shields.io/open-vsx/v/texra-ai/texra)](https://open-vsx.org/extension/texra-ai/texra)
 [![Open VSX Downloads](https://img.shields.io/open-vsx/dt/texra-ai/texra)](https://open-vsx.org/extension/texra-ai/texra)
 [![npm version](https://img.shields.io/npm/v/@texra-ai/cli?label=%40texra-ai%2Fcli)](https://www.npmjs.com/package/@texra-ai/cli)
-[![npm downloads](https://img.shields.io/npm/dm/@texra-ai/cli)](https://www.npmjs.com/package/@texra-ai/cli)
+[![CLI downloads](https://img.shields.io/npm/dm/@texra-ai/cli?label=CLI%20downloads)](https://www.npmjs.com/package/@texra-ai/cli)
 
 A LaTeX research assistant for VS Code and the terminal. Multi-agent
 workflows for writing, reviewing, formalizing, and rendering academic

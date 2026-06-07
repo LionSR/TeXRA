@@ -37,10 +37,23 @@ export class LoginBanner extends LitElement {
         letter-spacing: -0.005em;
       }
 
-      .banner-description {
+      .banner-lead {
         font-size: var(--font-size-sm);
-        opacity: 0.78;
-        line-height: var(--line-height-relaxed, 1.5);
+        opacity: 0.85;
+        line-height: var(--line-height-normal, 1.4);
+      }
+
+      .banner-fineprint {
+        font-size: var(--font-size-xs);
+        opacity: 0.6;
+        line-height: var(--line-height-normal, 1.4);
+      }
+
+      /* Pair the sparkle with the title row instead of centering it in the
+         taller text block. */
+      #loginBanner::part(icon) {
+        align-self: flex-start;
+        margin-block-start: 0.05em;
       }
 
       #loginBannerButton::part(base) {
@@ -76,7 +89,10 @@ export class LoginBanner extends LitElement {
           <div class="banner-row">
             <div class="banner-text">
               <span class="banner-title">Researcher Access Program</span>
-              <span class="banner-description">${PROMO_NOTICE_SHORT}</span>
+              <span class="banner-lead">${PROMO_NOTICE_SHORT.lead}</span>
+              <span class="banner-fineprint"
+                >${PROMO_NOTICE_SHORT.fineprint}</span
+              >
             </div>
             <div class="actions">
               <wa-button
