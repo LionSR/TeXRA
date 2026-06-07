@@ -35,7 +35,7 @@ import {
 import {
   cliTerminalStatus,
   createCliRunResult,
-} from '@cli/commands/_helpers/terminalStatus';
+} from '@cli/runtime/terminalStatus';
 import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
