@@ -17,6 +17,7 @@ import {
 import { bus } from '@eventBus/ProgressEventBus';
 import type {
   ExecutionId,
+  OutputFileInfo,
   Plan,
   StorageKey,
   StreamTabId,
@@ -73,6 +74,20 @@ const PLAN: Plan = {
 
 function usage(input: number, output: number, cost: number): TokenUsageStats {
   return { inputTokens: input, outputTokens: output, cost };
+}
+
+function outputFile(relativePath: string, round: number): OutputFileInfo {
+  return {
+    source: 'document',
+    location: {
+      kind: 'workspace',
+      absolutePath: `/workspace/${relativePath}`,
+      relativePath,
+    },
+    round,
+    lineage: null,
+    diff: null,
+  };
 }
 
 describe('StreamSnapshotStore', () => {
@@ -196,7 +211,7 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
-  it('seeds existing disk data before a direct mutator, so extension writes cannot erase it', async () => {
+  it('resolves pre-seed usage after merging existing disk usage', async () => {
     await installPlatform();
     const dir = streamDataDir(STREAM);
     await StorageFS.ensureDir(dir);
@@ -206,8 +221,17 @@ describe('StreamSnapshotStore', () => {
     );
 
     const store = new StreamSnapshotStore();
-    const immediate = store.addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
-    expect(immediate).toBeUndefined();
+    const pending = store.addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
+    expect(store.getRunUsage(STREAM).get(RUN_2)).toMatchObject({
+      inputTokens: 50,
+      outputTokens: 10,
+      cost: 0.25,
+    });
+    await expect(Promise.resolve(pending)).resolves.toMatchObject({
+      inputTokens: 50,
+      outputTokens: 10,
+      cost: 0.25,
+    });
     await store.flush();
 
     const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
@@ -217,7 +241,7 @@ describe('StreamSnapshotStore', () => {
     });
   });
 
-  it('keeps seed-before-write for streams outside a partial preload', async () => {
+  it('returns pre-seed usage only after a partial preload baseline is merged', async () => {
     await installPlatform();
     const dir = streamDataDir(OTHER_STREAM);
     await StorageFS.ensureDir(dir);
@@ -229,14 +253,104 @@ describe('StreamSnapshotStore', () => {
     const store = new StreamSnapshotStore();
     await store.preload([STREAM]);
 
-    const immediate = store.addUsage(OTHER_STREAM, RUN_2, usage(50, 10, 0.25));
-    expect(immediate).toBeUndefined();
+    const pending = store.addUsage(OTHER_STREAM, RUN_2, usage(50, 10, 0.25));
+    expect(store.getRunUsage(OTHER_STREAM).get(RUN_2)).toMatchObject({
+      inputTokens: 50,
+      outputTokens: 10,
+      cost: 0.25,
+    });
+    await expect(Promise.resolve(pending)).resolves.toMatchObject({
+      inputTokens: 50,
+      outputTokens: 10,
+      cost: 0.25,
+    });
     await store.flush();
 
     const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
     expect(raw).toMatchObject({
       [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
       [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
+    });
+  });
+
+  it('includes the disk baseline in a pre-seed usage result for the same run', async () => {
+    await installPlatform();
+    const dir = streamDataDir(OTHER_STREAM);
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'usageStats.json'),
+      JSON.stringify({ [RUN]: usage(100, 20, 0.5) }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    const pending = store.addUsage(OTHER_STREAM, RUN, usage(50, 10, 0.25));
+    expect(store.getRunUsage(OTHER_STREAM).get(RUN)).toMatchObject({
+      inputTokens: 50,
+      outputTokens: 10,
+      cost: 0.25,
+    });
+    await expect(Promise.resolve(pending)).resolves.toMatchObject({
+      inputTokens: 150,
+      outputTokens: 30,
+      cost: 0.75,
+    });
+    await store.flush();
+
+    const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
+    expect(raw).toMatchObject({
+      [RUN]: { inputTokens: 150, outputTokens: 30, cost: 0.75 },
+    });
+  });
+
+  it('returns output files immediately for streams outside a partial preload without erasing disk outputs', async () => {
+    await installPlatform();
+    const dir = streamDataDir(OTHER_STREAM);
+    await StorageFS.ensureDir(dir);
+    const prior = outputFile('prior.tex', 0);
+    const next = outputFile('next.tex', 1);
+    await StorageFS.write(
+      path.join(dir, 'outputFiles.json'),
+      JSON.stringify({ '0': [prior] }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    store.addOutputFiles(OTHER_STREAM, { 1: [next] });
+    expect(store.getOutputFiles(OTHER_STREAM).get(1)).toEqual([next]);
+    await store.flush();
+
+    const raw = await StorageFS.readJson(path.join(dir, 'outputFiles.json'));
+    expect(raw).toMatchObject({
+      '0': [prior],
+      '1': [next],
+    });
+  });
+
+  it('keeps output overlays when flattening legacy output files after preload', async () => {
+    await installPlatform();
+    const dir = streamDataDir(OTHER_STREAM);
+    await StorageFS.ensureDir(dir);
+    const prior = outputFile('prior.tex', 0);
+    const next = outputFile('next.tex', 1);
+    await StorageFS.write(
+      path.join(dir, 'outputFiles.json'),
+      JSON.stringify({ [RUN]: { '0': [prior] } }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    store.addOutputFiles(OTHER_STREAM, { 1: [next] });
+    expect(store.getOutputFiles(OTHER_STREAM).get(1)).toEqual([next]);
+    await store.flush();
+
+    const raw = await StorageFS.readJson(path.join(dir, 'outputFiles.json'));
+    expect(raw).toEqual({
+      '0': [prior],
+      '1': [next],
     });
   });
 
@@ -262,7 +376,13 @@ describe('StreamSnapshotStore', () => {
     store.setTaskState(STREAM, taskState, executionId);
     expect(store.getTaskState(STREAM)).toEqual(taskState);
     expect(store.getExecutionId(STREAM)).toBe(executionId);
-    expect(store.addUsage(STREAM, RUN_2, usage(50, 10, 0.25))).toBeUndefined();
+    await expect(
+      Promise.resolve(store.addUsage(STREAM, RUN_2, usage(50, 10, 0.25))),
+    ).resolves.toMatchObject({
+      inputTokens: 50,
+      outputTokens: 10,
+      cost: 0.25,
+    });
     await store.flush();
 
     expect(store.getTaskState(STREAM)).toEqual(taskState);
