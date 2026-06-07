@@ -1,9 +1,7 @@
-import { createProgressViewCommandHandlers } from '@controllers/progressView/ProgressViewCommandHandlers';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import {
   dispatchProgressViewInbound,
   ProgressViewInboundMessageSchema,
-  type ProgressViewInboundHandlerRegistry,
   type ProgressViewInboundMessage,
 } from '@shared/schemas/progressView';
 
@@ -14,8 +12,13 @@ import {
 } from './desktopIpcTypes.js';
 import type { DesktopProgressBridge } from './desktopAgentExecution.js';
 
+type DesktopProgressIpcBridge = Pick<
+  DesktopProgressBridge,
+  'progressViewInboundHandlers' | 'syncFullView'
+>;
+
 export interface DesktopProgressIpcOptions {
-  progress: DesktopProgressBridge;
+  progress: DesktopProgressIpcBridge;
   onUnsupportedCommand?: (message: ProgressViewInboundMessage) => void;
   onAsyncError?: (error: unknown) => void;
 }
@@ -36,55 +39,6 @@ export function createDesktopProgressIpc(
     options.onUnsupportedCommand ?? defaultUnsupportedCommand;
   const progress = options.progress;
 
-  const progressHandlers: ProgressViewInboundHandlerRegistry =
-    createProgressViewCommandHandlers({
-      lifecycle: {
-        setActiveStream: (stream) => progress.setActiveStream(stream),
-        setAgentFilter: (filter) => progress.setAgentFilter(filter),
-        deleteStream: (stream) => progress.deleteStream(stream),
-        deleteAllStreams: () => progress.deleteAllStreams(),
-        stopStream: (stream) => progress.stopStream(stream),
-      },
-      run: {
-        resumeStream: (stream) => progress.resumeStream(stream),
-        runNewStream: (stream) => progress.runNewStream(stream),
-      },
-      followUp: {
-        sendFollowUp: ({ stream, text, mediaFiles }) =>
-          progress.sendFollowUp(stream, text, mediaFiles),
-        reportImageSaveError: (_image, error) => reportAsyncError(error),
-      },
-      bypass: {
-        runtimeHost: progress.runtimeHost,
-      },
-      file: {
-        openFile: (file, line) => progress.openFile(file, line),
-        openFileCompile: (file) => progress.openFileCompile(file),
-        openTaskStorage: (stream) => progress.openTaskStorage(stream),
-        compareOriginal: (file, base) => progress.compareOriginal(file, base),
-        comparePrevious: (file, base, previous) =>
-          progress.comparePrevious(file, base, previous),
-        acceptFile: (file, base) => progress.acceptFile(file, base),
-        mergeFile: (file, base) => progress.mergeFile(file, base),
-        latexdiffFile: (file, base) => progress.latexdiffFile(file, base),
-        openLabel: (label) => progress.openLabel(label),
-      },
-      approval: {
-        handleToolEditApprovalAction: (message) =>
-          progress.handleToolEditApprovalAction(message),
-        onUnsupportedToolEditApproval: (message) =>
-          onUnsupportedCommand(message),
-        handleBashApprovalAction: (message) =>
-          progress.handleBashApprovalAction(message),
-        handlePlanApprovalAction: (message) =>
-          progress.handlePlanApprovalAction(message),
-        handleUserQuestionAction: (message) =>
-          progress.handleUserQuestionAction(message),
-        handleAgentProposalAction: (message) =>
-          progress.handleAgentProposalAction(message),
-      },
-    });
-
   return {
     handleMessage(message: DesktopCommandMessage): boolean {
       const result = ProgressViewInboundMessageSchema.safeParse(message);
@@ -100,7 +54,11 @@ export function createDesktopProgressIpc(
       if (passThroughCommands.has(command)) return false;
 
       if (
-        dispatchProgressViewInbound(message, progressHandlers, reportAsyncError)
+        dispatchProgressViewInbound(
+          message,
+          progress.progressViewInboundHandlers,
+          reportAsyncError,
+        )
       ) {
         return true;
       }
