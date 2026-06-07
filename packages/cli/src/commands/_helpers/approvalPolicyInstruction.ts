@@ -1,9 +1,4 @@
-import {
-  approvalPromptsUnavailable,
-  type ApprovalInstructionContext,
-} from '@cli/runtime/approvalPolicyAvailability';
-
-export { approvalPromptsUnavailable, type ApprovalInstructionContext };
+import type { ApprovalInstructionContext } from '@cli/runtime/approvalPolicyAvailability';
 
 const PRIVILEGED_ACTION_GUIDANCE =
   'Do not call approval-gated tools such as bash/shell commands, file edits, setup/config updates, user questions, retry/plan approvals, or new subagent delegations; solve from the provided context or state what approval is needed.';
