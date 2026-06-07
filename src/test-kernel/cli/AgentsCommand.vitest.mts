@@ -66,14 +66,16 @@ describe('CLI agents command', () => {
   });
 
   it('parses agent category filter spellings', async () => {
-    const { parseAgentCategoryFilter } = await import('@cli/commands/agents');
+    const { parseCliAgentCategoryFilter } = await import('@cli/runtime/agents');
 
-    expect(parseAgentCategoryFilter('workflow')).toBe(AgentCategory.Workflow);
-    expect(parseAgentCategoryFilter('toolUse')).toBe(AgentCategory.ToolUse);
-    expect(parseAgentCategoryFilter('tool-use')).toBe(AgentCategory.ToolUse);
-    expect(parseAgentCategoryFilter('tool_use')).toBe(AgentCategory.ToolUse);
-    expect(parseAgentCategoryFilter('work-flow')).toBeUndefined();
-    expect(parseAgentCategoryFilter('unknown')).toBeUndefined();
+    expect(parseCliAgentCategoryFilter('workflow')).toBe(
+      AgentCategory.Workflow,
+    );
+    expect(parseCliAgentCategoryFilter('toolUse')).toBe(AgentCategory.ToolUse);
+    expect(parseCliAgentCategoryFilter('tool-use')).toBe(AgentCategory.ToolUse);
+    expect(parseCliAgentCategoryFilter('tool_use')).toBe(AgentCategory.ToolUse);
+    expect(parseCliAgentCategoryFilter('work-flow')).toBeUndefined();
+    expect(parseCliAgentCategoryFilter('unknown')).toBeUndefined();
   });
 
   it('lists visible agents by default and reports hidden agents in text mode', async () => {
