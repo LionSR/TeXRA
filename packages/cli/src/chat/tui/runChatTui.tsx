@@ -121,6 +121,7 @@ import {
   onStreamStatusChange,
   streamStatusFromState,
 } from './state/streamStatus';
+import { activeStreamScope } from './state/streamViews';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import { requestCliCompaction } from './state/compactionRequest';
 import {
@@ -420,20 +421,23 @@ export type ChatTuiFocusedChildFollowUpRoute =
   | { readonly kind: 'reject'; readonly streamId: StreamTabId };
 
 export function chatTuiFocusedChildFollowUpRoute(): ChatTuiFocusedChildFollowUpRoute {
-  const activeStreamId = cliState.activeStreamId.get();
-  if (!activeStreamId || !cliState.parentStream.get().has(activeStreamId)) {
+  const scope = activeStreamScope({
+    activeStreamId: cliState.activeStreamId.get(),
+    parentStream: cliState.parentStream.get(),
+  });
+  if (scope.kind !== 'child') {
     return { kind: 'none' };
   }
 
-  const status = streamStatusFromState(activeStreamId);
+  const status = streamStatusFromState(scope.streamId);
   // A focused child normally has a status. Keep the previous permissive
   // behavior during the brief edge where parent focus arrives first.
   if (status !== undefined && !isInFlightStatus(status)) {
-    return { kind: 'reject', streamId: activeStreamId };
+    return { kind: 'reject', streamId: scope.streamId };
   }
   return {
     kind: 'accept',
-    streamId: activeStreamId,
+    streamId: scope.streamId,
     shouldAnnounceQueuedFollowUp: status !== STREAM_STATUS.WAITING,
   };
 }
