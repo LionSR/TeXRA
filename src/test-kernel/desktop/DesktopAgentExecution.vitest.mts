@@ -224,10 +224,9 @@ async function createBridge(
   const { DesktopProgressBridge } = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
-  return new DesktopProgressBridge(
-    (message) => messages.push(message),
-    { streamSnapshotStore: options.streamSnapshotStore },
-  ) as TestableBridge;
+  return new DesktopProgressBridge((message) => messages.push(message), {
+    streamSnapshotStore: options.streamSnapshotStore,
+  }) as TestableBridge;
 }
 
 async function createExecution(options: {
@@ -311,7 +310,9 @@ function progressMessages(
 function createStreamSnapshotStore(
   hydrated: readonly RestoredStreamSnapshot[],
 ): TestDesktopStreamSnapshotStore {
-  const live = new Map(hydrated.map((snapshot) => [snapshot.streamId, snapshot]));
+  const live = new Map(
+    hydrated.map((snapshot) => [snapshot.streamId, snapshot]),
+  );
   return {
     hydrated,
     upsert: vi.fn(async (snapshot: RestoredStreamSnapshot) => {
