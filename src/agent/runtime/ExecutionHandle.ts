@@ -15,6 +15,7 @@ import {
   type StreamTabId,
 } from '@shared/schemas';
 import { formatDuration } from '@utils/core';
+import type { RunCoordinators } from './RunContext';
 
 export interface ExecutionStatusInfo {
   status: string;
@@ -67,6 +68,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
     readonly agentName: string,
     readonly category: 'workflow' | 'toolUse',
     readonly runtimeHost: AgentRuntimeHost,
+    readonly coordinators?: RunCoordinators,
   ) {
     this._parentStreamId = parentStreamId;
   }
