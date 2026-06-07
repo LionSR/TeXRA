@@ -31,7 +31,7 @@ import {
   optionalStringFlagValue,
   optString,
 } from './_helpers/globalArgs';
-import { resolveCliAgent } from './_helpers/agentResolution';
+import { resolveCliAgent } from '../runtime/agentResolution';
 import { executeCliRequest } from './_helpers/runExecution';
 import {
   terminalStatusExitCode,

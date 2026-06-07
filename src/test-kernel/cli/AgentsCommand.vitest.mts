@@ -35,7 +35,7 @@ vi.mock('@cli/commands/_helpers/output', () => ({
   emitCliResult: mocks.emitCliResult,
 }));
 
-vi.mock('@cli/commands/_helpers/agentResolution', () => ({
+vi.mock('@cli/runtime/agentResolution', () => ({
   resolveCliAgent: mocks.resolveCliAgent,
 }));
 
