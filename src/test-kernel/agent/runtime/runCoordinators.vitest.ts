@@ -156,4 +156,55 @@ describe('runCoordinators', () => {
       'resolveRetryRequest',
     ]);
   });
+
+  it('cleans pending requests for one stream through their owning coordinators', async () => {
+    const active = createRecordingHost();
+    const bridge = new RunCoordinatorBridge();
+    const coordinators = createCoordinators(active.host);
+    const context = createRunContext({
+      runtimeHost: active.host,
+      coordinators,
+    });
+
+    const release = bridge.retainForStream(streamId, coordinators);
+    try {
+      const planResult = withRunContext(context, () =>
+        bridge.waitForPlanApproval(streamId, {
+          approvalId: 'approval:cleanup-stream',
+          plan,
+        }),
+      );
+      const proposalResult = withRunContext(context, () =>
+        bridge.waitForProposal(streamId, {
+          proposalId: 'proposal:cleanup-stream',
+          proposal,
+        }),
+      );
+      const retryResult = withRunContext(context, () =>
+        bridge.waitForRetry(streamId, {
+          operation: 'Model invocation',
+          logger: createLogger(),
+        }),
+      );
+
+      bridge.cleanupRequestsForStream(streamId);
+
+      await expect(planResult).resolves.toEqual({ action: 'reject' });
+      await expect(proposalResult).resolves.toEqual({ action: 'reject' });
+      await expect(retryResult).resolves.toEqual({ action: 'cancel' });
+      expect(bridge.triggerRetry(streamId)).toBe(false);
+      expect(
+        bridge.resolvePlanApproval('approval:cleanup-stream', {
+          action: 'approve',
+        }),
+      ).toBe(false);
+      expect(
+        bridge.resolveProposal('proposal:cleanup-stream', {
+          action: 'approve',
+        }),
+      ).toBe(false);
+    } finally {
+      release();
+    }
+  });
 });
