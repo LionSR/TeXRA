@@ -17,7 +17,6 @@ import {
 import { extractErrorMessage } from '@utils/core';
 
 // Local imports - CLI runtime
-import { formatCliAccountLabelForDisplay } from './accountDisplay';
 import { workspaceCliConfigPath } from './cliConfig';
 import { CliExitCode } from './exitCodes';
 import {
@@ -200,9 +199,7 @@ async function checkAuth(
     const profile = await deps.authProfile();
     if (profile.authenticated) {
       const tier = profile.tier ? `, ${profile.tier}` : '';
-      const accountLabel = profile.accountLabel
-        ? formatCliAccountLabelForDisplay(profile.accountLabel)
-        : 'unknown';
+      const accountLabel = profile.accountLabel || 'unknown';
       return pass(
         'auth',
         'Included access',
