@@ -1,6 +1,5 @@
 import * as path from 'node:path';
 
-import { loadAgents } from '@agent/index';
 import { writeTerminalStatus } from '@agent/storage';
 import {
   AgentConfigSchema,
@@ -28,7 +27,7 @@ import {
   optionalStringFlagValue,
   optString,
 } from './_helpers/globalArgs';
-import { resolveAgentWithRemoteFallback } from './_helpers/remoteAgents';
+import { resolveCliAgent } from './_helpers/agentResolution';
 import { executeCliRequest } from './_helpers/runExecution';
 import {
   terminalStatusExitCode,
@@ -75,8 +74,7 @@ async function runWorkflowAgent(
   // full agent run otherwise.
   await assertOutputFileAvailable(init.output, runContext.cwd);
 
-  await loadAgents({ includeRemote: false });
-  const agent = await resolveAgentWithRemoteFallback(init.agent);
+  const agent = await resolveCliAgent(init.agent);
   // Pre-validate the resolved agent so usage errors land before stdin is read
   // or the runtime host starts.
   if (!agent) {
