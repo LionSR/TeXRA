@@ -28,6 +28,7 @@ import {
   type BypassState,
   type StreamSlice,
 } from '../state/cliState';
+import { activeStreamScope } from '../state/streamViews';
 import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 
@@ -501,7 +502,7 @@ export function ctrlCActionForFocus({
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
 }): CtrlCAction {
   if (!canStopActiveRun) return 'exit';
-  return activeStreamId && parentStream.has(activeStreamId)
+  return activeStreamScope({ activeStreamId, parentStream }).kind === 'child'
     ? 'stop root'
     : 'stop';
 }

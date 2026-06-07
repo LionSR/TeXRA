@@ -21,6 +21,45 @@ export interface StreamView {
   readonly shortcutIndex?: number;
 }
 
+export type ActiveStreamScope =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'root'; readonly streamId: StreamTabId }
+  | {
+      readonly kind: 'child';
+      readonly parentStreamId: StreamTabId;
+      readonly streamId: StreamTabId;
+    };
+
+export function activeStreamScope(init: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+}): ActiveStreamScope {
+  const activeStreamId = init.activeStreamId;
+  if (!activeStreamId) return { kind: 'none' };
+
+  const parentStreamId = init.parentStream.get(activeStreamId);
+  return parentStreamId === undefined
+    ? { kind: 'root', streamId: activeStreamId }
+    : { kind: 'child', parentStreamId, streamId: activeStreamId };
+}
+
+export function activeStreamParentOrSelfId(init: {
+  readonly activeStreamId: StreamTabId;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+}): StreamTabId;
+export function activeStreamParentOrSelfId(init: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+}): StreamTabId | undefined;
+export function activeStreamParentOrSelfId(init: {
+  readonly activeStreamId: StreamTabId | undefined;
+  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
+}): StreamTabId | undefined {
+  const scope = activeStreamScope(init);
+  if (scope.kind === 'none') return undefined;
+  return scope.kind === 'child' ? scope.parentStreamId : scope.streamId;
+}
+
 function childReferenceKey(child: ActiveChildInfo): string {
   return child.childStreamId ?? child.executionId;
 }
@@ -92,8 +131,7 @@ interface OrderedStreamViewInput {
 }
 
 function activeTreeRoot(init: OrderedStreamViewInput): StreamTabId | undefined {
-  if (!init.activeStreamId) return init.streams.keys().next().value;
-  return init.parentStream.get(init.activeStreamId) ?? init.activeStreamId;
+  return activeStreamParentOrSelfId(init) ?? init.streams.keys().next().value;
 }
 
 function orderedStreamTree(init: {
