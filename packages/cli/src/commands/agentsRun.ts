@@ -33,7 +33,7 @@ import {
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { emitCliResult } from './_helpers/output';
-import { resolveCliAgent } from './_helpers/agentResolution';
+import { resolveCliAgent } from '../runtime/agentResolution';
 import { executeCliRequest } from './_helpers/runExecution';
 import {
   createCliRunResult,
