@@ -58,6 +58,10 @@ export interface CliModelAccessListOptions {
   readonly apiMode?: CliApiMode;
 }
 
+export interface CliModelListOptions {
+  readonly includeUnavailable?: boolean;
+}
+
 export interface CliNoAvailableModelsRecoveryOptions {
   readonly includedModeAction?: string;
   readonly personalModeAction?: string;
@@ -341,6 +345,59 @@ export function findCliModelAccessEntry(
 
   const lower = model.toLowerCase();
   return models.find((entry) => entry.model.value.toLowerCase() === lower);
+}
+
+/**
+ * Output projection for JSON/NDJSON: prefix the model record with `id` so the
+ * model id is addressable under the same key (`.id`) as every other CLI
+ * resource (`agents`, `multi-agent`, `history`). `value` is kept for backward
+ * compatibility with existing scripts.
+ */
+export function cliModelRecord(
+  model: ModelOptionData,
+): { id: string } & ModelOptionData {
+  return { id: model.value, ...model };
+}
+
+export function listableModelAccessEntries(
+  models: readonly CliModelAccess[],
+  options: CliModelListOptions = {},
+): readonly CliModelAccess[] {
+  if (options.includeUnavailable === true) return models;
+  return runnableCliModelAccessEntries(models);
+}
+
+export function formatNoListableModelsMessage(
+  apiMode: CliApiMode | undefined,
+  options: CliModelListOptions = {},
+): string {
+  const statusHint =
+    options.includeUnavailable === true
+      ? 'No model records were returned for this installation.'
+      : 'Run `texra models list --all` to see unavailable models and access status.';
+  return [
+    'No models are currently available.',
+    statusHint,
+    formatCliNoAvailableModelsRecovery(apiMode),
+  ].join('\n');
+}
+
+export function formatCliModelDetails(entry: CliModelAccess): string {
+  const { model, status } = entry;
+  const lines: string[] = [];
+  lines.push(`id: ${model.value}`);
+  lines.push(`label: ${model.label}`);
+  if (model.provider) lines.push(`provider: ${model.provider}`);
+  lines.push(`status: ${status}`);
+  if (model.availabilityLabel)
+    lines.push(`availability: ${model.availabilityLabel}`);
+  if (model.context) lines.push(`context: ${model.context}`);
+  if (model.cost) lines.push(`cost: ${model.cost}`);
+  if (model.hint) {
+    lines.push('');
+    lines.push(model.hint);
+  }
+  return lines.join('\n');
 }
 
 function modelIds(models: readonly CliModelAccess[]): string[] {
