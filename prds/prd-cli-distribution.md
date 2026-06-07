@@ -70,7 +70,8 @@ additive: Tier 1's tap and release automation carry forward into Tier 2.
   finds `dist/resources` by walking up from `import.meta.url` to the `cli` package
   dir. All candidates are `import.meta.url`-relative; **there is no
   `process.execPath`-anchored candidate and no embedded-asset branch.** This is the
-  single load-bearing code change Tier 2 requires (see §8.3).
+  load-bearing runtime code change Tier 2 requires; the binary build also needs the
+  CJS bundle target described in §8.1.
 - **Public repo:** `github.com/texra-ai/texra-issues`. Proposed tap:
   `texra-ai/homebrew-tap` (referenced by users as `texra-ai/tap`).
 - **Published tarball coordinates** (for the Tier 1 formula):
@@ -131,7 +132,9 @@ Only if "needs Node" or cold-start becomes a real complaint. Work items:
    `node:sea` `getAsset()`.
 3. Build per-platform binaries in a CI matrix (§8.2), codesign on macOS, attach to a
    GitHub release.
-4. Add a Homebrew **cask** that fans out by OS/arch to the release assets.
+4. Add a macOS Homebrew **cask** that fans out by Apple Silicon vs Intel release
+   assets. Linux release assets are still used by the npm shim and optional
+   `curl | bash` installer, not by Homebrew casks.
 5. Convert the npm package to the per-platform optionalDependencies shim so
    `npm i -g` delivers the binary unchanged for users.
 6. Optionally add a `curl | bash` installer.
