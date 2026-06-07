@@ -20,7 +20,7 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
-import { resolveAgentWithRemoteFallback } from './_helpers/remoteAgents';
+import { resolveCliAgent } from './_helpers/agentResolution';
 import { agentsRunCommand } from './agentsRun';
 import type { CliContext } from '../runtime/cliContext';
 
@@ -158,9 +158,7 @@ export async function showAgent(
   name: string,
 ): Promise<number> {
   await initLocalCliPlatform(context);
-  await loadAgents({ includeRemote: false });
-
-  const entry = await resolveAgentWithRemoteFallback(name);
+  const entry = await resolveCliAgent(name);
   if (!entry) {
     writeTextStderr(missingAgentMessage(name));
     return CliExitCode.Usage;
