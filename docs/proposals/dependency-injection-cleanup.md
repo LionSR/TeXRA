@@ -308,7 +308,7 @@ flowchart LR
 
 Sequenced so nothing breaks, lowest-risk first:
 
-1. **Fold the 20 P-class setters into `Platform` ports.** _(Highest leverage, mostly mechanical.)_ Most consumers sit 1–2 hops from the setter (often the same file). Precedent already exists (`fs`, `workspace`, `secrets`). Eliminates the entire silent-no-op class at once — a missing wiring becomes a type error. Do the 6 ext-only no-op setters first (clearest user-facing bug surface in CLI/desktop).
+1. **Fold the 20 P-class setters into `Platform` ports.** _(Highest leverage, mostly mechanical.)_ Most consumers sit 1–2 hops from the setter (often the same file). Precedent already exists (`fs`, `workspace`, `secrets`). Eliminates the entire silent-no-op class at once — a missing wiring becomes a type error. Do the 7 ext-only no-op setters first (clearest user-facing bug surface in CLI/desktop).
 2. **De-duplicate the split-brain fields.** Stop threading the 7–8 fields already in `RunContext`; let flow nodes read them the way tools already do. This shrinks every flow-service interface for free.
 3. **Cohesion-split `AgentCore`** into `RunIdentity` / `DelegationPolicy` / `AgentDefinition` + ambient `logger`. The wholesale re-spread at the 2 nesting sites becomes `setServices({ identity, delegation, agent })`.
 4. **Narrow node interfaces (ISP).** A node reading 3 fields should declare those 3, not `ReflectionServices`. This removes the pressure to forward the whole bag.
