@@ -51,10 +51,9 @@ export class JsonRpcConnection {
       params === undefined
         ? this.conn.sendNotification(method)
         : this.conn.sendNotification(method, params);
-    // Notifications are fire-and-forget; swallow transport errors so teardown
-    // races (e.g. notify('exit') after the process has died) don't surface as
-    // unhandled rejections.
-    p.catch(() => {});
+    p.catch((err) => {
+      this.logLiveError('notification failed', err);
+    });
   }
 
   async request<T>(method: string, params?: unknown): Promise<T> {
