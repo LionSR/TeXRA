@@ -33,8 +33,6 @@ import {
 } from '@agent/toolUse/ToolUseFollowUp';
 import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
-import { isOAuthProvider, type OAuthProvider } from '@auth/sharedConfig';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
@@ -55,6 +53,10 @@ import {
   resolveCliRunnableModel,
   type CliNoAvailableModelsRecoveryOptions,
 } from '@cli/runtime/modelAccess';
+import {
+  githubSelectAccountWarning,
+  parseChatLoginSlashArgs,
+} from '@cli/runtime/loginOptions';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
 import {
@@ -635,55 +637,6 @@ const CHAT_STARTUP_MODEL_RECOVERY = {
   personalModeAction: 'retry with `texra chat --api-mode personal`',
 } satisfies CliNoAvailableModelsRecoveryOptions;
 
-interface ChatLoginSlashArgs {
-  readonly provider: OAuthProvider;
-  readonly noBrowser: boolean;
-  readonly selectAccount: boolean;
-  readonly loginHint?: string;
-}
-
-export function parseChatLoginSlashArgs(
-  input: string,
-): ChatLoginSlashArgs | undefined {
-  const tokens = input.trim().split(/\s+/).filter(Boolean);
-  let provider: string = DEFAULT_OAUTH_PROVIDER;
-  let providerSet = false;
-  let noBrowser = false;
-  let selectAccount = false;
-  let loginHint: string | undefined;
-
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index];
-    if (token === '--no-browser') {
-      noBrowser = true;
-      continue;
-    }
-    if (token === '--select-account') {
-      selectAccount = true;
-      continue;
-    }
-    if (token === '--login-hint') {
-      const next = tokens[index + 1];
-      if (!next || next.startsWith('--')) return undefined;
-      loginHint = next;
-      index += 1;
-      continue;
-    }
-    if (token.startsWith('--login-hint=')) {
-      const value = token.slice('--login-hint='.length).trim();
-      if (!value || value.startsWith('--')) return undefined;
-      loginHint = value;
-      continue;
-    }
-    if (token.startsWith('--') || providerSet) return undefined;
-    provider = token;
-    providerSet = true;
-  }
-
-  if (!isOAuthProvider(provider)) return undefined;
-  return { provider, noBrowser, selectAccount, loginHint };
-}
-
 async function loginFromChat(input: string): Promise<void> {
   const args = parseChatLoginSlashArgs(input);
   if (!args) {
@@ -691,11 +644,8 @@ async function loginFromChat(input: string): Promise<void> {
     return;
   }
 
-  if (args.provider === 'github' && args.selectAccount && !args.loginHint) {
-    appendLocalAssistantTranscript(
-      'GitHub does not support --select-account by itself. Use --login-hint <username> to request a specific GitHub account.',
-    );
-  }
+  const accountWarning = githubSelectAccountWarning(args);
+  if (accountWarning) appendLocalAssistantTranscript(accountWarning);
   appendLocalAssistantTranscript(
     args.noBrowser
       ? `Starting TeXRA ${args.provider} sign-in.`
