@@ -18,22 +18,16 @@ import {
 } from '../schemas/cliSettings';
 import { BUILTIN_DEFAULT_CHAT_AGENT } from '../runtime/defaultAgents';
 import type { InitAnswers } from '../runtime/initConfig';
+import type { CliModelAccess } from '../runtime/modelAccess';
 
 export interface InitWizardAgentOption {
   readonly name: string;
   readonly description?: string;
 }
 
-export interface InitWizardModelOption {
-  readonly value: string;
-  readonly label: string;
-  readonly available: boolean;
-  readonly status: string;
-}
-
 export interface InitWizardOptions {
   readonly agents: readonly InitWizardAgentOption[];
-  readonly models: readonly InitWizardModelOption[];
+  readonly models: readonly CliModelAccess[];
   readonly colorEnabled?: boolean;
 }
 
@@ -116,18 +110,18 @@ function StepFrame(props: {
   );
 }
 
-function firstAvailableIndex(models: readonly InitWizardModelOption[]): number {
+function firstAvailableIndex(models: readonly CliModelAccess[]): number {
   const index = models.findIndex((model) => model.available);
   return index >= 0 ? index : 0;
 }
 
 export function initWizardModelSelectItems(
-  models: readonly InitWizardModelOption[],
+  models: readonly CliModelAccess[],
 ): ReadonlyArray<SelectItem<string>> {
   const hasAvailableModel = models.some((model) => model.available);
   return models.map((model) => ({
-    value: model.value,
-    label: model.label,
+    value: model.model.value,
+    label: model.model.label || model.model.value,
     description: model.available
       ? model.status
       : `${model.status} (unavailable now)`,
