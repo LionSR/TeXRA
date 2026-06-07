@@ -69,6 +69,7 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { defineTool } from './core/define';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream } from './childStream';
+import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import {
   agentCliLoopTerminalStatus,
   finalizeAgentCliLoopStatus,
@@ -155,23 +156,13 @@ interface ActiveThread {
   executionId: ExecutionId;
 }
 
-const threadRegistry = new Map<string, ActiveThread>();
-
-/** Store a thread for multi-turn reuse and persist thread ID to disk. */
-function storeThread(threadId: string, entry: ActiveThread): void {
-  threadRegistry.set(threadId, entry);
-  // Extension reload clears memory but SDK stores sessions on disk —
-  // persist the ID so later code can display or cross-reference it.
-  void getExecutionStore(entry.executionId)
-    .write('codex_thread_id', threadId)
-    .catch(() => {});
-}
+const codexThreads = new AgentCliSessionRegistry<ActiveThread>(
+  'codex_thread_id',
+);
 
 /** Prevents codex streams from remaining in stale WAITING state during reload. */
 export function interruptAllCodexSessions(): void {
-  for (const { childStreamId } of [...threadRegistry.values()]) {
-    interruptRegistry.get(childStreamId)?.interrupt();
-  }
+  codexThreads.interruptAll();
 }
 
 // ============================================================================
@@ -528,7 +519,7 @@ function startCodexLoop(params: {
   // guard and start a concurrent loop. Fresh threads don't have thread.id
   // yet; they're registered after the first turn completes.
   if (thread.id) {
-    storeThread(thread.id, {
+    codexThreads.register(thread.id, {
       thread,
       childStreamId,
       parentStreamId,
@@ -581,8 +572,8 @@ function startCodexLoop(params: {
         const wallTimeMs = Date.now() - startedAt;
         const turnFailed = err != null;
         const threadId = thread.id;
-        if (!turnFailed && threadId && !threadRegistry.has(threadId)) {
-          storeThread(threadId, {
+        if (!turnFailed && threadId && !codexThreads.isActive(threadId)) {
+          codexThreads.register(threadId, {
             thread,
             childStreamId,
             parentStreamId,
@@ -633,7 +624,7 @@ function startCodexLoop(params: {
       interruptRegistry.unregister(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
       const threadId = thread.id;
-      if (threadId) threadRegistry.delete(threadId);
+      if (threadId) codexThreads.release(threadId);
       // Persist terminal status before untracking — executionRegistry.untrack fires
       // notifyWaiters, so consumers must see the final status on disk.
       await writeTerminalStatus(
@@ -718,7 +709,7 @@ export class CodexTool extends defineTool({
     const runContext = contexts?.runContext;
     callContext?.onExecutionReady?.();
 
-    if (input.thread_id && threadRegistry.has(input.thread_id)) {
+    if (input.thread_id && codexThreads.isActive(input.thread_id)) {
       return resumeCodexThread(
         input.thread_id,
         input.prompt,
@@ -807,7 +798,7 @@ function resumeCodexThread(
   prompt: string,
   callerStreamId: StreamTabId | undefined,
 ): ToolResult {
-  const stored = threadRegistry.get(threadId);
+  const stored = codexThreads.lookup(threadId);
   if (!stored) {
     throw new ToolError(
       `Codex thread '${threadId}' is not active. It may have completed or been stopped; start a new session without thread_id.`,
