@@ -12,7 +12,7 @@ import {
 } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
-import { getActiveChildren } from '@agent/runtime/executionRegistry';
+import { executionRegistry } from '@agent/runtime/executionRegistry';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import {
   maybeSaveDebugObject,
@@ -127,7 +127,9 @@ export async function saveCycleDebug(
 export function defaultPostCompactionContext(
   services: CycleServices,
 ): string | null {
-  const { subagents, processes } = getActiveChildren(services.streamId);
+  const { subagents, processes } = executionRegistry.getActiveChildren(
+    services.streamId,
+  );
   return formatPostCompactionContext(
     subagents,
     processes,
