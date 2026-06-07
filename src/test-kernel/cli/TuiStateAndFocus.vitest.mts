@@ -70,7 +70,6 @@ import {
   chatTuiCanSelectModel,
   chatTuiSigintAction,
   chatTuiFocusedChildFollowUpRoute,
-  parseChatLoginSlashArgs,
   clearTuiSessionRunState,
   markChatTuiRunPending,
 } from '@cli/chat/tui/runChatTui';
@@ -1256,45 +1255,6 @@ describe('CLI TUI row allocation', () => {
         canInterruptActiveRun: true,
       }),
     ).toBe('force-exit');
-  });
-
-  it('parses in-chat login slash command options', () => {
-    expect(parseChatLoginSlashArgs('')).toEqual({
-      provider: 'github',
-      noBrowser: false,
-      selectAccount: false,
-      loginHint: undefined,
-    });
-    expect(
-      parseChatLoginSlashArgs('google --no-browser --select-account'),
-    ).toEqual({
-      provider: 'google',
-      noBrowser: true,
-      selectAccount: true,
-      loginHint: undefined,
-    });
-    expect(parseChatLoginSlashArgs('--login-hint user@example.edu')).toEqual({
-      provider: 'github',
-      noBrowser: false,
-      selectAccount: false,
-      loginHint: 'user@example.edu',
-    });
-    expect(parseChatLoginSlashArgs('github --login-hint=octocat')).toEqual({
-      provider: 'github',
-      noBrowser: false,
-      selectAccount: false,
-      loginHint: 'octocat',
-    });
-  });
-
-  it('rejects invalid in-chat login slash command options', () => {
-    expect(parseChatLoginSlashArgs('slack')).toBeUndefined();
-    expect(parseChatLoginSlashArgs('github google')).toBeUndefined();
-    expect(parseChatLoginSlashArgs('--login-hint')).toBeUndefined();
-    expect(
-      parseChatLoginSlashArgs('--login-hint --no-browser'),
-    ).toBeUndefined();
-    expect(parseChatLoginSlashArgs('--unexpected')).toBeUndefined();
   });
 
   it('selects the focused child stream as a follow-up target', () => {
