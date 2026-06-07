@@ -2,7 +2,7 @@ import type { ExecutionListingEntry, TodoEntry } from '@agent/storage';
 import {
   type ExecutionHandle,
   type ExecutionStatusInfo,
-  getHandle,
+  executionRegistry,
 } from '@agent/runtime/executionRegistry';
 import {
   EXECUTION_STATUS,
@@ -58,7 +58,7 @@ export function getExecutionStatusInfo(
   executionId: string,
   terminalStatus?: string,
 ): ExecutionStatusInfo {
-  const handle = getHandle(executionId);
+  const handle = executionRegistry.getHandle(executionId);
   if (handle) return handle.getStatus();
   return {
     status: terminalStatus ?? EXECUTION_STATUS.COMPLETED,

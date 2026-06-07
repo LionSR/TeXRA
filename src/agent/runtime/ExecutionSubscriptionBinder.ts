@@ -12,8 +12,7 @@
  */
 
 import {
-  addExecutionListener,
-  getHandle,
+  executionRegistry,
   type ExecutionHandle,
 } from '@agent/runtime/executionRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -110,14 +109,17 @@ class ExecutionSubscription implements Disposable {
   }
 
   bind(): boolean {
-    this.removeListener = addExecutionListener(this.executionId, (handle) => {
-      this.handleChange(handle);
-    });
+    this.removeListener = executionRegistry.addListener(
+      this.executionId,
+      (handle) => {
+        this.handleChange(handle);
+      },
+    );
 
-    // TOCTOU: handle could untrack between the initial getHandle() check
+    // TOCTOU: handle could untrack between the initial executionRegistry.getHandle() check
     // and listener registration. Re-check; if gone, fire the terminal event
     // and dispose so the listener never leaks.
-    if (!getHandle(this.executionId)) {
+    if (!executionRegistry.getHandle(this.executionId)) {
       this.sendFinished();
       this.dispose();
       return false;
@@ -194,7 +196,7 @@ export function bindExecutionSubscription(
 ): void {
   ensureReleaseHook();
 
-  const handle = getHandle(executionId);
+  const handle = executionRegistry.getHandle(executionId);
   if (!handle) {
     throw new Error(
       `Execution ${executionId} is not active. Subscribe only works on tracked executions; use 'view' to read the final report.`,
