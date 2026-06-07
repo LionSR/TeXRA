@@ -14,10 +14,7 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
-import {
-  AgentCategory,
-  isWorkflowSetting,
-} from '@agent/core/definition/AgentDataclass';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { AgentError } from '@common/errors';
@@ -38,10 +35,8 @@ import {
   withExecutionRunContext,
   type AgentLaunchContext,
 } from './AgentLaunchContext';
-import {
-  buildTerminalFlowResult,
-  runFlowWithLifecycle,
-} from './AgentRunLifecycle';
+import { runFlowWithLifecycle } from './AgentRunLifecycle';
+import { executionRegistry } from './executionRegistry';
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { getRunStorageService } from './RunStorageService';
@@ -243,10 +238,7 @@ export async function executeAgent(
   ctx.stopAfterCycle = options.stopAfterCycle;
   return withExecutionRunContext(ctx, async () => {
     const { setting, streamId, config } = ctx;
-    const { agent: agentName } = config;
     const { isSubagent } = options;
-    const category =
-      setting.agentCategory === AgentCategory.ToolUse ? 'toolUse' : 'workflow';
 
     // Fire-and-forget: generate AI session description from the user's instruction.
     // Triggered at the start so cancelled/errored sessions still get descriptions.
@@ -260,8 +252,6 @@ export async function executeAgent(
     ).catch(() => {});
     return runFlowWithLifecycle(
       ctx,
-      streamId,
-      agentName,
       async () => {
         // Pre-execution UI setup
         if (executionId) await ensureRunDir(executionId);
@@ -287,7 +277,7 @@ export async function executeAgent(
           taskState: agentConfigToTaskState(config),
         });
 
-        logger.info(`Executing ${agentName} with model ${config.model}`);
+        logger.info(`Executing ${config.agent} with model ${config.model}`);
         const interrupts = createInterruptCallbacks();
 
         if (setting.agentCategory === AgentCategory.ToolUse) {
@@ -358,7 +348,6 @@ export async function executeAgent(
       },
       {
         isSubagent,
-        category,
         parentStreamId: options.parentStreamId,
         onCompleted: options.onCompleted,
         onError: options.onError,
@@ -405,8 +394,6 @@ export async function resumeToolUseFromSnapshot(
 
     await runFlowWithLifecycle(
       ctx,
-      streamId,
-      snapshot.agentConfig.agent,
       async () => {
         StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
           runtimeHost: ctx.runtimeHost,
@@ -444,7 +431,7 @@ export async function resumeToolUseFromSnapshot(
           streamId,
         };
       },
-      { category: 'toolUse' },
     );
+
   });
 }

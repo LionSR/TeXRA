@@ -1,5 +1,6 @@
 import { writeTerminalStatus } from '@agent/storage';
 import { logSdkError } from '@agent/trace';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentError,
   classifyAgentError,
@@ -11,43 +12,21 @@ import {
   STREAM_STATUS,
   END_GROUP_STATUS,
   EXECUTION_STATUS,
-  type EndGroupStatus,
-  type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 
 import { AgentExecutionHandle, executionRegistry } from './executionRegistry';
 import { StreamStatusService } from './StreamStatusService';
-import type { AgentFlowResult } from './AgentFlowResult';
+import { buildTerminalFlowResult, type AgentFlowResult } from './AgentFlowResult';
 import type { AgentLaunchContext } from './AgentLaunchContext';
 
 const logger = createChannelTrace('agentRunLifecycle');
 
 export interface RunFlowLifecycleOptions {
   isSubagent?: boolean;
-  category?: 'workflow' | 'toolUse';
   parentStreamId?: StreamTabId;
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;
-}
-
-export function buildTerminalFlowResult(
-  category: 'workflow' | 'toolUse',
-  status: EndGroupStatus,
-  executionId: ExecutionId,
-  streamId: StreamTabId,
-): AgentFlowResult {
-  if (category === 'toolUse') {
-    return { category, status, executionId, streamId };
-  }
-  return {
-    category,
-    status,
-    executionId,
-    streamId,
-    outputs: [],
-    compileFailures: [],
-  };
 }
 
 /**
@@ -61,12 +40,13 @@ export function buildTerminalFlowResult(
  */
 export async function runFlowWithLifecycle(
   ctx: AgentLaunchContext,
-  streamId: StreamTabId,
-  agentName: string,
   runner: () => Promise<AgentFlowResult>,
   options?: RunFlowLifecycleOptions,
 ): Promise<AgentFlowResult> {
-  const category = options?.category ?? 'workflow';
+  const { streamId } = ctx;
+  const agentName = ctx.config.agent;
+  const category =
+    ctx.setting.agentCategory === AgentCategory.ToolUse ? 'toolUse' : 'workflow';
   const parentStreamId = options?.parentStreamId ?? streamId;
   const handle = new AgentExecutionHandle(
     ctx.executionId,
@@ -109,7 +89,8 @@ export async function runFlowWithLifecycle(
       kind === 'abort' ? STREAM_STATUS.STOPPED : STREAM_STATUS.ERROR;
     await writeTerminalStatus(ctx.executionId, terminalStatus).catch(() => {});
     executionRegistry.untrack(ctx.executionId);
-    const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
+    const sdkMsg = getSdkErrorMessage(err);
+    const errorMsg = `Error executing agent ${agentName}: ${sdkMsg}`;
 
     // Root-agent failures are surfaced in the stream log. Subagent failures
     // are delivered to the orchestrator below, so avoid adding a second
@@ -131,7 +112,7 @@ export async function runFlowWithLifecycle(
     if (!options?.isSubagent) {
       if (kind === 'disk-full') {
         ctx.runtimeHost.emit('requestShowError', {
-          message: getSdkErrorMessage(err),
+          message: sdkMsg,
         });
       } else if (kind === 'missing-api-key') {
         ctx.runtimeHost.emit('requestShowInstruction', {

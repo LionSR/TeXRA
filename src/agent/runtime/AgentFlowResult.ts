@@ -4,6 +4,9 @@ import {
   EndGroupStatusSchema,
   ExecutionIdSchema,
   StreamTabIdSchema,
+  type EndGroupStatus,
+  type ExecutionId,
+  type StreamTabId,
 } from '@shared/schemas';
 
 export const OutputFileSummarySchema = z.object({
@@ -58,3 +61,15 @@ export const AgentFlowResultSchema = z.discriminatedUnion('category', [
 ]);
 
 export type AgentFlowResult = z.infer<typeof AgentFlowResultSchema>;
+
+export function buildTerminalFlowResult(
+  category: 'workflow' | 'toolUse',
+  status: EndGroupStatus,
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+): AgentFlowResult {
+  if (category === 'toolUse') {
+    return { category, status, executionId, streamId };
+  }
+  return { category, status, executionId, streamId, outputs: [], compileFailures: [] };
+}
