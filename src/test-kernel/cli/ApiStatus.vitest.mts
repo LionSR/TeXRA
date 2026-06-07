@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatCliAccountLabelForDisplay } from '@cli/runtime/accountDisplay';
 import {
   formatCliApiStatusActionHint,
   formatCliAuthStatusLine,
@@ -34,9 +33,12 @@ describe('CLI API status text', () => {
   });
 
   it('shows account labels plainly in auth status', () => {
-    expect(formatCliAccountLabelForDisplay('14889516+LionSR@users.noreply.github.com')).toBe(
-      '14889516+LionSR@users.noreply.github.com',
-    );
+    expect(
+      formatCliAuthStatusLine({
+        authenticated: true,
+        accountLabel: '14889516+LionSR@users.noreply.github.com',
+      }),
+    ).toBe('auth: signed in as 14889516+LionSR@users.noreply.github.com');
     expect(
       formatCliAuthStatusLine({
         authenticated: true,
@@ -46,10 +48,12 @@ describe('CLI API status text', () => {
   });
 
   it('keeps non-email account labels readable', () => {
-    expect(formatCliAccountLabelForDisplay('github-user')).toBe('github-user');
-    expect(formatCliAccountLabelForDisplay('team@internal')).toBe(
-      'team@internal',
-    );
+    expect(
+      formatCliAuthStatusLine({
+        authenticated: true,
+        accountLabel: 'github-user',
+      }),
+    ).toBe('auth: signed in as github-user');
     expect(
       formatCliAuthStatusLine({
         authenticated: true,

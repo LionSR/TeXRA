@@ -2,7 +2,6 @@ import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { API_PROVIDERS, lookupApiKeyOrigin } from '@model/apiProviders';
 
-import { formatCliAccountLabelForDisplay } from './accountDisplay';
 import {
   formatCliApiMode,
   getCliApiMode,
@@ -27,11 +26,7 @@ export function formatCliAuthStatusLine(
   profile: Pick<CliAuthProfile, 'authenticated' | 'accountLabel'>,
 ): string {
   if (!profile.authenticated) return 'auth: signed out';
-  return `auth: signed in${
-    profile.accountLabel
-      ? ` as ${formatCliAccountLabelForDisplay(profile.accountLabel)}`
-      : ''
-  }`;
+  return `auth: signed in${profile.accountLabel ? ` as ${profile.accountLabel}` : ''}`;
 }
 
 /**
