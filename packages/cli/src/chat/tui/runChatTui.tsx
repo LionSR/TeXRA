@@ -13,8 +13,6 @@ import {
   getDefaultStreamLogStore,
   StreamSnapshotStore,
 } from '@transcript';
-import { bus } from '@eventBus/ProgressEventBus';
-import { sumUsageStats } from '@shared/schemas';
 import { tryPlatform } from '@platform/platform';
 import { getAgent, loadAgents } from '@agent/index';
 import { registerExecution, writeTerminalStatus } from '@agent/storage';
@@ -54,10 +52,9 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   cliRunnableModelOptionsForSource,
-  type CliModelFallbackMode,
-  type CliRunnableModelResolution,
   formatCliNoAvailableModelsRecovery,
   resolveCliRunnableModel,
+  type CliNoAvailableModelsRecoveryOptions,
 } from '@cli/runtime/modelAccess';
 import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
@@ -85,6 +82,8 @@ import {
 } from '@cli/runtime/memory';
 import { isInFlightStatus } from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import { bus } from '@eventBus/ProgressEventBus';
+import { sumUsageStats } from '@shared/schemas';
 import {
   EXECUTION_STATUS,
   LIVE_ELAPSED_STREAM_STATUSES,
@@ -551,25 +550,6 @@ async function applyCliModelSelection(
   );
 }
 
-function chatApiModeRecoveryMessage(apiMode: CliApiMode): string {
-  return formatCliNoAvailableModelsRecovery(apiMode, {
-    includedModeAction: 'switch to included relay with `/api included`',
-    personalModeAction: 'switch to personal API keys with `/api personal`',
-  });
-}
-
-export async function resolveChatRootModelForApiMode(
-  model: string,
-  apiMode: CliApiMode,
-  fallbackMode: CliModelFallbackMode,
-): Promise<CliRunnableModelResolution> {
-  return resolveCliRunnableModel(model, {
-    fallbackMode,
-    apiMode,
-    noAvailableModelsMessage: chatApiModeRecoveryMessage(apiMode),
-  });
-}
-
 async function reconcileRootModelAfterApiModeChange(
   context: SlashCommandContext | undefined,
   apiMode: CliApiMode,
@@ -577,19 +557,22 @@ async function reconcileRootModelAfterApiModeChange(
   if (!context || !chatTuiCanStartRootRun(context.session)) return undefined;
 
   const currentModel = cliState.sessionMeta.get().model;
-  const resolution = await resolveChatRootModelForApiMode(
-    currentModel,
+  const selection = await resolveCliRunnableModel(currentModel, {
+    fallbackMode: 'notice',
     apiMode,
-    'notice',
-  );
-  if (resolution.model === currentModel) return undefined;
+    noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+      apiMode,
+      CHAT_API_MODE_MODEL_RECOVERY,
+    ),
+  });
+  if (selection.model === currentModel) return undefined;
 
-  await setCliHelperModel(resolution.model);
+  await setCliHelperModel(selection.model);
   cliState.sessionMeta.set({
     ...cliState.sessionMeta.get(),
-    model: resolution.model,
+    model: selection.model,
   });
-  return resolution.notice;
+  return selection.notice;
 }
 
 async function applyCliApiModeSelection(
@@ -640,6 +623,16 @@ async function showCliAuthStatus(): Promise<void> {
 
 export const CHAT_LOGIN_USAGE =
   'Usage: /login [github | google] [--no-browser] [--select-account] [--login-hint <account>]';
+
+const CHAT_API_MODE_MODEL_RECOVERY = {
+  includedModeAction: 'switch to included relay with `/api included`',
+  personalModeAction: 'switch to personal API keys with `/api personal`',
+} satisfies CliNoAvailableModelsRecoveryOptions;
+
+const CHAT_STARTUP_MODEL_RECOVERY = {
+  includedModeAction: 'retry with `texra chat --api-mode included`',
+  personalModeAction: 'retry with `texra chat --api-mode personal`',
+} satisfies CliNoAvailableModelsRecoveryOptions;
 
 interface ChatLoginSlashArgs {
   readonly provider: OAuthProvider;
@@ -1049,16 +1042,16 @@ export async function runChat(
   // wins, otherwise the persisted account default. Model resolution, the
   // no-models hints, and the header/status all read this same value so they can
   // never disagree.
-  let modelResolution: Awaited<ReturnType<typeof resolveCliRunnableModel>>;
+  let modelSelection: Awaited<ReturnType<typeof resolveCliRunnableModel>>;
   try {
-    modelResolution = await resolveCliRunnableModel(
+    modelSelection = await resolveCliRunnableModel(
       defaults.model,
       cliRunnableModelOptionsForSource(defaults.modelSource, {
         apiMode,
-        noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(apiMode, {
-          includedModeAction: 'retry with `texra chat --api-mode included`',
-          personalModeAction: 'retry with `texra chat --api-mode personal`',
-        }),
+        noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+          apiMode,
+          CHAT_STARTUP_MODEL_RECOVERY,
+        ),
       }),
     );
   } catch (error: unknown) {
@@ -1066,7 +1059,7 @@ export async function runChat(
     return { exitCode: CliExitCode.Usage };
   }
   const { agent } = defaults;
-  const model = modelResolution.model;
+  const model = modelSelection.model;
   await setCliHelperModel(model);
   const version = await readCliVersion();
 
@@ -1109,8 +1102,8 @@ export async function runChat(
     teamName: init.teamName,
     version,
   });
-  if (modelResolution.notice) {
-    appendLocalAssistantTranscript(modelResolution.notice);
+  if (modelSelection.notice) {
+    appendLocalAssistantTranscript(modelSelection.notice);
   }
 
   const inputHistory = await loadInputHistory();
@@ -1496,11 +1489,14 @@ export async function runChat(
         const meta = cliState.sessionMeta.get();
         const currentAgent = meta.agent || agent;
         const currentModel = meta.model || model;
-        const resolution = await resolveChatRootModelForApiMode(
-          currentModel,
-          meta.apiMode,
-          'reject',
-        );
+        const selection = await resolveCliRunnableModel(currentModel, {
+          fallbackMode: 'reject',
+          apiMode: meta.apiMode,
+          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+            meta.apiMode,
+            CHAT_API_MODE_MODEL_RECOVERY,
+          ),
+        });
         if (session.stopRequested) {
           markChatTuiRunCompleted(session);
           return;
@@ -1509,7 +1505,7 @@ export async function runChat(
         startAgentRun(
           buildInitialChatAgentConfig({
             agent: currentAgent,
-            model: resolution.model,
+            model: selection.model,
             instruction,
             displayInstruction,
             mediaFiles,
