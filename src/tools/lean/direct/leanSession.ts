@@ -450,7 +450,13 @@ export function fileUriToPath(uri: string): string | null {
   if (!uri.startsWith('file://')) return null;
   try {
     return fileURLToPath(uri);
-  } catch {
+  } catch (err) {
+    // Malformed or non-local file URIs from an external Lean LSP server
+    // (e.g. `file://host/path`, bad percent-encoding) make fileURLToPath
+    // throw. This runs on the JSON-RPC notification path, so map to null
+    // (an untracked URI the caller skips) rather than letting the exception
+    // escape and break diagnostics handling.
+    debug(LOG_CHANNEL, `Ignoring unmappable file URI ${uri}`, { data: err });
     return null;
   }
 }

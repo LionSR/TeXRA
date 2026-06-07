@@ -169,7 +169,14 @@ export class ArxivSourceProcessor {
       return destPath;
     } finally {
       if (shouldCleanup) {
-        void AbsoluteFS.delete(destPath).catch(() => undefined);
+        void AbsoluteFS.delete(destPath).catch((error: unknown) => {
+          logger.debug(
+            this.channel,
+            `Failed to clean up partial download ${destPath}`,
+            { data: error },
+          );
+          return undefined;
+        });
       }
     }
   }
@@ -275,12 +282,26 @@ export class ArxivSourceProcessor {
       if (downloadedPath.endsWith('.pdf')) {
         await AbsoluteFS.delete(downloadedPath);
         await AbsoluteFS.delete(downloadDirFull, { recursive: true }).catch(
-          () => undefined,
+          (error: unknown) => {
+            logger.debug(
+              this.channel,
+              `Failed to clean up download dir ${downloadDirFull}`,
+              { data: error },
+            );
+            return undefined;
+          },
         );
         // Only clean up the paper directory when it was created for this download
         if (!isRoot) {
           await AbsoluteFS.delete(paperDirFull, { recursive: true }).catch(
-            () => undefined,
+            (error: unknown) => {
+              logger.debug(
+                this.channel,
+                `Failed to clean up paper dir ${paperDirFull}`,
+                { data: error },
+              );
+              return undefined;
+            },
           );
         }
         throw new Error(PDF_ONLY_SUBMISSION_ERROR);
@@ -337,7 +358,14 @@ export class ArxivSourceProcessor {
 
       // Remove the temporary download directory (files are now in paper root)
       await AbsoluteFS.delete(downloadDirFull, { recursive: true }).catch(
-        () => undefined,
+        (error: unknown) => {
+          logger.debug(
+            this.channel,
+            `Failed to clean up temporary download dir ${downloadDirFull}`,
+            { data: error },
+          );
+          return undefined;
+        },
       );
     }
 

@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   deleteExecution: vi.fn(),
   deleteAllExecutions: vi.fn(),
   readCliToolUseResumeData: vi.fn(),
+  readCliToolUseResumeDataForListing: vi.fn(),
 }));
 
 vi.mock('@agent/storage', async () => {
@@ -49,6 +50,7 @@ vi.mock('@utils/files/taskRunStorage', () => ({
 
 vi.mock('@cli/runtime/toolUseResumeData', () => ({
   readCliToolUseResumeData: mocks.readCliToolUseResumeData,
+  readCliToolUseResumeDataForListing: mocks.readCliToolUseResumeDataForListing,
 }));
 
 // Imported after vi.mock so the mocked dependencies are in place.
@@ -98,6 +100,7 @@ describe('CLI history runtime', () => {
     mocks.readReport.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);
     mocks.readCliToolUseResumeData.mockResolvedValue(null);
+    mocks.readCliToolUseResumeDataForListing.mockResolvedValue(null);
   });
 
   it('formats history list rows with the stable tab-separated text shape', async () => {
@@ -163,7 +166,7 @@ describe('CLI history runtime', () => {
       agentCategory: 'toolUse',
     } as AgentConfig;
     mocks.readConfig.mockResolvedValue(toolUseConfig);
-    mocks.readCliToolUseResumeData.mockResolvedValue({
+    mocks.readCliToolUseResumeDataForListing.mockResolvedValue({
       streamId: 'chat@gpt54#a1',
       config: toolUseConfig,
       snapshot: { agentConfig: { ...toolUseConfig, model: 'gpt55' } },

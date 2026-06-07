@@ -9,7 +9,10 @@
 import * as vscode from 'vscode';
 
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import {
+  retrieveSessionResumeData,
+  type SessionResumeData,
+} from '@agent/runtime/SessionResumeRetrieval';
 import { createChannelTrace } from '@logger';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import type { StreamTabId } from '@shared/schemas';
@@ -43,11 +46,22 @@ export async function tryResumeFromSnapshot(
     return false;
   }
 
-  const resumeData = await retrieveSessionResumeData(
-    streamId,
-    executionId,
-    taskState,
-  );
+  let resumeData: SessionResumeData | null;
+  try {
+    resumeData = await retrieveSessionResumeData(
+      streamId,
+      executionId,
+      taskState,
+    );
+  } catch (error) {
+    // Retrieval failed unexpectedly (distinct from "no resumable session").
+    // Auto-resume is best-effort here, so degrade — but log the real failure
+    // rather than letting it masquerade as "nothing to resume".
+    logger.error(`Failed to retrieve resume data for stream: ${streamId}`, {
+      data: error,
+    });
+    return false;
+  }
   if (!resumeData) return false;
 
   logger.info(

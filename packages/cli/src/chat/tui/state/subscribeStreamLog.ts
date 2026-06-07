@@ -42,11 +42,9 @@ function transcriptMessageTypesForStream(streamId: StreamTabId): Set<string> {
  *  args, not output — so a JSON serialization is cheap. */
 function inputEqual(prev: unknown, next: unknown): boolean {
   if (prev === next) return true;
-  try {
-    return JSON.stringify(prev) === JSON.stringify(next);
-  } catch {
-    return false;
-  }
+  // Tool-arg inputs are plain JSON values (model-supplied, Zod passthrough),
+  // never circular, so JSON.stringify can't throw here.
+  return JSON.stringify(prev) === JSON.stringify(next);
 }
 
 // Field-by-field — a stringified signature over the whole NormalizedToolUse

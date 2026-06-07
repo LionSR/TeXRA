@@ -71,6 +71,18 @@ describe('resolveCliResumeSnapshot', () => {
     expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
   });
 
+  it('returns load-failed when config lookup fails', async () => {
+    mocks.readCliHistoryConfig.mockRejectedValue(new Error('state is locked'));
+
+    const result = await resolve();
+
+    expect(result).toEqual({
+      kind: 'load-failed',
+      reason: 'state is locked',
+    });
+    expect(mocks.retrieveSessionResumeData).not.toHaveBeenCalled();
+  });
+
   it('returns workflow for a workflow config (not continuable here)', async () => {
     mocks.readCliHistoryConfig.mockResolvedValue(workflowConfig());
 
@@ -117,6 +129,18 @@ describe('resolveCliResumeSnapshot', () => {
     expect(result).toEqual({ kind: 'no-snapshot' });
   });
 
+  it('returns load-failed when resume state retrieval fails', async () => {
+    mocks.readCliHistoryConfig.mockResolvedValue(toolUseConfig());
+    mocks.retrieveSessionResumeData.mockRejectedValue(new Error('KV timeout'));
+
+    const result = await resolve();
+
+    expect(result).toEqual({
+      kind: 'load-failed',
+      reason: 'KV timeout',
+    });
+  });
+
   it('returns no-snapshot when retrieval yields a non-toolUse payload', async () => {
     mocks.readCliHistoryConfig.mockResolvedValue(toolUseConfig());
     mocks.retrieveSessionResumeData.mockResolvedValue({ type: 'workflow' });
@@ -140,5 +164,11 @@ describe('explainNonResumable', () => {
     expect(explainNonResumable({ kind: 'no-snapshot' }, EXECUTION_ID)).toBe(
       `Execution ${EXECUTION_ID} has no resumable session state (it completed or was cleared).`,
     );
+    expect(
+      explainNonResumable(
+        { kind: 'load-failed', reason: 'KV timeout' },
+        EXECUTION_ID,
+      ),
+    ).toBe(`Failed to load resumable session ${EXECUTION_ID}: KV timeout`);
   });
 });

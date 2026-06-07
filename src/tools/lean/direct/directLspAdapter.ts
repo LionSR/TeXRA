@@ -150,6 +150,10 @@ export function createDirectLspLeanAdapter(
         const session = await getSession(file);
         return await session.fetchDiagnostics(file);
       } catch (error) {
+        // Return null (LeanDiagnosticsTool surfaces it as a failure result) and
+        // log the cause. The interface contract is `LeanDiagnostic[] | null`;
+        // honoring it keeps a missing/broken `lake` from throwing out of the
+        // JSON-RPC path.
         warn(
           LOG_CHANNEL,
           `fetchDiagnosticsForFile failed for ${file}: ${toErrorMessage(error)}`,
@@ -174,6 +178,9 @@ export function createDirectLspLeanAdapter(
         await session.restartFile(filePath);
         return true;
       } catch (error) {
+        // Return false (LeanFileTool surfaces it as a failure result) and log
+        // the cause. Honors the `Promise<boolean>` contract so a missing/broken
+        // `lake` doesn't throw out of the JSON-RPC path.
         warn(
           LOG_CHANNEL,
           `executeFileCommand(${command}) failed for ${filePath}: ${toErrorMessage(error)}`,

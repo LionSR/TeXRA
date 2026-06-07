@@ -11,6 +11,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getAgent, isAgentRegistryReady } from '@agent/index/agentRegistry';
 
+import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files';
 import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
@@ -137,8 +138,14 @@ export async function writeTerminalStatus(
 ): Promise<void> {
   try {
     await enqueueMetaUpdate(executionId, () => ({ terminalStatus: status }));
-  } catch {
+  } catch (err) {
     // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
+    logger.debug(
+      'ExecutionLifecycle',
+      `Failed to persist terminal status for ${executionId}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
   }
 }
 
@@ -154,7 +161,13 @@ export async function writeSessionDescription(
 ): Promise<void> {
   try {
     await enqueueMetaUpdate(executionId, () => ({ description }));
-  } catch {
+  } catch (err) {
     // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
+    logger.debug(
+      'ExecutionLifecycle',
+      `Failed to persist session description for ${executionId}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
   }
 }
