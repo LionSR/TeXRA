@@ -2,9 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   loginInitFromArgs,
-  resolveLoginProvider,
   shouldPromptForLoginProvider,
 } from '@cli/commands/auth';
+import {
+  githubSelectAccountWarning,
+  parseChatLoginSlashArgs,
+  resolveLoginProvider,
+  unsupportedLoginProviderMessage,
+} from '@cli/runtime/loginOptions';
 import { formatCliManualAuthUrlMessage } from '@cli/runtime/supabaseAuth';
 
 describe('CLI login arguments (texra login)', () => {
@@ -67,6 +72,65 @@ describe('CLI login arguments (texra login)', () => {
     expect(loginInitFromArgs({ browser: false })).toMatchObject({
       noBrowser: true,
     });
+  });
+
+  it('parses in-chat login slash command options through the same runtime owner', () => {
+    expect(parseChatLoginSlashArgs('')).toEqual({
+      provider: 'github',
+      noBrowser: false,
+      selectAccount: false,
+      loginHint: undefined,
+    });
+    expect(
+      parseChatLoginSlashArgs('google --no-browser --select-account'),
+    ).toEqual({
+      provider: 'google',
+      noBrowser: true,
+      selectAccount: true,
+      loginHint: undefined,
+    });
+    expect(parseChatLoginSlashArgs('--login-hint user@example.edu')).toEqual({
+      provider: 'github',
+      noBrowser: false,
+      selectAccount: false,
+      loginHint: 'user@example.edu',
+    });
+    expect(parseChatLoginSlashArgs('github --login-hint=octocat')).toEqual({
+      provider: 'github',
+      noBrowser: false,
+      selectAccount: false,
+      loginHint: 'octocat',
+    });
+  });
+
+  it('rejects invalid in-chat login slash command options', () => {
+    expect(parseChatLoginSlashArgs('slack')).toBeUndefined();
+    expect(parseChatLoginSlashArgs('github google')).toBeUndefined();
+    expect(parseChatLoginSlashArgs('--login-hint')).toBeUndefined();
+    expect(
+      parseChatLoginSlashArgs('--login-hint --no-browser'),
+    ).toBeUndefined();
+    expect(parseChatLoginSlashArgs('--unexpected')).toBeUndefined();
+  });
+
+  it('formats login provider policy messages from one runtime owner', () => {
+    expect(unsupportedLoginProviderMessage('slack')).toBe(
+      'Unsupported provider: slack. Expected github or google.',
+    );
+    expect(
+      githubSelectAccountWarning({
+        provider: 'github',
+        selectAccount: true,
+      }),
+    ).toBe(
+      'GitHub does not support --select-account by itself. Use --login-hint <username> to request a specific GitHub account.',
+    );
+    expect(
+      githubSelectAccountWarning({
+        provider: 'google',
+        selectAccount: true,
+      }),
+    ).toBeUndefined();
   });
 
   it('prompts for provider only for bare interactive text login', () => {
