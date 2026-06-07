@@ -4,7 +4,8 @@ import path from 'node:path';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { z } from 'zod';
 
-import { toErrorMessage } from '@common/errors';
+import { isFileNotFoundError } from '@common/errors';
+import { toErrorMessage } from '@common/errors/errorMessage';
 
 import {
   CLI_APPROVAL_POLICIES,
@@ -203,8 +204,15 @@ export async function loadWorkspaceCliConfig(
   let raw: string;
   try {
     raw = await readFile(filePath, 'utf8');
-  } catch {
-    return { values: {}, warnings: [] };
+  } catch (error: unknown) {
+    if (isFileNotFoundError(error)) {
+      return { values: {}, warnings: [] };
+    }
+    return {
+      path: filePath,
+      values: {},
+      warnings: [`Could not read ${filePath}: ${toErrorMessage(error)}`],
+    };
   }
 
   let parsed: unknown;
