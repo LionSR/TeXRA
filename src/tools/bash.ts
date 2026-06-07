@@ -13,10 +13,9 @@ import {
   type ToolCallContext,
 } from '@agent/toolUse/ToolFileInteractionContext';
 import {
-  registerInterruptible,
-  unregisterInterruptible,
+  interruptRegistry,
   type IInterruptible,
-} from '@agent/toolUse/ToolUseAgentRegistry';
+} from '@agent/runtime/InterruptRegistry';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
@@ -243,7 +242,7 @@ export class BashTool extends defineTool({
     let loggedChars = 0;
     let logCapReached = false;
     const session = new BashBackgroundSession();
-    registerInterruptible(childStreamId, session);
+    interruptRegistry.register(childStreamId, session);
 
     const logChunk = (chunk: string, level: 'info' | 'warn'): void => {
       if (logCapReached) return;
@@ -297,7 +296,7 @@ export class BashTool extends defineTool({
         });
         const terminalStatus = result.success ? 'completed' : 'error';
         await writeTerminalStatus(executionId, terminalStatus).catch(() => {});
-        unregisterInterruptible(childStreamId);
+        interruptRegistry.unregister(childStreamId);
         finalizeChildStream({
           childStreamId,
           executionId,
@@ -328,7 +327,7 @@ export class BashTool extends defineTool({
       })
       .catch(async (err: unknown) => {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
-        unregisterInterruptible(childStreamId);
+        interruptRegistry.unregister(childStreamId);
         finalizeChildStream({
           childStreamId,
           executionId,

@@ -36,10 +36,7 @@ import {
   notifyFollowUpSent,
   sendFollowUp,
 } from '@agent/toolUse/ToolUseFollowUp';
-import {
-  getInterruptible,
-  getToolUseFlowContext,
-} from '@agent/toolUse/ToolUseAgentRegistry';
+import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
 import { isOAuthProvider, type OAuthProvider } from '@auth/sharedConfig';
@@ -523,7 +520,7 @@ async function applyCliModelSelection(
   }
 
   const activeFlow = context.session.streamId
-    ? getToolUseFlowContext(context.session.streamId)
+    ? interruptRegistry.getToolUseFlowContext(context.session.streamId)
     : undefined;
   if (!activeFlow) {
     appendLocalAssistantTranscript(
@@ -983,7 +980,8 @@ async function handleTuiSlashCommand(
     case 'compact':
       requestCliCompaction({
         streamId: cliState.activeStreamId.get(),
-        getFlowContext: getToolUseFlowContext,
+        getFlowContext: (streamId) =>
+          interruptRegistry.getToolUseFlowContext(streamId),
         notifyFollowUpSent,
         appendTranscript: appendLocalAssistantTranscript,
       });
@@ -1168,7 +1166,10 @@ export async function runChat(
   const rootStreamStatus = (): StreamStatus | undefined =>
     session.streamId ? streamStatusFromState(session.streamId) : undefined;
   const hasActiveToolUseFlow = (): boolean =>
-    Boolean(session.streamId && getToolUseFlowContext(session.streamId));
+    Boolean(
+      session.streamId &&
+      interruptRegistry.getToolUseFlowContext(session.streamId),
+    );
   const canSelectCurrentModel = (): boolean =>
     chatTuiCanSelectModel({
       canStartRootRun: chatTuiCanStartRootRun(session),
@@ -1183,7 +1184,7 @@ export async function runChat(
       return undefined;
     }
     const activeFlow = session.streamId
-      ? getToolUseFlowContext(session.streamId)
+      ? interruptRegistry.getToolUseFlowContext(session.streamId)
       : undefined;
     return activeFlow?.modelSwitchDisabledReason(candidateModel);
   };
@@ -1208,7 +1209,7 @@ export async function runChat(
     clearApprovals();
     if (!session.streamId) return;
     interruptActiveChildren(session.streamId);
-    getInterruptible(session.streamId)?.interrupt();
+    interruptRegistry.get(session.streamId)?.interrupt();
   };
 
   const resetSessionForClear = (): void => {
