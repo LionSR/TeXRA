@@ -8,14 +8,6 @@ import {
   type LaunchedApp,
 } from './electronApp.js';
 
-// Mirror of `SETTINGS_TAB.MULTI_AGENT` from
-// `src/shared/schemas/settingsViewMessages.ts`. Inlined because the cross-
-// package TS import via Playwright's ESM loader trips over the `.js` suffix
-// resolving to a CommonJS-shaped module ("Named export 'SETTINGS_TAB' not
-// found") and fails the entire test discovery. The settings tab order is
-// stable; if it changes, both the schema and this constant must update.
-const MULTI_AGENT_TAB_INDEX = 4;
-
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCREENSHOTS_DIR = join(HERE, '__screenshots__');
 
@@ -101,6 +93,51 @@ async function setRoute(
   );
 }
 
+async function selectSettingsTab(panelName: string): Promise<void> {
+  await launched.page.waitForFunction(
+    (panel) => {
+      const dialog = document.querySelector(
+        'wa-dialog.desktop-settings-overlay',
+      );
+      const settingsApp = dialog?.querySelector('settings-app');
+      return (
+        settingsApp?.shadowRoot?.querySelector(`wa-tab[panel="${panel}"]`) !=
+        null
+      );
+    },
+    panelName,
+    { timeout: 10000 },
+  );
+  await launched.page.evaluate((panel) => {
+    const dialog = document.querySelector('wa-dialog.desktop-settings-overlay');
+    const settingsApp = dialog?.querySelector('settings-app');
+    const tab = settingsApp?.shadowRoot?.querySelector<HTMLElement>(
+      `wa-tab[panel="${panel}"]`,
+    );
+    if (!tab) {
+      throw new Error(`Settings tab not found: ${panel}`);
+    }
+    tab.click();
+  }, panelName);
+  await launched.page.waitForFunction(
+    (panel) => {
+      const dialog = document.querySelector(
+        'wa-dialog.desktop-settings-overlay',
+      );
+      const settingsApp = dialog?.querySelector('settings-app');
+      const root = settingsApp?.shadowRoot;
+      if (!root) return false;
+      const activeTab = root.querySelector(`wa-tab[panel="${panel}"][active]`);
+      const activePanel = root.querySelector(
+        `wa-tab-panel[name="${panel}"][active]`,
+      );
+      return activeTab != null || activePanel != null;
+    },
+    panelName,
+    { timeout: 10000 },
+  );
+}
+
 test('launcher screenshot', async () => {
   await setRoute('main');
   await launched.page.screenshot({
@@ -125,29 +162,7 @@ test('progress screenshot', async () => {
 test('settings screenshot', async () => {
   await setRoute('settings');
   // Open the Multi-Agent settings tab — the most visually rich area.
-  const multiAgentTabIndex = MULTI_AGENT_TAB_INDEX;
-  await launched.page.evaluate((tabIndex) => {
-    window.postMessage({ command: 'setTab', tabIndex }, '*');
-  }, multiAgentTabIndex);
-  await launched.page.waitForFunction(
-    () => {
-      const dialog = document.querySelector(
-        'wa-dialog.desktop-settings-overlay',
-      );
-      const settingsApp = dialog?.querySelector('settings-app');
-      const root = settingsApp?.shadowRoot;
-      if (!root) return false;
-      const activeTab = root.querySelector(
-        'wa-tab[panel="multi-agent"][active]',
-      );
-      const activePanel = root.querySelector(
-        'wa-tab-panel[name="multi-agent"][active]',
-      );
-      return activeTab != null || activePanel != null;
-    },
-    undefined,
-    { timeout: 10000 },
-  );
+  await selectSettingsTab('multi-agent');
   await launched.page.screenshot({
     path: join(SCREENSHOTS_DIR, 'settings.png'),
     fullPage: false,
