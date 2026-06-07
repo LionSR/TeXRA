@@ -11,9 +11,9 @@ import {
 } from '@tools/userQuestion';
 import {
   cleanupAllApprovals,
+  proposalApprovalState,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
-  toggleProposalBypass,
   toggleBashApprovalSessionBypass,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval';
@@ -269,7 +269,7 @@ describe('human prompt progress events', () => {
     const explicit = createRecordingHost();
     const streamId = 'stream:proposal-bypass' as StreamTabId;
 
-    const enabled = toggleProposalBypass(streamId, explicit.host);
+    const enabled = proposalApprovalState.toggleBypass(streamId, explicit.host);
 
     expect(enabled).toBe(true);
     expect(explicit.events).toEqual([

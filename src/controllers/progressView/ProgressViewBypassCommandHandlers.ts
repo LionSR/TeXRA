@@ -4,9 +4,9 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
 import {
   isApprovalBypassedForStream,
+  proposalApprovalState,
   setBashApprovalSessionBypass,
   setToolEditApprovalSessionBypass,
-  toggleProposalBypass,
   toggleToolEditApprovalSessionBypass,
 } from '@tools/approval';
 
@@ -43,7 +43,10 @@ export function createProgressViewBypassCommandHandlers(
       );
     },
     [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: async (data) => {
-      const isNowEnabled = toggleProposalBypass(data.stream, runtimeHost);
+      const isNowEnabled = proposalApprovalState.toggleBypass(
+        data.stream,
+        runtimeHost,
+      );
       if (isNowEnabled) {
         if (!isApprovalBypassedForStream(data.stream)) {
           setToolEditApprovalSessionBypass(data.stream, true, runtimeHost);

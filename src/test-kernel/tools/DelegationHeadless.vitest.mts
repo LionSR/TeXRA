@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   getExecutionStore: vi.fn(),
   getVisibleAgents: vi.fn(),
   isApprovalBypassedForStream: vi.fn(),
-  isProposalBypassedForStream: vi.fn(),
+  isProposalBypassed: vi.fn(),
   registerExecution: vi.fn(),
   writeReport: vi.fn(),
   computeModelOptionsData: vi.fn(),
@@ -45,7 +45,9 @@ vi.mock('@tools/approval', () => ({
   enableYoloOnChildStream: mocks.enableYoloOnChildStream,
   inheritBashBypassOnChildStream: mocks.inheritBashBypassOnChildStream,
   isApprovalBypassedForStream: mocks.isApprovalBypassedForStream,
-  isProposalBypassedForStream: mocks.isProposalBypassedForStream,
+  proposalApprovalState: {
+    isBypassed: mocks.isProposalBypassed,
+  },
 }));
 
 function runtimeHost() {
@@ -70,7 +72,7 @@ describe('headless delegation', () => {
         requiresKey: false,
       },
     ]);
-    mocks.isProposalBypassedForStream.mockReturnValue(true);
+    mocks.isProposalBypassed.mockReturnValue(true);
     mocks.isApprovalBypassedForStream.mockReturnValue(false);
     mocks.registerExecution.mockResolvedValue(undefined);
     mocks.writeReport.mockResolvedValue(undefined);
