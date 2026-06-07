@@ -55,11 +55,13 @@ additive: Tier 1's tap and release automation carry forward into Tier 2.
 
 ## 4. Current state (grounded in the codebase, June 2026)
 
-- **Package:** `@texra-ai/cli`, v0.38.5 on npm (local tree at 0.38.6), bin name
+- **Package:** `@texra-ai/cli`, v0.38.6 on npm (local tree at 0.38.7), bin name
   `texra`, `engines.node >= 22.9.0`, `publishConfig.access: public`.
-- **Artifact:** a single esbuild bundle `dist/bin/texra.js` (~8.9 MB, `format: 'esm'`,
-  `target: 'node20'`, minified) plus `dist/resources/` (~200 KB: agents, docs,
-  templates, tool-use agents). Published tarball is 2.8 MB.
+- **Artifact:** the published `0.38.6` tarball contains a single esbuild bundle
+  `dist/bin/texra.js` (8,989,261 bytes, `format: 'esm'`, `target: 'node20'`,
+  minified) plus `dist/resources/` (142,193 bytes: agents, docs, templates,
+  tool-use agents). Reproduced with
+  `npm pack @texra-ai/cli@0.38.6 --json`; packed tarball size is 2,648,694 bytes.
 - **Zero runtime dependencies.** `package.json` has no `dependencies`, only
   `devDependencies`. `node-pty` (the one native module) is a **test-harness-only**
   dep used by `validate-run.mjs` / `validate-tui.mjs`; it is not in the shipped
@@ -72,8 +74,8 @@ additive: Tier 1's tap and release automation carry forward into Tier 2.
 - **Public repo:** `github.com/texra-ai/texra-issues`. Proposed tap:
   `texra-ai/homebrew-tap` (referenced by users as `texra-ai/tap`).
 - **Published tarball coordinates** (for the Tier 1 formula):
-  - url: `https://registry.npmjs.org/@texra-ai/cli/-/cli-0.38.5.tgz`
-  - sha256: `310021c21edfaeb91e43321290e8a9ddcf1dd2993446aaea59498b39c68a1a39`
+  - url: `https://registry.npmjs.org/@texra-ai/cli/-/cli-0.38.6.tgz`
+  - sha256: `aab274196ab5b995ebc4165a97413b851142e6b9e6ac16796dea619520f6b9f8`
 
 ## 5. How the reference CLIs do it
 
@@ -92,8 +94,9 @@ Three takeaways that shape this PRD:
 
 1. **Homebrew for a prebuilt binary is a cask, not a formula.** A formula is meant to
    build from source; a cask installs a precompiled artifact. This also matches
-   GoReleaser's v2.10 move from `brews` to `homebrew_casks`. Tier 1's formula is the
-   entry-tier compromise; Tier 2 uses a cask.
+   GoReleaser's v2.10 addition of `homebrew_casks` for casks, separate from the
+   `brews` section used for formulas. Tier 1's formula is the entry-tier
+   compromise; Tier 2 uses a cask.
 2. **npm stays alive as a binary delivery vector.** The npm package stops _being_ the
    app and instead declares per-platform packages (e.g.
    `@texra-ai/cli-darwin-arm64`) as `optionalDependencies`; npm installs only the
@@ -218,8 +221,8 @@ and it is the only part no off-the-shelf tool can do for us.
 
 - **License field.** `:cannot_represent` works on a tap but blocks homebrew-core.
   If core submission is ever wanted, the package needs an SPDX identifier.
-- **Binary size.** A SEA binary is ~80-110 MB per platform versus the 2.8 MB npm
-  tarball. Acceptable for a cask, but worth noting for release storage.
+- **Binary size.** A SEA binary is ~80-110 MB per platform versus the 2,648,694-byte
+  npm tarball. Acceptable for a cask, but worth noting for release storage.
 - **Two-channel drift in Tier 2.** Once npm delivers a binary via the shim, the
   optionalDependencies versions must stay lockstep with the main package version;
   the publish script must bump all platform packages together.
@@ -234,8 +237,8 @@ and it is the only part no off-the-shelf tool can do for us.
 class Texra < Formula
   desc "AI-powered LaTeX research assistant for the terminal"
   homepage "https://texra.ai"
-  url "https://registry.npmjs.org/@texra-ai/cli/-/cli-0.38.5.tgz"
-  sha256 "310021c21edfaeb91e43321290e8a9ddcf1dd2993446aaea59498b39c68a1a39"
+  url "https://registry.npmjs.org/@texra-ai/cli/-/cli-0.38.6.tgz"
+  sha256 "aab274196ab5b995ebc4165a97413b851142e6b9e6ac16796dea619520f6b9f8"
   license :cannot_represent # package.json: "SEE LICENSE IN LICENSE.txt"
 
   livecheck do
