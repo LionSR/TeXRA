@@ -60,6 +60,8 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
+- **Sign-in works from Codespaces and the web** — signing in from GitHub Codespaces or vscode.dev now completes instead of failing partway through.
+- **Tidier inline banners** — the sign-in banner and other inline banners no longer render oversized, and the sign-in banner reads more clearly.
 - **Mixed image-and-text paste keeps your text** — pasting an image together with text in the webview no longer drops the text.
 
 ### Shared (all surfaces)
