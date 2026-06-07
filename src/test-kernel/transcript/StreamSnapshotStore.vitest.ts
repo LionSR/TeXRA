@@ -49,6 +49,7 @@ async function installPlatform(): Promise<void> {
 }
 
 const STREAM = 'polish@gpt#abc123def' as StreamTabId;
+const OTHER_STREAM = 'review@gpt#fed321cba' as StreamTabId;
 const RUN = 'run-1' as StorageKey;
 const RUN_2 = 'run-2' as StorageKey;
 
@@ -206,6 +207,29 @@ describe('StreamSnapshotStore', () => {
 
     const store = new StreamSnapshotStore();
     const immediate = store.addUsage(STREAM, RUN_2, usage(50, 10, 0.25));
+    expect(immediate).toBeUndefined();
+    await store.flush();
+
+    const raw = await StorageFS.readJson(path.join(dir, 'usageStats.json'));
+    expect(raw).toMatchObject({
+      [RUN]: { inputTokens: 100, outputTokens: 20, cost: 0.5 },
+      [RUN_2]: { inputTokens: 50, outputTokens: 10, cost: 0.25 },
+    });
+  });
+
+  it('keeps seed-before-write for streams outside a partial preload', async () => {
+    await installPlatform();
+    const dir = streamDataDir(OTHER_STREAM);
+    await StorageFS.ensureDir(dir);
+    await StorageFS.write(
+      path.join(dir, 'usageStats.json'),
+      JSON.stringify({ [RUN]: usage(100, 20, 0.5) }),
+    );
+
+    const store = new StreamSnapshotStore();
+    await store.preload([STREAM]);
+
+    const immediate = store.addUsage(OTHER_STREAM, RUN_2, usage(50, 10, 0.25));
     expect(immediate).toBeUndefined();
     await store.flush();
 
