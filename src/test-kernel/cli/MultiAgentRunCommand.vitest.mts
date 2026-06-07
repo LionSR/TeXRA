@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     expandRunInputs: vi.fn(),
     cliMultiAgentPlanHasGaps: vi.fn(),
     cliMultiAgentPresetCanLaunchTeam: vi.fn(),
+    formatCliMultiAgentPresetRunWarnings: vi.fn(),
     formatCliMultiAgentTeamLaunchBlockMessage: vi.fn(),
     getToolUseAgents: vi.fn(),
     getWorkflowAgents: vi.fn(),
@@ -88,6 +89,8 @@ vi.mock('@cli/runtime/multiAgentPresets', () => {
     formatCliMultiAgentPresetDetails: vi.fn(() => ''),
     formatCliMultiAgentPresetInspection: vi.fn(() => ''),
     formatCliMultiAgentPresetList: vi.fn(() => ''),
+    formatCliMultiAgentPresetRunWarnings:
+      mocks.formatCliMultiAgentPresetRunWarnings,
     formatCliMultiAgentTeamLaunchBlockMessage:
       mocks.formatCliMultiAgentTeamLaunchBlockMessage,
     MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION:
@@ -160,6 +163,7 @@ describe('CLI multi-agent run command', () => {
     mocks.formatCliMultiAgentTeamLaunchBlockMessage.mockReturnValue(
       'blocked preset message',
     );
+    mocks.formatCliMultiAgentPresetRunWarnings.mockReturnValue([]);
     mocks.planCliMultiAgentPresets.mockImplementation((presets) =>
       presets.map((preset: unknown) =>
         mocks.planCliMultiAgentPresetRun(preset, {
@@ -509,6 +513,9 @@ describe('CLI multi-agent run command', () => {
   });
 
   it('keeps degraded-team wording when the root can delegate', async () => {
+    const warning =
+      'WARN preset mathematician is degraded; running root agent orchestrator with 1 available team agent.';
+    mocks.formatCliMultiAgentPresetRunWarnings.mockReturnValueOnce([warning]);
     mocks.planCliMultiAgentPresetRun.mockReturnValue({
       preset: {
         id: 'mathematician',
@@ -538,9 +545,7 @@ describe('CLI multi-agent run command', () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'WARN preset mathematician is degraded; running root agent orchestrator with 1 available team agent.',
-    );
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(warning);
   });
 
   it('refuses a delegating root with no available team members', async () => {

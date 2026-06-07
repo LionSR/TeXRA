@@ -9,7 +9,6 @@ import {
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 
 import { EXECUTION_STATUS } from '@shared/schemas';
-import { agentKey } from '@shared/schemas/agent';
 import { generateExecutionId } from '@utils/core/executionId';
 import { CliUsageError, readCliStdinText } from '../runtime/cliContext';
 import { installCliApprovalHandlers } from '../runtime/approvalAdapter';
@@ -28,6 +27,7 @@ import {
   formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
+  formatCliMultiAgentPresetRunWarnings,
   planCliMultiAgentPresets,
   planCliMultiAgentPresetRun,
   readCliMultiAgentPresets,
@@ -182,33 +182,9 @@ async function reloadRemoteAgentsForGaps<T>(
 export function writeMissingPresetAgents(
   plan: CliMultiAgentPresetRunPlan,
 ): void {
-  const missing = [
-    ...plan.missingWorkflowAgents.map((agent) => `workflow:${agent}`),
-    ...plan.missingToolUseAgents.map((agent) => `tool-use:${agent}`),
-  ];
-  if (missing.length === 0) return;
-  writeTextStderr(
-    `WARN preset ${plan.preset.id} references unavailable agents: ${missing.join(', ')}`,
-  );
-  if (!plan.rootAgent) return;
-
-  const availableTeamAgents = new Set([
-    ...plan.workflowAgentKeys,
-    ...plan.toolUseAgentKeys,
-  ]);
-  availableTeamAgents.delete(
-    agentKey(plan.rootAgent.source, plan.rootAgent.name),
-  );
-  if (!agentHasDelegationTools(plan.rootAgent)) return;
-  if (availableTeamAgents.size === 0) return;
-
-  const availableText =
-    availableTeamAgents.size === 1
-      ? '1 available team agent'
-      : `${availableTeamAgents.size} available team agents`;
-  writeTextStderr(
-    `WARN preset ${plan.preset.id} is degraded; running root agent ${plan.rootAgent.name} with ${availableText}.`,
-  );
+  for (const warning of formatCliMultiAgentPresetRunWarnings(plan)) {
+    writeTextStderr(warning);
+  }
 }
 
 function writeApprovalUnavailableDelegationWarning(

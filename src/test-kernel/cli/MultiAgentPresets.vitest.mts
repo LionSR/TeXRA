@@ -16,6 +16,7 @@ import {
   formatCliMultiAgentPresetDetails,
   formatCliMultiAgentPresetInspection,
   formatCliMultiAgentPresetList,
+  formatCliMultiAgentPresetRunWarnings,
   planCliMultiAgentPresets,
   planCliMultiAgentPresetRun,
   parseCliCustomAgentPresets,
@@ -200,6 +201,42 @@ describe('CLI multi-agent presets', () => {
       'degraded; 2/9 tool-use agents; 0/4 workflow agents',
     );
     expect(cliMultiAgentPresetCanLaunchTeam(plan)).toBe(true);
+  });
+
+  it('formats run warnings from planned missing team members', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'physicist',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
+        agent('review', AgentCategory.ToolUse),
+      ],
+    });
+
+    expect(formatCliMultiAgentPresetRunWarnings(plan)).toEqual([
+      'WARN preset physicist references unavailable agents: workflow:criticize, workflow:generic, workflow:devise, workflow:apply, tool-use:research, tool-use:numerics, tool-use:search, tool-use:presenter, tool-use:simplifier, tool-use:latexFixer, tool-use:progressCheck',
+      'WARN preset physicist is degraded; running root agent orchestrator with 1 available team agent.',
+    ]);
+  });
+
+  it('omits degraded run warnings when only the root is available', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'physicist',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: [
+        agent('orchestrator', AgentCategory.ToolUse, ['delegate_agent']),
+      ],
+    });
+
+    expect(formatCliMultiAgentPresetRunWarnings(plan)).toEqual([
+      'WARN preset physicist references unavailable agents: workflow:criticize, workflow:generic, workflow:devise, workflow:apply, tool-use:research, tool-use:numerics, tool-use:review, tool-use:search, tool-use:presenter, tool-use:simplifier, tool-use:latexFixer, tool-use:progressCheck',
+    ]);
   });
 
   it('formats ready launcher team summaries without raw availability keys', () => {
