@@ -9,16 +9,17 @@ import path from 'path';
 import { sync as globSync } from 'glob';
 
 import { platform } from '@platform/platform';
-import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@common/errors';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
+import { debug } from '@logger/logUtils';
 import {
   createExternalLocation,
   createWorkspaceLocation,
   WorkspaceFS,
   type FileLocation,
 } from '@utils/files';
+import { getConfig } from '@utils/config/configUtils';
 
 export type BuildDisplayFn = (
   location: FileLocation,
@@ -62,7 +63,12 @@ const latexdiffService = new LaTeXdiffService('ToolEditApproval');
 async function silentUnlink(filePath: string): Promise<void> {
   await platform()
     .fs.delete(filePath)
-    .catch(() => {});
+    .catch((error) => {
+      // Best-effort temp cleanup; the file may already be gone.
+      debug('latexPreview', `Failed to delete temp file ${filePath}`, {
+        data: error,
+      });
+    });
 }
 
 /** Clean up LaTeX auxiliary files for a given base path */
@@ -83,7 +89,12 @@ function registerCleanup(
   cleanup: () => Promise<void>,
 ): void {
   if (entry.isSettled()) {
-    void cleanup().catch(() => {});
+    // Best-effort cleanup for an already-settled entry; failures are benign.
+    void cleanup().catch((error) => {
+      debug('latexPreview', 'Immediate cleanup failed for settled entry', {
+        data: error,
+      });
+    });
     return;
   }
   entry.workspaceTempCleanup.push(cleanup);
@@ -164,7 +175,12 @@ async function createTempFileWithCleanup(
     if (location === 'workspaceTemp') {
       await platform()
         .fs.delete(tempDir)
-        .catch(() => {});
+        .catch((error) => {
+          // Best-effort temp dir removal; it may be non-empty or already gone.
+          debug('latexPreview', `Failed to delete temp dir ${tempDir}`, {
+            data: error,
+          });
+        });
     }
   });
 

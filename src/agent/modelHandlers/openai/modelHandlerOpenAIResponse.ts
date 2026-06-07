@@ -18,7 +18,6 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
-import { getConfig } from '@utils/config/configUtils';
 import { toOpenAIReasoningEffort } from '@agent/runtime/reasoningEffort';
 import {
   getSdkErrorMessage,
@@ -34,6 +33,7 @@ import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
 import { delay, filterNotNullish } from '@utils/core';
+import { getConfig } from '@utils/config/configUtils';
 import {
   getWebSocketEnabled,
   getUseOpenRouter,
@@ -771,8 +771,14 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           systemPrompt,
           tools: convertedTools,
         });
-      } catch {
-        // Fall back to output_tokens if token counting fails.
+      } catch (err) {
+        // Fall back to output_tokens if token counting fails. Log so a degraded
+        // post-compaction token estimate is visible rather than silent.
+        this.logger.debug(
+          `Post-compaction token counting failed; falling back to output_tokens: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
         // NOTE: It's unclear what output_tokens represents exactly for the compact
         // endpoint — it may be the generation cost rather than the reusable content
         // size. This fallback is a best-effort estimate until OpenAI clarifies.

@@ -1,3 +1,5 @@
+import * as logger from '@logger/logUtils';
+
 import { AbsoluteFS } from './absoluteFS';
 import { WorkspaceFS } from './workspaceFS';
 
@@ -18,7 +20,12 @@ export async function setVarFromFile(
     userVars[`${varName}_FILE`] = filePath;
     userVars[`${varName}_CONTENT`] = fileContent;
     return true;
-  } catch {
+  } catch (error) {
+    logger.debug(
+      'VarsUtils',
+      `Failed to read ${varName} from file ${filePath}`,
+      { data: error },
+    );
     return false;
   }
 }

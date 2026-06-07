@@ -9,6 +9,7 @@
 import { platform } from '@platform/platform';
 import { getExecutionStore } from '@agent/storage';
 import type { ExecutionMeta } from '@agent/storage/ExecutionKVStore';
+import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -45,7 +46,16 @@ async function readMetaSafely(
 ): Promise<ExecutionMeta | null | 'error'> {
   try {
     return await getExecutionStore(executionId).readMeta();
-  } catch {
+  } catch (err) {
+    // IO/permission failure (not malformed JSON, which safeParse maps to null).
+    // Return the 'error' sentinel so resume fails closed, but log so an
+    // unreadable ancestor isn't an invisible cause of blocked delegation.
+    logger.warn(
+      'DelegationPolicy',
+      `Failed to read execution meta for ${executionId}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
     return 'error';
   }
 }

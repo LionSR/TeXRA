@@ -10,6 +10,8 @@
 
 import { z } from 'zod';
 
+import * as logger from '@logger/logUtils';
+
 // SDK type imports - using native types for better type safety
 // Consumers should import SDK types directly from the respective SDKs:
 // - Anthropic: '@anthropic-ai/sdk/resources/messages'
@@ -490,7 +492,15 @@ export function extractOpenAIWebSearchResults(
 export function extractDomain(url: string): string {
   try {
     return new URL(url).hostname;
-  } catch (_err) {
+  } catch (err) {
+    // Contract: return '' for unparseable URLs. Log so malformed source data
+    // isn't silently rendered as an empty domain.
+    logger.debug(
+      'ServerTools',
+      `extractDomain: unparseable URL "${url}": ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
     return '';
   }
 }

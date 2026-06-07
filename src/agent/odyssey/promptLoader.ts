@@ -16,6 +16,7 @@ import * as path from 'path';
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
+import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 
 const OdysseyPromptsYamlSchema = z.object({
@@ -124,7 +125,15 @@ async function loadPrompts(): Promise<OdysseyPrompts> {
     );
     const content = await AbsoluteFS.read(yamlPath);
     cached = OdysseyPromptsYamlSchema.parse(yaml.parse(content));
-  } catch {
+  } catch (err) {
+    // Fall back to inline templates, but warn so a broken/missing bundled
+    // odyssey.yaml is detectable rather than silently masked.
+    logger.warn(
+      'OdysseyPromptLoader',
+      `Failed to load bundled odyssey.yaml; using inline prompt templates: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
     cached = inlineTemplates;
   }
   return cached;
