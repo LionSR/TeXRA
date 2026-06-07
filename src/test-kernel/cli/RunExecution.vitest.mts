@@ -22,7 +22,7 @@ vi.mock('@cli/runtime/runtimeHost', () => ({
   createCliRuntimeHost: mocks.createCliRuntimeHost,
 }));
 
-vi.mock('@cli/commands/_helpers/terminalStatus', () => ({
+vi.mock('@cli/runtime/terminalStatus', () => ({
   readCliTerminalStatus: mocks.readCliTerminalStatus,
 }));
 
