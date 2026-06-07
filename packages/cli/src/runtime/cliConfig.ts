@@ -65,9 +65,15 @@ const COMMAND_FIELD_SCHEMAS: ReadonlyArray<[string, z.ZodType]> = [
   ['agent', NonEmptyStringSchema],
   ['model', ModelSchema],
 ];
+const COMMAND_SECTIONS = ['chat', 'run'] as const;
 
 const TOP_LEVEL_KEYS = new Set<string>(CLI_SETTING_PATHS);
 const COMMAND_KEYS = new Set(COMMAND_FIELD_SCHEMAS.map(([key]) => key));
+
+/** Preferred config key order: unified `texra.*` first, legacy bare key second. */
+function configKeyVariants(bareKey: string): readonly [string, string] {
+  return [`texra.${bareKey}`, bareKey];
+}
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -122,21 +128,24 @@ function collectValidationWarnings(
 
   // Validate top-level fields in both bare (legacy) and `texra.*` forms.
   for (const [key, schema] of TOP_LEVEL_FIELD_SCHEMAS) {
-    warnInvalidField(warnings, filePath, record, key, schema);
-    warnInvalidField(warnings, filePath, record, `texra.${key}`, schema);
+    for (const variant of configKeyVariants(key)) {
+      warnInvalidField(warnings, filePath, record, variant, schema);
+    }
   }
 
-  for (const section of ['chat', 'run', 'texra.chat', 'texra.run'] as const) {
-    if (!Object.hasOwn(record, section)) continue;
-    const sectionValue = record[section];
-    if (!isPlainRecord(sectionValue)) {
-      warnings.push(`Ignoring invalid ${filePath} key "${section}".`);
-      continue;
-    }
-    const prefix = `${section}.`;
-    warnUnknownKeys(warnings, filePath, sectionValue, COMMAND_KEYS, prefix);
-    for (const [key, schema] of COMMAND_FIELD_SCHEMAS) {
-      warnInvalidField(warnings, filePath, sectionValue, key, schema, prefix);
+  for (const section of COMMAND_SECTIONS) {
+    for (const sectionKey of configKeyVariants(section)) {
+      if (!Object.hasOwn(record, sectionKey)) continue;
+      const sectionValue = record[sectionKey];
+      if (!isPlainRecord(sectionValue)) {
+        warnings.push(`Ignoring invalid ${filePath} key "${sectionKey}".`);
+        continue;
+      }
+      const prefix = `${sectionKey}.`;
+      warnUnknownKeys(warnings, filePath, sectionValue, COMMAND_KEYS, prefix);
+      for (const [key, schema] of COMMAND_FIELD_SCHEMAS) {
+        warnInvalidField(warnings, filePath, sectionValue, key, schema, prefix);
+      }
     }
   }
   return warnings;
@@ -159,7 +168,7 @@ function pickValue<T>(
   bareKey: string,
   schema: z.ZodType<T>,
 ): T | undefined {
-  for (const key of [`texra.${bareKey}`, bareKey]) {
+  for (const key of configKeyVariants(bareKey)) {
     if (Object.hasOwn(record, key)) return parseOptional(schema, record[key]);
   }
   return undefined;
@@ -169,7 +178,7 @@ function pickRecord(
   record: Record<string, unknown>,
   bareKey: string,
 ): Record<string, unknown> | undefined {
-  for (const key of [`texra.${bareKey}`, bareKey]) {
+  for (const key of configKeyVariants(bareKey)) {
     const value = record[key];
     if (isPlainRecord(value)) return value;
   }
