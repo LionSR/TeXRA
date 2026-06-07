@@ -143,6 +143,27 @@ export class ExecutionRegistry {
     return this.handles.get(executionId);
   }
 
+  getAgentHandleByStream(
+    streamId: StreamTabId,
+  ): AgentExecutionHandle | undefined {
+    for (const handle of this.handles.values()) {
+      if (
+        handle instanceof AgentExecutionHandle &&
+        handle.childStreamId === streamId
+      ) {
+        return handle;
+      }
+    }
+    return undefined;
+  }
+
+  getAgentHandles(): AgentExecutionHandle[] {
+    return [...this.handles.values()].filter(
+      (handle): handle is AgentExecutionHandle =>
+        handle instanceof AgentExecutionHandle,
+    );
+  }
+
   /** Terminate an execution via its handle. Returns true on success. */
   kill(executionId: string): boolean {
     const handle = this.handles.get(executionId);
