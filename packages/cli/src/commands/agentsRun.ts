@@ -1,4 +1,3 @@
-import { loadAgents } from '@agent/index';
 import { writeTerminalStatus } from '@agent/storage';
 import {
   AgentConfigSchema,
@@ -34,7 +33,7 @@ import {
   resolveCliRunModel,
 } from './_helpers/modelArg';
 import { emitCliResult } from './_helpers/output';
-import { resolveAgentWithRemoteFallback } from './_helpers/remoteAgents';
+import { resolveCliAgent } from './_helpers/agentResolution';
 import { executeCliRequest } from './_helpers/runExecution';
 import {
   createCliRunResult,
@@ -90,8 +89,7 @@ export async function runToolUseAgent(
     return CliExitCode.Usage;
   }
 
-  await loadAgents({ includeRemote: false });
-  const agent = await resolveAgentWithRemoteFallback(init.agent);
+  const agent = await resolveCliAgent(init.agent);
 
   if (!agent) {
     writeTextStderr(missingToolUseAgentMessage(init.agent));
