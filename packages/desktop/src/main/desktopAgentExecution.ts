@@ -613,8 +613,10 @@ export class DesktopProgressBridge {
           });
           return;
         }
-        this.routeToProgress();
-        this.sendRestoredDisplay(data.streamId);
+        if (data.suppressViewSwitch !== true) {
+          this.routeToProgress();
+          this.sendRestoredDisplay(data.streamId);
+        }
         return;
       }
       case 'setTaskState': {
