@@ -10,12 +10,7 @@ import { ProgressAgentProposalController } from '@controllers/progressView/Progr
 import { ProgressWorkflowActionsController } from '@controllers/progressView/ProgressWorkflowActionsController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { getAgent } from '@agent/index';
-import {
-  cancelRetry,
-  resolvePlanApproval,
-  resolveProposal,
-  triggerRetry,
-} from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
   validateExecutionRequest,
   type ExecutionRequest,
@@ -260,7 +255,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       [PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST]: (data) =>
         this.handleRetryStreamRequest(data),
       [PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST]: (data) => {
-        cancelRetry(data.stream);
+        runCoordinatorBridge.cancelRetry(data.stream);
       },
       [PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY]: (data) =>
         this.handleUseOwnApiKey(data),
@@ -534,7 +529,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
         );
       },
       resolveProposal: (proposalId, result) => {
-        resolveProposal(proposalId, result);
+        runCoordinatorBridge.resolveProposal(proposalId, result);
       },
       onMissingProposal: (proposalId) => {
         this.logger.warn(
@@ -598,7 +593,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleRetryStreamRequest(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST>,
   ): Promise<void> {
-    const success = triggerRetry(data.stream, data.feedback);
+    const success = runCoordinatorBridge.triggerRetry(
+      data.stream,
+      data.feedback,
+    );
     if (!success) {
       await vscode.window.showInformationMessage(
         'No retryable request is available for this stream yet.',
@@ -676,7 +674,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
       await getServerSideKeyService().setUseIncludedModelAccess(false);
       invalidateModelOptionsCache();
     }
-    const retried = triggerRetry(data.stream);
+    const retried = runCoordinatorBridge.triggerRetry(data.stream);
     if (!retried) {
       await vscode.window.showInformationMessage(
         'Switched to your own API key. No pending retry to resume — run the agent again when ready.',
@@ -755,17 +753,17 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     const { approvalId, action } = data;
     switch (action) {
       case 'approve':
-        resolvePlanApproval(approvalId, {
+        runCoordinatorBridge.resolvePlanApproval(approvalId, {
           action: 'approve',
         });
         break;
       case 'approve_and_odyssey':
-        resolvePlanApproval(approvalId, {
+        runCoordinatorBridge.resolvePlanApproval(approvalId, {
           action: 'approve_and_odyssey',
         });
         break;
       case 'reject':
-        resolvePlanApproval(approvalId, {
+        runCoordinatorBridge.resolvePlanApproval(approvalId, {
           action: 'reject',
           feedback: data.feedback,
         });

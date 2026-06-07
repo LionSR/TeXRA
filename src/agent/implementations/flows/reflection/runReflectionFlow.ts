@@ -14,10 +14,7 @@ import {
   type IInterruptible,
 } from '@agent/runtime/InterruptRegistry';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
-import {
-  clearPlanApprovalForStream,
-  clearRetryRequest,
-} from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
@@ -170,8 +167,8 @@ export async function runReflectionFlow<C = unknown>(
   const interruptible: IInterruptible = {
     interrupt(): void {
       input.onInterrupt?.();
-      clearRetryRequest(streamId);
-      clearPlanApprovalForStream(streamId);
+      runCoordinatorBridge.clearRetryRequest(streamId);
+      runCoordinatorBridge.clearPlanApprovalForStream(streamId);
     },
   };
 
@@ -313,8 +310,8 @@ export async function runReflectionFlow<C = unknown>(
       }
     }
 
-    clearRetryRequest(streamId);
-    clearPlanApprovalForStream(streamId);
+    runCoordinatorBridge.clearRetryRequest(streamId);
+    runCoordinatorBridge.clearPlanApprovalForStream(streamId);
 
     interruptRegistry.unregister(streamId);
   }

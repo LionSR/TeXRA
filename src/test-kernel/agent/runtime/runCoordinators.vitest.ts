@@ -12,15 +12,7 @@ import {
   withRunContext,
   type RunCoordinators,
 } from '@agent/runtime/RunContext';
-import {
-  cleanupAllCoordinatorRequests,
-  resolvePlanApproval,
-  resolveProposal,
-  triggerRetry,
-  waitForPlanApproval,
-  waitForProposal,
-  waitForRetry,
-} from '@agent/runtime/runCoordinators';
+import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import {
   AGENT_CATEGORY,
   TODO_STATUS,
@@ -68,7 +60,7 @@ function createLogger(): AgentTrace {
 
 describe('runCoordinators', () => {
   afterEach(() => {
-    cleanupAllCoordinatorRequests();
+    runCoordinatorBridge.cleanupAllRequests();
   });
 
   it('does not fall back to default coordinators when a run has none', async () => {
@@ -78,19 +70,19 @@ describe('runCoordinators', () => {
       createRunContext({ runtimeHost: active.host }),
       async () => {
         await expect(
-          waitForPlanApproval(streamId, {
+          runCoordinatorBridge.waitForPlanApproval(streamId, {
             approvalId: 'approval:missing-coordinators',
             plan,
           }),
         ).rejects.toThrow(/active run coordinators/);
         await expect(
-          waitForProposal(streamId, {
+          runCoordinatorBridge.waitForProposal(streamId, {
             proposalId: 'proposal:missing-coordinators',
             proposal,
           }),
         ).rejects.toThrow(/active run coordinators/);
         await expect(
-          waitForRetry(streamId, {
+          runCoordinatorBridge.waitForRetry(streamId, {
             operation: 'Model invocation',
             logger: createLogger(),
           }),
@@ -110,26 +102,26 @@ describe('runCoordinators', () => {
     });
 
     const planResult = withRunContext(context, () =>
-      waitForPlanApproval(streamId, {
+      runCoordinatorBridge.waitForPlanApproval(streamId, {
         approvalId: 'approval:active-coordinator',
         plan,
       }),
     );
     expect(
-      resolvePlanApproval('approval:active-coordinator', {
+      runCoordinatorBridge.resolvePlanApproval('approval:active-coordinator', {
         action: 'approve',
       }),
     ).toBe(true);
     await expect(planResult).resolves.toEqual({ action: 'approve' });
 
     const proposalResult = withRunContext(context, () =>
-      waitForProposal(streamId, {
+      runCoordinatorBridge.waitForProposal(streamId, {
         proposalId: 'proposal:active-coordinator',
         proposal,
       }),
     );
     expect(
-      resolveProposal('proposal:active-coordinator', {
+      runCoordinatorBridge.resolveProposal('proposal:active-coordinator', {
         action: 'approve',
         agent: 'reviewer',
         model: 'test-model',
@@ -142,12 +134,14 @@ describe('runCoordinators', () => {
     });
 
     const retryResult = withRunContext(context, () =>
-      waitForRetry(streamId, {
+      runCoordinatorBridge.waitForRetry(streamId, {
         operation: 'Model invocation',
         logger: createLogger(),
       }),
     );
-    expect(triggerRetry(streamId, 'try the request again')).toBe(true);
+    expect(
+      runCoordinatorBridge.triggerRetry(streamId, 'try the request again'),
+    ).toBe(true);
     await expect(retryResult).resolves.toEqual({
       action: 'retry',
       feedback: 'try the request again',
