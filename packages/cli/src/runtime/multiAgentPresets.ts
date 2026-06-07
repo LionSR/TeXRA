@@ -315,6 +315,32 @@ export function formatCliMultiAgentTeamLaunchBlockMessage(
   return parts.filter((part): part is string => !!part).join(' ');
 }
 
+export function formatCliMultiAgentPresetRunWarnings(
+  plan: CliMultiAgentPresetRunPlan,
+): readonly string[] {
+  const missing = [
+    ...plan.missingWorkflowAgents.map((agent) => `workflow:${agent}`),
+    ...plan.missingToolUseAgents.map((agent) => `tool-use:${agent}`),
+  ];
+  if (missing.length === 0) return [];
+
+  const warnings = [
+    `WARN preset ${plan.preset.id} references unavailable agents: ${missing.join(', ')}`,
+  ];
+
+  if (!plan.rootAgent || !agentHasDelegationTools(plan.rootAgent)) {
+    return warnings;
+  }
+
+  const availableTeamMembers = availablePresetTeamMemberCount(plan);
+  if (availableTeamMembers === 0) return warnings;
+
+  warnings.push(
+    `WARN preset ${plan.preset.id} is degraded; running root agent ${plan.rootAgent.name} with ${formatAvailableTeamAgentCount(availableTeamMembers)}.`,
+  );
+  return warnings;
+}
+
 export function cliMultiAgentPresetAvailability(
   plan: CliMultiAgentPresetRunPlan,
 ): CliMultiAgentPresetAvailability {
@@ -517,6 +543,12 @@ function availablePresetTeamMemberCount(
     ...plan.toolUseAgentKeys.filter((key) => key !== rootKey),
   ];
   return new Set(memberKeys).size;
+}
+
+function formatAvailableTeamAgentCount(count: number): string {
+  return count === 1
+    ? '1 available team agent'
+    : `${count} available team agents`;
 }
 
 export function agentHasDelegationTools(agent: AgentEntry): boolean {
