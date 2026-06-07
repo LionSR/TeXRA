@@ -10,10 +10,9 @@ import {
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import {
-  registerInterruptible,
-  unregisterInterruptible,
+  interruptRegistry,
   type IInterruptible,
-} from '@agent/toolUse/ToolUseAgentRegistry';
+} from '@agent/runtime/InterruptRegistry';
 import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
 import {
   clearPlanApprovalForStream,
@@ -194,7 +193,7 @@ export async function runReflectionFlow<C = unknown>(
   const kv = getExecutionStore(executionId);
 
   try {
-    registerInterruptible(streamId, interruptible);
+    interruptRegistry.register(streamId, interruptible);
 
     const flowRecord = await kv.read<FlowRecord>(flowKey(executionId));
     const validated = flowRecord?.shared
@@ -317,7 +316,7 @@ export async function runReflectionFlow<C = unknown>(
     clearRetryRequest(streamId);
     clearPlanApprovalForStream(streamId);
 
-    unregisterInterruptible(streamId);
+    interruptRegistry.unregister(streamId);
   }
 
   return {

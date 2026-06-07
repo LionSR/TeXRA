@@ -21,7 +21,6 @@ import {
 import { mapToRecord } from '@shared/progressView/backend/persistence/serializationUtils';
 import {
   ProgressViewState,
-  cleanupToolUseAgentRegistry,
   type ActiveStreamId,
   type StreamExecutionState,
 } from '@shared/progressView/backend/state/ProgressViewState';
@@ -361,7 +360,7 @@ export class ProgressEventHandler {
     this.state.clearStreamHints(streamId);
     this.state.getOrCreateStreamState(streamId, category);
     this.state.resetFinishedChildCounters(streamId);
-    cleanupToolUseAgentRegistry(this.state.snapshots);
+    this.state.pruneInterruptHandles();
 
     if (isActiveStream) {
       this.maybeUpdateFilterForCategory(category);

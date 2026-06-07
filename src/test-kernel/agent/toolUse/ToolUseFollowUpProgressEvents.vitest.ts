@@ -10,10 +10,7 @@ import {
   untrackExecution,
 } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import {
-  registerInterruptible,
-  unregisterInterruptible,
-} from '@agent/toolUse/ToolUseAgentRegistry';
+import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { onFollowUpSent, sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
@@ -27,7 +24,7 @@ describe('tool-use follow-up progress events', () => {
   afterEach(() => {
     unsubscribeFollowUpObserver?.();
     unsubscribeFollowUpObserver = undefined;
-    unregisterInterruptible(streamId);
+    interruptRegistry.unregister(streamId);
     StreamStatusService.clearAll({ emit: false });
   });
 
@@ -35,7 +32,7 @@ describe('tool-use follow-up progress events', () => {
     const { events, host } = createRecordingHost();
     const appendFollowUp = vi.fn();
 
-    registerInterruptible(streamId, {
+    interruptRegistry.register(streamId, {
       session: { appendFollowUp },
       modelHandler: {},
       runtimeHost: host,
@@ -65,7 +62,7 @@ describe('tool-use follow-up progress events', () => {
       observed.push(observedStreamId);
     });
 
-    registerInterruptible(streamId, {
+    interruptRegistry.register(streamId, {
       session: { appendFollowUp: vi.fn() },
       modelHandler: {},
       runtimeHost: host,
@@ -85,7 +82,7 @@ describe('tool-use follow-up progress events', () => {
     const appendFollowUp = vi.fn();
 
     StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, { emit: false });
-    registerInterruptible(streamId, {
+    interruptRegistry.register(streamId, {
       session: { appendFollowUp },
       modelHandler: {},
       runtimeHost: host,

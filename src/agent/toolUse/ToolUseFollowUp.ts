@@ -11,7 +11,7 @@
  */
 
 import { getActiveChildren } from '@agent/runtime/executionRegistry';
-import { getToolUseFlowContext } from '@agent/toolUse/ToolUseAgentRegistry';
+import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { isInFlightStatus } from '@common/constants/streamStatus';
@@ -94,7 +94,7 @@ export async function sendFollowUp(
   }
 
   // Try active flow context first
-  const flowContext = getToolUseFlowContext(streamId);
+  const flowContext = interruptRegistry.getToolUseFlowContext(streamId);
   if (flowContext) {
     flowContext.session.appendFollowUp(text, mediaFiles, displayText);
     notifyFollowUpSent(streamId, flowContext.runtimeHost);
