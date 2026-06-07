@@ -49,12 +49,7 @@ import {
   type AgentLaunchContext,
 } from './AgentLaunchContext';
 import { createInterruptCallbacks } from './InterruptManager';
-import {
-  trackExecution,
-  untrackExecution,
-  updateExecutionProgress,
-  AgentExecutionHandle,
-} from './executionRegistry';
+import { AgentExecutionHandle, executionRegistry } from './executionRegistry';
 import { generateSessionDescription } from './sessionDescription';
 import { getRunStorageService } from './RunStorageService';
 import { StreamStatusService } from './StreamStatusService';
@@ -136,7 +131,7 @@ function createRoundProgressCallback(
   outputPaths?: readonly string[],
 ) => void {
   return (roundIndex, totalRounds, outputPaths) => {
-    updateExecutionProgress(executionId, {
+    executionRegistry.updateProgress(executionId, {
       currentRound: roundIndex,
       totalRounds,
     });
@@ -188,7 +183,7 @@ async function runFlowWithLifecycle(
     category,
     ctx.runtimeHost,
   );
-  trackExecution(handle);
+  executionRegistry.track(handle);
   try {
     const result = await runner();
     await options?.onCompleted?.(result);
@@ -198,7 +193,7 @@ async function runFlowWithLifecycle(
         : EXECUTION_STATUS.COMPLETED;
     await writeTerminalStatus(ctx.executionId, terminalStatus).catch(() => {});
 
-    untrackExecution(ctx.executionId);
+    executionRegistry.untrack(ctx.executionId);
     ctx.parentStage.end(result.status);
 
     if (!StreamStatusService.shouldPreserveOnCompletion(streamId)) {
@@ -220,7 +215,7 @@ async function runFlowWithLifecycle(
     const streamStatus =
       kind === 'abort' ? STREAM_STATUS.STOPPED : STREAM_STATUS.ERROR;
     await writeTerminalStatus(ctx.executionId, terminalStatus).catch(() => {});
-    untrackExecution(ctx.executionId);
+    executionRegistry.untrack(ctx.executionId);
     const errorMsg = `Error executing agent ${agentName}: ${getSdkErrorMessage(err)}`;
 
     // Root-agent failures are surfaced in the stream log. Subagent failures
@@ -380,7 +375,7 @@ export interface ExecuteAgentOptions {
   stopAfterCycle?: boolean;
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
   approvalPromptsUnavailable?: boolean;
-  /** Fires after flow completes but BEFORE untrackExecution, so follow-ups are enqueued before waiters resolve. */
+  /** Fires after flow completes but before executionRegistry.untrack, so follow-ups are enqueued before waiters resolve. */
   onCompleted?: (result: AgentFlowResult) => void | Promise<void>;
   /** Fires when a subagent fails and should report the failure to its orchestrator. */
   onError?: (error: unknown, result: AgentFlowResult) => void | Promise<void>;

@@ -35,7 +35,7 @@ import {
 } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { untrackExecution } from '@agent/runtime/executionRegistry';
+import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import {
@@ -634,7 +634,7 @@ function startCodexLoop(params: {
       ToolUseFollowUpQueue.release(childStreamId);
       const threadId = thread.id;
       if (threadId) threadRegistry.delete(threadId);
-      // Persist terminal status before untracking — untrackExecution fires
+      // Persist terminal status before untracking — executionRegistry.untrack fires
       // notifyWaiters, so consumers must see the final status on disk.
       await writeTerminalStatus(
         executionId,
@@ -643,7 +643,7 @@ function startCodexLoop(params: {
           sawTurnFailure,
         }),
       ).catch(() => {});
-      untrackExecution(executionId);
+      executionRegistry.untrack(executionId);
 
       finalizeCodexLoopStatus(childStreamId, runtimeHost);
       disposeTrace();

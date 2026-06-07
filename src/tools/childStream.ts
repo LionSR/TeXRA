@@ -7,8 +7,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   AgentExecutionHandle,
-  trackExecution,
-  untrackExecution,
+  executionRegistry,
 } from '@agent/runtime/executionRegistry';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 
@@ -96,7 +95,7 @@ export function createChildStream(
     runtimeHost,
   );
   if (options.toolName) handle.toolName = options.toolName;
-  trackExecution(handle);
+  executionRegistry.track(handle);
 
   return {
     childStreamId,
@@ -150,7 +149,7 @@ export function finalizeChildStream(args: FinalizeChildStreamArgs): void {
       { runtimeHost },
     );
   }
-  untrackExecution(executionId);
+  executionRegistry.untrack(executionId);
   disposeTrace();
 
   if (options?.autoClose) {
