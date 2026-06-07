@@ -5,12 +5,12 @@ import { Select } from '../chat/tui/ui/Select';
 import { KeyHints, type KeyHint } from '../chat/tui/ui/KeyHints';
 import { tuiOutputStreamForColor } from '../chat/tui/render/noColorOutput';
 import { clearTerminalVisibleScreen } from '../chat/tui/terminalCleanup';
+import { formatCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import {
   modelAccessLaunchBlockDescriptionForCliMode,
   modelSelectItemsForCliMode,
-} from '../chat/tui/modelAccessDisplay';
-import { formatCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
-import type { CliModelAccess } from '../runtime/modelAccess';
+  type CliModelAccess,
+} from '../runtime/modelAccess';
 import type {
   CliOrchestrationAction,
   CliOrchestrationItem,
