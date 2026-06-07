@@ -9,46 +9,17 @@
 import { type Readable, Writable } from 'node:stream';
 
 import {
+  ConnectionErrors,
   createMessageConnection,
   StreamMessageReader,
   StreamMessageWriter,
   type MessageConnection,
 } from 'vscode-jsonrpc/node';
 
+import * as logger from '@logger/logUtils';
+
 export type NotificationHandler = (params: unknown) => void;
 export type ServerRequestHandler = (params: unknown) => Promise<unknown>;
-
-/**
- * Wraps `target` in a Writable that silently drops writes once the target is
- * destroyed. This prevents ERR_STREAM_DESTROYED from propagating through
- * vscode-jsonrpc's async Promise executor — which uses `throw` inside an
- * `async new Promise()` constructor and therefore cannot be caught by callers.
- */
-function guardedWritable(target: Writable): Writable {
-  // Absorb 'error' events so a broken pipe (EPIPE) on the original stream
-  // doesn't become an unhandled Node.js exception.
-  target.on('error', () => {});
-  return new Writable({
-    write(chunk, _encoding, callback) {
-      if (target.destroyed || !target.writable) {
-        callback();
-        return;
-      }
-      try {
-        target.write(chunk, () => callback());
-      } catch {
-        callback();
-      }
-    },
-    final(callback) {
-      if (!target.destroyed && target.writable) {
-        target.end(callback);
-      } else {
-        callback();
-      }
-    },
-  });
-}
 
 export class JsonRpcConnection {
   private readonly conn: MessageConnection;
@@ -58,11 +29,11 @@ export class JsonRpcConnection {
   constructor(stdin: Writable, stdout: Readable) {
     this.conn = createMessageConnection(
       new StreamMessageReader(stdout),
-      new StreamMessageWriter(guardedWritable(stdin)),
+      new StreamMessageWriter(this.createGuardedWritable(stdin)),
     );
-    // Suppress stream-level errors that vscode-jsonrpc may fire after the
-    // underlying process exits.
-    this.conn.onError(() => {});
+    this.conn.onError(([err]) => {
+      this.logLiveError('connection error', err);
+    });
     this.conn.listen();
   }
 
@@ -97,7 +68,13 @@ export class JsonRpcConnection {
     } catch (err) {
       // Propagate the caller's dispose reason rather than vscode-jsonrpc's
       // generic "connection got disposed" message.
-      if (this.disposed && this.disposeError) throw this.disposeError;
+      if (
+        this.disposed &&
+        this.disposeError &&
+        isConnectionDisposedError(err)
+      ) {
+        throw this.disposeError;
+      }
       throw err;
     }
   }
@@ -108,4 +85,61 @@ export class JsonRpcConnection {
     this.disposeError = new Error(reason ?? 'JsonRpcConnection disposed');
     this.conn.dispose();
   }
+
+  /**
+   * Drops writes after the Lean server's stdin is gone. vscode-jsonrpc writes
+   * from async internals, so stream teardown errors need to be absorbed here.
+   */
+  private createGuardedWritable(target: Writable): Writable {
+    target.on('error', (err) => {
+      this.logLiveError('stdin stream error', err);
+    });
+
+    return new Writable({
+      write: (chunk, _encoding, callback) => {
+        if (target.destroyed || !target.writable) {
+          callback();
+          return;
+        }
+        try {
+          target.write(chunk, (err?: Error | null) => {
+            this.logLiveError('stdin write failed', err);
+            callback();
+          });
+        } catch (err) {
+          this.logLiveError('stdin write failed', err);
+          callback();
+        }
+      },
+      final: (callback) => {
+        if (target.destroyed || !target.writable) {
+          callback();
+          return;
+        }
+        try {
+          target.end(callback);
+        } catch (err) {
+          this.logLiveError('stdin close failed', err);
+          callback();
+        }
+      },
+    });
+  }
+
+  private logLiveError(context: string, err: unknown): void {
+    if (this.disposed || !err) return;
+    logger.debug('JsonRpcConnection', `${context}: ${errorMessage(err)}`);
+  }
+}
+
+function isConnectionDisposedError(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (code === ConnectionErrors.Disposed || code === ConnectionErrors.Closed) {
+    return true;
+  }
+  return /\bconnection\b.*\b(disposed|closed)\b/i.test(errorMessage(err));
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
