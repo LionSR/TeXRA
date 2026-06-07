@@ -1,8 +1,16 @@
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
+// Local imports - agent
+import type { TaskState } from '@agent/core/execution/TaskState';
+import { bus } from '@eventBus/ProgressEventBus';
+
 // Local imports - shared
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  AgentCategory,
+  type ProgressViewOutboundMessage,
+} from '@shared/schemas';
 import {
   ProgressBackend,
   type ProgressBackendServices,
@@ -50,6 +58,16 @@ function createUiConfig(): ProgressBackendUiConfig {
     },
     hasPendingPermissions: vi.fn(() => false),
   };
+}
+
+function toolUseTaskState(agent: string, model: string): TaskState {
+  return {
+    agentConfig: {
+      agent,
+      model,
+      agentCategory: AgentCategory.ToolUse,
+    },
+  } as TaskState;
 }
 
 describe('ProgressBackend', () => {
@@ -126,5 +144,79 @@ describe('ProgressBackend', () => {
     expect(sent).toHaveBeenCalledTimes(2);
 
     backend.dispose();
+  });
+
+  it('refreshes stream metadata when inactive stream task state arrives', async () => {
+    const messages: ProgressViewOutboundMessage[] = [];
+    const backend = new ProgressBackend({
+      storage: new MemoryMementoStorage(),
+      sendMessage: (message) => {
+        messages.push(message);
+        return true;
+      },
+      hasTarget: () => true,
+      configureUi: () => createUiConfig(),
+    });
+    const subscription = backend.setupEventListeners();
+
+    try {
+      bus.emit('setActiveStream', {
+        streamId: 'root',
+        agentCategory: AgentCategory.Workflow,
+      });
+      await vi.waitFor(() =>
+        expect(
+          messages.some(
+            (message) =>
+              message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+          ),
+        ).toBe(true),
+      );
+
+      bus.emit('setActiveStream', {
+        streamId: 'child',
+        agentCategory: AgentCategory.ToolUse,
+        suppressViewSwitch: true,
+      });
+      await vi.waitFor(() =>
+        expect(
+          messages.some(
+            (message) =>
+              message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS &&
+              message.streams.some((stream) => stream.name === 'child'),
+          ),
+        ).toBe(true),
+      );
+      messages.length = 0;
+
+      bus.emit('setTaskState', {
+        streamId: 'child',
+        executionId: 'exec-child',
+        taskState: toolUseTaskState('search', 'deepseekproT'),
+      });
+
+      await vi.waitFor(() =>
+        expect(
+          messages.find(
+            (message) =>
+              message.command === PROGRESS_VIEW_COMMANDS.UPDATE_STREAMS,
+          ),
+        ).toMatchObject({
+          activeStream: 'root',
+          streams: expect.arrayContaining([
+            expect.objectContaining({
+              name: 'child',
+              label: 'search',
+              agent: 'search',
+              model: 'deepseekproT',
+              executionId: 'exec-child',
+            }),
+          ]),
+        }),
+      );
+    } finally {
+      subscription.dispose();
+      backend.dispose();
+    }
   });
 });
