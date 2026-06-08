@@ -80,6 +80,8 @@ describe('runFlowWithLifecycle', () => {
         emit: false,
       });
 
+      // This test scopes ownership to the lifecycle finalization path; other
+      // mid-run status transitions are migrated in separate Step 7 slices.
       await runFlowWithLifecycle(ctx, async () => ({
         category: 'toolUse',
         status: END_GROUP_STATUS.STOPPED,
