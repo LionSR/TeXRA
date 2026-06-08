@@ -63,7 +63,7 @@ export class WorkflowToolUseFollowupSection extends LitElement {
       }
 
       .followup__label {
-        font-size: var(--font-size-small);
+        font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
       }
 

@@ -61,7 +61,7 @@ export class OdysseyTab extends LitElement {
         font-size: var(--wa-font-size-xs);
         font-weight: var(--wa-font-weight-semibold);
         padding: 2px 8px;
-        border-radius: 999px;
+        border-radius: var(--wa-border-radius-pill);
         background: var(--_chip-bg, var(--wa-color-neutral-fill-quiet));
         color: var(--_chip-fg, var(--wa-color-neutral-on-quiet));
       }
