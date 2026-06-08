@@ -97,7 +97,7 @@ function SessionHeaderBlock({
       <Box paddingX={1}>
         <Text wrap="truncate-end">
           <Text bold color="cyan">
-            TeXRA
+            {'{ T } TeXRA'}
           </Text>{' '}
           <Text dimColor>v{meta.version}</Text>{' '}
           <Text dimColor>{shortCliApiMode(meta.apiMode)}</Text>{' '}
@@ -115,7 +115,7 @@ function SessionHeaderBlock({
       <Box flexDirection="column" paddingX={1}>
         <Box gap={2}>
           <Text bold color="cyan">
-            TeXRA
+            {'{ T } TeXRA'}
           </Text>
           <Text dimColor>v{meta.version}</Text>
           <Text dimColor>{shortCliApiMode(meta.apiMode)}</Text>
