@@ -27,7 +27,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
-import { setRunStorageService } from '@agent/runtime/RunStorageService';
+import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { toErrorMessage } from '@common/errors';
@@ -202,7 +202,7 @@ export class DesktopProgressBridge {
     private readonly postToRenderer: (message: unknown) => void,
     private readonly options: DesktopProgressBridgeOptions = {},
   ) {
-    setRunStorageService({ isViewVisible: () => true });
+    setProgressViewBridge({ isViewVisible: () => true });
     this.backend = new ProgressBackend({
       storage: tryPlatform()?.workspaceState ?? new MemoryProgressStorage(),
       snapshots: options.progressSnapshotStore ?? new StreamSnapshotStore(),
