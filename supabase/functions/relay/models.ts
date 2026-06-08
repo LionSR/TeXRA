@@ -8,7 +8,7 @@
  * - Ultra: All models above $3/M input
  */
 
-import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.6.1';
+import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.8.1';
 import { FREE_TIER, MAX_TIER, ULTRA_TIER } from './tierConstants.ts';
 
 export { FREE_TIER, MAX_TIER, ULTRA_TIER };
