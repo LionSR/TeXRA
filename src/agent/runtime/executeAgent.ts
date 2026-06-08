@@ -40,7 +40,6 @@ import { executionRegistry } from './executionRegistry';
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { getRunStorageService } from './RunStorageService';
-import { StreamStatusService } from './StreamStatusService';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type {
   AgentFlowResult,
@@ -255,7 +254,7 @@ export async function executeAgent(
       async (handle) => {
         // Pre-execution UI setup
         if (executionId) await ensureRunDir(executionId);
-        StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
+        ctx.streamStatus.set(streamId, STREAM_STATUS.RUNNING, {
           runtimeHost: ctx.runtimeHost,
         });
         logger.info(`Starting task execution (streamId: ${streamId})`);
@@ -400,7 +399,7 @@ export async function resumeToolUseFromSnapshot(
     }
 
     await runFlowWithLifecycle(ctx, async (handle) => {
-      StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
+      ctx.streamStatus.set(streamId, STREAM_STATUS.RUNNING, {
         runtimeHost: ctx.runtimeHost,
       });
 
