@@ -101,6 +101,7 @@ export class RetryRequestPanel extends BaseRequestPanel {
               icon: 'key',
               text: 'Use your own API key',
               title: 'Use your own API key (k)',
+              action: 'useOwnApiKey',
               onClick: () => this.emitAction('useOwnApiKey'),
             }),
           )}
@@ -108,12 +109,14 @@ export class RetryRequestPanel extends BaseRequestPanel {
             icon: 'refresh',
             text: 'Retry',
             title: 'Retry (r)',
+            action: 'retry',
             onClick: () => this.emitAction('retry'),
           })}
           ${renderLabeledActionButton({
             icon: 'close',
             text: 'Dismiss',
             title: 'Dismiss (Esc)',
+            action: 'cancel',
             onClick: () => this.emitAction('cancel'),
           })}
         </div>
