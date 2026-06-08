@@ -8,10 +8,6 @@ const baseBadgeStyles: CSSResult = css`
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-medium, 500);
   }
-
-  .badge--small {
-    border-radius: var(--border-radius-small);
-  }
 `;
 
 const categoryBadgeStyles: CSSResult = css`
@@ -27,25 +23,6 @@ const categoryBadgeStyles: CSSResult = css`
   .category-badge wa-icon,
   .agent-category-badge wa-icon {
     font-size: var(--font-size-sm);
-  }
-
-  .category-workflow,
-  .category-badge.workflow {
-    background-color: var(
-      --texra-editorInfo-background,
-      rgba(0, 127, 212, 0.15)
-    );
-    color: var(--wa-color-brand-on-quiet, #3794ff);
-  }
-
-  .category-tool-use,
-  .category-badge.tooluse,
-  .category-badge.tool-use {
-    background-color: var(
-      --wa-color-warning-fill-quiet,
-      rgba(255, 204, 0, 0.15)
-    );
-    color: var(--wa-color-warning-on-quiet, #cca700);
   }
 `;
 
@@ -64,9 +41,7 @@ const searchHighlightStyles: CSSResult = css`
 `;
 
 const emptyStateStyles: CSSResult = css`
-  .no-data,
-  .no-agents,
-  .history-none {
+  .no-data {
     color: var(--color-text-secondary);
     font-style: italic;
     text-align: center;

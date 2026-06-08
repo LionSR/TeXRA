@@ -87,11 +87,6 @@ export const historyListStyles: CSSResult = css`
     gap: var(--wa-space-2xs);
   }
 
-  .history-timestamp {
-    font-size: var(--font-size-sm);
-    margin-bottom: var(--wa-space-2xs);
-  }
-
   .history-description {
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-quiet);

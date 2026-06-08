@@ -83,19 +83,6 @@ export const selectStyles: CSSResult = css`
     max-width: 10rem;
   }
 
-  .agent-select-controls {
-    flex: 0 1 auto;
-    min-width: 7rem;
-    max-width: 10rem;
-  }
-
-  .agent-select-dropdowns {
-    position: relative;
-    width: 100%;
-    min-width: 7rem;
-    max-width: 10rem;
-  }
-
   wa-option {
     font-family: var(--wa-font-family-body);
   }
