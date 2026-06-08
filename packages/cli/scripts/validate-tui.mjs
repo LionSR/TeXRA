@@ -2611,13 +2611,12 @@ function snapshotSvgDocument(name, frame) {
 `;
 }
 
-function writeSnapshot(index, name, frame, rows) {
+function writeSnapshot(index, name, frame) {
   if (!snapshotDir) return;
-  const content = frameTail(frame, rows);
   const textFile = path.join(snapshotDir, snapshotFileName(index, name));
   const svgFile = path.join(snapshotDir, snapshotFileName(index, name, 'svg'));
-  writeFileSync(textFile, `${content}${content.endsWith('\n') ? '' : '\n'}`);
-  writeFileSync(svgFile, snapshotSvgDocument(name, content));
+  writeFileSync(textFile, `${frame}${frame.endsWith('\n') ? '' : '\n'}`);
+  writeFileSync(svgFile, snapshotSvgDocument(name, frame));
 }
 
 function snapshotHtmlDocument(results) {
@@ -2626,7 +2625,7 @@ function snapshotHtmlDocument(results) {
     .map((result, index) => {
       const textFile = snapshotFileName(index, result.name);
       const svgFile = snapshotFileName(index, result.name, 'svg');
-      const frame = frameTail(result.fullFrame, result.rows);
+      const frame = result.frame;
       const statusClass = result.ok ? 'ok' : 'failed';
       const failures = result.failures.length
         ? `<ul>${result.failures
@@ -2721,7 +2720,6 @@ async function runScenario(scenario) {
       skipReason,
       failures: [],
       frame: skipReason,
-      fullFrame: skipReason,
       rows: scenarioRows(scenario),
     };
   }
@@ -2936,7 +2934,6 @@ async function runScenarioWithResources(scenario, fakeClipboard) {
     skipped: false,
     failures,
     frame,
-    fullFrame,
     rows,
   };
 }
@@ -2950,7 +2947,7 @@ for (const [index, scenario] of scenarios.entries()) {
   // eslint-disable-next-line no-await-in-loop
   const result = await runScenario(scenario);
   results.push(result);
-  writeSnapshot(index, result.name, result.fullFrame, result.rows);
+  writeSnapshot(index, result.name, result.frame);
   if (result.skipped) {
     skipped += 1;
     console.log(`- ${result.name} (skipped: ${result.skipReason})`);
