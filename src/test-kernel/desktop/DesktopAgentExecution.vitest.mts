@@ -113,8 +113,8 @@ async function createBridge(
   options: CreateBridgeOptions = {},
 ): Promise<TestableBridge> {
   vi.resetModules();
-  vi.doMock('@agent/runtime/RunStorageService', () => ({
-    setRunStorageService: vi.fn(),
+  vi.doMock('@agent/runtime/ProgressViewBridge', () => ({
+    setProgressViewBridge: vi.fn(),
   }));
   vi.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
     retrieveSessionResumeData:
@@ -243,8 +243,8 @@ async function createExecution(options: {
   runAgent?: RunExecutionRequest;
 }): Promise<DesktopExecution> {
   vi.resetModules();
-  vi.doMock('@agent/runtime/RunStorageService', () => ({
-    setRunStorageService: vi.fn(),
+  vi.doMock('@agent/runtime/ProgressViewBridge', () => ({
+    setProgressViewBridge: vi.fn(),
   }));
   vi.doMock('@agent/runtime/SessionResumeRetrieval', () => ({
     retrieveSessionResumeData: vi.fn(async () => null),
@@ -376,7 +376,7 @@ async function settleProgressEvents(): Promise<void> {
 
 describe('DesktopProgressBridge', () => {
   afterEach(() => {
-    vi.doUnmock('@agent/runtime/RunStorageService');
+    vi.doUnmock('@agent/runtime/ProgressViewBridge');
     vi.doUnmock('@agent/runtime/SessionResumeRetrieval');
     vi.doUnmock('@agent/runtime/executeAgent');
     vi.doUnmock('@agent/runtime/runAgent');

@@ -17,7 +17,7 @@ import {
 import { KVStore } from '@common/storage/KVStore';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
-import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+import { TASK_RUNS_DIR } from '@utils/files';
 
 // ============================================================================
 // Key constants (implementation detail — not exported)
