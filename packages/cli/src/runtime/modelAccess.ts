@@ -440,7 +440,7 @@ function formatUnavailableModelMessage(
   return `Model "${model}" is not available in the active API mode${status}. ${formatAvailableModels(availableIds, options)}`;
 }
 
-export function resolveCliRunnableModelFromAccessList(
+function resolveCliRunnableModelFromAccessList(
   models: readonly CliModelAccess[],
   model: string,
   options: CliRunnableModelOptions,
