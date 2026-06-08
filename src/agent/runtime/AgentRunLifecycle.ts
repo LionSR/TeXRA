@@ -16,7 +16,6 @@ import {
 } from '@shared/schemas';
 
 import { AgentExecutionHandle, executionRegistry } from './executionRegistry';
-import { StreamStatusService } from './StreamStatusService';
 import {
   buildTerminalFlowResult,
   type AgentFlowResult,
@@ -60,7 +59,7 @@ export async function runFlowWithLifecycle(
     agentName,
     category,
     ctx.runtimeHost,
-    StreamStatusService,
+    ctx.streamStatus,
     ctx.coordinators,
   );
   executionRegistry.track(handle);
@@ -76,10 +75,10 @@ export async function runFlowWithLifecycle(
     executionRegistry.untrack(ctx.executionId);
     ctx.parentStage.end(result.status);
 
-    if (!StreamStatusService.shouldPreserveOnCompletion(streamId)) {
+    if (!ctx.streamStatus.shouldPreserveOnCompletion(streamId)) {
       const status =
         result.status === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
-      StreamStatusService.set(streamId, status, {
+      ctx.streamStatus.set(streamId, status, {
         runtimeHost: ctx.runtimeHost,
         terminalStatus,
       });
@@ -109,7 +108,7 @@ export async function runFlowWithLifecycle(
     }
 
     ctx.parentStage.end(status);
-    StreamStatusService.set(streamId, streamStatus, {
+    ctx.streamStatus.set(streamId, streamStatus, {
       runtimeHost: ctx.runtimeHost,
       terminalStatus,
     });

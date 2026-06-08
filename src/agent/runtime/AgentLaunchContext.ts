@@ -51,13 +51,17 @@ import {
   shouldWarnMediaNeedsVision,
 } from './mediaVisionWarning';
 import { getStreamTabId } from './streamTab';
-import { StreamStatusService } from './StreamStatusService';
+import {
+  StreamStatusService,
+  type StreamStatusRegistry,
+} from './StreamStatusService';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 export interface AgentLaunchContext extends AgentCore {
   usageMonitor: UsageMonitor;
   storageKey: StorageKey;
   parentStage: StageHandle;
+  streamStatus: StreamStatusRegistry;
   coordinators: RunCoordinators;
   /** Whether approval or user prompts cannot be answered by the current host. */
   approvalPromptsUnavailable?: boolean;
@@ -167,6 +171,7 @@ async function beginRunStage(
 async function assembleAgentLaunchContext(
   input: AgentLaunchInput,
   executionId: ExecutionId,
+  streamStatus: StreamStatusRegistry,
   runtimeHost: AgentRuntimeHost,
   reservedStreamId: StreamTabId | undefined,
   onActivated: (streamId: StreamTabId) => void,
@@ -313,6 +318,7 @@ async function assembleAgentLaunchContext(
     userVarChannels,
     usageMonitor,
     runtimeHost,
+    streamStatus,
     workingDirectory: configPayload.workingDirectory?.trim() || undefined,
     coordinators: {
       plan: new PlanApprovalCoordinator(runtimeHost),
@@ -325,18 +331,19 @@ async function assembleAgentLaunchContext(
 
 function acquireStreamOrThrow(
   streamId: StreamTabId,
+  streamStatus: StreamStatusRegistry,
   runtimeHost: AgentRuntimeHost,
   taskType: string = 'Task',
 ): void {
   if (
-    StreamStatusService.tryAcquire(streamId, {
+    streamStatus.tryAcquire(streamId, {
       runtimeHost,
     })
   ) {
     return;
   }
 
-  const status = StreamStatusService.get(streamId) ?? '';
+  const status = streamStatus.get(streamId) ?? '';
   const statusMsg = STATUS_MESSAGES[status] || 'already running';
   throw new AgentError(
     `${taskType} "${streamId}" is ${statusMsg}. Please wait for it to complete or stop it first.`,
@@ -358,6 +365,7 @@ function compensateFailedActivation(args: {
   configPayload: AgentConfigPayload;
   reservedStreamId?: StreamTabId;
   activatedStreamId?: StreamTabId;
+  streamStatus: StreamStatusRegistry;
   runtimeHost: AgentRuntimeHost;
   err: unknown;
   // The run-trace from assembleAgentLaunchContext when it was created before the
@@ -369,6 +377,7 @@ function compensateFailedActivation(args: {
     configPayload,
     reservedStreamId,
     activatedStreamId,
+    streamStatus,
     runtimeHost,
     err,
     runTrace,
@@ -386,14 +395,14 @@ function compensateFailedActivation(args: {
         { operation: `start ${configPayload.agent}` },
       );
     }
-    StreamStatusService.set(activatedStreamId, STREAM_STATUS.ERROR, {
+    streamStatus.set(activatedStreamId, STREAM_STATUS.ERROR, {
       runtimeHost,
     });
     return;
   }
 
   if (reservedStreamId) {
-    StreamStatusService.releaseIfInitializing(reservedStreamId, {
+    streamStatus.releaseIfInitializing(reservedStreamId, {
       runtimeHost,
     });
   }
@@ -411,6 +420,7 @@ export async function buildAgentLaunchContext(
   input: AgentLaunchInput,
 ): Promise<AgentLaunchContext> {
   const { configPayload, runtimeHost } = input;
+  const streamStatus = StreamStatusService;
   const executionId = input.executionId ?? generateExecutionId();
   if (
     !input.streamTabIdOverride &&
@@ -423,7 +433,12 @@ export async function buildAgentLaunchContext(
     ? undefined
     : getStreamTabId(configPayload.agent, configPayload.model, { executionId });
   if (reservedStreamId) {
-    acquireStreamOrThrow(reservedStreamId, runtimeHost, input.taskType);
+    acquireStreamOrThrow(
+      reservedStreamId,
+      streamStatus,
+      runtimeHost,
+      input.taskType,
+    );
   }
 
   let activatedStreamId: StreamTabId | undefined;
@@ -435,6 +450,7 @@ export async function buildAgentLaunchContext(
     return await assembleAgentLaunchContext(
       input,
       executionId,
+      streamStatus,
       runtimeHost,
       reservedStreamId,
       (streamId) => {
@@ -449,6 +465,7 @@ export async function buildAgentLaunchContext(
       configPayload,
       reservedStreamId,
       activatedStreamId,
+      streamStatus,
       runtimeHost,
       err,
       runTrace,
