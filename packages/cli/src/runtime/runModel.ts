@@ -9,7 +9,6 @@ import { CliUsageError, type CliContext } from './cliContext';
 import { initCliPlatform, setCliHelperModel } from './initPlatform';
 import { writeTextStderr } from './logSinks';
 import {
-  cliRunnableModelOptionsForSource,
   resolveCliRunnableModel,
   type CliModelSelectionSource,
 } from './modelAccess';
@@ -70,12 +69,10 @@ export async function resolveCliRunModel(
   await initCliPlatform({ ...context, quietLogs: true });
   const apiMode = effectiveCliApiMode(context);
   try {
-    const resolution = await resolveCliRunnableModel(
-      candidate.model,
-      cliRunnableModelOptionsForSource(candidate.source, {
-        apiMode,
-      }),
-    );
+    const resolution = await resolveCliRunnableModel(candidate.model, {
+      fallbackSource: candidate.source,
+      apiMode,
+    });
     if (resolution.notice && context.quietLogs !== true) {
       writeTextStderr(resolution.notice);
     }
