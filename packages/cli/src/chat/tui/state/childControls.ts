@@ -249,26 +249,16 @@ function hasVisibleSubagents(
   return slice !== undefined && visibleSubagentRows(slice).length > 0;
 }
 
-function hasVisibleTasks(
-  slice:
-    | Pick<StreamSlice, 'activeProcesses' | 'activeSubagents' | 'childStreams'>
-    | undefined,
-): boolean {
-  return (
-    slice !== undefined &&
-    (visibleSubagentRows(slice).length > 0 || slice.activeProcesses.length > 0)
-  );
-}
-
 export function hasChildControlItems(
   slice:
     | Pick<StreamSlice, 'activeProcesses' | 'activeSubagents' | 'childStreams'>
     | undefined,
   mode: ChildControlMode,
 ): boolean {
+  if (slice === undefined) return false;
   return mode === 'subagents'
     ? hasVisibleSubagents(slice)
-    : hasVisibleTasks(slice);
+    : visibleSubagentRows(slice).length > 0 || slice.activeProcesses.length > 0;
 }
 
 export function resolveChildControlStreamTarget({
@@ -409,10 +399,7 @@ export function hasChildExecutionRows(
     | Pick<StreamSlice, 'activeProcesses' | 'activeSubagents' | 'childStreams'>
     | undefined,
 ): boolean {
-  return (
-    slice !== undefined &&
-    (visibleSubagentRows(slice).length > 0 || slice.activeProcesses.length > 0)
-  );
+  return hasChildControlItems(slice, 'tasks');
 }
 
 export function numericFocusTargetForActiveStream(init: {
