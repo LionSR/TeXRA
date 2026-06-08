@@ -26,7 +26,7 @@ import {
 } from './logSinks';
 import { getCliModelAccessList } from './modelAccess';
 import { createCliStyle } from './style';
-import { getCliStoredAuthProfile } from './supabaseAuth';
+import { getCliAuthProfile } from './supabaseAuth';
 
 // Type imports - CLI runtime
 import type { CliContext } from './cliContext';
@@ -203,7 +203,7 @@ async function checkAuth(
       return pass(
         'auth',
         'Included access',
-        `Stored sign-in found for ${accountLabel}${tier}.`,
+        `Signed in as ${accountLabel}${tier}.`,
       );
     }
     return warn(
@@ -330,7 +330,7 @@ export async function buildDoctorReport(
 ): Promise<DoctorReport> {
   const resolved = {
     nodeVersion: deps.nodeVersion ?? process.versions.node,
-    authProfile: deps.authProfile ?? getCliStoredAuthProfile,
+    authProfile: deps.authProfile ?? getCliAuthProfile,
     modelAccessList: deps.modelAccessList ?? getCliModelAccessList,
     latexToolchain: deps.latexToolchain ?? probeLatexToolchain,
     pathStat: deps.pathStat ?? stat,
