@@ -28,7 +28,7 @@ import { isPlainReturnInput } from '../input/inputKeys';
 
 const TUI_MODEL_EMPTY_RECOVERY = {
   includedModeAction: 'switch with /api included',
-  loginAction: 'Run /login',
+  loginAction: 'run /login',
   personalModeAction: 'switch with /api personal',
 } satisfies CliNoRunnableModelsMessageOptions;
 
