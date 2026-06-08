@@ -1,5 +1,5 @@
 // Third-party imports
-import { Minimatch } from 'minimatch';
+import micromatch from 'micromatch';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
@@ -12,13 +12,8 @@ import { ToolError } from '@tools/result';
  * Supports `*`, `?`, and `**` tokens.
  */
 export function createGlobMatcher(pattern: string): (value: string) => boolean {
-  const matcher = new Minimatch(pattern, {
-    dot: true,
-    matchBase: true,
-    nocase: false,
-  });
-
-  return (value: string) => matcher.match(value.replaceAll('\\', '/'));
+  const isMatch = micromatch.matcher(pattern, { dot: true, matchBase: true });
+  return (value: string) => isMatch(value.replaceAll('\\', '/'));
 }
 
 /**

@@ -3,6 +3,7 @@
 import * as path from 'path';
 import { glob } from 'glob';
 import * as yaml from 'yaml';
+import { LRUCache } from 'lru-cache';
 
 import { platform } from '@platform/platform';
 import {
@@ -133,8 +134,7 @@ const PREFERRED_TOOL_USE_AGENTS = [
 // STATE
 // =============================================================================
 
-/** The cache. Just a Map. */
-const cache = new Map<string, AgentEntry>();
+const cache = new LRUCache<string, AgentEntry>({ max: 500 });
 
 /** Initialization state */
 let initialized = false;
