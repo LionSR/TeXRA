@@ -133,11 +133,27 @@ export const requestPanelStyles: CSSResult = css`
     gap: ${sp.small};
   }
 
-  :is(${ACTIONS}) wa-button {
+  /* The primary action buttons (which carry data-action) fill the row
+     equally; the diff dropdown's own buttons keep their bespoke sizing. */
+  :is(${ACTIONS}) wa-button[data-action] {
     min-width: auto;
+    flex: 1 1 var(--action-button-basis, 8rem);
   }
 
-  :is(${ACTIONS}) wa-button::part(base) {
+  /* Per-panel basis tunes how many action buttons fit per row before wrapping.
+     Default 8rem (retry / inquiry / question); approval + plan want wider rows,
+     the workflow proposal narrower. */
+  .approval-request__actions,
+  .bash-approval-request__actions,
+  .plan-approval-request__actions {
+    --action-button-basis: 12rem;
+  }
+
+  .workflow-proposal__actions {
+    --action-button-basis: 6rem;
+  }
+
+  :is(${ACTIONS}) wa-button[data-action]::part(base) {
     justify-content: flex-start;
     gap: ${sp.small};
   }
@@ -190,12 +206,6 @@ export const requestPanelStyles: CSSResult = css`
   }
   .user-question-request {
     border-left: var(--border-medium) solid var(--wa-color-focus);
-  }
-
-  /* Shared action button width — approval and bash use the same flex-basis */
-  .approval-request__actions wa-button,
-  .bash-approval-request__actions wa-button {
-    flex: 1 1 12rem;
   }
 
   /* ================================================================
@@ -309,10 +319,6 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--color-warning);
   }
 
-  .retry-request__actions wa-button {
-    flex: 1 1 8rem;
-  }
-
   .retry-request__operation {
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
@@ -382,10 +388,6 @@ export const requestPanelStyles: CSSResult = css`
 
   .workflow-proposals__header wa-icon {
     color: var(--wa-color-text-link);
-  }
-
-  .workflow-proposal__actions wa-button {
-    flex: 1 1 6rem;
   }
 
   .workflow-proposal__header-row {
@@ -567,10 +569,6 @@ export const requestPanelStyles: CSSResult = css`
 
   .plan-approval-request__file {
     color: var(--wa-color-text-link);
-  }
-
-  .plan-approval-request__actions wa-button {
-    flex: 1 1 12rem;
   }
 
   /* ================================================================
@@ -905,10 +903,6 @@ export const requestPanelStyles: CSSResult = css`
     }
   }
 
-  .external-inquiry-request__actions wa-button {
-    flex: 1 1 8rem;
-  }
-
   /* ================================================================
    * User question requests
    * ================================================================ */
@@ -992,9 +986,5 @@ export const requestPanelStyles: CSSResult = css`
 
   .user-question-request__free-text {
     width: 100%;
-  }
-
-  .user-question-request__actions wa-button {
-    flex: 1 1 8rem;
   }
 `;
