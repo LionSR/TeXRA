@@ -1,0 +1,34 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 200 200"
+  width="200"
+  height="200"
+  role="img"
+  aria-label="TeXRA"
+>
+  <!-- Dark "board" variant for dark editor / IDE surfaces (e.g. the docs mockup
+       activity bar). The deeper near-black background (#1B0828), warm ivory T
+       (#F4ECDC), and orange braces are tuned for that surface and are
+       intentionally distinct from the canonical light palette (#270939 / #FEF7E2).
+       Surface-specific values — do not copy them into other assets as tokens. -->
+  <rect width="200" height="200" rx="46" fill="#1B0828"></rect>
+  <g transform="scale(3.125)">
+    <path
+      d="M22 10c-5.2 0-8 3.4-8 8.5v5.3c0 3-1.5 4.8-4.7 5.7 3.2.9 4.7 2.7 4.7 5.7v5.3c0 5.1 2.8 8.5 8 8.5"
+      fill="none"
+      stroke="#F39215"
+      stroke-width="4.4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      d="M42 10c5.2 0 8 3.4 8 8.5v5.3c0 3 1.5 4.8 4.7 5.7-3.2.9-4.7 2.7-4.7 5.7v5.3c0 5.1-2.8 8.5-8 8.5"
+      fill="none"
+      stroke="#F39215"
+      stroke-width="4.4"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path d="M25 17.5h14v5.6h-4.1V47h-5.8V23.1H25z" fill="#F4ECDC" />
+  </g>
+</svg>
