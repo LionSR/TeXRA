@@ -21,7 +21,11 @@ import { streamViewForId } from '../state/streamViews';
 import { transcriptEntryLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
-import { TranscriptEntry } from './TranscriptEntry';
+import {
+  isInquiryContinuationText,
+  TranscriptEntry,
+  USER_ENTRY_MARGIN_BOTTOM_ROWS,
+} from './TranscriptEntry';
 
 export type StaticTranscriptItem =
   | {
@@ -152,8 +156,14 @@ function staticTranscriptItemRowCount(
   }
   // Compact budgeting can over-count tool rows because the transcript viewer
   // keeps full tool output while the static scrollback renderer elides it.
-  return transcriptEntryLines(item.entry, Math.max(1, Math.floor(width ?? 80)))
-    .length;
+  const lines = transcriptEntryLines(
+    item.entry,
+    Math.max(1, Math.floor(width ?? 80)),
+  ).length;
+  return item.entry.role === 'user' &&
+    !isInquiryContinuationText(item.entry.text)
+    ? lines + USER_ENTRY_MARGIN_BOTTOM_ROWS
+    : lines;
 }
 
 export function appendStaticTranscriptItems({

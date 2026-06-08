@@ -55,6 +55,7 @@ export interface StatusBarDisplayInput {
   readonly pendingExitHint: boolean;
   readonly pendingExitResumeId: string | undefined;
   readonly bypass: BypassState;
+  readonly thinkingActive?: boolean;
   readonly queuedFollowUpMessages: readonly string[];
   readonly queuedFollowUpPreview?: boolean;
   readonly usage: TokenUsageStats | undefined;
@@ -171,6 +172,7 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   approvalDepth: 60,
   rootActive: 65,
   elapsed: 70,
+  thinking: 75,
 } as const;
 
 function truncateSummaryToColumns(text: string, maxColumns: number): string {
@@ -628,6 +630,16 @@ export function buildStatusBarDisplay(
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.elapsed,
       });
     }
+    if (
+      input.status === STREAM_STATUS.RUNNING &&
+      input.thinkingActive === true
+    ) {
+      left.push({
+        text: 'thinking',
+        color: 'dim',
+        compactPriority: STATUS_BAR_COMPACT_PRIORITY.thinking,
+      });
+    }
   }
 
   const rootActive = rootActiveSegment(input);
@@ -755,6 +767,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     pendingExitHint,
     pendingExitResumeId,
     bypass: statusSlice?.bypass ?? NO_BYPASS,
+    thinkingActive: statusSlice?.thinkingActive ?? false,
     queuedFollowUpMessages: statusSlice?.queuedFollowUpMessages ?? [],
     queuedFollowUpPreview: props.queuedFollowUpPreview,
     usage: statusSlice?.usage,
