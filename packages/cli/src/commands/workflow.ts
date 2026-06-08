@@ -32,7 +32,7 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveCliAgent } from '../runtime/agentResolution';
-import { executeCliRequest } from './_helpers/runExecution';
+import { executeCliRequest } from '../runtime/runExecution';
 import {
   terminalStatusExitCode,
   type CliRunResult,
