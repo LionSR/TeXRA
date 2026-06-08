@@ -158,6 +158,25 @@ export class ExecutionRegistry {
     this.track(handle);
   }
 
+  /**
+   * Publish an in-flight agent status through the registry-owned status store.
+   * Explicit user stops win over loop transitions, and stale handles cannot
+   * revive an execution that has already been untracked.
+   */
+  updateAgentExecutionStatus(
+    handle: AgentExecutionHandle,
+    status: StreamStatus,
+  ): boolean {
+    if (this.handles.get(handle.executionId) !== handle) return false;
+    if (this.streamStatus.get(handle.childStreamId) === STREAM_STATUS.STOPPED) {
+      return false;
+    }
+    this.streamStatus.set(handle.childStreamId, status, {
+      runtimeHost: handle.runtimeHost,
+    });
+    return true;
+  }
+
   /** Remove an execution handle and notify waiters. */
   untrack(executionId: string): void {
     const handle = this.handles.get(executionId);
@@ -207,7 +226,14 @@ export class ExecutionRegistry {
     options: FinishAgentExecutionOptions,
   ): void {
     const currentStatus = this.streamStatus.get(handle.childStreamId);
-    if (currentStatus !== STREAM_STATUS.STOPPED) {
+    const shouldUpdateStatus =
+      currentStatus !== STREAM_STATUS.STOPPED &&
+      currentStatus !== options.status;
+
+    // READY clears the status store. Do it after untracking so the status
+    // listener cannot summarize the still-tracked child via the RUNNING
+    // fallback before the removal update.
+    if (options.status !== STREAM_STATUS.READY && shouldUpdateStatus) {
       this.streamStatus.set(handle.childStreamId, options.status, {
         runtimeHost: handle.runtimeHost,
       });
@@ -217,6 +243,12 @@ export class ExecutionRegistry {
       this.untrackHandle(handle);
     } else {
       this.notifyWaiters(handle.executionId);
+    }
+
+    if (options.status === STREAM_STATUS.READY && shouldUpdateStatus) {
+      this.streamStatus.set(handle.childStreamId, options.status, {
+        runtimeHost: handle.runtimeHost,
+      });
     }
   }
 
