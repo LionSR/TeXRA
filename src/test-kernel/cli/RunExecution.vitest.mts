@@ -60,8 +60,7 @@ describe('executeCliRequest', () => {
   });
 
   it('marks headless never runs as approval-unavailable for agent execution', async () => {
-    const { executeCliRequest } =
-      await import('@cli/commands/_helpers/runExecution');
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = {
       config: {},
       executionId: 'exec-1',
@@ -78,8 +77,7 @@ describe('executeCliRequest', () => {
   });
 
   it('marks headless ask runs as approval-unavailable for agent execution', async () => {
-    const { executeCliRequest } =
-      await import('@cli/commands/_helpers/runExecution');
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = {
       config: {},
       executionId: 'exec-1',
@@ -96,8 +94,7 @@ describe('executeCliRequest', () => {
   });
 
   it('keeps yolo runs approval-available for agent execution', async () => {
-    const { executeCliRequest } =
-      await import('@cli/commands/_helpers/runExecution');
+    const { executeCliRequest } = await import('@cli/runtime/runExecution');
     const request = {
       config: {},
       executionId: 'exec-1',
