@@ -8,7 +8,7 @@
  */
 import * as vscode from 'vscode';
 
-import { getRunStorageService } from '@agent/runtime/RunStorageService';
+import { getProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { toErrorMessage } from '@common/errors';
 import { bus, INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import type {
@@ -112,7 +112,7 @@ async function handleRequestEnsureProgressView(
   // fallback notification was provided, show a toast as a last resort.
   // This preserves the original two-check semantics that relied on await.
   const fb = payload.fallbackNotification;
-  if (fb && !getRunStorageService().isViewVisible()) {
+  if (fb && !getProgressViewBridge().isViewVisible()) {
     const selection = await vscode.window.showInformationMessage(
       `TeXRA Agent Started: "${fb.agentName}" is processing ${fb.inputName} with ${fb.modelName} ${fb.outputInfo}. View in ProgressBoard for progress.`,
       {

@@ -18,7 +18,6 @@ vi.mock('@utils/files', async () => {
 });
 
 vi.mock('@agent/storage/ExecutionKVStore', () => ({
-  EXECUTIONS_DIR: 'executions',
   getExecutionStore: vi.fn(() => ({ clear: mocks.clear })),
 }));
 

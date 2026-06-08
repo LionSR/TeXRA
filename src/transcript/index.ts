@@ -13,6 +13,8 @@ export {
   getDefaultStreamLogStore,
   setDefaultStreamLogStore,
   StreamLogStore,
+  STREAM_LOGS_DIR,
+  STREAM_LOG_SUMMARIES_DIR,
 } from './StreamLogStore';
 export {
   StreamLog,

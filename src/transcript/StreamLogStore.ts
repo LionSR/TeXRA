@@ -18,8 +18,8 @@ import {
 } from './StreamLog';
 
 const SAVE_DEBOUNCE_MS = 300;
-const STREAM_LOGS_DIR = 'streamLogs';
-const STREAM_LOG_SUMMARIES_DIR = 'streamLogSummaries';
+export const STREAM_LOGS_DIR = 'streamLogs';
+export const STREAM_LOG_SUMMARIES_DIR = 'streamLogSummaries';
 const STREAM_LOG_LOAD_CONCURRENCY = 8;
 const LOG_TAG = 'StreamLogStore';
 
