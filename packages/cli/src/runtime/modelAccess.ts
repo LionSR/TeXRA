@@ -67,12 +67,12 @@ export interface CliModelListOptions {
 
 export interface CliNoAvailableModelsRecoveryOptions {
   readonly includedModeAction?: string;
+  readonly loginAction?: string;
   readonly personalModeAction?: string;
 }
 
-export interface CliNoRunnableModelsMessageOptions extends CliNoAvailableModelsRecoveryOptions {
-  readonly loginAction?: string;
-}
+export type CliNoRunnableModelsMessageOptions =
+  CliNoAvailableModelsRecoveryOptions;
 
 export type NoRunnableModelAccessReason = CliApiMode | 'includedLoginRequired';
 
@@ -109,9 +109,30 @@ const NO_RUNNABLE_MODEL_ACCESS_COPY = {
   { readonly launchBlock: string; readonly summary: string }
 >;
 
+const DEFAULT_CLI_MODEL_RECOVERY_ACTIONS = {
+  includedModeAction: 'retry with `--api-mode included`',
+  loginAction: 'run `texra login`',
+  personalModeAction: 'retry with `--api-mode personal`',
+} satisfies Required<CliNoAvailableModelsRecoveryOptions>;
+
 function startSentence(text: string): string {
   if (text.length === 0) return text;
   return `${text[0]!.toUpperCase()}${text.slice(1)}`;
+}
+
+function cliModelRecoveryActions(
+  options: CliNoAvailableModelsRecoveryOptions = {},
+): Required<CliNoAvailableModelsRecoveryOptions> {
+  return {
+    includedModeAction:
+      options.includedModeAction ??
+      DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.includedModeAction,
+    loginAction:
+      options.loginAction ?? DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.loginAction,
+    personalModeAction:
+      options.personalModeAction ??
+      DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.personalModeAction,
+  };
 }
 
 function isCliModelOptionBasicallyAvailable(model: ModelOptionData): boolean {
@@ -176,14 +197,11 @@ function formatCliNoRunnableModelsRecovery(
   reason: NoRunnableModelAccessReason,
   options: CliNoRunnableModelsMessageOptions = {},
 ): string {
-  const includedModeAction =
-    options.includedModeAction ?? 'retry with `--api-mode included`';
-  const loginAction = options.loginAction ?? 'Run `texra login`';
-  const personalModeAction =
-    options.personalModeAction ?? 'retry with `--api-mode personal`';
+  const { includedModeAction, loginAction, personalModeAction } =
+    cliModelRecoveryActions(options);
 
   if (reason === 'includedLoginRequired') {
-    return `${loginAction} or ${personalModeAction}.`;
+    return `${startSentence(loginAction)} or ${personalModeAction}.`;
   }
   if (reason === 'included') {
     return `${startSentence(personalModeAction)} or try again later.`;
@@ -265,18 +283,16 @@ export function formatCliNoAvailableModelsRecovery(
   apiMode?: CliApiMode,
   options: CliNoAvailableModelsRecoveryOptions = {},
 ): string {
-  const includedModeAction =
-    options.includedModeAction ?? 'retry with `--api-mode included`';
-  const personalModeAction =
-    options.personalModeAction ?? 'retry with `--api-mode personal`';
+  const { includedModeAction, loginAction, personalModeAction } =
+    cliModelRecoveryActions(options);
 
   if (apiMode === 'personal') {
-    return `Configure a provider API key for personal mode, or ${includedModeAction} and run \`texra login\` for included relay access.`;
+    return `Configure a provider API key for personal mode, or ${includedModeAction} and ${loginAction} for included relay access.`;
   }
   if (apiMode === 'included') {
-    return `Run \`texra login\` for included relay access, or ${personalModeAction} after configuring a provider API key.`;
+    return `${startSentence(loginAction)} for included relay access, or ${personalModeAction} after configuring a provider API key.`;
   }
-  return `Run \`texra login\` for included relay access, ${includedModeAction}, or configure a provider API key.`;
+  return `${startSentence(loginAction)} for included relay access, ${includedModeAction}, or configure a provider API key.`;
 }
 
 function toCliModelAccess(
