@@ -10,8 +10,8 @@
  *
  * TIER-BASED ACCESS (cumulative):
  * - Ultra tier: Access to ALL models via relay (full access)
- * - Max tier: Mid-tier models ($1-3/M) + all free tier models
- * - free tier: Budget models only (under $1/M input)
+ * - Max tier: Free-tier models plus any future Max-only additions
+ * - free tier: Included non-premium models (up to $3/M input)
  */
 
 import { EventEmitter } from 'events';
