@@ -1,3 +1,5 @@
+import { clamp } from '@utils/core';
+
 import {
   isEscapeInput,
   isUnhandledControlInput,
@@ -15,7 +17,7 @@ export interface TextInputChunkEdit extends TextEdit {
 }
 
 export function clampCursor(cursor: number, length: number): number {
-  return Math.max(0, Math.min(cursor, length));
+  return clamp(cursor, 0, length);
 }
 
 /**

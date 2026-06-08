@@ -1,3 +1,5 @@
+import { clamp } from '@utils/core';
+
 export interface TranscriptScrollWindow {
   readonly lineCount: number;
   readonly viewRows: number;
@@ -19,7 +21,7 @@ function clampTranscriptScrollOffset(
   offset: number,
   window: TranscriptScrollWindow,
 ): number {
-  return Math.max(0, Math.min(maxTranscriptScrollOffset(window), offset));
+  return clamp(offset, 0, maxTranscriptScrollOffset(window));
 }
 
 export function initialTranscriptScrollState(
