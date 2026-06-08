@@ -792,6 +792,10 @@ describe('CLI model access resolution', () => {
 
   it('marks only included-access models runnable in included relay mode', async () => {
     computeModelOptionsDataMock.mockResolvedValueOnce([
+      modelOption('gemini35f', {
+        availability: 'included-access',
+        availabilityLabel: 'Included access',
+      }),
       modelOption('sonnet46T', {
         availability: 'included-access',
         availabilityLabel: 'Included access',
@@ -809,6 +813,7 @@ describe('CLI model access resolution', () => {
     await expect(
       getCliModelAccessList({ apiMode: 'included' }),
     ).resolves.toMatchObject([
+      { model: { value: 'gemini35f' }, available: true },
       { model: { value: 'sonnet46T' }, available: true },
       { model: { value: 'deepseekT' }, available: false },
       { model: { value: 'openrouterOnlyT' }, available: false },

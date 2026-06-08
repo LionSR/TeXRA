@@ -8,9 +8,9 @@
  * All server-side API key access is provided as a convenience for researchers.
  *
  * TIER HIERARCHY (cumulative access):
- * - free: Budget models only (under $1/M input)
- * - Max: Mid-tier models ($1-3/M) + all free tier models
- * - Ultra: All models including premium ($3+/M input)
+ * - free: Included non-premium models (up to $3/M input)
+ * - Max: Free-tier models plus any future Max-only additions
+ * - Ultra: All models above $3/M input
  */
 
 import { toErrorMessage } from '@common/errors/errorMessage';

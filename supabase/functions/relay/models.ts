@@ -3,9 +3,9 @@
  *
  * SINGLE SOURCE OF TRUTH: llm-zoo npm package
  * Tier assignments are derived from model pricing:
- * - free: Budget models (under $1/M input)
- * - Max: Mid-tier models ($1-3/M input) + free tier
- * - Ultra: All models including premium ($3+/M input)
+ * - free: Included non-premium models (up to $3/M input)
+ * - Max: Free-tier models plus any future Max-only additions
+ * - Ultra: All models above $3/M input
  */
 
 import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.6.1';
@@ -53,7 +53,7 @@ interface RelayModel {
 // Tier Assignment Logic
 // =============================================================================
 
-/** Derive tier from model pricing */
+/** Derive tier from model pricing. */
 function getTierFromPrice(inputPrice: number): MinTier {
   if (inputPrice <= 3) return 'free';
   return 'Ultra';
