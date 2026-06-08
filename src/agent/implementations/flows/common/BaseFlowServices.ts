@@ -12,6 +12,7 @@ import type {
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
@@ -28,6 +29,7 @@ export interface AgentCore<C = unknown> {
   prompt: AgentPrompt;
   logger: AgentTrace;
   runtimeHost: AgentRuntimeHost;
+  streamStatus: StreamStatusRegistry;
   streamId: StreamTabId;
   executionId: ExecutionId;
   userVarChannels: UserVariableChannels;

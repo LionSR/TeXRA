@@ -25,6 +25,7 @@ import type { ToolUseCycleServices } from '@agent/core/flows/CycleServices';
 // Local imports - agent runtime
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
 import type { ExecResult } from '@agent/types/ResultTypes';
@@ -169,6 +170,7 @@ describe('BashTool', () => {
       userVarChannels: { input: {}, transient: {} },
       logger: createRunTrace('BashToolTest').trace,
       runtimeHost: noopAgentRuntimeHost,
+      streamStatus: new StreamStatusRegistry(),
       client: {} as OpenAI,
       toolRegistry: new MapToolRegistry({ bash: bashTool }),
       checkInterruption: () => false,
