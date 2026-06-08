@@ -12,6 +12,7 @@ import {
 import { ImagePasteQueue } from '../input/imagePasteQueue';
 import { ReverseSearch } from '../input/ReverseSearch';
 import { isCtrlInput } from '../input/inputKeys';
+import { openRegisteredCliSlashForm } from '../commands/slashForms';
 import { SlashPalette } from '../commands/SlashPalette';
 import {
   matchSlashCommands,
@@ -40,14 +41,14 @@ export interface InputBarProps {
 function slashSubmitText(
   current: string,
   commandName: string,
-  fallbackRemainder: string,
+  remainder: string,
   typedName?: string,
 ): string {
   const parsedName = parseSlashInput(current)?.name;
   const nameToReplace =
     typedName && current.startsWith(`/${typedName}`) ? typedName : parsedName;
   if (!nameToReplace) {
-    return `/${commandName}${fallbackRemainder ? ` ${fallbackRemainder.trimStart()}` : ''}`;
+    return `/${commandName}${remainder ? ` ${remainder.trimStart()}` : ''}`;
   }
   const suffix = current.slice(nameToReplace.length + 1);
   const separator = suffix.length > 0 && !/^\s/.test(suffix) ? ' ' : '';
@@ -56,22 +57,22 @@ function slashSubmitText(
 
 export function submitSlashCommandWhenReady({
   commandName,
-  fallbackRemainder,
   handleSubmit,
   imagePasteQueue,
   readDraft,
+  remainder,
   typedName,
 }: {
   readonly commandName: string;
-  readonly fallbackRemainder: string;
   readonly handleSubmit: (value: string) => void;
   readonly imagePasteQueue: ImagePasteQueue;
   readonly readDraft: () => string;
+  readonly remainder: string;
   readonly typedName?: string;
 }): void {
   imagePasteQueue.runWhenIdle(() => {
     handleSubmit(
-      slashSubmitText(readDraft(), commandName, fallbackRemainder, typedName),
+      slashSubmitText(readDraft(), commandName, remainder, typedName),
     );
   });
 }
@@ -184,28 +185,17 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
       if (cmd.formComponent) {
         // Structured forms own the screen — clear the input and let
         // the active-form signal mount the component (see App.tsx).
-        const Form = cmd.formComponent;
         clearDraft();
-        cliState.activeForm.set({
-          commandName: cmd.name,
-          escapeAction: cmd.formEscapeAction,
-          render: (close, availableRows) => (
-            <Form
-              remainder={remainder.trimStart()}
-              availableRows={availableRows}
-              onDone={() => close()}
-            />
-          ),
-        });
+        openRegisteredCliSlashForm(cmd, remainder);
         return;
       }
       if (intent === 'submit') {
         submitSlashCommandWhenReady({
           commandName: cmd.name,
-          fallbackRemainder: remainder,
           handleSubmit,
           imagePasteQueue,
           readDraft: () => draftValueRef.current,
+          remainder,
           typedName,
         });
         return;
