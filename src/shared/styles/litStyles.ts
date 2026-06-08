@@ -59,6 +59,7 @@ export const designTokens: CSSResult = css`
 
     /* Heights */
     --height-control: 24px;
+    --height-control-compact: 22px;
     /* Shared height for the Progress view's pane headers — the conversation
        header and the stream-tabs rail header pin to this so the two panes
        start their content at the same baseline (and match the desktop rail). */
@@ -82,7 +83,9 @@ export const designTokens: CSSResult = css`
 
     /* Opacity levels */
     --opacity-separator: 0.3;
+    --opacity-faint: 0.35;
     --opacity-disabled: 0.5;
+    --opacity-muted: 0.6;
     --opacity-subtle: 0.7;
     --opacity-hover: 0.8;
     --opacity-normal: 0.85;
@@ -92,6 +95,9 @@ export const designTokens: CSSResult = css`
     --transition-fast: 0.15s ease;
     --transition-normal: 0.2s ease;
     --transition-slow: 0.3s ease;
+
+    /* Letter spacing for uppercase labels/badges (em scales with font-size). */
+    --letter-spacing-caps: 0.06em;
   }
 `;
 

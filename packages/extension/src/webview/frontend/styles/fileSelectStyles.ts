@@ -37,7 +37,7 @@ export const fileSelectLayoutStyles = css`
     flex-wrap: nowrap;
     line-height: var(--line-height-normal);
     gap: var(--wa-space-2xs);
-    min-height: 22px;
+    min-height: var(--height-control-compact);
   }
 
   .file-select-header > wa-button {
@@ -62,7 +62,7 @@ export const fileSelectLayoutStyles = css`
     flex-wrap: nowrap;
     flex: 1;
     min-width: 0;
-    min-height: 22px;
+    min-height: var(--height-control-compact);
   }
 
   .file-select-label-group wa-button {
