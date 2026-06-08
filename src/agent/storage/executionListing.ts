@@ -24,10 +24,7 @@ import { StorageFS, WorkspaceFS, TASK_RUNS_DIR } from '@utils/files';
 import { filterNotNull } from '@utils/core';
 import { isDirectory } from '@utils/files/fsEntryType';
 
-import {
-  type ExecutionMeta,
-  getExecutionStore,
-} from './ExecutionKVStore';
+import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
 
 const CHANNEL = 'ExecutionListing';
 const INDEX_PATH = 'executions/index.json';
