@@ -64,14 +64,12 @@ import {
   createCliRunResult,
   terminalStatusExitCode,
   toolUseResultText,
-  type CliRunResult,
+  type CliToolUseRunResult,
 } from '../runtime/terminalStatus';
 import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
 } from '../runtime/workflowInputs';
-
-type CliToolUseRunResult = Extract<CliRunResult, { category: 'toolUse' }>;
 
 interface MultiAgentRunInit {
   readonly preset: string;

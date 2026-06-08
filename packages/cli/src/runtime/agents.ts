@@ -87,18 +87,14 @@ export function formatCliAgentDetails(entry: AgentEntry): string {
     lines.push('');
     lines.push(entry.description);
   }
-  const metadataLines: string[] = [];
-  if (entry.tools && entry.tools.length > 0) {
-    metadataLines.push(`tools: ${entry.tools.join(', ')}`);
-  }
-  if (entry.defaultOutputFiles && entry.defaultOutputFiles.length > 0) {
-    metadataLines.push(
-      `defaultOutputFiles: ${entry.defaultOutputFiles.join(', ')}`,
-    );
-  }
-  if (entry.visibility && entry.visibility.length > 0) {
-    metadataLines.push(`visibility: ${entry.visibility.join(', ')}`);
-  }
+  const metadataFields: readonly [string, readonly string[] | undefined][] = [
+    ['tools', entry.tools],
+    ['defaultOutputFiles', entry.defaultOutputFiles],
+    ['visibility', entry.visibility],
+  ];
+  const metadataLines = metadataFields
+    .filter(([, values]) => values && values.length > 0)
+    .map(([label, values]) => `${label}: ${values!.join(', ')}`);
   if (metadataLines.length > 0) {
     lines.push('');
     lines.push(...metadataLines);

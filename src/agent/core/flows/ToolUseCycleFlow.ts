@@ -203,6 +203,14 @@ export interface ToolUseCycleShared extends ToolUseCycleFields {
   cycleNormalizedUsage?: NormalizedUsage;
 }
 
+/** Prep result for ToolUsePrepNode - drained queued follow-up plus interrupt flag. */
+interface ToolUsePrepResult {
+  interrupted: boolean;
+  queuedFollowUp: string | null;
+  queuedFollowUpDisplay: string | null;
+  synthetic: boolean;
+}
+
 /**
  * Prepares a tool-use cycle by checking interruptions and injecting queued follow-ups.
  *
@@ -215,12 +223,7 @@ class ToolUsePrepNode<C> extends BaseNode<
   CycleParams,
   ToolUseCycleServices<C>
 > {
-  async prep(_shared: ToolUseCycleShared): Promise<{
-    interrupted: boolean;
-    queuedFollowUp: string | null;
-    queuedFollowUpDisplay: string | null;
-    synthetic: boolean;
-  }> {
+  async prep(_shared: ToolUseCycleShared): Promise<ToolUsePrepResult> {
     const interrupted = this.services.checkInterruption();
 
     if (!this.services.session?.hasQueuedFollowUp()) {
@@ -244,12 +247,7 @@ class ToolUsePrepNode<C> extends BaseNode<
 
   async post(
     shared: ToolUseCycleShared,
-    prepRes: {
-      interrupted: boolean;
-      queuedFollowUp: string | null;
-      queuedFollowUpDisplay: string | null;
-      synthetic: boolean;
-    },
+    prepRes: ToolUsePrepResult,
   ): Promise<string | undefined> {
     if (prepRes.interrupted) {
       shared.shouldStop = true;

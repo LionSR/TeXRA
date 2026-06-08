@@ -51,6 +51,7 @@ import {
   formatCliNoAvailableModelsRecovery,
   resolveCliRunnableModel,
   type CliNoAvailableModelsRecoveryOptions,
+  type CliRunnableModelResolution,
 } from '@cli/runtime/modelAccess';
 import {
   githubSelectAccountWarning,
@@ -992,7 +993,7 @@ export async function runChat(
   // wins, otherwise the persisted account default. Model resolution, the
   // no-models hints, and the header/status all read this same value so they can
   // never disagree.
-  let modelSelection: Awaited<ReturnType<typeof resolveCliRunnableModel>>;
+  let modelSelection: CliRunnableModelResolution;
   try {
     modelSelection = await resolveCliRunnableModel(
       defaults.model,
@@ -1128,10 +1129,9 @@ export async function runChat(
       : undefined;
     return activeFlow?.modelSwitchDisabledReason(candidateModel);
   };
-  const activateSkillForNextMessage = (selection: {
-    readonly name: string;
-    readonly activationPrompt: string;
-  }): void => {
+  const activateSkillForNextMessage = (
+    selection: ReservedSkillActivation,
+  ): void => {
     const wasPending = pendingSkillActivations.has(selection.name);
     pendingSkillActivations.set(selection.name, selection.activationPrompt);
     appendLocalAssistantTranscript(

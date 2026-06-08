@@ -157,12 +157,6 @@ export function noRunnableModelAccessReason(
   return apiMode;
 }
 
-function formatCliNoRunnableModelsSummary(
-  reason: NoRunnableModelAccessReason,
-): string {
-  return NO_RUNNABLE_MODEL_ACCESS_SUMMARIES[reason];
-}
-
 export function formatCliNoRunnableModelsLaunchBlock(
   reason: NoRunnableModelAccessReason,
 ): string {
@@ -192,7 +186,7 @@ export function formatCliNoRunnableModelsMessage(
   reason: NoRunnableModelAccessReason,
   options: CliNoRunnableModelsMessageOptions = {},
 ): string {
-  return `${formatCliNoRunnableModelsSummary(reason)} ${formatCliNoRunnableModelsRecovery(reason, options)}`;
+  return `${NO_RUNNABLE_MODEL_ACCESS_SUMMARIES[reason]} ${formatCliNoRunnableModelsRecovery(reason, options)}`;
 }
 
 function formatModelAccessStatus(model: ModelOptionData): string {
@@ -216,10 +210,15 @@ export function formatModelStatusForCliMode(
   return RELAY_STATUS_BY_AVAILABILITY[availability];
 }
 
+// Reason a given model id cannot be switched to right now, or undefined if it can.
+export type GetModelSwitchDisabledReason = (
+  model: string,
+) => string | undefined;
+
 export function modelSelectItemsForCliMode(
   models: readonly CliModelAccess[],
   apiMode: CliApiMode,
-  getModelSwitchDisabledReason?: (model: string) => string | undefined,
+  getModelSwitchDisabledReason?: GetModelSwitchDisabledReason,
 ): readonly CliModelPickerItem[] {
   return runnableCliModelAccessEntries(models, apiMode).map((model) => {
     const disabledReason = getModelSwitchDisabledReason?.(model.model.value);

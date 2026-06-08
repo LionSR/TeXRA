@@ -12,15 +12,15 @@ import { createProgressViewCommandHandlers } from '@controllers/progressView/Pro
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { platform, tryPlatform } from '@platform/platform';
-import {
-  StreamSnapshotStore,
-  type StreamSnapshotStore as SnapshotStore,
-} from '@transcript';
+import { StreamSnapshotStore } from '@transcript';
 import { streamDataDir } from '@transcript/streamDataPaths';
 import { readMeta } from '@transcript/streamSnapshotRead';
 import type { AgentTrace } from '@agent/trace';
 import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
-import { TaskStateSchema } from '@agent/core/execution/TaskState';
+import {
+  TaskStateSchema,
+  type TaskState,
+} from '@agent/core/execution/TaskState';
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -48,8 +48,8 @@ import { createChannelTrace } from '@logger';
 import {
   STREAM_STATUS,
   type AgentProposalPermission,
-  type AgentCategory,
   type AgentCategoryFilter,
+  type MainViewPersistedState,
   type ProgressViewOutboundMessage,
   type ExecutionId,
   type RestoredStreamSnapshot,
@@ -102,7 +102,7 @@ export interface DesktopAgentExecutionOptions {
    * previously-persisted "ghost" streams in the rail at launch.
    */
   streamSnapshotStore?: DesktopStreamSnapshotStore;
-  progressSnapshotStore?: SnapshotStore;
+  progressSnapshotStore?: StreamSnapshotStore;
 }
 
 export interface DesktopAgentExecution {
@@ -110,8 +110,6 @@ export interface DesktopAgentExecution {
   progress: DesktopProgressBridge;
   dispose(): void;
 }
-
-type TaskState = ProgressEventPayloads['setTaskState']['taskState'];
 
 type ResumeState = {
   taskState: TaskState;
@@ -134,7 +132,7 @@ export interface DesktopProgressBridgeOptions {
   showInfoMessage?: (message: string) => Promise<void> | void;
   showErrorMessage?: (message: string) => Promise<void> | void;
   streamSnapshotStore?: DesktopStreamSnapshotStore;
-  progressSnapshotStore?: SnapshotStore;
+  progressSnapshotStore?: StreamSnapshotStore;
 }
 
 function toFileLocation(filePath: string): FileLocation {
@@ -347,7 +345,7 @@ export class DesktopProgressBridge {
     this.agentProposalController = new ProgressAgentProposalController({
       getPendingProposal: (proposalId) => this.agentProposals.get(proposalId),
       restoreTaskState: async (taskState) => {
-        let state: ReturnType<typeof buildMainViewState>;
+        let state: MainViewPersistedState;
         try {
           state = buildMainViewState(taskState);
         } catch {

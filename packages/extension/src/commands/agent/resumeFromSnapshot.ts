@@ -55,7 +55,7 @@ export async function tryResumeFromSnapshot(
     );
   } catch (error) {
     // Retrieval failed unexpectedly (distinct from "no resumable session").
-    // Auto-resume is best-effort here, so degrade — but log the real failure
+    // Auto-resume is best-effort here, so degrade, but log the real failure
     // rather than letting it masquerade as "nothing to resume".
     logger.error(`Failed to retrieve resume data for stream: ${streamId}`, {
       data: error,

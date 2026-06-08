@@ -9,6 +9,12 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import type { RunCoordinators } from './RunContext';
 
+/** Round counters tracked per execution (both absent until the first update). */
+export interface ExecutionProgress {
+  currentRound?: number;
+  totalRounds?: number;
+}
+
 export interface ExecutionStatusInfo {
   status: string;
   elapsed: string | null;
@@ -30,9 +36,9 @@ export interface ExecutionHandle {
   readonly startedAt: number;
   readonly runtimeHost: AgentRuntimeHost;
 
-  getProgress(): { currentRound?: number; totalRounds?: number };
+  getProgress(): ExecutionProgress;
 
-  updateProgress(update: { currentRound?: number; totalRounds?: number }): void;
+  updateProgress(update: ExecutionProgress): void;
 }
 
 export interface LiveToolUseFlowContext {
@@ -60,7 +66,7 @@ export interface LiveToolUseFlowContext {
  */
 export class AgentExecutionHandle implements ExecutionHandle {
   readonly startedAt = Date.now();
-  private progress: { currentRound?: number; totalRounds?: number } = {};
+  private progress: ExecutionProgress = {};
   private _parentStreamId: StreamTabId;
   private toolUseFlowContext?: LiveToolUseFlowContext;
 
@@ -88,14 +94,11 @@ export class AgentExecutionHandle implements ExecutionHandle {
     this._parentStreamId = this.childStreamId;
   }
 
-  getProgress(): { currentRound?: number; totalRounds?: number } {
+  getProgress(): ExecutionProgress {
     return { ...this.progress };
   }
 
-  updateProgress(update: {
-    currentRound?: number;
-    totalRounds?: number;
-  }): void {
+  updateProgress(update: ExecutionProgress): void {
     Object.assign(this.progress, update);
   }
 
@@ -142,7 +145,7 @@ export class ProcessExecutionHandle implements ExecutionHandle {
     return this.killFn();
   }
 
-  getProgress(): { currentRound?: number; totalRounds?: number } {
+  getProgress(): ExecutionProgress {
     return {};
   }
 

@@ -62,8 +62,11 @@ export const AgentFlowResultSchema = z.discriminatedUnion('category', [
 
 export type AgentFlowResult = z.infer<typeof AgentFlowResultSchema>;
 
+/** The discriminant of {@link AgentFlowResult}: which flow produced the result. */
+export type AgentFlowCategory = AgentFlowResult['category'];
+
 export function buildTerminalFlowResult(
-  category: 'workflow' | 'toolUse',
+  category: AgentFlowCategory,
   status: EndGroupStatus,
   executionId: ExecutionId,
   streamId: StreamTabId,

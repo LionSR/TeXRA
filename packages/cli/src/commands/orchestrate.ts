@@ -25,7 +25,7 @@ import {
   runnableCliModelAccessEntries,
   type CliModelAccess,
 } from '../runtime/modelAccess';
-import { effectiveCliApiMode } from '../runtime/apiAccessMode';
+import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
 import { loadCliApiStatusLines } from '../runtime/apiStatus';
 import { notifyCliUpdate } from '../runtime/updateChecker';
 import { resolveChatDefaults } from '../runtime/chatDefaults';
@@ -48,7 +48,7 @@ import type { CliContext } from '../runtime/cliContext';
 async function canLaunchWithDefaultModel(
   context: CliContext,
   models: readonly CliModelAccess[],
-  apiMode: ReturnType<typeof effectiveCliApiMode>,
+  apiMode: CliApiMode,
 ): Promise<boolean> {
   if (
     models.length === 0 ||

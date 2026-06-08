@@ -28,10 +28,7 @@ import {
 } from '@cli/runtime/approvalEvents';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
-import type {
-  ProgressEvent,
-  ProgressEventPayloads,
-} from '@eventBus/ProgressEventBus';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import {
   handleProgressViewBashApprovalAction,
   setBashApprovalSessionBypass,
@@ -50,11 +47,6 @@ import {
   type ApprovalDecision,
   type ApprovalPayload,
 } from './approvalQueue';
-
-type Emit = <K extends ProgressEvent>(
-  event: K,
-  payload: ProgressEventPayloads[K],
-) => void;
 
 /**
  * Install the typed approval pipeline. Returns an `unbind` callback that
@@ -82,7 +74,7 @@ export function installTuiApprovals(
       return;
     }
     originalEmit(event, payload);
-  }) as Emit;
+  }) as CliRuntimeHost['emit'];
 
   setToolEditApprovalHandler(async (request) => {
     let decision: ApprovalDecision | undefined = immediateDecision(context);
@@ -204,7 +196,7 @@ function routeWithPolicy<K extends 'bash' | 'plan' | 'proposal' | 'retry', P>(
   // The Extract<...> cast narrows the queue payload to the kind we picked;
   // each dispatcher already trusts its payload shape via its own signature.
   const queuePayload = { kind, payload } as Extract<
-    Parameters<typeof enqueueApproval>[0],
+    ApprovalPayload,
     { kind: K }
   >;
   void enqueueTuiApproval(queuePayload, host).then((decision) => {

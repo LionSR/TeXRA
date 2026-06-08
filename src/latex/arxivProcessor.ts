@@ -66,6 +66,23 @@ export class ArxivSourceProcessor {
     logger.initialize(this.channel);
   }
 
+  /** Best-effort delete that logs failures at debug level instead of throwing. */
+  private async cleanUpBestEffort(
+    target: string,
+    description: string,
+    options?: { recursive?: boolean },
+  ): Promise<void> {
+    await AbsoluteFS.delete(target, options).catch((error: unknown) => {
+      logger.debug(
+        this.channel,
+        `Failed to clean up ${description} ${target}`,
+        {
+          data: error,
+        },
+      );
+    });
+  }
+
   /**
    * Determine file extension from content-type header.
    * Handles tar, gzip, and tex content types.
@@ -169,14 +186,7 @@ export class ArxivSourceProcessor {
       return destPath;
     } finally {
       if (shouldCleanup) {
-        void AbsoluteFS.delete(destPath).catch((error: unknown) => {
-          logger.debug(
-            this.channel,
-            `Failed to clean up partial download ${destPath}`,
-            { data: error },
-          );
-          return undefined;
-        });
+        void this.cleanUpBestEffort(destPath, 'partial download');
       }
     }
   }
@@ -281,28 +291,14 @@ export class ArxivSourceProcessor {
       // Detect PDF-only submissions (no LaTeX source available)
       if (downloadedPath.endsWith('.pdf')) {
         await AbsoluteFS.delete(downloadedPath);
-        await AbsoluteFS.delete(downloadDirFull, { recursive: true }).catch(
-          (error: unknown) => {
-            logger.debug(
-              this.channel,
-              `Failed to clean up download dir ${downloadDirFull}`,
-              { data: error },
-            );
-            return undefined;
-          },
-        );
+        await this.cleanUpBestEffort(downloadDirFull, 'download dir', {
+          recursive: true,
+        });
         // Only clean up the paper directory when it was created for this download
         if (!isRoot) {
-          await AbsoluteFS.delete(paperDirFull, { recursive: true }).catch(
-            (error: unknown) => {
-              logger.debug(
-                this.channel,
-                `Failed to clean up paper dir ${paperDirFull}`,
-                { data: error },
-              );
-              return undefined;
-            },
-          );
+          await this.cleanUpBestEffort(paperDirFull, 'paper dir', {
+            recursive: true,
+          });
         }
         throw new Error(PDF_ONLY_SUBMISSION_ERROR);
       }
@@ -357,16 +353,9 @@ export class ArxivSourceProcessor {
       }
 
       // Remove the temporary download directory (files are now in paper root)
-      await AbsoluteFS.delete(downloadDirFull, { recursive: true }).catch(
-        (error: unknown) => {
-          logger.debug(
-            this.channel,
-            `Failed to clean up temporary download dir ${downloadDirFull}`,
-            { data: error },
-          );
-          return undefined;
-        },
-      );
+      await this.cleanUpBestEffort(downloadDirFull, 'temporary download dir', {
+        recursive: true,
+      });
     }
 
     // Skip auto-indent for root destination to avoid reformatting existing workspace files

@@ -7,7 +7,7 @@
 
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
-import { FollowUpQueue } from './FollowUpQueue';
+import { FollowUpQueue, type DrainedFollowUpItem } from './FollowUpQueue';
 
 const logger = createChannelTrace('ToolUseFollowUpQueue');
 
@@ -105,11 +105,7 @@ export class ToolUseFollowUpQueue {
   }
 
   /** Drain queued follow-ups with their media file paths (resume replay). */
-  static drainItems(streamId: StreamTabId): Array<{
-    text: string;
-    displayText?: string;
-    mediaFiles?: readonly string[];
-  }> {
+  static drainItems(streamId: StreamTabId): DrainedFollowUpItem[] {
     return this.queues.get(streamId)?.drainItems() ?? [];
   }
 

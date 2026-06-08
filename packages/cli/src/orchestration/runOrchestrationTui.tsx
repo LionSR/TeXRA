@@ -10,6 +10,7 @@ import {
   modelAccessLaunchBlockDescriptionForCliMode,
   modelSelectItemsForCliMode,
   type CliModelAccess,
+  type CliModelPickerItem,
 } from '../runtime/modelAccess';
 import type {
   CliOrchestrationAction,
@@ -37,7 +38,7 @@ export function orchestrationModelAccessView(
   } = {},
 ): {
   readonly items: readonly CliOrchestrationItem[];
-  readonly modelItems: ReturnType<typeof modelSelectItemsForCliMode>;
+  readonly modelItems: readonly CliModelPickerItem[];
 } {
   const modelItems = modelSelectItemsForCliMode(models, apiMode);
   if (
@@ -54,13 +55,10 @@ export function orchestrationModelAccessView(
   );
   return {
     modelItems,
-    items: items.map((item) =>
-      isModelPickAction(item.value)
-        ? item.disabled
-          ? item
-          : { ...item, description, disabled: true }
-        : item,
-    ),
+    items: items.map((item) => {
+      if (!isModelPickAction(item.value) || item.disabled) return item;
+      return { ...item, description, disabled: true };
+    }),
   };
 }
 
@@ -99,12 +97,9 @@ export function orchestrationFooterHints(
   return hints;
 }
 
-function orchestrationFooterRowCost(footerHints: readonly string[]): number {
-  return footerHints.length === 0 ? 0 : footerHints.length + 1;
-}
-
-function orchestrationStatusRowCost(statusLines: readonly string[]): number {
-  return statusLines.length === 0 ? 0 : statusLines.length + 1;
+/** Rows a marginTop=1 block of lines occupies (the lines plus the margin). */
+function blockRowCost(lines: readonly string[]): number {
+  return lines.length === 0 ? 0 : lines.length + 1;
 }
 
 function modelPickKeyHints(): readonly KeyHint[] {
@@ -138,8 +133,8 @@ export function OrchestrationApp(
     4,
     rows -
       8 -
-      orchestrationStatusRowCost(pending ? [] : statusLines) -
-      orchestrationFooterRowCost(footerHints),
+      blockRowCost(pending ? [] : statusLines) -
+      blockRowCost(footerHints),
   );
 
   const finish = (action: CliOrchestrationAction): void => {

@@ -549,12 +549,14 @@ function statusBarCanStopStatus(status: string | undefined): boolean {
   );
 }
 
-function rootActiveSegment(input: StatusBarDisplayInput) {
+function rootActiveSegment(
+  input: StatusBarDisplayInput,
+): StatusBarSegment | undefined {
   return input.ctrlCAction === 'stop root' &&
     !statusBarCanStopStatus(input.status)
     ? {
         text: 'root active',
-        color: 'yellow' as const,
+        color: 'yellow',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.rootActive,
       }
     : undefined;
