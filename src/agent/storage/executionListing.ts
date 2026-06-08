@@ -27,7 +27,7 @@ import { isDirectory } from '@utils/files/fsEntryType';
 import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
 
 const CHANNEL = 'ExecutionListing';
-const INDEX_PATH = 'executions/index.json';
+const INDEX_PATH = `${TASK_RUNS_DIR}/index.json`;
 const LEGACY_HISTORY_KEY = 'texra.agentHistory';
 const EXECUTION_ID_PATTERN = /^[0-9a-f][-0-9a-f]*$/i;
 const EXECUTION_STORAGE_CONCURRENCY = 32;
