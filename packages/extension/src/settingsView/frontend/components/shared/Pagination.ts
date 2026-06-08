@@ -12,6 +12,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa';
 import { createEvent } from '@shared/utils/events';
+import { clamp } from '@utils/core';
 
 /** Detail payload for the `page-change` custom event. */
 export interface PageChangeDetail {
@@ -31,7 +32,7 @@ export function paginate<T>(
   pageSize: number,
 ): { paged: T[]; totalPages: number } {
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
-  const safePage = Math.max(0, Math.min(page, totalPages - 1));
+  const safePage = clamp(page, 0, totalPages - 1);
   const start = safePage * pageSize;
   return {
     paged: items.slice(start, start + pageSize) as T[],

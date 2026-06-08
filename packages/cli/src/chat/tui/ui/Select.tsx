@@ -11,6 +11,8 @@
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useState } from 'react';
 
+import { clamp } from '@utils/core';
+
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 
 export const SELECT_LABEL_MAX_COLS = 24;
@@ -36,7 +38,7 @@ export interface SelectProps<T> {
 
 function clampIndex(index: number, length: number): number {
   if (length <= 0) return 0;
-  return Math.min(Math.max(index, 0), length - 1);
+  return clamp(index, 0, length - 1);
 }
 
 function firstEnabledSelectIndex<T>(

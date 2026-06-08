@@ -5,6 +5,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 import { designTokens } from '@shared/styles';
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
+import { clamp } from '@utils/core';
 
 import { profileViewStyles } from './styles';
 
@@ -119,7 +120,7 @@ export class RelayQuotaMeter extends LitElement {
     const s = this.status;
     if (!s) return nothing;
 
-    const percent = Math.min(100, Math.max(0, s.percentUsed));
+    const percent = clamp(s.percentUsed, 0, 100);
     const remainingPercent = Math.max(0, Math.round(100 - percent));
     const state = quotaState(s);
     const note = quotaNote(state, this.autoSwitched, remainingPercent);

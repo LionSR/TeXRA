@@ -9,6 +9,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 // Local imports - shared styles and icons
 import { designTokens, commonViewStyles } from '@shared/styles';
 import { TEXRA_ICON_LIBRARY } from '@shared/wa/webAwesomeIcons';
+import { clamp } from '@utils/core';
 
 /**
  * Visual-only mock of a context window utilization chip. Shows the
@@ -87,7 +88,7 @@ export class ContextUtilizationMock extends LitElement {
   @property({ type: String }) tokens = '24k / 200k';
 
   override render(): TemplateResult {
-    const clamped = Math.max(0, Math.min(100, this.percent));
+    const clamped = clamp(this.percent, 0, 100);
     const scale = (clamped / 100).toFixed(3);
     const title = `Context ${clamped}% used — ${this.tokens}`;
     return html`
