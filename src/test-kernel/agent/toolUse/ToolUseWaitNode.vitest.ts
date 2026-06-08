@@ -7,6 +7,11 @@ import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/Tool
 import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import { IdleContinuationRegistry } from '@agent/runtime/idleContinuation';
+import {
+  StreamStatusRegistry,
+  StreamStatusService,
+} from '@agent/runtime/StreamStatusService';
+import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 describe('ToolUseWaitNode', () => {
   it('marks a delivered subagent cycle before stopping on interruption', async () => {
@@ -33,6 +38,7 @@ describe('ToolUseWaitNode', () => {
           return null;
         },
       },
+      streamStatus: new StreamStatusRegistry(),
       streamId: 'test-stream',
     } as unknown as ToolUseServices;
 
@@ -87,6 +93,7 @@ describe('ToolUseWaitNode', () => {
           return null;
         },
       },
+      streamStatus: new StreamStatusRegistry(),
       streamId: 'test-stream',
     } as unknown as ToolUseServices;
 
@@ -127,6 +134,7 @@ describe('ToolUseWaitNode', () => {
         hasQueuedFollowUp: () => false,
         waitForFollowUp: vi.fn(),
       },
+      streamStatus: new StreamStatusRegistry(),
       streamId: 'test-stream',
     } as unknown as ToolUseServices;
 
@@ -165,6 +173,7 @@ describe('ToolUseWaitNode', () => {
         createUserFollowUpMessages: vi.fn(async () => []),
       },
       runtimeHost: { emit: vi.fn() },
+      streamStatus: new StreamStatusRegistry(),
       streamId: 'test-stream',
     } as unknown as ToolUseServices;
 
@@ -189,5 +198,58 @@ describe('ToolUseWaitNode', () => {
       expect.stringContaining('Model has no vision support'),
     );
     expect(addMediaToUserMessage).toHaveBeenCalledOnce();
+  });
+
+  it('updates the injected stream status owner while waiting and resuming', async () => {
+    const streamId = 'wait-node-owner' as StreamTabId;
+    const streamStatus = new StreamStatusRegistry();
+    const shared: ToolUseRunShared = {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    };
+    const createUserFollowUpMessages = vi.fn(async () => []);
+    const services = {
+      checkInterruption: () => false,
+      idleContinuations: new IdleContinuationRegistry(),
+      logger: { error: vi.fn() },
+      modelHandler: {
+        createUserFollowUpMessages,
+        extractAssistantText: () => undefined,
+      },
+      runtimeHost: { emit: vi.fn() },
+      session: {
+        hasQueuedFollowUp: () => false,
+        waitForFollowUp: async () => ({
+          displayItems: ['continue'],
+          items: ['continue'],
+          mediaFiles: [],
+          synthetic: true,
+        }),
+      },
+      streamId,
+      streamStatus,
+    } as unknown as ToolUseServices;
+    const node = new ToolUseWaitNode().setServices(services);
+
+    try {
+      streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
+      StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, {
+        emit: false,
+      });
+
+      const prep = await node.prep(shared);
+      const exec = await node.exec(prep);
+      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.WAITING);
+      expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+
+      await node.post(shared, prep, exec);
+      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.RUNNING);
+      expect(StreamStatusService.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(createUserFollowUpMessages).toHaveBeenCalledOnce();
+    } finally {
+      streamStatus.clear(streamId, { emit: false });
+      StreamStatusService.clear(streamId, { emit: false });
+    }
   });
 });
