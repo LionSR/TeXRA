@@ -103,6 +103,7 @@ import { App } from './App';
 import { assertNever } from './assertNever';
 import { formatApprovalPolicyForCli as formatApprovalPolicy } from './forms/ApprovalPolicyForm';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
+import { openRegisteredCliSlashForm } from './commands/slashForms';
 import {
   listSlashCommands,
   parseSlashInput,
@@ -736,26 +737,6 @@ async function showCliMemoryList(): Promise<void> {
 
 async function showCliMemoryPreview(inputPath: string): Promise<void> {
   appendLocalAssistantTranscript(await formatCliMemoryPreview(inputPath));
-}
-
-export function openRegisteredCliSlashForm(
-  command: SlashCommand,
-  remainder: string,
-): boolean {
-  const Form = command.formComponent;
-  if (!Form) return false;
-  cliState.activeForm.set({
-    commandName: command.name,
-    escapeAction: command.formEscapeAction,
-    render: (close, availableRows) => (
-      <Form
-        availableRows={availableRows}
-        remainder={remainder.trimStart()}
-        onDone={() => close()}
-      />
-    ),
-  });
-  return true;
 }
 
 function findRegisteredCliSlashCommand(
