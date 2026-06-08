@@ -8,6 +8,9 @@ import { toErrorMessage } from '@common/errors';
 import { getFileLister } from '@frontend/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
+// Local imports - latex
+import { openFirstLabelMatch } from '@latex/labelSearch';
+
 // Local imports - logging
 import * as logger from '@logger/logUtils';
 
@@ -49,33 +52,37 @@ export async function openLabel(
   label: string,
   options: OpenLabelOptions = {},
 ): Promise<boolean> {
-  const escape = label.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`\\\\label\\{${escape}\\}`, 'm');
   const candidates = new Set([
     ...(await getFileLister().list('input')),
     ...(await getFileLister().list('context')),
   ]);
 
-  for (const file of candidates) {
-    try {
-      const content = await WorkspaceFS.read(file);
-      const match = content.match(pattern);
-      if (match && match.index !== undefined) {
-        const doc = await vscode.workspace.openTextDocument(
-          WorkspaceFS.toAbsolute(file),
+  const opened = await openFirstLabelMatch(
+    label,
+    candidates,
+    async (file) => {
+      try {
+        return await WorkspaceFS.read(file);
+      } catch (error) {
+        logger.debug(
+          CHANNEL,
+          `Could not read file ${file}: ${toErrorMessage(error)}`,
         );
-        const editor = await vscode.window.showTextDocument(doc, {
-          preview: true,
-        });
-        revealPosition(editor, doc.positionAt(match.index));
-        return true;
+        throw error;
       }
-    } catch (error) {
-      logger.debug(
-        CHANNEL,
-        `Could not read file ${file}: ${toErrorMessage(error)}`,
+    },
+    async (file, index) => {
+      const doc = await vscode.workspace.openTextDocument(
+        WorkspaceFS.toAbsolute(file),
       );
-    }
+      const editor = await vscode.window.showTextDocument(doc, {
+        preview: true,
+      });
+      revealPosition(editor, doc.positionAt(index));
+    },
+  );
+  if (opened) {
+    return true;
   }
 
   if (options.notifyNotFound ?? true) {
