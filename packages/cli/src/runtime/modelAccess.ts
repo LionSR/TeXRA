@@ -227,7 +227,7 @@ export function modelSelectItemsForCliMode(
     return {
       value: model.model.value,
       label: model.model.label || model.model.value,
-      description: disabledReason ? `${status}; ${disabledReason}` : status,
+      description: disabledReason ? `${disabledReason}; ${status}` : status,
       disabled: disabledReason != null,
     };
   });
