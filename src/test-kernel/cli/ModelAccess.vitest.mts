@@ -416,7 +416,7 @@ describe('CLI model access resolution', () => {
         value: 'sonnet46T',
         label: 'Sonnet',
         description:
-          'api: api key set; different conversation format; start new chat',
+          'different conversation format; start new chat; api: api key set',
         disabled: true,
       },
       {
