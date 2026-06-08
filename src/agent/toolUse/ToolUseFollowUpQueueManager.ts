@@ -5,9 +5,8 @@
  * follow-ups to active/resuming sessions.
  */
 
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { createChannelTrace } from '@logger';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import { FollowUpQueue } from './FollowUpQueue';
 
 const logger = createChannelTrace('ToolUseFollowUpQueue');
@@ -68,14 +67,6 @@ export class ToolUseFollowUpQueue {
         );
       }
     }
-  }
-
-  /**
-   * Check if a stream is currently resuming.
-   * Uses StreamStatusService as the single source of truth.
-   */
-  static isResuming(streamId: StreamTabId): boolean {
-    return StreamStatusService.get(streamId) === STREAM_STATUS.RESUMING;
   }
 
   /**

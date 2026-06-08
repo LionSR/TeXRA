@@ -14,6 +14,7 @@ import {
   interruptRegistry,
   type InterruptRegistry,
 } from '@agent/runtime/InterruptRegistry';
+import { isInFlightStatus } from '@common/constants/streamStatus';
 import {
   STREAM_STATUS,
   LIVE_ELAPSED_STREAM_STATUSES,
@@ -56,6 +57,25 @@ export interface TrackAgentExecutionOptions {
 export interface FinishAgentExecutionOptions {
   readonly status: StreamStatus;
 }
+
+export type ToolUseFollowUpQueueReason =
+  | 'resuming'
+  | 'waiting'
+  | 'children_running';
+
+export type ToolUseFollowUpTarget =
+  | {
+      readonly kind: 'active';
+      readonly context: LiveToolUseFlowContext;
+    }
+  | {
+      readonly kind: 'queue';
+      readonly reason: ToolUseFollowUpQueueReason;
+    }
+  | {
+      readonly kind: 'no_session';
+      readonly streamStatus: StreamStatus | undefined;
+    };
 
 /**
  * Process-wide owner for active executions and their change listeners.
@@ -297,6 +317,36 @@ export class ExecutionRegistry {
     streamId: StreamTabId,
   ): LiveToolUseFlowContext | undefined {
     return this.getAgentHandleByStream(streamId)?.getToolUseFlow();
+  }
+
+  /**
+   * Decide how a tool-use follow-up should be admitted from one registry-owned
+   * snapshot of stream status, active flow context, and child executions.
+   */
+  getToolUseFollowUpTarget(streamId: StreamTabId): ToolUseFollowUpTarget {
+    const status = this.streamStatus.get(streamId);
+    const hasActiveChildren = this.hasActiveChildren(streamId);
+
+    if (status !== undefined && !isInFlightStatus(status)) {
+      if (hasActiveChildren) {
+        return { kind: 'queue', reason: 'children_running' };
+      }
+      return { kind: 'no_session', streamStatus: status };
+    }
+
+    const context = this.getToolUseFlowContext(streamId);
+    if (context) return { kind: 'active', context };
+
+    if (status === STREAM_STATUS.RESUMING) {
+      return { kind: 'queue', reason: 'resuming' };
+    }
+    if (status === STREAM_STATUS.WAITING) {
+      return { kind: 'queue', reason: 'waiting' };
+    }
+    if (hasActiveChildren) {
+      return { kind: 'queue', reason: 'children_running' };
+    }
+    return { kind: 'no_session', streamStatus: status };
   }
 
   /** Terminate an execution via its handle. Returns true on success. */
@@ -558,6 +608,13 @@ export class ExecutionRegistry {
       result.push(info);
     }
     return result;
+  }
+
+  private hasActiveChildren(parentStreamId: StreamTabId): boolean {
+    for (const handle of this.handles.values()) {
+      if (isChildExecution(handle, parentStreamId)) return true;
+    }
+    return false;
   }
 
   private terminate(handle: ExecutionHandle): boolean {
