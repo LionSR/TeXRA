@@ -33,6 +33,8 @@ export interface CliRunnableModelOptions {
   /** Source category that owns unavailable-model fallback behavior. */
   readonly fallbackSource: CliModelSelectionSource;
   readonly apiMode?: CliApiMode;
+  /** Optional preloaded list, used by launchers that already fetched access. */
+  readonly accessList?: readonly CliModelAccess[];
   readonly noAvailableModelsMessage?: string;
 }
 
@@ -476,15 +478,9 @@ export async function resolveCliRunnableModel(
   model: string,
   options: CliRunnableModelOptions,
 ): Promise<CliRunnableModelResolution> {
-  const models = await getCliModelAccessList({ apiMode: options.apiMode });
-  return resolveCliRunnableModelWithAccessList(models, model, options);
-}
-
-export async function resolveCliRunnableModelWithAccessList(
-  models: readonly CliModelAccess[],
-  model: string,
-  options: CliRunnableModelOptions,
-): Promise<CliRunnableModelResolution> {
+  const models =
+    options.accessList ??
+    (await getCliModelAccessList({ apiMode: options.apiMode }));
   const trimmed = model.trim();
   const hiddenModelId =
     trimmed && !findCliModelAccessEntry(models, trimmed)

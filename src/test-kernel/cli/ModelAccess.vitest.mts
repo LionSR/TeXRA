@@ -13,7 +13,6 @@ import {
   runnableCliModelAccessEntries,
   resolveCliRunnableModel,
   resolveCliRunnableModelFromAccessList,
-  resolveCliRunnableModelWithAccessList,
   type CliModelAccess,
 } from '@cli/runtime/modelAccess';
 import { computeModelOptionsData } from '@model/computeModelOptions';
@@ -936,8 +935,10 @@ describe('CLI model access resolution', () => {
     ]);
 
     await expect(
-      resolveCliRunnableModelWithAccessList(
-        [
+      resolveCliRunnableModel('hiddenFixtureModel', {
+        fallbackSource: 'override',
+        apiMode: 'personal',
+        accessList: [
           model('deepseekT', {
             available: false,
             status: 'missing api key',
@@ -948,12 +949,7 @@ describe('CLI model access resolution', () => {
             }),
           }),
         ],
-        'hiddenFixtureModel',
-        {
-          fallbackSource: 'override',
-          apiMode: 'personal',
-        },
-      ),
+      }),
     ).resolves.toEqual({ model: 'hiddenFixtureModel' });
     expect(computeModelOptionsDataMock).toHaveBeenCalledWith([
       'hiddenFixtureModel',
