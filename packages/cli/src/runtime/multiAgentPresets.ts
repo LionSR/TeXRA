@@ -1,5 +1,5 @@
 import { platform } from '@platform/platform';
-import type { AgentEntry } from '@agent/index';
+import { REMOTE_ORCHESTRATOR_AGENT_NAMES, type AgentEntry } from '@agent/index';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { agentKey } from '@shared/schemas/agent';
@@ -72,7 +72,6 @@ export const MULTI_AGENT_TEAM_ROOT_AGENT_DESCRIPTION =
   'Root agent for the team run (defaults to the preset orchestrator)';
 export const MULTI_AGENT_TEAM_ROOT_MODEL_DESCRIPTION =
   'Model for the team root agent';
-const BUILT_IN_TEAM_ROOT_AGENT_NAMES = ['orchestrator', 'leanOrchestrator'];
 const MULTI_AGENT_INSPECT_HINT = `Hint: run \`${formatCliMultiAgentInspectCommand('<preset>')}\` to see missing agents for degraded or unavailable presets.`;
 const MULTI_AGENT_LOGIN_HINT =
   'Hint: built-in teams may load additional relay-served agents after `texra login`.';
@@ -516,8 +515,8 @@ function findPreferredRootAgent(
 ): AgentEntry | undefined {
   const searchOrder =
     presetSource === 'built-in'
-      ? BUILT_IN_TEAM_ROOT_AGENT_NAMES
-      : [...BUILT_IN_TEAM_ROOT_AGENT_NAMES, ...presetOrder];
+      ? REMOTE_ORCHESTRATOR_AGENT_NAMES
+      : [...REMOTE_ORCHESTRATOR_AGENT_NAMES, ...presetOrder];
   for (const name of searchOrder) {
     const entry = agents.find((agent) => agent.name === name);
     if (entry) return entry;
