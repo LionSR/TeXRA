@@ -631,6 +631,7 @@ export const CHAT_LOGIN_USAGE =
 
 const CHAT_API_MODE_MODEL_RECOVERY = {
   includedModeAction: 'switch to included relay with `/api included`',
+  loginAction: 'run `/login`',
   personalModeAction: 'switch to personal API keys with `/api personal`',
 } satisfies CliNoAvailableModelsRecoveryOptions;
 
