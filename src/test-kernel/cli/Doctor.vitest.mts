@@ -231,11 +231,11 @@ describe('CLI doctor', () => {
     const records = doctorNdjsonRecords(report, '2026-05-18T00:00:00.000Z');
 
     expect(authCheck?.message).toContain('user@example.edu');
-    expect(text).toContain('Stored sign-in found for user@example.edu, Max.');
+    expect(text).toContain('Signed in as user@example.edu, Max.');
     expect(records).toContainEqual(
       expect.objectContaining({
         id: 'auth',
-        message: 'Stored sign-in found for user@example.edu, Max.',
+        message: 'Signed in as user@example.edu, Max.',
       }),
     );
   });
@@ -248,7 +248,7 @@ describe('CLI doctor', () => {
           id: 'auth',
           name: 'Included access',
           status: 'pass',
-          message: 'Stored sign-in found for user@example.edu.',
+          message: 'Signed in as user@example.edu.',
         },
         {
           id: 'config',
@@ -263,7 +263,7 @@ describe('CLI doctor', () => {
     const text = formatDoctorText(report);
     const records = doctorNdjsonRecords(report, '2026-05-18T00:00:00.000Z');
 
-    expect(text).toContain('Stored sign-in found for user@example.edu.');
+    expect(text).toContain('Signed in as user@example.edu.');
     expect(text).toContain('Workspace config references o***@e***.edu.');
     expect(text).toContain('Ask a***@e***.edu to update it.');
     expect(text).not.toContain('owner@example.edu');
@@ -303,11 +303,11 @@ describe('CLI doctor', () => {
     const text = formatDoctorText(report);
     const records = doctorNdjsonRecords(report, '2026-05-18T00:00:00.000Z');
 
-    expect(text).toContain('Stored sign-in found for team@internal.');
+    expect(text).toContain('Signed in as team@internal.');
     expect(records).toContainEqual(
       expect.objectContaining({
         id: 'auth',
-        message: 'Stored sign-in found for team@internal.',
+        message: 'Signed in as team@internal.',
       }),
     );
   });
@@ -336,7 +336,7 @@ describe('CLI doctor', () => {
     });
 
     expect(report.checks.find((check) => check.id === 'auth')?.message).toBe(
-      'Stored sign-in found for unknown.',
+      'Signed in as unknown.',
     );
   });
 
