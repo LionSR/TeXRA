@@ -52,12 +52,39 @@ jobs:
       issues: write
       id-token: write
     steps:
+      - name: Check tracker provider token
+        id: tracker-provider-token
+        shell: bash
+        env:
+          TRACKER_PROVIDER: ${{ env.CLAUDE_CODE_PROVIDER }}
+        run: |
+          set -euo pipefail
+
+          case "$TRACKER_PROVIDER" in
+            anthropic) provider_token="$CLAUDE_CODE_OAUTH_TOKEN" ;;
+            deepseek) provider_token="$DEEPSEEK_API_KEY" ;;
+            *)
+              echo "::error::Unsupported tracker provider: $TRACKER_PROVIDER"
+              exit 1
+              ;;
+          esac
+
+          if [[ -n "$provider_token" ]]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "reason=$TRACKER_PROVIDER token is not configured" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping tracker agent: $TRACKER_PROVIDER token is not configured for this event."
+          fi
+
       - name: Checkout repository
+        if: steps.tracker-provider-token.outputs.skip != 'true'
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Gate tracker agent
+        if: steps.tracker-provider-token.outputs.skip != 'true'
         id: tracker-gate
         shell: bash
         env:
@@ -90,7 +117,7 @@ jobs:
           echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
 
       - name: Checkout trusted automation
-        if: steps.tracker-gate.outputs.should_run == 'true'
+        if: steps.tracker-provider-token.outputs.skip != 'true' && steps.tracker-gate.outputs.should_run == 'true'
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
@@ -98,7 +125,7 @@ jobs:
           fetch-depth: 1
 
       - name: Check trusted provider wrapper
-        if: steps.tracker-gate.outputs.should_run == 'true'
+        if: steps.tracker-provider-token.outputs.skip != 'true' && steps.tracker-gate.outputs.should_run == 'true'
         id: trusted-provider-wrapper
         run: |
           # claude-code-with-provider is now external (LionSR/agent-ci-actions@v1), always available;
@@ -107,7 +134,7 @@ jobs:
 
       - name: Run Claude Code
         id: claude
-        if: steps.tracker-gate.outputs.should_run == 'true' && steps.trusted-provider-wrapper.outputs.available == 'true'
+        if: steps.tracker-provider-token.outputs.skip != 'true' && steps.tracker-gate.outputs.should_run == 'true' && steps.trusted-provider-wrapper.outputs.available == 'true'
         uses: LionSR/agent-ci-actions@v1
         with:
           provider: ${{ env.CLAUDE_CODE_PROVIDER }}
