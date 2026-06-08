@@ -4,7 +4,9 @@
  * Pure presentation: no signals, no event listeners, no VS Code theme
  * variables. Body content is light-DOM (slotted) so KaTeX / hljs CSS in
  * the host document reaches it normally; the bubble frame lives inside
- * shadow DOM so it can be styled in isolation.
+ * shadow DOM so it can be styled in isolation. The `--ce-*` tokens are
+ * defined once on `:root` (see styles/tokens) and inherit across the
+ * shadow boundary, so the frame reads them via `var()` without redefining.
  *
  * `data-role` (not `role`) — `role` is a reserved ARIA attribute whose
  * valid values don't include "user"/"assistant"; using it would trip
@@ -19,14 +21,13 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import { bubbleFrame, chatTokens } from '../styles/tokens';
+import { bubbleFrame } from '../styles/tokens';
 
 export type ChatRole = 'user' | 'assistant';
 
 @customElement('texra-chat-message')
 export class ChatMessage extends LitElement {
   static override styles = [
-    chatTokens,
     bubbleFrame,
     css`
       :host([data-role='user']) .frame {
