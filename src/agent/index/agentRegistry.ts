@@ -122,9 +122,19 @@ const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
  * by alphabetical accident.
  */
 const DEFAULT_WORKFLOW_AGENT = 'correct';
-const PREFERRED_TOOL_USE_AGENTS = [
+
+/**
+ * Relay-served orchestrator roots that delegate to a team. They need sign-in,
+ * so UIs surface them first. Single source of truth for "the built-in
+ * delegating roots" (also consumed by the CLI multi-agent presets).
+ */
+export const REMOTE_ORCHESTRATOR_AGENT_NAMES = [
   'orchestrator',
   'leanOrchestrator',
+] as const;
+
+const PREFERRED_TOOL_USE_AGENTS = [
+  ...REMOTE_ORCHESTRATOR_AGENT_NAMES,
   'research',
   'review',
 ] as const;
@@ -577,9 +587,7 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  * Agents are already deduplicated by name from the getter functions.
  * No default → undefined means "never configured" (show all).
  */
-export function getVisibleAgents(
-  category: 'workflow' | 'toolUse',
-): AgentEntry[] {
+export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
   const isToolUse = category === 'toolUse';
   const entries = isToolUse ? getToolUseAgents() : getWorkflowAgents();
   const stateKey = isToolUse

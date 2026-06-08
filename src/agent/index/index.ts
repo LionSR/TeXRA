@@ -68,4 +68,6 @@ export {
   getVisibleAgents,
   // Metadata update (for remote agent loading)
   updateAgentMeta,
+  // Built-in relay-served orchestrator roots
+  REMOTE_ORCHESTRATOR_AGENT_NAMES,
 } from './agentRegistry';

@@ -142,6 +142,7 @@ import {
   transcriptViewportRepaintOptions,
   type TranscriptViewportChange,
 } from './state/transcriptViewportMode';
+import type { SkillActivation } from './forms/SkillsListForm';
 
 export interface ChatResult {
   exitCode: number;
@@ -198,15 +199,10 @@ export function buildInitialChatAgentConfig({
   };
 }
 
-export interface ReservedSkillActivation {
-  readonly name: string;
-  readonly activationPrompt: string;
-}
-
 export interface PreparedChatInstruction {
   readonly instruction: string;
   readonly displayInstruction?: string;
-  readonly reservedSkillActivations: readonly ReservedSkillActivation[];
+  readonly reservedSkillActivations: readonly SkillActivation[];
 }
 
 export function takePendingSkillActivations(
@@ -241,7 +237,7 @@ export function takePendingSkillActivations(
 
 export function restorePendingSkillActivations(
   pendingSkillActivations: Map<string, string>,
-  activations: readonly ReservedSkillActivation[],
+  activations: readonly SkillActivation[],
 ): void {
   for (const { name, activationPrompt } of activations) {
     if (!pendingSkillActivations.has(name)) {
@@ -1129,9 +1125,7 @@ export async function runChat(
       : undefined;
     return activeFlow?.modelSwitchDisabledReason(candidateModel);
   };
-  const activateSkillForNextMessage = (
-    selection: ReservedSkillActivation,
-  ): void => {
+  const activateSkillForNextMessage = (selection: SkillActivation): void => {
     const wasPending = pendingSkillActivations.has(selection.name);
     pendingSkillActivations.set(selection.name, selection.activationPrompt);
     appendLocalAssistantTranscript(

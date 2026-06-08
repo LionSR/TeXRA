@@ -7,6 +7,7 @@
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import type { AgentCategory } from '@shared/schemas/agent';
 import type { RunCoordinators } from './RunContext';
 
 /** Round counters tracked per execution (both absent until the first update). */
@@ -31,7 +32,7 @@ export const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
 export interface ExecutionHandle {
   readonly executionId: string;
   readonly parentStreamId: StreamTabId;
-  readonly category: 'workflow' | 'toolUse' | 'process';
+  readonly category: AgentCategory | 'process';
   readonly agentName: string;
   readonly startedAt: number;
   readonly runtimeHost: AgentRuntimeHost;
@@ -78,7 +79,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
     parentStreamId: StreamTabId,
     readonly childStreamId: StreamTabId,
     readonly agentName: string,
-    readonly category: 'workflow' | 'toolUse',
+    readonly category: AgentCategory,
     readonly runtimeHost: AgentRuntimeHost,
     readonly coordinators?: RunCoordinators,
   ) {

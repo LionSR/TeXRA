@@ -518,9 +518,7 @@ export class ModelHandlerOpenAI<
           // totalUsage() may fail if stream ended abnormally — leave usage
           // unset, but log so missing token accounting is traceable.
           this.logger.debug(
-            `totalUsage() fallback failed; usage unavailable: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
+            `totalUsage() fallback failed; usage unavailable: ${getSdkErrorMessage(err)}`,
           );
         }
       }
