@@ -25,11 +25,11 @@ import type {
 
 export interface SkillsListFormProps {
   readonly availableRows?: number;
-  readonly onSelect: (value: SkillSelectValue) => void;
+  readonly onSelect: (value: SkillActivation) => void;
   readonly onClose: () => void;
 }
 
-export interface SkillSelectValue {
+export interface SkillActivation {
   readonly name: string;
   readonly activationPrompt: string;
 }
@@ -53,7 +53,7 @@ export function formatSkillActivationPrompt(skill: SourcedSkill): string {
   ].join('\n');
 }
 
-export function skillSelectValueForTui(skill: SourcedSkill): SkillSelectValue {
+export function skillActivationForTui(skill: SourcedSkill): SkillActivation {
   const record = skillListRecord(skill);
   return {
     name: record.name,
@@ -63,11 +63,11 @@ export function skillSelectValueForTui(skill: SourcedSkill): SkillSelectValue {
 
 export function skillSelectItemsForTui(
   skills: readonly SourcedSkill[],
-): SelectItem<SkillSelectValue>[] {
+): SelectItem<SkillActivation>[] {
   return skills.map((skill) => {
     const record = skillListRecord(skill);
     return {
-      value: skillSelectValueForTui(skill),
+      value: skillActivationForTui(skill),
       label: record.name,
       description: formatSkillDescriptionForTui(skill),
     };
