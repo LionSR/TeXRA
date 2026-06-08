@@ -4,17 +4,23 @@ import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 
 export type CliApiMode = 'included' | 'personal';
 
-export const CLI_API_MODE_INPUTS = [
-  'included',
-  'relay',
-  'texra',
-  'personal',
-  'direct',
-  'api',
-  'byok',
-  'key',
-  'keys',
-] as const;
+const CLI_API_MODE_BY_INPUT = {
+  included: 'included',
+  relay: 'included',
+  texra: 'included',
+  personal: 'personal',
+  direct: 'personal',
+  api: 'personal',
+  byok: 'personal',
+  key: 'personal',
+  keys: 'personal',
+} as const satisfies Record<string, CliApiMode>;
+
+type CliApiModeInput = keyof typeof CLI_API_MODE_BY_INPUT;
+
+export const CLI_API_MODE_INPUTS = Object.keys(
+  CLI_API_MODE_BY_INPUT,
+) as readonly CliApiModeInput[];
 
 export function getCliApiMode(): CliApiMode {
   return getServerSideKeyService().getUseIncludedModelAccess()
@@ -38,15 +44,9 @@ export function shortCliApiMode(mode: CliApiMode): string {
 
 export function parseCliApiMode(input: string): CliApiMode | undefined {
   const normalized = input.trim().toLowerCase();
-  if (
-    ['personal', 'direct', 'api', 'byok', 'key', 'keys'].includes(normalized)
-  ) {
-    return 'personal';
-  }
-  if (['included', 'relay', 'texra'].includes(normalized)) {
-    return 'included';
-  }
-  return undefined;
+  return Object.hasOwn(CLI_API_MODE_BY_INPUT, normalized)
+    ? CLI_API_MODE_BY_INPUT[normalized as CliApiModeInput]
+    : undefined;
 }
 
 export async function setCliApiMode(mode: CliApiMode): Promise<void> {
