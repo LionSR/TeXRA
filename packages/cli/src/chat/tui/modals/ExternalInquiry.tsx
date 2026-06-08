@@ -3,6 +3,7 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import { writeClipboardText } from '@cli/runtime/clipboardText';
 import type { ExternalInquiryPermission } from '@shared/schemas';
+import { clamp } from '@utils/core';
 
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
 import { BaseTextInput } from '../input/BaseTextInput';
@@ -284,7 +285,7 @@ export function ExternalInquiry(
   ): void {
     setQuestionOffset((current) => {
       const requested = typeof next === 'function' ? next(current) : next;
-      return Math.max(0, Math.min(maxQuestionOffset, requested));
+      return clamp(requested, 0, maxQuestionOffset);
     });
   }
 
@@ -300,7 +301,7 @@ export function ExternalInquiry(
 
   useEffect(() => {
     setQuestionOffset((current) =>
-      Math.max(0, Math.min(maxQuestionOffset, current)),
+      clamp(current, 0, maxQuestionOffset),
     );
   }, [maxQuestionOffset]);
 
