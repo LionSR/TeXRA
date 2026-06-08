@@ -63,15 +63,17 @@ jobs:
             assets
             changelog.html
             examples
+            favicon.svg
             guide
             hashmap.json
             images
             index.html
             launch.html
-            logo-1024x1024.png
-            logo-1024x1024.svg
-            logo-128x128.png
-            logo-128x128.svg
+            logo-icon-board.svg
+            logo-icon.svg
+            logo-mark-mono.svg
+            logo-mark-reversed.svg
+            logo-mark.svg
             providers.html
             terms.html
             vp-icons.css

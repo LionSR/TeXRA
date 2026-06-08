@@ -10,7 +10,7 @@ defineProps({
   title: { type: String, default: 'texra-paper' },
 });
 
-const LOGO = withBase('/logo-128x128.svg');
+const LOGO = withBase('/logo-icon-board.svg');
 </script>
 
 <template>
@@ -65,7 +65,7 @@ const LOGO = withBase('/logo-128x128.svg');
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.04) inset,
     0 24px 60px -20px rgba(0, 0, 0, 0.55),
-    0 8px 20px -12px rgba(77, 33, 97, 0.45);
+    0 8px 20px -12px rgba(111, 56, 122, 0.45);
 }
 .win-bar {
   display: flex;
