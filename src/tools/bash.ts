@@ -39,7 +39,7 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
-import { createChildStream, finalizeChildStream } from './childStream';
+import { createChildStream } from './childStream';
 import { parseWorkingDirectory } from './pathResolution';
 
 const BASH_TIMEOUT_MS = 120_000; // 120 s
@@ -224,19 +224,16 @@ export class BashTool extends defineTool({
       'process',
     );
 
-    const { childStreamId, logger, disposeTrace } = createChildStream(
-      executionId,
-      parentStreamId,
-      {
-        streamPrefix: 'bash@tool',
-        streamCategory: AgentCategory.ToolUse,
-        agentName: 'bash',
-        description: command,
-        config: syntheticConfig,
-        toolName: 'bash',
-        runtimeHost,
-      },
-    );
+    const childStream = createChildStream(executionId, parentStreamId, {
+      streamPrefix: 'bash@tool',
+      streamCategory: AgentCategory.ToolUse,
+      agentName: 'bash',
+      description: command,
+      config: syntheticConfig,
+      toolName: 'bash',
+      runtimeHost,
+    });
+    const { childStreamId, logger } = childStream;
     let stdoutTail = '';
     let stderrTail = '';
     let loggedChars = 0;
@@ -297,21 +294,14 @@ export class BashTool extends defineTool({
         const terminalStatus = result.success ? 'completed' : 'error';
         await writeTerminalStatus(executionId, terminalStatus).catch(() => {});
         interruptRegistry.unregister(childStreamId);
-        finalizeChildStream({
-          childStreamId,
-          executionId,
-          logger,
-          disposeTrace,
-          runtimeHost,
-          options: {
-            wallTimeMs,
-            error: result.success
-              ? undefined
-              : new ToolError(
-                  `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
-                ),
-            autoClose: true,
-          },
+        childStream.finalize({
+          wallTimeMs,
+          error: result.success
+            ? undefined
+            : new ToolError(
+                `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
+              ),
+          autoClose: true,
         });
 
         const msg = formatBashDelivery(
@@ -328,16 +318,9 @@ export class BashTool extends defineTool({
       .catch(async (err: unknown) => {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
         interruptRegistry.unregister(childStreamId);
-        finalizeChildStream({
-          childStreamId,
-          executionId,
-          logger,
-          disposeTrace,
-          runtimeHost,
-          options: {
-            error: err,
-            autoClose: true,
-          },
+        childStream.finalize({
+          error: err,
+          autoClose: true,
         });
 
         const msg = formatBashError(executionId, command, err);
