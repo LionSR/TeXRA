@@ -27,10 +27,11 @@ export interface CliRunnableModelResolution {
   readonly notice?: string;
 }
 
-export type CliModelFallbackMode = 'reject' | 'notice' | 'silent';
+type CliModelFallbackMode = 'reject' | 'notice' | 'silent';
 
 export interface CliRunnableModelOptions {
-  readonly fallbackMode: CliModelFallbackMode;
+  /** Source category that owns unavailable-model fallback behavior. */
+  readonly fallbackSource: CliModelSelectionSource;
   readonly apiMode?: CliApiMode;
   readonly noAvailableModelsMessage?: string;
 }
@@ -252,20 +253,10 @@ export function emptyModelListMessageForCliMode(
   );
 }
 
-export function cliModelFallbackModeForSource(
+function fallbackModeForModelSource(
   source: CliModelSelectionSource,
 ): CliModelFallbackMode {
   return CLI_MODEL_FALLBACK_MODE_BY_SOURCE[source];
-}
-
-export function cliRunnableModelOptionsForSource(
-  source: CliModelSelectionSource,
-  options: Omit<CliRunnableModelOptions, 'fallbackMode'> = {},
-): CliRunnableModelOptions {
-  return {
-    ...options,
-    fallbackMode: cliModelFallbackModeForSource(source),
-  };
 }
 
 export function formatCliNoAvailableModelsRecovery(
@@ -452,6 +443,7 @@ export function resolveCliRunnableModelFromAccessList(
   model: string,
   options: CliRunnableModelOptions,
 ): CliRunnableModelResolution {
+  const fallbackMode = fallbackModeForModelSource(options.fallbackSource);
   const trimmed = model.trim();
   const runnableEntries = runnableCliModelAccessEntries(
     models,
@@ -468,12 +460,12 @@ export function resolveCliRunnableModelFromAccessList(
     availableIds,
     options,
   );
-  if (options.fallbackMode === 'reject' || availableIds.length === 0) {
+  if (fallbackMode === 'reject' || availableIds.length === 0) {
     throw new Error(unavailableMessage);
   }
 
   const fallback = availableIds[0]!;
-  if (options.fallbackMode === 'silent') return { model: fallback };
+  if (fallbackMode === 'silent') return { model: fallback };
   return {
     model: fallback,
     notice: `${unavailableMessage} Using "${fallback}" instead.`,
