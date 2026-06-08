@@ -6,16 +6,17 @@ import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
 import { getSafeDocumentRelativePath } from '@agent/utils/outputFileUtils';
-import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
+import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+import { getRunDir } from '@utils/files';
+
+import { CliUsageError, type CliContext } from './cliContext';
 import {
   cliTerminalStatus,
   createCliRunResult,
   type CliRunResult,
   type ExecuteAgentResult,
-} from '@cli/runtime/terminalStatus';
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
-import { getRunDir } from '@utils/files';
+} from './terminalStatus';
 
 /** Resolve a user-supplied path against `cwd` when it isn't already absolute. */
 function joinCwdRelative(target: string, cwd: string): string {

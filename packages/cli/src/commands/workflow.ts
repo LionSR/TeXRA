@@ -48,7 +48,7 @@ import {
   expectedOutputFilesForOutputDir,
   formatWorkflowTextResult,
   resolveWorkflowOutput,
-} from './_helpers/workflowOutput';
+} from '../runtime/workflowOutput';
 
 interface WorkflowRunInit {
   readonly agent: string;

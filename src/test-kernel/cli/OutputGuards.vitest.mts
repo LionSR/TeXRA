@@ -8,7 +8,7 @@ import { CliUsageError } from '@cli/runtime/cliContext';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
-} from '@cli/commands/_helpers/workflowOutput';
+} from '@cli/runtime/workflowOutput';
 
 describe('assertOutputDirAvailable', () => {
   it('no-ops when --output-dir was not passed', async () => {
