@@ -35,8 +35,6 @@ import {
 } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   interruptRegistry,
@@ -68,14 +66,12 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from './core/define';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
-import { createChildStream } from './childStream';
+import { createChildStream, type ChildStream } from './childStream';
 import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import {
   agentCliLoopTerminalStatus,
-  finalizeAgentCliLoopStatus,
   isCleanInterruption,
   logTurnSummary,
-  markAgentCliLoopError,
 } from './agentCliShared';
 import {
   buildCodexCommandToolLog,
@@ -206,18 +202,6 @@ class CodexFollowUpSession implements IInterruptible {
   finishTurn(): void {
     this.turnAbortController = null;
   }
-}
-
-/**
- * Clear the transient status owned by a Codex loop after the loop exits.
- * Explicit terminal statuses set by other runtime paths, such as STOPPED or
- * ERROR, are left intact.
- */
-export function finalizeCodexLoopStatus(
-  childStreamId: StreamTabId,
-  runtimeHost: AgentRuntimeHost,
-): void {
-  finalizeAgentCliLoopStatus(childStreamId, runtimeHost);
 }
 
 // ============================================================================
@@ -484,24 +468,21 @@ export async function runStreamedTurn(
  */
 function startCodexLoop(params: {
   thread: Thread;
-  childStreamId: StreamTabId;
+  childStream: ChildStream;
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
-  logger: AgentTrace;
-  disposeTrace: () => void;
   initialPrompt: string;
   runtimeHost: AgentRuntimeHost;
 }): void {
   const {
     thread,
-    childStreamId,
+    childStream,
     parentStreamId,
     executionId,
-    logger,
-    disposeTrace,
     initialPrompt,
     runtimeHost,
   } = params;
+  const { childStreamId, logger } = childStream;
 
   const session = new CodexFollowUpSession();
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
@@ -529,9 +510,7 @@ function startCodexLoop(params: {
 
   // Seed the initial prompt; the loop drains it as the first turn.
   queue.enqueue(initialPrompt);
-  StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING, {
-    runtimeHost,
-  });
+  childStream.waitForInput();
 
   let sawTurnFailure = false;
   void (async () => {
@@ -543,9 +522,7 @@ function startCodexLoop(params: {
         if (!messages || session.isInterrupted()) break;
 
         const prompt = messages.items.join('\n\n');
-        StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING, {
-          runtimeHost,
-        });
+        childStream.beginTurn();
         const startedAt = Date.now();
         const signal = session.startTurn();
 
@@ -609,14 +586,12 @@ function startCodexLoop(params: {
 
         if (turnFailed) {
           sawTurnFailure = true;
-          markAgentCliLoopError(childStreamId, runtimeHost);
+          childStream.failTurn();
           break;
         }
 
         if (!session.isInterrupted()) {
-          StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING, {
-            runtimeHost,
-          });
+          childStream.waitForInput();
         }
       }
     } finally {
@@ -625,8 +600,8 @@ function startCodexLoop(params: {
       ToolUseFollowUpQueue.release(childStreamId);
       const threadId = thread.id;
       if (threadId) codexThreads.release(threadId);
-      // Persist terminal status before untracking — executionRegistry.untrack fires
-      // notifyWaiters, so consumers must see the final status on disk.
+      // Persist terminal status before childStream.finalize() untracks and
+      // notifies waiters.
       await writeTerminalStatus(
         executionId,
         agentCliLoopTerminalStatus({
@@ -634,10 +609,10 @@ function startCodexLoop(params: {
           sawTurnFailure,
         }),
       ).catch(() => {});
-      executionRegistry.untrack(executionId);
 
-      finalizeCodexLoopStatus(childStreamId, runtimeHost);
-      disposeTrace();
+      childStream.finalize({
+        status: sawTurnFailure ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
+      });
     }
   })();
 }
@@ -756,31 +731,26 @@ async function launchCodexSession(
     throw new ToolError('Failed to register Codex execution.');
   }
 
-  const { childStreamId, logger, disposeTrace } = createChildStream(
-    executionId,
-    parentStreamId,
-    {
-      streamPrefix: 'codex@codex-sdk',
-      streamCategory: AgentCategory.ToolUse,
-      agentName: 'codex',
-      description: input.prompt,
-      config,
-      toolName: 'codex',
-      runtimeHost,
-    },
-  );
+  const childStream = createChildStream(executionId, parentStreamId, {
+    streamPrefix: 'codex@codex-sdk',
+    streamCategory: AgentCategory.ToolUse,
+    agentName: 'codex',
+    description: input.prompt,
+    config,
+    toolName: 'codex',
+    runtimeHost,
+  });
 
   startCodexLoop({
     thread,
-    childStreamId,
+    childStream,
     parentStreamId,
     executionId,
-    logger,
-    disposeTrace,
     initialPrompt: input.prompt,
     runtimeHost,
   });
 
+  const { childStreamId } = childStream;
   const preview = truncateWithEllipsis(input.prompt, 60);
   return {
     summary: `Launched Codex: ${preview}`,

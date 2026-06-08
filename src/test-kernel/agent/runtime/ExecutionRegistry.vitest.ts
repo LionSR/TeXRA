@@ -247,6 +247,47 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('updates live agent status without reviving stopped or stale handles', () => {
+    const explicit = createRecordingHost();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const parentStreamId = 'parent-update-agent-status-test' as StreamTabId;
+    const childStreamId = 'child-update-agent-status-test' as StreamTabId;
+    const executionId = 'exec-update-agent-status-test';
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'test-subagent',
+      'toolUse',
+      explicit.host,
+    );
+
+    try {
+      registry.trackAgentExecution(handle, { status: STREAM_STATUS.RUNNING });
+
+      expect(
+        registry.updateAgentExecutionStatus(handle, STREAM_STATUS.WAITING),
+      ).toBe(true);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.WAITING);
+
+      streamStatus.set(childStreamId, STREAM_STATUS.STOPPED, { emit: false });
+      expect(
+        registry.updateAgentExecutionStatus(handle, STREAM_STATUS.RUNNING),
+      ).toBe(false);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.STOPPED);
+
+      registry.untrack(executionId);
+      streamStatus.set(childStreamId, STREAM_STATUS.WAITING, { emit: false });
+      expect(
+        registry.updateAgentExecutionStatus(handle, STREAM_STATUS.RUNNING),
+      ).toBe(false);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.WAITING);
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('finishes agent executions without overwriting explicit stops', () => {
     const explicit = createRecordingHost();
     const streamStatus = new StreamStatusRegistry();

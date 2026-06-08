@@ -40,18 +40,24 @@ interface FinalizeChildStreamOptions {
   } | null;
   error?: unknown;
   errorMessage?: string;
+  status?: ChildStreamTerminalStatus;
   /** Remove the child stream tab from the progress view once finalized. */
   autoClose?: boolean;
 }
 
+type ChildStreamTerminalStatus =
+  | typeof STREAM_STATUS.READY
+  | typeof STREAM_STATUS.ERROR;
+
 export interface ChildStream {
   childStreamId: StreamTabId;
   logger: AgentTrace;
-  /**
-   * Drop the run-trace subscribers attached by `createRunTrace`. Must be
-   * called once when a custom child-loop cleanup path does not use `finalize`.
-   */
-  disposeTrace: () => void;
+  /** The child loop is idle and waiting for the next follow-up instruction. */
+  waitForInput: () => void;
+  /** The child loop has started processing a turn. */
+  beginTurn: () => void;
+  /** The active turn failed; preserve explicit user stops. */
+  failTurn: () => void;
   /** Complete the child stream lifecycle through the owning execution handle. */
   finalize: (options?: FinalizeChildStreamOptions) => void;
 }
@@ -100,7 +106,23 @@ export function createChildStream(
   return {
     childStreamId,
     logger: runTrace.trace,
-    disposeTrace: runTrace.dispose,
+    // Mid-run status updates are intentionally best-effort. Explicit stops and
+    // stale handles are ignored by the registry; finalize owns terminal status.
+    waitForInput: () => {
+      executionRegistry.updateAgentExecutionStatus(
+        handle,
+        STREAM_STATUS.WAITING,
+      );
+    },
+    beginTurn: () => {
+      executionRegistry.updateAgentExecutionStatus(
+        handle,
+        STREAM_STATUS.RUNNING,
+      );
+    },
+    failTurn: () => {
+      executionRegistry.updateAgentExecutionStatus(handle, STREAM_STATUS.ERROR);
+    },
     finalize: (finalizeOptions) => {
       finalizeChildStream({
         handle,
@@ -139,7 +161,8 @@ function finalizeChildStream(args: FinalizeChildStreamArgs): void {
   }
 
   executionRegistry.finishAgentExecution(handle, {
-    status: hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
+    status:
+      options?.status ?? (hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY),
   });
   disposeTrace();
 
