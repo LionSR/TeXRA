@@ -45,7 +45,7 @@ import {
 import {
   resolveWorkflowOutput,
   resumeWorkflowOutputFile,
-} from '@cli/commands/_helpers/workflowOutput';
+} from '@cli/runtime/workflowOutput';
 import { isKnownCliModel } from '@cli/runtime/cliConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
