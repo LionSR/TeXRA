@@ -43,7 +43,7 @@ export const compactIconActionButtonStyles: CSSResult = css`
   }
 
   .action-icon-button[disabled]::part(base) {
-    opacity: 0.35;
+    opacity: var(--opacity-faint);
     background: transparent;
   }
 
@@ -143,8 +143,6 @@ export const commonViewStyles: CSSResult = css`
     color: var(--wa-color-text-normal);
   }
 
-  /* "body" part is used by vscode-collapsible; "content" part by wa-details. */
-  .panel-collapsible::part(body),
   .panel-collapsible::part(content) {
     padding: 0 var(--wa-space-2xs) var(--wa-space-2xs);
   }
@@ -206,17 +204,6 @@ export const commonViewStyles: CSSResult = css`
     min-height: 0;
   }
 
-  vscode-toolbar-container {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-    flex-wrap: nowrap;
-  }
-
-  vscode-toolbar-button {
-    flex-shrink: 0;
-  }
-
   .action-button-group {
     display: flex;
     align-items: center;
@@ -228,7 +215,7 @@ export const commonViewStyles: CSSResult = css`
    * Borderless default; hover adds a subtle border (no fill swap). */
   .action-button::part(base) {
     gap: var(--wa-space-2xs);
-    min-height: 22px;
+    min-height: var(--height-control-compact);
     padding: 0 6px;
     border: var(--border-thin) solid transparent;
     background: transparent;
@@ -282,14 +269,6 @@ export const commonViewStyles: CSSResult = css`
     outline: var(--border-thin) solid var(--wa-color-focus);
     outline-offset: 1px;
     border-radius: var(--border-radius-small);
-  }
-
-  .detail-section {
-    margin: var(--wa-space-2xs) 0;
-  }
-
-  .detail-content {
-    padding: var(--wa-space-3xs) 0 var(--wa-space-2xs) var(--wa-space-s);
   }
 
   .detail-list {
@@ -361,20 +340,6 @@ export const commonViewStyles: CSSResult = css`
     display: none !important;
   }
 
-  .btn-secondary {
-    opacity: var(--opacity-normal);
-  }
-
-  .btn-secondary:hover {
-    opacity: var(--opacity-full);
-  }
-
-  .btn-secondary:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
-    border-radius: var(--border-radius-small);
-  }
-
   /* Shared tab content container — consistent max-width and centering for all settings tabs */
   .tab-content-container {
     max-width: 1000px;
@@ -386,7 +351,7 @@ export const commonViewStyles: CSSResult = css`
     display: inline-flex;
     align-items: center;
     gap: var(--wa-space-2xs);
-    min-height: 22px;
+    min-height: var(--height-control-compact);
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     font-size: var(--font-size-xs);
     font-family: inherit;
@@ -512,33 +477,6 @@ export const commonViewStyles: CSSResult = css`
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-`;
-
-/**
- * Reusable focus-visible ring styles.
- *
- * Apply via Lit's static styles array:
- *   static override styles = [designTokens, focusRingStyles, css`...`];
- *
- * Then add the `.focus-ring` class to any interactive element that needs
- * a standard keyboard-focus outline:
- *   <button class="focus-ring" ...>
- *
- * Variants:
- *   `.focus-ring--inset`  — outline-offset: -1px (inner focus ring)
- */
-export const focusRingStyles: CSSResult = css`
-  .focus-ring:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
-    border-radius: var(--border-radius-small);
-  }
-
-  .focus-ring--inset:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: -1px;
-    border-radius: var(--border-radius-small);
   }
 `;
 

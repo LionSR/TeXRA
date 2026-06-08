@@ -3,7 +3,6 @@ export {
   commonViewStyles,
   compactIconActionButtonStyles,
   filledButtonStyles,
-  focusRingStyles,
 } from './commonViewStyles';
 export { designTokens, animationStyles } from './litStyles';
 
