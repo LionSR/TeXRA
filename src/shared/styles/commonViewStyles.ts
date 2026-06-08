@@ -126,39 +126,6 @@ export const commonViewStyles: CSSResult = css`
     gap: var(--wa-space-2xs);
   }
 
-  .collapsible {
-    margin-top: var(--wa-space-2xs);
-  }
-
-  /*
-   * Legacy vscode-collapsible support: 'body' is the part name for that
-   * component. Long content historically clipped at --height-max; the grid
-   * trick below replaces the discrete max-height jump for wa-details
-   * ('content' part), which is the modern variant.
-   */
-  .collapsible::part(body) {
-    max-height: var(--height-medium);
-    overflow: hidden;
-  }
-
-  .collapsible[open]::part(body) {
-    max-height: var(--height-max);
-  }
-
-  .collapsible::part(content) {
-    display: grid;
-    grid-template-rows: 1fr;
-  }
-
-  .collapsible:not([open])::part(content) {
-    grid-template-rows: 0fr;
-  }
-
-  .collapsible::part(content) > * {
-    overflow: hidden;
-    min-height: 0;
-  }
-
   /* Panel collapsible - consistent styling for collapsible panels */
   .panel-collapsible {
     border-top: var(--border-thin) solid var(--color-border);
@@ -222,8 +189,8 @@ export const commonViewStyles: CSSResult = css`
     color: var(--wa-color-text-normal);
   }
 
-  /* Same grid 1fr/0fr collapse as .collapsible / .panel-collapsible so the
-     quiet variant is self-contained (no need to also apply .collapsible). */
+  /* Same grid 1fr/0fr collapse as .panel-collapsible so the quiet variant is
+     self-contained. */
   .collapsible-quiet::part(content) {
     display: grid;
     grid-template-rows: 1fr;
