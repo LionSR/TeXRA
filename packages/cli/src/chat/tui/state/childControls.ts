@@ -7,7 +7,7 @@ import {
   type ActiveChildInfo,
   type StreamTabId,
 } from '@shared/schemas';
-import { formatDuration } from '@utils/core';
+import { clamp, formatDuration } from '@utils/core';
 
 // Local imports - CLI state
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
@@ -437,7 +437,7 @@ export function numericFocusTargetForActiveStream(init: {
 
 export function clampPickerIndex(index: number, length: number): number {
   if (length <= 0) return 0;
-  return Math.min(Math.max(index, 0), length - 1);
+  return clamp(index, 0, length - 1);
 }
 
 export function nextPickerIndex(

@@ -9,6 +9,8 @@ import {
   type SlashCommand,
   type SlashPickIntent,
 } from './slashRegistry';
+import { clamp } from '@utils/core';
+
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { KeyHints } from '../ui/KeyHints';
 
@@ -34,7 +36,7 @@ export interface SlashPaletteWindow {
 
 function clampHighlight(index: number, itemCount: number): number {
   if (itemCount <= 0) return 0;
-  return Math.min(Math.max(index, 0), itemCount - 1);
+  return clamp(index, 0, itemCount - 1);
 }
 
 export function nextSlashPaletteHighlight({
