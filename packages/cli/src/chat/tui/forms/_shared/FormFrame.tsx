@@ -5,6 +5,7 @@
 import { Box, Text, useWindowSize } from 'ink';
 
 import { KeyHints, type KeyHint } from '@cli/chat/tui/ui/KeyHints';
+import { clamp } from '@utils/core';
 
 export interface FormFrameProps {
   readonly color: string;
@@ -24,7 +25,7 @@ export function formFrameWidth(columns: number | undefined): number {
     columns != null && Number.isFinite(columns) && columns > 0
       ? Math.floor(columns)
       : FORM_FRAME_MAX_WIDTH;
-  return Math.max(1, Math.min(normalized, FORM_FRAME_MAX_WIDTH));
+  return clamp(normalized, 1, FORM_FRAME_MAX_WIDTH);
 }
 
 export function FormFrame(props: FormFrameProps): React.JSX.Element {

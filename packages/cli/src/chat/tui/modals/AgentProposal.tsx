@@ -6,6 +6,7 @@ import {
   getProposalFileGroups,
   type AgentProposalPermission,
 } from '@shared/schemas';
+import { clamp } from '@utils/core';
 
 import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
@@ -350,14 +351,12 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   function scrollTo(next: number | ((currentOffset: number) => number)): void {
     setScrollOffset((current) => {
       const requested = typeof next === 'function' ? next(current) : next;
-      return Math.max(0, Math.min(maxScrollOffset, requested));
+      return clamp(requested, 0, maxScrollOffset);
     });
   }
 
   useEffect(() => {
-    setScrollOffset((current) =>
-      Math.max(0, Math.min(maxScrollOffset, current)),
-    );
+    setScrollOffset((current) => clamp(current, 0, maxScrollOffset));
   }, [maxScrollOffset]);
 
   useInput(
