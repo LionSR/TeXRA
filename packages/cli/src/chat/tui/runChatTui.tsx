@@ -118,7 +118,11 @@ import { tuiOutputStreamForColor } from './render/noColorOutput';
 import { formatCliSessionStatus } from './sessionStatus';
 import { clearApprovals } from './state/approvalQueue';
 import { cliState, patchStream, resetCliState } from './state/cliState';
-import { collectResumeTargets, formatResumeHint } from './state/resumeHint';
+import {
+  collectResumeTargets,
+  collectResumeUsage,
+  formatResumeHint,
+} from './state/resumeHint';
 import { installTuiApprovals } from './state/subscribeApprovals';
 import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
@@ -1299,9 +1303,9 @@ export async function runChat(
     // An older run with no persisted entries simply shows whatever exists
     // (possibly nothing) — the continued turn streams in regardless.
     await getDefaultStreamLogStore().ensureLoaded(resolution.streamId);
-    // Restore the durable per-stream display (todos/plan/usage) the previous
-    // run persisted, so resume shows more than just the transcript. Liveness is
-    // never persisted, so nothing stale (running badges, RUNNING status) leaks.
+    // Restore durable per-stream display state plus cumulative usage for exit
+    // summaries. Latest context-window usage is live-only and should not be
+    // rehydrated from the per-run total.
     await snapshotStore.load([resolution.streamId]);
     const restored = await snapshotStore.read(resolution.streamId);
     patchStream(resolution.streamId, (slice) => {
@@ -1311,7 +1315,9 @@ export async function runChat(
       // to stale slice state) rather than treating empty as "no data".
       return {
         ...slice,
-        usage: runUsages.length ? sumUsageStats(runUsages) : slice.usage,
+        cumulativeUsage: runUsages.length
+          ? sumUsageStats(runUsages)
+          : slice.cumulativeUsage,
         todos: restored.todos,
         plan: restored.plan,
       };
@@ -1622,11 +1628,13 @@ export async function runChat(
   // Read cliState before resetCliState() clears it.
   const printResumeHintOnExit = (): void => {
     if (!session.executionId) return;
+    const streams = cliState.streams.get();
     const hint = formatResumeHint(
       collectResumeTargets({
         rootExecutionId: session.executionId,
-        streams: cliState.streams.get(),
+        streams,
       }),
+      collectResumeUsage(streams),
     );
     if (hint) writeTextStdout(`\n${hint}`);
   };
