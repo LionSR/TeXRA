@@ -6,9 +6,9 @@
  * Users can always choose between server-side keys or their own API keys.
  *
  * TIER HIERARCHY (cumulative access):
- * - free: Budget models only (under $1/M input)
- * - Max: Mid-tier models ($1-3/M) + all free tier models
- * - Ultra: All models including premium ($3+/M input)
+ * - free: Included non-premium models (up to $3/M input)
+ * - Max: Free-tier models plus any future Max-only additions
+ * - Ultra: All models above $3/M input
  *
  * ACCESS EXPIRATION:
  * - All researcher access has an expiration date to prevent abuse
