@@ -12,10 +12,8 @@
 
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { isInFlightStatus } from '@common/constants/streamStatus';
 import { createChannelTrace } from '@logger';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
 
 /**
@@ -73,59 +71,36 @@ export async function sendFollowUp(
   mediaFiles?: readonly string[],
   displayText?: string,
 ): Promise<SendFollowUpResult> {
-  const status = StreamStatusService.get(streamId);
-  const activeChildren = executionRegistry.getActiveChildren(streamId);
-  const hasActiveChildren =
-    activeChildren.subagents.length > 0 || activeChildren.processes.length > 0;
   const queueOptions = { mediaFiles, displayText };
-  if (status !== undefined && !isInFlightStatus(status)) {
-    if (hasActiveChildren) {
-      ToolUseFollowUpQueue.enqueue(streamId, text, {
-        ...queueOptions,
-        force: true,
-      });
-      return { status: 'queued', reason: 'children_running' };
-    }
-    logger.warn(
-      `No active session for follow-up on stream ${streamId}. Status: ${status}`,
-    );
-    return { status: 'no_session', streamStatus: status };
-  }
+  const target = executionRegistry.getToolUseFollowUpTarget(streamId);
 
-  // Try active flow context first
-  const flowContext = executionRegistry.getToolUseFlowContext(streamId);
-  if (flowContext) {
-    flowContext.session.appendFollowUp(text, mediaFiles, displayText);
-    notifyFollowUpSent(streamId, flowContext.runtimeHost);
+  if (target.kind === 'active') {
+    target.context.session.appendFollowUp(text, mediaFiles, displayText);
+    notifyFollowUpSent(streamId, target.context.runtimeHost);
     return { status: 'sent' };
   }
 
-  // Queue if session is resuming
-  if (ToolUseFollowUpQueue.isResuming(streamId)) {
-    ToolUseFollowUpQueue.enqueue(streamId, text, queueOptions);
-    return { status: 'queued', reason: 'resuming' };
-  }
-
-  // Queue if session is waiting (paused, can be resumed)
-  if (status === STREAM_STATUS.WAITING) {
-    ToolUseFollowUpQueue.enqueue(streamId, text, queueOptions);
-    return { status: 'queued', reason: 'waiting' };
-  }
-
-  if (hasActiveChildren) {
-    // force:true reopens a queue sealed by sessionLifecycle disposal — the
-    // caller must auto-resume the parent or re-release, or late child
-    // deliveries will leak into the next run on this stream.
+  if (target.kind === 'queue') {
+    // children_running reopens a queue sealed by session disposal; callers
+    // must auto-resume the parent or release again to avoid stale delivery.
+    const force = target.reason === 'children_running';
     ToolUseFollowUpQueue.enqueue(streamId, text, {
       ...queueOptions,
-      force: true,
+      ...(force ? { force: true } : {}),
     });
-    return { status: 'queued', reason: 'children_running' };
+    return { status: 'queued', reason: target.reason };
+  }
+
+  if (target.streamStatus !== undefined) {
+    logger.warn(
+      `No active session for follow-up on stream ${streamId}. Status: ${target.streamStatus}`,
+    );
+    return { status: 'no_session', streamStatus: target.streamStatus };
   }
 
   // No active/waiting session found - caller should handle UI notification
   logger.warn(
-    `No active session for follow-up on stream ${streamId}. Status: ${status ?? 'undefined'}`,
+    `No active session for follow-up on stream ${streamId}. Status: undefined`,
   );
-  return { status: 'no_session', streamStatus: status };
+  return { status: 'no_session', streamStatus: undefined };
 }
