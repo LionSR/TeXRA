@@ -59,7 +59,7 @@ import {
   optString,
 } from './_helpers/globalArgs';
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
-import { executeCliRequest } from './_helpers/runExecution';
+import { executeCliRequest } from '../runtime/runExecution';
 import {
   createCliRunResult,
   terminalStatusExitCode,
