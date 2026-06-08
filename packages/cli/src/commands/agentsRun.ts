@@ -45,7 +45,7 @@ import { formatToolUseAgentRunInstruction } from './_helpers/toolUseRunInstructi
 import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
-} from './_helpers/workflowInputs';
+} from '../runtime/workflowInputs';
 
 type CliToolUseRunResult = Extract<CliRunResult, { category: 'toolUse' }>;
 
