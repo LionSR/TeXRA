@@ -43,7 +43,7 @@ interface BinderLogger {
 }
 
 interface ExecutionSubscriptionBinderOptions {
-  registry?: Pick<ExecutionRegistry, 'addListener' | 'getHandle'>;
+  registry?: Pick<ExecutionRegistry, 'addListener' | 'getHandle' | 'getStatus'>;
   releaseSource?: ReleaseSource;
   logger?: BinderLogger;
 }
@@ -67,8 +67,11 @@ interface SnapshotState {
   round: string | null;
 }
 
-function snapshot(handle: ExecutionHandle): SnapshotState {
-  const info = handle.getStatus();
+function snapshot(
+  registry: Pick<ExecutionRegistry, 'getStatus'>,
+  handle: ExecutionHandle,
+): SnapshotState {
+  const info = registry.getStatus(handle);
   return {
     status: info.status,
     elapsed: info.elapsed,
@@ -90,14 +93,14 @@ class ExecutionSubscription implements Disposable {
     private readonly runtimeHost: AgentRuntimeHost,
     private readonly registry: Pick<
       ExecutionRegistry,
-      'addListener' | 'getHandle'
+      'addListener' | 'getHandle' | 'getStatus'
     >,
     private readonly onDisposed: () => void,
   ) {
     this.executionId = handle.executionId;
     this.agentName = handle.agentName;
     this.category = handle.category;
-    this.last = snapshot(handle);
+    this.last = snapshot(this.registry, handle);
   }
 
   bind(): boolean {
@@ -133,7 +136,7 @@ class ExecutionSubscription implements Disposable {
       return;
     }
 
-    const current = snapshot(handle);
+    const current = snapshot(this.registry, handle);
     const statusChanged = !this.last || this.last.status !== current.status;
     const roundChanged = this.last?.round !== current.round;
     if (!statusChanged && !roundChanged) {
@@ -177,7 +180,7 @@ class ExecutionSubscription implements Disposable {
 export class ExecutionSubscriptionBinder {
   private readonly registry: Pick<
     ExecutionRegistry,
-    'addListener' | 'getHandle'
+    'addListener' | 'getHandle' | 'getStatus'
   >;
   private readonly releaseSource: ReleaseSource;
   private readonly logger: BinderLogger;
