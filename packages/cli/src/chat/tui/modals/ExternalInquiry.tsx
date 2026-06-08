@@ -300,9 +300,7 @@ export function ExternalInquiry(
   }
 
   useEffect(() => {
-    setQuestionOffset((current) =>
-      clamp(current, 0, maxQuestionOffset),
-    );
+    setQuestionOffset((current) => clamp(current, 0, maxQuestionOffset));
   }, [maxQuestionOffset]);
 
   useInput((input, key) => {
