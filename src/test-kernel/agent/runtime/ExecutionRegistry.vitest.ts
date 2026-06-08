@@ -459,6 +459,95 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('owns tool-use follow-up admission from status, context, and children', () => {
+    const explicit = createRecordingHost();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const activeStreamId = 'stream-follow-up-active-test' as StreamTabId;
+    const resumingStreamId = 'stream-follow-up-resuming-test' as StreamTabId;
+    const waitingStreamId = 'stream-follow-up-waiting-test' as StreamTabId;
+    const stoppedStreamId = 'stream-follow-up-stopped-test' as StreamTabId;
+    const parentStreamId = 'stream-follow-up-parent-test' as StreamTabId;
+    const childStreamId = 'stream-follow-up-child-test' as StreamTabId;
+    const context: LiveToolUseFlowContext = {
+      session: {
+        appendFollowUp: vi.fn(),
+      },
+      modelHandler: {
+        supportsManualCompaction: true,
+      },
+      runtimeHost: explicit.host,
+      requestImmediateCompaction: vi.fn(),
+      modelSwitchDisabledReason: vi.fn(),
+      switchModel: vi.fn(),
+    };
+
+    try {
+      const activeHandle = new AgentExecutionHandle(
+        'exec-follow-up-active-test',
+        activeStreamId,
+        activeStreamId,
+        'test-tool-use',
+        'toolUse',
+        explicit.host,
+      );
+      activeHandle.attachToolUseFlow(context);
+      registry.track(activeHandle);
+      streamStatus.set(activeStreamId, STREAM_STATUS.RUNNING, {
+        emit: false,
+      });
+
+      expect(registry.getToolUseFollowUpTarget(activeStreamId)).toEqual({
+        kind: 'active',
+        context,
+      });
+
+      streamStatus.set(resumingStreamId, STREAM_STATUS.RESUMING, {
+        emit: false,
+      });
+      expect(registry.getToolUseFollowUpTarget(resumingStreamId)).toEqual({
+        kind: 'queue',
+        reason: 'resuming',
+      });
+
+      streamStatus.set(waitingStreamId, STREAM_STATUS.WAITING, {
+        emit: false,
+      });
+      expect(registry.getToolUseFollowUpTarget(waitingStreamId)).toEqual({
+        kind: 'queue',
+        reason: 'waiting',
+      });
+
+      streamStatus.set(stoppedStreamId, STREAM_STATUS.STOPPED, {
+        emit: false,
+      });
+      expect(registry.getToolUseFollowUpTarget(stoppedStreamId)).toEqual({
+        kind: 'no_session',
+        streamStatus: STREAM_STATUS.STOPPED,
+      });
+
+      streamStatus.set(parentStreamId, STREAM_STATUS.STOPPED, {
+        emit: false,
+      });
+      registry.track(
+        new AgentExecutionHandle(
+          'exec-follow-up-child-test',
+          parentStreamId,
+          childStreamId,
+          'test-subagent',
+          'toolUse',
+          explicit.host,
+        ),
+      );
+      expect(registry.getToolUseFollowUpTarget(parentStreamId)).toEqual({
+        kind: 'queue',
+        reason: 'children_running',
+      });
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('publishes detach updates through the caller runtime host', () => {
     const explicit = createRecordingHost();
     const registry = new ExecutionRegistry();
