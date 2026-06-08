@@ -63,6 +63,12 @@ function resolveModelFromAccessList(
   return resolveCliRunnableModel(model, { ...options, accessList });
 }
 
+const INTERACTIVE_RECOVERY = {
+  includedModeAction: 'switch with /api included',
+  loginAction: 'run /login',
+  personalModeAction: 'switch with /api personal',
+} as const;
+
 describe('CLI model access resolution', () => {
   beforeEach(() => {
     computeModelOptionsDataMock.mockReset();
@@ -555,12 +561,6 @@ describe('CLI model access resolution', () => {
   });
 
   it('formats no-runnable model reasons for launch and model picker views', () => {
-    const interactiveRecovery = {
-      includedModeAction: 'switch with /api included',
-      loginAction: 'Run /login',
-      personalModeAction: 'switch with /api personal',
-    };
-
     expect(formatCliNoRunnableModelsLaunchBlock('includedLoginRequired')).toBe(
       'Sign in with texra login for included relay models',
     );
@@ -573,30 +573,34 @@ describe('CLI model access resolution', () => {
     expect(
       formatCliNoRunnableModelsMessage(
         'includedLoginRequired',
-        interactiveRecovery,
+        INTERACTIVE_RECOVERY,
       ),
     ).toBe(
       'Included relay models require sign-in. Run /login or switch with /api personal.',
     );
     expect(
-      formatCliNoRunnableModelsMessage('included', interactiveRecovery),
+      formatCliNoRunnableModelsMessage('included', INTERACTIVE_RECOVERY),
     ).toBe(
       'No included relay models are runnable. Switch with /api personal or try again later.',
     );
     expect(
-      formatCliNoRunnableModelsMessage('personal', interactiveRecovery),
+      formatCliNoRunnableModelsMessage('personal', INTERACTIVE_RECOVERY),
     ).toBe(
       'No personal API-key models are runnable. Configure a provider key or switch with /api included.',
+    );
+    expect(
+      formatCliNoAvailableModelsRecovery('included', INTERACTIVE_RECOVERY),
+    ).toBe(
+      'Run /login for included relay access, or switch with /api personal after configuring a provider API key.',
+    );
+    expect(
+      formatCliNoAvailableModelsRecovery('personal', INTERACTIVE_RECOVERY),
+    ).toBe(
+      'Configure a provider API key for personal mode, or switch with /api included and run /login for included relay access.',
     );
   });
 
   it('formats empty model picker messages with caller-owned recovery actions', () => {
-    const interactiveRecovery = {
-      includedModeAction: 'switch with /api included',
-      loginAction: 'Run /login',
-      personalModeAction: 'switch with /api personal',
-    };
-
     expect(
       emptyModelListMessageForCliMode(
         [
@@ -610,7 +614,7 @@ describe('CLI model access resolution', () => {
           }),
         ],
         'included',
-        interactiveRecovery,
+        INTERACTIVE_RECOVERY,
       ),
     ).toBe(
       'Included relay models require sign-in. Run /login or switch with /api personal.',
@@ -628,7 +632,7 @@ describe('CLI model access resolution', () => {
           }),
         ],
         'included',
-        interactiveRecovery,
+        INTERACTIVE_RECOVERY,
       ),
     ).toBe(
       'No included relay models are runnable. Switch with /api personal or try again later.',
@@ -646,7 +650,7 @@ describe('CLI model access resolution', () => {
           }),
         ],
         'personal',
-        interactiveRecovery,
+        INTERACTIVE_RECOVERY,
       ),
     ).toBe(
       'No personal API-key models are runnable. Configure a provider key or switch with /api included.',
