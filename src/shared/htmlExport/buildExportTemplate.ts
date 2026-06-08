@@ -19,6 +19,8 @@ import { html as serverHtml } from '@lit-labs/ssr';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
+import { documentTokens } from './styles/tokens';
+
 // Side-effecting imports — registers the custom elements so
 // `<texra-chat-message>` etc. resolve to a class during SSR.
 import './components/ChatMessage';
@@ -104,6 +106,13 @@ export function buildExportTemplate(doc: ExportDocument) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="generator" content="TeXRA chat export" />
   <title>${doc.title}</title>
+  ${
+    // Server-only templates forbid bindings *inside* a <style> tag, so build
+    // the whole element via unsafeHTML. The content is our own trusted token
+    // CSS (no user data), inlined so the document and shadow components share
+    // one `--ce-*` source by inheritance.
+    unsafeHTML(`<style>${documentTokens.cssText}</style>`)
+  }
   <link rel="stylesheet" href="${doc.assetsHref}/katex.min.css" />
   <link rel="stylesheet" href="${doc.assetsHref}/texmath.css" />
   <link
