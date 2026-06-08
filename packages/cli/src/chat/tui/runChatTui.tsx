@@ -31,7 +31,6 @@ import {
   notifyFollowUpSent,
   sendFollowUp,
 } from '@agent/toolUse/ToolUseFollowUp';
-import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
 import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
@@ -519,7 +518,7 @@ async function applyCliModelSelection(
   }
 
   const activeFlow = context.session.streamId
-    ? interruptRegistry.getToolUseFlowContext(context.session.streamId)
+    ? executionRegistry.getToolUseFlowContext(context.session.streamId)
     : undefined;
   if (!activeFlow) {
     appendLocalAssistantTranscript(
@@ -922,7 +921,7 @@ async function handleTuiSlashCommand(
       requestCliCompaction({
         streamId: cliState.activeStreamId.get(),
         getFlowContext: (streamId) =>
-          interruptRegistry.getToolUseFlowContext(streamId),
+          executionRegistry.getToolUseFlowContext(streamId),
         notifyFollowUpSent,
         appendTranscript: appendLocalAssistantTranscript,
       });
@@ -1109,7 +1108,7 @@ export async function runChat(
   const hasActiveToolUseFlow = (): boolean =>
     Boolean(
       session.streamId &&
-      interruptRegistry.getToolUseFlowContext(session.streamId),
+      executionRegistry.getToolUseFlowContext(session.streamId),
     );
   const canSelectCurrentModel = (): boolean =>
     chatTuiCanSelectModel({
@@ -1125,7 +1124,7 @@ export async function runChat(
       return undefined;
     }
     const activeFlow = session.streamId
-      ? interruptRegistry.getToolUseFlowContext(session.streamId)
+      ? executionRegistry.getToolUseFlowContext(session.streamId)
       : undefined;
     return activeFlow?.modelSwitchDisabledReason(candidateModel);
   };

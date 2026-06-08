@@ -252,7 +252,7 @@ export async function executeAgent(
     ).catch(() => {});
     return runFlowWithLifecycle(
       ctx,
-      async () => {
+      async (handle) => {
         // Pre-execution UI setup
         if (executionId) await ensureRunDir(executionId);
         StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
@@ -283,42 +283,49 @@ export async function executeAgent(
         if (setting.agentCategory === AgentCategory.ToolUse) {
           let toolUseTurns = 0;
           const onRoundFinalized = createUsageRecordingCallback(ctx);
-          const result = await runToolUseFlow({
-            ...ctx,
-            ...interrupts,
-            onRoundFinalized,
-            setting,
-            isSubagent,
-            approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-            onBeforeWaiting: options.onBeforeWaiting,
-            stopAfterCycle: options.stopAfterCycle,
-            onProgress: (update) => {
-              if (update.kind === 'overview') {
-                toolUseTurns++;
-                ctx.runtimeHost.emit('updateConversationProgress', {
-                  streamId,
-                  progress: {
-                    conversationTurns: toolUseTurns,
-                    toolCallCount: update.toolCallCount,
-                  },
+          const result = await runToolUseFlow(
+            {
+              ...ctx,
+              ...interrupts,
+              onRoundFinalized,
+              setting,
+              isSubagent,
+              approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+              onBeforeWaiting: options.onBeforeWaiting,
+              stopAfterCycle: options.stopAfterCycle,
+              onProgress: (update) => {
+                if (update.kind === 'overview') {
+                  toolUseTurns++;
+                  ctx.runtimeHost.emit('updateConversationProgress', {
+                    streamId,
+                    progress: {
+                      conversationTurns: toolUseTurns,
+                      toolCallCount: update.toolCallCount,
+                    },
+                  });
+                }
+                options.onProgress?.(update);
+              },
+              onFollowUpConsumed: () => {
+                ctx.runtimeHost.emit('updateQueuedFollowUps', {
+                  streamId: ctx.streamId,
                 });
-              }
-              options.onProgress?.(update);
+                options.onFollowUpConsumed?.();
+              },
+              onModelChanged: (modelHandler, model) => {
+                ctx.config.model = model;
+                ctx.usageMonitor.setModelInfo({
+                  capabilities: modelHandler.capabilities,
+                  config: modelHandler.config,
+                });
+              },
             },
-            onFollowUpConsumed: () => {
-              ctx.runtimeHost.emit('updateQueuedFollowUps', {
-                streamId: ctx.streamId,
-              });
-              options.onFollowUpConsumed?.();
+            undefined,
+            (flowContext) => {
+              handle.attachToolUseFlow(flowContext);
+              return () => handle.detachToolUseFlow(flowContext);
             },
-            onModelChanged: (modelHandler, model) => {
-              ctx.config.model = model;
-              ctx.usageMonitor.setModelInfo({
-                capabilities: modelHandler.capabilities,
-                config: modelHandler.config,
-              });
-            },
-          });
+          );
           return {
             category: 'toolUse' as const,
             status: result.status,
@@ -392,7 +399,7 @@ export async function resumeToolUseFromSnapshot(
       );
     }
 
-    await runFlowWithLifecycle(ctx, async () => {
+    await runFlowWithLifecycle(ctx, async (handle) => {
       StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
         runtimeHost: ctx.runtimeHost,
       });
@@ -416,9 +423,11 @@ export async function resumeToolUseFromSnapshot(
             }),
         },
         undefined,
-        options.setupSession
-          ? (context) => options.setupSession?.(context.session)
-          : undefined,
+        (flowContext) => {
+          handle.attachToolUseFlow(flowContext);
+          options.setupSession?.(flowContext.session);
+          return () => handle.detachToolUseFlow(flowContext);
+        },
       );
       return {
         category: 'toolUse' as const,
