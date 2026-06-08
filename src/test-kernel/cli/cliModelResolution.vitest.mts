@@ -140,7 +140,7 @@ describe('resolveCliRunModel precedence', () => {
       CLI_BUILTIN_DEFAULT_MODEL,
       {
         apiMode: 'personal',
-        fallbackMode: 'silent',
+        fallbackSource: 'builtin',
       },
     );
     expect(mocks.setCliHelperModel).toHaveBeenCalledWith(
@@ -162,7 +162,7 @@ describe('resolveCliRunModel precedence', () => {
     );
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith(
       'staleConfiguredModel',
-      expect.objectContaining({ fallbackMode: 'notice' }),
+      expect.objectContaining({ fallbackSource: 'config' }),
     );
     expect(mocks.initCliPlatform).toHaveBeenCalledWith({
       ...context,
@@ -189,7 +189,7 @@ describe('resolveCliRunModel precedence', () => {
     );
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith('opus48T', {
       apiMode: 'personal',
-      fallbackMode: 'reject',
+      fallbackSource: 'override',
     });
   });
 
@@ -203,7 +203,7 @@ describe('resolveCliRunModel precedence', () => {
 
     expect(resolveCliRunnableModelMock).toHaveBeenCalledWith('opus48T', {
       apiMode: 'personal',
-      fallbackMode: 'reject',
+      fallbackSource: 'env',
     });
     expect(mocks.setCliHelperModel).toHaveBeenCalledWith('opus48T');
   });
