@@ -9,7 +9,7 @@ import { getFileLister } from '@frontend/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
 
 // Local imports - latex
-import { findLabelLocation } from '@latex/labelSearch';
+import { openFirstLabelMatch } from '@latex/labelSearch';
 
 // Local imports - logging
 import * as logger from '@logger/logUtils';
@@ -57,25 +57,31 @@ export async function openLabel(
     ...(await getFileLister().list('context')),
   ]);
 
-  const located = await findLabelLocation(label, candidates, async (file) => {
-    try {
-      return await WorkspaceFS.read(file);
-    } catch (error) {
-      logger.debug(
-        CHANNEL,
-        `Could not read file ${file}: ${toErrorMessage(error)}`,
+  const opened = await openFirstLabelMatch(
+    label,
+    candidates,
+    async (file) => {
+      try {
+        return await WorkspaceFS.read(file);
+      } catch (error) {
+        logger.debug(
+          CHANNEL,
+          `Could not read file ${file}: ${toErrorMessage(error)}`,
+        );
+        throw error;
+      }
+    },
+    async (file, index) => {
+      const doc = await vscode.workspace.openTextDocument(
+        WorkspaceFS.toAbsolute(file),
       );
-      throw error;
-    }
-  });
-  if (located) {
-    const doc = await vscode.workspace.openTextDocument(
-      WorkspaceFS.toAbsolute(located.file),
-    );
-    const editor = await vscode.window.showTextDocument(doc, {
-      preview: true,
-    });
-    revealPosition(editor, doc.positionAt(located.index));
+      const editor = await vscode.window.showTextDocument(doc, {
+        preview: true,
+      });
+      revealPosition(editor, doc.positionAt(index));
+    },
+  );
+  if (opened) {
     return true;
   }
 

@@ -46,7 +46,7 @@ import {
   buildAcceptSuccessMessage,
   getAcceptedFileTarget,
 } from '@latex/acceptedFileTarget';
-import { findLabelLocation } from '@latex/labelSearch';
+import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
 import { createChannelTrace } from '@logger';
@@ -1197,13 +1197,14 @@ export class DesktopProgressBridge {
       ),
     );
 
-    const located = await findLabelLocation(label, candidates, (file) =>
-      readFile(file, 'utf8'),
+    return openFirstLabelMatch(
+      label,
+      candidates,
+      (file) => readFile(file, 'utf8'),
+      async (file) => {
+        await this.options.openPath?.(file);
+      },
     );
-    if (!located) return false;
-
-    await this.options.openPath?.(located.file);
-    return true;
   }
 
   private deleteAgentProposalsForStream(streamId: StreamTabId): void {

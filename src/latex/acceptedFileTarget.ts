@@ -53,10 +53,7 @@ export function siblingLocation(
  * Verb describing the write that accepting an edited file will perform,
  * used in the confirmation prompt ("This will {action} ...").
  */
-export function getAcceptAction(
-  isNewFile: boolean,
-  targetExists: boolean,
-): string {
+function getAcceptAction(isNewFile: boolean, targetExists: boolean): string {
   if (targetExists) return 'overwrite existing';
   if (isNewFile) return 'create';
   return 'overwrite';
