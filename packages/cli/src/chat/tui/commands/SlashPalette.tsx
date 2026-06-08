@@ -3,13 +3,14 @@
 import { Box, Text, useInput } from 'ink';
 import { useState, useEffect } from 'react';
 
+import { clamp } from '@utils/core';
+
 import {
   matchSlashCommands,
   slashPickIntent,
   type SlashCommand,
   type SlashPickIntent,
 } from './slashRegistry';
-import { clamp } from '@utils/core';
 
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { KeyHints } from '../ui/KeyHints';
@@ -34,11 +35,6 @@ export interface SlashPaletteWindow {
   readonly hiddenAfter: number;
 }
 
-function clampHighlight(index: number, itemCount: number): number {
-  if (itemCount <= 0) return 0;
-  return clamp(index, 0, itemCount - 1);
-}
-
 export function nextSlashPaletteHighlight({
   direction,
   highlight,
@@ -49,7 +45,7 @@ export function nextSlashPaletteHighlight({
   readonly itemCount: number;
 }): number {
   if (itemCount <= 0) return 0;
-  const clamped = clampHighlight(highlight, itemCount);
+  const clamped = clamp(highlight, 0, itemCount - 1);
   if (direction === 1) return (clamped + 1) % itemCount;
   return clamped <= 0 ? itemCount - 1 : clamped - 1;
 }
@@ -72,7 +68,7 @@ export function slashPaletteWindow({
     return { start: 0, end: itemCount, hiddenBefore: 0, hiddenAfter: 0 };
   }
 
-  const clamped = clampHighlight(highlight, itemCount);
+  const clamped = clamp(highlight, 0, itemCount - 1);
   if (clamped < visibleAtEdge) {
     return {
       start: 0,
@@ -140,7 +136,7 @@ export function SlashPalette(
       return;
     }
     if (highlight < 0 || highlight >= matchCount) {
-      setHighlight(clampHighlight(highlight, matchCount));
+      setHighlight(clamp(highlight, 0, matchCount - 1));
     }
   }, [matchCount, highlight]);
 
