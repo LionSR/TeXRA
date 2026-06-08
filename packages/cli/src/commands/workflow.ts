@@ -41,7 +41,7 @@ import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
   hasMixedStdinWorkflowInputSpecs,
-} from './_helpers/workflowInputs';
+} from '../runtime/workflowInputs';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
