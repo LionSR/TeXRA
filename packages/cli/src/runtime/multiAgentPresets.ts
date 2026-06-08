@@ -135,12 +135,12 @@ export function planCliMultiAgentPresets(
 export function cliMultiAgentPresetAvailabilityParts(
   plan: CliMultiAgentPresetRunPlan,
 ): string[] {
-  const status = cliMultiAgentPlanStatus(plan);
+  const availability = cliMultiAgentPresetAvailability(plan);
   const parts = [
-    `workflow:${formatAvailablePresetAgentCount(plan.preset.workflowAgents, plan.missingWorkflowAgents)}`,
-    `tool-use:${formatAvailablePresetAgentCount(plan.preset.toolUseAgents, plan.missingToolUseAgents)}`,
+    `workflow:${availability.workflow.label}`,
+    `tool-use:${availability.toolUse.label}`,
   ];
-  if (status !== 'available') parts.push(status);
+  if (availability.status !== 'available') parts.push(availability.status);
   return parts;
 }
 
@@ -565,13 +565,6 @@ function availablePresetAgents(
 ): string[] {
   const missing = new Set(missingAgents);
   return presetAgents.filter((agent) => !missing.has(agent));
-}
-
-function formatAvailablePresetAgentCount(
-  presetAgents: readonly string[],
-  missingAgents: readonly string[],
-): string {
-  return presetAgentAvailability(presetAgents, missingAgents).label;
 }
 
 function presetAgentAvailability(
