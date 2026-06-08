@@ -119,6 +119,31 @@ describe('tool-use follow-up progress events', () => {
     expect(appendFollowUp).not.toHaveBeenCalled();
   });
 
+  it('queues follow-ups for resuming streams through registry admission', async () => {
+    const resumingStreamId = 'stream:resuming-follow-up' as StreamTabId;
+
+    StreamStatusService.set(resumingStreamId, STREAM_STATUS.RESUMING, {
+      emit: false,
+    });
+
+    try {
+      const result = await sendFollowUp(
+        resumingStreamId,
+        'queued while resuming',
+      );
+
+      expect(result).toEqual({
+        status: 'queued',
+        reason: 'resuming',
+      });
+      expect(ToolUseFollowUpQueue.getAll(resumingStreamId)).toEqual([
+        'queued while resuming',
+      ]);
+    } finally {
+      ToolUseFollowUpQueue.release(resumingStreamId);
+    }
+  });
+
   it('keeps terminal parents with active children on the children-running queue path', async () => {
     const parentStreamId = 'stream:terminal-parent' as StreamTabId;
     const childStreamId = 'stream:terminal-parent-child' as StreamTabId;
