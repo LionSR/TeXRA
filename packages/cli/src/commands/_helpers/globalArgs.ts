@@ -1,12 +1,10 @@
 import { INTEROP_SKILL_DIRS } from '@skills/skillSources';
 import {
   CLI_APPROVAL_POLICIES,
-  type CliApprovalPolicy,
-} from '@cli/schemas/cliSettings';
-import {
   CLI_OUTPUT_FORMATS,
+  type CliApprovalPolicy,
   type CliOutputFormat,
-} from '@cli/runtime/cliConfig';
+} from '@cli/schemas/cliSettings';
 import { CliUsageError } from '@cli/runtime/cliContext';
 
 /**
