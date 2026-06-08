@@ -1,9 +1,10 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 // Local imports
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   STREAM_STATUS,
   type ExecutionId,
@@ -15,6 +16,10 @@ import { createRecordingHost } from '../progressTestUtils';
 const executionId = 'exec:child-stream' as ExecutionId;
 const parentStreamId = 'stream:parent' as StreamTabId;
 const childStreamId = 'bash#exec:child-stream' as StreamTabId;
+const loopExecutionId = 'exec:child-stream-loop' as ExecutionId;
+const loopChildStreamId = 'codex#exec:child-stream-loop' as StreamTabId;
+const stoppedExecutionId = 'exec:child-stream-stopped' as ExecutionId;
+const stoppedChildStreamId = 'codex#exec:child-stream-stopped' as StreamTabId;
 const config = {
   agentCategory: AgentCategory.ToolUse,
   model: 'test-model',
@@ -22,6 +27,16 @@ const config = {
 } as unknown as AgentConfig;
 
 describe('child stream progress events', () => {
+  afterEach(() => {
+    for (const streamId of [
+      childStreamId,
+      loopChildStreamId,
+      stoppedChildStreamId,
+    ]) {
+      StreamStatusService.clear(streamId, { emit: false });
+    }
+  });
+
   it('publishes child stream lifecycle events through the explicit runtime host', () => {
     const active = createRecordingHost();
 
@@ -47,9 +62,8 @@ describe('child stream progress events', () => {
       'updateStreamStatus',
       'updateActiveSubagents',
       'setParentStream',
+      'updateActiveSubagents',
       'updateStreamStatus',
-      'updateActiveSubagents',
-      'updateActiveSubagents',
       'removeStream',
     ]);
     // Background child streams register without yanking the active tab —
@@ -94,6 +108,10 @@ describe('child stream progress events', () => {
       ],
     });
     expect(events[6]).toEqual({
+      event: 'updateActiveSubagents',
+      payload: { parentStreamId, children: [] },
+    });
+    expect(events[7]).toEqual({
       event: 'updateStreamStatus',
       payload: {
         streamId: childStreamId,
@@ -102,12 +120,77 @@ describe('child stream progress events', () => {
       },
     });
     expect(events[8]).toEqual({
-      event: 'updateActiveSubagents',
-      payload: { parentStreamId, children: [] },
-    });
-    expect(events[9]).toEqual({
       event: 'removeStream',
       payload: { streamId: childStreamId },
     });
+  });
+
+  it('publishes child loop status changes through the child stream owner', () => {
+    const active = createRecordingHost();
+
+    const childStream = createChildStream(loopExecutionId, parentStreamId, {
+      runtimeHost: active.host,
+      streamPrefix: 'codex',
+      streamCategory: AgentCategory.ToolUse,
+      agentName: 'codex',
+      description: 'Run a long-lived Codex child loop',
+      config,
+      toolName: 'codex',
+    });
+    active.events.splice(0);
+
+    childStream.waitForInput();
+    childStream.beginTurn();
+    childStream.failTurn();
+    childStream.finalize({ status: STREAM_STATUS.ERROR });
+
+    const statusEvents = active.events.filter(
+      (entry) => entry.event === 'updateStreamStatus',
+    );
+    const statuses = statusEvents.map(
+      (entry) => (entry.payload as { status: string }).status,
+    );
+    expect(statuses).toEqual([
+      STREAM_STATUS.WAITING,
+      STREAM_STATUS.RUNNING,
+      STREAM_STATUS.ERROR,
+    ]);
+    expect(StreamStatusService.get(loopChildStreamId)).toBe(
+      STREAM_STATUS.ERROR,
+    );
+    expect(active.events.at(-1)).toEqual({
+      event: 'updateActiveSubagents',
+      payload: { parentStreamId, children: [] },
+    });
+  });
+
+  it('preserves explicit user stops during child loop status changes', () => {
+    const active = createRecordingHost();
+
+    const childStream = createChildStream(stoppedExecutionId, parentStreamId, {
+      runtimeHost: active.host,
+      streamPrefix: 'codex',
+      streamCategory: AgentCategory.ToolUse,
+      agentName: 'codex',
+      description: 'Run a stopped Codex child loop',
+      config,
+      toolName: 'codex',
+    });
+    StreamStatusService.set(stoppedChildStreamId, STREAM_STATUS.STOPPED, {
+      emit: false,
+    });
+    active.events.splice(0);
+
+    childStream.waitForInput();
+    childStream.beginTurn();
+    childStream.failTurn();
+    childStream.finalize({ status: STREAM_STATUS.ERROR });
+
+    expect(StreamStatusService.get(stoppedChildStreamId)).toBe(
+      STREAM_STATUS.STOPPED,
+    );
+    expect(
+      active.events.filter((entry) => entry.event === 'updateStreamStatus'),
+    ).toHaveLength(0);
   });
 });
