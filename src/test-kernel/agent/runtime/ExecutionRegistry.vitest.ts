@@ -8,7 +8,10 @@ import {
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
 import { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
-import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
+import {
+  StreamStatusRegistry,
+  StreamStatusService,
+} from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -33,6 +36,7 @@ describe('executionRegistry', () => {
         'test-subagent',
         'toolUse',
         explicit.host,
+        streamStatus,
       );
       registry.track(handle);
 
@@ -67,6 +71,7 @@ describe('executionRegistry', () => {
           'test-root',
           'toolUse',
           explicit.host,
+          streamStatus,
         ),
       );
       registry.track(
@@ -77,6 +82,7 @@ describe('executionRegistry', () => {
           'test-subagent',
           'toolUse',
           explicit.host,
+          streamStatus,
         ),
       );
 
@@ -116,6 +122,7 @@ describe('executionRegistry', () => {
           'test-root',
           'toolUse',
           explicit.host,
+          streamStatus,
         ),
       );
       registry.track(
@@ -126,6 +133,7 @@ describe('executionRegistry', () => {
           'test-subagent',
           'toolUse',
           explicit.host,
+          streamStatus,
         ),
       );
 
@@ -182,6 +190,39 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('reports agent status from its stream-status owner', () => {
+    const explicit = createRecordingHost();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const parentStreamId = 'parent-owned-status-test' as StreamTabId;
+    const childStreamId = 'child-owned-status-test' as StreamTabId;
+    const executionId = 'exec-owned-status-test';
+
+    try {
+      streamStatus.set(childStreamId, STREAM_STATUS.WAITING, { emit: false });
+      registry.track(
+        new AgentExecutionHandle(
+          executionId,
+          parentStreamId,
+          childStreamId,
+          'test-subagent',
+          'toolUse',
+          explicit.host,
+          streamStatus,
+        ),
+      );
+
+      expect(registry.getActiveChildren(parentStreamId).subagents).toEqual([
+        expect.objectContaining({
+          executionId,
+          status: STREAM_STATUS.WAITING,
+        }),
+      ]);
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('requires a runtime host when detaching without a tracked root handle', () => {
     const registry = new ExecutionRegistry();
     const streamId = 'missing-host-detach-stop-policy-test' as StreamTabId;
@@ -212,6 +253,7 @@ describe('executionRegistry', () => {
         'test-subagent',
         'toolUse',
         explicit.host,
+        StreamStatusService,
       );
 
       registry.track(handle);
@@ -267,6 +309,7 @@ describe('executionRegistry', () => {
         'test-tool-use',
         'toolUse',
         explicit.host,
+        StreamStatusService,
       );
 
       handle.attachToolUseFlow(context);
@@ -298,6 +341,7 @@ describe('executionRegistry', () => {
         'test-subagent',
         'toolUse',
         explicit.host,
+        StreamStatusService,
       );
 
       registry.track(handle);
@@ -337,6 +381,7 @@ describe('executionRegistry', () => {
       'test-subagent',
       'toolUse',
       explicit.host,
+      streamStatus,
     );
 
     registry.track(handle);
