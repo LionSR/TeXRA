@@ -10,7 +10,12 @@ import { writeRawStderr, writeRawStdout } from '@cli/runtime/logSinks';
 import { readCliAmbientState } from '@cli/runtime/cliContext';
 import { stripAnsiSequences } from '@cli/runtime/ansiEscapes';
 
-import { GLOBAL_BOOL_FLAGS, GLOBAL_VALUE_FLAGS } from './globalArgs';
+import {
+  GLOBAL_ARGS,
+  GLOBAL_BOOL_FLAGS,
+  GLOBAL_VALUE_FLAGS,
+  HEADLESS_ONLY_GLOBAL_ARG_NAMES,
+} from './globalArgs';
 
 interface LeadingGlobalFlags {
   readonly leadingGlobals: readonly string[];
@@ -561,10 +566,9 @@ function addFlagSpec(specs: CommandFlagSpecs, name: string, def: ArgDef): void {
 }
 
 function addInteractiveHeadlessOnlyFlags(specs: CommandFlagSpecs): void {
-  specs.long.set('--print', { takesValue: false });
-  specs.short.set('-p', { takesValue: false });
-  specs.long.set('--no-input', { takesValue: false });
-  addLongFlag(specs, 'output-format', { takesValue: true });
+  for (const name of HEADLESS_ONLY_GLOBAL_ARG_NAMES) {
+    addFlagSpec(specs, name, GLOBAL_ARGS[name]);
+  }
 }
 
 async function commandFlagSpecs(
