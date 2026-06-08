@@ -2,14 +2,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse';
-import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  noopAgentRuntimeHost,
+  type AgentRuntimeHost,
+} from '@agent/runtime/AgentRuntimeHost';
 import {
   AgentExecutionHandle,
   executionRegistry,
+  type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { onFollowUpSent, sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
@@ -19,24 +21,54 @@ const streamId = 'stream:follow-up' as StreamTabId;
 
 describe('tool-use follow-up progress events', () => {
   let unsubscribeFollowUpObserver: (() => void) | undefined;
+  const trackedExecutionIds = new Set<string>();
 
   afterEach(() => {
     unsubscribeFollowUpObserver?.();
     unsubscribeFollowUpObserver = undefined;
-    interruptRegistry.unregister(streamId);
+    for (const executionId of trackedExecutionIds) {
+      executionRegistry.untrack(executionId);
+    }
+    trackedExecutionIds.clear();
     StreamStatusService.clearAll({ emit: false });
   });
+
+  function trackToolUseFlow({
+    stream = streamId,
+    host = noopAgentRuntimeHost,
+    appendFollowUp,
+    executionId = `exec-${stream}`,
+  }: {
+    readonly stream?: StreamTabId;
+    readonly host?: AgentRuntimeHost;
+    readonly appendFollowUp: LiveToolUseFlowContext['session']['appendFollowUp'];
+    readonly executionId?: string;
+  }): void {
+    const handle = new AgentExecutionHandle(
+      executionId,
+      stream,
+      stream,
+      'search',
+      'toolUse',
+      host,
+    );
+    handle.attachToolUseFlow({
+      session: { appendFollowUp },
+      modelHandler: { supportsManualCompaction: true },
+      runtimeHost: host,
+      requestImmediateCompaction: () => {},
+      modelSwitchDisabledReason: () => undefined,
+      switchModel: async () => {},
+    });
+    executionRegistry.track(handle);
+    trackedExecutionIds.add(executionId);
+  }
 
   it('publishes sent follow-up events through the active runtime host', async () => {
     const { events, host } = createRecordingHost();
     const appendFollowUp = vi.fn();
 
-    interruptRegistry.register(streamId, {
-      session: { appendFollowUp },
-      modelHandler: {},
-      runtimeHost: host,
-      interrupt: vi.fn(),
-    } as unknown as ToolUseFlowContext);
+    trackToolUseFlow({ host, appendFollowUp });
 
     const result = await sendFollowUp(streamId, 'please continue');
 
@@ -61,12 +93,7 @@ describe('tool-use follow-up progress events', () => {
       observed.push(observedStreamId);
     });
 
-    interruptRegistry.register(streamId, {
-      session: { appendFollowUp: vi.fn() },
-      modelHandler: {},
-      runtimeHost: host,
-      interrupt: vi.fn(),
-    } as unknown as ToolUseFlowContext);
+    trackToolUseFlow({ host, appendFollowUp: vi.fn() });
 
     await sendFollowUp(streamId, 'break wait');
     unsubscribeFollowUpObserver();
@@ -81,12 +108,7 @@ describe('tool-use follow-up progress events', () => {
     const appendFollowUp = vi.fn();
 
     StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, { emit: false });
-    interruptRegistry.register(streamId, {
-      session: { appendFollowUp },
-      modelHandler: {},
-      runtimeHost: host,
-      interrupt: vi.fn(),
-    } as unknown as ToolUseFlowContext);
+    trackToolUseFlow({ host, appendFollowUp });
 
     const result = await sendFollowUp(streamId, 'late follow-up');
 
