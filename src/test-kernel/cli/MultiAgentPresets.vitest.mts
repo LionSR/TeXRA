@@ -385,7 +385,7 @@ describe('CLI multi-agent presets', () => {
         ],
         [
           'software-engineer',
-          'unavailable; no runnable team root; 0/5 tool-use agents',
+          'unavailable; no runnable team root; 0/4 tool-use agents',
         ],
       ]),
     );
