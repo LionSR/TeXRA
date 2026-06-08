@@ -1,9 +1,14 @@
 #!/usr/bin/env node
+/* global console, process */
 /**
- * Copies the static CSS + fonts needed by the HTML chat export into
- * `packages/extension/resources/htmlExport/`. The runtime export handler
+ * Copies the static third-party CSS + fonts needed by the HTML chat export
+ * into `packages/extension/resources/htmlExport/`. The runtime export handler
  * copies this folder alongside each exported HTML file so the document is
  * viewable offline with the same KaTeX/highlight.js styling as the webview.
+ *
+ * TeXRA's own styling (tokens + document sheet) is NOT copied here — it lives
+ * in `src/shared/htmlExport/styles/` and is inlined into each export's <head>
+ * by buildExportTemplate, so only third-party assets need staging.
  *
  * Run as part of `compile:fast` / `package:fast` so the resources are in
  * place before vsce packages the extension.
@@ -45,16 +50,6 @@ const texmathCssSrc = path.join(
   'css',
   'texmath.css',
 );
-const chatCssSrc = path.join(
-  repoRoot,
-  'packages',
-  'extension',
-  'src',
-  'commands',
-  'history',
-  'htmlExport',
-  'chat.css',
-);
 
 async function copyDir(src, dest, filter = () => true) {
   await mkdir(dest, { recursive: true });
@@ -88,7 +83,6 @@ async function main() {
   await copyFile(hljsThemeSrc, path.join(destRoot, 'hljs-light.css'));
   await copyFile(hljsDarkThemeSrc, path.join(destRoot, 'hljs-dark.css'));
   await copyFile(texmathCssSrc, path.join(destRoot, 'texmath.css'));
-  await copyFile(chatCssSrc, path.join(destRoot, 'chat.css'));
 }
 
 main().catch((err) => {

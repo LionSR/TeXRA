@@ -1,7 +1,7 @@
 /**
  * Design tokens for the chat export — the single source of truth for the
- * `--ce-*` palette used by both the light-DOM document (`chat.css`) and the
- * shadow-DOM bubble components.
+ * `--ce-*` palette used by both the light-DOM document (`documentStyles`)
+ * and the shadow-DOM bubble components.
  *
  * Tokens are defined as CSS custom properties on `:root` (not `:host`), with
  * a `@media (prefers-color-scheme: dark)` block that re-binds them. Custom
@@ -9,7 +9,7 @@
  * is readable via `var(--ce-fg)` inside every component's shadow styles
  * without redefining it there. `buildExportTemplate` inlines this block into
  * the document `<head>` (via `.cssText`), so the components consume it by
- * inheritance and `chat.css` consumes it directly.
+ * inheritance and `documentStyles` consumes it directly.
  *
  * Tokens are deliberately a small, neutral set — this is a static page
  * shared with people who don't have the user's VS Code theme. The token

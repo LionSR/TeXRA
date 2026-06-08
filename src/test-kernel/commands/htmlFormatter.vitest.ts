@@ -66,11 +66,13 @@ describe('formatChatAsHtml', () => {
     expect(html).toContain('<title>Plot the Riemann zeta zeros</title>');
   });
 
-  it('links to the assets folder for CSS and fonts', () => {
+  it('links only third-party assets; TeXRA styling is inlined', () => {
+    // KaTeX/hljs/fonts stay external (size + woff2); our own tokens and
+    // document sheet are inlined so the export carries its styling itself.
     expect(html).toContain('href="./assets/katex.min.css"');
-    expect(html).toContain('href="./assets/chat.css"');
     expect(html).toContain('href="./assets/hljs-light.css"');
     expect(html).toContain('href="./assets/hljs-dark.css"');
+    expect(html).not.toContain('chat.css');
   });
 
   it('renders the document header with run metadata', () => {
@@ -110,12 +112,15 @@ describe('formatChatAsHtml', () => {
     expect(html).toMatch(/<template[^>]*shadowrootmode="open"/);
   });
 
-  it('defines the --ce-* tokens once on :root in the document head', () => {
-    // The palette is the single source of truth in styles/tokens.ts and is
-    // inlined into <head> on :root (not redefined per shadow root). The token
-    // *definition* (`--ce-bg:`) lives in the head, before the asset links.
+  it('inlines the --ce-* tokens and document styles in the head', () => {
+    // The palette (styles/tokens.ts) and the light-DOM document sheet
+    // (styles/documentStyles.ts) are the single source of truth, inlined into
+    // <head> rather than shipped as a separate chat.css asset. The token
+    // *definition* (`--ce-bg:`) and a document rule (`.page`) both appear in
+    // the inlined <style>.
     const head = html.slice(0, html.indexOf('</head>'));
     expect(head).toMatch(/<style>[\s\S]*:root\s*\{[\s\S]*--ce-bg:/);
+    expect(head).toMatch(/<style>[\s\S]*\.page\s*\{/);
   });
 
   it('inlines component-scoped CSS inside the declarative shadow root', () => {

@@ -1339,8 +1339,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
    *
    * Layout (under the execution's storage folder):
    *   texra-chat-{date}-{slug}/
-   *     index.html           ← document references ./assets/*
-   *     assets/              ← chat.css, katex.min.css, hljs themes, fonts
+   *     index.html           ← TeXRA styling inlined; references ./assets/*
+   *     assets/              ← katex.min.css, texmath.css, hljs themes, fonts
    *
    * Opens index.html in the user's default browser so they see the same
    * KaTeX/highlight.js rendering an audience would see.

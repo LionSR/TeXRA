@@ -19,6 +19,7 @@ import { html as serverHtml } from '@lit-labs/ssr';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
+import { documentStyles } from './styles/documentStyles';
 import { documentTokens } from './styles/tokens';
 
 // Side-effecting imports — registers the custom elements so
@@ -107,11 +108,14 @@ export function buildExportTemplate(doc: ExportDocument) {
   <meta name="generator" content="TeXRA chat export" />
   <title>${doc.title}</title>
   ${
-    // Server-only templates forbid bindings *inside* a <style> tag, so build
-    // the whole element via unsafeHTML. The content is our own trusted token
-    // CSS (no user data), inlined so the document and shadow components share
-    // one `--ce-*` source by inheritance.
-    unsafeHTML(`<style>${documentTokens.cssText}</style>`)
+    // TeXRA's own styling (tokens + document sheet) is inlined so the export
+    // is self-contained; only third-party assets (KaTeX/hljs/fonts) stay
+    // external. Server-only templates forbid bindings *inside* a <style> tag,
+    // so build the whole element via unsafeHTML. The content is our own
+    // trusted CSS (no user data).
+    unsafeHTML(
+      `<style>${documentTokens.cssText}\n${documentStyles.cssText}</style>`,
+    )
   }
   <link rel="stylesheet" href="${doc.assetsHref}/katex.min.css" />
   <link rel="stylesheet" href="${doc.assetsHref}/texmath.css" />
@@ -125,7 +129,6 @@ export function buildExportTemplate(doc: ExportDocument) {
     href="${doc.assetsHref}/hljs-dark.css"
     media="(prefers-color-scheme: dark)"
   />
-  <link rel="stylesheet" href="${doc.assetsHref}/chat.css" />
 </head>
 <body>
   <main class="page">
