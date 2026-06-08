@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
+import { clamp } from '@utils/core';
 
 import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
 import {
@@ -75,7 +76,7 @@ export function editApprovalDiffRowsBudget({
     EDIT_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE -
     titleRows -
     feedbackRows;
-  return Math.max(1, Math.min(COMPACT_DIFF_DISPLAY_LINES, compactDiffRows));
+  return clamp(compactDiffRows, 1, COMPACT_DIFF_DISPLAY_LINES);
 }
 
 export function editApprovalFeedbackRows({
@@ -145,13 +146,13 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
   function scrollTo(next: number | ((currentOffset: number) => number)): void {
     setScrollOffset((current) => {
       const requested = typeof next === 'function' ? next(current) : next;
-      return Math.max(0, Math.min(maxScrollOffset, requested));
+      return clamp(requested, 0, maxScrollOffset);
     });
   }
 
   useEffect(() => {
     setScrollOffset((current) =>
-      Math.max(0, Math.min(maxScrollOffset, current)),
+      clamp(current, 0, maxScrollOffset),
     );
   }, [maxScrollOffset]);
 

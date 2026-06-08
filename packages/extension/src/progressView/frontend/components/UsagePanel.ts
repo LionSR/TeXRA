@@ -10,6 +10,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 // Local imports - shared styles
 import { designTokens } from '@shared/styles';
 import type { TokenUsageStats } from '@shared/schemas';
+import { clamp } from '@utils/core';
 
 // Local imports - progress view
 import { formatTokens } from '../formatters/timestampUtils';
@@ -234,7 +235,7 @@ export class UsagePanel extends LitElement {
     if (!this.contextState) return nothing;
     const { inputTokens, contextWindow, utilizationPercent } =
       this.contextState;
-    const clamped = Math.min(100, Math.max(0, utilizationPercent));
+    const clamped = clamp(utilizationPercent, 0, 100);
 
     return html`
       <span class="context-gauge" title="${clamped.toFixed(0)}% context used">
