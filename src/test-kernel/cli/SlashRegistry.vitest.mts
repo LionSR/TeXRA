@@ -11,7 +11,7 @@ import {
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
-import { openRegisteredCliSlashForm } from '@cli/chat/tui/runChatTui';
+import { openRegisteredCliSlashForm } from '@cli/chat/tui/commands/slashForms';
 import { cliState, resetCliState } from '@cli/chat/tui/state/cliState';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 
