@@ -52,17 +52,6 @@ export class MemoryItem extends LitElement {
         margin-top: var(--wa-space-3xs);
       }
 
-      .memory-contents::part(header) {
-        min-height: 20px;
-        padding: 0;
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
-      }
-
-      .memory-contents::part(content) {
-        padding: 0;
-      }
-
       .memory-preview {
         font-size: var(--font-size-sm);
         line-height: var(--line-height-tight, 1.3);
@@ -236,7 +225,7 @@ export class MemoryItem extends LitElement {
           ${this.renderMeta(this.item)}
         </div>
         <wa-details
-          class="collapsible memory-contents"
+          class="collapsible-quiet memory-contents"
           summary="Contents"
           ?open=${this.contentsOpened}
           @wa-show=${this.handleContentsShow}

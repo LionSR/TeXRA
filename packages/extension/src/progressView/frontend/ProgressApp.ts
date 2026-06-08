@@ -228,6 +228,15 @@ export class ProgressApp extends ProgressAppBase {
       wa-split-panel {
         width: 100%;
         height: 100%;
+        /* The divider is the one and only seam between the conversation and
+           the stream rail. Collapse WebAwesome's default 4px neutral bar to a
+           1px hairline that matches every other border in the view; the
+           invisible 0.75rem hit-area still makes it easy to drag. */
+        --divider-width: var(--border-thin, 1px);
+      }
+
+      wa-split-panel::part(divider) {
+        background-color: var(--color-border);
       }
 
       stream-tabs {
@@ -447,6 +456,7 @@ export class ProgressApp extends ProgressAppBase {
 
                   <stream-tabs
                     slot="end"
+                    .heading=${compactTabs ? '' : 'Sessions'}
                     .compact=${compactTabs}
                     .streams=${tabStreams$.get()}
                     .activeStreamId=${activeStreamId$.get()}

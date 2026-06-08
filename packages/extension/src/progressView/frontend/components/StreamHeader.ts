@@ -134,7 +134,10 @@ export class StreamHeader extends LitElement {
         font-size: var(--font-size-sm);
         display: flex;
         flex-direction: column;
+        justify-content: center;
         gap: var(--wa-space-2xs);
+        min-height: var(--height-header);
+        box-sizing: border-box;
         color: var(--color-text-secondary);
         border-bottom: var(--border-thin) solid var(--color-border);
       }
