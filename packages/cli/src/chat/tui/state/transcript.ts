@@ -32,6 +32,17 @@ function normalizeTranscriptText(text: string): string {
   return text.trim();
 }
 
+function transcriptDedupeText(text: string): string {
+  return normalizeTranscriptText(text).replaceAll('\\checkmark', '✓');
+}
+
+function currentTurnStartIndex(entries: readonly ConversationEntry[]): number {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    if (entries[index]?.role === 'user') return index;
+  }
+  return 0;
+}
+
 export function appendAssistantTranscriptIfMissing(
   streamId: StreamTabId,
   text: string | undefined,
@@ -39,22 +50,30 @@ export function appendAssistantTranscriptIfMissing(
 ): void {
   const normalized = normalizeTranscriptText(text ?? '');
   if (!normalized) return;
+  const dedupeText = transcriptDedupeText(normalized);
   const syntheticAfterSeq = getDefaultStreamLogStore().get(streamId)?.head ?? 0;
 
   patchStream(streamId, (slice) => {
     const entryId = `${idPrefix}:${streamId}`;
-    const alreadyRendered = slice.entries.some(
-      (entry) =>
-        entry.id === entryId ||
-        (!entry.synthetic &&
-          entry.role === 'assistant' &&
-          normalizeTranscriptText(entry.text) === normalized) ||
-        (entry.synthetic &&
-          entry.syntheticKind === 'final' &&
-          entry.syntheticAfterSeq === syntheticAfterSeq &&
-          entry.role === 'assistant' &&
-          normalizeTranscriptText(entry.text) === normalized),
-    );
+    const turnStartIndex = currentTurnStartIndex(slice.entries);
+    const alreadyRendered = slice.entries.some((entry, index) => {
+      if (entry.id === entryId) return true;
+      if (
+        !entry.synthetic &&
+        index >= turnStartIndex &&
+        entry.role === 'assistant' &&
+        transcriptDedupeText(entry.text) === dedupeText
+      ) {
+        return true;
+      }
+      return (
+        entry.synthetic === true &&
+        entry.syntheticKind === 'final' &&
+        entry.syntheticAfterSeq === syntheticAfterSeq &&
+        entry.role === 'assistant' &&
+        transcriptDedupeText(entry.text) === dedupeText
+      );
+    });
     if (alreadyRendered) return slice;
 
     const entry: ConversationEntry = {
