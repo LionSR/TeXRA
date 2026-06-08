@@ -162,6 +162,7 @@ describe('slashRegistry', () => {
     resetCliState({
       agent: 'chat',
       model: 'deepseekT',
+      modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
       canDelegate: false,
@@ -197,6 +198,7 @@ describe('slashRegistry', () => {
     resetCliState({
       agent: 'chat',
       model: 'deepseekT',
+      modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
       canDelegate: false,
@@ -226,6 +228,7 @@ describe('slashRegistry', () => {
     resetCliState({
       agent: 'chat',
       model: 'deepseekT',
+      modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
       canDelegate: false,
@@ -253,6 +256,7 @@ describe('slashRegistry', () => {
     resetCliState({
       agent: 'chat',
       model: 'deepseekT',
+      modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
       canDelegate: false,
@@ -269,16 +273,23 @@ describe('slashRegistry', () => {
     expect(openRegisteredCliSlashForm(model, '')).toBe(true);
 
     const modelNode = renderFormAdapter<{
+      onSelect?: (value: string) => void;
       selectable?: boolean;
     }>(cliState.activeForm.get()?.render(() => {}, 20));
+    modelNode.props?.onSelect?.('gpt55');
 
     expect(modelNode.props).toMatchObject({ selectable: true });
+    expect(cliState.sessionMeta.get()).toMatchObject({
+      model: 'gpt55',
+      modelSource: 'override',
+    });
   });
 
   it('passes live model-switch disabled reasons into the model picker', () => {
     resetCliState({
       agent: 'chat',
       model: 'gpt54',
+      modelSource: 'override',
       cwd: '/tmp/workspace',
       apiMode: 'personal',
       canDelegate: false,
@@ -364,6 +375,7 @@ describe('slashRegistry', () => {
     resetCliState({
       agent: 'chat',
       model: 'deepseekT',
+      modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
       canDelegate: false,
@@ -398,6 +410,7 @@ describe('slashRegistry', () => {
     resetCliState({
       agent: 'chat',
       model: 'deepseekT',
+      modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
       canDelegate: false,
