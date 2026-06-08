@@ -580,7 +580,8 @@ const SCENARIOS = [
       '/model · included relay',
       'No model choices in this API mode.',
       'No included relay models are runnable.',
-      'Switch with /api personal or try again later.',
+      'Switch with /api personal or try',
+      'again later.',
       'Enter close',
     ],
     unexpect: [
