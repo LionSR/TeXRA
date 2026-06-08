@@ -10,7 +10,7 @@ const baseConfig = {
   description:
     'Multi-agent AI system for scientific discovery. Specialized agents that polish LaTeX, search literature, generate figures, and build presentations — orchestrated in reproducible workflows inside VS Code.',
   head: [
-    ['link', { rel: 'icon', href: `${base}logo-128x128.svg` }],
+    ['link', { rel: 'icon', href: `${base}favicon.svg` }],
     [
       'script',
       {},
@@ -91,7 +91,7 @@ const baseConfig = {
     ],
   ],
   themeConfig: {
-    logo: '/logo-128x128.svg',
+    logo: '/favicon.svg',
     nav: [
       {
         text: 'Docs',

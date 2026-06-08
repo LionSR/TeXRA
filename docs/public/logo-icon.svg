@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="TeXRA">
+  <rect width="200" height="200" rx="46" fill="#FEF7E2"></rect>
+  <text x="100" y="134" text-anchor="middle">
+    <tspan font-family="&#39;Source Serif 4&#39;, Georgia, &#39;Times New Roman&#39;, serif" font-size="108" fill="#6F387A">{</tspan><tspan dx="5" dy="-7" font-family="&#39;Source Serif 4&#39;, Georgia, &#39;Times New Roman&#39;, serif" font-size="74" font-weight="600" fill="#270939">T</tspan><tspan dx="5" dy="7" font-family="&#39;Source Serif 4&#39;, Georgia, &#39;Times New Roman&#39;, serif" font-size="108" fill="#6F387A">}</tspan>
+  </text>
+</svg>

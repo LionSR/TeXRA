@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="TeXRA">
+  <rect width="200" height="200" rx="46" fill="#1B0828"></rect>
+  <text x="100" y="132" text-anchor="middle">
+    <tspan font-family="&#39;JetBrains Mono&#39;, &#39;Courier New&#39;, monospace" font-size="96" fill="#F39215">{</tspan><tspan dx="3" dy="-7" font-family="&#39;Source Serif 4&#39;, Georgia, &#39;Times New Roman&#39;, serif" font-size="74" font-weight="600" fill="#F4ECDC">T</tspan><tspan dx="3" dy="7" font-family="&#39;JetBrains Mono&#39;, &#39;Courier New&#39;, monospace" font-size="96" fill="#F39215">}</tspan>
+  </text>
+</svg>
