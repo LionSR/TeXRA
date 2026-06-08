@@ -177,13 +177,3 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
     expiresAt: session ? new Date(session.expiresAt).toISOString() : undefined,
   };
 }
-
-export async function getCliStoredAuthProfile(): Promise<CliAuthProfile> {
-  const session = await getCliSupabaseAuthCoordinator().loadSession();
-  if (!session) return { authenticated: false };
-  return {
-    authenticated: true,
-    accountLabel: session.account.label,
-    expiresAt: new Date(session.expiresAt).toISOString(),
-  };
-}
