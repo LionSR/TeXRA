@@ -46,6 +46,7 @@ const STREAM_ID = 'cli-test-stream' as StreamTabId;
 const SESSION_META = {
   agent: 'research',
   model: 'deepseekT',
+  modelSource: 'builtin',
   cwd: '/tmp/project',
   apiMode: 'personal',
   canDelegate: false,
@@ -344,6 +345,23 @@ describe('CLI conversation transcript splitting', () => {
         width: 6,
       }),
     ).toBe('  ef  ');
+  });
+
+  it('budgets the visual gap after finalized user turns', () => {
+    const user = entry('u1', 'user', 'why do you write as a latex?', true);
+
+    expect(estimateTranscriptEntryRows(user, 80)).toBe(2);
+  });
+
+  it('does not budget regular user margin for inquiry continuations', () => {
+    const continuation = entry(
+      'u1',
+      'user',
+      '[inquiry] ei_123 answered.\nQ: Can this be simplified?\nA: Yes.',
+      true,
+    );
+
+    expect(estimateTranscriptEntryRows(continuation, 80)).toBe(3);
   });
 
   it('appends only finalized entries to terminal scrollback items', () => {
@@ -745,7 +763,9 @@ function sliceWithEntries(
     status: undefined,
     runStartedAt: undefined,
     description: undefined,
+    thinkingActive: false,
     usage: undefined,
+    cumulativeUsage: undefined,
     conversation: undefined,
     entries,
     queuedFollowUps: 0,

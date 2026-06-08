@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  findSlashCommand,
   listSlashCommands,
   matchSlashCommands,
   parseSlashInput,
@@ -11,7 +12,10 @@ import {
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
-import { openRegisteredCliSlashForm } from '@cli/chat/tui/runChatTui';
+import {
+  openCliSlashCommandForm,
+  openRegisteredCliSlashForm,
+} from '@cli/chat/tui/commands/slashForms';
 import { cliState, resetCliState } from '@cli/chat/tui/state/cliState';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 
@@ -144,10 +148,21 @@ describe('slashRegistry', () => {
     expect(cliState.activeForm.get()?.commandName).toBe('tools');
   });
 
+  it('opens structured forms by registered command name or alias', () => {
+    registerBuiltinSlashCommands();
+
+    expect(openCliSlashCommandForm('TOOLS', '')).toBe(true);
+    expect(cliState.activeForm.get()?.commandName).toBe('tools');
+
+    expect(openCliSlashCommandForm('skill', '')).toBe(true);
+    expect(cliState.activeForm.get()?.commandName).toBe('skills');
+  });
+
   it('chains selectable agent picks into the API-mode-aware model picker', async () => {
     resetCliState({
       agent: 'chat',
       model: 'deepseekT',
+      modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
       canDelegate: false,
@@ -183,6 +198,7 @@ describe('slashRegistry', () => {
     resetCliState({
       agent: 'chat',
       model: 'deepseekT',
+      modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
       canDelegate: false,
@@ -212,6 +228,7 @@ describe('slashRegistry', () => {
     resetCliState({
       agent: 'chat',
       model: 'deepseekT',
+      modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
       canDelegate: false,
@@ -239,6 +256,7 @@ describe('slashRegistry', () => {
     resetCliState({
       agent: 'chat',
       model: 'deepseekT',
+      modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
       canDelegate: false,
@@ -255,16 +273,23 @@ describe('slashRegistry', () => {
     expect(openRegisteredCliSlashForm(model, '')).toBe(true);
 
     const modelNode = renderFormAdapter<{
+      onSelect?: (value: string) => void;
       selectable?: boolean;
     }>(cliState.activeForm.get()?.render(() => {}, 20));
+    modelNode.props?.onSelect?.('gpt55');
 
     expect(modelNode.props).toMatchObject({ selectable: true });
+    expect(cliState.sessionMeta.get()).toMatchObject({
+      model: 'gpt55',
+      modelSource: 'override',
+    });
   });
 
   it('passes live model-switch disabled reasons into the model picker', () => {
     resetCliState({
       agent: 'chat',
       model: 'gpt54',
+      modelSource: 'override',
       cwd: '/tmp/workspace',
       apiMode: 'personal',
       canDelegate: false,
@@ -350,6 +375,7 @@ describe('slashRegistry', () => {
     resetCliState({
       agent: 'chat',
       model: 'deepseekT',
+      modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
       canDelegate: false,
@@ -384,6 +410,7 @@ describe('slashRegistry', () => {
     resetCliState({
       agent: 'chat',
       model: 'deepseekT',
+      modelSource: 'builtin',
       cwd: '/tmp/workspace',
       apiMode: 'included',
       canDelegate: false,
@@ -504,6 +531,18 @@ describe('slashRegistry', () => {
     });
     expect(matchSlashCommands('h').map((c) => c.name)).toEqual(['help']);
     expect(matchSlashCommands('us').map((c) => c.name)).toEqual(['help']);
+  });
+
+  it('finds exact command names and aliases case-insensitively', () => {
+    registerSlashCommand({
+      name: 'agent',
+      description: 'pick an agent',
+      aliases: ['agents'],
+    });
+
+    expect(findSlashCommand('agent')?.name).toBe('agent');
+    expect(findSlashCommand('AGENTS')?.name).toBe('agent');
+    expect(findSlashCommand('age')).toBeUndefined();
   });
 
   it('submits no-form commands on Enter and completes on Tab', () => {

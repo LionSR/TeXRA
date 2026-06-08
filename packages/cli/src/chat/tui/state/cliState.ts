@@ -8,6 +8,7 @@
 import { signal, Signal } from '@lit-labs/signals';
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
+import type { CliModelSelectionSource } from '@cli/runtime/modelAccess';
 import {
   STREAM_STATUS,
   type ActiveChildInfo,
@@ -53,6 +54,7 @@ export interface CompletedProcessTranscript {
 export interface SessionMeta {
   readonly agent: string;
   readonly model: string;
+  readonly modelSource: CliModelSelectionSource;
   readonly cwd: string;
   readonly apiMode: CliApiMode;
   readonly canDelegate: boolean;
@@ -83,7 +85,17 @@ export interface StreamSlice {
    *  token-less "thinking" turn still shows liveness. */
   readonly runStartedAt: number | undefined;
   readonly description: string | undefined;
+  /** Latest model usage snapshot. The StatusBar treats this as current context
+   *  occupancy, so it must not be accumulated across turns. */
   readonly usage: TokenUsageStats | undefined;
+  /** Accumulated usage for resume/exit summaries across all turns in this
+   *  stream. Kept separate from `usage` so the context-window indicator remains
+   *  a latest-snapshot display. */
+  readonly cumulativeUsage: TokenUsageStats | undefined;
+  /** True while the latest hidden provider-side reasoning/thinking stream is
+   *  the current live activity. The CLI never renders the content directly;
+   *  this only drives a lightweight liveness indicator. */
+  readonly thinkingActive: boolean;
   readonly conversation: ConversationProgress | undefined;
   readonly entries: readonly ConversationEntry[];
   readonly queuedFollowUps: number;
@@ -107,6 +119,7 @@ export interface StreamSlice {
 const EMPTY_SESSION_META: SessionMeta = {
   agent: '',
   model: '',
+  modelSource: 'builtin',
   cwd: '',
   apiMode: 'personal',
   canDelegate: false,
@@ -197,7 +210,9 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     status: undefined,
     runStartedAt: undefined,
     description: undefined,
+    thinkingActive: false,
     usage: undefined,
+    cumulativeUsage: undefined,
     conversation: undefined,
     entries: [],
     queuedFollowUps: 0,

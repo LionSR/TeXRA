@@ -22,7 +22,6 @@ import {
   allocateSidePanelRows,
   appEscapeInterruptActive,
   appFocusShortcutsActive,
-  approvalBlocksInput,
   approvalForegroundMaxRows,
   approvalVisibleForActiveStream,
   childControlForegroundMaxRows,
@@ -78,6 +77,7 @@ import {
   appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
+  appendLocalUserTranscript,
   clearLocalTranscript,
   CLI_LOCAL_STREAM_ID,
   moveLocalTranscriptToStream,
@@ -89,6 +89,7 @@ import {
   AGENT_CATEGORY,
   MESSAGE_TYPES,
   STREAM_STATUS,
+  type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
 import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
@@ -858,7 +859,7 @@ describe('CLI TUI row allocation', () => {
     ).toBe(true);
   });
 
-  it('blocks input for hidden stream-owned approvals', () => {
+  it('keeps hidden stream-owned approvals from taking the foreground', () => {
     const childApproval = {
       payload: {
         kind: 'bash',
@@ -878,8 +879,6 @@ describe('CLI TUI row allocation', () => {
         pending: childApproval,
       }),
     ).toBe(false);
-    expect(approvalBlocksInput(childApproval)).toBe(true);
-    expect(approvalBlocksInput(undefined)).toBe(false);
   });
 
   it('keeps stream focus shortcuts available for hidden approvals', () => {
@@ -902,7 +901,6 @@ describe('CLI TUI row allocation', () => {
         pending: childApproval,
       }),
     ).toBe(false);
-    expect(approvalBlocksInput(childApproval)).toBe(true);
     expect(
       appFocusShortcutsActive({
         foregroundOpen: false,
@@ -1269,7 +1267,6 @@ describe('CLI TUI row allocation', () => {
     expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
       kind: 'accept',
       streamId: child1,
-      shouldAnnounceQueuedFollowUp: false,
     });
   });
 
@@ -1293,7 +1290,6 @@ describe('CLI TUI row allocation', () => {
     expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
       kind: 'accept',
       streamId: child1,
-      shouldAnnounceQueuedFollowUp: true,
     });
   });
 
@@ -1356,7 +1352,6 @@ describe('CLI TUI row allocation', () => {
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
         kind: 'accept',
         streamId: child1,
-        shouldAnnounceQueuedFollowUp: true,
       });
     } finally {
       dispose();
@@ -1557,6 +1552,37 @@ describe('CLI transcript state', () => {
     }
   });
 
+  it('tracks hidden thinking activity without rendering thinking text', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
+      thinking.append('private reasoning summary');
+
+      syncStreamLog(root);
+
+      let slice = cliState.streams.get().get(root);
+      expect(slice?.thinkingActive).toBe(true);
+      expect(slice?.entries).toEqual([]);
+
+      const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+      output.append('Visible answer.');
+
+      syncStreamLog(root);
+
+      slice = cliState.streams.get().get(root);
+      expect(slice?.thinkingActive).toBe(false);
+      expect(slice?.entries.map((entry) => entry.text)).toEqual([
+        'Visible answer.',
+      ]);
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
   // Regression: a sync tick that fires after `finalizeAssistantTranscriptEntries`
   // must not roll the entry back to `finalized: false`. Cursor Bugbot flagged
   // this when `entriesEqual` started comparing `finalized` — without this
@@ -1676,6 +1702,101 @@ describe('CLI transcript state', () => {
     }
   });
 
+  it('lets the stream-log assistant own final text even when fallback text differs', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info('| x | Check |\n|---|---|\n| 3 | 1 ✓ |', {
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      });
+      syncStreamLog(root);
+      appendAssistantTranscriptIfMissing(
+        root,
+        '| x | Check |\n|---|---|\n| 3 | 1 \\checkmark |',
+        'final:first',
+      );
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        '| x | Check |\n|---|---|\n| 3 | 1 ✓ |',
+      ]);
+      expect(entries[0]?.synthetic).toBeUndefined();
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
+  it('dedupes fallback text against stream-log assistant text before trailing tools', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info('| x | Check |\n|---|---|\n| 3 | 1 ✓ |', {
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      });
+      logger.info('', {
+        messageType: MESSAGE_TYPES.TOOL_USE,
+        data: {
+          toolName: 'bash',
+          input: { command: 'true' },
+          output: { summary: 'Executed: true', output: 'ok' },
+          status: 'completed',
+        },
+      });
+      syncStreamLog(root);
+      appendAssistantTranscriptIfMissing(
+        root,
+        '| x | Check |\n|---|---|\n| 3 | 1 \\checkmark |',
+        'final:first',
+      );
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.role)).toEqual(['assistant', 'tool']);
+      expect(entries.map((entry) => entry.text)).toEqual([
+        '| x | Check |\n|---|---|\n| 3 | 1 ✓ |',
+        '',
+      ]);
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
+  it('does not dedupe fallback text against a matching prior-turn assistant', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      logger.info('Done ✓', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
+      syncStreamLog(root);
+
+      logger.info('second prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      syncStreamLog(root);
+      appendAssistantTranscriptIfMissing(root, 'Done \\checkmark', 'final:2');
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        'first prompt',
+        'Done ✓',
+        'second prompt',
+        'Done \\checkmark',
+      ]);
+      expect(entries.at(-1)).toMatchObject({
+        synthetic: true,
+        syntheticKind: 'final',
+      });
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
   it('projects a turn boundary without duplicating fallback assistant text', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
@@ -1717,6 +1838,17 @@ describe('CLI transcript state', () => {
     expect(entries.map((entry) => entry.text)).toEqual([
       'Available commands: /help',
       'Available commands: /help',
+    ]);
+  });
+
+  it('preserves literal checkmark commands in local user transcript text', () => {
+    cliState.activeStreamId.set(root);
+
+    appendLocalUserTranscript('literal \\checkmark');
+
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => [entry.role, entry.text])).toEqual([
+      ['user', 'literal \\checkmark'],
     ]);
   });
 
@@ -2168,6 +2300,49 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     } finally {
       ToolUseFollowUpQueue.release(root);
     }
+  });
+
+  it('keeps latest usage separate from cumulative resume usage', () => {
+    const wrapped = wrapRuntimeHost(makeHost());
+    const storageKey = 'root-run' as StorageKey;
+
+    wrapped.emit('updateStreamUsage', {
+      streamId: root,
+      storageKey,
+      usage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 1,
+        cacheReadInputTokens: 30,
+      },
+    });
+    wrapped.emit('updateStreamUsage', {
+      streamId: root,
+      storageKey,
+      usage: {
+        inputTokens: 40,
+        outputTokens: 10,
+        cost: 2,
+        cacheReadInputTokens: 5,
+        cacheCreationInputTokens: 7,
+      },
+    });
+
+    expect(cliState.streams.get().get(root)?.usage).toEqual({
+      inputTokens: 40,
+      outputTokens: 10,
+      cost: 2,
+      cacheReadInputTokens: 5,
+      cacheCreationInputTokens: 7,
+    });
+    expect(cliState.streams.get().get(root)?.cumulativeUsage).toEqual({
+      inputTokens: 140,
+      outputTokens: 30,
+      cost: 3,
+      cacheReadInputTokens: 35,
+      cacheMissInputTokens: 0,
+      cacheCreationInputTokens: 7,
+    });
   });
 
   it('persists a bounded completed-process transcript before pruning processOutput', () => {

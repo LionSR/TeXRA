@@ -15,7 +15,7 @@ export const compactFormControlStyles: CSSResult = css`
   }
 
   wa-select::part(combobox) {
-    min-height: 22px;
+    min-height: var(--height-control-compact);
     min-width: 0;
     padding-block: 0;
     padding-inline: 6px;
@@ -40,7 +40,7 @@ export const compactFormControlStyles: CSSResult = css`
   }
 
   wa-select wa-option::part(base) {
-    min-height: 22px;
+    min-height: var(--height-control-compact);
     padding: 2px 8px 2px 4px;
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal);
@@ -51,7 +51,7 @@ export const compactFormControlStyles: CSSResult = css`
   }
 
   wa-input::part(base) {
-    min-height: 22px;
+    min-height: var(--height-control-compact);
     padding-block: 0;
     border: var(--border-thin) solid
       var(--wa-color-surface-border, var(--color-border));
@@ -80,19 +80,6 @@ export const selectStyles: CSSResult = css`
   .select-group wa-select {
     flex: 1;
     min-width: 6rem;
-    max-width: 10rem;
-  }
-
-  .agent-select-controls {
-    flex: 0 1 auto;
-    min-width: 7rem;
-    max-width: 10rem;
-  }
-
-  .agent-select-dropdowns {
-    position: relative;
-    width: 100%;
-    min-width: 7rem;
     max-width: 10rem;
   }
 

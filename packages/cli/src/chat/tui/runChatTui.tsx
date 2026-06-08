@@ -47,10 +47,10 @@ import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
-  cliRunnableModelOptionsForSource,
   formatCliNoAvailableModelsRecovery,
   resolveCliRunnableModel,
   type CliNoAvailableModelsRecoveryOptions,
+  type CliModelSelectionSource,
   type CliRunnableModelResolution,
 } from '@cli/runtime/modelAccess';
 import {
@@ -97,16 +97,19 @@ import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 import { generateExecutionId } from '@utils/core/executionId';
-import { truncateSummary } from '@utils/text/stringUtils';
 
 import { App } from './App';
 import { assertNever } from './assertNever';
 import { formatApprovalPolicyForCli as formatApprovalPolicy } from './forms/ApprovalPolicyForm';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import {
+  openCliSlashCommandForm,
+  openRegisteredCliSlashForm,
+} from './commands/slashForms';
+import {
+  findSlashCommand,
   listSlashCommands,
   parseSlashInput,
-  type SlashCommand,
 } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
@@ -114,7 +117,11 @@ import { tuiOutputStreamForColor } from './render/noColorOutput';
 import { formatCliSessionStatus } from './sessionStatus';
 import { clearApprovals } from './state/approvalQueue';
 import { cliState, patchStream, resetCliState } from './state/cliState';
-import { collectResumeTargets, formatResumeHint } from './state/resumeHint';
+import {
+  collectResumeTargets,
+  collectResumeUsage,
+  formatResumeHint,
+} from './state/resumeHint';
 import { installTuiApprovals } from './state/subscribeApprovals';
 import { wrapRuntimeHost } from './state/subscribeRuntimeHost';
 import { subscribeStreamLog } from './state/subscribeStreamLog';
@@ -165,8 +172,6 @@ export interface RunChatInit {
    */
   readonly resumeExecutionId?: ExecutionId;
 }
-
-const QUEUED_FOLLOW_UP_NOTICE_LENGTH = 96;
 
 export interface BuildInitialChatAgentConfigInput {
   readonly agent: string;
@@ -411,11 +416,7 @@ export function chatTuiIsResumableIdleOnExit(input: {
 
 export type ChatTuiFocusedChildFollowUpRoute =
   | { readonly kind: 'none' }
-  | {
-      readonly kind: 'accept';
-      readonly streamId: StreamTabId;
-      readonly shouldAnnounceQueuedFollowUp: boolean;
-    }
+  | { readonly kind: 'accept'; readonly streamId: StreamTabId }
   | { readonly kind: 'reject'; readonly streamId: StreamTabId };
 
 export function chatTuiFocusedChildFollowUpRoute(): ChatTuiFocusedChildFollowUpRoute {
@@ -433,18 +434,7 @@ export function chatTuiFocusedChildFollowUpRoute(): ChatTuiFocusedChildFollowUpR
   if (status !== undefined && !isInFlightStatus(status)) {
     return { kind: 'reject', streamId: scope.streamId };
   }
-  return {
-    kind: 'accept',
-    streamId: scope.streamId,
-    shouldAnnounceQueuedFollowUp: status !== STREAM_STATUS.WAITING,
-  };
-}
-
-function shouldAnnounceQueuedFollowUpToStream(
-  targetStreamId: StreamTabId | undefined,
-): boolean {
-  if (!targetStreamId) return true;
-  return streamStatusFromState(targetStreamId) !== STREAM_STATUS.WAITING;
+  return { kind: 'accept', streamId: scope.streamId };
 }
 
 interface SlashCommandContext {
@@ -499,6 +489,7 @@ async function applyCliModelSelection(
       cliState.sessionMeta.set({
         ...cliState.sessionMeta.get(),
         model: nextModel,
+        modelSource: 'override',
       });
       appendLocalAssistantTranscript(`Root model set to ${nextModel}.`);
     } catch (error: unknown) {
@@ -529,6 +520,7 @@ async function applyCliModelSelection(
     cliState.sessionMeta.set({
       ...cliState.sessionMeta.get(),
       model: nextModel,
+      modelSource: 'override',
     });
   } catch (error: unknown) {
     appendLocalAssistantTranscript(toErrorMessage(error));
@@ -555,9 +547,9 @@ async function reconcileRootModelAfterApiModeChange(
 ): Promise<string | undefined> {
   if (!context || !chatTuiCanStartRootRun(context.session)) return undefined;
 
-  const currentModel = cliState.sessionMeta.get().model;
+  const { model: currentModel, modelSource } = cliState.sessionMeta.get();
   const selection = await resolveCliRunnableModel(currentModel, {
-    fallbackMode: 'notice',
+    fallbackSource: modelSource,
     apiMode,
     noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
       apiMode,
@@ -625,6 +617,7 @@ export const CHAT_LOGIN_USAGE =
 
 const CHAT_API_MODE_MODEL_RECOVERY = {
   includedModeAction: 'switch to included relay with `/api included`',
+  loginAction: 'run `/login`',
   personalModeAction: 'switch to personal API keys with `/api personal`',
 } satisfies CliNoAvailableModelsRecoveryOptions;
 
@@ -714,7 +707,7 @@ function applyCliApprovalPolicySelection(
 ): void {
   const normalized = input.trim().toLowerCase();
   if (!normalized || normalized === 'status') {
-    openRegisteredCliSlashCommandForm('approval', '');
+    openCliSlashCommandForm('approval', '');
     return;
   }
 
@@ -736,45 +729,6 @@ async function showCliMemoryList(): Promise<void> {
 
 async function showCliMemoryPreview(inputPath: string): Promise<void> {
   appendLocalAssistantTranscript(await formatCliMemoryPreview(inputPath));
-}
-
-export function openRegisteredCliSlashForm(
-  command: SlashCommand,
-  remainder: string,
-): boolean {
-  const Form = command.formComponent;
-  if (!Form) return false;
-  cliState.activeForm.set({
-    commandName: command.name,
-    escapeAction: command.formEscapeAction,
-    render: (close, availableRows) => (
-      <Form
-        availableRows={availableRows}
-        remainder={remainder.trimStart()}
-        onDone={() => close()}
-      />
-    ),
-  });
-  return true;
-}
-
-function findRegisteredCliSlashCommand(
-  commandName: string,
-): SlashCommand | undefined {
-  const lower = commandName.toLowerCase();
-  return listSlashCommands().find(
-    (cmd) =>
-      cmd.name.toLowerCase() === lower ||
-      cmd.aliases?.some((alias) => alias.toLowerCase() === lower) === true,
-  );
-}
-
-function openRegisteredCliSlashCommandForm(
-  commandName: string,
-  remainder: string,
-): boolean {
-  const registered = findRegisteredCliSlashCommand(commandName);
-  return registered ? openRegisteredCliSlashForm(registered, remainder) : false;
 }
 
 async function handleTuiSlashCommand(
@@ -821,16 +775,16 @@ async function handleTuiSlashCommand(
       } else if (rest) {
         applyInitialCliAgentSelection(rest, context);
       } else {
-        openRegisteredCliSlashCommandForm('agent', rest);
+        openCliSlashCommandForm('agent', rest);
       }
       return true;
     case 'model':
     case 'models':
-      openRegisteredCliSlashCommandForm('model', rest);
+      openCliSlashCommandForm('model', rest);
       return true;
     case 'api':
       if (!rest) {
-        openRegisteredCliSlashCommandForm('api', rest);
+        openCliSlashCommandForm('api', rest);
         return true;
       }
       try {
@@ -856,7 +810,7 @@ async function handleTuiSlashCommand(
       if (rest) {
         applyCliApprovalPolicySelection(rest, context);
       } else {
-        openRegisteredCliSlashCommandForm('approval', rest);
+        openCliSlashCommandForm('approval', rest);
       }
       return true;
     case 'yolo':
@@ -889,7 +843,7 @@ async function handleTuiSlashCommand(
     }
     case 'resume': {
       if (!rest) {
-        openRegisteredCliSlashCommandForm('resume', rest);
+        openCliSlashCommandForm('resume', rest);
         return true;
       }
       const id = parseCliHistoryId(rest);
@@ -903,7 +857,7 @@ async function handleTuiSlashCommand(
     case 'memory': {
       try {
         if (!rest) {
-          openRegisteredCliSlashCommandForm('memory', rest);
+          openCliSlashCommandForm('memory', rest);
         } else if (rest.toLowerCase() === 'list') {
           await showCliMemoryList();
         } else {
@@ -924,7 +878,7 @@ async function handleTuiSlashCommand(
       });
       return true;
     default: {
-      const registered = findRegisteredCliSlashCommand(command);
+      const registered = findSlashCommand(command);
       if (registered) {
         if (openRegisteredCliSlashForm(registered, parsed.remainder)) {
           return true;
@@ -991,16 +945,14 @@ export async function runChat(
   // never disagree.
   let modelSelection: CliRunnableModelResolution;
   try {
-    modelSelection = await resolveCliRunnableModel(
-      defaults.model,
-      cliRunnableModelOptionsForSource(defaults.modelSource, {
+    modelSelection = await resolveCliRunnableModel(defaults.model, {
+      fallbackSource: defaults.modelSource,
+      apiMode,
+      noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
         apiMode,
-        noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-          apiMode,
-          CHAT_STARTUP_MODEL_RECOVERY,
-        ),
-      }),
-    );
+        CHAT_STARTUP_MODEL_RECOVERY,
+      ),
+    });
   } catch (error: unknown) {
     writeTextStderr(toErrorMessage(error));
     return { exitCode: CliExitCode.Usage };
@@ -1043,6 +995,7 @@ export async function runChat(
   cliState.sessionMeta.set({
     agent,
     model,
+    modelSource: defaults.modelSource,
     cwd: context.cwd,
     apiMode,
     canDelegate: agentSupportsDelegation(agent),
@@ -1322,6 +1275,7 @@ export async function runChat(
       ...cliState.sessionMeta.get(),
       agent: resolution.config.agent,
       model: resolution.config.model,
+      modelSource: 'history',
       canDelegate: agentSupportsDelegation(resolution.config.agent),
     });
 
@@ -1331,9 +1285,9 @@ export async function runChat(
     // An older run with no persisted entries simply shows whatever exists
     // (possibly nothing) — the continued turn streams in regardless.
     await getDefaultStreamLogStore().ensureLoaded(resolution.streamId);
-    // Restore the durable per-stream display (todos/plan/usage) the previous
-    // run persisted, so resume shows more than just the transcript. Liveness is
-    // never persisted, so nothing stale (running badges, RUNNING status) leaks.
+    // Restore durable per-stream display state plus cumulative usage for exit
+    // summaries. Latest context-window usage is live-only and should not be
+    // rehydrated from the per-run total.
     await snapshotStore.load([resolution.streamId]);
     const restored = await snapshotStore.read(resolution.streamId);
     patchStream(resolution.streamId, (slice) => {
@@ -1343,7 +1297,9 @@ export async function runChat(
       // to stale slice state) rather than treating empty as "no data".
       return {
         ...slice,
-        usage: runUsages.length ? sumUsageStats(runUsages) : slice.usage,
+        cumulativeUsage: runUsages.length
+          ? sumUsageStats(runUsages)
+          : slice.cumulativeUsage,
         todos: restored.todos,
         plan: restored.plan,
       };
@@ -1432,8 +1388,11 @@ export async function runChat(
         const meta = cliState.sessionMeta.get();
         const currentAgent = meta.agent || agent;
         const currentModel = meta.model || model;
+        const currentModelSource: CliModelSelectionSource = meta.model
+          ? meta.modelSource
+          : defaults.modelSource;
         const selection = await resolveCliRunnableModel(currentModel, {
-          fallbackMode: 'reject',
+          fallbackSource: currentModelSource,
           apiMode: meta.apiMode,
           noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
             meta.apiMode,
@@ -1529,20 +1488,6 @@ export async function runChat(
     // user submits before `onStreamResolved` populates `session.streamId`.
     // p-queue serializes work but doesn't have an "await predicate" primitive,
     // so the task itself waits for the stream id via a tiny poll loop.
-    const initialFollowUpTarget = childFollowUpTarget ?? session.streamId;
-    const shouldAnnounceQueuedFollowUp =
-      focusedChildRoute.kind === 'accept'
-        ? focusedChildRoute.shouldAnnounceQueuedFollowUp
-        : shouldAnnounceQueuedFollowUpToStream(initialFollowUpTarget);
-    if (shouldAnnounceQueuedFollowUp) {
-      appendLocalAssistantTranscript(
-        `Queued follow-up: ${truncateSummary(
-          line,
-          QUEUED_FOLLOW_UP_NOTICE_LENGTH,
-        )}`,
-        initialFollowUpTarget,
-      );
-    }
     void followUpQueue.add(async () => {
       let delivered = false;
       let followUpTarget = childFollowUpTarget;
@@ -1651,11 +1596,13 @@ export async function runChat(
   // Read cliState before resetCliState() clears it.
   const printResumeHintOnExit = (): void => {
     if (!session.executionId) return;
+    const streams = cliState.streams.get();
     const hint = formatResumeHint(
       collectResumeTargets({
         rootExecutionId: session.executionId,
-        streams: cliState.streams.get(),
+        streams,
       }),
+      collectResumeUsage(streams),
     );
     if (hint) writeTextStdout(`\n${hint}`);
   };

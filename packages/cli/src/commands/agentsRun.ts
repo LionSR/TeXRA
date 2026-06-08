@@ -19,6 +19,7 @@ import {
   buildHeadlessRunContext,
   resolveCliRunModel,
 } from '../runtime/runModel';
+import { initLocalCliPlatform } from '../runtime/initPlatform';
 
 import {
   TOOL_USE_AGENT_NAME_DESCRIPTION,
@@ -71,14 +72,11 @@ export async function runToolUseAgent(
   context: CliContext,
   init: ToolUseAgentRunInit,
 ): Promise<number> {
-  const model = await resolveCliRunModel(context, init.model, 'chat');
-  const runContext = buildHeadlessRunContext(context, model);
-
   let inputFiles: string[];
   let contextFiles: string[];
   let instruction: string;
   try {
-    instruction = await resolveToolUseInstruction(init, runContext.cwd);
+    instruction = await resolveToolUseInstruction(init, context.cwd);
   } catch (error: unknown) {
     if (!(error instanceof CliUsageError)) {
       throw error;
@@ -87,6 +85,7 @@ export async function runToolUseAgent(
     return CliExitCode.Usage;
   }
 
+  await initLocalCliPlatform(context);
   const agent = await resolveCliAgent(init.agent);
 
   if (!agent) {
@@ -99,6 +98,9 @@ export async function runToolUseAgent(
     );
     return CliExitCode.Usage;
   }
+
+  const model = await resolveCliRunModel(context, init.model, 'chat');
+  const runContext = buildHeadlessRunContext(context, model);
 
   const stdinInputFile = createStdinWorkflowInputMaterializer({
     readStdinText: readCliStdinText,

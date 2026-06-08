@@ -7,7 +7,9 @@ import { isNonEmptyString } from '@utils/core/stringCore';
 
 import {
   CLI_APPROVAL_POLICIES,
+  CLI_OUTPUT_FORMATS,
   type CliApprovalPolicy,
+  type CliOutputFormat,
 } from '../schemas/cliSettings';
 import {
   CLI_API_MODE_INPUTS,
@@ -15,11 +17,9 @@ import {
   type CliApiMode,
 } from './apiAccessMode';
 import {
-  CLI_OUTPUT_FORMATS,
   isKnownCliModel,
   loadWorkspaceCliConfig,
   type CliConfigValues,
-  type CliOutputFormat,
 } from './cliConfig';
 import { resolveCliResourcesPath } from './resourcesPath';
 import type { SkillSourceOptions } from '@skills/skillSources';

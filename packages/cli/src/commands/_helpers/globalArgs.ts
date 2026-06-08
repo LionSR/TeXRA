@@ -1,12 +1,10 @@
 import { INTEROP_SKILL_DIRS } from '@skills/skillSources';
 import {
   CLI_APPROVAL_POLICIES,
-  type CliApprovalPolicy,
-} from '@cli/schemas/cliSettings';
-import {
   CLI_OUTPUT_FORMATS,
+  type CliApprovalPolicy,
   type CliOutputFormat,
-} from '@cli/runtime/cliConfig';
+} from '@cli/schemas/cliSettings';
 import { CliUsageError } from '@cli/runtime/cliContext';
 
 /**
@@ -130,16 +128,24 @@ export const AGENT_RUN_GLOBAL_ARGS = {
 
 export const ROOT_ROUTING_ARGS = AGENT_RUN_GLOBAL_ARGS;
 
+export const HEADLESS_ONLY_GLOBAL_ARG_NAMES = [
+  'print',
+  'output-format',
+  'no-input',
+] as const;
+type HeadlessOnlyGlobalArgName =
+  (typeof HEADLESS_ONLY_GLOBAL_ARG_NAMES)[number];
+
 /**
  * Flags that are meaningful for commands which necessarily own the terminal.
- * In particular, `chat` and `orchestrate` cannot honor `--print`,
- * `--output-format`, or `--no-input` (which forces headless); scripts should use
- * a concrete headless command instead. `--no-color` still applies — a terminal
- * session may legitimately want plain output.
+ * In particular, `chat` and `orchestrate` cannot honor the headless-only
+ * globals above; scripts should use a concrete headless command instead.
+ * `--no-color` still applies — a terminal session may legitimately want plain
+ * output.
  */
 export const INTERACTIVE_GLOBAL_ARGS: Omit<
   CliGlobalArgsDef,
-  'print' | 'output-format' | 'no-input'
+  HeadlessOnlyGlobalArgName
 > = {
   quiet: GLOBAL_ARGS.quiet,
   cwd: GLOBAL_ARGS.cwd,
@@ -184,19 +190,25 @@ export const GLOBAL_BOOL_FLAGS = new Set<string>(
   }),
 );
 
+const HEADLESS_ONLY_GLOBAL_FLAG_SPELLINGS =
+  HEADLESS_ONLY_GLOBAL_ARG_NAMES.flatMap((name) =>
+    flagSpellings(name, GLOBAL_ARGS[name]),
+  );
+const HEADLESS_ONLY_GLOBAL_FLAG_LABELS = formatCommaList(
+  HEADLESS_ONLY_GLOBAL_FLAG_SPELLINGS.filter((flag) => flag.startsWith('--')),
+);
+const HEADLESS_ONLY_GLOBAL_FLAGS = new Set<string>(
+  HEADLESS_ONLY_GLOBAL_FLAG_SPELLINGS,
+);
+
 export function optString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
 function isHeadlessOnlyFlag(arg: string): boolean {
-  return (
-    arg === '--print' ||
-    arg.startsWith('--print=') ||
-    arg === '-p' ||
-    arg === '--no-input' ||
-    arg.startsWith('--no-input=') ||
-    arg === '--output-format' ||
-    arg.startsWith('--output-format=')
+  if (HEADLESS_ONLY_GLOBAL_FLAGS.has(arg)) return true;
+  return HEADLESS_ONLY_GLOBAL_FLAG_SPELLINGS.some(
+    (flag) => flag.startsWith('--') && arg.startsWith(`${flag}=`),
   );
 }
 
@@ -207,7 +219,7 @@ export function rejectHeadlessOnlyFlags(
   if (!rawArgs.some(isHeadlessOnlyFlag)) return;
 
   throw new CliUsageError(
-    `texra ${commandName} is interactive and does not support --print, --no-input, or --output-format. For scripting, use \`texra run\` or a concrete non-interactive subcommand.`,
+    `texra ${commandName} is interactive and does not support ${HEADLESS_ONLY_GLOBAL_FLAG_LABELS}. For scripting, use \`texra run\` or a concrete non-interactive subcommand.`,
   );
 }
 

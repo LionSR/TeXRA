@@ -19,10 +19,8 @@ import {
 } from '../runtime/multiAgentPresets';
 import { buildCliOrchestrationItems } from '../runtime/orchestration';
 import {
-  cliRunnableModelOptionsForSource,
   getCliModelAccessList,
-  resolveCliRunnableModelWithAccessList,
-  runnableCliModelAccessEntries,
+  resolveCliRunnableModel,
   type CliModelAccess,
 } from '../runtime/modelAccess';
 import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
@@ -50,12 +48,7 @@ async function canLaunchWithDefaultModel(
   models: readonly CliModelAccess[],
   apiMode: CliApiMode,
 ): Promise<boolean> {
-  if (
-    models.length === 0 ||
-    runnableCliModelAccessEntries(models, apiMode).length > 0
-  ) {
-    return true;
-  }
+  if (models.length === 0) return true;
 
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
@@ -63,11 +56,11 @@ async function canLaunchWithDefaultModel(
     envModel: context.envModel,
   });
   try {
-    await resolveCliRunnableModelWithAccessList(
-      models,
-      defaults.model,
-      cliRunnableModelOptionsForSource(defaults.modelSource, { apiMode }),
-    );
+    await resolveCliRunnableModel(defaults.model, {
+      fallbackSource: defaults.modelSource,
+      apiMode,
+      accessList: models,
+    });
     return true;
   } catch {
     return false;

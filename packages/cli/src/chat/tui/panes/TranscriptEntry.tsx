@@ -19,6 +19,7 @@ import type {
 
 const INQUIRY_CONTINUATION_RE =
   /^\[inquiry\]\s+\S+\s+(?:answered|dropped by user)\.(?:\n|$)/;
+export const USER_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 
 export function isInquiryContinuationText(text: string): boolean {
   return INQUIRY_CONTINUATION_RE.test(text);
@@ -98,11 +99,11 @@ function UserEntryRow({
   // stays full-width across a resize because `<Static>` is remounted on a width
   // change (key={columns} in StaticConversationTranscript) — that regenerates
   // `fullStaticOutput` at the new width, which the resize full-repaint then
-  // reprints. The `› ` chevron is 2 cols, matching the static row count in
-  // transcriptLines.ts.
+  // reprints. The `› ` chevron is 2 cols; row estimators add the exported
+  // margin constant alongside their wrapped-line count.
   const cols = Math.max(1, Math.floor(width ?? 80));
   return (
-    <Box>
+    <Box marginBottom={USER_ENTRY_MARGIN_BOTTOM_ROWS}>
       <Text inverse={colorEnabled !== false}>
         {compactPrefixedDisplayRows({
           fillWidth: true,

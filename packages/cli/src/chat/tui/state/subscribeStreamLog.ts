@@ -29,10 +29,37 @@ const CHILD_STREAM_LOG_MESSAGE_TYPES = new Set<string>([
   MESSAGE_TYPES.DEFAULT,
 ]);
 
+const LIVE_ACTIVITY_MESSAGE_TYPES = new Set<string>([
+  MESSAGE_TYPES.THINKING,
+  MESSAGE_TYPES.MODEL_RESPONSE,
+  MESSAGE_TYPES.TOOL_USE,
+  MESSAGE_TYPES.ERROR,
+  MESSAGE_TYPES.USER_MESSAGE,
+]);
+
 function transcriptMessageTypesForStream(streamId: StreamTabId): Set<string> {
   return /^(bash@tool|claude@agent-sdk|codex@codex-sdk)#/.test(streamId)
     ? CHILD_STREAM_LOG_MESSAGE_TYPES
     : TRANSCRIPT_MESSAGE_TYPES;
+}
+
+function logEntryHasText(entry: StreamLogEntry): boolean {
+  return (entry.text ?? '').trim().length > 0;
+}
+
+function latestLogActivityIsThinking(
+  entries: readonly StreamLogEntry[],
+): boolean {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (!entry || !LIVE_ACTIVITY_MESSAGE_TYPES.has(entry.messageType ?? '')) {
+      continue;
+    }
+    return (
+      entry.messageType === MESSAGE_TYPES.THINKING && logEntryHasText(entry)
+    );
+  }
+  return false;
 }
 
 /** Tool inputs are typed `unknown` (model-supplied JSON) and reach us
@@ -283,12 +310,12 @@ export function syncStreamLog(streamId: StreamTabId): void {
   const log = store.get(streamId);
   if (!log) return;
 
+  const allEntries = log.getRange(0);
+  const thinkingActive = latestLogActivityIsThinking(allEntries);
   const transcriptMessageTypes = transcriptMessageTypesForStream(streamId);
-  const responses = log
-    .getRange(0)
-    .filter((entry: StreamLogEntry) =>
-      transcriptMessageTypes.has(entry.messageType ?? ''),
-    );
+  const responses = allEntries.filter((entry: StreamLogEntry) =>
+    transcriptMessageTypes.has(entry.messageType ?? ''),
+  );
 
   patchStream(streamId, (slice) => {
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
@@ -349,8 +376,8 @@ export function syncStreamLog(streamId: StreamTabId): void {
           !entriesEqual(entry, candidate)
         );
       });
-    if (!changed) return slice;
-    return { ...slice, entries: next };
+    if (!changed && slice.thinkingActive === thinkingActive) return slice;
+    return { ...slice, entries: next, thinkingActive };
   });
 
   // Surface stream as active if we don't already have one — handles bare

@@ -27,11 +27,14 @@ export interface CliRunnableModelResolution {
   readonly notice?: string;
 }
 
-export type CliModelFallbackMode = 'reject' | 'notice' | 'silent';
+type CliModelFallbackMode = 'reject' | 'notice' | 'silent';
 
 export interface CliRunnableModelOptions {
-  readonly fallbackMode: CliModelFallbackMode;
+  /** Source category that owns unavailable-model fallback behavior. */
+  readonly fallbackSource: CliModelSelectionSource;
   readonly apiMode?: CliApiMode;
+  /** Optional preloaded list, used by launchers that already fetched access. */
+  readonly accessList?: readonly CliModelAccess[];
   readonly noAvailableModelsMessage?: string;
 }
 
@@ -64,12 +67,12 @@ export interface CliModelListOptions {
 
 export interface CliNoAvailableModelsRecoveryOptions {
   readonly includedModeAction?: string;
+  readonly loginAction?: string;
   readonly personalModeAction?: string;
 }
 
-export interface CliNoRunnableModelsMessageOptions extends CliNoAvailableModelsRecoveryOptions {
-  readonly loginAction?: string;
-}
+export type CliNoRunnableModelsMessageOptions =
+  CliNoAvailableModelsRecoveryOptions;
 
 export type NoRunnableModelAccessReason = CliApiMode | 'includedLoginRequired';
 
@@ -88,21 +91,48 @@ const RELAY_STATUS_BY_AVAILABILITY = {
   'missing-key': 'relay: unavailable; missing api key',
 } satisfies Record<ModelAvailabilityKind, string>;
 
-const NO_RUNNABLE_MODEL_ACCESS_SUMMARIES = {
-  includedLoginRequired: 'Included relay models require sign-in.',
-  included: 'No included relay models are runnable.',
-  personal: 'No personal API-key models are runnable.',
-} satisfies Record<NoRunnableModelAccessReason, string>;
+const NO_RUNNABLE_MODEL_ACCESS_COPY = {
+  includedLoginRequired: {
+    launchBlock: 'Sign in with texra login for included relay models',
+    summary: 'Included relay models require sign-in.',
+  },
+  included: {
+    launchBlock: 'No included relay models are runnable',
+    summary: 'No included relay models are runnable.',
+  },
+  personal: {
+    launchBlock: 'No personal API-key models are runnable',
+    summary: 'No personal API-key models are runnable.',
+  },
+} satisfies Record<
+  NoRunnableModelAccessReason,
+  { readonly launchBlock: string; readonly summary: string }
+>;
 
-const NO_RUNNABLE_MODEL_ACCESS_LAUNCH_BLOCKS = {
-  includedLoginRequired: 'Sign in with texra login for included relay models',
-  included: 'No included relay models are runnable',
-  personal: 'No personal API-key models are runnable',
-} satisfies Record<NoRunnableModelAccessReason, string>;
+const DEFAULT_CLI_MODEL_RECOVERY_ACTIONS = {
+  includedModeAction: 'retry with `--api-mode included`',
+  loginAction: 'run `texra login`',
+  personalModeAction: 'retry with `--api-mode personal`',
+} satisfies Required<CliNoAvailableModelsRecoveryOptions>;
 
 function startSentence(text: string): string {
   if (text.length === 0) return text;
   return `${text[0]!.toUpperCase()}${text.slice(1)}`;
+}
+
+function cliModelRecoveryActions(
+  options: CliNoAvailableModelsRecoveryOptions = {},
+): Required<CliNoAvailableModelsRecoveryOptions> {
+  return {
+    includedModeAction:
+      options.includedModeAction ??
+      DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.includedModeAction,
+    loginAction:
+      options.loginAction ?? DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.loginAction,
+    personalModeAction:
+      options.personalModeAction ??
+      DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.personalModeAction,
+  };
 }
 
 function isCliModelOptionBasicallyAvailable(model: ModelOptionData): boolean {
@@ -160,21 +190,18 @@ export function noRunnableModelAccessReason(
 export function formatCliNoRunnableModelsLaunchBlock(
   reason: NoRunnableModelAccessReason,
 ): string {
-  return NO_RUNNABLE_MODEL_ACCESS_LAUNCH_BLOCKS[reason];
+  return NO_RUNNABLE_MODEL_ACCESS_COPY[reason].launchBlock;
 }
 
 function formatCliNoRunnableModelsRecovery(
   reason: NoRunnableModelAccessReason,
   options: CliNoRunnableModelsMessageOptions = {},
 ): string {
-  const includedModeAction =
-    options.includedModeAction ?? 'retry with `--api-mode included`';
-  const loginAction = options.loginAction ?? 'Run `texra login`';
-  const personalModeAction =
-    options.personalModeAction ?? 'retry with `--api-mode personal`';
+  const { includedModeAction, loginAction, personalModeAction } =
+    cliModelRecoveryActions(options);
 
   if (reason === 'includedLoginRequired') {
-    return `${loginAction} or ${personalModeAction}.`;
+    return `${startSentence(loginAction)} or ${personalModeAction}.`;
   }
   if (reason === 'included') {
     return `${startSentence(personalModeAction)} or try again later.`;
@@ -186,7 +213,7 @@ export function formatCliNoRunnableModelsMessage(
   reason: NoRunnableModelAccessReason,
   options: CliNoRunnableModelsMessageOptions = {},
 ): string {
-  return `${NO_RUNNABLE_MODEL_ACCESS_SUMMARIES[reason]} ${formatCliNoRunnableModelsRecovery(reason, options)}`;
+  return `${NO_RUNNABLE_MODEL_ACCESS_COPY[reason].summary} ${formatCliNoRunnableModelsRecovery(reason, options)}`;
 }
 
 function formatModelAccessStatus(model: ModelOptionData): string {
@@ -252,38 +279,20 @@ export function emptyModelListMessageForCliMode(
   );
 }
 
-export function cliModelFallbackModeForSource(
-  source: CliModelSelectionSource,
-): CliModelFallbackMode {
-  return CLI_MODEL_FALLBACK_MODE_BY_SOURCE[source];
-}
-
-export function cliRunnableModelOptionsForSource(
-  source: CliModelSelectionSource,
-  options: Omit<CliRunnableModelOptions, 'fallbackMode'> = {},
-): CliRunnableModelOptions {
-  return {
-    ...options,
-    fallbackMode: cliModelFallbackModeForSource(source),
-  };
-}
-
 export function formatCliNoAvailableModelsRecovery(
   apiMode?: CliApiMode,
   options: CliNoAvailableModelsRecoveryOptions = {},
 ): string {
-  const includedModeAction =
-    options.includedModeAction ?? 'retry with `--api-mode included`';
-  const personalModeAction =
-    options.personalModeAction ?? 'retry with `--api-mode personal`';
+  const { includedModeAction, loginAction, personalModeAction } =
+    cliModelRecoveryActions(options);
 
   if (apiMode === 'personal') {
-    return `Configure a provider API key for personal mode, or ${includedModeAction} and run \`texra login\` for included relay access.`;
+    return `Configure a provider API key for personal mode, or ${includedModeAction} and ${loginAction} for included relay access.`;
   }
   if (apiMode === 'included') {
-    return `Run \`texra login\` for included relay access, or ${personalModeAction} after configuring a provider API key.`;
+    return `${startSentence(loginAction)} for included relay access, or ${personalModeAction} after configuring a provider API key.`;
   }
-  return `Run \`texra login\` for included relay access, ${includedModeAction}, or configure a provider API key.`;
+  return `${startSentence(loginAction)} for included relay access, ${includedModeAction}, or configure a provider API key.`;
 }
 
 function toCliModelAccess(
@@ -447,11 +456,13 @@ function formatUnavailableModelMessage(
   return `Model "${model}" is not available in the active API mode${status}. ${formatAvailableModels(availableIds, options)}`;
 }
 
-export function resolveCliRunnableModelFromAccessList(
+function resolveCliRunnableModelFromAccessList(
   models: readonly CliModelAccess[],
   model: string,
   options: CliRunnableModelOptions,
 ): CliRunnableModelResolution {
+  const fallbackMode =
+    CLI_MODEL_FALLBACK_MODE_BY_SOURCE[options.fallbackSource];
   const trimmed = model.trim();
   const runnableEntries = runnableCliModelAccessEntries(
     models,
@@ -468,12 +479,12 @@ export function resolveCliRunnableModelFromAccessList(
     availableIds,
     options,
   );
-  if (options.fallbackMode === 'reject' || availableIds.length === 0) {
+  if (fallbackMode === 'reject' || availableIds.length === 0) {
     throw new Error(unavailableMessage);
   }
 
   const fallback = availableIds[0]!;
-  if (options.fallbackMode === 'silent') return { model: fallback };
+  if (fallbackMode === 'silent') return { model: fallback };
   return {
     model: fallback,
     notice: `${unavailableMessage} Using "${fallback}" instead.`,
@@ -484,15 +495,9 @@ export async function resolveCliRunnableModel(
   model: string,
   options: CliRunnableModelOptions,
 ): Promise<CliRunnableModelResolution> {
-  const models = await getCliModelAccessList({ apiMode: options.apiMode });
-  return resolveCliRunnableModelWithAccessList(models, model, options);
-}
-
-export async function resolveCliRunnableModelWithAccessList(
-  models: readonly CliModelAccess[],
-  model: string,
-  options: CliRunnableModelOptions,
-): Promise<CliRunnableModelResolution> {
+  const models =
+    options.accessList ??
+    (await getCliModelAccessList({ apiMode: options.apiMode }));
   const trimmed = model.trim();
   const hiddenModelId =
     trimmed && !findCliModelAccessEntry(models, trimmed)
