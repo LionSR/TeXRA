@@ -6,7 +6,6 @@ import {
   formatMediaNeedsVisionWarning,
   shouldWarnMediaNeedsVision,
 } from '@agent/runtime/mediaVisionWarning';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS } from '@shared/schemas';
 
 import { findLastAssistantText, extractTouchedFiles } from './types';
@@ -60,6 +59,7 @@ export class ToolUseWaitNode<C> extends Node<
       checkInterruption,
       session,
       streamId,
+      streamStatus,
       onBeforeWaiting,
       runtimeHost,
       isSubagent,
@@ -117,7 +117,7 @@ export class ToolUseWaitNode<C> extends Node<
     }
 
     if (!session.hasQueuedFollowUp()) {
-      StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
+      streamStatus.set(streamId, STREAM_STATUS.WAITING, {
         runtimeHost,
       });
     }
@@ -155,6 +155,7 @@ export class ToolUseWaitNode<C> extends Node<
       logger,
       modelHandler,
       runtimeHost,
+      streamStatus,
       fileService,
     } = this.services;
 
@@ -184,7 +185,7 @@ export class ToolUseWaitNode<C> extends Node<
       onFollowUpConsumed?.();
       logUserMessage(logger, execRes.displayFollowUp ?? execRes.followUp);
     }
-    StreamStatusService.set(streamId, STREAM_STATUS.RUNNING, {
+    streamStatus.set(streamId, STREAM_STATUS.RUNNING, {
       runtimeHost,
     });
     shared.messages = await modelHandler.createUserFollowUpMessages(
