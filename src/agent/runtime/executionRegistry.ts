@@ -16,15 +16,17 @@ import {
 } from '@agent/runtime/InterruptRegistry';
 import {
   STREAM_STATUS,
+  LIVE_ELAPSED_STREAM_STATUSES,
   type ActiveChildInfo,
   type StreamTabId,
 } from '@shared/schemas';
+import { formatDuration } from '@utils/core';
 import {
   type ExecutionHandle,
+  type ExecutionStatusInfo,
   type LiveToolUseFlowContext,
   AgentExecutionHandle,
   ProcessExecutionHandle,
-  collectChildSummary,
   isChildExecution,
 } from './ExecutionHandle';
 import {
@@ -164,6 +166,22 @@ export class ExecutionRegistry {
 
   getHandle(executionId: string): ExecutionHandle | undefined {
     return this.handles.get(executionId);
+  }
+
+  getStatus(handle: ExecutionHandle): ExecutionStatusInfo {
+    const status =
+      handle instanceof AgentExecutionHandle
+        ? (this.streamStatus.get(handle.childStreamId) ?? STREAM_STATUS.RUNNING)
+        : STREAM_STATUS.RUNNING;
+
+    if (!LIVE_ELAPSED_STREAM_STATUSES.has(status)) {
+      return { status, elapsed: null };
+    }
+
+    return {
+      status,
+      elapsed: formatDuration(Date.now() - handle.startedAt),
+    };
   }
 
   getAgentHandleByStream(
@@ -367,14 +385,9 @@ export class ExecutionRegistry {
     processes: ActiveChildInfo[];
   } {
     return {
-      subagents: collectChildSummary(
+      subagents: this.collectChildSummary(parentStreamId, AgentExecutionHandle),
+      processes: this.collectChildSummary(
         parentStreamId,
-        this.handles.values(),
-        AgentExecutionHandle,
-      ),
-      processes: collectChildSummary(
-        parentStreamId,
-        this.handles.values(),
         ProcessExecutionHandle,
       ),
     };
@@ -411,11 +424,7 @@ export class ExecutionRegistry {
   ): void {
     runtimeHost.emit('updateActiveSubagents', {
       parentStreamId,
-      children: collectChildSummary(
-        parentStreamId,
-        this.handles.values(),
-        AgentExecutionHandle,
-      ),
+      children: this.collectChildSummary(parentStreamId, AgentExecutionHandle),
     });
   }
 
@@ -425,12 +434,42 @@ export class ExecutionRegistry {
   ): void {
     runtimeHost.emit('updateActiveProcesses', {
       parentStreamId,
-      processes: collectChildSummary(
+      processes: this.collectChildSummary(
         parentStreamId,
-        this.handles.values(),
         ProcessExecutionHandle,
       ),
     });
+  }
+
+  private collectChildSummary(
+    parentStreamId: StreamTabId,
+    ctor: typeof AgentExecutionHandle | typeof ProcessExecutionHandle,
+  ): ActiveChildInfo[] {
+    const result: ActiveChildInfo[] = [];
+    for (const handle of this.handles.values()) {
+      if (
+        !(handle instanceof ctor) ||
+        !isChildExecution(handle, parentStreamId)
+      ) {
+        continue;
+      }
+      const { status, elapsed } = this.getStatus(handle);
+      const info: ActiveChildInfo = {
+        executionId: handle.executionId,
+        agentName: handle.agentName,
+        status,
+        startedAt: handle.startedAt,
+        elapsed: elapsed ?? null,
+      };
+      if (handle instanceof AgentExecutionHandle) {
+        info.childStreamId = handle.childStreamId;
+        if (handle.toolName) info.toolName = handle.toolName;
+      } else if (handle instanceof ProcessExecutionHandle && handle.toolName) {
+        info.toolName = handle.toolName;
+      }
+      result.push(info);
+    }
+    return result;
   }
 
   private terminate(handle: ExecutionHandle): boolean {
