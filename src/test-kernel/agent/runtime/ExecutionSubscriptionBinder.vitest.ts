@@ -7,7 +7,6 @@ import {
   ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
 import { ExecutionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -61,7 +60,6 @@ describe('ExecutionSubscriptionBinder', () => {
       'search',
       'toolUse',
       explicit.host,
-      StreamStatusService,
     );
 
     try {
@@ -96,7 +94,6 @@ describe('ExecutionSubscriptionBinder', () => {
       'search',
       'toolUse',
       explicit.host,
-      StreamStatusService,
     );
 
     try {
@@ -129,7 +126,6 @@ describe('ExecutionSubscriptionBinder', () => {
       'search',
       'toolUse',
       explicit.host,
-      StreamStatusService,
     );
 
     try {
