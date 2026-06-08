@@ -214,6 +214,109 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('publishes initial status when tracking an agent execution', () => {
+    const explicit = createRecordingHost();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const parentStreamId = 'parent-track-agent-status-test' as StreamTabId;
+    const childStreamId = 'child-track-agent-status-test' as StreamTabId;
+    const executionId = 'exec-track-agent-status-test';
+
+    try {
+      registry.trackAgentExecution(
+        new AgentExecutionHandle(
+          executionId,
+          parentStreamId,
+          childStreamId,
+          'test-subagent',
+          'toolUse',
+          explicit.host,
+        ),
+        { status: STREAM_STATUS.RUNNING },
+      );
+
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.RUNNING);
+      expect(registry.getActiveChildren(parentStreamId).subagents).toEqual([
+        expect.objectContaining({
+          executionId,
+          status: STREAM_STATUS.RUNNING,
+        }),
+      ]);
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('finishes agent executions without overwriting explicit stops', () => {
+    const explicit = createRecordingHost();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const parentStreamId = 'parent-finish-agent-status-test' as StreamTabId;
+    const childStreamId = 'child-finish-agent-status-test' as StreamTabId;
+    const executionId = 'exec-finish-agent-status-test';
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'test-subagent',
+      'toolUse',
+      explicit.host,
+    );
+
+    try {
+      registry.track(handle);
+      streamStatus.set(childStreamId, STREAM_STATUS.STOPPED, { emit: false });
+
+      registry.finishAgentExecution(handle, {
+        status: STREAM_STATUS.READY,
+      });
+
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(registry.getHandle(executionId)).toBeUndefined();
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('can finish an agent execution from its handle after untracking', () => {
+    const explicit = createRecordingHost();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ streamStatus });
+    const parentStreamId = 'parent-finish-untracked-agent-test' as StreamTabId;
+    const childStreamId = 'child-finish-untracked-agent-test' as StreamTabId;
+    const executionId = 'exec-finish-untracked-agent-test';
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'test-subagent',
+      'toolUse',
+      explicit.host,
+    );
+
+    try {
+      registry.trackAgentExecution(handle, { status: STREAM_STATUS.RUNNING });
+      registry.untrack(executionId);
+      const activeUpdateCount = explicit.events.filter(
+        (event) => event.event === 'updateActiveSubagents',
+      ).length;
+
+      registry.finishAgentExecution(handle, {
+        status: STREAM_STATUS.ERROR,
+      });
+
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.ERROR);
+      expect(
+        explicit.events.filter(
+          (event) => event.event === 'updateActiveSubagents',
+        ),
+      ).toHaveLength(activeUpdateCount);
+      expect(registry.getHandle(executionId)).toBeUndefined();
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('requires a runtime host when detaching without a tracked root handle', () => {
     const registry = new ExecutionRegistry();
     const streamId = 'missing-host-detach-stop-policy-test' as StreamTabId;

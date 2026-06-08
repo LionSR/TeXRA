@@ -18,6 +18,7 @@ import {
   STREAM_STATUS,
   LIVE_ELAPSED_STREAM_STATUSES,
   type ActiveChildInfo,
+  type StreamStatus,
   type StreamTabId,
 } from '@shared/schemas';
 import { formatDuration } from '@utils/core';
@@ -46,6 +47,14 @@ export {
 export interface StopAgentStreamOptions {
   readonly detachActiveChildren?: boolean;
   readonly runtimeHost?: AgentRuntimeHost;
+}
+
+export interface TrackAgentExecutionOptions {
+  readonly status?: StreamStatus;
+}
+
+export interface FinishAgentExecutionOptions {
+  readonly status: StreamStatus;
 }
 
 /**
@@ -133,12 +142,37 @@ export class ExecutionRegistry {
     }
   }
 
+  /**
+   * Register an agent execution and, when requested, publish its initial
+   * stream status through the registry-owned status store.
+   */
+  trackAgentExecution(
+    handle: AgentExecutionHandle,
+    options: TrackAgentExecutionOptions = {},
+  ): void {
+    if (options.status) {
+      this.streamStatus.set(handle.childStreamId, options.status, {
+        runtimeHost: handle.runtimeHost,
+      });
+    }
+    this.track(handle);
+  }
+
   /** Remove an execution handle and notify waiters. */
   untrack(executionId: string): void {
     const handle = this.handles.get(executionId);
-    this.handles.delete(executionId);
-    this.notifyWaiters(executionId);
-    if (!handle) return;
+    if (!handle) {
+      this.handles.delete(executionId);
+      this.notifyWaiters(executionId);
+      return;
+    }
+
+    this.untrackHandle(handle);
+  }
+
+  private untrackHandle(handle: ExecutionHandle): void {
+    this.handles.delete(handle.executionId);
+    this.notifyWaiters(handle.executionId);
     const { runtimeHost } = handle;
 
     if (
@@ -153,7 +187,7 @@ export class ExecutionRegistry {
       // The final read must complete before the badge update, because the
       // badge handler prunes output entries for processes no longer active.
       const finalize = (): void => {
-        this.processOutput.unregister(executionId);
+        this.processOutput.unregister(handle.executionId);
         this.emitActiveProcessesUpdate(handle.parentStreamId, runtimeHost);
       };
       if (handle.outputPaths) {
@@ -161,6 +195,28 @@ export class ExecutionRegistry {
       } else {
         finalize();
       }
+    }
+  }
+
+  /**
+   * Finalize an agent execution from its owning handle while preserving
+   * explicit user stops.
+   */
+  finishAgentExecution(
+    handle: AgentExecutionHandle,
+    options: FinishAgentExecutionOptions,
+  ): void {
+    const currentStatus = this.streamStatus.get(handle.childStreamId);
+    if (currentStatus !== STREAM_STATUS.STOPPED) {
+      this.streamStatus.set(handle.childStreamId, options.status, {
+        runtimeHost: handle.runtimeHost,
+      });
+    }
+
+    if (this.handles.get(handle.executionId) === handle) {
+      this.untrackHandle(handle);
+    } else {
+      this.notifyWaiters(handle.executionId);
     }
   }
 
