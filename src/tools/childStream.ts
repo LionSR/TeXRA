@@ -4,7 +4,6 @@ import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   AgentExecutionHandle,
   executionRegistry,
@@ -45,28 +44,27 @@ interface FinalizeChildStreamOptions {
   autoClose?: boolean;
 }
 
+export interface ChildStream {
+  childStreamId: StreamTabId;
+  logger: AgentTrace;
+  /**
+   * Drop the run-trace subscribers attached by `createRunTrace`. Must be
+   * called once when a custom child-loop cleanup path does not use `finalize`.
+   */
+  disposeTrace: () => void;
+  /** Complete the child stream lifecycle through the owning execution handle. */
+  finalize: (options?: FinalizeChildStreamOptions) => void;
+}
+
 /** Create a child stream tab and execution handle for a background child task. */
 export function createChildStream(
   executionId: ExecutionId,
   parentStreamId: StreamTabId,
   options: CreateChildStreamOptions,
-): {
-  childStreamId: StreamTabId;
-  logger: AgentTrace;
-  /**
-   * Drop the run-trace subscribers attached by `createRunTrace`. Must be
-   * called once when the child stream finalizes, either via
-   * `finalizeChildStream` (which calls it for you) or directly from a custom
-   * cleanup path.
-   */
-  disposeTrace: () => void;
-} {
+): ChildStream {
   const childStreamId = `${options.streamPrefix}#${executionId}` as StreamTabId;
   const { runtimeHost } = options;
 
-  StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING, {
-    runtimeHost,
-  });
   // Register the child stream (state, logs, hints) without switching the
   // active tab. Background child streams (bash, codex) shouldn't yank the
   // user away from whatever they're viewing — the tab simply appears.
@@ -95,35 +93,35 @@ export function createChildStream(
     runtimeHost,
   );
   if (options.toolName) handle.toolName = options.toolName;
-  executionRegistry.track(handle);
+  executionRegistry.trackAgentExecution(handle, {
+    status: STREAM_STATUS.RUNNING,
+  });
 
   return {
     childStreamId,
     logger: runTrace.trace,
     disposeTrace: runTrace.dispose,
+    finalize: (finalizeOptions) => {
+      finalizeChildStream({
+        handle,
+        logger: runTrace.trace,
+        disposeTrace: runTrace.dispose,
+        options: finalizeOptions,
+      });
+    },
   };
 }
 
 interface FinalizeChildStreamArgs {
-  childStreamId: StreamTabId;
-  executionId: ExecutionId;
+  handle: AgentExecutionHandle;
   logger: AgentTrace;
-  /** From `createChildStream` — releases the run-trace subscribers. */
   disposeTrace: () => void;
-  runtimeHost: AgentRuntimeHost;
   options?: FinalizeChildStreamOptions;
 }
 
 /** Finalize a child stream tab and untrack its execution handle. */
-export function finalizeChildStream(args: FinalizeChildStreamArgs): void {
-  const {
-    childStreamId,
-    executionId,
-    logger,
-    disposeTrace,
-    runtimeHost,
-    options,
-  } = args;
+function finalizeChildStream(args: FinalizeChildStreamArgs): void {
+  const { handle, logger, disposeTrace, options } = args;
   const hasError = options?.error != null || options?.errorMessage != null;
 
   if (options?.errorMessage) {
@@ -140,19 +138,12 @@ export function finalizeChildStream(args: FinalizeChildStreamArgs): void {
     );
   }
 
-  // Preserve user-initiated STOPPED status — don't overwrite with ERROR/READY
-  const currentStatus = StreamStatusService.get(childStreamId);
-  if (currentStatus !== STREAM_STATUS.STOPPED) {
-    StreamStatusService.set(
-      childStreamId,
-      hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
-      { runtimeHost },
-    );
-  }
-  executionRegistry.untrack(executionId);
+  executionRegistry.finishAgentExecution(handle, {
+    status: hasError ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
+  });
   disposeTrace();
 
   if (options?.autoClose) {
-    runtimeHost.emit('removeStream', { streamId: childStreamId });
+    handle.runtimeHost.emit('removeStream', { streamId: handle.childStreamId });
   }
 }
