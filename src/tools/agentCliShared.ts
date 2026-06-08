@@ -2,15 +2,7 @@
 // Host-agnostic, VS Code-free.
 
 import { type AgentTrace } from '@agent/trace';
-import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import {
-  EXECUTION_STATUS,
-  type ExecutionStatus,
-  type StreamStatus,
-  STREAM_STATUS,
-  type StreamTabId,
-} from '@shared/schemas';
+import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 import { formatDuration } from '@utils/core';
 
 /** True for an AbortController-style cancellation error. */
@@ -30,11 +22,6 @@ export function isCleanInterruption(
   return signal.aborted || session.isInterrupted() || isAbortError(err);
 }
 
-/** Transient statuses owned by a running agent loop. */
-export function isLoopOwnedStatus(status: StreamStatus | undefined): boolean {
-  return status === STREAM_STATUS.WAITING || status === STREAM_STATUS.RUNNING;
-}
-
 export function agentCliLoopTerminalStatus(state: {
   readonly interrupted: boolean;
   readonly sawTurnFailure: boolean;
@@ -43,28 +30,6 @@ export function agentCliLoopTerminalStatus(state: {
   return state.interrupted
     ? EXECUTION_STATUS.INTERRUPTED
     : EXECUTION_STATUS.COMPLETED;
-}
-
-export function markAgentCliLoopError(
-  childStreamId: StreamTabId,
-  runtimeHost: AgentRuntimeHost,
-): void {
-  if (StreamStatusService.get(childStreamId) !== STREAM_STATUS.STOPPED) {
-    StreamStatusService.set(childStreamId, STREAM_STATUS.ERROR, {
-      runtimeHost,
-    });
-  }
-}
-
-export function finalizeAgentCliLoopStatus(
-  childStreamId: StreamTabId,
-  runtimeHost: AgentRuntimeHost,
-): void {
-  if (isLoopOwnedStatus(StreamStatusService.get(childStreamId))) {
-    StreamStatusService.set(childStreamId, STREAM_STATUS.READY, {
-      runtimeHost,
-    });
-  }
 }
 
 /** Log a turn summary (duration + token usage) to the child stream. */
