@@ -43,7 +43,7 @@ export const compactIconActionButtonStyles: CSSResult = css`
   }
 
   .action-icon-button[disabled]::part(base) {
-    opacity: 0.35;
+    opacity: var(--opacity-faint);
     background: transparent;
   }
 
@@ -215,7 +215,7 @@ export const commonViewStyles: CSSResult = css`
    * Borderless default; hover adds a subtle border (no fill swap). */
   .action-button::part(base) {
     gap: var(--wa-space-2xs);
-    min-height: 22px;
+    min-height: var(--height-control-compact);
     padding: 0 6px;
     border: var(--border-thin) solid transparent;
     background: transparent;
@@ -351,7 +351,7 @@ export const commonViewStyles: CSSResult = css`
     display: inline-flex;
     align-items: center;
     gap: var(--wa-space-2xs);
-    min-height: 22px;
+    min-height: var(--height-control-compact);
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
     font-size: var(--font-size-xs);
     font-family: inherit;
