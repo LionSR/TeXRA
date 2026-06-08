@@ -163,7 +163,8 @@ describe('CLI StatusBar display model', () => {
       activeSubagents: 0,
       activeProcesses: 0,
       approvalDepth: 0,
-      subagentControlsAvailable: true,
+      taskControlsAvailable: false,
+      subagentControlsAvailable: false,
       hasMultipleStreams: true,
       model: 'deepseekT',
       apiMode: PERSONAL_API_MODE_LABEL,
@@ -188,7 +189,8 @@ describe('CLI StatusBar display model', () => {
       activeSubagents: 0,
       activeProcesses: 0,
       approvalDepth: 0,
-      subagentControlsAvailable: true,
+      taskControlsAvailable: false,
+      subagentControlsAvailable: false,
       hasMultipleStreams: true,
       model: 'deepseekT',
       apiMode: PERSONAL_API_MODE_LABEL,
@@ -453,6 +455,7 @@ describe('CLI StatusBar display model', () => {
       apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
       ctrlCAction: 'stop',
+      transcriptAvailable: true,
       width: 60,
     });
 
@@ -481,6 +484,7 @@ describe('CLI StatusBar display model', () => {
       apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Option',
       ctrlCAction: 'stop',
+      transcriptAvailable: true,
       width: 44,
     });
 
