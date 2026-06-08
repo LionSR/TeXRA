@@ -125,6 +125,81 @@ describe('CLI StatusBar display model', () => {
     expect(display.left.map(statusBarSegmentText)).not.toContain('deepseekT');
   });
 
+  it('advertises the transcript viewer when the focused stream has history', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.WAITING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: true,
+      hasMultipleStreams: true,
+      model: 'deepseekT',
+      apiMode: PERSONAL_API_MODE_LABEL,
+      shortcutModifierLabel: 'Alt',
+      transcriptAvailable: true,
+      width: 80,
+    });
+
+    expect(display.bindings).toContain('[Tab]streams');
+    expect(display.bindings).toContain('[Ctrl-T]transcript');
+    expect(display.bindings).toContain('[Alt-s]subagents');
+  });
+
+  it('keeps the transcript shortcut in narrow stream views', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.WAITING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: true,
+      hasMultipleStreams: true,
+      model: 'deepseekT',
+      apiMode: PERSONAL_API_MODE_LABEL,
+      shortcutModifierLabel: 'Alt',
+      transcriptAvailable: true,
+      width: 60,
+    });
+
+    expect(display.bindings).toContain('[Ctrl-T]transcript');
+    expect(display.bindings).toContain('[Ctrl-C]exit');
+  });
+
+  it('prefers transcript over stream cycling when the bar is very narrow', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.WAITING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: true,
+      hasMultipleStreams: true,
+      model: 'deepseekT',
+      apiMode: PERSONAL_API_MODE_LABEL,
+      shortcutModifierLabel: 'Alt',
+      transcriptAvailable: true,
+      width: 42,
+    });
+
+    expect(display.bindings).toBe('[Ctrl-T]transcript  [Ctrl-C]exit');
+  });
+
   it('advertises root agent selection while setup can still change it', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.WAITING,
@@ -149,6 +224,32 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toBe(
       '[/agent]agents  [/model]models  [/api]api  [Ctrl-J]newline  [Ctrl-C]exit',
     );
+  });
+
+  it('does not let setup bindings hide the transcript viewer', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.WAITING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      agentSelectionAvailable: true,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'gpt54',
+      apiMode: PERSONAL_API_MODE_LABEL,
+      shortcutModifierLabel: 'Alt',
+      transcriptAvailable: true,
+      width: 80,
+    });
+
+    expect(display.bindings).toContain('[Ctrl-T]transcript');
+    expect(display.bindings).toContain('[/agent]agents');
   });
 
   it('keeps root agent selection visible when setup bindings get narrow', () => {
