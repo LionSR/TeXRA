@@ -3,10 +3,12 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { registerCommands } from '@commands/_shared/registerCommands';
-import { toErrorMessage } from '@common/errors';
 // Local imports - frontend
 import { getFileLister } from '@frontend/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
+
+// Local imports - latex
+import { findLabelLocation } from '@latex/labelSearch';
 
 // Local imports - logging
 import * as logger from '@logger/logUtils';
@@ -49,33 +51,23 @@ export async function openLabel(
   label: string,
   options: OpenLabelOptions = {},
 ): Promise<boolean> {
-  const escape = label.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`\\\\label\\{${escape}\\}`, 'm');
   const candidates = new Set([
     ...(await getFileLister().list('input')),
     ...(await getFileLister().list('context')),
   ]);
 
-  for (const file of candidates) {
-    try {
-      const content = await WorkspaceFS.read(file);
-      const match = content.match(pattern);
-      if (match && match.index !== undefined) {
-        const doc = await vscode.workspace.openTextDocument(
-          WorkspaceFS.toAbsolute(file),
-        );
-        const editor = await vscode.window.showTextDocument(doc, {
-          preview: true,
-        });
-        revealPosition(editor, doc.positionAt(match.index));
-        return true;
-      }
-    } catch (error) {
-      logger.debug(
-        CHANNEL,
-        `Could not read file ${file}: ${toErrorMessage(error)}`,
-      );
-    }
+  const located = await findLabelLocation(label, candidates, (file) =>
+    WorkspaceFS.read(file),
+  );
+  if (located) {
+    const doc = await vscode.workspace.openTextDocument(
+      WorkspaceFS.toAbsolute(located.file),
+    );
+    const editor = await vscode.window.showTextDocument(doc, {
+      preview: true,
+    });
+    revealPosition(editor, doc.positionAt(located.index));
+    return true;
   }
 
   if (options.notifyNotFound ?? true) {
