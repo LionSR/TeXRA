@@ -1,6 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="TeXRA">
+  <!-- Dark "board" variant for dark editor / IDE surfaces (e.g. the docs mockup
+       activity bar). The deeper near-black background (#1B0828), warm ivory T
+       (#F4ECDC), and monospace braces are tuned for that surface and are
+       intentionally distinct from the canonical light palette (#270939 / #FEF7E2).
+       Surface-specific values — do not copy them into other assets as tokens. -->
   <rect width="200" height="200" rx="46" fill="#1B0828"></rect>
   <text x="100" y="132" text-anchor="middle">
-    <tspan font-family="&#39;JetBrains Mono&#39;, &#39;Courier New&#39;, monospace" font-size="96" fill="#F39215">{</tspan><tspan dx="3" dy="-7" font-family="&#39;Source Serif 4&#39;, Georgia, &#39;Times New Roman&#39;, serif" font-size="74" font-weight="600" fill="#F4ECDC">T</tspan><tspan dx="3" dy="7" font-family="&#39;JetBrains Mono&#39;, &#39;Courier New&#39;, monospace" font-size="96" fill="#F39215">}</tspan>
+    <tspan font-family="'JetBrains Mono', 'Courier New', monospace" font-size="96" fill="#F39215">{</tspan><tspan dx="3" dy="-7" font-family="'Source Serif 4', Georgia, 'Times New Roman', serif" font-size="74" font-weight="600" fill="#F4ECDC">T</tspan><tspan dx="3" dy="7" font-family="'JetBrains Mono', 'Courier New', monospace" font-size="96" fill="#F39215">}</tspan>
   </text>
 </svg>
