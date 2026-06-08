@@ -38,8 +38,6 @@ import {
 } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import {
   interruptRegistry,
@@ -72,14 +70,12 @@ import {
   importClaudeAgentSdk,
   findClaudeBinaryPath,
 } from './claudeAgentImport';
-import { createChildStream } from './childStream';
+import { createChildStream, type ChildStream } from './childStream';
 import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import {
   agentCliLoopTerminalStatus,
-  finalizeAgentCliLoopStatus,
   isCleanInterruption,
   logTurnSummary,
-  markAgentCliLoopError,
 } from './agentCliShared';
 import {
   buildClaudeToolUseLog,
@@ -463,11 +459,9 @@ function extractToolErrorMessage(content: unknown): string | undefined {
 // ============================================================================
 
 function startClaudeAgentLoop(params: {
-  childStreamId: StreamTabId;
+  childStream: ChildStream;
   parentStreamId: StreamTabId;
   executionId: ExecutionId;
-  logger: AgentTrace;
-  disposeTrace: () => void;
   initialPrompt: string;
   model: string;
   permissionMode: ClaudeAgentPermissionMode;
@@ -479,14 +473,13 @@ function startClaudeAgentLoop(params: {
   runtimeHost: AgentRuntimeHost;
 }): void {
   const {
-    childStreamId,
+    childStream,
     parentStreamId,
     executionId,
-    logger,
-    disposeTrace,
     initialPrompt,
     runtimeHost,
   } = params;
+  const { childStreamId, logger } = childStream;
 
   const session = new ClaudeAgentSession();
   const queue = ToolUseFollowUpQueue.acquire(childStreamId);
@@ -498,9 +491,7 @@ function startClaudeAgentLoop(params: {
   const sessionStage = logger.openStage('Claude Code session');
 
   queue.enqueue(initialPrompt);
-  StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING, {
-    runtimeHost,
-  });
+  childStream.waitForInput();
 
   let resumeSessionId: string | undefined;
   const storedSessionIds = new Set<string>();
@@ -515,9 +506,7 @@ function startClaudeAgentLoop(params: {
         if (!messages || session.isInterrupted()) break;
 
         const prompt = messages.items.join('\n\n');
-        StreamStatusService.set(childStreamId, STREAM_STATUS.RUNNING, {
-          runtimeHost,
-        });
+        childStream.beginTurn();
         const startedAt = Date.now();
         const ac = session.startTurn();
 
@@ -597,14 +586,12 @@ function startClaudeAgentLoop(params: {
 
         if (turnFailed) {
           sawTurnFailure = true;
-          markAgentCliLoopError(childStreamId, runtimeHost);
+          childStream.failTurn();
           break;
         }
 
         if (!session.isInterrupted()) {
-          StreamStatusService.set(childStreamId, STREAM_STATUS.WAITING, {
-            runtimeHost,
-          });
+          childStream.waitForInput();
         }
       }
     } finally {
@@ -619,9 +606,9 @@ function startClaudeAgentLoop(params: {
           sawTurnFailure,
         }),
       ).catch(() => {});
-      executionRegistry.untrack(executionId);
-      finalizeAgentCliLoopStatus(childStreamId, runtimeHost);
-      disposeTrace();
+      childStream.finalize({
+        status: sawTurnFailure ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
+      });
     }
   })();
 }
@@ -719,26 +706,20 @@ async function launchClaudeAgentSession(
     throw new ToolError('Failed to register Claude Code CLI execution.');
   }
 
-  const { childStreamId, logger, disposeTrace } = createChildStream(
-    executionId,
-    parentStreamId,
-    {
-      streamPrefix: 'claude@agent-sdk',
-      streamCategory: AgentCategory.ToolUse,
-      agentName: CLAUDE_AGENT_NAME,
-      description: input.prompt,
-      config: agentConfig,
-      toolName: CLAUDE_AGENT_NAME,
-      runtimeHost,
-    },
-  );
+  const childStream = createChildStream(executionId, parentStreamId, {
+    streamPrefix: 'claude@agent-sdk',
+    streamCategory: AgentCategory.ToolUse,
+    agentName: CLAUDE_AGENT_NAME,
+    description: input.prompt,
+    config: agentConfig,
+    toolName: CLAUDE_AGENT_NAME,
+    runtimeHost,
+  });
 
   startClaudeAgentLoop({
-    childStreamId,
+    childStream,
     parentStreamId,
     executionId,
-    logger,
-    disposeTrace,
     initialPrompt: input.prompt,
     model,
     permissionMode,
@@ -750,6 +731,7 @@ async function launchClaudeAgentSession(
     runtimeHost,
   });
 
+  const { childStreamId } = childStream;
   const preview = truncateWithEllipsis(input.prompt, 60);
   return {
     summary: `Launched Claude Code CLI: ${preview}`,
