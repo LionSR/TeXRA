@@ -436,6 +436,23 @@ export function statusBarBindingsText(
   ]);
   if (fitsStatusBindings(minimalBindings, maxColumns)) return minimalBindings;
 
+  if (
+    taskControlsAvailable ||
+    subagentControlsAvailable ||
+    agentSelectionAvailable
+  ) {
+    const controlFocusedBindings = joinStatusBindings([
+      ...(hasMultipleStreams ? ['[Tab]streams'] : []),
+      ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
+      ...(subagentControlsAvailable ? [`${subagentsBinding}subagents`] : []),
+      ...(agentSelectionAvailable ? ['[/agent]agents'] : []),
+      `[Ctrl-C]${ctrlCAction}`,
+    ]);
+    if (fitsStatusBindings(controlFocusedBindings, maxColumns)) {
+      return controlFocusedBindings;
+    }
+  }
+
   if (hasMultipleStreams && taskControlsAvailable) {
     const taskFocusedBindings = joinStatusBindings([
       '[Tab]streams',
@@ -457,6 +474,14 @@ export function statusBarBindingsText(
     if (fitsStatusBindings(bareTaskBindings, maxColumns)) {
       return bareTaskBindings;
     }
+
+    const bareTaskBindingsWithoutTranscript = joinStatusBindings([
+      `${tasksBinding}tasks`,
+      `[Ctrl-C]${ctrlCAction}`,
+    ]);
+    if (fitsStatusBindings(bareTaskBindingsWithoutTranscript, maxColumns)) {
+      return bareTaskBindingsWithoutTranscript;
+    }
   }
 
   if (subagentControlsAvailable) {
@@ -477,6 +502,14 @@ export function statusBarBindingsText(
     ]);
     if (fitsStatusBindings(bareSubagentBindings, maxColumns)) {
       return bareSubagentBindings;
+    }
+
+    const bareSubagentBindingsWithoutTranscript = joinStatusBindings([
+      `${subagentsBinding}subagents`,
+      `[Ctrl-C]${ctrlCAction}`,
+    ]);
+    if (fitsStatusBindings(bareSubagentBindingsWithoutTranscript, maxColumns)) {
+      return bareSubagentBindingsWithoutTranscript;
     }
   }
 
