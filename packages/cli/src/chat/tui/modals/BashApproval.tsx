@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 import type { BashPermission } from '@shared/schemas';
+import { clamp } from '@utils/core';
 
 import { ConfirmCard, CONFIRM_CARD_HORIZONTAL_DECORATION } from './ConfirmCard';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
@@ -59,7 +60,7 @@ export function bashApprovalCommandRowsBudget({
     availableRows -
     BASH_APPROVAL_COMPACT_FIXED_ROWS_EXCLUDING_TITLE -
     titleRows;
-  return Math.max(1, Math.min(COMPACT_BASH_COMMAND_ROWS, compactRows));
+  return clamp(compactRows, 1, COMPACT_BASH_COMMAND_ROWS);
 }
 
 export function bashCommandDisplayLines({
@@ -261,13 +262,13 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
   function scrollTo(next: number | ((currentOffset: number) => number)): void {
     setScrollOffset((current) => {
       const requested = typeof next === 'function' ? next(current) : next;
-      return Math.max(0, Math.min(maxScrollOffset, requested));
+      return clamp(requested, 0, maxScrollOffset);
     });
   }
 
   useEffect(() => {
     setScrollOffset((current) =>
-      Math.max(0, Math.min(maxScrollOffset, current)),
+      clamp(current, 0, maxScrollOffset),
     );
   }, [maxScrollOffset]);
 

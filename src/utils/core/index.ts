@@ -22,3 +22,4 @@ export {
   ensureArray,
 } from './typeGuards';
 export { debounce, delay } from './async';
+export { clamp } from './math';

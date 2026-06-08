@@ -46,7 +46,7 @@ import {
 // Local imports - shared utilities
 import { copyTextToClipboard } from '@shared/utils/clipboard';
 import { createEvent } from '@shared/utils/events';
-import { filterNotNullish } from '@utils/core';
+import { clamp, filterNotNullish } from '@utils/core';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
@@ -995,10 +995,10 @@ export class LaTeXTab extends LitElement {
               // Coerce to integer first — paste / spinner can produce decimals
               // that the backend `.int()` schema would silently reject.
               const integer = Math.round(raw);
-              const clamped = Math.max(
-                opts.min,
-                opts.max !== undefined ? Math.min(opts.max, integer) : integer,
-              );
+              const clamped =
+                opts.max !== undefined
+                  ? clamp(integer, opts.min, opts.max)
+                  : Math.max(opts.min, integer);
               this.dispatchSetConfigValue(opts.field, clamped);
             }}
             style="margin-top:var(--wa-space-2xs);width:140px;"
