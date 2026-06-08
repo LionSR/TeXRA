@@ -13,7 +13,12 @@ export interface SkillSourceOptions {
   readonly additionalPaths?: readonly string[];
 }
 
-export const INTEROP_SKILL_DIRS = ['.claude', '.codex', '.gemini'] as const;
+export const INTEROP_SKILL_DIRS = [
+  '.agents',
+  '.claude',
+  '.codex',
+  '.gemini',
+] as const;
 
 function bundledSkillSources(resourcesPath: string): SkillSource[] {
   return [
