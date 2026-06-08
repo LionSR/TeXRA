@@ -89,6 +89,7 @@ import {
   AGENT_CATEGORY,
   MESSAGE_TYPES,
   STREAM_STATUS,
+  type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
 import { stripOrchestratorFollowup } from '@shared/subagentFollowup';
@@ -2271,6 +2272,49 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     } finally {
       ToolUseFollowUpQueue.release(root);
     }
+  });
+
+  it('keeps latest usage separate from cumulative resume usage', () => {
+    const wrapped = wrapRuntimeHost(makeHost());
+    const storageKey = 'root-run' as StorageKey;
+
+    wrapped.emit('updateStreamUsage', {
+      streamId: root,
+      storageKey,
+      usage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        cost: 1,
+        cacheReadInputTokens: 30,
+      },
+    });
+    wrapped.emit('updateStreamUsage', {
+      streamId: root,
+      storageKey,
+      usage: {
+        inputTokens: 40,
+        outputTokens: 10,
+        cost: 2,
+        cacheReadInputTokens: 5,
+        cacheCreationInputTokens: 7,
+      },
+    });
+
+    expect(cliState.streams.get().get(root)?.usage).toEqual({
+      inputTokens: 40,
+      outputTokens: 10,
+      cost: 2,
+      cacheReadInputTokens: 5,
+      cacheCreationInputTokens: 7,
+    });
+    expect(cliState.streams.get().get(root)?.cumulativeUsage).toEqual({
+      inputTokens: 140,
+      outputTokens: 30,
+      cost: 3,
+      cacheReadInputTokens: 35,
+      cacheMissInputTokens: 0,
+      cacheCreationInputTokens: 7,
+    });
   });
 
   it('persists a bounded completed-process transcript before pruning processOutput', () => {
