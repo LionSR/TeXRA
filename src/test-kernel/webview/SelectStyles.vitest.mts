@@ -17,9 +17,16 @@ function readSelectStyles(): string {
   });
 }
 
+function readLitStyles(): string {
+  return readFileSync(resolve(REPO_ROOT, 'src/shared/styles/litStyles.ts'), {
+    encoding: 'utf8',
+  });
+}
+
 describe('shared select styles', () => {
   it('keeps Web Awesome select menus at IDE density', () => {
     const source = readSelectStyles();
+    const tokenSource = readLitStyles();
     const listboxStart = source.indexOf('wa-select::part(listbox)');
     const optionStart = source.indexOf('wa-select wa-option::part(base)');
     const inputStart = source.indexOf('wa-input {');
@@ -29,7 +36,8 @@ describe('shared select styles', () => {
     expect(optionStart).toBeGreaterThan(listboxStart);
     expect(inputStart).toBeGreaterThan(optionStart);
     expect(menuRules).toContain('padding-block: var(--wa-space-3xs)');
-    expect(menuRules).toContain('min-height: 22px');
+    expect(menuRules).toContain('min-height: var(--height-control-compact)');
     expect(menuRules).toContain('padding: 2px 8px 2px 4px');
+    expect(tokenSource).toContain('--height-control-compact: 22px');
   });
 });
