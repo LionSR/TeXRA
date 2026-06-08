@@ -43,18 +43,31 @@ export function formatApiKeyShadowWarning(
   return 'note: a provider API key is set while signed in — `--api-mode` (or `/api`) controls which one is used.';
 }
 
+const CLI_API_STATUS_ACTION_HINTS: Record<
+  CliApiMode,
+  Record<'signedIn' | 'signedOut', string>
+> = {
+  included: {
+    signedIn:
+      'actions: `texra login --select-account` changes account; `--api-mode personal` uses provider keys',
+    signedOut:
+      'actions: `texra login` enables included relay; `--api-mode personal` uses provider keys',
+  },
+  personal: {
+    signedIn:
+      'actions: `--api-mode included` uses relay; `texra logout` signs out',
+    signedOut:
+      'actions: configure a provider key, or run `texra login` for included relay',
+  },
+};
+
 export function formatCliApiStatusActionHint(
   mode: CliApiMode,
   profile: Pick<CliAuthProfile, 'authenticated'>,
 ): string {
-  if (mode === 'included') {
-    return profile.authenticated
-      ? 'actions: `texra login --select-account` changes account; `--api-mode personal` uses provider keys'
-      : 'actions: `texra login` enables included relay; `--api-mode personal` uses provider keys';
-  }
-  return profile.authenticated
-    ? 'actions: `--api-mode included` uses relay; `texra logout` signs out'
-    : 'actions: configure a provider key, or run `texra login` for included relay';
+  return CLI_API_STATUS_ACTION_HINTS[mode][
+    profile.authenticated ? 'signedIn' : 'signedOut'
+  ];
 }
 
 async function anyPersonalKeyPresent(): Promise<boolean> {
@@ -90,19 +103,16 @@ export async function loadCliApiStatusLines(
   }
 
   if (profile.tier) lines.push(`tier: ${profile.tier}`);
-  if (!profile.authenticated || !profile.tier) {
-    if (actionHint) lines.push(actionHint);
-    return lines;
-  }
-
-  try {
-    lines.push(
-      formatRelayUsageStatus(
-        await fetchRelayUsageSummary({ tier: profile.tier }),
-      ),
-    );
-  } catch (error: unknown) {
-    lines.push(`relay usage: unavailable (${toErrorMessage(error)})`);
+  if (profile.authenticated && profile.tier) {
+    try {
+      lines.push(
+        formatRelayUsageStatus(
+          await fetchRelayUsageSummary({ tier: profile.tier }),
+        ),
+      );
+    } catch (error: unknown) {
+      lines.push(`relay usage: unavailable (${toErrorMessage(error)})`);
+    }
   }
 
   if (actionHint) lines.push(actionHint);

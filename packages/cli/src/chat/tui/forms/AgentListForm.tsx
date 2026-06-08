@@ -1,7 +1,7 @@
 // `/agent` form. It lists visible tool-use agents and workflows. Before the
 // first message, tool-use agents can be chosen as the root chat agent.
 
-import { Box, Text, useWindowSize } from 'ink';
+import { Box, Text } from 'ink';
 import { Spinner } from '@inkjs/ui';
 
 import { computeAgentOptionsData } from '@agent/index';
@@ -10,11 +10,7 @@ import { agentName } from '@shared/schemas/agent';
 
 import { KeyHints } from '../ui/KeyHints';
 import { Select } from '../ui/Select';
-import {
-  CompactFormKeyHints,
-  FormFrame,
-  formFrameWidth,
-} from './_shared/FormFrame';
+import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
@@ -154,7 +150,6 @@ export function agentSelectWindow({
 }
 
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
-  const { columns } = useWindowSize();
   const { data, loading, error } = useAsyncListForm<AgentGroups>({
     load: async () => {
       const options = await computeAgentOptionsData();
@@ -247,16 +242,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   }
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor="cyan"
-      flexDirection="column"
-      paddingX={1}
-      width={formFrameWidth(columns)}
-    >
-      <Text bold color="cyan">
-        /agent
-      </Text>
+    <FormFrame color="cyan" title="/agent" showCloseHint={false}>
       <Text dimColor wrap="truncate-end">
         {selectable
           ? 'Choose the root agent for the first message.'
@@ -317,6 +303,6 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
           />
         )}
       </Box>
-    </Box>
+    </FormFrame>
   );
 }

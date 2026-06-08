@@ -177,7 +177,7 @@ function orderedStreamTree(init: {
   for (const [index, id] of ordered.entries()) {
     if (!init.streams.has(id)) continue;
     const position = index + 1;
-    const shortcutIndex = position <= 0 || position > 9 ? undefined : position;
+    const shortcutIndex = position > 9 ? undefined : position;
     out.push({ id, shortcutIndex });
   }
   return out;

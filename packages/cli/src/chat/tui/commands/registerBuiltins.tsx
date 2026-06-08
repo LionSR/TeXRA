@@ -1,6 +1,7 @@
 // Registers the slash commands the input palette surfaces.
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
+import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import type { CliApprovalPolicy } from '@cli/schemas/cliSettings';
 import type { ExecutionId } from '@shared/schemas';
 
@@ -76,7 +77,7 @@ export function registerBuiltinSlashCommands(options?: {
   onApprovalPolicySelect?: ApprovalPolicySelectHandler;
   onModelSelect?: ModelSelectHandler;
   canSelectModel?: () => boolean;
-  getModelSwitchDisabledReason?: (model: string) => string | undefined;
+  getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
   onApiModeSelect?: ApiModeSelectHandler;
   onMemorySelect?: MemorySelectHandler;
   onResumeSelect?: ResumeSelectHandler;

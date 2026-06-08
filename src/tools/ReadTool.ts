@@ -15,7 +15,7 @@ import {
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
 import { recordToolFileRead } from '@tools/fileInteractions';
-import { parseEml } from '@tools/emlParser';
+import { parseEml, type EmlImageAttachment } from '@tools/emlParser';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 import {
   getMimeType,
@@ -95,7 +95,7 @@ export class ReadFileTool extends defineTool({
 
     // EML files use complex MIME encoding (multipart, base64, quoted-printable).
     // Parse into readable text and extract image attachments for vision models.
-    let emlImages: Awaited<ReturnType<typeof parseEml>>['images'] = [];
+    let emlImages: EmlImageAttachment[] = [];
     let lines: string[];
 
     if (hasExtension(input.path, '.eml')) {

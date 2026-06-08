@@ -390,15 +390,22 @@ export function foregroundEscapeAction({
   readonly foregroundKind: ForegroundSurfaceKind | undefined;
   readonly pending: PendingApproval | undefined;
 }): string | undefined {
-  if (foregroundKind !== 'approval') {
-    if (foregroundKind === undefined) return undefined;
-    if (foregroundKind === 'form') return activeFormEscapeAction ?? 'close';
-    return foregroundKind === 'childControls' ? 'panel' : 'close';
+  switch (foregroundKind) {
+    case undefined:
+      return undefined;
+    case 'form':
+      return activeFormEscapeAction ?? 'close';
+    case 'childControls':
+      return 'panel';
+    case 'transcript':
+      return 'close';
+    case 'approval': {
+      const kind = pending?.payload.kind;
+      return kind === 'externalInquiry' || kind === 'userQuestion'
+        ? 'skip'
+        : 'cancel';
+    }
   }
-  const kind = pending?.payload.kind;
-  return kind === 'externalInquiry' || kind === 'userQuestion'
-    ? 'skip'
-    : 'cancel';
 }
 
 export function childControlForegroundMaxRows({

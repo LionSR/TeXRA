@@ -45,7 +45,7 @@ interface AnsiMarkdownStyle {
 
 // One color gate for the whole package: picocolors' `createColors(false)` hands
 // back identity functions, so there's no need to keep parallel on/off style
-// objects — same pattern as `runtime/style.ts`'s `createCliStyle`. Raw SGR codes
+// objects (same pattern as `runtime/style.ts`'s `createCliStyle`). Raw SGR codes
 // (strong/em/strikethrough/link) can't be neutered by `createColors`, so `sgr`
 // stays explicitly gated.
 function ansiMarkdownStyle(colorEnabled: boolean): AnsiMarkdownStyle {

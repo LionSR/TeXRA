@@ -39,15 +39,13 @@ import {
   createCliRunResult,
   terminalStatusExitCode,
   toolUseResultText,
-  type CliRunResult,
+  type CliToolUseRunResult,
 } from '../runtime/terminalStatus';
 import { formatToolUseAgentRunInstruction } from './_helpers/toolUseRunInstruction';
 import {
   createStdinWorkflowInputMaterializer,
   expandRunInputs,
 } from '../runtime/workflowInputs';
-
-type CliToolUseRunResult = Extract<CliRunResult, { category: 'toolUse' }>;
 
 export interface ToolUseAgentRunInit {
   readonly agent: string;

@@ -153,24 +153,28 @@ export const INTERACTIVE_AGENT_GLOBAL_ARGS = {
   ...SKILL_SOURCE_ARGS,
 } as const;
 
+// The long flag plus any single-character alias for a routable global flag.
+function flagSpellings(
+  name: string,
+  def: { type: string; alias?: string },
+): string[] {
+  const long = `--${name}`;
+  return def.alias ? [long, `-${def.alias}`] : [long];
+}
+
 // Derived from `ROOT_ROUTING_ARGS` so adding/renaming a leading-routable flag
 // in one place flows through to `reorderGlobalFlags` automatically. Commands
 // still choose which routed flags they accept through their own args objects.
 export const GLOBAL_VALUE_FLAGS = new Set<string>(
-  Object.entries(ROOT_ROUTING_ARGS).flatMap(([name, def]) => {
-    if (def.type === 'boolean') return [];
-    const long = `--${name}`;
-    const alias = 'alias' in def ? def.alias : undefined;
-    return alias ? [long, `-${alias}`] : [long];
-  }),
+  Object.entries(ROOT_ROUTING_ARGS).flatMap(([name, def]) =>
+    def.type === 'boolean' ? [] : flagSpellings(name, def),
+  ),
 );
 
 export const GLOBAL_BOOL_FLAGS = new Set<string>(
   Object.entries(ROOT_ROUTING_ARGS).flatMap(([name, def]) => {
     if (def.type !== 'boolean') return [];
-    const long = `--${name}`;
-    const alias = 'alias' in def ? def.alias : undefined;
-    const flags = alias ? [long, `-${alias}`] : [long];
+    const flags = flagSpellings(name, def);
     // Booleans defaulting to `true` are passed by their negated form
     // (`--no-color`); citty rewrites those to `<name>: false`.
     // Register the negated spelling so leading-flag reordering and unknown-

@@ -29,6 +29,17 @@ export interface ExternalInquiryDisplayLine {
 
 type CopyStatus = 'idle' | 'copying' | 'copied' | 'failed';
 
+function copyStatusLabel(status: Exclude<CopyStatus, 'idle'>): string {
+  switch (status) {
+    case 'copying':
+      return ' copying...';
+    case 'copied':
+      return ' copied to clipboard';
+    case 'failed':
+      return ' copy failed';
+  }
+}
+
 const MIN_EXTERNAL_INQUIRY_WIDTH = 20;
 const DEFAULT_EXTERNAL_INQUIRY_QUESTION_ROWS = 16;
 const COMPACT_EXTERNAL_INQUIRY_QUESTION_ROWS = 3;
@@ -349,11 +360,7 @@ export function ExternalInquiry(
             color={copyStatus === 'failed' ? 'yellow' : 'green'}
             dimColor={copyStatus === 'copying'}
           >
-            {copyStatus === 'copying'
-              ? ' copying...'
-              : copyStatus === 'copied'
-                ? ' copied to clipboard'
-                : ' copy failed'}
+            {copyStatusLabel(copyStatus)}
           </Text>
         ) : null}
       </Text>
