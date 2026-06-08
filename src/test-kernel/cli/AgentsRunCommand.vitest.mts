@@ -8,9 +8,13 @@ const mocks = vi.hoisted(() => {
   return {
     executeCliRequest: vi.fn(),
     expandRunInputs: vi.fn(),
+    initLocalCliPlatform: vi.fn(),
     installCliApprovalHandlers: vi.fn(),
     resolveCliAgent: vi.fn(),
+    resolveCliRunModel: vi.fn(),
     stdinInputFile,
+    writeErrorStderr: vi.fn(),
+    writeTextStderr: vi.fn(),
   };
 });
 
@@ -26,6 +30,10 @@ vi.mock('@cli/runtime/approvalAdapter', () => ({
   installCliApprovalHandlers: mocks.installCliApprovalHandlers,
 }));
 
+vi.mock('@cli/runtime/initPlatform', () => ({
+  initLocalCliPlatform: mocks.initLocalCliPlatform,
+}));
+
 vi.mock('@cli/runtime/runModel', () => ({
   buildHeadlessRunContext: vi.fn((context: CliContext, model: string) => ({
     ...context,
@@ -33,9 +41,12 @@ vi.mock('@cli/runtime/runModel', () => ({
     quietLogs: true,
     renderRunProgress: false,
   })),
-  resolveCliRunModel: vi.fn(
-    async (_context: CliContext, model: string | undefined) => model ?? 'gpt54',
-  ),
+  resolveCliRunModel: mocks.resolveCliRunModel,
+}));
+
+vi.mock('@cli/runtime/logSinks', () => ({
+  writeErrorStderr: mocks.writeErrorStderr,
+  writeTextStderr: mocks.writeTextStderr,
 }));
 
 vi.mock('@cli/commands/_helpers/output', () => ({
@@ -87,6 +98,10 @@ describe('CLI agents run command', () => {
       path: '/agents/chat.yaml',
       tools: ['read_file'],
     });
+    mocks.resolveCliRunModel.mockImplementation(
+      async (_context: CliContext, model: string | undefined) =>
+        model ?? 'gpt54',
+    );
     mocks.executeCliRequest.mockResolvedValue({
       result: {
         category: AgentCategory.ToolUse,
@@ -110,6 +125,12 @@ describe('CLI agents run command', () => {
     });
 
     expect(exitCode).toBe(0);
+    expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/tmp/project' }),
+    );
+    expect(mocks.initLocalCliPlatform.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.resolveCliAgent.mock.invocationCallOrder[0],
+    );
     expect(mocks.expandRunInputs).toHaveBeenCalledWith(
       ['problem.md'],
       ['notes.md'],
@@ -135,6 +156,81 @@ describe('CLI agents run command', () => {
     );
     expect(request?.config.instruction).toContain(
       'Assess the proof concisely.',
+    );
+  });
+
+  it('reports missing instruction before resolving the model', async () => {
+    const { runToolUseAgent } = await import('@cli/commands/agentsRun');
+
+    const exitCode = await runToolUseAgent(cliContext(), {
+      agent: 'chat',
+      inputFiles: [],
+      contextFiles: [],
+      model: 'gpt54',
+      instruction: '',
+    });
+
+    expect(exitCode).toBe(2);
+    expect(mocks.initLocalCliPlatform).not.toHaveBeenCalled();
+    expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
+    expect(mocks.resolveCliAgent).not.toHaveBeenCalled();
+    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+    expect(mocks.writeErrorStderr).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Provide --instruction or --instruction-file.',
+      }),
+    );
+  });
+
+  it('reports missing agents before resolving the model', async () => {
+    mocks.resolveCliAgent.mockResolvedValueOnce(undefined);
+    const { runToolUseAgent } = await import('@cli/commands/agentsRun');
+
+    const exitCode = await runToolUseAgent(cliContext(), {
+      agent: 'missing-agent',
+      inputFiles: [],
+      contextFiles: [],
+      model: 'gpt54',
+      instruction: 'Check this.',
+    });
+
+    expect(exitCode).toBe(2);
+    expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/tmp/project' }),
+    );
+    expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
+    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'Tool-use agent not found: missing-agent. Use `texra agents list` for visible starter agents, or pass a known launchable agent name from a team preset.',
+    );
+  });
+
+  it('reports workflow agents before resolving the model', async () => {
+    mocks.resolveCliAgent.mockResolvedValueOnce({
+      name: 'polish',
+      category: AgentCategory.Workflow,
+      source: 'builtInWorkflow',
+      path: '/agents/polish.yaml',
+      tools: [],
+    });
+    const { runToolUseAgent } = await import('@cli/commands/agentsRun');
+
+    const exitCode = await runToolUseAgent(cliContext(), {
+      agent: 'polish',
+      inputFiles: [],
+      contextFiles: [],
+      model: 'gpt54',
+      instruction: 'Check this.',
+    });
+
+    expect(exitCode).toBe(2);
+    expect(mocks.initLocalCliPlatform).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/tmp/project' }),
+    );
+    expect(mocks.resolveCliRunModel).not.toHaveBeenCalled();
+    expect(mocks.expandRunInputs).not.toHaveBeenCalled();
+    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+      'Agent "polish" is a workflow agent; `texra agents run` only handles tool-use agents. Use `texra run polish` for workflow agents.',
     );
   });
 });
