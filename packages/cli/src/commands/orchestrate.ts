@@ -20,7 +20,7 @@ import {
 import { buildCliOrchestrationItems } from '../runtime/orchestration';
 import {
   getCliModelAccessList,
-  resolveCliRunnableModelWithAccessList,
+  resolveCliRunnableModel,
   type CliModelAccess,
 } from '../runtime/modelAccess';
 import { effectiveCliApiMode, type CliApiMode } from '../runtime/apiAccessMode';
@@ -56,9 +56,10 @@ async function canLaunchWithDefaultModel(
     envModel: context.envModel,
   });
   try {
-    await resolveCliRunnableModelWithAccessList(models, defaults.model, {
+    await resolveCliRunnableModel(defaults.model, {
       fallbackSource: defaults.modelSource,
       apiMode,
+      accessList: models,
     });
     return true;
   } catch {
