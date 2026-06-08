@@ -39,7 +39,7 @@ import { runFlowWithLifecycle } from './AgentRunLifecycle';
 import { executionRegistry } from './executionRegistry';
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
-import { getRunStorageService } from './RunStorageService';
+import { getProgressViewBridge } from './ProgressViewBridge';
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type {
   AgentFlowResult,
@@ -265,7 +265,7 @@ export async function executeAgent(
         logger.debug(`Output files: ${config.outputFiles?.length ?? 0}`);
         // Subagents don't need to force-open the progress board or show notifications —
         // the orchestrator's stream is already visible.
-        if (!isSubagent && !getRunStorageService().isViewVisible()) {
+        if (!isSubagent && !getProgressViewBridge().isViewVisible()) {
           ctx.runtimeHost.emit('requestEnsureProgressView', {
             fallbackNotification: buildFallbackNotification(config),
           });
