@@ -103,7 +103,10 @@ import { App } from './App';
 import { assertNever } from './assertNever';
 import { formatApprovalPolicyForCli as formatApprovalPolicy } from './forms/ApprovalPolicyForm';
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
-import { openRegisteredCliSlashForm } from './commands/slashForms';
+import {
+  openCliSlashCommandForm,
+  openRegisteredCliSlashForm,
+} from './commands/slashForms';
 import {
   findSlashCommand,
   listSlashCommands,
@@ -715,7 +718,7 @@ function applyCliApprovalPolicySelection(
 ): void {
   const normalized = input.trim().toLowerCase();
   if (!normalized || normalized === 'status') {
-    openRegisteredCliSlashCommandForm('approval', '');
+    openCliSlashCommandForm('approval', '');
     return;
   }
 
@@ -737,14 +740,6 @@ async function showCliMemoryList(): Promise<void> {
 
 async function showCliMemoryPreview(inputPath: string): Promise<void> {
   appendLocalAssistantTranscript(await formatCliMemoryPreview(inputPath));
-}
-
-function openRegisteredCliSlashCommandForm(
-  commandName: string,
-  remainder: string,
-): boolean {
-  const registered = findSlashCommand(commandName);
-  return registered ? openRegisteredCliSlashForm(registered, remainder) : false;
 }
 
 async function handleTuiSlashCommand(
@@ -791,16 +786,16 @@ async function handleTuiSlashCommand(
       } else if (rest) {
         applyInitialCliAgentSelection(rest, context);
       } else {
-        openRegisteredCliSlashCommandForm('agent', rest);
+        openCliSlashCommandForm('agent', rest);
       }
       return true;
     case 'model':
     case 'models':
-      openRegisteredCliSlashCommandForm('model', rest);
+      openCliSlashCommandForm('model', rest);
       return true;
     case 'api':
       if (!rest) {
-        openRegisteredCliSlashCommandForm('api', rest);
+        openCliSlashCommandForm('api', rest);
         return true;
       }
       try {
@@ -826,7 +821,7 @@ async function handleTuiSlashCommand(
       if (rest) {
         applyCliApprovalPolicySelection(rest, context);
       } else {
-        openRegisteredCliSlashCommandForm('approval', rest);
+        openCliSlashCommandForm('approval', rest);
       }
       return true;
     case 'yolo':
@@ -859,7 +854,7 @@ async function handleTuiSlashCommand(
     }
     case 'resume': {
       if (!rest) {
-        openRegisteredCliSlashCommandForm('resume', rest);
+        openCliSlashCommandForm('resume', rest);
         return true;
       }
       const id = parseCliHistoryId(rest);
@@ -873,7 +868,7 @@ async function handleTuiSlashCommand(
     case 'memory': {
       try {
         if (!rest) {
-          openRegisteredCliSlashCommandForm('memory', rest);
+          openCliSlashCommandForm('memory', rest);
         } else if (rest.toLowerCase() === 'list') {
           await showCliMemoryList();
         } else {
