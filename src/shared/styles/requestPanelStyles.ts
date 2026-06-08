@@ -141,8 +141,8 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   /* Per-panel basis tunes how many action buttons fit per row before wrapping.
-     Default 8rem (retry / inquiry / question); approval + plan want wider rows,
-     the workflow proposal narrower. */
+     Default 8rem (retry / inquiry / question); approval / bash / plan want
+     wider rows, the workflow proposal narrower. */
   .approval-request__actions,
   .bash-approval-request__actions,
   .plan-approval-request__actions {
