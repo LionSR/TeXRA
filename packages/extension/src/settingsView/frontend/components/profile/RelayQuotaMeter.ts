@@ -53,8 +53,8 @@ export class RelayQuotaMeter extends LitElement {
       .quota-meter {
         margin: 0 0 var(--wa-space-m);
         padding: var(--wa-space-m) var(--wa-space-l);
-        border: 1px solid var(--wa-color-neutral-border-quiet);
-        border-radius: var(--wa-border-radius-m);
+        border: var(--border-thin) solid var(--wa-color-neutral-border-quiet);
+        border-radius: var(--border-radius);
         background: var(--wa-color-neutral-background-quiet);
       }
       .quota-meter[data-state='exhausted'] {
@@ -85,7 +85,7 @@ export class RelayQuotaMeter extends LitElement {
         position: relative;
         height: 6px;
         background: var(--wa-color-neutral-border-quiet);
-        border-radius: 3px;
+        border-radius: var(--border-radius);
         overflow: hidden;
       }
       .quota-bar-fill {
