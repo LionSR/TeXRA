@@ -47,7 +47,6 @@ import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { initCliPlatform, setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
-  cliRunnableModelOptionsForSource,
   formatCliNoAvailableModelsRecovery,
   resolveCliRunnableModel,
   type CliNoAvailableModelsRecoveryOptions,
@@ -561,7 +560,7 @@ async function reconcileRootModelAfterApiModeChange(
 
   const currentModel = cliState.sessionMeta.get().model;
   const selection = await resolveCliRunnableModel(currentModel, {
-    fallbackMode: 'notice',
+    fallbackSource: 'config',
     apiMode,
     noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
       apiMode,
@@ -956,16 +955,14 @@ export async function runChat(
   // never disagree.
   let modelSelection: CliRunnableModelResolution;
   try {
-    modelSelection = await resolveCliRunnableModel(
-      defaults.model,
-      cliRunnableModelOptionsForSource(defaults.modelSource, {
+    modelSelection = await resolveCliRunnableModel(defaults.model, {
+      fallbackSource: defaults.modelSource,
+      apiMode,
+      noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
         apiMode,
-        noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-          apiMode,
-          CHAT_STARTUP_MODEL_RECOVERY,
-        ),
-      }),
-    );
+        CHAT_STARTUP_MODEL_RECOVERY,
+      ),
+    });
   } catch (error: unknown) {
     writeTextStderr(toErrorMessage(error));
     return { exitCode: CliExitCode.Usage };
@@ -1398,7 +1395,7 @@ export async function runChat(
         const currentAgent = meta.agent || agent;
         const currentModel = meta.model || model;
         const selection = await resolveCliRunnableModel(currentModel, {
-          fallbackMode: 'reject',
+          fallbackSource: 'override',
           apiMode: meta.apiMode,
           noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
             meta.apiMode,

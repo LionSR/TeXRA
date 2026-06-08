@@ -19,7 +19,6 @@ import {
 } from '../runtime/multiAgentPresets';
 import { buildCliOrchestrationItems } from '../runtime/orchestration';
 import {
-  cliRunnableModelOptionsForSource,
   getCliModelAccessList,
   resolveCliRunnableModelWithAccessList,
   type CliModelAccess,
@@ -57,11 +56,10 @@ async function canLaunchWithDefaultModel(
     envModel: context.envModel,
   });
   try {
-    await resolveCliRunnableModelWithAccessList(
-      models,
-      defaults.model,
-      cliRunnableModelOptionsForSource(defaults.modelSource, { apiMode }),
-    );
+    await resolveCliRunnableModelWithAccessList(models, defaults.model, {
+      fallbackSource: defaults.modelSource,
+      apiMode,
+    });
     return true;
   } catch {
     return false;
