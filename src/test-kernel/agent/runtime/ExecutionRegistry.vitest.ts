@@ -45,6 +45,157 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('owns visible stream stop policy for root and children', () => {
+    const explicit = createRecordingHost();
+    const interrupts = new InterruptRegistry();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ interrupts, streamStatus });
+    const rootStreamId = 'root-stop-policy-test' as StreamTabId;
+    const childStreamId = 'child-stop-policy-test' as StreamTabId;
+    const rootInterrupt = vi.fn();
+    const childInterrupt = vi.fn();
+
+    try {
+      interrupts.register(rootStreamId, { interrupt: rootInterrupt });
+      interrupts.register(childStreamId, { interrupt: childInterrupt });
+      registry.track(
+        new AgentExecutionHandle(
+          'exec-root-stop-policy-test',
+          rootStreamId,
+          rootStreamId,
+          'test-root',
+          'toolUse',
+          explicit.host,
+        ),
+      );
+      registry.track(
+        new AgentExecutionHandle(
+          'exec-child-stop-policy-test',
+          rootStreamId,
+          childStreamId,
+          'test-subagent',
+          'toolUse',
+          explicit.host,
+        ),
+      );
+
+      expect(
+        registry.stopAgentStream(rootStreamId, {
+          runtimeHost: explicit.host,
+        }),
+      ).toBe(true);
+
+      expect(rootInterrupt).toHaveBeenCalledOnce();
+      expect(childInterrupt).toHaveBeenCalledOnce();
+      expect(streamStatus.get(rootStreamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.STOPPED);
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('detaches children when stopping a stream with detached subagents', () => {
+    const explicit = createRecordingHost();
+    const interrupts = new InterruptRegistry();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ interrupts, streamStatus });
+    const rootStreamId = 'root-detach-stop-policy-test' as StreamTabId;
+    const childStreamId = 'child-detach-stop-policy-test' as StreamTabId;
+    const rootInterrupt = vi.fn();
+    const childInterrupt = vi.fn();
+
+    try {
+      interrupts.register(rootStreamId, { interrupt: rootInterrupt });
+      interrupts.register(childStreamId, { interrupt: childInterrupt });
+      registry.track(
+        new AgentExecutionHandle(
+          'exec-root-detach-stop-policy-test',
+          rootStreamId,
+          rootStreamId,
+          'test-root',
+          'toolUse',
+          explicit.host,
+        ),
+      );
+      registry.track(
+        new AgentExecutionHandle(
+          'exec-child-detach-stop-policy-test',
+          rootStreamId,
+          childStreamId,
+          'test-subagent',
+          'toolUse',
+          explicit.host,
+        ),
+      );
+
+      expect(
+        registry.stopAgentStream(rootStreamId, {
+          detachActiveChildren: true,
+          runtimeHost: explicit.host,
+        }),
+      ).toBe(true);
+
+      expect(rootInterrupt).toHaveBeenCalledOnce();
+      expect(childInterrupt).not.toHaveBeenCalled();
+      expect(registry.getActiveChildren(rootStreamId).subagents).toHaveLength(
+        0,
+      );
+      expect(
+        registry.getAgentHandleByStream(childStreamId)?.parentStreamId,
+      ).toBe(childStreamId);
+      expect(streamStatus.get(rootStreamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(childStreamId)).toBeUndefined();
+      expect(explicit.events).toContainEqual({
+        event: 'setParentStream',
+        payload: {
+          childStreamId,
+          parentStreamId: null,
+        },
+      });
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('stops a registered stream before its execution handle is tracked', () => {
+    const explicit = createRecordingHost();
+    const interrupts = new InterruptRegistry();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ interrupts, streamStatus });
+    const streamId = 'untracked-stop-policy-test' as StreamTabId;
+    const interrupt = vi.fn();
+
+    try {
+      interrupts.register(streamId, { interrupt });
+
+      expect(
+        registry.stopAgentStream(streamId, {
+          runtimeHost: explicit.host,
+        }),
+      ).toBe(true);
+
+      expect(interrupt).toHaveBeenCalledOnce();
+      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('requires a runtime host when detaching without a tracked root handle', () => {
+    const registry = new ExecutionRegistry();
+    const streamId = 'missing-host-detach-stop-policy-test' as StreamTabId;
+
+    try {
+      expect(() =>
+        registry.stopAgentStream(streamId, {
+          detachActiveChildren: true,
+        }),
+      ).toThrow('requires a runtimeHost');
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('publishes handle updates through the handle runtime host', () => {
     const explicit = createRecordingHost();
     const registry = new ExecutionRegistry();
