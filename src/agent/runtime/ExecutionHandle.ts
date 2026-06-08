@@ -6,7 +6,7 @@
  */
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
+import type { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import {
   LIVE_ELAPSED_STREAM_STATUSES,
   STREAM_STATUS,
@@ -20,6 +20,8 @@ export interface ExecutionStatusInfo {
   status: string;
   elapsed: string | null;
 }
+
+export type StreamStatusReader = Pick<StreamStatusRegistry, 'get'>;
 
 /** Statuses that represent a live execution (running, transitioning, or paused). */
 export const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
@@ -83,6 +85,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
     readonly agentName: string,
     readonly category: 'workflow' | 'toolUse',
     readonly runtimeHost: AgentRuntimeHost,
+    private readonly streamStatus: StreamStatusReader,
     readonly coordinators?: RunCoordinators,
   ) {
     this._parentStreamId = parentStreamId;
@@ -99,7 +102,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
 
   getStatus(): ExecutionStatusInfo {
     const status =
-      StreamStatusService.get(this.childStreamId) ?? STREAM_STATUS.RUNNING;
+      this.streamStatus.get(this.childStreamId) ?? STREAM_STATUS.RUNNING;
     if (!LIVE_ELAPSED_STREAM_STATUSES.has(status)) {
       return { status, elapsed: null };
     }

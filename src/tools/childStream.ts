@@ -93,6 +93,7 @@ export function createChildStream(
     options.agentName,
     'toolUse',
     runtimeHost,
+    StreamStatusService,
   );
   if (options.toolName) handle.toolName = options.toolName;
   executionRegistry.track(handle);

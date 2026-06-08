@@ -51,6 +51,7 @@ describe('tool-use follow-up progress events', () => {
       'search',
       'toolUse',
       host,
+      StreamStatusService,
     );
     handle.attachToolUseFlow({
       session: { appendFollowUp },
@@ -130,6 +131,7 @@ describe('tool-use follow-up progress events', () => {
       'critic',
       'toolUse',
       noopAgentRuntimeHost,
+      StreamStatusService,
     );
 
     StreamStatusService.set(parentStreamId, STREAM_STATUS.STOPPED, {
