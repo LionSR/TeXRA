@@ -44,6 +44,24 @@ export interface ExecutionHandle {
   updateProgress(update: { currentRound?: number; totalRounds?: number }): void;
 }
 
+export interface LiveToolUseFlowContext {
+  readonly session: {
+    appendFollowUp(
+      text: string,
+      mediaFiles?: readonly string[],
+      displayText?: string,
+    ): void;
+  };
+  readonly modelHandler: {
+    readonly supportsManualCompaction: boolean;
+  };
+  readonly runtimeHost?: AgentRuntimeHost;
+
+  requestImmediateCompaction(): void;
+  modelSwitchDisabledReason(model: string): string | undefined;
+  switchModel(model: string): Promise<void>;
+}
+
 /**
  * Handle for agent-based executions (workflow or toolUse subagents).
  * When `parentStreamId` differs from `childStreamId`, the handle represents
@@ -53,6 +71,7 @@ export class AgentExecutionHandle implements ExecutionHandle {
   readonly startedAt = Date.now();
   private progress: { currentRound?: number; totalRounds?: number } = {};
   private _parentStreamId: StreamTabId;
+  private toolUseFlowContext?: LiveToolUseFlowContext;
 
   /** Stable tool name for UI identification (e.g. "bash", "codex"). */
   toolName?: string;
@@ -99,6 +118,22 @@ export class AgentExecutionHandle implements ExecutionHandle {
     totalRounds?: number;
   }): void {
     Object.assign(this.progress, update);
+  }
+
+  attachToolUseFlow(context: LiveToolUseFlowContext): void {
+    if (this.category !== 'toolUse') {
+      throw new Error('Only tool-use execution handles can attach tool flows.');
+    }
+    this.toolUseFlowContext = context;
+  }
+
+  detachToolUseFlow(context?: LiveToolUseFlowContext): void {
+    if (context !== undefined && this.toolUseFlowContext !== context) return;
+    this.toolUseFlowContext = undefined;
+  }
+
+  getToolUseFlow(): LiveToolUseFlowContext | undefined {
+    return this.toolUseFlowContext;
   }
 }
 

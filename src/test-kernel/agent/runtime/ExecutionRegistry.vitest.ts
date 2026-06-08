@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AgentExecutionHandle,
   ExecutionRegistry,
+  type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
 import { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
@@ -235,6 +236,48 @@ describe('executionRegistry', () => {
         parentStreamId,
         children: [],
       });
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('clears live tool-use context while the handle remains tracked', () => {
+    const explicit = createRecordingHost();
+    const registry = new ExecutionRegistry();
+    const executionId = 'exec-live-flow-context-test';
+    const streamId = 'stream-live-flow-context-test' as StreamTabId;
+    const context: LiveToolUseFlowContext = {
+      session: {
+        appendFollowUp: vi.fn(),
+      },
+      modelHandler: {
+        supportsManualCompaction: true,
+      },
+      runtimeHost: explicit.host,
+      requestImmediateCompaction: vi.fn(),
+      modelSwitchDisabledReason: vi.fn(),
+      switchModel: vi.fn(),
+    };
+
+    try {
+      const handle = new AgentExecutionHandle(
+        executionId,
+        streamId,
+        streamId,
+        'test-tool-use',
+        'toolUse',
+        explicit.host,
+      );
+
+      handle.attachToolUseFlow(context);
+      registry.track(handle);
+
+      expect(registry.getToolUseFlowContext(streamId)).toBe(context);
+
+      handle.detachToolUseFlow(context);
+
+      expect(registry.getToolUseFlowContext(streamId)).toBeUndefined();
+      expect(registry.getAgentHandleByStream(streamId)).toBe(handle);
     } finally {
       registry.dispose();
     }
