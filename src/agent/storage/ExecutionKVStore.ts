@@ -17,6 +17,7 @@ import {
 import { KVStore } from '@common/storage/KVStore';
 import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
+import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 // ============================================================================
 // Key constants (implementation detail — not exported)
@@ -139,13 +140,6 @@ export interface ExecutionKVStore {
   writeResultMeta(data: ResultMeta): Promise<void>;
 }
 
-/**
- * Storage directory for all execution data (KV, output logs, etc.).
- * This matches TASK_RUNS_DIR by design — both point to 'executions/' so
- * KV metadata and workflow output files share the same per-execution directory.
- */
-export const EXECUTIONS_DIR = 'executions';
-
 // ============================================================================
 // Implementation
 // ============================================================================
@@ -157,7 +151,7 @@ export const EXECUTIONS_DIR = 'executions';
  */
 class StorageFSKVStore extends KVStore implements ExecutionKVStore {
   constructor(private readonly executionId: ExecutionId) {
-    super(path.join(EXECUTIONS_DIR, executionId));
+    super(path.join(TASK_RUNS_DIR, executionId));
   }
 
   async clear(): Promise<void> {
