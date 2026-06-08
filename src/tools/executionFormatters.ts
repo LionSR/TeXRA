@@ -59,7 +59,7 @@ export function getExecutionStatusInfo(
   terminalStatus?: string,
 ): ExecutionStatusInfo {
   const handle = executionRegistry.getHandle(executionId);
-  if (handle) return handle.getStatus();
+  if (handle) return executionRegistry.getStatus(handle);
   return {
     status: terminalStatus ?? EXECUTION_STATUS.COMPLETED,
     elapsed: null,

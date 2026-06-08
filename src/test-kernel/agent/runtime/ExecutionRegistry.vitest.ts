@@ -8,10 +8,7 @@ import {
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
 import { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
-import {
-  StreamStatusRegistry,
-  StreamStatusService,
-} from '@agent/runtime/StreamStatusService';
+import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
@@ -36,7 +33,6 @@ describe('executionRegistry', () => {
         'test-subagent',
         'toolUse',
         explicit.host,
-        streamStatus,
       );
       registry.track(handle);
 
@@ -71,7 +67,6 @@ describe('executionRegistry', () => {
           'test-root',
           'toolUse',
           explicit.host,
-          streamStatus,
         ),
       );
       registry.track(
@@ -82,7 +77,6 @@ describe('executionRegistry', () => {
           'test-subagent',
           'toolUse',
           explicit.host,
-          streamStatus,
         ),
       );
 
@@ -122,7 +116,6 @@ describe('executionRegistry', () => {
           'test-root',
           'toolUse',
           explicit.host,
-          streamStatus,
         ),
       );
       registry.track(
@@ -133,7 +126,6 @@ describe('executionRegistry', () => {
           'test-subagent',
           'toolUse',
           explicit.host,
-          streamStatus,
         ),
       );
 
@@ -208,7 +200,6 @@ describe('executionRegistry', () => {
           'test-subagent',
           'toolUse',
           explicit.host,
-          streamStatus,
         ),
       );
 
@@ -253,7 +244,6 @@ describe('executionRegistry', () => {
         'test-subagent',
         'toolUse',
         explicit.host,
-        StreamStatusService,
       );
 
       registry.track(handle);
@@ -309,7 +299,6 @@ describe('executionRegistry', () => {
         'test-tool-use',
         'toolUse',
         explicit.host,
-        StreamStatusService,
       );
 
       handle.attachToolUseFlow(context);
@@ -341,7 +330,6 @@ describe('executionRegistry', () => {
         'test-subagent',
         'toolUse',
         explicit.host,
-        StreamStatusService,
       );
 
       registry.track(handle);
@@ -381,7 +369,6 @@ describe('executionRegistry', () => {
       'test-subagent',
       'toolUse',
       explicit.host,
-      streamStatus,
     );
 
     registry.track(handle);
