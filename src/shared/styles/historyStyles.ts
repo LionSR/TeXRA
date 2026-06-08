@@ -100,10 +100,6 @@ export const historyListStyles: CSSResult = css`
     line-height: var(--line-height-normal);
   }
 
-  .history-item .collapsible::part(header) {
-    font-weight: var(--font-weight-normal);
-  }
-
   .history-title {
     flex: 1;
     min-width: 0;

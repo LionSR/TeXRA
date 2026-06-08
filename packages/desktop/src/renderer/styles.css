@@ -112,7 +112,7 @@ wa-button.desktop-command-button {
   display: flex;
   align-items: center;
   gap: var(--wa-space-xs);
-  min-height: 34px;
+  min-height: var(--height-header);
   padding: 0 var(--wa-space-xs) 0 var(--wa-space-s);
   border-bottom: 1px solid var(--wa-color-surface-border);
   box-sizing: border-box;

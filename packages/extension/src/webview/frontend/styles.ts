@@ -67,30 +67,10 @@ export const mainViewStyles: CSSResult = css`
    * slim summary row by default, keeping the primary "what do you want to
    * do?" textarea front-and-center and unblocked.
    */
+  /* Chrome comes from the shared .collapsible-quiet (applied in MainApp);
+     only the host margin and the summary layout are file-selection-specific. */
   wa-details.file-selection-details {
     margin-bottom: var(--wa-space-s);
-    background: transparent;
-  }
-
-  wa-details.file-selection-details::part(base) {
-    background: transparent;
-    border: none;
-    border-radius: 0;
-  }
-
-  wa-details.file-selection-details::part(header) {
-    padding: var(--wa-space-3xs) var(--wa-space-2xs);
-    min-height: 22px;
-    font-size: var(--font-size-sm);
-    color: var(--wa-color-text-quiet);
-  }
-
-  wa-details.file-selection-details[open]::part(header) {
-    color: var(--wa-color-text-normal);
-  }
-
-  wa-details.file-selection-details::part(content) {
-    padding: var(--wa-space-2xs) 0 0;
   }
 
   wa-details.file-selection-details .file-selection-summary {

@@ -52,6 +52,37 @@ export const compactIconActionButtonStyles: CSSResult = css`
   }
 `;
 
+/**
+ * Busy state for an icon action button: a spinner overlays the button while
+ * it works, instead of taking its own slot. The button stays in the flow
+ * (so the toolbar never shifts when the busy flag toggles) and its glyph is
+ * hidden under the spinner. Emitted by `renderIconActionButton({ busy })` —
+ * the helper owns the markup, this sheet styles the class hooks.
+ *
+ * Exported as a focused subset and interpolated into `commonViewStyles` below
+ * so the selectors have a single source of truth (mirrors
+ * `compactIconActionButtonStyles`).
+ */
+export const busyIconButtonStyles: CSSResult = css`
+  .action-icon-busy {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .action-icon-busy wa-button.is-busy {
+    visibility: hidden;
+  }
+
+  .action-icon-busy .action-busy-spinner {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    font-size: var(--font-size-icon, 1em);
+    pointer-events: none;
+  }
+`;
+
 export const commonViewStyles: CSSResult = css`
   .view-header {
     display: flex;
@@ -133,6 +164,12 @@ export const commonViewStyles: CSSResult = css`
     border-top: var(--border-thin) solid var(--color-border);
   }
 
+  /* Boxed variant: also rule off the bottom edge so the panel reads as a
+     standalone band (used by the Plan and Todos panels in the progress board). */
+  .panel-collapsible.is-boxed {
+    border-bottom: var(--border-thin) solid var(--color-border);
+  }
+
   .panel-collapsible::part(header) {
     padding: var(--wa-space-2xs) var(--wa-space-xs);
     background-color: var(--wa-color-surface-lowered, transparent);
@@ -159,6 +196,45 @@ export const commonViewStyles: CSSResult = css`
   }
 
   .panel-collapsible::part(content) > * {
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* Quiet collapsible - a borderless, low-emphasis disclosure for inline
+     toggles (e.g. "Show full instructions", a memory "Contents" preview, the
+     file-selection group). One shared look so the same control reads
+     identically wherever it appears, instead of each call site rolling its
+     own header padding/size/color. */
+  .collapsible-quiet::part(base) {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+  }
+
+  .collapsible-quiet::part(header) {
+    padding: var(--wa-space-3xs) var(--wa-space-2xs);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-normal);
+    color: var(--wa-color-text-quiet);
+  }
+
+  .collapsible-quiet[open]::part(header) {
+    color: var(--wa-color-text-normal);
+  }
+
+  /* Same grid 1fr/0fr collapse as .collapsible / .panel-collapsible so the
+     quiet variant is self-contained (no need to also apply .collapsible). */
+  .collapsible-quiet::part(content) {
+    display: grid;
+    grid-template-rows: 1fr;
+    padding: var(--wa-space-2xs) 0 0;
+  }
+
+  .collapsible-quiet:not([open])::part(content) {
+    grid-template-rows: 0fr;
+  }
+
+  .collapsible-quiet::part(content) > * {
     overflow: hidden;
     min-height: 0;
   }
@@ -202,6 +278,7 @@ export const commonViewStyles: CSSResult = css`
   }
 
   ${compactIconActionButtonStyles}
+  ${busyIconButtonStyles}
   ${compactFormControlStyles}
 
   /* Stricter compactness for wa-checkbox / wa-radio — smaller label,
