@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  collectResumeUsage,
   collectResumeTargets,
   formatResumeHint,
+  formatResumeUsage,
+  type ResumeUsageStats,
 } from '@cli/chat/tui/state/resumeHint';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
@@ -20,6 +23,7 @@ function makeSlice(
     runStartedAt: undefined,
     description: undefined,
     usage: undefined,
+    cumulativeUsage: undefined,
     conversation: undefined,
     entries: [],
     queuedFollowUps: 0,
@@ -135,7 +139,96 @@ describe('formatResumeHint', () => {
     );
   });
 
+  it('prepends token usage when available', () => {
+    expect(
+      formatResumeHint([{ executionId: 'root', label: 'main', isRoot: true }], {
+        inputTokens: 186_189_742,
+        outputTokens: 11_042_600,
+        cost: 0,
+        cacheReadInputTokens: 6_470_327_168,
+        reasoningTokens: 3_489_148,
+      } satisfies ResumeUsageStats),
+    ).toBe(
+      [
+        'Token usage: total=197,232,342 input=186,189,742 (+ 6,470,327,168 cached) output=11,042,600 (reasoning 3,489,148)',
+        'Resume this session with:',
+        '  texra --resume root  (main)',
+      ].join('\n'),
+    );
+  });
+
   it('is undefined when there is nothing to resume', () => {
     expect(formatResumeHint([])).toBeUndefined();
+  });
+});
+
+describe('collectResumeUsage', () => {
+  it('sums usage from every stream', () => {
+    const streams = streamsOf(
+      makeSlice({
+        streamId: 'main@m#root',
+        usage: {
+          inputTokens: 100,
+          outputTokens: 20,
+          cost: 0.2,
+          cacheReadInputTokens: 7,
+        },
+      }),
+      makeSlice({
+        streamId: 'review@m#rev',
+        usage: {
+          inputTokens: 40,
+          outputTokens: 8,
+          cost: 0.3,
+          cacheReadInputTokens: 3,
+          reasoningTokens: 5,
+        } as ResumeUsageStats,
+      }),
+    );
+
+    expect(collectResumeUsage(streams)).toEqual({
+      inputTokens: 140,
+      outputTokens: 28,
+      cost: 0.5,
+      cacheReadInputTokens: 10,
+      cacheMissInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      reasoningTokens: 5,
+    });
+  });
+
+  it('prefers cumulative usage over the latest status-bar snapshot', () => {
+    const streams = streamsOf(
+      makeSlice({
+        streamId: 'main@m#root',
+        usage: {
+          inputTokens: 40,
+          outputTokens: 8,
+          cost: 0.1,
+        },
+        cumulativeUsage: {
+          inputTokens: 100,
+          outputTokens: 20,
+          cost: 0.3,
+        },
+      }),
+    );
+
+    expect(collectResumeUsage(streams)).toEqual({
+      inputTokens: 100,
+      outputTokens: 20,
+      cost: 0.3,
+      cacheReadInputTokens: 0,
+      cacheMissInputTokens: 0,
+      cacheCreationInputTokens: 0,
+    });
+  });
+});
+
+describe('formatResumeUsage', () => {
+  it('omits empty usage', () => {
+    expect(
+      formatResumeUsage({ inputTokens: 0, outputTokens: 0, cost: 0 }),
+    ).toBeUndefined();
   });
 });

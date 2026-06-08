@@ -21,6 +21,7 @@ import {
 } from './cliState';
 import { mergeChildStreams } from './childStreamMerge';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
+import { sumResumeUsageStats } from './resumeHint';
 
 type Emit = <K extends ProgressEvent>(
   event: K,
@@ -110,7 +111,13 @@ function applyToState<K extends ProgressEvent>(
       return;
     case 'updateStreamUsage': {
       const p = payload as ProgressEventPayloads['updateStreamUsage'];
-      patchStream(p.streamId, (s) => ({ ...s, usage: p.usage }));
+      patchStream(p.streamId, (s) => ({
+        ...s,
+        usage: p.usage,
+        cumulativeUsage: sumResumeUsageStats(
+          s.cumulativeUsage ? [s.cumulativeUsage, p.usage] : [p.usage],
+        ),
+      }));
       return;
     }
     case 'updateConversationProgress': {

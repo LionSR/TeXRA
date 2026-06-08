@@ -85,7 +85,13 @@ export interface StreamSlice {
    *  token-less "thinking" turn still shows liveness. */
   readonly runStartedAt: number | undefined;
   readonly description: string | undefined;
+  /** Latest model usage snapshot. The StatusBar treats this as current context
+   *  occupancy, so it must not be accumulated across turns. */
   readonly usage: TokenUsageStats | undefined;
+  /** Accumulated usage for resume/exit summaries across all turns in this
+   *  stream. Kept separate from `usage` so the context-window indicator remains
+   *  a latest-snapshot display. */
+  readonly cumulativeUsage: TokenUsageStats | undefined;
   readonly conversation: ConversationProgress | undefined;
   readonly entries: readonly ConversationEntry[];
   readonly queuedFollowUps: number;
@@ -201,6 +207,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     runStartedAt: undefined,
     description: undefined,
     usage: undefined,
+    cumulativeUsage: undefined,
     conversation: undefined,
     entries: [],
     queuedFollowUps: 0,

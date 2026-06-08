@@ -5,7 +5,12 @@
 // (only tool-use agents do). Reads only the in-memory stream tree, which still
 // holds finished subagents for the session, so no exit-time disk I/O is needed.
 
-import { AGENT_CATEGORY, type StreamTabId } from '@shared/schemas';
+import {
+  AGENT_CATEGORY,
+  sumUsageStats,
+  type StreamTabId,
+  type TokenUsageStats,
+} from '@shared/schemas';
 
 import type { StreamSlice } from './cliState';
 
@@ -19,6 +24,70 @@ export interface ResumeTarget {
 export interface ResumeTargetsInput {
   readonly rootExecutionId: string | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
+}
+
+export type ResumeUsageStats = TokenUsageStats & {
+  readonly reasoningTokens?: number;
+};
+
+function formatInteger(value: number): string {
+  return new Intl.NumberFormat('en-US').format(value);
+}
+
+function usageHasTokens(usage: ResumeUsageStats): boolean {
+  return (
+    usage.inputTokens > 0 ||
+    usage.outputTokens > 0 ||
+    (usage.cacheReadInputTokens ?? 0) > 0 ||
+    (usage.cacheMissInputTokens ?? 0) > 0 ||
+    (usage.cacheCreationInputTokens ?? 0) > 0 ||
+    (usage.reasoningTokens ?? 0) > 0
+  );
+}
+
+export function sumResumeUsageStats(
+  items: Iterable<ResumeUsageStats>,
+): ResumeUsageStats {
+  const usages = [...items];
+  const total = sumUsageStats(usages);
+  const reasoningTokens = usages.reduce(
+    (sum, usage) => sum + (usage.reasoningTokens ?? 0),
+    0,
+  );
+  return reasoningTokens > 0 ? { ...total, reasoningTokens } : total;
+}
+
+export function collectResumeUsage(
+  streams: ReadonlyMap<StreamTabId, StreamSlice>,
+): ResumeUsageStats | undefined {
+  const usages: ResumeUsageStats[] = [];
+
+  for (const slice of streams.values()) {
+    const usage: ResumeUsageStats | undefined =
+      slice.cumulativeUsage ?? slice.usage;
+    if (!usage || !usageHasTokens(usage)) continue;
+    usages.push(usage);
+  }
+
+  const total = sumResumeUsageStats(usages);
+  return usageHasTokens(total) ? total : undefined;
+}
+
+export function formatResumeUsage(
+  usage: ResumeUsageStats | undefined,
+): string | undefined {
+  if (!usage || !usageHasTokens(usage)) return undefined;
+  const total = usage.inputTokens + usage.outputTokens;
+  const cached = usage.cacheReadInputTokens ?? 0;
+  const reasoning = usage.reasoningTokens ?? 0;
+  const lines = [
+    `total=${formatInteger(total)}`,
+    `input=${formatInteger(usage.inputTokens)}`,
+  ];
+  if (cached > 0) lines.push(`(+ ${formatInteger(cached)} cached)`);
+  lines.push(`output=${formatInteger(usage.outputTokens)}`);
+  if (reasoning > 0) lines.push(`(reasoning ${formatInteger(reasoning)})`);
+  return `Token usage: ${lines.join(' ')}`;
 }
 
 /** The main session followed by each tool-use subagent (any depth), deduped by
@@ -56,9 +125,12 @@ export function collectResumeTargets({
 /** Multi-line reopen hint, or undefined when there's nothing to resume. */
 export function formatResumeHint(
   targets: readonly ResumeTarget[],
+  usage?: ResumeUsageStats,
 ): string | undefined {
   if (targets.length === 0) return undefined;
-  const lines = ['Resume this session with:'];
+  const lines = [formatResumeUsage(usage), 'Resume this session with:'].filter(
+    (line): line is string => Boolean(line),
+  );
   for (const target of targets) {
     lines.push(`  texra --resume ${target.executionId}  (${target.label})`);
   }
