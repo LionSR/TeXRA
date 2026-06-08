@@ -14,6 +14,8 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { registerDiffRefresh } from '@frontend/ui/diffView';
 import {
+  buildAcceptConfirmMessage,
+  buildAcceptSuccessMessage,
   getAcceptedFileTarget,
   siblingLocation,
   type AcceptedFileTarget,
@@ -165,25 +167,14 @@ async function confirmReplace(
   basePath: string,
   editedPath: string,
 ): Promise<boolean> {
-  const { targetLocation, targetFileName, isNewFile } = target;
+  const { targetLocation, isNewFile } = target;
   const targetExists = isNewFile && (await flexibleFS.exists(targetLocation));
-
-  let action: string;
-  if (targetExists) {
-    action = 'overwrite existing';
-  } else if (isNewFile) {
-    action = 'create';
-  } else {
-    action = 'overwrite';
-  }
-
-  let extensionNote = '';
-  if (isNewFile) {
-    const baseExt = path.extname(basePath).toLowerCase();
-    const editedExt = path.extname(editedPath).toLowerCase();
-    extensionNote = `Extensions differ (${baseExt} vs ${editedExt}). `;
-  }
-  const confirmMessage = `${extensionNote}This will ${action} '${targetFileName}' with content from '${path.basename(editedPath)}'. Are you sure?`;
+  const confirmMessage = buildAcceptConfirmMessage(
+    target,
+    basePath,
+    editedPath,
+    targetExists,
+  );
 
   const answer = await vscode.window.showWarningMessage(
     confirmMessage,
@@ -258,7 +249,6 @@ async function handleAcceptEdited(
     }
 
     const editedPath = editedLocation.absolutePath;
-    const editedFileName = path.basename(editedPath);
 
     const resolved = await resolveAcceptTarget(
       fileToUseLocation,
@@ -268,9 +258,7 @@ async function handleAcceptEdited(
     if (!resolved) return false;
 
     const { targetLocation, targetFileName } = resolved;
-    const operation = (await flexibleFS.exists(targetLocation))
-      ? 'replaced'
-      : 'created';
+    const targetExisted = await flexibleFS.exists(targetLocation);
 
     const editedContent = await flexibleFS.read(editedLocation);
     await flexibleFS.write(targetLocation, editedContent);
@@ -281,7 +269,11 @@ async function handleAcceptEdited(
       });
     }
 
-    const successMessage = `Successfully ${operation} '${targetFileName}' with content from '${editedFileName}'`;
+    const successMessage = buildAcceptSuccessMessage(
+      targetFileName,
+      editedPath,
+      targetExisted,
+    );
     vscode.window.showInformationMessage(successMessage);
     logger.info(CHANNEL, successMessage);
     return true;
