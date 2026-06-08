@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - common
 import { registerCommands } from '@commands/_shared/registerCommands';
+import { toErrorMessage } from '@common/errors';
 // Local imports - frontend
 import { getFileLister } from '@frontend/files';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
@@ -56,9 +57,17 @@ export async function openLabel(
     ...(await getFileLister().list('context')),
   ]);
 
-  const located = await findLabelLocation(label, candidates, (file) =>
-    WorkspaceFS.read(file),
-  );
+  const located = await findLabelLocation(label, candidates, async (file) => {
+    try {
+      return await WorkspaceFS.read(file);
+    } catch (error) {
+      logger.debug(
+        CHANNEL,
+        `Could not read file ${file}: ${toErrorMessage(error)}`,
+      );
+      throw error;
+    }
+  });
   if (located) {
     const doc = await vscode.workspace.openTextDocument(
       WorkspaceFS.toAbsolute(located.file),
