@@ -41,7 +41,12 @@ import { KVStore } from '@common/storage/KVStore';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { DiffViewHost } from '@hosts/diffViewHost';
 import type { ExternalOpener } from '@hosts/externalOpener';
-import { getAcceptedFileTarget } from '@latex/acceptedFileTarget';
+import {
+  buildAcceptConfirmMessage,
+  buildAcceptSuccessMessage,
+  getAcceptedFileTarget,
+} from '@latex/acceptedFileTarget';
+import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
 import { createChannelTrace } from '@logger';
@@ -1114,17 +1119,19 @@ export class DesktopProgressBridge {
   ): Promise<boolean> {
     const baseLocation = pathToLocation(baseFile);
     const editedLocation = pathToLocation(editedFile);
-    const { targetLocation, targetFileName, isNewFile } = getAcceptedFileTarget(
+    const target = getAcceptedFileTarget(
       baseLocation,
       editedLocation.absolutePath,
     );
+    const { targetLocation, targetFileName, isNewFile } = target;
     const targetExists =
       isNewFile && (await AbsoluteFS.exists(targetLocation.absolutePath));
-    const action = getAcceptAction(isNewFile, targetExists);
-    const extensionNote = isNewFile
-      ? `Extensions differ (${path.extname(baseFile).toLowerCase()} vs ${path.extname(editedFile).toLowerCase()}). `
-      : '';
-    const confirmMessage = `${extensionNote}This will ${action} '${targetFileName}' with content from '${path.basename(editedFile)}'. Are you sure?`;
+    const confirmMessage = buildAcceptConfirmMessage(
+      target,
+      baseFile,
+      editedFile,
+      targetExists,
+    );
 
     if (this.options.confirmAcceptFile) {
       const confirmed = await this.options.confirmAcceptFile(confirmMessage);
@@ -1139,9 +1146,12 @@ export class DesktopProgressBridge {
       });
     }
 
-    const operation = isNewFile && !targetExists ? 'created' : 'replaced';
     await this.options.showInfoMessage?.(
-      `Successfully ${operation} '${targetFileName}' with content from '${path.basename(editedFile)}'`,
+      buildAcceptSuccessMessage(
+        targetFileName,
+        editedFile,
+        !isNewFile || targetExists,
+      ),
     );
     return true;
   }
@@ -1178,29 +1188,23 @@ export class DesktopProgressBridge {
     const workspacePath = platform().workspace.getWorkspacePath();
     if (!workspacePath) return false;
 
-    const escape = label.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`\\\\label\\{${escape}\\}`, 'm');
-    const candidates = new Set([
-      ...(await this.listWorkspaceFiles('input')),
-      ...(await this.listWorkspaceFiles('context')),
-    ]);
+    const candidates = new Set(
+      [
+        ...(await this.listWorkspaceFiles('input')),
+        ...(await this.listWorkspaceFiles('context')),
+      ].map((file) =>
+        path.isAbsolute(file) ? file : path.join(workspacePath, file),
+      ),
+    );
 
-    for (const file of candidates) {
-      const filePath = path.isAbsolute(file)
-        ? file
-        : path.join(workspacePath, file);
-      try {
-        const content = await readFile(filePath, 'utf8');
-        if (pattern.test(content)) {
-          await this.options.openPath?.(filePath);
-          return true;
-        }
-      } catch {
-        // Ignore unreadable candidates and continue scanning.
-      }
-    }
-
-    return false;
+    return openFirstLabelMatch(
+      label,
+      candidates,
+      (file) => readFile(file, 'utf8'),
+      async (file) => {
+        await this.options.openPath?.(file);
+      },
+    );
   }
 
   private deleteAgentProposalsForStream(streamId: StreamTabId): void {
@@ -1224,12 +1228,6 @@ export class DesktopProgressBridge {
         (tryPlatform()?.fs ?? nodeFilesystem).readDirectory(directory),
     });
   }
-}
-
-function getAcceptAction(isNewFile: boolean, targetExists: boolean): string {
-  if (targetExists) return 'overwrite existing';
-  if (isNewFile) return 'create';
-  return 'overwrite';
 }
 
 export function createDesktopAgentExecution(
