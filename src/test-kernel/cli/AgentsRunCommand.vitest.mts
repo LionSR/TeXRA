@@ -46,7 +46,7 @@ vi.mock('@cli/runtime/agentResolution', () => ({
   resolveCliAgent: mocks.resolveCliAgent,
 }));
 
-vi.mock('@cli/commands/_helpers/runExecution', () => ({
+vi.mock('@cli/runtime/runExecution', () => ({
   executeCliRequest: mocks.executeCliRequest,
 }));
 

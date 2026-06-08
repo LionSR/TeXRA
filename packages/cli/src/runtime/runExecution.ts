@@ -1,15 +1,15 @@
 import { writeTerminalStatus } from '@agent/storage';
 import { runAgent } from '@agent/runtime/runAgent';
 import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
+import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 
-import type { CliContext } from '@cli/runtime/cliContext';
-import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
-import { createCliRuntimeHost } from '@cli/runtime/runtimeHost';
+import { approvalPromptsUnavailable } from './approvalPolicyAvailability';
+import { createCliRuntimeHost } from './runtimeHost';
 import {
   readCliTerminalStatus,
   type ExecuteAgentResult,
-} from '@cli/runtime/terminalStatus';
-import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+} from './terminalStatus';
+import type { CliContext } from './cliContext';
 
 export interface CliExecuteOptions {
   /** Forwarded to `runAgent`. */
@@ -31,11 +31,11 @@ export interface CliExecuteOptions {
 }
 
 /**
- * Shared headless-execution skeleton for `run`, `multi-agent run`, and
- * `resume`: stand up a runtime host, run the request (optionally wrapped),
- * always close the host, and resolve the terminal status. Centralizing this
- * stops the three runners from drifting apart on host lifecycle and status
- * handling, which is how their behavior diverged before.
+ * Shared headless-execution skeleton for `run`, `agents run`, and
+ * `multi-agent run`: stand up a runtime host, run the request (optionally
+ * wrapped), always close the host, and resolve the terminal status.
+ * Centralizing this stops the three runners from drifting apart on host
+ * lifecycle and status handling, which is how their behavior diverged before.
  */
 export async function executeCliRequest(
   request: ValidatedExecutionRequest,
