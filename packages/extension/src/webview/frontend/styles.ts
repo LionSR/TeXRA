@@ -67,6 +67,9 @@ export const mainViewStyles: CSSResult = css`
    * slim summary row by default, keeping the primary "what do you want to
    * do?" textarea front-and-center and unblocked.
    */
+  /* File selection keeps local disclosure chrome because its body hosts
+     dropdowns that require visible overflow; .collapsible-quiet clamps direct
+     child overflow for simple inline disclosures. */
   wa-details.file-selection-details {
     margin-bottom: var(--wa-space-s);
     background: transparent;

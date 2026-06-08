@@ -1,7 +1,8 @@
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import { html, type TemplateResult } from 'lit';
+import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
+import { html, nothing, type TemplateResult } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 
 // Local imports - Web Awesome
@@ -20,12 +21,20 @@ export interface IconActionButtonOptions {
   readonly appearance?: ActionButtonAppearance;
   readonly variant?: ActionButtonVariant;
   readonly disabled?: boolean;
+  /**
+   * Icon-only. When defined, the button renders inside an overlay wrapper:
+   * while `true` a spinner covers the (hidden, disabled) button so the toolbar
+   * layout does not shift. Styled by `busyIconButtonStyles` in commonViewStyles.
+   * Omitted from the labeled variant — the centered icon-sized spinner only
+   * makes sense over a square icon button.
+   */
+  readonly busy?: boolean;
   readonly onClick?: (event: MouseEvent) => void;
 }
 
 export interface LabeledActionButtonOptions extends Omit<
   IconActionButtonOptions,
-  'label'
+  'label' | 'busy'
 > {
   readonly text: string;
   readonly label?: string;
@@ -50,14 +59,19 @@ function renderActionButtonBase({
   appearance = 'plain',
   variant = 'neutral',
   disabled,
+  busy,
   onClick,
 }: ActionButtonBaseOptions): TemplateResult {
-  const classes = [text ? 'action-button' : 'action-icon-button', className]
+  const classes = [
+    text ? 'action-button' : 'action-icon-button',
+    busy ? 'is-busy' : undefined,
+    className,
+  ]
     .filter(Boolean)
     .join(' ');
   const ariaLabel = label ?? text ?? '';
 
-  return html`
+  const button = html`
     <wa-button
       id=${ifDefined(id)}
       class=${classes}
@@ -68,11 +82,26 @@ function renderActionButtonBase({
       aria-label=${ariaLabel}
       title=${title ?? ariaLabel}
       data-action=${ifDefined(action)}
-      ?disabled=${disabled}
+      ?disabled=${disabled || busy}
       @click=${onClick}
     >
       ${waIcon(icon, { slot: text ? 'start' : undefined })} ${text}
     </wa-button>
+  `;
+
+  // `busy` undefined → plain button (unchanged for every other caller).
+  // `busy` defined → stable overlay wrapper so toggling never reflows the row.
+  if (busy === undefined) return button;
+  return html`
+    <span class="action-icon-busy">
+      ${button}
+      ${busy
+        ? html`<wa-spinner
+            class="action-busy-spinner"
+            aria-hidden="true"
+          ></wa-spinner>`
+        : nothing}
+    </span>
   `;
 }
 

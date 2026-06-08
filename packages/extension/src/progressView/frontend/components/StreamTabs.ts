@@ -547,20 +547,44 @@ export class StreamTabs extends LitElement {
         display: none;
       }
 
+      /*
+       * No own border-left: the single separator between this rail and the
+       * conversation is owned by the host layout — the wa-split-panel divider
+       * in the extension Progress view, and the desktop-rail border-right in
+       * the desktop shell. Drawing one here too produced a doubled seam.
+       */
       .tabs {
         display: flex;
         flex-direction: column;
         flex: 1;
         min-width: 0;
         font-size: var(--font-size-sm);
-        border-left: var(--border-thin) solid var(--color-border);
         height: 100%;
         overflow: visible;
         background-color: var(--background-color);
       }
 
-      :host([compact]) .tabs {
-        border-left: none;
+      /*
+       * Optional rail header band. Pins to the shared --height-header token so
+       * it lines up with the conversation header in the Progress view (and the
+       * desktop rail header). Rendered only when a heading is set.
+       */
+      .stream-tabs-header {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+        box-sizing: border-box;
+        min-height: var(--height-header);
+        padding: var(--wa-space-2xs) var(--wa-space-xs);
+        border-bottom: var(--border-thin) solid var(--color-border);
+      }
+
+      .stream-tabs-title {
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-semibold, 600);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
       }
 
       .tabs-content {
@@ -637,6 +661,8 @@ export class StreamTabs extends LitElement {
 
   @property({ attribute: false }) streams: StreamTabInfo[] = [];
   @property({ type: Boolean, reflect: true }) compact = false;
+  /** Optional rail-header title. Empty (default) renders no header band. */
+  @property({ type: String }) heading = '';
   @property({ attribute: false }) activeStreamId: string | null = null;
   @property({ attribute: false }) filter: StreamFilter = 'all';
   /**
@@ -804,6 +830,11 @@ export class StreamTabs extends LitElement {
   override render(): TemplateResult {
     return html`
       <div class="tabs">
+        ${this.heading && !this.compact
+          ? html`<header class="stream-tabs-header" part="header">
+              <span class="stream-tabs-title">${this.heading}</span>
+            </header>`
+          : nothing}
         <div class="tabs-content">
           <div id=${ELEMENT_IDS.STREAM_TABS} @click=${this.handleTabClick}>
             ${repeat(

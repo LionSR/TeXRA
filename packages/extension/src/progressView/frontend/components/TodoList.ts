@@ -43,11 +43,6 @@ export class TodoList extends LitElement {
         display: none;
       }
 
-      /* Add bottom border */
-      .todo-collapsible {
-        border-bottom: var(--border-thin) solid var(--color-border);
-      }
-
       .todo-list {
         display: flex;
         flex-direction: column;
@@ -135,7 +130,7 @@ export class TodoList extends LitElement {
     return html`
       <wa-details
         id=${ELEMENT_IDS.TODO_LIST_CONTAINER}
-        class="todo-collapsible panel-collapsible"
+        class="panel-collapsible is-boxed"
         summary=${`Todos (${completed}/${total})`}
         ?open=${this.open}
         @wa-show=${this.handleShow}
