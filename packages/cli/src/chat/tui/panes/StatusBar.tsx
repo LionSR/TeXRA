@@ -364,6 +364,14 @@ function metaShortcutLabel(modifierLabel: string, key: string): string {
   return `[${modifierLabel}${separator}${key}]`;
 }
 
+function statusBarBindingRow(
+  bindings: readonly (string | false | undefined)[],
+): string {
+  return joinStatusBindings(
+    bindings.filter((binding): binding is string => !!binding),
+  );
+}
+
 export function statusBarBindingsText(
   taskControlsAvailable = true,
   agentSelectionAvailable = false,
@@ -379,160 +387,81 @@ export function statusBarBindingsText(
   const tasksBinding = metaShortcutLabel(modifierLabel, 'p');
   const subagentsBinding = metaShortcutLabel(modifierLabel, 's');
   const transcriptBinding = '[Ctrl-T]transcript';
-  const bindings: string[] = [
+  const streamTabs = hasMultipleStreams ? '[Tab]streams' : undefined;
+  const streamFocus = hasMultipleStreams ? `${focusBinding}focus` : undefined;
+  const transcript = transcriptAvailable ? transcriptBinding : undefined;
+  const tasks = taskControlsAvailable ? `${tasksBinding}tasks` : undefined;
+  const subagents = subagentControlsAvailable
+    ? `${subagentsBinding}subagents`
+    : undefined;
+  const agent = agentSelectionAvailable ? '[/agent]agents' : undefined;
+  const status = '[/status]details';
+  const model = '[/model]models';
+  const api = '[/api]api';
+  const newline = shiftEnterNewline
+    ? '[Shift-Enter]newline'
+    : '[Ctrl-J]newline';
+  const ctrlC = `[Ctrl-C]${ctrlCAction}`;
+  const candidates = [
     // Stream cycling / numeric focus only do something when there is more
     // than one stream — hide the hints in a plain single-stream chat.
-    ...(hasMultipleStreams ? ['[Tab]streams', `${focusBinding}focus`] : []),
-    ...(transcriptAvailable ? [transcriptBinding] : []),
-    ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
-    '[/status]details',
-    ...(agentSelectionAvailable ? ['[/agent]agents'] : []),
-    '[/model]models',
-    '[/api]api',
-    shiftEnterNewline ? '[Shift-Enter]newline' : '[Ctrl-J]newline',
-    `[Ctrl-C]${ctrlCAction}`,
+    statusBarBindingRow([
+      streamTabs,
+      streamFocus,
+      transcript,
+      tasks,
+      subagents,
+      status,
+      agent,
+      model,
+      api,
+      newline,
+      ctrlC,
+    ]),
+    agentSelectionAvailable &&
+      statusBarBindingRow([transcript, agent, model, api, newline, ctrlC]),
+    statusBarBindingRow([
+      streamTabs,
+      transcript,
+      tasks,
+      subagents,
+      agent,
+      status,
+      ctrlC,
+    ]),
+    statusBarBindingRow([
+      streamTabs,
+      transcript,
+      tasks,
+      subagents,
+      agent,
+      ctrlC,
+    ]),
+    (taskControlsAvailable ||
+      subagentControlsAvailable ||
+      agentSelectionAvailable) &&
+      statusBarBindingRow([streamTabs, tasks, subagents, agent, ctrlC]),
+    hasMultipleStreams &&
+      taskControlsAvailable &&
+      statusBarBindingRow([streamTabs, transcript, tasks, ctrlC]),
+    taskControlsAvailable && statusBarBindingRow([transcript, tasks, ctrlC]),
+    taskControlsAvailable && statusBarBindingRow([tasks, ctrlC]),
+    subagentControlsAvailable &&
+      statusBarBindingRow([streamTabs, transcript, subagents, ctrlC]),
+    subagentControlsAvailable &&
+      statusBarBindingRow([transcript, subagents, ctrlC]),
+    subagentControlsAvailable && statusBarBindingRow([subagents, ctrlC]),
+    transcriptAvailable && statusBarBindingRow([streamTabs, transcript, ctrlC]),
+    transcriptAvailable && statusBarBindingRow([transcript, ctrlC]),
   ];
-  if (subagentControlsAvailable) {
-    const tasksIndex = bindings.indexOf(`${tasksBinding}tasks`);
-    const statusIndex = bindings.indexOf('[/status]details');
-    let insertSubagentsAt = bindings.length;
-    if (tasksIndex >= 0) insertSubagentsAt = tasksIndex + 1;
-    else if (statusIndex >= 0) insertSubagentsAt = statusIndex;
-    bindings.splice(insertSubagentsAt, 0, `${subagentsBinding}subagents`);
-  }
-  const fullBindings = joinStatusBindings(bindings);
-  if (fitsStatusBindings(fullBindings, maxColumns)) return fullBindings;
 
-  if (agentSelectionAvailable) {
-    const setupBindings = joinStatusBindings([
-      ...(transcriptAvailable ? [transcriptBinding] : []),
-      '[/agent]agents',
-      '[/model]models',
-      '[/api]api',
-      shiftEnterNewline ? '[Shift-Enter]newline' : '[Ctrl-J]newline',
-      `[Ctrl-C]${ctrlCAction}`,
-    ]);
-    if (fitsStatusBindings(setupBindings, maxColumns)) return setupBindings;
-  }
-
-  const compactBindings = joinStatusBindings([
-    ...(hasMultipleStreams ? ['[Tab]streams'] : []),
-    ...(transcriptAvailable ? [transcriptBinding] : []),
-    ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
-    ...(subagentControlsAvailable ? [`${subagentsBinding}subagents`] : []),
-    ...(agentSelectionAvailable ? ['[/agent]agents'] : []),
-    '[/status]details',
-    `[Ctrl-C]${ctrlCAction}`,
-  ]);
-  if (fitsStatusBindings(compactBindings, maxColumns)) return compactBindings;
-
-  const minimalBindings = joinStatusBindings([
-    ...(hasMultipleStreams ? ['[Tab]streams'] : []),
-    ...(transcriptAvailable ? [transcriptBinding] : []),
-    ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
-    ...(subagentControlsAvailable ? [`${subagentsBinding}subagents`] : []),
-    ...(agentSelectionAvailable ? ['[/agent]agents'] : []),
-    `[Ctrl-C]${ctrlCAction}`,
-  ]);
-  if (fitsStatusBindings(minimalBindings, maxColumns)) return minimalBindings;
-
-  if (
-    taskControlsAvailable ||
-    subagentControlsAvailable ||
-    agentSelectionAvailable
-  ) {
-    const controlFocusedBindings = joinStatusBindings([
-      ...(hasMultipleStreams ? ['[Tab]streams'] : []),
-      ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
-      ...(subagentControlsAvailable ? [`${subagentsBinding}subagents`] : []),
-      ...(agentSelectionAvailable ? ['[/agent]agents'] : []),
-      `[Ctrl-C]${ctrlCAction}`,
-    ]);
-    if (fitsStatusBindings(controlFocusedBindings, maxColumns)) {
-      return controlFocusedBindings;
-    }
-  }
-
-  if (hasMultipleStreams && taskControlsAvailable) {
-    const taskFocusedBindings = joinStatusBindings([
-      '[Tab]streams',
-      ...(transcriptAvailable ? [transcriptBinding] : []),
-      `${tasksBinding}tasks`,
-      `[Ctrl-C]${ctrlCAction}`,
-    ]);
-    if (fitsStatusBindings(taskFocusedBindings, maxColumns)) {
-      return taskFocusedBindings;
-    }
-  }
-
-  if (taskControlsAvailable) {
-    const bareTaskBindings = joinStatusBindings([
-      ...(transcriptAvailable ? [transcriptBinding] : []),
-      `${tasksBinding}tasks`,
-      `[Ctrl-C]${ctrlCAction}`,
-    ]);
-    if (fitsStatusBindings(bareTaskBindings, maxColumns)) {
-      return bareTaskBindings;
-    }
-
-    const bareTaskBindingsWithoutTranscript = joinStatusBindings([
-      `${tasksBinding}tasks`,
-      `[Ctrl-C]${ctrlCAction}`,
-    ]);
-    if (fitsStatusBindings(bareTaskBindingsWithoutTranscript, maxColumns)) {
-      return bareTaskBindingsWithoutTranscript;
-    }
-  }
-
-  if (subagentControlsAvailable) {
-    const subagentFocusedBindings = joinStatusBindings([
-      ...(hasMultipleStreams ? ['[Tab]streams'] : []),
-      ...(transcriptAvailable ? [transcriptBinding] : []),
-      `${subagentsBinding}subagents`,
-      `[Ctrl-C]${ctrlCAction}`,
-    ]);
-    if (fitsStatusBindings(subagentFocusedBindings, maxColumns)) {
-      return subagentFocusedBindings;
-    }
-
-    const bareSubagentBindings = joinStatusBindings([
-      ...(transcriptAvailable ? [transcriptBinding] : []),
-      `${subagentsBinding}subagents`,
-      `[Ctrl-C]${ctrlCAction}`,
-    ]);
-    if (fitsStatusBindings(bareSubagentBindings, maxColumns)) {
-      return bareSubagentBindings;
-    }
-
-    const bareSubagentBindingsWithoutTranscript = joinStatusBindings([
-      `${subagentsBinding}subagents`,
-      `[Ctrl-C]${ctrlCAction}`,
-    ]);
-    if (fitsStatusBindings(bareSubagentBindingsWithoutTranscript, maxColumns)) {
-      return bareSubagentBindingsWithoutTranscript;
-    }
-  }
-
-  if (transcriptAvailable) {
-    const transcriptOnlyBindings = joinStatusBindings([
-      ...(hasMultipleStreams ? ['[Tab]streams'] : []),
-      transcriptBinding,
-      `[Ctrl-C]${ctrlCAction}`,
-    ]);
-    if (fitsStatusBindings(transcriptOnlyBindings, maxColumns)) {
-      return transcriptOnlyBindings;
-    }
-
-    const bareTranscriptBindings = joinStatusBindings([
-      transcriptBinding,
-      `[Ctrl-C]${ctrlCAction}`,
-    ]);
-    if (fitsStatusBindings(bareTranscriptBindings, maxColumns)) {
-      return bareTranscriptBindings;
-    }
-  }
-
-  return `[Ctrl-C]${ctrlCAction}`;
+  return (
+    candidates.find(
+      (candidate): candidate is string =>
+        typeof candidate === 'string' &&
+        fitsStatusBindings(candidate, maxColumns),
+    ) ?? ctrlC
+  );
 }
 
 function joinStatusBindings(bindings: readonly string[]): string {
