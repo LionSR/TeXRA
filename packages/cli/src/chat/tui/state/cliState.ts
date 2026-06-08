@@ -8,6 +8,7 @@
 import { signal, Signal } from '@lit-labs/signals';
 
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
+import type { CliModelSelectionSource } from '@cli/runtime/modelAccess';
 import {
   STREAM_STATUS,
   type ActiveChildInfo,
@@ -53,6 +54,7 @@ export interface CompletedProcessTranscript {
 export interface SessionMeta {
   readonly agent: string;
   readonly model: string;
+  readonly modelSource: CliModelSelectionSource;
   readonly cwd: string;
   readonly apiMode: CliApiMode;
   readonly canDelegate: boolean;
@@ -107,6 +109,7 @@ export interface StreamSlice {
 const EMPTY_SESSION_META: SessionMeta = {
   agent: '',
   model: '',
+  modelSource: 'builtin',
   cwd: '',
   apiMode: 'personal',
   canDelegate: false,

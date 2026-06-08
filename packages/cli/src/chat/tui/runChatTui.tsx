@@ -50,6 +50,7 @@ import {
   formatCliNoAvailableModelsRecovery,
   resolveCliRunnableModel,
   type CliNoAvailableModelsRecoveryOptions,
+  type CliModelSelectionSource,
   type CliRunnableModelResolution,
 } from '@cli/runtime/modelAccess';
 import {
@@ -502,6 +503,7 @@ async function applyCliModelSelection(
       cliState.sessionMeta.set({
         ...cliState.sessionMeta.get(),
         model: nextModel,
+        modelSource: 'override',
       });
       appendLocalAssistantTranscript(`Root model set to ${nextModel}.`);
     } catch (error: unknown) {
@@ -532,6 +534,7 @@ async function applyCliModelSelection(
     cliState.sessionMeta.set({
       ...cliState.sessionMeta.get(),
       model: nextModel,
+      modelSource: 'override',
     });
   } catch (error: unknown) {
     appendLocalAssistantTranscript(toErrorMessage(error));
@@ -558,9 +561,9 @@ async function reconcileRootModelAfterApiModeChange(
 ): Promise<string | undefined> {
   if (!context || !chatTuiCanStartRootRun(context.session)) return undefined;
 
-  const currentModel = cliState.sessionMeta.get().model;
+  const { model: currentModel, modelSource } = cliState.sessionMeta.get();
   const selection = await resolveCliRunnableModel(currentModel, {
-    fallbackSource: 'config',
+    fallbackSource: modelSource,
     apiMode,
     noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
       apiMode,
@@ -1005,6 +1008,7 @@ export async function runChat(
   cliState.sessionMeta.set({
     agent,
     model,
+    modelSource: defaults.modelSource,
     cwd: context.cwd,
     apiMode,
     canDelegate: agentSupportsDelegation(agent),
@@ -1284,6 +1288,7 @@ export async function runChat(
       ...cliState.sessionMeta.get(),
       agent: resolution.config.agent,
       model: resolution.config.model,
+      modelSource: 'history',
       canDelegate: agentSupportsDelegation(resolution.config.agent),
     });
 
@@ -1394,8 +1399,11 @@ export async function runChat(
         const meta = cliState.sessionMeta.get();
         const currentAgent = meta.agent || agent;
         const currentModel = meta.model || model;
+        const currentModelSource: CliModelSelectionSource = meta.model
+          ? meta.modelSource
+          : defaults.modelSource;
         const selection = await resolveCliRunnableModel(currentModel, {
-          fallbackSource: 'override',
+          fallbackSource: currentModelSource,
           apiMode: meta.apiMode,
           noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
             meta.apiMode,

@@ -32,7 +32,12 @@ function patchSessionMeta<K extends 'agent' | 'model' | 'apiMode'>(
   key: K,
   value: K extends 'apiMode' ? CliApiMode : string,
 ): void {
-  cliState.sessionMeta.set({ ...cliState.sessionMeta.get(), [key]: value });
+  const meta = cliState.sessionMeta.get();
+  cliState.sessionMeta.set({
+    ...meta,
+    [key]: value,
+    ...(key === 'model' ? { modelSource: 'override' } : {}),
+  });
 }
 
 /** Run a form selection handler with consistent completion and error routing. */
