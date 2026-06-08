@@ -160,12 +160,10 @@ export function boundedBashCommandDisplayLines({
 
   if (maxDisplayLines <= COMPACT_BASH_COMMAND_ROWS) {
     const contentRows = Math.max(1, maxDisplayLines - 1);
-    const offset = Math.max(
+    const offset = clamp(
+      scrollOffset,
       0,
-      Math.min(
-        scrollOffset,
-        maxBashCommandScrollOffset(lines.length, maxDisplayLines),
-      ),
+      maxBashCommandScrollOffset(lines.length, maxDisplayLines),
     );
 
     if (maxDisplayLines === 1) {
