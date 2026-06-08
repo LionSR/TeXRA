@@ -130,25 +130,6 @@ export const logEntryStyles = css`
     font-style: italic;
   }
 
-  .xml-link-container .xml-fix-hint {
-    flex-basis: 100%;
-    margin-top: var(--wa-space-3xs);
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-3xs);
-  }
-
-  .xml-link-container .xml-fix-hint wa-icon {
-    opacity: var(--opacity-full);
-    color: var(--color-text-link);
-  }
-
-  .xml-link-container .xml-fix-hint strong {
-    color: var(--color-text-link);
-  }
-
   /* Note: .detail-item base styles are in commonViewStyles; this adds log-specific variants */
 
   :is(.file-link, .web-search-link) {
@@ -259,14 +240,6 @@ export const logEntryStyles = css`
 
   .message-info {
     color: var(--wa-color-text-normal);
-  }
-
-  .banner-summary {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-    font-size: var(--font-size);
-    font-weight: var(--font-weight-semibold);
   }
 
   .banner-details {
