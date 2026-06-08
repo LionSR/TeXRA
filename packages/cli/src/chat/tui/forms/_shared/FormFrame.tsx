@@ -4,9 +4,8 @@
 
 import { Box, Text, useWindowSize } from 'ink';
 
-import { clamp } from '@utils/core';
-
 import { KeyHints, type KeyHint } from '@cli/chat/tui/ui/KeyHints';
+import { clamp } from '@utils/core';
 
 export interface FormFrameProps {
   readonly color: string;
