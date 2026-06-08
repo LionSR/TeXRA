@@ -996,6 +996,18 @@ describe('CLI StatusBar display model', () => {
       PERSONAL_API_MODE_LABEL,
     ]);
 
+    const thinking = buildStatusBarDisplay({
+      ...runningInput,
+      thinkingActive: true,
+    });
+    expect(thinking.left.map(statusBarSegmentText)).toEqual([
+      '◆',
+      'running',
+      '110s',
+      'thinking',
+      PERSONAL_API_MODE_LABEL,
+    ]);
+
     // The same elapsed reading is suppressed once the turn is no longer running.
     const idle = buildStatusBarDisplay({
       status: STREAM_STATUS.WAITING,
@@ -1014,6 +1026,7 @@ describe('CLI StatusBar display model', () => {
       model: 'deepseekT',
       apiMode: PERSONAL_API_MODE_LABEL,
       shortcutModifierLabel: 'Alt',
+      thinkingActive: true,
     });
 
     expect(idle.left.map(statusBarSegmentText)).toEqual([

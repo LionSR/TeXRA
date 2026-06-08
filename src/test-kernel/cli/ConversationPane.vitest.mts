@@ -347,6 +347,23 @@ describe('CLI conversation transcript splitting', () => {
     ).toBe('  ef  ');
   });
 
+  it('budgets the visual gap after finalized user turns', () => {
+    const user = entry('u1', 'user', 'why do you write as a latex?', true);
+
+    expect(estimateTranscriptEntryRows(user, 80)).toBe(2);
+  });
+
+  it('does not budget regular user margin for inquiry continuations', () => {
+    const continuation = entry(
+      'u1',
+      'user',
+      '[inquiry] ei_123 answered.\nQ: Can this be simplified?\nA: Yes.',
+      true,
+    );
+
+    expect(estimateTranscriptEntryRows(continuation, 80)).toBe(3);
+  });
+
   it('appends only finalized entries to terminal scrollback items', () => {
     const user = entry('u1', 'user', 'What is a tensor network?', true);
     const assistant = entry('a1', 'assistant', 'A decomposition.', false);
@@ -746,6 +763,7 @@ function sliceWithEntries(
     status: undefined,
     runStartedAt: undefined,
     description: undefined,
+    thinkingActive: false,
     usage: undefined,
     cumulativeUsage: undefined,
     conversation: undefined,
