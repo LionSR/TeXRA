@@ -1,8 +1,15 @@
 // Third-party imports
+import { ModelProvider } from 'llm-zoo';
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { noopTrace } from '@agent/trace';
+import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import {
+  AgentCategory,
+  AgentPromptSchema,
+  AgentSettingSchema,
+} from '@agent/core/definition/AgentDataclass';
 import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
   StreamStatusRegistry,
@@ -12,10 +19,12 @@ import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
+import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
   END_GROUP_STATUS,
   STREAM_STATUS,
   type ExecutionId,
+  type StorageKey,
   type StreamTabId,
 } from '@shared/schemas';
 
@@ -39,35 +48,71 @@ function createLifecycleContext({
   streamStatus: StreamStatusRegistry;
 }): AgentLaunchContext {
   const explicit = createRecordingHost();
+  const config = AgentConfigSchema.parse({
+    agent: 'test-agent',
+    model: 'test-model',
+    agentCategory: AgentCategory.ToolUse,
+  });
+  const setting = AgentSettingSchema.parse({
+    agentCategory: AgentCategory.ToolUse,
+  });
+  const prompt = AgentPromptSchema.parse({});
+  const storageKey = executionId as StorageKey;
+  const modelInfo = {
+    capabilities: {
+      supportsPromptCaching: false,
+      supportsAutoPromptCaching: false,
+      supportsReasoning: false,
+      cacheDiscountFactor: 0,
+    },
+    config: {
+      provider: ModelProvider.OPENAI,
+      name: 'test-model',
+      fullName: 'Test Model',
+      inputPrice: 0,
+      openRouterOnly: false,
+      requiresResponsesAPI: false,
+    },
+  };
 
   return {
-    config: {
-      agent: 'test-agent',
-      model: 'test-model',
-    },
-    setting: {
-      agentCategory: AgentCategory.ToolUse,
-    },
+    config,
+    setting,
+    prompt,
     streamId,
     executionId,
     runtimeHost: explicit.host,
     streamStatus,
-    logger: {
-      debug: vi.fn(),
+    logger: noopTrace,
+    parentStage: noopTrace.openStage('Run: test-agent'),
+    storageKey,
+    userVarChannels: {
+      input: Object.freeze({}),
+      transient: {},
     },
-    parentStage: {
-      end: vi.fn(),
-    },
+    usageMonitor: new UsageMonitor(
+      modelInfo,
+      {
+        logger: noopTrace,
+        runtimeHost: explicit.host,
+        storageKey,
+        streamId,
+      },
+      {
+        agentName: config.agent,
+        agentCategory: setting.agentCategory,
+      },
+    ),
     modelHandler: {
       dispose: vi.fn(),
-    },
+    } as unknown as AgentLaunchContext['modelHandler'],
     disposeTrace: vi.fn(),
     coordinators: {
       plan: new PlanApprovalCoordinator(explicit.host),
       proposal: new AgentProposalCoordinator(explicit.host),
       retry: new RetryRequestCoordinatorImpl(explicit.host),
     },
-  } as unknown as AgentLaunchContext;
+  };
 }
 
 describe('runFlowWithLifecycle', () => {
