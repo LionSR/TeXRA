@@ -84,7 +84,9 @@ export class RetryRequestPanel extends BaseRequestPanel {
           )}
           ${detailsText
             ? html`
-                <wa-details class="retry-request__error-details">
+                <wa-details
+                  class="retry-request__error-details collapsible-quiet"
+                >
                   <span slot="summary" class="retry-request__error-summary">
                     Error details
                   </span>

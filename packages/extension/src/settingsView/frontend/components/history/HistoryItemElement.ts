@@ -223,7 +223,7 @@ export class HistoryItemElement extends LitElement {
 
     return html`
       <wa-details
-        class="collapsible instruction-collapsible"
+        class="collapsible-quiet instruction-collapsible"
         summary="Show full instructions"
         ?open=${this.open}
         @wa-show=${(e: Event) => this.dispatchToggle(e, true)}

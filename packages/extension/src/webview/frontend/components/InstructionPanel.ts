@@ -47,7 +47,6 @@ import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 import '@awesome.me/webawesome/dist/components/radio/radio.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
-import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
@@ -400,25 +399,6 @@ export class InstructionPanel extends LitElement {
         transform-origin: center;
       }
 
-      /*
-       * Reserve a fixed slot for the polish spinner so the toolbar layout
-       * doesn't jump when isPolishing toggles. Width matches the wa-spinner
-       * font-size used inside the slot.
-       */
-      .polish-spinner-slot {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: var(--font-size-icon, 1em);
-        height: var(--font-size-icon, 1em);
-        opacity: 0;
-        transition: opacity var(--transition-fast);
-      }
-
-      .polish-spinner-slot[aria-hidden='false'] {
-        opacity: 1;
-      }
-
       @keyframes pulse-record {
         0%,
         100% {
@@ -718,22 +698,9 @@ export class InstructionPanel extends LitElement {
               icon: 'sparkle',
               label: 'Polish instruction',
               title: 'Polish instruction text with AI',
-              disabled: session.isPolishing,
+              busy: session.isPolishing,
               action: 'polish',
             })}
-            <span
-              class="polish-spinner-slot"
-              aria-hidden=${session.isPolishing ? 'false' : 'true'}
-            >
-              ${session.isPolishing
-                ? html`
-                    <wa-spinner
-                      id="polishProgressContainer"
-                      style="font-size: var(--font-size-icon, 1em)"
-                    ></wa-spinner>
-                  `
-                : nothing}
-            </span>
             ${renderIconActionButton({
               id: 'recordInstructionButton',
               icon: session.isRecording ? 'stop-circle' : 'mic',
