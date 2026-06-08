@@ -62,7 +62,7 @@ export class WorktreeChip extends LitElement {
         align-items: center;
         gap: var(--wa-space-3xs);
         padding: 0 var(--wa-space-2xs);
-        border-radius: var(--border-radius-pill, 999px);
+        border-radius: var(--wa-border-radius-pill);
         background-color: color-mix(
           in srgb,
           var(--color-text-secondary) 12%,
