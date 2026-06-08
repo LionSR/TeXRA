@@ -91,17 +91,23 @@ const RELAY_STATUS_BY_AVAILABILITY = {
   'missing-key': 'relay: unavailable; missing api key',
 } satisfies Record<ModelAvailabilityKind, string>;
 
-const NO_RUNNABLE_MODEL_ACCESS_SUMMARIES = {
-  includedLoginRequired: 'Included relay models require sign-in.',
-  included: 'No included relay models are runnable.',
-  personal: 'No personal API-key models are runnable.',
-} satisfies Record<NoRunnableModelAccessReason, string>;
-
-const NO_RUNNABLE_MODEL_ACCESS_LAUNCH_BLOCKS = {
-  includedLoginRequired: 'Sign in with texra login for included relay models',
-  included: 'No included relay models are runnable',
-  personal: 'No personal API-key models are runnable',
-} satisfies Record<NoRunnableModelAccessReason, string>;
+const NO_RUNNABLE_MODEL_ACCESS_COPY = {
+  includedLoginRequired: {
+    launchBlock: 'Sign in with texra login for included relay models',
+    summary: 'Included relay models require sign-in.',
+  },
+  included: {
+    launchBlock: 'No included relay models are runnable',
+    summary: 'No included relay models are runnable.',
+  },
+  personal: {
+    launchBlock: 'No personal API-key models are runnable',
+    summary: 'No personal API-key models are runnable.',
+  },
+} satisfies Record<
+  NoRunnableModelAccessReason,
+  { readonly launchBlock: string; readonly summary: string }
+>;
 
 function startSentence(text: string): string {
   if (text.length === 0) return text;
@@ -163,7 +169,7 @@ export function noRunnableModelAccessReason(
 export function formatCliNoRunnableModelsLaunchBlock(
   reason: NoRunnableModelAccessReason,
 ): string {
-  return NO_RUNNABLE_MODEL_ACCESS_LAUNCH_BLOCKS[reason];
+  return NO_RUNNABLE_MODEL_ACCESS_COPY[reason].launchBlock;
 }
 
 function formatCliNoRunnableModelsRecovery(
@@ -189,7 +195,7 @@ export function formatCliNoRunnableModelsMessage(
   reason: NoRunnableModelAccessReason,
   options: CliNoRunnableModelsMessageOptions = {},
 ): string {
-  return `${NO_RUNNABLE_MODEL_ACCESS_SUMMARIES[reason]} ${formatCliNoRunnableModelsRecovery(reason, options)}`;
+  return `${NO_RUNNABLE_MODEL_ACCESS_COPY[reason].summary} ${formatCliNoRunnableModelsRecovery(reason, options)}`;
 }
 
 function formatModelAccessStatus(model: ModelOptionData): string {
