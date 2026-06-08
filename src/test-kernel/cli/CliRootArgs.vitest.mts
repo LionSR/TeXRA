@@ -41,7 +41,7 @@ import {
   expandRunInputs,
   expandWorkflowInputSpecs,
   hasMixedStdinWorkflowInputSpecs,
-} from '@cli/commands/_helpers/workflowInputs';
+} from '@cli/runtime/workflowInputs';
 import {
   resolveWorkflowOutput,
   resumeWorkflowOutputFile,

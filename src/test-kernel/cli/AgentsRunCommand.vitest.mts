@@ -50,7 +50,7 @@ vi.mock('@cli/commands/_helpers/runExecution', () => ({
   executeCliRequest: mocks.executeCliRequest,
 }));
 
-vi.mock('@cli/commands/_helpers/workflowInputs', () => ({
+vi.mock('@cli/runtime/workflowInputs', () => ({
   createStdinWorkflowInputMaterializer: vi.fn(() => mocks.stdinInputFile),
   expandRunInputs: mocks.expandRunInputs,
 }));
