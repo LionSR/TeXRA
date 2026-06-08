@@ -121,7 +121,10 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
         }
         const normalized = toPosixPath(relativePath);
         try {
-          return ig.ignores(normalized);
+          // Try plain path first; also try with trailing slash so that
+          // directory-only rules (e.g. "dist/") match bare directory names
+          // ("dist") the same way the old minimatch-based parser did.
+          return ig.ignores(normalized) || ig.ignores(normalized + '/');
         } catch {
           return false;
         }
