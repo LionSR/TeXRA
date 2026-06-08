@@ -118,7 +118,7 @@ vi.mock('@cli/runtime/runModel', () => ({
   ),
 }));
 
-vi.mock('@cli/commands/_helpers/runExecution', () => ({
+vi.mock('@cli/runtime/runExecution', () => ({
   executeCliRequest: mocks.executeCliRequest,
 }));
 
