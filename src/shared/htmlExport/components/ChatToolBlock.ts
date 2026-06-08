@@ -15,7 +15,7 @@
 import { LitElement, css, html, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import { bubbleFrame, chatTokens } from '../styles/tokens';
+import { bubbleFrame } from '../styles/tokens';
 
 export type ToolBlockKind =
   | 'call'
@@ -35,7 +35,6 @@ const ROLE_LABELS: Record<ToolBlockKind, string> = {
 @customElement('texra-chat-tool-block')
 export class ChatToolBlock extends LitElement {
   static override styles = [
-    chatTokens,
     bubbleFrame,
     css`
       :host {
