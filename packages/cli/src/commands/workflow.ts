@@ -21,6 +21,7 @@ import {
   buildHeadlessRunContext,
   resolveCliRunModel,
 } from '../runtime/runModel';
+import { initLocalCliPlatform } from '../runtime/initPlatform';
 
 import { missingAgentMessage } from './_helpers/agentLookupText';
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -60,23 +61,22 @@ interface WorkflowRunInit {
   readonly instruction: string;
 }
 
-async function runWorkflowAgent(
+export async function runWorkflowAgent(
   context: CliContext,
   init: WorkflowRunInit,
 ): Promise<number> {
-  const model = await resolveCliRunModel(context, init.model, 'run');
-  const runContext = buildHeadlessRunContext(context, model);
   if (init.output && init.outputDir) {
     throw new CliUsageError('Use either --output or --output-dir, not both.');
   }
   // Reject `--output-dir <path>` early when the path already points at a
   // non-directory (else we'd run the full workflow and EEXIST at the end).
-  await assertOutputDirAvailable(init.outputDir, runContext.cwd);
+  await assertOutputDirAvailable(init.outputDir, context.cwd);
   // Same fast-fail for `--output <path>`: existing directory or file-typed
   // parent component blows up at copy time (`EISDIR` / `EEXIST`) after the
   // full agent run otherwise.
-  await assertOutputFileAvailable(init.output, runContext.cwd);
+  await assertOutputFileAvailable(init.output, context.cwd);
 
+  await initLocalCliPlatform(context);
   const agent = await resolveCliAgent(init.agent);
   // Pre-validate the resolved agent so usage errors land before stdin is read
   // or the runtime host starts.
@@ -93,6 +93,9 @@ async function runWorkflowAgent(
       'Use --output-dir for multi-input workflow runs; --output is only for a single final artifact.',
     );
   }
+
+  const model = await resolveCliRunModel(context, init.model, 'run');
+  const runContext = buildHeadlessRunContext(context, model);
 
   const stdinInputFile = createStdinWorkflowInputMaterializer({
     readStdinText: readCliStdinText,
