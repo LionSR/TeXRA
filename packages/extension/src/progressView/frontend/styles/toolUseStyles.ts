@@ -28,12 +28,6 @@ export const toolUseStyles = css`
     cursor: text;
   }
 
-  .tool-use-label {
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-link);
-    margin-bottom: var(--wa-space-2xs);
-  }
-
   .tool-use-subsection {
     margin: var(--wa-space-3xs) 0;
   }
