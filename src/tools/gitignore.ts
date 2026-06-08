@@ -1,25 +1,19 @@
 // Standard library imports
 import * as path from 'path';
 
+// Third-party imports
+import ignore from 'ignore';
+
 // Local imports - utils
 import { warn } from '@logger/logUtils';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import { filterNotNull } from '@utils/core';
-import { splitContentLines } from '@utils/text/stringUtils';
 import { toPosixPath } from '@utils/core/pathCore';
 import { safeHomedir } from '@utils/system/platformPaths';
 
-// Local file imports
-import { createGlobMatcher } from './utils';
-
-type GitignoreRule = {
-  matcher: (value: string) => boolean;
-  negated: boolean;
-};
-
 type GitignoreSource = {
   absolutePath: string;
-  rules: GitignoreRule[];
+  content: string;
 };
 
 export type GitignoreMatcher = {
@@ -36,77 +30,13 @@ const EMPTY_GITIGNORE_MATCHER: GitignoreMatcher = {
 
 let gitignoreMatcherPromise: Promise<GitignoreMatcher> | undefined;
 
-function expandGitignorePattern(
-  pattern: string,
-  options: { anchored: boolean; dirOnly: boolean },
-): string[] {
-  const normalized = pattern.replaceAll('\\', '/');
-  let basePattern: string;
-  if (options.anchored) {
-    basePattern = normalized.replace(/^\/+/, '');
-  } else if (normalized.startsWith('**/')) {
-    basePattern = normalized;
-  } else {
-    basePattern = `**/${normalized}`;
-  }
-
-  if (!options.dirOnly) {
-    return [basePattern];
-  }
-
-  // For directory-only patterns, match both the dir and its contents
-  return basePattern.endsWith('/**')
-    ? [basePattern]
-    : [basePattern, `${basePattern}/**`];
-}
-
-function parseGitignore(content: string): GitignoreRule[] {
-  const rules: GitignoreRule[] = [];
-  const lines = splitContentLines(content);
-
-  for (const rawLine of lines) {
-    let line = rawLine.trim();
-    if (!line || line.startsWith('#')) {
-      continue;
-    }
-
-    let negated = false;
-    if (line.startsWith('!') && !line.startsWith('\\!')) {
-      negated = true;
-      line = line.slice(1);
-    } else if (line.startsWith('\\#') || line.startsWith('\\!')) {
-      line = line.slice(1);
-    }
-
-    const anchored = line.startsWith('/');
-    line = anchored ? line.slice(1) : line;
-
-    const dirOnly = line.endsWith('/');
-    line = dirOnly ? line.slice(0, -1) : line;
-
-    if (!line) {
-      continue;
-    }
-
-    line = line.replaceAll('\\ ', ' ');
-    line = line.replaceAll('\\#', '#').replaceAll('\\!', '!');
-
-    const patterns = expandGitignorePattern(line, { anchored, dirOnly });
-    for (const pattern of patterns) {
-      rules.push({ matcher: createGlobMatcher(pattern), negated });
-    }
-  }
-
-  return rules;
-}
-
 async function readGitignoreFile(
   absolutePath: string,
   readContent: () => Promise<string>,
 ): Promise<GitignoreSource | null> {
   try {
     const content = await readContent();
-    return { absolutePath, rules: parseGitignore(content) };
+    return { absolutePath, content };
   } catch {
     return null;
   }
@@ -174,9 +104,13 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
       workspaceSource,
     ].filter(filterNotNull);
 
-    const rules = sources.flatMap((source) => source.rules);
-    if (rules.length === 0) {
+    if (sources.length === 0) {
       return EMPTY_GITIGNORE_MATCHER;
+    }
+
+    const ig = ignore();
+    for (const source of sources) {
+      ig.add(source.content);
     }
 
     return {
@@ -186,13 +120,18 @@ async function loadGitignoreMatcher(): Promise<GitignoreMatcher> {
           return false;
         }
         const normalized = toPosixPath(relativePath);
-        let ignored = false;
-        for (const rule of rules) {
-          if (rule.matcher(normalized)) {
-            ignored = !rule.negated;
-          }
+        try {
+          // Try plain path first; also try with trailing slash so that
+          // directory-only rules (e.g. "dist/") match bare directory names
+          // ("dist") the same way the old minimatch-based parser did.
+          // Known deviation from strict git spec: a *file* named "dist" would
+          // also be ignored by a "dist/" rule, because we cannot distinguish
+          // files from directories without a stat call. The old parser had the
+          // same behaviour (it expanded "dist/" → ["dist", "dist/**"]).
+          return ig.ignores(normalized) || ig.ignores(normalized + '/');
+        } catch {
+          return false;
         }
-        return ignored;
       },
       ignoreFiles: sources.map((source) => source.absolutePath),
     };
