@@ -201,10 +201,9 @@ export const commonViewStyles: CSSResult = css`
   }
 
   /* Quiet collapsible - a borderless, low-emphasis disclosure for inline
-     toggles (e.g. "Show full instructions", a memory "Contents" preview, the
-     file-selection group). One shared look so the same control reads
-     identically wherever it appears, instead of each call site rolling its
-     own header padding/size/color. */
+     toggles (e.g. "Show full instructions" or a memory "Contents" preview).
+     One shared look so the same control reads identically wherever it appears,
+     instead of each call site rolling its own header padding/size/color. */
   .collapsible-quiet::part(base) {
     background: transparent;
     border: none;
@@ -213,8 +212,9 @@ export const commonViewStyles: CSSResult = css`
 
   .collapsible-quiet::part(header) {
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
+    min-height: 20px;
     font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-normal);
+    font-weight: var(--font-weight);
     color: var(--wa-color-text-quiet);
   }
 

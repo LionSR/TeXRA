@@ -68,7 +68,7 @@ export const historyListStyles: CSSResult = css`
   }
 
   .history-label {
-    font-weight: var(--font-weight-normal);
+    font-weight: var(--font-weight);
     color: var(--wa-color-text-quiet);
   }
 
@@ -103,13 +103,13 @@ export const historyListStyles: CSSResult = css`
   .history-title {
     flex: 1;
     min-width: 0;
-    font-weight: var(--font-weight-normal);
+    font-weight: var(--font-weight);
     color: var(--wa-color-text-normal);
     word-break: break-word;
   }
 
   .history-title .markdown-content {
-    font-weight: var(--font-weight-normal);
+    font-weight: var(--font-weight);
   }
 
   .config-section {
@@ -126,7 +126,7 @@ export const historyListStyles: CSSResult = css`
   }
 
   .config-key {
-    font-weight: var(--font-weight-normal);
+    font-weight: var(--font-weight);
     color: var(--wa-color-text-quiet);
     min-width: calc(
       var(--width-button-min) + var(--wa-space-l) + var(--wa-space-l)
