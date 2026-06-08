@@ -14,26 +14,21 @@ import {
 import { cliState } from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 
+// Marker glyph + color per todo status; statuses absent here (e.g. PENDING)
+// fall back to the default empty box with no color.
+const TODO_STATUS_DISPLAY: Partial<
+  Record<TodoStatus, { marker: string; color: string }>
+> = {
+  [TODO_STATUS.COMPLETED]: { marker: '☑', color: 'green' },
+  [TODO_STATUS.IN_PROGRESS]: { marker: '☐', color: 'cyan' },
+};
+
 function todoMarker(status: TodoStatus): string {
-  switch (status) {
-    case TODO_STATUS.COMPLETED:
-      return '☑';
-    case TODO_STATUS.IN_PROGRESS:
-      return '☐';
-    default:
-      return '□';
-  }
+  return TODO_STATUS_DISPLAY[status]?.marker ?? '□';
 }
 
 function todoColor(status: TodoStatus): string | undefined {
-  switch (status) {
-    case TODO_STATUS.COMPLETED:
-      return 'green';
-    case TODO_STATUS.IN_PROGRESS:
-      return 'cyan';
-    default:
-      return undefined;
-  }
+  return TODO_STATUS_DISPLAY[status]?.color;
 }
 
 function TodoRow({
@@ -74,32 +69,39 @@ export type CompactTodosPlanRow =
       stepIndex: number;
     };
 
+// Sort priority by (row kind, status). Statuses absent for a kind use
+// DEFAULT_TODO_ROW_PRIORITY; planSummary has a single fixed priority.
+const COMPACT_ROW_PRIORITY: Record<
+  'todo' | 'planStep',
+  Partial<Record<TodoStatus, number>>
+> = {
+  todo: {
+    [TODO_STATUS.IN_PROGRESS]: 0,
+    [TODO_STATUS.PENDING]: 1,
+    [TODO_STATUS.COMPLETED]: 4,
+  },
+  planStep: {
+    [TODO_STATUS.IN_PROGRESS]: 2,
+    [TODO_STATUS.PENDING]: 3,
+    [TODO_STATUS.COMPLETED]: 6,
+  },
+};
+const DEFAULT_TODO_ROW_PRIORITY = 3;
+const PLAN_SUMMARY_PRIORITY = 5;
+
 function compactRowPriority(row: CompactTodosPlanRow): number {
   switch (row.kind) {
     case 'todo':
-      switch (row.todo.status) {
-        case TODO_STATUS.IN_PROGRESS:
-          return 0;
-        case TODO_STATUS.PENDING:
-          return 1;
-        case TODO_STATUS.COMPLETED:
-          return 4;
-        default:
-          return 3;
-      }
+      return (
+        COMPACT_ROW_PRIORITY.todo[row.todo.status] ?? DEFAULT_TODO_ROW_PRIORITY
+      );
     case 'planStep':
-      switch (row.step.status) {
-        case TODO_STATUS.IN_PROGRESS:
-          return 2;
-        case TODO_STATUS.PENDING:
-          return 3;
-        case TODO_STATUS.COMPLETED:
-          return 6;
-        default:
-          return 3;
-      }
+      return (
+        COMPACT_ROW_PRIORITY.planStep[row.step.status] ??
+        DEFAULT_TODO_ROW_PRIORITY
+      );
     case 'planSummary':
-      return 5;
+      return PLAN_SUMMARY_PRIORITY;
   }
   const exhaustive: never = row;
   return exhaustive;

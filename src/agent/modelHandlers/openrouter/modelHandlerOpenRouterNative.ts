@@ -70,23 +70,24 @@ type OpenRouterReasoningEffort = NonNullable<
   NonNullable<ChatRequest['reasoning']>['effort']
 >;
 
+// OpenRouter's reasoning tiers passed through unchanged. It has no 'max' tier,
+// so 'max' maps to the top tier 'xhigh' and anything unknown falls back to 'low'.
+const OPENROUTER_REASONING_EFFORTS: ReadonlySet<string> = new Set([
+  'xhigh',
+  'high',
+  'medium',
+  'low',
+  'minimal',
+  'none',
+]);
+
 export function toOpenRouterReasoningEffort(
   effort: string,
 ): OpenRouterReasoningEffort {
-  switch (effort) {
-    case 'max':
-      // OpenRouter has no 'max' tier; map to its top tier 'xhigh'.
-      return 'xhigh';
-    case 'xhigh':
-    case 'high':
-    case 'medium':
-    case 'low':
-    case 'minimal':
-    case 'none':
-      return effort;
-    default:
-      return 'low';
-  }
+  if (effort === 'max') return 'xhigh';
+  return OPENROUTER_REASONING_EFFORTS.has(effort)
+    ? (effort as OpenRouterReasoningEffort)
+    : 'low';
 }
 
 // ============================================================================
