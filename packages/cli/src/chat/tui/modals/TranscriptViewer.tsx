@@ -13,6 +13,7 @@ import { isEscapeInput } from '../input/inputKeys';
 import { KeyHints } from '../ui/KeyHints';
 import {
   initialTranscriptScrollState,
+  maxTranscriptScrollOffset,
   scrollTranscriptToOffset,
   syncTranscriptScrollState,
 } from '../state/transcriptScroll';
@@ -48,7 +49,6 @@ export function TranscriptViewer({
   // when present, so the scrollable region never overflows availableRows.
   const titleRows = title ? 1 : 0;
   const viewRows = Math.max(1, availableRows - 1 - titleRows);
-  const maxOffset = Math.max(0, lines.length - viewRows);
   // Open pinned to the bottom — the latest output is what the user just asked
   // to inspect.
   const [{ offset }, setScrollState] = useState(() =>
@@ -82,7 +82,10 @@ export function TranscriptViewer({
     else if (key.pageDown) scrollTo((current) => current + viewRows);
     else if (key.pageUp) scrollTo((current) => current - viewRows);
     else if (input === 'g') scrollTo(0);
-    else if (input === 'G') scrollTo(maxOffset);
+    else if (input === 'G')
+      scrollTo(
+        maxTranscriptScrollOffset({ lineCount: lines.length, viewRows }),
+      );
   });
 
   const visible = lines.slice(offset, offset + viewRows);

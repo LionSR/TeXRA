@@ -22,7 +22,7 @@ import { buildStreamInfos } from '@shared/progressView/backend/streamInfoUtils';
 import {
   type ActiveStreamId,
   ProgressViewState,
-  type StreamExecutionState,
+  type StreamBadgeSnapshot,
 } from '@shared/progressView/backend/state/ProgressViewState';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 import type { OdysseyStatus } from '@tools/odyssey';
@@ -67,12 +67,7 @@ export interface SyncStreamContentPayload {
   agentCategory?: string;
   /** Tab-switch state previously sent by syncActiveStreamState (R2). */
   conversationProgress?: ConversationProgress;
-  badges?: {
-    activeSubagents: StreamExecutionState['activeSubagents'];
-    finishedSubagentCount: StreamExecutionState['finishedSubagentCount'];
-    activeProcesses: StreamExecutionState['activeProcesses'];
-    finishedProcessCount: StreamExecutionState['finishedProcessCount'];
-  };
+  badges?: StreamBadgeSnapshot;
   parentStreamId?: StreamTabId;
   /** Toggle bypass state (hydrated on tab switch so toggles display correctly). */
   toolEditBypass?: boolean;
@@ -289,15 +284,7 @@ export class WebviewUpdater {
     });
   }
 
-  updateStreamBadges(
-    stream: StreamTabId,
-    badges: {
-      activeSubagents: StreamExecutionState['activeSubagents'];
-      finishedSubagentCount: StreamExecutionState['finishedSubagentCount'];
-      activeProcesses: StreamExecutionState['activeProcesses'];
-      finishedProcessCount: StreamExecutionState['finishedProcessCount'];
-    },
-  ): void {
+  updateStreamBadges(stream: StreamTabId, badges: StreamBadgeSnapshot): void {
     this.sendMessage({
       command: PROGRESS_VIEW_COMMANDS.UPDATE_STREAM_BADGES,
       stream,

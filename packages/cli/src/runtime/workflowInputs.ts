@@ -6,6 +6,7 @@ import { glob, hasMagic } from 'glob';
 
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import type { Stats } from 'node:fs';
 
 const STDIN_INPUT_TOKEN = '-';
 const STDIN_TEMP_PREFIX = '.texra-stdin-';
@@ -155,6 +156,13 @@ export async function expandWorkflowInputSpec(
   const trimmed = inputSpec.trim();
   if (!trimmed) return [];
 
+  const normalizeMatches = (matches: string[]): string[] =>
+    matches
+      .sort()
+      .map((match) =>
+        normalizeCliInputPathForRun(match, cwd, flagLabel, options),
+      );
+
   if (trimmed === STDIN_INPUT_TOKEN) {
     const stdinInputFile = requireStdinWorkflowInputFile(flagLabel, options);
     return [
@@ -177,18 +185,14 @@ export async function expandWorkflowInputSpec(
     if (matches.length === 0) {
       throw new CliUsageError(`No input files matched: ${trimmed}`);
     }
-    return matches
-      .sort()
-      .map((match) =>
-        normalizeCliInputPathForRun(match, cwd, flagLabel, options),
-      );
+    return normalizeMatches(matches);
   }
 
   const absolutePath = resolveAgainstCwd(trimmed, cwd);
   // Only treat true missing-path errors as "file not found"; other failures
   // (EACCES, EIO, ...) are environment problems, not Usage errors, and must
   // propagate so the user sees the real cause.
-  let stats: Awaited<ReturnType<typeof fs.stat>> | null = null;
+  let stats: Stats | null = null;
   try {
     stats = await fs.stat(absolutePath);
   } catch (error: unknown) {
@@ -209,11 +213,7 @@ export async function expandWorkflowInputSpec(
         `No .tex input files found in directory: ${trimmed}`,
       );
     }
-    return matches
-      .sort()
-      .map((match) =>
-        normalizeCliInputPathForRun(match, cwd, flagLabel, options),
-      );
+    return normalizeMatches(matches);
   }
 
   // Fail fast with a Usage error (exit 2) instead of paying full platform
@@ -309,38 +309,31 @@ export async function expandRunInputs(
     );
   }
 
+  const shared = {
+    requireWorkspaceFiles: options.requireWorkspaceFiles,
+    stdinInputFile: options.stdinInputFile,
+  };
   const inputExpansion = await prepareWorkflowInputExpansion(
     inputSpecs,
     cwd,
     '--input',
-    {
-      requireWorkspaceFiles: options.requireWorkspaceFiles,
-      stdinInputFile: options.stdinInputFile,
-    },
+    shared,
   );
   const contextExpansion = await prepareWorkflowInputExpansion(
     contextSpecs,
     cwd,
     '--context',
-    {
-      requireWorkspaceFiles: options.requireWorkspaceFiles,
-      stdinInputFile: options.stdinInputFile,
-    },
+    shared,
   );
 
   const inputFiles = await finishWorkflowInputExpansion(inputExpansion, cwd, {
+    ...shared,
     allowEmpty: options.allowEmptyInput,
-    requireWorkspaceFiles: options.requireWorkspaceFiles,
-    stdinInputFile: options.stdinInputFile,
   });
   const contextFiles = await finishWorkflowInputExpansion(
     contextExpansion,
     cwd,
-    {
-      allowEmpty: true,
-      requireWorkspaceFiles: options.requireWorkspaceFiles,
-      stdinInputFile: options.stdinInputFile,
-    },
+    { ...shared, allowEmpty: true },
   );
   return { inputFiles, contextFiles };
 }

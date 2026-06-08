@@ -11,6 +11,8 @@ import {
   getCliModelAccessList,
   modelSelectItemsForCliMode,
   type CliModelAccess,
+  type CliNoRunnableModelsMessageOptions,
+  type GetModelSwitchDisabledReason,
 } from '@cli/runtime/modelAccess';
 import { formatCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
 import { Select } from '../ui/Select';
@@ -28,14 +30,14 @@ const TUI_MODEL_EMPTY_RECOVERY = {
   includedModeAction: 'switch with /api included',
   loginAction: 'Run /login',
   personalModeAction: 'switch with /api personal',
-};
+} satisfies CliNoRunnableModelsMessageOptions;
 
 export interface ModelListFormProps {
   readonly currentModel: string;
   readonly apiMode: CliApiMode;
   readonly availableRows?: number;
   readonly selectable?: boolean;
-  readonly getModelSwitchDisabledReason?: (model: string) => string | undefined;
+  readonly getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
   readonly onSelect?: (value: string) => void;
   readonly onClose: () => void;
 }

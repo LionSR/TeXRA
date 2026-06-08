@@ -296,7 +296,7 @@ function findToolInCommonPathsUncached(tool: string): string | null {
   const pathEnv = extendEnvPath();
 
   // kpsewhich resolves files through the TeX database rather than PATH, so it
-  // stays a subprocess — npm `which` only searches PATH.
+  // stays a subprocess. npm `which` only searches PATH.
   for (const name of candidates) {
     try {
       const result = execaSync('kpsewhich', [name], {

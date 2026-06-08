@@ -14,6 +14,7 @@
 import {
   executionRegistry,
   type ExecutionHandle,
+  type ExecutionProgress,
   type ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -48,9 +49,7 @@ interface ExecutionSubscriptionBinderOptions {
   logger?: BinderLogger;
 }
 
-function progressLine(
-  progress: { currentRound?: number; totalRounds?: number } | undefined,
-): string | null {
+function progressLine(progress: ExecutionProgress | undefined): string | null {
   if (
     !progress ||
     progress.currentRound === undefined ||

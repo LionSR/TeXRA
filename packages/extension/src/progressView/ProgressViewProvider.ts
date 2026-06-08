@@ -12,7 +12,6 @@ import {
   setActiveSidebarView,
 } from '@common/webview';
 import { workspaceSM } from '@common/state';
-import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import { buildBasicModelOptionsData } from '@model/modelOptionsBasic';
 import { computeModelOptionsData } from '@model/computeModelOptions';
@@ -24,9 +23,10 @@ import type {
   PlanApprovalPermission,
   ProgressViewOutboundMessage,
   ProgressViewPlacement,
-  StorageKey,
+  RetryPermission,
   StreamTabId,
   ToolEditPermission,
+  UserQuestionPermission,
 } from '@shared/schemas';
 import { AGENT_CATEGORY } from '@shared/schemas';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
@@ -94,7 +94,7 @@ export class ProgressViewProvider
     'requestId'
   >;
   private retryRequestHandler!: ApprovalRequestHandler<
-    ProgressEventPayloads['showRetryRequest'],
+    RetryPermission,
     'streamId'
   >;
   private agentProposalHandler!: ApprovalRequestHandler<
@@ -110,7 +110,7 @@ export class ProgressViewProvider
     'requestId'
   >;
   private userQuestionHandler!: ApprovalRequestHandler<
-    ProgressEventPayloads['showUserQuestion'],
+    UserQuestionPermission,
     'requestId'
   >;
 

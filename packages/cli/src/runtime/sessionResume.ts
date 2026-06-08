@@ -14,7 +14,10 @@ import { toErrorMessage } from '@common/errors';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 
 import { readCliHistoryConfig } from './history';
-import { readCliToolUseResumeData } from './toolUseResumeData';
+import {
+  readCliToolUseResumeData,
+  type CliToolUseResumeData,
+} from './toolUseResumeData';
 
 export type CliResumeResolution =
   | {
@@ -46,7 +49,7 @@ export async function resolveCliResumeSnapshot(
   const taskState = agentConfigToTaskState(config);
   if (!isToolUseTaskState(taskState)) return { kind: 'workflow' };
 
-  let resume: Awaited<ReturnType<typeof readCliToolUseResumeData>>;
+  let resume: CliToolUseResumeData | null;
   try {
     resume = await readCliToolUseResumeData(id, config);
   } catch (error) {

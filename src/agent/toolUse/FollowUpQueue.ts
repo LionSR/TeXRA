@@ -25,6 +25,13 @@ export interface FollowUpQueueBatch {
   readonly mediaFiles: string[];
 }
 
+/** A single visible follow-up drained for resume replay. */
+export interface DrainedFollowUpItem {
+  text: string;
+  displayText?: string;
+  mediaFiles?: readonly string[];
+}
+
 export class FollowUpQueue {
   private readonly queued: FollowUpQueueItem[] = [];
   private resolver: ((value: FollowUpQueueItem | null) => void) | null = null;
@@ -72,11 +79,7 @@ export class FollowUpQueue {
    * Used by resume to replay queued user input without losing pasted images;
    * the text-only {@link drain} stays for display/back-compat.
    */
-  drainItems(): Array<{
-    text: string;
-    displayText?: string;
-    mediaFiles?: readonly string[];
-  }> {
+  drainItems(): DrainedFollowUpItem[] {
     return this.queued
       .splice(0)
       .filter((item) => !item.synthetic)

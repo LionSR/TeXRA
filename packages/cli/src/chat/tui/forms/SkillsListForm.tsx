@@ -135,10 +135,6 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
   });
   const items = skillSelectItemsForTui(skills);
 
-  function handleSelect(value: SkillSelectValue): void {
-    props.onSelect(value);
-  }
-
   if (isCompactFormRows(props.availableRows)) {
     return (
       <FormFrame color="cyan" title="/skills" showCloseHint={false}>
@@ -150,7 +146,7 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
           items={items}
           maxVisibleItems={1}
           showOverflow={false}
-          onSelect={handleSelect}
+          onSelect={props.onSelect}
           onCancel={props.onClose}
         />
         <CompactFormKeyHints
@@ -168,7 +164,7 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
         items={items}
         maxVisibleItems={selectWindow.maxVisibleItems}
         showOverflow={selectWindow.showOverflow}
-        onSelect={handleSelect}
+        onSelect={props.onSelect}
         onCancel={props.onClose}
       />
       <Box marginTop={1}>

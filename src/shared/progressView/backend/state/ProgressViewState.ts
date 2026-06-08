@@ -25,7 +25,6 @@ import {
   type AgentCategoryFilter,
   type ConversationProgress,
   type ContextStateData,
-  type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
@@ -83,6 +82,19 @@ export interface StreamExecutionState {
   activeProcesses: ActiveChildInfo[];
   finishedProcessCount: number;
 }
+
+/**
+ * Per-stream child-activity badge counts, projected from
+ * {@link StreamExecutionState}. Sent to the webview on tab switch and whenever
+ * subagent/process activity changes.
+ */
+export type StreamBadgeSnapshot = Pick<
+  StreamExecutionState,
+  | 'activeSubagents'
+  | 'finishedSubagentCount'
+  | 'activeProcesses'
+  | 'finishedProcessCount'
+>;
 
 function createExecutionState(
   kind: (typeof AgentCategory)[keyof typeof AgentCategory],

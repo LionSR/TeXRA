@@ -16,6 +16,7 @@ import {
   type MessageConnection,
 } from 'vscode-jsonrpc/node';
 
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 export type NotificationHandler = (params: unknown) => void;
@@ -127,7 +128,7 @@ export class JsonRpcConnection {
 
   private logLiveError(context: string, err: unknown): void {
     if (this.disposed || !err) return;
-    logger.debug('JsonRpcConnection', `${context}: ${errorMessage(err)}`);
+    logger.debug('JsonRpcConnection', `${context}: ${toErrorMessage(err)}`);
   }
 }
 
@@ -136,9 +137,5 @@ function isConnectionDisposedError(err: unknown): boolean {
   if (code === ConnectionErrors.Disposed || code === ConnectionErrors.Closed) {
     return true;
   }
-  return /\bconnection\b.*\b(disposed|closed)\b/i.test(errorMessage(err));
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  return /\bconnection\b.*\b(disposed|closed)\b/i.test(toErrorMessage(err));
 }

@@ -64,10 +64,10 @@ export function useAsyncListForm<T>(
   const empty =
     data !== undefined && options.isEmpty ? options.isEmpty(data) : false;
 
-  useInput((_input, key) => {
+  useInput((input, key) => {
     if (
       shouldCloseAsyncListFormOnInput({
-        input: _input,
+        input,
         key,
         loading,
         error,

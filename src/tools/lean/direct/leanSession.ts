@@ -150,7 +150,7 @@ export class LeanSession {
       textDocument: { uri: pathToUri(absolute) },
       position: { line, character: column },
     };
-    return (await this.requireRpc().request(method, params)) as T;
+    return this.requireRpc().request<T>(method, params);
   }
 
   /** Return the live JSON-RPC connection, or throw if the session is down. */

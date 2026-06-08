@@ -119,9 +119,8 @@ export type CliHistoryDeleteResult =
     };
 
 export function parseCliHistoryId(raw: string): ExecutionId | undefined {
-  return ExecutionIdSchema.safeParse(raw).success
-    ? (raw as ExecutionId)
-    : undefined;
+  const parsed = ExecutionIdSchema.safeParse(raw);
+  return parsed.success ? parsed.data : undefined;
 }
 
 export async function listCliHistoryEntries(): Promise<CliHistoryEntry[]> {
