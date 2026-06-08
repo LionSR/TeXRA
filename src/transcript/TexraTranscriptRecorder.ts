@@ -343,23 +343,17 @@ export function attachTranscriptRecorder(
  * the DEFAULT bucket. Renderers that key on messageType (latexdiff,
  * scratchpad, missingOutputs) keep working without subscriber changes.
  */
+const DOMAIN_MESSAGE_TYPE: Record<string, MessageType> = {
+  latexdiff: MESSAGE_TYPES.LATEXDIFF,
+  scratchpad: MESSAGE_TYPES.SCRATCHPAD,
+  missingOutputs: MESSAGE_TYPES.MISSING_OUTPUTS,
+  webSearch: MESSAGE_TYPES.WEB_SEARCH,
+  webFetch: MESSAGE_TYPES.WEB_FETCH,
+  contextManagement: MESSAGE_TYPES.CONTEXT_MANAGEMENT,
+};
+
 function domainMessageType(key: string): MessageType {
-  switch (key) {
-    case 'latexdiff':
-      return MESSAGE_TYPES.LATEXDIFF;
-    case 'scratchpad':
-      return MESSAGE_TYPES.SCRATCHPAD;
-    case 'missingOutputs':
-      return MESSAGE_TYPES.MISSING_OUTPUTS;
-    case 'webSearch':
-      return MESSAGE_TYPES.WEB_SEARCH;
-    case 'webFetch':
-      return MESSAGE_TYPES.WEB_FETCH;
-    case 'contextManagement':
-      return MESSAGE_TYPES.CONTEXT_MANAGEMENT;
-    default:
-      return MESSAGE_TYPES.DEFAULT;
-  }
+  return DOMAIN_MESSAGE_TYPE[key] ?? MESSAGE_TYPES.DEFAULT;
 }
 
 /** Re-exported so SDK consumers can introspect the persisted shape. */
