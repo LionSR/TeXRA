@@ -76,6 +76,8 @@ export interface StatusBarDisplayInput {
   /** Advertise Shift+Enter for newline when the Kitty keyboard protocol is
    *  active; otherwise the universal Ctrl-J is the only reliable binding. */
   readonly shiftEnterNewline?: boolean;
+  /** True when the focused stream has transcript entries. */
+  readonly transcriptAvailable?: boolean;
   /** Terminal width in columns. Used to keep right-side previews from
    *  colliding with durable left-side status segments. */
   readonly width?: number;
@@ -369,16 +371,19 @@ export function statusBarBindingsText(
   hasMultipleStreams: boolean,
   modifierLabel = defaultShortcutModifierLabel(),
   shiftEnterNewline = false,
+  transcriptAvailable = false,
   ctrlCAction: CtrlCAction = 'exit',
   maxColumns?: number,
 ): string {
   const focusBinding = metaShortcutLabel(modifierLabel, '1..9');
   const tasksBinding = metaShortcutLabel(modifierLabel, 'p');
   const subagentsBinding = metaShortcutLabel(modifierLabel, 's');
+  const transcriptBinding = '[Ctrl-T]transcript';
   const bindings: string[] = [
     // Stream cycling / numeric focus only do something when there is more
     // than one stream — hide the hints in a plain single-stream chat.
     ...(hasMultipleStreams ? ['[Tab]streams', `${focusBinding}focus`] : []),
+    ...(transcriptAvailable ? [transcriptBinding] : []),
     ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
     '[/status]details',
     ...(agentSelectionAvailable ? ['[/agent]agents'] : []),
@@ -400,6 +405,7 @@ export function statusBarBindingsText(
 
   if (agentSelectionAvailable) {
     const setupBindings = joinStatusBindings([
+      ...(transcriptAvailable ? [transcriptBinding] : []),
       '[/agent]agents',
       '[/model]models',
       '[/api]api',
@@ -411,6 +417,7 @@ export function statusBarBindingsText(
 
   const compactBindings = joinStatusBindings([
     ...(hasMultipleStreams ? ['[Tab]streams'] : []),
+    ...(transcriptAvailable ? [transcriptBinding] : []),
     ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
     ...(subagentControlsAvailable ? [`${subagentsBinding}subagents`] : []),
     ...(agentSelectionAvailable ? ['[/agent]agents'] : []),
@@ -421,6 +428,7 @@ export function statusBarBindingsText(
 
   const minimalBindings = joinStatusBindings([
     ...(hasMultipleStreams ? ['[Tab]streams'] : []),
+    ...(transcriptAvailable ? [transcriptBinding] : []),
     ...(taskControlsAvailable ? [`${tasksBinding}tasks`] : []),
     ...(subagentControlsAvailable ? [`${subagentsBinding}subagents`] : []),
     ...(agentSelectionAvailable ? ['[/agent]agents'] : []),
@@ -431,6 +439,7 @@ export function statusBarBindingsText(
   if (hasMultipleStreams && taskControlsAvailable) {
     const taskFocusedBindings = joinStatusBindings([
       '[Tab]streams',
+      ...(transcriptAvailable ? [transcriptBinding] : []),
       `${tasksBinding}tasks`,
       `[Ctrl-C]${ctrlCAction}`,
     ]);
@@ -441,6 +450,7 @@ export function statusBarBindingsText(
 
   if (taskControlsAvailable) {
     const bareTaskBindings = joinStatusBindings([
+      ...(transcriptAvailable ? [transcriptBinding] : []),
       `${tasksBinding}tasks`,
       `[Ctrl-C]${ctrlCAction}`,
     ]);
@@ -452,6 +462,7 @@ export function statusBarBindingsText(
   if (subagentControlsAvailable) {
     const subagentFocusedBindings = joinStatusBindings([
       ...(hasMultipleStreams ? ['[Tab]streams'] : []),
+      ...(transcriptAvailable ? [transcriptBinding] : []),
       `${subagentsBinding}subagents`,
       `[Ctrl-C]${ctrlCAction}`,
     ]);
@@ -460,11 +471,31 @@ export function statusBarBindingsText(
     }
 
     const bareSubagentBindings = joinStatusBindings([
+      ...(transcriptAvailable ? [transcriptBinding] : []),
       `${subagentsBinding}subagents`,
       `[Ctrl-C]${ctrlCAction}`,
     ]);
     if (fitsStatusBindings(bareSubagentBindings, maxColumns)) {
       return bareSubagentBindings;
+    }
+  }
+
+  if (transcriptAvailable) {
+    const transcriptOnlyBindings = joinStatusBindings([
+      ...(hasMultipleStreams ? ['[Tab]streams'] : []),
+      transcriptBinding,
+      `[Ctrl-C]${ctrlCAction}`,
+    ]);
+    if (fitsStatusBindings(transcriptOnlyBindings, maxColumns)) {
+      return transcriptOnlyBindings;
+    }
+
+    const bareTranscriptBindings = joinStatusBindings([
+      transcriptBinding,
+      `[Ctrl-C]${ctrlCAction}`,
+    ]);
+    if (fitsStatusBindings(bareTranscriptBindings, maxColumns)) {
+      return bareTranscriptBindings;
     }
   }
 
@@ -700,6 +731,7 @@ export function buildStatusBarDisplay(
               input.hasMultipleStreams,
               input.shortcutModifierLabel,
               input.shiftEnterNewline,
+              input.transcriptAvailable,
               input.ctrlCAction,
               input.width === undefined
                 ? undefined
@@ -716,6 +748,7 @@ export interface StatusBarProps {
   readonly shortcutsActive?: boolean;
   readonly subagentControlsAvailable: boolean;
   readonly taskControlsAvailable: boolean;
+  readonly transcriptAvailable?: boolean;
 }
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
@@ -762,6 +795,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     model: sessionMeta.model,
     apiMode: shortCliApiMode(sessionMeta.apiMode),
     shiftEnterNewline: caps.kittyKeyboard,
+    transcriptAvailable: props.transcriptAvailable,
     width: columns,
     ctrlCAction: ctrlCActionForFocus({
       activeStreamId,
