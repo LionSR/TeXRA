@@ -105,9 +105,9 @@ import { formatApprovalPolicyForCli as formatApprovalPolicy } from './forms/Appr
 import { registerBuiltinSlashCommands } from './commands/registerBuiltins';
 import { openRegisteredCliSlashForm } from './commands/slashForms';
 import {
+  findSlashCommand,
   listSlashCommands,
   parseSlashInput,
-  type SlashCommand,
 } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
@@ -739,22 +739,11 @@ async function showCliMemoryPreview(inputPath: string): Promise<void> {
   appendLocalAssistantTranscript(await formatCliMemoryPreview(inputPath));
 }
 
-function findRegisteredCliSlashCommand(
-  commandName: string,
-): SlashCommand | undefined {
-  const lower = commandName.toLowerCase();
-  return listSlashCommands().find(
-    (cmd) =>
-      cmd.name.toLowerCase() === lower ||
-      cmd.aliases?.some((alias) => alias.toLowerCase() === lower) === true,
-  );
-}
-
 function openRegisteredCliSlashCommandForm(
   commandName: string,
   remainder: string,
 ): boolean {
-  const registered = findRegisteredCliSlashCommand(commandName);
+  const registered = findSlashCommand(commandName);
   return registered ? openRegisteredCliSlashForm(registered, remainder) : false;
 }
 
@@ -905,7 +894,7 @@ async function handleTuiSlashCommand(
       });
       return true;
     default: {
-      const registered = findRegisteredCliSlashCommand(command);
+      const registered = findSlashCommand(command);
       if (registered) {
         if (openRegisteredCliSlashForm(registered, parsed.remainder)) {
           return true;
