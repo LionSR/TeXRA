@@ -92,6 +92,10 @@ export interface StreamSlice {
    *  stream. Kept separate from `usage` so the context-window indicator remains
    *  a latest-snapshot display. */
   readonly cumulativeUsage: TokenUsageStats | undefined;
+  /** True while the latest hidden provider-side reasoning/thinking stream is
+   *  the current live activity. The CLI never renders the content directly;
+   *  this only drives a lightweight liveness indicator. */
+  readonly thinkingActive: boolean;
   readonly conversation: ConversationProgress | undefined;
   readonly entries: readonly ConversationEntry[];
   readonly queuedFollowUps: number;
@@ -206,6 +210,7 @@ function emptySlice(streamId: StreamTabId): StreamSlice {
     status: undefined,
     runStartedAt: undefined,
     description: undefined,
+    thinkingActive: false,
     usage: undefined,
     cumulativeUsage: undefined,
     conversation: undefined,
