@@ -54,10 +54,6 @@ export class PlanView extends LitElement {
         display: none;
       }
 
-      .plan-collapsible {
-        border-bottom: var(--border-thin) solid var(--color-border);
-      }
-
       .plan-body {
         max-height: var(--height-xlarge);
         overflow-y: auto;
@@ -210,7 +206,7 @@ export class PlanView extends LitElement {
     return html`
       <wa-details
         id=${ELEMENT_IDS.PLAN_VIEW_CONTAINER}
-        class="plan-collapsible panel-collapsible"
+        class="panel-collapsible is-boxed"
         summary=${`Plan (${completed}/${total})`}
         ?open=${this.open}
         @wa-show=${this.handleShow}

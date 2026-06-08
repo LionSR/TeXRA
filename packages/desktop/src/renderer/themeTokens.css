@@ -22,6 +22,10 @@
   --font-size-h2: 1.25em;
   --font-size-h3: 1em;
 
+  /* Shared pane-header height (mirrors extension litStyles.ts --height-header)
+     so the rail header and the conversation header line up across hosts. */
+  --height-header: 34px;
+
   --desktop-color-background: light-dark(#ffffff, #1e1e1e);
   --desktop-color-foreground: light-dark(#1f2328, #d4d4d4);
   --desktop-color-muted: light-dark(#57606a, #a6a6a6);

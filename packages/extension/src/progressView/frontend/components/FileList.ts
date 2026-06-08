@@ -196,22 +196,16 @@ export class FileList extends LitElement {
         margin-left: var(--wa-space-3xs);
       }
 
-      /* Nested round collapsibles */
-      .round-collapsible {
-        border-top: var(--border-thin) solid var(--color-border);
-      }
-
+      /* Nested round collapsibles inherit the shared .panel-collapsible
+         chrome; they only drop the top rule on the first round (the parent
+         panel already rules above it) and shrink the header text so the
+         nested rounds read as subordinate. */
       .round-collapsible:first-child {
         border-top: none;
       }
 
       .round-collapsible::part(header) {
-        padding: var(--wa-space-3xs) var(--wa-space-xs);
         font-size: var(--font-size-sm);
-      }
-
-      .round-collapsible::part(body) {
-        padding: 0 var(--wa-space-xs);
       }
 
       .compile-warning {

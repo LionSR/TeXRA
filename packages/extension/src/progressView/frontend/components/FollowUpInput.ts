@@ -9,7 +9,6 @@ import {
 } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
-import { when } from 'lit/directives/when.js';
 
 // Local imports
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
@@ -32,7 +31,6 @@ import './QueuedFollowUps';
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 @customElement('follow-up-input')
@@ -252,7 +250,7 @@ export class FollowUpInput extends LitElement {
 
   override render(): TemplateResult | typeof nothing {
     return html`
-      <wa-details class="panel-collapsible" summary="Follow-up Input">
+      <wa-details class="panel-collapsible" summary="Followup">
         <div id=${ELEMENT_IDS.FOLLOW_UP_CONTAINER} class="follow-up-container">
           <queued-follow-ups
             .messages=${this.queuedMessages}
@@ -276,9 +274,9 @@ export class FollowUpInput extends LitElement {
                 icon: 'sparkle',
                 label: 'Polish follow-up',
                 title: 'Polish follow-up with AI',
+                busy: this.polishing,
                 onClick: this.emitPolish,
               })}
-              ${when(this.polishing, () => html`<wa-spinner></wa-spinner>`)}
               ${renderIconActionButton({
                 id: ELEMENT_IDS.RECORD_FOLLOW_UP_BTN,
                 icon: this.recordingController.state.icon,
