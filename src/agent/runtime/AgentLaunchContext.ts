@@ -80,7 +80,6 @@ export interface AgentLaunchInput {
   configPayload: AgentConfigPayload;
   executionId?: ExecutionId;
   runtimeHost: AgentRuntimeHost;
-  streamStatus?: StreamStatusRegistry;
   streamTabIdOverride?: StreamTabId;
   taskType?: string;
   /** Fires after streamId is assigned but before setActiveStream is emitted. */
@@ -421,7 +420,7 @@ export async function buildAgentLaunchContext(
   input: AgentLaunchInput,
 ): Promise<AgentLaunchContext> {
   const { configPayload, runtimeHost } = input;
-  const streamStatus = input.streamStatus ?? StreamStatusService;
+  const streamStatus = StreamStatusService;
   const executionId = input.executionId ?? generateExecutionId();
   if (
     !input.streamTabIdOverride &&
