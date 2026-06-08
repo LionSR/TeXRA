@@ -46,6 +46,7 @@ const STREAM_ID = 'cli-test-stream' as StreamTabId;
 const SESSION_META = {
   agent: 'research',
   model: 'deepseekT',
+  modelSource: 'builtin',
   cwd: '/tmp/project',
   apiMode: 'personal',
   canDelegate: false,
