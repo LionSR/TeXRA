@@ -9,13 +9,11 @@ import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   AgentExecutionHandle,
   executionRegistry,
+  type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-// Type imports
-import type { ToolUseFlowContext } from '@agent/implementations/flows/tooluse';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
-import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import type { StreamTabId } from '@shared/schemas';
 
 describe('ToolUseFollowUp', () => {
@@ -45,20 +43,42 @@ describe('ToolUseFollowUp', () => {
   };
 
   afterEach(() => {
-    interruptRegistry.unregister(streamId);
+    for (const executionId of executionRegistry.getActiveIds()) {
+      executionRegistry.untrack(executionId);
+    }
+    ToolUseFollowUpQueue.release(streamId);
   });
+
+  function trackToolUseFlow(
+    stream: StreamTabId,
+    appendFollowUp: LiveToolUseFlowContext['session']['appendFollowUp'],
+    executionId = `exec-${stream}`,
+  ): string {
+    const handle = new AgentExecutionHandle(
+      executionId,
+      stream,
+      stream,
+      'demo-agent',
+      'toolUse',
+      noopAgentRuntimeHost,
+    );
+    handle.attachToolUseFlow({
+      session: { appendFollowUp },
+      modelHandler: { supportsManualCompaction: true },
+      runtimeHost: noopAgentRuntimeHost,
+      requestImmediateCompaction: () => {},
+      modelSwitchDisabledReason: () => undefined,
+      switchModel: async () => {},
+    });
+    executionRegistry.track(handle);
+    return executionId;
+  }
 
   it('sends follow-ups to active flow contexts', async () => {
     const calls: string[] = [];
-    interruptRegistry.register(streamId, {
-      session: {
-        appendFollowUp: (text: string) => {
-          calls.push(text);
-        },
-      },
-      modelHandler: {},
-      interrupt: () => {},
-    } as unknown as ToolUseFlowContext);
+    trackToolUseFlow(streamId, (text: string) => {
+      calls.push(text);
+    });
 
     const result = await sendFollowUp(streamId, 'hello');
 

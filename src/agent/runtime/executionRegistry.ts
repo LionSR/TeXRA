@@ -21,6 +21,7 @@ import {
 } from '@shared/schemas';
 import {
   type ExecutionHandle,
+  type LiveToolUseFlowContext,
   AgentExecutionHandle,
   ProcessExecutionHandle,
   collectChildSummary,
@@ -34,6 +35,7 @@ import {
 export type { ExecutionHandle } from './ExecutionHandle';
 export {
   type ExecutionStatusInfo,
+  type LiveToolUseFlowContext,
   ACTIVE_STATUSES,
   AgentExecutionHandle,
   ProcessExecutionHandle,
@@ -183,6 +185,12 @@ export class ExecutionRegistry {
       (handle): handle is AgentExecutionHandle =>
         handle instanceof AgentExecutionHandle,
     );
+  }
+
+  getToolUseFlowContext(
+    streamId: StreamTabId,
+  ): LiveToolUseFlowContext | undefined {
+    return this.getAgentHandleByStream(streamId)?.getToolUseFlow();
   }
 
   /** Terminate an execution via its handle. Returns true on success. */
