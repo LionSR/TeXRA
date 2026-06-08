@@ -37,9 +37,9 @@
  * ============================================================================
  *
  * TIER HIERARCHY (cumulative access):
- * - Ultra: All models including premium ($3+/M input)
- * - Max: Mid-tier models ($1-3/M) + all free tier models
- * - free: Budget models only (under $1/M input)
+ * - Ultra: All models above $3/M input
+ * - Max: Free-tier models plus any future Max-only additions
+ * - free: Included non-premium models (up to $3/M input)
  *
  * Authentication: JWT tokens are extracted from SDK auth headers:
  * - OpenAI: Authorization: Bearer {jwt}

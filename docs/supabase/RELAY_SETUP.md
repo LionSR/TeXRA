@@ -6,9 +6,9 @@ This guide explains how to deploy and configure the Relay Edge Function for serv
 
 The Relay function allows authenticated users to access AI models without providing their own API keys. Access is tier-based:
 
-- **Ultra**: All models including premium ($3+/M input)
-- **Max**: Mid-tier models ($1-3/M) + all free tier models
-- **free**: Budget models only (under $1/M input)
+- **Ultra**: All models above $3/M input
+- **Max**: Free-tier models plus any future Max-only additions
+- **free**: Included non-premium models (up to $3/M input)
 
 The API keys are stored as Supabase secrets and the relay forwards requests to the appropriate provider.
 
@@ -65,7 +65,7 @@ https://your-project.supabase.co/functions/v1/relay/openai/v1/chat/completions
 ## How It Works
 
 1. **User makes request** - Client sends request with user's JWT in Authorization header
-2. **Relay validates user** - Checks JWT and verifies user has Ultra tier
+2. **Relay validates user** - Checks JWT and verifies tier access for the requested model
 3. **Relay adds API key** - Retrieves server-side API key from secrets
 4. **Request forwarded** - Request is forwarded to the actual provider
 5. **Response streamed back** - Response is streamed back to the client
