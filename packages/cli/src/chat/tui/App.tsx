@@ -850,6 +850,7 @@ export function App(props: AppProps): React.JSX.Element {
           shortcutsActive={focusShortcutsActive}
           subagentControlsAvailable={subagentControlsAvailable}
           taskControlsAvailable={taskControlsAvailable}
+          transcriptAvailable={(activeSlice?.entries.length ?? 0) > 0}
         />
       </Box>
     </>
