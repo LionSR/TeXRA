@@ -375,12 +375,6 @@ export function approvalVisibleForActiveStream({
   return streamId === undefined || streamId === activeStreamId;
 }
 
-export function approvalBlocksInput(
-  pending: PendingApproval | undefined,
-): boolean {
-  return pending !== undefined;
-}
-
 export function foregroundEscapeAction({
   activeFormEscapeAction,
   foregroundKind,
@@ -479,7 +473,6 @@ export function App(props: AppProps): React.JSX.Element {
     activeStreamId,
     pending,
   });
-  const approvalInputBlocked = approvalBlocksInput(pending);
 
   const stdin = useStdin();
   const foregroundOpen =
@@ -487,8 +480,7 @@ export function App(props: AppProps): React.JSX.Element {
     activeForm !== undefined ||
     childControlMode !== undefined ||
     transcriptViewerOpen;
-  const inputDisabled =
-    props.inputDisabled === true || foregroundOpen || approvalInputBlocked;
+  const inputDisabled = props.inputDisabled === true || foregroundOpen;
   const inputBarVisible = !foregroundOpen;
   const viewportKey = transcriptViewportKey({
     activeStreamId,
