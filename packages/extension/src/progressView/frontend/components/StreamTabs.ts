@@ -616,7 +616,6 @@ export class StreamTabs extends LitElement {
         min-width: 0;
       }
 
-      .agent-filter-group vscode-radio,
       .agent-filter-group wa-radio {
         min-width: auto;
         flex: 0 0 auto;
