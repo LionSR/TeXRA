@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import type { DrainedFollowUpItem } from '@agent/toolUse/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -46,11 +47,7 @@ async function resumeFromSnapshot(
     runtimeHost,
   });
 
-  let queuedFollowUps: Array<{
-    text: string;
-    displayText?: string;
-    mediaFiles?: readonly string[];
-  }> = [];
+  let queuedFollowUps: DrainedFollowUpItem[] = [];
   try {
     queuedFollowUps = ToolUseFollowUpQueue.drainItems(streamId);
     runtimeHost.emit('updateQueuedFollowUps', {

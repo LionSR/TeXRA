@@ -529,7 +529,8 @@ function includeAgent(
   agents: readonly AgentEntry[],
   rootAgent: AgentEntry,
 ): AgentEntry[] {
-  return agents.some((agent) => toAgentKey(agent) === toAgentKey(rootAgent))
+  const rootKey = toAgentKey(rootAgent);
+  return agents.some((agent) => toAgentKey(agent) === rootKey)
     ? [...agents]
     : [...agents, rootAgent];
 }

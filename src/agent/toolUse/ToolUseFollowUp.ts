@@ -10,7 +10,10 @@
  * showing appropriate UI notifications based on the returned result.
  */
 
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import {
+  executionRegistry,
+  type ToolUseFollowUpQueueReason,
+} from '@agent/runtime/executionRegistry';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
@@ -23,7 +26,7 @@ export type SendFollowUpResult =
   | { status: 'sent' }
   | {
       status: 'queued';
-      reason: 'resuming' | 'waiting' | 'children_running';
+      reason: ToolUseFollowUpQueueReason;
     }
   | { status: 'no_session'; streamStatus: string | undefined };
 
@@ -71,7 +74,6 @@ export async function sendFollowUp(
   mediaFiles?: readonly string[],
   displayText?: string,
 ): Promise<SendFollowUpResult> {
-  const queueOptions = { mediaFiles, displayText };
   const target = executionRegistry.getToolUseFollowUpTarget(streamId);
 
   if (target.kind === 'active') {
@@ -85,22 +87,16 @@ export async function sendFollowUp(
     // must auto-resume the parent or release again to avoid stale delivery.
     const force = target.reason === 'children_running';
     ToolUseFollowUpQueue.enqueue(streamId, text, {
-      ...queueOptions,
+      mediaFiles,
+      displayText,
       ...(force ? { force: true } : {}),
     });
     return { status: 'queued', reason: target.reason };
   }
 
-  if (target.streamStatus !== undefined) {
-    logger.warn(
-      `No active session for follow-up on stream ${streamId}. Status: ${target.streamStatus}`,
-    );
-    return { status: 'no_session', streamStatus: target.streamStatus };
-  }
-
   // No active/waiting session found - caller should handle UI notification
   logger.warn(
-    `No active session for follow-up on stream ${streamId}. Status: undefined`,
+    `No active session for follow-up on stream ${streamId}. Status: ${target.streamStatus}`,
   );
-  return { status: 'no_session', streamStatus: undefined };
+  return { status: 'no_session', streamStatus: target.streamStatus };
 }

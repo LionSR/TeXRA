@@ -12,7 +12,10 @@ import { fillRows } from '../render/terminalText';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
 import { ToolUseRow } from './ToolUseRow';
 import { toolUseDisplayLines } from './toolRenderers';
-import type { ConversationEntry } from '../state/cliState';
+import type {
+  CompletedProcessTranscript,
+  ConversationEntry,
+} from '../state/cliState';
 
 const INQUIRY_CONTINUATION_RE =
   /^\[inquiry\]\s+\S+\s+(?:answered|dropped by user)\.(?:\n|$)/;
@@ -147,7 +150,7 @@ function ProcessEntryRow({
   width,
 }: {
   readonly fillWidth?: boolean;
-  readonly process: NonNullable<ConversationEntry['process']>;
+  readonly process: CompletedProcessTranscript;
   readonly width?: number;
 }): React.JSX.Element {
   if (fillWidth === true) {

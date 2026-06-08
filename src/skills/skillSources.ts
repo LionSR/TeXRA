@@ -35,6 +35,14 @@ function bundledSkillSources(resourcesPath: string): SkillSource[] {
   ];
 }
 
+function interopSkillSources(base: string, scopeLabel: string): SkillSource[] {
+  return INTEROP_SKILL_DIRS.map((dir) => ({
+    scope: 'interop',
+    path: path.join(base, dir, 'skills'),
+    label: `${dir} ${scopeLabel}`,
+  }));
+}
+
 function resolveSkillSourcePath(base: string, candidate: string): string {
   return path.isAbsolute(candidate)
     ? path.resolve(candidate)
@@ -82,13 +90,7 @@ export function defaultSkillSources(
   });
 
   if (options.includeInterop === true) {
-    for (const dir of INTEROP_SKILL_DIRS) {
-      sources.push({
-        scope: 'interop',
-        path: path.join(context.cwd, dir, 'skills'),
-        label: `${dir} project`,
-      });
-    }
+    sources.push(...interopSkillSources(context.cwd, 'project'));
   }
 
   sources.push({
@@ -98,13 +100,7 @@ export function defaultSkillSources(
   });
 
   if (options.includeInterop === true) {
-    for (const dir of INTEROP_SKILL_DIRS) {
-      sources.push({
-        scope: 'interop',
-        path: path.join(home, dir, 'skills'),
-        label: `${dir} user`,
-      });
-    }
+    sources.push(...interopSkillSources(home, 'user'));
   }
 
   sources.push(...bundledSkillSources(context.resourcesPath));

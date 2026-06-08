@@ -11,6 +11,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { getAgent, isAgentRegistryReady } from '@agent/index/agentRegistry';
 
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceFS } from '@utils/files';
@@ -142,9 +143,9 @@ export async function writeTerminalStatus(
     // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
     logger.debug(
       'ExecutionLifecycle',
-      `Failed to persist terminal status for ${executionId}: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      `Failed to persist terminal status for ${executionId}: ${toErrorMessage(
+        err,
+      )}`,
     );
   }
 }
@@ -165,9 +166,9 @@ export async function writeSessionDescription(
     // Non-critical bookkeeping — don't let I/O errors disrupt execution lifecycle.
     logger.debug(
       'ExecutionLifecycle',
-      `Failed to persist session description for ${executionId}: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      `Failed to persist session description for ${executionId}: ${toErrorMessage(
+        err,
+      )}`,
     );
   }
 }

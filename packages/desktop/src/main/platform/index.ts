@@ -84,9 +84,7 @@ export async function initializeElectronPlatform(
   // bus event handling; the platform owns lifecycle flushing so app shutdown
   // drains the same writer instead of creating a second bus subscriber.
   const snapshotStore = new StreamSnapshotStore();
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => {
-    return snapshotStore.flush();
-  });
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => snapshotStore.flush());
 
   // Lean tools talk to `lake env lean --server` directly in the desktop build.
   // Servers are spawned lazily per Lake project root on first request.

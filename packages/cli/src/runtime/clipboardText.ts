@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { platform as osPlatform } from 'node:os';
+import type { ChildProcess } from 'node:child_process';
 
 export type ClipboardTextWriteResult =
   | { readonly ok: true }
@@ -74,7 +75,7 @@ function writeWithCommand(
     let stderr = '';
     const deadlineMs = Math.max(1, Math.floor(timeoutMs));
 
-    let child: ReturnType<SpawnCommand>;
+    let child: ChildProcess;
     try {
       child = spawnCommand(candidate.command, [...candidate.args], {
         stdio: ['pipe', 'ignore', 'pipe'],

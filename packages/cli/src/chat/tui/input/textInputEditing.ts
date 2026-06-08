@@ -16,6 +16,13 @@ export interface TextInputChunkEdit extends TextEdit {
   readonly submit: boolean;
 }
 
+/**
+ * Shape shared by every cursor-positioned editing primitive
+ * (`deleteBeforeCursor`, `deleteToEnd`, ...): given the current value and
+ * caret, produce the next `TextEdit`.
+ */
+export type CursorEdit = (value: string, cursor: number) => TextEdit;
+
 export function clampCursor(cursor: number, length: number): number {
   return clamp(cursor, 0, length);
 }
@@ -97,11 +104,7 @@ export function applyTerminalInputChunk(
   const chars = [...input];
   for (let index = 0; index < chars.length; index += 1) {
     const ch = chars[index];
-    if (ch === SYNTHETIC_SHIFT_RETURN_INPUT) {
-      edit = insertText(edit.value, edit.cursor, '\n');
-      continue;
-    }
-    if (ch === '\n') {
+    if (ch === SYNTHETIC_SHIFT_RETURN_INPUT || ch === '\n') {
       edit = insertText(edit.value, edit.cursor, '\n');
       continue;
     }

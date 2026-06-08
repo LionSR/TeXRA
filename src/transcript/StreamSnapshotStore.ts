@@ -76,6 +76,25 @@ type UsageUpdateResult =
   | undefined
   | Promise<TokenUsageStats | undefined>;
 
+/**
+ * Round-keyed delta shape carried by the `addOutputFiles` /
+ * `updateMissingOutputs` / `updateCompileFailures` bus events. Stated once here
+ * so the store's mutators don't each restate the `{ [round: number]: T[] }`
+ * literal. Mirrors the inline payload fields in `ProgressEventPayloads`.
+ */
+type RoundKeyedList<T> = { [round: number]: T[] };
+
+/**
+ * Match criteria for {@link StreamSnapshotStore.findWorkflowStreamsMatching}.
+ * Mirrors the `streamConfig` payload on the `clearMissingOutputs` bus event.
+ */
+interface WorkflowStreamMatch {
+  agent: string;
+  model: string;
+  inputFile: string;
+  outputFiles?: readonly string[];
+}
+
 function normalizeOutputFiles(outputFiles?: readonly string[]): string[] {
   return (outputFiles ?? [])
     .map((file) => file.replaceAll('\\', '/'))
@@ -311,9 +330,9 @@ export class StreamSnapshotStore {
     return inner;
   }
 
-  private parseOutputFilesPatch(filesByRound: {
-    [key: number]: OutputFileInfo[];
-  }): OutputFilesPatch {
+  private parseOutputFilesPatch(
+    filesByRound: RoundKeyedList<OutputFileInfo>,
+  ): OutputFilesPatch {
     const patch: OutputFilesPatch = new Map();
     for (const [round, files] of Object.entries(filesByRound)) {
       const key = RoundKeySchema.safeParse(round);
@@ -398,7 +417,7 @@ export class StreamSnapshotStore {
 
   addOutputFiles(
     stream: StreamTabId,
-    filesByRound: { [key: number]: OutputFileInfo[] },
+    filesByRound: RoundKeyedList<OutputFileInfo>,
   ): void {
     const patch = this.parseOutputFilesPatch(filesByRound);
     if (patch.size === 0) return;
@@ -417,7 +436,7 @@ export class StreamSnapshotStore {
 
   updateMissingOutputs(
     stream: StreamTabId,
-    filesByRound: { [key: number]: string[] },
+    filesByRound: RoundKeyedList<string>,
   ): void {
     this.mutate(stream, () => {
       const rounds = this.getOrCreate(this.missingOutputs, stream);
@@ -431,7 +450,7 @@ export class StreamSnapshotStore {
 
   updateCompileFailures(
     stream: StreamTabId,
-    filesByRound: { [key: number]: CompileFailure[] },
+    filesByRound: RoundKeyedList<CompileFailure>,
   ): void {
     this.mutate(stream, () => {
       const rounds = this.getOrCreate(this.compileFailures, stream);
@@ -530,6 +549,24 @@ export class StreamSnapshotStore {
   // Lifecycle (replace manager evict/evictAll)
   // ==========================================================================
 
+  /** Every stream id with any in-memory accumulator/overlay state. */
+  private allKnownStreams(): Set<StreamTabId> {
+    return new Set<StreamTabId>([
+      ...this.outputFiles.keys(),
+      ...this.missingOutputs.keys(),
+      ...this.compileFailures.keys(),
+      ...this.usage.keys(),
+      ...this.workPlan.keys(),
+      ...this.meta.keys(),
+      ...this.taskStates.keys(),
+      ...this.seeded,
+      ...this.seedChains.keys(),
+      ...this.outputFileOverlays.keys(),
+      ...this.usageOverlays.keys(),
+      ...this.kvCache.keys(),
+    ]);
+  }
+
   /** Drop a stream's in-memory state. Disk cleanup is the caller's job. */
   evict(stream: StreamTabId): void {
     this.bumpStreamVersion(stream);
@@ -552,21 +589,7 @@ export class StreamSnapshotStore {
   }
 
   evictAll(): void {
-    const streams = new Set<StreamTabId>([
-      ...this.outputFiles.keys(),
-      ...this.missingOutputs.keys(),
-      ...this.compileFailures.keys(),
-      ...this.usage.keys(),
-      ...this.workPlan.keys(),
-      ...this.meta.keys(),
-      ...this.taskStates.keys(),
-      ...this.seeded,
-      ...this.seedChains.keys(),
-      ...this.outputFileOverlays.keys(),
-      ...this.usageOverlays.keys(),
-      ...this.kvCache.keys(),
-    ]);
-    for (const stream of streams) this.bumpStreamVersion(stream);
+    for (const stream of this.allKnownStreams()) this.bumpStreamVersion(stream);
     this.outputFiles.clear();
     this.missingOutputs.clear();
     this.compileFailures.clear();
@@ -733,12 +756,7 @@ export class StreamSnapshotStore {
    * that surfaced markers for the cleaned files. Both sides are canonicalized
    * (agent source prefixes stripped, paths normalized to forward slashes).
    */
-  findWorkflowStreamsMatching(match: {
-    agent: string;
-    model: string;
-    inputFile: string;
-    outputFiles?: readonly string[];
-  }): StreamTabId[] {
+  findWorkflowStreamsMatching(match: WorkflowStreamMatch): StreamTabId[] {
     const wantAgent = getCleanAgentName(match.agent);
     const wantFile = match.inputFile.replaceAll('\\', '/');
     const wantOutputFiles = normalizeOutputFiles(match.outputFiles);
@@ -916,21 +934,7 @@ export class StreamSnapshotStore {
   }
 
   private evictStreamsExcept(keep: ReadonlySet<StreamTabId>): void {
-    const streams = new Set<StreamTabId>([
-      ...this.outputFiles.keys(),
-      ...this.missingOutputs.keys(),
-      ...this.compileFailures.keys(),
-      ...this.usage.keys(),
-      ...this.workPlan.keys(),
-      ...this.meta.keys(),
-      ...this.taskStates.keys(),
-      ...this.seeded,
-      ...this.seedChains.keys(),
-      ...this.outputFileOverlays.keys(),
-      ...this.usageOverlays.keys(),
-      ...this.kvCache.keys(),
-    ]);
-    for (const stream of streams) {
+    for (const stream of this.allKnownStreams()) {
       if (!keep.has(stream)) this.evict(stream);
     }
   }
@@ -1005,27 +1009,25 @@ export class StreamSnapshotStore {
     stream: StreamTabId,
     keys: Iterable<string>,
   ): void {
-    const byKey = new Map<string, Map<number | string, unknown> | undefined>([
-      [
-        STREAM_DATA_KEYS.OUTPUT_FILES,
-        this.outputFiles.get(stream) as Map<number, unknown> | undefined,
-      ],
-      [
-        STREAM_DATA_KEYS.MISSING_OUTPUTS,
-        this.missingOutputs.get(stream) as Map<number, unknown> | undefined,
-      ],
-      [
-        STREAM_DATA_KEYS.COMPILE_FAILURES,
-        this.compileFailures.get(stream) as Map<number, unknown> | undefined,
-      ],
-      [
-        STREAM_DATA_KEYS.USAGE_STATS,
-        this.usage.get(stream) as Map<string, unknown> | undefined,
-      ],
-    ]);
     for (const key of keys) {
-      const map = byKey.get(key);
-      if (map) this.write(stream, key, mapToRecord(map));
+      switch (key) {
+        case STREAM_DATA_KEYS.OUTPUT_FILES:
+          if (this.outputFiles.has(stream)) this.writeOutputFiles(stream);
+          break;
+        case STREAM_DATA_KEYS.USAGE_STATS:
+          if (this.usage.has(stream)) this.writeUsage(stream);
+          break;
+        case STREAM_DATA_KEYS.MISSING_OUTPUTS: {
+          const map = this.missingOutputs.get(stream);
+          if (map) this.write(stream, key, mapToRecord(map));
+          break;
+        }
+        case STREAM_DATA_KEYS.COMPILE_FAILURES: {
+          const map = this.compileFailures.get(stream);
+          if (map) this.write(stream, key, mapToRecord(map));
+          break;
+        }
+      }
     }
   }
 
