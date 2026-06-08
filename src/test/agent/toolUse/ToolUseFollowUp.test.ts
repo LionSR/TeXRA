@@ -11,7 +11,6 @@ import {
   executionRegistry,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
@@ -62,7 +61,6 @@ describe('ToolUseFollowUp', () => {
       'demo-agent',
       'toolUse',
       noopAgentRuntimeHost,
-      StreamStatusService,
     );
     handle.attachToolUseFlow({
       session: { appendFollowUp },
@@ -101,7 +99,6 @@ describe('ToolUseFollowUp', () => {
       'test-subagent',
       'toolUse',
       noopAgentRuntimeHost,
-      StreamStatusService,
     );
     executionRegistry.track(handle);
 
@@ -135,7 +132,6 @@ describe('ToolUseFollowUp', () => {
       'test-subagent',
       'toolUse',
       noopAgentRuntimeHost,
-      StreamStatusService,
     );
     executionRegistry.track(handle);
     ToolUseFollowUpQueue.release(parentStreamId);

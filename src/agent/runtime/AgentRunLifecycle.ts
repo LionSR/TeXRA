@@ -59,7 +59,6 @@ export async function runFlowWithLifecycle(
     agentName,
     category,
     ctx.runtimeHost,
-    ctx.streamStatus,
     ctx.coordinators,
   );
   executionRegistry.track(handle);
