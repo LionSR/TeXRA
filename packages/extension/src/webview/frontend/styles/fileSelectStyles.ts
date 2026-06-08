@@ -37,7 +37,7 @@ export const fileSelectLayoutStyles = css`
     flex-wrap: nowrap;
     line-height: var(--line-height-normal);
     gap: var(--wa-space-2xs);
-    min-height: 22px;
+    min-height: var(--height-control-compact);
   }
 
   .file-select-header > wa-button {
@@ -62,7 +62,7 @@ export const fileSelectLayoutStyles = css`
     flex-wrap: nowrap;
     flex: 1;
     min-width: 0;
-    min-height: 22px;
+    min-height: var(--height-control-compact);
   }
 
   .file-select-label-group wa-button {
@@ -233,63 +233,13 @@ export const multiFilesStyles = css`
   }
 `;
 
-/** Dropdown menu styles. */
+/** Outline cue for the file-select button when document options are active.
+ *  (The dropdown itself is a native <wa-dropdown>.) */
 export const dropdownStyles = css`
-  .dropdown-container {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-  }
-
-  .dropdown-container wa-button {
-    flex-shrink: 0;
-  }
-
   wa-button.has-options::part(base) {
     outline: var(--border-thin) solid
       var(--wa-color-brand-border-quiet, var(--wa-color-focus));
     outline-offset: -1px;
-  }
-
-  .dropdown-container .dropdown-menu {
-    position: absolute;
-    top: calc(100% + var(--wa-space-3xs));
-    left: 0;
-    right: auto;
-    z-index: 100;
-    display: block;
-    background-color: var(--wa-color-menu-background);
-    color: var(--wa-color-menu-foreground);
-    border: var(--border-thin) solid var(--wa-color-menu-border);
-    border-radius: var(--border-radius);
-    min-width: 160px;
-  }
-
-  .dropdown-container .dropdown-menu:not([show]) {
-    display: none;
-  }
-
-  .dropdown-container .dropdown-menu .dropdown-menu-content {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    padding: var(--wa-space-3xs);
-  }
-
-  .dropdown-container .dropdown-menu wa-checkbox {
-    display: flex;
-    align-items: center;
-    height: 20px;
-    padding: var(--wa-space-3xs);
-    font-size: var(--font-size-sm);
-  }
-
-  .dropdown-container .dropdown-menu wa-checkbox:hover {
-    background: color-mix(
-      in srgb,
-      var(--wa-color-neutral-fill-quiet) 30%,
-      transparent
-    );
   }
 `;
 

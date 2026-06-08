@@ -194,7 +194,7 @@ export class StreamTab extends LitElement {
       .tab-description {
         font-size: var(--font-size-sm);
         color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
-        opacity: 0.8;
+        opacity: var(--opacity-hover);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -315,7 +315,7 @@ export class StreamTab extends LitElement {
 
       .compact-subagent-hint {
         font-size: var(--font-size-xs);
-        opacity: 0.35;
+        opacity: var(--opacity-faint);
         flex-shrink: 0;
       }
 
@@ -346,7 +346,7 @@ export class StreamTab extends LitElement {
         background: none;
         cursor: pointer;
         color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
-        opacity: 0.6;
+        opacity: var(--opacity-muted);
         padding: 0;
       }
 
@@ -582,7 +582,7 @@ export class StreamTabs extends LitElement {
       .stream-tabs-title {
         font-size: var(--font-size-xs);
         font-weight: var(--font-weight-semibold, 600);
-        letter-spacing: 0.06em;
+        letter-spacing: var(--letter-spacing-caps);
         text-transform: uppercase;
         color: var(--color-text-secondary);
       }
@@ -616,7 +616,6 @@ export class StreamTabs extends LitElement {
         min-width: 0;
       }
 
-      .agent-filter-group vscode-radio,
       .agent-filter-group wa-radio {
         min-width: auto;
         flex: 0 0 auto;

@@ -41,27 +41,4 @@ export const statusIndicatorStyles: CSSResult = css`
     background-color: var(--wa-color-text-quiet);
     opacity: var(--opacity-disabled, 0.5);
   }
-
-  .status-text {
-    font-size: var(--font-size-sm, 12px);
-    text-transform: capitalize;
-  }
-
-  .status-text.is-running {
-    color: var(--color-success);
-  }
-
-  .status-text.is-stopped {
-    color: var(--color-text-secondary, var(--wa-color-text-quiet));
-  }
-
-  .status-text.is-error {
-    color: var(--color-error);
-  }
-
-  .status-text.is-waiting,
-  .status-text.is-resuming,
-  .status-text.is-initializing {
-    color: var(--wa-color-text-link);
-  }
 `;
