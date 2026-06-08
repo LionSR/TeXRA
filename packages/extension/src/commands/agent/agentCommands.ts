@@ -2,25 +2,19 @@
 import * as vscode from 'vscode';
 
 // Local imports - agent
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { notifyFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
 import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { workspaceSM, WorkspaceStateKey } from '@common/state';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
-import { STREAM_STATUS } from '@shared/schemas';
 import type { StreamTabId } from '@shared/schemas';
 
 export function stopAgent(streamId: StreamTabId): void {
-  if (
-    workspaceSM.get<boolean>(WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP, false)
-  ) {
-    executionRegistry.detachActiveChildren(streamId, extensionAgentRuntimeHost);
-  } else {
-    executionRegistry.interruptActiveChildren(streamId);
-  }
-  interruptRegistry.get(streamId)?.interrupt();
-  StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, {
+  executionRegistry.stopAgentStream(streamId, {
+    detachActiveChildren: workspaceSM.get<boolean>(
+      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+      false,
+    ),
     runtimeHost: extensionAgentRuntimeHost,
   });
 }
