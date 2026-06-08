@@ -110,11 +110,20 @@ describe('formatChatAsHtml', () => {
     expect(html).toMatch(/<template[^>]*shadowrootmode="open"/);
   });
 
+  it('defines the --ce-* tokens once on :root in the document head', () => {
+    // The palette is the single source of truth in styles/tokens.ts and is
+    // inlined into <head> on :root (not redefined per shadow root). The token
+    // *definition* (`--ce-bg:`) lives in the head, before the asset links.
+    const head = html.slice(0, html.indexOf('</head>'));
+    expect(head).toMatch(/<style>[\s\S]*:root\s*\{[\s\S]*--ce-bg:/);
+  });
+
   it('inlines component-scoped CSS inside the declarative shadow root', () => {
-    // Scoped styles should appear inside <style> inside the DSD template.
-    // Token CSS variables (`--ce-bg-*`) are a tell that chatTokens applied.
+    // Scoped frame styles (.frame/.role) appear inside <style> inside the DSD
+    // template; they *consume* the inherited tokens via var(--ce-*) rather than
+    // redefining them, so the shadow root references but does not declare them.
     expect(html).toMatch(
-      /<template[^>]*shadowrootmode="open">\s*<style>[\s\S]*--ce-bg/,
+      /<template[^>]*shadowrootmode="open">\s*<style>[\s\S]*var\(--ce-/,
     );
   });
 

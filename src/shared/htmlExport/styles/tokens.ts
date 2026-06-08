@@ -1,11 +1,15 @@
 /**
- * Design tokens shared between the chat-export Lit components.
+ * Design tokens for the chat export — the single source of truth for the
+ * `--ce-*` palette used by both the light-DOM document (`chat.css`) and the
+ * shadow-DOM bubble components.
  *
- * The tokens are defined as CSS custom properties on `:host`, with a
- * `@media (prefers-color-scheme: dark)` block that re-binds them. Each
- * component composes `chatTokens` first in its `static styles` array, so
- * the component-local rules can read `var(--ce-fg)` etc. without caring
- * whether the page is light or dark.
+ * Tokens are defined as CSS custom properties on `:root` (not `:host`), with
+ * a `@media (prefers-color-scheme: dark)` block that re-binds them. Custom
+ * properties inherit across the shadow boundary, so a token set on `:root`
+ * is readable via `var(--ce-fg)` inside every component's shadow styles
+ * without redefining it there. `buildExportTemplate` inlines this block into
+ * the document `<head>` (via `.cssText`), so the components consume it by
+ * inheritance and `chat.css` consumes it directly.
  *
  * Tokens are deliberately a small, neutral set — this is a static page
  * shared with people who don't have the user's VS Code theme. The token
@@ -14,8 +18,9 @@
  */
 import { css } from 'lit';
 
-export const chatTokens = css`
-  :host {
+export const documentTokens = css`
+  :root {
+    color-scheme: light dark;
     --ce-bg: #ffffff;
     --ce-bg-elevated: #f6f8fa;
     --ce-bg-user: #eef4ff;
@@ -40,7 +45,7 @@ export const chatTokens = css`
   }
 
   @media (prefers-color-scheme: dark) {
-    :host {
+    :root {
       --ce-bg: #0d1117;
       --ce-bg-elevated: #161b22;
       --ce-bg-user: #1c2a3a;
