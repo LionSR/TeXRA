@@ -7,15 +7,17 @@ import * as path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { StreamLogStore, type StreamLogAppendInput } from '@transcript';
+import {
+  StreamLogStore,
+  STREAM_LOGS_DIR,
+  type StreamLogAppendInput,
+} from '@transcript';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_LOG_ENTRY_TYPES,
 } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
-
-const STREAM_LOGS_DIR = 'streamLogs';
 
 function storageFile(dir: string, key: string): string {
   return path.join(dir, `${encodeURIComponent(key)}.json`);

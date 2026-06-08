@@ -20,18 +20,14 @@ import { isFileNotFoundError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
-import { StorageFS, WorkspaceFS } from '@utils/files';
+import { StorageFS, WorkspaceFS, TASK_RUNS_DIR } from '@utils/files';
 import { filterNotNull } from '@utils/core';
 import { isDirectory } from '@utils/files/fsEntryType';
 
-import {
-  type ExecutionMeta,
-  EXECUTIONS_DIR,
-  getExecutionStore,
-} from './ExecutionKVStore';
+import { type ExecutionMeta, getExecutionStore } from './ExecutionKVStore';
 
 const CHANNEL = 'ExecutionListing';
-const INDEX_PATH = 'executions/index.json';
+const INDEX_PATH = `${TASK_RUNS_DIR}/index.json`;
 const LEGACY_HISTORY_KEY = 'texra.agentHistory';
 const EXECUTION_ID_PATTERN = /^[0-9a-f][-0-9a-f]*$/i;
 const EXECUTION_STORAGE_CONCURRENCY = 32;
@@ -108,7 +104,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
     migrated = true;
   }
 
-  const entries = await readDirOrEmpty(EXECUTIONS_DIR);
+  const entries = await readDirOrEmpty(TASK_RUNS_DIR);
 
   // Filter for directories matching execution ID pattern (hex UUID-like)
   const executionDirs = entries
@@ -175,7 +171,7 @@ export async function listExecutions(): Promise<ExecutionListingEntry[]> {
 export async function deleteExecution(
   executionId: ExecutionId,
 ): Promise<boolean> {
-  const existed = await StorageFS.exists(`${EXECUTIONS_DIR}/${executionId}`);
+  const existed = await StorageFS.exists(`${TASK_RUNS_DIR}/${executionId}`);
   if (!existed) return false;
   try {
     await getExecutionStore(executionId).clear();
@@ -193,7 +189,7 @@ export async function deleteExecution(
 export async function deleteAllExecutions(
   exclude?: ReadonlySet<string>,
 ): Promise<void> {
-  const entries = await readDirOrEmpty(EXECUTIONS_DIR);
+  const entries = await readDirOrEmpty(TASK_RUNS_DIR);
 
   const executionDirs = entries
     .filter(

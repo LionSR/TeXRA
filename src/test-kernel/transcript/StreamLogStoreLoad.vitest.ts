@@ -7,7 +7,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';
 
-import { StreamLogStore } from '@transcript';
+import {
+  StreamLogStore,
+  STREAM_LOGS_DIR,
+  STREAM_LOG_SUMMARIES_DIR,
+} from '@transcript';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -16,9 +20,6 @@ import {
 } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
 import { delay } from '@utils/core/async';
-
-const STREAM_LOGS_DIR = 'streamLogs';
-const STREAM_LOG_SUMMARIES_DIR = 'streamLogSummaries';
 
 interface MockStorageOptions {
   logs: Record<string, StreamLogEntry[]>;

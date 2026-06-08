@@ -5,6 +5,11 @@ import * as path from 'path';
 import { toErrorMessage } from '@common/errors';
 import type { AgentSource } from '@shared/schemas/agent';
 
+import {
+  BUILTIN_WORKFLOW_AGENTS_DIR,
+  BUILTIN_TOOL_USE_AGENTS_DIR,
+} from './BundledAgentDirectories';
+
 export const DEFAULT_CUSTOM_AGENTS_DIR_NAME = 'custom_agents';
 
 export interface AgentDirectoryPathStorage {
@@ -50,11 +55,11 @@ export class AgentDirectoryService {
   }
 
   async builtIn(): Promise<string> {
-    return this.ensureBuiltInDir('agents');
+    return this.ensureBuiltInDir(BUILTIN_WORKFLOW_AGENTS_DIR);
   }
 
   async builtInToolUse(): Promise<string> {
-    return this.ensureBuiltInDir('tool_use_agents');
+    return this.ensureBuiltInDir(BUILTIN_TOOL_USE_AGENTS_DIR);
   }
 
   async custom(): Promise<string> {

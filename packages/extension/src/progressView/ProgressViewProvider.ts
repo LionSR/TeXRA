@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 
 import { computeAgentOptionsData } from '@agent/index';
 import type { AgentTrace } from '@agent/trace';
-import type { IRunStorageService } from '@agent/runtime/RunStorageService';
-import { setRunStorageService } from '@agent/runtime/RunStorageService';
+import type { IProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
+import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
   BaseWebviewProvider,
@@ -54,11 +54,11 @@ const MAX_INQUIRY_THREAD_HYDRATION = 100;
  * In sidebar mode, the single `texra.mainView` hosts progress content —
  * MainViewProvider owns the WebviewView and delegates messages here.
  *
- * Implements IRunStorageService for agent runtime integration.
+ * Implements IProgressViewBridge for agent runtime integration.
  */
 export class ProgressViewProvider
   extends BaseWebviewProvider
-  implements IRunStorageService
+  implements IProgressViewBridge
 {
   public static readonly viewType = 'texra.progress';
   private static _instance: ProgressViewProvider | undefined;
@@ -225,7 +225,7 @@ export class ProgressViewProvider
     this.messageHandler = new ProgressViewMessageHandler(this, context);
 
     ProgressViewProvider._instance = this;
-    setRunStorageService(this);
+    setProgressViewBridge(this);
 
     this._disposables.push(
       vscode.workspace.onDidChangeWorkspaceFolders(async () => {
