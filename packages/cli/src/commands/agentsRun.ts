@@ -34,7 +34,7 @@ import {
 import { resolveFileBackedInstruction } from './_helpers/instructionFile';
 import { emitCliResult } from './_helpers/output';
 import { resolveCliAgent } from '../runtime/agentResolution';
-import { executeCliRequest } from './_helpers/runExecution';
+import { executeCliRequest } from '../runtime/runExecution';
 import {
   createCliRunResult,
   terminalStatusExitCode,
