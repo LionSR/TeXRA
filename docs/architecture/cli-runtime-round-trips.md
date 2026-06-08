@@ -21,7 +21,7 @@ flowchart TD
   replan[planCliMultiAgentPresets replan]
   items[runtime/orchestration buildCliOrchestrationItems]
   modelList[runtime/modelAccess getCliModelAccessList]
-  defaultModel[resolveChatDefaults + resolveCliRunnableModelWithAccessList]
+  defaultModel[resolveChatDefaults + resolveCliRunnableModel]
   picker[orchestration/runOrchestrationTui]
   chat[chat/tui/runChatTui runChat]
   presetRun[commands/multiAgent loadCliMultiAgentRunPlan]
