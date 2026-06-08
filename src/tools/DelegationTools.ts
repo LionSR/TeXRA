@@ -632,10 +632,7 @@ async function resolveAvailableDelegationModel(input: {
 }
 
 /** Throw if no visible agent of the given category matches the name. */
-function assertVisibleAgent(
-  category: 'workflow' | 'toolUse',
-  name: string,
-): void {
+function assertVisibleAgent(category: AgentCategory, name: string): void {
   const visible = getVisibleAgents(category);
   if (visible.some((a) => a.name === name)) return;
   const available = visible.map((a) => a.name).join(', ');

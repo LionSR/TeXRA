@@ -598,6 +598,17 @@ export function statusBarDisplaySlice({
   });
 }
 
+// Bypass badges, in emission order. One row per BypassState flag.
+const BYPASS_BADGES: ReadonlyArray<{
+  readonly field: keyof BypassState;
+  readonly text: string;
+  readonly badgeColor: 'red' | 'yellow';
+}> = [
+  { field: 'superYolo', text: 'YOLO', badgeColor: 'red' },
+  { field: 'bash', text: 'AUTO-BASH', badgeColor: 'yellow' },
+  { field: 'toolEdit', text: 'AUTO-APPROVE', badgeColor: 'yellow' },
+];
+
 export function buildStatusBarDisplay(
   input: StatusBarDisplayInput,
 ): StatusBarDisplay {
@@ -652,14 +663,14 @@ export function buildStatusBarDisplay(
     kind: input.approvalKind,
   });
   if (pendingInteraction) left.push(pendingInteraction);
-  if (input.bypass.superYolo) {
-    left.push({ text: 'YOLO', badge: true, badgeColor: 'red' });
-  }
-  if (input.bypass.bash) {
-    left.push({ text: 'AUTO-BASH', badge: true, badgeColor: 'yellow' });
-  }
-  if (input.bypass.toolEdit) {
-    left.push({ text: 'AUTO-APPROVE', badge: true, badgeColor: 'yellow' });
+  for (const badge of BYPASS_BADGES) {
+    if (input.bypass[badge.field]) {
+      left.push({
+        text: badge.text,
+        badge: true,
+        badgeColor: badge.badgeColor,
+      });
+    }
   }
   const fittedLeft = input.pendingExitHint
     ? fitPendingExitStatusBarLeftSegments(left, input.width)
