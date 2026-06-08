@@ -261,12 +261,6 @@ export function emptyModelListMessageForCliMode(
   );
 }
 
-function fallbackModeForModelSource(
-  source: CliModelSelectionSource,
-): CliModelFallbackMode {
-  return CLI_MODEL_FALLBACK_MODE_BY_SOURCE[source];
-}
-
 export function formatCliNoAvailableModelsRecovery(
   apiMode?: CliApiMode,
   options: CliNoAvailableModelsRecoveryOptions = {},
@@ -451,7 +445,8 @@ function resolveCliRunnableModelFromAccessList(
   model: string,
   options: CliRunnableModelOptions,
 ): CliRunnableModelResolution {
-  const fallbackMode = fallbackModeForModelSource(options.fallbackSource);
+  const fallbackMode =
+    CLI_MODEL_FALLBACK_MODE_BY_SOURCE[options.fallbackSource];
   const trimmed = model.trim();
   const runnableEntries = runnableCliModelAccessEntries(
     models,
