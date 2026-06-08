@@ -12,7 +12,10 @@ import {
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
-import { openRegisteredCliSlashForm } from '@cli/chat/tui/commands/slashForms';
+import {
+  openCliSlashCommandForm,
+  openRegisteredCliSlashForm,
+} from '@cli/chat/tui/commands/slashForms';
 import { cliState, resetCliState } from '@cli/chat/tui/state/cliState';
 import type { CliApiMode } from '@cli/runtime/apiAccessMode';
 
@@ -143,6 +146,16 @@ describe('slashRegistry', () => {
 
     expect(openRegisteredCliSlashForm(tools, '')).toBe(true);
     expect(cliState.activeForm.get()?.commandName).toBe('tools');
+  });
+
+  it('opens structured forms by registered command name or alias', () => {
+    registerBuiltinSlashCommands();
+
+    expect(openCliSlashCommandForm('TOOLS', '')).toBe(true);
+    expect(cliState.activeForm.get()?.commandName).toBe('tools');
+
+    expect(openCliSlashCommandForm('skill', '')).toBe(true);
+    expect(cliState.activeForm.get()?.commandName).toBe('skills');
   });
 
   it('chains selectable agent picks into the API-mode-aware model picker', async () => {

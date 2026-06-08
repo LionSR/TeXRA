@@ -1,6 +1,6 @@
 import { cliState } from '../state/cliState';
 
-import type { SlashCommand } from './slashRegistry';
+import { findSlashCommand, type SlashCommand } from './slashRegistry';
 
 export function openRegisteredCliSlashForm(
   command: SlashCommand,
@@ -20,4 +20,12 @@ export function openRegisteredCliSlashForm(
     ),
   });
   return true;
+}
+
+export function openCliSlashCommandForm(
+  commandName: string,
+  remainder: string,
+): boolean {
+  const command = findSlashCommand(commandName);
+  return command ? openRegisteredCliSlashForm(command, remainder) : false;
 }
