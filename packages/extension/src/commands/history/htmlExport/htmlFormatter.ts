@@ -11,9 +11,9 @@
  *   5. render to string via @lit-labs/ssr — emits Declarative Shadow DOM
  *      so the bubble styling stays scoped without any client-side JS.
  *
- * The output references `./assets/{chat,katex.min,...}.css`; the asset
- * folder is staged alongside the file by the calling handler
- * (see SettingsViewMessageHandler.handleExportChat).
+ * TeXRA's own document/bubble styling is inlined by buildExportTemplate; the
+ * output references `./assets` only for third-party CSS/fonts staged alongside
+ * the file by the calling handler (see SettingsViewMessageHandler).
  */
 
 import katex from 'katex';
@@ -104,9 +104,10 @@ function safeUrl(raw: string): string | null {
 
 /**
  * Wrap the rendered markdown / preformatted content in a `<div class="md">`
- * so the chat.css document-level rules (margins, list spacing, table style)
- * still target it. Components slot this div into shadow DOM via `<slot>`,
- * but the slotted node itself lives in light DOM where global CSS reaches.
+ * so the documentStyles document-level rules (margins, list spacing, table
+ * style) still target it. Components slot this div into shadow DOM via
+ * `<slot>`, but the slotted node itself lives in light DOM where the inlined
+ * document CSS reaches.
  */
 function wrapMd(html: string): string {
   return `<div class="md">${html}</div>`;
