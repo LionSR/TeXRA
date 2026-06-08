@@ -52,6 +52,7 @@ GPT-5 reasoning summaries require account verification. Enable with `texra.model
 | Model ID    | Use Case                       | Cost | Speed  |
 | :---------- | :----------------------------- | :--- | :----- |
 | `gemini31p` | Pro with reasoning, 1M context | $$$  | Medium |
+| `gemini35f` | Flash model with 1M context    | $$   | Fast   |
 
 ## DeepSeek Models
 

@@ -67,6 +67,7 @@ GET https://remote.texra.ai/functions/v1/relay/tier-config
         "sonnet46",
         "sonnet46T",
         "gemini31p",
+        "gemini35f",
         "grok4",
         "deepseekpro",
         "deepseekproT",
@@ -101,6 +102,7 @@ GET https://remote.texra.ai/functions/v1/relay/tier-config
         "sonnet46",
         "sonnet46T",
         "gemini31p",
+        "gemini35f",
         "grok4",
         "deepseekpro",
         "deepseekproT",
@@ -159,7 +161,7 @@ Model names must match the short names defined by the [`llm-zoo`](https://www.np
 ::: warning Auto-derived snapshot
 The model rows and prices below are a **snapshot of `llm-zoo` `MODEL_CONFIGS`**. The relay builds its model list and tier assignments automatically from that package (see [Single Source of Truth](#single-source-of-truth)), so individual IDs and prices here drift whenever `llm-zoo` is bumped. Treat the tables as illustrative and re-derive from `MODEL_CONFIGS` before relying on a specific value.
 
-**Prices last verified against `llm-zoo@1.8.0` `MODEL_CONFIGS`: 2026-05-29.**
+**Prices last verified against `llm-zoo@1.8.1` `MODEL_CONFIGS`: 2026-06-08.**
 :::
 
 ### Free / Max Tier Models (≤$3/M Input)
@@ -184,6 +186,7 @@ Available to all authenticated users (free and Max tiers have the same access).
 | `sonnet46`     | claude-sonnet-4-6                    | Anthropic | $3.00/$15.00            |
 | `sonnet46T`    | claude-sonnet-4-6 (Thinking)         | Anthropic | $3.00/$15.00            |
 | `gemini31p`    | gemini-3.1-pro-preview               | Google    | $2.00/$12.00            |
+| `gemini35f`    | gemini-3.5-flash                     | Google    | $1.50/$9.00             |
 | `grok4`        | grok-4-0709                          | xAI       | $3.00/$15.00            |
 | `deepseekpro`  | deepseek-v4-pro                      | DeepSeek  | $0.44/$0.87             |
 | `deepseekproT` | deepseek-v4-pro (Thinking)           | DeepSeek  | $0.44/$0.87             |
