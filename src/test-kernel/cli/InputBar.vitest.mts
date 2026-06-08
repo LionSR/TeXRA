@@ -34,10 +34,10 @@ describe('InputBar slash submit', () => {
 
     submitSlashCommandWhenReady({
       commandName: 'help',
-      fallbackRemainder: '',
       handleSubmit: (value) => submitted.push(value),
       imagePasteQueue,
       readDraft: () => draft,
+      remainder: '',
       typedName: 'h',
     });
 
@@ -64,10 +64,10 @@ describe('InputBar slash submit', () => {
 
     submitSlashCommandWhenReady({
       commandName: 'help',
-      fallbackRemainder: '',
       handleSubmit: (value) => submitted.push(value),
       imagePasteQueue,
       readDraft: () => draft,
+      remainder: '',
       typedName: 'h',
     });
 
