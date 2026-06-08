@@ -78,6 +78,7 @@ import {
   appendAssistantTranscriptIfMissing,
   appendLocalAssistantTranscript,
   appendLocalErrorTranscript,
+  appendLocalUserTranscript,
   clearLocalTranscript,
   CLI_LOCAL_STREAM_ID,
   moveLocalTranscriptToStream,
@@ -1676,6 +1677,101 @@ describe('CLI transcript state', () => {
     }
   });
 
+  it('lets the stream-log assistant own final text even when fallback text differs', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info('| x | Check |\n|---|---|\n| 3 | 1 ✓ |', {
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      });
+      syncStreamLog(root);
+      appendAssistantTranscriptIfMissing(
+        root,
+        '| x | Check |\n|---|---|\n| 3 | 1 \\checkmark |',
+        'final:first',
+      );
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        '| x | Check |\n|---|---|\n| 3 | 1 ✓ |',
+      ]);
+      expect(entries[0]?.synthetic).toBeUndefined();
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
+  it('dedupes fallback text against stream-log assistant text before trailing tools', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info('| x | Check |\n|---|---|\n| 3 | 1 ✓ |', {
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      });
+      logger.info('', {
+        messageType: MESSAGE_TYPES.TOOL_USE,
+        data: {
+          toolName: 'bash',
+          input: { command: 'true' },
+          output: { summary: 'Executed: true', output: 'ok' },
+          status: 'completed',
+        },
+      });
+      syncStreamLog(root);
+      appendAssistantTranscriptIfMissing(
+        root,
+        '| x | Check |\n|---|---|\n| 3 | 1 \\checkmark |',
+        'final:first',
+      );
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.role)).toEqual(['assistant', 'tool']);
+      expect(entries.map((entry) => entry.text)).toEqual([
+        '| x | Check |\n|---|---|\n| 3 | 1 ✓ |',
+        '',
+      ]);
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
+  it('does not dedupe fallback text against a matching prior-turn assistant', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info('first prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      logger.info('Done ✓', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
+      syncStreamLog(root);
+
+      logger.info('second prompt', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      syncStreamLog(root);
+      appendAssistantTranscriptIfMissing(root, 'Done \\checkmark', 'final:2');
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        'first prompt',
+        'Done ✓',
+        'second prompt',
+        'Done \\checkmark',
+      ]);
+      expect(entries.at(-1)).toMatchObject({
+        synthetic: true,
+        syntheticKind: 'final',
+      });
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
   it('projects a turn boundary without duplicating fallback assistant text', () => {
     const previousStore = getDefaultStreamLogStore();
     const store = new StreamLogStore();
@@ -1717,6 +1813,17 @@ describe('CLI transcript state', () => {
     expect(entries.map((entry) => entry.text)).toEqual([
       'Available commands: /help',
       'Available commands: /help',
+    ]);
+  });
+
+  it('preserves literal checkmark commands in local user transcript text', () => {
+    cliState.activeStreamId.set(root);
+
+    appendLocalUserTranscript('literal \\checkmark');
+
+    const entries = cliState.streams.get().get(root)?.entries ?? [];
+    expect(entries.map((entry) => [entry.role, entry.text])).toEqual([
+      ['user', 'literal \\checkmark'],
     ]);
   });
 
