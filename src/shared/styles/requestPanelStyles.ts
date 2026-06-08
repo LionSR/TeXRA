@@ -133,34 +133,28 @@ export const requestPanelStyles: CSSResult = css`
     gap: ${sp.small};
   }
 
-  :is(${ACTIONS})::part(container) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: ${sp.small};
-  }
-
-  :is(${ACTIONS}) vscode-toolbar-button {
+  :is(${ACTIONS}) wa-button {
     min-width: auto;
   }
 
-  :is(${ACTIONS}) vscode-toolbar-button::part(control) {
+  :is(${ACTIONS}) wa-button::part(base) {
     justify-content: flex-start;
     gap: ${sp.small};
   }
 
   /* Shared action button colors */
-  :is(${ACTIONS}) vscode-toolbar-button[data-action='approve']::part(control),
-  :is(${ACTIONS}) vscode-toolbar-button[data-action='submit']::part(control) {
+  :is(${ACTIONS}) wa-button[data-action='approve']::part(base),
+  :is(${ACTIONS}) wa-button[data-action='submit']::part(base) {
     color: var(--wa-color-success-fill-loud);
   }
 
-  :is(${ACTIONS}) vscode-toolbar-button[data-action='setup']::part(control) {
+  :is(${ACTIONS}) wa-button[data-action='setup']::part(base) {
     color: var(--wa-color-text-link);
   }
 
   :is(${FEEDBACK_ACTIVE})
     :is(${ACTIONS})
-    vscode-toolbar-button[data-action='reject']::part(control) {
+    wa-button[data-action='reject']::part(base) {
     color: var(--wa-color-warning-border-quiet);
   }
 
@@ -199,8 +193,8 @@ export const requestPanelStyles: CSSResult = css`
   }
 
   /* Shared action button width — approval and bash use the same flex-basis */
-  .approval-request__actions vscode-toolbar-button,
-  .bash-approval-request__actions vscode-toolbar-button {
+  .approval-request__actions wa-button,
+  .bash-approval-request__actions wa-button {
     flex: 1 1 12rem;
   }
 
@@ -315,7 +309,7 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--color-warning);
   }
 
-  .retry-request__actions vscode-toolbar-button {
+  .retry-request__actions wa-button {
     flex: 1 1 8rem;
   }
 
@@ -390,7 +384,7 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--wa-color-text-link);
   }
 
-  .workflow-proposal__actions vscode-toolbar-button {
+  .workflow-proposal__actions wa-button {
     flex: 1 1 6rem;
   }
 
@@ -575,7 +569,7 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--wa-color-text-link);
   }
 
-  .plan-approval-request__actions vscode-toolbar-button {
+  .plan-approval-request__actions wa-button {
     flex: 1 1 12rem;
   }
 
@@ -911,7 +905,7 @@ export const requestPanelStyles: CSSResult = css`
     }
   }
 
-  .external-inquiry-request__actions vscode-toolbar-button {
+  .external-inquiry-request__actions wa-button {
     flex: 1 1 8rem;
   }
 
@@ -1000,7 +994,7 @@ export const requestPanelStyles: CSSResult = css`
     width: 100%;
   }
 
-  .user-question-request__actions vscode-toolbar-button {
+  .user-question-request__actions wa-button {
     flex: 1 1 8rem;
   }
 `;
