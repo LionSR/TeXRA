@@ -16,10 +16,6 @@ import {
 } from '../schemas/cliSettings';
 import { KNOWN_TEXRA_KEYS } from '../schemas/knownKeys';
 
-// Re-export so existing call sites (`from './cliConfig'`) keep working — the
-// canonical home is `../schemas/cliSettings`.
-export { CLI_OUTPUT_FORMATS, type CliOutputFormat };
-
 export const CLI_CONFIG_DIR = '.texra';
 export const CLI_CONFIG_FILE = 'config.json';
 export const CLI_BUILTIN_DEFAULT_MODEL = 'deepseekT';
