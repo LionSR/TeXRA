@@ -12,9 +12,9 @@ import { ToolError } from '@tools/result';
  * Supports `*`, `?`, and `**` tokens.
  */
 export function createGlobMatcher(pattern: string): (value: string) => boolean {
-  // matchBase only applies to slash-free patterns (same semantics as minimatch).
-  // micromatch applies matchBase to ALL patterns including those with slashes,
-  // so we gate it explicitly.
+  // Preserve Minimatch semantics: basename matching is only enabled for
+  // slash-free patterns. micromatch changes slash-containing pattern behavior
+  // when matchBase is true, so gate it before compiling.
   const isMatch = micromatch.matcher(pattern, {
     dot: true,
     matchBase: !pattern.includes('/'),
