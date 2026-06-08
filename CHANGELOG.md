@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Features
+
+- **Software Engineer team** — a new built-in multi-agent team for the code that accompanies a project (simulations, numerics, data pipelines, scripts, and small libraries). An `engineer` lead plans the work and delegates to specialists: `coder` (implementation), `codeReviewer` (correctness/security/style review), `debugger` (reproduce and fix failures), and `testEngineer` (write and maintain tests). Pick it from the Multi-Agent settings tab, or launch it from the CLI with `texra multi-agent run software-engineer`. The team works offline without sign-in.
+
 ## [0.38.6] - 2026-06-07
 
 ### CLI

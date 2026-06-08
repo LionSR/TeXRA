@@ -99,4 +99,19 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
       'progressCheck',
     ],
   },
+  {
+    id: 'software-engineer',
+    name: 'Software Engineer',
+    description:
+      "For a project's code -- the engineer lead delegates implementation, review, debugging, and testing across a team of specialists.",
+    icon: 'codicon-tools',
+    workflowAgents: [],
+    toolUseAgents: [
+      'engineer',
+      'coder',
+      'codeReviewer',
+      'debugger',
+      'testEngineer',
+    ],
+  },
 ];

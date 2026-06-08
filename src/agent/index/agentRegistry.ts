@@ -125,16 +125,33 @@ const DEFAULT_WORKFLOW_AGENT = 'correct';
 
 /**
  * Relay-served orchestrator roots that delegate to a team. They need sign-in,
- * so UIs surface them first. Single source of truth for "the built-in
- * delegating roots" (also consumed by the CLI multi-agent presets).
+ * so UIs surface them first.
  */
 export const REMOTE_ORCHESTRATOR_AGENT_NAMES = [
   'orchestrator',
   'leanOrchestrator',
 ] as const;
 
+/**
+ * Bundled (local) orchestrator roots that delegate to a team. Unlike the
+ * relay-served roots above, these ship in the extension/CLI and are available
+ * offline without sign-in (e.g. the Software Engineer team's `engineer` lead).
+ */
+export const BUNDLED_ORCHESTRATOR_AGENT_NAMES = ['engineer'] as const;
+
+/**
+ * Single source of truth for "the built-in delegating team roots" (relay-served
+ * plus bundled). Consumed by the CLI multi-agent presets to pick a preset's
+ * root agent.
+ */
+export const BUILTIN_TEAM_ROOT_AGENT_NAMES = [
+  ...REMOTE_ORCHESTRATOR_AGENT_NAMES,
+  ...BUNDLED_ORCHESTRATOR_AGENT_NAMES,
+] as const;
+
 const PREFERRED_TOOL_USE_AGENTS = [
   ...REMOTE_ORCHESTRATOR_AGENT_NAMES,
+  ...BUNDLED_ORCHESTRATOR_AGENT_NAMES,
   'research',
   'review',
 ] as const;
