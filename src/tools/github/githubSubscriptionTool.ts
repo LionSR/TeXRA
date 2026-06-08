@@ -153,15 +153,17 @@ function getMinAnnotationLevel(
   return input.min_annotation_level ?? DEFAULT_CHECK_ANNOTATION_LEVEL;
 }
 
+const ANNOTATION_LEVEL_DESCRIPTIONS: Record<
+  GitHubCheckAnnotationLevel,
+  string
+> = {
+  failure: 'failures only',
+  warning: 'warnings and failures',
+  notice: 'notices, warnings, and failures',
+};
+
 function describeAnnotationLevel(level: GitHubCheckAnnotationLevel): string {
-  switch (level) {
-    case 'failure':
-      return 'failures only';
-    case 'warning':
-      return 'warnings and failures';
-    case 'notice':
-      return 'notices, warnings, and failures';
-  }
+  return ANNOTATION_LEVEL_DESCRIPTIONS[level];
 }
 
 /** Shared body sentence describing what a PR subscription delivers. */

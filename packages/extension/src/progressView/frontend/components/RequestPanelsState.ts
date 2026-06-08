@@ -1,5 +1,8 @@
 // Local imports - shared utilities
-import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+import {
+  PERMISSION_KIND,
+  type PermissionKind,
+} from '@shared/utils/uiConstants';
 
 // Local imports - progress view component types
 import type { BaseRequestPanel } from './BaseRequestPanel';
@@ -30,37 +33,26 @@ export function createEmptyPermissionGroups(): PermissionGroups {
   };
 }
 
+const KIND_TO_GROUP: Record<PermissionKind, keyof PermissionGroups> = {
+  [PERMISSION_KIND.TOOL_EDIT]: 'approval',
+  [PERMISSION_KIND.BASH]: 'bash',
+  [PERMISSION_KIND.RETRY]: 'retry',
+  [PERMISSION_KIND.PROPOSAL]: 'proposal',
+  [PERMISSION_KIND.PLAN_APPROVAL]: 'planApproval',
+  [PERMISSION_KIND.EXTERNAL_INQUIRY]: 'externalInquiry',
+  [PERMISSION_KIND.USER_QUESTION]: 'userQuestion',
+};
+
 export function groupPermissions(
   permissions: PermissionState[],
 ): PermissionGroups {
   const groups = createEmptyPermissionGroups();
-
   for (const permission of permissions) {
-    switch (permission.kind) {
-      case PERMISSION_KIND.TOOL_EDIT:
-        groups.approval.push(permission);
-        break;
-      case PERMISSION_KIND.BASH:
-        groups.bash.push(permission);
-        break;
-      case PERMISSION_KIND.RETRY:
-        groups.retry.push(permission);
-        break;
-      case PERMISSION_KIND.PROPOSAL:
-        groups.proposal.push(permission);
-        break;
-      case PERMISSION_KIND.PLAN_APPROVAL:
-        groups.planApproval.push(permission);
-        break;
-      case PERMISSION_KIND.EXTERNAL_INQUIRY:
-        groups.externalInquiry.push(permission);
-        break;
-      case PERMISSION_KIND.USER_QUESTION:
-        groups.userQuestion.push(permission);
-        break;
-    }
+    // Guard against malformed IPC data: an unknown kind is dropped (matching
+    // the old switch's no-default behavior) rather than throwing in render.
+    const group = KIND_TO_GROUP[permission.kind];
+    if (group) groups[group].push(permission);
   }
-
   return groups;
 }
 
