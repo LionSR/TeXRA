@@ -57,6 +57,17 @@ export function listSlashCommands(): readonly SlashCommand[] {
   return [...COMMANDS.values()];
 }
 
+export function findSlashCommand(
+  nameOrAlias: string,
+): SlashCommand | undefined {
+  const lower = nameOrAlias.toLowerCase();
+  return listSlashCommands().find(
+    (cmd) =>
+      cmd.name.toLowerCase() === lower ||
+      cmd.aliases?.some((alias) => alias.toLowerCase() === lower) === true,
+  );
+}
+
 /**
  * Returns registered commands whose name or an alias starts with `prefix`.
  * Results are case-insensitive and preserve registration order.
