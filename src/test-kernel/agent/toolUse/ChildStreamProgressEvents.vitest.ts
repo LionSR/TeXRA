@@ -9,7 +9,7 @@ import {
   type ExecutionId,
   type StreamTabId,
 } from '@shared/schemas';
-import { createChildStream, finalizeChildStream } from '@tools/childStream';
+import { createChildStream } from '@tools/childStream';
 import { createRecordingHost } from '../progressTestUtils';
 
 const executionId = 'exec:child-stream' as ExecutionId;
@@ -25,11 +25,7 @@ describe('child stream progress events', () => {
   it('publishes child stream lifecycle events through the explicit runtime host', () => {
     const active = createRecordingHost();
 
-    const {
-      childStreamId: actualChildStreamId,
-      logger,
-      disposeTrace,
-    } = createChildStream(executionId, parentStreamId, {
+    const childStream = createChildStream(executionId, parentStreamId, {
       runtimeHost: active.host,
       streamPrefix: 'bash',
       streamCategory: AgentCategory.ToolUse,
@@ -39,23 +35,16 @@ describe('child stream progress events', () => {
       toolName: 'bash',
     });
 
-    expect(actualChildStreamId).toBe(childStreamId);
+    expect(childStream.childStreamId).toBe(childStreamId);
 
-    finalizeChildStream({
-      childStreamId,
-      executionId,
-      logger,
-      disposeTrace,
-      runtimeHost: active.host,
-      options: { autoClose: true },
-    });
+    childStream.finalize({ autoClose: true });
 
     const { events } = active;
     expect(events.map((entry) => entry.event)).toEqual([
-      'updateStreamStatus',
       'setActiveStream',
       'setTaskState',
       'updateStreamDescription',
+      'updateStreamStatus',
       'updateActiveSubagents',
       'setParentStream',
       'updateStreamStatus',
@@ -63,17 +52,9 @@ describe('child stream progress events', () => {
       'updateActiveSubagents',
       'removeStream',
     ]);
-    expect(events[0]).toEqual({
-      event: 'updateStreamStatus',
-      payload: {
-        streamId: childStreamId,
-        status: STREAM_STATUS.RUNNING,
-        previousStatus: STREAM_STATUS.READY,
-      },
-    });
     // Background child streams register without yanking the active tab —
     // suppressViewSwitch: true keeps the user's current view stable.
-    expect(events[1]).toEqual({
+    expect(events[0]).toEqual({
       event: 'setActiveStream',
       payload: {
         streamId: childStreamId,
@@ -81,7 +62,7 @@ describe('child stream progress events', () => {
         suppressViewSwitch: true,
       },
     });
-    expect(events[2]).toEqual({
+    expect(events[1]).toEqual({
       event: 'setTaskState',
       payload: {
         streamId: childStreamId,
@@ -90,6 +71,14 @@ describe('child stream progress events', () => {
           agentConfig: config,
           toolSessionState: {},
         },
+      },
+    });
+    expect(events[3]).toEqual({
+      event: 'updateStreamStatus',
+      payload: {
+        streamId: childStreamId,
+        status: STREAM_STATUS.RUNNING,
+        previousStatus: STREAM_STATUS.READY,
       },
     });
     expect(events[4].payload).toEqual({
