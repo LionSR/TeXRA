@@ -3,11 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - runtime
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { AgentProposalCoordinator } from '@agent/runtime/AgentProposalCoordinator';
 import {
   StreamStatusRegistry,
   StreamStatusService,
 } from '@agent/runtime/StreamStatusService';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
+import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
+import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import {
   END_GROUP_STATUS,
@@ -59,7 +62,11 @@ function createLifecycleContext({
       dispose: vi.fn(),
     },
     disposeTrace: vi.fn(),
-    coordinators: {},
+    coordinators: {
+      plan: new PlanApprovalCoordinator(explicit.host),
+      proposal: new AgentProposalCoordinator(explicit.host),
+      retry: new RetryRequestCoordinatorImpl(explicit.host),
+    },
   } as unknown as AgentLaunchContext;
 }
 
