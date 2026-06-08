@@ -203,7 +203,7 @@ function shouldSkipWait(executionId: string): boolean {
   const handle = executionRegistry.getHandle(executionId);
   if (!handle) return true;
 
-  const { status } = handle.getStatus();
+  const { status } = executionRegistry.getStatus(handle);
   if (!ACTIVE_STATUSES.has(status)) return true;
 
   // Tool-use subagent in WAITING = job delivered via onBeforeWaiting, don't block.
@@ -463,7 +463,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         store.readReport(),
       ]);
 
-      const info = handle.getStatus();
+      const info = executionRegistry.getStatus(handle);
       const lines = [
         `Execution: ${executionId}`,
         `Agent: ${handle.agentName}`,

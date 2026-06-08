@@ -17,7 +17,6 @@ import {
   AgentExecutionHandle,
   ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   AGENT_CATEGORY,
   TODO_STATUS,
@@ -178,7 +177,6 @@ describe('runCoordinators', () => {
       'orchestrator',
       'toolUse',
       active.host,
-      StreamStatusService,
       coordinators,
     );
 
@@ -236,7 +234,6 @@ describe('runCoordinators', () => {
       'orchestrator',
       'toolUse',
       active.host,
-      StreamStatusService,
       coordinators,
     );
 
