@@ -18,6 +18,7 @@ import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 // Local imports - desktop test paths
 import { desktopSourcePath, moduleFileUrl } from './desktopTestPaths.mjs';
+import type { StreamSnapshotStore as ProgressSnapshotStore } from '@transcript';
 
 type Bridge = {
   openFileCompile(filePath: string): Promise<void>;
@@ -64,7 +65,10 @@ type RunExecutionRequest = (
 interface DesktopAgentExecutionModule {
   DesktopProgressBridge: new (
     postToRenderer: (message: unknown) => void,
-    options?: { streamSnapshotStore?: TestDesktopStreamSnapshotStore },
+    options?: {
+      streamSnapshotStore?: TestDesktopStreamSnapshotStore;
+      progressSnapshotStore?: ProgressSnapshotStore;
+    },
   ) => Bridge;
   createDesktopAgentExecution(options: {
     postToRenderer(message: unknown): void;
@@ -82,6 +86,7 @@ type CreateBridgeOptions = {
   resumeToolUseFromSnapshot?: ReturnType<typeof vi.fn>;
   runAgent?: RunExecutionRequest;
   streamSnapshotStore?: TestDesktopStreamSnapshotStore;
+  configureProgressSnapshotStore?: (store: ProgressSnapshotStore) => void;
 };
 
 type TestDesktopStreamSnapshotStore = {
@@ -224,11 +229,20 @@ async function createBridge(
       workspaceFolders: [],
     },
   }));
+  let progressSnapshotStore: ProgressSnapshotStore | undefined;
+  if (options.configureProgressSnapshotStore) {
+    const { StreamSnapshotStore } = await import('@transcript');
+    progressSnapshotStore = new StreamSnapshotStore();
+    await progressSnapshotStore.load([]);
+    options.configureProgressSnapshotStore(progressSnapshotStore);
+    await progressSnapshotStore.flush();
+  }
   const { DesktopProgressBridge } = (await import(
     moduleFileUrl(desktopSourcePath('main', 'desktopAgentExecution.ts'))
   )) as DesktopAgentExecutionModule;
   return new DesktopProgressBridge((message) => messages.push(message), {
     streamSnapshotStore: options.streamSnapshotStore,
+    progressSnapshotStore,
   }) as TestableBridge;
 }
 
@@ -655,6 +669,54 @@ describe('DesktopProgressBridge', () => {
           '1': [expect.objectContaining({ logRelativePath: 'out/paper.log' })],
         },
         reset: true,
+      });
+    } finally {
+      bridge.dispose();
+    }
+  });
+
+  it('restores ghost display from the backend snapshot store', async () => {
+    const messages: unknown[] = [];
+    const kvRead = vi.fn(async () => {
+      throw new Error('unexpected sidecar disk read');
+    });
+    const bridge = await createBridge(messages, {
+      kvRead,
+      configureProgressSnapshotStore: (store) => {
+        store.setTodos('ghost-stream', [
+          {
+            content: 'Preloaded backend todo',
+            status: 'pending',
+            activeForm: 'Restoring from backend store',
+          },
+        ]);
+      },
+      streamSnapshotStore: createStreamSnapshotStore([
+        {
+          streamId: 'ghost-stream',
+          label: 'ghost-stream',
+          agentCategory: AGENT_CATEGORY.WORKFLOW,
+          lastKnownStatus: STREAM_STATUS.STOPPED,
+          creationTimestamp: 1_000,
+          persistedAt: 2_000,
+        },
+      ]),
+    });
+
+    try {
+      bridge.setActiveStream('ghost-stream');
+      await settleProgressEvents();
+
+      expect(kvRead).not.toHaveBeenCalled();
+      expect(
+        progressMessages(messages, PROGRESS_VIEW_COMMANDS.UPDATE_TODOS).at(-1),
+      ).toMatchObject({
+        stream: 'ghost-stream',
+        todos: [
+          expect.objectContaining({
+            content: 'Preloaded backend todo',
+          }),
+        ],
       });
     } finally {
       bridge.dispose();

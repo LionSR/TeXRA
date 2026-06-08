@@ -185,13 +185,6 @@ export class DesktopProgressBridge {
     StreamTabId,
     RestoredStreamSnapshot
   >();
-  /**
-   * Durable per-stream sidecar reader. Restores a ghost (prior-session)
-   * stream's persisted display — todos/plan/usage/output files — when it first
-   * becomes active, the same data the CLI/extension show on resume. Reads are
-   * stateless disk reads used only for restored rows from a previous launch.
-   */
-  private readonly durableSnapshots = new StreamSnapshotStore();
   /** Ghost streams whose persisted display has already been restored this session. */
   private readonly restoredDisplaySent = new Set<StreamTabId>();
   /** Ghost streams with an async persisted-display restore already pending. */
@@ -596,7 +589,7 @@ export class DesktopProgressBridge {
       return;
     }
     this.restoredDisplayInFlight.add(streamId);
-    void this.durableSnapshots
+    void this.state.snapshots
       .read(streamId)
       .then((snap) => {
         if (
