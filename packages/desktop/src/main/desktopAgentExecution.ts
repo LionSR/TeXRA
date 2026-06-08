@@ -28,7 +28,6 @@ import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { setRunStorageService } from '@agent/runtime/RunStorageService';
-import { interruptRegistry } from '@agent/runtime/InterruptRegistry';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { toErrorMessage } from '@common/errors';
@@ -850,13 +849,8 @@ export class DesktopProgressBridge {
 
   private stopStream(streamId: StreamTabId): void {
     runCoordinatorBridge.clearRetryRequest(streamId);
-    if (this.options.detachSubagentsOnStop === true) {
-      executionRegistry.detachActiveChildren(streamId, this.runtimeHost);
-    } else {
-      executionRegistry.interruptActiveChildren(streamId);
-    }
-    interruptRegistry.get(streamId)?.interrupt();
-    StreamStatusService.set(streamId, STREAM_STATUS.STOPPED, {
+    executionRegistry.stopAgentStream(streamId, {
+      detachActiveChildren: this.options.detachSubagentsOnStop === true,
       runtimeHost: this.runtimeHost,
     });
   }
