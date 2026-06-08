@@ -747,6 +747,7 @@ function sliceWithEntries(
     runStartedAt: undefined,
     description: undefined,
     usage: undefined,
+    cumulativeUsage: undefined,
     conversation: undefined,
     entries,
     queuedFollowUps: 0,
