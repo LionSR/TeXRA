@@ -11,7 +11,7 @@ import { ApprovalPolicyForm } from '../forms/ApprovalPolicyForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { ModelListForm } from '../forms/ModelListForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
-import { SkillsListForm, type SkillSelectValue } from '../forms/SkillsListForm';
+import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import { ToolsListForm } from '../forms/ToolsListForm';
 import { cliState } from '../state/cliState';
 import { registerSlashCommand, type SlashFormProps } from './slashRegistry';
@@ -24,7 +24,7 @@ type ModelSelectHandler = (value: string) => void | Promise<void>;
 type ApiModeSelectHandler = (value: CliApiMode) => void | Promise<void>;
 type MemorySelectHandler = (storagePath: string) => void | Promise<void>;
 type ResumeSelectHandler = (id: ExecutionId) => void | Promise<void>;
-type SkillSelectHandler = (value: SkillSelectValue) => void | Promise<void>;
+type SkillSelectHandler = (value: SkillActivation) => void | Promise<void>;
 type ErrorHandler = (error: unknown) => void | Promise<void>;
 type SelectionCompletion = 'afterAction' | 'beforeAction';
 

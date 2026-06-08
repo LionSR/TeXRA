@@ -775,9 +775,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // Fall back to output_tokens if token counting fails. Log so a degraded
         // post-compaction token estimate is visible rather than silent.
         this.logger.debug(
-          `Post-compaction token counting failed; falling back to output_tokens: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
+          `Post-compaction token counting failed; falling back to output_tokens: ${getSdkErrorMessage(err)}`,
         );
         // NOTE: It's unclear what output_tokens represents exactly for the compact
         // endpoint — it may be the generation cost rather than the reusable content

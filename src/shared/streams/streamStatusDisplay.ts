@@ -1,23 +1,22 @@
 import { STREAM_STATUS } from '@shared/schemas';
 
+// cli and cliCompact share every label except the INITIALIZING ellipsis, so
+// cliCompact is derived from cli rather than hand-synced.
+const cliStreamStatusLabels = {
+  [STREAM_STATUS.INITIALIZING]: 'starting\u2026',
+  [STREAM_STATUS.RUNNING]: 'running',
+  [STREAM_STATUS.ERROR]: 'error',
+  [STREAM_STATUS.STOPPED]: 'stopped',
+  [STREAM_STATUS.READY]: 'ready',
+  [STREAM_STATUS.WAITING]: 'idle',
+  [STREAM_STATUS.RESUMING]: 'resuming',
+} as const;
+
 const STREAM_STATUS_LABELS = {
-  cli: {
-    [STREAM_STATUS.INITIALIZING]: 'starting\u2026',
-    [STREAM_STATUS.RUNNING]: 'running',
-    [STREAM_STATUS.ERROR]: 'error',
-    [STREAM_STATUS.STOPPED]: 'stopped',
-    [STREAM_STATUS.READY]: 'ready',
-    [STREAM_STATUS.WAITING]: 'idle',
-    [STREAM_STATUS.RESUMING]: 'resuming',
-  },
+  cli: cliStreamStatusLabels,
   cliCompact: {
+    ...cliStreamStatusLabels,
     [STREAM_STATUS.INITIALIZING]: 'starting',
-    [STREAM_STATUS.RUNNING]: 'running',
-    [STREAM_STATUS.ERROR]: 'error',
-    [STREAM_STATUS.STOPPED]: 'stopped',
-    [STREAM_STATUS.READY]: 'ready',
-    [STREAM_STATUS.WAITING]: 'idle',
-    [STREAM_STATUS.RESUMING]: 'resuming',
   },
   progressHeader: {
     [STREAM_STATUS.INITIALIZING]: 'Initializing',
