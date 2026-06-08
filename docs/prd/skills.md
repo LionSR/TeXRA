@@ -36,7 +36,7 @@ What is missing is **runtime integration** — `src/skills/` has no loader, no p
 - **G1.** Implement an Agent Skills spec-compliant loader: discover `SKILL.md` files, parse frontmatter, expose a list of `{name, description, body, baseDir}` to the runtime.
 - **G2.** Prompt injection at turn boundaries: surface available skill names + descriptions to the model. Provider-agnostic format (plain text). Token-budgeted.
 - **G3.** Skill activation: model can invoke a skill (via dedicated tool or file-read) and have its `SKILL.md` body injected.
-- **G4.** Multi-source discovery: read skills from `<repoRoot>/skills/` (bundled), `~/.texra/skills/` (user), `<workspace>/.texra/skills/` (project), and (opt-in) `.claude/skills/`, `~/.claude/skills/`, `.codex/skills/`, `~/.codex/skills/`.
+- **G4.** Multi-source discovery: read skills from `<repoRoot>/skills/` (bundled), `~/.texra/skills/` (user), `<workspace>/.texra/skills/` (project), and (opt-in) `.agents/skills/`, `.claude/skills/`, `.codex/skills/`, and `.gemini/skills/` at project and user scope.
 - **G5.** `inherits_skill:` mechanism in YAML agents so multi-round CoT agents (`critiqueFix`, `verifyFix`) can keep their runtime while sourcing prompt content from a skill.
 - **G6.** Migrate single-round prompt agents from `texra-agent-prompts/` to skills. ~70-80% of the 139.
 - **G7.** Settings UI tab listing discovered skills (similar to existing Agents tab).
@@ -53,12 +53,12 @@ What is missing is **runtime integration** — `src/skills/` has no loader, no p
 
 ## Users
 
-| User                             | Use case                                                                                                                                             |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **TeXRA end-user** (researcher)  | Picks a skill from a list ("polish my LaTeX," "convert paper to slides"). May write a personal skill in `.texra/skills/` for project-specific style. |
-| **Power user**                   | Forks community skills from `.claude/skills/` or `.codex/skills/` into TeXRA. Shares their own skills as `git`-able directories.                     |
-| **Orchestrator agent (machine)** | Dispatches sub-tasks with the right skill attached per branch.                                                                                       |
-| **Contributor**                  | Adds a new prompt-shaped capability by writing `SKILL.md` — no TypeScript changes needed.                                                            |
+| User                             | Use case                                                                                                                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **TeXRA end-user** (researcher)  | Picks a skill from a list ("polish my LaTeX," "convert paper to slides"). May write a personal skill in `.texra/skills/` for project-specific style.                    |
+| **Power user**                   | Forks community skills from `.agents/skills/`, `.claude/skills/`, `.codex/skills/`, or `.gemini/skills/` into TeXRA. Shares their own skills as `git`-able directories. |
+| **Orchestrator agent (machine)** | Dispatches sub-tasks with the right skill attached per branch.                                                                                                          |
+| **Contributor**                  | Adds a new prompt-shaped capability by writing `SKILL.md` — no TypeScript changes needed.                                                                               |
 
 ---
 
@@ -117,8 +117,8 @@ What is missing is **runtime integration** — `src/skills/` has no loader, no p
   2. `~/.texra/skills/` (user, scope `user`)
   3. `<workspaceRoot>/.texra/skills/` (project, scope `project`)
 - **FR-4.2.** Opt-in interop sources (toggleable in settings):
-  - `~/.claude/skills/`, `~/.codex/skills/`
-  - `<workspaceRoot>/.claude/skills/`, `<workspaceRoot>/.codex/skills/`
+  - `~/.agents/skills/`, `~/.claude/skills/`, `~/.codex/skills/`, `~/.gemini/skills/`
+  - `<workspaceRoot>/.agents/skills/`, `<workspaceRoot>/.claude/skills/`, `<workspaceRoot>/.codex/skills/`, `<workspaceRoot>/.gemini/skills/`
 - **FR-4.3.** Each skill tagged with `scope`. Collision precedence: `project > user > interop > bundled`. First-wins within a scope.
 - **FR-4.4.** Settings: array of additional skill paths (CLI-style `skills` setting, codex-shaped).
 
@@ -211,11 +211,10 @@ Later phases may add: `when_to_use` (Claude Code), `metadata.short-description` 
 - `~/.texra/skills/` — user
 - `<workspaceRoot>/.texra/skills/` — project
 
-Opt-in interop with `.claude/`, `.codex/` via settings.
+Opt-in interop with `.agents/`, `.claude/`, `.codex/`, and `.gemini/` via settings. `.agents/` is first
+within interop precedence because it is the cross-client convention rather than a client-specific directory.
 
-**Not** using `.agents/skills/` as the bundled location because the repo has already committed to `skills/` at root and the existing authoring docs reference that path.
-
-**Open:** Should we ship a `.agents/skills/` _additional_ source for cross-tool interop? Codex's choice suggests the spec is moving toward `.agents/` as the cross-vendor canonical. Defer until ecosystem signal stronger.
+**Not** using `.agents/skills/` as the bundled location because the repo has already committed to `skills/` at root and the existing authoring docs reference that path. `.agents/skills/` is an additional opt-in interop source.
 
 ### D5. Frontmatter parser strictness
 
@@ -266,7 +265,7 @@ Once skills carry the prompt content, the legacy YAML files in `packages/extensi
 ## Success criteria
 
 - **SC-1.** End-to-end: a user can drop a `SKILL.md` into `.texra/skills/`, see it in the settings UI, invoke it from a TeXRA command, and have the body inject into the prompt.
-- **SC-2.** Interop: a skill from `~/.claude/skills/` or `~/.codex/skills/` is discoverable when the user opts in.
+- **SC-2.** Interop: a skill from `~/.agents/skills/`, `~/.claude/skills/`, `~/.codex/skills/`, or `~/.gemini/skills/` is discoverable when the user opts in.
 - **SC-3.** Migration: ≥80% of `article/*` agents work as skills end-to-end with no regression on test fixtures.
 - **SC-4.** Multi-round: `critiqueFix` runs with skill-sourced content and produces identical output to its pre-migration YAML version on a held-out fixture.
 - **SC-5.** Cross-provider parity: the same skill produces equivalent output on at least one Anthropic, one OpenAI, and one Google model.
@@ -276,7 +275,7 @@ Once skills carry the prompt content, the legacy YAML files in `packages/extensi
 
 ## Open questions
 
-- **OQ-1.** `.texra/skills/` vs `.agents/skills/` as canonical project location. Currently leaning `.texra/`; revisit if codex-style `.agents/` standard solidifies.
+- **OQ-1.** `.texra/skills/` remains the native project location; `.agents/skills/` is imported as an interop source when enabled.
 - **OQ-2.** Should `_multiple` agent variants collapse into one skill with a frontmatter flag, or stay as siblings? Probably case-by-case, but a default convention helps.
 - **OQ-3.** How aggressively to bundle skills with the extension. Top-N most-used? Or none (ship clean, let users opt in)?
 - **OQ-4.** Where the orchestrator-attaches-skills wiring lives. Likely a `skills: string[]` field on agent definitions (mirroring Claude Code's `AgentDefinition.skills`), but the dispatch path needs design work.
