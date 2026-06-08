@@ -36,11 +36,14 @@ export function isExecutionStatus(
   );
 }
 
+export type CliToolUseRunResult = Extract<
+  CliRunResult,
+  { category: 'toolUse' }
+>;
+
 /** Display text for a finished tool-use run: the last response if present,
  *  otherwise a terse status/execution-id summary. */
-export function toolUseResultText(
-  result: Extract<CliRunResult, { category: 'toolUse' }>,
-): string {
+export function toolUseResultText(result: CliToolUseRunResult): string {
   return (
     result.lastResponse?.trim() ||
     `${result.status}\nExecution: ${result.executionId}`

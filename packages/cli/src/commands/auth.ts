@@ -1,5 +1,7 @@
 import { defineCommand } from 'citty';
 
+import type { SupabaseSession } from '@auth/SupabaseSession';
+
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import {
@@ -25,6 +27,7 @@ import {
   getCliAuthProfile,
   signInCliSupabase,
   signOutCliSupabase,
+  type CliAuthProfile,
 } from '../runtime/supabaseAuth';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
@@ -94,7 +97,7 @@ async function runLogin(
   if (context.outputFormat === 'text' && !init.noBrowser) {
     writeTextStdout(`Opening browser for TeXRA ${init.provider} sign-in...`);
   }
-  let session: Awaited<ReturnType<typeof signInCliSupabase>>;
+  let session: SupabaseSession;
   try {
     session = await signInCliSupabase({
       provider: init.provider,
@@ -211,7 +214,7 @@ const authStatusCommand = defineCliCommand({
     ...GLOBAL_ARGS,
   },
   async run(context) {
-    let profile: Awaited<ReturnType<typeof getCliAuthProfile>>;
+    let profile: CliAuthProfile;
     try {
       await initCliPlatform({ ...context, quietLogs: true });
       profile = await getCliAuthProfile();

@@ -88,6 +88,7 @@ import {
   type ClaudeAgentPermissionMode,
   type ClaudeMessageBlock,
 } from './claudeAgentShared';
+import type { Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk';
 
 let _configModule: typeof import('./claudeAgentConfig') | null = null;
 async function getClaudeAgentConfig(): Promise<
@@ -297,7 +298,7 @@ export async function runStreamedTurn(params: {
 
   const query = await importClaudeAgentSdk();
 
-  const sdkOptions: import('@anthropic-ai/claude-agent-sdk').Options = {
+  const sdkOptions: ClaudeAgentSdkOptions = {
     abortController: params.abortController,
     model: params.model,
     permissionMode: params.permissionMode,

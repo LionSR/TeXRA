@@ -9,10 +9,8 @@ import { createChannelTrace } from '@logger';
 import {
   STREAM_STATUS,
   type ConversationProgress,
-  type StorageKey,
   type StreamStatus,
   type StreamTabId,
-  type TokenUsageStats,
 } from '@shared/schemas';
 import {
   WebviewUpdater,
@@ -22,6 +20,7 @@ import { mapToRecord } from '@shared/progressView/backend/persistence/serializat
 import {
   ProgressViewState,
   type ActiveStreamId,
+  type StreamBadgeSnapshot,
   type StreamExecutionState,
 } from '@shared/progressView/backend/state/ProgressViewState';
 import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
@@ -39,13 +38,6 @@ export type { UICallbacks };
 
 /** Throttle interval for conversation progress webview pushes (ms). */
 const PROGRESS_THROTTLE_MS = 500;
-
-type StreamBadgeSnapshot = {
-  activeSubagents: StreamExecutionState['activeSubagents'];
-  finishedSubagentCount: StreamExecutionState['finishedSubagentCount'];
-  activeProcesses: StreamExecutionState['activeProcesses'];
-  finishedProcessCount: StreamExecutionState['finishedProcessCount'];
-};
 
 export type ProgressEventSubscription = {
   dispose(): void;
@@ -547,9 +539,7 @@ export class ProgressEventHandler {
 
     // Per-run usage map — shared by workflow and tool-use. Frontend derives
     // sessionUsage as the sum so cumulative totals survive resume.
-    const runUsage = Object.fromEntries(
-      this.state.snapshots.getRunUsage(stream).entries(),
-    ) as Record<string, TokenUsageStats>;
+    const runUsage = mapToRecord(this.state.snapshots.getRunUsage(stream));
 
     const contextState = this.state.getContextState(stream);
 

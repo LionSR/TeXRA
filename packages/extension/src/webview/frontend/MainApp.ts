@@ -1,7 +1,6 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { provide } from '@lit/context';
 import { customElement, state } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -1659,9 +1658,6 @@ export class MainApp extends MainAppBase {
     }
 
     const isToolUse = this.sessionType.get() === SESSION_TYPES.TOOL_USE;
-    const fileSelectionClasses = classMap({
-      'file-selection-group': true,
-    });
     // Tool-use (interactive) agents read input/context via their own tools, so
     // only the Media group (pasted/added images the agent can view) is relevant
     // to them; workflow agents get the full set. Surfacing Media here lets an
@@ -1783,55 +1779,53 @@ export class MainApp extends MainAppBase {
               .handleComponentDismissGettingStarted}
           ></banner-group>
 
-          ${html`
-            <div class="section-separator" role="presentation"></div>
-            <wa-details
-              class="file-selection-details"
-              ?open=${this.fileSelectionOpen.get()}
-              @wa-show=${(event: Event) => {
-                // Filter by event source: child wa-dropdown components
-                // inside the panel also emit wa-show/wa-hide which bubble
-                // up. Without this guard, opening any dropdown inside
-                // the Files panel re-flips fileSelectionOpen on the next
-                // dropdown close (see webawesome#1540).
-                if (event.target === event.currentTarget) {
-                  this.fileSelectionOpen.set(true);
-                }
-              }}
-              @wa-hide=${(event: Event) => {
-                if (event.target === event.currentTarget) {
-                  this.fileSelectionOpen.set(false);
-                }
-              }}
-            >
-              <span slot="summary" class="file-selection-summary">
-                <wa-icon
-                  library=${TEXRA_ICON_LIBRARY}
-                  name="folder-tree"
-                  variant="solid"
-                ></wa-icon>
-                Files
-              </span>
-              <div class=${fileSelectionClasses}>
-                ${repeat(
-                  visibleFileConfigs,
-                  (config) => config.type,
-                  (config) => html`
-                    <file-select-group
-                      .config=${config}
-                      @add-opened-files=${this.handleComponentAddOpenedFiles}
-                      @empty-files=${this.handleComponentEmptyFiles}
-                      @select-multiple-files=${this
-                        .handleComponentSelectMultipleFiles}
-                      @remove-file=${this.handleComponentRemoveFile}
-                      @files-reordered=${this.handleComponentFilesReordered}
-                      @checkbox-change=${this.handleComponentCheckboxChange}
-                    ></file-select-group>
-                  `,
-                )}
-              </div>
-            </wa-details>
-          `}
+          <div class="section-separator" role="presentation"></div>
+          <wa-details
+            class="file-selection-details"
+            ?open=${this.fileSelectionOpen.get()}
+            @wa-show=${(event: Event) => {
+              // Filter by event source: child wa-dropdown components
+              // inside the panel also emit wa-show/wa-hide which bubble
+              // up. Without this guard, opening any dropdown inside
+              // the Files panel re-flips fileSelectionOpen on the next
+              // dropdown close (see webawesome#1540).
+              if (event.target === event.currentTarget) {
+                this.fileSelectionOpen.set(true);
+              }
+            }}
+            @wa-hide=${(event: Event) => {
+              if (event.target === event.currentTarget) {
+                this.fileSelectionOpen.set(false);
+              }
+            }}
+          >
+            <span slot="summary" class="file-selection-summary">
+              <wa-icon
+                library=${TEXRA_ICON_LIBRARY}
+                name="folder-tree"
+                variant="solid"
+              ></wa-icon>
+              Files
+            </span>
+            <div class="file-selection-group">
+              ${repeat(
+                visibleFileConfigs,
+                (config) => config.type,
+                (config) => html`
+                  <file-select-group
+                    .config=${config}
+                    @add-opened-files=${this.handleComponentAddOpenedFiles}
+                    @empty-files=${this.handleComponentEmptyFiles}
+                    @select-multiple-files=${this
+                      .handleComponentSelectMultipleFiles}
+                    @remove-file=${this.handleComponentRemoveFile}
+                    @files-reordered=${this.handleComponentFilesReordered}
+                    @checkbox-change=${this.handleComponentCheckboxChange}
+                  ></file-select-group>
+                `,
+              )}
+            </div>
+          </wa-details>
         </div>
 
         ${this.isDesktopHost

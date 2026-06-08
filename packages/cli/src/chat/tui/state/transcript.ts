@@ -16,7 +16,7 @@ export const CLI_LOCAL_STREAM_ID = 'cli-local' as StreamTabId;
 /**
  * Stream statuses at which deferred-finalization entries (assistant text and
  * tool rows) are promoted into `<Static>` scrollback. This is exactly the
- * shared "execution ended" set ({@link isTerminalStatus}) — a terminal status
+ * shared "execution ended" set ({@link isTerminalStatus}): a terminal status
  * means the current cycle is done, so its entries are safe to finalize. Aliased
  * (not re-declared) so the membership stays single-sourced across all hosts.
  */

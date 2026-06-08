@@ -4,6 +4,7 @@ import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/toolus
 import {
   runToolUseFlow,
   type IToolUseSession,
+  type RunToolUseFlowResult,
 } from '@agent/implementations/flows/tooluse';
 import {
   runReflectionFlow,
@@ -18,6 +19,7 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { AgentError } from '@common/errors';
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import {
   STREAM_STATUS,
@@ -27,7 +29,6 @@ import {
   type RoundOutput,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import { TaskRunFileService } from '@utils/files';
 import { ensureRunDir } from '@utils/files/taskRunStorage';
 
 import {
@@ -46,8 +47,6 @@ import type {
   CompileFailureSummary,
   OutputFileSummary,
 } from './AgentFlowResult';
-
-export { getAgentPath } from './AgentLaunchContext';
 
 const CHANNEL = 'executeAgent';
 const logger = createChannelTrace(CHANNEL);
@@ -106,6 +105,22 @@ function buildWorkflowFlowResult(
   };
 }
 
+/** Build a tool-use AgentFlowResult from a tool-use flow run. */
+function buildToolUseFlowResult(
+  result: RunToolUseFlowResult,
+  executionId: ExecutionId,
+  streamId: StreamTabId,
+): AgentFlowResult {
+  return {
+    category: 'toolUse',
+    status: result.status,
+    lastResponse: result.lastResponse,
+    touchedFiles: result.touchedFiles,
+    executionId,
+    streamId,
+  };
+}
+
 /** Create an onRoundCompleted callback that feeds progress into the execution registry and orchestrator. */
 function createRoundProgressCallback(
   executionId: ExecutionId,
@@ -147,12 +162,12 @@ function createUsageRecordingCallback(
   };
 }
 
-function buildFallbackNotification(config: AgentConfig): {
-  agentName: string;
-  modelName: string;
-  inputName: string;
-  outputInfo: string;
-} {
+/** Toast payload shown when the progress view cannot be opened. */
+type FallbackNotification = NonNullable<
+  ProgressEventPayloads['requestEnsureProgressView']['fallbackNotification']
+>;
+
+function buildFallbackNotification(config: AgentConfig): FallbackNotification {
   const primaryInput = config.inputFiles[0];
   const inputName = primaryInput
     ? path.basename(primaryInput)
@@ -325,14 +340,7 @@ export async function executeAgent(
               return () => handle.detachToolUseFlow(flowContext);
             },
           );
-          return {
-            category: 'toolUse' as const,
-            status: result.status,
-            lastResponse: result.lastResponse,
-            touchedFiles: result.touchedFiles,
-            executionId: ctx.executionId,
-            streamId,
-          };
+          return buildToolUseFlowResult(result, ctx.executionId, streamId);
         }
 
         const onRoundCompleted = createRoundProgressCallback(
@@ -428,14 +436,7 @@ export async function resumeToolUseFromSnapshot(
           return () => handle.detachToolUseFlow(flowContext);
         },
       );
-      return {
-        category: 'toolUse' as const,
-        status: result.status,
-        lastResponse: result.lastResponse,
-        touchedFiles: result.touchedFiles,
-        executionId: ctx.executionId,
-        streamId,
-      };
+      return buildToolUseFlowResult(result, ctx.executionId, streamId);
     });
   });
 }

@@ -8,7 +8,7 @@ import * as yaml from 'yaml';
 // Local imports - utilities
 import { resolveAgent, getWorkflowAgents } from '@agent/index';
 import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
-import { getAgentPath } from '@agent/runtime/executeAgent';
+import { getAgentPath } from '@agent/runtime/AgentLaunchContext';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import {
   getActiveEditorWithGuards,

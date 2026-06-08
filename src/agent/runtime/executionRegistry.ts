@@ -25,6 +25,7 @@ import {
 import { formatDuration } from '@utils/core';
 import {
   type ExecutionHandle,
+  type ExecutionProgress,
   type ExecutionStatusInfo,
   type LiveToolUseFlowContext,
   AgentExecutionHandle,
@@ -38,6 +39,7 @@ import {
 
 export type { ExecutionHandle } from './ExecutionHandle';
 export {
+  type ExecutionProgress,
   type ExecutionStatusInfo,
   type LiveToolUseFlowContext,
   ACTIVE_STATUSES,
@@ -201,7 +203,6 @@ export class ExecutionRegistry {
   untrack(executionId: string): void {
     const handle = this.handles.get(executionId);
     if (!handle) {
-      this.handles.delete(executionId);
       this.notifyWaiters(executionId);
       return;
     }
@@ -377,10 +378,7 @@ export class ExecutionRegistry {
     }
   }
 
-  updateProgress(
-    executionId: string,
-    update: { currentRound?: number; totalRounds?: number },
-  ): void {
+  updateProgress(executionId: string, update: ExecutionProgress): void {
     const handle = this.handles.get(executionId);
     if (!handle) return;
     handle.updateProgress(update);

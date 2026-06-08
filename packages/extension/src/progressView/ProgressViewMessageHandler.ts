@@ -26,6 +26,7 @@ import { loadOptions } from '@frontend/agents/optionsLoader';
 import { handleProgressViewToolEditApprovalAction } from '@frontend/approval/nativeToolEditApproval';
 import { RecordingManager } from '@frontend/media/RecordingManager';
 import { safeExecuteCommand } from '@frontend/system/commandUtils';
+import { isApiProvider } from '@model/apiProviders';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import { COMMON_COMMANDS, PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { StreamTabId } from '@shared/schemas';
@@ -113,10 +114,7 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
     this.followUpController = this.createFollowUpController();
 
     const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
-      void this.handleDeleteStream({
-        command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
-        stream: streamId,
-      });
+      void this.streamLifecycleController.deleteStream(streamId);
       void OdysseyStore.forget(streamId);
     });
     context.subscriptions.push({ dispose: unsubscribeRemoveStream });
@@ -568,12 +566,6 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   // Stream management handlers
   // ============================================================
 
-  private async handleDeleteStream(
-    data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.DELETE_STREAM>,
-  ): Promise<void> {
-    await this.streamLifecycleController.deleteStream(data.stream);
-  }
-
   private async handleDeleteAll(): Promise<void> {
     const confirmation = await vscode.window.showWarningMessage(
       'Are you sure you want to delete all streams? This action cannot be undone.',
@@ -607,11 +599,10 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
   private async handleUseOwnApiKey(
     data: MessageFor<typeof PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY>,
   ): Promise<void> {
-    const providerArg = (
-      SecretManager.API_PROVIDERS as readonly string[]
-    ).includes(data.provider ?? '')
-      ? (data.provider as ApiProvider)
-      : undefined;
+    const providerArg =
+      data.provider !== undefined && isApiProvider(data.provider)
+        ? data.provider
+        : undefined;
 
     // The gate depends on WHICH credential is exhausted:
     //   - Upstream credit depletion (Anthropic 400 "credit balance is

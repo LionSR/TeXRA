@@ -17,6 +17,7 @@ import {
   applyTerminalInputChunk,
   insertText,
   maskDisplayValue,
+  type CursorEdit,
   type TextEdit,
 } from './textInputEditing';
 import {
@@ -369,7 +370,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
   );
 
   const applyLatestEdit = useCallback(
-    (edit: (value: string, cursor: number) => TextEdit) => {
+    (edit: CursorEdit) => {
       const { value: v, cursor: c } = latestStateRef.current;
       applyEdit(edit(v, c));
     },

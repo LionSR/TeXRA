@@ -12,6 +12,7 @@ import {
   parseCliHistoryId,
   preflightCliHistoryDeleteAll,
   readCliHistoryDetails,
+  type CliHistoryDeleteResult,
 } from '../runtime/history';
 import { initLocalCliPlatform } from '../runtime/initPlatform';
 import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
@@ -97,7 +98,7 @@ async function runHistoryDelete(
     preCountForAll = preflight.count;
   }
 
-  let result: Awaited<ReturnType<typeof deleteCliHistory>>;
+  let result: CliHistoryDeleteResult;
   try {
     result = await deleteCliHistory({ ...options, preCountForAll });
   } catch (error) {
