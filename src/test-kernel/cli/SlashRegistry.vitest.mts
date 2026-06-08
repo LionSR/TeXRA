@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  findSlashCommand,
   listSlashCommands,
   matchSlashCommands,
   parseSlashInput,
@@ -504,6 +505,18 @@ describe('slashRegistry', () => {
     });
     expect(matchSlashCommands('h').map((c) => c.name)).toEqual(['help']);
     expect(matchSlashCommands('us').map((c) => c.name)).toEqual(['help']);
+  });
+
+  it('finds exact command names and aliases case-insensitively', () => {
+    registerSlashCommand({
+      name: 'agent',
+      description: 'pick an agent',
+      aliases: ['agents'],
+    });
+
+    expect(findSlashCommand('agent')?.name).toBe('agent');
+    expect(findSlashCommand('AGENTS')?.name).toBe('agent');
+    expect(findSlashCommand('age')).toBeUndefined();
   });
 
   it('submits no-form commands on Enter and completes on Tab', () => {
