@@ -39,6 +39,11 @@ export {
   ProcessExecutionHandle,
 } from './ExecutionHandle';
 
+export interface StopAgentStreamOptions {
+  readonly detachActiveChildren?: boolean;
+  readonly runtimeHost?: AgentRuntimeHost;
+}
+
 /**
  * Process-wide owner for active executions and their change listeners.
  *
@@ -315,6 +320,39 @@ export class ExecutionRegistry {
     this.emitActiveSubagentsUpdate(parentStreamId, runtimeHost);
   }
 
+  /**
+   * Stop a visible agent stream and apply the same child policy everywhere.
+   *
+   * Hosts should call this instead of reconstructing stop behavior from
+   * child-interrupts, root interrupts, and stream-status writes.
+   */
+  stopAgentStream(
+    streamId: StreamTabId,
+    options: StopAgentStreamOptions = {},
+  ): boolean {
+    const rootHandle = this.getAgentHandleByStream(streamId);
+    const runtimeHost = options.runtimeHost ?? rootHandle?.runtimeHost;
+
+    if (options.detachActiveChildren === true) {
+      if (!runtimeHost) {
+        throw new Error(
+          'stopAgentStream requires a runtimeHost to detach active children',
+        );
+      }
+      this.detachActiveChildren(streamId, runtimeHost);
+    } else {
+      this.interruptActiveChildren(streamId);
+    }
+
+    const stopped = rootHandle
+      ? this.terminate(rootHandle)
+      : this.interruptRegisteredStream(streamId, runtimeHost);
+    if (!stopped && runtimeHost) {
+      this.streamStatus.set(streamId, STREAM_STATUS.STOPPED, { runtimeHost });
+    }
+    return stopped;
+  }
+
   /** Get active subagent and process children for a parent stream. */
   getActiveChildren(parentStreamId: StreamTabId): {
     subagents: ActiveChildInfo[];
@@ -403,6 +441,19 @@ export class ExecutionRegistry {
     }
 
     return false;
+  }
+
+  private interruptRegisteredStream(
+    streamId: StreamTabId,
+    runtimeHost: AgentRuntimeHost | undefined,
+  ): boolean {
+    const interruptible = this.interrupts.get(streamId);
+    if (!interruptible) return false;
+    interruptible.interrupt();
+    if (runtimeHost) {
+      this.streamStatus.set(streamId, STREAM_STATUS.STOPPED, { runtimeHost });
+    }
+    return true;
   }
 
   private addChangeCallback(executionId: string, cb: () => void): void {
