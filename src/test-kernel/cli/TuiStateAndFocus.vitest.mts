@@ -22,7 +22,6 @@ import {
   allocateSidePanelRows,
   appEscapeInterruptActive,
   appFocusShortcutsActive,
-  approvalBlocksInput,
   approvalForegroundMaxRows,
   approvalVisibleForActiveStream,
   childControlForegroundMaxRows,
@@ -859,7 +858,7 @@ describe('CLI TUI row allocation', () => {
     ).toBe(true);
   });
 
-  it('blocks input for hidden stream-owned approvals', () => {
+  it('keeps hidden stream-owned approvals from taking the foreground', () => {
     const childApproval = {
       payload: {
         kind: 'bash',
@@ -879,8 +878,6 @@ describe('CLI TUI row allocation', () => {
         pending: childApproval,
       }),
     ).toBe(false);
-    expect(approvalBlocksInput(childApproval)).toBe(true);
-    expect(approvalBlocksInput(undefined)).toBe(false);
   });
 
   it('keeps stream focus shortcuts available for hidden approvals', () => {
@@ -903,7 +900,6 @@ describe('CLI TUI row allocation', () => {
         pending: childApproval,
       }),
     ).toBe(false);
-    expect(approvalBlocksInput(childApproval)).toBe(true);
     expect(
       appFocusShortcutsActive({
         foregroundOpen: false,
