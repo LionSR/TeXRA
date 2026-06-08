@@ -267,9 +267,7 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
   }
 
   useEffect(() => {
-    setScrollOffset((current) =>
-      clamp(current, 0, maxScrollOffset),
-    );
+    setScrollOffset((current) => clamp(current, 0, maxScrollOffset));
   }, [maxScrollOffset]);
 
   useInput(
