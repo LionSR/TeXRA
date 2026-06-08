@@ -97,7 +97,9 @@ export interface ToolUseFlowContext {
   switchModel(model: string): Promise<void>;
 }
 
-export type ToolUseFlowSetupCallback = (context: ToolUseFlowContext) => void;
+export type ToolUseFlowSetupCallback = (
+  context: ToolUseFlowContext,
+) => void | (() => void);
 
 type ToolUsePersistedFlow<C> = PersistedFlow<
   ToolUseRunShared,
@@ -263,6 +265,7 @@ export async function runToolUseFlow<C = unknown>(
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let lastResponse: string | undefined;
   let touchedFiles: string[] | undefined;
+  let teardownSetup: (() => void) | undefined;
 
   let shared: ToolUseRunShared = {
     messages: [],
@@ -272,7 +275,7 @@ export async function runToolUseFlow<C = unknown>(
 
   try {
     interruptRegistry.register(streamId, flowContext);
-    onSetup?.(flowContext);
+    teardownSetup = onSetup?.(flowContext) ?? undefined;
     let flowRecord: FlowRecord | null = null;
     try {
       flowRecord = (await kv.read<FlowRecord>(flowKey(executionId))) ?? null;
@@ -347,6 +350,8 @@ export async function runToolUseFlow<C = unknown>(
     }
   } finally {
     activePersistedFlow = undefined;
+    teardownSetup?.();
+    teardownSetup = undefined;
     if (shared.userCancelledRetry) {
       logger.debug('Flow record preserved for resume after retry cancellation');
     } else {

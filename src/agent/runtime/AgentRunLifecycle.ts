@@ -43,7 +43,7 @@ export interface RunFlowLifecycleOptions {
  */
 export async function runFlowWithLifecycle(
   ctx: AgentLaunchContext,
-  runner: () => Promise<AgentFlowResult>,
+  runner: (handle: AgentExecutionHandle) => Promise<AgentFlowResult>,
   options?: RunFlowLifecycleOptions,
 ): Promise<AgentFlowResult> {
   const { streamId } = ctx;
@@ -64,7 +64,7 @@ export async function runFlowWithLifecycle(
   );
   executionRegistry.track(handle);
   try {
-    const result = await runner();
+    const result = await runner(handle);
     await options?.onCompleted?.(result);
     const terminalStatus =
       result.status === END_GROUP_STATUS.ERROR
