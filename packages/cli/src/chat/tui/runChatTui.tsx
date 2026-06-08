@@ -1149,8 +1149,7 @@ export async function runChat(
   const interruptActive = (): void => {
     clearApprovals();
     if (!session.streamId) return;
-    executionRegistry.interruptActiveChildren(session.streamId);
-    interruptRegistry.get(session.streamId)?.interrupt();
+    executionRegistry.stopAgentStream(session.streamId);
   };
 
   const resetSessionForClear = (): void => {
