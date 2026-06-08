@@ -42,10 +42,14 @@ import {
 } from '../src/chat/tui/state/transcriptViewportMode';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
 import {
+  findSlashCommand,
   listSlashCommands,
   parseSlashInput,
-  type SlashCommand,
 } from '../src/chat/tui/commands/slashRegistry';
+import {
+  openCliSlashCommandForm,
+  openRegisteredCliSlashForm,
+} from '../src/chat/tui/commands/slashForms';
 import { formatApprovalPolicyForCli } from '../src/chat/tui/forms/ApprovalPolicyForm';
 import {
   cliState,
@@ -1194,15 +1198,6 @@ function harnessRejectsChildSubmit(childStreamId: StreamTabId): boolean {
   return status !== undefined && !isInFlightStatus(status);
 }
 
-function findRegisteredSlashCommand(name: string): SlashCommand | undefined {
-  const lower = name.toLowerCase();
-  return listSlashCommands().find(
-    (command) =>
-      command.name.toLowerCase() === lower ||
-      command.aliases?.some((alias) => alias.toLowerCase() === lower) === true,
-  );
-}
-
 function formatHarnessSlashHelp(): string {
   return listSlashCommands()
     .map((command) => `/${command.name} - ${command.description}`)
@@ -1248,29 +1243,8 @@ function getHarnessModelSwitchDisabledReason(
     : undefined;
 }
 
-function openHarnessSlashForm(
-  command: SlashCommand,
-  remainder: string,
-): boolean {
-  const Form = command.formComponent;
-  if (!Form) return false;
-  cliState.activeForm.set({
-    commandName: command.name,
-    escapeAction: command.formEscapeAction,
-    render: (close, availableRows) => (
-      <Form
-        availableRows={availableRows}
-        remainder={remainder.trimStart()}
-        onDone={() => close()}
-      />
-    ),
-  });
-  return true;
-}
-
 function openHarnessApprovalPolicyForm(remainder: string): boolean {
-  const command = findRegisteredSlashCommand('approval');
-  return command ? openHarnessSlashForm(command, remainder) : false;
+  return openCliSlashCommandForm('approval', remainder);
 }
 
 function applyHarnessApprovalPolicySelection(
@@ -1393,12 +1367,12 @@ function handleHarnessSlashCommand(line: string): boolean {
       applyHarnessApprovalPolicySelection(rest || 'yolo', HARNESS_YOLO_USAGE);
       return true;
     default: {
-      const command = findRegisteredSlashCommand(commandName);
+      const command = findSlashCommand(commandName);
       if (!command) {
         appendHarnessAssistantTranscript(`Unknown command: /${parsed.name}`);
         return true;
       }
-      if (openHarnessSlashForm(command, rest)) return true;
+      if (openRegisteredCliSlashForm(command, rest)) return true;
       appendHarnessAssistantTranscript(
         `/${command.name} is registered but has no harness action.`,
       );
