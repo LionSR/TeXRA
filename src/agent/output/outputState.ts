@@ -73,7 +73,10 @@ export function getStorageKey(state: OutputState): StorageKey {
   return state.storageKey ?? normalizeRunId(null);
 }
 
-export function ensureRoundData(state: OutputState, round: number): RoundOutput {
+export function ensureRoundData(
+  state: OutputState,
+  round: number,
+): RoundOutput {
   let data = state.rounds.get(round);
   if (!data) {
     data = {
