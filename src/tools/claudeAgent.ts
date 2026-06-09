@@ -25,11 +25,7 @@
 import { z } from 'zod';
 
 // Local imports
-import {
-  getExecutionStore,
-  registerExecution,
-  writeTerminalStatus,
-} from '@agent/storage';
+import { registerExecution } from '@agent/storage';
 import {
   emitToolUseCard,
   endToolUseCard,
@@ -39,13 +35,7 @@ import {
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
-import {
-  interruptRegistry,
-  type IInterruptible,
-} from '@agent/runtime/InterruptRegistry';
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
 import type {
   StreamTabId,
@@ -53,7 +43,7 @@ import type {
   StorageKey,
   ToolUseLog,
 } from '@shared/schemas';
-import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { ToolError, type ToolResult } from '@tools/result';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -74,10 +64,9 @@ import {
 import { createChildStream, type ChildStream } from './childStream';
 import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import {
-  agentCliLoopTerminalStatus,
-  isCleanInterruption,
-  logTurnSummary,
-} from './agentCliShared';
+  runAgentCliSession,
+  type AgentCliSessionStrategy,
+} from './agentCliSessionLoop';
 import {
   buildClaudeToolUseLog,
   buildClaudeUsageStats,
@@ -157,39 +146,6 @@ const claudeAgentSessions = new AgentCliSessionRegistry<ActiveSession>(
 
 export function interruptAllClaudeAgentSessions(): void {
   claudeAgentSessions.interruptAll();
-}
-
-// ============================================================================
-// Interruptible session — runs the SDK query loop and accepts follow-ups
-// ============================================================================
-
-class ClaudeAgentSession implements IInterruptible {
-  private interrupted = false;
-  private queue: FollowUpQueue | null = null;
-  private turnAbortController: AbortController | null = null;
-
-  interrupt(): void {
-    this.interrupted = true;
-    this.queue?.cancelWait();
-    this.turnAbortController?.abort();
-  }
-
-  setQueue(q: FollowUpQueue): void {
-    this.queue = q;
-  }
-
-  isInterrupted(): boolean {
-    return this.interrupted;
-  }
-
-  startTurn(): AbortController {
-    this.turnAbortController = new AbortController();
-    return this.turnAbortController;
-  }
-
-  finishTurn(): void {
-    this.turnAbortController = null;
-  }
 }
 
 // ============================================================================
@@ -474,148 +430,85 @@ function startClaudeAgentLoop(params: {
   pathToClaudeCodeExecutable: string | undefined;
   runtimeHost: AgentRuntimeHost;
 }): void {
-  const {
+  const { childStream, parentStreamId, executionId, initialPrompt, runtimeHost } =
+    params;
+  const { childStreamId, logger } = childStream;
+
+  // The SDK needs the prior session id to resume the same conversation across
+  // turns; it's threaded forward from each turn's result.
+  let resumeSessionId: string | undefined;
+  const storedSessionIds = new Set<string>();
+
+  const strategy: AgentCliSessionStrategy<TurnResult> = {
+    stageLabel: 'Claude Code session',
+    runTurn: async (prompt, abortController) => {
+      const turn = await runStreamedTurn({
+        prompt,
+        childStreamId,
+        logger,
+        abortController,
+        model: params.model,
+        permissionMode: params.permissionMode,
+        effort: params.effort,
+        cwd: params.cwd,
+        additionalDirectories: params.additionalDirectories,
+        env: params.env,
+        resumeSessionId,
+        pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
+      });
+      if (turn.sessionId) resumeSessionId = turn.sessionId;
+      return turn;
+    },
+    getUsage: (turn) => turn.usage,
+    isTurnError: (turn) => turn.isError,
+    onTurnError: (turn, log) => {
+      if (turn.errorMessage) log.error(turn.errorMessage);
+    },
+    onTurnSuccess: (turn) => {
+      if (turn.sessionId && !claudeAgentSessions.isActive(turn.sessionId)) {
+        claudeAgentSessions.register(turn.sessionId, {
+          childStreamId,
+          parentStreamId,
+          executionId,
+          model: params.model,
+          permissionMode: params.permissionMode,
+          effort: params.effort,
+          cwd: params.cwd,
+          additionalDirectories: params.additionalDirectories,
+        });
+        storedSessionIds.add(turn.sessionId);
+      }
+    },
+    publishUsage: (turn) => {
+      if (turn.usage) {
+        runtimeHost.emit('updateStreamUsage', {
+          streamId: childStreamId,
+          storageKey: executionId as StorageKey,
+          executionId,
+          usage: buildClaudeUsageStats(turn.usage),
+        });
+      }
+    },
+    formatDelivery: (turn, prompt, wallTimeMs) =>
+      formatClaudeDelivery(executionId, prompt, wallTimeMs, turn),
+    formatError: (turn, prompt, err) =>
+      formatClaudeError(
+        executionId,
+        prompt,
+        err ?? turn?.errorMessage ?? turn?.finalResponse,
+      ),
+    onSessionCleanup: () => {
+      claudeAgentSessions.releaseMany(storedSessionIds);
+    },
+  };
+
+  runAgentCliSession({
     childStream,
     parentStreamId,
     executionId,
     initialPrompt,
-    runtimeHost,
-  } = params;
-  const { childStreamId, logger } = childStream;
-
-  const session = new ClaudeAgentSession();
-  const queue = ToolUseFollowUpQueue.acquire(childStreamId);
-  session.setQueue(queue);
-  interruptRegistry.register(childStreamId, session);
-
-  // The child session runs on its own trace, whose per-instance stage scope is
-  // empty here, so this opens as a root with no cross-trace parent.
-  const sessionStage = logger.openStage('Claude Code session');
-
-  queue.enqueue({ text: initialPrompt });
-  childStream.waitForInput();
-
-  let resumeSessionId: string | undefined;
-  const storedSessionIds = new Set<string>();
-
-  let sawTurnFailure = false;
-  void (async () => {
-    try {
-      while (!session.isInterrupted()) {
-        const messages = await queue.waitAndDrainAll(() =>
-          session.isInterrupted(),
-        );
-        if (!messages || session.isInterrupted()) break;
-
-        const prompt = messages.items.map((item) => item.text).join('\n\n');
-        childStream.beginTurn();
-        const startedAt = Date.now();
-        const ac = session.startTurn();
-
-        let turn: TurnResult | null = null;
-        let err: unknown = null;
-        try {
-          turn = await runStreamedTurn({
-            prompt,
-            childStreamId,
-            logger,
-            abortController: ac,
-            model: params.model,
-            permissionMode: params.permissionMode,
-            effort: params.effort,
-            cwd: params.cwd,
-            additionalDirectories: params.additionalDirectories,
-            env: params.env,
-            resumeSessionId,
-            pathToClaudeCodeExecutable: params.pathToClaudeCodeExecutable,
-          });
-          if (turn.sessionId) resumeSessionId = turn.sessionId;
-          logTurnSummary(logger, Date.now() - startedAt, turn.usage);
-          if (turn.isError && turn.errorMessage) {
-            logger.error(turn.errorMessage);
-          }
-        } catch (caught) {
-          if (isCleanInterruption(caught, ac.signal, session)) break;
-          err = caught;
-          logger.error(toErrorMessage(caught));
-        } finally {
-          session.finishTurn();
-        }
-
-        const wallTimeMs = Date.now() - startedAt;
-        const turnFailed = err != null || turn?.isError === true;
-        if (
-          !turnFailed &&
-          turn?.sessionId &&
-          !claudeAgentSessions.isActive(turn.sessionId)
-        ) {
-          claudeAgentSessions.register(turn.sessionId, {
-            childStreamId,
-            parentStreamId,
-            executionId,
-            model: params.model,
-            permissionMode: params.permissionMode,
-            effort: params.effort,
-            cwd: params.cwd,
-            additionalDirectories: params.additionalDirectories,
-          });
-          storedSessionIds.add(turn.sessionId);
-        }
-
-        if (turn?.usage) {
-          runtimeHost.emit('updateStreamUsage', {
-            streamId: childStreamId,
-            storageKey: executionId as StorageKey,
-            executionId,
-            usage: buildClaudeUsageStats(turn.usage),
-          });
-        }
-
-        const msg =
-          turn && !turnFailed
-            ? formatClaudeDelivery(executionId, prompt, wallTimeMs, turn)
-            : formatClaudeError(
-                executionId,
-                prompt,
-                err ?? turn?.errorMessage ?? turn?.finalResponse,
-              );
-        try {
-          await getExecutionStore(executionId).writeReport(msg);
-        } catch {
-          // Best-effort; delivery must not block on storage.
-        }
-        await sendFollowUp(parentStreamId, {
-          text: msg,
-          origin: 'subagent_result',
-        });
-
-        if (turnFailed) {
-          sawTurnFailure = true;
-          childStream.failTurn();
-          break;
-        }
-
-        if (!session.isInterrupted()) {
-          childStream.waitForInput();
-        }
-      }
-    } finally {
-      sessionStage.end(sawTurnFailure ? 'error' : 'stopped');
-      claudeAgentSessions.releaseMany(storedSessionIds);
-      interruptRegistry.unregister(childStreamId);
-      ToolUseFollowUpQueue.release(childStreamId);
-      await writeTerminalStatus(
-        executionId,
-        agentCliLoopTerminalStatus({
-          interrupted: session.isInterrupted(),
-          sawTurnFailure,
-        }),
-      ).catch(() => {});
-      childStream.finalize({
-        status: sawTurnFailure ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
-      });
-    }
-  })();
+    strategy,
+  });
 }
 
 // ============================================================================
