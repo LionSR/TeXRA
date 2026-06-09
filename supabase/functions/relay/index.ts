@@ -337,8 +337,9 @@ async function checkSpendingLimit(
 
   // Call database function for efficient server-side aggregation
   // Aggregates relay usage server-side, summing workflow streams and
-  // deduplicating other streams/batches; keep in sync with
-  // 20260108_dedupe_relay_views_by_stream.sql.
+  // relying on the canonical per-stream rows maintained by
+  // 20260517100000_usage_logs_upsert_rpc.sql and
+  // 20260517100100_usage_logs_aggregate_per_stream.sql.
   const { data, error } = await adminClient.rpc(
     'get_user_monthly_relay_spend',
     {
