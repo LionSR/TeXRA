@@ -2,6 +2,8 @@ import { Node } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { appendFollowUpAsUserMessage } from '@agent/toolUse/followUpMessages';
+import { maybeBuildOdysseyContinuation } from '@agent/odyssey';
+import { OdysseyStore } from '@tools/odyssey';
 import { STREAM_STATUS } from '@shared/schemas';
 
 import { findLastAssistantText, extractTouchedFiles } from './types';
@@ -75,6 +77,16 @@ export class ToolUseWaitNode<C> extends Node<
     if (prepRes.afterError && isSubagent) {
       return { kind: 'stop' };
     }
+    // A failed/cancelled cycle ends the autonomous leg. Pause any active
+    // odyssey so it surfaces as resumable — the in-cycle retry layer already
+    // absorbed transient errors before we reach here — instead of leaving the
+    // record `active` while the loop is actually stalled on a blocking wait.
+    if (prepRes.afterError) {
+      const odyssey = OdysseyStore.getForStream(streamId);
+      if (odyssey?.status === 'active') {
+        await OdysseyStore.setStatus(streamId, 'paused');
+      }
+    }
     if (!prepRes.afterError) {
       const delivered = await onBeforeWaiting?.(
         prepRes.lastResponse,
@@ -89,29 +101,23 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
 
-    // Idle-continuation providers run BEFORE `waitForFollowUp` blocks; once
+    // The Odyssey continuation runs BEFORE `waitForFollowUp` blocks; once
     // inside the wait, a continuation check is unreachable. Skipped after a
     // failed/cancelled cycle so the user-recovery path still fires. The
-    // post-await re-check of `hasQueuedFollowUp` lets user input that
-    // arrived during the build win the race; providers do their persistent
-    // side effects in `commit()` so a loser leaves no audit trace.
+    // post-build re-check of `hasQueuedFollowUp` lets user input that arrived
+    // during the build win the race.
     if (!prepRes.afterError) {
-      for (const provider of this.services.idleContinuations.list()) {
-        const continuation = await provider.build({
-          streamId,
-          isSubagent: !!isSubagent,
-          hasQueuedFollowUp: session.hasQueuedFollowUp(),
-        });
-        if (continuation && !session.hasQueuedFollowUp()) {
-          await continuation.commit();
-          return {
-            kind: 'continue',
-            followUps: [
-              { text: continuation.followUp, origin: 'synthetic' as const },
-            ],
-            synthetic: true,
-          };
-        }
+      const followUp = await maybeBuildOdysseyContinuation({
+        streamId,
+        isSubagent: !!isSubagent,
+        hasQueuedFollowUp: session.hasQueuedFollowUp(),
+      });
+      if (followUp && !session.hasQueuedFollowUp()) {
+        return {
+          kind: 'continue',
+          followUps: [{ text: followUp, origin: 'synthetic' as const }],
+          synthetic: true,
+        };
       }
     }
 

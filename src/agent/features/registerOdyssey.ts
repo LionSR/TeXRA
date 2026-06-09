@@ -1,28 +1,21 @@
-import { maybeBuildOdysseyContinuation } from '@agent/odyssey';
-import { idleContinuationRegistry } from '@agent/runtime/idleContinuation';
 import { toolInjectionRegistry } from '@agent/runtime/toolInjection';
-import { OdysseyStore, isOdysseyEnabled } from '@tools/odyssey';
+import { isOdysseyEnabled } from '@tools/odyssey';
 
+/**
+ * Wire the Odyssey (autonomous-continuation) feature into the tool-use loop.
+ *
+ * The unified `plan` tool owns both planning and odyssey lifecycle commands
+ * (update / pause / complete), so it is auto-injected whenever odyssey is
+ * enabled — any tool-use agent can drive the autonomous loop without opting
+ * into the tool in YAML.
+ *
+ * The continuation itself is not registered here: `ToolUseWaitNode` calls
+ * `maybeBuildOdysseyContinuation` directly at the pre-wait point. There is no
+ * idle-continuation registry — odyssey was its only consumer.
+ */
 export function registerOdysseyFeature(): void {
-  // The unified `plan` tool owns both planning and odyssey lifecycle commands
-  // (update / pause / complete). Auto-inject it when odyssey is enabled so any
-  // tool-use agent can drive the autonomous loop without having to opt into the
-  // tool in YAML.
   toolInjectionRegistry.register({
     toolName: 'plan',
     shouldInject: () => isOdysseyEnabled(),
-  });
-
-  idleContinuationRegistry.register({
-    source: 'odyssey',
-    async build(ctx) {
-      const followUp = await maybeBuildOdysseyContinuation(ctx);
-      if (!followUp) return null;
-      return {
-        source: 'odyssey',
-        followUp,
-        commit: () => OdysseyStore.recordContinuation(ctx.streamId),
-      };
-    },
   });
 }

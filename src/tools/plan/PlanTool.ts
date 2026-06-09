@@ -46,7 +46,6 @@ import {
   formatWorkPlanGranularityWarning,
 } from '@tools/workPlanGranularityFeedback';
 import { defineTool } from '@tools/core/define';
-import { filterNotNull } from '@utils/core';
 
 const logger = createChannelTrace('PlanTool');
 
@@ -82,10 +81,7 @@ function formatOdysseyView(odyssey: Odyssey): string {
     `Odyssey: ${odyssey.odysseyId}`,
     `Status: ${odyssey.status}`,
     `Time elapsed: ${formatOdysseyTime(odysseyElapsedMs(odyssey))}`,
-    odyssey.completedReason ? `Reason: ${odyssey.completedReason}` : null,
-  ]
-    .filter(filterNotNull)
-    .join('\n');
+  ].join('\n');
 }
 
 /**
@@ -245,7 +241,7 @@ Best practices:
       };
     }
     const updated =
-      (await OdysseyStore.setStatus(streamId, 'paused', reason)) ?? odyssey;
+      (await OdysseyStore.setStatus(streamId, 'paused')) ?? odyssey;
     return {
       summary: 'Odyssey paused.',
       output: `Odyssey paused: ${reason}\n\n${formatOdysseyView(updated)}`,
@@ -265,24 +261,14 @@ Best practices:
           'The plan is the only artifact; you may simply summarize the result for the user.',
       };
     }
-    if (odyssey.status === 'complete') {
-      return {
-        summary: 'Odyssey already complete.',
-        output: `Odyssey is already complete. Reason on record: ${odyssey.completedReason ?? '(none)'}`,
-      };
-    }
-    if (odyssey.status === 'abandoned') {
-      throw new ToolError(
-        'Odyssey was abandoned by the user; complete is rejected. ' +
-          'The user must start a new odyssey explicitly.',
-      );
-    }
-    const updated =
-      (await OdysseyStore.setStatus(streamId, 'complete', reason)) ?? odyssey;
+    // Completing forgets the record — an odyssey is a live pursuit, not an
+    // archived one. The autonomous loop stops because no `active` record
+    // remains for the next wait-node continuation check.
+    await OdysseyStore.forget(streamId);
     return {
       summary: 'Odyssey complete.',
       output:
-        `Odyssey ${updated.odysseyId} marked complete.\n\n` +
+        `Odyssey ${odyssey.odysseyId} marked complete.\n\n` +
         `Reason: ${reason}\n\n` +
         `The autonomous continuation loop has stopped. ` +
         `Returning control to the user.`,
@@ -398,11 +384,7 @@ Best practices:
         );
         const active =
           retargeted.status === 'paused'
-            ? ((await OdysseyStore.setStatus(
-                streamId,
-                'active',
-                'User approved a new plan and requested autonomous execution.',
-              )) ?? retargeted)
+            ? ((await OdysseyStore.setStatus(streamId, 'active')) ?? retargeted)
             : retargeted;
         return {
           summary: `Plan approved — odyssey ${active.odysseyId} retargeted`,

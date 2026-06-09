@@ -2,10 +2,6 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { getExecutionStore } from '@agent/storage';
 import {
-  idleContinuationRegistry,
-  type IdleContinuationRegistry,
-} from '@agent/runtime/idleContinuation';
-import {
   activeModelHandlerCompatibilityKey,
   createModelHandler,
   modelHandlerCompatibilityKey,
@@ -75,8 +71,6 @@ export interface RunToolUseFlowInput<
   ) => void;
   /** Runtime feature registry for auto-injected tools. */
   toolInjections?: ToolInjectionRegistry;
-  /** Runtime feature registry for synthetic idle continuations. */
-  idleContinuations?: IdleContinuationRegistry;
 }
 
 export interface RunToolUseFlowResult {
@@ -150,7 +144,6 @@ export async function runToolUseFlow<C = unknown>(
     onRoundFinalized: input.onRoundFinalized ?? (async () => {}),
     persistTodos: (todos) => kv.writeTodos(todos),
     fileService: new TaskRunFileService(executionId),
-    idleContinuations: input.idleContinuations ?? idleContinuationRegistry,
     delegationDepth,
     delegationConfig,
     delegationTrimmed,
