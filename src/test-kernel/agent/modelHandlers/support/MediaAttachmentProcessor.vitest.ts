@@ -11,6 +11,12 @@ import { strict as assert } from 'node:assert';
 // Third-party imports
 import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';
 
+// Local imports - platform
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+
+// Local imports - test support
+import { createFakePlatform } from '@test/support/FakePlatform';
+
 // Local imports - agent
 import { DEFAULT_MODEL_CAPABILITIES, type ModelCapabilities } from 'llm-zoo';
 import type { AgentTrace } from '@agent/trace';
@@ -72,7 +78,12 @@ describe('MediaAttachmentProcessor', () => {
   const originalExists = absoluteFsAny.exists;
   const originalStat = absoluteFsAny.stat;
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    // Vitest isolates files, so this suite installs its own platform.
+    // Real node fs is required because fixtures live in os.tmpdir().
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
+
     absoluteFsAny.exists = async (filePath: string) => {
       if (!path.isAbsolute(filePath)) {
         throw new Error(`Expected absolute path, received ${filePath}`);
@@ -280,6 +291,13 @@ describe('MediaAttachmentProcessor', () => {
 
     processor.logResults(results);
     assert.equal(stub.fileListEntries.length, 1, 'should log failed media');
-    assert.equal(stub.warnMessages.length, 1, 'should warn about failed media');
+    assert.deepEqual(
+      stub.warnMessages,
+      [
+        `Skipping empty media file: ${displayPath}`,
+        'Some media files failed to load',
+      ],
+      'should warn while loading and again when logging the failed batch',
+    );
   });
 });

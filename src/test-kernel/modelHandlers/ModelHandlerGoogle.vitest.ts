@@ -161,7 +161,12 @@ describe('ModelHandlerGoogleGenAI.createToolUseFollowUpMessages', () => {
 });
 
 describe('ModelHandlerGoogleGenAI.createResponse', () => {
-  it('strips unsupported identifier fields before issuing chat history', async () => {
+  // Identifier hygiene is enforced when parts are created (see the
+  // createToolUseFollowUpMessages suite above): the handler only ever emits
+  // the SDK-supported `id` field on function calls. createResponse therefore
+  // forwards prior turns to the chat session unchanged, splitting off only
+  // the final user message which is sent via sendMessage.
+  it('forwards prior turns as chat history with SDK function-call ids intact', async () => {
     const handler = new ModelHandlerGoogleGenAI({
       name: 'test-google-model',
       label: 'Test Google Model',
@@ -209,12 +214,10 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
         parts: [
           {
             functionCall: {
+              id: 'abc',
               name: 'ls',
               args: {},
-              call_id: 'abc',
-              tool_call_id: 'abc',
-              tool_use_id: 'abc',
-            } as any,
+            },
           },
         ],
       },
@@ -234,12 +237,12 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
     );
     const history = capturedHistory[0];
     assert.ok(Array.isArray(history), 'expected captured history array');
-    const modelEntry = history[1];
-    assert.ok(modelEntry, 'expected model entry in history');
-    assert.ok(
-      Array.isArray(modelEntry.parts),
-      'expected parts array on model entry',
+    assert.deepEqual(
+      history,
+      messages.slice(0, -1),
+      'history should contain all but the final user message, unchanged',
     );
+    const modelEntry = history[1];
     const callPart = (modelEntry.parts as any[]).find(
       (part) => part && typeof part === 'object' && 'functionCall' in part,
     );
@@ -248,9 +251,7 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
       string,
       unknown
     >;
-    assert.equal('call_id' in functionCall, false);
-    assert.equal('tool_call_id' in functionCall, false);
-    assert.equal('tool_use_id' in functionCall, false);
+    assert.equal(functionCall.id, 'abc');
   });
 
   it('aggregates streamed chunks without relying on SDK response promises', async () => {
@@ -276,9 +277,10 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
       warn: () => {},
       error: () => {},
       statistics: () => {},
-      createStream: () => ({
+      openStream: () => ({
+        id: 'test-stream',
         append: () => {},
-        finalize: () => {},
+        finalize: () => '',
       }),
     };
     (handler as any).getStreamingConfig = () => true;
@@ -372,9 +374,10 @@ describe('ModelHandlerGoogleGenAI.createResponse', () => {
       warn: () => {},
       error: () => {},
       statistics: () => {},
-      createStream: () => ({
+      openStream: () => ({
+        id: 'test-stream',
         append: () => {},
-        finalize: () => {},
+        finalize: () => '',
       }),
     };
     (handler as any).getStreamingConfig = () => true;

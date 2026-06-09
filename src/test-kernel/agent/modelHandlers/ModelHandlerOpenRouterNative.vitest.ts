@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, it, afterEach } from 'vitest';
+import { describe, it, afterEach, vi } from 'vitest';
 
 // Standard library imports
 import { strict as assert } from 'node:assert';
@@ -14,7 +14,7 @@ import {
 // Local imports - handler under test
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 
-// Modules to monkey-patch
+// Modules to stub via vi.spyOn
 import * as serverKeysModule from '@auth/serverKeys';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
@@ -36,44 +36,25 @@ function buildConfig(overrides: Partial<ModelConfig> = {}): ModelConfig {
   };
 }
 
-describe('ModelHandlerOpenRouterNative routing precedence', () => {
-  const originalGetUseOpenRouter = providerConfigModule.getUseOpenRouter;
-  const originalGetServerSideKeyService =
-    serverKeysModule.getServerSideKeyService;
+function stubServerSideKeyService(): void {
+  vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
+    shouldUseServerSideKeysSync: () => true,
+    getUseIncludedModelAccess: () => true,
+    canUseServerSideKeys: async () => true,
+    getRelayBaseUrl: (provider: string) =>
+      `https://relay.example.com/functions/v1/relay/${provider}/v1`,
+  } as unknown as ReturnType<typeof serverKeysModule.getServerSideKeyService>);
+}
 
+describe('ModelHandlerOpenRouterNative routing precedence', () => {
   afterEach(() => {
-    (
-      providerConfigModule as {
-        getUseOpenRouter: typeof originalGetUseOpenRouter;
-      }
-    ).getUseOpenRouter = originalGetUseOpenRouter;
-    (
-      serverKeysModule as {
-        getServerSideKeyService: typeof originalGetServerSideKeyService;
-      }
-    ).getServerSideKeyService = originalGetServerSideKeyService;
+    vi.restoreAllMocks();
   });
 
   it('shouldUseServerSideKeys returns false when getUseOpenRouter=true even if server-side keys are available', () => {
     // Simulate: user has "Use Included Access" enabled with a valid server-side key service
-    (
-      providerConfigModule as {
-        getUseOpenRouter: typeof originalGetUseOpenRouter;
-      }
-    ).getUseOpenRouter = () => true;
-
-    (
-      serverKeysModule as {
-        getServerSideKeyService: typeof originalGetServerSideKeyService;
-      }
-    ).getServerSideKeyService = () =>
-      ({
-        shouldUseServerSideKeysSync: () => true,
-        getUseIncludedModelAccess: () => true,
-        canUseServerSideKeys: async () => true,
-        getRelayBaseUrl: (provider: string) =>
-          `https://relay.example.com/functions/v1/relay/${provider}/v1`,
-      }) as unknown as ReturnType<typeof originalGetServerSideKeyService>;
+    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(true);
+    stubServerSideKeyService();
 
     const handler = new ModelHandlerOpenRouterNative(buildConfig());
 
@@ -82,24 +63,8 @@ describe('ModelHandlerOpenRouterNative routing precedence', () => {
   });
 
   it('shouldUseServerSideKeys returns false for openRouterOnly=true models regardless of server-side key availability', () => {
-    (
-      providerConfigModule as {
-        getUseOpenRouter: typeof originalGetUseOpenRouter;
-      }
-    ).getUseOpenRouter = () => false;
-
-    (
-      serverKeysModule as {
-        getServerSideKeyService: typeof originalGetServerSideKeyService;
-      }
-    ).getServerSideKeyService = () =>
-      ({
-        shouldUseServerSideKeysSync: () => true,
-        getUseIncludedModelAccess: () => true,
-        canUseServerSideKeys: async () => true,
-        getRelayBaseUrl: (provider: string) =>
-          `https://relay.example.com/functions/v1/relay/${provider}/v1`,
-      }) as unknown as ReturnType<typeof originalGetServerSideKeyService>;
+    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
+    stubServerSideKeyService();
 
     const handler = new ModelHandlerOpenRouterNative(
       buildConfig({ openRouterOnly: true }),
@@ -109,24 +74,8 @@ describe('ModelHandlerOpenRouterNative routing precedence', () => {
   });
 
   it('shouldUseServerSideKeys respects server-side key service when NOT routing through OpenRouter', () => {
-    (
-      providerConfigModule as {
-        getUseOpenRouter: typeof originalGetUseOpenRouter;
-      }
-    ).getUseOpenRouter = () => false;
-
-    (
-      serverKeysModule as {
-        getServerSideKeyService: typeof originalGetServerSideKeyService;
-      }
-    ).getServerSideKeyService = () =>
-      ({
-        shouldUseServerSideKeysSync: () => true,
-        getUseIncludedModelAccess: () => true,
-        canUseServerSideKeys: async () => true,
-        getRelayBaseUrl: (provider: string) =>
-          `https://relay.example.com/functions/v1/relay/${provider}/v1`,
-      }) as unknown as ReturnType<typeof originalGetServerSideKeyService>;
+    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
+    stubServerSideKeyService();
 
     // Use a non-OpenRouter handler (base class logic), openRouterOnly=false, global toggle off
     // shouldUseServerSideKeys should delegate to the service and return true

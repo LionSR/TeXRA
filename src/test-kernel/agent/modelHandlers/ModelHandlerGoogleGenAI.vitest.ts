@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, it } from 'vitest';
+import { beforeAll, describe, it } from 'vitest';
 
 // Standard library imports
 import { strict as assert } from 'node:assert';
@@ -10,6 +10,9 @@ import {
   createPartFromText,
   createPartFromUri,
 } from '@google/genai';
+
+// Local imports - test support
+import { createFakePlatform } from '@test/support/FakePlatform';
 
 // Local imports - agent
 import {
@@ -23,6 +26,7 @@ import {
   ModelHandlerGoogleGenAI,
   validateGoogleMessageHistory,
 } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { extractToolAttachments } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Type imports
@@ -38,6 +42,13 @@ import type {
   FunctionCall,
   Content,
 } from '@google/genai';
+
+// Vitest isolates files, so this suite installs its own platform
+// (pathToLocation resolves through platform workspace services).
+beforeAll(async () => {
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(createFakePlatform());
+});
 
 interface LoggerStub extends Partial<AgentTrace> {
   streamId: string;
@@ -411,13 +422,13 @@ describe('ModelHandlerGoogleGenAI createUserFollowUpMessages', () => {
 });
 
 describe('ModelHandlerGoogleGenAI tool attachments', () => {
-  it('appends tool attachments as inline data parts', async () => {
+  it('embeds tool attachments as function response parts with inline data', async () => {
     const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
     const { logger } = createLoggerStub();
     handler.setLogger(logger);
 
     const attachmentBytes = new Uint8Array([1, 2, 3, 4]);
-    const toolResult: Record<string, unknown> = {
+    const toolResult = {
       output: 'generated figures',
       files: [
         {
@@ -428,6 +439,22 @@ describe('ModelHandlerGoogleGenAI tool attachments', () => {
         },
       ],
     };
+
+    // Handlers receive the sanitized payload and extracted attachments —
+    // binary data is stripped from the payload and carried separately.
+    const { attachments, sanitizedResult } = extractToolAttachments(toolResult);
+    assert.equal(attachments.length, 1, 'should extract one attachment');
+    assert.deepEqual(
+      sanitizedResult.files,
+      [
+        {
+          path: 'figures/plot.png',
+          mimeType: 'image/png',
+          description: 'Plot preview',
+        },
+      ],
+      'sanitized payload should keep file metadata without binary data',
+    );
 
     const functionCall: FunctionCall = {
       name: 'extract_figures',
@@ -446,8 +473,8 @@ describe('ModelHandlerGoogleGenAI tool attachments', () => {
     const messages = await handler.createToolUseFollowUpMessages(
       undefined,
       providerCall,
-      toolResult,
-      [],
+      sanitizedResult,
+      attachments,
     );
 
     assert.equal(
@@ -459,45 +486,41 @@ describe('ModelHandlerGoogleGenAI tool attachments', () => {
     const responseParts = messages[1].parts ?? [];
     assert.equal(
       responseParts.length,
-      2,
-      'response should contain function response and attachment parts',
+      1,
+      'response should contain a single function response part',
     );
-    const [responsePart, attachmentPart] = responseParts;
+    const [responsePart] = responseParts;
 
     const functionResponse = responsePart.functionResponse;
     assert(
       functionResponse,
       'response part should include functionResponse payload',
     );
+    assert.equal(functionResponse.id, 'call-123');
+    assert.equal(functionResponse.name, 'extract_figures');
 
     const sanitizedResponse = functionResponse.response as Record<
       string,
       unknown
     >;
-    const attachmentSummary = sanitizedResponse.attachmentSummary as string;
+    const resultText = sanitizedResponse.result as string;
+    assert(resultText.includes('generated figures'));
     assert(
-      attachmentSummary,
-      'attachment summary should be present on sanitized response',
+      resultText.includes('Attachments included in this response:'),
+      'attachment summary should be appended to the response text',
     );
-    assert(!attachmentSummary.includes('read_file'));
+    assert(resultText.includes('- figures/plot.png (image/png)'));
+    assert(!resultText.includes('read_file'));
 
-    const files = sanitizedResponse.files as Array<Record<string, unknown>>;
-    assert.deepEqual(files, [
-      {
-        path: 'figures/plot.png',
-        mimeType: 'image/png',
-        description: 'Plot preview',
-      },
-    ]);
-
-    assert(
-      !functionResponse?.parts,
-      'function response should not embed parts',
-    );
-
-    assert.equal(attachmentPart.inlineData?.mimeType, 'image/png');
+    const attachmentParts = functionResponse.parts ?? [];
     assert.equal(
-      attachmentPart.inlineData?.data,
+      attachmentParts.length,
+      1,
+      'function response should embed the attachment as a native part',
+    );
+    assert.equal(attachmentParts[0].inlineData?.mimeType, 'image/png');
+    assert.equal(
+      attachmentParts[0].inlineData?.data,
       Buffer.from(attachmentBytes).toString('base64'),
     );
   });

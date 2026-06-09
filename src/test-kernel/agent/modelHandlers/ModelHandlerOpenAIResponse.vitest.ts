@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, it } from 'vitest';
+import { beforeAll, describe, it } from 'vitest';
 
 // Standard library imports
 import { strict as assert } from 'node:assert';
@@ -14,6 +14,12 @@ import {
   ModelProvider,
 } from 'llm-zoo';
 
+// Local imports - platform
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+
+// Local imports - test support
+import { createFakePlatform } from '@test/support/FakePlatform';
+
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -27,6 +33,13 @@ import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHan
 // Type imports
 import { pathToLocation } from '@utils/files';
 import type { ResponseInputItem } from 'openai/resources/responses/responses';
+
+// Vitest isolates files, so this suite installs its own platform
+// (pathToLocation and flexibleFS resolve through platform services).
+beforeAll(async () => {
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
+});
 
 type LoggerStub = Partial<AgentTrace> & {
   streamId: string;

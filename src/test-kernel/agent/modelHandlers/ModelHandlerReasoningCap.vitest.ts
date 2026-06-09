@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, it, afterEach } from 'vitest';
+import { describe, it, afterEach, vi } from 'vitest';
 
 // Standard library imports
 import { strict as assert } from 'node:assert';
@@ -17,7 +17,7 @@ import {
 import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/modelHandlerOpenRouterNative';
 import { FREE_TIER, MAX_TIER, ULTRA_TIER } from '@auth/config';
 
-// Modules to monkey-patch
+// Modules to stub via vi.spyOn
 import * as serverKeysModule from '@auth/serverKeys';
 import * as providerConfigModule from '@utils/config/providerConfig';
 
@@ -44,43 +44,23 @@ function buildGpt5Config(overrides: Partial<ModelConfig> = {}): ModelConfig {
 }
 
 describe('ModelHandler.getEffectiveReasoningEffort tier caps', () => {
-  const originalGetUseOpenRouter = providerConfigModule.getUseOpenRouter;
-  const originalGetServerSideKeyService =
-    serverKeysModule.getServerSideKeyService;
-
   function stubServerSideKeys(tier: string | null): void {
-    (
-      providerConfigModule as {
-        getUseOpenRouter: typeof originalGetUseOpenRouter;
-      }
-    ).getUseOpenRouter = () => false;
+    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
 
-    (
-      serverKeysModule as {
-        getServerSideKeyService: typeof originalGetServerSideKeyService;
-      }
-    ).getServerSideKeyService = () =>
-      ({
-        shouldUseServerSideKeysSync: () => true,
-        getUserTier: () => tier,
-        getUseIncludedModelAccess: () => true,
-        canUseServerSideKeys: async () => true,
-        getRelayBaseUrl: (provider: string) =>
-          `https://relay.example.com/functions/v1/relay/${provider}/v1`,
-      }) as unknown as ReturnType<typeof originalGetServerSideKeyService>;
+    vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
+      shouldUseServerSideKeysSync: () => true,
+      getUserTier: () => tier,
+      getUseIncludedModelAccess: () => true,
+      canUseServerSideKeys: async () => true,
+      getRelayBaseUrl: (provider: string) =>
+        `https://relay.example.com/functions/v1/relay/${provider}/v1`,
+    } as unknown as ReturnType<
+      typeof serverKeysModule.getServerSideKeyService
+    >);
   }
 
   afterEach(() => {
-    (
-      providerConfigModule as {
-        getUseOpenRouter: typeof originalGetUseOpenRouter;
-      }
-    ).getUseOpenRouter = originalGetUseOpenRouter;
-    (
-      serverKeysModule as {
-        getServerSideKeyService: typeof originalGetServerSideKeyService;
-      }
-    ).getServerSideKeyService = originalGetServerSideKeyService;
+    vi.restoreAllMocks();
   });
 
   it('caps xhigh to medium for free tier on GPT-5 with server-side keys', () => {
@@ -111,25 +91,18 @@ describe('ModelHandler.getEffectiveReasoningEffort tier caps', () => {
   });
 
   it('does not cap when not using server-side keys (free tier, own key)', () => {
-    (
-      providerConfigModule as {
-        getUseOpenRouter: typeof originalGetUseOpenRouter;
-      }
-    ).getUseOpenRouter = () => false;
+    vi.spyOn(providerConfigModule, 'getUseOpenRouter').mockReturnValue(false);
 
-    (
-      serverKeysModule as {
-        getServerSideKeyService: typeof originalGetServerSideKeyService;
-      }
-    ).getServerSideKeyService = () =>
-      ({
-        shouldUseServerSideKeysSync: () => false,
-        getUserTier: () => FREE_TIER,
-        getUseIncludedModelAccess: () => false,
-        canUseServerSideKeys: async () => false,
-        getRelayBaseUrl: (provider: string) =>
-          `https://relay.example.com/functions/v1/relay/${provider}/v1`,
-      }) as unknown as ReturnType<typeof originalGetServerSideKeyService>;
+    vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
+      shouldUseServerSideKeysSync: () => false,
+      getUserTier: () => FREE_TIER,
+      getUseIncludedModelAccess: () => false,
+      canUseServerSideKeys: async () => false,
+      getRelayBaseUrl: (provider: string) =>
+        `https://relay.example.com/functions/v1/relay/${provider}/v1`,
+    } as unknown as ReturnType<
+      typeof serverKeysModule.getServerSideKeyService
+    >);
 
     const handler = new ModelHandlerOpenRouterNative(buildGpt5Config());
     assert.equal(

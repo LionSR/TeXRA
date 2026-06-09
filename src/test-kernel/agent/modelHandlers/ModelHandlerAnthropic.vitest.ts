@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, it } from 'vitest';
+import { afterEach, beforeAll, describe, it, vi } from 'vitest';
 
 // Standard library imports
 import { strict as assert } from 'node:assert';
@@ -9,6 +9,12 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { APIUserAbortError as AnthropicUserAbortError } from '@anthropic-ai/sdk';
+
+// Local imports - platform
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+
+// Local imports - test support
+import { createFakePlatform } from '@test/support/FakePlatform';
 
 // Local imports - agent
 import {
@@ -26,12 +32,19 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
-import { logContextManagementFromResponse } from '@agent/modelHandlers/anthropic/anthropicContextManagement';
+import {
+  enforceCacheControlLimit,
+  logContextManagementFromResponse,
+  SHORT_CACHE_CONTROL,
+} from '@agent/modelHandlers/anthropic/anthropicContextManagement';
 
 // Type imports
 
+// Local imports - auth (stubbed via vi.spyOn)
+import * as serverKeysModule from '@auth/serverKeys';
+
 // Local imports - model config
-import * as configModule from '@utils/config';
+import * as configUtils from '@utils/config/configUtils';
 import { pathToLocation } from '@utils/files';
 
 // Type imports
@@ -41,6 +54,29 @@ import type {
   MessageParam,
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/messages';
+
+// Vitest isolates files, so this suite installs its own platform. Real node
+// fs is required because the prefill tests write and read files in os.tmpdir().
+beforeAll(async () => {
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+/** Stub the compaction threshold config read for compaction tests. */
+function stubCompactionThresholdPercent(value: number): void {
+  vi.spyOn(configUtils, 'getConfig').mockImplementation(
+    <T>(path: string, defaultValue?: T): T => {
+      if (path === 'texra.model.compactionThresholdPercent') {
+        return value as T;
+      }
+      return defaultValue as T;
+    },
+  );
+}
 
 function buildAnthropicConfig(
   capabilityOverrides: Partial<ModelCapabilities> = {},
@@ -306,7 +342,6 @@ describe('ModelHandlerAnthropic message guards', () => {
   });
 
   it('strips legacy cache markers from non-compaction blocks in restored conversations', () => {
-    const handler = createAnthropicHandler();
     const messageContent: ContentBlockParam[] = [];
 
     // Simulate a saved conversation with old-style cache_control on text blocks
@@ -323,7 +358,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       { role: 'user', content: messageContent },
     ];
 
-    (handler as any).enforceCacheControlLimit(messages, 2);
+    enforceCacheControlLimit(messages, 2, SHORT_CACHE_CONTROL, true);
 
     const remaining = messageContent.filter(
       (block) =>
@@ -339,7 +374,6 @@ describe('ModelHandlerAnthropic message guards', () => {
   });
 
   it('preserves compaction cache markers while stripping legacy text markers', () => {
-    const handler = createAnthropicHandler();
     const compactionBlock = {
       type: 'compaction',
       content: '<summary>state</summary>',
@@ -360,7 +394,7 @@ describe('ModelHandlerAnthropic message guards', () => {
       { role: 'assistant', content: messageContent },
     ];
 
-    (handler as any).enforceCacheControlLimit(messages, 2);
+    enforceCacheControlLimit(messages, 2, SHORT_CACHE_CONTROL, true);
 
     // Legacy text marker stripped
     assert.equal(
@@ -381,7 +415,6 @@ describe('ModelHandlerAnthropic message guards', () => {
   });
 
   it('trims excess compaction markers when they exceed available slots', () => {
-    const handler = createAnthropicHandler();
     const messageContent = [
       {
         type: 'compaction',
@@ -405,7 +438,7 @@ describe('ModelHandlerAnthropic message guards', () => {
     ];
 
     // 2 reserved (system + automatic) → 2 available for compaction
-    (handler as any).enforceCacheControlLimit(messages, 2);
+    enforceCacheControlLimit(messages, 2, SHORT_CACHE_CONTROL, true);
 
     const withMarkers = (messages[0].content as any[]).filter(
       (block: any) => block.cache_control,
@@ -795,6 +828,10 @@ describe('ModelHandlerAnthropic message guards', () => {
   it('does not warn about context overflow for models with native 1M context', async () => {
     const handler = createAnthropicHandler({ supportsTokenCounting: true });
     handler.config.fullName = 'claude-sonnet-4-6';
+    // Sonnet 4.6 ships a native 1M context window at standard pricing; the
+    // window size comes straight from the llm-zoo model config (no beta
+    // header), so mirror that here instead of the 200K test default.
+    handler.config.contextWindow = 1_000_000;
 
     const warnMessages: string[] = [];
     stubHandlerForTest(handler, {
@@ -890,20 +927,9 @@ describe('ModelHandlerAnthropic message guards', () => {
       },
     } as any;
 
-    const originalGetConfig = configModule.getConfig;
-    try {
-      (configModule as any).getConfig = (
-        path: string,
-        defaultValue?: unknown,
-      ) => {
-        if (path === 'texra.model.compactionThresholdPercent') return 75;
-        return defaultValue as unknown;
-      };
+    stubCompactionThresholdPercent(75);
 
-      await handler.createResponse({ client, messages, temperature: 0 });
-    } finally {
-      (configModule as any).getConfig = originalGetConfig;
-    }
+    await handler.createResponse({ client, messages, temperature: 0 });
 
     const options = messageOptions[0] ?? {};
     const betas: string[] = options.betas ?? [];
@@ -967,20 +993,9 @@ describe('ModelHandlerAnthropic message guards', () => {
       },
     } as any;
 
-    const originalGetConfig = configModule.getConfig;
-    try {
-      (configModule as any).getConfig = (
-        path: string,
-        defaultValue?: unknown,
-      ) => {
-        if (path === 'texra.model.compactionThresholdPercent') return 75;
-        return defaultValue as unknown;
-      };
+    stubCompactionThresholdPercent(75);
 
-      await handler.createResponse({ client, messages, temperature: 0 });
-    } finally {
-      (configModule as any).getConfig = originalGetConfig;
-    }
+    await handler.createResponse({ client, messages, temperature: 0 });
 
     const options = messageOptions[0] ?? {};
     const betas: string[] = options.betas ?? [];
@@ -1134,20 +1149,9 @@ describe('ModelHandlerAnthropic message guards', () => {
       },
     } as any;
 
-    const originalGetConfig = configModule.getConfig;
-    try {
-      (configModule as any).getConfig = (
-        path: string,
-        defaultValue?: unknown,
-      ) => {
-        if (path === 'texra.model.compactionThresholdPercent') return 0;
-        return defaultValue as unknown;
-      };
+    stubCompactionThresholdPercent(0);
 
-      await handler.createResponse({ client, messages, temperature: 0 });
-    } finally {
-      (configModule as any).getConfig = originalGetConfig;
-    }
+    await handler.createResponse({ client, messages, temperature: 0 });
 
     const options = messageOptions[0] ?? {};
     const edits = options.context_management?.edits ?? [];
@@ -1202,20 +1206,9 @@ describe('ModelHandlerAnthropic message guards', () => {
       },
     } as any;
 
-    const originalGetConfig = configModule.getConfig;
-    try {
-      (configModule as any).getConfig = (
-        path: string,
-        defaultValue?: unknown,
-      ) => {
-        if (path === 'texra.model.compactionThresholdPercent') return 75;
-        return defaultValue as unknown;
-      };
+    stubCompactionThresholdPercent(75);
 
-      await handler.createResponse({ client, messages, temperature: 0 });
-    } finally {
-      (configModule as any).getConfig = originalGetConfig;
-    }
+    await handler.createResponse({ client, messages, temperature: 0 });
 
     const options = messageOptions[0] ?? {};
     const betas: string[] = options.betas ?? [];
@@ -1570,6 +1563,19 @@ describe('ModelHandlerAnthropic pre-message_start error handling', () => {
   }
 
   it('preserves AnthropicUserAbortError thrown before message_start (does not wrap it)', async () => {
+    // The stream-failure debug log resolves relay routing via the server-side
+    // key service; stub it so this isolated suite doesn't need the singleton
+    // that extension activation normally initializes.
+    vi.spyOn(serverKeysModule, 'getServerSideKeyService').mockReturnValue({
+      shouldUseServerSideKeysSync: () => false,
+      getUseIncludedModelAccess: () => false,
+      canUseServerSideKeys: async () => false,
+      getRelayBaseUrl: (provider: string) =>
+        `https://relay.example.com/functions/v1/relay/${provider}/v1`,
+    } as unknown as ReturnType<
+      typeof serverKeysModule.getServerSideKeyService
+    >);
+
     const handler = createAnthropicHandler({
       supportsTokenCounting: false,
       supportsReasoning: false,

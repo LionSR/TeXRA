@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, it, afterEach } from 'vitest';
+import { describe, it, afterEach, vi } from 'vitest';
 
 // Node.js built-in imports
 import { strict as assert } from 'node:assert';
@@ -40,8 +40,7 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
   const originalGetConfig = configModule.getConfig;
 
   afterEach(() => {
-    (configModule as { getConfig: typeof originalGetConfig }).getConfig =
-      originalGetConfig;
+    vi.restoreAllMocks();
   });
 
   it('enables background mode by default only for GPT workflow agents', () => {
@@ -69,15 +68,14 @@ describe('ModelHandlerOpenAIResponse background mode', () => {
   });
 
   it('respects the background-mode toggle for GPT workflow agents', () => {
-    (configModule as { getConfig: typeof originalGetConfig }).getConfig = (<T>(
-      key: string,
-      defaultValue?: T,
-    ): T => {
-      if (key === 'texra.model.useBackgroundResponses') {
-        return false as T;
-      }
-      return originalGetConfig(key, defaultValue);
-    }) as typeof originalGetConfig;
+    vi.spyOn(configModule, 'getConfig').mockImplementation(
+      <T>(key: string, defaultValue?: T): T => {
+        if (key === 'texra.model.useBackgroundResponses') {
+          return false as T;
+        }
+        return originalGetConfig(key, defaultValue);
+      },
+    );
 
     const handler = new ModelHandlerOpenAIResponse(createOpenAIConfig('gpt-5'));
     handler.setAgentCategory(AgentCategory.Workflow);
