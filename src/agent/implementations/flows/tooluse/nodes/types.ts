@@ -7,6 +7,7 @@ import type {
 } from '@agent/core/execution/AgentWorkspaceState';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
+import type { FollowUpQueueBatchItem } from '@agent/toolUse/FollowUpQueue';
 import type { RetryErrorInfo } from '@shared/schemas';
 
 export interface StateSlicesSnapshot {
@@ -49,22 +50,14 @@ export interface PrepareResult {
 export type WaitExecResult =
   | {
       kind: 'continue';
-      followUp: string;
-      /** User-facing text for logs when followUp contains injected context. */
-      displayFollowUp?: string;
+      followUps: readonly FollowUpQueueBatchItem[];
       /**
-       * True when `followUp` was synthesized by an idle-continuation provider
+       * True when `followUps` were synthesized by an idle-continuation provider
        * instead of being consumed from `session.waitForFollowUp()`. The
        * post() handler uses this to skip `onFollowUpConsumed` so synthetic
        * continuations don't emit a spurious updateQueuedFollowUps event.
        */
       synthetic?: boolean;
-      /**
-       * Media file paths attached to this follow-up (from the user queue).
-       * Converted to FileLocation[] and attached to the new user message via
-       * `addMediaToUserMessage` in post(). Empty for synthetic continuations.
-       */
-      mediaFiles?: string[];
     }
   | { kind: 'stop' };
 

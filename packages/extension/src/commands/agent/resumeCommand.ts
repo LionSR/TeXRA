@@ -6,7 +6,10 @@ import { z } from 'zod';
 import { resumeToolUseFromSnapshot } from '@agent/runtime/executeAgent';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type { DrainedFollowUpItem } from '@agent/toolUse/FollowUpQueue';
+import type {
+  DrainedFollowUpItem,
+  FollowUpQueueInput,
+} from '@agent/toolUse/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import { logErrorMessage } from '@frontend/ui/errorHandlingUtils';
@@ -56,13 +59,13 @@ async function resumeFromSnapshot(
 
     await resumeToolUseFromSnapshot(snapshot, runtimeHost, {
       setupSession: (session) => {
-        const allFollowUps =
+        const allFollowUps: readonly FollowUpQueueInput[] =
           followUp !== undefined
-            ? [{ text: followUp }, ...queuedFollowUps]
+            ? [{ text: followUp, origin: 'user' as const }, ...queuedFollowUps]
             : queuedFollowUps;
 
         for (const item of allFollowUps) {
-          session.appendFollowUp(item.text, item.mediaFiles, item.displayText);
+          session.appendFollowUp(item);
         }
       },
     });
