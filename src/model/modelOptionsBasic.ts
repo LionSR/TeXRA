@@ -14,8 +14,8 @@ import {
 
 /** Models that should be present in every user's model list. */
 export const DEFAULT_MODELS = [
-  'gemini31p',
   'gemini35f',
+  'gemini31p',
   'sonnet46T',
   'opus48T',
   'gpt55',
@@ -26,7 +26,7 @@ export const DEFAULT_MODELS = [
 ];
 
 /** Increment when the persisted model list needs reconciliation. */
-export const MODEL_LIST_VERSION = 17;
+export const MODEL_LIST_VERSION = 18;
 
 const MILLION = 1_000_000;
 const THOUSAND = 1_000;
