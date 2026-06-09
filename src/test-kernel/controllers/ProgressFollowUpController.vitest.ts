@@ -71,7 +71,9 @@ function createCompileFailure(): CompileFailure {
   };
 }
 
-function createController(existingFiles: Set<string>): ProgressFollowUpController {
+function createController(
+  existingFiles: Set<string>,
+): ProgressFollowUpController {
   return new ProgressFollowUpController({
     getAgentCategory: () => AgentCategory.ToolUse,
     workspace: {
@@ -107,19 +109,20 @@ describe('ProgressFollowUpController', () => {
   });
 
   it('does not edit generated latexdiff artifacts when source is absent', async () => {
-    const plan = await createController(new Set(['main-diffea268c1.tex']))
-      .planCompileFixer({
-        streamId: 'stream-a',
-        taskState: createWorkflowTaskState({
-          inputFiles: ['main-diffea268c1.tex'],
-        }),
-        compileFailures: [createCompileFailure()],
-        runOutputs: new Map([
-          [2, [createRunStorageOutputFile('main-diffea268c1.tex')]],
-        ]),
-        modelOptions: [{ value: 'gemini31p' }],
-        executionId: 'exec-123',
-      });
+    const plan = await createController(
+      new Set(['main-diffea268c1.tex']),
+    ).planCompileFixer({
+      streamId: 'stream-a',
+      taskState: createWorkflowTaskState({
+        inputFiles: ['main-diffea268c1.tex'],
+      }),
+      compileFailures: [createCompileFailure()],
+      runOutputs: new Map([
+        [2, [createRunStorageOutputFile('main-diffea268c1.tex')]],
+      ]),
+      modelOptions: [{ value: 'gemini31p' }],
+      executionId: 'exec-123',
+    });
 
     expect(plan).toEqual({
       kind: 'warning',
