@@ -78,9 +78,10 @@ function getTierFromPrice(inputPrice: number, outputPrice: number): MinTier {
 }
 
 /**
- * TeXRA model selector id an over-tier free user is pointed at in a 403, so the
- * denial suggests something they can type instead of only an upsell. Kept next
- * to the price ceiling it must satisfy (input <= 1.5, output <= 9).
+ * TeXRA model selector id for the free-tier model an over-tier user is pointed
+ * at in a 403, so the denial suggests something they can type instead of only
+ * an upsell. Kept next to the price ceiling it must satisfy (input <= 1.5,
+ * output <= 9).
  */
 export const FREE_TIER_SUGGESTED_MODEL = 'gemini35f';
 
