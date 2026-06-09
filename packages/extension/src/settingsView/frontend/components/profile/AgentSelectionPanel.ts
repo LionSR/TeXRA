@@ -86,7 +86,7 @@ export class AgentSelectionPanel extends LitElement {
         font-weight: var(--font-weight-semibold);
         color: var(--color-text-secondary);
         text-transform: uppercase;
-        letter-spacing: 0.06em;
+        letter-spacing: var(--letter-spacing-caps);
         background: color-mix(
           in srgb,
           var(--wa-color-surface-default) 92%,
