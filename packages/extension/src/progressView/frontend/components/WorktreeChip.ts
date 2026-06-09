@@ -181,10 +181,12 @@ export class WorktreeChip extends LitElement {
   }
 
   private renderPRPill(state: WorktreePRState): TemplateResult {
-    return html`<span
-      class=${classMap({ pill: true, [`state-${state}`]: true })}
+    return html`<wa-badge
+      class="pill"
+      variant=${PR_STATE_VARIANT[state]}
+      appearance="filled"
       title=${`PR ${PR_STATE_LABEL[state]}`}
-      >${PR_STATE_LABEL[state]}</span
+      >${PR_STATE_LABEL[state]}</wa-badge
     >`;
   }
 
