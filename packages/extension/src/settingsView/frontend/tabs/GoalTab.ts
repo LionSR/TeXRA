@@ -124,7 +124,7 @@ export class GoalTab extends LitElement {
           <div class="settings-reminder-description">
             Goals are autonomous-continuation modes the assistant enters for
             itself when you describe a goal with a verifiable stopping
-            condition. The agent decides when to start, pause, or complete an
+            condition. The agent decides when to start, pause, or complete a
             Goal via its tools — this list is for observation and navigation
             only.
           </div>
