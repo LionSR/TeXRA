@@ -129,8 +129,13 @@ export const PROVIDER_URLS: Record<string, string> = {
   openRouter: 'https://openrouter.ai/keys',
 };
 
-/** Default model used for auxiliary/helper tasks (polishing, agent creation, merge, session descriptions). */
-export const DEFAULT_HELPER_MODEL = 'sonnet46';
+/**
+ * Default model used for auxiliary/helper tasks (polishing, agent creation,
+ * merge, session descriptions). DeepSeek V4 Flash is the cheapest capable
+ * option (~$0.14/$0.28 per MTok) and keeps these one-shot, non-streaming
+ * helper calls fast.
+ */
+export const DEFAULT_HELPER_MODEL = 'deepseek';
 
 /**
  * Zod schema for a VS Code boolean setting surfaced per provider (without runtime value).
