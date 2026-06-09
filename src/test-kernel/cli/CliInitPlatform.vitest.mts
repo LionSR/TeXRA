@@ -95,6 +95,7 @@ vi.mock('@cli/runtime/gitAuthor', () => ({ applyCliGitAuthorConfig: vi.fn() }));
 
 vi.mock('@tools/lean/direct/directLspAdapter', () => ({
   createDirectLspLeanAdapter: () => mocks.leanAdapter,
+  registerDirectLeanLanguageServices: vi.fn(),
 }));
 
 vi.mock('@tools/lean/leanLanguageServices', () => ({

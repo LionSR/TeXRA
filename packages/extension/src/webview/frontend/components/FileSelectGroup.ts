@@ -1,6 +1,6 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { consume } from '@lit/context';
-import { customElement, property, query, state } from 'lit/decorators.js';
+import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
@@ -14,11 +14,7 @@ import { getBasename, normalizeFilePath } from '@shared/utils/path';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { MainViewEvents } from '../events';
-import {
-  extractDroppedFilePaths,
-  hasDroppedFilePayload,
-  postDroppedFiles,
-} from '../fileDropHandler';
+import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { SESSION_TYPES } from '../constants';
 import { SESSION_DEFAULTS } from '../sessionDefaults';
 import {
@@ -59,10 +55,9 @@ export class FileSelectGroup extends LitElement {
   @query('.multiple-files-list')
   private fileListElement?: HTMLElement;
 
-  @state()
-  private isDragActive = false;
-
-  private dragDepth = 0;
+  private fileDrop = new FileDropController(this, (paths) =>
+    postDroppedFiles(paths, this.config.type),
+  );
 
   private sortableController = new SortableController(
     this,
@@ -100,51 +95,6 @@ export class FileSelectGroup extends LitElement {
   private handleSelectMultipleFiles(): void {
     this.dispatchEvent(
       MainViewEvents.selectMultipleFiles({ listId: this.listId }),
-    );
-  }
-
-  private handleDragEnter(event: DragEvent): void {
-    if (!hasDroppedFilePayload(event.dataTransfer)) return;
-    event.preventDefault();
-    this.dragDepth += 1;
-    this.isDragActive = true;
-  }
-
-  private handleDragOver(event: DragEvent): void {
-    if (!hasDroppedFilePayload(event.dataTransfer)) return;
-    event.preventDefault();
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'copy';
-    }
-  }
-
-  private handleDragLeave(event: DragEvent): void {
-    if (!hasDroppedFilePayload(event.dataTransfer)) return;
-    event.preventDefault();
-    this.dragDepth = Math.max(0, this.dragDepth - 1);
-    if (this.dragDepth === 0) {
-      this.isDragActive = false;
-    }
-  }
-
-  private handleDrop(event: DragEvent): void {
-    // Always clear the drag-active visuals on drop. `dragenter`/`dragover`
-    // can only inspect `dataTransfer.types` (protected mode), so a non-file
-    // URI such as an https link is optimistically treated as droppable and
-    // activates the outline. At drop time the payload is readable and may be
-    // rejected — but no `dragleave` follows a `drop`, so failing to reset here
-    // would leave the bucket permanently stuck in the drop-active state.
-    const wasDragActive = this.isDragActive;
-    this.dragDepth = 0;
-    this.isDragActive = false;
-    if (!hasDroppedFilePayload(event.dataTransfer)) {
-      if (wasDragActive) event.preventDefault();
-      return;
-    }
-    event.preventDefault();
-    postDroppedFiles(
-      extractDroppedFilePaths(event.dataTransfer),
-      this.config.type,
     );
   }
 
@@ -341,12 +291,12 @@ export class FileSelectGroup extends LitElement {
       <div
         class=${classMap({
           'file-select': true,
-          'drop-active': this.isDragActive,
+          'drop-active': this.fileDrop.isDragActive,
         })}
-        @dragenter=${this.handleDragEnter}
-        @dragover=${this.handleDragOver}
-        @dragleave=${this.handleDragLeave}
-        @drop=${this.handleDrop}
+        @dragenter=${this.fileDrop.handleDragEnter}
+        @dragover=${this.fileDrop.handleDragOver}
+        @dragleave=${this.fileDrop.handleDragLeave}
+        @drop=${this.fileDrop.handleDrop}
       >
         <div class="file-select-header">
           <div class="file-select-label-group">

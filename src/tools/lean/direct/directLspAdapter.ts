@@ -11,11 +11,16 @@
 import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import {
+  SHUTDOWN_PHASE,
+  type LifecycleHost,
+} from '@platform/interfaces/lifecycle';
 import { toErrorMessage } from '@common/errors';
 import { warn } from '@logger/logUtils';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanSession } from './leanSession';
+import { setLeanLanguageServices } from '../leanLanguageServices';
 import type { LeanFileCommand, LeanProjectCommand } from '../leanConstants';
 import type { LeanLanguageServices } from '../leanLanguageServices';
 import type { LspHover } from '../lspTypes';
@@ -33,6 +38,20 @@ export interface DirectLspLeanAdapterOptions {
   lakeCommand?: string;
   /** Override the project-root locator (mostly for tests). */
   resolveWorkspaceRoot?: (filePath: string) => Promise<string | null>;
+}
+
+/**
+ * Wire the direct LSP adapter as the Lean language services for hosts without
+ * a VS Code extension bridge (Electron desktop, CLI). Spawns `lake env lean
+ * --server` lazily per Lake project root; nothing happens at startup when no
+ * Lean tools are invoked.
+ */
+export function registerDirectLeanLanguageServices(
+  lifecycle: LifecycleHost,
+): void {
+  const leanAdapter = createDirectLspLeanAdapter();
+  setLeanLanguageServices(leanAdapter);
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => leanAdapter.dispose());
 }
 
 /**
