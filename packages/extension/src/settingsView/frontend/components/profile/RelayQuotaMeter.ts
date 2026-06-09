@@ -73,7 +73,7 @@ export class RelayQuotaMeter extends LitElement {
         margin-bottom: var(--wa-space-xs);
       }
       .quota-label {
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
         font-size: var(--wa-font-size-s);
       }
       .quota-amount {
