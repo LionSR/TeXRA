@@ -24,7 +24,6 @@ import { AgentError, getSdkErrorMessage } from '@common/errors';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import {
-  STREAM_STATUS,
   type StreamTabId,
   type ExecutionId,
   type OutputFileInfo,
@@ -290,11 +289,8 @@ export async function executeAgent(
     return runFlowWithLifecycle(
       ctx,
       async (handle) => {
-        // Pre-execution UI setup
+        // Pre-execution UI setup (RUNNING is set by runFlowWithLifecycle)
         if (executionId) await ensureRunDir(executionId);
-        ctx.streamStatus.set(streamId, STREAM_STATUS.RUNNING, {
-          runtimeHost: ctx.runtimeHost,
-        });
         logger.info(`Starting task execution (streamId: ${streamId})`);
         logger.info(`Input file: ${config.inputFiles[0] ?? '(none)'}`);
         logger.debug(
@@ -455,10 +451,6 @@ export async function resumeToolUseFromSnapshot(
     }
 
     await runFlowWithLifecycle(ctx, async (handle) => {
-      ctx.streamStatus.set(streamId, STREAM_STATUS.RUNNING, {
-        runtimeHost: ctx.runtimeHost,
-      });
-
       const result = await runToolUseFlow(
         {
           ...ctx,

@@ -130,13 +130,13 @@ describe('runFlowWithLifecycle', () => {
     });
 
     try {
-      streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
       StreamStatusService.set(streamId, STREAM_STATUS.WAITING, {
         emit: false,
       });
 
-      // This test scopes ownership to the lifecycle finalization path; other
-      // mid-run status transitions are migrated in separate Step 7 slices.
+      // The lifecycle owns the whole transition (RUNNING on entry, terminal
+      // on exit) against the ctx-owned registry; the module-global
+      // StreamStatusService must stay untouched.
       await runFlowWithLifecycle(ctx, async () => ({
         category: 'toolUse',
         status: END_GROUP_STATUS.STOPPED,
@@ -167,8 +167,6 @@ describe('runFlowWithLifecycle', () => {
     const onError = vi.fn();
 
     try {
-      streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
-
       const result = await runFlowWithLifecycle(
         ctx,
         async () => {
@@ -203,8 +201,6 @@ describe('runFlowWithLifecycle', () => {
     });
 
     try {
-      streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
-
       const result = await runFlowWithLifecycle(
         ctx,
         async () => {
