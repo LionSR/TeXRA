@@ -196,7 +196,7 @@ describe('buildCodexCommandToolLog', () => {
 
     assert.deepEqual(log, {
       toolName: 'bash',
-      summary: 'lake env lean MPS/ParentHamiltonian/UniqueGroundState.lean…',
+      summary: 'lake env lean MPS/ParentHamiltonian/UniqueGroundState.lean …',
       input: {
         command:
           'lake env lean MPS/ParentHamiltonian/UniqueGroundState.lean --very-long-flag value',

@@ -33,11 +33,11 @@ describe('extractBibliography helpers', () => {
     (WorkspaceFS as unknown as { read: typeof originalRead }).read =
       async () => `
       % comment
-      \documentclass{article}
-      \addbibresource[location=local]{references}
-      Some text \cite{alpha , beta}
-      More citations \nocite{gamma}
-      % \cite{ignored}
+      \\documentclass{article}
+      \\addbibresource[location=local]{references}
+      Some text \\cite{alpha , beta}
+      More citations \\nocite{gamma}
+      % \\cite{ignored}
     `;
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       async (file: string) => file === expectedBibPath;
@@ -84,8 +84,8 @@ describe('extractBibliography helpers', () => {
 
     (WorkspaceFS as unknown as { read: typeof originalRead }).read =
       async () => `
-      \bibliography{bib/one, bib/two.bib, } % trailing comma
-      \cite{first} \cite{second, third}
+      \\bibliography{bib/one, bib/two.bib, } % trailing comma
+      \\cite{first} \\cite{second, third}
     `;
     (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
       async (file: string) => file === path.join('bib', 'two.bib');
@@ -122,15 +122,16 @@ describe('extractBibliography helpers', () => {
     );
 
     assert.strictEqual(entries.size, 1);
+    // formatBibEntry drops the trailing comma after the last field.
     assert.strictEqual(
       entries.get('alpha'),
-      '@article{alpha,\n  title = {Alpha Paper},\n}',
+      '@article{alpha,\n  title = {Alpha Paper}\n}',
     );
     assert.deepStrictEqual(missingKeys, ['gamma']);
 
     const formatted = summarizeBibliographyEntries(entries, 5);
     assert.deepStrictEqual(formatted, [
-      '@article{alpha,\n  title = {Alpha Paper},\n}',
+      '@article{alpha,\n  title = {Alpha Paper}\n}',
     ]);
   });
 

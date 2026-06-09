@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, it, beforeEach, afterEach } from 'vitest';
+import { describe, it, afterEach, vi } from 'vitest';
 
 // Standard library imports
 import { strict as assert } from 'node:assert';
@@ -13,29 +13,19 @@ import * as toolUtils from '@utils/system/toolUtils';
 import * as execUtils from '@utils/system/execUtils';
 
 describe('wolframScriptUtils', () => {
-  let originalCheckToolInstalled: typeof toolUtils.checkToolInstalled;
-  let originalExecuteCommand: typeof execUtils.executeCommand;
-
-  beforeEach(() => {
-    originalCheckToolInstalled = toolUtils.checkToolInstalled;
-    originalExecuteCommand = execUtils.executeCommand;
-  });
-
   afterEach(() => {
-    (toolUtils as any).checkToolInstalled = originalCheckToolInstalled;
-    (execUtils as any).executeCommand = originalExecuteCommand;
+    vi.restoreAllMocks();
   });
 
   it('executeWolframCode delegates to runWolfram with code args', async () => {
     const calls: any[] = [];
-    (toolUtils as any).checkToolInstalled = async () => true;
-    (execUtils as any).executeCommand = async (
-      command: string[],
-      opts: any,
-    ) => {
-      calls.push(command, opts);
-      return { success: true, stdout: '2', stderr: '' } as any;
-    };
+    vi.spyOn(toolUtils, 'checkToolInstalled').mockResolvedValue(true);
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (command, opts) => {
+        calls.push(command, opts);
+        return { success: true, stdout: '2', stderr: '' } as any;
+      },
+    );
 
     const result = await executeWolframCode('1+1');
 
@@ -47,14 +37,13 @@ describe('wolframScriptUtils', () => {
 
   it('executeWolframScriptFile delegates to runWolfram with file args', async () => {
     const calls: any[] = [];
-    (toolUtils as any).checkToolInstalled = async () => true;
-    (execUtils as any).executeCommand = async (
-      command: string[],
-      opts: any,
-    ) => {
-      calls.push(command, opts);
-      return { success: true, stdout: 'done', stderr: '' } as any;
-    };
+    vi.spyOn(toolUtils, 'checkToolInstalled').mockResolvedValue(true);
+    vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+      async (command, opts) => {
+        calls.push(command, opts);
+        return { success: true, stdout: 'done', stderr: '' } as any;
+      },
+    );
 
     const result = await executeWolframScriptFile('/tmp/test.wls');
 

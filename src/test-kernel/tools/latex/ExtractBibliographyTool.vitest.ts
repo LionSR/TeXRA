@@ -1,67 +1,49 @@
 // Third-party imports
-import { describe, it, afterEach } from 'vitest';
+import { describe, it, afterEach, vi } from 'vitest';
 
 // Node.js built-in imports
 import * as assert from 'node:assert';
 
+// Local imports - tests
+import { createFakePlatform } from '@test/support/FakePlatform';
+
 // Local imports - tools
 import * as bibliographyModule from '@latex/extractBibliography';
 import { ExtractBibliographyTool } from '@tools/latex';
-import { WorkspaceFS } from '@utils/files';
+
+async function installPlatform(files: Record<string, string>) {
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(createFakePlatform({ workspacePath: '/workspace', files }));
+}
 
 describe('ExtractBibliographyTool', () => {
-  const originalExists = WorkspaceFS.exists;
-  const originalContext = bibliographyModule.extractBibliographyContext;
-  const originalLoad = bibliographyModule.loadBibliographyEntries;
-  const originalSummarize = bibliographyModule.summarizeBibliographyEntries;
-
   afterEach(() => {
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      originalExists;
-    (
-      bibliographyModule as {
-        extractBibliographyContext: typeof originalContext;
-      }
-    ).extractBibliographyContext = originalContext;
-    (
-      bibliographyModule as { loadBibliographyEntries: typeof originalLoad }
-    ).loadBibliographyEntries = originalLoad;
-    (
-      bibliographyModule as {
-        summarizeBibliographyEntries: typeof originalSummarize;
-      }
-    ).summarizeBibliographyEntries = originalSummarize;
+    vi.restoreAllMocks();
   });
 
   it('returns bibliography entries and summary', async () => {
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      async (path: string) => path === 'main.tex';
-    (
-      bibliographyModule as {
-        extractBibliographyContext: typeof originalContext;
-      }
-    ).extractBibliographyContext = async () => ({
+    await installPlatform({
+      '/workspace/main.tex': '\\documentclass{article}',
+    });
+    vi.spyOn(
+      bibliographyModule,
+      'extractBibliographyContext',
+    ).mockResolvedValue({
       citationKeys: ['alpha', 'beta'],
       bibliographyFiles: ['references.bib'],
       missingBibliographyFiles: [],
     });
-    (
-      bibliographyModule as { loadBibliographyEntries: typeof originalLoad }
-    ).loadBibliographyEntries = async () => ({
+    vi.spyOn(bibliographyModule, 'loadBibliographyEntries').mockResolvedValue({
       entries: new Map([
         ['alpha', '@article{alpha,...}'],
         ['beta', '@book{beta,...}'],
       ]),
       missingKeys: [],
     });
-    (
-      bibliographyModule as {
-        summarizeBibliographyEntries: typeof originalSummarize;
-      }
-    ).summarizeBibliographyEntries = () => [
-      '@article{alpha,...}',
-      '@book{beta,...}',
-    ];
+    vi.spyOn(
+      bibliographyModule,
+      'summarizeBibliographyEntries',
+    ).mockReturnValue(['@article{alpha,...}', '@book{beta,...}']);
 
     const tool = new ExtractBibliographyTool();
     const result = await tool.call({ texPath: 'main.tex' });
@@ -77,28 +59,25 @@ describe('ExtractBibliographyTool', () => {
   });
 
   it('reports missing bibliography files and keys', async () => {
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      async (path: string) => path === 'paper.tex';
-    (
-      bibliographyModule as {
-        extractBibliographyContext: typeof originalContext;
-      }
-    ).extractBibliographyContext = async () => ({
+    await installPlatform({
+      '/workspace/paper.tex': '\\documentclass{article}',
+    });
+    vi.spyOn(
+      bibliographyModule,
+      'extractBibliographyContext',
+    ).mockResolvedValue({
       citationKeys: ['alpha'],
       bibliographyFiles: [],
       missingBibliographyFiles: ['references.bib'],
     });
-    (
-      bibliographyModule as { loadBibliographyEntries: typeof originalLoad }
-    ).loadBibliographyEntries = async () => ({
+    vi.spyOn(bibliographyModule, 'loadBibliographyEntries').mockResolvedValue({
       entries: new Map(),
       missingKeys: ['alpha'],
     });
-    (
-      bibliographyModule as {
-        summarizeBibliographyEntries: typeof originalSummarize;
-      }
-    ).summarizeBibliographyEntries = () => [];
+    vi.spyOn(
+      bibliographyModule,
+      'summarizeBibliographyEntries',
+    ).mockReturnValue([]);
 
     const tool = new ExtractBibliographyTool();
     const result = await tool.call({ texPath: 'paper.tex' });
@@ -114,8 +93,7 @@ describe('ExtractBibliographyTool', () => {
   });
 
   it('returns error when tex file is missing', async () => {
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      async () => false;
+    await installPlatform({});
 
     const tool = new ExtractBibliographyTool();
     const result = await tool.call({ texPath: 'missing.tex' });
@@ -127,31 +105,31 @@ describe('ExtractBibliographyTool', () => {
   it('includes explicit bibliography path when provided', async () => {
     const calls: { paths: string[]; keys: string[] }[] = [];
 
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      async (path: string) => path === 'thesis.tex' || path === 'extra.bib';
-    (
-      bibliographyModule as {
-        extractBibliographyContext: typeof originalContext;
-      }
-    ).extractBibliographyContext = async () => ({
+    await installPlatform({
+      '/workspace/thesis.tex': '\\documentclass{article}',
+      '/workspace/extra.bib': '@article{alpha,...}',
+    });
+    vi.spyOn(
+      bibliographyModule,
+      'extractBibliographyContext',
+    ).mockResolvedValue({
       citationKeys: ['alpha'],
       bibliographyFiles: [],
       missingBibliographyFiles: [],
     });
-    (
-      bibliographyModule as { loadBibliographyEntries: typeof originalLoad }
-    ).loadBibliographyEntries = async (paths, keys) => {
-      calls.push({ paths, keys });
-      return {
-        entries: new Map([['alpha', '@article{alpha,...}']]),
-        missingKeys: [],
-      };
-    };
-    (
-      bibliographyModule as {
-        summarizeBibliographyEntries: typeof originalSummarize;
-      }
-    ).summarizeBibliographyEntries = () => ['@article{alpha,...}'];
+    vi.spyOn(bibliographyModule, 'loadBibliographyEntries').mockImplementation(
+      async (paths, keys) => {
+        calls.push({ paths, keys });
+        return {
+          entries: new Map([['alpha', '@article{alpha,...}']]),
+          missingKeys: [],
+        };
+      },
+    );
+    vi.spyOn(
+      bibliographyModule,
+      'summarizeBibliographyEntries',
+    ).mockReturnValue(['@article{alpha,...}']);
 
     const tool = new ExtractBibliographyTool();
     const result = await tool.call({
@@ -168,31 +146,31 @@ describe('ExtractBibliographyTool', () => {
   it('falls back to wildcard when only a bibliography path is supplied', async () => {
     const calls: { paths: string[]; keys: string[] }[] = [];
 
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      async (path: string) => path === 'standalone.tex' || path === 'refs.bib';
-    (
-      bibliographyModule as {
-        extractBibliographyContext: typeof originalContext;
-      }
-    ).extractBibliographyContext = async () => ({
+    await installPlatform({
+      '/workspace/standalone.tex': '\\documentclass{article}',
+      '/workspace/refs.bib': '@article{alpha,...}',
+    });
+    vi.spyOn(
+      bibliographyModule,
+      'extractBibliographyContext',
+    ).mockResolvedValue({
       citationKeys: [],
       bibliographyFiles: [],
       missingBibliographyFiles: [],
     });
-    (
-      bibliographyModule as { loadBibliographyEntries: typeof originalLoad }
-    ).loadBibliographyEntries = async (paths, keys) => {
-      calls.push({ paths, keys });
-      return {
-        entries: new Map(),
-        missingKeys: [],
-      };
-    };
-    (
-      bibliographyModule as {
-        summarizeBibliographyEntries: typeof originalSummarize;
-      }
-    ).summarizeBibliographyEntries = () => [];
+    vi.spyOn(bibliographyModule, 'loadBibliographyEntries').mockImplementation(
+      async (paths, keys) => {
+        calls.push({ paths, keys });
+        return {
+          entries: new Map(),
+          missingKeys: [],
+        };
+      },
+    );
+    vi.spyOn(
+      bibliographyModule,
+      'summarizeBibliographyEntries',
+    ).mockReturnValue([]);
 
     const tool = new ExtractBibliographyTool();
     const result = await tool.call({

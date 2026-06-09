@@ -1,8 +1,11 @@
 // Third-party imports
-import { describe, it, afterEach } from 'vitest';
+import { describe, it, beforeAll, afterEach, vi } from 'vitest';
 
 // Node.js built-in imports
 import { strict as assert } from 'node:assert';
+
+// Local imports - tests
+import { createFakePlatform } from '@test/support/FakePlatform';
 
 // Local imports - agent core
 import {
@@ -50,44 +53,50 @@ class BashMockHandler extends ModelHandlerOpenAIResponse {
     return {} as OpenAI;
   }
 
+  // createResponse returns a CreateResponseResult wrapper around the raw
+  // provider response (see IModelHandler.createResponse).
   override async createResponse(): Promise<any> {
     this.callCount += 1;
     if (this.callCount === 1) {
       return {
-        id: 'bash-call',
+        response: {
+          id: 'bash-call',
+          status: 'completed',
+          output_text: 'running bash',
+          output: [
+            {
+              type: 'message',
+              role: 'assistant',
+              content: [
+                { type: 'output_text', text: 'running bash', annotations: [] },
+              ],
+            },
+            {
+              type: 'function_call',
+              call_id: 'bash-1',
+              name: 'bash',
+              arguments: '{"command":"echo long"}',
+            },
+          ],
+          usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+        },
+      };
+    }
+    return {
+      response: {
+        id: 'bash-complete',
         status: 'completed',
-        output_text: 'running bash',
+        output_text: 'done',
         output: [
           {
             type: 'message',
             role: 'assistant',
-            content: [
-              { type: 'output_text', text: 'running bash', annotations: [] },
-            ],
-          },
-          {
-            type: 'function_call',
-            call_id: 'bash-1',
-            name: 'bash',
-            arguments: '{"command":"echo long"}',
+            status: 'completed',
+            content: [{ type: 'output_text', text: 'done', annotations: [] }],
           },
         ],
         usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
-      };
-    }
-    return {
-      id: 'bash-complete',
-      status: 'completed',
-      output_text: 'done',
-      output: [
-        {
-          type: 'message',
-          role: 'assistant',
-          status: 'completed',
-          content: [{ type: 'output_text', text: 'done', annotations: [] }],
-        },
-      ],
-      usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+      },
     };
   }
 
@@ -107,13 +116,19 @@ class BashMockHandler extends ModelHandlerOpenAIResponse {
 }
 
 describe('BashTool', () => {
-  const originalExecuteCommand = execUtils.executeCommand;
-  const execUtilsMutable = execUtils as unknown as {
-    executeCommand: typeof originalExecuteCommand;
-  };
+  beforeAll(async () => {
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform({
+        workspacePath: '/workspace',
+        // Unit tests exercise the tool directly — no approval host is wired.
+        config: { 'texra.toolUse.requireBashApproval': false },
+      }),
+    );
+  });
 
   afterEach(() => {
-    execUtilsMutable.executeCommand = originalExecuteCommand;
+    vi.restoreAllMocks();
   });
 
   it('preserves long stdout for tool results and model payloads', async () => {
@@ -126,7 +141,7 @@ describe('BashTool', () => {
       timedOut: false,
     };
 
-    execUtilsMutable.executeCommand = async () => execResult;
+    vi.spyOn(execUtils, 'executeCommand').mockResolvedValue(execResult);
 
     const bashTool = new BashTool();
     const directResult = await bashTool.call({ command: 'echo long' });

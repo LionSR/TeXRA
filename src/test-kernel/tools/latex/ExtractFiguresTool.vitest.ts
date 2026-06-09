@@ -1,43 +1,34 @@
 // Third-party imports
-import { describe, it, afterEach } from 'vitest';
+import { describe, it, afterEach, vi } from 'vitest';
 
 // Node.js built-in imports
 import * as assert from 'node:assert';
 
+// Local imports - tests
+import { createFakePlatform } from '@test/support/FakePlatform';
+
 // Local imports - tools
 import * as figureModule from '@latex/extractFigure';
 import { ExtractLatexFiguresTool } from '@tools/latex';
-import { WorkspaceFS } from '@utils/files';
+
+async function installPlatform(files: Record<string, string>) {
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(createFakePlatform({ workspacePath: '/workspace', files }));
+}
 
 describe('ExtractLatexFiguresTool', () => {
-  const originalExtract = figureModule.extractFigurePathsFromLatex;
-  const originalExists = WorkspaceFS.exists;
-  const originalReadBytes = WorkspaceFS.readBytes;
-
   afterEach(() => {
-    (
-      figureModule as { extractFigurePathsFromLatex: typeof originalExtract }
-    ).extractFigurePathsFromLatex = originalExtract;
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      originalExists;
-    (
-      WorkspaceFS as unknown as { readBytes: typeof originalReadBytes }
-    ).readBytes = originalReadBytes;
+    vi.restoreAllMocks();
   });
 
   it('attaches discovered figure files', async () => {
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      async (path: string) => {
-        return path === 'main.tex' || path === 'figures/plot.pdf';
-      };
-    (
-      WorkspaceFS as unknown as { readBytes: typeof originalReadBytes }
-    ).readBytes = async () => Buffer.from('pdf');
-    (
-      figureModule as {
-        extractFigurePathsFromLatex: typeof originalExtract;
-      }
-    ).extractFigurePathsFromLatex = async () => ['figures/plot.pdf'];
+    await installPlatform({
+      '/workspace/main.tex': '\\documentclass{article}',
+      '/workspace/figures/plot.pdf': 'pdf',
+    });
+    vi.spyOn(figureModule, 'extractFigurePathsFromLatex').mockResolvedValue([
+      'figures/plot.pdf',
+    ]);
 
     const tool = new ExtractLatexFiguresTool();
     const result = await tool.call({
@@ -56,13 +47,10 @@ describe('ExtractLatexFiguresTool', () => {
   });
 
   it('returns graceful message when figures are absent', async () => {
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      async (path: string) => path === 'report.tex';
-    (
-      figureModule as {
-        extractFigurePathsFromLatex: typeof originalExtract;
-      }
-    ).extractFigurePathsFromLatex = async () => [];
+    await installPlatform({
+      '/workspace/report.tex': '\\documentclass{article}',
+    });
+    vi.spyOn(figureModule, 'extractFigurePathsFromLatex').mockResolvedValue([]);
 
     const tool = new ExtractLatexFiguresTool();
     const result = await tool.call({ texPath: 'report.tex' });
@@ -73,8 +61,7 @@ describe('ExtractLatexFiguresTool', () => {
   });
 
   it('returns error when tex file is missing', async () => {
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      async () => false;
+    await installPlatform({});
 
     const tool = new ExtractLatexFiguresTool();
     const result = await tool.call({ texPath: 'missing.tex' });

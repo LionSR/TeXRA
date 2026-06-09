@@ -1,11 +1,17 @@
 // Third-party imports
-import { describe, it, afterEach } from 'vitest';
+import { describe, it, beforeAll, afterEach } from 'vitest';
 
 // Node.js built-in imports
 import * as assert from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
+// Local imports - platform
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+
+// Local imports - tests
+import { createFakePlatform } from '@test/support/FakePlatform';
 
 // Local imports - tools
 import { findCodexBinaryInElectronResources } from '@tools/codexImport';
@@ -48,6 +54,12 @@ const PLATFORM_PACKAGES: Record<
 
 describe('findCodexBinaryInElectronResources', () => {
   let tempDir: string | undefined;
+
+  beforeAll(async () => {
+    // pathExists() probes the real filesystem through platform().fs.
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
+  });
 
   afterEach(() => {
     if (tempDir != null) {

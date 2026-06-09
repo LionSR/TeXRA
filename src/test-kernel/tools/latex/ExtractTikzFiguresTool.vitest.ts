@@ -1,49 +1,38 @@
 // Third-party imports
-import { describe, it, afterEach } from 'vitest';
+import { describe, it, afterEach, vi } from 'vitest';
 
 // Node.js built-in imports
 import * as assert from 'node:assert';
 
+// Local imports - tests
+import { createFakePlatform } from '@test/support/FakePlatform';
+
 // Local imports - tools
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 import { ExtractTikzFiguresTool } from '@tools/latex';
-import { WorkspaceFS, pathToLocation } from '@utils/files';
+import { pathToLocation } from '@utils/files';
+
+async function installPlatform(files: Record<string, string>) {
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(createFakePlatform({ workspacePath: '/workspace', files }));
+}
 
 describe('ExtractTikzFiguresTool', () => {
-  const originalExtract = tikzPictureManager.extract;
-  const originalCompile = tikzPictureManager.compile;
-  const originalExists = WorkspaceFS.exists;
-  const originalReadBytes = WorkspaceFS.readBytes;
-
   afterEach(() => {
-    (
-      tikzPictureManager as unknown as { extract: typeof originalExtract }
-    ).extract = originalExtract;
-    (
-      tikzPictureManager as unknown as { compile: typeof originalCompile }
-    ).compile = originalCompile;
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      originalExists;
-    (
-      WorkspaceFS as unknown as { readBytes: typeof originalReadBytes }
-    ).readBytes = originalReadBytes;
+    vi.restoreAllMocks();
   });
 
   it('compiles TikZ figures and returns attachments', async () => {
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      async (path: string) =>
-        path === 'slides.tex' || path === 'build/slides/fig_a.pdf';
-    (
-      WorkspaceFS as unknown as { readBytes: typeof originalReadBytes }
-    ).readBytes = async () => Buffer.from('%PDF');
-    (
-      tikzPictureManager as unknown as { extract: typeof originalExtract }
-    ).extract = async () => [
+    await installPlatform({
+      '/workspace/slides.tex': '\\documentclass{beamer}',
+      '/workspace/build/slides/fig_a.pdf': '%PDF',
+    });
+    vi.spyOn(tikzPictureManager, 'extract').mockResolvedValue([
       ['fig:a', ['\\begin{tikzpicture}\\end{tikzpicture}']],
-    ];
-    (
-      tikzPictureManager as unknown as { compile: typeof originalCompile }
-    ).compile = async () => [pathToLocation('build/slides/fig_a.pdf')];
+    ]);
+    vi.spyOn(tikzPictureManager, 'compile').mockResolvedValue([
+      pathToLocation('build/slides/fig_a.pdf'),
+    ]);
 
     const tool = new ExtractTikzFiguresTool();
     const result = await tool.call({
@@ -62,13 +51,12 @@ describe('ExtractTikzFiguresTool', () => {
   });
 
   it('omits attachments when compilation disabled', async () => {
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      async (path: string) => path === 'draft.tex';
-    (
-      tikzPictureManager as unknown as { extract: typeof originalExtract }
-    ).extract = async () => [
+    await installPlatform({
+      '/workspace/draft.tex': '\\documentclass{article}',
+    });
+    vi.spyOn(tikzPictureManager, 'extract').mockResolvedValue([
       ['fig:b', ['\\begin{tikzpicture}\\end{tikzpicture}']],
-    ];
+    ]);
 
     const tool = new ExtractTikzFiguresTool();
     const result = await tool.call({ texPath: 'draft.tex', compile: false });
@@ -79,8 +67,7 @@ describe('ExtractTikzFiguresTool', () => {
   });
 
   it('returns error when LaTeX file is missing', async () => {
-    (WorkspaceFS as unknown as { exists: typeof originalExists }).exists =
-      async () => false;
+    await installPlatform({});
 
     const tool = new ExtractTikzFiguresTool();
     const result = await tool.call({ texPath: 'absent.tex' });

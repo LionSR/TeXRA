@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, it, afterEach } from 'vitest';
+import { describe, it, afterEach, vi } from 'vitest';
 
 // Node.js built-in imports
 import * as assert from 'node:assert';
@@ -9,12 +9,8 @@ import * as texcountModule from '@latex/texcount';
 import { TexcountTool } from '@tools/texcount/TexcountTool';
 
 describe('TexcountTool', () => {
-  const originalGetTeXCount = texcountModule.getTeXCount;
-
   afterEach(() => {
-    (
-      texcountModule as { getTeXCount: typeof originalGetTeXCount }
-    ).getTeXCount = originalGetTeXCount;
+    vi.restoreAllMocks();
   });
 
   it('returns raw texcount output for single file input', async () => {
@@ -22,20 +18,20 @@ describe('TexcountTool', () => {
       files: string[];
       options?: texcountModule.TexcountOptions;
     }> = [];
-    (
-      texcountModule as { getTeXCount: typeof originalGetTeXCount }
-    ).getTeXCount = async (files, options) => {
-      calls.push({
-        files: Array.isArray(files) ? files : [files],
-        options,
-      });
-      return { output: 'Words in text: 42', errors: [] };
-    };
+    vi.spyOn(texcountModule, 'getTeXCount').mockImplementation(
+      async (files, options) => {
+        calls.push({
+          files: Array.isArray(files) ? files : [files],
+          options,
+        });
+        return { output: 'Words in text: 42', errors: [] };
+      },
+    );
 
     const tool = new TexcountTool();
     const result = await tool.call({ files: 'main.tex' });
 
-    assert.strictEqual(result.summary, 'texcount analysis for 1 file');
+    assert.strictEqual(result.summary, 'Analyzed: 1 file');
     assert.strictEqual(result.output, 'Words in text: 42');
     assert.strictEqual(calls.length, 1);
     assert.deepStrictEqual(calls[0].files, ['main.tex']);
@@ -43,12 +39,10 @@ describe('TexcountTool', () => {
   });
 
   it('formats output when stats format requested', async () => {
-    (
-      texcountModule as { getTeXCount: typeof originalGetTeXCount }
-    ).getTeXCount = async () => ({
+    vi.spyOn(texcountModule, 'getTeXCount').mockImplementation(async () => ({
       output: 'Words in text: 100',
       errors: [],
-    });
+    }));
 
     const tool = new TexcountTool();
     const result = await tool.call({
@@ -56,18 +50,16 @@ describe('TexcountTool', () => {
       format: 'stats',
     });
 
-    assert.strictEqual(result.summary, 'texcount analysis for 2 files');
+    assert.strictEqual(result.summary, 'Analyzed: 2 files');
     assert.ok(result.output?.includes('<texcount>'));
     assert.ok(result.output?.includes('Words in text: 100'));
   });
 
   it('returns error result when texcount output is missing', async () => {
-    (
-      texcountModule as { getTeXCount: typeof originalGetTeXCount }
-    ).getTeXCount = async () => ({
+    vi.spyOn(texcountModule, 'getTeXCount').mockImplementation(async () => ({
       output: null,
       errors: ['File missing.tex does not exist.'],
-    });
+    }));
 
     const tool = new TexcountTool();
     const result = await tool.call({ files: ['missing.tex'], mode: 'sum' });
@@ -81,15 +73,15 @@ describe('TexcountTool', () => {
       files: string[];
       options?: texcountModule.TexcountOptions;
     }> = [];
-    (
-      texcountModule as { getTeXCount: typeof originalGetTeXCount }
-    ).getTeXCount = async (files, options) => {
-      calls.push({
-        files: Array.isArray(files) ? files : [files],
-        options,
-      });
-      return { output: 'Words in text: 21', errors: [] };
-    };
+    vi.spyOn(texcountModule, 'getTeXCount').mockImplementation(
+      async (files, options) => {
+        calls.push({
+          files: Array.isArray(files) ? files : [files],
+          options,
+        });
+        return { output: 'Words in text: 21', errors: [] };
+      },
+    );
 
     const tool = new TexcountTool();
     const result = await tool.call({
@@ -97,7 +89,7 @@ describe('TexcountTool', () => {
       mode: 'sum',
     });
 
-    assert.strictEqual(result.summary, 'texcount analysis for 2 files');
+    assert.strictEqual(result.summary, 'Analyzed: 2 files');
     assert.strictEqual(result.output, 'Words in text: 21');
     assert.strictEqual(calls.length, 1);
     assert.deepStrictEqual(calls[0].files, ['file1.tex', 'file2.tex']);

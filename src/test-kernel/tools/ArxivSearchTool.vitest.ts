@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, it, afterEach } from 'vitest';
+import { describe, it, afterEach, vi } from 'vitest';
 
 // Node.js built-in imports
 import * as assert from 'node:assert';
@@ -10,20 +10,8 @@ import * as rateLimiter from '@tools/citation/rateLimiter';
 import { ArxivSearchTool } from '@tools/arxiv/ArxivSearchTool';
 
 describe('ArxivSearchTool', () => {
-  const originalCreateArxivClient = arxivShared.createArxivClient;
-  const originalWaitForRateLimit = rateLimiter.waitForRateLimit;
-
   afterEach(() => {
-    (
-      arxivShared as unknown as {
-        createArxivClient: typeof originalCreateArxivClient;
-      }
-    ).createArxivClient = originalCreateArxivClient;
-    (
-      rateLimiter as unknown as {
-        waitForRateLimit: typeof originalWaitForRateLimit;
-      }
-    ).waitForRateLimit = originalWaitForRateLimit;
+    vi.restoreAllMocks();
   });
 
   it('builds keyword queries for multi-word input', async () => {
@@ -48,42 +36,36 @@ describe('ArxivSearchTool', () => {
       },
     ];
 
-    (
-      rateLimiter as unknown as {
-        waitForRateLimit: typeof originalWaitForRateLimit;
-      }
-    ).waitForRateLimit = async () => {};
+    vi.spyOn(rateLimiter, 'waitForRateLimit').mockResolvedValue(undefined);
 
-    (
-      arxivShared as unknown as {
-        createArxivClient: typeof originalCreateArxivClient;
-      }
-    ).createArxivClient = () =>
-      ({
-        query(value: { toString: () => string }) {
-          captured.query = value.toString();
-          return this;
-        },
-        start(value: number) {
-          captured.start = value;
-          return this;
-        },
-        maxResults(value: number) {
-          captured.maxResults = value;
-          return this;
-        },
-        sortBy(value: string) {
-          captured.sortBy = value;
-          return this;
-        },
-        sortOrder(value: string) {
-          captured.sortOrder = value;
-          return this;
-        },
-        async execute() {
-          return sampleEntries;
-        },
-      }) as unknown as arxivShared.ArxivClientInstance;
+    vi.spyOn(arxivShared, 'createArxivClient').mockImplementation(
+      () =>
+        ({
+          query(value: { toString: () => string }) {
+            captured.query = value.toString();
+            return this;
+          },
+          start(value: number) {
+            captured.start = value;
+            return this;
+          },
+          maxResults(value: number) {
+            captured.maxResults = value;
+            return this;
+          },
+          sortBy(value: string) {
+            captured.sortBy = value;
+            return this;
+          },
+          sortOrder(value: string) {
+            captured.sortOrder = value;
+            return this;
+          },
+          async execute() {
+            return sampleEntries;
+          },
+        }) as unknown as arxivShared.ArxivClientInstance,
+    );
 
     const tool = new ArxivSearchTool();
     const result = await tool.call({

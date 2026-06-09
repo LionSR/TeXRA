@@ -3,8 +3,12 @@ import { describe, it, beforeEach, afterEach } from 'vitest';
 
 import * as assert from 'node:assert';
 
+// Local imports - tests
+import { createFakePlatform } from '@test/support/FakePlatform';
+
 // Local imports - agent types
 import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 
 // Local imports - tools
 import type { StreamTabId } from '@shared/schemas';
@@ -16,25 +20,28 @@ import {
   toggleToolEditApprovalSessionBypass,
   type ToolEditApprovalRequest,
 } from '@tools/approval';
-import * as configModule from '@utils/config';
 import { WorkspaceFS } from '@utils/files';
 
 // Test stream ID for per-stream YOLO mode tests
 const TEST_STREAM_ID = 'TestAgent@model: test.tex' as StreamTabId;
+
+async function installPlatform(config: Record<string, unknown> = {}) {
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(createFakePlatform({ workspacePath: '/workspace', config }));
+}
 
 describe('Tool edit approval gating', () => {
   let originalExists: typeof WorkspaceFS.exists;
   let originalRead: typeof WorkspaceFS.read;
   let originalWrite: typeof WorkspaceFS.write;
   let originalAppend: typeof WorkspaceFS.appendFile;
-  let originalGetConfig: typeof configModule.getConfig;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     originalExists = WorkspaceFS.exists;
     originalRead = WorkspaceFS.read;
     originalWrite = WorkspaceFS.write;
     originalAppend = WorkspaceFS.appendFile;
-    originalGetConfig = configModule.getConfig;
+    await installPlatform();
     cleanupAllApprovals();
   });
 
@@ -43,8 +50,6 @@ describe('Tool edit approval gating', () => {
     WorkspaceFS.read = originalRead;
     WorkspaceFS.write = originalWrite;
     WorkspaceFS.appendFile = originalAppend;
-    (configModule as { getConfig: typeof originalGetConfig }).getConfig =
-      originalGetConfig;
     setToolEditApprovalHandler();
     cleanupAllApprovals();
   });
@@ -105,6 +110,8 @@ describe('Tool edit approval gating', () => {
   });
 
   it('write_file skips approval when disabled via config', async () => {
+    await installPlatform({ 'texra.toolUse.requireEditApproval': false });
+
     const tool = new WriteFileTool();
     let handlerCalled = false;
     let writtenContent: string | undefined;
@@ -114,16 +121,6 @@ describe('Tool edit approval gating', () => {
     WorkspaceFS.write = async (_path: string, content: string) => {
       writtenContent = content;
     };
-
-    (configModule as { getConfig: typeof originalGetConfig }).getConfig = (<T>(
-      key: string,
-      defaultValue?: T,
-    ) => {
-      if (key === 'texra.toolUse.requireEditApproval') {
-        return false as T;
-      }
-      return originalGetConfig(key, defaultValue);
-    }) as typeof configModule.getConfig;
 
     setToolEditApprovalHandler(async () => {
       handlerCalled = true;
@@ -160,9 +157,15 @@ describe('Tool edit approval gating', () => {
       { silent: true },
     );
 
-    // Note: bypass check requires streamId on the request, which isn't set in unit tests
-    // This test verifies the bypass is set correctly; integration tests verify full flow
-    const result = await tool.call({ path: 'doc.txt', content: 'auto' });
+    // The bypass check requires a streamId on the request; the approval layer
+    // picks it up from the active run context.
+    const result = await withRunContext(
+      createRunContext({
+        runtimeHost: noopAgentRuntimeHost,
+        streamId: TEST_STREAM_ID,
+      }),
+      () => tool.call({ path: 'doc.txt', content: 'auto' }),
+    );
 
     assert.strictEqual(handlerCalled, false);
     assert.strictEqual(writtenContent, 'auto');
