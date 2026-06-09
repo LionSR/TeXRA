@@ -11,6 +11,7 @@ import type { StreamTabId } from '@shared/schemas';
  */
 export class SubagentDeliveryState {
   private hasDelivered = false;
+  private deliveryInFlight = false;
 
   isDelivered(): boolean {
     return this.hasDelivered;
@@ -18,18 +19,34 @@ export class SubagentDeliveryState {
 
   markPending(): void {
     this.hasDelivered = false;
+    this.deliveryInFlight = false;
   }
 
   markDelivered(): boolean {
-    if (this.hasDelivered) return false;
-    this.hasDelivered = true;
+    if (!this.beginDelivery()) return false;
+    this.completeDelivery();
     return true;
+  }
+
+  beginDelivery(): boolean {
+    if (this.hasDelivered || this.deliveryInFlight) return false;
+    this.deliveryInFlight = true;
+    return true;
+  }
+
+  completeDelivery(): void {
+    this.hasDelivered = true;
+    this.deliveryInFlight = false;
+  }
+
+  failDelivery(): void {
+    this.deliveryInFlight = false;
   }
 
   resolveBeforeWaiting(
     childStreamId: StreamTabId | undefined,
   ): SubagentDeliveryDecision {
-    if (this.hasDelivered) {
+    if (this.hasDelivered || this.deliveryInFlight) {
       return SUBAGENT_DELIVERY_DECISION.AlreadyDelivered;
     }
     if (!childStreamId) {
