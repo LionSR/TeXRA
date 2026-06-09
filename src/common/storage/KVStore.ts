@@ -1,27 +1,91 @@
 /**
- * Generic file-backed key-value store, now backed by Keyv.
+ * Generic StorageFS-backed key-value store.
  *
- * Each key is stored as a separate JSON file under `dir/` inside StorageFS.
- * The on-disk format is identical to the previous hand-rolled implementation
- * (pretty or compact JSON, no wrapper envelope) because we supply custom
- * serialize/deserialize functions to Keyv that strip its `{value, expires}`
- * envelope. This means existing stored files remain readable without migration.
- *
- * Keyv handles the get/set/delete/has surface; StorageFS operations that have
- * no Keyv equivalent (listKeys, modifiedAt, deleteDir) are kept as direct
- * StorageFS calls.
+ * Keyv owns the key-value semantics; this module owns the StorageFS file layout.
+ * Each key is stored as one JSON file, and custom Keyv serialization preserves
+ * the existing plain-JSON on-disk format rather than Keyv's `{value, expires}`
+ * envelope.
  */
 
 import * as path from 'path';
 
-import Keyv from 'keyv';
+import Keyv, { type KeyvStoreAdapter, type StoredData } from 'keyv';
 
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { isFile } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 import { StorageFS } from '@utils/files/storageFS';
 
-import { StorageFSKeyvAdapter } from './StorageFSKeyvAdapter';
+function keyToPath(dir: string, key: string): string {
+  return path.join(dir, `${encodeURIComponent(key)}.json`);
+}
+
+function filenameToKey(filename: string): string {
+  return decodeURIComponent(filename.replace(/\.json$/, ''));
+}
+
+async function withMissingFallback<T>(
+  operation: () => Promise<T>,
+  fallback: T,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (err) {
+    if (isFileNotFoundError(err)) return fallback;
+    throw err;
+  }
+}
+
+function createStorageStore(dir: string): KeyvStoreAdapter {
+  let dirEnsured = false;
+
+  return {
+    opts: {},
+    namespace: undefined,
+
+    // Keyv subscribes to store error events when present. StorageFS surfaces
+    // failures by rejecting the operation promise, so there is no event source.
+    on(): KeyvStoreAdapter {
+      return this;
+    },
+
+    async get<Value>(key: string): Promise<StoredData<Value> | undefined> {
+      const raw = await withMissingFallback(
+        () => StorageFS.read(keyToPath(dir, key)),
+        undefined,
+      );
+      return raw as StoredData<Value> | undefined;
+    },
+
+    async set(key: string, value: unknown): Promise<void> {
+      if (!dirEnsured) {
+        await StorageFS.ensureDir(dir);
+        dirEnsured = true;
+      }
+      // Keyv has already run the serializer, so StorageFS receives raw JSON.
+      await StorageFS.write(keyToPath(dir, key), value as string);
+    },
+
+    async delete(key: string): Promise<boolean> {
+      return withMissingFallback(async () => {
+        await StorageFS.delete(keyToPath(dir, key));
+        return true;
+      }, false);
+    },
+
+    async clear(): Promise<void> {
+      await withMissingFallback(
+        () => StorageFS.delete(dir, { recursive: true }),
+        undefined,
+      );
+      dirEnsured = false;
+    },
+
+    async has(key: string): Promise<boolean> {
+      return StorageFS.exists(keyToPath(dir, key));
+    },
+  };
+}
 
 export interface KVStoreOptions {
   /**
@@ -35,17 +99,15 @@ export class KVStore {
   private readonly keyv: Keyv;
 
   constructor(
-    protected readonly dir: string,
+    private readonly dir: string,
     options: KVStoreOptions = {},
   ) {
     const indent = options.compactJson ? undefined : 2;
-    const adapter = new StorageFSKeyvAdapter(dir);
     this.keyv = new Keyv({
-      store: adapter,
-      // No namespace prefix — the directory already provides isolation.
+      store: createStorageStore(dir),
+      // The directory is the namespace; keys are stored literally.
       namespace: undefined,
-      // Custom serializer preserves the existing on-disk format:
-      // files contain plain JSON (not Keyv's {"value":...,"expires":...} envelope).
+      useKeyPrefix: false,
       serialize: (data) => JSON.stringify(data.value, null, indent),
       deserialize: (raw) => ({ value: JSON.parse(raw) }),
     });
@@ -67,29 +129,21 @@ export class KVStore {
     return this.keyv.has(key);
   }
 
-  // ── Operations without Keyv equivalents ─────────────────────────────────────
-
   async modifiedAt(key: string): Promise<number | undefined> {
-    const filePath = path.join(this.dir, `${encodeURIComponent(key)}.json`);
-    try {
-      return (await StorageFS.stat(filePath)).mtime;
-    } catch (err) {
-      if (isFileNotFoundError(err)) return undefined;
-      throw err;
-    }
+    return withMissingFallback(
+      async () => (await StorageFS.stat(keyToPath(this.dir, key))).mtime,
+      undefined,
+    );
   }
 
   async listKeys(prefix?: string): Promise<string[]> {
-    let entries: [string, number][];
-    try {
-      entries = await StorageFS.readDir(this.dir);
-    } catch (err) {
-      if (isFileNotFoundError(err)) return [];
-      throw err;
-    }
+    const entries = await withMissingFallback(
+      () => StorageFS.readDir(this.dir),
+      [],
+    );
     return entries
       .filter(([name, type]) => isFile(type) && hasExtension(name, '.json'))
-      .map(([name]) => StorageFSKeyvAdapter.filenameToKey(name))
+      .map(([name]) => filenameToKey(name))
       .filter((key) => !prefix || key.startsWith(prefix));
   }
 
