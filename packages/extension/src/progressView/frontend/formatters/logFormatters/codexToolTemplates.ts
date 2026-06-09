@@ -30,6 +30,10 @@ import {
   SPINNER_ICON_NAME,
 } from '../htmlBuilders';
 
+// Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
+import '@awesome.me/webawesome/dist/components/divider/divider.js';
+
 type RenderableSection = TemplateResult | typeof nothing | undefined | null;
 type BadgeData = { iconName: string; label: string };
 type CodexToolRenderer = (input: unknown) => TemplateResult | typeof nothing;
@@ -51,7 +55,7 @@ function renderBadge({ iconName, label }: BadgeData): TemplateResult {
     ? html`<wa-spinner></wa-spinner>`
     : html`<wa-icon library="texra" name=${iconName} aria-hidden="true"></wa-icon>`;
   // prettier-ignore
-  return html`<span class="extract-flag">${iconTemplate} ${label}</span>`;
+  return html`<wa-badge variant="neutral" appearance="filled">${iconTemplate} ${label}</wa-badge>`;
 }
 
 function renderBadgeSection(
@@ -87,10 +91,7 @@ function renderSectionGroup(
     visibleSections,
     (_section, index) => index,
     (section, index) =>
-      html`${when(
-        index > 0,
-        () => html`<hr class="tool-use-separator" />`,
-      )}${section}`,
+      html`${when(index > 0, () => html`<wa-divider></wa-divider>`)}${section}`,
   )}`;
 }
 

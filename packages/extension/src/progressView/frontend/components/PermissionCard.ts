@@ -35,6 +35,7 @@ import { permissionCardStyles } from '@shared/styles/permissionCardStyles';
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
 
 // Local imports - progress view
 import { ProgressEvents } from '../events';
@@ -295,13 +296,13 @@ export class PermissionCard extends LitElement {
         flags,
         (flag) => flag,
         (flag) =>
-          html`<span class="extract-flag"
+          html`<wa-badge variant="neutral" appearance="filled"
             ><wa-icon
               library="texra"
               name="file-media"
               aria-hidden="true"
             ></wa-icon>
-            ${flag}</span
+            ${flag}</wa-badge
           >`,
       )}
     </p>`;
