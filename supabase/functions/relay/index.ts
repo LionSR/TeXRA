@@ -70,6 +70,7 @@ import {
   TIER_SPENDING_LIMITS,
   isModelAllowedForTier,
   getSpendingLimit,
+  FREE_TIER_SUGGESTED_MODEL,
   ULTRA_TIER,
   FREE_TIER,
   MAX_TIER,
@@ -685,11 +686,15 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
     if (!isModelAllowedForTier(userTier, modelName)) {
       const tierName = userTier === FREE_TIER ? 'free' : userTier;
-      const upgradeHint = 'Upgrade to Ultra for access.';
+      // Point users at a model their tier can actually use, not just an upsell.
+      const hint =
+        userTier === FREE_TIER
+          ? `Switch to a free model such as '${FREE_TIER_SUGGESTED_MODEL}', or upgrade for access.`
+          : 'Upgrade to Ultra for access.';
 
       return jsonError(
         modelName
-          ? `Model '${modelName}' is not available for ${tierName} tier. ${upgradeHint}`
+          ? `Model '${modelName}' is not available for the ${tierName} tier. ${hint}`
           : `Could not determine model from request. ${tierName} tier requires explicit model specification.`,
         403,
       );
