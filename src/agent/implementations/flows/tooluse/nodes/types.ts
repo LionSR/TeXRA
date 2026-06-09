@@ -77,8 +77,8 @@ export function findLastAssistantText(
   messages: ProviderMessage[],
   extractAssistantText: (message: ProviderMessage) => string | undefined,
 ): string | undefined {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const text = extractAssistantText(messages[i]);
+  for (const message of messages.toReversed()) {
+    const text = extractAssistantText(message);
     if (text !== undefined) return text;
   }
   return undefined;

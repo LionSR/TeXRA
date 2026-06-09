@@ -1,4 +1,4 @@
-import * as path from 'path';
+import * as path from 'node:path';
 
 // Platform imports
 import { platform } from '@platform/platform';

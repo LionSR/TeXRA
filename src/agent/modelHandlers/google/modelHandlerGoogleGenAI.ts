@@ -1,5 +1,5 @@
 // Standard library imports
-import { Buffer } from 'buffer';
+import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 
 // Third-party imports

@@ -1,7 +1,7 @@
 // Third-party imports
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports - model
@@ -15,16 +15,16 @@ let homedirMock: string;
 async function loadBuildClaudeAgentEnv(): Promise<
   typeof import('@tools/claudeAgentConfig').buildClaudeAgentEnv
 > {
-  vi.doMock('child_process', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('child_process')>();
+  vi.doMock('node:child_process', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:child_process')>();
     return {
       ...actual,
       execFileSync: execFileSyncMock,
     };
   });
 
-  vi.doMock('os', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('os')>();
+  vi.doMock('node:os', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:os')>();
     return {
       ...actual,
       homedir: () => homedirMock,

@@ -130,8 +130,7 @@ Best practices:
 
     const lines: string[] = ['Current todo list:', ''];
 
-    for (let i = 0; i < todos.length; i++) {
-      const todo = todos[i];
+    for (const [i, todo] of todos.entries()) {
       const { icon, label } = STATUS_DISPLAY[todo.status];
       lines.push(`${i + 1}. ${icon} [${label}] ${todo.content}`);
       if (todo.status === TODO_STATUS.IN_PROGRESS) {

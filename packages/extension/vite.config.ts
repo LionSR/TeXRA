@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
-import { resolve } from 'path';
-import { mkdirSync, writeFileSync, existsSync } from 'fs';
+import { resolve } from 'node:path';
+import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 
 // Shared path aliases from tsconfig.json (single source of truth)
 import { aliases } from '../../scripts/aliases.mjs';

@@ -1,5 +1,5 @@
 // Third-party imports
-import * as assert from 'assert';
+import * as assert from 'node:assert';
 
 // Local imports - utils
 import { getMimeType } from '@utils/files';

@@ -305,20 +305,18 @@ export class WorkPlanState {
   }
 
   private _todosEqual(a: TodoItem[], b: TodoItem[]): boolean {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) {
-      const ai = a[i],
-        bi = b[i];
-      if (!ai || !bi) return false;
-      if (
-        ai.content !== bi.content ||
-        ai.status !== bi.status ||
-        ai.activeForm !== bi.activeForm
-      ) {
-        return false;
-      }
-    }
-    return true;
+    return (
+      a.length === b.length &&
+      a.every((ai, i) => {
+        const bi = b[i];
+        return (
+          bi !== undefined &&
+          ai.content === bi.content &&
+          ai.status === bi.status &&
+          ai.activeForm === bi.activeForm
+        );
+      })
+    );
   }
 
   private _planEqual(a: Plan | null, b: Plan | null): boolean {

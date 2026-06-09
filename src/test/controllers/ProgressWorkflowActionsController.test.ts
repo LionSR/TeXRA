@@ -1,5 +1,5 @@
 // Standard library imports
-import { strict as assert } from 'assert';
+import { strict as assert } from 'node:assert';
 
 // Local imports - agent
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';

@@ -448,8 +448,7 @@ function formatPlanContext(workPlan: WorkPlanSnapshot): string[] {
 
   const lines: string[] = [`<current-plan summary="${escapeAttr(summary)}">`];
   if (plan) {
-    for (let i = 0; i < plan.steps.length; i++) {
-      const step = plan.steps[i]!;
+    for (const [i, step] of plan.steps.entries()) {
       const filesAttr =
         step.files.length > 0
           ? ` files="${escapeAttr(step.files.join(', '))}"`

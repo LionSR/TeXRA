@@ -35,8 +35,7 @@ export class StreamLog {
     });
     this.seqCounter = this.entries.length;
 
-    for (let i = 0; i < this.entries.length; i++) {
-      const entry = this.entries[i];
+    for (const [i, entry] of this.entries.entries()) {
       this.indexById.set(entry.id, i);
       if (isRunningGroupEntry(entry)) {
         this.runningGroupCount += 1;

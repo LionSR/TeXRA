@@ -1,4 +1,4 @@
-import path from 'path';
+import path from 'node:path';
 
 // Local imports - common
 import { toErrorMessage } from '@common/errors';
