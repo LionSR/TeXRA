@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { OdysseyStatusSchema } from '@tools/odyssey/odysseyMeta';
+import { GoalStatusSchema } from '@tools/goal/goalMeta';
 import {
   AGENT_CATEGORY,
   AgentCategorySchema,
@@ -110,9 +110,9 @@ export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
   queuedFollowUps: z.array(z.string()).prefault([]),
   toolEditBypass: z.boolean().optional(),
   superYoloBypass: z.boolean().optional(),
-  odysseyActive: z.boolean().optional(),
-  odysseyStatus: OdysseyStatusSchema.optional(),
-  odysseyObjective: z.string().optional(),
+  goalActive: z.boolean().optional(),
+  goalStatus: GoalStatusSchema.optional(),
+  goalObjective: z.string().optional(),
   // Per-run usage for accumulation; sessionUsage is derived as their sum.
   runUsage: RunScopedRecord(TokenUsageStatsSchema),
   sessionUsage: TokenUsageStatsSchema.nullable().prefault(null),

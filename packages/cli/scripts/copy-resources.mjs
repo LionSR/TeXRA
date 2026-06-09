@@ -9,7 +9,7 @@ const target = path.resolve(packageDir, 'dist/resources');
 const runtimeResourceEntries = [
   'agents',
   'docs/agent-creation',
-  'odyssey',
+  'goal',
   'shared',
   'templates/agentCreatorToolUse.yaml',
   'templates/agentCreatorWorkflow.yaml',

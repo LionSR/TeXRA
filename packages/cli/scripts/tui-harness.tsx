@@ -105,7 +105,7 @@ const SHOW_EXTERNAL_INQUIRY = process.env.HARNESS_EXTERNAL_INQUIRY === '1';
 const SHOW_USER_QUESTION = process.env.HARNESS_USER_QUESTION === '1';
 const SHOW_PLAN_APPROVAL = process.env.HARNESS_PLAN_APPROVAL === '1';
 const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
-const PLAN_APPROVAL_ODYSSEY = process.env.HARNESS_PLAN_APPROVAL_ODYSSEY === '1';
+const PLAN_APPROVAL_GOAL = process.env.HARNESS_PLAN_APPROVAL_GOAL === '1';
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
 const SHOW_PROJECT_SKILL = process.env.HARNESS_PROJECT_SKILL === '1';
@@ -646,7 +646,7 @@ function makePlanApprovalPayload() {
   return {
     approvalId: 'harness-plan-approval',
     streamId: STREAM_ID,
-    odysseyEnabled: PLAN_APPROVAL_ODYSSEY,
+    goalEnabled: PLAN_APPROVAL_GOAL,
     plan: {
       summary: 'Coordinate a short math proof through CLI chat.',
       steps: [
@@ -791,8 +791,8 @@ function appendHarnessRetryDecision(decision: ApprovalDecision): void {
 }
 
 function appendHarnessPlanDecision(decision: ApprovalDecision): void {
-  if (decision.planAction === 'approve_and_odyssey') {
-    appendHarnessAssistantTranscript('PLAN-ODYSSEY');
+  if (decision.planAction === 'approve_and_goal') {
+    appendHarnessAssistantTranscript('PLAN-GOAL');
     return;
   }
   appendHarnessAssistantTranscript(

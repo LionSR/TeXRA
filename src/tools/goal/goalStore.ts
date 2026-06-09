@@ -9,54 +9,74 @@ import type { Plan } from '@shared/schemas/plan';
 
 import { filterNotNull } from '@utils/core';
 import {
-  OdysseySchema,
-  isOdysseyInFlight,
-  type Odyssey,
-  type OdysseyStatus,
-} from './odysseyMeta';
+  GoalSchema,
+  isGoalInFlight,
+  type Goal,
+  type GoalStatus,
+} from './goalMeta';
 
-const STREAM_KEY_PREFIX = 'odysseys:byStream:';
-const INDEX_KEY = 'odysseys:index';
+const STREAM_KEY_PREFIX = 'goals:byStream:';
+const INDEX_KEY = 'goals:index';
+// Pre-rename keys (the feature was "Odyssey" before June 2026). Records written
+// by an older build live under these; we read them as a fallback and migrate
+// lazily — `writeRaw` always writes the new key, so any touched record moves
+// over, and `forget` clears both so a stale legacy record can't reappear.
+const LEGACY_STREAM_KEY_PREFIX = 'odysseys:byStream:';
+const LEGACY_INDEX_KEY = 'odysseys:index';
 // Stream index growth is user-driven (one entry per stream that ever had
-// an Odyssey). `forget()` removes entries; callers that delete a stream
+// a Goal). `forget()` removes entries; callers that delete a stream
 // without calling `forget()` leave dangling entries until next manual cleanup.
 
 function streamKey(streamId: StreamTabId): string {
   return `${STREAM_KEY_PREFIX}${streamId}`;
 }
 
+function legacyStreamKey(streamId: StreamTabId): string {
+  return `${LEGACY_STREAM_KEY_PREFIX}${streamId}`;
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
 
-function generateOdysseyId(): string {
-  return `ody_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
+function generateGoalId(): string {
+  return `goal_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
 }
 
-function readRaw(streamId: StreamTabId): Odyssey | null {
+function readRaw(streamId: StreamTabId): Goal | null {
   // tryGetWorkspaceState — bootstrap-tolerant: read-only paths called before
   // initPlatform() (e.g. early-stream syncs in some tests) return null
   // rather than throwing. Write paths still use platform().workspaceState which
   // does throw, surfacing the misuse.
   const state = tryGetWorkspaceState();
   if (!state) return null;
-  const raw = state.get<unknown>(streamKey(streamId));
+  // Prefer the current key; fall back to the pre-rename "odyssey" key.
+  const raw =
+    state.get<unknown>(streamKey(streamId)) ??
+    state.get<unknown>(legacyStreamKey(streamId));
   if (!raw) return null;
-  const parsed = OdysseySchema.safeParse(raw);
+  const parsed = GoalSchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
 }
 
-async function writeRaw(odyssey: Odyssey): Promise<void> {
-  await platform().workspaceState.update(streamKey(odyssey.streamId), odyssey);
+async function writeRaw(goal: Goal): Promise<void> {
+  await platform().workspaceState.update(streamKey(goal.streamId), goal);
+}
+
+function parseIndex(raw: unknown): StreamTabId[] {
+  return Array.isArray(raw)
+    ? raw.filter((v): v is StreamTabId => typeof v === 'string')
+    : [];
 }
 
 function readIndex(): StreamTabId[] {
   const state = tryGetWorkspaceState();
   if (!state) return [];
-  const raw = state.get<unknown>(INDEX_KEY);
-  return Array.isArray(raw)
-    ? raw.filter((v): v is StreamTabId => typeof v === 'string')
-    : [];
+  // Union of the current and pre-rename indexes. `readRaw` filters out any
+  // dangling entry whose record no longer exists under either key.
+  const current = parseIndex(state.get<unknown>(INDEX_KEY));
+  const legacy = parseIndex(state.get<unknown>(LEGACY_INDEX_KEY));
+  return [...new Set([...current, ...legacy])];
 }
 
 async function addToIndex(streamId: StreamTabId): Promise<void> {
@@ -78,22 +98,22 @@ async function removeFromIndex(streamId: StreamTabId): Promise<void> {
  */
 async function update(
   streamId: StreamTabId,
-  mutate: (odyssey: Odyssey) => Odyssey,
-): Promise<Odyssey | null> {
-  const odyssey = readRaw(streamId);
-  if (!odyssey) return null;
-  const final: Odyssey = { ...mutate(odyssey), updatedAt: nowIso() };
+  mutate: (goal: Goal) => Goal,
+): Promise<Goal | null> {
+  const goal = readRaw(streamId);
+  if (!goal) return null;
+  const final: Goal = { ...mutate(goal), updatedAt: nowIso() };
   await writeRaw(final);
-  bus.emit('odysseyStateChanged', { streamId });
+  bus.emit('goalStateChanged', { streamId });
   return final;
 }
 
 /**
  * Allowed state-machine transitions. Both live states are reachable from each
  * other (resume a paused pursuit; pause an active one). Finishing or abandoning
- * an odyssey is `forget()`, not a status — there are no terminal states.
+ * a goal is `forget()`, not a status — there are no terminal states.
  */
-const ALLOWED_TRANSITIONS: Record<OdysseyStatus, readonly OdysseyStatus[]> = {
+const ALLOWED_TRANSITIONS: Record<GoalStatus, readonly GoalStatus[]> = {
   active: ['paused'],
   paused: ['active'],
 };
@@ -106,39 +126,39 @@ function requireNonEmpty(value: string, label: string): string {
   return trimmed;
 }
 
-export const OdysseyStore = {
-  /** Get the odyssey for a stream, or null when none exists. */
-  getForStream(streamId: StreamTabId): Odyssey | null {
+export const GoalStore = {
+  /** Get the goal for a stream, or null when none exists. */
+  getForStream(streamId: StreamTabId): Goal | null {
     return readRaw(streamId);
   },
 
-  /** Get all odysseys (for the OdysseyTab cross-conversation list). */
-  list(): Odyssey[] {
+  /** Get all goals (for the GoalTab cross-conversation list). */
+  list(): Goal[] {
     return readIndex()
       .map((id) => readRaw(id))
       .filter(filterNotNull);
   },
 
   /**
-   * Create a new active odyssey for the stream. Throws if one already exists
+   * Create a new active goal for the stream. Throws if one already exists
    * (active or paused). Finishing one (forget) and starting another is normal.
    */
   async start(
     streamId: StreamTabId,
     objective: string,
     options?: { plan?: Plan },
-  ): Promise<Odyssey> {
+  ): Promise<Goal> {
     const trimmed = requireNonEmpty(objective, 'objective');
     const existing = readRaw(streamId);
-    if (existing && isOdysseyInFlight(existing)) {
+    if (existing && isGoalInFlight(existing)) {
       throw new Error(
-        `An odyssey is already in progress for this stream (status: ${existing.status}). ` +
+        `A goal is already in progress for this stream (status: ${existing.status}). ` +
           `Abandon or complete it before starting a new one.`,
       );
     }
     const now = nowIso();
-    const odyssey: Odyssey = {
-      odysseyId: generateOdysseyId(),
+    const goal: Goal = {
+      goalId: generateGoalId(),
       streamId,
       objective: trimmed,
       status: 'active',
@@ -146,9 +166,9 @@ export const OdysseyStore = {
       updatedAt: now,
       plan: options?.plan ?? null,
     };
-    await Promise.all([writeRaw(odyssey), addToIndex(streamId)]);
-    bus.emit('odysseyStateChanged', { streamId });
-    return odyssey;
+    await Promise.all([writeRaw(goal), addToIndex(streamId)]);
+    bus.emit('goalStateChanged', { streamId });
+    return goal;
   },
 
   /**
@@ -159,22 +179,22 @@ export const OdysseyStore = {
    */
   async setStatus(
     streamId: StreamTabId,
-    nextStatus: OdysseyStatus,
-  ): Promise<Odyssey | null> {
+    nextStatus: GoalStatus,
+  ): Promise<Goal | null> {
     const current = readRaw(streamId);
     if (!current) return null;
     if (current.status === nextStatus) return current;
     if (!ALLOWED_TRANSITIONS[current.status].includes(nextStatus)) {
       throw new Error(
-        `Illegal odyssey transition: ${current.status} → ${nextStatus}.`,
+        `Illegal goal transition: ${current.status} → ${nextStatus}.`,
       );
     }
-    return update(streamId, (odyssey) => ({ ...odyssey, status: nextStatus }));
+    return update(streamId, (goal) => ({ ...goal, status: nextStatus }));
   },
 
   /**
    * Replace the objective (and optionally the originating plan).
-   * Used by the Approve & Run path when an odyssey is already in flight —
+   * Used by the Approve & Run path when a goal is already in flight —
    * re-targeting an active loop is preferable to silently leaving it
    * pointed at a stale objective.
    */
@@ -182,19 +202,19 @@ export const OdysseyStore = {
     streamId: StreamTabId,
     newObjective: string,
     options?: { plan?: Plan | null },
-  ): Promise<Odyssey> {
+  ): Promise<Goal> {
     const trimmed = requireNonEmpty(newObjective, 'objective');
     // `options.plan !== undefined` keeps absent and explicit `undefined` both
     // as "don't touch plan"; `null` still means "clear".
     const planUpdate =
       options?.plan !== undefined ? { plan: options.plan } : {};
-    const updated = await update(streamId, (odyssey) => ({
-      ...odyssey,
+    const updated = await update(streamId, (goal) => ({
+      ...goal,
       objective: trimmed,
       ...planUpdate,
     }));
     if (!updated) {
-      throw new Error('No odyssey found for this stream.');
+      throw new Error('No goal found for this stream.');
     }
     return updated;
   },
@@ -209,9 +229,12 @@ export const OdysseyStore = {
     if (!existed) return;
     await Promise.all([
       state.update(streamKey(streamId), undefined),
+      // Clear the pre-rename key too, or a forgotten legacy record would
+      // resurface via the readRaw fallback.
+      state.update(legacyStreamKey(streamId), undefined),
       removeFromIndex(streamId),
     ]);
-    bus.emit('odysseyStateChanged', { streamId });
+    bus.emit('goalStateChanged', { streamId });
   },
 
   /**
@@ -230,11 +253,11 @@ export const OdysseyStore = {
     const nextIndex = index.filter((id) => !dropped.has(id));
     await Promise.all([
       ...toRemove.map((id) => state.update(streamKey(id), undefined)),
+      ...toRemove.map((id) => state.update(legacyStreamKey(id), undefined)),
       nextIndex.length === index.length
         ? Promise.resolve()
         : state.update(INDEX_KEY, nextIndex),
     ]);
-    for (const id of toRemove)
-      bus.emit('odysseyStateChanged', { streamId: id });
+    for (const id of toRemove) bus.emit('goalStateChanged', { streamId: id });
   },
 };

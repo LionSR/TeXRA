@@ -16,7 +16,10 @@ import {
   type CliAmbientState,
 } from '@cli/runtime/cliContext';
 import { loadWorkspaceCliConfig } from '@cli/runtime/cliConfig';
-import { LEGACY_ODYSSEY_FEATURE_FLAG_KEY } from '@tools/odyssey';
+import { LEGACY_GOAL_FEATURE_FLAG_KEYS } from '@tools/goal';
+
+// Pre-rename canonical key, still honored read-only for back-compat.
+const LEGACY_GOAL_FEATURE_FLAG_KEY = LEGACY_GOAL_FEATURE_FLAG_KEYS[0];
 
 const ambient = {
   isCi: true,
@@ -145,17 +148,17 @@ describe('CLI context config defaults', () => {
     expect(loaded.warnings.join('\n')).toContain('chat.other');
   });
 
-  it('accepts the legacy Odyssey flag without unknown-key warnings', async () => {
+  it('accepts the legacy Goal flag without unknown-key warnings', async () => {
     const workspace = await workspaceWithConfig(
       JSON.stringify({
-        [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: false,
+        [LEGACY_GOAL_FEATURE_FLAG_KEY]: false,
       }),
     );
 
     const loaded = await loadWorkspaceCliConfig(workspace);
 
     expect(loaded.warnings.join('\n')).not.toContain(
-      LEGACY_ODYSSEY_FEATURE_FLAG_KEY,
+      LEGACY_GOAL_FEATURE_FLAG_KEY,
     );
   });
 
