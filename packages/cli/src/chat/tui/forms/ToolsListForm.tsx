@@ -108,10 +108,11 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
 
   if (isCompactFormRows(props.availableRows)) {
     return (
-      <FormFrame color="cyan" title="/tools" showCloseHint={false}>
-        <Text dimColor wrap="truncate-end">
-          Toggle available external integrations.
-        </Text>
+      <FormFrame
+        color="cyan"
+        title="/tools · Toggle available external integrations."
+        showCloseHint={false}
+      >
         <Select
           items={items}
           maxVisibleItems={1}
