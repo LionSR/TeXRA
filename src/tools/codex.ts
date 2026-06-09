@@ -509,7 +509,7 @@ function startCodexLoop(params: {
   }
 
   // Seed the initial prompt; the loop drains it as the first turn.
-  queue.enqueue(initialPrompt);
+  queue.enqueue({ text: initialPrompt });
   childStream.waitForInput();
 
   let sawTurnFailure = false;
@@ -521,7 +521,7 @@ function startCodexLoop(params: {
         );
         if (!messages || session.isInterrupted()) break;
 
-        const prompt = messages.items.join('\n\n');
+        const prompt = messages.items.map((item) => item.text).join('\n\n');
         childStream.beginTurn();
         const startedAt = Date.now();
         const signal = session.startTurn();
@@ -582,7 +582,10 @@ function startCodexLoop(params: {
         } catch {
           // Best-effort; delivery must not block on storage.
         }
-        ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
+        ToolUseFollowUpQueue.enqueue(parentStreamId, {
+          text: msg,
+          origin: 'subagent_result',
+        });
 
         if (turnFailed) {
           sawTurnFailure = true;
@@ -785,7 +788,7 @@ function resumeCodexThread(
   }
 
   const queue = ToolUseFollowUpQueue.acquire(stored.childStreamId);
-  queue.enqueue(prompt);
+  queue.enqueue({ text: prompt });
 
   const preview = truncateWithEllipsis(prompt, 60);
   return {

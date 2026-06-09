@@ -6,6 +6,7 @@
  */
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { RunCoordinators } from './RunContext';
@@ -44,11 +45,7 @@ export interface ExecutionHandle {
 
 export interface LiveToolUseFlowContext {
   readonly session: {
-    appendFollowUp(
-      text: string,
-      mediaFiles?: readonly string[],
-      displayText?: string,
-    ): void;
+    appendFollowUp(followUp: FollowUpQueueInput): void;
   };
   readonly modelHandler: {
     readonly supportsManualCompaction: boolean;

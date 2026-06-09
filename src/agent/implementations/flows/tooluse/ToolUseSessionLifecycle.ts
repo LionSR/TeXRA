@@ -1,13 +1,12 @@
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type { FollowUpQueueBatch } from '@agent/toolUse/FollowUpQueue';
+import type {
+  FollowUpQueueBatch,
+  FollowUpQueueInput,
+} from '@agent/toolUse/FollowUpQueue';
 import type { StreamTabId } from '@shared/schemas';
 
 export interface IToolUseSession {
-  appendFollowUp(
-    text: string,
-    mediaFiles?: readonly string[],
-    displayText?: string,
-  ): void;
+  appendFollowUp(followUp: FollowUpQueueInput): void;
   appendSyntheticFollowUp(text: string): void;
   hasQueuedFollowUp(): boolean;
   /** Wait for the next follow-up items. Returns null if interrupted. */
@@ -22,12 +21,8 @@ export class ToolUseSessionLifecycle implements IToolUseSession {
 
   constructor(private readonly streamTabId: StreamTabId) {}
 
-  appendFollowUp(
-    text: string,
-    mediaFiles?: readonly string[],
-    displayText?: string,
-  ): void {
-    this.followUps.enqueue(text, mediaFiles, displayText);
+  appendFollowUp(followUp: FollowUpQueueInput): void {
+    this.followUps.enqueue(followUp);
   }
 
   appendSyntheticFollowUp(text: string): void {

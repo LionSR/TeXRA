@@ -313,7 +313,10 @@ export class BashTool extends defineTool({
           stderrTail,
         );
         await store.writeReport(msg);
-        ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
+        ToolUseFollowUpQueue.enqueue(parentStreamId, {
+          text: msg,
+          origin: 'subagent_result',
+        });
       })
       .catch(async (err: unknown) => {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
@@ -325,7 +328,10 @@ export class BashTool extends defineTool({
 
         const msg = formatBashError(executionId, command, err);
         await getExecutionStore(executionId).writeReport(msg);
-        ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
+        ToolUseFollowUpQueue.enqueue(parentStreamId, {
+          text: msg,
+          origin: 'subagent_result',
+        });
       });
 
     return {

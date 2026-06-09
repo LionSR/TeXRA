@@ -7,7 +7,11 @@
 
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
-import { FollowUpQueue, type DrainedFollowUpItem } from './FollowUpQueue';
+import {
+  FollowUpQueue,
+  type DrainedFollowUpItem,
+  type FollowUpQueueInput,
+} from './FollowUpQueue';
 
 const logger = createChannelTrace('ToolUseFollowUpQueue');
 
@@ -81,12 +85,8 @@ export class ToolUseFollowUpQueue {
    */
   static enqueue(
     streamId: StreamTabId,
-    followUp: string,
-    options?: {
-      force?: boolean;
-      mediaFiles?: readonly string[];
-      displayText?: string;
-    },
+    followUp: FollowUpQueueInput,
+    options?: { force?: boolean },
   ): boolean {
     if (this.released.has(streamId) && !options?.force) {
       logger.debug(
@@ -95,7 +95,7 @@ export class ToolUseFollowUpQueue {
       return false;
     }
     const queue = this.acquire(streamId);
-    queue.enqueue(followUp, options?.mediaFiles, options?.displayText);
+    queue.enqueue(followUp);
     logger.debug(`Queued follow-up for stream ${streamId}.`);
     return true;
   }
