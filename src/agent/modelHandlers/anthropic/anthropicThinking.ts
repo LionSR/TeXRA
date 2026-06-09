@@ -96,9 +96,10 @@ export const requiresNoTemperatureWithThinking = (fullName: string): boolean =>
  * Returns the Anthropic effort level for the current model.
  * Maps the llm-zoo ReasoningEffort enum to Anthropic's effort levels.
  * Falls back to 'high' (the API default) when no specific effort is configured.
- * The above-'high' tiers are only valid for Opus-tier models: Opus 4.8 accepts
- * both the distinct 'xhigh' ("extra") tier and the top 'max' tier, while Opus
- * 4.6/4.7 predate that split and only accept 'max'.
+ * The above-'high' tiers are valid for Opus-tier and Mythos-class models:
+ * Opus 4.8 and the Mythos-class models (Fable 5, Mythos 5) accept both the
+ * distinct 'xhigh' ("extra") tier and the top 'max' tier, while Opus 4.6/4.7
+ * predate that split and only accept 'max'.
  */
 export function mapAnthropicEffort(
   fullName: string,
@@ -161,9 +162,10 @@ export interface ThinkingConfigResult {
 /**
  * Builds the thinking configuration for a create request.
  *
- * Adaptive-thinking models (Opus 4.6/4.7/4.8, Sonnet 4.6) use the effort
- * parameter and let the model decide its budget; interleaved thinking is enabled
- * automatically. Older models use a manual budget_tokens cap.
+ * Adaptive-thinking models (Opus 4.6/4.7/4.8, Sonnet 4.6, and the Mythos-class
+ * models Fable 5 / Mythos 5) use the effort parameter and let the model decide
+ * its budget; interleaved thinking is enabled automatically. Older models use a
+ * manual budget_tokens cap.
  */
 export function buildThinkingConfig({
   fullName,
