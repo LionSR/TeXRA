@@ -74,6 +74,20 @@ describe('CLI session status formatter', () => {
     expect(status).not.toContain('<subagent-result');
   });
 
+  it('keeps malformed queued follow-up entries from breaking status details', () => {
+    const status = formatCliSessionStatus({
+      agent: 'chat',
+      model: 'harness-model',
+      api: 'personal',
+      approval: 'ask',
+      status: 'running',
+      queuedFollowUpMessages: [undefined as unknown as string],
+    });
+
+    expect(status).toContain('queued follow-ups: 1');
+    expect(status).toContain('1. (empty follow-up)');
+  });
+
   it('reports an empty follow-up queue explicitly', () => {
     expect(
       formatCliSessionStatus({
