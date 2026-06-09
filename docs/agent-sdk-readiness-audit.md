@@ -1005,17 +1005,18 @@ thus also safe for multiple in-process sessions:
 The genuine cross-session leaks for a hypothetical multi-session-in-one-process SDK embedder are
 therefore a **short, enumerable list** — the explicit _all/sweep_ entry points, not the maps:
 
-1. `getActiveExecutionIds()` (`executionRegistry.ts:124`) returns **every** session's executions;
-   consumed by the orchestrator's `ExecutionsTool` listing (`tools/ExecutionsTool.ts:382,441`) and
-   the delete-all guards (`SettingsViewMessageHandler.ts:1201/1227`,
-   `desktopSettingsIpc.ts:449/463`). A second session's runs would be visible/selectable.
+1. At the original §13 pass, `getActiveExecutionIds()` (`executionRegistry.ts:124` at that
+   revision) returned **every** session's executions; consumed by the orchestrator's
+   `ExecutionsTool` listing (`tools/ExecutionsTool.ts:382,441`) and the delete-all guards
+   (`SettingsViewMessageHandler.ts:1201/1227`, `desktopSettingsIpc.ts:449/463`). A second
+   session's runs would have been visible/selectable. This seam is now removed; see §15.
 2. `cleanupAllCoordinatorRequests()` + `clearAll*` (`runCoordinators.ts:115/216/237`), reached via
    `cleanupAllApprovals()` ("delete all streams", `tools/approval/index.ts:49-57`). A reset in one
    session would clear another's pending approvals. **Note:** the per-session variant already
    exists — `cleanupCoordinatorRequestsForStream(streamId)` (`runCoordinators.ts:231`,
    `tools/approval/index.ts:42`) — so the scoped path is built; only the "all" sweep leaks.
-3. The single module-level `StreamStatusService.onDidChange(...)` subscription in
-   `executionRegistry.ts:44` — one process-wide listener (its body is keyed-safe; the subscription
+3. The single module-level `StreamStatusRegistry.onDidChange(...)` subscription in
+   `executionRegistry.ts:118` — one process-wide listener (its body is keyed-safe; the subscription
    registration is the global).
 
 **Ledger update:** the §5/Step-7 prescription "relocate the three module-globals onto a per-run
@@ -1334,7 +1335,7 @@ YAML + tool-list concern, not new code.** No new abstraction introduced.
   `getActiveExecutionIds` sweep seam was removed. Per §13 Finding B the remaining cross-session
   seams narrow to the **`clearAll*` reset path** (`runCoordinators.ts:142-193`
   `cleanupAllRequests`, reachable via `tools/approval`) and the **single module-level
-  `StreamStatusService.onDidChange` subscription** in `executionRegistry.ts:118` — scope these by
+  `StreamStatusRegistry.onDidChange` subscription** in `executionRegistry.ts:118` — scope these by
   session and the in-process multi-session blocker closes. The keyed registries themselves need
   not move for correctness (no current single-session host exhibits a bug).
 - **§3.1** — still no `@agent/runtime/index.ts` barrel; still optional polish (the `@texra/core`
