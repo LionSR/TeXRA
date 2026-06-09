@@ -70,4 +70,8 @@ export {
   updateAgentMeta,
   // Built-in relay-served orchestrator roots
   REMOTE_ORCHESTRATOR_AGENT_NAMES,
+  // Bundled (offline) orchestrator roots
+  BUNDLED_ORCHESTRATOR_AGENT_NAMES,
+  // All built-in delegating team roots (relay-served + bundled)
+  BUILTIN_TEAM_ROOT_AGENT_NAMES,
 } from './agentRegistry';
