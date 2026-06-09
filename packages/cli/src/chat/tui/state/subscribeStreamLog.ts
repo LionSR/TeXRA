@@ -47,6 +47,14 @@ function logEntryHasText(entry: StreamLogEntry): boolean {
   return (entry.text ?? '').trim().length > 0;
 }
 
+function logEntryStreamIsRunning(entry: StreamLogEntry): boolean {
+  const data = entry.data;
+  if (typeof data !== 'object' || data === null || !('status' in data)) {
+    return logEntryHasText(entry);
+  }
+  return data.status === 'running';
+}
+
 function latestLogActivityIsThinking(
   entries: readonly StreamLogEntry[],
 ): boolean {
@@ -56,7 +64,8 @@ function latestLogActivityIsThinking(
       continue;
     }
     return (
-      entry.messageType === MESSAGE_TYPES.THINKING && logEntryHasText(entry)
+      entry.messageType === MESSAGE_TYPES.THINKING &&
+      logEntryStreamIsRunning(entry)
     );
   }
   return false;

@@ -1,6 +1,6 @@
 // Regression test for the width-adaptive `<Static>` user-message band
-// (TranscriptEntry full-width reverse-video band + StaticConversationTranscript
-// `<Static key={width}>`). Renders a minimal Ink app reproducing the pattern to
+// (TranscriptEntry full-width reverse-video band + the entry Static remount in
+// StaticConversationTranscript). Renders a minimal Ink app reproducing the pattern to
 // an in-memory fake stdout, simulates a terminal resize by bumping `columns` and
 // emitting `resize`, and asserts the highlighted band reflows to the NEW width
 // instead of staying baked at the original width.

@@ -278,7 +278,7 @@ export function staticScrollbackTarget({
   // Before a root run resolves, local helper output and harness-built root
   // streams still need static scrollback. The root owner key is deliberately
   // stable across the later rootStreamId resolution so Ink's append-only
-  // <Static> cache does not remount and print the session header twice.
+  // <Static> cache does not remount and reprint pre-run root entries.
   return {
     ownerKey: 'root',
     streamId: rootStreamId ?? activeStreamId,
