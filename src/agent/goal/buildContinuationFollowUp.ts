@@ -1,8 +1,5 @@
-import type { Odyssey } from '@tools/odyssey';
-import {
-  formatOdysseyTime,
-  odysseyElapsedMs,
-} from '@tools/odyssey/odysseyMeta';
+import type { Goal } from '@tools/goal';
+import { formatGoalTime, goalElapsedMs } from '@tools/goal/goalMeta';
 
 import {
   getContinuationTemplate,
@@ -16,17 +13,15 @@ function render(template: string, vars: Record<string, string>): string {
 }
 
 /**
- * Render the continuation prompt for an active odyssey, wrapped in
- * <odyssey_context> tags. Used as a synthesized user message when the
+ * Render the continuation prompt for an active goal, wrapped in
+ * <goal_context> tags. Used as a synthesized user message when the
  * wait-node short-circuits the wait for the autonomous loop.
  */
-export async function buildContinuationFollowUp(
-  odyssey: Odyssey,
-): Promise<string> {
+export async function buildContinuationFollowUp(goal: Goal): Promise<string> {
   const template = await getContinuationTemplate();
   return render(template, {
-    objective: odyssey.objective,
-    timeUsed: formatOdysseyTime(odysseyElapsedMs(odyssey)),
+    objective: goal.objective,
+    timeUsed: formatGoalTime(goalElapsedMs(goal)),
   });
 }
 
@@ -34,8 +29,8 @@ export async function buildContinuationFollowUp(
  * Render the objective-updated prompt for the user-driven edit flow.
  */
 export async function buildObjectiveUpdatedFollowUp(
-  odyssey: Odyssey,
+  goal: Goal,
 ): Promise<string> {
   const template = await getObjectiveUpdatedTemplate();
-  return render(template, { objective: odyssey.objective });
+  return render(template, { objective: goal.objective });
 }

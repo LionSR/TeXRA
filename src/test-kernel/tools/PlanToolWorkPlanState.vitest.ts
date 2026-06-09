@@ -14,7 +14,7 @@ import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator'
 import { type RunCoordinators } from '@agent/runtime/RunContext';
 import { withToolEnvironment } from '@agent/toolUse/ToolFileInteractionContext';
 import type { Plan, StreamTabId } from '@shared/schemas';
-import { ODYSSEY_FEATURE_FLAG_KEY, OdysseyStore } from '@tools/odyssey';
+import { GOAL_FEATURE_FLAG_KEY, GoalStore } from '@tools/goal';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { createRecordingHost } from '../agent/progressTestUtils';
 
@@ -37,7 +37,7 @@ const followUpPlan: Plan = {
   steps: [
     {
       title: 'Retarget objective',
-      description: 'Make the active odyssey follow the newly approved plan.',
+      description: 'Make the active goal follow the newly approved plan.',
       status: 'pending',
       files: ['src/tools/plan/PlanTool.ts'],
     },
@@ -47,7 +47,7 @@ const followUpPlan: Plan = {
 async function installPlatform(flagOn: boolean): Promise<Platform> {
   const { initPlatform } = await import('@platform/platform');
   const platform = createFakePlatform({
-    config: { [ODYSSEY_FEATURE_FLAG_KEY]: flagOn },
+    config: { [GOAL_FEATURE_FLAG_KEY]: flagOn },
   });
   initPlatform(platform);
   return platform;
@@ -89,8 +89,8 @@ describe('PlanTool — update (plan approval)', () => {
     expect(workPlanState.planSummary).toBeNull();
   });
 
-  it('approve_and_odyssey starts an odyssey using the plan as the objective', async () => {
-    const streamId = 'stream:plan-odyssey' as StreamTabId;
+  it('approve_and_goal starts a goal using the plan as the objective', async () => {
+    const streamId = 'stream:plan-goal' as StreamTabId;
     await installPlatform(true);
 
     try {
@@ -118,34 +118,34 @@ describe('PlanTool — update (plan approval)', () => {
         (entry) => entry.event === 'showPlanApproval',
       );
       expect(approval).toBeDefined();
-      expect(
-        (approval!.payload as { odysseyEnabled: boolean }).odysseyEnabled,
-      ).toBe(true);
+      expect((approval!.payload as { goalEnabled: boolean }).goalEnabled).toBe(
+        true,
+      );
       coordinator.resolveRequest(
         (approval!.payload as { approvalId: string }).approvalId,
-        { action: 'approve_and_odyssey' },
+        { action: 'approve_and_goal' },
       );
 
       const result = await resultPromise;
       expect(result.isError).not.toBe(true);
 
-      const odyssey = OdysseyStore.getForStream(streamId);
-      expect(odyssey).not.toBeNull();
-      expect(odyssey!.status).toBe('active');
-      expect(odyssey!.objective).toContain(plan.summary);
-      expect(odyssey!.objective).toContain(plan.steps[0]!.title);
-      expect(odyssey!.plan).toEqual(plan);
+      const goal = GoalStore.getForStream(streamId);
+      expect(goal).not.toBeNull();
+      expect(goal!.status).toBe('active');
+      expect(goal!.objective).toContain(plan.summary);
+      expect(goal!.objective).toContain(plan.steps[0]!.title);
+      expect(goal!.plan).toEqual(plan);
     } finally {
-      await OdysseyStore.forget(streamId);
+      await GoalStore.forget(streamId);
     }
   });
 
-  it('approve_and_odyssey retargets an existing odyssey to the approved plan', async () => {
-    const streamId = 'stream:plan-odyssey-retarget' as StreamTabId;
+  it('approve_and_goal retargets an existing goal to the approved plan', async () => {
+    const streamId = 'stream:plan-goal-retarget' as StreamTabId;
     await installPlatform(true);
 
     try {
-      const existing = await OdysseyStore.start(streamId, 'Old objective', {
+      const existing = await GoalStore.start(streamId, 'Old objective', {
         plan,
       });
       const { events, host } = createRecordingHost();
@@ -174,27 +174,27 @@ describe('PlanTool — update (plan approval)', () => {
       expect(approval).toBeDefined();
       coordinator.resolveRequest(
         (approval!.payload as { approvalId: string }).approvalId,
-        { action: 'approve_and_odyssey' },
+        { action: 'approve_and_goal' },
       );
 
       const result = await resultPromise;
       expect(result.isError).not.toBe(true);
       expect(result.summary).toMatch(/retargeted/i);
 
-      const odyssey = OdysseyStore.getForStream(streamId);
-      expect(odyssey).not.toBeNull();
-      expect(odyssey!.odysseyId).toBe(existing.odysseyId);
-      expect(odyssey!.status).toBe('active');
-      expect(odyssey!.objective).toContain(followUpPlan.summary);
-      expect(odyssey!.objective).not.toContain('Old objective');
-      expect(odyssey!.plan).toEqual(followUpPlan);
+      const goal = GoalStore.getForStream(streamId);
+      expect(goal).not.toBeNull();
+      expect(goal!.goalId).toBe(existing.goalId);
+      expect(goal!.status).toBe('active');
+      expect(goal!.objective).toContain(followUpPlan.summary);
+      expect(goal!.objective).not.toContain('Old objective');
+      expect(goal!.plan).toEqual(followUpPlan);
     } finally {
-      await OdysseyStore.forget(streamId);
+      await GoalStore.forget(streamId);
     }
   });
 
-  it('approve_and_odyssey explicitly reports when odyssey is disabled before resolution', async () => {
-    const streamId = 'stream:plan-odyssey-disabled' as StreamTabId;
+  it('approve_and_goal explicitly reports when goal is disabled before resolution', async () => {
+    const streamId = 'stream:plan-goal-disabled' as StreamTabId;
     const platform = await installPlatform(true);
 
     try {
@@ -222,26 +222,23 @@ describe('PlanTool — update (plan approval)', () => {
         (entry) => entry.event === 'showPlanApproval',
       );
       expect(approval).toBeDefined();
-      expect(
-        (approval!.payload as { odysseyEnabled: boolean }).odysseyEnabled,
-      ).toBe(true);
-
-      (platform.config as FakeConfigProvider).set(
-        ODYSSEY_FEATURE_FLAG_KEY,
-        false,
+      expect((approval!.payload as { goalEnabled: boolean }).goalEnabled).toBe(
+        true,
       );
+
+      (platform.config as FakeConfigProvider).set(GOAL_FEATURE_FLAG_KEY, false);
       coordinator.resolveRequest(
         (approval!.payload as { approvalId: string }).approvalId,
-        { action: 'approve_and_odyssey' },
+        { action: 'approve_and_goal' },
       );
 
       const result = await resultPromise;
       expect(result.isError).not.toBe(true);
       expect(result.summary).toMatch(/autonomous run unavailable/i);
       expect(result.output).toContain('feature flag is currently disabled');
-      expect(OdysseyStore.getForStream(streamId)).toBeNull();
+      expect(GoalStore.getForStream(streamId)).toBeNull();
     } finally {
-      await OdysseyStore.forget(streamId);
+      await GoalStore.forget(streamId);
     }
   });
 
@@ -281,7 +278,7 @@ describe('PlanTool — update (plan approval)', () => {
   });
 });
 
-describe('PlanTool — pause/complete (odyssey lifecycle)', () => {
+describe('PlanTool — pause/complete (goal lifecycle)', () => {
   const STREAM_ID = 'stream:plan-lifecycle' as StreamTabId;
 
   beforeEach(async () => {
@@ -289,7 +286,7 @@ describe('PlanTool — pause/complete (odyssey lifecycle)', () => {
   });
 
   afterEach(async () => {
-    await OdysseyStore.forget(STREAM_ID);
+    await GoalStore.forget(STREAM_ID);
   });
 
   async function callTool(input: unknown) {
@@ -304,8 +301,8 @@ describe('PlanTool — pause/complete (odyssey lifecycle)', () => {
     );
   }
 
-  it('pauses an active odyssey with a reason', async () => {
-    await OdysseyStore.start(STREAM_ID, 'Drive the plan to completion.', {
+  it('pauses an active goal with a reason', async () => {
+    await GoalStore.start(STREAM_ID, 'Drive the plan to completion.', {
       plan,
     });
     const result = await callTool({
@@ -313,11 +310,11 @@ describe('PlanTool — pause/complete (odyssey lifecycle)', () => {
       reason: 'Need API credentials from the user.',
     });
     expect(result.isError).toBeFalsy();
-    expect(OdysseyStore.getForStream(STREAM_ID)?.status).toBe('paused');
+    expect(GoalStore.getForStream(STREAM_ID)?.status).toBe('paused');
   });
 
-  it('completes an active odyssey with a verification reason', async () => {
-    await OdysseyStore.start(STREAM_ID, 'Drive the plan to completion.', {
+  it('completes an active goal by forgetting the record', async () => {
+    await GoalStore.start(STREAM_ID, 'Drive the plan to completion.', {
       plan,
     });
     const result = await callTool({
@@ -325,24 +322,22 @@ describe('PlanTool — pause/complete (odyssey lifecycle)', () => {
       reason: 'Ran pnpm test; all 142 tests pass.',
     });
     expect(result.isError).toBeFalsy();
-    expect(OdysseyStore.getForStream(STREAM_ID)?.status).toBe('complete');
-    expect(OdysseyStore.getForStream(STREAM_ID)?.completedReason).toContain(
-      'all 142 tests pass',
-    );
+    expect(result.output).toContain('all 142 tests pass');
+    // Completing is `forget()` — a finished goal is not archived, so no
+    // record remains and the wait-node loop has nothing to continue.
+    expect(GoalStore.getForStream(STREAM_ID)).toBeNull();
   });
 
-  it('refuses to complete an abandoned odyssey', async () => {
-    await OdysseyStore.start(STREAM_ID, 'objective', { plan });
-    await OdysseyStore.setStatus(STREAM_ID, 'abandoned', 'user abandoned');
+  it('complete is a no-op when no goal is running', async () => {
     const result = await callTool({
       command: 'complete',
       reason: 'I think I am done.',
     });
-    expect(result.isError).toBe(true);
-    expect(result.error).toMatch(/abandoned/i);
+    expect(result.isError).toBeFalsy();
+    expect(result.summary).toMatch(/no-op/i);
   });
 
-  it('pause is a no-op when no odyssey is running', async () => {
+  it('pause is a no-op when no goal is running', async () => {
     const result = await callTool({
       command: 'pause',
       reason: 'Need user input.',
@@ -352,7 +347,7 @@ describe('PlanTool — pause/complete (odyssey lifecycle)', () => {
   });
 
   it('rejects whitespace-only reason on pause', async () => {
-    await OdysseyStore.start(STREAM_ID, 'objective', { plan });
+    await GoalStore.start(STREAM_ID, 'objective', { plan });
     const result = await callTool({ command: 'pause', reason: '   ' });
     expect(result.isError).toBe(true);
     expect(result.error).toMatch(/empty/i);

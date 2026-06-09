@@ -49,14 +49,14 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
       compact={compact}
       title="Approve plan?"
       extraActions={
-        props.payload.odysseyEnabled
+        props.payload.goalEnabled
           ? [
               {
                 key: 'r',
                 label: 'approve & run',
                 decision: {
                   accepted: true,
-                  planAction: 'approve_and_odyssey',
+                  planAction: 'approve_and_goal',
                 },
               },
             ]

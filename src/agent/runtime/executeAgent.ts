@@ -2,6 +2,7 @@ import * as path from 'path';
 
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import {
+  getToolUseFlowErrorResult,
   runToolUseFlow,
   type IToolUseSession,
   type RunToolUseFlowResult,
@@ -19,7 +20,7 @@ import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
-import { AgentError } from '@common/errors';
+import { AgentError, getSdkErrorMessage } from '@common/errors';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
 import {
@@ -42,12 +43,13 @@ import { executionRegistry } from './executionRegistry';
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { getProgressViewBridge } from './ProgressViewBridge';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
-import type {
-  AgentFlowResult,
-  CompileFailureSummary,
-  OutputFileSummary,
+import {
+  AgentFlowError,
+  type AgentFlowResult,
+  type CompileFailureSummary,
+  type OutputFileSummary,
 } from './AgentFlowResult';
+import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const CHANNEL = 'executeAgent';
 const logger = createChannelTrace(CHANNEL);
@@ -118,6 +120,9 @@ function buildWorkflowFlowResult(
     executionId,
     streamId,
     ...(memoryMisses && memoryMisses.length > 0 ? { memoryMisses } : {}),
+    ...(result.totalCostUsd != null && result.totalCostUsd > 0
+      ? { totalCostUsd: result.totalCostUsd }
+      : {}),
   };
 }
 
@@ -136,6 +141,9 @@ function buildToolUseFlowResult(
     executionId,
     streamId,
     ...(memoryMisses && memoryMisses.length > 0 ? { memoryMisses } : {}),
+    ...(result.totalCostUsd != null && result.totalCostUsd > 0
+      ? { totalCostUsd: result.totalCostUsd }
+      : {}),
   };
 }
 
@@ -312,55 +320,70 @@ export async function executeAgent(
         if (setting.agentCategory === AgentCategory.ToolUse) {
           let toolUseTurns = 0;
           const onRoundFinalized = createUsageRecordingCallback(ctx);
-          const result = await runToolUseFlow(
-            {
-              ...ctx,
-              ...interrupts,
-              onRoundFinalized,
-              setting,
-              isSubagent,
-              approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-              onBeforeWaiting: options.onBeforeWaiting,
-              stopAfterCycle: options.stopAfterCycle,
-              onProgress: (update) => {
-                if (update.kind === 'overview') {
-                  toolUseTurns++;
-                  ctx.runtimeHost.emit('updateConversationProgress', {
-                    streamId,
-                    progress: {
-                      conversationTurns: toolUseTurns,
-                      toolCallCount: update.toolCallCount,
-                    },
+          try {
+            const result = await runToolUseFlow(
+              {
+                ...ctx,
+                ...interrupts,
+                onRoundFinalized,
+                setting,
+                isSubagent,
+                approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+                onBeforeWaiting: options.onBeforeWaiting,
+                stopAfterCycle: options.stopAfterCycle,
+                onProgress: (update) => {
+                  if (update.kind === 'overview') {
+                    toolUseTurns++;
+                    ctx.runtimeHost.emit('updateConversationProgress', {
+                      streamId,
+                      progress: {
+                        conversationTurns: toolUseTurns,
+                        toolCallCount: update.toolCallCount,
+                      },
+                    });
+                  }
+                  options.onProgress?.(update);
+                },
+                onFollowUpConsumed: () => {
+                  ctx.runtimeHost.emit('updateQueuedFollowUps', {
+                    streamId: ctx.streamId,
                   });
-                }
-                options.onProgress?.(update);
+                  options.onFollowUpConsumed?.();
+                },
+                onModelChanged: (modelHandler, model) => {
+                  ctx.config.model = model;
+                  ctx.usageMonitor.setModelInfo({
+                    capabilities: modelHandler.capabilities,
+                    config: modelHandler.config,
+                  });
+                },
               },
-              onFollowUpConsumed: () => {
-                ctx.runtimeHost.emit('updateQueuedFollowUps', {
-                  streamId: ctx.streamId,
-                });
-                options.onFollowUpConsumed?.();
+              undefined,
+              (flowContext) => {
+                handle.attachToolUseFlow(flowContext);
+                return () => handle.detachToolUseFlow(flowContext);
               },
-              onModelChanged: (modelHandler, model) => {
-                ctx.config.model = model;
-                ctx.usageMonitor.setModelInfo({
-                  capabilities: modelHandler.capabilities,
-                  config: modelHandler.config,
-                });
-              },
-            },
-            undefined,
-            (flowContext) => {
-              handle.attachToolUseFlow(flowContext);
-              return () => handle.detachToolUseFlow(flowContext);
-            },
-          );
-          return buildToolUseFlowResult(
-            result,
-            ctx.executionId,
-            streamId,
-            ctx.attachedMemoryMisses,
-          );
+            );
+            return buildToolUseFlowResult(
+              result,
+              ctx.executionId,
+              streamId,
+              ctx.attachedMemoryMisses,
+            );
+          } catch (err) {
+            const failedResult = getToolUseFlowErrorResult(err);
+            if (!failedResult) throw err;
+            throw new AgentFlowError(
+              getSdkErrorMessage(err),
+              buildToolUseFlowResult(
+                failedResult,
+                ctx.executionId,
+                streamId,
+                ctx.attachedMemoryMisses,
+              ),
+              { cause: err },
+            );
+          }
         }
 
         const onRoundCompleted = createRoundProgressCallback(

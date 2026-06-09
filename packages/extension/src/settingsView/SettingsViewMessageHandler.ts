@@ -105,7 +105,7 @@ import type {
   ProviderVscodeSetting,
   NumberVscodeSetting,
 } from '@shared/schemas/profileViewMessages';
-import { OdysseyStore } from '@tools/odyssey';
+import { GoalStore } from '@tools/goal';
 import {
   getLastCheckResults,
   refreshToolAvailability,
@@ -310,8 +310,8 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         this.sendToolDashboardData(w, { skipChecks: true }),
       );
     });
-    bus.on('odysseyStateChanged', () => {
-      void this.withActiveWebview((w) => this.sendOdysseyList(w));
+    bus.on('goalStateChanged', () => {
+      void this.withActiveWebview((w) => this.sendGoalList(w));
     });
   }
 
@@ -607,23 +607,21 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       [SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND]: (data) =>
         this.handleRunToolCommand(data),
 
-      [SETTINGS_VIEW_COMMANDS.GET_ODYSSEY_LIST]: () =>
-        this.withActiveWebview((w) => this.sendOdysseyList(w)),
-      [SETTINGS_VIEW_COMMANDS.REVEAL_ODYSSEY_STREAM]: (data) =>
-        this.handleRevealOdysseyStream(data.streamId),
+      [SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST]: () =>
+        this.withActiveWebview((w) => this.sendGoalList(w)),
+      [SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_STREAM]: (data) =>
+        this.handleRevealGoalStream(data.streamId),
     };
   }
 
-  public async sendOdysseyList(webview: vscode.Webview): Promise<void> {
+  public async sendGoalList(webview: vscode.Webview): Promise<void> {
     await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_ODYSSEY_LIST,
-      items: OdysseyStore.list(),
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
+      items: GoalStore.list(),
     });
   }
 
-  private async handleRevealOdysseyStream(
-    streamId: StreamTabId,
-  ): Promise<void> {
+  private async handleRevealGoalStream(streamId: StreamTabId): Promise<void> {
     const provider = ProgressViewProvider.getInstance();
     if (!provider) return;
     if (!provider.state.streamLogs.has(streamId)) return;
@@ -710,7 +708,7 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.latexHandlers.sendLatexSettingsStatus(webview),
       this.latexHandlers.sendLatexConfigValues(webview),
       this.sendInlineCriticismEnabled(webview),
-      this.sendOdysseyList(webview),
+      this.sendGoalList(webview),
     ]);
   }
 

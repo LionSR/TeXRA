@@ -1190,11 +1190,11 @@ const SCENARIOS = [
     ],
   },
   {
-    name: 'plan-approval-odyssey',
+    name: 'plan-approval-goal',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_ODYSSEY: '1',
+      HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
     bootExpect: '[Ctrl-C]',
     expect: [
@@ -1224,13 +1224,13 @@ const SCENARIOS = [
     unexpect: ['[/model]models'],
   },
   {
-    name: 'compact-plan-approval-odyssey',
+    name: 'compact-plan-approval-goal',
     rows: 10,
     cols: 80,
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_ODYSSEY: '1',
+      HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
     bootExpect: '[Ctrl-C]',
     expect: [
@@ -1246,16 +1246,16 @@ const SCENARIOS = [
     unexpect: ['[/model]models'],
   },
   {
-    name: 'plan-approval-approve-odyssey',
+    name: 'plan-approval-approve-goal',
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_ODYSSEY: '1',
+      HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
     bootExpect: '[Ctrl-C]',
     keys: ['r'],
     frame: 'tail',
-    expect: ['PLAN-ODYSSEY', '[/status]details', '[/model]models'],
+    expect: ['PLAN-GOAL', '[/status]details', '[/model]models'],
     unexpect: ['Approve plan?', '1 approval'],
   },
   {
@@ -1263,13 +1263,13 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '4',
       HARNESS_PLAN_APPROVAL: '1',
-      HARNESS_PLAN_APPROVAL_ODYSSEY: '1',
+      HARNESS_PLAN_APPROVAL_GOAL: '1',
     },
     bootExpect: '[Ctrl-C]',
     keys: [DC2],
     frame: 'tail',
     expect: ['Approve plan?', 'r approve & run', '1 approval'],
-    unexpect: ['PLAN-ODYSSEY', '[/model]models'],
+    unexpect: ['PLAN-GOAL', '[/model]models'],
   },
   {
     name: 'retry-approval',

@@ -61,6 +61,12 @@ const AgentFlowMetaSchema = z.object({
   executionId: ExecutionIdSchema,
   streamId: StreamTabIdSchema,
   memoryMisses: z.array(AttachedMemoryMissSchema).optional(),
+  /**
+   * Total model cost (USD) of the run, including its own subagents.
+   * Parents use this to roll a completed subagent's spend into their own
+   * usage totals and goal cost cap without branching on the subagent flow.
+   */
+  totalCostUsd: z.number().nonnegative().optional(),
 });
 
 export const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
@@ -88,6 +94,23 @@ export const AgentFlowResultSchema = z.discriminatedUnion('category', [
 ]);
 
 export type AgentFlowResult = z.infer<typeof AgentFlowResultSchema>;
+
+export class AgentFlowError extends Error {
+  constructor(
+    message: string,
+    readonly result: AgentFlowResult,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = 'AgentFlowError';
+  }
+}
+
+export function getAgentFlowErrorResult(
+  error: unknown,
+): AgentFlowResult | undefined {
+  return error instanceof AgentFlowError ? error.result : undefined;
+}
 
 /** The discriminant of {@link AgentFlowResult}: which flow produced the result. */
 export type AgentFlowCategory = AgentFlowResult['category'];

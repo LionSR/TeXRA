@@ -120,8 +120,8 @@ export const SETTINGS_VIEW_CMD = {
   // Experimental settings
   GET_INLINE_CRITICISM_ENABLED: 'getInlineCriticismEnabled',
   SET_INLINE_CRITICISM_ENABLED: 'setInlineCriticismEnabled',
-  GET_ODYSSEY_LIST: 'getOdysseyList',
-  REVEAL_ODYSSEY_STREAM: 'revealOdysseyStream',
+  GET_GOAL_LIST: 'getGoalList',
+  REVEAL_GOAL_STREAM: 'revealGoalStream',
 } as const;
 
 // Settings view specific commands (combines Memory, History, and Profile views)
@@ -147,5 +147,5 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',
   UPDATE_LATEX_CONFIG_VALUES: 'updateLatexConfigValues',
   UPDATE_INLINE_CRITICISM_ENABLED: 'updateInlineCriticismEnabled',
-  UPDATE_ODYSSEY_LIST: 'updateOdysseyList',
+  UPDATE_GOAL_LIST: 'updateGoalList',
 } as const;

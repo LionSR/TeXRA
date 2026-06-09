@@ -362,17 +362,25 @@
               "scope": "resource",
               "type": "boolean"
             },
+            "texra.goal.costCapUsd": {
+              "default": 0,
+              "description": "Optional USD spend cap for autonomous Goals (0 = unbounded). Snapshotted when a Goal starts; spend counts the conversation's model cost from the Goal's start, including delegated subagents when each child execution settles. When the cap is reached the Goal auto-pauses (resumable) instead of continuing.",
+              "minimum": 0,
+              "order": 54,
+              "scope": "resource",
+              "type": "number"
+            },
+            "texra.goal.enabled": {
+              "default": true,
+              "description": "Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command=\"complete\"). On by default; set to false to require manual continuation.",
+              "order": 53,
+              "scope": "resource",
+              "type": "boolean"
+            },
             "texra.inlineCriticism.enabled": {
               "default": false,
               "description": "Experimental: parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and surface them as VS Code diagnostics (squiggles + Problems panel). Severity 5→Error, 4→Warning, 3→Info, 1–2→Hint. Tool-use agents may also push diagnostics directly via the add_criticism tool.",
               "order": 52,
-              "scope": "resource",
-              "type": "boolean"
-            },
-            "texra.odyssey.enabled": {
-              "default": true,
-              "description": "Enable Odyssey, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Odyssey lets the agent keep working across turns toward a stated objective until it calls plan(command=\"complete\"). On by default; set to false to require manual continuation.",
-              "order": 53,
               "scope": "resource",
               "type": "boolean"
             }
