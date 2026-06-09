@@ -11,7 +11,7 @@ import {
 } from '@cli/runtime/approvalAdapter';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
-import { AGENT_CATEGORY, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
+import { AgentCategory, DEFAULT_TOOL_CONFIG } from '@shared/schemas';
 import {
   requestToolEditApproval,
   setToolEditApprovalHandler,
@@ -180,7 +180,7 @@ describe('formatAgentProposalApprovalSummary', () => {
       instruction:
         'Please verify the proof carefully.\nReport any gaps or hidden cases.',
       memories: [],
-      agentCategory: AGENT_CATEGORY.TOOL_USE,
+      agentCategory: AgentCategory.ToolUse,
     });
 
     expect(summary).toContain(
@@ -209,7 +209,7 @@ describe('formatAgentProposalApprovalSummary', () => {
       instruction,
       memories: ['/memories/proof-style.md'],
       workingDirectory: '/tmp/project',
-      agentCategory: AGENT_CATEGORY.TOOL_USE,
+      agentCategory: AgentCategory.ToolUse,
     });
 
     expect(summary).toContain('Working directory: /tmp/project');
@@ -232,7 +232,7 @@ describe('formatAgentProposalApprovalSummary', () => {
       mediaFiles: ['figure.png'],
       outputFiles: ['draft-polished.tex'],
       toolConfig: DEFAULT_TOOL_CONFIG,
-      agentCategory: AGENT_CATEGORY.WORKFLOW,
+      agentCategory: AgentCategory.Workflow,
     });
 
     expect(summary).toContain(

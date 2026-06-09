@@ -11,7 +11,7 @@
 import { z } from 'zod';
 
 import {
-  AGENT_CATEGORY,
+  AgentCategory,
   ToolConfigSchema,
   ToolUseAgentProposalSchema,
   WorkflowAgentProposalSchema,
@@ -50,7 +50,7 @@ function parseProposalInput(
 
   if (toolName === 'delegate_agent' || toolName === 'propose_agent') {
     const result = LenientToolUseProposalSchema.safeParse({
-      agentCategory: AGENT_CATEGORY.TOOL_USE,
+      agentCategory: AgentCategory.ToolUse,
       ...spread,
     });
     return result.success ? result.data : null;
@@ -86,7 +86,7 @@ function parseProposalInput(
     };
 
     const result = LenientWorkflowProposalSchema.safeParse({
-      agentCategory: AGENT_CATEGORY.WORKFLOW,
+      agentCategory: AgentCategory.Workflow,
       ...migrated,
       toolConfig,
     });

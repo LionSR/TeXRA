@@ -3,12 +3,8 @@ import * as path from 'path';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type {
-  AgentCategory,
-  StreamTabInfo,
-  WorktreeInfo,
-} from '@shared/schemas';
-import { AGENT_CATEGORY } from '@shared/schemas/agent';
+import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas/agent';
 import { isProcessAgent } from '@shared/streams/agentKind';
 
 import { getCleanAgentName, isRemoteAgent } from './agentRegistry';
@@ -47,7 +43,7 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   const { streamId, config, hints, creationTimestamp } = inputs;
 
   const category =
-    config?.agentCategory ?? hints?.agentCategory ?? AGENT_CATEGORY.WORKFLOW;
+    config?.agentCategory ?? hints?.agentCategory ?? AgentCategory.Workflow;
 
   const inputFile = config?.inputFiles?.[0] ?? hints?.inputFile ?? '';
   const rawAgentName = config?.agent ?? hints?.agent ?? streamId.split('@')[0];
@@ -57,7 +53,7 @@ export function buildStreamTabInfo(inputs: StreamTabInfoInputs): StreamTabInfo {
   // can tell parallel runs apart at a glance. Tool-use agents don't have
   // a single canonical input file, so we just show the agent name.
   const label =
-    category !== AGENT_CATEGORY.TOOL_USE && inputFile
+    category !== AgentCategory.ToolUse && inputFile
       ? `${agentName}: ${path.basename(inputFile)}`
       : agentName;
 

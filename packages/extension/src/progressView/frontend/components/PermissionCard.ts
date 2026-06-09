@@ -7,7 +7,7 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - shared
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { AGENT_CATEGORY } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { postMessage } from '@shared/hostBridge';
 import type {
   AgentOptionData,
@@ -201,7 +201,7 @@ export class PermissionCard extends LitElement {
     if (!this.permission) return '';
 
     if (this.permission.kind === PERMISSION_KIND.PROPOSAL) {
-      return this.permission.data.agentCategory === AGENT_CATEGORY.WORKFLOW
+      return this.permission.data.agentCategory === AgentCategory.Workflow
         ? 'Approve task (Workflow)'
         : 'Approve task (Interactive)';
     }
@@ -277,7 +277,7 @@ export class PermissionCard extends LitElement {
             <span class="file-path">${data.workingDirectory}</span>
           </p>`
         : nothing}
-      ${data.agentCategory === AGENT_CATEGORY.WORKFLOW
+      ${data.agentCategory === AgentCategory.Workflow
         ? this.renderExtractFlags(data)
         : nothing}
       ${this.renderFileGroups(data)} ${this.renderFeedbackSection()}

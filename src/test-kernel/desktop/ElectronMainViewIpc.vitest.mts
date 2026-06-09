@@ -6,7 +6,7 @@ import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
-import { AGENT_CATEGORY } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - desktop test paths
@@ -283,7 +283,7 @@ describe('desktop main-view IPC', () => {
       { sender: webContents },
       {
         command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
-        sessionType: AGENT_CATEGORY.TOOL_USE,
+        sessionType: AgentCategory.ToolUse,
       },
     );
     rendererListener?.(
@@ -317,7 +317,7 @@ describe('desktop main-view IPC', () => {
       {
         channel: ELECTRON_WEBVIEW_PUSH_CHANNEL,
         message: {
-          agentSubTab: AGENT_CATEGORY.TOOL_USE,
+          agentSubTab: AgentCategory.ToolUse,
           command: SETTINGS_VIEW_COMMANDS.SET_TAB,
           tabIndex: SETTINGS_TAB.AGENTS,
         },

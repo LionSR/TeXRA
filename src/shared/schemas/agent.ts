@@ -13,15 +13,6 @@ export const AgentCategory = {
 } as const;
 export type AgentCategory = (typeof AgentCategory)[keyof typeof AgentCategory];
 
-/**
- * Legacy alias preserving UPPER_SNAKE keys for call sites that already use it
- * (e.g. `AGENT_CATEGORY.WORKFLOW`). Prefer `AgentCategory.Workflow` in new code.
- */
-export const AGENT_CATEGORY = {
-  WORKFLOW: AgentCategory.Workflow,
-  TOOL_USE: AgentCategory.ToolUse,
-} as const;
-
 export const AgentCategorySchema = z.enum([
   AgentCategory.Workflow,
   AgentCategory.ToolUse,

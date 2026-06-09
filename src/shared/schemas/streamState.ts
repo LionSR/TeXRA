@@ -1,11 +1,7 @@
 import { z } from 'zod';
 
 import { GoalStatusSchema } from '@tools/goal/goalMeta';
-import {
-  AGENT_CATEGORY,
-  AgentCategorySchema,
-  type AgentCategory,
-} from './agent';
+import { AgentCategory, AgentCategorySchema } from './agent';
 import { CompileFailureSchema, OutputFileInfoSchema } from './output';
 import { STREAM_STATUS, StreamStatusSchema } from './stream';
 import { TaskGroupSchema } from './taskGroup';
@@ -103,7 +99,7 @@ function RunScopedRecord<T extends z.ZodType>(valueSchema: T) {
 // Tool-Use Stream State
 
 export const ToolUseStreamStateSchema = BaseStreamStateSchema.extend({
-  kind: z.literal(AGENT_CATEGORY.TOOL_USE),
+  kind: z.literal(AgentCategory.ToolUse),
   // Frontend-owned fields updated by targeted progress-view messages
   todos: z.array(TodoItemSchema).prefault([]),
   plan: PlanSchema.nullable().prefault(null),
@@ -130,7 +126,7 @@ function RoundIndexedRecord<T extends z.ZodType>(valueSchema: T) {
 }
 
 export const WorkflowStreamStateSchema = BaseStreamStateSchema.extend({
-  kind: z.literal(AGENT_CATEGORY.WORKFLOW),
+  kind: z.literal(AgentCategory.Workflow),
   // Frontend-owned fields updated by targeted progress-view messages.
   // Per-run usage mirrors tool-use so resume correctly accumulates across
   // the original and resumed runs; sessionUsage is derived as their sum.
@@ -157,13 +153,13 @@ export type StreamState = z.infer<typeof StreamStateSchema>;
 export function isToolUseState(
   state: StreamState,
 ): state is ToolUseStreamState {
-  return state.kind === AGENT_CATEGORY.TOOL_USE;
+  return state.kind === AgentCategory.ToolUse;
 }
 
 export function isWorkflowState(
   state: StreamState,
 ): state is WorkflowStreamState {
-  return state.kind === AGENT_CATEGORY.WORKFLOW;
+  return state.kind === AgentCategory.Workflow;
 }
 
 // Factory Functions
@@ -172,7 +168,7 @@ export function createToolUseStreamState(
   partial?: Partial<ToolUseStreamState>,
 ): ToolUseStreamState {
   return ToolUseStreamStateSchema.parse({
-    kind: AGENT_CATEGORY.TOOL_USE,
+    kind: AgentCategory.ToolUse,
     ...partial,
   });
 }
@@ -181,7 +177,7 @@ export function createWorkflowStreamState(
   partial?: Partial<WorkflowStreamState>,
 ): WorkflowStreamState {
   return WorkflowStreamStateSchema.parse({
-    kind: AGENT_CATEGORY.WORKFLOW,
+    kind: AgentCategory.Workflow,
     ...partial,
   });
 }
@@ -190,7 +186,7 @@ export function createStreamState(
   agentCategory: AgentCategory,
   partial?: Partial<StreamState>,
 ): StreamState {
-  if (agentCategory === AGENT_CATEGORY.TOOL_USE) {
+  if (agentCategory === AgentCategory.ToolUse) {
     return createToolUseStreamState(partial as Partial<ToolUseStreamState>);
   }
   return createWorkflowStreamState(partial as Partial<WorkflowStreamState>);

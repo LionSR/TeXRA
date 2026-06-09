@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { HISTORY_VIEW_COMMANDS } from '@shared/ipc';
 import { commandOnly } from './messageFactories';
 
-import { AGENT_CATEGORY } from './agent';
+import { AgentCategory } from './agent';
 
 // ============================================================
 // Data schemas
@@ -24,7 +24,7 @@ const BaseConfigSummarySchema = z.object({
 
 /** Workflow agents carry file-related fields. */
 const WorkflowConfigSummarySchema = BaseConfigSummarySchema.extend({
-  agentCategory: z.literal(AGENT_CATEGORY.WORKFLOW),
+  agentCategory: z.literal(AgentCategory.Workflow),
   inputFiles: z.array(z.string()).optional(),
   mediaFiles: z.array(z.string()).optional(),
   contextFiles: z.array(z.string()).optional(),
@@ -34,7 +34,7 @@ const WorkflowConfigSummarySchema = BaseConfigSummarySchema.extend({
 
 /** Tool-use agents only have the base fields. */
 const ToolUseConfigSummarySchema = BaseConfigSummarySchema.extend({
-  agentCategory: z.literal(AGENT_CATEGORY.TOOL_USE),
+  agentCategory: z.literal(AgentCategory.ToolUse),
   editedFiles: z.array(z.string()).optional(),
 });
 

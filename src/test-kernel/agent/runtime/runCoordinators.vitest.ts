@@ -18,7 +18,7 @@ import {
   ExecutionRegistry,
 } from '@agent/runtime/executionRegistry';
 import {
-  AGENT_CATEGORY,
+  AgentCategory,
   TODO_STATUS,
   type AgentProposal,
   type Plan,
@@ -40,7 +40,7 @@ const plan: Plan = {
   ],
 };
 const proposal: AgentProposal = {
-  agentCategory: AGENT_CATEGORY.TOOL_USE,
+  agentCategory: AgentCategory.ToolUse,
   agent: 'reviewer',
   model: 'test-model',
   instruction: 'Review the runtime boundary.',
