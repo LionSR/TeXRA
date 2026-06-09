@@ -121,7 +121,11 @@ export interface AgentCliSessionStrategy<TTurn> {
   /** Format the error delivery XML (turn is null when `runTurn` threw). */
   formatError(turn: TTurn | null, prompt: string, err: unknown): string;
 
-  /** Called in the finally block to release registry entries. */
+  /**
+   * Called in the finally block to release provider-owned registry entries.
+   * Runs before this loop unregisters the child stream from InterruptRegistry;
+   * implementations must not depend on interrupt-registry membership.
+   */
   onSessionCleanup?(): void;
 }
 
