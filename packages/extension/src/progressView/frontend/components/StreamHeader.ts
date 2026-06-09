@@ -24,6 +24,7 @@ import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
+import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, TOOLBAR_BUTTONS } from '../constants';
@@ -190,15 +191,6 @@ export class StreamHeader extends LitElement {
 
       /* Note: .is-ready and other status states from statusIndicatorStyles */
 
-      /* Replaces flex layout previously provided by vscode-toolbar-container.
-         Without this, toolbar buttons would stack vertically in block flow. */
-      .toolbar-container {
-        display: inline-flex;
-        flex-wrap: wrap;
-        gap: var(--wa-space-2xs, 4px);
-        align-items: center;
-      }
-
       .toolbar-button--hidden {
         display: none;
       }
@@ -345,9 +337,9 @@ export class StreamHeader extends LitElement {
             ${this.renderOdysseyChip()} ${this.renderProgressBadge()}
           </div>
           <div class="header-actions">
-            <div
+            <wa-button-group
               id=${ELEMENT_IDS.TOOLBAR_CONTAINER}
-              class="toolbar-container"
+              label="Stream actions"
               data-agent-mode=${agentCategory}
               @click=${this.handleToolbarClick}
             >
@@ -393,7 +385,7 @@ export class StreamHeader extends LitElement {
                   `;
                 },
               )}
-            </div>
+            </wa-button-group>
           </div>
         </div>
       </div>

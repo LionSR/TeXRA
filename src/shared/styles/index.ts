@@ -13,8 +13,8 @@ export { permissionCardStyles } from './permissionCardStyles';
 export { requestPanelStyles } from './requestPanelStyles';
 export { viewTabStyles, waTabThemeTokenStyles } from './viewTabStyles';
 
-// Badge styles (combined array used by multiple views)
-export { badgeStyles, tintedBadgeStyles } from './badgeStyles';
+// Shared list-view styles: search highlighting + empty states
+export { badgeStyles } from './badgeStyles';
 
 // History/search styles
 export {
