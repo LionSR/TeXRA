@@ -402,10 +402,10 @@ function formatAnsiLatexReference(
 // Table layout needs the terminal width baked into the renderer (the shared
 // processor caches by content only), so each processor is bound to one
 // (width, colorEnabled) pair. Keep a small LRU of processors rather than a
-// single slot: the live-region row estimator renders with the default color
-// setting while a NO_COLOR painter renders without, and a single slot would
-// rebuild the processor — discarding its content LRU — on every alternation,
-// re-parsing all pending markdown each frame.
+// single slot: callers are not guaranteed to agree on the pair (the row
+// estimator defaults color on while a NO_COLOR painter passes false), and
+// with a single slot any alternation would rebuild the processor and discard
+// its content LRU — re-parsing every visible markdown body per frame.
 const PROCESSOR_CACHE_MAX = 4;
 const processorCache = new Map<string, MarkdownProcessor>();
 

@@ -43,7 +43,30 @@ function wrapLines(lines: readonly string[], cols: number): string[] {
   return lines.flatMap((line) => wrapDisplayLine(line, cols));
 }
 
+// Wrapped-line cache keyed by the immutable entry object. Entries are
+// replaced (never mutated in place) when their content changes, so a hit is
+// always current. One slot per entry suffices: every caller wraps at the
+// transcript width, and after a resize the next call recomputes. This keeps
+// the open transcript viewer's per-tick re-flatten proportional to the
+// entries that actually changed (usually just the streaming tail) instead of
+// re-wrapping the full history.
+const entryLinesCache = new WeakMap<
+  ConversationEntry,
+  { readonly cols: number; readonly lines: readonly string[] }
+>();
+
 export function transcriptEntryLines(
+  entry: ConversationEntry,
+  cols: number,
+): readonly string[] {
+  const cached = entryLinesCache.get(entry);
+  if (cached && cached.cols === cols) return cached.lines;
+  const lines = computeTranscriptEntryLines(entry, cols);
+  entryLinesCache.set(entry, { cols, lines });
+  return lines;
+}
+
+function computeTranscriptEntryLines(
   entry: ConversationEntry,
   cols: number,
 ): readonly string[] {
