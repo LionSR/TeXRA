@@ -568,6 +568,22 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'model-form-buffered-hotkey',
+    env: {
+      HARNESS_CAN_SELECT_MODEL: '1',
+      HARNESS_ENTRIES: '4',
+    },
+    keys: ['/model', '\r', '21'],
+    frame: 'tail',
+    settleMs: ASYNC_FORM_SETTLE_MS,
+    expect: ['Harness model selected. Future turns:'],
+    unexpect: [
+      'Finish the active response before switching models.',
+      'Platform not initialized',
+      '/model - error',
+    ],
+  },
+  {
     name: 'model-form-included-empty',
     env: {
       HARNESS_AUTHENTICATED: '1',
