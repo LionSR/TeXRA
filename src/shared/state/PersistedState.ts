@@ -18,7 +18,7 @@ export interface StateStorage {
  */
 export function createBackendStorage(memento: {
   get(key: string): unknown;
-  update(key: string, value: unknown): Thenable<void>;
+  update(key: string, value: unknown): PromiseLike<void>;
 }): StateStorage {
   return {
     get: (key) => memento.get(key),

@@ -24,7 +24,7 @@ import {
   normalizeOpenRouterUsage,
   type OpenRouterPricingConfig,
 } from './openRouterUsage';
-import { tagOpenRouterSdkError } from '../support/sdkErrorAdapters';
+import { tagOpenRouterSdkError } from './openRouterSdkError';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 
 // Local file imports

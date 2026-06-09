@@ -75,8 +75,10 @@ import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
 import * as logger from '@logger/logUtils';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
-import { interruptAllCodexSessions } from '@tools/codex';
-import { interruptAllClaudeAgentSessions } from '@tools/claudeAgent';
+import {
+  interruptAllClaudeAgentSessions,
+  interruptAllCodexSessions,
+} from '@tools/agentCliSessionStores';
 import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup';
