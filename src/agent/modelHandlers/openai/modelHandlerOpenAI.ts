@@ -49,7 +49,7 @@ import { flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { extractMimeSubtype, objectToLogString } from '@utils/text/stringUtils';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
-import { tagOpenAISdkError } from '../support/sdkErrorAdapters';
+import { tagOpenAISdkError } from './openAISdkError';
 
 // Local file imports
 import {

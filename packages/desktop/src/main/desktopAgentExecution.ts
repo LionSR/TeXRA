@@ -204,7 +204,10 @@ export class DesktopProgressBridge {
     this.backend = new ProgressBackend({
       storage: tryPlatform()?.workspaceState ?? new MemoryProgressStorage(),
       snapshots: options.progressSnapshotStore ?? new StreamSnapshotStore(),
-      sendMessage: (message) => this.postToRenderer(message),
+      sendMessage: (message) => {
+        this.postToRenderer(message);
+        return true;
+      },
       hasTarget: () => true,
       configureUi: ({ webviewUpdater }) => ({
         callbacks: {
@@ -427,7 +430,9 @@ export class DesktopProgressBridge {
         stopStream: (stream) => this.stopStream(stream),
       },
       run: {
-        resumeStream: (stream) => this.tryResumeStream(stream),
+        resumeStream: async (stream) => {
+          await this.tryResumeStream(stream);
+        },
         runNewStream: (stream) => this.runNewStream(stream),
       },
       followUp: {
@@ -1086,7 +1091,7 @@ export class DesktopProgressBridge {
   ): Promise<void> {
     const [{ getHelperModelName }, { validateExecutionRequest }] =
       await Promise.all([
-        import('@agent/runtime/helperModel'),
+        import('@agent/runtime/helperModelName'),
         import('@agent/core/execution/executionRequests'),
       ]);
     const validation = validateExecutionRequest({
