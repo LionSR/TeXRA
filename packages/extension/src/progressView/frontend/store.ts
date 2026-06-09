@@ -1,8 +1,7 @@
 // Local imports
 import {
-  AGENT_CATEGORY,
+  AgentCategory,
   createStreamState,
-  type AgentCategory,
   type AgentCategoryFilter,
   type ContextStateData,
   type LogMessageData,
@@ -119,6 +118,6 @@ export function getStreamState(
 ): StreamState {
   return (
     state.streamStates.get(streamId) ??
-    createStreamState(agentCategory ?? AGENT_CATEGORY.WORKFLOW)
+    createStreamState(agentCategory ?? AgentCategory.Workflow)
   );
 }

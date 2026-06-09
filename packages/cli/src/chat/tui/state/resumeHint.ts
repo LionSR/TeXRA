@@ -6,7 +6,7 @@
 // holds finished subagents for the session, so no exit-time disk I/O is needed.
 
 import {
-  AGENT_CATEGORY,
+  AgentCategory,
   sumUsageStats,
   type StreamTabId,
   type TokenUsageStats,
@@ -109,7 +109,7 @@ export function collectResumeTargets({
     for (const child of slice.childStreams) {
       if (!child.childStreamId || seen.has(child.executionId)) continue;
       const childSlice = streams.get(child.childStreamId);
-      if (childSlice?.category !== AGENT_CATEGORY.TOOL_USE) continue;
+      if (childSlice?.category !== AgentCategory.ToolUse) continue;
       seen.add(child.executionId);
       targets.push({
         executionId: child.executionId,

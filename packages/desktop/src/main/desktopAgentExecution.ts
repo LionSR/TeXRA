@@ -66,7 +66,7 @@ import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import type { MementoStorage } from '@shared/progressView/backend/persistence/PersistentMapManager';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc/progressViewCommands';
 import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
-import { AGENT_CATEGORY } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas/agent';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import {
   cleanupAllApprovals,
@@ -509,7 +509,7 @@ export class DesktopProgressBridge {
       agentCategory:
         info?.agentCategory ??
         restored?.agentCategory ??
-        AGENT_CATEGORY.WORKFLOW,
+        AgentCategory.Workflow,
       inputFile: info?.inputFile || restored?.inputFile,
       instruction: taskState?.agentConfig.instruction || restored?.instruction,
       lastKnownStatus:
