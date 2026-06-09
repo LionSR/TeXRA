@@ -154,8 +154,7 @@ function collapseMiddle(
 
   const out: StreamTabDisplayItem[] = [];
   let elided = false;
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
+  for (const [i, item] of items.entries()) {
     if (keep.has(i)) {
       if (elided) {
         out.push(ELLIPSIS_TAB_ITEM);

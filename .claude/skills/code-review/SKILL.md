@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: TeXRA-aware code review. Use for /review, PR audits, or any code review of this repo. Catches platform-coupling, Zod v4, PocketFlow, factory, and webview-render rules that generic passes miss.
+description: TeXRA-aware code review. Use for /review, PR audits, or any code review of this repo. Catches platform-coupling, Zod v4, PocketFlow, factory, modern-TypeScript, and webview-render rules that generic passes miss.
 ---
 
 # TeXRA Code Review

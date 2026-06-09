@@ -49,7 +49,14 @@ that affect the truth, scope, or reproducibility of the scientific content:
   and consistent with the surrounding text.
 
 Avoid style nits unless they obscure correctness or make future changes
-substantially harder. Do not invent issues merely to have comments. Prefer
+substantially harder. Do not invent issues merely to have comments. One
+repository convention is worth enforcing on changed TypeScript lines: the
+modern-TypeScript patterns in `AGENTS.md` ("ES2023+ Patterns") — `node:`
+prefixed builtin imports, `.toSorted()` over spread-then-sort, `for...of`
+(with `.entries()`) over index loops, `.findLast()`/`.toReversed()` over
+backwards loops. Flag only regressions newly introduced by this pull request,
+not pre-existing code, and respect the documented exceptions (variable-stride
+token consumers, queues appended mid-iteration, `charCodeAt` hash loops). Prefer
 inline comments for local, actionable issues on changed diff lines; put broader
 mathematical, physical, or scientific-computing concerns in the review body.
 Use the commentable line anchors file when choosing JSON `comments` line

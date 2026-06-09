@@ -60,8 +60,8 @@ export function planTerminalTextUpdate(
 
 export function countTerminalRows(text: string): number {
   let rows = 1;
-  for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) === 10) rows += 1;
+  for (const char of text) {
+    if (char === '\n') rows += 1;
   }
   return rows;
 }
