@@ -120,6 +120,9 @@ function buildWorkflowFlowResult(
     executionId,
     streamId,
     ...(memoryMisses && memoryMisses.length > 0 ? { memoryMisses } : {}),
+    ...(result.totalCostUsd != null && result.totalCostUsd > 0
+      ? { totalCostUsd: result.totalCostUsd }
+      : {}),
   };
 }
 

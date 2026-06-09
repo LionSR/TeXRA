@@ -144,7 +144,7 @@ export class GoalTab extends LitElement {
     const metaParts: MetaPart[] = [
       html`<span class="stream-id">${item.streamId}</span>`,
       html`<span
-        title="Wall-clock duration from Goal start to now while it is active, or to when it was last touched"
+        title="Wall-clock duration since this Goal started"
         >duration ${formatGoalTime(goalDurationMs(item))}</span
       >`,
     ];
