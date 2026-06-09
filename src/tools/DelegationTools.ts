@@ -457,7 +457,9 @@ async function executeSubagent(
   const deliveryState = subagentDeliveryRegistry.start(executionId);
   let childStreamId: StreamTabId | undefined;
 
-  async function deliverFollowUp(followUp: FollowUpQueueInput): Promise<boolean> {
+  async function deliverFollowUp(
+    followUp: FollowUpQueueInput,
+  ): Promise<boolean> {
     const result = await sendFollowUp(orchestratorStreamId, followUp);
     if (result.status !== 'no_session') return true;
     logger.warn(
