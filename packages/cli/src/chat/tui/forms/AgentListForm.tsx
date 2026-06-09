@@ -20,7 +20,7 @@ import { useAsyncListForm } from './_shared/useAsyncListForm';
 export interface AgentListFormProps {
   readonly currentAgent: string;
   readonly availableRows?: number;
-  readonly selectable?: boolean;
+  readonly selectable: boolean;
   readonly onSelect?: (value: string) => void;
   readonly onClose: () => void;
 }
@@ -175,7 +175,6 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   }
 
   const agents: AgentGroups = data ?? { toolUse: [], workflow: [] };
-  const selectable = props.selectable === true;
   const primarySectionTitle = agentPickerPrimarySectionTitle(agents.toolUse);
   const items = agents.toolUse.map((agent) => ({
     value: agent.label,
@@ -206,7 +205,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     selectWindow.maxVisibleWorkflows,
   );
   const handleSelectItem = (value: string): void => {
-    if (selectable) {
+    if (props.selectable) {
       props.onSelect?.(value);
       return;
     }
@@ -232,7 +231,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
         />
         <CompactFormKeyHints
           primary={
-            selectable
+            props.selectable
               ? { key: '1-9/a-z/Enter', action: 'select' }
               : { key: 'Enter', action: 'close' }
           }
@@ -244,7 +243,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   return (
     <FormFrame color="cyan" title="/agent" showCloseHint={false}>
       <Text dimColor wrap="truncate-end">
-        {selectable
+        {props.selectable
           ? 'Choose the root agent for the first message.'
           : 'Available agents. Start a new chat with texra chat --agent=<name> to choose the root agent.'}
       </Text>
@@ -285,7 +284,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
         </Box>
       ) : null}
       <Box marginTop={1}>
-        {selectable ? (
+        {props.selectable ? (
           <KeyHints
             hints={[
               { key: '↑/↓', action: 'navigate' },
