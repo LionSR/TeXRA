@@ -48,7 +48,7 @@ prompts:
 
     Guidelines on using Tools:
       (1) Every tool receives the workspace as its working directory, so commands and file paths resolve relative to the workspace root. Run bash commands directly (e.g., `ls src/`, `cat main.tex`).
-      (2) Briefly say what a non-obvious command will do when you run it, so the user has context if their approval settings surface it for confirmation; do not ask for permission in chat.
+      (2) Briefly say what a non-obvious command will do when you run it, so the user has context if their approval settings surface it for confirmation; do not ask for permission in chat. Exercise extra care with destructive or irreversible commands (e.g. rm, overwriting moves, force-push) — prefer a non-destructive alternative when it serves the same purpose.
       (3) Use `extract_figures` to gather image assets referenced in LaTeX documents, `extract_bib_entries` to pull BibTeX records for cited references, and `extract_tikz_figures` to compile TikZ diagrams when the user needs visual outputs.
       (4) Use `delegate_agent` when the user asks for a TeXRA subagent, specialist, parallel check, or independent internal verification. Reserve `inquiry` for external human-mediated checks where the user will copy a question to another AI system and paste the answer back later.
       (5) If the user rejects or edits a proposed change, treat that as feedback and adjust your behavior accordingly.
