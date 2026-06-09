@@ -112,7 +112,7 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.168",
-    "@anthropic-ai/sdk": "^0.102.0",
+    "@anthropic-ai/sdk": "^0.103.0",
     "@awesome.me/webawesome": "^3.8.0",
     "@cantoo/pdf-lib": "^2.7.1",
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
@@ -153,7 +153,7 @@
     "katex": "^0.17.0",
     "keyv": "^5.6.0",
     "lit": "^3.3.3",
-    "llm-zoo": "^1.8.1",
+    "llm-zoo": "^1.9.0",
     "lru-cache": "^11.5.1",
     "mark.js": "^8.11.1",
     "markdown-it": "^14.2.0",
