@@ -17,40 +17,52 @@ const ActiveFilesSchema = z.partialRecord(
   z.boolean(),
 ) as z.ZodType<Record<MultipleDocumentFileType, boolean>>;
 
-const WorkflowTaskStateSchema = z.object({
-  agentConfig: AgentConfigSchema.refine(
-    (c) => c.agentCategory === AgentCategory.Workflow,
-    { error: 'Expected Workflow category' },
-  ),
-  activeFiles: ActiveFilesSchema,
-});
+type WorkflowAgentConfig = AgentConfig & {
+  agentCategory: typeof AgentCategory.Workflow;
+};
 
-const ToolUseTaskStateSchema = z.object({
-  agentConfig: AgentConfigSchema.refine(
-    (c) => c.agentCategory === AgentCategory.ToolUse,
-    { error: 'Expected ToolUse category' },
-  ),
-  toolSessionState: ToolSessionStateSchema.optional(),
-});
-
-export const TaskStateSchema = z.union([
-  WorkflowTaskStateSchema,
-  ToolUseTaskStateSchema,
-]);
-
-export type ToolSessionState = z.infer<typeof ToolSessionStateSchema>;
+type ToolUseAgentConfig = AgentConfig & {
+  agentCategory: typeof AgentCategory.ToolUse;
+};
 
 export interface WorkflowTaskState {
-  agentConfig: AgentConfig & { agentCategory: typeof AgentCategory.Workflow };
+  agentConfig: WorkflowAgentConfig;
   activeFiles: Record<MultipleDocumentFileType, boolean>;
 }
 
 export interface ToolUseTaskState {
-  agentConfig: AgentConfig & { agentCategory: typeof AgentCategory.ToolUse };
+  agentConfig: ToolUseAgentConfig;
   toolSessionState?: ToolSessionState;
 }
 
 export type TaskState = WorkflowTaskState | ToolUseTaskState;
+
+const WorkflowAgentConfigSchema = AgentConfigSchema.refine(
+  (c) => c.agentCategory === AgentCategory.Workflow,
+  { error: 'Expected Workflow category' },
+) as z.ZodType<WorkflowAgentConfig>;
+
+const ToolUseAgentConfigSchema = AgentConfigSchema.refine(
+  (c) => c.agentCategory === AgentCategory.ToolUse,
+  { error: 'Expected ToolUse category' },
+) as z.ZodType<ToolUseAgentConfig>;
+
+const WorkflowTaskStateSchema = z.object({
+  agentConfig: WorkflowAgentConfigSchema,
+  activeFiles: ActiveFilesSchema,
+}) satisfies z.ZodType<WorkflowTaskState>;
+
+const ToolUseTaskStateSchema = z.object({
+  agentConfig: ToolUseAgentConfigSchema,
+  toolSessionState: ToolSessionStateSchema.optional(),
+}) satisfies z.ZodType<ToolUseTaskState>;
+
+export const TaskStateSchema = z.union([
+  WorkflowTaskStateSchema,
+  ToolUseTaskStateSchema,
+]) satisfies z.ZodType<TaskState>;
+
+export type ToolSessionState = z.infer<typeof ToolSessionStateSchema>;
 
 export function isWorkflowTaskState(
   taskState: TaskState,

@@ -57,7 +57,7 @@ import {
   findClaudeBinaryPath,
 } from './claudeAgentImport';
 import { createChildStream, type ChildStream } from './childStream';
-import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
+import { claudeAgentSessions } from './agentCliSessionStores';
 import { publishAgentCliStreamUsage } from './agentCliShared';
 import {
   runAgentCliSession,
@@ -120,29 +120,6 @@ const ClaudeAgentInputSchema = z.strictObject({
 });
 
 export type ClaudeAgentInput = z.infer<typeof ClaudeAgentInputSchema>;
-
-// ============================================================================
-// Session registry — keeps sessions alive between turns for follow-ups
-// ============================================================================
-
-interface ActiveSession {
-  childStreamId: StreamTabId;
-  parentStreamId: StreamTabId;
-  executionId: ExecutionId;
-  model: string;
-  permissionMode: ClaudeAgentPermissionMode;
-  effort: ClaudeAgentEffort;
-  cwd?: string;
-  additionalDirectories?: string[];
-}
-
-const claudeAgentSessions = new AgentCliSessionRegistry<ActiveSession>(
-  'claude_agent_session_id',
-);
-
-export function interruptAllClaudeAgentSessions(): void {
-  claudeAgentSessions.interruptAll();
-}
 
 // ============================================================================
 // Result formatting
