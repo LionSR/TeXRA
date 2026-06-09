@@ -17,6 +17,7 @@ import {
 } from '@agent/runtime/StreamStatusService';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
+import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
@@ -216,6 +217,47 @@ describe('runFlowWithLifecycle', () => {
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.ERROR);
       expect(onError).toHaveBeenCalledOnce();
       expect(executionRegistry.getHandle(executionId)).toBeUndefined();
+    } finally {
+      executionRegistry.untrack(executionId);
+      streamStatus.clear(streamId, { emit: false });
+    }
+  });
+
+  it('passes flow-carried terminal results to subagent error delivery', async () => {
+    const executionId =
+      'execution-lifecycle-subagent-flow-error' as ExecutionId;
+    const streamId = 'stream-lifecycle-subagent-flow-error' as StreamTabId;
+    const streamStatus = new StreamStatusRegistry();
+    const ctx = createLifecycleContext({
+      executionId,
+      streamId,
+      streamStatus,
+    });
+    const carriedResult = {
+      category: 'toolUse' as const,
+      status: END_GROUP_STATUS.ERROR,
+      executionId,
+      streamId,
+      totalCostUsd: 0.73,
+    };
+    const onError = vi.fn();
+
+    try {
+      streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
+
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => {
+          throw new AgentFlowError('subagent failed', carriedResult);
+        },
+        { isSubagent: true, onError },
+      );
+
+      expect(result).toEqual(carriedResult);
+      expect(onError).toHaveBeenCalledWith(
+        expect.any(AgentFlowError),
+        carriedResult,
+      );
     } finally {
       executionRegistry.untrack(executionId);
       streamStatus.clear(streamId, { emit: false });

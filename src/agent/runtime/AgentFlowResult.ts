@@ -96,6 +96,23 @@ export const AgentFlowResultSchema = z.discriminatedUnion('category', [
 
 export type AgentFlowResult = z.infer<typeof AgentFlowResultSchema>;
 
+export class AgentFlowError extends Error {
+  constructor(
+    message: string,
+    readonly result: AgentFlowResult,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = 'AgentFlowError';
+  }
+}
+
+export function getAgentFlowErrorResult(
+  error: unknown,
+): AgentFlowResult | undefined {
+  return error instanceof AgentFlowError ? error.result : undefined;
+}
+
 /** The discriminant of {@link AgentFlowResult}: which flow produced the result. */
 export type AgentFlowCategory = AgentFlowResult['category'];
 

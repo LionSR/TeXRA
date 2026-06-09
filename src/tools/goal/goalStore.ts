@@ -1,11 +1,16 @@
 import { randomUUID } from 'crypto';
 
+import { z } from 'zod';
+
 import { platform } from '@platform/platform';
 import { tryGetWorkspaceState } from '@agent/core/stateStore';
 import { bus } from '@eventBus/ProgressEventBus';
-import type { StreamTabId } from '@shared/schemas/identifiers';
+import {
+  StreamTabIdSchema,
+  type StreamTabId,
+} from '@shared/schemas/identifiers';
 
-import type { Plan } from '@shared/schemas/plan';
+import { PlanSchema, type Plan } from '@shared/schemas/plan';
 
 import { filterNotNull } from '@utils/core';
 import {
@@ -44,6 +49,40 @@ function generateGoalId(): string {
   return `goal_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
 }
 
+const LegacyOdysseySchema = z.object({
+  odysseyId: z.string().min(1),
+  streamId: StreamTabIdSchema,
+  objective: z.string().min(1),
+  status: z.enum(['active', 'paused', 'complete', 'abandoned']),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  plan: PlanSchema.nullish(),
+});
+
+function normalizeGoalRecord(raw: unknown): Goal | null {
+  const parsedGoal = GoalSchema.safeParse(raw);
+  if (parsedGoal.success) return parsedGoal.data;
+
+  const parsedLegacy = LegacyOdysseySchema.safeParse(raw);
+  if (!parsedLegacy.success) return null;
+  const legacy = parsedLegacy.data;
+  if (legacy.status === 'complete' || legacy.status === 'abandoned') {
+    return null;
+  }
+  return {
+    goalId: legacy.odysseyId,
+    streamId: legacy.streamId,
+    objective: legacy.objective,
+    status: legacy.status,
+    createdAt: legacy.createdAt,
+    updatedAt: legacy.updatedAt,
+    plan: legacy.plan ?? null,
+    costCapUsd: null,
+    baselineRunCostUsd: null,
+    spentUsd: 0,
+  };
+}
+
 function readRaw(streamId: StreamTabId): Goal | null {
   // tryGetWorkspaceState — bootstrap-tolerant: read-only paths called before
   // initPlatform() (e.g. early-stream syncs in some tests) return null
@@ -52,12 +91,9 @@ function readRaw(streamId: StreamTabId): Goal | null {
   const state = tryGetWorkspaceState();
   if (!state) return null;
   // Prefer the current key; fall back to the pre-rename "odyssey" key.
-  const raw =
-    state.get<unknown>(streamKey(streamId)) ??
-    state.get<unknown>(legacyStreamKey(streamId));
-  if (!raw) return null;
-  const parsed = GoalSchema.safeParse(raw);
-  return parsed.success ? parsed.data : null;
+  const current = normalizeGoalRecord(state.get<unknown>(streamKey(streamId)));
+  if (current) return current;
+  return normalizeGoalRecord(state.get<unknown>(legacyStreamKey(streamId)));
 }
 
 async function writeRaw(goal: Goal): Promise<void> {
