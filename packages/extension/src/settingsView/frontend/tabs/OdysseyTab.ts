@@ -135,7 +135,7 @@ export class OdysseyTab extends LitElement {
           class="settings-reminder-icon"
         ></wa-icon>
         <div class="settings-reminder-body">
-          <div class="settings-reminder-title">Odyssey (experimental)</div>
+          <div class="settings-reminder-title">Odyssey</div>
           <div class="settings-reminder-description">
             Odysseys are autonomous-continuation modes the assistant enters for
             itself when you describe a goal with a verifiable stopping

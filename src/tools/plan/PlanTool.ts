@@ -16,7 +16,6 @@
 import { z } from 'zod';
 
 // Local imports - tools
-import { platform } from '@platform/platform';
 import type { WorkPlanState } from '@agent/core/execution/AgentWorkspaceState';
 import type { PlanApprovalResult } from '@agent/runtime/PlanApprovalCoordinator';
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
@@ -33,9 +32,9 @@ import {
 } from '@shared/schemas';
 import { proposalApprovalState } from '@tools/approval';
 import {
-  ODYSSEY_FEATURE_FLAG_KEY,
   OdysseyStore,
   formatOdysseyTime,
+  isOdysseyEnabled,
   isOdysseyInFlight,
   odysseyElapsedMs,
   type Odyssey,
@@ -300,10 +299,7 @@ Best practices:
     granularityWarning?: string,
   ): Promise<ToolResult> {
     const approvalId = `plan-${Date.now().toString(36)}-${++approvalCounter}`;
-    const odysseyEnabled = platform().config.get<boolean>(
-      ODYSSEY_FEATURE_FLAG_KEY,
-      false,
-    );
+    const odysseyEnabled = isOdysseyEnabled();
 
     logger.info(`Requesting approval for plan: ${plan.summary}`);
 
@@ -366,10 +362,7 @@ Best practices:
     streamId: string,
     granularityWarning?: string,
   ): Promise<ToolResult> {
-    const odysseyEnabled = platform().config.get<boolean>(
-      ODYSSEY_FEATURE_FLAG_KEY,
-      false,
-    );
+    const odysseyEnabled = isOdysseyEnabled();
     if (!odysseyEnabled) {
       logger.warn(
         'Approve & Run Autonomously requested but odyssey feature flag is off; ' +

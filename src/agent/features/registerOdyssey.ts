@@ -1,19 +1,16 @@
-import { platform } from '@platform/platform';
 import { maybeBuildOdysseyContinuation } from '@agent/odyssey';
 import { idleContinuationRegistry } from '@agent/runtime/idleContinuation';
 import { toolInjectionRegistry } from '@agent/runtime/toolInjection';
-import { ODYSSEY_FEATURE_FLAG_KEY } from '@tools/odyssey/odysseyMeta';
-import { OdysseyStore } from '@tools/odyssey/odysseyStore';
+import { OdysseyStore, isOdysseyEnabled } from '@tools/odyssey';
 
 export function registerOdysseyFeature(): void {
   // The unified `plan` tool owns both planning and odyssey lifecycle commands
-  // (update / pause / complete). Auto-inject it when the experimental odyssey
-  // flag is on so any tool-use agent can drive the autonomous loop without
-  // having to opt into the tool in YAML.
+  // (update / pause / complete). Auto-inject it when odyssey is enabled so any
+  // tool-use agent can drive the autonomous loop without having to opt into the
+  // tool in YAML.
   toolInjectionRegistry.register({
     toolName: 'plan',
-    shouldInject: () =>
-      platform().config.get<boolean>(ODYSSEY_FEATURE_FLAG_KEY, false),
+    shouldInject: () => isOdysseyEnabled(),
   });
 
   idleContinuationRegistry.register({
