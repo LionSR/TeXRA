@@ -5,6 +5,7 @@ import {
   runToolUseFlow,
   type IToolUseSession,
   type RunToolUseFlowResult,
+  type ToolUseBeforeWaitingCallback,
 } from '@agent/implementations/flows/tooluse';
 import {
   runReflectionFlow,
@@ -94,6 +95,7 @@ function buildWorkflowFlowResult(
   result: RunReflectionFlowResult,
   executionId: ExecutionId,
   streamId: StreamTabId,
+  memoryMisses: AgentFlowResult['memoryMisses'],
 ): AgentFlowResult {
   return {
     category: 'workflow',
@@ -102,6 +104,7 @@ function buildWorkflowFlowResult(
     compileFailures: toCompileFailureSummaries(result.roundOutputs),
     executionId,
     streamId,
+    ...(memoryMisses && memoryMisses.length > 0 ? { memoryMisses } : {}),
   };
 }
 
@@ -110,6 +113,7 @@ function buildToolUseFlowResult(
   result: RunToolUseFlowResult,
   executionId: ExecutionId,
   streamId: StreamTabId,
+  memoryMisses: AgentFlowResult['memoryMisses'],
 ): AgentFlowResult {
   return {
     category: 'toolUse',
@@ -118,6 +122,7 @@ function buildToolUseFlowResult(
     touchedFiles: result.touchedFiles,
     executionId,
     streamId,
+    ...(memoryMisses && memoryMisses.length > 0 ? { memoryMisses } : {}),
   };
 }
 
@@ -211,10 +216,7 @@ export interface ExecuteAgentOptions {
   /** Fires with the real streamId before the stream is activated (before UI sync). */
   onStreamResolved?: (streamId: StreamTabId) => void;
   /** Fires before a tool-use subagent enters WAITING, delivering interim result to orchestrator. */
-  onBeforeWaiting?: (
-    lastResponse: string | undefined,
-    touchedFiles: string[],
-  ) => boolean | void | Promise<boolean | void>;
+  onBeforeWaiting?: ToolUseBeforeWaitingCallback;
   /** Fires when a tool-use session consumes queued follow-up instructions. */
   onFollowUpConsumed?: () => void;
   /** Fires on meaningful progress: todo changes, round completions, tool call milestones. */
@@ -340,7 +342,12 @@ export async function executeAgent(
               return () => handle.detachToolUseFlow(flowContext);
             },
           );
-          return buildToolUseFlowResult(result, ctx.executionId, streamId);
+          return buildToolUseFlowResult(
+            result,
+            ctx.executionId,
+            streamId,
+            ctx.attachedMemoryMisses,
+          );
         }
 
         const onRoundCompleted = createRoundProgressCallback(
@@ -358,7 +365,12 @@ export async function executeAgent(
           parentStage: ctx.parentStage,
           onRoundCompleted,
         });
-        return buildWorkflowFlowResult(result, ctx.executionId, streamId);
+        return buildWorkflowFlowResult(
+          result,
+          ctx.executionId,
+          streamId,
+          ctx.attachedMemoryMisses,
+        );
       },
       {
         isSubagent,
@@ -436,7 +448,12 @@ export async function resumeToolUseFromSnapshot(
           return () => handle.detachToolUseFlow(flowContext);
         },
       );
-      return buildToolUseFlowResult(result, ctx.executionId, streamId);
+      return buildToolUseFlowResult(
+        result,
+        ctx.executionId,
+        streamId,
+        ctx.attachedMemoryMisses,
+      );
     });
   });
 }

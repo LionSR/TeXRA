@@ -2,6 +2,7 @@ import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass'
 import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { IdleContinuationRegistry } from '@agent/runtime/idleContinuation';
+import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import type { ToolDefinition } from '@model';
 import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
 import type { TaskRunFileService } from '@utils/files';
@@ -11,6 +12,12 @@ import type {
 } from '../common/BaseFlowServices';
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
+
+export type ToolUseBeforeWaitingCallback = (
+  lastResponse: string | undefined,
+  touchedFiles: string[],
+  memoryMisses: readonly AttachedMemoryMiss[],
+) => boolean | void | Promise<boolean | void>;
 
 export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
   readonly setting: AgentToolUseSetting;
@@ -26,10 +33,8 @@ export interface ToolUseServices<C = unknown> extends BaseFlowContextInit<C> {
    *  current cycle is purely internal). `true` or `void` indicates a result
    *  was delivered; on interruption the wait node uses this to mark the flow
    *  as completed rather than aborted. */
-  readonly onBeforeWaiting?: (
-    lastResponse: string | undefined,
-    touchedFiles: string[],
-  ) => boolean | void | Promise<boolean | void>;
+  readonly onBeforeWaiting?: ToolUseBeforeWaitingCallback;
+  readonly attachedMemoryMisses?: readonly AttachedMemoryMiss[];
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
   /** Stop after one cycle instead of waiting for a conversational follow-up. */
   readonly stopAfterCycle?: boolean;

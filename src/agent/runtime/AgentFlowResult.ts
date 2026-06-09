@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { AttachedMemoryMissSchema } from '@agent/types/AttachedMemory';
 import {
   EndGroupStatusSchema,
   ExecutionIdSchema,
@@ -34,6 +35,7 @@ export type CompileFailureSummary = z.infer<typeof CompileFailureSummarySchema>;
 const AgentFlowMetaSchema = z.object({
   executionId: ExecutionIdSchema,
   streamId: StreamTabIdSchema,
+  memoryMisses: z.array(AttachedMemoryMissSchema).optional(),
 });
 
 export const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
@@ -70,15 +72,20 @@ export function buildTerminalFlowResult(
   status: EndGroupStatus,
   executionId: ExecutionId,
   streamId: StreamTabId,
+  memoryMisses?: z.infer<typeof AttachedMemoryMissSchema>[],
 ): AgentFlowResult {
+  const meta = {
+    executionId,
+    streamId,
+    ...(memoryMisses && memoryMisses.length > 0 ? { memoryMisses } : {}),
+  };
   if (category === 'toolUse') {
-    return { category, status, executionId, streamId };
+    return { category, status, ...meta };
   }
   return {
     category,
     status,
-    executionId,
-    streamId,
+    ...meta,
     outputs: [],
     compileFailures: [],
   };
