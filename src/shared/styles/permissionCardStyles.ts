@@ -113,18 +113,6 @@ export const permissionCardStyles: CSSResult = css`
     flex-wrap: wrap;
   }
 
-  .extract-flag {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--wa-space-3xs);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
-    padding: var(--wa-space-3xs) var(--wa-space-2xs);
-    border-radius: var(--border-radius);
-    background: var(--wa-color-neutral-fill-quiet);
-    color: var(--wa-color-neutral-on-quiet);
-  }
-
   .file-list {
     margin: var(--wa-space-2xs) 0;
   }
