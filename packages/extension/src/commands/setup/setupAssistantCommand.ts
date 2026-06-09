@@ -24,7 +24,7 @@ logger.initialize(CHANNEL);
  * Model to launch with when the user is signed in to Researcher Access
  * (server-side keys cover Gemini).
  */
-const SIGNED_IN_SETUP_MODEL = 'gemini31p';
+const SIGNED_IN_SETUP_MODEL = 'gemini35f';
 
 /**
  * Provider → model mapping used when the user only has a direct API key.

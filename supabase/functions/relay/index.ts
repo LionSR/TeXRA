@@ -37,9 +37,9 @@
  * ============================================================================
  *
  * TIER HIERARCHY (cumulative access):
- * - Ultra: All models above $3/M input
  * - Max: Free-tier models plus any future Max-only additions
- * - free: Included non-premium models (up to $3/M input)
+ * - free: input <= $1.5/M AND output <= $9/M
+ * - Ultra: everything else
  *
  * Authentication: JWT tokens are extracted from SDK auth headers:
  * - OpenAI: Authorization: Bearer {jwt}
@@ -70,6 +70,7 @@ import {
   TIER_SPENDING_LIMITS,
   isModelAllowedForTier,
   getSpendingLimit,
+  FREE_TIER_SUGGESTED_MODEL,
   ULTRA_TIER,
   FREE_TIER,
   MAX_TIER,
@@ -685,12 +686,20 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
     if (!isModelAllowedForTier(userTier, modelName)) {
       const tierName = userTier === FREE_TIER ? 'free' : userTier;
-      const upgradeHint = 'Upgrade to Ultra for access.';
+      // Point users at a model their tier can actually use, not just an upsell.
+      const tierModelAccess =
+        TIER_CONFIG.tiers[userTier as keyof typeof TIER_CONFIG.tiers];
+      const suggestedModelAllowed = Array.isArray(tierModelAccess?.models)
+        ? tierModelAccess.models.includes(FREE_TIER_SUGGESTED_MODEL)
+        : tierModelAccess?.models === '*';
+      const hint = suggestedModelAllowed
+        ? `Switch to an available model such as '${FREE_TIER_SUGGESTED_MODEL}', or upgrade for access.`
+        : 'Upgrade to Ultra for access.';
 
       return jsonError(
         modelName
-          ? `Model '${modelName}' is not available for ${tierName} tier. ${upgradeHint}`
-          : `Could not determine model from request. ${tierName} tier requires explicit model specification.`,
+          ? `Model '${modelName}' is not available for the ${tierName} tier. ${hint}`
+          : `Could not determine model from request. The ${tierName} tier requires explicit model specification.`,
         403,
       );
     }
