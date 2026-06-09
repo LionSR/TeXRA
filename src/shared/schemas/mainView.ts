@@ -131,7 +131,7 @@ const MainViewPersistedStateBaseSchema = UIFileFieldsSchema.merge(
   sessionType: SessionTypeSchema.prefault('toolUse'),
   workflowAgent: z.string().prefault('correct'),
   toolUseAgent: z.string().prefault('orchestrator'),
-  model: z.string().prefault('gemini31p'),
+  model: z.string().prefault('gemini35f'),
   commit: z.string().prefault('HEAD'),
   instruction: z.string().prefault(''),
   workflowInstruction: z.string().prefault(''),
