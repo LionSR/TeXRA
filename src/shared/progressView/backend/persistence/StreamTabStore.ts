@@ -10,7 +10,7 @@
  * stream. It can be retired entirely once those pre-#3061 tabs age out.
  */
 
-import * as path from 'path';
+import * as path from 'node:path';
 import pMap from 'p-map';
 
 import {

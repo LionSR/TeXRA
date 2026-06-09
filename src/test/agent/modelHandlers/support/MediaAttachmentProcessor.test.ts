@@ -1,9 +1,9 @@
 // Standard library imports
-import { Buffer } from 'buffer';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { strict as assert } from 'assert';
+import { Buffer } from 'node:buffer';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';

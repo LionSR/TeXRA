@@ -1,6 +1,6 @@
 // Standard library imports
-import { strict as assert } from 'assert';
-import { createRequire } from 'module';
+import { strict as assert } from 'node:assert';
+import { createRequire } from 'node:module';
 
 // Local imports - commands
 import { commandCatalog, commandKeybindings } from '@shared/commands/catalog';

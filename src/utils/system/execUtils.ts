@@ -1,5 +1,5 @@
 // Third-party imports
-import * as path from 'path';
+import * as path from 'node:path';
 
 import {
   execa,

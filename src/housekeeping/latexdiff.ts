@@ -1,4 +1,4 @@
-import * as path from 'path';
+import * as path from 'node:path';
 
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';

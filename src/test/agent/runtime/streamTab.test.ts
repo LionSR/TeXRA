@@ -1,5 +1,5 @@
 // Standard library imports
-import { strict as assert } from 'assert';
+import { strict as assert } from 'node:assert';
 
 // Local imports
 import { getStreamTabId } from '@agent/runtime/streamTab';

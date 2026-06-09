@@ -1,4 +1,4 @@
-import * as path from 'path';
+import * as path from 'node:path';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { AbsoluteFS } from '@utils/files';

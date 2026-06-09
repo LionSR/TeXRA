@@ -3,8 +3,8 @@
  * Handles creating temp files, running latexdiff, and building PDFs.
  */
 
-import { randomUUID } from 'crypto';
-import path from 'path';
+import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 
 import { sync as globSync } from 'glob';
 
