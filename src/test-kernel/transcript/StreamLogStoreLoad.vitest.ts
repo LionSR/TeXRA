@@ -140,6 +140,16 @@ function mockStorage({
   });
 
   vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
+  vi.spyOn(StorageFS, 'exists').mockImplementation(async (target) => {
+    const key = streamKeyFromFile(target);
+    if (target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`)) {
+      return Object.hasOwn(summaries, key);
+    }
+    if (target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
+      return Object.hasOwn(logs, key);
+    }
+    throw new Error(`Unexpected exists target: ${target}`);
+  });
   vi.spyOn(StorageFS, 'stat').mockImplementation(async (target) => {
     const key = streamKeyFromFile(target);
     if (target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`)) {
