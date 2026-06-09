@@ -262,6 +262,31 @@ describe('CLI multi-agent presets', () => {
     );
   });
 
+  it('launches the software-engineer team on its bundled engineer root', () => {
+    const preset = findCliMultiAgentPreset(
+      cliMultiAgentPresets(undefined),
+      'software-engineer',
+    )!;
+    const plan = planCliMultiAgentPresetRun(preset, {
+      workflowAgents: [],
+      toolUseAgents: preset.toolUseAgents.map((name) =>
+        agent(
+          name,
+          AgentCategory.ToolUse,
+          name === 'engineer' ? ['delegate_agent'] : [],
+        ),
+      ),
+    });
+
+    expect(plan.rootAgent?.name).toBe('engineer');
+    expect(plan.missingToolUseAgents).toEqual([]);
+    expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
+    expect(cliMultiAgentPresetCanLaunchTeam(plan)).toBe(true);
+    expect(formatCliMultiAgentPresetLauncherSummary(plan)).toBe(
+      'ready; 6 tool-use agents',
+    );
+  });
+
   it('formats unavailable launcher team summaries with root guidance', () => {
     const preset = findCliMultiAgentPreset(
       cliMultiAgentPresets(undefined),
@@ -385,7 +410,7 @@ describe('CLI multi-agent presets', () => {
         ],
         [
           'software-engineer',
-          'unavailable; no runnable team root; 0/4 tool-use agents',
+          'unavailable; no runnable team root; 0/6 tool-use agents',
         ],
       ]),
     );
