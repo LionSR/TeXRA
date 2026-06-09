@@ -83,7 +83,7 @@ export const mainViewStyles: CSSResult = css`
 
   wa-details.file-selection-details::part(header) {
     padding: var(--wa-space-3xs) var(--wa-space-2xs);
-    min-height: 22px;
+    min-height: var(--height-control-compact);
     font-size: var(--font-size-sm);
     color: var(--wa-color-text-quiet);
   }
