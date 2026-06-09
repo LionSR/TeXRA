@@ -280,58 +280,92 @@ export class BashTool extends defineTool({
       },
     });
 
-    void promise
-      .then(async (result) => {
-        const wallTimeMs = Date.now() - startedAt;
-        const store = getExecutionStore(executionId);
-        await store.writeResultMeta({
-          exitCode: result.exitCode,
-          wallTimeMs,
-          success: result.success,
-          timedOut: result.timedOut,
-          command,
-        });
-        const terminalStatus = result.success ? 'completed' : 'error';
-        await writeTerminalStatus(executionId, terminalStatus).catch(() => {});
+    const finalizeBackground = (
+      options?: Parameters<typeof childStream.finalize>[0],
+    ): void => {
+      interruptRegistry.unregister(childStreamId);
+      childStream.finalize(options);
+    };
 
-        const msg = formatBashDelivery(
-          executionId,
-          command,
-          wallTimeMs,
-          result,
-          stdoutTail,
-          stderrTail,
-        );
-        await store.writeReport(msg);
-        await sendFollowUp(parentStreamId, {
-          text: msg,
-          origin: 'subagent_result',
-        });
-        interruptRegistry.unregister(childStreamId);
-        childStream.finalize({
-          wallTimeMs,
-          error: result.success
-            ? undefined
-            : new ToolError(
-                `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
-              ),
-          autoClose: true,
-        });
-      })
-      .catch(async (err: unknown) => {
-        await writeTerminalStatus(executionId, 'error').catch(() => {});
-        const msg = formatBashError(executionId, command, err);
-        await getExecutionStore(executionId).writeReport(msg);
-        await sendFollowUp(parentStreamId, {
-          text: msg,
-          origin: 'subagent_result',
-        });
-        interruptRegistry.unregister(childStreamId);
-        childStream.finalize({
-          error: err,
-          autoClose: true,
-        });
+    const deliverParentFollowUp = async (text: string): Promise<void> => {
+      await sendFollowUp(parentStreamId, {
+        text,
+        origin: 'subagent_result',
       });
+    };
+
+    const logDeliveryFailure = (err: unknown): void => {
+      logger.error(
+        `Failed to deliver background bash result: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    };
+
+    void (async () => {
+      const outcome = await promise.then(
+        (result) => ({ ok: true as const, result }),
+        (error: unknown) => ({ ok: false as const, error }),
+      );
+
+      if (outcome.ok) {
+        const { result } = outcome;
+        const wallTimeMs = Date.now() - startedAt;
+        const error = result.success
+          ? undefined
+          : new ToolError(
+              `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
+            );
+
+        try {
+          const store = getExecutionStore(executionId);
+          await store.writeResultMeta({
+            exitCode: result.exitCode,
+            wallTimeMs,
+            success: result.success,
+            timedOut: result.timedOut,
+            command,
+          });
+          const terminalStatus = result.success ? 'completed' : 'error';
+          await writeTerminalStatus(executionId, terminalStatus).catch(
+            () => {},
+          );
+
+          const msg = formatBashDelivery(
+            executionId,
+            command,
+            wallTimeMs,
+            result,
+            stdoutTail,
+            stderrTail,
+          );
+          await store.writeReport(msg);
+          await deliverParentFollowUp(msg);
+        } catch (err: unknown) {
+          logDeliveryFailure(err);
+        } finally {
+          finalizeBackground({
+            wallTimeMs,
+            error,
+            autoClose: true,
+          });
+        }
+        return;
+      }
+
+      const { error } = outcome;
+      try {
+        await writeTerminalStatus(executionId, 'error').catch(() => {});
+        const msg = formatBashError(executionId, command, error);
+        await getExecutionStore(executionId).writeReport(msg);
+        await deliverParentFollowUp(msg);
+      } catch (err: unknown) {
+        logDeliveryFailure(err);
+      } finally {
+        finalizeBackground({
+          error,
+          autoClose: true,
+        });
+      }
+    })();
 
     return {
       summary: `Launched background: ${preview}`,
