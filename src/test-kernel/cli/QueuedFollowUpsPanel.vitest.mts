@@ -44,6 +44,18 @@ describe('CLI queued follow-up panel display model', () => {
     ]);
   });
 
+  it('keeps malformed queued follow-up entries renderable', () => {
+    const display = queuedFollowUpPanelDisplay({
+      messages: [undefined as unknown as string],
+      maxRows: 3,
+      width: 80,
+    });
+
+    expect(display.rows.map((row) => row.text)).toEqual([
+      '1. (empty follow-up)',
+    ]);
+  });
+
   it('keeps the panel bounded when more messages are queued', () => {
     expect(queuedFollowUpPanelRowCount(['first', 'second', 'third'])).toBe(3);
 
