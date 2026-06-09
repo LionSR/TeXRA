@@ -8,7 +8,6 @@ import { OutputNode } from '@agent/implementations/flows/reflection/nodes/Output
 import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
 import { createOutputState } from '@agent/output/outputState';
-import type { RoundOutput } from '@shared/schemas';
 import {
   OutputFileProcessor,
   type ProcessingContext,
