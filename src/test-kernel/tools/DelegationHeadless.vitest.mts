@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
+import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   AgentExecutionHandle,
@@ -146,33 +147,45 @@ describe('headless delegation', () => {
   });
 
   it('formats returned child error results as subagent errors', async () => {
+    const recordSubagentCost = vi.fn();
     mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-      await options.onError?.(new Error('review model failed'));
+      await options.onError?.(new Error('review model failed'), {
+        category: 'toolUse',
+        status: 'error',
+        executionId: 'child-exec',
+        streamId: 'child-stream',
+        totalCostUsd: 0.42,
+      });
       return {
         category: 'toolUse',
         status: 'error',
         executionId: 'child-exec',
         streamId: 'child-stream',
+        totalCostUsd: 0.42,
       };
     });
 
-    const result = await withRunContext(
-      createRunContext({
-        runtimeHost: runtimeHost(),
-        streamId: 'parent-stream',
-        executionId: 'parent-exec',
-        model: 'deepseekT',
-        stopAfterCycle: true,
-      }),
+    const result = await withToolFileInteractionContext(
+      { tracker: {} as never, recordSubagentCost },
       () =>
-        new DelegateAgentTool().call({
-          agent: 'review',
-          model: null,
-          instruction: 'Check the proof.',
-          memories: [],
-          working_directory: null,
-          execution_id: null,
-        }),
+        withRunContext(
+          createRunContext({
+            runtimeHost: runtimeHost(),
+            streamId: 'parent-stream',
+            executionId: 'parent-exec',
+            model: 'deepseekT',
+            stopAfterCycle: true,
+          }),
+          () =>
+            new DelegateAgentTool().call({
+              agent: 'review',
+              model: null,
+              instruction: 'Check the proof.',
+              memories: [],
+              working_directory: null,
+              execution_id: null,
+            }),
+        ),
     );
 
     expect(result.summary).toBe("Subagent 'review' failed");
@@ -181,6 +194,56 @@ describe('headless delegation', () => {
     expect(result.output).toContain('<subagent-error');
     expect(result.output).toContain('review model failed');
     expect(mocks.writeReport).toHaveBeenCalledWith(result.output);
+    expect(recordSubagentCost).toHaveBeenCalledTimes(1);
+    expect(recordSubagentCost).toHaveBeenCalledWith(0.42);
+  });
+
+  it('rolls up failed async subagent cost from the error callback', async () => {
+    const recordSubagentCost = vi.fn();
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      await options.onError?.(new Error('review model failed'), {
+        category: 'toolUse',
+        status: 'error',
+        executionId: 'child-exec',
+        streamId: 'child-stream',
+        totalCostUsd: 0.31,
+      });
+      return {
+        category: 'toolUse',
+        status: 'error',
+        executionId: 'child-exec',
+        streamId: 'child-stream',
+        totalCostUsd: 0.31,
+      };
+    });
+
+    const result = await withToolFileInteractionContext(
+      { tracker: {} as never, recordSubagentCost },
+      () =>
+        withRunContext(
+          createRunContext({
+            runtimeHost: runtimeHost(),
+            streamId: 'parent-stream',
+            executionId: 'parent-exec',
+            model: 'deepseekT',
+          }),
+          () =>
+            new DelegateAgentTool().call({
+              agent: 'review',
+              model: null,
+              instruction: 'Check the proof.',
+              memories: [],
+              working_directory: null,
+              execution_id: null,
+            }),
+        ),
+    );
+
+    expect(result.summary).toBe("Launched 'review' (async)");
+    await vi.waitFor(() => {
+      expect(recordSubagentCost).toHaveBeenCalledTimes(1);
+    });
+    expect(recordSubagentCost).toHaveBeenCalledWith(0.31);
   });
 
   it('keeps interactive delegations asynchronous', async () => {

@@ -17,6 +17,7 @@ import {
 
 import { AgentExecutionHandle, executionRegistry } from './executionRegistry';
 import {
+  getAgentFlowErrorResult,
   buildTerminalFlowResult,
   type AgentFlowResult,
 } from './AgentFlowResult';
@@ -137,13 +138,15 @@ export async function runFlowWithLifecycle(
     }
 
     if (options?.isSubagent) {
-      const result = buildTerminalFlowResult(
-        category,
-        status,
-        ctx.executionId,
-        streamId,
-        ctx.attachedMemoryMisses,
-      );
+      const result =
+        getAgentFlowErrorResult(err) ??
+        buildTerminalFlowResult(
+          category,
+          status,
+          ctx.executionId,
+          streamId,
+          ctx.attachedMemoryMisses,
+        );
       try {
         await options.onError?.(err, result);
       } catch (deliveryError) {

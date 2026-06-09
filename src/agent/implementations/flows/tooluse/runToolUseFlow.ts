@@ -86,6 +86,23 @@ export interface RunToolUseFlowResult {
   totalCostUsd?: number;
 }
 
+export class ToolUseFlowError extends Error {
+  constructor(
+    message: string,
+    readonly result: RunToolUseFlowResult,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = 'ToolUseFlowError';
+  }
+}
+
+export function getToolUseFlowErrorResult(
+  error: unknown,
+): RunToolUseFlowResult | undefined {
+  return error instanceof ToolUseFlowError ? error.result : undefined;
+}
+
 export interface ToolUseFlowContext {
   readonly session: ToolUseSessionLifecycle;
   readonly modelHandler: ToolUseServices['modelHandler'];
@@ -320,36 +337,42 @@ export async function runToolUseFlow<C = unknown>(
     // would always see the stale initial values.
     shared = (await pf.getShared()) ?? shared;
 
+    lastResponse =
+      findLastAssistantText(shared.messages, (m) =>
+        services.modelHandler.extractAssistantText(m),
+      ) ||
+      shared.lastResponse ||
+      undefined;
+    totalCostUsd =
+      shared.stateSlices?.runStateSnapshot.usageAccumulator.totals.totalCost ??
+      undefined;
+    const extractedTouchedFiles = extractTouchedFiles(shared.stateSlices);
+    touchedFiles = extractedTouchedFiles.length
+      ? extractedTouchedFiles
+      : undefined;
+
     if (shared.lastError) {
       status = END_GROUP_STATUS.ERROR;
       // Re-throw so runFlowWithLifecycle logs the error and shows
-      // the user notification. State was already projected per-step.
-      throw new Error(shared.lastError.message);
-    } else {
-      const isInterrupted = input.checkInterruption();
-      const interruptedAfterDeliveredSubagentResult =
-        input.isSubagent &&
-        shared.deliveredToOrchestrator === true &&
-        isInterrupted;
-      const execStatus =
-        isInterrupted && !interruptedAfterDeliveredSubagentResult
-          ? EXECUTION_STATUS.INTERRUPTED
-          : EXECUTION_STATUS.COMPLETED;
-      status = executionToEndStatus(execStatus) as EndGroupStatus;
-      lastResponse =
-        findLastAssistantText(shared.messages, (m) =>
-          services.modelHandler.extractAssistantText(m),
-        ) ||
-        shared.lastResponse ||
-        undefined;
-      totalCostUsd =
-        shared.stateSlices?.runStateSnapshot.usageAccumulator.totals
-          .totalCost ?? undefined;
-      const extractedTouchedFiles = extractTouchedFiles(shared.stateSlices);
-      touchedFiles = extractedTouchedFiles.length
-        ? extractedTouchedFiles
-        : undefined;
+      // the user notification, while preserving terminal run accounting.
+      throw new ToolUseFlowError(shared.lastError.message, {
+        status,
+        lastResponse,
+        touchedFiles,
+        totalCostUsd,
+      });
     }
+
+    const isInterrupted = input.checkInterruption();
+    const interruptedAfterDeliveredSubagentResult =
+      input.isSubagent &&
+      shared.deliveredToOrchestrator === true &&
+      isInterrupted;
+    const execStatus =
+      isInterrupted && !interruptedAfterDeliveredSubagentResult
+        ? EXECUTION_STATUS.INTERRUPTED
+        : EXECUTION_STATUS.COMPLETED;
+    status = executionToEndStatus(execStatus) as EndGroupStatus;
   } finally {
     activePersistedFlow = undefined;
     teardownSetup?.();
