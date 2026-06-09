@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
+- **Cheaper default helper model** — the built-in helper model used for auxiliary tasks (session descriptions, instruction polishing, AI-assisted agent creation, and merges) now defaults to DeepSeek V4 Flash (~$0.14/$0.28 per MTok) instead of Sonnet 4.6, cutting the cost of these background calls by roughly 20×. Override it any time from the Models settings tab.
 - **Odyssey is now on by default** — Odyssey, the autonomous-continuation mode that lets an agent keep working toward a stated objective across turns until it reports the goal complete, has graduated from experimental and is enabled out of the box. The setting moved from `texra.experimental.odyssey.enabled` to `texra.odyssey.enabled`; if you previously set the old key, your choice is still honored. Set `texra.odyssey.enabled` to `false` to require manual continuation.
 
 ## [0.38.6] - 2026-06-07
