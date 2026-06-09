@@ -423,6 +423,7 @@ async function executeSubagent(
           {
             wallTimeMs: Date.now() - startedAt,
             workingDirectory: configPayload.workingDirectory ?? undefined,
+            memoryMisses: result.memoryMisses,
           },
         );
         await writeSubagentReport(executionId, msg);
@@ -513,11 +514,15 @@ async function executeSubagent(
     void deliverFollowUp({ text: msg, origin: 'subagent_result' });
   }
 
-  async function deliverSubagentError(err: unknown): Promise<void> {
+  async function deliverSubagentError(
+    err: unknown,
+    result?: AgentFlowResult,
+  ): Promise<void> {
     const wallTimeMs = Date.now() - startedAt;
     const msg = formatSubagentError(executionId, agentName, err, {
       wallTimeMs,
       workingDirectory: configPayload.workingDirectory ?? undefined,
+      memoryMisses: result?.memoryMisses,
     });
     void getExecutionStore(executionId).writeReport(msg);
     await deliverTerminalFollowUp({
@@ -546,7 +551,7 @@ async function executeSubagent(
     onFollowUpConsumed: () => {
       deliveryState.markPending();
     },
-    onBeforeWaiting: async (lastResponse, touchedFiles) => {
+    onBeforeWaiting: async (lastResponse, touchedFiles, memoryMisses) => {
       const deliveryDecision =
         deliveryState.resolveBeforeWaiting(childStreamId);
       if (deliveryDecision === SUBAGENT_DELIVERY_DECISION.AlreadyDelivered) {
@@ -568,6 +573,7 @@ async function executeSubagent(
           touchedFiles,
           executionId,
           streamId: resolvedChildStreamId,
+          memoryMisses: memoryMisses.length > 0 ? [...memoryMisses] : undefined,
         },
         {
           wallTimeMs,
@@ -615,7 +621,7 @@ async function executeSubagent(
         origin: 'subagent_result',
       });
     },
-    onError: (err) => deliverSubagentError(err),
+    onError: (err, result) => deliverSubagentError(err, result),
   });
   promise
     .catch((err: unknown) => {

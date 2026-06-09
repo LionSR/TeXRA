@@ -20,6 +20,10 @@ import {
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import {
+  readAttachedMemoryMisses,
+  type AttachedMemoryMiss,
+} from '@agent/types/AttachedMemory';
+import {
   ensureAgentCategoryForSource,
   loadAgentSettingAndPrompts,
 } from '@agent/runtime/agentLoad';
@@ -63,6 +67,7 @@ export interface AgentLaunchContext extends AgentCore {
   parentStage: StageHandle;
   streamStatus: StreamStatusRegistry;
   coordinators: RunCoordinators;
+  attachedMemoryMisses: AttachedMemoryMiss[];
   /** Whether approval or user prompts cannot be answered by the current host. */
   approvalPromptsUnavailable?: boolean;
   /** Whether this tool-use run exits after one cycle instead of idling. */
@@ -295,6 +300,9 @@ async function assembleAgentLaunchContext(
     input: Object.freeze(baseVars),
     transient: { ...baseVars },
   };
+  const attachedMemoryMisses = readAttachedMemoryMisses(
+    baseVars.ATTACHED_MEMORY_MISSES,
+  );
 
   const usageMonitor = new UsageMonitor(
     { capabilities: modelHandler.capabilities, config: modelHandler.config },
@@ -316,6 +324,7 @@ async function assembleAgentLaunchContext(
     parentStage,
     storageKey,
     userVarChannels,
+    attachedMemoryMisses,
     usageMonitor,
     runtimeHost,
     streamStatus,
