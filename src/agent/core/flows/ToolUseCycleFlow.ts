@@ -624,6 +624,14 @@ class ToolUseDispatchNode<C> extends BatchNode<
           toolCallId: call.callId,
           onExecutionReady,
           onToolOutput,
+          // Subagent cost lands in the parent's totals only (no normalized
+          // snapshot), so per-round usage reporting doesn't double-count it —
+          // the child's own run already reported its rounds.
+          recordSubagentCost: (costUsd) => {
+            if (costUsd > 0) {
+              options.run.usageAccumulator.totals.totalCost += costUsd;
+            }
+          },
         },
         () => tool.call(parsedInput),
       );
