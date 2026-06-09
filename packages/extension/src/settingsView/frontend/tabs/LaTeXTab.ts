@@ -6,6 +6,7 @@ import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
+import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -44,7 +45,6 @@ import {
 } from '@shared/constants/latex';
 
 // Local imports - shared utilities
-import { copyTextToClipboard } from '@shared/utils/clipboard';
 import { createEvent } from '@shared/utils/events';
 import { clamp, filterNotNullish } from '@utils/core';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -315,11 +315,6 @@ export class LaTeXTab extends LitElement {
         white-space: nowrap;
       }
 
-      .copy-success {
-        color: var(--wa-color-testing-passed, #73c991) !important;
-        border-color: var(--wa-color-testing-passed, #73c991) !important;
-      }
-
       /* Prerequisite hint uses wa-callout; only layout for actions row + the
          inline command text live here. */
       wa-callout.prerequisite-hint {
@@ -399,17 +394,6 @@ export class LaTeXTab extends LitElement {
   @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
   @state() private expandedGuides = new Set<string>();
-  /** Command string most recently copied; clears after a brief flash. */
-  @state() private copiedCommand: string | null = null;
-  private copyResetTimer: ReturnType<typeof setTimeout> | null = null;
-
-  override disconnectedCallback(): void {
-    if (this.copyResetTimer) {
-      clearTimeout(this.copyResetTimer);
-      this.copyResetTimer = null;
-    }
-    super.disconnectedCallback();
-  }
 
   private toggleGuide(key: string): void {
     const next = new Set(this.expandedGuides);
@@ -453,17 +437,6 @@ export class LaTeXTab extends LitElement {
       options.find((cmd) => !cmd.packageManager || cmd.packageManager === pm) ??
       null
     );
-  }
-
-  private async handleCopyCommand(command: string): Promise<void> {
-    const ok = await copyTextToClipboard(command);
-    if (!ok) return;
-    this.copiedCommand = command;
-    if (this.copyResetTimer) clearTimeout(this.copyResetTimer);
-    this.copyResetTimer = setTimeout(() => {
-      this.copiedCommand = null;
-      this.copyResetTimer = null;
-    }, 2000);
   }
 
   private handleRunInTerminal(command: string): void {
@@ -532,19 +505,7 @@ export class LaTeXTab extends LitElement {
         ${!installed && installCmd
           ? html`
               <div class="dependency-install-actions">
-                <button
-                  class="tab-action-btn ${this.copiedCommand ===
-                  installCmd.command
-                    ? 'copy-success'
-                    : ''}"
-                  title=${this.copiedCommand === installCmd.command
-                    ? 'Copied!'
-                    : `Copy: ${installCmd.command}`}
-                  @click=${() => this.handleCopyCommand(installCmd.command)}
-                >
-                  <wa-icon library="texra" name="copy"></wa-icon>
-                  Copy
-                </button>
+                <wa-copy-button value=${installCmd.command}></wa-copy-button>
                 <button
                   class="tab-action-btn"
                   title="Run: ${installCmd.command}"
@@ -622,18 +583,7 @@ export class LaTeXTab extends LitElement {
         <div class="hint-description">${description}</div>
         <div class="hint-actions">
           <code class="install-command-text">${installCommand}</code>
-          <button
-            class="tab-action-btn ${this.copiedCommand === installCommand
-              ? 'copy-success'
-              : ''}"
-            title=${this.copiedCommand === installCommand
-              ? 'Copied!'
-              : `Copy ${pmName} install command`}
-            @click=${() => this.handleCopyCommand(installCommand)}
-          >
-            <wa-icon library="texra" name="copy"></wa-icon>
-            Copy
-          </button>
+          <wa-copy-button value=${installCommand}></wa-copy-button>
           <button
             class="tab-action-btn"
             title=${this.desktopHost
