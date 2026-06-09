@@ -41,13 +41,51 @@ export class DiffFileProcessor {
   // means the diff output is missing or corrupt, so it must propagate to the
   // caller (LaTeXdiffService.runDiff*/), whose catch turns it into a
   // `{ success: false }` result. Swallowing it would falsely report success.
-  async processDiffFile(diffFileLocation: FileLocation): Promise<void> {
+  async processDiffFile(
+    diffFileLocation: FileLocation,
+    editedFileLocation?: FileLocation,
+  ): Promise<void> {
     const content = await flexibleFS.read(diffFileLocation);
-    let processedContent = this.processStarEnvironments(content);
+    const editedContent = editedFileLocation
+      ? await flexibleFS.read(editedFileLocation)
+      : undefined;
+    let processedContent = this.restoreFlattenedBibliography(
+      content,
+      editedContent,
+    );
+    processedContent = this.processStarEnvironments(processedContent);
     processedContent = this.processLineByLine(processedContent);
     processedContent = replacementEngine.applyAll(processedContent);
     await flexibleFS.write(diffFileLocation, processedContent);
     await this.processTikzPictureEndings(diffFileLocation);
+  }
+
+  private restoreFlattenedBibliography(
+    content: string,
+    editedContent?: string,
+  ): string {
+    const bibliography = this.findBibliographyDirective(editedContent);
+    if (!bibliography) {
+      return content;
+    }
+
+    return content.replace(
+      /\\begin\{thebibliography\}\{[^}]*\}[\s\S]*?\\end\{thebibliography\}/g,
+      bibliography,
+    );
+  }
+
+  private findBibliographyDirective(content?: string): string | undefined {
+    for (const line of content?.split('\n') ?? []) {
+      if (line.trimStart().startsWith('%')) {
+        continue;
+      }
+      const bibliography = line.match(/\\bibliography\s*\{[^}]+\}/);
+      if (bibliography) {
+        return bibliography[0];
+      }
+    }
+    return undefined;
   }
 
   private processStarEnvironments(content: string): string {
