@@ -5,19 +5,21 @@
 // markdown (bold section headers + list items) so each command stays on
 // its own row in the transcript.
 
+import { metaChordLabel } from '../panes/StatusBar';
+
 import type { SlashCommand, SlashCommandCategory } from './slashRegistry';
 
-const CATEGORY_ORDER: readonly SlashCommandCategory[] = [
-  'session',
-  'configuration',
-  'account',
+// Help sections in display order; `undefined` collects uncategorized
+// (plugin-style) registrations into a trailing "Other" section.
+const CATEGORY_SECTIONS: ReadonlyArray<{
+  readonly category: SlashCommandCategory | undefined;
+  readonly label: string;
+}> = [
+  { category: 'session', label: 'Session' },
+  { category: 'configuration', label: 'Configuration' },
+  { category: 'account', label: 'Account' },
+  { category: undefined, label: 'Other' },
 ];
-
-const CATEGORY_LABELS: Record<SlashCommandCategory, string> = {
-  session: 'Session',
-  configuration: 'Configuration',
-  account: 'Account',
-};
 
 export interface SlashCommandHelpOptions {
   /** Chord modifier shown for stream-focus shortcuts: `Alt` on most
@@ -36,28 +38,19 @@ function commandListItem(command: SlashCommand): string {
 }
 
 function commandSections(commands: readonly SlashCommand[]): string[] {
-  const grouped = new Map<string, string[]>();
-  for (const command of commands) {
-    const label = command.category
-      ? CATEGORY_LABELS[command.category]
-      : 'Other';
-    const items = grouped.get(label) ?? [];
-    items.push(commandListItem(command));
-    grouped.set(label, items);
-  }
-
-  const labels = [
-    ...CATEGORY_ORDER.map((category) => CATEGORY_LABELS[category]),
-    'Other',
-  ];
-  return labels
-    .filter((label) => grouped.has(label))
-    .map((label) => [`**${label}**`, ...grouped.get(label)!].join('\n'));
+  return CATEGORY_SECTIONS.flatMap(({ category, label }) => {
+    const items = commands.filter((command) => command.category === category);
+    return items.length === 0
+      ? []
+      : [[`**${label}**`, ...items.map(commandListItem)].join('\n')];
+  });
 }
 
 function keyboardSection(options: SlashCommandHelpOptions): string {
-  const modifier = options.shortcutModifierLabel ?? 'Alt';
-  const focusChord = `${modifier}${modifier === 'Esc' ? ' ' : '-'}1..9`;
+  const focusChord = metaChordLabel(
+    options.shortcutModifierLabel ?? 'Alt',
+    '1..9',
+  );
   const newline =
     options.shiftEnterNewline === true
       ? '`Shift-Enter` or `Ctrl-J` insert a newline'
