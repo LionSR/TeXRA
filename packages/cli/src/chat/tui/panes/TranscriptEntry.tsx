@@ -95,12 +95,10 @@ function UserEntryRow({
   readonly width?: number;
 }): React.JSX.Element {
   // Mark a user turn with a full-width reverse-video band (theme-adaptive via
-  // reverse video). The fixed-width fill is baked at render width, so it only
-  // stays full-width across a resize because `<Static>` is remounted on a width
-  // change (key={columns} in StaticConversationTranscript) — that regenerates
-  // `fullStaticOutput` at the new width, which the resize full-repaint then
-  // reprints. The `› ` chevron is 2 cols; row estimators add the exported
-  // margin constant alongside their wrapped-line count.
+  // reverse video). Static transcript rows are print-once terminal scrollback:
+  // a row keeps the width it had when it was appended, while later rows render
+  // at the latest width. The `› ` chevron is 2 cols; row estimators add the
+  // exported margin constant alongside their wrapped-line count.
   const cols = Math.max(1, Math.floor(width ?? 80));
   return (
     <Box marginBottom={USER_ENTRY_MARGIN_BOTTOM_ROWS}>

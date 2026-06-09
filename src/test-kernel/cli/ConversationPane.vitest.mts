@@ -442,6 +442,33 @@ describe('CLI conversation transcript splitting', () => {
     ).toEqual(['u1', 'a1']);
   });
 
+  it('inserts a newly eligible header before existing compact transcript entries', () => {
+    const user = entry('u1', 'user', 'What is a tensor network?', true);
+    const assistant = entry('a1', 'assistant', 'A decomposition.', true);
+    const compact = appendStaticTranscriptItems({
+      scrollbackStreamId: STREAM_ID,
+      currentItems: [],
+      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
+      meta: SESSION_META,
+      maxRows: 0,
+      width: 80,
+    });
+
+    const expanded = appendStaticTranscriptItems({
+      scrollbackStreamId: STREAM_ID,
+      currentItems: compact,
+      streams: streamsFromEntries(STREAM_ID, [user, assistant]),
+      meta: SESSION_META,
+      width: 80,
+    });
+
+    expect(expanded.map((item) => item.id)).toEqual([
+      'session-header',
+      'u1',
+      'a1',
+    ]);
+  });
+
   it('preserves static transcript order when an entry exceeds the compact row budget', () => {
     const first = entry('u1', 'user', 'first', true);
     const large = entry('a1', 'assistant', 'line 1\nline 2\nline 3', true);
