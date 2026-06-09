@@ -104,7 +104,9 @@ export async function sendFollowUp(
     ToolUseFollowUpQueue.enqueue(
       streamId,
       item,
-      force ? { force: true } : undefined,
+      force
+        ? { createIfMissing: true, force: true }
+        : { createIfMissing: true },
     );
     return { status: 'queued', reason: target.reason };
   }

@@ -40,6 +40,7 @@ import {
   interruptRegistry,
   type IInterruptible,
 } from '@agent/runtime/InterruptRegistry';
+import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
@@ -582,7 +583,7 @@ function startCodexLoop(params: {
         } catch {
           // Best-effort; delivery must not block on storage.
         }
-        ToolUseFollowUpQueue.enqueue(parentStreamId, {
+        await sendFollowUp(parentStreamId, {
           text: msg,
           origin: 'subagent_result',
         });
