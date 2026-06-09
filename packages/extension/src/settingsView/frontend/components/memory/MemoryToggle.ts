@@ -24,7 +24,7 @@ export class MemoryToggle extends LitElement {
       .memory-settings {
         display: flex;
         align-items: center;
-        min-height: 22px;
+        min-height: var(--height-control-compact);
       }
     `,
   ];

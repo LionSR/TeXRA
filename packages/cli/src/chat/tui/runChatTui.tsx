@@ -566,6 +566,13 @@ async function reconcileRootModelAfterApiModeChange(
   return selection.notice;
 }
 
+function setCliSessionApiMode(apiMode: CliApiMode): void {
+  cliState.sessionMeta.set({
+    ...cliState.sessionMeta.get(),
+    apiMode,
+  });
+}
+
 async function applyCliApiModeSelection(
   mode: string | CliApiMode,
   context?: SlashCommandContext,
@@ -573,7 +580,9 @@ async function applyCliApiModeSelection(
   const normalized = mode.trim().toLowerCase();
 
   if (!normalized || normalized === 'status') {
-    const lines = await loadCliApiStatusLines();
+    const lines = await loadCliApiStatusLines({
+      apiMode: cliState.sessionMeta.get().apiMode,
+    });
     appendLocalAssistantTranscript(
       [...lines, 'Usage: /api personal | /api included'].join('\n'),
     );
@@ -583,10 +592,7 @@ async function applyCliApiModeSelection(
   const apiMode = parseCliApiMode(normalized);
   if (apiMode) {
     await setCliApiMode(apiMode);
-    cliState.sessionMeta.set({
-      ...cliState.sessionMeta.get(),
-      apiMode,
-    });
+    setCliSessionApiMode(apiMode);
     let modelNotice: string | undefined;
     try {
       modelNotice = await reconcileRootModelAfterApiModeChange(
@@ -609,7 +615,13 @@ async function applyCliApiModeSelection(
 }
 
 async function showCliAuthStatus(): Promise<void> {
-  appendLocalAssistantTranscript((await loadCliApiStatusLines()).join('\n'));
+  appendLocalAssistantTranscript(
+    (
+      await loadCliApiStatusLines({
+        apiMode: cliState.sessionMeta.get().apiMode,
+      })
+    ).join('\n'),
+  );
 }
 
 export const CHAT_LOGIN_USAGE =
@@ -654,10 +666,11 @@ async function loginFromChat(input: string): Promise<void> {
         }
       },
     });
+    setCliSessionApiMode('included');
     appendLocalAssistantTranscript(
       [
         `Signed in as ${session.account.label}.`,
-        ...(await loadCliApiStatusLines()),
+        ...(await loadCliApiStatusLines({ apiMode: 'included' })),
       ].join('\n'),
     );
   } catch (error: unknown) {
@@ -668,8 +681,12 @@ async function loginFromChat(input: string): Promise<void> {
 async function logoutFromChat(): Promise<void> {
   try {
     await signOutCliSupabase();
+    setCliSessionApiMode('personal');
     appendLocalAssistantTranscript(
-      ['Signed out.', ...(await loadCliApiStatusLines())].join('\n'),
+      [
+        'Signed out.',
+        ...(await loadCliApiStatusLines({ apiMode: 'personal' })),
+      ].join('\n'),
     );
   } catch (error: unknown) {
     appendLocalAssistantTranscript(toErrorMessage(error));

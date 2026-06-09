@@ -36,18 +36,93 @@ const DOCUMENT_END_FIXES: Array<[RegExp, string]> = [
   [/\\end\{document\}\s*\\addcontentsline/g, '\\addcontentsline'],
 ];
 
+/** Flattened .bbl blocks can contain macro definitions that latexdiff corrupts. */
+const THEBIBLIOGRAPHY_BLOCK =
+  /\\begin\{thebibliography\}\{[^}]*\}[\s\S]*?\\end\{thebibliography\}/g;
+
+/** The real bibliography entries start here; only sanitize generated macros before it. */
+const BIBITEM_START = /(?:^|\n)\s*(?:\\DIF(?:add|del)\{)?\\bibitem\b/;
+
 export class DiffFileProcessor {
   // Intentionally does not swallow failures: a read/transform/write error here
   // means the diff output is missing or corrupt, so it must propagate to the
   // caller (LaTeXdiffService.runDiff*/), whose catch turns it into a
   // `{ success: false }` result. Swallowing it would falsely report success.
-  async processDiffFile(diffFileLocation: FileLocation): Promise<void> {
+  async processDiffFile(
+    diffFileLocation: FileLocation,
+    editedFileLocation?: FileLocation,
+  ): Promise<void> {
     const content = await flexibleFS.read(diffFileLocation);
-    let processedContent = this.processStarEnvironments(content);
+    const editedContent = editedFileLocation
+      ? await flexibleFS.read(editedFileLocation)
+      : undefined;
+    let processedContent = this.restoreFlattenedBibliography(
+      content,
+      editedContent,
+    );
+    processedContent = this.processStarEnvironments(processedContent);
     processedContent = this.processLineByLine(processedContent);
     processedContent = replacementEngine.applyAll(processedContent);
     await flexibleFS.write(diffFileLocation, processedContent);
     await this.processTikzPictureEndings(diffFileLocation);
+  }
+
+  private restoreFlattenedBibliography(
+    content: string,
+    editedContent?: string,
+  ): string {
+    const bibliography = this.findBibliographyDirective(editedContent);
+    if (!bibliography) {
+      return this.sanitizeFlattenedBibliographyMacroPreamble(content);
+    }
+
+    return content.replaceAll(THEBIBLIOGRAPHY_BLOCK, bibliography);
+  }
+
+  private findBibliographyDirective(content?: string): string | undefined {
+    for (const line of content?.split('\n') ?? []) {
+      if (line.trimStart().startsWith('%')) {
+        continue;
+      }
+      const bibliography = line.match(/\\bibliography\s*\{[^}]+\}/);
+      if (bibliography) {
+        return bibliography[0];
+      }
+    }
+    return undefined;
+  }
+
+  private sanitizeFlattenedBibliographyMacroPreamble(content: string): string {
+    return content.replaceAll(THEBIBLIOGRAPHY_BLOCK, (block) => {
+      const bibitemStart = BIBITEM_START.exec(block);
+      const preambleEnd = bibitemStart?.index ?? block.length;
+      const preamble = block.slice(0, preambleEnd);
+      if (!preamble.includes('\\DIFadd') && !preamble.includes('\\DIFdel')) {
+        return block;
+      }
+
+      return (
+        this.stripLatexdiffMarkupFromMacroPreamble(preamble) +
+        block.slice(preambleEnd)
+      );
+    });
+  }
+
+  private stripLatexdiffMarkupFromMacroPreamble(content: string): string {
+    let sanitized = content
+      .replaceAll(/%DIF\s*>/g, '%')
+      .replaceAll(
+        /\\DIF(?:add|del)\{\\mbox\{%DIFAUXCMD\s*\r?\n\\([A-Za-z@]+)\s*\}\\hskip0pt%DIFAUXCMD\s*\r?\n\}/g,
+        '\\$1 ',
+      );
+
+    let previous: string;
+    do {
+      previous = sanitized;
+      sanitized = sanitized.replaceAll(/\\DIF(?:add|del)\{([^{}]*)\}/g, '$1');
+    } while (sanitized !== previous);
+
+    return sanitized;
   }
 
   private processStarEnvironments(content: string): string {

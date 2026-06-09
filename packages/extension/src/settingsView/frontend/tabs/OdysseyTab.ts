@@ -15,9 +15,26 @@ import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import type { MetaPart } from '@shared/wa/metaStrip';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
 
 function statusLabel(status: OdysseyStatus): string {
   return status[0].toUpperCase() + status.slice(1);
+}
+
+/** Map an Odyssey status to a wa-badge variant. */
+function statusVariant(
+  status: OdysseyStatus,
+): 'brand' | 'neutral' | 'success' | 'warning' {
+  switch (status) {
+    case 'active':
+      return 'success';
+    case 'paused':
+      return 'warning';
+    case 'complete':
+      return 'brand';
+    default:
+      return 'neutral';
+  }
 }
 
 @customElement('odyssey-tab')
@@ -57,31 +74,14 @@ export class OdysseyTab extends LitElement {
         background: var(--wa-color-surface-raised);
       }
 
-      .status-chip {
-        font-size: var(--wa-font-size-xs);
+      /* Native wa-badge (variant per status, quiet 'filled' appearance),
+         compacted to the prior 2px chip padding. */
+      .status-chip::part(base) {
+        padding: 2px var(--wa-space-2xs);
         font-weight: var(--wa-font-weight-semibold);
-        padding: 2px 8px;
-        border-radius: var(--wa-border-radius-pill);
-        background: var(--_chip-bg, var(--wa-color-neutral-fill-quiet));
-        color: var(--_chip-fg, var(--wa-color-neutral-on-quiet));
       }
 
-      .status-chip[data-status='active'] {
-        --_chip-bg: var(--wa-color-success-fill-quiet);
-        --_chip-fg: var(--wa-color-success-on-quiet);
-      }
-
-      .status-chip[data-status='paused'] {
-        --_chip-bg: var(--wa-color-warning-fill-quiet);
-        --_chip-fg: var(--wa-color-warning-on-quiet);
-      }
-
-      .status-chip[data-status='complete'] {
-        --_chip-bg: var(--wa-color-brand-fill-quiet);
-        --_chip-fg: var(--wa-color-brand-on-quiet);
-      }
-
-      .status-chip[data-status='abandoned'] {
+      .status-chip[data-status='abandoned']::part(base) {
         text-decoration: line-through;
       }
 
@@ -176,8 +176,12 @@ export class OdysseyTab extends LitElement {
         role=${inFlight ? 'button' : 'group'}
         tabindex=${inFlight ? 0 : -1}
       >
-        <span class="status-chip" data-status=${item.status}
-          >${statusLabel(item.status)}</span
+        <wa-badge
+          class="status-chip"
+          variant=${statusVariant(item.status)}
+          appearance="filled"
+          data-status=${item.status}
+          >${statusLabel(item.status)}</wa-badge
         >
         <div>
           <div class="objective" title=${item.objective}>${item.objective}</div>
