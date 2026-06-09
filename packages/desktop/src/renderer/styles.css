@@ -270,14 +270,19 @@ wa-dialog.desktop-settings-overlay settings-app {
   width: 100%;
 }
 
-wa-button.desktop-settings-close {
+/* Fullscreen-overlay close buttons (settings / diff / pdf) share one skin. */
+wa-button.desktop-settings-close,
+wa-button.desktop-diff-close,
+wa-button.desktop-pdf-close {
   position: absolute;
   top: var(--wa-space-s);
   right: var(--wa-space-s);
   z-index: 10;
 }
 
-wa-button.desktop-settings-close::part(base) {
+wa-button.desktop-settings-close::part(base),
+wa-button.desktop-diff-close::part(base),
+wa-button.desktop-pdf-close::part(base) {
   width: 32px;
   height: 32px;
   padding: 0;
@@ -349,22 +354,6 @@ wa-dialog.desktop-diff-overlay .desktop-diff-view {
   width: 100%;
 }
 
-wa-button.desktop-diff-close {
-  position: absolute;
-  top: var(--wa-space-s);
-  right: var(--wa-space-s);
-  z-index: 10;
-}
-
-wa-button.desktop-diff-close::part(base) {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: var(--wa-border-radius-m);
-  background: transparent;
-  color: var(--wa-color-text-normal);
-}
-
 /* =====================================================================
    PDF preview overlay (wa-dialog) — audit item B, trajectory #17
    --------------------------------------------------------------------- */
@@ -428,22 +417,6 @@ wa-dialog.desktop-pdf-overlay .desktop-pdf-frame {
   width: 100%;
   border: 0;
   background: var(--wa-color-surface-default);
-}
-
-wa-button.desktop-pdf-close {
-  position: absolute;
-  top: var(--wa-space-s);
-  right: var(--wa-space-s);
-  z-index: 10;
-}
-
-wa-button.desktop-pdf-close::part(base) {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: var(--wa-border-radius-m);
-  background: transparent;
-  color: var(--wa-color-text-normal);
 }
 
 /* =====================================================================
