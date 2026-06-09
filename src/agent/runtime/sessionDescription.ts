@@ -12,7 +12,7 @@ import { writeSessionDescription } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createHelperModelKit } from '@agent/runtime/helperModel';
-import { toErrorMessage } from '@common/errors/errorMessage';
+import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { isNonEmptyString } from '@utils/core';
@@ -124,7 +124,7 @@ export async function generateSessionDescription(
   } catch (err) {
     logger.warn(
       CHANNEL,
-      `Failed to generate session description: ${toErrorMessage(err)}`,
+      `Failed to generate session description: ${getSdkErrorMessage(err)}`,
     );
   }
 }

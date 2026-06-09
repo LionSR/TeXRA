@@ -14,7 +14,7 @@ export function classifyAgentError(err: unknown): AgentErrorKind {
   if (isDiskFullError(err)) return 'disk-full';
 
   const msg = toErrorMessage(err);
-  if (msg.includes('Missing API key') || msg.includes('API key not found')) {
+  if (msg.includes('Missing API key') || msg.includes('No API key found')) {
     return 'missing-api-key';
   }
 
