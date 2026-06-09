@@ -24,6 +24,14 @@ export interface ToolCallContext {
   onExecutionReady?: () => void;
   /** Called by tools to push partial output for live streaming to the UI. */
   onToolOutput?: (chunk: string) => void;
+  /**
+   * Roll a completed subagent's model cost (USD) into the parent run's usage
+   * totals. Delegation tools call this when a child run finishes so parent
+   * usage displays — and the goal cost cap — cover the whole subtree.
+   * Safe to call after the originating tool call returned (async subagents
+   * complete later); it mutates the live run accumulator directly.
+   */
+  recordSubagentCost?: (costUsd: number) => void;
 }
 
 export interface CurrentToolContexts {

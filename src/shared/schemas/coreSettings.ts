@@ -63,8 +63,9 @@ export const DEFAULT_CORE_SETTINGS = {
   inlineCriticism: {
     enabled: false,
   },
-  odyssey: {
+  goal: {
     enabled: true,
+    costCapUsd: 0,
   },
   ui: {
     showApiKeyReminders: true,
@@ -280,11 +281,15 @@ export const CoreSettingsShape = {
         .prefault(DEFAULT_CORE_SETTINGS.inlineCriticism.enabled),
     })
     .prefault(DEFAULT_CORE_SETTINGS.inlineCriticism),
-  odyssey: z
+  goal: z
     .strictObject({
-      enabled: z.boolean().prefault(DEFAULT_CORE_SETTINGS.odyssey.enabled),
+      enabled: z.boolean().prefault(DEFAULT_CORE_SETTINGS.goal.enabled),
+      costCapUsd: z
+        .number()
+        .nonnegative()
+        .prefault(DEFAULT_CORE_SETTINGS.goal.costCapUsd),
     })
-    .prefault(DEFAULT_CORE_SETTINGS.odyssey),
+    .prefault(DEFAULT_CORE_SETTINGS.goal),
   ui: z
     .strictObject({
       showApiKeyReminders: z
@@ -517,7 +522,8 @@ export type CoreSettings = z.infer<typeof CoreSettingsSchema>;
 export const CORE_SETTING_PATHS = [
   'agentOutputs.autoOpenFinal',
   'inlineCriticism.enabled',
-  'odyssey.enabled',
+  'goal.enabled',
+  'goal.costCapUsd',
   'ui.showApiKeyReminders',
   'ui.showLoginBanner',
   'ui.showGettingStartedBanner',

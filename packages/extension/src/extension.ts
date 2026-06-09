@@ -17,7 +17,7 @@ import { UsageLogService } from '@telemetry/UsageLogService';
 import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
-import { initializeOdysseyPrompts } from '@agent/odyssey';
+import { initializeGoalPrompts } from '@agent/goal';
 import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import {
@@ -165,7 +165,7 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.window.createOutputChannel(name),
   );
   initializePolishModel(context.extensionPath);
-  initializeOdysseyPrompts(context.extensionPath);
+  initializeGoalPrompts(context.extensionPath);
   initializeStateManagers(context, gitRepoRoot);
   const lifecycle = createLifecycleHost({
     onError: (phase, error) =>

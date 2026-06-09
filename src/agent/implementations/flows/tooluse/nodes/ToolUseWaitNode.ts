@@ -1,8 +1,10 @@
-import { Node } from '@agent/node';
-import { logUserMessage } from '@agent/trace';
+import { maybeBuildGoalContinuation } from '@agent/goal';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { Node } from '@agent/node';
 import { appendFollowUpAsUserMessage } from '@agent/toolUse/followUpMessages';
+import { logUserMessage } from '@agent/trace';
 import { STREAM_STATUS } from '@shared/schemas';
+import { GoalStore, setGoalSessionAutoApprovals } from '@tools/goal';
 
 import { findLastAssistantText, extractTouchedFiles } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
@@ -17,6 +19,8 @@ interface WaitPrepResult {
   previouslyDeliveredToOrchestrator: boolean;
   /** Set after the current cycle has been delivered to an orchestrator. */
   deliveredToOrchestrator?: boolean;
+  /** Run cost so far (USD, including rolled-up subagents) for the goal cap. */
+  runCostUsd: number;
 }
 
 export class ToolUseWaitNode<C> extends Node<
@@ -31,6 +35,9 @@ export class ToolUseWaitNode<C> extends Node<
     // Only extract when the callback is wired (subagent mode)
     const previouslyDeliveredToOrchestrator =
       shared.deliveredToOrchestrator === true;
+    const runCostUsd =
+      shared.stateSlices?.runStateSnapshot.usageAccumulator.totals.totalCost ??
+      0;
 
     if (!onBeforeWaiting)
       return {
@@ -38,6 +45,7 @@ export class ToolUseWaitNode<C> extends Node<
         touchedFiles: [],
         afterError,
         previouslyDeliveredToOrchestrator,
+        runCostUsd,
       };
 
     return {
@@ -47,6 +55,7 @@ export class ToolUseWaitNode<C> extends Node<
       ),
       afterError,
       previouslyDeliveredToOrchestrator,
+      runCostUsd,
     };
   }
 
@@ -75,6 +84,32 @@ export class ToolUseWaitNode<C> extends Node<
     if (prepRes.afterError && isSubagent) {
       return { kind: 'stop' };
     }
+
+    // Record this turn's spend against the goal and enforce the cost cap
+    // BEFORE the continuation check — a cap-pause must stop the loop on the
+    // same turn it trips, not one continuation later. Failed/cancelled parent
+    // cycles still consumed model spend, so account for them before parking
+    // the autonomous leg below. No-op without a goal.
+    const costNote = await GoalStore.noteRunCost(streamId, prepRes.runCostUsd);
+    if (costNote?.pausedForCap) {
+      await setGoalSessionAutoApprovals(streamId, false, runtimeHost);
+      this.services.logger.info(
+        `Goal paused: cost cap reached ($${costNote.goal.spentUsd.toFixed(2)} ` +
+          `of $${costNote.goal.costCapUsd?.toFixed(2)} cap). Resume the goal to continue.`,
+      );
+    }
+
+    // A failed/cancelled cycle ends the autonomous leg. Pause any active
+    // goal so it surfaces as resumable — the in-cycle retry layer already
+    // absorbed transient errors before we reach here — instead of leaving the
+    // record `active` while the loop is actually stalled on a blocking wait.
+    if (prepRes.afterError) {
+      const goal = GoalStore.getForStream(streamId);
+      if (goal?.status === 'active') {
+        await GoalStore.setStatus(streamId, 'paused');
+        await setGoalSessionAutoApprovals(streamId, false, runtimeHost);
+      }
+    }
     if (!prepRes.afterError) {
       const delivered = await onBeforeWaiting?.(
         prepRes.lastResponse,
@@ -89,29 +124,23 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
 
-    // Idle-continuation providers run BEFORE `waitForFollowUp` blocks; once
+    // The Goal continuation runs BEFORE `waitForFollowUp` blocks; once
     // inside the wait, a continuation check is unreachable. Skipped after a
     // failed/cancelled cycle so the user-recovery path still fires. The
-    // post-await re-check of `hasQueuedFollowUp` lets user input that
-    // arrived during the build win the race; providers do their persistent
-    // side effects in `commit()` so a loser leaves no audit trace.
+    // post-build re-check of `hasQueuedFollowUp` lets user input that arrived
+    // during the build win the race.
     if (!prepRes.afterError) {
-      for (const provider of this.services.idleContinuations.list()) {
-        const continuation = await provider.build({
-          streamId,
-          isSubagent: !!isSubagent,
-          hasQueuedFollowUp: session.hasQueuedFollowUp(),
-        });
-        if (continuation && !session.hasQueuedFollowUp()) {
-          await continuation.commit();
-          return {
-            kind: 'continue',
-            followUps: [
-              { text: continuation.followUp, origin: 'synthetic' as const },
-            ],
-            synthetic: true,
-          };
-        }
+      const followUp = await maybeBuildGoalContinuation({
+        streamId,
+        isSubagent: !!isSubagent,
+        hasQueuedFollowUp: session.hasQueuedFollowUp(),
+      });
+      if (followUp && !session.hasQueuedFollowUp()) {
+        return {
+          kind: 'continue',
+          followUps: [{ text: followUp, origin: 'synthetic' as const }],
+          synthetic: true,
+        };
       }
     }
 

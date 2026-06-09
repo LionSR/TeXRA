@@ -1105,7 +1105,7 @@ removal.
   found by `rg`, including the CLI TUI harness (`ModelFactory`, `helperModel`, `registerMemory`,
   `agentRegistry`, `diffCommandExecutor`, `texFormatter`, `delegationPolicy`, `OutputNode`,
   `LatexDiffManager`, `compileCheck`, `executionListing`, `indent`, `ExecutionsTool`,
-  `odysseyStore`, `enumConfig`, `tui-harness`)
+  `goalStore`, `enumConfig`, `tui-harness`)
   to read `platform()` directly — the documented `@platform` accessor — and reduced
   `stateStore.ts` to just `tryGetWorkspaceState()` (the genuine pre-initialization escape hatch,
   which must stay). Behavior-preserving: every passthrough was a one-line return of the same

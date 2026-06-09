@@ -4,12 +4,12 @@ export {
 } from './buildContinuationFollowUp';
 
 export {
-  maybeBuildOdysseyContinuation,
-  type OdysseyContinuationContext,
-} from './maybeBuildOdysseyContinuation';
+  maybeBuildGoalContinuation,
+  type GoalContinuationContext,
+} from './maybeBuildGoalContinuation';
 
 export {
-  initializeOdysseyPrompts,
+  initializeGoalPrompts,
   getContinuationTemplate,
   getObjectiveUpdatedTemplate,
 } from './promptLoader';

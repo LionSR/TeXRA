@@ -11,7 +11,7 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
-import { OdysseyStatusSchema } from '@tools/odyssey/odysseyMeta';
+import { GoalStatusSchema } from '@tools/goal/goalMeta';
 
 import { AgentCategorySchema } from './agent';
 import { StreamTabIdSchema } from './identifiers';
@@ -389,16 +389,16 @@ export const SyncStreamContentMessageSchema = z.object({
   // Toggle bypass state (hydrated on tab switch so toggles display correctly)
   toolEditBypass: z.boolean().optional(),
   superYoloBypass: z.boolean().optional(),
-  odysseyActive: z.boolean().optional(),
-  odysseyStatus: OdysseyStatusSchema.optional(),
-  odysseyObjective: z.string().optional(),
+  goalActive: z.boolean().optional(),
+  goalStatus: GoalStatusSchema.optional(),
+  goalObjective: z.string().optional(),
 });
 
-const OdysseyActiveUpdatedMessageSchema = z.object({
-  command: z.literal(PROGRESS_VIEW_COMMANDS.ODYSSEY_ACTIVE_UPDATED),
+const GoalActiveUpdatedMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.GOAL_ACTIVE_UPDATED),
   stream: StreamTabIdSchema,
   active: z.boolean(),
-  status: OdysseyStatusSchema.optional(),
+  status: GoalStatusSchema.optional(),
   objective: z.string().optional(),
 });
 
@@ -444,7 +444,7 @@ export const ProgressViewOutboundMessageSchema = z.discriminatedUnion(
     SyncStreamContentMessageSchema,
     UpdatePermissionMessageSchema,
     UpdateBypassMessageSchema,
-    OdysseyActiveUpdatedMessageSchema,
+    GoalActiveUpdatedMessageSchema,
     UpdateFollowUpTextMessageSchema,
     UpdateRecordingMessageSchema,
     SyncInquiryThreadsMessageSchema,

@@ -73,7 +73,7 @@ import {
   cleanupApprovalsForStream,
   handleProgressViewBashApprovalAction,
 } from '@tools/approval';
-import { OdysseyStore, isOdysseyInFlight } from '@tools/odyssey';
+import { GoalStore, isGoalInFlight } from '@tools/goal';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import {
@@ -284,8 +284,8 @@ export class DesktopProgressBridge {
     this.state = this.backend.state;
     this.streamLogs = this.state.streamLogs;
     const backendSubscription = this.backend.setupEventListeners();
-    const unsubscribeOdyssey = bus.on('odysseyStateChanged', ({ streamId }) => {
-      this.updateOdysseyActiveFromStore(streamId);
+    const unsubscribeGoal = bus.on('goalStateChanged', ({ streamId }) => {
+      this.updateGoalActiveFromStore(streamId);
     });
     const unsubscribeEnsureProgress = bus.on(
       'requestEnsureProgressView',
@@ -295,7 +295,7 @@ export class DesktopProgressBridge {
     );
     this.unsubscribe = () => {
       backendSubscription.dispose();
-      unsubscribeOdyssey();
+      unsubscribeGoal();
       unsubscribeEnsureProgress();
     };
     this.runtimeHost = {
@@ -661,14 +661,14 @@ export class DesktopProgressBridge {
       });
   }
 
-  private updateOdysseyActiveFromStore(streamId: StreamTabId): void {
-    const odyssey = OdysseyStore.getForStream(streamId);
-    this.backend.webviewUpdater.updateOdysseyActive(
+  private updateGoalActiveFromStore(streamId: StreamTabId): void {
+    const goal = GoalStore.getForStream(streamId);
+    this.backend.webviewUpdater.updateGoalActive(
       streamId,
-      isOdysseyInFlight(odyssey),
+      isGoalInFlight(goal),
       {
-        status: odyssey?.status,
-        objective: odyssey?.objective,
+        status: goal?.status,
+        objective: goal?.objective,
       },
     );
   }
@@ -779,7 +779,7 @@ export class DesktopProgressBridge {
     this.workflowFileActions.clearStreamBackups(streamId);
     this.restoredDisplaySent.delete(streamId);
     this.restoredDisplayInFlight.delete(streamId);
-    await OdysseyStore.forget(streamId);
+    await GoalStore.forget(streamId);
     await this.state.clearStream(streamId);
     this.send({
       command: PROGRESS_VIEW_COMMANDS.DELETE_STREAM,
@@ -805,7 +805,7 @@ export class DesktopProgressBridge {
     for (const streamId of streamIds) {
       ToolUseFollowUpQueue.release(streamId);
     }
-    await OdysseyStore.forgetMany([...streamIds]);
+    await GoalStore.forgetMany([...streamIds]);
     // Drop persisted ghosts too: a "delete all" should leave nothing
     // for the next launch to hydrate, otherwise users would see the
     // ghosts come back zombie-style after relaunch.

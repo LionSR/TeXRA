@@ -104,14 +104,12 @@ export const permissionHandlers: HandlerRegistry = {
     );
   },
 
-  [PROGRESS_VIEW_COMMANDS.ODYSSEY_ACTIVE_UPDATED]: (data, ctx) => {
+  [PROGRESS_VIEW_COMMANDS.GOAL_ACTIVE_UPDATED]: (data, ctx) => {
     updateToolUseState(ctx, data.stream, (prev) =>
       create(prev, (draft) => {
-        draft.odysseyActive = data.active;
-        draft.odysseyStatus = data.active
-          ? (data.status ?? undefined)
-          : undefined;
-        draft.odysseyObjective = data.active
+        draft.goalActive = data.active;
+        draft.goalStatus = data.active ? (data.status ?? undefined) : undefined;
+        draft.goalObjective = data.active
           ? (data.objective ?? undefined)
           : undefined;
       }),
