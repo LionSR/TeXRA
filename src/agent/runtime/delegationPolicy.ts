@@ -14,6 +14,8 @@ import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   clampNestedDelegationDepth,
+  evaluateDelegationGate,
+  type DelegationGateResult,
   type NestedDelegationConfig,
   UNKNOWN_DELEGATION_DEPTH,
 } from '@shared/constants/delegationPolicy';
@@ -25,6 +27,13 @@ export function readNestedDelegationConfig(): NestedDelegationConfig {
     state.get<number>(WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH, undefined),
   );
   return { maxDepth };
+}
+
+/** Evaluate the delegation gate against the current workspace policy. */
+export function evaluateCurrentDelegationGate(
+  depth: number,
+): DelegationGateResult {
+  return evaluateDelegationGate(depth, readNestedDelegationConfig());
 }
 
 /**
