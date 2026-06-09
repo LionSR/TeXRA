@@ -10,7 +10,7 @@ import type {
   AgentRunStateSnapshot,
   ConversationRoundStateSnapshot,
 } from '@agent/core/execution/AgentState';
-import { ensureError, formatProviderHttpError } from '@common/errors';
+import { ensureError, normalizeProviderError } from '@common/errors';
 import type { AgentFileLocation } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';
@@ -119,7 +119,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     } catch (error) {
       recordRound(prepRes.run, prepRes.round);
       await this.services.onRoundFinalized(prepRes.run);
-      const formatted = formatProviderHttpError(error);
+      const formatted = normalizeProviderError(error);
       return {
         outcome: 'failed',
         error: ensureError(error),
@@ -132,7 +132,7 @@ export class ResponseCycleNode<C = unknown> extends Node<
     _prepRes: CyclePrepInput,
     error: Error,
   ): Promise<CycleOutcome> {
-    const formatted = formatProviderHttpError(error);
+    const formatted = normalizeProviderError(error);
     return { outcome: 'failed', error, userRetryable: formatted.userRetryable };
   }
 
