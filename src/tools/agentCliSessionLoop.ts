@@ -41,7 +41,7 @@ type TurnUsage = { input_tokens?: number; output_tokens?: number };
  * through the WAITING state queue path: `sendFollowUp()` → stream is WAITING →
  * `ToolUseFollowUpQueue.enqueue()`.
  */
-export class AgentCliSession implements IInterruptible {
+class AgentCliSession implements IInterruptible {
   private interrupted = false;
   private queue: FollowUpQueue | null = null;
   private turnAbortController: AbortController | null = null;
@@ -74,6 +74,15 @@ export class AgentCliSession implements IInterruptible {
  * Provider-specific behavior for a single agent-CLI session. Created once per
  * session; its methods close over the provider's thread/session object,
  * registry, and runtime host.
+ *
+ * Per-turn call order inside the loop:
+ *   runTurn → getUsage (turn summary) → isTurnError → onTurnError (if true)
+ *   → onTurnSuccess (only when the turn did not fail) → publishUsage → format*.
+ * `onTurnError` fires only for a non-throwing turn that reports an
+ * application-level error (`isTurnError` true); a thrown turn goes through the
+ * loop's catch instead and is formatted via `formatError(null, …)`.
+ * `onSessionStart` runs once before the first turn; `onSessionCleanup` runs once
+ * in the loop's `finally`. `publishUsage` owns its own usage-presence check.
  */
 export interface AgentCliSessionStrategy<TTurn> {
   /** Stage label opened on the child trace (e.g. "Codex session"). */
@@ -88,8 +97,8 @@ export interface AgentCliSessionStrategy<TTurn> {
   /** Run one streamed turn. Throws on hard failure. */
   runTurn(prompt: string, abortController: AbortController): Promise<TTurn>;
 
-  /** Token usage for the turn summary + UI publish (null/undefined when none). */
-  getUsage(turn: TTurn): TurnUsage | null | undefined;
+  /** Token usage for the turn summary (null when none). */
+  getUsage(turn: TTurn): TurnUsage | null;
 
   /**
    * Application-level error reported by a turn that did NOT throw (e.g. the SDK
@@ -169,6 +178,7 @@ export function runAgentCliSession<TTurn>(
 
         let turn: TTurn | null = null;
         let err: unknown = null;
+        let turnIsError = false;
         try {
           turn = await strategy.runTurn(prompt, abortController);
           logTurnSummary(
@@ -176,7 +186,8 @@ export function runAgentCliSession<TTurn>(
             Date.now() - startedAt,
             strategy.getUsage(turn),
           );
-          if (strategy.isTurnError?.(turn)) {
+          turnIsError = strategy.isTurnError?.(turn) === true;
+          if (turnIsError) {
             strategy.onTurnError?.(turn, logger);
           }
         } catch (caught) {
@@ -190,15 +201,15 @@ export function runAgentCliSession<TTurn>(
         }
 
         const wallTimeMs = Date.now() - startedAt;
-        const turnFailed =
-          err != null ||
-          (turn != null && strategy.isTurnError?.(turn) === true);
+        const turnFailed = err != null || turnIsError;
 
         if (!turnFailed && turn != null) {
           strategy.onTurnSuccess?.(turn);
         }
 
-        if (turn != null && strategy.getUsage(turn)) {
+        // publishUsage owns its own usage-presence check; the loop only needs a
+        // turn to publish.
+        if (turn != null) {
           strategy.publishUsage(turn);
         }
 

@@ -37,12 +37,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { toErrorMessage } from '@common/errors';
-import type {
-  StreamTabId,
-  ExecutionId,
-  StorageKey,
-  ToolUseLog,
-} from '@shared/schemas';
+import type { StreamTabId, ExecutionId, ToolUseLog } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { ToolError, type ToolResult } from '@tools/result';
@@ -63,6 +58,7 @@ import {
 } from './claudeAgentImport';
 import { createChildStream, type ChildStream } from './childStream';
 import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
+import { publishAgentCliStreamUsage } from './agentCliShared';
 import {
   runAgentCliSession,
   type AgentCliSessionStrategy,
@@ -486,12 +482,12 @@ function startClaudeAgentLoop(params: {
     },
     publishUsage: (turn) => {
       if (turn.usage) {
-        runtimeHost.emit('updateStreamUsage', {
-          streamId: childStreamId,
-          storageKey: executionId as StorageKey,
+        publishAgentCliStreamUsage(
+          childStreamId,
           executionId,
-          usage: buildClaudeUsageStats(turn.usage),
-        });
+          buildClaudeUsageStats(turn.usage),
+          runtimeHost,
+        );
       }
     },
     formatDelivery: (turn, prompt, wallTimeMs) =>

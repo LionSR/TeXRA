@@ -37,9 +37,7 @@ import { toErrorMessage } from '@common/errors';
 import type {
   StreamTabId,
   ExecutionId,
-  StorageKey,
   TodoItem,
-  TokenUsageStats,
   ToolUseLog,
 } from '@shared/schemas';
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -59,6 +57,7 @@ import { defineTool } from './core/define';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream, type ChildStream } from './childStream';
 import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
+import { publishAgentCliStreamUsage } from './agentCliShared';
 import {
   runAgentCliSession,
   type AgentCliSessionStrategy,
@@ -207,20 +206,6 @@ export function publishCodexTodos(
   runtimeHost: AgentRuntimeHost,
 ): void {
   runtimeHost.emit('updateTodos', { streamId: childStreamId, todos });
-}
-
-export function publishCodexStreamUsage(
-  childStreamId: StreamTabId,
-  executionId: ExecutionId,
-  usage: TokenUsageStats,
-  runtimeHost: AgentRuntimeHost,
-): void {
-  runtimeHost.emit('updateStreamUsage', {
-    streamId: childStreamId,
-    storageKey: executionId as StorageKey,
-    executionId,
-    usage,
-  });
 }
 
 function toProgressTodos(item: TodoListItem): TodoItem[] {
@@ -463,7 +448,7 @@ function startCodexLoop(params: {
     onTurnSuccess: registerThread,
     publishUsage: (turn) => {
       if (turn.usage) {
-        publishCodexStreamUsage(
+        publishAgentCliStreamUsage(
           childStreamId,
           executionId,
           buildCodexUsageStats(turn.usage),
