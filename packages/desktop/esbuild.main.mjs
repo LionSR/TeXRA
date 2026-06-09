@@ -22,10 +22,20 @@ const result = await esbuild.build({
   external: ['electron', 'fsevents'],
   tsconfig: 'tsconfig.main.json',
   target: 'node22',
+  // ESM output has no CJS globals. Bundled CommonJS deps still reference them:
+  //   - `require` (createRequire) — needed by several deps.
+  //   - `__filename` — write-file-atomic's getTmpname() reads it; without this
+  //     shim the app fatally crashes on startup ("__filename is not defined")
+  //     in bootstrapPlatformAgentDirectories -> JsonStore.flush.
+  // Do NOT also shim `__dirname` here: esbuild already emits a `var __dirname`
+  // in the one chunk that needs it, so a banner `const __dirname` collides
+  // ("Identifier '__dirname' has already been declared").
   banner: {
     js:
       `import { createRequire as __texraCreateRequire } from 'node:module';\n` +
-      `const require = __texraCreateRequire(import.meta.url);`,
+      `import { fileURLToPath as __texraFileURLToPath } from 'node:url';\n` +
+      `const require = __texraCreateRequire(import.meta.url);\n` +
+      `const __filename = __texraFileURLToPath(import.meta.url);`,
   },
 });
 
