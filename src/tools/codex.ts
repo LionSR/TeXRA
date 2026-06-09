@@ -21,11 +21,7 @@
 import { z } from 'zod';
 
 // Local imports
-import {
-  getExecutionStore,
-  registerExecution,
-  writeTerminalStatus,
-} from '@agent/storage';
+import { registerExecution } from '@agent/storage';
 import {
   emitToolUseCard,
   endToolUseCard,
@@ -36,23 +32,15 @@ import {
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
-import {
-  interruptRegistry,
-  type IInterruptible,
-} from '@agent/runtime/InterruptRegistry';
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
-import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
 import type {
   StreamTabId,
   ExecutionId,
-  StorageKey,
   TodoItem,
-  TokenUsageStats,
   ToolUseLog,
 } from '@shared/schemas';
-import { MESSAGE_TYPES, STREAM_STATUS } from '@shared/schemas';
+import { MESSAGE_TYPES } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { ToolError, type ToolResult } from '@tools/result';
 import { parseWorkingDirectory } from '@tools/pathResolution';
@@ -69,11 +57,11 @@ import { defineTool } from './core/define';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream, type ChildStream } from './childStream';
 import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
+import { publishAgentCliStreamUsage } from './agentCliShared';
 import {
-  agentCliLoopTerminalStatus,
-  isCleanInterruption,
-  logTurnSummary,
-} from './agentCliShared';
+  runAgentCliSession,
+  type AgentCliSessionStrategy,
+} from './agentCliSessionLoop';
 import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
@@ -163,49 +151,6 @@ export function interruptAllCodexSessions(): void {
 }
 
 // ============================================================================
-// Codex follow-up session — IInterruptible only (no ToolUseFlowContext)
-// ============================================================================
-
-/**
- * Lightweight interruptible registered with the InterruptRegistry so the
- * stop button works on codex child streams.
- *
- * Does NOT implement the session duck-type (no `session.appendFollowUp`),
- * so flow-only commands such as context compaction ignore it.
- *
- * Follow-ups route through the WAITING state queue path:
- * `sendFollowUp()` → stream is WAITING → `ToolUseFollowUpQueue.enqueue()`.
- */
-class CodexFollowUpSession implements IInterruptible {
-  private interrupted = false;
-  private queue: FollowUpQueue | null = null;
-  private turnAbortController: AbortController | null = null;
-
-  interrupt(): void {
-    this.interrupted = true;
-    this.queue?.cancelWait();
-    this.turnAbortController?.abort();
-  }
-
-  setQueue(q: FollowUpQueue): void {
-    this.queue = q;
-  }
-
-  isInterrupted(): boolean {
-    return this.interrupted;
-  }
-
-  startTurn(): AbortSignal {
-    this.turnAbortController = new AbortController();
-    return this.turnAbortController.signal;
-  }
-
-  finishTurn(): void {
-    this.turnAbortController = null;
-  }
-}
-
-// ============================================================================
 // Result formatting
 // ============================================================================
 
@@ -261,20 +206,6 @@ export function publishCodexTodos(
   runtimeHost: AgentRuntimeHost,
 ): void {
   runtimeHost.emit('updateTodos', { streamId: childStreamId, todos });
-}
-
-export function publishCodexStreamUsage(
-  childStreamId: StreamTabId,
-  executionId: ExecutionId,
-  usage: TokenUsageStats,
-  runtimeHost: AgentRuntimeHost,
-): void {
-  runtimeHost.emit('updateStreamUsage', {
-    streamId: childStreamId,
-    storageKey: executionId as StorageKey,
-    executionId,
-    usage,
-  });
 }
 
 function toProgressTodos(item: TodoListItem): TodoItem[] {
@@ -462,10 +393,10 @@ export async function runStreamedTurn(
 // ============================================================================
 
 /**
- * Run the Codex session loop. The loop processes prompts from the child's
- * follow-up queue one at a time and delivers each turn's result to the
- * parent's follow-up queue. The initial prompt is seeded into the queue so
- * the first turn goes through the same code path as every follow-up turn.
+ * Run the Codex session loop. The shared loop runner processes prompts from the
+ * child's follow-up queue one at a time and delivers each turn's result to the
+ * parent's follow-up queue; this strategy supplies the Codex-specific turn
+ * execution, registry bookkeeping, and result formatting.
  */
 function startCodexLoop(params: {
   thread: Thread;
@@ -485,140 +416,63 @@ function startCodexLoop(params: {
   } = params;
   const { childStreamId, logger } = childStream;
 
-  const session = new CodexFollowUpSession();
-  const queue = ToolUseFollowUpQueue.acquire(childStreamId);
-  session.setQueue(queue);
-  interruptRegistry.register(childStreamId, session);
-
-  // Start a log group so endRunningGroups() marks it as errored on reload,
-  // giving the user a visual cue that the session was interrupted.
-  // Opens as a root: the child session's own trace has a per-instance stage
-  // scope that is empty here, so there is no cross-trace parent to inherit.
-  const sessionStage = logger.openStage('Codex session');
-
-  // Register resumed threads immediately — without this, a second codex call
-  // with the same thread_id during the first turn would bypass the in-memory
-  // guard and start a concurrent loop. Fresh threads don't have thread.id
-  // yet; they're registered after the first turn completes.
-  if (thread.id) {
-    codexThreads.register(thread.id, {
-      thread,
-      childStreamId,
-      parentStreamId,
-      executionId,
-    });
-  }
-
-  // Seed the initial prompt; the loop drains it as the first turn.
-  queue.enqueue({ text: initialPrompt });
-  childStream.waitForInput();
-
-  let sawTurnFailure = false;
-  void (async () => {
-    try {
-      while (!session.isInterrupted()) {
-        const messages = await queue.waitAndDrainAll(() =>
-          session.isInterrupted(),
-        );
-        if (!messages || session.isInterrupted()) break;
-
-        const prompt = messages.items.map((item) => item.text).join('\n\n');
-        childStream.beginTurn();
-        const startedAt = Date.now();
-        const signal = session.startTurn();
-
-        let turn: RunResult | null = null;
-        let err: unknown = null;
-        try {
-          turn = await runStreamedTurn(
-            thread,
-            prompt,
-            childStreamId,
-            logger,
-            runtimeHost,
-            signal,
-          );
-          logTurnSummary(logger, Date.now() - startedAt, turn.usage);
-        } catch (caught) {
-          if (isCleanInterruption(caught, signal, session)) break;
-          err = caught;
-          logger.error(toErrorMessage(caught));
-        } finally {
-          session.finishTurn();
-        }
-
-        const wallTimeMs = Date.now() - startedAt;
-        const turnFailed = err != null;
-        const threadId = thread.id;
-        if (!turnFailed && threadId && !codexThreads.isActive(threadId)) {
-          codexThreads.register(threadId, {
-            thread,
-            childStreamId,
-            parentStreamId,
-            executionId,
-          });
-        }
-
-        if (turn?.usage) {
-          publishCodexStreamUsage(
-            childStreamId,
-            executionId,
-            buildCodexUsageStats(turn.usage),
-            runtimeHost,
-          );
-        }
-
-        const msg =
-          turn && !turnFailed
-            ? formatCodexDelivery(
-                executionId,
-                prompt,
-                wallTimeMs,
-                turn,
-                threadId,
-              )
-            : formatCodexError(executionId, prompt, err);
-        try {
-          await getExecutionStore(executionId).writeReport(msg);
-        } catch {
-          // Best-effort; delivery must not block on storage.
-        }
-        await sendFollowUp(parentStreamId, {
-          text: msg,
-          origin: 'subagent_result',
-        });
-
-        if (turnFailed) {
-          sawTurnFailure = true;
-          childStream.failTurn();
-          break;
-        }
-
-        if (!session.isInterrupted()) {
-          childStream.waitForInput();
-        }
-      }
-    } finally {
-      sessionStage.end(sawTurnFailure ? 'error' : 'stopped');
-      interruptRegistry.unregister(childStreamId);
-      ToolUseFollowUpQueue.release(childStreamId);
-      const threadId = thread.id;
-      if (threadId) codexThreads.release(threadId);
-      // Persist terminal status before childStream.finalize() untracks and
-      // notifies waiters.
-      await writeTerminalStatus(
+  // Fresh threads don't have thread.id yet; they're registered after the first
+  // turn completes. Resumed threads are registered up front (onSessionStart) so
+  // a second codex call with the same thread_id during the first turn can't
+  // bypass the in-memory guard and start a concurrent loop.
+  const registerThread = (): void => {
+    const threadId = thread.id;
+    if (threadId && !codexThreads.isActive(threadId)) {
+      codexThreads.register(threadId, {
+        thread,
+        childStreamId,
+        parentStreamId,
         executionId,
-        agentCliLoopTerminalStatus({
-          interrupted: session.isInterrupted(),
-          sawTurnFailure,
-        }),
-      ).catch(() => {});
-
-      childStream.finalize({
-        status: sawTurnFailure ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,
       });
     }
-  })();
+  };
+
+  const strategy: AgentCliSessionStrategy<RunResult> = {
+    stageLabel: 'Codex session',
+    onSessionStart: registerThread,
+    runTurn: (prompt, abortController) =>
+      runStreamedTurn(
+        thread,
+        prompt,
+        childStreamId,
+        logger,
+        runtimeHost,
+        abortController.signal,
+      ),
+    getUsage: (turn) => turn.usage,
+    onTurnSuccess: registerThread,
+    publishUsage: (turn) => {
+      if (turn.usage) {
+        publishAgentCliStreamUsage(
+          childStreamId,
+          executionId,
+          buildCodexUsageStats(turn.usage),
+          runtimeHost,
+        );
+      }
+    },
+    formatDelivery: (turn, prompt, wallTimeMs) =>
+      formatCodexDelivery(executionId, prompt, wallTimeMs, turn, thread.id),
+    formatError: (_turn, prompt, err) =>
+      formatCodexError(executionId, prompt, err),
+    onSessionCleanup: () => {
+      const threadId = thread.id;
+      if (threadId) codexThreads.release(threadId);
+    },
+  };
+
+  runAgentCliSession({
+    childStream,
+    parentStreamId,
+    executionId,
+    initialPrompt,
+    strategy,
+  });
 }
 
 // ============================================================================
