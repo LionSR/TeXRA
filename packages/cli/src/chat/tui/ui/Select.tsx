@@ -11,7 +11,7 @@
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useState } from 'react';
 
-import { clamp } from '@utils/core';
+import { clampIndex } from '@utils/core';
 
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 
@@ -34,11 +34,6 @@ export interface SelectProps<T> {
   readonly initialIndex?: number;
   readonly maxVisibleItems?: number;
   readonly showOverflow?: boolean;
-}
-
-function clampIndex(index: number, length: number): number {
-  if (length <= 0) return 0;
-  return clamp(index, 0, length - 1);
 }
 
 function firstEnabledSelectIndex<T>(
