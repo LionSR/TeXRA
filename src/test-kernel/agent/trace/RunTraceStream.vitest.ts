@@ -10,7 +10,7 @@ import {
 import { endToolUseCard, startToolUseCard } from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
-describe('AgentLogger stream output', () => {
+describe('AgentTrace stream output', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
