@@ -9,7 +9,7 @@
 >
 > - **Plan step 6 is now PARTIAL:** SDK-readiness Steps 7a–c landed — `interruptRegistry`, `executionRegistry`, and `runCoordinatorBridge` are classes with module-default instances + delegators (`InterruptRegistry` / `ExecutionRegistry` / `RunCoordinatorBridge`). Residue (audit §15): the `clearAll*` path and one remaining module-level subscription. 7d (`SessionHandle`) is the remaining piece.
 > - **Registry inventory grows by one:** `executionSubscriptionBinder` (`ExecutionSubscriptionBinder.ts`) belongs in the Finding-C list and in the 7d composition.
-> - **`AgentCore` is now 14 fields, not 13** (`streamStatus` was added); the cohesion-split decision in Finding A should place it with `RunIdentity`-adjacent runtime wiring when step 3 lands.
+> - **`AgentCore` is still 13 fields but with different membership** (`streamStatus` added 06-08; `delegationConfig` deleted 06-09, `092358d86`); the cohesion split in Finding A should place `streamStatus` with `RunIdentity`-adjacent runtime wiring and drop `delegationConfig` from the `DelegationPolicy` group when step 3 lands.
 > - **Re-spread cites drifted:** `ToolUseCycleNode.ts:76` / `ResponseCycleNode.ts:95` (was :75/:94). Anchor on the `{...this.services}` clause text, not line numbers.
 
 ## How this was produced
