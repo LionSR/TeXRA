@@ -17,7 +17,6 @@
 
 import * as path from 'path';
 
-
 import { isModuleNotFoundError } from '@common/errors';
 import { pathExists, resolveBinary } from './support/externalBinaryUtils';
 import type { Options, Query } from '@anthropic-ai/claude-agent-sdk';
