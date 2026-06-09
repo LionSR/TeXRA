@@ -5,6 +5,7 @@
 
 import { Box, Text, useInput } from 'ink';
 import { Spinner } from '@inkjs/ui';
+import { useEffect, useRef } from 'react';
 
 import {
   emptyModelListMessageForCliMode,
@@ -15,7 +16,7 @@ import {
   type GetModelSwitchDisabledReason,
 } from '@cli/runtime/modelAccess';
 import { formatCliApiMode, type CliApiMode } from '@cli/runtime/apiAccessMode';
-import { Select } from '../ui/Select';
+import { Select, selectIndexForHotkeyInput } from '../ui/Select';
 import { KeyHints } from '../ui/KeyHints';
 import { CompactFormKeyHints, FormFrame } from './_shared/FormFrame';
 import {
@@ -84,26 +85,13 @@ function EmptyModelListState(props: {
 }
 
 export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
-  const { data, loading, error } = useAsyncListForm<readonly CliModelAccess[]>({
-    load: () => getCliModelAccessList({ apiMode: props.apiMode }),
-    onClose: props.onClose,
-    isEmpty: (models) => !models.some((model) => model.available),
-  });
-
-  if (loading) {
-    return (
-      <FormFrame color="cyan" title="/model">
-        <Spinner label="Loading model registry..." />
-      </FormFrame>
-    );
-  }
-  if (error) {
-    return (
-      <FormFrame color="red" title="/model - error">
-        <Text>{error}</Text>
-      </FormFrame>
-    );
-  }
+  const { data, loading, error, pendingInput, clearPendingInput } =
+    useAsyncListForm<readonly CliModelAccess[]>({
+      load: () => getCliModelAccessList({ apiMode: props.apiMode }),
+      onClose: props.onClose,
+      isEmpty: (models) => !models.some((model) => model.available),
+    });
+  const appliedPendingInput = useRef<string | undefined>(undefined);
 
   const models = data ?? [];
   const items = modelSelectItemsForCliMode(
@@ -127,6 +115,42 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
       return;
     }
     props.onClose();
+  }
+
+  useEffect(() => {
+    if (loading || error || !selectable || !pendingInput) return;
+    if (appliedPendingInput.current === pendingInput) return;
+    appliedPendingInput.current = pendingInput;
+
+    const index = selectIndexForHotkeyInput(pendingInput);
+    clearPendingInput();
+    if (index == null) return;
+
+    const choice = items[index];
+    if (choice && !choice.disabled) props.onSelect?.(choice.value);
+  }, [
+    clearPendingInput,
+    error,
+    items,
+    loading,
+    pendingInput,
+    props.onSelect,
+    selectable,
+  ]);
+
+  if (loading) {
+    return (
+      <FormFrame color="cyan" title="/model">
+        <Spinner label="Loading model registry..." />
+      </FormFrame>
+    );
+  }
+  if (error) {
+    return (
+      <FormFrame color="red" title="/model - error">
+        <Text>{error}</Text>
+      </FormFrame>
+    );
   }
 
   if (isCompactFormRows(props.availableRows) && items.length > 0) {
