@@ -4,10 +4,11 @@
 // copied verbatim across every list form; it lives here once.
 
 import { useInput } from 'ink';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import {
   isEscapeInput,
+  isPlainReturnInput,
   type ReturnKeyInput,
 } from '@cli/chat/tui/input/inputKeys';
 
@@ -15,6 +16,12 @@ export interface AsyncListFormState<T> {
   readonly data: T | undefined;
   readonly loading: boolean;
   readonly error: string | undefined;
+  /**
+   * First non-navigation key pressed while the async list was loading. Forms
+   * can apply it once their actionable items are mounted, then clear it.
+   */
+  readonly pendingInput: string | undefined;
+  readonly clearPendingInput: () => void;
   /**
    * Replace the loaded data after mount. Used by forms whose loaded list is
    * mutable in place (e.g. `/tools` re-reading statuses after a toggle).
@@ -48,6 +55,30 @@ export function shouldCloseAsyncListFormOnInput(args: {
   );
 }
 
+export function shouldBufferAsyncListFormInput(args: {
+  readonly input: string;
+  readonly key: Pick<ReturnKeyInput, 'ctrl' | 'escape' | 'meta' | 'return'> & {
+    readonly downArrow?: boolean;
+    readonly leftArrow?: boolean;
+    readonly rightArrow?: boolean;
+    readonly upArrow?: boolean;
+  };
+  readonly loading: boolean;
+}): boolean {
+  return (
+    args.loading &&
+    args.input.length > 0 &&
+    !args.key.ctrl &&
+    !args.key.meta &&
+    !args.key.downArrow &&
+    !args.key.leftArrow &&
+    !args.key.rightArrow &&
+    !args.key.upArrow &&
+    !isEscapeInput(args.input, args.key) &&
+    !isPlainReturnInput(args.input, args.key)
+  );
+}
+
 /**
  * Run the form's loader on mount, expose `loading` / `error` / `data`, and wire
  * `Esc` to close while the panel is loading, errored, or empty. Matches the
@@ -60,6 +91,8 @@ export function useAsyncListForm<T>(
   const [data, setData] = useState<T | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>(undefined);
+  const [pendingInput, setPendingInput] = useState<string | undefined>();
+  const clearPendingInput = useCallback(() => setPendingInput(undefined), []);
 
   const empty =
     data !== undefined && options.isEmpty ? options.isEmpty(data) : false;
@@ -75,6 +108,10 @@ export function useAsyncListForm<T>(
       })
     ) {
       options.onClose();
+      return;
+    }
+    if (shouldBufferAsyncListFormInput({ input, key, loading })) {
+      setPendingInput((current) => current ?? input);
     }
   });
 
@@ -98,5 +135,5 @@ export function useAsyncListForm<T>(
     // Load once on mount, matching the original per-form `useEffect(..., [])`.
   }, []);
 
-  return { data, loading, error, setData };
+  return { data, loading, error, pendingInput, clearPendingInput, setData };
 }
