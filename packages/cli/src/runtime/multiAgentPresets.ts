@@ -1,7 +1,7 @@
 import { platform } from '@platform/platform';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES, type AgentEntry } from '@agent/index';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { agentKey } from '@shared/schemas/agent';
 import {
   AGENT_MODE_PRESETS,
@@ -552,7 +552,7 @@ function formatAvailableTeamAgentCount(count: number): string {
 }
 
 export function agentHasDelegationTools(agent: AgentEntry): boolean {
-  return agent.tools?.some((tool) => DELEGATION_TOOLS.has(tool)) ?? false;
+  return hasDelegationTool(agent.tools);
 }
 
 function toAgentKey(agent: AgentEntry): string {
