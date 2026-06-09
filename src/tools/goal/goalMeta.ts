@@ -20,7 +20,8 @@ export const LEGACY_GOAL_FEATURE_FLAG_KEYS = [
 /**
  * Optional USD spend cap for autonomous goals. `0` (the default) means
  * unbounded. Snapshotted into the goal record at `GoalStore.start` so editing
- * the setting mid-goal doesn't silently retarget a running budget.
+ * the setting mid-goal doesn't silently retarget a running budget. Async
+ * subagent spend is counted when the child execution settles.
  */
 export const GOAL_COST_CAP_CONFIG_KEY = 'texra.goal.costCapUsd' as const;
 

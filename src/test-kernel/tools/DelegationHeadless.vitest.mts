@@ -7,6 +7,7 @@ import {
   AgentExecutionHandle,
   executionRegistry,
 } from '@agent/runtime/executionRegistry';
+import { AgentFlowError } from '@agent/runtime/AgentFlowResult';
 import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
@@ -196,6 +197,48 @@ describe('headless delegation', () => {
     expect(mocks.writeReport).toHaveBeenCalledWith(result.output);
     expect(recordSubagentCost).toHaveBeenCalledTimes(1);
     expect(recordSubagentCost).toHaveBeenCalledWith(0.42);
+  });
+
+  it('rolls up thrown child error results during one-shot runs', async () => {
+    const recordSubagentCost = vi.fn();
+    mocks.executeAgent.mockRejectedValueOnce(
+      new AgentFlowError('review model failed', {
+        category: 'toolUse',
+        status: 'error',
+        executionId: 'child-exec',
+        streamId: 'child-stream',
+        totalCostUsd: 0.57,
+      }),
+    );
+
+    const result = await withToolFileInteractionContext(
+      { tracker: {} as never, recordSubagentCost },
+      () =>
+        withRunContext(
+          createRunContext({
+            runtimeHost: runtimeHost(),
+            streamId: 'parent-stream',
+            executionId: 'parent-exec',
+            model: 'deepseekT',
+            stopAfterCycle: true,
+          }),
+          () =>
+            new DelegateAgentTool().call({
+              agent: 'review',
+              model: null,
+              instruction: 'Check the proof.',
+              memories: [],
+              working_directory: null,
+              execution_id: null,
+            }),
+        ),
+    );
+
+    expect(result.summary).toBe("Subagent 'review' failed");
+    expect(result.isError).toBe(true);
+    expect(result.error).toBe('review model failed');
+    expect(recordSubagentCost).toHaveBeenCalledTimes(1);
+    expect(recordSubagentCost).toHaveBeenCalledWith(0.57);
   });
 
   it('rolls up failed async subagent cost from the error callback', async () => {

@@ -28,7 +28,10 @@ import {
   AgentExecutionHandle,
   executionRegistry,
 } from '@agent/runtime/executionRegistry';
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import {
+  getAgentFlowErrorResult,
+  type AgentFlowResult,
+} from '@agent/runtime/AgentFlowResult';
 import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
@@ -464,6 +467,7 @@ async function executeSubagent(
         output: msg,
       };
     } catch (err) {
+      settleSubagentCost(getAgentFlowErrorResult(err));
       const msg = formatSubagentError(executionId, agentName, err, {
         wallTimeMs: Date.now() - startedAt,
         workingDirectory: configPayload.workingDirectory ?? undefined,
