@@ -1,31 +1,92 @@
 /**
- * Generic file-backed key-value store.
+ * Generic StorageFS-backed key-value store.
  *
- * Stores each key as a separate JSON file under a configurable directory
- * inside StorageFS (workspace-scoped). Keys are percent-encoded for
- * filesystem safety and decoded on read-back, so the mapping is
- * reversible and collision-free.
+ * Keyv owns the key-value semantics; this module owns the StorageFS file layout.
+ * Each key is stored as one JSON file, and custom Keyv serialization preserves
+ * the existing plain-JSON on-disk format rather than Keyv's `{value, expires}`
+ * envelope.
  */
 
 import * as path from 'path';
+
+import Keyv, { type KeyvStoreAdapter, type StoredData } from 'keyv';
 
 import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { isFile } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
 import { StorageFS } from '@utils/files/storageFS';
 
-async function withNotFoundFallback<T>(
+function keyToPath(dir: string, key: string): string {
+  return path.join(dir, `${encodeURIComponent(key)}.json`);
+}
+
+function filenameToKey(filename: string): string {
+  return decodeURIComponent(filename.replace(/\.json$/, ''));
+}
+
+async function withMissingFallback<T>(
   operation: () => Promise<T>,
   fallback: T,
 ): Promise<T> {
   try {
     return await operation();
-  } catch (error) {
-    if (isFileNotFoundError(error)) {
-      return fallback;
-    }
-    throw error;
+  } catch (err) {
+    if (isFileNotFoundError(err)) return fallback;
+    throw err;
   }
+}
+
+function createStorageStore(dir: string): KeyvStoreAdapter {
+  let dirEnsured = false;
+
+  return {
+    opts: {},
+    namespace: undefined,
+
+    // Keyv subscribes to store error events when present. StorageFS surfaces
+    // failures by rejecting the operation promise, so there is no event source.
+    on(): KeyvStoreAdapter {
+      return this;
+    },
+
+    async get<Value>(key: string): Promise<StoredData<Value> | undefined> {
+      const raw = await withMissingFallback(
+        () => StorageFS.read(keyToPath(dir, key)),
+        undefined,
+      );
+      // Keyv expects the serialized store value here and applies our
+      // `deserialize` hook before returning from KVStore.read().
+      return raw as StoredData<Value> | undefined;
+    },
+
+    async set(key: string, value: unknown): Promise<void> {
+      if (!dirEnsured) {
+        await StorageFS.ensureDir(dir);
+        dirEnsured = true;
+      }
+      // Keyv has already run the serializer, so StorageFS receives raw JSON.
+      await StorageFS.write(keyToPath(dir, key), value as string);
+    },
+
+    async delete(key: string): Promise<boolean> {
+      return withMissingFallback(async () => {
+        await StorageFS.delete(keyToPath(dir, key));
+        return true;
+      }, false);
+    },
+
+    async clear(): Promise<void> {
+      await withMissingFallback(
+        () => StorageFS.delete(dir, { recursive: true }),
+        undefined,
+      );
+      dirEnsured = false;
+    },
+
+    async has(key: string): Promise<boolean> {
+      return StorageFS.exists(keyToPath(dir, key));
+    },
+  };
 }
 
 export interface KVStoreOptions {
@@ -37,74 +98,58 @@ export interface KVStoreOptions {
 }
 
 export class KVStore {
-  private dirEnsured = false;
+  private readonly keyv: Keyv;
 
   constructor(
     private readonly dir: string,
-    private readonly options: KVStoreOptions = {},
-  ) {}
-
-  private keyToPath(key: string): string {
-    return path.join(this.dir, `${encodeURIComponent(key)}.json`);
-  }
-
-  private static filenameToKey(filename: string): string {
-    return decodeURIComponent(filename.replace(/\.json$/, ''));
+    options: KVStoreOptions = {},
+  ) {
+    const indent = options.compactJson ? undefined : 2;
+    this.keyv = new Keyv({
+      store: createStorageStore(dir),
+      // The directory is the namespace; keys are stored literally.
+      namespace: undefined,
+      useKeyPrefix: false,
+      serialize: (data) => JSON.stringify(data.value, null, indent),
+      deserialize: (raw) => ({ value: JSON.parse(raw) }),
+    });
   }
 
   async read<T = unknown>(key: string): Promise<T | undefined> {
-    return withNotFoundFallback(
-      () => StorageFS.readJson<T>(this.keyToPath(key)),
-      undefined,
-    );
+    return this.keyv.get<T>(key);
   }
 
   async write<T = unknown>(key: string, value: T): Promise<void> {
-    if (!this.dirEnsured) {
-      await StorageFS.ensureDir(this.dir);
-      this.dirEnsured = true;
-    }
-    const indent = this.options.compactJson ? undefined : 2;
-    await StorageFS.write(
-      this.keyToPath(key),
-      JSON.stringify(value, null, indent),
-    );
+    await this.keyv.set(key, value);
   }
 
   async delete(key: string): Promise<void> {
-    await withNotFoundFallback(
-      () => StorageFS.delete(this.keyToPath(key)),
-      undefined,
-    );
-  }
-
-  async deleteDir(): Promise<void> {
-    await withNotFoundFallback(
-      () => StorageFS.delete(this.dir, { recursive: true }),
-      undefined,
-    );
-    this.dirEnsured = false;
+    await this.keyv.delete(key);
   }
 
   async exists(key: string): Promise<boolean> {
-    return StorageFS.exists(this.keyToPath(key));
+    return this.keyv.has(key);
   }
 
   async modifiedAt(key: string): Promise<number | undefined> {
-    return withNotFoundFallback(
-      async () => (await StorageFS.stat(this.keyToPath(key))).mtime,
+    return withMissingFallback(
+      async () => (await StorageFS.stat(keyToPath(this.dir, key))).mtime,
       undefined,
     );
   }
 
   async listKeys(prefix?: string): Promise<string[]> {
-    const entries = await withNotFoundFallback(
+    const entries = await withMissingFallback(
       () => StorageFS.readDir(this.dir),
       [],
     );
     return entries
       .filter(([name, type]) => isFile(type) && hasExtension(name, '.json'))
-      .map(([name]) => KVStore.filenameToKey(name))
+      .map(([name]) => filenameToKey(name))
       .filter((key) => !prefix || key.startsWith(prefix));
+  }
+
+  async deleteDir(): Promise<void> {
+    await this.keyv.clear();
   }
 }

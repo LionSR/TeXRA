@@ -151,6 +151,7 @@
     "identifiers-arxiv": "^0.1.1",
     "ignore": "^7.0.5",
     "katex": "^0.17.0",
+    "keyv": "^5.6.0",
     "lit": "^3.3.3",
     "llm-zoo": "^1.8.1",
     "lru-cache": "^11.5.1",
