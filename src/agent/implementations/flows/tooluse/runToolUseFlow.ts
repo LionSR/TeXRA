@@ -246,8 +246,7 @@ export async function runToolUseFlow<C = unknown>(
     },
     interrupt(): void {
       onInterrupt?.();
-      runCoordinatorBridge.clearRetryRequest(streamId);
-      runCoordinatorBridge.clearPlanApprovalForStream(streamId);
+      runCoordinatorBridge.cleanupRequestsForStream(streamId);
       sessionLifecycle.interrupt();
     },
     requestImmediateCompaction(): void {
@@ -363,7 +362,7 @@ export async function runToolUseFlow<C = unknown>(
     }
 
     sessionLifecycle.dispose();
-    runCoordinatorBridge.clearPlanApprovalForStream(streamId);
+    runCoordinatorBridge.cleanupRequestsForStream(streamId);
     interruptRegistry.unregister(streamId);
     for (const handler of switchedHandlers) {
       handler.dispose();
