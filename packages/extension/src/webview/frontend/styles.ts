@@ -50,18 +50,6 @@ export const mainViewStyles: CSSResult = css`
   }
 
   /*
-   * Hairline separator between sections of the launcher. Kept subtle
-   * (single-pixel surface-border line) so the primary instruction flow
-   * stays the dominant visual element, with secondary regions like the
-   * file-select group quietly demarcated below.
-   */
-  .section-separator {
-    border-top: var(--border-thin) solid
-      var(--wa-color-surface-border, var(--color-border));
-    margin: 0 0 var(--wa-space-2xs);
-  }
-
-  /*
    * Files section sits BELOW the instruction-panel (textarea + toolbar).
    * Wrapped in a wa-details so the document slots collapse to a single
    * slim summary row by default, keeping the primary "what do you want to

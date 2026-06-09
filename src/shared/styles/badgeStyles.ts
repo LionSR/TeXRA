@@ -1,30 +1,8 @@
 import { css, type CSSResult } from 'lit';
 
-const baseBadgeStyles: CSSResult = css`
-  .badge {
-    display: inline-block;
-    padding: var(--wa-space-2xs) var(--wa-space-xs);
-    border-radius: var(--border-radius-medium);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium, 500);
-  }
-`;
-
-const categoryBadgeStyles: CSSResult = css`
-  .category-badge,
-  .agent-category-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-    background: var(--wa-color-neutral-fill-quiet);
-    color: var(--wa-color-neutral-on-quiet);
-  }
-
-  .category-badge wa-icon,
-  .agent-category-badge wa-icon {
-    font-size: var(--font-size-sm);
-  }
-`;
+// NOTE: the hand-rolled badge/pill rules formerly here (.badge, .category-badge,
+// .agent-category-badge, .tinted-badge) were retired in favor of native <wa-badge>.
+// What remains is search-highlight and empty-state styling shared by list views.
 
 const searchHighlightStyles: CSSResult = css`
   mark {
@@ -54,42 +32,7 @@ const emptyStateStyles: CSSResult = css`
   }
 `;
 
-/**
- * Tinted status badge — small pill with a tinted background.
- * Set `--_tint` on the element to control the color.
- *
- * Usage:
- *   <span class="tinted-badge" style="--_tint: var(--color-warning)">running</span>
- *
- * Or define a variant class:
- *   .my-badge--error { --_tint: var(--color-error); }
- */
-export const tintedBadgeStyles: CSSResult = css`
-  .tinted-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--wa-space-3xs);
-    padding: var(--border-thin) var(--wa-space-2xs);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
-    color: var(--_tint, var(--color-text-secondary));
-    background: color-mix(
-      in srgb,
-      var(--_tint, var(--color-text-secondary)) 12%,
-      transparent
-    );
-    border-radius: var(--border-radius-small);
-    white-space: nowrap;
-  }
-
-  .tinted-badge wa-icon {
-    font-size: var(--font-size-xs);
-  }
-`;
-
 export const badgeStyles: CSSResult[] = [
-  baseBadgeStyles,
-  categoryBadgeStyles,
   searchHighlightStyles,
   emptyStateStyles,
 ];

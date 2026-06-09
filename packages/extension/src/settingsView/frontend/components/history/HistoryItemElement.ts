@@ -312,11 +312,7 @@ export class HistoryItemElement extends LitElement {
 
     const metaParts: Array<string | TemplateResult> = [
       timestamp,
-      html`<wa-tag
-        class="agent-category-badge"
-        variant=${categoryVariant}
-        size="small"
-      >
+      html`<wa-tag variant=${categoryVariant} size="small">
         ${decorator.icon
           ? html`<wa-icon library="texra" name=${decorator.icon}></wa-icon>`
           : nothing}
