@@ -75,7 +75,7 @@ import {
   formatToolResultAsText,
   type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
-import { tagAnthropicSdkError } from '../support/sdkErrorAdapters';
+import { tagAnthropicSdkError } from './anthropicSdkError';
 import {
   FILES_API_BETA,
   CONTEXT_MANAGEMENT_BETA,

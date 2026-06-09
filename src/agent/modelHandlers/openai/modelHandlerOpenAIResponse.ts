@@ -42,10 +42,8 @@ import { flexibleFS } from '@utils/files/flexibleFS';
 import type { FileLocation } from '@utils/files/taskRunStorage';
 import { normalizeUsage } from '../support/UsageNormalizer';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
-import {
-  tagOpenAISdkError,
-  withSdkErrorTag,
-} from '../support/sdkErrorAdapters';
+import { tagOpenAISdkError } from './openAISdkError';
+import { withSdkErrorTag } from '../support/sdkErrorTagging';
 import {
   classifyOpenAIBackgroundResumeError,
   createOpenAIBackgroundPollingError,
