@@ -56,7 +56,7 @@ export const bannerStyles: CSSResult = css`
   .banner-row .hint {
     width: 100%;
     font-size: var(--font-size-sm);
-    opacity: 0.7;
+    opacity: var(--opacity-subtle);
     line-height: var(--line-height-relaxed, 1.5);
   }
 

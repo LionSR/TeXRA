@@ -13,12 +13,24 @@ import { designTokens } from '@shared/styles';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
 
 const PR_STATE_LABEL: Record<WorktreePRState, string> = {
   [WORKTREE_PR_STATE.OPEN]: 'Open',
   [WORKTREE_PR_STATE.MERGED]: 'Merged',
   [WORKTREE_PR_STATE.CLOSED]: 'Closed',
   [WORKTREE_PR_STATE.DRAFT]: 'Draft',
+};
+
+/** PR state → wa-badge variant (WA has no purple, so merged maps to brand). */
+const PR_STATE_VARIANT: Record<
+  WorktreePRState,
+  'brand' | 'neutral' | 'success' | 'danger'
+> = {
+  [WORKTREE_PR_STATE.OPEN]: 'success',
+  [WORKTREE_PR_STATE.MERGED]: 'brand',
+  [WORKTREE_PR_STATE.CLOSED]: 'danger',
+  [WORKTREE_PR_STATE.DRAFT]: 'neutral',
 };
 
 const CI_ICON: Record<WorktreeCIState, string> = {
@@ -57,51 +69,15 @@ export class WorktreeChip extends LitElement {
         max-width: 100%;
       }
 
+      /* Native wa-badge per PR state (quiet 'filled' appearance); compacted to
+         the prior pill padding. Colour comes from the variant. */
       .pill {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--wa-space-3xs);
-        padding: 0 var(--wa-space-2xs);
-        border-radius: var(--wa-border-radius-pill);
-        background-color: color-mix(
-          in srgb,
-          var(--color-text-secondary) 12%,
-          transparent
-        );
-        color: var(--wa-color-text-normal);
-        white-space: nowrap;
         flex-shrink: 0;
       }
 
-      .pill.state-open {
-        color: var(--wa-color-success-on-quiet, var(--color-success));
-        background-color: color-mix(
-          in srgb,
-          var(--color-success) 14%,
-          transparent
-        );
-      }
-
-      .pill.state-merged {
-        color: var(--wa-color-chart-purple, var(--wa-color-text-link, #8957e5));
-        background-color: color-mix(
-          in srgb,
-          var(--wa-color-chart-purple, #8957e5) 14%,
-          transparent
-        );
-      }
-
-      .pill.state-closed {
-        color: var(--wa-color-danger-on-quiet, var(--color-error));
-        background-color: color-mix(
-          in srgb,
-          var(--color-error) 14%,
-          transparent
-        );
-      }
-
-      .pill.state-draft {
-        color: var(--wa-color-text-quiet, var(--wa-color-text-normal));
+      .pill::part(base) {
+        gap: var(--wa-space-3xs);
+        padding: 0 var(--wa-space-2xs);
       }
 
       .branch {
@@ -205,10 +181,12 @@ export class WorktreeChip extends LitElement {
   }
 
   private renderPRPill(state: WorktreePRState): TemplateResult {
-    return html`<span
-      class=${classMap({ pill: true, [`state-${state}`]: true })}
+    return html`<wa-badge
+      class="pill"
+      variant=${PR_STATE_VARIANT[state]}
+      appearance="filled"
       title=${`PR ${PR_STATE_LABEL[state]}`}
-      >${PR_STATE_LABEL[state]}</span
+      >${PR_STATE_LABEL[state]}</wa-badge
     >`;
   }
 
