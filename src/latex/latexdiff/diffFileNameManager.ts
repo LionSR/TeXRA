@@ -6,6 +6,16 @@ import {
   extractLastRoundModelMatch,
 } from '@agent/utils/mergeFileUtils';
 
+export type GeneratedLatexdiffArtifactKind =
+  | 'workspaceDiff'
+  | 'versionControlDiff'
+  | 'betweenRoundDiff';
+
+export interface GeneratedLatexdiffArtifact {
+  kind: GeneratedLatexdiffArtifactKind;
+  sourcePath: string;
+}
+
 /**
  * Generate a diff filename based on input and edited file names.
  * Uses round-based naming only for between-round diffs (same operation chain).
@@ -59,4 +69,36 @@ export function generateDiffFileName(
   }
 
   return `${editedBaseName}${suffix}.tex`;
+}
+
+/**
+ * Recognize filenames TeXRA/latexdiff generates so source-editing commands can
+ * avoid treating diff artifacts as editable paper sources.
+ */
+export function detectGeneratedLatexdiffArtifact(
+  filePath: string,
+): GeneratedLatexdiffArtifact | null {
+  const parsed = path.parse(filePath);
+  if (parsed.ext.toLowerCase() !== '.tex') return null;
+
+  const patterns: Array<{
+    kind: GeneratedLatexdiffArtifactKind;
+    regex: RegExp;
+  }> = [
+    { kind: 'versionControlDiff', regex: /^(.+)-diff[0-9a-f]{6,40}$/i },
+    { kind: 'betweenRoundDiff', regex: /^(.+)_diffr\d+r\d+$/i },
+    { kind: 'workspaceDiff', regex: /^(.+)_diff$/i },
+  ];
+
+  for (const pattern of patterns) {
+    const match = pattern.regex.exec(parsed.name);
+    const sourceStem = match?.[1];
+    if (!sourceStem) continue;
+    return {
+      kind: pattern.kind,
+      sourcePath: path.join(parsed.dir, `${sourceStem}${parsed.ext}`),
+    };
+  }
+
+  return null;
 }
