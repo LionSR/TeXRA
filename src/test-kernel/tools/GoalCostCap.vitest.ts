@@ -66,6 +66,7 @@ describe('GoalStore cost cap', () => {
     const again = await GoalStore.noteRunCost(STREAM_ID, 1.7);
     expect(again?.pausedForCap).toBe(false);
     expect(again?.goal.status).toBe('paused');
+    expect(again?.goal.spentUsd).toBeCloseTo(1.1);
 
     const resumed = await GoalStore.setStatus(STREAM_ID, 'active');
     expect(resumed?.baselineRunCostUsd).toBeNull();
