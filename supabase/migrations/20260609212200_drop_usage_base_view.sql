@@ -1,8 +1,12 @@
 -- Drop the dead usage_base / relay_usage_base pass-through views.
 --
 -- usage_logs is now the single source of truth. The historical usage_base
--- version-aware deduplication view became an identity after per-stream
--- aggregation moved into usage_logs_upsert and the usage_logs table itself.
+-- version-aware deduplication view became an identity for current production
+-- data after per-stream aggregation moved into usage_logs_upsert and the
+-- usage_logs table itself. Linked-database verification on 2026-06-09 found
+-- zero streamless usage_logs rows and exact total-cost parity between
+-- usage_logs and usage_base, so the old streamless batch-dedup branch is not
+-- preserving any live data behavior.
 -- Repoint the admin spending views and relay spending function directly at
 -- usage_logs, then drop the obsolete pass-through views without CASCADE so any
 -- missed dependency fails this migration loudly.
