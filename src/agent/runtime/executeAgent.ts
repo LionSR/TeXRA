@@ -52,7 +52,13 @@ import type {
 const CHANNEL = 'executeAgent';
 const logger = createChannelTrace(CHANNEL);
 
-/** Map workflow RoundOutput[] to OutputFileSummary[] for AgentFlowResult. */
+/**
+ * Project `RoundOutput[]` → `OutputFileSummary[]` for inclusion in `AgentFlowResult`.
+ *
+ * `relativePath` falls back to `absolutePath` for `external` locations that have
+ * no relative path. `originalPath` prefers `lineage.diffBase` (the snapshot used
+ * for latexdiff) over `lineage.original` (the workspace source).
+ */
 function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
   return roundOutputs.flatMap((r) =>
     r.outputs.map((o: OutputFileInfo) => ({
@@ -73,6 +79,13 @@ function toOutputSummaries(roundOutputs: RoundOutput[]): OutputFileSummary[] {
   );
 }
 
+/**
+ * Project `RoundOutput[]` → `CompileFailureSummary[]` for inclusion in `AgentFlowResult`.
+ *
+ * `outputPath` is workspace-relative for workspace/runStorage files and absolute
+ * for external files (which have no meaningful relative path). `logPath` is always
+ * relative; `logAbsolutePath` is provided separately for direct file-open calls.
+ */
 function toCompileFailureSummaries(
   roundOutputs: RoundOutput[],
 ): CompileFailureSummary[] {
