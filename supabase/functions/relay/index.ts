@@ -687,15 +687,19 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     if (!isModelAllowedForTier(userTier, modelName)) {
       const tierName = userTier === FREE_TIER ? 'free' : userTier;
       // Point users at a model their tier can actually use, not just an upsell.
+      const suggestedModelAllowed = isModelAllowedForTier(
+        userTier,
+        FREE_TIER_SUGGESTED_MODEL,
+      );
       const hint =
-        userTier === FREE_TIER
-          ? `Switch to a free model such as '${FREE_TIER_SUGGESTED_MODEL}', or upgrade for access.`
+        suggestedModelAllowed
+          ? `Switch to an available model such as '${FREE_TIER_SUGGESTED_MODEL}', or upgrade for access.`
           : 'Upgrade to Ultra for access.';
 
       return jsonError(
         modelName
           ? `Model '${modelName}' is not available for the ${tierName} tier. ${hint}`
-          : `Could not determine model from request. ${tierName} tier requires explicit model specification.`,
+          : `Could not determine model from request. The ${tierName} tier requires explicit model specification.`,
         403,
       );
     }
