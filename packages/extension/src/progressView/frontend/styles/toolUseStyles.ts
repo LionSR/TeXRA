@@ -39,13 +39,6 @@ export const toolUseStyles = css`
     font-size: var(--font-size-sm);
   }
 
-  .tool-use-separator {
-    margin: var(--wa-space-2xs) 0;
-    border: none;
-    border-top: var(--border-thin) solid var(--color-border);
-    opacity: var(--opacity-separator);
-  }
-
   :is(.tool-use-error, .banner-details--error)
     > .details-summary
     :is(.tool-use-title, .label, wa-icon),

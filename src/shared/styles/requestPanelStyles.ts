@@ -45,9 +45,7 @@ const ACTIONS = selectorGroup(ITEM_NAMES, '__actions');
 const FEEDBACKS = selectorGroup(ITEM_NAMES, '__feedback');
 const FEEDBACK_INPUTS = selectorGroup(ITEM_NAMES, '__feedback-input');
 const FEEDBACK_ACTIVE = selectorGroup(ITEM_NAMES, '--feedback-active');
-const BADGES = unsafeCSS(
-  '.workflow-proposal__category-badge, .external-inquiry-request__mode-badge',
-);
+const BADGES = unsafeCSS('.external-inquiry-request__mode-badge');
 const SCROLLABLE_DETAILS = selectorGroup(
   ITEM_NAMES.filter((n) => n !== 'workflow-proposal'),
   '__details',
@@ -397,16 +395,6 @@ export const requestPanelStyles: CSSResult = css`
     flex-wrap: wrap;
   }
 
-  .workflow-proposal__category-badge--workflow {
-    background: var(--wa-color-neutral-fill-quiet);
-    color: var(--wa-color-neutral-on-quiet);
-  }
-
-  .workflow-proposal__category-badge--tool-use {
-    background: var(--wa-color-text-link);
-    color: var(--wa-color-surface-default);
-  }
-
   .workflow-proposal__agent {
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size);
@@ -472,14 +460,6 @@ export const requestPanelStyles: CSSResult = css`
     gap: ${sp.small};
     flex-wrap: wrap;
     margin-top: ${sp.small};
-  }
-
-  .workflow-proposal__extract-flag {
-    display: inline-flex;
-    align-items: center;
-    gap: ${sp.tiny};
-    text-transform: none;
-    letter-spacing: normal;
   }
 
   .workflow-proposal__files {

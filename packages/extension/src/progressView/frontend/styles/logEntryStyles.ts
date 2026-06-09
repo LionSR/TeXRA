@@ -256,19 +256,6 @@ export const logEntryStyles = css`
     display: none;
   }
 
-  .extract-flag {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--wa-space-3xs);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
-    padding: var(--wa-space-3xs) var(--wa-space-2xs);
-    border-radius: var(--border-radius);
-    background: var(--wa-color-neutral-fill-quiet);
-    color: var(--wa-color-neutral-on-quiet);
-    margin-right: var(--wa-space-2xs);
-  }
-
   /* Terminal-style output: monospace font, tighter spacing, no log bullets.
      Applied to streams that proxy raw process output (e.g. bash child streams)
      so their stdout/stderr reads like a terminal instead of a logger. */
