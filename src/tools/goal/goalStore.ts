@@ -264,7 +264,8 @@ export const GoalStore = {
    *
    * Returns `pausedForCap: true` only on the call that performs the
    * cap-pause, so callers can log the transition exactly once. No-op
-   * (returns null) when the stream has no goal.
+   * (returns null) when the stream has no goal; paused goals keep their
+   * parked spend until resume re-baselines the next autonomous leg.
    */
   async noteRunCost(
     streamId: StreamTabId,
@@ -272,6 +273,9 @@ export const GoalStore = {
   ): Promise<{ goal: Goal; pausedForCap: boolean } | null> {
     const current = readRaw(streamId);
     if (!current) return null;
+    if (current.status !== 'active') {
+      return { goal: current, pausedForCap: false };
+    }
     const baseline = current.baselineRunCostUsd ?? runCostUsd;
     const spentUsd = Math.max(0, runCostUsd - baseline);
     const capExceeded =
