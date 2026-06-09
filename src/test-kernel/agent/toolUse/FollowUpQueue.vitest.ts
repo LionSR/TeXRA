@@ -214,7 +214,7 @@ describe('FollowUpQueue', () => {
     ToolUseFollowUpQueue.acquire(retainedStream);
     ToolUseFollowUpQueue.release(retainedStream);
 
-    for (let i = 0; i < 499; i += 1) {
+    for (let i = 0; i < ToolUseFollowUpQueue.RELEASED_CAP - 1; i += 1) {
       ToolUseFollowUpQueue.release(`stream:released-extra-${i}` as StreamTabId);
     }
 
