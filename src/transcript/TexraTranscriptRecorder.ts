@@ -7,7 +7,7 @@
  * channel itself is platform-neutral, and TeXRA's transcript persistence is
  * one of many possible subscribers.
  *
- * Streaming behavior mirrors the legacy `AgentLogger.createStream`:
+ * Streaming behavior mirrors the `AgentTrace` stream pattern:
  *   - first chunk creates the entry (with empty text if no chunks yet)
  *   - subsequent chunks are buffered + flushed on an interval
  *   - finalize flushes any pending chunks immediately
