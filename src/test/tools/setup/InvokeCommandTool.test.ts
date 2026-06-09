@@ -1,5 +1,5 @@
 // Node.js built-in imports
-import { strict as assert } from 'assert';
+import { strict as assert } from 'node:assert';
 
 // Local imports
 import { AUTH_COMMANDS } from '@auth/constants';

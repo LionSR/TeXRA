@@ -1,5 +1,5 @@
-import * as path from 'path';
-import { randomBytes } from 'crypto';
+import * as path from 'node:path';
+import { randomBytes } from 'node:crypto';
 
 import AsyncLock from 'async-lock';
 import { z } from 'zod';

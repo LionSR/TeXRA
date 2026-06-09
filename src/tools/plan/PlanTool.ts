@@ -511,9 +511,7 @@ Best practices:
   private formatPlan(plan: Plan): string {
     const lines: string[] = [`Plan: ${plan.summary}`, ''];
 
-    for (let i = 0; i < plan.steps.length; i++) {
-      const step = plan.steps[i];
-      if (!step) continue;
+    for (const [i, step] of plan.steps.entries()) {
       const { icon, label } = STATUS_DISPLAY[step.status];
       lines.push(`${i + 1}. ${icon} [${label}] ${step.title}`);
       lines.push(`   ${step.description}`);

@@ -1,4 +1,4 @@
-import * as path from 'path';
+import * as path from 'node:path';
 
 import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';

@@ -8,8 +8,8 @@
  * approval/rejection via the progress view.
  */
 
-import { promises as fs } from 'fs';
-import * as path from 'path';
+import { promises as fs } from 'node:fs';
+import * as path from 'node:path';
 
 import * as vscode from 'vscode';
 

@@ -92,8 +92,7 @@ function formatTree(
 ): string[] {
   const lines: string[] = [];
 
-  for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i];
+  for (const [i, node] of nodes.entries()) {
     const isLast = i === nodes.length - 1;
     const connector = indent === 0 ? '' : isLast ? '└── ' : '├── ';
     const childContinuation = indent === 0 ? '' : isLast ? '    ' : '│   ';

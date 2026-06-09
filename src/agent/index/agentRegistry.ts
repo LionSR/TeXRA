@@ -1,6 +1,6 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
-import * as path from 'path';
+import * as path from 'node:path';
 import { glob } from 'glob';
 import * as yaml from 'yaml';
 
@@ -691,7 +691,7 @@ function sortAgentEntries(
       .map((name, i) => [entries.find((e) => e.name === name), i] as const)
       .filter(([entry]) => entry != null),
   );
-  return [...entries].sort((a, b) => {
+  return entries.toSorted((a, b) => {
     const aIdx = preferredSet.get(a);
     const bIdx = preferredSet.get(b);
     if (aIdx != null && bIdx != null) return aIdx - bIdx;

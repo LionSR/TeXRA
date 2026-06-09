@@ -5,7 +5,7 @@
  * imported from VS Code-free zones like `src/tools/`.
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 
 /** Cached WSL detection result (null = not yet checked). */
 let wslDetected: boolean | null = null;

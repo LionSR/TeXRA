@@ -1,5 +1,5 @@
 // Node.js built-in imports
-import { strict as assert } from 'assert';
+import { strict as assert } from 'node:assert';
 
 // Local imports
 import { initPlatform, type Platform } from '@platform/platform';

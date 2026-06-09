@@ -9,7 +9,7 @@
  */
 
 // Third-party imports
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 // Local imports - agent
@@ -119,17 +119,15 @@ const memoriesField = z
     'Memory file paths to attach (e.g. /memories/conventions.md). Content is injected into the agent prompt as read-only context. Use for project conventions, style guides, or accumulated knowledge the agent should follow.',
   )
   .superRefine((memories, ctx) => {
-    for (let i = 0; i < memories.length; i++) {
+    for (const [i, memory] of memories.entries()) {
       try {
-        displayToStoragePath(memories[i]);
+        displayToStoragePath(memory);
       } catch (e) {
         ctx.addIssue({
           code: 'custom',
           path: [i],
           message:
-            e instanceof Error
-              ? e.message
-              : `Invalid memory path: ${memories[i]}`,
+            e instanceof Error ? e.message : `Invalid memory path: ${memory}`,
         });
       }
     }

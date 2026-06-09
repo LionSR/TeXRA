@@ -1,5 +1,5 @@
 // Node.js built-in imports
-import * as assert from 'assert';
+import * as assert from 'node:assert';
 
 // Platform imports
 import { FileType, type FileStat } from '@platform/interfaces/filesystem';

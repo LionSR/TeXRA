@@ -1,5 +1,5 @@
 // Standard library imports
-import * as path from 'path';
+import * as path from 'node:path';
 
 // Local imports - shared
 import type { AgentCategory } from '@shared/schemas/agent';
