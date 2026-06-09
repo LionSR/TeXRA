@@ -247,7 +247,7 @@ export class StreamHeader extends LitElement {
         gap: var(--wa-space-3xs);
         flex-shrink: 0;
         padding: 0 var(--wa-space-2xs);
-        border-radius: 999px;
+        border-radius: var(--border-radius-pill);
         font-size: var(--font-size-xs);
         font-weight: var(--font-weight-medium);
         cursor: default;
