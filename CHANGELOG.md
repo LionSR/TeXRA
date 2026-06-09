@@ -2,11 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.38.7] - 2026-06-09
 
 ### Features
 
 - **Software Engineer team** — a new built-in multi-agent team for the code that accompanies a project (simulations, numerics, data pipelines, scripts, and small libraries). An `engineer` lead plans the work and delegates to specialists: `coder` (implementation, edits, and bug fixes), `codeReviewer` (correctness/security/style review), and `testEngineer` (write and maintain tests). Pick it from the Multi-Agent settings tab, or launch it from the CLI with `texra multi-agent run software-engineer`. The team works offline without sign-in.
+
+### Shared (all surfaces)
+
+#### Improvements
+
+- **Odyssey is now on by default** — Odyssey, the autonomous-continuation mode that lets an agent keep working toward a stated objective across turns until it reports the goal complete, has graduated from experimental and is enabled out of the box. The setting moved from `texra.experimental.odyssey.enabled` to `texra.odyssey.enabled`; if you previously set the old key, your choice is still honored. Set `texra.odyssey.enabled` to `false` to require manual continuation.
 
 ## [0.38.6] - 2026-06-07
 

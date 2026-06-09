@@ -16,6 +16,7 @@ import {
   type CliAmbientState,
 } from '@cli/runtime/cliContext';
 import { loadWorkspaceCliConfig } from '@cli/runtime/cliConfig';
+import { LEGACY_ODYSSEY_FEATURE_FLAG_KEY } from '@tools/odyssey';
 
 const ambient = {
   isCi: true,
@@ -142,6 +143,20 @@ describe('CLI context config defaults', () => {
     expect(loaded.warnings.join('\n')).toContain('unknown');
     expect(loaded.warnings.join('\n')).toContain('model');
     expect(loaded.warnings.join('\n')).toContain('chat.other');
+  });
+
+  it('accepts the legacy Odyssey flag without unknown-key warnings', async () => {
+    const workspace = await workspaceWithConfig(
+      JSON.stringify({
+        [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: false,
+      }),
+    );
+
+    const loaded = await loadWorkspaceCliConfig(workspace);
+
+    expect(loaded.warnings.join('\n')).not.toContain(
+      LEGACY_ODYSSEY_FEATURE_FLAG_KEY,
+    );
   });
 
   it('accepts prefixed command sections from unified workspace config', async () => {

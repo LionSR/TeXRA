@@ -3,7 +3,15 @@ import { z } from 'zod';
 import { StreamTabIdSchema } from '@shared/schemas/identifiers';
 import { PlanSchema } from '@shared/schemas/plan';
 
-export const ODYSSEY_FEATURE_FLAG_KEY =
+export const ODYSSEY_FEATURE_FLAG_KEY = 'texra.odyssey.enabled' as const;
+
+/**
+ * Pre-graduation key. Odyssey shipped experimental and OFF by default; it
+ * graduated to a first-class, on-by-default mode in June 2026. This legacy
+ * key is still honored for back-compat when a user explicitly set it — see
+ * `isOdysseyEnabled()` in `odysseyFeatureFlag.ts`.
+ */
+export const LEGACY_ODYSSEY_FEATURE_FLAG_KEY =
   'texra.experimental.odyssey.enabled' as const;
 
 /** Cap on the history-event ring buffer per Odyssey record (oldest dropped). */
