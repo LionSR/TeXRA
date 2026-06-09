@@ -1021,10 +1021,10 @@ therefore a **short, enumerable list** — the explicit _all/sweep_ entry points
 
 **Ledger update:** the §5/Step-7 prescription "relocate the three module-globals onto a per-run
 handle, never delete" is directionally right but heavier than needed. The minimal correctness fix
-for concurrent sessions is to **scope these ~3 sweep/list/subscribe seams by session/owner**
-(pass an owner filter to `getActiveExecutionIds`, route "clear-all" through a per-session set, and
-own the status subscription per session) — the keyed entries themselves need not move for
-correctness. This is a smaller, lower-risk change than a wholesale registry relocation, and it is
+for concurrent sessions is to **scope the unscoped sweep/list/subscribe seams by session/owner**
+(route "clear-all" through a per-session set and own the status subscription per session) — the
+keyed entries themselves need not move for correctness. _(At the §13 pass this was ~3 seams; the
+`getActiveExecutionIds` listing seam in item 1 has since been removed — see §15 — leaving ~2.)_ This is a smaller, lower-risk change than a wholesale registry relocation, and it is
 why none of the current single-session-per-process hosts (extension, CLI, desktop) exhibit any bug
 today. Recorded as a precise scope for Step 7; **not applied** (still a behavior-sensitive,
 multi-host change, consistent with the prior deferral).
@@ -1311,7 +1311,7 @@ per-session handle; scope the sweep/list seams"):
 
 **Software Engineer multi-agent team (`5fdc970`, #5667).** Four new subagents
 (`engineer`/`coder`/`codeReviewer`/`testEngineer`) were added **purely as
-`resources/tool_use_agents/*.yaml` + a `multiAgentPresets` entry + `agentRegistry` wiring**
+`packages/extension/resources/tool_use_agents/*.yaml` + a `multiAgentPresets` entry + `agentRegistry` wiring**
 (+30 LOC) — zero new agent-type code, zero new flow. This is a textbook live confirmation of
 §5's core claim: with config-driven YAML agents over the two shared flows, **new subagents are a
 YAML + tool-list concern, not new code.** No new abstraction introduced.
