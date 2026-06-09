@@ -10,12 +10,16 @@ export default defineConfig({
     alias: {
       ...aliases,
       electron: `${rootDir}/src/test-kernel/desktop/electronTestStub.mts`,
+      // Suites exercising VS Code-coupled modules run against this minimal
+      // stub; inside the real extension host the genuine module wins.
+      vscode: `${rootDir}/src/test-kernel/support/vscode-mock.ts`,
     },
   },
   test: {
     environment: 'node',
     include: ['src/test-kernel/**/*.vitest.{ts,mts}'],
     passWithNoTests: false,
+    testTimeout: 10000,
   },
 });
 

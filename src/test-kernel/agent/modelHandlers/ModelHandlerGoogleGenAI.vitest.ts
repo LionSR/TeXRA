@@ -1,0 +1,504 @@
+// Third-party imports
+import { describe, it } from 'vitest';
+
+// Standard library imports
+import { strict as assert } from 'node:assert';
+
+// Third-party imports
+import {
+  createPartFromBase64,
+  createPartFromText,
+  createPartFromUri,
+} from '@google/genai';
+
+// Local imports - agent
+import {
+  DEFAULT_MODEL_CAPABILITIES,
+  type ModelCapabilities,
+  type ModelConfig,
+  ModelProvider,
+} from 'llm-zoo';
+import type { AgentTrace } from '@agent/trace';
+import {
+  ModelHandlerGoogleGenAI,
+  validateGoogleMessageHistory,
+} from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { MediaEntry } from '@agent/utils/mediaTypes';
+
+// Type imports
+
+// Local imports - model config
+import { pathToLocation, type FileLocation } from '@utils/files';
+
+// Type imports
+import type {
+  File,
+  Part,
+  UploadFileParameters,
+  FunctionCall,
+  Content,
+} from '@google/genai';
+
+interface LoggerStub extends Partial<AgentTrace> {
+  streamId: string;
+  fileListEntries: Array<Array<{ path: string; ok: boolean }>>;
+}
+
+function createLoggerStub(): { logger: AgentTrace; stub: LoggerStub } {
+  const stub: LoggerStub = {
+    streamId: 'test-channel',
+    fileListEntries: [],
+    debug: () => {
+      /* no-op for tests */
+    },
+    info: () => {
+      /* no-op for tests */
+    },
+    warn: () => {
+      /* no-op for tests */
+    },
+    error: () => {
+      /* no-op for tests */
+    },
+    domain(event) {
+      if (event.key === 'filesLoaded') {
+        const data = event.data as {
+          entries: Array<{ path: string; ok: boolean }>;
+        };
+        this.fileListEntries.push(data.entries);
+      }
+    },
+  };
+
+  return { logger: stub as unknown as AgentTrace, stub };
+}
+
+function buildGoogleConfig(
+  overrides: Partial<ModelCapabilities> = {},
+): ModelConfig {
+  const capabilities: ModelCapabilities = {
+    ...DEFAULT_MODEL_CAPABILITIES,
+    supportsVision: true,
+    supportsNativePdf: true,
+    ...overrides,
+  };
+
+  return {
+    name: 'test-google',
+    label: 'Test Google',
+    fullName: 'test-google',
+    shortName: 'test-google',
+    provider: ModelProvider.GOOGLE,
+    maxOutputTokens: 1024,
+    inputPrice: 0,
+    outputPrice: 0,
+    contextWindow: 100000,
+    capabilities,
+    openRouterOnly: false,
+  };
+}
+
+class GoogleHandlerTestDouble extends ModelHandlerGoogleGenAI {
+  constructor(
+    config: ModelConfig,
+    private readonly clientStub: any,
+  ) {
+    super(config);
+  }
+
+  override async getClient(): Promise<any> {
+    return this.clientStub;
+  }
+
+  async invokeUpload(entries: MediaEntry[]): Promise<Part[]> {
+    return this.uploadMediaEntries(entries);
+  }
+}
+
+describe('ModelHandlerGoogleGenAI media uploads', () => {
+  it('creates inline parts when base64 media is provided', async () => {
+    const uploadCalls: UploadFileParameters[] = [];
+
+    const clientStub = {
+      files: {
+        upload: async (params: UploadFileParameters) => {
+          uploadCalls.push(params);
+          return {
+            name: 'files/test-file',
+            uri: 'files/test-file',
+            mimeType: params.config?.mimeType ?? 'application/pdf',
+            displayName: params.config?.displayName ?? 'test.pdf',
+          };
+        },
+      },
+    };
+
+    const handler = new GoogleHandlerTestDouble(
+      buildGoogleConfig(),
+      clientStub,
+    );
+    const { logger } = createLoggerStub();
+    handler.setLogger(logger);
+
+    const entry: MediaEntry = {
+      file_name: 'sample.pdf',
+      data: Buffer.from('%PDF-1.7').toString('base64'),
+      media_type: 'application/pdf',
+      media_category: 'image',
+      source_path: '/tmp/sample.pdf',
+    };
+
+    const parts = await handler.invokeUpload([entry]);
+
+    assert.equal(uploadCalls.length, 0, 'should not invoke files.upload');
+    assert.deepEqual(parts, [
+      createPartFromBase64(entry.data, 'application/pdf'),
+    ]);
+  });
+
+  it('does not emit duplicate fileList logs for inline attachments', async () => {
+    const clientStub = {
+      files: {
+        upload: async () => {
+          throw new Error('upload should not be called for inline payloads');
+        },
+      },
+    };
+
+    const handler = new GoogleHandlerTestDouble(
+      buildGoogleConfig(),
+      clientStub,
+    );
+    const { logger, stub } = createLoggerStub();
+    handler.setLogger(logger);
+
+    const entry: MediaEntry = {
+      file_name: 'sample.pdf',
+      data: Buffer.from('%PDF-1.7').toString('base64'),
+      media_type: 'application/pdf',
+      media_category: 'image',
+    };
+
+    await handler.invokeUpload([entry]);
+
+    assert.equal(
+      stub.fileListEntries.length,
+      0,
+      'uploadMediaEntries should not emit fileList logs',
+    );
+  });
+
+  it('falls back to files.upload when inline payload exceeds the configured limit', async () => {
+    const uploadCalls: UploadFileParameters[] = [];
+    const clientStub = {
+      files: {
+        upload: async (params: UploadFileParameters) => {
+          uploadCalls.push(params);
+          return {
+            name: 'files/large',
+            uri: 'files/large',
+            mimeType: params.config?.mimeType ?? 'application/pdf',
+            displayName: params.config?.displayName ?? 'large.pdf',
+          } satisfies Partial<File> as File;
+        },
+      },
+    };
+
+    class LimitedInlineHandler extends GoogleHandlerTestDouble {
+      protected override getInlineUploadLimitBytes(): number {
+        return 1;
+      }
+    }
+
+    const handler = new LimitedInlineHandler(buildGoogleConfig(), clientStub);
+    const { logger } = createLoggerStub();
+    handler.setLogger(logger);
+
+    const oversized = Buffer.from([0, 1]).toString('base64');
+    const entry: MediaEntry = {
+      file_name: 'large.pdf',
+      data: oversized,
+      media_type: 'application/pdf',
+      media_category: 'image',
+      source_path: '/tmp/large.pdf',
+    };
+
+    const parts = await handler.invokeUpload([entry]);
+
+    assert.equal(uploadCalls.length, 1, 'should invoke files.upload once');
+    assert.deepEqual(parts, [
+      createPartFromUri('files/large', 'application/pdf'),
+    ]);
+  });
+
+  it('builds media entries once and delegates upload inside createMediaMessage', async () => {
+    const uploadedEntries: MediaEntry[][] = [];
+    const loadCalls: FileLocation[][] = [];
+    const loggedResults: Array<Array<{ path: string; ok: boolean }>> = [];
+
+    class RecordingHandler extends ModelHandlerGoogleGenAI {
+      constructor(config: ModelConfig) {
+        super(config);
+      }
+
+      override async getClient(): Promise<any> {
+        throw new Error('getClient should not be called in this test');
+      }
+
+      override async uploadMediaEntries(
+        entries: MediaEntry[],
+      ): Promise<Part[]> {
+        uploadedEntries.push(entries);
+        return [createPartFromUri('files/doc', 'application/pdf')];
+      }
+    }
+
+    const handler = new RecordingHandler(buildGoogleConfig());
+    const { logger, stub } = createLoggerStub();
+    handler.setLogger(logger);
+
+    const handlerMediaProcessor = handler as unknown as {
+      mediaProcessor: {
+        loadEntries: (mediaFiles: FileLocation[]) => Promise<{
+          entries: MediaEntry[];
+          results: Array<{ path: string; ok: boolean }>;
+        }>;
+        logResults: (results: Array<{ path: string; ok: boolean }>) => void;
+      };
+    };
+    const originalLoadEntries =
+      handlerMediaProcessor.mediaProcessor.loadEntries.bind(
+        handlerMediaProcessor.mediaProcessor,
+      );
+    const originalLogResults =
+      handlerMediaProcessor.mediaProcessor.logResults.bind(
+        handlerMediaProcessor.mediaProcessor,
+      );
+
+    handlerMediaProcessor.mediaProcessor.loadEntries = async (
+      mediaFiles: FileLocation[],
+    ) => {
+      loadCalls.push(mediaFiles);
+      return {
+        entries: [
+          {
+            file_name: 'doc.pdf',
+            data: Buffer.from('%PDF-1.4').toString('base64'),
+            media_type: 'application/pdf',
+            media_category: 'image',
+            binary_data: Buffer.from('%PDF-1.4'),
+          },
+        ],
+        results: [{ path: 'doc.pdf', ok: true }],
+      };
+    };
+
+    handlerMediaProcessor.mediaProcessor.logResults = (results) => {
+      loggedResults.push(results);
+      originalLogResults(results);
+    };
+
+    const docLocation = pathToLocation('/tmp/doc.pdf');
+    const parts = await handler.createMediaMessage([docLocation]);
+
+    assert.equal(loadCalls.length, 1, 'loadEntries should be called once');
+    assert.equal(loadCalls[0].length, 1, 'should pass one media file');
+    assert.equal(loadCalls[0][0].absolutePath, '/tmp/doc.pdf');
+    assert.deepEqual(parts, [
+      createPartFromUri('files/doc', 'application/pdf'),
+    ]);
+    assert.equal(uploadedEntries.length, 1, 'uploads should run once');
+    assert.equal(uploadedEntries[0][0].file_name, 'doc.pdf');
+    assert.equal(stub.fileListEntries.length, 1, 'should log processed media');
+    assert.deepEqual(loggedResults, [[{ path: 'doc.pdf', ok: true }]]);
+
+    handlerMediaProcessor.mediaProcessor.loadEntries = originalLoadEntries;
+    handlerMediaProcessor.mediaProcessor.logResults = originalLogResults;
+  });
+});
+
+describe('validateGoogleMessageHistory', () => {
+  it('logs warning for consecutive same-role messages', () => {
+    const warnings: string[] = [];
+    const logger = {
+      warn: (msg: string) => warnings.push(msg),
+      debug: () => {},
+    } as unknown as AgentTrace;
+
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('first')] },
+      { role: 'user', parts: [createPartFromText('second')] }, // consecutive
+    ];
+
+    validateGoogleMessageHistory(messages, logger);
+
+    assert.equal(warnings.length, 1);
+    assert.ok(warnings[0].includes('Consecutive user messages'));
+  });
+
+  it('does not warn for properly alternating messages', () => {
+    const warnings: string[] = [];
+    const logger = {
+      warn: (msg: string) => warnings.push(msg),
+      debug: () => {},
+    } as unknown as AgentTrace;
+
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('hello')] },
+      { role: 'model', parts: [createPartFromText('hi')] },
+      { role: 'user', parts: [createPartFromText('bye')] },
+    ];
+
+    validateGoogleMessageHistory(messages, logger);
+
+    assert.equal(warnings.length, 0, 'should not warn for valid history');
+  });
+});
+
+describe('ModelHandlerGoogleGenAI createUserFollowUpMessages', () => {
+  it('merges with existing user message to maintain alternating turns', async () => {
+    const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
+    const { logger } = createLoggerStub();
+    handler.setLogger(logger);
+
+    // Start with messages ending in user (simulating after tool response)
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('initial')] },
+      { role: 'model', parts: [createPartFromText('model reply')] },
+      { role: 'user', parts: [createPartFromText('tool response')] },
+    ];
+
+    await handler.createUserFollowUpMessages(messages, 'user instruction');
+
+    // Should merge into existing user message, not create a new one
+    assert.equal(messages.length, 3, 'should not add a new message');
+    assert.equal(messages[2].role, 'user');
+    const userParts = messages[2].parts ?? [];
+    assert.equal(userParts.length, 2, 'should have merged parts');
+    assert.equal(
+      (userParts[0] as Part & { text: string }).text,
+      'tool response',
+    );
+    assert.equal(
+      (userParts[1] as Part & { text: string }).text,
+      'user instruction',
+    );
+  });
+
+  it('adds new user message when last message is model', async () => {
+    const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
+    const { logger } = createLoggerStub();
+    handler.setLogger(logger);
+
+    // Start with messages ending in model
+    const messages: Content[] = [
+      { role: 'user', parts: [createPartFromText('initial')] },
+      { role: 'model', parts: [createPartFromText('model reply')] },
+    ];
+
+    await handler.createUserFollowUpMessages(messages, 'new user message');
+
+    // Should add a new user message
+    assert.equal(messages.length, 3, 'should add a new message');
+    assert.equal(messages[2].role, 'user');
+    const userParts = messages[2].parts ?? [];
+    assert.equal(userParts.length, 1);
+    assert.equal(
+      (userParts[0] as Part & { text: string }).text,
+      'new user message',
+    );
+  });
+});
+
+describe('ModelHandlerGoogleGenAI tool attachments', () => {
+  it('appends tool attachments as inline data parts', async () => {
+    const handler = new ModelHandlerGoogleGenAI(buildGoogleConfig());
+    const { logger } = createLoggerStub();
+    handler.setLogger(logger);
+
+    const attachmentBytes = new Uint8Array([1, 2, 3, 4]);
+    const toolResult: Record<string, unknown> = {
+      output: 'generated figures',
+      files: [
+        {
+          path: 'figures/plot.png',
+          mimeType: 'image/png',
+          bytes: attachmentBytes,
+          description: 'Plot preview',
+        },
+      ],
+    };
+
+    const functionCall: FunctionCall = {
+      name: 'extract_figures',
+      args: { source: 'doc.tex' },
+      id: 'call-123',
+    };
+
+    const providerCall = {
+      provider: 'google',
+      callId: functionCall.id!,
+      name: functionCall.name!,
+      input: functionCall.args,
+      raw: functionCall,
+    } as const;
+
+    const messages = await handler.createToolUseFollowUpMessages(
+      undefined,
+      providerCall,
+      toolResult,
+      [],
+    );
+
+    assert.equal(
+      messages.length,
+      2,
+      'should produce call and response messages',
+    );
+
+    const responseParts = messages[1].parts ?? [];
+    assert.equal(
+      responseParts.length,
+      2,
+      'response should contain function response and attachment parts',
+    );
+    const [responsePart, attachmentPart] = responseParts;
+
+    const functionResponse = responsePart.functionResponse;
+    assert(
+      functionResponse,
+      'response part should include functionResponse payload',
+    );
+
+    const sanitizedResponse = functionResponse.response as Record<
+      string,
+      unknown
+    >;
+    const attachmentSummary = sanitizedResponse.attachmentSummary as string;
+    assert(
+      attachmentSummary,
+      'attachment summary should be present on sanitized response',
+    );
+    assert(!attachmentSummary.includes('read_file'));
+
+    const files = sanitizedResponse.files as Array<Record<string, unknown>>;
+    assert.deepEqual(files, [
+      {
+        path: 'figures/plot.png',
+        mimeType: 'image/png',
+        description: 'Plot preview',
+      },
+    ]);
+
+    assert(
+      !functionResponse?.parts,
+      'function response should not embed parts',
+    );
+
+    assert.equal(attachmentPart.inlineData?.mimeType, 'image/png');
+    assert.equal(
+      attachmentPart.inlineData?.data,
+      Buffer.from(attachmentBytes).toString('base64'),
+    );
+  });
+});

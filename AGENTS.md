@@ -17,7 +17,7 @@ When updating CHANGELOG.md:
    - Format code using `npm run format`.
    - Build the extension bundle with `npm run compile:fast`.
    - Lint TypeScript sources with `npm run lint`.
-   - Do NOT run `npm test` - it attempts to download VS Code test environment which will fail and waste time.
+   - Run the Vitest suite with `npm test`.
 3. Commit only when `npm run lint` completes without errors.
 
 ### Build system: esbuild + Vite

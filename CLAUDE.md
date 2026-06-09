@@ -38,7 +38,8 @@ npm run lint
 # Format code with Prettier
 npm run format
 
-# NOTE: Do NOT run `npm test` - it attempts to download VS Code test environment which will fail and waste time.
+# Run the test suite (Vitest)
+npm test
 ```
 
 ### Fast Builds (Recommended)
@@ -118,8 +119,7 @@ Key directories in `src/`:
 - `logger/` - Logging infrastructure
 - `eventBus/` - Progress event system
 - `replacement/` - Text cleanup rules
-- `test/` - Mocha test suites (do NOT run via `npm test`; see Development Commands)
-- `test-kernel/` - Vitest suites for host-neutral and Electron-facing logic
+- `test-kernel/` - Vitest suites (run via `npm test`); shared fakes live in `test-kernel/support/`
 
 Key directories in `packages/extension/`:
 
