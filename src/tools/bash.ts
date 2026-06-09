@@ -16,9 +16,9 @@ import {
   interruptRegistry,
   type IInterruptible,
 } from '@agent/runtime/InterruptRegistry';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 
 // Local imports - tools
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
@@ -280,29 +280,45 @@ export class BashTool extends defineTool({
       },
     });
 
-    void promise
-      .then(async (result) => {
+    const finalizeBackground = (
+      options?: Parameters<typeof childStream.finalize>[0],
+    ): void => {
+      interruptRegistry.unregister(childStreamId);
+      childStream.finalize(options);
+    };
+
+    const deliverParentFollowUp = async (text: string): Promise<void> => {
+      const result = await sendFollowUp(parentStreamId, {
+        text,
+        origin: 'subagent_result',
+      });
+      if (result.status === 'no_session') {
+        logger.debug(
+          `Background bash follow-up dropped: parent stream ${parentStreamId} has no active session (${result.streamStatus ?? 'unknown'}).`,
+        );
+      }
+    };
+
+    const logBackgroundFailure = (action: string, err: unknown): void => {
+      logger.error(
+        `Failed to ${action} background bash result: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    };
+
+    void (async () => {
+      const outcome = await promise.then(
+        (result) => ({ ok: true as const, result }),
+        (error: unknown) => ({ ok: false as const, error }),
+      );
+
+      if (outcome.ok) {
+        const { result } = outcome;
         const wallTimeMs = Date.now() - startedAt;
-        const store = getExecutionStore(executionId);
-        await store.writeResultMeta({
-          exitCode: result.exitCode,
-          wallTimeMs,
-          success: result.success,
-          timedOut: result.timedOut,
-          command,
-        });
-        const terminalStatus = result.success ? 'completed' : 'error';
-        await writeTerminalStatus(executionId, terminalStatus).catch(() => {});
-        interruptRegistry.unregister(childStreamId);
-        childStream.finalize({
-          wallTimeMs,
-          error: result.success
-            ? undefined
-            : new ToolError(
-                `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
-              ),
-          autoClose: true,
-        });
+        const error = result.success
+          ? undefined
+          : new ToolError(
+              `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
+            );
 
         const msg = formatBashDelivery(
           executionId,
@@ -312,27 +328,59 @@ export class BashTool extends defineTool({
           stdoutTail,
           stderrTail,
         );
-        await store.writeReport(msg);
-        ToolUseFollowUpQueue.enqueue(parentStreamId, {
-          text: msg,
-          origin: 'subagent_result',
-        });
-      })
-      .catch(async (err: unknown) => {
+
+        try {
+          const store = getExecutionStore(executionId);
+          await store.writeResultMeta({
+            exitCode: result.exitCode,
+            wallTimeMs,
+            success: result.success,
+            timedOut: result.timedOut,
+            command,
+          });
+          const terminalStatus = result.success ? 'completed' : 'error';
+          await writeTerminalStatus(executionId, terminalStatus).catch(
+            () => {},
+          );
+          await store.writeReport(msg);
+        } catch (err: unknown) {
+          logBackgroundFailure('persist', err);
+        }
+
+        try {
+          await deliverParentFollowUp(msg);
+        } catch (err: unknown) {
+          logBackgroundFailure('deliver', err);
+        } finally {
+          finalizeBackground({
+            wallTimeMs,
+            error,
+            autoClose: true,
+          });
+        }
+        return;
+      }
+
+      const { error } = outcome;
+      const msg = formatBashError(executionId, command, error);
+      try {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
-        interruptRegistry.unregister(childStreamId);
-        childStream.finalize({
-          error: err,
+        await getExecutionStore(executionId).writeReport(msg);
+      } catch (err: unknown) {
+        logBackgroundFailure('persist', err);
+      }
+
+      try {
+        await deliverParentFollowUp(msg);
+      } catch (err: unknown) {
+        logBackgroundFailure('deliver', err);
+      } finally {
+        finalizeBackground({
+          error,
           autoClose: true,
         });
-
-        const msg = formatBashError(executionId, command, err);
-        await getExecutionStore(executionId).writeReport(msg);
-        ToolUseFollowUpQueue.enqueue(parentStreamId, {
-          text: msg,
-          origin: 'subagent_result',
-        });
-      });
+      }
+    })();
 
     return {
       summary: `Launched background: ${preview}`,

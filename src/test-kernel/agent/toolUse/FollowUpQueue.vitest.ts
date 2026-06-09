@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { ToolUseSessionLifecycle } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
 import { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
 
 describe('FollowUpQueue', () => {
@@ -169,6 +170,72 @@ describe('FollowUpQueue', () => {
       });
     } finally {
       session.dispose();
+    }
+  });
+
+  it('does not create ghost queues for unknown streams', () => {
+    const streamId = 'stream:unknown-followup' as StreamTabId;
+
+    try {
+      expect(
+        ToolUseFollowUpQueue.enqueue(streamId, { text: 'late result' }),
+      ).toBe(false);
+      expect(ToolUseFollowUpQueue.getAll(streamId)).toEqual([]);
+    } finally {
+      ToolUseFollowUpQueue.release(streamId);
+    }
+  });
+
+  it('creates queues only for explicitly admitted follow-ups', () => {
+    const streamId = 'stream:admitted-followup' as StreamTabId;
+
+    try {
+      expect(
+        ToolUseFollowUpQueue.enqueue(
+          streamId,
+          { text: 'admitted result' },
+          { createIfMissing: true },
+        ),
+      ).toBe(true);
+      expect(ToolUseFollowUpQueue.getAll(streamId)).toEqual([
+        'admitted result',
+      ]);
+    } finally {
+      ToolUseFollowUpQueue.release(streamId);
+    }
+  });
+
+  it('does not forget every released stream when the release cap is exceeded', () => {
+    const firstStream = 'stream:released-first' as StreamTabId;
+    const retainedStream = 'stream:released-retained' as StreamTabId;
+
+    ToolUseFollowUpQueue.acquire(firstStream);
+    ToolUseFollowUpQueue.release(firstStream);
+    ToolUseFollowUpQueue.acquire(retainedStream);
+    ToolUseFollowUpQueue.release(retainedStream);
+
+    for (let i = 0; i < ToolUseFollowUpQueue.RELEASED_CAP - 1; i += 1) {
+      ToolUseFollowUpQueue.release(`stream:released-extra-${i}` as StreamTabId);
+    }
+
+    try {
+      expect(
+        ToolUseFollowUpQueue.enqueue(firstStream, { text: 'late first' }),
+      ).toBe(false);
+      expect(ToolUseFollowUpQueue.getAll(firstStream)).toEqual([]);
+      expect(
+        ToolUseFollowUpQueue.enqueue(
+          retainedStream,
+          {
+            text: 'late retained',
+          },
+          { createIfMissing: true },
+        ),
+      ).toBe(false);
+      expect(ToolUseFollowUpQueue.getAll(retainedStream)).toEqual([]);
+    } finally {
+      ToolUseFollowUpQueue.release(firstStream);
+      ToolUseFollowUpQueue.release(retainedStream);
     }
   });
 });
