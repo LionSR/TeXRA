@@ -238,48 +238,50 @@ export async function activate(context: vscode.ExtensionContext) {
   // LAST_KNOWN_VERSION, so upgrading users are not affected.
   await initializeToolDefaults();
 
-  // Per-key idempotent copy of LaTeX/compile/diff settings from VS Code
-  // config to TeXRA workspace storage. Safe to run on every activation —
-  // a key already in workspaceSM is left untouched.
-  await migrateLatexConfigToStorage();
-
-  // Copy default agents before loading the agent index so built-in agents
-  // are available when the index scans directories
-  await copyDefaultAgents(context);
-
-  // Expose agent directories to file tools via the external-roots allowlist.
-  // Must run after copyDefaultAgents so the built-in directories exist.
-  await registerAgentDirectoryRoots(context);
-
-  try {
-    const { added, currentVersion, previousVersion, removed, skipped } =
-      await refreshModelListStateIfNeeded(globalSM);
-    if (!skipped) {
-      logger.info(
-        'extension',
-        `Model list version changed (${previousVersion ?? 'none'} -> ${currentVersion}), updating model list`,
-      );
-      logger.info('extension', 'Model list refresh completed successfully');
-      if (added.length > 0 || removed.length > 0) {
-        logger.info(
+  // The following startup steps touch independent state, so they run
+  // concurrently to shorten activation. Within the agent branch the order
+  // still matters: copyDefaultAgents populates the built-in directories,
+  // registerAgentDirectoryRoots exposes them, and loadAgents scans them.
+  await Promise.all([
+    // Per-key idempotent copy of LaTeX/compile/diff settings from VS Code
+    // config to TeXRA workspace storage. Safe to run on every activation —
+    // a key already in workspaceSM is left untouched.
+    migrateLatexConfigToStorage(),
+    (async () => {
+      await copyDefaultAgents(context);
+      await registerAgentDirectoryRoots(context);
+      loadAgents().catch((err) => {
+        logger.error(
           'extension',
-          `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]`,
+          `Failed to initialize agent index: ${toErrorMessage(err)}`,
+        );
+      });
+    })(),
+    (async () => {
+      try {
+        const { added, currentVersion, previousVersion, removed, skipped } =
+          await refreshModelListStateIfNeeded(globalSM);
+        if (!skipped) {
+          logger.info(
+            'extension',
+            `Model list version changed (${previousVersion ?? 'none'} -> ${currentVersion}), updating model list`,
+          );
+          logger.info('extension', 'Model list refresh completed successfully');
+          if (added.length > 0 || removed.length > 0) {
+            logger.info(
+              'extension',
+              `Refreshed enabled models: added [${added.join(', ')}], removed [${removed.join(', ')}]`,
+            );
+          }
+        }
+      } catch (err) {
+        logger.error(
+          'extension',
+          `Failed to refresh model list: ${toErrorMessage(err)}`,
         );
       }
-    }
-  } catch (err) {
-    logger.error(
-      'extension',
-      `Failed to refresh model list: ${toErrorMessage(err)}`,
-    );
-  }
-
-  loadAgents().catch((err) => {
-    logger.error(
-      'extension',
-      `Failed to initialize agent index: ${toErrorMessage(err)}`,
-    );
-  });
+    })(),
+  ]);
 
   try {
     setRuntimeExtensionId(context.extension.id);
@@ -354,7 +356,11 @@ export async function activate(context: vscode.ExtensionContext) {
   logger.info('extension', 'TeXRA extension activated');
 
   await progressViewProvider.cleanupTasksAfterRestart();
-  configureLatexSettings();
+  // Deferred off the activation tick: extendEnvPath() inside performs
+  // synchronous glob probes of TeX install directories, which would
+  // otherwise block activation on slow disks. (Never rejects — the body is
+  // fully wrapped in try/catch.)
+  setImmediate(() => void configureLatexSettings());
   registerCommands(context);
   registerFileDecorations(context);
 

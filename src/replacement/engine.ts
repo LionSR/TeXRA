@@ -205,6 +205,30 @@ export function getAllReplacementsRegex(): ReplacementCategory[] {
 }
 
 /**
+ * Cache compiled replacement regexes keyed by pattern and flags. The replacement
+ * engine runs several times per model response over mostly static rule sets, so
+ * compiling each pattern once removes repeated RegExp construction from the
+ * streaming hot path.
+ */
+const compiledRegexCache = new Map<string, RegExp>();
+const MAX_COMPILED_REGEX_CACHE = 1000;
+
+function getCompiledRegex(pattern: string, flags?: string): RegExp {
+  const key = `${flags ?? ''}\u0000${pattern}`;
+  let regex = compiledRegexCache.get(key);
+  if (regex) {
+    return regex;
+  }
+
+  regex = new RegExp(pattern, flags);
+  if (compiledRegexCache.size >= MAX_COMPILED_REGEX_CACHE) {
+    compiledRegexCache.clear();
+  }
+  compiledRegexCache.set(key, regex);
+  return regex;
+}
+
+/**
  * Apply replacements to text, handling both regex and non-regex patterns.
  */
 export function applyReplacements(
@@ -227,7 +251,7 @@ export function applyReplacements(
     if (category.isRegex) {
       for (const [pattern, repl] of Object.entries(category.patterns)) {
         try {
-          const regex = new RegExp(pattern, category.flags);
+          const regex = getCompiledRegex(pattern, category.flags);
           result = result.replace(regex, repl as string);
         } catch (regexErr) {
           logger.error(

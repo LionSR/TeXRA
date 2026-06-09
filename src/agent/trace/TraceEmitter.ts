@@ -307,8 +307,10 @@ class SkippedStageHandle implements StageHandle {
 }
 
 class StreamHandleImpl implements StreamHandle {
-  private buffer = '';
-  private finalized = false;
+  // Chunks are buffered in an array and joined once at finalize so a long
+  // stream costs O(n) instead of repeated full-buffer string copies.
+  private readonly chunks: string[] = [];
+  private finalText: string | undefined;
 
   constructor(
     private readonly trace: TraceEmitter,
@@ -316,21 +318,21 @@ class StreamHandleImpl implements StreamHandle {
   ) {}
 
   append(text: string): void {
-    if (this.finalized || !text) return;
-    this.buffer += text;
+    if (this.finalText !== undefined || !text) return;
+    this.chunks.push(text);
     this.trace.emit({ type: 'stream.chunk', id: this.id, text });
   }
 
   finalize(finalText?: string): string {
-    if (this.finalized) return this.buffer;
-    this.finalized = true;
-    if (typeof finalText === 'string') this.buffer = finalText;
+    if (this.finalText !== undefined) return this.finalText;
+    this.finalText =
+      typeof finalText === 'string' ? finalText : this.chunks.join('');
     this.trace.emit({
       type: 'stream.end',
       id: this.id,
       finalText: typeof finalText === 'string' ? finalText : undefined,
     });
-    return this.buffer;
+    return this.finalText;
   }
 }
 
@@ -340,8 +342,8 @@ class StreamHandleImpl implements StreamHandle {
  * so callers can still read it back.
  */
 class BufferOnlyStreamHandle implements StreamHandle {
-  private buffer = '';
-  private finalized = false;
+  private readonly chunks: string[] = [];
+  private finalText: string | undefined;
 
   constructor(
     private readonly trace: TraceEmitter,
@@ -349,14 +351,14 @@ class BufferOnlyStreamHandle implements StreamHandle {
   ) {}
 
   append(text: string): void {
-    if (this.finalized || !text) return;
-    this.buffer += text;
+    if (this.finalText !== undefined || !text) return;
+    this.chunks.push(text);
   }
 
   finalize(finalText?: string): string {
-    if (this.finalized) return this.buffer;
-    this.finalized = true;
-    if (typeof finalText === 'string') this.buffer = finalText;
-    return this.buffer;
+    if (this.finalText !== undefined) return this.finalText;
+    this.finalText =
+      typeof finalText === 'string' ? finalText : this.chunks.join('');
+    return this.finalText;
   }
 }
