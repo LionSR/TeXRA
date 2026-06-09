@@ -66,6 +66,21 @@ describe('GoalStore cost cap', () => {
     const again = await GoalStore.noteRunCost(STREAM_ID, 1.7);
     expect(again?.pausedForCap).toBe(false);
     expect(again?.goal.status).toBe('paused');
+
+    const resumed = await GoalStore.setStatus(STREAM_ID, 'active');
+    expect(resumed?.baselineRunCostUsd).toBeNull();
+    expect(resumed?.spentUsd).toBe(0);
+
+    const resumedBaseline = await GoalStore.noteRunCost(STREAM_ID, 1.8);
+    expect(resumedBaseline?.pausedForCap).toBe(false);
+    expect(resumedBaseline?.goal.status).toBe('active');
+    expect(resumedBaseline?.goal.baselineRunCostUsd).toBe(1.8);
+    expect(resumedBaseline?.goal.spentUsd).toBe(0);
+
+    const trippedAgain = await GoalStore.noteRunCost(STREAM_ID, 2.9);
+    expect(trippedAgain?.pausedForCap).toBe(true);
+    expect(trippedAgain?.goal.status).toBe('paused');
+    expect(trippedAgain?.goal.spentUsd).toBeCloseTo(1.1);
   });
 
   it('never pauses without a cap and is a no-op without a goal', async () => {
