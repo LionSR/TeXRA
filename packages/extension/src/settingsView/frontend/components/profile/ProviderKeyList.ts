@@ -3,6 +3,7 @@
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
@@ -211,7 +212,10 @@ export class ProviderKeyList extends LitElement {
         <td>
           <div class="provider-name-cell">
             <wa-button
-              class="provider-expand-btn ${isExpanded ? 'expanded' : ''}"
+              class=${classMap({
+                'provider-expand-btn': true,
+                expanded: isExpanded,
+              })}
               appearance="plain"
               size="small"
               title="${isExpanded ? 'Collapse settings' : 'Expand settings'}"

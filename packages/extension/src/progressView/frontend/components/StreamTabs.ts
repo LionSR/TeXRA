@@ -804,7 +804,7 @@ export class StreamTabs extends LitElement {
 
     return html`
       <stream-tab
-        class=${isFinished ? 'is-finished' : ''}
+        class=${classMap({ 'is-finished': isFinished })}
         .info=${stream}
         .compact=${options.compact}
         .status=${this.getStatus(stream.name)}
