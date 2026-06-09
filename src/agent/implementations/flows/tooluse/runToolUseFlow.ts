@@ -78,6 +78,12 @@ export interface RunToolUseFlowResult {
   lastResponse?: string;
   /** Workspace-relative paths of files edited by tool calls during this session. */
   touchedFiles?: string[];
+  /**
+   * Total model cost (USD) accumulated by this run, including any subagents
+   * it delegated to (rolled up at the delegation boundary). Used by parent
+   * runs and the goal cost cap.
+   */
+  totalCostUsd?: number;
 }
 
 export interface ToolUseFlowContext {
@@ -257,6 +263,7 @@ export async function runToolUseFlow<C = unknown>(
   let status: EndGroupStatus = END_GROUP_STATUS.STOPPED;
   let lastResponse: string | undefined;
   let touchedFiles: string[] | undefined;
+  let totalCostUsd: number | undefined;
   let teardownSetup: (() => void) | undefined;
 
   let shared: ToolUseRunShared = {
@@ -335,6 +342,9 @@ export async function runToolUseFlow<C = unknown>(
         ) ||
         shared.lastResponse ||
         undefined;
+      totalCostUsd =
+        shared.stateSlices?.runStateSnapshot.usageAccumulator.totals
+          .totalCost ?? undefined;
       const extractedTouchedFiles = extractTouchedFiles(shared.stateSlices);
       touchedFiles = extractedTouchedFiles.length
         ? extractedTouchedFiles
@@ -366,5 +376,6 @@ export async function runToolUseFlow<C = unknown>(
     status,
     lastResponse,
     touchedFiles,
+    totalCostUsd,
   };
 }
