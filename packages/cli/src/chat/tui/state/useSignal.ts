@@ -2,7 +2,7 @@
 // the primitive the webview's `progressState` uses so the CLI host can read
 // the same signals without pulling in a second state-management library.
 
-import { useSyncExternalStore } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import { Signal } from '@lit-labs/signals';
 
 type ReadableSignal<T> = Signal.State<T> | Signal.Computed<T>;
@@ -13,10 +13,15 @@ type ReadableSignal<T> = Signal.State<T> | Signal.Computed<T>;
  * `Signal.subtle.Watcher` fires exactly once per change and must be re-armed
  * in the notify callback — the wrapper does that here so consumers see every
  * update.
+ *
+ * The subscribe callback is memoized per signal: `useSyncExternalStore`
+ * unsubscribes and resubscribes whenever the subscribe reference changes, so
+ * an inline closure would tear down and rebuild the Watcher on every render
+ * — per signal, per component, at streaming cadence.
  */
 export function useSignal<T>(signal: ReadableSignal<T>): T {
-  return useSyncExternalStore(
-    (notify) => {
+  const subscribe = useCallback(
+    (notify: () => void) => {
       const watcher = new Signal.subtle.Watcher(() => {
         notify();
         watcher.watch();
@@ -24,6 +29,7 @@ export function useSignal<T>(signal: ReadableSignal<T>): T {
       watcher.watch(signal);
       return () => watcher.unwatch(signal);
     },
-    () => signal.get(),
+    [signal],
   );
+  return useSyncExternalStore(subscribe, () => signal.get());
 }
