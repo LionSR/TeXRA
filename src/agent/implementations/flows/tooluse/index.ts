@@ -5,6 +5,7 @@
  */
 
 export {
+  getToolUseFlowErrorResult,
   runToolUseFlow,
   type ToolUseFlowContext,
   type RunToolUseFlowInput,
