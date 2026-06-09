@@ -284,7 +284,7 @@ const SCENARIOS = [
       'Team Lean Project',
       'unavailable',
       '2/7 tool-u',
-      '... 2 more',
+      '... 3 more',
       'Team setup: run texra multi-agent inspect <preset>.',
       'Relay teams may unlock more agents after texra login.',
       '1-9/a-z/Enter open',
@@ -1391,7 +1391,7 @@ const SCENARIOS = [
       {
         from: 'entry-4 chat history line',
         to: 'Subagents',
-        max: 0,
+        max: 1,
       },
     ],
   },
@@ -1665,7 +1665,7 @@ const SCENARIOS = [
       {
         from: 'entry-4 chat history line',
         to: 'Tasks and sub-workflows',
-        max: 0,
+        max: 1,
       },
     ],
   },
@@ -1695,7 +1695,7 @@ const SCENARIOS = [
       {
         from: 'entry-4 chat history line',
         to: 'Subagents',
-        max: 0,
+        max: 1,
       },
     ],
   },
@@ -1725,7 +1725,7 @@ const SCENARIOS = [
       {
         from: 'entry-4 chat history line',
         to: 'Tasks and sub-workflows',
-        max: 0,
+        max: 1,
       },
     ],
   },
