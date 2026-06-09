@@ -93,7 +93,6 @@ export async function runFlowWithLifecycle(
     const streamStatus =
       kind === 'abort' ? STREAM_STATUS.STOPPED : STREAM_STATUS.ERROR;
     await writeTerminalStatus(ctx.executionId, terminalStatus).catch(() => {});
-    executionRegistry.untrack(ctx.executionId);
     const sdkMsg = getSdkErrorMessage(err);
     const errorMsg = `Error executing agent ${agentName}: ${sdkMsg}`;
 
@@ -137,19 +136,10 @@ export async function runFlowWithLifecycle(
       }
     }
 
-    if (kind === 'abort') {
-      return buildTerminalFlowResult(
-        category,
-        END_GROUP_STATUS.STOPPED,
-        ctx.executionId,
-        streamId,
-      );
-    }
-
     if (options?.isSubagent) {
       const result = buildTerminalFlowResult(
         category,
-        END_GROUP_STATUS.ERROR,
+        status,
         ctx.executionId,
         streamId,
       );
@@ -160,7 +150,18 @@ export async function runFlowWithLifecycle(
           `Failed to deliver subagent error for ${agentName}: ${getSdkErrorMessage(deliveryError)}`,
         );
       }
+      executionRegistry.untrack(ctx.executionId);
       return result;
+    }
+
+    executionRegistry.untrack(ctx.executionId);
+    if (kind === 'abort') {
+      return buildTerminalFlowResult(
+        category,
+        END_GROUP_STATUS.STOPPED,
+        ctx.executionId,
+        streamId,
+      );
     }
 
     throw new AgentError(errorMsg, { cause: err });
