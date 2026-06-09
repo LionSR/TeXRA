@@ -69,6 +69,16 @@ export function notifyFollowUpSent(
  *
  * Items queued for WAITING sessions are picked up when user resumes.
  */
+export function sendFollowUp(
+  streamId: StreamTabId,
+  followUp: FollowUpQueueInput,
+): Promise<SendFollowUpResult>;
+export function sendFollowUp(
+  streamId: StreamTabId,
+  followUp: string,
+  mediaFiles?: readonly string[],
+  displayText?: string,
+): Promise<SendFollowUpResult>;
 export async function sendFollowUp(
   streamId: StreamTabId,
   followUp: string | FollowUpQueueInput,
