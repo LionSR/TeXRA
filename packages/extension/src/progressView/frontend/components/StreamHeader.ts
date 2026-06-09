@@ -23,6 +23,7 @@ import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, TOOLBAR_BUTTONS } from '../constants';
@@ -179,36 +180,12 @@ export class StreamHeader extends LitElement {
         margin-left: auto;
       }
 
-      /* Status indicator overrides - base styles from statusIndicatorStyles */
+      /* Status indicator overrides - base styles from statusIndicatorStyles.
+         The hover label is a native <wa-tooltip> wrapping this dot. */
       .status-indicator {
         width: var(--wa-space-xs);
         height: var(--wa-space-xs);
         margin: 0 var(--wa-space-2xs);
-        position: relative;
-      }
-
-      /* Tooltip on hover */
-      .status-indicator::after {
-        content: attr(data-status);
-        position: absolute;
-        left: 50%;
-        top: 100%;
-        transform: translateX(-50%);
-        margin-top: var(--wa-space-3xs);
-        padding: var(--wa-space-2xs) var(--wa-space-xs);
-        background: var(--background-color);
-        border: var(--border-thin) solid var(--color-border);
-        border-radius: var(--border-radius-small);
-        font-size: var(--font-size-sm);
-        white-space: nowrap;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity var(--transition-normal);
-        z-index: 100;
-      }
-
-      .status-indicator:hover::after {
-        opacity: var(--opacity-full);
       }
 
       /* Note: .is-ready and other status states from statusIndicatorStyles */
@@ -356,14 +333,15 @@ export class StreamHeader extends LitElement {
                 ${this.stream.label || this.stream.name}
               </span>
             </div>
-            <span
-              id=${ELEMENT_IDS.STATUS_INDICATOR}
-              class=${classMap({
-                'status-indicator': true,
-                [`is-${status}`]: Boolean(status),
-              })}
-              data-status=${statusLabel}
-            ></span>
+            <wa-tooltip content=${statusLabel}>
+              <span
+                id=${ELEMENT_IDS.STATUS_INDICATOR}
+                class=${classMap({
+                  'status-indicator': true,
+                  [`is-${status}`]: Boolean(status),
+                })}
+              ></span>
+            </wa-tooltip>
             ${this.renderOdysseyChip()} ${this.renderProgressBadge()}
           </div>
           <div class="header-actions">
