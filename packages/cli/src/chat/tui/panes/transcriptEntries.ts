@@ -1,14 +1,9 @@
-import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
+import {
+  LIVE_ELAPSED_STREAM_STATUSES,
+  type StreamStatus,
+} from '@shared/schemas';
 
 import type { ConversationEntry } from '../state/cliState';
-
-function isAppending(status: StreamStatus | undefined): boolean {
-  return (
-    status === STREAM_STATUS.INITIALIZING ||
-    status === STREAM_STATUS.RUNNING ||
-    status === STREAM_STATUS.RESUMING
-  );
-}
 
 export function splitTranscriptEntries(
   entries: readonly ConversationEntry[],
@@ -25,7 +20,8 @@ export function splitTranscriptEntries(
    *  fixed. */
   readonly pending: ConversationEntry[];
 } {
-  const showLiveAssistant = isAppending(status);
+  const showLiveAssistant =
+    status !== undefined && LIVE_ELAPSED_STREAM_STATUSES.has(status);
   const finalized: ConversationEntry[] = [];
   const pending: ConversationEntry[] = [];
   for (const entry of entries) {

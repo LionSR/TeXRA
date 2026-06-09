@@ -1138,9 +1138,8 @@ export async function runChat(
 
     if (
       (isRunPending && activeStatus !== STREAM_STATUS.WAITING) ||
-      activeStatus === STREAM_STATUS.INITIALIZING ||
-      activeStatus === STREAM_STATUS.RUNNING ||
-      activeStatus === STREAM_STATUS.RESUMING
+      (activeStatus !== undefined &&
+        LIVE_ELAPSED_STREAM_STATUSES.has(activeStatus))
     ) {
       appendLocalAssistantTranscript(
         'Wait for the active response to finish, or press Ctrl-C before /clear.',
