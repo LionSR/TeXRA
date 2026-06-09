@@ -87,16 +87,14 @@ export function goalElapsedMs(goal: { createdAt: string }): number {
   return Math.max(0, Date.now() - new Date(goal.createdAt).getTime());
 }
 
-export function goalDurationMs(goal: {
-  status: GoalStatus;
-  createdAt: string;
-  updatedAt: string;
-}): number {
-  const start = new Date(goal.createdAt).getTime();
-  const end = isGoalInFlight(goal)
-    ? Date.now()
-    : new Date(goal.updatedAt).getTime();
-  return Math.max(0, end - start);
+/**
+ * Duration of a goal. With only the live `active`/`paused` states, any
+ * persisted record is in flight, so this is wall-clock time since start —
+ * identical to {@link goalElapsedMs}; kept as a named alias for the
+ * duration-labelled UI call site.
+ */
+export function goalDurationMs(goal: { createdAt: string }): number {
+  return goalElapsedMs(goal);
 }
 
 /**
