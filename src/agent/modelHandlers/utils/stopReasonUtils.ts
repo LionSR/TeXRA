@@ -1,11 +1,9 @@
-// Third-party imports
-import { FinishReason } from '@google/genai';
-
 // Local imports - stop reasons
 import type { ProviderStopReason } from '@agent/modelHandlers/types/StopReasonTypes';
 // Internal imports
 import {
   ANTHROPIC_STOP,
+  GOOGLE_FINISH,
   MCP_STOP,
   OPENAI_CHAT_FINISH,
   OPENAI_COMPLETION_FINISH,
@@ -17,7 +15,7 @@ const TOKEN_LIMIT_STOP_REASONS: readonly ProviderStopReason[] = [
   OPENAI_COMPLETION_FINISH.LENGTH,
   ANTHROPIC_STOP.MAX_TOKENS,
   MCP_STOP.MAX_TOKENS,
-  FinishReason.MAX_TOKENS,
+  GOOGLE_FINISH.MAX_TOKENS,
 ];
 
 /** Keywords for fallback string matching */

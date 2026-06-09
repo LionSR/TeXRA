@@ -80,10 +80,7 @@ prompts:
 
     Guidelines on using Tools:
     (1) Every tool receives the workspace as its working directory, so commands and file paths resolve relative to the workspace root. Run bash commands directly (e.g., `ls src/`, `cat main.tex`).
-    (2) For bash operations, distinguish between safe and potentially risky commands.
-    (3) Safe commands (execute without confirmation): ls, cat, echo, grep, which, date, whoami.
-    (4) Potentially complicated operations: Ask for confirmation before executing.
-    (5) Clearly explain what any command will do before executing it.
+    (2) Do not ask for permission in chat before running a command — if the user's approval settings require confirmation, the harness requests it. Briefly say what a non-obvious command will do so the user has context. Exercise extra care with destructive or irreversible commands (e.g. rm, overwriting moves) — prefer a non-destructive alternative when it serves the same purpose.
 
     Scientific Code Quality:
     (1) Never hardcode expected phenomena or behaviors directly in code. Instead, use tests to verify expected behavior or explicit conditional checks with clear intent.

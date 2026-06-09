@@ -1,5 +1,3 @@
-// Third-party imports
-import { FinishReason } from '@google/genai';
 import type { StopReason as AnthropicSDKStopReason } from '@anthropic-ai/sdk/resources/messages';
 import type { ChatCompletion } from 'openai/resources/chat/completions';
 import type { CompletionChoice } from 'openai/resources/completions';
@@ -50,6 +48,17 @@ export const ANTHROPIC_STOP = {
 } as const satisfies Record<string, AnthropicSDKStopReason>;
 
 /**
+ * Google GenAI finish reasons. Kept as string constants so shared stop-reason
+ * utilities do not eagerly import the Google SDK.
+ */
+export const GOOGLE_FINISH = {
+  STOP: 'STOP',
+  MAX_TOKENS: 'MAX_TOKENS',
+} as const;
+export type GoogleFinishReason =
+  (typeof GOOGLE_FINISH)[keyof typeof GOOGLE_FINISH];
+
+/**
  * Union type covering all known provider stop reasons.
  * Additional string values are allowed for providers without explicit enums.
  */
@@ -57,6 +66,6 @@ export type ProviderStopReason =
   | OpenAIChatFinishReason
   | OpenAICompletionFinishReason
   | AnthropicSDKStopReason
-  | FinishReason
+  | GoogleFinishReason
   | MCPStopReason
   | string;

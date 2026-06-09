@@ -347,10 +347,18 @@ async function checkDesktopMainDynamicRequireShim(app, failures) {
   for (const bundlePath of await collectMainJavaScriptBundles(app)) {
     const mainBundle = await app.readText(bundlePath);
     if (!mainBundle.includes('Dynamic require of')) continue;
-    if (mainBundle.includes('__texraCreateRequire(import.meta.url)')) continue;
+    if (
+      mainBundle.includes('__texraCreateRequire(import.meta.url)') &&
+      mainBundle.includes(
+        'const __filename = __texraFileURLToPath(import.meta.url);',
+      ) &&
+      mainBundle.includes('const __dirname = __texraDirname(__filename);')
+    ) {
+      continue;
+    }
 
     failures.push(
-      `Packaged desktop main bundle contains esbuild dynamic require calls without the Node createRequire shim: ${bundlePath}`,
+      `Packaged desktop main bundle contains esbuild dynamic require calls without the shared ESM CommonJS-globals shim: ${bundlePath}`,
     );
   }
 }

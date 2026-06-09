@@ -78,7 +78,7 @@ prompts:
     Guidelines:
     (1) Be systematic: use todo_write to track what you have and have not checked.
     (2) Be specific: always reference the exact equation number, section, or line.
-    (3) Show your verification work: include your reasoning and any computational checks.
+    (3) Show your verification work: include the derivation or evidence supporting each finding and any computational checks you ran.
     (4) Distinguish between confirmed errors and items that need clarification.
     (5) Prioritize checking the main results and key derivations over peripheral content.
     (6) Do not edit workspace files while auditing unless the user explicitly requests edits. If edits are requested and no editing tool is available, state the needed changes in your final response.

@@ -56,7 +56,7 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { defineTool } from './core/define';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream, type ChildStream } from './childStream';
-import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
+import { codexThreads } from './agentCliSessionStores';
 import { publishAgentCliStreamUsage } from './agentCliShared';
 import {
   runAgentCliSession,
@@ -129,26 +129,6 @@ const CodexInputSchema = z.strictObject({
 });
 
 export type CodexInput = z.infer<typeof CodexInputSchema>;
-
-// ============================================================================
-// Thread registry — keeps threads alive between turns for follow-ups
-// ============================================================================
-
-interface ActiveThread {
-  thread: Thread;
-  childStreamId: StreamTabId;
-  parentStreamId: StreamTabId;
-  executionId: ExecutionId;
-}
-
-const codexThreads = new AgentCliSessionRegistry<ActiveThread>(
-  'codex_thread_id',
-);
-
-/** Prevents codex streams from remaining in stale WAITING state during reload. */
-export function interruptAllCodexSessions(): void {
-  codexThreads.interruptAll();
-}
 
 // ============================================================================
 // Result formatting
