@@ -76,8 +76,8 @@ describe('ToolUseFollowUp', () => {
 
   it('sends follow-ups to active flow contexts', async () => {
     const calls: string[] = [];
-    trackToolUseFlow(streamId, (text: string) => {
-      calls.push(text);
+    trackToolUseFlow(streamId, (followUp) => {
+      calls.push(followUp.text);
     });
 
     const result = await sendFollowUp(streamId, 'hello');

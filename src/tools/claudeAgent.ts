@@ -491,7 +491,7 @@ function startClaudeAgentLoop(params: {
   // empty here, so this opens as a root with no cross-trace parent.
   const sessionStage = logger.openStage('Claude Code session');
 
-  queue.enqueue(initialPrompt);
+  queue.enqueue({ text: initialPrompt });
   childStream.waitForInput();
 
   let resumeSessionId: string | undefined;
@@ -506,7 +506,7 @@ function startClaudeAgentLoop(params: {
         );
         if (!messages || session.isInterrupted()) break;
 
-        const prompt = messages.items.join('\n\n');
+        const prompt = messages.items.map((item) => item.text).join('\n\n');
         childStream.beginTurn();
         const startedAt = Date.now();
         const ac = session.startTurn();
@@ -583,7 +583,10 @@ function startClaudeAgentLoop(params: {
         } catch {
           // Best-effort; delivery must not block on storage.
         }
-        ToolUseFollowUpQueue.enqueue(parentStreamId, msg);
+        ToolUseFollowUpQueue.enqueue(parentStreamId, {
+          text: msg,
+          origin: 'subagent_result',
+        });
 
         if (turnFailed) {
           sawTurnFailure = true;
@@ -764,7 +767,7 @@ function resumeClaudeAgentSession(
   }
 
   const queue = ToolUseFollowUpQueue.acquire(stored.childStreamId);
-  queue.enqueue(prompt);
+  queue.enqueue({ text: prompt });
 
   const preview = truncateWithEllipsis(prompt, 60);
   return {

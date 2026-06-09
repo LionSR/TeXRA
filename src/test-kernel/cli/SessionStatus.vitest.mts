@@ -136,7 +136,7 @@ describe('CLI session status formatter', () => {
     const queue = ToolUseFollowUpQueue.acquire(STREAM_ID);
     ToolUseFollowUpQueue.drain(STREAM_ID);
     try {
-      queue.enqueue('Fresh queue message');
+      queue.enqueue({ text: 'Fresh queue message' });
 
       expect(ToolUseFollowUpQueue.getAll(STREAM_ID)).toEqual([
         'Fresh queue message',
