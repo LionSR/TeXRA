@@ -11,9 +11,11 @@ import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
 import { indentLatexFilesInDirectory } from '@housekeeping';
 import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount, type TexcountMode } from '@latex/texcount';
+import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';
 import { delay, filterNotNull } from '@utils/core';
+import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 
 import { getIndentTeXNotification } from './latexHousekeepingNotifications';
 
@@ -64,7 +66,16 @@ export async function handleFixCompilation(): Promise<void> {
   try {
     await withLaTeXGuard(
       { channel: CHANNEL, action: 'fix compilation', saveDocument: true },
-      async ({ relativePath }) => {
+      async ({ editor, relativePath }) => {
+        if (
+          await showGeneratedLatexdiffTargetWarning(
+            editor.document.fileName,
+            relativePath,
+          )
+        ) {
+          return;
+        }
+
         logger.info(
           CHANNEL,
           `Launching tool-use agent to fix compilation for: ${relativePath}`,
@@ -83,6 +94,53 @@ export async function handleFixCompilation(): Promise<void> {
       err,
     );
   }
+}
+
+async function showGeneratedLatexdiffTargetWarning(
+  activeFilePath: string,
+  activeRelativePath: string,
+): Promise<boolean> {
+  const artifact = detectGeneratedLatexdiffArtifact(activeFilePath);
+  if (!artifact) return false;
+
+  const sourceExists = await AbsoluteFS.exists(artifact.sourcePath);
+  // A user may legitimately keep a source file named chapter_diff.tex. Treat
+  // a plain `_diff` suffix in the workspace as generated only when the inferred
+  // source exists. Shadow/temp diffs live outside the workspace and still need
+  // to be blocked even when their source is elsewhere.
+  if (
+    artifact.kind === 'workspaceDiff' &&
+    !sourceExists &&
+    isInsideWorkspace(activeFilePath)
+  ) {
+    return false;
+  }
+
+  const sourceRelativePath = WorkspaceFS.relativePath(artifact.sourcePath);
+  const message = sourceExists
+    ? `Cannot run latexFixer on generated LaTeXdiff artifact ${activeRelativePath}. Open ${sourceRelativePath} and fix the source, then regenerate the diff.`
+    : `Cannot run latexFixer on generated LaTeXdiff artifact ${activeRelativePath}. Fix the source document, then regenerate the diff.`;
+
+  logger.warn(CHANNEL, message);
+  const openSource = 'Open Source';
+  const selection = sourceExists
+    ? await vscode.window.showWarningMessage(message, openSource)
+    : await vscode.window.showWarningMessage(message);
+  if (selection === openSource) {
+    await openSourceDocument(artifact.sourcePath);
+  }
+  return true;
+}
+
+function isInsideWorkspace(filePath: string): boolean {
+  return vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath)) != null;
+}
+
+async function openSourceDocument(sourcePath: string): Promise<void> {
+  const document = await vscode.workspace.openTextDocument(
+    vscode.Uri.file(sourcePath),
+  );
+  await vscode.window.showTextDocument(document);
 }
 
 export async function handleApplyReplacements(): Promise<void> {

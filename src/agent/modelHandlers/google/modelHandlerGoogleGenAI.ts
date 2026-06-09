@@ -62,7 +62,7 @@ import {
   type GooglePricingConfig,
 } from './googleUsage';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
-import { tagGoogleSdkError } from '../support/sdkErrorAdapters';
+import { tagGoogleSdkError } from './googleSdkError';
 
 // Local file imports
 import {
