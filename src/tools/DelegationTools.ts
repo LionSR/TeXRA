@@ -374,6 +374,12 @@ async function executeSubagent(
   // parent run after this tool call has returned. Subagents count toward
   // parent usage totals and the goal cost cap only — they never drive the loop.
   const recordSubagentCost = getCurrentToolCallContext()?.recordSubagentCost;
+  let subagentCostSettled = false;
+  function settleSubagentCost(result?: AgentFlowResult): void {
+    if (subagentCostSettled) return;
+    subagentCostSettled = true;
+    recordSubagentCost?.(result?.totalCostUsd ?? 0);
+  }
 
   const gated = depthGateError(
     parentDelegationDepth,
@@ -421,9 +427,7 @@ async function executeSubagent(
           subagentError = err;
         },
       });
-      // Roll the child's spend into the parent run even on failure — the
-      // money was spent either way.
-      recordSubagentCost?.(result.totalCostUsd ?? 0);
+      settleSubagentCost(result);
       if (result.status === 'error') {
         const msg = formatSubagentError(
           executionId,
@@ -527,6 +531,7 @@ async function executeSubagent(
     err: unknown,
     result?: AgentFlowResult,
   ): Promise<void> {
+    settleSubagentCost(result);
     const wallTimeMs = Date.now() - startedAt;
     const msg = formatSubagentError(executionId, agentName, err, {
       wallTimeMs,
@@ -603,8 +608,7 @@ async function executeSubagent(
       });
     },
     onCompleted: async (result) => {
-      // Roll the finished child's spend into the (still-live) parent run.
-      recordSubagentCost?.(result.totalCostUsd ?? 0);
+      settleSubagentCost(result);
       // For workflow results, compute diffs and write them as files to the
       // execution's run directory. The delivery references diff file paths
       // so the orchestrator can read them on demand via /executions/{id}/files/.
@@ -636,6 +640,7 @@ async function executeSubagent(
   });
   promise
     .catch((err: unknown) => {
+      settleSubagentCost();
       void deliverSubagentError(err);
     })
     .finally(() => {
