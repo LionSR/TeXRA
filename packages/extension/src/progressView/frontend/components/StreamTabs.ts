@@ -23,6 +23,7 @@ import {
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 import './WorktreeChip';
 import { formatRelativeTime } from '@shared/utils/string';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
@@ -474,11 +475,14 @@ export class StreamTab extends LitElement {
                     </div>`
                   : nothing}
                 <div class="tab-meta">
-                  <span class="last-active"
-                    >${this.lastTimestamp
-                      ? formatRelativeTime(this.lastTimestamp)
-                      : ''}</span
-                  >
+                  ${this.lastTimestamp
+                    ? html`<wa-relative-time
+                        class="last-active"
+                        .date=${new Date(this.lastTimestamp)}
+                        format="narrow"
+                        sync
+                      ></wa-relative-time>`
+                    : nothing}
                   <span class="model"
                     >${stream.modelLabel ?? stream.model ?? ''}</span
                   >

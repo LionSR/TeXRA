@@ -22,6 +22,7 @@ import { classMap } from 'lit/directives/class-map.js';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
 
 // Local imports
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
@@ -344,9 +345,13 @@ export class BackgroundTasksPanel extends LitElement {
             >${thread.threadId}</span
           >
           <span class="task-description" title=${preview}>${preview}</span>
-          <span class="task-elapsed" title=${thread.lastActivityIso}
-            >${formatInquiryActivity(thread.lastActivityIso)}</span
-          >
+          <wa-relative-time
+            class="task-elapsed"
+            date=${thread.lastActivityIso}
+            title=${thread.lastActivityIso}
+            format="narrow"
+            sync
+          ></wa-relative-time>
           <wa-tag
             class="task-status"
             variant=${inquiryStatusVariant(thread.status)}
@@ -543,20 +548,6 @@ function inquiryStatusVariant(
   if (status === 'open') return 'warning';
   if (status === 'answered') return 'success';
   return 'neutral';
-}
-
-function formatInquiryActivity(iso: string): string {
-  const time = Date.parse(iso);
-  if (Number.isNaN(time)) return '';
-
-  const elapsedMs = Date.now() - time;
-  if (elapsedMs < 60_000) return 'now';
-  if (elapsedMs < 3_600_000) return `${Math.floor(elapsedMs / 60_000)}m`;
-  if (elapsedMs < 86_400_000) return `${Math.floor(elapsedMs / 3_600_000)}h`;
-  return new Date(time).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 declare global {
