@@ -255,6 +255,17 @@ const round = segments.map(parseRound).findLast((r) => r !== null);
 
 // Use .every() for pairwise array comparison instead of manual loops
 const equal = a.length === b.length && a.every((x, i) => x === b[i]);
+
+// Use .slice() instead of .substring()
+const preview = text.slice(0, 100);
+
+// Use Number.parseInt with an explicit radix instead of bare parseInt
+const line = Number.parseInt(value, 10);
+
+// In Node-only code, sleep via node:timers/promises instead of a
+// hand-rolled Promise around setTimeout
+import { setTimeout as sleep } from 'node:timers/promises';
+await sleep(25);
 ```
 
 Index-based loops are still right when the index itself is the point: token

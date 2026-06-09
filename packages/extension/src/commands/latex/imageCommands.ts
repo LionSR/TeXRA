@@ -75,7 +75,7 @@ export async function handleEncodeImageToBase64(): Promise<string | undefined> {
     const base64String = await getBase64EncodedMedia(selection.relativePath);
     logger.debug(
       CHANNEL,
-      `Truncated base64 string (first 100 chars): ${base64String.substring(0, 100)}...`,
+      `Truncated base64 string (first 100 chars): ${base64String.slice(0, 100)}...`,
     );
     return base64String;
   } catch (err) {
@@ -110,7 +110,7 @@ export async function handleConvertPdfToImages(): Promise<
       prompt: 'Enter quality (DPI) for conversion (default: 300)',
       value: '300',
       validateInput: (value) => {
-        const num = parseInt(value);
+        const num = Number.parseInt(value, 10);
         return num > 0 && num <= 600
           ? null
           : 'Please enter a number between 1 and 600';
@@ -128,15 +128,15 @@ export async function handleConvertPdfToImages(): Promise<
         if (!value) {
           return null;
         }
-        const num = parseInt(value);
+        const num = Number.parseInt(value, 10);
         return num > 0 ? null : 'Please enter a positive number';
       },
     });
 
     const result = await processPdf2Png(
       selection.relativePath,
-      maxPages ? parseInt(maxPages) : undefined,
-      parseInt(quality),
+      maxPages ? Number.parseInt(maxPages, 10) : undefined,
+      Number.parseInt(quality, 10),
     );
 
     if (result) {

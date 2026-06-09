@@ -14,7 +14,7 @@ export function objectToLogString(
   try {
     const json = JSON.stringify(obj);
     return json.length > maxLength
-      ? `${json.substring(0, maxLength)}... (${json.length} chars)`
+      ? `${json.slice(0, maxLength)}... (${json.length} chars)`
       : json;
   } catch (_err) {
     return String(obj);
