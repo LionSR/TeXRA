@@ -364,7 +364,7 @@
             },
             "texra.goal.costCapUsd": {
               "default": 0,
-              "description": "Optional USD spend cap for autonomous Goals (0 = unbounded). Snapshotted when a Goal starts; spend counts the conversation's model cost from the Goal's start, including delegated subagents. When the cap is reached the Goal auto-pauses (resumable) instead of continuing.",
+              "description": "Optional USD spend cap for autonomous Goals (0 = unbounded). Snapshotted when a Goal starts; spend counts the conversation's model cost from the Goal's start, including delegated subagents when each child execution settles. When the cap is reached the Goal auto-pauses (resumable) instead of continuing.",
               "minimum": 0,
               "order": 54,
               "scope": "resource",
