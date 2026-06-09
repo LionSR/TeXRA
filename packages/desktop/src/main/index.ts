@@ -476,8 +476,16 @@ function createWindow(options: {
     return agentExecutionLoad;
   };
   const disposeAgentResumeHandler = setDesktopAgentResumeHandler(
-    async (streamId) =>
-      (await getAgentExecution()).progress.tryResumeStream(streamId),
+    async (streamId) => {
+      try {
+        return await (await getAgentExecution()).progress.tryResumeStream(
+          streamId,
+        );
+      } catch (error) {
+        if (!windowClosed) reportAsyncError(error);
+        return false;
+      }
+    },
   );
   const fileSelection = createDesktopFileSelection({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
