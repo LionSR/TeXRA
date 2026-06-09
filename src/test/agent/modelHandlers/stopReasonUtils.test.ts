@@ -1,11 +1,11 @@
 // Third-party imports
 import { strict as assert } from 'assert';
-import { FinishReason } from '@google/genai';
 
 // Local imports - utils
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 import {
   ANTHROPIC_STOP,
+  GOOGLE_FINISH,
   MCP_STOP,
   OPENAI_CHAT_FINISH,
   OPENAI_COMPLETION_FINISH,
@@ -17,7 +17,7 @@ describe('isTokenLimitStopReason', () => {
     assert.equal(isTokenLimitStopReason(OPENAI_COMPLETION_FINISH.LENGTH), true);
     assert.equal(isTokenLimitStopReason(ANTHROPIC_STOP.MAX_TOKENS), true);
     assert.equal(isTokenLimitStopReason(MCP_STOP.MAX_TOKENS), true);
-    assert.equal(isTokenLimitStopReason(FinishReason.MAX_TOKENS), true);
+    assert.equal(isTokenLimitStopReason(GOOGLE_FINISH.MAX_TOKENS), true);
   });
 
   it('detects keyword-based token limit strings', () => {

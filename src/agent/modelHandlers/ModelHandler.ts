@@ -1,6 +1,3 @@
-// Third-party imports
-import { FinishReason } from '@google/genai';
-
 // Local imports - agent
 import {
   type ModelConfig,
@@ -60,11 +57,12 @@ import {
   shouldUseOpenRouter,
 } from './support/ProxyConfigResolver';
 import {
-  withSdkErrorTag,
   type SdkErrorTagger,
-} from './support/sdkErrorAdapters';
+  withSdkErrorTag,
+} from './support/sdkErrorTagging';
 import {
   ANTHROPIC_STOP,
+  GOOGLE_FINISH,
   OPENAI_CHAT_FINISH,
   MCP_STOP,
 } from './types/StopReasonTypes';
@@ -593,8 +591,7 @@ export abstract class ModelHandler<
       ANTHROPIC_STOP.END_TURN,
       ANTHROPIC_STOP.STOP_SEQUENCE,
       OPENAI_CHAT_FINISH.STOP,
-      FinishReason.STOP,
-      'STOP', // handle string form returned by some Google clients
+      GOOGLE_FINISH.STOP,
     ];
     const endTurn = endTurnReasons.includes(stopReason ?? '');
     const encounterDocumentTag = newResponse.includes(

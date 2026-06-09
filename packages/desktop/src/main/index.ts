@@ -19,11 +19,11 @@ import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import type { TerminalRunResult } from '@hosts/terminalHost';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
-import { interruptAllCodexSessions } from '@tools/codex';
-import { interruptAllClaudeAgentSessions } from '@tools/claudeAgent';
-import { refreshToolAvailability } from '@tools/toolAvailability';
+import {
+  interruptAllClaudeAgentSessions,
+  interruptAllCodexSessions,
+} from '@tools/agentCliSessionStores';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
-import { createDesktopAgentExecution } from './desktopAgentExecution.js';
 import { setDesktopAgentResumeHandler } from './desktopAgentResume.js';
 import {
   openDesktopStreamSnapshotStore,
@@ -70,10 +70,14 @@ import {
   withNewWindowWorkspaceArgs,
   withWorkspacePathArg,
 } from '../workspacePath.js';
+import type {
+  DesktopAgentExecution,
+  DesktopAgentExecutionOptions,
+} from './desktopAgentExecution.js';
 import type { StreamSnapshotStore } from '@transcript';
 
 const moduleDirname = fileURLToPath(new URL('.', import.meta.url));
-const __dirname = findDesktopMainDir(moduleDirname);
+const desktopMainDir = findDesktopMainDir(moduleDirname);
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
 
@@ -248,7 +252,7 @@ function createWindow(options: {
     minHeight: 520,
     title: 'TeXRA',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.cjs'),
+      preload: join(desktopMainDir, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -395,7 +399,7 @@ function createWindow(options: {
     ).unref();
   };
   attachRendererConsoleLog(window.webContents);
-  const agentExecution = createDesktopAgentExecution({
+  const agentExecutionOptions: DesktopAgentExecutionOptions = {
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     opener: previewHost,
     diff: createDesktopDiffHost({
@@ -434,9 +438,27 @@ function createWindow(options: {
     showErrorMessage,
     streamSnapshotStore: options.streamSnapshotStore,
     progressSnapshotStore: options.progressSnapshotStore,
-  });
-  const disposeAgentResumeHandler = setDesktopAgentResumeHandler((streamId) =>
-    agentExecution.progress.tryResumeStream(streamId),
+  };
+  let agentExecution: DesktopAgentExecution | undefined;
+  let agentExecutionLoad: Promise<DesktopAgentExecution> | undefined;
+  const getAgentExecution = async (): Promise<DesktopAgentExecution> => {
+    if (agentExecution) return agentExecution;
+
+    agentExecutionLoad ??= import('./desktopAgentExecution.js')
+      .then(({ createDesktopAgentExecution }) => {
+        const created = createDesktopAgentExecution(agentExecutionOptions);
+        agentExecution = created;
+        return created;
+      })
+      .catch((error: unknown) => {
+        agentExecutionLoad = undefined;
+        throw error;
+      });
+    return agentExecutionLoad;
+  };
+  const disposeAgentResumeHandler = setDesktopAgentResumeHandler(
+    async (streamId) =>
+      (await getAgentExecution()).progress.tryResumeStream(streamId),
   );
   const fileSelection = createDesktopFileSelection({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
@@ -528,8 +550,12 @@ function createWindow(options: {
     runToolCommand: async ({ command }) => {
       await runSetupCommand(command);
     },
-    refreshToolAvailability: () =>
-      refreshToolAvailability(agentExecution.progress.runtimeHost),
+    refreshToolAvailability: async () => {
+      const { refreshToolAvailability } =
+        await import('@tools/toolAvailability');
+      const execution = await getAgentExecution();
+      await refreshToolAvailability(execution.progress.runtimeHost);
+    },
     runInstallCommand: async (command) => {
       await runSetupCommand(command);
     },
@@ -537,7 +563,8 @@ function createWindow(options: {
   });
   settingsIpcRef.current = settingsIpc;
   const progressIpc = createDesktopProgressIpc({
-    progress: agentExecution.progress,
+    getProgress: () => agentExecution?.progress,
+    ensureProgress: async () => (await getAgentExecution()).progress,
     onAsyncError: reportAsyncError,
   });
   const onboardingIpc = createDesktopOnboardingIpc(
@@ -568,7 +595,8 @@ function createWindow(options: {
     },
   );
   const mainViewIpc = installDesktopMainViewIpc(window, {
-    executeAgent: (message) => agentExecution.handleExecute(message),
+    executeAgent: async (message) =>
+      (await getAgentExecution()).handleExecute(message),
     fileSelection,
     settings: settingsIpc,
     progress: progressIpc,
@@ -603,7 +631,7 @@ function createWindow(options: {
       mainWindow = null;
     }
     disposeAgentResumeHandler();
-    agentExecution.dispose();
+    agentExecution?.dispose();
     desktopAuth.dispose();
   });
   window.webContents.once('did-finish-load', () => {
@@ -615,14 +643,14 @@ function createWindow(options: {
     return;
   }
 
-  void window.loadFile(join(__dirname, '../renderer/index.html'));
+  void window.loadFile(join(desktopMainDir, '../renderer/index.html'));
 }
 
 if (protocolLifecycle.shouldContinue) {
   app
     .whenReady()
     .then(async () => {
-      const platformInit = await initializeElectronPlatform(__dirname);
+      const platformInit = await initializeElectronPlatform(desktopMainDir);
       const { lifecycle } = platformInit;
       lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
         executionRegistry.killBackgroundProcesses(),
