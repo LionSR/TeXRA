@@ -21,7 +21,7 @@ const logger = createChannelTrace('ToolUseFollowUpQueue');
 export class ToolUseFollowUpQueue {
   private static readonly queues = new Map<StreamTabId, FollowUpQueue>();
   /** Streams whose queues were explicitly released (orchestrator disposed). */
-  private static readonly released = new Map<StreamTabId, true>();
+  private static readonly released = new Set<StreamTabId>();
   private static readonly RELEASED_CAP = 500;
   /** Observers notified whenever a stream's queue is released. */
   private static readonly releaseObservers = new Set<
@@ -120,9 +120,9 @@ export class ToolUseFollowUpQueue {
 
   private static rememberReleased(streamId: StreamTabId): void {
     this.released.delete(streamId);
-    this.released.set(streamId, true);
+    this.released.add(streamId);
     while (this.released.size > this.RELEASED_CAP) {
-      const oldest = this.released.keys().next().value;
+      const oldest = this.released.values().next().value;
       if (oldest === undefined) return;
       this.released.delete(oldest);
     }
