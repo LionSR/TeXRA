@@ -1476,9 +1476,11 @@ describe('DesktopProgressBridge', () => {
         executionId: 'exec-1',
         taskState,
       });
-      ToolUseFollowUpQueue.enqueue('stream-1', 'queued follow-up', {
-        force: true,
-      });
+      ToolUseFollowUpQueue.enqueue(
+        'stream-1',
+        { text: 'queued follow-up' },
+        { force: true },
+      );
 
       await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(true);
       expect(retrieveSessionResumeData).toHaveBeenCalledWith(
@@ -1500,21 +1502,21 @@ describe('DesktopProgressBridge', () => {
         unknown,
         {
           setupSession(session: {
-            appendFollowUp(
-              text: string,
-              mediaFiles?: readonly string[],
-              displayText?: string,
-            ): void;
+            appendFollowUp(followUp: {
+              text: string;
+              mediaFiles?: readonly string[];
+              displayText?: string;
+              origin?: 'user' | 'subagent_result';
+            }): void;
           }): void;
         },
       ];
       const appendFollowUp = vi.fn();
       resumeOptions.setupSession({ appendFollowUp });
-      expect(appendFollowUp).toHaveBeenCalledWith(
-        'queued follow-up',
-        undefined,
-        undefined,
-      );
+      expect(appendFollowUp).toHaveBeenCalledWith({
+        text: 'queued follow-up',
+        origin: 'user',
+      });
     } finally {
       ToolUseFollowUpQueue.release('stream-1');
       StreamStatusService.clear('stream-1', { emit: false });
@@ -1559,9 +1561,11 @@ describe('DesktopProgressBridge', () => {
           },
         },
       });
-      ToolUseFollowUpQueue.enqueue('stream-1', 'queued follow-up', {
-        force: true,
-      });
+      ToolUseFollowUpQueue.enqueue(
+        'stream-1',
+        { text: 'queued follow-up' },
+        { force: true },
+      );
 
       await expect(bridge.tryResumeStream('stream-1')).resolves.toBe(false);
       expect(ToolUseFollowUpQueue.getAll('stream-1')).toEqual([
