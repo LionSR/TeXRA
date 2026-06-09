@@ -2282,7 +2282,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     const queue = ToolUseFollowUpQueue.acquire(root);
 
     try {
-      queue.enqueue('Keep the proof under one page.');
+      queue.enqueue({ text: 'Keep the proof under one page.' });
       wrapped.emit('followUpSent', { streamId: root });
 
       let slice = cliState.streams.get().get(root);

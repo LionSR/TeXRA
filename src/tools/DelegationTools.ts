@@ -460,7 +460,10 @@ async function executeSubagent(
   function onProgress(update: SubagentProgressUpdate): void {
     if (deliveryState.isDelivered()) return;
     const msg = formatSubagentProgress(executionId, agentName, update);
-    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, {
+      text: msg,
+      origin: 'subagent_result',
+    });
   }
 
   function deliverSubagentError(err: unknown): void {
@@ -471,7 +474,10 @@ async function executeSubagent(
       workingDirectory: configPayload.workingDirectory ?? undefined,
     });
     void getExecutionStore(executionId).writeReport(msg);
-    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, {
+      text: msg,
+      origin: 'subagent_result',
+    });
   }
 
   const promise = executeAgent(configPayload, executionId, {
@@ -531,7 +537,10 @@ async function executeSubagent(
       // Mark delivered and enqueue only after the write attempt so that
       // onCompleted can still act as a fallback if we somehow never reach here.
       if (!deliveryState.markDelivered()) return true;
-      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, {
+        text: msg,
+        origin: 'subagent_result',
+      });
       return true;
     },
     onCompleted: async (result) => {
@@ -559,7 +568,10 @@ async function executeSubagent(
         workingDirectory: configPayload.workingDirectory ?? undefined,
       });
       void getExecutionStore(executionId).writeReport(msg);
-      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, {
+        text: msg,
+        origin: 'subagent_result',
+      });
     },
     onError: (err) => {
       deliverSubagentError(err);
