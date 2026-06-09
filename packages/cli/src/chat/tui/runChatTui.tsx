@@ -97,7 +97,6 @@ import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { loadMemoryItems } from '@tools/memory/memoryFileSystem';
 import { generateExecutionId } from '@utils/core/executionId';
-import { truncateSummary } from '@utils/text/stringUtils';
 
 import { App } from './App';
 import { assertNever } from './assertNever';
@@ -173,8 +172,6 @@ export interface RunChatInit {
    */
   readonly resumeExecutionId?: ExecutionId;
 }
-
-const QUEUED_FOLLOW_UP_NOTICE_LENGTH = 96;
 
 export interface BuildInitialChatAgentConfigInput {
   readonly agent: string;
@@ -419,11 +416,7 @@ export function chatTuiIsResumableIdleOnExit(input: {
 
 export type ChatTuiFocusedChildFollowUpRoute =
   | { readonly kind: 'none' }
-  | {
-      readonly kind: 'accept';
-      readonly streamId: StreamTabId;
-      readonly shouldAnnounceQueuedFollowUp: boolean;
-    }
+  | { readonly kind: 'accept'; readonly streamId: StreamTabId }
   | { readonly kind: 'reject'; readonly streamId: StreamTabId };
 
 export function chatTuiFocusedChildFollowUpRoute(): ChatTuiFocusedChildFollowUpRoute {
@@ -441,18 +434,7 @@ export function chatTuiFocusedChildFollowUpRoute(): ChatTuiFocusedChildFollowUpR
   if (status !== undefined && !isInFlightStatus(status)) {
     return { kind: 'reject', streamId: scope.streamId };
   }
-  return {
-    kind: 'accept',
-    streamId: scope.streamId,
-    shouldAnnounceQueuedFollowUp: status !== STREAM_STATUS.WAITING,
-  };
-}
-
-function shouldAnnounceQueuedFollowUpToStream(
-  targetStreamId: StreamTabId | undefined,
-): boolean {
-  if (!targetStreamId) return true;
-  return streamStatusFromState(targetStreamId) !== STREAM_STATUS.WAITING;
+  return { kind: 'accept', streamId: scope.streamId };
 }
 
 interface SlashCommandContext {
@@ -1212,7 +1194,7 @@ export async function runChat(
         } else {
           session.runExitCode = CliExitCode.AgentError;
         }
-        // Pull any final MODEL_RESPONSE chunks out of the AgentLogger
+        // Pull any final MODEL_RESPONSE chunks out of the AgentTrace
         // buffer before falling back to `result.lastResponse`. Without
         // this, a reply that finalized between sync ticks would never
         // hit the transcript.
@@ -1506,20 +1488,6 @@ export async function runChat(
     // user submits before `onStreamResolved` populates `session.streamId`.
     // p-queue serializes work but doesn't have an "await predicate" primitive,
     // so the task itself waits for the stream id via a tiny poll loop.
-    const initialFollowUpTarget = childFollowUpTarget ?? session.streamId;
-    const shouldAnnounceQueuedFollowUp =
-      focusedChildRoute.kind === 'accept'
-        ? focusedChildRoute.shouldAnnounceQueuedFollowUp
-        : shouldAnnounceQueuedFollowUpToStream(initialFollowUpTarget);
-    if (shouldAnnounceQueuedFollowUp) {
-      appendLocalAssistantTranscript(
-        `Queued follow-up: ${truncateSummary(
-          line,
-          QUEUED_FOLLOW_UP_NOTICE_LENGTH,
-        )}`,
-        initialFollowUpTarget,
-      );
-    }
     void followUpQueue.add(async () => {
       let delivered = false;
       let followUpTarget = childFollowUpTarget;

@@ -31,7 +31,7 @@ import {
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
 
 // Local imports - logger
 import { toErrorMessage } from '@common/errors';
@@ -268,6 +268,20 @@ async function writeSubagentReport(
   }
 }
 
+function resolveDeliveryStreamId(
+  executionId: string,
+  fallbackStreamId: StreamTabId,
+): StreamTabId | undefined {
+  const handle = executionRegistry.getHandle(executionId);
+  if (!(handle instanceof AgentExecutionHandle)) return fallbackStreamId;
+  // AgentExecutionHandle.detach() promotes a child by setting
+  // parentStreamId === childStreamId. Do not enqueue the formatted result
+  // back into the detached child's own prompt as a synthetic follow-up.
+  return handle.parentStreamId === handle.childStreamId
+    ? undefined
+    : handle.parentStreamId;
+}
+
 /**
  * Runtime depth gate shared by fresh delegations and resumes.
  * Tool-use flows pass the same max-depth snapshot used for tool resolution so
@@ -409,6 +423,7 @@ async function executeSubagent(
           {
             wallTimeMs: Date.now() - startedAt,
             workingDirectory: configPayload.workingDirectory ?? undefined,
+            memoryMisses: result.memoryMisses,
           },
         );
         await writeSubagentReport(executionId, msg);
@@ -457,21 +472,63 @@ async function executeSubagent(
   const deliveryState = subagentDeliveryRegistry.start(executionId);
   let childStreamId: StreamTabId | undefined;
 
+  async function deliverFollowUp(
+    followUp: FollowUpQueueInput,
+  ): Promise<boolean> {
+    const targetStreamId = resolveDeliveryStreamId(
+      executionId,
+      orchestratorStreamId,
+    );
+    if (!targetStreamId) return false;
+
+    const result = await sendFollowUp(targetStreamId, followUp);
+    if (result.status !== 'no_session') return true;
+    logger.warn(
+      'subagentDelivery',
+      `Unable to deliver subagent result for ${executionId}: parent stream ${targetStreamId} has no active session (status: ${result.streamStatus ?? 'unknown'}).`,
+    );
+    return false;
+  }
+
+  async function deliverTerminalFollowUp(
+    followUp: FollowUpQueueInput,
+  ): Promise<boolean> {
+    if (!deliveryState.beginDelivery()) return false;
+    try {
+      const delivered = await deliverFollowUp(followUp);
+      if (delivered) {
+        deliveryState.completeDelivery();
+      } else {
+        deliveryState.failDelivery();
+      }
+      return delivered;
+    } catch (err) {
+      deliveryState.failDelivery();
+      throw err;
+    }
+  }
+
   function onProgress(update: SubagentProgressUpdate): void {
     if (deliveryState.isDelivered()) return;
     const msg = formatSubagentProgress(executionId, agentName, update);
-    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+    void deliverFollowUp({ text: msg, origin: 'subagent_result' });
   }
 
-  function deliverSubagentError(err: unknown): void {
-    if (!deliveryState.markDelivered()) return;
+  async function deliverSubagentError(
+    err: unknown,
+    result?: AgentFlowResult,
+  ): Promise<void> {
     const wallTimeMs = Date.now() - startedAt;
     const msg = formatSubagentError(executionId, agentName, err, {
       wallTimeMs,
       workingDirectory: configPayload.workingDirectory ?? undefined,
+      memoryMisses: result?.memoryMisses,
     });
     void getExecutionStore(executionId).writeReport(msg);
-    ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+    await deliverTerminalFollowUp({
+      text: msg,
+      origin: 'subagent_result',
+    });
   }
 
   const promise = executeAgent(configPayload, executionId, {
@@ -494,7 +551,7 @@ async function executeSubagent(
     onFollowUpConsumed: () => {
       deliveryState.markPending();
     },
-    onBeforeWaiting: async (lastResponse, touchedFiles) => {
+    onBeforeWaiting: async (lastResponse, touchedFiles, memoryMisses) => {
       const deliveryDecision =
         deliveryState.resolveBeforeWaiting(childStreamId);
       if (deliveryDecision === SUBAGENT_DELIVERY_DECISION.AlreadyDelivered) {
@@ -516,6 +573,7 @@ async function executeSubagent(
           touchedFiles,
           executionId,
           streamId: resolvedChildStreamId,
+          memoryMisses: memoryMisses.length > 0 ? [...memoryMisses] : undefined,
         },
         {
           wallTimeMs,
@@ -528,15 +586,14 @@ async function executeSubagent(
       } catch {
         /* storage failure is non-fatal */
       }
-      // Mark delivered and enqueue only after the write attempt so that
-      // onCompleted can still act as a fallback if we somehow never reach here.
-      if (!deliveryState.markDelivered()) return true;
-      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
-      return true;
+      // Claim only the enqueue step: formatting/storage failures before this
+      // still leave onCompleted/onError available as terminal fallbacks.
+      return await deliverTerminalFollowUp({
+        text: msg,
+        origin: 'subagent_result',
+      });
     },
     onCompleted: async (result) => {
-      if (!deliveryState.markDelivered()) return;
-
       // For workflow results, compute diffs and write them as files to the
       // execution's run directory. The delivery references diff file paths
       // so the orchestrator can read them on demand via /executions/{id}/files/.
@@ -559,15 +616,16 @@ async function executeSubagent(
         workingDirectory: configPayload.workingDirectory ?? undefined,
       });
       void getExecutionStore(executionId).writeReport(msg);
-      ToolUseFollowUpQueue.enqueue(orchestratorStreamId, msg);
+      await deliverTerminalFollowUp({
+        text: msg,
+        origin: 'subagent_result',
+      });
     },
-    onError: (err) => {
-      deliverSubagentError(err);
-    },
+    onError: (err, result) => deliverSubagentError(err, result),
   });
   promise
     .catch((err: unknown) => {
-      deliverSubagentError(err);
+      void deliverSubagentError(err);
     })
     .finally(() => {
       subagentDeliveryRegistry.finish(executionId);

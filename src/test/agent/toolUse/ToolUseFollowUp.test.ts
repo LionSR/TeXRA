@@ -13,6 +13,7 @@ import {
 } from '@agent/runtime/executionRegistry';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -76,8 +77,8 @@ describe('ToolUseFollowUp', () => {
 
   it('sends follow-ups to active flow contexts', async () => {
     const calls: string[] = [];
-    trackToolUseFlow(streamId, (text: string) => {
-      calls.push(text);
+    trackToolUseFlow(streamId, (followUp) => {
+      calls.push(followUp.text);
     });
 
     const result = await sendFollowUp(streamId, 'hello');
@@ -85,6 +86,23 @@ describe('ToolUseFollowUp', () => {
     assert.equal(calls.length, 1);
     assert.equal(calls[0], 'hello');
     assert.deepEqual(result, { status: 'sent' });
+  });
+
+  it('preserves explicit follow-up item origin for active flow contexts', async () => {
+    const calls: FollowUpQueueInput[] = [];
+    trackToolUseFlow(streamId, (followUp) => {
+      calls.push(followUp);
+    });
+
+    const result = await sendFollowUp(streamId, {
+      text: 'subagent result',
+      origin: 'subagent_result',
+    });
+
+    assert.deepEqual(result, { status: 'sent' });
+    assert.deepEqual(calls, [
+      { text: 'subagent result', origin: 'subagent_result' },
+    ]);
   });
 
   it('queues follow-ups when children are still running', async () => {
@@ -145,6 +163,44 @@ describe('ToolUseFollowUp', () => {
       });
       assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), [
         'after release',
+      ]);
+    } finally {
+      executionRegistry.untrack(executionId);
+      ToolUseFollowUpQueue.release(parentStreamId);
+    }
+  });
+
+  it('queues subagent result follow-ups through the released parent queue', async () => {
+    const parentStreamId = 'parent-stream-subagent-result' as StreamTabId;
+    const childStreamId = 'child-stream-subagent-result' as StreamTabId;
+    const executionId = 'exec-subagent-result';
+
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'test-subagent',
+      'toolUse',
+      noopAgentRuntimeHost,
+    );
+    executionRegistry.track(handle);
+    ToolUseFollowUpQueue.release(parentStreamId);
+
+    try {
+      const result = await sendFollowUp(parentStreamId, {
+        text: 'child done',
+        origin: 'subagent_result',
+      });
+
+      assert.deepEqual(result, {
+        status: 'queued',
+        reason: 'children_running',
+      });
+      assert.deepEqual(ToolUseFollowUpQueue.drainItems(parentStreamId), [
+        {
+          text: 'child done',
+          origin: 'subagent_result',
+        },
       ]);
     } finally {
       executionRegistry.untrack(executionId);

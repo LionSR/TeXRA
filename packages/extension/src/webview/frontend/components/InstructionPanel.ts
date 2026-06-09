@@ -152,7 +152,7 @@ export class InstructionPanel extends LitElement {
         );
         color: var(--wa-color-text-normal);
         font-size: var(--font-size-sm);
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
         pointer-events: none;
       }
 
@@ -226,7 +226,7 @@ export class InstructionPanel extends LitElement {
 
       .session-hint-lede {
         color: var(--wa-color-text-normal);
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
         letter-spacing: 0.01em;
         white-space: nowrap;
       }

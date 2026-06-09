@@ -1,7 +1,9 @@
+import { collapseWhitespace } from '@utils/text/stringUtils';
+
 import { type Plan, type TodoItem } from '@shared/schemas';
 
 function taskKey(value: string): string {
-  return value.trim().replaceAll(/\s+/g, ' ').toLowerCase();
+  return collapseWhitespace(value).toLowerCase();
 }
 
 export function formatWorkPlanGranularityWarning(

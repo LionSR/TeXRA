@@ -1267,7 +1267,6 @@ describe('CLI TUI row allocation', () => {
     expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
       kind: 'accept',
       streamId: child1,
-      shouldAnnounceQueuedFollowUp: false,
     });
   });
 
@@ -1291,7 +1290,6 @@ describe('CLI TUI row allocation', () => {
     expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
       kind: 'accept',
       streamId: child1,
-      shouldAnnounceQueuedFollowUp: true,
     });
   });
 
@@ -1354,7 +1352,6 @@ describe('CLI TUI row allocation', () => {
       expect(chatTuiFocusedChildFollowUpRoute()).toEqual({
         kind: 'accept',
         streamId: child1,
-        shouldAnnounceQueuedFollowUp: true,
       });
     } finally {
       dispose();
@@ -1550,6 +1547,44 @@ describe('CLI transcript state', () => {
         text: 'Model request failed',
         finalized: true,
       });
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
+  it('tracks hidden thinking activity without rendering thinking text', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
+      thinking.append('private reasoning summary');
+
+      syncStreamLog(root);
+
+      let slice = cliState.streams.get().get(root);
+      expect(slice?.thinkingActive).toBe(true);
+      expect(slice?.entries).toEqual([]);
+
+      thinking.finalize();
+      syncStreamLog(root);
+
+      slice = cliState.streams.get().get(root);
+      expect(slice?.thinkingActive).toBe(false);
+      expect(slice?.entries).toEqual([]);
+
+      const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
+      output.append('Visible answer.');
+
+      syncStreamLog(root);
+
+      slice = cliState.streams.get().get(root);
+      expect(slice?.thinkingActive).toBe(false);
+      expect(slice?.entries.map((entry) => entry.text)).toEqual([
+        'Visible answer.',
+      ]);
     } finally {
       setDefaultStreamLogStore(previousStore);
     }
@@ -2254,7 +2289,7 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
     const queue = ToolUseFollowUpQueue.acquire(root);
 
     try {
-      queue.enqueue('Keep the proof under one page.');
+      queue.enqueue({ text: 'Keep the proof under one page.' });
       wrapped.emit('followUpSent', { streamId: root });
 
       let slice = cliState.streams.get().get(root);

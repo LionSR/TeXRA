@@ -7,7 +7,11 @@
 
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
-import { FollowUpQueue, type DrainedFollowUpItem } from './FollowUpQueue';
+import {
+  FollowUpQueue,
+  type DrainedFollowUpItem,
+  type FollowUpQueueInput,
+} from './FollowUpQueue';
 
 const logger = createChannelTrace('ToolUseFollowUpQueue');
 
@@ -18,7 +22,7 @@ export class ToolUseFollowUpQueue {
   private static readonly queues = new Map<StreamTabId, FollowUpQueue>();
   /** Streams whose queues were explicitly released (orchestrator disposed). */
   private static readonly released = new Set<StreamTabId>();
-  private static readonly RELEASED_CAP = 500;
+  static readonly RELEASED_CAP = 500;
   /** Observers notified whenever a stream's queue is released. */
   private static readonly releaseObservers = new Set<
     (streamId: StreamTabId) => void
@@ -52,11 +56,7 @@ export class ToolUseFollowUpQueue {
       queue.dispose();
       this.queues.delete(streamId);
     }
-    this.released.add(streamId);
-    if (this.released.size > this.RELEASED_CAP) {
-      this.released.clear();
-      this.released.add(streamId);
-    }
+    this.rememberReleased(streamId);
     logger.debug(`Released follow-up queue for stream ${streamId}.`);
     for (const observer of this.releaseObservers) {
       try {
@@ -73,20 +73,18 @@ export class ToolUseFollowUpQueue {
    * Enqueue a follow-up for a stream.
    *
    * Auto-creates the queue if it doesn't exist yet (needed for WAITING streams
-   * from prior sessions). Returns false and silently discards if the queue was
+   * from prior sessions) only when the caller has already admitted the
+   * follow-up through the registry. Returns false and silently discards if the queue was
    * explicitly released (orchestrator disposed — late-arriving subagent
    * results). Pass `{ force: true }` for explicit user actions that should
-   * reopen a released queue (caller is responsible for ensuring a consumer
-   * will drain it, or releasing again on failure).
+   * reopen or create a queue even without `createIfMissing` (caller is
+   * responsible for ensuring a consumer will drain it, or releasing again on
+   * failure).
    */
   static enqueue(
     streamId: StreamTabId,
-    followUp: string,
-    options?: {
-      force?: boolean;
-      mediaFiles?: readonly string[];
-      displayText?: string;
-    },
+    followUp: FollowUpQueueInput,
+    options?: { createIfMissing?: boolean; force?: boolean },
   ): boolean {
     if (this.released.has(streamId) && !options?.force) {
       logger.debug(
@@ -94,8 +92,15 @@ export class ToolUseFollowUpQueue {
       );
       return false;
     }
-    const queue = this.acquire(streamId);
-    queue.enqueue(followUp, options?.mediaFiles, options?.displayText);
+    const queue = this.queues.get(streamId);
+    if (!queue && !options?.createIfMissing && !options?.force) {
+      logger.debug(
+        `No follow-up queue for stream ${streamId}, discarding follow-up.`,
+      );
+      return false;
+    }
+    const target = queue ?? this.acquire(streamId);
+    target.enqueue(followUp);
     logger.debug(`Queued follow-up for stream ${streamId}.`);
     return true;
   }
@@ -112,5 +117,15 @@ export class ToolUseFollowUpQueue {
   /** Get all queued follow-up messages for a stream without consuming them. */
   static getAll(streamId: StreamTabId): string[] {
     return this.queues.get(streamId)?.getAll() ?? [];
+  }
+
+  private static rememberReleased(streamId: StreamTabId): void {
+    this.released.delete(streamId);
+    this.released.add(streamId);
+    while (this.released.size > this.RELEASED_CAP) {
+      const oldest = this.released.values().next().value;
+      if (oldest === undefined) return;
+      this.released.delete(oldest);
+    }
   }
 }

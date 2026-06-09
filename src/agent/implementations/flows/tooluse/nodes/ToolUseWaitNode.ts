@@ -1,11 +1,7 @@
 import { Node } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import {
-  countMediaFilesNeedingVision,
-  formatMediaNeedsVisionWarning,
-  shouldWarnMediaNeedsVision,
-} from '@agent/runtime/mediaVisionWarning';
+import { appendFollowUpAsUserMessage } from '@agent/toolUse/followUpMessages';
 import { STREAM_STATUS } from '@shared/schemas';
 
 import { findLastAssistantText, extractTouchedFiles } from './types';
@@ -83,6 +79,7 @@ export class ToolUseWaitNode<C> extends Node<
       const delivered = await onBeforeWaiting?.(
         prepRes.lastResponse,
         prepRes.touchedFiles,
+        this.services.attachedMemoryMisses ?? [],
       );
       prepRes.deliveredToOrchestrator =
         onBeforeWaiting !== undefined && delivered !== false;
@@ -109,7 +106,9 @@ export class ToolUseWaitNode<C> extends Node<
           await continuation.commit();
           return {
             kind: 'continue',
-            followUp: continuation.followUp,
+            followUps: [
+              { text: continuation.followUp, origin: 'synthetic' as const },
+            ],
             synthetic: true,
           };
         }
@@ -129,10 +128,8 @@ export class ToolUseWaitNode<C> extends Node<
 
     return {
       kind: 'continue',
-      followUp: batch.items.join('\n\n'),
-      displayFollowUp: batch.displayItems.join('\n\n'),
+      followUps: batch.items,
       synthetic: batch.synthetic,
-      mediaFiles: batch.mediaFiles,
     };
   }
 
@@ -149,15 +146,8 @@ export class ToolUseWaitNode<C> extends Node<
     prepRes: WaitPrepResult,
     execRes: WaitExecResult,
   ): Promise<string | undefined> {
-    const {
-      onFollowUpConsumed,
-      streamId,
-      logger,
-      modelHandler,
-      runtimeHost,
-      streamStatus,
-      fileService,
-    } = this.services;
+    const { onFollowUpConsumed, streamId, logger, runtimeHost, streamStatus } =
+      this.services;
 
     if (execRes.kind === 'stop') {
       if (prepRes.deliveredToOrchestrator) {
@@ -183,32 +173,19 @@ export class ToolUseWaitNode<C> extends Node<
     if (!execRes.synthetic) {
       shared.deliveredToOrchestrator = undefined;
       onFollowUpConsumed?.();
-      logUserMessage(logger, execRes.displayFollowUp ?? execRes.followUp);
+      for (const followUp of execRes.followUps) {
+        logUserMessage(logger, followUp.displayText ?? followUp.text);
+      }
     }
     streamStatus.set(streamId, STREAM_STATUS.RUNNING, {
       runtimeHost,
     });
-    shared.messages = await modelHandler.createUserFollowUpMessages(
-      shared.messages,
-      execRes.followUp,
-    );
 
-    // Attach any media (e.g. pasted images) the user sent with this follow-up
-    // to the freshly-appended user message, reusing the same shared media path
-    // as the reflection flow. No-ops when empty or the model lacks vision.
-    if (execRes.mediaFiles?.length) {
-      const visionMediaCount = countMediaFilesNeedingVision(execRes.mediaFiles);
-      if (
-        shouldWarnMediaNeedsVision(
-          execRes.mediaFiles,
-          modelHandler.capabilities,
-        )
-      ) {
-        logger.warn(formatMediaNeedsVisionWarning(visionMediaCount, 'pasted'));
-      }
-      await modelHandler.addMediaToUserMessage(
+    for (const followUp of execRes.followUps) {
+      shared.messages = await appendFollowUpAsUserMessage(
         shared.messages,
-        execRes.mediaFiles.map((p) => fileService.createLocation(p)),
+        followUp,
+        this.services,
       );
     }
 

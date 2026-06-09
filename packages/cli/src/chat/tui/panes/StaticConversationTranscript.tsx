@@ -1,6 +1,6 @@
-// Print-once transcript rendered through Ink `<Static>` so finalized entries
-// land in ordinary terminal scrollback. The session header is the first
-// static item; finalized conversation entries follow as they promote.
+// Live session header plus print-once transcript entries. Finalized entries
+// land in ordinary terminal scrollback through Ink `<Static>`; the header
+// stays adaptive chrome for the active scrollback owner.
 
 import path from 'node:path';
 
@@ -21,7 +21,11 @@ import { streamViewForId } from '../state/streamViews';
 import { transcriptEntryLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
-import { TranscriptEntry } from './TranscriptEntry';
+import {
+  isInquiryContinuationText,
+  TranscriptEntry,
+  USER_ENTRY_MARGIN_BOTTOM_ROWS,
+} from './TranscriptEntry';
 
 export type StaticTranscriptItem =
   | {
@@ -36,6 +40,16 @@ export type StaticTranscriptItem =
       readonly kind: 'entry';
       readonly entry: ConversationEntry;
     };
+
+type StaticTranscriptHeaderItem = Extract<
+  StaticTranscriptItem,
+  { readonly kind: 'header' }
+>;
+
+type StaticTranscriptEntryItem = Extract<
+  StaticTranscriptItem,
+  { readonly kind: 'entry' }
+>;
 
 interface StaticTranscriptState {
   readonly ownerKey: string;
@@ -152,8 +166,26 @@ function staticTranscriptItemRowCount(
   }
   // Compact budgeting can over-count tool rows because the transcript viewer
   // keeps full tool output while the static scrollback renderer elides it.
-  return transcriptEntryLines(item.entry, Math.max(1, Math.floor(width ?? 80)))
-    .length;
+  const lines = transcriptEntryLines(
+    item.entry,
+    Math.max(1, Math.floor(width ?? 80)),
+  ).length;
+  return item.entry.role === 'user' &&
+    !isInquiryContinuationText(item.entry.text)
+    ? lines + USER_ENTRY_MARGIN_BOTTOM_ROWS
+    : lines;
+}
+
+function isStaticTranscriptHeaderItem(
+  item: StaticTranscriptItem,
+): item is StaticTranscriptHeaderItem {
+  return item.kind === 'header';
+}
+
+function isStaticTranscriptEntryItem(
+  item: StaticTranscriptItem,
+): item is StaticTranscriptEntryItem {
+  return item.kind === 'entry';
 }
 
 export function appendStaticTranscriptItems({
@@ -293,39 +325,43 @@ export function StaticConversationTranscript({
     width,
   ]);
 
+  const headerItems = items.filter(isStaticTranscriptHeaderItem);
+  const entryItems = items.filter(isStaticTranscriptEntryItem);
+
   return (
-    // Remount <Static> on a width or owner change so Ink regenerates
-    // `fullStaticOutput` for the current stream. Without the owner key, a focus
-    // switch would keep the previous stream's append-only cache.
-    <Static
-      key={`${ownerKey}:${Math.max(1, Math.floor(width ?? 80))}`}
-      items={[...items]}
-    >
-      {(item: StaticTranscriptItem) => (
-        // Isolate per item: a throw here would otherwise crash the whole Ink
-        // tree, and `<Static>` commits each row to scrollback exactly once, so
-        // the fallback marker is printed once in place of the bad entry.
+    <>
+      {headerItems.map((item: StaticTranscriptHeaderItem) => (
         <Box key={item.id} flexDirection="column">
-          <EntryErrorBoundary
-            label={item.kind === 'header' ? 'session header' : item.entry.role}
-          >
-            {item.kind === 'header' ? (
-              <SessionHeaderBlock
-                compact={item.compact}
-                identityLine={item.identityLine}
-                meta={item.meta}
-                width={width}
-              />
-            ) : (
+          <EntryErrorBoundary label="session header">
+            <SessionHeaderBlock
+              compact={item.compact}
+              identityLine={item.identityLine}
+              meta={item.meta}
+              width={width}
+            />
+          </EntryErrorBoundary>
+        </Box>
+      ))}
+      {/* Remount entry <Static> on a width or owner change so Ink regenerates
+       * `fullStaticOutput` for the current stream. The header is outside this
+       * keyed region; early terminal-width settling must not print the
+       * session banner twice. */}
+      <Static
+        key={`entries:${ownerKey}:${Math.max(1, Math.floor(width ?? 80))}`}
+        items={[...entryItems]}
+      >
+        {(item: StaticTranscriptEntryItem) => (
+          <Box key={item.id} flexDirection="column">
+            <EntryErrorBoundary label={item.entry.role}>
               <TranscriptEntry
                 entry={item.entry}
                 width={width}
                 colorEnabled={colorEnabled}
               />
-            )}
-          </EntryErrorBoundary>
-        </Box>
-      )}
-    </Static>
+            </EntryErrorBoundary>
+          </Box>
+        )}
+      </Static>
+    </>
   );
 }

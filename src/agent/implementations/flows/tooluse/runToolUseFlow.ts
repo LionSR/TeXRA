@@ -47,7 +47,10 @@ import {
 import { setToolUseSharedModel } from './modelSwitchState';
 import { ToolUseSessionLifecycle } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
-import type { ToolUseServices } from './ToolUseServices';
+import type {
+  ToolUseBeforeWaitingCallback,
+  ToolUseServices,
+} from './ToolUseServices';
 
 export interface RunToolUseFlowInput<
   C = unknown,
@@ -60,10 +63,7 @@ export interface RunToolUseFlowInput<
   /** When true, approval-gated tools are filtered out before model invocation. */
   approvalPromptsUnavailable?: boolean;
   /** Fires before the subagent enters WAITING, delivering the last response to the orchestrator. */
-  onBeforeWaiting?: (
-    lastResponse: string | undefined,
-    touchedFiles: string[],
-  ) => boolean | void | Promise<boolean | void>;
+  onBeforeWaiting?: ToolUseBeforeWaitingCallback;
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
   /** Stop after one cycle instead of waiting for a conversational follow-up. */
@@ -246,8 +246,7 @@ export async function runToolUseFlow<C = unknown>(
     },
     interrupt(): void {
       onInterrupt?.();
-      runCoordinatorBridge.clearRetryRequest(streamId);
-      runCoordinatorBridge.clearPlanApprovalForStream(streamId);
+      runCoordinatorBridge.cleanupRequestsForStream(streamId);
       sessionLifecycle.interrupt();
     },
     requestImmediateCompaction(): void {
@@ -363,7 +362,7 @@ export async function runToolUseFlow<C = unknown>(
     }
 
     sessionLifecycle.dispose();
-    runCoordinatorBridge.clearPlanApprovalForStream(streamId);
+    runCoordinatorBridge.cleanupRequestsForStream(streamId);
     interruptRegistry.unregister(streamId);
     for (const handler of switchedHandlers) {
       handler.dispose();

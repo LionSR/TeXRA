@@ -1,5 +1,5 @@
 name: engineer
-description: Software engineering team lead. Turns a coding goal into focused tasks, delegates each to the right specialist (coder, codeReviewer, testEngineer), reviews their work, and keeps the codebase coherent.
+description: Software engineering team lead. Turns a coding goal into focused tasks, delegates each to the right specialist (coder, codeReviewer, testEngineer, codeSimplifier, progressCheck), reviews their work, and keeps the codebase coherent.
 
 settings:
   agentCategory: toolUse

@@ -27,6 +27,16 @@ describe('summarizeSubagentFollowup', () => {
     );
   });
 
+  it('summarizes malformed non-string follow-up payloads without throwing', () => {
+    expect(summarizeFollowupMessage(undefined)).toBe('(empty follow-up)');
+    expect(summarizeSubagentFollowup(undefined)).toBe('(empty follow-up)');
+  });
+
+  it('preserves empty string messages for transcript rendering', () => {
+    expect(summarizeFollowupMessage('')).toBe('');
+    expect(summarizeSubagentFollowup('')).toBe('');
+  });
+
   it('summarizes a started progress block', () => {
     expect(
       summarizeSubagentFollowup(

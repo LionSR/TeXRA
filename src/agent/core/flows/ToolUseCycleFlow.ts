@@ -28,12 +28,14 @@ import {
   NormalizedUsageSchema,
   type NormalizedUsage,
 } from '@agent/types/NormalizedUsage';
+import { appendFollowUpAsUserMessage } from '@agent/toolUse/followUpMessages';
 
 // Internal imports - use core ToolTypes as single source of truth
 import {
   extractToolAttachments,
   type ExtractedToolAttachments,
 } from '@agent/modelHandlers/utils/toolAttachmentUtils';
+import type { FollowUpQueueBatchItem } from '@agent/toolUse/FollowUpQueue';
 import { withToolFileInteractionContext } from '@agent/toolUse/ToolFileInteractionContext';
 import type {
   FileInteractionState,
@@ -206,8 +208,7 @@ export interface ToolUseCycleShared extends ToolUseCycleFields {
 /** Prep result for ToolUsePrepNode - drained queued follow-up plus interrupt flag. */
 interface ToolUsePrepResult {
   interrupted: boolean;
-  queuedFollowUp: string | null;
-  queuedFollowUpDisplay: string | null;
+  queuedFollowUps: readonly FollowUpQueueBatchItem[] | null;
   synthetic: boolean;
 }
 
@@ -229,8 +230,7 @@ class ToolUsePrepNode<C> extends BaseNode<
     if (!this.services.session?.hasQueuedFollowUp()) {
       return {
         interrupted,
-        queuedFollowUp: null,
-        queuedFollowUpDisplay: null,
+        queuedFollowUps: null,
         synthetic: false,
       };
     }
@@ -239,8 +239,7 @@ class ToolUsePrepNode<C> extends BaseNode<
     const batch = await this.services.session.waitForFollowUp(() => false);
     return {
       interrupted,
-      queuedFollowUp: batch?.items.join('\n\n') ?? null,
-      queuedFollowUpDisplay: batch?.displayItems.join('\n\n') ?? null,
+      queuedFollowUps: batch?.items ?? null,
       synthetic: batch?.synthetic ?? false,
     };
   }
@@ -258,18 +257,22 @@ class ToolUsePrepNode<C> extends BaseNode<
     // Inject queued follow-up BEFORE the model call
     // This ensures user's message typed during tool execution is seen
     // before the model starts thinking/responding
-    if (prepRes.queuedFollowUp) {
+    if (prepRes.queuedFollowUps?.length) {
       if (!prepRes.synthetic) {
-        logUserMessage(
-          this.services.logger,
-          prepRes.queuedFollowUpDisplay ?? prepRes.queuedFollowUp,
+        for (const followUp of prepRes.queuedFollowUps) {
+          logUserMessage(
+            this.services.logger,
+            followUp.displayText ?? followUp.text,
+          );
+        }
+      }
+      for (const followUp of prepRes.queuedFollowUps) {
+        shared.messages = await appendFollowUpAsUserMessage(
+          shared.messages,
+          followUp,
+          this.services,
         );
       }
-      shared.messages =
-        await this.services.modelHandler.createUserFollowUpMessages(
-          shared.messages,
-          prepRes.queuedFollowUp,
-        );
       if (!prepRes.synthetic) {
         this.services.onFollowUpConsumed?.();
       }

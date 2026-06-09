@@ -8,7 +8,12 @@ import {
 } from '@test/support/FakePlatform';
 import { maybeBuildOdysseyContinuation } from '@agent/odyssey';
 import type { StreamTabId } from '@shared/schemas';
-import { ODYSSEY_FEATURE_FLAG_KEY, OdysseyStore } from '@tools/odyssey';
+import {
+  LEGACY_ODYSSEY_FEATURE_FLAG_KEY,
+  ODYSSEY_FEATURE_FLAG_KEY,
+  OdysseyStore,
+  isOdysseyEnabled,
+} from '@tools/odyssey';
 import type { Platform } from '@platform/platform';
 
 const STREAM_ID = 'stream:odyssey-cont' as StreamTabId;
@@ -16,11 +21,65 @@ const STREAM_ID = 'stream:odyssey-cont' as StreamTabId;
 async function installPlatform(flagOn: boolean): Promise<Platform> {
   const { initPlatform } = await import('@platform/platform');
   const platform = createFakePlatform({
-    config: flagOn ? { [ODYSSEY_FEATURE_FLAG_KEY]: true } : {},
+    config: { [ODYSSEY_FEATURE_FLAG_KEY]: flagOn },
   });
   initPlatform(platform);
   return platform;
 }
+
+async function installPlatformWithConfig(
+  config: Record<string, unknown>,
+): Promise<Platform> {
+  const { initPlatform } = await import('@platform/platform');
+  const platform = createFakePlatform({ config });
+  initPlatform(platform);
+  return platform;
+}
+
+describe('isOdysseyEnabled', () => {
+  it.each([
+    {
+      name: 'defaults on when neither key is set',
+      config: {},
+      expected: true,
+    },
+    {
+      name: 'honors explicit canonical false',
+      config: { [ODYSSEY_FEATURE_FLAG_KEY]: false },
+      expected: false,
+    },
+    {
+      name: 'honors explicit legacy false when canonical is absent',
+      config: { [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: false },
+      expected: false,
+    },
+    {
+      name: 'honors explicit legacy true when canonical is absent',
+      config: { [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: true },
+      expected: true,
+    },
+    {
+      name: 'lets canonical true override legacy false',
+      config: {
+        [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: false,
+        [ODYSSEY_FEATURE_FLAG_KEY]: true,
+      },
+      expected: true,
+    },
+    {
+      name: 'lets canonical false override legacy true',
+      config: {
+        [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: true,
+        [ODYSSEY_FEATURE_FLAG_KEY]: false,
+      },
+      expected: false,
+    },
+  ])('$name', async ({ config, expected }) => {
+    await installPlatformWithConfig(config);
+
+    expect(isOdysseyEnabled()).toBe(expected);
+  });
+});
 
 describe('maybeBuildOdysseyContinuation', () => {
   let platform: Platform;

@@ -56,6 +56,7 @@ export const designTokens: CSSResult = css`
     --border-radius: 3px;
     --border-radius-medium: 4px;
     --border-radius-large: 6px;
+    --border-radius-pill: 999px;
 
     /* Heights */
     --height-control: 24px;

@@ -274,7 +274,7 @@ For good separation of concerns and platform independence, core business logic s
 
 **Logging and telemetry**
 
-- Route logging through `@logger/logUtils`. Agent flows should wrap the logger with `AgentLogger` (`src/logger/AgentLogger.ts`) to get grouped output and tool-use aware channels.
+- Route logging through `@logger/logUtils`. Agent flows should use `AgentTrace` (`@agent/trace`) to get grouped output and tool-use aware channels.
 - Always pass structured payloads via the `data` argument (file lists, missing outputs, latexdiff results, usage statistics) so the progress view can render rich entries without custom parsing.
 - Publish progress updates with the event bus (`bus.emit`/`bus.on` from `src/eventBus/ProgressEventBus.ts`) and keep non-agent logs on the shared `TeXRA` output channel.
 
@@ -333,7 +333,7 @@ See `docs/pocketflow/` for full framework documentation.
 
 - **Base Classes**: All webviews (webview, progressView, settingsView) extend `BaseViewContentProvider` and `BaseViewMessageHandler` from `src/common/webview/` for consistent error handling, logging, and cleanup.
 - **Naming Convention**: Follow `[Domain]View[Component]` pattern (e.g., `MainViewContentProvider`, `SettingsViewMessageHandler`, `ProgressViewContentProvider`)
-- **Command Constants**: Define all commands in `src/common/webview/commands.ts` - use constants, not string literals
+- **Command Constants**: Define commands in `src/shared/ipc/commonCommands.ts` (plus per-view `*ViewCommands.ts` files under `src/shared/ipc/`) — use constants, not string literals
 - **Message Handlers**: Delegate to domain-specific manager classes (FileManager, SettingsManager, etc.) for separation of concerns
 - **Client-Side State**: Add empty handlers with `/* State saved client-side */` comment for checkbox/toggle operations
 - **Resource Access**: Include all common module paths in `localResourceRoots` to prevent 401 errors

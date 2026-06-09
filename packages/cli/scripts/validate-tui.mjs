@@ -284,7 +284,7 @@ const SCENARIOS = [
       'Team Lean Project',
       'unavailable',
       '2/7 tool-u',
-      '... 2 more',
+      '... 3 more',
       'Team setup: run texra multi-agent inspect <preset>.',
       'Relay teams may unlock more agents after texra login.',
       '1-9/a-z/Enter open',
@@ -560,6 +560,22 @@ const SCENARIOS = [
     },
     keys: ['/model', '\r', '\r'],
     frame: 'tail',
+    expect: ['Harness model selected. Future turns:'],
+    unexpect: [
+      'Finish the active response before switching models.',
+      'Platform not initialized',
+      '/model - error',
+    ],
+  },
+  {
+    name: 'model-form-buffered-hotkey',
+    env: {
+      HARNESS_CAN_SELECT_MODEL: '1',
+      HARNESS_ENTRIES: '4',
+    },
+    keys: ['/model', '\r', '21'],
+    frame: 'tail',
+    settleMs: ASYNC_FORM_SETTLE_MS,
     expect: ['Harness model selected. Future turns:'],
     unexpect: [
       'Finish the active response before switching models.',
@@ -1375,7 +1391,7 @@ const SCENARIOS = [
       {
         from: 'entry-4 chat history line',
         to: 'Subagents',
-        max: 0,
+        max: 1,
       },
     ],
   },
@@ -1649,7 +1665,7 @@ const SCENARIOS = [
       {
         from: 'entry-4 chat history line',
         to: 'Tasks and sub-workflows',
-        max: 0,
+        max: 1,
       },
     ],
   },
@@ -1679,7 +1695,7 @@ const SCENARIOS = [
       {
         from: 'entry-4 chat history line',
         to: 'Subagents',
-        max: 0,
+        max: 1,
       },
     ],
   },
@@ -1709,7 +1725,7 @@ const SCENARIOS = [
       {
         from: 'entry-4 chat history line',
         to: 'Tasks and sub-workflows',
-        max: 0,
+        max: 1,
       },
     ],
   },

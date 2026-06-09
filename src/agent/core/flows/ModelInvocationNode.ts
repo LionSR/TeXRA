@@ -37,7 +37,7 @@ export interface ModelInvocationConfig<TShared, TServices> {
   ) => CycleDebugFileOptions;
 }
 
-type InvocationServices = BaseFlowContextInit<any> & {
+type InvocationServices = BaseFlowContextInit<unknown> & {
   readonly client: unknown;
   readonly refreshClient?: () => Promise<void>;
 };
