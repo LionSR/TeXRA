@@ -401,6 +401,7 @@ For good separation of concerns, testability, and platform independence, core bu
 - Use `isFileNotFoundError()` from `@common/errors` instead of `instanceof vscode.FileSystemError`
 - Return error results instead of calling `vscode.window.show*Message()` from business logic — let the caller (command layer) handle UI
 - Add typed `Platform` ports (like `toolAvailability.isVscodeExtensionInstalled`) for platform-specific capabilities needed in agnostic code
+- New run-scoped facts extend `AgentEvent` (trace) or `ProgressEventPayloads` emitted via the run's `runtimeHost` — never a new `bus.emit` from a VS Code-free zone, and never a new subscribe surface. (Ruled in `docs/proposals/error-pipeline-and-ownership.md`; the existing direct `bus.emit` sites in `src/tools` are grandfathered until SDK Step 7d.)
 
 ### Path Aliases
 
