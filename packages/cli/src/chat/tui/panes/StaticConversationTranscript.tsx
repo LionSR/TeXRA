@@ -1,6 +1,8 @@
-// Live session header plus print-once transcript entries. Finalized entries
-// land in ordinary terminal scrollback through Ink `<Static>`; the header
-// stays adaptive chrome for the active scrollback owner.
+// Print-once session header plus transcript entries. The header is the first
+// static row for the active scrollback owner; finalized entries append after it
+// in ordinary terminal scrollback through Ink `<Static>`. The Static key must
+// stay stable across resize because terminal scrollback is append-only: reflowing
+// old rows by remounting Static reprints the header and finalized history.
 
 import path from 'node:path';
 
@@ -40,16 +42,6 @@ export type StaticTranscriptItem =
       readonly kind: 'entry';
       readonly entry: ConversationEntry;
     };
-
-type StaticTranscriptHeaderItem = Extract<
-  StaticTranscriptItem,
-  { readonly kind: 'header' }
->;
-
-type StaticTranscriptEntryItem = Extract<
-  StaticTranscriptItem,
-  { readonly kind: 'entry' }
->;
 
 interface StaticTranscriptState {
   readonly ownerKey: string;
@@ -176,18 +168,6 @@ function staticTranscriptItemRowCount(
     : lines;
 }
 
-function isStaticTranscriptHeaderItem(
-  item: StaticTranscriptItem,
-): item is StaticTranscriptHeaderItem {
-  return item.kind === 'header';
-}
-
-function isStaticTranscriptEntryItem(
-  item: StaticTranscriptItem,
-): item is StaticTranscriptEntryItem {
-  return item.kind === 'entry';
-}
-
 export function appendStaticTranscriptItems({
   currentItems,
   streams,
@@ -227,7 +207,14 @@ export function appendStaticTranscriptItems({
       maxRows === undefined ||
       currentRows + staticTranscriptItemRowCount(header, width) <= maxRows
     ) {
-      nextItems.push(header);
+      const firstEntryIndex = nextItems.findIndex(
+        (item) => item.kind === 'entry',
+      );
+      nextItems.splice(
+        firstEntryIndex < 0 ? nextItems.length : firstEntryIndex,
+        0,
+        header,
+      );
       currentRows += staticTranscriptItemRowCount(header, width);
       seen.add(SESSION_HEADER_ID);
     }
@@ -325,33 +312,20 @@ export function StaticConversationTranscript({
     width,
   ]);
 
-  const headerItems = items.filter(isStaticTranscriptHeaderItem);
-  const entryItems = items.filter(isStaticTranscriptEntryItem);
-
   return (
-    <>
-      {headerItems.map((item: StaticTranscriptHeaderItem) => (
+    <Static key={`transcript:${ownerKey}`} items={[...items]}>
+      {(item: StaticTranscriptItem) => (
         <Box key={item.id} flexDirection="column">
-          <EntryErrorBoundary label="session header">
-            <SessionHeaderBlock
-              compact={item.compact}
-              identityLine={item.identityLine}
-              meta={item.meta}
-              width={width}
-            />
-          </EntryErrorBoundary>
-        </Box>
-      ))}
-      {/* Remount entry <Static> on a width or owner change so Ink regenerates
-       * `fullStaticOutput` for the current stream. The header is outside this
-       * keyed region; early terminal-width settling must not print the
-       * session banner twice. */}
-      <Static
-        key={`entries:${ownerKey}:${Math.max(1, Math.floor(width ?? 80))}`}
-        items={[...entryItems]}
-      >
-        {(item: StaticTranscriptEntryItem) => (
-          <Box key={item.id} flexDirection="column">
+          {item.kind === 'header' ? (
+            <EntryErrorBoundary label="session header">
+              <SessionHeaderBlock
+                compact={item.compact}
+                identityLine={item.identityLine}
+                meta={item.meta}
+                width={width}
+              />
+            </EntryErrorBoundary>
+          ) : (
             <EntryErrorBoundary label={item.entry.role}>
               <TranscriptEntry
                 entry={item.entry}
@@ -359,9 +333,9 @@ export function StaticConversationTranscript({
                 colorEnabled={colorEnabled}
               />
             </EntryErrorBoundary>
-          </Box>
-        )}
-      </Static>
-    </>
+          )}
+        </Box>
+      )}
+    </Static>
   );
 }
