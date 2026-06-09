@@ -6,22 +6,24 @@ import {
   FakeConfigProvider,
   createFakePlatform,
 } from '@test/support/FakePlatform';
-import { maybeBuildOdysseyContinuation } from '@agent/odyssey';
+import { maybeBuildGoalContinuation } from '@agent/goal';
 import type { StreamTabId } from '@shared/schemas';
 import {
-  LEGACY_ODYSSEY_FEATURE_FLAG_KEY,
-  ODYSSEY_FEATURE_FLAG_KEY,
-  OdysseyStore,
-  isOdysseyEnabled,
-} from '@tools/odyssey';
+  LEGACY_GOAL_FEATURE_FLAG_KEYS,
+  GOAL_FEATURE_FLAG_KEY,
+  GoalStore,
+  isGoalEnabled,
+} from '@tools/goal';
 import type { Platform } from '@platform/platform';
 
-const STREAM_ID = 'stream:odyssey-cont' as StreamTabId;
+const STREAM_ID = 'stream:goal-cont' as StreamTabId;
+// Pre-rename canonical key, still honored read-only for back-compat.
+const LEGACY_GOAL_FEATURE_FLAG_KEY = LEGACY_GOAL_FEATURE_FLAG_KEYS[0];
 
 async function installPlatform(flagOn: boolean): Promise<Platform> {
   const { initPlatform } = await import('@platform/platform');
   const platform = createFakePlatform({
-    config: { [ODYSSEY_FEATURE_FLAG_KEY]: flagOn },
+    config: { [GOAL_FEATURE_FLAG_KEY]: flagOn },
   });
   initPlatform(platform);
   return platform;
@@ -36,7 +38,7 @@ async function installPlatformWithConfig(
   return platform;
 }
 
-describe('isOdysseyEnabled', () => {
+describe('isGoalEnabled', () => {
   it.each([
     {
       name: 'defaults on when neither key is set',
@@ -45,43 +47,43 @@ describe('isOdysseyEnabled', () => {
     },
     {
       name: 'honors explicit canonical false',
-      config: { [ODYSSEY_FEATURE_FLAG_KEY]: false },
+      config: { [GOAL_FEATURE_FLAG_KEY]: false },
       expected: false,
     },
     {
       name: 'honors explicit legacy false when canonical is absent',
-      config: { [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: false },
+      config: { [LEGACY_GOAL_FEATURE_FLAG_KEY]: false },
       expected: false,
     },
     {
       name: 'honors explicit legacy true when canonical is absent',
-      config: { [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: true },
+      config: { [LEGACY_GOAL_FEATURE_FLAG_KEY]: true },
       expected: true,
     },
     {
       name: 'lets canonical true override legacy false',
       config: {
-        [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: false,
-        [ODYSSEY_FEATURE_FLAG_KEY]: true,
+        [LEGACY_GOAL_FEATURE_FLAG_KEY]: false,
+        [GOAL_FEATURE_FLAG_KEY]: true,
       },
       expected: true,
     },
     {
       name: 'lets canonical false override legacy true',
       config: {
-        [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: true,
-        [ODYSSEY_FEATURE_FLAG_KEY]: false,
+        [LEGACY_GOAL_FEATURE_FLAG_KEY]: true,
+        [GOAL_FEATURE_FLAG_KEY]: false,
       },
       expected: false,
     },
   ])('$name', async ({ config, expected }) => {
     await installPlatformWithConfig(config);
 
-    expect(isOdysseyEnabled()).toBe(expected);
+    expect(isGoalEnabled()).toBe(expected);
   });
 });
 
-describe('maybeBuildOdysseyContinuation', () => {
+describe('maybeBuildGoalContinuation', () => {
   let platform: Platform;
 
   beforeEach(async () => {
@@ -89,20 +91,20 @@ describe('maybeBuildOdysseyContinuation', () => {
   });
 
   afterEach(async () => {
-    await OdysseyStore.forget(STREAM_ID);
+    await GoalStore.forget(STREAM_ID);
   });
 
-  it('returns a rendered prompt when an active odyssey is present', async () => {
-    await OdysseyStore.start(
+  it('returns a rendered prompt when an active goal is present', async () => {
+    await GoalStore.start(
       STREAM_ID,
       'Complete the refactor until pnpm test passes',
     );
-    const out = await maybeBuildOdysseyContinuation({
+    const out = await maybeBuildGoalContinuation({
       streamId: STREAM_ID,
       isSubagent: false,
       hasQueuedFollowUp: false,
     });
-    expect(out).toMatch(/<odyssey_context>/);
+    expect(out).toMatch(/<goal_context>/);
     expect(out).toContain('Complete the refactor until pnpm test passes');
     expect(out).toContain('Autonomous objective active');
     // The continuation no longer advertises the model-callable exit verbs;
@@ -112,8 +114,8 @@ describe('maybeBuildOdysseyContinuation', () => {
   });
 
   it('returns null in subagent mode (parent owns continuation)', async () => {
-    await OdysseyStore.start(STREAM_ID, 'objective');
-    const out = await maybeBuildOdysseyContinuation({
+    await GoalStore.start(STREAM_ID, 'objective');
+    const out = await maybeBuildGoalContinuation({
       streamId: STREAM_ID,
       isSubagent: true,
       hasQueuedFollowUp: false,
@@ -122,8 +124,8 @@ describe('maybeBuildOdysseyContinuation', () => {
   });
 
   it('returns null when user already queued a follow-up', async () => {
-    await OdysseyStore.start(STREAM_ID, 'objective');
-    const out = await maybeBuildOdysseyContinuation({
+    await GoalStore.start(STREAM_ID, 'objective');
+    const out = await maybeBuildGoalContinuation({
       streamId: STREAM_ID,
       isSubagent: false,
       hasQueuedFollowUp: true,
@@ -131,26 +133,23 @@ describe('maybeBuildOdysseyContinuation', () => {
     expect(out).toBeNull();
   });
 
-  it('returns null when the feature flag is off (with an active odyssey present)', async () => {
-    await OdysseyStore.start(STREAM_ID, 'objective');
+  it('returns null when the feature flag is off (with an active goal present)', async () => {
+    await GoalStore.start(STREAM_ID, 'objective');
     // Flip just the flag — keep the same workspaceState so the active
-    // odyssey is still on disk. Otherwise the test passes trivially.
-    (platform.config as FakeConfigProvider).set(
-      ODYSSEY_FEATURE_FLAG_KEY,
-      false,
-    );
-    const out = await maybeBuildOdysseyContinuation({
+    // goal is still on disk. Otherwise the test passes trivially.
+    (platform.config as FakeConfigProvider).set(GOAL_FEATURE_FLAG_KEY, false);
+    const out = await maybeBuildGoalContinuation({
       streamId: STREAM_ID,
       isSubagent: false,
       hasQueuedFollowUp: false,
     });
     expect(out).toBeNull();
     // Sanity: the record still exists; only the flag stopped the loop.
-    expect(OdysseyStore.getForStream(STREAM_ID)?.status).toBe('active');
+    expect(GoalStore.getForStream(STREAM_ID)?.status).toBe('active');
   });
 
-  it('returns null when no odyssey exists for the stream', async () => {
-    const out = await maybeBuildOdysseyContinuation({
+  it('returns null when no goal exists for the stream', async () => {
+    const out = await maybeBuildGoalContinuation({
       streamId: STREAM_ID,
       isSubagent: false,
       hasQueuedFollowUp: false,
@@ -158,10 +157,10 @@ describe('maybeBuildOdysseyContinuation', () => {
     expect(out).toBeNull();
   });
 
-  it('returns null when the odyssey is paused', async () => {
-    await OdysseyStore.start(STREAM_ID, 'objective');
-    await OdysseyStore.setStatus(STREAM_ID, 'paused');
-    const out = await maybeBuildOdysseyContinuation({
+  it('returns null when the goal is paused', async () => {
+    await GoalStore.start(STREAM_ID, 'objective');
+    await GoalStore.setStatus(STREAM_ID, 'paused');
+    const out = await maybeBuildGoalContinuation({
       streamId: STREAM_ID,
       isSubagent: false,
       hasQueuedFollowUp: false,
@@ -170,13 +169,13 @@ describe('maybeBuildOdysseyContinuation', () => {
   });
 
   it('is a pure read — leaves the record untouched', async () => {
-    const before = await OdysseyStore.start(STREAM_ID, 'objective');
-    await maybeBuildOdysseyContinuation({
+    const before = await GoalStore.start(STREAM_ID, 'objective');
+    await maybeBuildGoalContinuation({
       streamId: STREAM_ID,
       isSubagent: false,
       hasQueuedFollowUp: false,
     });
-    const after = OdysseyStore.getForStream(STREAM_ID);
+    const after = GoalStore.getForStream(STREAM_ID);
     // No counter, no audit log: the helper only reads. The loop runs until
     // the model completes or the user stops it.
     expect(after?.status).toBe('active');

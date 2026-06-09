@@ -44,7 +44,7 @@ describe('createProgressViewApprovalCommandHandlers', () => {
         {
           command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
           approvalId: 'plan-1',
-          action: 'approve_and_odyssey',
+          action: 'approve_and_goal',
         },
         handlers,
       ),
@@ -89,7 +89,7 @@ describe('createProgressViewApprovalCommandHandlers', () => {
     expect(actions.handlePlanApprovalAction).toHaveBeenCalledWith({
       command: PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION,
       approvalId: 'plan-1',
-      action: 'approve_and_odyssey',
+      action: 'approve_and_goal',
     });
     expect(actions.handleUserQuestionAction).toHaveBeenCalledWith({
       command: PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION,

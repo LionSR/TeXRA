@@ -25,7 +25,7 @@ import {
   type StreamBadgeSnapshot,
 } from '@shared/progressView/backend/state/ProgressViewState';
 import { buildStreamMetadata } from '@shared/streams/streamMetadata';
-import type { OdysseyStatus } from '@tools/odyssey';
+import type { GoalStatus } from '@tools/goal';
 
 export type ProgressViewMessageSender = (
   message: ProgressViewOutboundMessage,
@@ -72,9 +72,9 @@ export interface SyncStreamContentPayload {
   /** Toggle bypass state (hydrated on tab switch so toggles display correctly). */
   toolEditBypass?: boolean;
   superYoloBypass?: boolean;
-  odysseyActive?: boolean;
-  odysseyStatus?: OdysseyStatus;
-  odysseyObjective?: string;
+  goalActive?: boolean;
+  goalStatus?: GoalStatus;
+  goalObjective?: string;
 }
 
 /**
@@ -189,14 +189,14 @@ export class WebviewUpdater {
     });
   }
 
-  /** Notify the frontend that this stream's odyssey state changed. */
-  updateOdysseyActive(
+  /** Notify the frontend that this stream's goal state changed. */
+  updateGoalActive(
     stream: StreamTabId,
     active: boolean,
-    details?: { status?: OdysseyStatus; objective?: string },
+    details?: { status?: GoalStatus; objective?: string },
   ): void {
     this.sendMessage({
-      command: PROGRESS_VIEW_COMMANDS.ODYSSEY_ACTIVE_UPDATED,
+      command: PROGRESS_VIEW_COMMANDS.GOAL_ACTIVE_UPDATED,
       stream,
       active,
       ...(details?.status ? { status: details.status } : {}),

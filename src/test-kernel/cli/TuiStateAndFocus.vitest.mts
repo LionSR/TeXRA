@@ -370,7 +370,7 @@ describe('CLI TUI row allocation', () => {
           payload: {
             approvalId: 'plan-1',
             streamId: root,
-            odysseyEnabled: false,
+            goalEnabled: false,
             plan: {
               summary: 'Coordinate a proof.',
               steps: [],

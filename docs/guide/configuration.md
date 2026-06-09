@@ -23,7 +23,7 @@ The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open i
 
 <DashboardTabsCard />
 
-<p class="hero-caption">The Dashboard navigation rail: ten tabs from Memory through Odyssey, each opening a focused configuration surface.</p>
+<p class="hero-caption">The Dashboard navigation rail: ten tabs from Memory through Goal, each opening a focused configuration surface.</p>
 
 - **[Memory](./memory.md)** - See what your tool-use agents have remembered across sessions, pin core insights, and delete entries you no longer need.
 - **History** - Search and browse past runs. Handy for finding that polish job you ran last week.
@@ -34,7 +34,7 @@ The **Dashboard** is your one-stop shop for managing everything in TeXRA. Open i
 - **Integrations** - Set up third-party coding agents (OpenAI Codex, Claude Code) that TeXRA can hand off to. See [Agent Integrations](./agent-integrations.md).
 - **Git** - Set a GitHub personal access token (required for the `github_subscription` tool) and optionally attribute TeXRA commits to a custom author.
 - **LaTeX** - Configure LaTeX formatting, diff, and TikZ settings.
-- **Odyssey** - Watch autonomous runs, where an agent keeps working toward a goal across turns until it reports the goal complete. On by default; this tab lists active and past Odysseys for observation and navigation.
+- **Goal** - Watch autonomous runs, where an agent keeps working toward a goal across turns until it reports the goal complete. On by default; this tab lists active and past Goals for observation and navigation.
 
 ::: tip
 The Dashboard tabs are the recommended way to manage agents, models, tools, and connections. VS Code's raw settings (`texra.*` keys) still work for power users.

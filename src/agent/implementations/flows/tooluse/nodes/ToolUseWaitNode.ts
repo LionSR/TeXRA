@@ -2,8 +2,8 @@ import { Node } from '@agent/node';
 import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { appendFollowUpAsUserMessage } from '@agent/toolUse/followUpMessages';
-import { maybeBuildOdysseyContinuation } from '@agent/odyssey';
-import { OdysseyStore } from '@tools/odyssey';
+import { maybeBuildGoalContinuation } from '@agent/goal';
+import { GoalStore } from '@tools/goal';
 import { STREAM_STATUS } from '@shared/schemas';
 
 import { findLastAssistantText, extractTouchedFiles } from './types';
@@ -78,13 +78,13 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
     // A failed/cancelled cycle ends the autonomous leg. Pause any active
-    // odyssey so it surfaces as resumable — the in-cycle retry layer already
+    // goal so it surfaces as resumable — the in-cycle retry layer already
     // absorbed transient errors before we reach here — instead of leaving the
     // record `active` while the loop is actually stalled on a blocking wait.
     if (prepRes.afterError) {
-      const odyssey = OdysseyStore.getForStream(streamId);
-      if (odyssey?.status === 'active') {
-        await OdysseyStore.setStatus(streamId, 'paused');
+      const goal = GoalStore.getForStream(streamId);
+      if (goal?.status === 'active') {
+        await GoalStore.setStatus(streamId, 'paused');
       }
     }
     if (!prepRes.afterError) {
@@ -101,13 +101,13 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
 
-    // The Odyssey continuation runs BEFORE `waitForFollowUp` blocks; once
+    // The Goal continuation runs BEFORE `waitForFollowUp` blocks; once
     // inside the wait, a continuation check is unreachable. Skipped after a
     // failed/cancelled cycle so the user-recovery path still fires. The
     // post-build re-check of `hasQueuedFollowUp` lets user input that arrived
     // during the build win the race.
     if (!prepRes.afterError) {
-      const followUp = await maybeBuildOdysseyContinuation({
+      const followUp = await maybeBuildGoalContinuation({
         streamId,
         isSubagent: !!isSubagent,
         hasQueuedFollowUp: session.hasQueuedFollowUp(),
