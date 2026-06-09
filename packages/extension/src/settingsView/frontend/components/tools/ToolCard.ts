@@ -1,5 +1,6 @@
 /** Single tool group with status, description, and optional installation guide. */
 
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
@@ -97,18 +98,9 @@ export class ToolCard extends LitElement {
         margin-bottom: var(--wa-space-2xs);
       }
 
-      .tool-id-tag {
+      wa-badge.tool-id-tag::part(base) {
         font-family: var(--wa-font-family-mono, monospace), monospace;
         font-size: var(--font-size-xs);
-        padding: var(--border-thin) var(--border-radius-large);
-        background: var(
-          --wa-color-neutral-fill-quiet,
-          rgba(128, 128, 128, 0.15)
-        );
-        border: var(--border-thin) solid
-          var(--wa-color-neutral-border-quiet, transparent);
-        color: var(--wa-color-neutral-on-quiet);
-        border-radius: var(--border-radius);
       }
 
       .tool-guide-toggle::part(base) {
@@ -477,10 +469,12 @@ export class ToolCard extends LitElement {
               <div class="tool-ids">
                 ${this.item.tools.map(
                   (tool) =>
-                    html`<span
+                    html`<wa-badge
                       class="tool-id-tag"
+                      variant="neutral"
+                      appearance="filled"
                       title=${tool.description ?? tool.name}
-                      >${tool.name}</span
+                      >${tool.name}</wa-badge
                     >`,
                 )}
               </div>

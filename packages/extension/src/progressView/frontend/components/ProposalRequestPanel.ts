@@ -9,6 +9,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Side-effect imports - register WA icon component
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
@@ -118,15 +119,12 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
       >
         <div class="workflow-proposal__details">
           <div class="workflow-proposal__header-row">
-            <span
-              class=${classMap({
-                'workflow-proposal__category-badge': true,
-                'workflow-proposal__category-badge--workflow': isWorkflow,
-                'workflow-proposal__category-badge--tool-use': !isWorkflow,
-              })}
+            <wa-badge
+              variant=${isWorkflow ? 'neutral' : 'brand'}
+              appearance="filled"
             >
               ${categoryLabel}
-            </span>
+            </wa-badge>
             ${hasAgentOptions
               ? html`
                   <div class="workflow-proposal__agent-select">
@@ -248,14 +246,13 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
         flags,
         (flag) => flag,
         (flag) =>
-          html`<span
-            class="workflow-proposal__category-badge workflow-proposal__category-badge--workflow workflow-proposal__extract-flag"
+          html`<wa-badge variant="neutral" appearance="filled"
             ><wa-icon
               library="texra"
               name="file-media"
               aria-hidden="true"
             ></wa-icon>
-            ${flag}</span
+            ${flag}</wa-badge
           >`,
       )}
     </div>`;
