@@ -1,7 +1,14 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createRunContext, withRunContext } from '@agent/runtime/RunContext';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import {
+  AgentExecutionHandle,
+  executionRegistry,
+} from '@agent/runtime/executionRegistry';
+import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import type { StreamTabId } from '@shared/schemas';
 import { DelegateAgentTool } from '@tools/DelegationTools';
 
 const mocks = vi.hoisted(() => ({
@@ -87,6 +94,14 @@ describe('headless delegation', () => {
       lastResponse: 'The proof is correct.',
       touchedFiles: [],
     });
+  });
+
+  afterEach(() => {
+    for (const executionId of executionRegistry.getActiveIds()) {
+      executionRegistry.untrack(executionId);
+    }
+    ToolUseFollowUpQueue.release('parent-stream' as StreamTabId);
+    ToolUseFollowUpQueue.release('child-stream' as StreamTabId);
   });
 
   it('awaits child delegation during one-shot tool-use runs', async () => {
@@ -195,6 +210,102 @@ describe('headless delegation', () => {
       expect.anything(),
       expect.any(String),
       expect.not.objectContaining({ stopAfterCycle: true }),
+    );
+  });
+
+  it('includes memory misses in interactive early-delivered reports', async () => {
+    const childStreamId = 'child-stream' as StreamTabId;
+    let onBeforeWaiting: ToolUseBeforeWaitingCallback | undefined;
+
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      options.onStreamResolved?.(childStreamId);
+      onBeforeWaiting = options.onBeforeWaiting;
+      return new Promise(() => {});
+    });
+
+    await withRunContext(
+      createRunContext({
+        runtimeHost: runtimeHost(),
+        streamId: 'parent-stream',
+        executionId: 'parent-exec',
+        model: 'deepseekT',
+      }),
+      () =>
+        new DelegateAgentTool().call({
+          agent: 'review',
+          model: null,
+          instruction: 'Check the proof.',
+          memories: [],
+          working_directory: null,
+          execution_id: null,
+        }),
+    );
+
+    expect(onBeforeWaiting).toBeDefined();
+    await onBeforeWaiting!(
+      'The proof is correct.',
+      [],
+      [{ path: '/memories/missing.md', reason: 'not found & unreadable' }],
+    );
+
+    expect(mocks.writeReport).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '<memory-miss path="/memories/missing.md" reason="not found &amp; unreadable" />',
+      ),
+    );
+  });
+
+  it('does not deliver detached subagent results back to the released parent', async () => {
+    const parentStreamId = 'parent-stream' as StreamTabId;
+    const childStreamId = 'child-stream' as StreamTabId;
+    const host = runtimeHost();
+    let onBeforeWaiting: ToolUseBeforeWaitingCallback | undefined;
+
+    mocks.executeAgent.mockImplementationOnce(
+      async (_config, executionId: string, options) => {
+        executionRegistry.track(
+          new AgentExecutionHandle(
+            executionId,
+            parentStreamId,
+            childStreamId,
+            'review',
+            'toolUse',
+            host,
+          ),
+        );
+        options.onStreamResolved?.(childStreamId);
+        onBeforeWaiting = options.onBeforeWaiting;
+        return new Promise(() => {});
+      },
+    );
+
+    await withRunContext(
+      createRunContext({
+        runtimeHost: host,
+        streamId: parentStreamId,
+        executionId: 'parent-exec',
+        model: 'deepseekT',
+      }),
+      () =>
+        new DelegateAgentTool().call({
+          agent: 'review',
+          model: null,
+          instruction: 'Check the proof.',
+          memories: [],
+          working_directory: null,
+          execution_id: null,
+        }),
+    );
+
+    executionRegistry.detachActiveChildren(parentStreamId, host);
+
+    expect(onBeforeWaiting).toBeDefined();
+    const delivered = await onBeforeWaiting!('The proof is correct.', [], []);
+    expect(delivered).toBe(false);
+    expect(ToolUseFollowUpQueue.getAll(parentStreamId)).toEqual([]);
+    expect(ToolUseFollowUpQueue.getAll(childStreamId)).toEqual([]);
+    expect(mocks.writeReport).toHaveBeenCalledWith(
+      expect.stringContaining('The proof is correct.'),
     );
   });
 });

@@ -5,10 +5,24 @@
  * toolUse modules, allowing it to be imported without circular dependency issues.
  */
 
+/** Preserves visible follow-up provenance across queueing and resume replay. */
+export type VisibleFollowUpQueueItemOrigin = 'user' | 'subagent_result';
+export type FollowUpQueueItemOrigin =
+  | VisibleFollowUpQueueItemOrigin
+  | 'synthetic';
+
+export interface FollowUpQueueInput {
+  readonly text: string;
+  readonly displayText?: string;
+  /** Media file paths (e.g. pasted images) attached to this user follow-up. */
+  readonly mediaFiles?: readonly string[];
+  readonly origin?: VisibleFollowUpQueueItemOrigin;
+}
+
 interface FollowUpQueueItem {
   readonly text: string;
   readonly displayText?: string;
-  readonly synthetic: boolean;
+  readonly origin: FollowUpQueueItemOrigin;
   /** Media file paths (e.g. pasted images) attached to this user follow-up. */
   readonly mediaFiles?: readonly string[];
 }
@@ -17,40 +31,67 @@ function displayTextForItem(item: FollowUpQueueItem): string {
   return item.displayText ?? item.text;
 }
 
+function isVisibleItem(item: FollowUpQueueItem): item is FollowUpQueueItem & {
+  readonly origin: VisibleFollowUpQueueItemOrigin;
+} {
+  return item.origin !== 'synthetic';
+}
+
+export interface FollowUpQueueBatchItem {
+  readonly text: string;
+  readonly displayText?: string;
+  readonly mediaFiles?: readonly string[];
+  readonly origin: FollowUpQueueItemOrigin;
+}
+
 export interface FollowUpQueueBatch {
-  readonly items: string[];
-  readonly displayItems: string[];
+  readonly items: FollowUpQueueBatchItem[];
   readonly synthetic: boolean;
-  /** Media file paths from the user follow-ups in this batch, flattened. */
-  readonly mediaFiles: string[];
 }
 
 /** A single visible follow-up drained for resume replay. */
 export interface DrainedFollowUpItem {
-  text: string;
-  displayText?: string;
-  mediaFiles?: readonly string[];
+  readonly text: string;
+  readonly displayText?: string;
+  readonly mediaFiles?: readonly string[];
+  readonly origin: VisibleFollowUpQueueItemOrigin;
+}
+
+function batchItem(item: FollowUpQueueItem): FollowUpQueueBatchItem {
+  return {
+    text: item.text,
+    displayText: item.displayText,
+    mediaFiles: item.mediaFiles,
+    origin: item.origin,
+  };
+}
+
+function drainedVisibleItem(
+  item: FollowUpQueueItem & { readonly origin: VisibleFollowUpQueueItemOrigin },
+): DrainedFollowUpItem {
+  return {
+    text: item.text,
+    displayText: item.displayText,
+    mediaFiles: item.mediaFiles,
+    origin: item.origin,
+  };
 }
 
 export class FollowUpQueue {
   private readonly queued: FollowUpQueueItem[] = [];
   private resolver: ((value: FollowUpQueueItem | null) => void) | null = null;
 
-  enqueue(
-    value: string,
-    mediaFiles?: readonly string[],
-    displayText?: string,
-  ): void {
+  enqueue(value: FollowUpQueueInput): void {
     this.enqueueItem({
-      text: value,
-      displayText,
-      synthetic: false,
-      mediaFiles,
+      text: value.text,
+      displayText: value.displayText,
+      origin: value.origin ?? 'user',
+      mediaFiles: value.mediaFiles,
     });
   }
 
   enqueueSynthetic(value: string): void {
-    this.enqueueItem({ text: value, synthetic: true });
+    this.enqueueItem({ text: value, origin: 'synthetic' });
   }
 
   private enqueueItem(value: FollowUpQueueItem): void {
@@ -68,10 +109,7 @@ export class FollowUpQueue {
   }
 
   drain(): string[] {
-    return this.queued
-      .splice(0)
-      .filter((item) => !item.synthetic)
-      .map(displayTextForItem);
+    return this.queued.splice(0).filter(isVisibleItem).map(displayTextForItem);
   }
 
   /**
@@ -80,14 +118,7 @@ export class FollowUpQueue {
    * the text-only {@link drain} stays for display/back-compat.
    */
   drainItems(): DrainedFollowUpItem[] {
-    return this.queued
-      .splice(0)
-      .filter((item) => !item.synthetic)
-      .map((item) => ({
-        text: item.text,
-        displayText: item.displayText,
-        mediaFiles: item.mediaFiles,
-      }));
+    return this.queued.splice(0).filter(isVisibleItem).map(drainedVisibleItem);
   }
 
   waitForNext(
@@ -116,27 +147,21 @@ export class FollowUpQueue {
   ): Promise<FollowUpQueueBatch | null> {
     const first = await this.waitForNext(checkInterruption);
     if (first === null) return null;
-    if (first.synthetic) {
+    if (first.origin === 'synthetic') {
       return {
-        items: [first.text],
-        displayItems: [displayTextForItem(first)],
+        items: [batchItem(first)],
         synthetic: true,
-        mediaFiles: [],
       };
     }
 
-    const items = [first.text];
-    const displayItems = [displayTextForItem(first)];
-    const mediaFiles: string[] = [...(first.mediaFiles ?? [])];
+    const items = [batchItem(first)];
     while (true) {
       const next = this.queued[0];
-      if (!next || next.synthetic) break;
+      if (!next || next.origin === 'synthetic') break;
       const item = this.queued.shift()!;
-      items.push(item.text);
-      displayItems.push(displayTextForItem(item));
-      if (item.mediaFiles?.length) mediaFiles.push(...item.mediaFiles);
+      items.push(batchItem(item));
     }
-    return { items, displayItems, synthetic: false, mediaFiles };
+    return { items, synthetic: false };
   }
 
   cancelWait(): void {
@@ -152,8 +177,6 @@ export class FollowUpQueue {
 
   /** Get a copy of all queued items for display purposes. */
   getAll(): string[] {
-    return this.queued
-      .filter((item) => !item.synthetic)
-      .map(displayTextForItem);
+    return this.queued.filter(isVisibleItem).map(displayTextForItem);
   }
 }

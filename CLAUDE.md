@@ -323,9 +323,10 @@ mouse-scroll for finalized history, so don't reinvent them.
   width-dependent: recompute live-region layout from `useWindowSize()` columns
   on every render; never cache wrapped output across a width change. On a width
   change the vendored `ink` patch (`patches/ink@7.0.5.patch`) deliberately does
-  a **full repaint** — `ansiEscapes.clearTerminal` then reprint
-  `fullStaticOutput` (header + finalized root history, reflowed), with the live
-  region drawn below — debounced so a drag-storm collapses into one redraw.
+  a **full repaint** — `ansiEscapes.clearTerminal` then reprint live chrome
+  (including the session header) plus `fullStaticOutput` (finalized history,
+  reflowed), with the live region drawn below — debounced so a drag-storm
+  collapses into one redraw.
   Any transcript viewport switch (`root` ↔ scoped child, or child ↔ child) uses
   the same known-origin pattern: clear scrollback, drop cached static output,
   then repaint the new viewport. Root viewports reprint root `<Static>` history;
@@ -333,9 +334,9 @@ mouse-scroll for finalized history, so don't reinvent them.
   Line-count erasing of the live region can't survive reflow, because the
   emulator owns the reflow/scroll geometry and a write-only stdout can't observe
   it, so any fixed erase count either strands residue or walks up and eats the
-  static header. Don't "fix" this back to line-count erasing; the no-repaint
-  rule applies to steady-state rendering, not resize or transcript viewport
-  switches.
+  live session header. Don't "fix" this back to line-count erasing; the
+  no-repaint rule applies to steady-state rendering, not resize or transcript
+  viewport switches.
 
 ### CLI design (clig.dev)
 

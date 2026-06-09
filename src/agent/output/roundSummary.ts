@@ -115,11 +115,5 @@ export async function getRoundOutput(
     );
   }
 
-  return {
-    round,
-    rawOutput: data.rawOutput,
-    outputs: data.outputs,
-    compileFailures: data.compileFailures,
-    xmlSummary: data.xmlSummary,
-  };
+  return data;
 }

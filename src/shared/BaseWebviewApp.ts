@@ -26,7 +26,7 @@ import { themeIsDark } from '@shared/wa/hostTheme';
  * instead of `unknown`.
  */
 
-export abstract class BaseWebviewApp<TMessage = any> extends LitElement {
+export abstract class BaseWebviewApp<TMessage = unknown> extends LitElement {
   @provide({ context: themeContext })
   @state()
   protected theme = '';

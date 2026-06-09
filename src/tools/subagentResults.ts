@@ -12,6 +12,7 @@ import type {
   AgentFlowResult,
   OutputFileSummary,
 } from '@agent/runtime/AgentFlowResult';
+import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import type { ExecResult } from '@agent/types/ResultTypes';
 import { normalizeProviderError, toErrorMessage } from '@common/errors';
 import type {
@@ -99,6 +100,20 @@ function workingDirectoryElement(value: string | undefined): string | null {
     : null;
 }
 
+function formatMemoryMisses(
+  misses: readonly AttachedMemoryMiss[] = [],
+): string[] {
+  if (misses.length === 0) return [];
+  return [
+    '<memory-misses>',
+    ...misses.map(
+      (miss) =>
+        `<memory-miss path="${escapeAttr(miss.path)}" reason="${escapeAttr(miss.reason)}" />`,
+    ),
+    '</memory-misses>',
+  ];
+}
+
 /**
  * Format an AgentFlowResult as a delivery message.
  * Injected into the orchestrator's FollowUpQueue as a user-role message.
@@ -130,6 +145,7 @@ export function formatSubagentDelivery(
 
   const wdElement = workingDirectoryElement(options?.workingDirectory);
   if (wdElement) lines.push(wdElement);
+  lines.push(...formatMemoryMisses(result.memoryMisses));
 
   if (result.category === 'workflow') {
     if (result.outputs.length > 0) {
@@ -168,7 +184,11 @@ export function formatSubagentError(
   executionId: string,
   agentName: string,
   err: unknown,
-  options?: { wallTimeMs?: number; workingDirectory?: string },
+  options?: {
+    wallTimeMs?: number;
+    workingDirectory?: string;
+    memoryMisses?: readonly AttachedMemoryMiss[];
+  },
 ): string {
   const formatted = normalizeProviderError(err);
   const lines = [
@@ -179,6 +199,7 @@ export function formatSubagentError(
   }
   const wdElement = workingDirectoryElement(options?.workingDirectory);
   if (wdElement) lines.push(wdElement);
+  lines.push(...formatMemoryMisses(options?.memoryMisses));
   lines.push(
     `<message>${escapeText(formatted.message)}</message>`,
     '</subagent-error>',

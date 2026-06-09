@@ -9,17 +9,19 @@ import {
   AgentPrompt,
   AgentCategory,
 } from '@agent/core/definition/AgentDataclass';
-import { getConfig } from '@utils/config/configUtils';
+import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
+import { toErrorMessage } from '@common/errors';
 import type { FileListEntry } from '@shared/schemas';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
+import { filterNotNull, isNonEmptyString } from '@utils/core';
 import { AbsoluteFS, WorkspaceFS } from '@utils/files';
 import {
   getListOfFiles,
   getPromptFileName,
   getXmlFormatFromReadableFiles,
 } from '@utils/prompt';
-import { filterNotNull, isNonEmptyString } from '@utils/core';
+import { getConfig } from '@utils/config/configUtils';
 import {
   listExternalRoots,
   type ExternalRootKind,
@@ -61,6 +63,11 @@ export interface ModelProviderFlags {
 type FileVarsResult = {
   vars: UserVars;
   files: LoadedFileEntry[];
+};
+
+type AttachedMemoriesResult = {
+  xml: string | null;
+  misses: AttachedMemoryMiss[];
 };
 
 /**
@@ -116,7 +123,8 @@ export async function buildUserVars(
     ...resolveOutputFiles(agentConfig, agentSetting),
     ...getToolFlags(agentConfig, agentSetting, agentPrompt),
     LATEX_STYLE_RULES: latexStyleRules,
-    ATTACHED_MEMORIES: attachedMemories,
+    ATTACHED_MEMORIES: attachedMemories.xml,
+    ATTACHED_MEMORY_MISSES: attachedMemories.misses,
     AVAILABLE_SKILLS: availableSkills,
   };
 
@@ -436,8 +444,8 @@ async function getPatternBasedFileVars(
  */
 async function getAttachedMemories(
   memoryPaths: string[],
-): Promise<string | null> {
-  if (memoryPaths.length === 0) return null;
+): Promise<AttachedMemoriesResult> {
+  if (memoryPaths.length === 0) return { xml: null, misses: [] };
 
   const results = await Promise.all(
     memoryPaths.map(async (displayPath) => {
@@ -448,18 +456,30 @@ async function getAttachedMemories(
         const { content } = parseFrontmatter(raw);
         const trimmed = content.trim();
         if (trimmed) {
-          return `<memory name="${displayPath}">\n${trimmed}\n</memory>`;
+          return {
+            xml: `<memory name="${displayPath}">\n${trimmed}\n</memory>`,
+            miss: null,
+          };
         }
-      } catch {
-        // Skip memories that can't be read (deleted between delegation and execution)
+      } catch (error) {
+        return {
+          xml: null,
+          miss: { path: displayPath, reason: toErrorMessage(error) },
+        };
       }
-      return null;
+      return { xml: null, miss: null };
     }),
   );
 
-  const parts = results.filter(filterNotNull);
-  if (parts.length === 0) return null;
-  return `<attached_memories>\n${parts.join('\n')}\n</attached_memories>`;
+  const parts = results.map((result) => result.xml).filter(filterNotNull);
+  const misses = results.map((result) => result.miss).filter(filterNotNull);
+  return {
+    xml:
+      parts.length > 0
+        ? `<attached_memories>\n${parts.join('\n')}\n</attached_memories>`
+        : null,
+    misses,
+  };
 }
 
 export function resolveOutputFiles(

@@ -2,7 +2,12 @@
 
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
-import { LIVE_TAIL_ROWS, tailWindow } from './TranscriptEntry';
+import {
+  isInquiryContinuationText,
+  LIVE_TAIL_ROWS,
+  USER_ENTRY_MARGIN_BOTTOM_ROWS,
+  tailWindow,
+} from './TranscriptEntry';
 import { toolUseDisplayLines } from './toolRenderers';
 import type { ConversationEntry } from '../state/cliState';
 
@@ -48,11 +53,15 @@ export function estimateTranscriptEntryRows(
       return Math.max(1, rendered.split('\n').length) + 1;
     });
   }
-  // User / error rows render without a trailing margin (compact mode) so
-  // chat-heavy sessions don't burn half the viewport on blank gaps. Their
-  // box uses `paddingX={1}` (2 cols) and a 2-col prefix (`› ` / `! `), so
-  // long text wraps to `width - 4` — keep the estimate in sync.
-  if (entry.role === 'user' || entry.role === 'error') {
+  if (entry.role === 'user') {
+    const rows = estimateWrappedRows(entry.text, Math.max(1, width - 2));
+    return isInquiryContinuationText(entry.text)
+      ? rows
+      : rows + USER_ENTRY_MARGIN_BOTTOM_ROWS;
+  }
+  if (entry.role === 'error') {
+    // Error rows render inside a padded box plus the `! ` prefix, so long text
+    // wraps to `width - 4`.
     return estimateWrappedRows(entry.text, Math.max(1, width - 4));
   }
 

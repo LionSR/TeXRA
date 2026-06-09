@@ -48,6 +48,7 @@ function slice(
     status: undefined,
     runStartedAt: undefined,
     description: undefined,
+    thinkingActive: false,
     usage: undefined,
     cumulativeUsage: undefined,
     conversation: undefined,

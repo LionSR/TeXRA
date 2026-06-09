@@ -15,13 +15,21 @@
 import { escapeRegExp } from '@utils/core/stringCore';
 
 const SUBAGENT_TAG_RE = /^<subagent-(?:progress|result|error)\b/;
+const EMPTY_FOLLOW_UP_SUMMARY = '(empty follow-up)';
 
-export function stripOrchestratorFollowup(text: string): string {
-  const trimmed = text.trim();
+function followupText(text: unknown): string | undefined {
+  return typeof text === 'string' ? text : undefined;
+}
+
+export function stripOrchestratorFollowup(text: unknown): string {
+  const normalized = followupText(text);
+  if (normalized === undefined) return EMPTY_FOLLOW_UP_SUMMARY;
+
+  const trimmed = normalized.trim();
   const match = trimmed.match(
     /^<orchestrator-followup>\s*([\s\S]*?)\s*<\/orchestrator-followup>$/,
   );
-  return match?.[1]?.trim() ?? text;
+  return match?.[1]?.trim() ?? normalized;
 }
 
 function attr(xml: string, name: string): string | undefined {
@@ -75,11 +83,15 @@ function progressDetail(xml: string): string {
 /**
  * Collapse a subagent follow-up XML block into a one-line (or, for results,
  * status + response) human-readable summary. Returns `text` unchanged when it
- * is not a subagent block.
+ * is not a subagent block. Malformed non-string payloads render as a visible
+ * placeholder instead of crashing status surfaces.
  */
-export function summarizeSubagentFollowup(text: string): string {
-  const trimmed = text.trim();
-  if (!SUBAGENT_TAG_RE.test(trimmed)) return text;
+export function summarizeSubagentFollowup(text: unknown): string {
+  const normalized = followupText(text);
+  if (normalized === undefined) return EMPTY_FOLLOW_UP_SUMMARY;
+
+  const trimmed = normalized.trim();
+  if (!SUBAGENT_TAG_RE.test(trimmed)) return normalized;
 
   const agent = attr(trimmed, 'agent') ?? 'subagent';
 
@@ -103,6 +115,6 @@ export function summarizeSubagentFollowup(text: string): string {
   return message ? `${head}\n${decodeXmlEntities(message)}` : head;
 }
 
-export function summarizeFollowupMessage(text: string): string {
+export function summarizeFollowupMessage(text: unknown): string {
   return summarizeSubagentFollowup(stripOrchestratorFollowup(text));
 }

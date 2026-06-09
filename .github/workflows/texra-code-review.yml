@@ -33,8 +33,30 @@ jobs:
             echo "::notice::Skipping TeXRA review: no model provider key is configured."
           fi
 
-      - name: Checkout pull request
+      - name: Check pull request merge ref
         if: steps.keys.outputs.present == 'true'
+        id: merge-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          ref="pull/${PR_NUMBER}/merge"
+          if ! matches="$(gh api "repos/${REPOSITORY}/git/matching-refs/${ref}" --jq 'length')"; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping TeXRA review: could not confirm that refs/${ref} is available."
+            exit 0
+          fi
+
+          if [ "$matches" != "0" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping TeXRA review: refs/${ref} is not available."
+          fi
+
+      - name: Checkout pull request
+        if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
         uses: actions/checkout@v6
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
@@ -42,7 +64,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout trusted review prompt
-        if: steps.keys.outputs.present == 'true'
+        if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
         uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.base.sha }}
@@ -52,7 +74,7 @@ jobs:
           persist-credentials: false
 
       - name: TeXRA review
-        if: steps.keys.outputs.present == 'true'
+        if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
         # texra-ai/texra-action v1.1.0; pin the reviewed release commit so
         # PR review behavior only changes through an explicit workflow update.
         # Keep the secret-bearing review job read-only: provider keys and the

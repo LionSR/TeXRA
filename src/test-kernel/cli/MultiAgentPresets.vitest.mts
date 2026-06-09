@@ -51,7 +51,7 @@ describe('CLI multi-agent presets', () => {
           agent(
             name,
             AgentCategory.ToolUse,
-            ['orchestrator', 'leanOrchestrator'].includes(name)
+            ['orchestrator', 'leanOrchestrator', 'engineer'].includes(name)
               ? ['delegate_agent']
               : [],
           ),
@@ -383,6 +383,10 @@ describe('CLI multi-agent presets', () => {
           'cs-ml',
           'unavailable; no runnable team root; 4/8 tool-use agents; 1/5 workflow agents',
         ],
+        [
+          'software-engineer',
+          'unavailable; no runnable team root; 0/4 tool-use agents',
+        ],
       ]),
     );
     for (const summary of summaries.values()) {
@@ -672,6 +676,30 @@ describe('CLI multi-agent presets', () => {
         workflowAgents: [],
         toolUseAgents: [
           agent('review', AgentCategory.ToolUse, ['delegate_agent']),
+        ],
+      },
+    );
+
+    expect(plan.rootAgent?.name).toBe('review');
+    expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
+  });
+
+  it('prefers custom preset order before built-in root fallbacks', () => {
+    const plan = planCliMultiAgentPresetRun(
+      {
+        id: 'custom-review',
+        name: 'Custom review',
+        description: 'User-authored review team.',
+        icon: 'codicon-symbol-method',
+        source: 'custom',
+        workflowAgents: [],
+        toolUseAgents: ['review', 'engineer'],
+      },
+      {
+        workflowAgents: [],
+        toolUseAgents: [
+          agent('review', AgentCategory.ToolUse, ['delegate_agent']),
+          agent('engineer', AgentCategory.ToolUse, ['delegate_agent']),
         ],
       },
     );

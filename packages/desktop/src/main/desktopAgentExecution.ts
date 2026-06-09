@@ -906,20 +906,13 @@ export class DesktopProgressBridge {
           await resumeToolUseFromSnapshot(resume.snapshot, this.runtimeHost, {
             setupSession: (session) => {
               for (const item of queuedFollowUps) {
-                session.appendFollowUp(
-                  item.text,
-                  item.mediaFiles,
-                  item.displayText,
-                );
+                session.appendFollowUp(item);
               }
             },
           });
         } catch (error) {
           for (const item of queuedFollowUps) {
-            ToolUseFollowUpQueue.enqueue(streamId, item.text, {
-              mediaFiles: item.mediaFiles,
-              displayText: item.displayText,
-            });
+            ToolUseFollowUpQueue.enqueue(streamId, item);
           }
           if (queuedFollowUps.length > 0) {
             this.runtimeHost.emit('updateQueuedFollowUps', { streamId });

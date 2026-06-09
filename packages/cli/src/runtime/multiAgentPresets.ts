@@ -1,5 +1,5 @@
 import { platform } from '@platform/platform';
-import { REMOTE_ORCHESTRATOR_AGENT_NAMES, type AgentEntry } from '@agent/index';
+import { BUILTIN_TEAM_ROOT_AGENT_NAMES, type AgentEntry } from '@agent/index';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import { agentKey } from '@shared/schemas/agent';
@@ -515,8 +515,8 @@ function findPreferredRootAgent(
 ): AgentEntry | undefined {
   const searchOrder =
     presetSource === 'built-in'
-      ? REMOTE_ORCHESTRATOR_AGENT_NAMES
-      : [...REMOTE_ORCHESTRATOR_AGENT_NAMES, ...presetOrder];
+      ? BUILTIN_TEAM_ROOT_AGENT_NAMES
+      : [...presetOrder, ...BUILTIN_TEAM_ROOT_AGENT_NAMES];
   for (const name of searchOrder) {
     const entry = agents.find((agent) => agent.name === name);
     if (entry) return entry;

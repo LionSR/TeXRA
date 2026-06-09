@@ -44,7 +44,7 @@ The Dashboard tabs are the recommended way to manage agents, models, tools, and 
 
 Most configuration happens in the **Dashboard** (above) — open it with `TeXRA: Show Settings Dashboard`. The CLI keeps project defaults in a per-project `.texra/config.json` (`texra init` scaffolds one).
 
-Many `texra.*` keys share the same **name** across the VS Code extension and the CLI's `.texra/config.json` (most of the file-, LaTeX-, and model-connection settings below), so the same documentation applies to both. They don't share storage, though — the extension persists settings in VS Code's config/global state, while the CLI reads `.texra/config.json`. Some keys are extension-only (for example the LaTeX formatter and the model picker, which live in extension state); the CLI warns on any key it doesn't recognize.
+Many `texra.*` keys share the same **name** across the VS Code extension and the CLI's `.texra/config.json` (most of the file-, LaTeX-, and model-connection settings below), so the same documentation applies to both. They don't share storage, though — the extension persists settings in VS Code's config/global state, while the CLI reads `.texra/config.json`. Some keys are extension-only (for example the LaTeX formatter and extension model visibility settings); the CLI warns on any key it doesn't recognize.
 
 VS Code's built-in Settings UI remains available for power users — open it with `Ctrl+,` (`Cmd+,` on macOS), search for "TeXRA", and edit in the UI or the JSON. It's no longer the primary path, so reach for the Dashboard or CLI config first.
 
