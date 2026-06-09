@@ -478,9 +478,9 @@ function createWindow(options: {
   const disposeAgentResumeHandler = setDesktopAgentResumeHandler(
     async (streamId) => {
       try {
-        return await (await getAgentExecution()).progress.tryResumeStream(
-          streamId,
-        );
+        return await (
+          await getAgentExecution()
+        ).progress.tryResumeStream(streamId);
       } catch (error) {
         if (!windowClosed) reportAsyncError(error);
         return false;
