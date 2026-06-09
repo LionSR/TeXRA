@@ -293,16 +293,6 @@ export class BashTool extends defineTool({
         });
         const terminalStatus = result.success ? 'completed' : 'error';
         await writeTerminalStatus(executionId, terminalStatus).catch(() => {});
-        interruptRegistry.unregister(childStreamId);
-        childStream.finalize({
-          wallTimeMs,
-          error: result.success
-            ? undefined
-            : new ToolError(
-                `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
-              ),
-          autoClose: true,
-        });
 
         const msg = formatBashDelivery(
           executionId,
@@ -317,20 +307,29 @@ export class BashTool extends defineTool({
           text: msg,
           origin: 'subagent_result',
         });
+        interruptRegistry.unregister(childStreamId);
+        childStream.finalize({
+          wallTimeMs,
+          error: result.success
+            ? undefined
+            : new ToolError(
+                `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
+              ),
+          autoClose: true,
+        });
       })
       .catch(async (err: unknown) => {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
-        interruptRegistry.unregister(childStreamId);
-        childStream.finalize({
-          error: err,
-          autoClose: true,
-        });
-
         const msg = formatBashError(executionId, command, err);
         await getExecutionStore(executionId).writeReport(msg);
         await sendFollowUp(parentStreamId, {
           text: msg,
           origin: 'subagent_result',
+        });
+        interruptRegistry.unregister(childStreamId);
+        childStream.finalize({
+          error: err,
+          autoClose: true,
         });
       });
 
