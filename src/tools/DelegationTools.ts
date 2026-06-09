@@ -573,8 +573,7 @@ async function executeSubagent(
           touchedFiles,
           executionId,
           streamId: resolvedChildStreamId,
-          memoryMisses:
-            memoryMisses.length > 0 ? [...memoryMisses] : undefined,
+          memoryMisses: memoryMisses.length > 0 ? [...memoryMisses] : undefined,
         },
         {
           wallTimeMs,

@@ -242,9 +242,11 @@ describe('headless delegation', () => {
     );
 
     expect(onBeforeWaiting).toBeDefined();
-    await onBeforeWaiting!('The proof is correct.', [], [
-      { path: '/memories/missing.md', reason: 'not found & unreadable' },
-    ]);
+    await onBeforeWaiting!(
+      'The proof is correct.',
+      [],
+      [{ path: '/memories/missing.md', reason: 'not found & unreadable' }],
+    );
 
     expect(mocks.writeReport).toHaveBeenCalledWith(
       expect.stringContaining(
