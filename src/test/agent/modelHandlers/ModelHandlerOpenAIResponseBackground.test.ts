@@ -10,8 +10,8 @@ import {
 
 // Local imports - agent
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import * as configModule from '@utils/config/configUtils';
 import { ModelHandlerOpenAIResponse } from '@agent/modelHandlers/openai/modelHandlerOpenAIResponse';
+import * as configModule from '@utils/config/configUtils';
 
 class UnsupportedBackgroundHandler extends ModelHandlerOpenAIResponse {
   protected override backgroundModeSupported = false;

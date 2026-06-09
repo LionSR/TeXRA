@@ -10,7 +10,6 @@ import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
-import { getConfig } from '@utils/config/configUtils';
 import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
 
 // Local imports - tools and utils
@@ -18,6 +17,7 @@ import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import type { FileLocation } from '@utils/files';
 import { flexibleFS } from '@utils/files';
+import { getConfig } from '@utils/config/configUtils';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
 import {
   computeOpenRouterPrice,

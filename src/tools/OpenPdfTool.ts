@@ -18,13 +18,13 @@ import {
 import { ToolError, type ToolResult } from '@tools/result';
 
 // Local imports - utilities
-import { hasExtension } from '@utils/core/pathCore';
 import {
   AbsoluteFS,
   createRunStorageLocation,
   getRunDir,
   pathToLocation,
 } from '@utils/files';
+import { hasExtension } from '@utils/core/pathCore';
 
 // Local file imports
 import { defineTool } from './core/define';

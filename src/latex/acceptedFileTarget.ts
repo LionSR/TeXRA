@@ -5,13 +5,13 @@ import path from 'path';
 import { extractAgentSuffix } from '@agent/utils/mergeFileUtils';
 
 // Local imports - utilities
-import { getExtensionLowercase } from '@utils/core/pathCore';
 import {
   createExternalLocation,
   createRunStorageLocation,
   createWorkspaceLocation,
   type FileLocation,
 } from '@utils/files';
+import { getExtensionLowercase } from '@utils/core/pathCore';
 
 export type AcceptedFileTarget = {
   targetLocation: FileLocation;
