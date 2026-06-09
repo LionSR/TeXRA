@@ -112,8 +112,8 @@ async function getImageDimensions(
     throw new Error(result.stderr || 'Failed to get image dimensions');
   }
   const [widthStr, heightStr] = result.stdout.trim().split(/\s+/);
-  const width = parseInt(widthStr, 10);
-  const height = parseInt(heightStr, 10);
+  const width = Number.parseInt(widthStr, 10);
+  const height = Number.parseInt(heightStr, 10);
 
   if (Number.isNaN(width) || Number.isNaN(height)) {
     throw new Error(

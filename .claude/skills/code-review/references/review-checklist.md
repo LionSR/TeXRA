@@ -99,6 +99,9 @@ Full pattern list with examples in `AGENTS.md` → "ES2023+ Patterns". Greps for
 - **`for (let i = 0; i < arr.length; i++)`** where the body only reads `arr[i]` → `for...of` (with `.entries()` when the index is needed). The conversion usually deletes `!` assertions and `if (!item) continue` guards too — flag those leftovers.
 - **Backwards index loops** (`for (let i = arr.length - 1; i >= 0; i--)`) that search or visit in reverse → `.findLast()` / `.findLastIndex()` / iterate `.toReversed()`.
 - **Manual pairwise-equality loops** over two arrays → `a.length === b.length && a.every((x, i) => ...)`.
+- **`.substring(`** → `.slice()` (repo is unified on `slice`).
+- **Bare `parseInt(` / `parseFloat(`** → `Number.parseInt(x, 10)` / `Number.parseFloat(x)`; flag any missing radix.
+- **`new Promise((resolve) => setTimeout(resolve, ms))`** in Node-only code → `setTimeout` from `node:timers/promises`.
 - **Don't flag** the legitimate index loops: token consumers that advance `i` by variable strides, queue/BFS loops that append mid-iteration, and `charCodeAt(i)` hash loops (code-point iteration would change persisted hash output).
 
 ## Final pass

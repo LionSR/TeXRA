@@ -167,7 +167,7 @@ Deno.serve(async (req: Request) => {
       return errorResponse(req, 'Missing authorization token', 401);
     }
 
-    const jwtToken = authHeader.substring(7);
+    const jwtToken = authHeader.slice(7);
 
     // 2. Validate user with Supabase
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
