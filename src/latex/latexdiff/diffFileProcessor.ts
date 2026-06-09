@@ -167,5 +167,4 @@ export class DiffFileProcessor {
 
     return processedLines.join('\n') + '\n';
   }
-
 }
