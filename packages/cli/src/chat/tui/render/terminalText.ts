@@ -1,5 +1,7 @@
 import stringWidth from 'string-width';
 
+import { collapseWhitespace } from '@utils/text/stringUtils';
+
 export function textDisplayWidth(text: string): number {
   return stringWidth(text);
 }
@@ -11,6 +13,24 @@ export function clipToWidth(text: string, width: number): string {
     clipped += char;
   }
   return clipped;
+}
+
+const ELLIPSIS = '…';
+
+/** Truncate to `maxColumns` display columns, ending with `…` when cut. */
+export function truncateToWidth(text: string, maxColumns: number): string {
+  if (textDisplayWidth(text) <= maxColumns) return text;
+  const contentColumns = Math.max(0, maxColumns - textDisplayWidth(ELLIPSIS));
+  return `${clipToWidth(text, contentColumns)}${ELLIPSIS}`;
+}
+
+/** Collapse whitespace, then truncate — the one-line-summary form used by
+ *  status rows and side panels. */
+export function truncateSummaryToWidth(
+  text: string,
+  maxColumns: number,
+): string {
+  return truncateToWidth(collapseWhitespace(text), maxColumns);
 }
 
 /**
