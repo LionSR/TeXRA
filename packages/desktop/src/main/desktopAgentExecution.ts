@@ -92,7 +92,7 @@ import {
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
 export interface DesktopAgentExecutionOptions {
-  postToRenderer(message: unknown): void;
+  postToRenderer(message: unknown): boolean | void;
   opener?: Pick<ExternalOpener, 'openPath'> & {
     openBuildDisplay?: BuildDisplayFn;
   };
@@ -197,7 +197,7 @@ export class DesktopProgressBridge {
   readonly progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
 
   constructor(
-    private readonly postToRenderer: (message: unknown) => void,
+    private readonly postToRenderer: (message: unknown) => boolean | void,
     private readonly options: DesktopProgressBridgeOptions = {},
   ) {
     setProgressViewBridge({ isViewVisible: () => true });
@@ -205,8 +205,7 @@ export class DesktopProgressBridge {
       storage: tryPlatform()?.workspaceState ?? new MemoryProgressStorage(),
       snapshots: options.progressSnapshotStore ?? new StreamSnapshotStore(),
       sendMessage: (message) => {
-        this.postToRenderer(message);
-        return true;
+        return this.postToRenderer(message) !== false;
       },
       hasTarget: () => true,
       configureUi: ({ webviewUpdater }) => ({
