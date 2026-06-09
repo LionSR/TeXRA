@@ -5,15 +5,38 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AgentExecutionHandle,
   ExecutionRegistry,
+  ProcessExecutionHandle,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
 import { InterruptRegistry } from '@agent/runtime/InterruptRegistry';
+import { ProcessOutputPoller } from '@agent/runtime/ProcessOutputPoller';
 import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { createRecordingHost } from '../progressTestUtils';
 
 describe('executionRegistry', () => {
+  it('owns process-output poller teardown', () => {
+    const explicit = createRecordingHost();
+    const processOutput = new ProcessOutputPoller();
+    const dispose = vi.spyOn(processOutput, 'dispose');
+    const flush = vi.spyOn(processOutput, 'flush');
+    const registry = new ExecutionRegistry({ processOutput });
+    const handle = new ProcessExecutionHandle(
+      'exec-process-output-dispose-test',
+      'stream-process-output-dispose-test' as StreamTabId,
+      'bash',
+      () => true,
+      explicit.host,
+    );
+
+    registry.track(handle);
+    registry.dispose();
+
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(flush).not.toHaveBeenCalled();
+  });
+
   it('uses its interrupt registry when terminating agent handles', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();

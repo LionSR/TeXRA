@@ -32,10 +32,7 @@ import {
   ProcessExecutionHandle,
   isChildExecution,
 } from './ExecutionHandle';
-import {
-  processOutputPoller,
-  type ProcessOutputPoller,
-} from './ProcessOutputPoller';
+import { ProcessOutputPoller } from './ProcessOutputPoller';
 
 export type { ExecutionHandle } from './ExecutionHandle';
 export {
@@ -102,7 +99,7 @@ export class ExecutionRegistry {
 
   constructor({
     interrupts = interruptRegistry,
-    processOutput = processOutputPoller,
+    processOutput = new ProcessOutputPoller(),
     streamStatus = StreamStatusService,
   }: {
     readonly interrupts?: InterruptRegistry;
@@ -138,8 +135,11 @@ export class ExecutionRegistry {
 
   dispose(): void {
     this.disposeStatusListener();
-    for (const executionId of [...this.handles.keys()]) {
-      this.untrack(executionId);
+    const executionIds = [...this.handles.keys()];
+    this.handles.clear();
+    this.processOutput.dispose();
+    for (const executionId of executionIds) {
+      this.notifyWaiters(executionId);
     }
     this.changeCallbacks.clear();
     this.persistentListeners.clear();
