@@ -1,8 +1,8 @@
 // Local imports - log
-import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { runToolWithCheck } from '@utils/system';
+import { getConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

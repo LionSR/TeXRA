@@ -2,7 +2,6 @@
 import * as path from 'path';
 
 // Local imports - log
-import { getConfig } from '@utils/config/configUtils';
 import * as logger from '@logger/logUtils';
 import { renderPrompt } from '@utils/prompt';
 import {
@@ -11,6 +10,7 @@ import {
   pathToLocation,
   type FileLocation,
 } from '@utils/files';
+import { getConfig } from '@utils/config/configUtils';
 
 // Local imports - latex utils
 import { compileLatex2Pdf } from './texTools';
