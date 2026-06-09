@@ -268,6 +268,20 @@ async function writeSubagentReport(
   }
 }
 
+function resolveDeliveryStreamId(
+  executionId: string,
+  fallbackStreamId: StreamTabId,
+): StreamTabId | undefined {
+  const handle = executionRegistry.getHandle(executionId);
+  if (!(handle instanceof AgentExecutionHandle)) return fallbackStreamId;
+  // AgentExecutionHandle.detach() promotes a child by setting
+  // parentStreamId === childStreamId. Do not enqueue the formatted result
+  // back into the detached child's own prompt as a synthetic follow-up.
+  return handle.parentStreamId === handle.childStreamId
+    ? undefined
+    : handle.parentStreamId;
+}
+
 /**
  * Runtime depth gate shared by fresh delegations and resumes.
  * Tool-use flows pass the same max-depth snapshot used for tool resolution so
@@ -460,11 +474,17 @@ async function executeSubagent(
   async function deliverFollowUp(
     followUp: FollowUpQueueInput,
   ): Promise<boolean> {
-    const result = await sendFollowUp(orchestratorStreamId, followUp);
+    const targetStreamId = resolveDeliveryStreamId(
+      executionId,
+      orchestratorStreamId,
+    );
+    if (!targetStreamId) return false;
+
+    const result = await sendFollowUp(targetStreamId, followUp);
     if (result.status !== 'no_session') return true;
     logger.warn(
       'subagentDelivery',
-      `Unable to deliver subagent result for ${executionId}: parent stream ${orchestratorStreamId} has no active session (status: ${result.streamStatus ?? 'unknown'}).`,
+      `Unable to deliver subagent result for ${executionId}: parent stream ${targetStreamId} has no active session (status: ${result.streamStatus ?? 'unknown'}).`,
     );
     return false;
   }
@@ -562,11 +582,10 @@ async function executeSubagent(
       }
       // Claim only the enqueue step: formatting/storage failures before this
       // still leave onCompleted/onError available as terminal fallbacks.
-      await deliverTerminalFollowUp({
+      return await deliverTerminalFollowUp({
         text: msg,
         origin: 'subagent_result',
       });
-      return true;
     },
     onCompleted: async (result) => {
       // For workflow results, compute diffs and write them as files to the
