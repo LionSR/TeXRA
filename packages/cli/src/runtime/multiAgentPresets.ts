@@ -516,7 +516,7 @@ function findPreferredRootAgent(
   const searchOrder =
     presetSource === 'built-in'
       ? BUILTIN_TEAM_ROOT_AGENT_NAMES
-      : [...BUILTIN_TEAM_ROOT_AGENT_NAMES, ...presetOrder];
+      : [...presetOrder, ...BUILTIN_TEAM_ROOT_AGENT_NAMES];
   for (const name of searchOrder) {
     const entry = agents.find((agent) => agent.name === name);
     if (entry) return entry;

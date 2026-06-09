@@ -116,10 +116,11 @@ const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
  * Preferred agents for dropdowns, in priority order.
  * Preferred agents present in the workspace are sorted to the top of the
  * dropdown (in the order listed here); all others follow alphabetically.
- * The remote orchestrators come first (they need sign-in); `research`/`review`
- * are local general-purpose fallbacks so signed-out users in presets like
- * Physicist/Mathematician don't land on task-specific agents (e.g. `presenter`)
- * by alphabetical accident.
+ * Remote orchestrators come first because they need sign-in, then bundled
+ * orchestrators such as `engineer`, then `research`/`review` as local
+ * general-purpose fallbacks. This keeps signed-out users in presets like
+ * Physicist/Mathematician from landing on task-specific agents (e.g.
+ * `presenter`) by alphabetical accident.
  */
 const DEFAULT_WORKFLOW_AGENT = 'correct';
 

@@ -684,6 +684,30 @@ describe('CLI multi-agent presets', () => {
     expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
   });
 
+  it('prefers custom preset order before built-in root fallbacks', () => {
+    const plan = planCliMultiAgentPresetRun(
+      {
+        id: 'custom-review',
+        name: 'Custom review',
+        description: 'User-authored review team.',
+        icon: 'codicon-symbol-method',
+        source: 'custom',
+        workflowAgents: [],
+        toolUseAgents: ['review', 'engineer'],
+      },
+      {
+        workflowAgents: [],
+        toolUseAgents: [
+          agent('review', AgentCategory.ToolUse, ['delegate_agent']),
+          agent('engineer', AgentCategory.ToolUse, ['delegate_agent']),
+        ],
+      },
+    );
+
+    expect(plan.rootAgent?.name).toBe('review');
+    expect(cliMultiAgentPlanHasGaps(plan)).toBe(false);
+  });
+
   it('does not infer a non-delegating root for custom presets', () => {
     const plan = planCliMultiAgentPresetRun(
       {
