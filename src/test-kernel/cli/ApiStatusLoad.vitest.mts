@@ -39,5 +39,6 @@ describe('loadCliApiStatusLines', () => {
       'auth: signed out',
       'actions: `texra login` enables included relay; `--api-mode personal` uses provider keys',
     ]);
+    expect(mocks.getCliApiMode).not.toHaveBeenCalled();
   });
 });
