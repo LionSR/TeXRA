@@ -6,12 +6,14 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseWaitNode';
 import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
-import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import {
   StreamStatusRegistry,
   StreamStatusService,
 } from '@agent/runtime/StreamStatusService';
+import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import { createFakePlatform } from '@test/support/FakePlatform';
+import { GOAL_COST_CAP_CONFIG_KEY, GoalStore } from '@tools/goal';
 
 describe('ToolUseWaitNode', () => {
   it('marks a delivered subagent cycle before stopping on interruption', async () => {
@@ -205,6 +207,69 @@ describe('ToolUseWaitNode', () => {
       expect.stringContaining('Model has no vision support'),
     );
     expect(addMediaToUserMessage).toHaveBeenCalledOnce();
+  });
+
+  it('records goal spend before pausing after a failed parent cycle', async () => {
+    const streamId = 'wait-node-error-goal' as StreamTabId;
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform({
+        config: { [GOAL_COST_CAP_CONFIG_KEY]: 10 },
+      }),
+    );
+
+    await GoalStore.start(streamId, 'finish the refactor');
+    await GoalStore.noteRunCost(streamId, 1);
+
+    const shared: ToolUseRunShared = {
+      lastError: { message: 'cycle failed', userRetryable: false },
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    };
+    const runtimeHost = { emit: vi.fn() };
+    const waitForFollowUp = vi.fn();
+    const services = {
+      checkInterruption: () => false,
+      isSubagent: false,
+      logger: { error: vi.fn(), info: vi.fn() },
+      modelHandler: { extractAssistantText: () => undefined },
+      runtimeHost,
+      session: {
+        hasQueuedFollowUp: () => false,
+        waitForFollowUp,
+      },
+      stopAfterCycle: true,
+      streamId,
+      streamStatus: new StreamStatusRegistry(),
+    } as unknown as ToolUseServices;
+    const node = new ToolUseWaitNode().setServices(services);
+
+    try {
+      const exec = await node.exec({
+        afterError: true,
+        lastResponse: undefined,
+        previouslyDeliveredToOrchestrator: false,
+        runCostUsd: 3.5,
+        touchedFiles: [],
+      });
+
+      const goal = GoalStore.getForStream(streamId);
+      expect(exec.kind).toBe('stop');
+      expect(waitForFollowUp).not.toHaveBeenCalled();
+      expect(goal?.status).toBe('paused');
+      expect(goal?.spentUsd).toBeCloseTo(2.5);
+      expect(runtimeHost.emit).toHaveBeenCalledWith(
+        'updateBashApprovalBypassState',
+        { streamId, bypassActive: false },
+      );
+      expect(runtimeHost.emit).toHaveBeenCalledWith(
+        'updateToolEditApprovalBypassState',
+        { streamId, bypassActive: false },
+      );
+    } finally {
+      await GoalStore.forget(streamId);
+    }
   });
 
   it('updates the injected stream status owner while waiting and resuming', async () => {
