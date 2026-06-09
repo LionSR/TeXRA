@@ -143,8 +143,7 @@ export class GoalTab extends LitElement {
     const inFlight = isGoalInFlight(item);
     const metaParts: MetaPart[] = [
       html`<span class="stream-id">${item.streamId}</span>`,
-      html`<span
-        title="Wall-clock duration since this Goal started"
+      html`<span title="Wall-clock duration since this Goal started"
         >duration ${formatGoalTime(goalDurationMs(item))}</span
       >`,
     ];
