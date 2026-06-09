@@ -11,6 +11,8 @@
  * Returns an `InjectionOutcome` so the caller (action handler) can
  * forward it to the UI via the `inquiryThreadUpdated` event.
  */
+import { collapseWhitespace } from '@utils/text/stringUtils';
+
 import { platform } from '@platform/platform';
 
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
@@ -43,8 +45,7 @@ function truncate(text: string, limit: number): string {
 }
 
 function previewText(text: string, limit: number): string {
-  const collapsed = text.replaceAll(/\s+/g, ' ').trim();
-  return truncate(collapsed, limit);
+  return truncate(collapseWhitespace(text), limit);
 }
 
 function readThreadCommand(threadId: ExternalInquiryThreadId): string {
