@@ -83,10 +83,8 @@ describe('ToolUseWaitNode', () => {
           waitCalls += 1;
           if (waitCalls === 1) {
             return {
-              items: ['synthetic continuation'],
-              displayItems: ['synthetic continuation'],
+              items: [{ text: 'synthetic continuation', origin: 'synthetic' }],
               synthetic: true,
-              mediaFiles: [],
             };
           }
           interrupted = true;
@@ -187,9 +185,14 @@ describe('ToolUseWaitNode', () => {
         touchedFiles: [],
       },
       {
-        followUp: 'please inspect this figure',
+        followUps: [
+          {
+            text: 'please inspect this figure',
+            mediaFiles: ['/tmp/figure.png'],
+            origin: 'user',
+          },
+        ],
         kind: 'continue',
-        mediaFiles: ['/tmp/figure.png'],
       },
     );
 
@@ -221,9 +224,7 @@ describe('ToolUseWaitNode', () => {
       session: {
         hasQueuedFollowUp: () => false,
         waitForFollowUp: async () => ({
-          displayItems: ['continue'],
-          items: ['continue'],
-          mediaFiles: [],
+          items: [{ text: 'continue', origin: 'synthetic' }],
           synthetic: true,
         }),
       },
@@ -251,5 +252,70 @@ describe('ToolUseWaitNode', () => {
       streamStatus.clear(streamId, { emit: false });
       StreamStatusService.clear(streamId, { emit: false });
     }
+  });
+
+  it('appends queued subagent results and user follow-ups as separate turns', async () => {
+    const shared: ToolUseRunShared = {
+      messages: [],
+      shouldSkipCycle: false,
+      stateSlices: null,
+    };
+    const createUserFollowUpMessages = vi.fn(
+      async (messages: unknown[], userMessage: string) => [
+        ...messages,
+        { role: 'user', content: userMessage },
+      ],
+    );
+    const info = vi.fn();
+    const services = {
+      checkInterruption: () => false,
+      idleContinuations: new IdleContinuationRegistry(),
+      logger: { error: vi.fn(), info },
+      modelHandler: {
+        capabilities: { supportsVision: true },
+        createUserFollowUpMessages,
+        extractAssistantText: () => undefined,
+      },
+      runtimeHost: { emit: vi.fn() },
+      session: {
+        hasQueuedFollowUp: () => true,
+        waitForFollowUp: async () => ({
+          items: [
+            {
+              text: '<subagent-result>done</subagent-result>',
+              origin: 'subagent_result',
+            },
+            {
+              text: 'please revise the theorem',
+              origin: 'user',
+            },
+          ],
+          synthetic: false,
+        }),
+      },
+      streamStatus: new StreamStatusRegistry(),
+      streamId: 'test-stream',
+    } as unknown as ToolUseServices;
+    const node = new ToolUseWaitNode().setServices(services);
+
+    const prep = await node.prep(shared);
+    const exec = await node.exec(prep);
+    const transition = await node.post(shared, prep, exec);
+
+    expect(transition).toBe(FlowTransition.CONTINUE);
+    expect(createUserFollowUpMessages).toHaveBeenNthCalledWith(
+      1,
+      [],
+      '<subagent-result>done</subagent-result>',
+    );
+    expect(createUserFollowUpMessages).toHaveBeenNthCalledWith(
+      2,
+      [{ role: 'user', content: '<subagent-result>done</subagent-result>' }],
+      'please revise the theorem',
+    );
+    expect(shared.messages).toEqual([
+      { role: 'user', content: '<subagent-result>done</subagent-result>' },
+      { role: 'user', content: 'please revise the theorem' },
+    ]);
   });
 });

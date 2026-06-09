@@ -31,6 +31,7 @@ export interface ToolUseCycleServices<
   C = unknown,
 > extends BaseFlowContextInit<C> {
   readonly client: C;
+  readonly fileService: TaskRunFileService;
   readonly toolRegistry: IToolRegistry;
   /** Session for injecting queued user messages after tool dispatch. */
   readonly session?: IToolUseSession;

@@ -75,9 +75,10 @@ export async function sendFollowUp(
   displayText?: string,
 ): Promise<SendFollowUpResult> {
   const target = executionRegistry.getToolUseFollowUpTarget(streamId);
+  const followUp = { text, mediaFiles, displayText };
 
   if (target.kind === 'active') {
-    target.context.session.appendFollowUp(text, mediaFiles, displayText);
+    target.context.session.appendFollowUp(followUp);
     notifyFollowUpSent(streamId, target.context.runtimeHost);
     return { status: 'sent' };
   }
@@ -86,11 +87,11 @@ export async function sendFollowUp(
     // children_running reopens a queue sealed by session disposal; callers
     // must auto-resume the parent or release again to avoid stale delivery.
     const force = target.reason === 'children_running';
-    ToolUseFollowUpQueue.enqueue(streamId, text, {
-      mediaFiles,
-      displayText,
-      ...(force ? { force: true } : {}),
-    });
+    ToolUseFollowUpQueue.enqueue(
+      streamId,
+      followUp,
+      force ? { force: true } : undefined,
+    );
     return { status: 'queued', reason: target.reason };
   }
 
