@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.38.7] - 2026-06-09
+
+### Shared (all surfaces)
+
+#### Improvements
+
+- **Odyssey is now on by default** — Odyssey, the autonomous-continuation mode that lets an agent keep working toward a stated objective across turns until it reports the goal complete, has graduated from experimental and is enabled out of the box. The setting moved from `texra.experimental.odyssey.enabled` to `texra.odyssey.enabled`; if you previously set the old key, your choice is still honored. Set `texra.odyssey.enabled` to `false` to require manual continuation.
+
 ## [0.38.6] - 2026-06-07
 
 ### CLI
