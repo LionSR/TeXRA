@@ -1,10 +1,10 @@
 import type { StreamTabId } from '@shared/schemas/identifiers';
 
-import { OdysseyStore, isOdysseyEnabled } from '@tools/odyssey';
+import { GoalStore, isGoalEnabled } from '@tools/goal';
 
 import { buildContinuationFollowUp } from './buildContinuationFollowUp';
 
-export interface OdysseyContinuationContext {
+export interface GoalContinuationContext {
   streamId: StreamTabId;
   /** True when the current wait-node is running inside an orchestrator-driven subagent. */
   isSubagent: boolean;
@@ -13,7 +13,7 @@ export interface OdysseyContinuationContext {
 }
 
 /**
- * Pre-wait Odyssey continuation check.
+ * Pre-wait Goal continuation check.
  *
  * Returns a rendered continuation prompt when:
  *   - the feature flag is on,
@@ -21,7 +21,7 @@ export interface OdysseyContinuationContext {
  *     — subagents only ever roll their usage up to the parent, never drive the
  *     loop),
  *   - no user followUp is already queued (caller-supplied snapshot),
- *   - the stream has an Odyssey with status `active`.
+ *   - the stream has a Goal with status `active`.
  *
  * Returns null in every other case so the caller falls back to the normal
  * blocking wait. Pure: no side effects. The autonomous loop runs until the
@@ -32,8 +32,8 @@ export interface OdysseyContinuationContext {
  * wait blocks indefinitely on an empty queue, so the continuation cannot run
  * after it.
  */
-export async function maybeBuildOdysseyContinuation(
-  ctx: OdysseyContinuationContext,
+export async function maybeBuildGoalContinuation(
+  ctx: GoalContinuationContext,
 ): Promise<string | null> {
   if (ctx.isSubagent) return null;
   if (ctx.hasQueuedFollowUp) return null;
@@ -41,10 +41,10 @@ export async function maybeBuildOdysseyContinuation(
   // Read the store first — it is bootstrap-tolerant (returns null before
   // platform init), so the flag check below (which needs `platform()`) is only
   // reached when an active record actually exists on disk.
-  const odyssey = OdysseyStore.getForStream(ctx.streamId);
-  if (!odyssey || odyssey.status !== 'active') return null;
+  const goal = GoalStore.getForStream(ctx.streamId);
+  if (!goal || goal.status !== 'active') return null;
 
-  if (!isOdysseyEnabled()) return null;
+  if (!isGoalEnabled()) return null;
 
-  return buildContinuationFollowUp(odyssey);
+  return buildContinuationFollowUp(goal);
 }

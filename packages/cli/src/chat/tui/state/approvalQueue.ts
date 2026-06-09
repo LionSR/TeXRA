@@ -50,7 +50,7 @@ export interface ApprovalDecision extends Readonly<SharedApprovalDecision> {
   /** Credential mode to apply before accepting this approval. */
   readonly apiMode?: CliApiMode;
   /** Plan-only approval action when plain approve/reject is not specific enough. */
-  readonly planAction?: Extract<PlanApprovalAction, 'approve_and_odyssey'>;
+  readonly planAction?: Extract<PlanApprovalAction, 'approve_and_goal'>;
 }
 
 export interface PendingApproval {

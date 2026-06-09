@@ -23,7 +23,7 @@ export function formatWorkPlanGranularityWarning(
   return [
     'Warning: todo_write and plan use the same labels for work at different levels.',
     ...overlaps.map((overlap) => `- ${overlap}`),
-    'Use plan for long-running goal/odyssey milestones and todo_write for microscopic execution steps. Make plan items more macroscopic, or make todos more granular, instead of duplicating the same checklist item in both tools.',
+    'Use plan for long-running goal/goal milestones and todo_write for microscopic execution steps. Make plan items more macroscopic, or make todos more granular, instead of duplicating the same checklist item in both tools.',
   ].join('\n');
 }
 

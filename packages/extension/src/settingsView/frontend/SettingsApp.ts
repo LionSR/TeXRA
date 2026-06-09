@@ -44,7 +44,7 @@ import {
   type ClaudeAgentPermissionMode,
   type LatexConfigValues,
   type NumberVscodeSetting,
-  type Odyssey,
+  type Goal,
   type PRSubscriptionEntry,
   type ToolDashboardItem,
   DEFAULT_LATEX_SETTINGS_STATUS,
@@ -70,7 +70,7 @@ import { settingsViewStyles } from './styles';
 
 // Side-effect: register tab components
 import './tabs/MemoryTab';
-import './tabs/OdysseyTab';
+import './tabs/GoalTab';
 import './tabs/HistoryTab';
 import './tabs/ModelsTab';
 import './tabs/AgentsTab';
@@ -335,8 +335,8 @@ export class SettingsApp extends SettingsAppBase {
   private readonly latexConfigValuesLoaded = signal(false);
   private readonly inlineCriticismEnabled = signal(false);
 
-  // Odyssey settings state
-  private readonly odysseyItems = signal<readonly Odyssey[]>([]);
+  // Goal settings state
+  private readonly goalItems = signal<readonly Goal[]>([]);
 
   // Outbound message handlers (extension host → settings webview). Each entry
   // receives the already-parsed, typed message and updates the matching
@@ -450,8 +450,8 @@ export class SettingsApp extends SettingsAppBase {
     [SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED]: (data) => {
       this.inlineCriticismEnabled.set(data.enabled);
     },
-    [SETTINGS_VIEW_COMMANDS.UPDATE_ODYSSEY_LIST]: (data) => {
-      this.odysseyItems.set(data.items);
+    [SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST]: (data) => {
+      this.goalItems.set(data.items);
     },
     [SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE]: (data) => {
       this.authenticated.set(data.authenticated);
@@ -1090,14 +1090,14 @@ export class SettingsApp extends SettingsAppBase {
             ></wa-icon>
             LaTeX</wa-tab
           >
-          <wa-tab panel="odyssey"
+          <wa-tab panel="goal"
             ><wa-icon
               class="settings-tab-icon"
               library=${TEXRA_ICON_LIBRARY}
               name="compass"
               variant="solid"
             ></wa-icon>
-            Odyssey</wa-tab
+            Goal</wa-tab
           >
 
           <wa-tab-panel name="memory">
@@ -1116,8 +1116,8 @@ export class SettingsApp extends SettingsAppBase {
             ></memory-tab>
           </wa-tab-panel>
 
-          <wa-tab-panel name="odyssey">
-            <odyssey-tab .items=${this.odysseyItems.get()}></odyssey-tab>
+          <wa-tab-panel name="goal">
+            <goal-tab .items=${this.goalItems.get()}></goal-tab>
           </wa-tab-panel>
 
           <wa-tab-panel name="history">

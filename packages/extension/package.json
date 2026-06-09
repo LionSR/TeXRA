@@ -53,10 +53,10 @@
             "scope": "resource",
             "order": 52
           },
-          "texra.odyssey.enabled": {
+          "texra.goal.enabled": {
             "type": "boolean",
             "default": true,
-            "description": "Enable Odyssey, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Odyssey lets the agent keep working across turns toward a stated objective until it calls plan(command=\"complete\"). On by default; set to false to require manual continuation.",
+            "description": "Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command=\"complete\"). On by default; set to false to require manual continuation.",
             "scope": "resource",
             "order": 53
           }

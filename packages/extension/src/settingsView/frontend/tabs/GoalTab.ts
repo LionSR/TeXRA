@@ -6,39 +6,28 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
 import { designTokens, commonViewStyles } from '@shared/styles';
 import {
-  formatOdysseyTime,
-  isOdysseyInFlight,
-  odysseyDurationMs,
+  formatGoalTime,
+  isGoalInFlight,
+  goalDurationMs,
 } from '@shared/schemas';
-import type { Odyssey, OdysseyStatus } from '@shared/schemas';
+import type { Goal, GoalStatus } from '@shared/schemas';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import type { MetaPart } from '@shared/wa/metaStrip';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 
-function statusLabel(status: OdysseyStatus): string {
+function statusLabel(status: GoalStatus): string {
   return status[0].toUpperCase() + status.slice(1);
 }
 
-/** Map an Odyssey status to a wa-badge variant. */
-function statusVariant(
-  status: OdysseyStatus,
-): 'brand' | 'neutral' | 'success' | 'warning' {
-  switch (status) {
-    case 'active':
-      return 'success';
-    case 'paused':
-      return 'warning';
-    case 'complete':
-      return 'brand';
-    default:
-      return 'neutral';
-  }
+/** Map a Goal status to a wa-badge variant. */
+function statusVariant(status: GoalStatus): 'success' | 'warning' {
+  return status === 'active' ? 'success' : 'warning';
 }
 
-@customElement('odyssey-tab')
-export class OdysseyTab extends LitElement {
+@customElement('goal-tab')
+export class GoalTab extends LitElement {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -48,13 +37,13 @@ export class OdysseyTab extends LitElement {
         display: block;
       }
 
-      .odyssey-list {
+      .goal-list {
         display: flex;
         flex-direction: column;
         gap: var(--wa-space-xs);
       }
 
-      .odyssey-row {
+      .goal-row {
         display: grid;
         grid-template-columns: auto 1fr auto;
         gap: var(--wa-space-s);
@@ -65,12 +54,12 @@ export class OdysseyTab extends LitElement {
         background: var(--wa-color-surface-default);
       }
 
-      .odyssey-row.is-clickable {
+      .goal-row.is-clickable {
         cursor: pointer;
         transition: background-color 0.1s;
       }
 
-      .odyssey-row.is-clickable:hover {
+      .goal-row.is-clickable:hover {
         background: var(--wa-color-surface-raised);
       }
 
@@ -79,10 +68,6 @@ export class OdysseyTab extends LitElement {
       .status-chip::part(base) {
         padding: 2px var(--wa-space-2xs);
         font-weight: var(--wa-font-weight-semibold);
-      }
-
-      .status-chip[data-status='abandoned']::part(base) {
-        text-decoration: line-through;
       }
 
       .objective {
@@ -109,14 +94,14 @@ export class OdysseyTab extends LitElement {
     `,
   ];
 
-  @property({ attribute: false }) items: readonly Odyssey[] = [];
+  @property({ attribute: false }) items: readonly Goal[] = [];
 
   private handleRefresh = (): void => {
-    postMessage(SETTINGS_VIEW_COMMANDS.GET_ODYSSEY_LIST, {});
+    postMessage(SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST, {});
   };
 
   private handleReveal(streamId: string): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.REVEAL_ODYSSEY_STREAM, { streamId });
+    postMessage(SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_STREAM, { streamId });
   }
 
   private handleRowKey(event: KeyboardEvent, streamId: string): void {
@@ -135,12 +120,12 @@ export class OdysseyTab extends LitElement {
           class="settings-reminder-icon"
         ></wa-icon>
         <div class="settings-reminder-body">
-          <div class="settings-reminder-title">Odyssey</div>
+          <div class="settings-reminder-title">Goal</div>
           <div class="settings-reminder-description">
-            Odysseys are autonomous-continuation modes the assistant enters for
+            Goals are autonomous-continuation modes the assistant enters for
             itself when you describe a goal with a verifiable stopping
             condition. The agent decides when to start, pause, or complete an
-            Odyssey via its tools — this list is for observation and navigation
+            Goal via its tools — this list is for observation and navigation
             only.
           </div>
           <div class="settings-reminder-actions">
@@ -154,18 +139,18 @@ export class OdysseyTab extends LitElement {
     `;
   }
 
-  private renderRow(item: Odyssey): TemplateResult {
-    const inFlight = isOdysseyInFlight(item);
+  private renderRow(item: Goal): TemplateResult {
+    const inFlight = isGoalInFlight(item);
     const metaParts: MetaPart[] = [
       html`<span class="stream-id">${item.streamId}</span>`,
       html`<span
-        title="Wall-clock duration from Odyssey start to now while it is active, or to when it was last touched"
-        >duration ${formatOdysseyTime(odysseyDurationMs(item))}</span
+        title="Wall-clock duration from Goal start to now while it is active, or to when it was last touched"
+        >duration ${formatGoalTime(goalDurationMs(item))}</span
       >`,
     ];
     return html`
       <div
-        class=${'odyssey-row' + (inFlight ? ' is-clickable' : '')}
+        class=${'goal-row' + (inFlight ? ' is-clickable' : '')}
         @click=${inFlight ? () => this.handleReveal(item.streamId) : null}
         @keydown=${inFlight
           ? (e: KeyboardEvent) => this.handleRowKey(e, item.streamId)
@@ -177,7 +162,6 @@ export class OdysseyTab extends LitElement {
           class="status-chip"
           variant=${statusVariant(item.status)}
           appearance="filled"
-          data-status=${item.status}
           >${statusLabel(item.status)}</wa-badge
         >
         <div>
@@ -200,13 +184,13 @@ export class OdysseyTab extends LitElement {
         ${this.items.length === 0
           ? html`<div class="empty-state">
               <wa-icon library="texra" name="compass"></wa-icon>
-              <p>No Odysseys yet.</p>
+              <p>No Goals yet.</p>
             </div>`
           : html`
-              <div class="odyssey-list">
+              <div class="goal-list">
                 ${repeat(
                   this.items,
-                  (it) => it.odysseyId,
+                  (it) => it.goalId,
                   (it) => this.renderRow(it),
                 )}
               </div>
@@ -218,6 +202,6 @@ export class OdysseyTab extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'odyssey-tab': OdysseyTab;
+    'goal-tab': GoalTab;
   }
 }
