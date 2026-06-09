@@ -184,7 +184,8 @@ describe('runFlowWithLifecycle', () => {
   it('keeps subagent errors registered until terminal delivery runs', async () => {
     const executionId =
       'execution-lifecycle-subagent-error-registered' as ExecutionId;
-    const streamId = 'stream-lifecycle-subagent-error-registered' as StreamTabId;
+    const streamId =
+      'stream-lifecycle-subagent-error-registered' as StreamTabId;
     const streamStatus = new StreamStatusRegistry();
     const ctx = createLifecycleContext({
       executionId,
