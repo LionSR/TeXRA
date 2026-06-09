@@ -100,8 +100,11 @@ async function removeFromIndex(streamId: StreamTabId): Promise<void> {
 async function update(
   streamId: StreamTabId,
   mutate: (goal: Goal) => Goal,
+  // Callers that already read the record (setStatus, noteRunCost) pass it in
+  // to skip a second read-and-parse of the same workspaceState key.
+  existing?: Goal,
 ): Promise<Goal | null> {
-  const goal = readRaw(streamId);
+  const goal = existing ?? readRaw(streamId);
   if (!goal) return null;
   const final: Goal = { ...mutate(goal), updatedAt: nowIso() };
   await writeRaw(final);
@@ -201,7 +204,11 @@ export const GoalStore = {
         `Illegal goal transition: ${current.status} → ${nextStatus}.`,
       );
     }
-    return update(streamId, (goal) => ({ ...goal, status: nextStatus }));
+    return update(
+      streamId,
+      (goal) => ({ ...goal, status: nextStatus }),
+      current,
+    );
   },
 
   /**
@@ -236,12 +243,16 @@ export const GoalStore = {
     ) {
       return { goal: current, pausedForCap: false };
     }
-    const goal = await update(streamId, (g) => ({
-      ...g,
-      baselineRunCostUsd: baseline,
-      spentUsd,
-      status: pausedForCap ? 'paused' : g.status,
-    }));
+    const goal = await update(
+      streamId,
+      (g) => ({
+        ...g,
+        baselineRunCostUsd: baseline,
+        spentUsd,
+        status: pausedForCap ? 'paused' : g.status,
+      }),
+      current,
+    );
     return goal ? { goal, pausedForCap } : null;
   },
 
