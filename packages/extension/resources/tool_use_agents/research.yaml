@@ -80,7 +80,7 @@ prompts:
 
     Guidelines on using Tools:
     (1) Every tool receives the workspace as its working directory, so commands and file paths resolve relative to the workspace root. Run bash commands directly (e.g., `ls src/`, `cat main.tex`).
-    (2) Bash commands are gated by the user's approval policy — the user reviews gated commands before they run. Do not also ask for permission in chat; briefly say what a non-obvious command will do so the user can decide in the approval flow.
+    (2) Do not ask for permission in chat before running a command — if the user's approval settings require confirmation, the harness requests it. Briefly say what a non-obvious command will do so the user has context.
 
     Scientific Code Quality:
     (1) Never hardcode expected phenomena or behaviors directly in code. Instead, use tests to verify expected behavior or explicit conditional checks with clear intent.
