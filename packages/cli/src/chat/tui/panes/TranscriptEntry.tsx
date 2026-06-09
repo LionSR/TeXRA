@@ -19,7 +19,7 @@ import type {
 
 const INQUIRY_CONTINUATION_RE =
   /^\[inquiry\]\s+\S+\s+(?:answered|dropped by user)\.(?:\n|$)/;
-export const USER_ENTRY_MARGIN_BOTTOM_ROWS = 1;
+export const USER_ENTRY_MARGIN_BOTTOM_ROWS = 0;
 
 export function isInquiryContinuationText(text: string): boolean {
   return INQUIRY_CONTINUATION_RE.test(text);
