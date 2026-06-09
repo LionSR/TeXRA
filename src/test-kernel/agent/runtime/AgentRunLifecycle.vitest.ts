@@ -91,6 +91,7 @@ function createLifecycleContext({
       input: Object.freeze({}),
       transient: {},
     },
+    attachedMemoryMisses: [],
     usageMonitor: new UsageMonitor(
       modelInfo,
       {
@@ -159,6 +160,9 @@ describe('runFlowWithLifecycle', () => {
       streamId,
       streamStatus,
     });
+    ctx.attachedMemoryMisses = [
+      { path: '/memories/missing.md', reason: 'not found' },
+    ];
     const onError = vi.fn();
 
     try {
@@ -173,6 +177,7 @@ describe('runFlowWithLifecycle', () => {
       );
 
       expect(result.status).toBe(END_GROUP_STATUS.STOPPED);
+      expect(result.memoryMisses).toEqual(ctx.attachedMemoryMisses);
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
       expect(onError).toHaveBeenCalledOnce();
       expect(onError.mock.calls[0][1]).toEqual(result);

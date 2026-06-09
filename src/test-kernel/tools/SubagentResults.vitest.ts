@@ -27,6 +27,29 @@ describe('formatSubagentDelivery', () => {
     expect(delivery).not.toContain('Keep </response> literal');
   });
 
+  it('includes attached memory misses in subagent delivery XML', () => {
+    const result = {
+      category: 'toolUse',
+      executionId: 'abc123',
+      streamId: 'child-stream',
+      status: 'stopped',
+      lastResponse: 'Checked the proof.',
+      memoryMisses: [
+        {
+          path: '/memories/missing.md',
+          reason: 'Path is missing & unreadable',
+        },
+      ],
+    } satisfies ToolUseFlowResult;
+
+    const delivery = formatSubagentDelivery('reviewer', result);
+
+    expect(delivery).toContain('<memory-misses>');
+    expect(delivery).toContain(
+      '<memory-miss path="/memories/missing.md" reason="Path is missing &amp; unreadable" />',
+    );
+  });
+
   it('keeps all content lines when a background output tail ends at the preview limit', () => {
     const outputTail = Array.from(
       { length: 20 },
