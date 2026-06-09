@@ -21,3 +21,6 @@ allowBuilds:
   unrs-resolver: true
 patchedDependencies:
   ink@7.0.5: patches/ink@7.0.5.patch
+minimumReleaseAgeExclude:
+  - llm-zoo@1.9.0
+  - '@anthropic-ai/sdk@0.103.0'
