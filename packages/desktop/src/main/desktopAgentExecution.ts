@@ -92,7 +92,7 @@ import {
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
 export interface DesktopAgentExecutionOptions {
-  postToRenderer(message: unknown): void;
+  postToRenderer(message: unknown): boolean | void;
   opener?: Pick<ExternalOpener, 'openPath'> & {
     openBuildDisplay?: BuildDisplayFn;
   };
@@ -197,14 +197,16 @@ export class DesktopProgressBridge {
   readonly progressViewInboundHandlers: ProgressViewInboundHandlerRegistry;
 
   constructor(
-    private readonly postToRenderer: (message: unknown) => void,
+    private readonly postToRenderer: (message: unknown) => boolean | void,
     private readonly options: DesktopProgressBridgeOptions = {},
   ) {
     setProgressViewBridge({ isViewVisible: () => true });
     this.backend = new ProgressBackend({
       storage: tryPlatform()?.workspaceState ?? new MemoryProgressStorage(),
       snapshots: options.progressSnapshotStore ?? new StreamSnapshotStore(),
-      sendMessage: (message) => this.postToRenderer(message),
+      sendMessage: (message) => {
+        return this.postToRenderer(message) !== false;
+      },
       hasTarget: () => true,
       configureUi: ({ webviewUpdater }) => ({
         callbacks: {
@@ -427,7 +429,9 @@ export class DesktopProgressBridge {
         stopStream: (stream) => this.stopStream(stream),
       },
       run: {
-        resumeStream: (stream) => this.tryResumeStream(stream),
+        resumeStream: async (stream) => {
+          await this.tryResumeStream(stream);
+        },
         runNewStream: (stream) => this.runNewStream(stream),
       },
       followUp: {
@@ -1086,7 +1090,7 @@ export class DesktopProgressBridge {
   ): Promise<void> {
     const [{ getHelperModelName }, { validateExecutionRequest }] =
       await Promise.all([
-        import('@agent/runtime/helperModel'),
+        import('@agent/runtime/helperModelName'),
         import('@agent/core/execution/executionRequests'),
       ]);
     const validation = validateExecutionRequest({

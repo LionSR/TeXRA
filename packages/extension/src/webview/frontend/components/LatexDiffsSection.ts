@@ -1,6 +1,7 @@
 /** LaTeXDiff section with base/edited file selectors, commit selector, and diff actions. */
 
 // Side-effect imports - register WA select & option components
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 
@@ -9,7 +10,6 @@ import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
-import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - main view
 import { designTokens } from '@shared/styles';
@@ -20,7 +20,6 @@ import {
   compactActionButtonStyles,
   compactFormControlStyles,
   fileSelectLayoutStyles,
-  toggleStyles,
 } from '../styles/fileSelectStyles';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
@@ -31,40 +30,55 @@ export class LatexDiffsSection extends LitElement {
     compactActionButtonStyles,
     compactFormControlStyles,
     fileSelectLayoutStyles,
-    toggleStyles,
     css`
       :host {
         display: block;
       }
 
-      .latexdiffs-section {
+      .latexdiffs-details {
         margin-top: auto;
-        padding: var(--wa-space-s) 0 0;
-        background-color: transparent;
-        border: none;
         margin-bottom: var(--wa-space-s);
       }
 
-      .latexdiffs-section[data-expanded='true'] {
+      .latexdiffs-details::part(base) {
+        background-color: transparent;
+        border: none;
+        border-radius: var(--border-radius);
+        overflow: visible;
+      }
+
+      .latexdiffs-details[open]::part(base) {
         background-color: var(--background-color);
         border: var(--border-thin) solid
           var(--wa-color-surface-border, var(--dropdown-border));
-        border-radius: var(--border-radius);
-        padding: var(--wa-space-xs);
+      }
+
+      .latexdiffs-details::part(header) {
+        padding: var(--wa-space-s) 0 0;
+        min-height: var(--height-control-compact);
+      }
+
+      .latexdiffs-details[open]::part(header) {
+        padding: var(--wa-space-xs) var(--wa-space-xs) var(--wa-space-3xs);
+      }
+
+      .latexdiffs-details::part(content) {
+        padding: 0 var(--wa-space-xs) var(--wa-space-xs);
         overflow: visible;
       }
 
-      .latexdiffs-section .file-select-header {
-        margin-bottom: 0;
+      .latexdiffs-summary {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--wa-space-3xs);
+        color: var(--text-color);
+        font-size: var(--font-size);
+        line-height: var(--line-height-normal);
+        white-space: nowrap;
       }
 
-      .latexdiffs-section[data-expanded='true'] .optional-label,
-      .latexdiffs-section[data-expanded='true'] .toggle-icon {
+      .latexdiffs-details[open] .latexdiffs-summary {
         color: var(--wa-color-text-normal);
-      }
-
-      #latexdiffsContent {
-        overflow: visible;
       }
 
       #commit::part(listbox) {
@@ -97,10 +111,9 @@ export class LatexDiffsSection extends LitElement {
   /** Whether this is a git repo */
   @property({ attribute: false }) isGitRepo = true;
 
-  private handleToggle(): void {
-    this.dispatchEvent(
-      MainViewEvents.latexDiffsToggle({ visible: !this.visible }),
-    );
+  private handleDetailsOpenChange(event: Event, visible: boolean): void {
+    if (event.target !== event.currentTarget) return;
+    this.dispatchEvent(MainViewEvents.latexDiffsToggle({ visible }));
   }
 
   private handleBaseSelectChange(event: Event): void {
@@ -240,29 +253,17 @@ export class LatexDiffsSection extends LitElement {
   }
 
   override render(): TemplateResult {
-    const chevronName = this.visible ? 'chevron-up' : 'chevron-down';
-
     return html`
-      <div class="latexdiffs-section" data-expanded=${String(this.visible)}>
-        <div class="file-select-header">
-          <div class="file-select-label-group">
-            <span
-              id="toggleLatexdiffs"
-              class="toggle-icon"
-              title="LaTeXDiffs"
-              @click=${this.handleToggle}
-            >
-              ${waIcon(chevronName)}
-            </span>
-            <span class="optional-label"
-              >${waIcon('source-control')} LaTeXDiffs</span
-            >
-          </div>
-        </div>
-        <div
-          id="latexdiffsContent"
-          style=${styleMap({ display: this.visible ? 'block' : 'none' })}
-        >
+      <wa-details
+        class="latexdiffs-details"
+        ?open=${this.visible}
+        @wa-show=${(event: Event) => this.handleDetailsOpenChange(event, true)}
+        @wa-hide=${(event: Event) => this.handleDetailsOpenChange(event, false)}
+      >
+        <span slot="summary" class="latexdiffs-summary">
+          ${waIcon('source-control')} LaTeXDiffs
+        </span>
+        <div id="latexdiffsContent">
           <div class="file-select">
             <div class="file-select-header">
               <div class="file-select-label-group">
@@ -430,7 +431,7 @@ export class LatexDiffsSection extends LitElement {
             </wa-select>
           </div>
         </div>
-      </div>
+      </wa-details>
     `;
   }
 }

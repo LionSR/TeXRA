@@ -119,40 +119,6 @@ export const fileSelectLayoutStyles = css`
   }
 `;
 
-/** Toggle icon and optional label styles. */
-export const toggleStyles = css`
-  .optional-label {
-    color: var(--text-color);
-    font-weight: normal;
-    font-size: var(--font-size);
-    white-space: nowrap;
-    min-width: calc(var(--width-button-min) * 2);
-    display: flex;
-    align-items: center;
-    height: var(--height-control-compact);
-  }
-
-  .toggle-icon {
-    cursor: pointer;
-    user-select: none;
-    margin: 0;
-    position: relative;
-    padding: 0 var(--wa-space-3xs);
-    color: var(--text-color);
-    display: flex;
-    align-items: center;
-    height: var(--height-control-compact);
-    background: none;
-    border: none;
-  }
-
-  .toggle-icon:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
-    border-radius: var(--border-radius-small);
-  }
-`;
-
 /** Multiple files list styles. */
 export const multiFilesStyles = css`
   .multiple-files-container {
@@ -248,7 +214,6 @@ export const fileSelectStyles = [
   compactActionButtonStyles,
   compactFormControlStyles,
   fileSelectLayoutStyles,
-  toggleStyles,
   multiFilesStyles,
   dropdownStyles,
 ];

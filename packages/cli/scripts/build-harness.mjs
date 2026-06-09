@@ -3,8 +3,8 @@
 import { chmod } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import { esmCjsGlobalsBanner } from './esm-cjs-globals-banner.mjs';
 import { reactCompilerPlugin } from './reactCompilerPlugin.mjs';
+import { esmCjsGlobalsBanner } from '../../../scripts/esm-cjs-globals-banner.mjs';
 
 const reactDevtoolsStub = fileURLToPath(
   new URL('./react-devtools-core-stub.mjs', import.meta.url),
