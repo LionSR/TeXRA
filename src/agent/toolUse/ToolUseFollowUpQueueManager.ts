@@ -22,7 +22,7 @@ export class ToolUseFollowUpQueue {
   private static readonly queues = new Map<StreamTabId, FollowUpQueue>();
   /** Streams whose queues were explicitly released (orchestrator disposed). */
   private static readonly released = new Set<StreamTabId>();
-  private static readonly RELEASED_CAP = 500;
+  static readonly RELEASED_CAP = 500;
   /** Observers notified whenever a stream's queue is released. */
   private static readonly releaseObservers = new Set<
     (streamId: StreamTabId) => void
@@ -77,8 +77,9 @@ export class ToolUseFollowUpQueue {
    * follow-up through the registry. Returns false and silently discards if the queue was
    * explicitly released (orchestrator disposed — late-arriving subagent
    * results). Pass `{ force: true }` for explicit user actions that should
-   * reopen a released queue (caller is responsible for ensuring a consumer
-   * will drain it, or releasing again on failure).
+   * reopen or create a queue even without `createIfMissing` (caller is
+   * responsible for ensuring a consumer will drain it, or releasing again on
+   * failure).
    */
   static enqueue(
     streamId: StreamTabId,
