@@ -29,6 +29,7 @@ import { ModelHandlerOpenRouterNative } from '@agent/modelHandlers/openrouter/mo
 
 // Local imports - utils
 import type { FileLocation } from '@utils/files';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 
 // Type imports
 import type { ChatMessages } from '@openrouter/sdk/models';
@@ -107,7 +108,7 @@ describe('model handler empty prefill behavior', () => {
     await withMissingOutput(async (outputLocation) => {
       const handler = new ModelHandlerOpenAI(buildConfig(ModelProvider.OPENAI));
       handler.setLogger(createLoggerStub() as unknown as AgentTrace);
-      const messages = [
+      const messages: ChatCompletionMessageParam[] = [
         {
           role: 'user',
           content: [{ type: 'text', text: 'revise the document' }],
