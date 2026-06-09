@@ -10,6 +10,11 @@ import { BaseTextInput } from '../input/BaseTextInput';
 import { isEscapeInput } from '../input/inputKeys';
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import {
+  moreRowsText,
+  previousRowsText,
+  scrollStatusText,
+} from '../render/overflowText';
+import {
   maxScrollableRowOffset,
   scrollBoundedRows,
 } from '../render/scrollBounds';
@@ -137,22 +142,6 @@ export function externalInquiryQuestionRowsBudget({
   return Math.max(0, availableRows - EXTERNAL_INQUIRY_FIXED_ROWS - answerRows);
 }
 
-function overflowText(kind: 'previous' | 'more', count: number) {
-  if (kind === 'previous') return `... ${count} previous rows`;
-  return `... ${count} more rows`;
-}
-
-function compactOverflowText(
-  hiddenBefore: number,
-  hiddenAfter: number,
-): string {
-  if (hiddenBefore > 0 && hiddenAfter > 0) {
-    return `... ${hiddenBefore} previous, ${hiddenAfter} more rows`;
-  }
-  if (hiddenBefore > 0) return overflowText('previous', hiddenBefore);
-  return overflowText('more', hiddenAfter);
-}
-
 export function externalInquiryQuestionLines({
   question,
   width,
@@ -215,7 +204,7 @@ export function boundedExternalInquiryQuestionLines({
         ? [
             {
               kind: 'overflow' as const,
-              text: compactOverflowText(hiddenBefore, hiddenAfter),
+              text: scrollStatusText(hiddenBefore, hiddenAfter),
             },
           ]
         : []),
@@ -234,7 +223,7 @@ export function boundedExternalInquiryQuestionLines({
       ? [
           {
             kind: 'overflow' as const,
-            text: overflowText('previous', hiddenBefore),
+            text: previousRowsText(hiddenBefore),
           },
         ]
       : []),
@@ -243,7 +232,7 @@ export function boundedExternalInquiryQuestionLines({
       ? [
           {
             kind: 'overflow' as const,
-            text: overflowText('more', hiddenAfter),
+            text: moreRowsText(hiddenAfter),
           },
         ]
       : []),

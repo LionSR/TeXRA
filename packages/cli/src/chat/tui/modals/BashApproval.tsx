@@ -10,6 +10,12 @@ import {
   maxScrollableRowOffset,
   scrollBoundedRows,
 } from '../render/scrollBounds';
+import {
+  hiddenRowsText,
+  moreRowsText,
+  previousRowsText,
+  scrollStatusText,
+} from '../render/overflowText';
 import { clipToWidth, textDisplayWidth } from '../render/terminalText';
 import { KeyHints } from '../ui/KeyHints';
 import type { ApprovalDecision } from '../state/approvalQueue';
@@ -103,12 +109,6 @@ export function bashApprovalPageRows(maxCommandRows: number): number {
     : Math.max(1, maxCommandRows - 2);
 }
 
-function overflowText(kind: 'more' | 'previous' | 'hidden', count: number) {
-  if (kind === 'previous') return `... ${count} previous rows`;
-  if (kind === 'hidden') return `... ${count} rows hidden`;
-  return `... ${count} more rows`;
-}
-
 function compactHiddenCommandText({
   firstLine,
   hiddenLines,
@@ -118,30 +118,11 @@ function compactHiddenCommandText({
   readonly hiddenLines: number;
   readonly width: number;
 }): string {
-  const suffix = ` ${overflowText('hidden', hiddenLines)}`;
+  const suffix = ` ${hiddenRowsText(hiddenLines)}`;
   const prefixWidth = width - textDisplayWidth(suffix);
-  if (prefixWidth <= 0)
-    return clipToWidth(overflowText('hidden', hiddenLines), width);
+  if (prefixWidth <= 0) return clipToWidth(hiddenRowsText(hiddenLines), width);
 
   return `${clipToWidth(firstLine, prefixWidth).trimEnd()}${suffix}`;
-}
-
-function compactScrollStatusText({
-  hiddenAfter,
-  hiddenBefore,
-  width,
-}: {
-  readonly hiddenAfter: number;
-  readonly hiddenBefore: number;
-  readonly width: number;
-}): string {
-  const text =
-    hiddenBefore > 0 && hiddenAfter > 0
-      ? `... ${hiddenBefore} previous, ${hiddenAfter} more rows`
-      : hiddenBefore > 0
-        ? overflowText('previous', hiddenBefore)
-        : overflowText('more', hiddenAfter);
-  return clipToWidth(text, width);
 }
 
 export function boundedBashCommandDisplayLines({
@@ -186,11 +167,7 @@ export function boundedBashCommandDisplayLines({
       ...visible,
       {
         kind: 'overflow',
-        text: compactScrollStatusText({
-          hiddenAfter,
-          hiddenBefore,
-          width,
-        }),
+        text: clipToWidth(scrollStatusText(hiddenBefore, hiddenAfter), width),
       },
     ];
   }
@@ -207,7 +184,7 @@ export function boundedBashCommandDisplayLines({
       ? [
           {
             kind: 'overflow' as const,
-            text: overflowText('previous', hiddenBefore),
+            text: previousRowsText(hiddenBefore),
           },
         ]
       : []),
@@ -216,7 +193,7 @@ export function boundedBashCommandDisplayLines({
       ? [
           {
             kind: 'overflow' as const,
-            text: overflowText('more', hiddenAfter),
+            text: moreRowsText(hiddenAfter),
           },
         ]
       : []),

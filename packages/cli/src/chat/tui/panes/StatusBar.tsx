@@ -7,6 +7,7 @@ import stringWidth from 'string-width';
 
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import {
+  LIVE_ELAPSED_STREAM_STATUSES,
   STREAM_STATUS,
   type ConversationProgress,
   type StreamStatus,
@@ -14,8 +15,8 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
-import { collapseWhitespace } from '@utils/text/stringUtils';
 
+import { truncateSummaryToWidth } from '../render/terminalText';
 import { formatCliStatusLabel } from '../sessionStatus';
 import {
   approvalQueueStatus,
@@ -175,23 +176,6 @@ const STATUS_BAR_COMPACT_PRIORITY = {
   thinking: 75,
 } as const;
 
-function truncateSummaryToColumns(text: string, maxColumns: number): string {
-  const summary = collapseWhitespace(text);
-  if (stringWidth(summary) <= maxColumns) return summary;
-
-  const ellipsis = '…';
-  const contentColumns = Math.max(0, maxColumns - stringWidth(ellipsis));
-  let width = 0;
-  let truncated = '';
-  for (const char of summary) {
-    const charWidth = stringWidth(char);
-    if (width + charWidth > contentColumns) break;
-    truncated += char;
-    width += charWidth;
-  }
-  return `${truncated}${ellipsis}`;
-}
-
 function numberedQueuedFollowUpPreview(
   message: string,
   index: number,
@@ -199,7 +183,7 @@ function numberedQueuedFollowUpPreview(
 ): string {
   const prefix = `${index + 1}. `;
   const bodyColumns = Math.max(0, maxColumns - stringWidth(prefix));
-  return `${prefix}${truncateSummaryToColumns(message, bodyColumns)}`;
+  return `${prefix}${truncateSummaryToWidth(message, bodyColumns)}`;
 }
 
 function queuedFollowUpsListSummary(
@@ -239,7 +223,7 @@ export function queuedFollowUpsSummary(
   if (messages.length > 1) {
     return queuedFollowUpsListSummary(messages, previewLength);
   }
-  return truncateSummaryToColumns(messages[0] ?? '', previewLength);
+  return truncateSummaryToWidth(messages[0] ?? '', previewLength);
 }
 
 function queuedFollowUpsCountSegment(
@@ -303,7 +287,7 @@ function fitPendingExitStatusBarLeftSegments(
     const iconAndGapWidth = statusBarSegmentWidth(icon) + 1;
     fitted[1] = {
       ...prompt,
-      text: truncateSummaryToColumns(
+      text: truncateSummaryToWidth(
         prompt.text,
         Math.max(0, innerWidth - iconAndGapWidth),
       ),
@@ -511,35 +495,22 @@ export function ctrlCActionForFocus({
     : 'stop';
 }
 
-function statusBarCanStopStatus(status: string | undefined): boolean {
-  return (
-    status === STREAM_STATUS.INITIALIZING ||
-    status === STREAM_STATUS.RUNNING ||
-    status === STREAM_STATUS.RESUMING
-  );
+/** In-flight run statuses — stoppable, and live enough to represent a
+ *  focused child's ancestor in the bar. */
+function isLiveStreamStatus(status: string | undefined): boolean {
+  return status !== undefined && LIVE_ELAPSED_STREAM_STATUSES.has(status);
 }
 
 function rootActiveSegment(
   input: StatusBarDisplayInput,
 ): StatusBarSegment | undefined {
-  return input.ctrlCAction === 'stop root' &&
-    !statusBarCanStopStatus(input.status)
+  return input.ctrlCAction === 'stop root' && !isLiveStreamStatus(input.status)
     ? {
         text: 'root active',
         color: 'yellow',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.rootActive,
       }
     : undefined;
-}
-
-function statusBarCanRepresentLiveAncestor(
-  status: StreamStatus | undefined,
-): boolean {
-  return (
-    status === STREAM_STATUS.INITIALIZING ||
-    status === STREAM_STATUS.RUNNING ||
-    status === STREAM_STATUS.RESUMING
-  );
 }
 
 interface StatusBarVisibleStream {
@@ -576,13 +547,13 @@ export function statusBarCanStopVisibleRun({
   readonly status: StreamStatus | undefined;
   readonly streams: ReadonlyMap<StreamTabId, StatusBarVisibleStream>;
 }): boolean {
-  if (statusBarCanStopStatus(status)) return true;
+  if (isLiveStreamStatus(status)) return true;
   return (
     statusBarFindAncestorStream({
       activeStreamId,
       parentStream,
       streams,
-      canUseStream: (stream) => statusBarCanStopStatus(stream.status),
+      canUseStream: (stream) => isLiveStreamStatus(stream.status),
     }) !== undefined
   );
 }
@@ -602,7 +573,7 @@ export function statusBarDisplaySlice({
     activeStreamId,
     parentStream,
     streams,
-    canUseStream: (stream) => statusBarCanRepresentLiveAncestor(stream.status),
+    canUseStream: (stream) => isLiveStreamStatus(stream.status),
   });
 }
 
