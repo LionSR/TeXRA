@@ -116,7 +116,6 @@ export async function withExecutionRunContext<T>(
     agentName: ctx.config.agent,
     workingDirectory: ctx.workingDirectory,
     delegationDepth: ctx.delegationDepth,
-    delegationConfig: ctx.delegationConfig,
     approvalPromptsUnavailable: ctx.approvalPromptsUnavailable,
     stopAfterCycle: ctx.stopAfterCycle,
   });
