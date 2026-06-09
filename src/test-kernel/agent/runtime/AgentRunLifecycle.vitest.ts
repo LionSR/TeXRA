@@ -148,4 +148,35 @@ describe('runFlowWithLifecycle', () => {
       StreamStatusService.clear(streamId, { emit: false });
     }
   });
+
+  it('delivers subagent aborts through the terminal callback', async () => {
+    const executionId = 'execution-lifecycle-subagent-abort' as ExecutionId;
+    const streamId = 'stream-lifecycle-subagent-abort' as StreamTabId;
+    const streamStatus = new StreamStatusRegistry();
+    const ctx = createLifecycleContext({
+      executionId,
+      streamId,
+      streamStatus,
+    });
+    const onError = vi.fn();
+
+    try {
+      streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
+
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => {
+          throw new DOMException('Request aborted', 'AbortError');
+        },
+        { isSubagent: true, onError },
+      );
+
+      expect(result.status).toBe(END_GROUP_STATUS.STOPPED);
+      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(onError).toHaveBeenCalledOnce();
+      expect(onError.mock.calls[0][1]).toEqual(result);
+    } finally {
+      streamStatus.clear(streamId, { emit: false });
+    }
+  });
 });
