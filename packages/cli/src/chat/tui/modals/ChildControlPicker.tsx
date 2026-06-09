@@ -9,10 +9,11 @@ import { Box, Text, useInput } from 'ink';
 import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - CLI state and UI
+import { clampIndex } from '@utils/core';
+
 import {
   buildChildControlItems,
   childPickerKeyAction,
-  clampPickerIndex,
   liveChildExecutionElapsedKey,
   nextPickerIndex,
   subagentPickerSelection,
@@ -981,7 +982,7 @@ export function ChildControlPicker({
     undefined,
   );
   const streamScopeLabel = streamLabel ?? activeStreamId;
-  const selectedIndex = clampPickerIndex(highlight, items.length);
+  const selectedIndex = clampIndex(highlight, items.length);
   const selectedItem = items[selectedIndex];
   const hasItems = items.length > 0;
   const tailItem = tailExecutionId
@@ -1014,7 +1015,7 @@ export function ChildControlPicker({
     : framedPickerHintColumns(availableColumns);
 
   useEffect(() => {
-    setHighlight((current) => clampPickerIndex(current, items.length));
+    setHighlight((current) => clampIndex(current, items.length));
   }, [items.length]);
 
   useEffect(() => {
