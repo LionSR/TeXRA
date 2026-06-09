@@ -171,7 +171,7 @@ export class BackgroundTasksPanel extends LitElement {
         font-weight: var(--font-weight-semibold);
         color: var(--color-text-secondary);
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: var(--letter-spacing-caps);
         cursor: pointer;
         list-style: none;
         user-select: none;

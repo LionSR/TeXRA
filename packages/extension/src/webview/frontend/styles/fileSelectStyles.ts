@@ -83,8 +83,8 @@ export const fileSelectLayoutStyles = css`
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
+    width: var(--height-control-compact);
+    height: var(--height-control-compact);
     color: var(--color-text-secondary);
     flex-shrink: 0;
   }
@@ -129,7 +129,7 @@ export const toggleStyles = css`
     min-width: calc(var(--width-button-min) * 2);
     display: flex;
     align-items: center;
-    height: 22px;
+    height: var(--height-control-compact);
   }
 
   .toggle-icon {
@@ -141,7 +141,7 @@ export const toggleStyles = css`
     color: var(--text-color);
     display: flex;
     align-items: center;
-    height: 22px;
+    height: var(--height-control-compact);
     background: none;
     border: none;
   }
