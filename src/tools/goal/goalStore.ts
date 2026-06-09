@@ -242,7 +242,13 @@ export const GoalStore = {
     }
     return update(
       streamId,
-      (goal) => ({ ...goal, status: nextStatus }),
+      (goal) => ({
+        ...goal,
+        status: nextStatus,
+        ...(nextStatus === 'active'
+          ? { baselineRunCostUsd: null, spentUsd: 0 }
+          : {}),
+      }),
       current,
     );
   },
