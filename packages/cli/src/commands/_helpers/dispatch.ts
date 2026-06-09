@@ -372,9 +372,7 @@ async function resolveDeepestSubCommandPath({
   if (!subCommands) {
     return { command: cmd, parent, commandPath, parentPath, rootCommand };
   }
-  for (let i = 0; i < rawArgs.length; i++) {
-    const token = rawArgs[i];
-    if (token === undefined) break;
+  for (const [i, token] of rawArgs.entries()) {
     if (token.startsWith('-')) continue;
     const next = subCommands[token];
     if (next) {

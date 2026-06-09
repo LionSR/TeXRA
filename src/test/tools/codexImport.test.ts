@@ -1,8 +1,8 @@
 // Node.js built-in imports
-import * as assert from 'assert';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import * as assert from 'node:assert';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 // Local imports - tools
 import { findCodexBinaryInElectronResources } from '@tools/codexImport';

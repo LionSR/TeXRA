@@ -1,5 +1,5 @@
 // Third-party imports
-import { strict as assert } from 'assert';
+import { strict as assert } from 'node:assert';
 
 // Local imports - utils
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';

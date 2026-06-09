@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from 'async_hooks';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';

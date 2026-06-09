@@ -1,5 +1,5 @@
 // Standard library imports
-import * as path from 'path';
+import * as path from 'node:path';
 
 // Local imports - log
 import * as logger from '@logger/logUtils';
@@ -171,8 +171,7 @@ export class TikzPictureManager {
           ? tikzpicturess.map((_, i) => String.fromCharCode(97 + i))
           : [undefined];
 
-      for (let i = 0; i < tikzpicturess.length; i++) {
-        const tikzpictures = tikzpicturess[i];
+      for (const [i, tikzpictures] of tikzpicturess.entries()) {
         const suffix = suffixes[i];
 
         const texLocation = await this.createStandalone(

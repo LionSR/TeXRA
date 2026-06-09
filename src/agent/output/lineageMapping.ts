@@ -5,7 +5,7 @@
  * enabling proper diff computation and file history tracking.
  */
 
-import * as path from 'path';
+import * as path from 'node:path';
 
 import type { FileLocation } from '@shared/schemas';
 import { createFileMapping, getComparablePath } from '@utils/files';

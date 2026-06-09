@@ -1,5 +1,5 @@
 // Standard library imports
-import * as path from 'path';
+import * as path from 'node:path';
 
 // Local imports - result types
 import { getCleanAgentName } from '@agent/index';
@@ -222,11 +222,10 @@ function buildFileListLog(movedFiles: string[], copiedFiles: string[]): string {
 function packDestinationName(file: string): string {
   const base = path.basename(file);
   const segments = path.dirname(file).split(/[\\/]+/);
-  for (let i = segments.length - 1; i >= 0; i--) {
-    const round = parseWorkflowOutputRoundDir(segments[i]);
-    if (round !== null) return `r${round}_${base}`;
-  }
-  return base;
+  const round = segments
+    .map(parseWorkflowOutputRoundDir)
+    .findLast((r) => r !== null);
+  return round != null ? `r${round}_${base}` : base;
 }
 
 async function moveAndCopyFiles(

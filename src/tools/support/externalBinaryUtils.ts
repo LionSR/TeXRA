@@ -7,8 +7,8 @@
  * path-existence helpers. Centralising them here prevents silent drift.
  */
 
-import { createRequire } from 'module';
-import * as path from 'path';
+import { createRequire } from 'node:module';
+import * as path from 'node:path';
 
 import { platform } from '@platform/platform';
 import { executeCommandSync } from '@utils/system/execUtils';
