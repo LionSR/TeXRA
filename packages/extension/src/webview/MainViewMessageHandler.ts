@@ -24,18 +24,15 @@ import { getConfig, updateConfig, SETTINGS_QUERY } from '@utils/config';
 import { checkCoreDependencies, getToolDocsCommand } from '@utils/system';
 
 import { DiffManager } from './managers/DiffManager';
-import {
-  ExecutionManager,
-  type CommandMessage,
-} from './managers/ExecutionManager';
+import * as executionHandlers from './managers/executionHandlers';
 import { FileManager } from './managers/FileManager';
 import { InstructionManager } from './managers/InstructionManager';
+import type { CommandMessage } from './managers/executionHandlers';
 import type { MainViewExecuteMessage } from '@controllers/mainView/MainViewExecutionController';
 
 export class MainViewMessageHandler extends BaseViewMessageHandler {
   private readonly recordingManager: RecordingManager;
   private readonly fileManager: FileManager;
-  private readonly executionManager: ExecutionManager;
   private readonly diffManager: DiffManager;
   private readonly instructionManager: InstructionManager;
   private readonly interactionController: MainViewInteractionController;
@@ -51,7 +48,6 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       progressTitle: 'Transcribing instruction',
     });
     this.fileManager = new FileManager();
-    this.executionManager = new ExecutionManager();
     this.diffManager = new DiffManager();
     this.instructionManager = new InstructionManager(context);
     this.interactionController = new MainViewInteractionController({
@@ -158,13 +154,13 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
       // infer the rich shape — cast to the handler's declared input type
       // rather than discarding all checking with `any`.
       [MAIN_VIEW_COMMANDS.EXECUTE]: (m) =>
-        this.executionManager.handleExecute(m as MainViewExecuteMessage),
+        executionHandlers.handleExecute(m as MainViewExecuteMessage),
       [MAIN_VIEW_COMMANDS.MERGE]: (m) =>
-        this.executionManager.handleFileOperation(m as CommandMessage),
+        executionHandlers.handleFileOperation(m as CommandMessage),
       [MAIN_VIEW_COMMANDS.COMPARE]: (m) =>
-        this.executionManager.handleFileOperation(m as CommandMessage),
+        executionHandlers.handleFileOperation(m as CommandMessage),
       [MAIN_VIEW_COMMANDS.ACCEPT_EDITED]: (m) =>
-        this.executionManager.handleFileOperation(m as CommandMessage),
+        executionHandlers.handleFileOperation(m as CommandMessage),
 
       [MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE]: () =>
         this.fileManager.handleEditedFileSelection(),
@@ -311,19 +307,19 @@ export class MainViewMessageHandler extends BaseViewMessageHandler {
         this.diffManager.handleLatexdiffvcOperation(m),
 
       [MAIN_VIEW_COMMANDS.CLEAN_OUTPUT]: (m) =>
-        this.executionManager.handleHousekeeping(m),
+        executionHandlers.handleHousekeeping(m),
       [MAIN_VIEW_COMMANDS.CLEAN_BUILD]: (m) =>
-        this.executionManager.handleHousekeeping(m),
+        executionHandlers.handleHousekeeping(m),
       [MAIN_VIEW_COMMANDS.INDENT_TEX]: (m) =>
-        this.executionManager.handleHousekeeping(m),
+        executionHandlers.handleHousekeeping(m),
       [MAIN_VIEW_COMMANDS.PACK_SINGLE]: (m) =>
-        this.executionManager.handleSingleOperation(m),
+        executionHandlers.handleSingleOperation(m),
       [MAIN_VIEW_COMMANDS.CLEAN_SINGLE]: (m) =>
-        this.executionManager.handleSingleOperation(m),
+        executionHandlers.handleSingleOperation(m),
       [MAIN_VIEW_COMMANDS.PACK_MULTIPLE]: (m) =>
-        this.executionManager.handleMultipleOperation(m),
+        executionHandlers.handleMultipleOperation(m),
       [MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE]: (m) =>
-        this.executionManager.handleMultipleOperation(m),
+        executionHandlers.handleMultipleOperation(m),
 
       [MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY]: () =>
         safeExecuteCommand('texra.showAgentHistory', [], this.viewName),
