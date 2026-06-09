@@ -851,7 +851,9 @@ const SCENARIOS = [
     name: 'bash-approval',
     env: { HARNESS_ENTRIES: '4', HARNESS_BASH_APPROVAL: '1' },
     bootExpect: '[Ctrl-C]',
+    resizes: [{ cols: 120 }],
     expect: [
+      'agent: chat · model: harness-model',
       'Run bash command?',
       '$ npm run compile:safe',
       'y approve',
@@ -859,6 +861,17 @@ const SCENARIOS = [
       'Use foreground panel shortcuts',
     ],
     unexpect: ['[Alt-p]tasks', '[Option-p]tasks', '[/model]models'],
+    maxOccurrences: [{ text: '{ T } TeXRA', max: 1 }],
+    ordered: [
+      {
+        before: 'agent: chat · model: harness-model',
+        after: '› entry-1 chat history line',
+      },
+      {
+        before: 'agent: chat · model: harness-model',
+        after: 'Run bash command?',
+      },
+    ],
     maxBlankLinesBetween: [
       { from: 'entry-4 chat history line', to: 'Run bash command?', max: 3 },
     ],
@@ -2561,6 +2574,17 @@ function countOccurrences(text, needle) {
   }
 }
 
+function orderedTextFailure(frame, check) {
+  const afterIndex = frame.indexOf(check.after);
+  if (afterIndex < 0)
+    return `order marker missing: ${JSON.stringify(check.after)}`;
+  const beforeIndex = frame.lastIndexOf(check.before, afterIndex);
+  if (beforeIndex < 0)
+    return `${JSON.stringify(check.before)} should appear before ${JSON.stringify(check.after)}`;
+  if (beforeIndex < afterIndex) return undefined;
+  return `${JSON.stringify(check.before)} should appear before ${JSON.stringify(check.after)}`;
+}
+
 function snapshotFileName(index, name, extension = 'txt') {
   const prefix = String(index + 1).padStart(2, '0');
   return `${prefix}-${name.replace(/[^a-z0-9._-]+/gi, '-')}.${extension}`;
@@ -2827,6 +2851,11 @@ async function runScenarioWithResources(scenario, fakeClipboard) {
     child.write(key);
     await sleep(500);
   }
+  for (const resize of scenario.resizes ?? []) {
+    child.resize(Number(resize.cols ?? cols), Number(resize.rows ?? rows));
+    term.resize(Number(resize.cols ?? cols), Number(resize.rows ?? rows));
+    await sleep(Number(resize.delayMs ?? 500));
+  }
 
   // Settle after keystrokes. A quiet PTY is not quite enough: under a full
   // suite, Ink/xterm can occasionally pause between chunks of the final frame,
@@ -2878,6 +2907,10 @@ async function runScenarioWithResources(scenario, fakeClipboard) {
         `text appears too many times: ${JSON.stringify(check.text)} (${actual} > ${check.max})`,
       );
     }
+  }
+  for (const check of scenario.ordered ?? []) {
+    const failure = orderedTextFailure(frame, check);
+    if (failure) failures.push(failure);
   }
   const slashPaletteVisible =
     frame.includes('Tab complete') && frame.includes('↑/↓ navigate');

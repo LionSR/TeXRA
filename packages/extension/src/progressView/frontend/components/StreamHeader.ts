@@ -25,6 +25,7 @@ import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
 
 // Local imports - progress view constants
 import { ELEMENT_IDS, TOOLBAR_BUTTONS } from '../constants';
@@ -210,31 +211,16 @@ export class StreamHeader extends LitElement {
         color: var(--color-success);
       }
 
+      /* Native wa-badge (brand=active / warning=paused, quiet 'filled'
+         appearance), compacted to the prior chip padding. */
       .odyssey-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--wa-space-3xs);
         flex-shrink: 0;
-        padding: 0 var(--wa-space-2xs);
-        border-radius: var(--border-radius-pill);
-        font-size: var(--font-size-xs);
-        font-weight: var(--font-weight-medium);
-        cursor: default;
-        color: var(--wa-color-brand-on-quiet, var(--color-info));
-        background-color: color-mix(
-          in srgb,
-          var(--wa-color-brand-fill-loud, var(--color-info)) 15%,
-          transparent
-        );
       }
 
-      .odyssey-chip.is-paused {
-        color: var(--wa-color-warning-on-quiet, var(--color-warning));
-        background-color: color-mix(
-          in srgb,
-          var(--wa-color-warning-fill-loud, var(--color-warning)) 15%,
-          transparent
-        );
+      .odyssey-chip::part(base) {
+        gap: var(--wa-space-3xs);
+        padding: 0 var(--wa-space-2xs);
+        font-weight: var(--font-weight-medium);
       }
 
       .odyssey-chip wa-icon {
@@ -410,14 +396,15 @@ export class StreamHeader extends LitElement {
     const tooltip = this.odysseyObjective
       ? `${label}: ${this.odysseyObjective}`
       : label;
-    return html`<span
-      class=${classMap({ 'odyssey-chip': true, 'is-paused': isPaused })}
+    return html`<wa-badge
+      class="odyssey-chip"
+      variant=${isPaused ? 'warning' : 'brand'}
+      appearance="filled"
       title=${tooltip}
       aria-label=${tooltip}
     >
-      <wa-icon library="texra" name="compass" aria-hidden="true"></wa-icon>
-      ${label}
-    </span>`;
+      ${waIcon('compass')} ${label}
+    </wa-badge>`;
   }
 
   private renderProgressBadge(): TemplateResult | typeof nothing {

@@ -237,7 +237,7 @@ export class SettingsApp extends SettingsAppBase {
 
       wa-tab .settings-tab-icon {
         margin-inline-end: 0.45em;
-        opacity: 0.85;
+        opacity: var(--opacity-normal);
       }
 
       wa-tab[active] .settings-tab-icon {
