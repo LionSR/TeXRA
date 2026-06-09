@@ -47,7 +47,7 @@ const followUpPlan: Plan = {
 async function installPlatform(flagOn: boolean): Promise<Platform> {
   const { initPlatform } = await import('@platform/platform');
   const platform = createFakePlatform({
-    config: flagOn ? { [ODYSSEY_FEATURE_FLAG_KEY]: true } : {},
+    config: { [ODYSSEY_FEATURE_FLAG_KEY]: flagOn },
   });
   initPlatform(platform);
   return platform;

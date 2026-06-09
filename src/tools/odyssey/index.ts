@@ -1,5 +1,8 @@
+export { isOdysseyEnabled } from './odysseyFeatureFlag';
+
 export {
   ODYSSEY_FEATURE_FLAG_KEY,
+  LEGACY_ODYSSEY_FEATURE_FLAG_KEY,
   ODYSSEY_HISTORY_LIMIT,
   OdysseyStatusSchema,
   OdysseyEventKindSchema,
