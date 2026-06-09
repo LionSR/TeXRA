@@ -1015,6 +1015,9 @@ therefore a **short, enumerable list** — the explicit _all/sweep_ entry points
    session would clear another's pending approvals. **Note:** the per-session variant already
    exists — `cleanupCoordinatorRequestsForStream(streamId)` (`runCoordinators.ts:231`,
    `tools/approval/index.ts:42`) — so the scoped path is built; only the "all" sweep leaks.
+   _(Item-2 names/line numbers are from the §13 pass; the methods were since renamed
+   `cleanupAllRequests`/`cleanupRequestsForStream` and the current reset path is
+   `runCoordinators.ts:142-193` per §15.)_
 3. The single module-level `StreamStatusRegistry.onDidChange(...)` subscription in
    `executionRegistry.ts:118` — one process-wide listener (its body is keyed-safe; the subscription
    registration is the global).
@@ -1281,9 +1284,10 @@ confirmation _plus_ a ledger update to ground truth, not a re-scoping.
 The audited-dir commits are CLI/follow-up-queue fixes, declarative refactors, and one feature —
 none adds a wrapper, barrel, or run-entry indirection (`git diff --name-status` shows the only
 new files are `runtime/ProgressViewBridge.ts`, `toolUse/followUpMessages.ts`,
-`types/AttachedMemory.ts` — none a barrel). Three of these **move the §5/Step-7 and §13
-Finding-B ledger toward its prescription** ("relocate the keyed registries onto an injectable
-per-session handle; scope the sweep/list seams"):
+`types/AttachedMemory.ts` — none a barrel). Three of these **materially advance** the §5/Step-7
+and §13 Finding-B ledger toward its prescription ("relocate the keyed registries onto an
+injectable per-session handle; scope the sweep/list seams"); a fourth, listed last, is a pure
+relabel:
 
 - **`runCoordinators.bridgeState` (module-global free Maps) → `RunCoordinatorBridge` class
   (`runCoordinators.ts:33`).** Now an injectable class with three instance Maps
