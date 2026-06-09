@@ -15,3 +15,5 @@ export {
 export { type IToolUseSession } from './ToolUseSessionLifecycle';
 
 export { type ToolUseSessionSnapshot } from './ToolUseSessionTypes';
+
+export { type ToolUseBeforeWaitingCallback } from './ToolUseServices';

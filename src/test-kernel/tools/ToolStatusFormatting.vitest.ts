@@ -72,6 +72,27 @@ describe('tool status formatting', () => {
     );
   });
 
+  it('includes attached memory misses in subagent error delivery', () => {
+    const delivery = formatSubagentError(
+      'exec-1',
+      'review',
+      new Error('subagent failed'),
+      {
+        memoryMisses: [
+          {
+            path: '/memories/missing.md',
+            reason: 'Path is missing & unreadable',
+          },
+        ],
+      },
+    );
+
+    expect(delivery).toContain('<memory-misses>');
+    expect(delivery).toContain(
+      '<memory-miss path="/memories/missing.md" reason="Path is missing &amp; unreadable" />',
+    );
+  });
+
   it('renders bash execution history as a process without a model', () => {
     const entry: ExecutionListingEntry = {
       id: '16c0f3f748e4',

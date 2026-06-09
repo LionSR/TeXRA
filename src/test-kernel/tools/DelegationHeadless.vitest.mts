@@ -6,6 +6,7 @@ import {
   AgentExecutionHandle,
   executionRegistry,
 } from '@agent/runtime/executionRegistry';
+import type { ToolUseBeforeWaitingCallback } from '@agent/implementations/flows/tooluse';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { StreamTabId } from '@shared/schemas';
 import { DelegateAgentTool } from '@tools/DelegationTools';
@@ -212,16 +213,51 @@ describe('headless delegation', () => {
     );
   });
 
+  it('includes memory misses in interactive early-delivered reports', async () => {
+    const childStreamId = 'child-stream' as StreamTabId;
+    let onBeforeWaiting: ToolUseBeforeWaitingCallback | undefined;
+
+    mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
+      options.onStreamResolved?.(childStreamId);
+      onBeforeWaiting = options.onBeforeWaiting;
+      return new Promise(() => {});
+    });
+
+    await withRunContext(
+      createRunContext({
+        runtimeHost: runtimeHost(),
+        streamId: 'parent-stream',
+        executionId: 'parent-exec',
+        model: 'deepseekT',
+      }),
+      () =>
+        new DelegateAgentTool().call({
+          agent: 'review',
+          model: null,
+          instruction: 'Check the proof.',
+          memories: [],
+          working_directory: null,
+          execution_id: null,
+        }),
+    );
+
+    expect(onBeforeWaiting).toBeDefined();
+    await onBeforeWaiting!('The proof is correct.', [], [
+      { path: '/memories/missing.md', reason: 'not found & unreadable' },
+    ]);
+
+    expect(mocks.writeReport).toHaveBeenCalledWith(
+      expect.stringContaining(
+        '<memory-miss path="/memories/missing.md" reason="not found &amp; unreadable" />',
+      ),
+    );
+  });
+
   it('does not deliver detached subagent results back to the released parent', async () => {
     const parentStreamId = 'parent-stream' as StreamTabId;
     const childStreamId = 'child-stream' as StreamTabId;
     const host = runtimeHost();
-    let onBeforeWaiting:
-      | ((
-          lastResponse: string | undefined,
-          touchedFiles: string[],
-        ) => Promise<boolean>)
-      | undefined;
+    let onBeforeWaiting: ToolUseBeforeWaitingCallback | undefined;
 
     mocks.executeAgent.mockImplementationOnce(
       async (_config, executionId: string, options) => {
@@ -261,9 +297,9 @@ describe('headless delegation', () => {
 
     executionRegistry.detachActiveChildren(parentStreamId, host);
 
-    await expect(onBeforeWaiting?.('The proof is correct.', [])).resolves.toBe(
-      false,
-    );
+    expect(onBeforeWaiting).toBeDefined();
+    const delivered = await onBeforeWaiting!('The proof is correct.', [], []);
+    expect(delivered).toBe(false);
     expect(ToolUseFollowUpQueue.getAll(parentStreamId)).toEqual([]);
     expect(ToolUseFollowUpQueue.getAll(childStreamId)).toEqual([]);
     expect(mocks.writeReport).toHaveBeenCalledWith(

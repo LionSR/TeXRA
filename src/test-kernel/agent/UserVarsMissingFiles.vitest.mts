@@ -27,6 +27,8 @@ describe('buildUserVars with missing configured files', () => {
         files: {
           '/workspace/present.tex': 'present input',
           '/workspace/context.tex': 'present context',
+          '/workspace/.texra/storage/memories/present.md':
+            '---\nmodifiedBy: user\n---\nRemember this convention.',
         },
       }),
     );
@@ -70,5 +72,34 @@ describe('buildUserVars with missing configured files', () => {
     expect(vars.LIST_OF_ALL_CONTEXTS).toBe('context.tex');
     expect(vars.CONTEXT_FILE).toBe('context.tex');
     expect(vars.CONTEXT_CONTENT).toBe('present context');
+  });
+
+  it('records attached memory read misses from the prompt-load pass', async () => {
+    const agentConfig = AgentConfigSchema.parse({
+      agent: 'generic',
+      model: 'test-model',
+      memories: ['/memories/present.md', '/memories/missing.md'],
+    });
+    const agentSetting = AgentWorkflowSettingSchema.parse({
+      agentCategory: AgentCategory.Workflow,
+    });
+    const agentPrompt = AgentPromptSchema.parse({});
+
+    const vars = await buildUserVars(
+      agentConfig,
+      agentSetting,
+      agentPrompt,
+      '/agents/generic',
+      providerFlags,
+      noopTrace,
+      '/workspace',
+    );
+
+    expect(vars.ATTACHED_MEMORIES).toBe(
+      '<attached_memories>\n<memory name="/memories/present.md">\nRemember this convention.\n</memory>\n</attached_memories>',
+    );
+    expect(vars.ATTACHED_MEMORY_MISSES).toEqual([
+      expect.objectContaining({ path: '/memories/missing.md' }),
+    ]);
   });
 });

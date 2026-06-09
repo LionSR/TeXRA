@@ -6,6 +6,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseWaitNode';
 import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
+import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import { IdleContinuationRegistry } from '@agent/runtime/idleContinuation';
 import {
   StreamStatusRegistry,
@@ -22,8 +23,12 @@ describe('ToolUseWaitNode', () => {
     };
     let interrupted = false;
     const onBeforeWaiting = vi.fn(async () => {});
+    const memoryMisses: AttachedMemoryMiss[] = [
+      { path: '/memories/missing.md', reason: 'not found' },
+    ];
 
     const services = {
+      attachedMemoryMisses: memoryMisses,
       checkInterruption: () => interrupted,
       idleContinuations: new IdleContinuationRegistry(),
       isSubagent: true,
@@ -49,6 +54,7 @@ describe('ToolUseWaitNode', () => {
     const transition = await node.post(shared, prep, exec);
 
     expect(onBeforeWaiting).toHaveBeenCalledOnce();
+    expect(onBeforeWaiting).toHaveBeenCalledWith(undefined, [], memoryMisses);
     expect(transition).toBe(FlowTransition.COMPLETE);
     expect(shared.deliveredToOrchestrator).toBe(true);
   });

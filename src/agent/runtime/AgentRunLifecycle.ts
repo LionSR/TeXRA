@@ -142,6 +142,7 @@ export async function runFlowWithLifecycle(
         status,
         ctx.executionId,
         streamId,
+        ctx.attachedMemoryMisses,
       );
       try {
         await options.onError?.(err, result);
@@ -161,6 +162,7 @@ export async function runFlowWithLifecycle(
         END_GROUP_STATUS.STOPPED,
         ctx.executionId,
         streamId,
+        ctx.attachedMemoryMisses,
       );
     }
 
