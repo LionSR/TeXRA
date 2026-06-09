@@ -5,6 +5,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
+import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import { COMMON_COMMANDS, MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { SignalWatcher, signal, Signal } from '@shared/signals';
 import { BaseWebviewApp } from '@shared/BaseWebviewApp';
@@ -1779,7 +1780,7 @@ export class MainApp extends MainAppBase {
               .handleComponentDismissGettingStarted}
           ></banner-group>
 
-          <div class="section-separator" role="presentation"></div>
+          <wa-divider></wa-divider>
           <wa-details
             class="file-selection-details"
             ?open=${this.fileSelectionOpen.get()}
