@@ -473,13 +473,18 @@ async function executeSubagent(
     followUp: FollowUpQueueInput,
   ): Promise<boolean> {
     if (!deliveryState.beginDelivery()) return false;
-    const delivered = await deliverFollowUp(followUp);
-    if (delivered) {
-      deliveryState.completeDelivery();
-    } else {
+    try {
+      const delivered = await deliverFollowUp(followUp);
+      if (delivered) {
+        deliveryState.completeDelivery();
+      } else {
+        deliveryState.failDelivery();
+      }
+      return delivered;
+    } catch (err) {
       deliveryState.failDelivery();
+      throw err;
     }
-    return delivered;
   }
 
   function onProgress(update: SubagentProgressUpdate): void {
