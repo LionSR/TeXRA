@@ -1339,7 +1339,7 @@ YAML + tool-list concern, not new code.** No new abstraction introduced.
   session and the in-process multi-session blocker closes. The keyed registries themselves need
   not move for correctness (no current single-session host exhibits a bug).
 - **§3.1** — still no `@agent/runtime/index.ts` barrel; still optional polish (the `@texra/core`
-  - `src/platform/index.ts` surfaces already cover the underlying concern).
+  and `src/platform/index.ts` surfaces already cover the underlying concern).
 - **§13 finding #1 (`AgentRuntimeHost.emit` mixes UI + essential events)** — unchanged; the
   headless-contract TSDoc is present (`AgentRuntimeHost.ts:1-27`, "Frontend-bound events"
   grouping), structural split deferred.
