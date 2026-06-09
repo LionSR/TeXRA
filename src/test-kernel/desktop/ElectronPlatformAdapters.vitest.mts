@@ -24,6 +24,7 @@ import { loadPlatformDefaultsModule } from './loadPlatformDefaultsModule.mjs';
 interface JsonStore {
   get<T>(key: string, defaultValue?: T): T;
   set(key: string, value: unknown): Promise<void>;
+  update(key: string, value: unknown): Promise<void>;
   snapshot(): Record<string, unknown>;
 }
 
@@ -31,15 +32,6 @@ interface JsonStoreModule {
   JsonStore: {
     open(filePath: string): Promise<JsonStore>;
   };
-}
-
-interface JsonBackedStateStore {
-  get<T>(key: string, defaultValue?: T): T;
-  update(key: string, value: unknown): PromiseLike<void>;
-}
-
-interface JsonStateStoreModule {
-  JsonStateStore: new (store: JsonStore) => JsonBackedStateStore;
 }
 
 interface ElectronSecrets {
@@ -124,20 +116,16 @@ describe('desktop platform adapters', () => {
   });
 
   it('persists state values and deletes undefined updates through JsonStore', async () => {
-    const [{ JsonStore }, { JsonStateStore }] = await Promise.all([
-      loadPlatformDefaultsModule<JsonStoreModule>('jsonStore.ts'),
-      loadPlatformDefaultsModule<JsonStateStoreModule>('jsonStateStore.ts'),
-    ]);
+    const JsonStore = await loadJsonStore();
     const root = await makeTempDir('texra-electron-state-');
     const store = await JsonStore.open(join(root, 'state.json'));
-    const state = new JsonStateStore(store);
 
-    await state.update('session', { active: true });
-    await state.update('cleared', 'value');
-    await state.update('cleared', undefined);
+    await store.update('session', { active: true });
+    await store.update('cleared', 'value');
+    await store.update('cleared', undefined);
 
-    expect(state.get('session')).toEqual({ active: true });
-    expect(state.get('missing', 'fallback')).toBe('fallback');
+    expect(store.get('session')).toEqual({ active: true });
+    expect(store.get('missing', 'fallback')).toBe('fallback');
     expect(store.snapshot()).toEqual({ session: { active: true } });
   });
 
