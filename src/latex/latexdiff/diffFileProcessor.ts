@@ -11,6 +11,11 @@ const STAR_ENVIRONMENTS = [
   'alignat\\*',
 ];
 
+const STAR_ENV_REGEX = new RegExp(
+  `\\\\begin\\{(${STAR_ENVIRONMENTS.join('|')})\\}([\\s\\S]*?)\\\\end\\{\\1\\}`,
+  'g',
+);
+
 /** Substrings that trigger extra newlines before the line for readability. */
 const PACKAGES_NEEDING_NEWLINE = [
   '\\usepackage{tikz}',
@@ -63,8 +68,10 @@ export class DiffFileProcessor {
     processedContent = this.processStarEnvironments(processedContent);
     processedContent = this.processLineByLine(processedContent);
     processedContent = replacementEngine.applyAll(processedContent);
+    for (const [pattern, replacement] of DOCUMENT_END_FIXES) {
+      processedContent = processedContent.replace(pattern, replacement);
+    }
     await flexibleFS.write(diffFileLocation, processedContent);
-    await this.processTikzPictureEndings(diffFileLocation);
   }
 
   private restoreFlattenedBibliography(
@@ -80,16 +87,8 @@ export class DiffFileProcessor {
   }
 
   private findBibliographyDirective(content?: string): string | undefined {
-    for (const line of content?.split('\n') ?? []) {
-      if (line.trimStart().startsWith('%')) {
-        continue;
-      }
-      const bibliography = line.match(/\\bibliography\s*\{[^}]+\}/);
-      if (bibliography) {
-        return bibliography[0];
-      }
-    }
-    return undefined;
+    // First \bibliography directive on a non-comment line.
+    return content?.match(/^(?![ \t]*%).*?(\\bibliography\s*\{[^}]+\})/m)?.[1];
   }
 
   private sanitizeFlattenedBibliographyMacroPreamble(content: string): string {
@@ -126,13 +125,7 @@ export class DiffFileProcessor {
   }
 
   private processStarEnvironments(content: string): string {
-    const envPattern = STAR_ENVIRONMENTS.join('|');
-    const starEnvRegex = new RegExp(
-      `\\\\begin\\{(${envPattern})\\}([\\s\\S]*?)\\\\end\\{\\1\\}`,
-      'g',
-    );
-
-    return content.replaceAll(starEnvRegex, (_match, envName, envContent) => {
+    return content.replaceAll(STAR_ENV_REGEX, (_match, envName, envContent) => {
       const cleanContent = envContent.replaceAll(/\\label\{[^}]*\}/g, '');
       return `\\begin{${envName}}${cleanContent}\\end{${envName}}`;
     });
@@ -175,15 +168,4 @@ export class DiffFileProcessor {
     return processedLines.join('\n') + '\n';
   }
 
-  private async processTikzPictureEndings(
-    fileLocation: FileLocation,
-  ): Promise<void> {
-    let content = await flexibleFS.read(fileLocation);
-
-    for (const [pattern, replacement] of DOCUMENT_END_FIXES) {
-      content = content.replace(pattern, replacement);
-    }
-
-    await flexibleFS.write(fileLocation, content);
-  }
 }

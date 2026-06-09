@@ -64,8 +64,9 @@ function mergeMessageContent(
     return;
   }
 
-  // Note: Messages are already deep-cloned before merging, so we can safely
-  // spread arrays without additional structuredClone calls.
+  // Note: Messages are shallow-copied before merging, so this must only
+  // replace top-level fields and build new arrays — never mutate the
+  // (shared) nested content items.
 
   // Both arrays: concatenate
   if (Array.isArray(prevContent) && Array.isArray(currContent)) {
@@ -139,7 +140,11 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
     convertContentToString: asString = false,
   } = options;
 
-  let working: T[] = messages.map((message) => structuredClone(message));
+  // Shallow per-message copies suffice: merging and string conversion only
+  // replace top-level fields (content / reasoning_content) and build new
+  // arrays, never mutating nested content items — so a structuredClone of
+  // the whole (potentially multi-megabyte) history per request is wasted work.
+  let working: T[] = messages.map((message) => ({ ...message }));
 
   if (mergeConsecutiveRoles) {
     const merged: T[] = [];
