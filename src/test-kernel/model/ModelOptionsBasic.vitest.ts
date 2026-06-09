@@ -20,6 +20,23 @@ describe('default model list', () => {
     expect(config.inputPrice).toBeLessThanOrEqual(3);
   });
 
+  it('includes Fable 5 as a default model', () => {
+    const config = MODEL_CONFIGS.fable5;
+
+    expect(DEFAULT_MODELS).toContain('fable5');
+    expect(config).toMatchObject({
+      fullName: 'claude-fable-5',
+      label: 'Fable 5',
+      provider: 'anthropic',
+      openRouterOnly: false,
+    });
+    expect(config.deprecated ?? false).toBe(false);
+    expect(config.inputPrice).toBe(10);
+    expect(config.outputPrice).toBe(50);
+    expect(config.contextWindow).toBe(1_000_000);
+    expect(config.maxOutputTokens).toBe(128_000);
+  });
+
   it('only contains model ids known by llm-zoo', () => {
     expect(DEFAULT_MODELS.filter((model) => !MODEL_CONFIGS[model])).toEqual([]);
   });
