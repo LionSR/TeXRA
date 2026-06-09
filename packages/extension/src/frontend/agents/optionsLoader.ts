@@ -1,5 +1,5 @@
 import { computeAgentOptionsData } from '@agent/index';
-import { getHelperModelName } from '@agent/runtime/helperModel';
+import { getHelperModelName } from '@agent/runtime/helperModelName';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 
 export interface OptionsPayload {

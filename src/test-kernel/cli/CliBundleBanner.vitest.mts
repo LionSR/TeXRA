@@ -10,11 +10,9 @@ function readRepoFile(path: string): string {
   return readFileSync(join(repoRoot, path), 'utf8');
 }
 
-describe('CLI ESM bundle banner', () => {
+describe('ESM bundle banner', () => {
   it('defines CommonJS globals for bundled dependencies', () => {
-    const banner = readRepoFile(
-      'packages/cli/scripts/esm-cjs-globals-banner.mjs',
-    );
+    const banner = readRepoFile('scripts/esm-cjs-globals-banner.mjs');
 
     expect(banner).toContain('__texraCreateRequire');
     expect(banner).toContain('const require = __texraCreateRequire');
@@ -22,11 +20,14 @@ describe('CLI ESM bundle banner', () => {
     expect(banner).toContain('const __dirname = __texraDirname(__filename)');
   });
 
-  it('uses the shared banner for both CLI ESM bundles', () => {
+  it('uses the shared banner for bundled ESM entry points', () => {
     expect(readRepoFile('packages/cli/scripts/build-bundle.mjs')).toContain(
       'esmCjsGlobalsBanner',
     );
     expect(readRepoFile('packages/cli/scripts/build-harness.mjs')).toContain(
+      'esmCjsGlobalsBanner',
+    );
+    expect(readRepoFile('packages/desktop/esbuild.main.mjs')).toContain(
       'esmCjsGlobalsBanner',
     );
   });
