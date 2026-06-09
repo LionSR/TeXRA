@@ -8,7 +8,12 @@ import {
 } from '@test/support/FakePlatform';
 import { maybeBuildOdysseyContinuation } from '@agent/odyssey';
 import type { StreamTabId } from '@shared/schemas';
-import { ODYSSEY_FEATURE_FLAG_KEY, OdysseyStore } from '@tools/odyssey';
+import {
+  LEGACY_ODYSSEY_FEATURE_FLAG_KEY,
+  ODYSSEY_FEATURE_FLAG_KEY,
+  OdysseyStore,
+  isOdysseyEnabled,
+} from '@tools/odyssey';
 import type { Platform } from '@platform/platform';
 
 const STREAM_ID = 'stream:odyssey-cont' as StreamTabId;
@@ -16,11 +21,45 @@ const STREAM_ID = 'stream:odyssey-cont' as StreamTabId;
 async function installPlatform(flagOn: boolean): Promise<Platform> {
   const { initPlatform } = await import('@platform/platform');
   const platform = createFakePlatform({
-    config: flagOn ? { [ODYSSEY_FEATURE_FLAG_KEY]: true } : {},
+    config: { [ODYSSEY_FEATURE_FLAG_KEY]: flagOn },
   });
   initPlatform(platform);
   return platform;
 }
+
+async function installPlatformWithConfig(
+  config: Record<string, unknown>,
+): Promise<Platform> {
+  const { initPlatform } = await import('@platform/platform');
+  const platform = createFakePlatform({ config });
+  initPlatform(platform);
+  return platform;
+}
+
+describe('isOdysseyEnabled', () => {
+  it('defaults on when neither the canonical nor legacy key is set', async () => {
+    await installPlatformWithConfig({});
+
+    expect(isOdysseyEnabled()).toBe(true);
+  });
+
+  it('honors the explicit legacy key when the canonical key is absent', async () => {
+    await installPlatformWithConfig({
+      [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: false,
+    });
+
+    expect(isOdysseyEnabled()).toBe(false);
+  });
+
+  it('lets the canonical key override the legacy key', async () => {
+    await installPlatformWithConfig({
+      [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: false,
+      [ODYSSEY_FEATURE_FLAG_KEY]: true,
+    });
+
+    expect(isOdysseyEnabled()).toBe(true);
+  });
+});
 
 describe('maybeBuildOdysseyContinuation', () => {
   let platform: Platform;
