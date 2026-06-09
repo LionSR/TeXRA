@@ -93,7 +93,7 @@ export class StreamLog {
 
     // Direct merge — no Zod parse. update() is on the streaming hot path
     // (tool output chunks at ~200/sec) and receives trusted data from
-    // AgentLogger. Persisted entries are parsed when loaded from storage.
+    // AgentTrace. Persisted entries are parsed when loaded from storage.
     const updated: StreamLogEntry = {
       ...current,
       ...patch,
