@@ -259,20 +259,6 @@ class BatchNode<
     return results;
   }
 }
-class ParallelBatchNode<
-  S = unknown,
-  P extends NonIterableObject = NonIterableObject,
-  Svc = unknown,
-> extends Node<S, P, Svc> {
-  async _exec(items: unknown[]): Promise<unknown[]> {
-    if (!Array.isArray(items)) return [];
-    // Check abort signal before starting parallel execution
-    if (this.signal?.aborted) return [];
-    const results = await Promise.all(items.map((item) => super._exec(item)));
-    // Note: Can't abort mid-execution, but at least we check before starting
-    return results;
-  }
-}
 class Flow<
   S = unknown,
   P extends NonIterableObject = NonIterableObject,
@@ -304,4 +290,4 @@ class Flow<
     throw new Error("Flow can't exec.");
   }
 }
-export { BaseNode, Node, BatchNode, ParallelBatchNode, Flow };
+export { BaseNode, Node, BatchNode, Flow };

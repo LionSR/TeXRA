@@ -7,5 +7,4 @@ export {
   AgentRegistrationSkipReason,
   getAgentRegistrationSkipReason,
   promptToAddAgentToConfig,
-  validateYamlAndPromptAdd,
 } from './register';

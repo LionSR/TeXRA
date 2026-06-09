@@ -17,7 +17,6 @@ import {
   type AgentPrompt,
 } from '@agent/core/definition/AgentDataclass';
 import { RemoteAgentLoader } from '@agent/remote/RemoteAgentLoader';
-import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { resolveToolDefinitions } from '@tools/registry';
 import { AbsoluteFS } from '@utils/files';
@@ -133,24 +132,4 @@ export async function loadAgentSettingAndPrompts(
 
   // Apply defaults and validate the final settings and prompts
   return [AgentSettingSchema.parse(settings), AgentPromptSchema.parse(prompts)];
-}
-
-/**
- * Check whether a YAML file represents a valid agent configuration.
- * Returns an object with the agent's root name and its settings if valid, otherwise null.
- */
-export async function isValidAgentYaml(
-  filePath: string,
-): Promise<ValidAgentDefinition | null> {
-  try {
-    const rawData = await loadYaml(filePath);
-    const { name, settings } = validateAgentYamlContent(rawData);
-    return { name, settings };
-  } catch (err) {
-    logger.debug(
-      CHANNEL,
-      `isValidAgentYaml check failed for ${filePath}: ${toErrorMessage(err)}`,
-    );
-  }
-  return null;
 }
