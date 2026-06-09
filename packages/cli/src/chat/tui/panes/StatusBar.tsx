@@ -635,8 +635,8 @@ export function buildStatusBarDisplay(
       input.thinkingActive === true
     ) {
       left.push({
-        text: 'thinking',
-        color: 'dim',
+        text: 'thinking...',
+        color: 'yellow',
         compactPriority: STATUS_BAR_COMPACT_PRIORITY.thinking,
       });
     }
