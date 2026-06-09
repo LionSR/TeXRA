@@ -322,23 +322,21 @@ export class WorkPlanState {
   private _planEqual(a: Plan | null, b: Plan | null): boolean {
     if (a === b) return true;
     if (!a || !b) return false;
-    if (a.summary !== b.summary) return false;
-    if (a.steps.length !== b.steps.length) return false;
-    for (let i = 0; i < a.steps.length; i++) {
-      const ai = a.steps[i],
-        bi = b.steps[i];
-      if (!ai || !bi) return false;
-      if (
-        ai.title !== bi.title ||
-        ai.description !== bi.description ||
-        ai.status !== bi.status ||
-        ai.files.length !== bi.files.length ||
-        ai.files.some((f, j) => f !== bi.files[j])
-      ) {
-        return false;
-      }
-    }
-    return true;
+    return (
+      a.summary === b.summary &&
+      a.steps.length === b.steps.length &&
+      a.steps.every((ai, i) => {
+        const bi = b.steps[i];
+        return (
+          bi !== undefined &&
+          ai.title === bi.title &&
+          ai.description === bi.description &&
+          ai.status === bi.status &&
+          ai.files.length === bi.files.length &&
+          ai.files.every((f, j) => f === bi.files[j])
+        );
+      })
+    );
   }
 
   reset(): void {

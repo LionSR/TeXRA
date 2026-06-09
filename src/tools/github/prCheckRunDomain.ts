@@ -103,8 +103,8 @@ export function planAnnotationCandidates(
   currentPendingRuns: ReadonlyArray<GhCheckRun>,
 ): AnnotationQueuePlan {
   const pendingIndexById = new Map<number, number>();
-  for (let i = 0; i < currentPendingRuns.length; i += 1) {
-    pendingIndexById.set(currentPendingRuns[i].id, i);
+  for (const [i, run] of currentPendingRuns.entries()) {
+    pendingIndexById.set(run.id, i);
   }
 
   const newCurrentKeys = new Set<string>();
