@@ -137,19 +137,10 @@ export async function runFlowWithLifecycle(
       }
     }
 
-    if (kind === 'abort') {
-      return buildTerminalFlowResult(
-        category,
-        END_GROUP_STATUS.STOPPED,
-        ctx.executionId,
-        streamId,
-      );
-    }
-
     if (options?.isSubagent) {
       const result = buildTerminalFlowResult(
         category,
-        END_GROUP_STATUS.ERROR,
+        status,
         ctx.executionId,
         streamId,
       );
@@ -161,6 +152,15 @@ export async function runFlowWithLifecycle(
         );
       }
       return result;
+    }
+
+    if (kind === 'abort') {
+      return buildTerminalFlowResult(
+        category,
+        END_GROUP_STATUS.STOPPED,
+        ctx.executionId,
+        streamId,
+      );
     }
 
     throw new AgentError(errorMsg, { cause: err });
