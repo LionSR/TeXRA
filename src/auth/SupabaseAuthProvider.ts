@@ -345,7 +345,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       }
 
       // Log token format to help diagnose auth issues (token prefix indicates type)
-      const tokenPrefix = githubSession.accessToken.substring(0, 4);
+      const tokenPrefix = githubSession.accessToken.slice(0, 4);
       const tokenType = GITHUB_TOKEN_TYPE_MAP[tokenPrefix] ?? 'unknown format';
 
       logger.info(

@@ -5,6 +5,8 @@
 // non-TTY callers are pointed at `texra run` (which is what they actually
 // want for piping/scripting).
 
+import { setTimeout as sleep } from 'node:timers/promises';
+
 import { render, type Instance as InkInstance } from 'ink';
 import PQueue from 'p-queue';
 
@@ -1527,7 +1529,7 @@ export async function runChat(
           !session.stopRequested &&
           !session.runCompleted
         ) {
-          await new Promise<void>((resolve) => setTimeout(resolve, 25));
+          await sleep(25);
           followUpTarget = session.streamId;
         }
         if (!followUpTarget || session.stopRequested) return;

@@ -201,7 +201,7 @@ function extractJwtFromRequest(req: Request): string | null {
   // OpenAI SDK: Authorization: Bearer {jwt}
   const authHeader = req.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
-    return authHeader.substring(7);
+    return authHeader.slice(7);
   }
 
   // Anthropic SDK: x-api-key: {jwt}
