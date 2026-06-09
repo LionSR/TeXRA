@@ -51,10 +51,7 @@ import {
   type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import {
-  evaluateDelegationGate,
-  type NestedDelegationConfig,
-} from '@shared/constants/delegationPolicy';
+import { evaluateDelegationGate } from '@shared/constants/delegationPolicy';
 import { formatBytes } from '@shared/utils/string';
 
 // Local imports - tools
@@ -284,17 +281,12 @@ function resolveDeliveryStreamId(
 
 /**
  * Runtime depth gate shared by fresh delegations and resumes.
- * Tool-use flows pass the same max-depth snapshot used for tool resolution so
- * prompt pruning and runtime enforcement derive from one policy snapshot.
- * Direct tool calls fall back to the current workspace policy.
+ * Reads the current workspace delegation policy via readNestedDelegationConfig().
  */
-function depthGateError(
-  parentDelegationDepth: number,
-  configSnapshot?: NestedDelegationConfig,
-): ToolResult | null {
+function depthGateError(parentDelegationDepth: number): ToolResult | null {
   const gate = evaluateDelegationGate(
     parentDelegationDepth,
-    configSnapshot ?? readNestedDelegationConfig(),
+    readNestedDelegationConfig(),
   );
   if (gate.allowed) return null;
 
@@ -369,10 +361,7 @@ async function executeSubagent(
   const parentDelegationDepth = parentContext.delegationDepth ?? 0;
   const runtimeHost = parentContext.runtimeHost;
 
-  const gated = depthGateError(
-    parentDelegationDepth,
-    parentContext.delegationConfig,
-  );
+  const gated = depthGateError(parentDelegationDepth);
   if (gated) return gated;
 
   const executionId = generateExecutionId();
@@ -1122,10 +1111,7 @@ Git worktree support: ${
   ): Promise<ToolResult> {
     const parentContext = tryUseRunContext();
     const parentDelegationDepth = parentContext?.delegationDepth ?? 0;
-    const gated = depthGateError(
-      parentDelegationDepth,
-      parentContext?.delegationConfig,
-    );
+    const gated = depthGateError(parentDelegationDepth);
     if (gated) return gated;
 
     const handle = executionRegistry.getHandle(executionId);

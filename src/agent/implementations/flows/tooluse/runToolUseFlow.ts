@@ -152,7 +152,6 @@ export async function runToolUseFlow<C = unknown>(
     fileService: new TaskRunFileService(executionId),
     idleContinuations: input.idleContinuations ?? idleContinuationRegistry,
     delegationDepth,
-    delegationConfig,
     delegationTrimmed,
   };
   const switchedHandlers = new Set<ToolUseServices<C>['modelHandler']>();
