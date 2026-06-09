@@ -285,7 +285,7 @@ export class ProgressApp extends ProgressAppBase {
         margin: var(--wa-space-2xs) 0 0;
         color: var(--wa-color-text-normal);
         font-size: 24px;
-        font-weight: 600;
+        font-weight: var(--font-weight-semibold);
         letter-spacing: 0;
       }
 
