@@ -1004,7 +1004,7 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'running',
       '110s',
-      'thinking',
+      'thinking...',
       PERSONAL_API_MODE_LABEL,
     ]);
 

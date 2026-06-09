@@ -88,7 +88,7 @@ You are a delegated subagent. The configured delegation depth does not allow you
  */
 export async function getSystemPromptWithRules(
   systemPrompt: string,
-  userVars: Record<string, any>,
+  userVars: Record<string, unknown>,
 ): Promise<string> {
   const basePrompt = await renderPrompt(systemPrompt, userVars);
   const parts = [basePrompt];
@@ -125,7 +125,7 @@ export class PromptBuilder {
   constructor(
     private readonly agentPrompt: AgentPrompt,
     private readonly agentSetting: PromptBuilderSetting,
-    private readonly userVars: Record<string, any>,
+    private readonly userVars: Record<string, unknown>,
     private readonly logger?: AgentTrace,
   ) {}
 
@@ -226,7 +226,7 @@ export type InitialPrompts = Awaited<
 
 export async function buildInitialToolUsePrompts(
   agentPrompt: AgentPrompt,
-  userVars: Record<string, any>,
+  userVars: Record<string, unknown>,
   logger?: AgentTrace,
   options?: {
     resolvedToolNames?: readonly string[];

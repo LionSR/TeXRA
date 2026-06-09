@@ -1568,6 +1568,13 @@ describe('CLI transcript state', () => {
       expect(slice?.thinkingActive).toBe(true);
       expect(slice?.entries).toEqual([]);
 
+      thinking.finalize();
+      syncStreamLog(root);
+
+      slice = cliState.streams.get().get(root);
+      expect(slice?.thinkingActive).toBe(false);
+      expect(slice?.entries).toEqual([]);
+
       const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE);
       output.append('Visible answer.');
 
