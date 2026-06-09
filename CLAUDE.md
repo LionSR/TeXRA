@@ -75,15 +75,6 @@ overwrites in place — so it always runs your latest local build, no relinking
 needed. Re-run `texra-local:build` to refresh. Override the install dir with
 `TEXRA_LOCAL_BIN_DIR=/some/dir npm run texra-local:link`.
 
-### Legacy Webpack Builds
-
-The original webpack-based commands are still available:
-
-```bash
-npm run compile
-npm run package
-```
-
 ## Architecture Overview
 
 ### Agent System

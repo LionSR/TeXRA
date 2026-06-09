@@ -8,16 +8,14 @@ import { aliases } from '../../scripts/aliases.mjs';
 const webviews = ['progressView', 'settingsView', 'webview'] as const;
 
 /**
- * Plugin to generate shared webview runtime assets for Vite builds.
+ * Plugin to generate shared webview runtime assets.
  *
- * Webpack builds use a shared UMD bundle (WebviewCommons) that all webviews
- * reference via externals. Vite builds inline all dependencies directly into
- * each webview bundle, so the WebviewCommons global is never used.
- *
- * However, the HTML templates reference ${commonsBundleUri} which points to
- * dist/shared/commons.js. This plugin generates a minimal stub that:
+ * Vite inlines all dependencies directly into each webview bundle, so the
+ * WebviewCommons global is never used. However, the HTML templates reference
+ * ${commonsBundleUri} which points to dist/shared/commons.js. This plugin
+ * generates a minimal stub that:
  * 1. Prevents 404 errors when loading the webview
- * 2. Sets up an empty WebviewCommons global (never actually used by Vite bundles)
+ * 2. Sets up an empty WebviewCommons global (never actually used)
  */
 function commonsStubPlugin(): Plugin {
   return {
@@ -28,7 +26,6 @@ function commonsStubPlugin(): Plugin {
 
       mkdirSync(sharedDir, { recursive: true });
 
-      // Only create stub if commons.js doesn't exist (i.e., webpack hasn't run)
       if (!existsSync(commonsPath)) {
         writeFileSync(
           commonsPath,

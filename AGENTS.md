@@ -15,21 +15,16 @@ When updating CHANGELOG.md:
 1. **Install dependencies**: run `corepack pnpm install` if needed.
 2. **Run checks before committing**:
    - Format code using `npm run format`.
-   - Build the extension bundle with `npm run compile:fast` (recommended) or `npm run compile`.
+   - Build the extension bundle with `npm run compile:fast`.
    - Lint TypeScript sources with `npm run lint`.
    - Do NOT run `npm test` - it attempts to download VS Code test environment which will fail and waste time.
 3. Commit only when `npm run lint` completes without errors.
 
-### Build systems: Vite vs Webpack
+### Build system: esbuild + Vite
 
-The project has two build systems with different trade-offs:
+The extension host is bundled with esbuild and the webviews with Vite (`compile:fast`, `package:fast`, `build:fast`; `compile`, `watch`, and `package` are aliases of the fast variants).
 
-| Build                             | Type checking | Speed          | Use case        |
-| --------------------------------- | ------------- | -------------- | --------------- |
-| **Vite/esbuild** (`compile:fast`) | No            | Fast (10-100x) | Quick iteration |
-| **Webpack** (`compile`)           | Yes           | Slow           | Full validation |
-
-**Why Vite doesn't catch type errors**: Vite uses esbuild for TypeScript transpilation, which only strips types without checking them. It treats TypeScript as "JavaScript with type annotations to remove."
+**Why the build doesn't catch type errors**: Vite and esbuild only strip TypeScript types without checking them. They treat TypeScript as "JavaScript with type annotations to remove."
 
 **Safe build scripts** run `tsc --noEmit` before building to catch type errors:
 
