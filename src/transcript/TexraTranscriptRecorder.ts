@@ -64,6 +64,7 @@ interface StreamSinkState {
   buffer: string;
   pending: string[];
   created: boolean;
+  ended: boolean;
   enabled: boolean;
   groupId: string | undefined;
   level: LogLevel;
@@ -108,6 +109,7 @@ export function attachTranscriptRecorder(
         groupId: state.groupId,
         messageType: state.messageType,
         text: state.buffer,
+        data: { status: state.ended ? 'completed' : 'running' },
         verbose: debugModeEnabled(),
       });
       state.created = !!appended;
@@ -115,7 +117,10 @@ export function attachTranscriptRecorder(
       return;
     }
 
-    store.update(streamId, id, { text: state.buffer });
+    store.update(streamId, id, {
+      text: state.buffer,
+      data: { status: state.ended ? 'completed' : 'running' },
+    });
   };
 
   const scheduleStreamUpdate = (state: StreamSinkState, id: string): void => {
@@ -252,6 +257,7 @@ export function attachTranscriptRecorder(
           buffer: '',
           pending: [],
           created: false,
+          ended: false,
           enabled: true,
           groupId: event.stageId,
           level: 'info',
@@ -279,6 +285,7 @@ export function attachTranscriptRecorder(
           state.buffer = event.finalText;
           state.pending = [];
         }
+        state.ended = true;
         flushStream(state, event.id);
         streams.delete(event.id);
         return;
