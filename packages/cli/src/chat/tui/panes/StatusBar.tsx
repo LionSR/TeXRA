@@ -361,9 +361,15 @@ export function defaultShortcutModifierLabel(
   return platform === 'darwin' ? 'Esc' : 'Alt';
 }
 
-function metaShortcutLabel(modifierLabel: string, key: string): string {
+/** Bare modifier chord (`Alt-p` / `Esc p`) — also feeds the /help keyboard
+ *  section, so the Esc-vs-Alt separator rule lives in one place. */
+export function metaChordLabel(modifierLabel: string, key: string): string {
   const separator = modifierLabel === 'Esc' ? ' ' : '-';
-  return `[${modifierLabel}${separator}${key}]`;
+  return `${modifierLabel}${separator}${key}`;
+}
+
+function metaShortcutLabel(modifierLabel: string, key: string): string {
+  return `[${metaChordLabel(modifierLabel, key)}]`;
 }
 
 function statusBarBindingRow(
