@@ -7,7 +7,6 @@ import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/Tool
 import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
 import type { ToolUseServices } from '@agent/implementations/flows/tooluse/ToolUseServices';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
-import { IdleContinuationRegistry } from '@agent/runtime/idleContinuation';
 import {
   StreamStatusRegistry,
   StreamStatusService,
@@ -30,7 +29,6 @@ describe('ToolUseWaitNode', () => {
     const services = {
       attachedMemoryMisses: memoryMisses,
       checkInterruption: () => interrupted,
-      idleContinuations: new IdleContinuationRegistry(),
       isSubagent: true,
       logger: { error: vi.fn() },
       modelHandler: { extractAssistantText: () => undefined },
@@ -74,7 +72,6 @@ describe('ToolUseWaitNode', () => {
 
     const services = {
       checkInterruption: () => interrupted,
-      idleContinuations: new IdleContinuationRegistry(),
       isSubagent: true,
       logger: { error: vi.fn(), info: vi.fn() },
       modelHandler: {
@@ -220,7 +217,6 @@ describe('ToolUseWaitNode', () => {
     const createUserFollowUpMessages = vi.fn(async () => []);
     const services = {
       checkInterruption: () => false,
-      idleContinuations: new IdleContinuationRegistry(),
       logger: { error: vi.fn() },
       modelHandler: {
         createUserFollowUpMessages,
@@ -275,7 +271,6 @@ describe('ToolUseWaitNode', () => {
     const info = vi.fn();
     const services = {
       checkInterruption: () => false,
-      idleContinuations: new IdleContinuationRegistry(),
       logger: { error: vi.fn(), info },
       modelHandler: {
         capabilities: { supportsVision: true },
