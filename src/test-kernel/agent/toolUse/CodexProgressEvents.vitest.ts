@@ -19,11 +19,8 @@ import type {
 } from '@shared/schemas';
 
 // Local imports - tools
-import {
-  publishCodexStreamUsage,
-  publishCodexTodos,
-  runStreamedTurn,
-} from '@tools/codex';
+import { publishAgentCliStreamUsage } from '@tools/agentCliShared';
+import { publishCodexTodos, runStreamedTurn } from '@tools/codex';
 
 // Local imports - test
 import { createRecordingHost } from '../progressTestUtils';
@@ -65,7 +62,7 @@ describe('codex progress events', () => {
     const active = createRecordingHost();
 
     publishCodexTodos(streamId, todos, active.host);
-    publishCodexStreamUsage(streamId, executionId, usage, active.host);
+    publishAgentCliStreamUsage(streamId, executionId, usage, active.host);
 
     expect(active.events).toEqual([
       {
