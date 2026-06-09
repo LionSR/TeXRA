@@ -40,10 +40,13 @@ export { LaTeXdiffService } from './latexdiff';
 export {
   DEFAULT_MATH_MARKUP,
   describeMathMarkupOption,
+  detectGeneratedLatexdiffArtifact,
   DiffCommandExecutor,
   DiffFileProcessor,
   generateDiffFileName,
   MATH_MARKUP_OPTIONS,
+  type GeneratedLatexdiffArtifact,
+  type GeneratedLatexdiffArtifactKind,
   type MathMarkupOption,
 } from './latexdiff/index';
 
