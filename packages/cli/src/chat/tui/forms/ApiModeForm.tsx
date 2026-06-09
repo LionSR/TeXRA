@@ -22,7 +22,7 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
 
   useEffect(() => {
     let cancelled = false;
-    void loadCliApiStatusLines()
+    void loadCliApiStatusLines({ apiMode: props.currentMode })
       .then((lines) => {
         if (!cancelled) setStatusLines(lines);
       })
@@ -32,7 +32,7 @@ export function ApiModeForm(props: ApiModeFormProps): React.JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [props.currentMode]);
 
   const items = [
     {
