@@ -682,8 +682,7 @@ export class PRPollingSource extends PollingSourceBase<
     let madeProgress = true;
     while (madeProgress) {
       madeProgress = false;
-      for (let i = 0; i < pendingEntries.length; i += 1) {
-        const [key, state] = pendingEntries[i];
+      for (const [key, state] of pendingEntries) {
         if (!this.has(key)) continue;
         if (state.pendingAnnotationRuns.length === 0) continue;
         const claims = claimsByKey.get(key) ?? 0;

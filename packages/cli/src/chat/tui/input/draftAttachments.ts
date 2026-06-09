@@ -133,9 +133,7 @@ export class DraftAttachmentStore {
    */
   expandText(input: string): string {
     let out = input;
-    const matches = matchChips(input);
-    for (let i = matches.length - 1; i >= 0; i--) {
-      const match = matches[i];
+    for (const match of matchChips(input).toReversed()) {
       const entry = this.entries.get(match.id);
       if (entry?.kind !== 'text') continue;
       out = out.slice(0, match.start) + entry.content + out.slice(match.end);
@@ -150,9 +148,7 @@ export class DraftAttachmentStore {
    */
   expandTextForHistory(input: string): string {
     let out = input;
-    const matches = matchChips(input);
-    for (let i = matches.length - 1; i >= 0; i--) {
-      const match = matches[i];
+    for (const match of matchChips(input).toReversed()) {
       const entry = this.entries.get(match.id);
       if (entry?.kind !== 'image') continue;
       out = removeChipRange(out, match.start, match.end);

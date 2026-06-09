@@ -236,7 +236,31 @@ const isEnabled = config.enabled ?? false;
 
 // Iterate Sets directly without Array.from()
 for (const item of mySet) { ... }
+
+// Import Node builtins with the node: protocol
+import * as path from 'node:path';
+
+// Use .toSorted() instead of spread-then-mutate (copies from a Set/Map
+// still need the spread first)
+const sorted = items.toSorted((a, b) => a.localeCompare(b));
+
+// Use for...of — with .entries() when the index is needed — instead of
+// index-based loops; iterator values are non-undefined, so guards and
+// non-null assertions on arr[i] disappear
+for (const [i, step] of plan.steps.entries()) { ... }
+
+// Use .findLast()/.findLastIndex() or .toReversed() instead of
+// backwards index loops
+const round = segments.map(parseRound).findLast((r) => r !== null);
+
+// Use .every() for pairwise array comparison instead of manual loops
+const equal = a.length === b.length && a.every((x, i) => x === b[i]);
 ```
+
+Index-based loops are still right when the index itself is the point: token
+consumers that advance `i` by a variable stride, queue/BFS loops that append
+to the array mid-iteration, and `charCodeAt(i)` hash loops (`for...of` walks
+code points, not UTF-16 units, which changes persisted hash output).
 
 ### Refactoring for simplicity
 
