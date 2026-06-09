@@ -294,23 +294,54 @@ type TranscriptCandidate = {
   readonly tieBreak: number;
 };
 
+function compareTranscriptCandidates(
+  left: TranscriptCandidate,
+  right: TranscriptCandidate,
+): number {
+  return left.sortSeq - right.sortSeq || left.tieBreak - right.tieBreak;
+}
+
+// Log entries already arrive in seqNo order, so the per-tick common case is
+// fully sorted — only synthetic rows (spliced in by syntheticAfterSeq) can
+// land out of order. Detect sortedness in O(N) instead of paying the sort's
+// comparator churn on every streaming delta.
+function sortTranscriptCandidatesIfNeeded(
+  candidates: TranscriptCandidate[],
+): TranscriptCandidate[] {
+  for (let index = 1; index < candidates.length; index += 1) {
+    if (
+      compareTranscriptCandidates(candidates[index - 1], candidates[index]) > 0
+    ) {
+      return candidates.sort(compareTranscriptCandidates);
+    }
+  }
+  return candidates;
+}
+
 export function subscribeStreamLog(): () => void {
   const store = getDefaultStreamLogStore();
-  const pendingTimers = new Map<StreamTabId, ReturnType<typeof setTimeout>>();
+  const pendingStreams = new Set<StreamTabId>();
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
+  // One trailing timer shared by every stream: during a multi-subagent burst
+  // the root and each child emit within the same window, and per-stream
+  // timers would fire staggered — one sync→render pass per stream. A shared
+  // flush coalesces them into a single pass; syncStreamLog reads the full
+  // log at flush time, so batching loses nothing.
   const dispose = store.onChange((streamId) => {
-    if (pendingTimers.has(streamId)) return;
-    const timer = setTimeout(() => {
-      pendingTimers.delete(streamId);
-      syncStreamLog(streamId);
+    pendingStreams.add(streamId);
+    timer ??= setTimeout(() => {
+      timer = undefined;
+      const streamIds = [...pendingStreams];
+      pendingStreams.clear();
+      for (const id of streamIds) syncStreamLog(id);
     }, STREAM_SYNC_THROTTLE_MS);
-    pendingTimers.set(streamId, timer);
   });
 
   return () => {
     dispose();
-    for (const timer of pendingTimers.values()) clearTimeout(timer);
-    pendingTimers.clear();
+    if (timer !== undefined) clearTimeout(timer);
+    pendingStreams.clear();
   };
 }
 
@@ -336,21 +367,16 @@ export function syncStreamLog(streamId: StreamTabId): void {
     const existing = new Map(slice.entries.map((e) => [e.id, e]));
     const syntheticEntries = slice.entries.filter((entry) => entry.synthetic);
     const streamFinal = isFinalTranscriptStatus(slice.status);
-    const logEntries: { entry: StreamLogEntry; rendered: ConversationEntry }[] =
-      [];
+    const logCandidates: TranscriptCandidate[] = [];
     for (const entry of responses) {
       const rendered = renderLogEntry(entry, existing.get(entry.id));
       if (!rendered) continue;
-      logEntries.push({ entry, rendered });
+      logCandidates.push({ rendered, sortSeq: entry.seqNo, tieBreak: 0 });
     }
-    const logCandidates: TranscriptCandidate[] = logEntries.map(
-      ({ entry, rendered }) => ({
-        rendered,
-        sortSeq: entry.seqNo,
-        tieBreak: 0,
-      }),
-    );
-    const candidates: TranscriptCandidate[] = [...logCandidates];
+    // The synthetic loop's duplicate check scans `logCandidates`, so synthetics
+    // push into a copy; without synthetics the log list is used as-is.
+    const candidates: TranscriptCandidate[] =
+      syntheticEntries.length === 0 ? logCandidates : [...logCandidates];
 
     for (const [index, entry] of syntheticEntries.entries()) {
       if (entry.syntheticKind !== 'local') {
@@ -370,12 +396,9 @@ export function syncStreamLog(streamId: StreamTabId): void {
       });
     }
 
-    const ordered = candidates
-      .sort(
-        (left, right) =>
-          left.sortSeq - right.sortSeq || left.tieBreak - right.tieBreak,
-      )
-      .map((candidate) => candidate.rendered);
+    const ordered = sortTranscriptCandidatesIfNeeded(candidates).map(
+      (candidate) => candidate.rendered,
+    );
     // Promote the settled prefix only after sorting: "is there a later
     // entry" and Static append order are both defined on the final stream
     // order, not the per-entry render order.
