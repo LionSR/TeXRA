@@ -1,7 +1,6 @@
-import { platform } from '@platform/platform';
 import type { StreamTabId } from '@shared/schemas/identifiers';
 
-import { ODYSSEY_FEATURE_FLAG_KEY, OdysseyStore } from '@tools/odyssey';
+import { OdysseyStore, isOdysseyEnabled } from '@tools/odyssey';
 
 import { buildContinuationFollowUp } from './buildContinuationFollowUp';
 
@@ -40,9 +39,7 @@ export async function maybeBuildOdysseyContinuation(
 ): Promise<string | null> {
   if (ctx.isSubagent) return null;
   if (ctx.hasQueuedFollowUp) return null;
-  if (!platform().config.get<boolean>(ODYSSEY_FEATURE_FLAG_KEY, false)) {
-    return null;
-  }
+  if (!isOdysseyEnabled()) return null;
 
   const odyssey = OdysseyStore.getForStream(ctx.streamId);
   if (!odyssey || odyssey.status !== 'active') return null;
