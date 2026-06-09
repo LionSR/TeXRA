@@ -497,7 +497,9 @@ export class ModelHandlerAnthropic extends ModelHandler<
         );
       }
 
-      // Remove temperature for Claude 4 models when thinking is enabled as per Anthropic docs
+      // Remove temperature for models that reject sampling parameters when
+      // thinking is enabled: Claude 4 families and the Mythos-class models
+      // (Fable 5, Mythos 5), per Anthropic docs.
       if (thinkingConfig.removeTemperature) {
         delete options.temperature;
       }

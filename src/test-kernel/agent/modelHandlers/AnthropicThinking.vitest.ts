@@ -24,7 +24,7 @@ describe('mapAnthropicEffort', () => {
     expect(mapAnthropicEffort(OPUS_48, null)).toBe('high');
   });
 
-  it('maps the internal "max" tier only on Opus models', () => {
+  it('maps the internal "max" tier on Opus models and caps others at "high"', () => {
     expect(mapAnthropicEffort(OPUS_46, ReasoningEffort.MAX)).toBe('max');
     expect(mapAnthropicEffort(OPUS_47, ReasoningEffort.MAX)).toBe('max');
     expect(mapAnthropicEffort(OPUS_48, ReasoningEffort.MAX)).toBe('max');
