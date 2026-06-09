@@ -18,6 +18,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
 import { ToolUseFollowUpQueue } from './ToolUseFollowUpQueueManager';
+import type { FollowUpQueueInput } from './FollowUpQueue';
 
 /**
  * Result of sending a follow-up message to a tool-use session.
@@ -68,17 +69,30 @@ export function notifyFollowUpSent(
  *
  * Items queued for WAITING sessions are picked up when user resumes.
  */
+export function sendFollowUp(
+  streamId: StreamTabId,
+  followUp: FollowUpQueueInput,
+): Promise<SendFollowUpResult>;
+export function sendFollowUp(
+  streamId: StreamTabId,
+  followUp: string,
+  mediaFiles?: readonly string[],
+  displayText?: string,
+): Promise<SendFollowUpResult>;
 export async function sendFollowUp(
   streamId: StreamTabId,
-  text: string,
+  followUp: string | FollowUpQueueInput,
   mediaFiles?: readonly string[],
   displayText?: string,
 ): Promise<SendFollowUpResult> {
   const target = executionRegistry.getToolUseFollowUpTarget(streamId);
-  const followUp = { text, mediaFiles, displayText };
+  const item =
+    typeof followUp === 'string'
+      ? { text: followUp, mediaFiles, displayText }
+      : followUp;
 
   if (target.kind === 'active') {
-    target.context.session.appendFollowUp(followUp);
+    target.context.session.appendFollowUp(item);
     notifyFollowUpSent(streamId, target.context.runtimeHost);
     return { status: 'sent' };
   }
@@ -89,7 +103,7 @@ export async function sendFollowUp(
     const force = target.reason === 'children_running';
     ToolUseFollowUpQueue.enqueue(
       streamId,
-      followUp,
+      item,
       force ? { force: true } : undefined,
     );
     return { status: 'queued', reason: target.reason };
