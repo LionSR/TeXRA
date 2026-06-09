@@ -98,7 +98,7 @@ export class RoundPersistedFlow<
   private currentRoundStage: StageHandle | null = null;
 
   constructor(
-    start: BaseNode<any, any>,
+    start: BaseNode,
     kv: ExecutionKVStore,
     options?: {
       callbacks?: RoundCallbacks<S>;
