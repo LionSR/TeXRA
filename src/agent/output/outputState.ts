@@ -3,9 +3,12 @@
  *
  * Manages mutable state for output files across rounds, including
  * round data, storage keys, and workspace preparation.
+ *
+ * `OutputState.rounds` stores mutable `RoundOutput` objects — the same type
+ * persisted in `ReflectionFlowShared.roundOutputs`. Each round's entry is
+ * built up in-place during processing; `OutputNode.post()` then writes the
+ * completed entry to shared state for persistence.
  */
-
-import { z } from 'zod';
 
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -13,12 +16,10 @@ import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { normalizeRunId } from '@common/constants/runIds';
 import {
-  CompileFailureSchema,
-  FileLocationSchema,
-  OutputFileInfoSchema,
   OutputXmlSummarySchema,
   type CompileFailure,
   type OutputFileInfo,
+  type RoundOutput,
   type StorageKey,
 } from '@shared/schemas';
 import {
@@ -28,17 +29,8 @@ import {
   type FileLocation,
 } from '@utils/files';
 
-const RoundDataSchema = z.object({
-  outputs: OutputFileInfoSchema.array().prefault(() => []),
-  compileFailures: CompileFailureSchema.array().prefault(() => []),
-  rawOutput: FileLocationSchema.nullable().prefault(null),
-  xmlSummary: OutputXmlSummarySchema.prefault(() => ({})),
-});
-
-export type RoundData = z.infer<typeof RoundDataSchema>;
-
 export interface OutputState {
-  rounds: Map<number, RoundData>;
+  rounds: Map<number, RoundOutput>;
   openedOutputs: Set<string>;
   storageKey: StorageKey | null;
   runPreparation: Promise<void> | null;
@@ -81,10 +73,16 @@ export function getStorageKey(state: OutputState): StorageKey {
   return state.storageKey ?? normalizeRunId(null);
 }
 
-export function ensureRoundData(state: OutputState, round: number): RoundData {
+export function ensureRoundData(state: OutputState, round: number): RoundOutput {
   let data = state.rounds.get(round);
   if (!data) {
-    data = RoundDataSchema.parse({});
+    data = {
+      round,
+      rawOutput: null,
+      outputs: [],
+      compileFailures: [],
+      xmlSummary: OutputXmlSummarySchema.parse({}),
+    };
     state.rounds.set(round, data);
   }
   return data;

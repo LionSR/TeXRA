@@ -7,7 +7,8 @@ import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { OutputNode } from '@agent/implementations/flows/reflection/nodes/OutputNode';
 import type { ReflectionFlowShared } from '@agent/implementations/flows/reflection/ReflectionFlowState';
 import type { ReflectionServices } from '@agent/implementations/flows/reflection/ReflectionServices';
-import { createOutputState, type RoundData } from '@agent/output/outputState';
+import { createOutputState } from '@agent/output/outputState';
+import type { RoundOutput } from '@shared/schemas';
 import {
   OutputFileProcessor,
   type ProcessingContext,
@@ -289,7 +290,7 @@ describe('output progress events', () => {
 
   it('publishes missing-output processing events through the runtime host', async () => {
     const { events, host } = createRecordingHost();
-    const roundData = new Map<number, RoundData>();
+    const roundData = new Map<number, RoundOutput>();
     const logger = {
       debug: () => {},
       domain: () => {},
@@ -299,10 +300,11 @@ describe('output progress events', () => {
         throw new Error('invalid xml');
       },
     } as unknown as XmlOutputManager;
-    const ensureRound = (round: number): RoundData => {
+    const ensureRound = (round: number): RoundOutput => {
       let data = roundData.get(round);
       if (!data) {
         data = {
+          round,
           outputs: [],
           compileFailures: [],
           rawOutput: null,
@@ -350,7 +352,7 @@ describe('output progress events', () => {
 
   it('emits missing-output events when extraction yields no files (no exception)', async () => {
     const { events, host } = createRecordingHost();
-    const roundData = new Map<number, RoundData>();
+    const roundData = new Map<number, RoundOutput>();
     const logger = {
       debug: () => {},
       domain: () => {},
@@ -358,10 +360,11 @@ describe('output progress events', () => {
     const xmlManager = {
       splitScratchpadMultipleOutputXml: async () => [],
     } as unknown as XmlOutputManager;
-    const ensureRound = (round: number): RoundData => {
+    const ensureRound = (round: number): RoundOutput => {
       let data = roundData.get(round);
       if (!data) {
         data = {
+          round,
           outputs: [],
           compileFailures: [],
           rawOutput: null,
