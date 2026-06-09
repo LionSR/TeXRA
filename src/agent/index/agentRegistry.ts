@@ -116,25 +116,43 @@ const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
  * Preferred agents for dropdowns, in priority order.
  * Preferred agents present in the workspace are sorted to the top of the
  * dropdown (in the order listed here); all others follow alphabetically.
- * The remote orchestrators come first (they need sign-in); `research`/`review`
- * are local general-purpose fallbacks so signed-out users in presets like
- * Physicist/Mathematician don't land on task-specific agents (e.g. `presenter`)
- * by alphabetical accident.
+ * Remote orchestrators come first because they need sign-in, then bundled
+ * orchestrators such as `engineer`, then `research`/`review` as local
+ * general-purpose fallbacks. This keeps signed-out users in presets like
+ * Physicist/Mathematician from landing on task-specific agents (e.g.
+ * `presenter`) by alphabetical accident.
  */
 const DEFAULT_WORKFLOW_AGENT = 'correct';
 
 /**
  * Relay-served orchestrator roots that delegate to a team. They need sign-in,
- * so UIs surface them first. Single source of truth for "the built-in
- * delegating roots" (also consumed by the CLI multi-agent presets).
+ * so UIs surface them first.
  */
 export const REMOTE_ORCHESTRATOR_AGENT_NAMES = [
   'orchestrator',
   'leanOrchestrator',
 ] as const;
 
+/**
+ * Bundled (local) orchestrator roots that delegate to a team. Unlike the
+ * relay-served roots above, these ship in the extension/CLI and are available
+ * offline without sign-in (e.g. the Software Engineer team's `engineer` lead).
+ */
+export const BUNDLED_ORCHESTRATOR_AGENT_NAMES = ['engineer'] as const;
+
+/**
+ * Single source of truth for "the built-in delegating team roots" (relay-served
+ * plus bundled). Consumed by the CLI multi-agent presets to pick a preset's
+ * root agent.
+ */
+export const BUILTIN_TEAM_ROOT_AGENT_NAMES = [
+  ...REMOTE_ORCHESTRATOR_AGENT_NAMES,
+  ...BUNDLED_ORCHESTRATOR_AGENT_NAMES,
+] as const;
+
 const PREFERRED_TOOL_USE_AGENTS = [
   ...REMOTE_ORCHESTRATOR_AGENT_NAMES,
+  ...BUNDLED_ORCHESTRATOR_AGENT_NAMES,
   'research',
   'review',
 ] as const;
