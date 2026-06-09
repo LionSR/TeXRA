@@ -228,5 +228,3 @@ async function readTail(path: string, state: FileReadState): Promise<string> {
   state.offset += buf.length;
   return state.decoder.write(buf);
 }
-
-export const processOutputPoller = new ProcessOutputPoller();
