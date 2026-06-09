@@ -11,6 +11,7 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
+import '@awesome.me/webawesome/dist/components/button-group/button-group.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -198,7 +199,7 @@ export class MemoryItem extends LitElement {
       <div class="list-item memory-item ${this.item.pinned ? 'pinned' : ''}">
         <div class="list-item-header">
           <div class="memory-path">${this.item.displayPath}</div>
-          <div class="action-button-group">
+          <wa-button-group label="Memory actions">
             ${renderIconActionButton({
               icon: this.item.pinned ? 'thumbtack-slash' : 'thumbtack',
               label: this.item.pinned ? 'Unpin' : 'Pin',
@@ -219,7 +220,7 @@ export class MemoryItem extends LitElement {
               title: 'Delete this memory',
               onClick: this.handleDelete,
             })}
-          </div>
+          </wa-button-group>
         </div>
         <div class="text-secondary meta-strip">
           ${this.renderMeta(this.item)}
