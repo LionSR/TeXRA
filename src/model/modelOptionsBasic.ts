@@ -26,7 +26,7 @@ export const DEFAULT_MODELS = [
 ];
 
 /** Increment when the persisted model list needs reconciliation. */
-export const MODEL_LIST_VERSION = 17;
+export const MODEL_LIST_VERSION = 18;
 
 const MILLION = 1_000_000;
 const THOUSAND = 1_000;
