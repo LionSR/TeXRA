@@ -9,6 +9,7 @@ import type { Plan } from '@shared/schemas/plan';
 
 import { filterNotNull } from '@utils/core';
 import {
+  GOAL_COST_CAP_CONFIG_KEY,
   GoalSchema,
   isGoalInFlight,
   type Goal,
@@ -126,6 +127,14 @@ function requireNonEmpty(value: string, label: string): string {
   return trimmed;
 }
 
+/** Read the configured USD cost cap; `0`/unset/invalid mean unbounded (null). */
+function configuredCostCapUsd(): number | null {
+  const raw = platform().config.get<number>(GOAL_COST_CAP_CONFIG_KEY, 0);
+  return typeof raw === 'number' && Number.isFinite(raw) && raw > 0
+    ? raw
+    : null;
+}
+
 export const GoalStore = {
   /** Get the goal for a stream, or null when none exists. */
   getForStream(streamId: StreamTabId): Goal | null {
@@ -165,6 +174,9 @@ export const GoalStore = {
       createdAt: now,
       updatedAt: now,
       plan: options?.plan ?? null,
+      costCapUsd: configuredCostCapUsd(),
+      baselineRunCostUsd: null,
+      spentUsd: 0,
     };
     await Promise.all([writeRaw(goal), addToIndex(streamId)]);
     bus.emit('goalStateChanged', { streamId });
@@ -190,6 +202,47 @@ export const GoalStore = {
       );
     }
     return update(streamId, (goal) => ({ ...goal, status: nextStatus }));
+  },
+
+  /**
+   * Record the stream's current run cost against the goal and enforce the
+   * cost cap. Called by the tool-use wait node before each continuation.
+   *
+   * The first observation becomes the baseline so conversation spend from
+   * before the goal started doesn't count toward the cap. The run cost
+   * already includes completed subagents (rolled up at the delegation
+   * boundary), so subagents count toward the cap but never drive the loop.
+   *
+   * Returns `pausedForCap: true` only on the call that performs the
+   * cap-pause, so callers can log the transition exactly once. No-op
+   * (returns null) when the stream has no goal.
+   */
+  async noteRunCost(
+    streamId: StreamTabId,
+    runCostUsd: number,
+  ): Promise<{ goal: Goal; pausedForCap: boolean } | null> {
+    const current = readRaw(streamId);
+    if (!current) return null;
+    const baseline = current.baselineRunCostUsd ?? runCostUsd;
+    const spentUsd = Math.max(0, runCostUsd - baseline);
+    const capExceeded =
+      current.costCapUsd != null && spentUsd >= current.costCapUsd;
+    const pausedForCap = capExceeded && current.status === 'active';
+    // Skip the write (and its broadcast) when nothing material changed.
+    if (
+      current.baselineRunCostUsd != null &&
+      Math.abs(spentUsd - current.spentUsd) < 1e-9 &&
+      !pausedForCap
+    ) {
+      return { goal: current, pausedForCap: false };
+    }
+    const goal = await update(streamId, (g) => ({
+      ...g,
+      baselineRunCostUsd: baseline,
+      spentUsd,
+      status: pausedForCap ? 'paused' : g.status,
+    }));
+    return goal ? { goal, pausedForCap } : null;
   },
 
   /**

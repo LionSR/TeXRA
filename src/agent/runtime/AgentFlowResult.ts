@@ -61,6 +61,13 @@ const AgentFlowMetaSchema = z.object({
   executionId: ExecutionIdSchema,
   streamId: StreamTabIdSchema,
   memoryMisses: z.array(AttachedMemoryMissSchema).optional(),
+  /**
+   * Total model cost (USD) of the run, including its own subagents.
+   * Currently populated for tool-use flows only — the reflection flow does
+   * not track a run usage accumulator. Parents use this to roll a completed
+   * subagent's spend into their own usage totals (and the goal cost cap).
+   */
+  totalCostUsd: z.number().nonnegative().optional(),
 });
 
 export const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
