@@ -92,7 +92,7 @@ export class ToolUseWaitNode<C> extends Node<
       const goal = GoalStore.getForStream(streamId);
       if (goal?.status === 'active') {
         await GoalStore.setStatus(streamId, 'paused');
-        setGoalSessionAutoApprovals(streamId, false, runtimeHost);
+        await setGoalSessionAutoApprovals(streamId, false, runtimeHost);
       }
     }
     if (!prepRes.afterError) {
@@ -118,7 +118,7 @@ export class ToolUseWaitNode<C> extends Node<
         prepRes.runCostUsd,
       );
       if (costNote?.pausedForCap) {
-        setGoalSessionAutoApprovals(streamId, false, runtimeHost);
+        await setGoalSessionAutoApprovals(streamId, false, runtimeHost);
         this.services.logger.info(
           `Goal paused: cost cap reached ($${costNote.goal.spentUsd.toFixed(2)} ` +
             `of $${costNote.goal.costCapUsd?.toFixed(2)} cap). Resume the goal to continue.`,
