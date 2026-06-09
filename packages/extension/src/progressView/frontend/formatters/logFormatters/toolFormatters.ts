@@ -78,6 +78,10 @@ import { codexToolRenderers } from './codexToolTemplates';
 import '@progressView/frontend/components/ToolTimer';
 import '@progressView/frontend/components/TerminalOutput';
 
+// Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/badge/badge.js';
+import '@awesome.me/webawesome/dist/components/divider/divider.js';
+
 /** Known per-tool default timeouts (ms) for display in the running timer. */
 const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
   bash: 120_000, // matches BASH_TIMEOUT_MS in src/tools/bash.ts
@@ -148,7 +152,7 @@ function joinWithSeparator(sections: TemplateResult[]): TemplateResult {
   return html`${sections.map(
     (section, i) =>
       html`${section}${i < sections.length - 1
-        ? html`<hr class="tool-use-separator" />`
+        ? html`<wa-divider></wa-divider>`
         : ''}`,
   )}`;
 }
@@ -499,7 +503,7 @@ function buildDelegationSections(ctx: ToolSectionContext): TemplateResult[] {
     extractFlags.push('Extract TikZ');
   if (extractFlags.length > 0) {
     // prettier-ignore
-    sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => html`<span class="extract-flag"><wa-icon library="texra" name="file-media" aria-hidden="true"></wa-icon> ${f}</span>`)}`));
+    sections.push(buildToolUseSection('Extraction:', html`${extractFlags.map((f) => html`<wa-badge variant="neutral" appearance="filled"><wa-icon library="texra" name="file-media" aria-hidden="true"></wa-icon> ${f}</wa-badge>`)}`));
   }
 
   const fileGroups = getProposalFileGroups(delegateInput);
@@ -568,7 +572,7 @@ function buildMcpSections(ctx: ToolSectionContext): TemplateResult[] {
       ? html`<wa-spinner></wa-spinner>`
       : html`<wa-icon library="texra" name=${statusIconName} aria-hidden="true"></wa-icon>`;
     // prettier-ignore
-    sections.push(buildToolUseSection('Status:', html`<span class="extract-flag">${statusIconTemplate} ${mcpOutput.status}</span>`));
+    sections.push(buildToolUseSection('Status:', html`<wa-badge variant="neutral" appearance="filled">${statusIconTemplate} ${mcpOutput.status}</wa-badge>`));
     renderedMcpOutput = true;
   }
 

@@ -467,7 +467,6 @@ export const profileViewStyles: CSSResult = css`
   /**
    * Inline icon following a model row's name. Variants set --_icon-color;
    * the base resolves to secondary text when no variant is applied.
-   * Mirrors the tinted-badge --_tint pattern in shared badgeStyles.
    */
   .model-row-icon {
     font-size: var(--font-size-xs);
