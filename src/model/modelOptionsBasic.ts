@@ -14,8 +14,8 @@ import {
 
 /** Models that should be present in every user's model list. */
 export const DEFAULT_MODELS = [
-  'gemini31p',
   'gemini35f',
+  'gemini31p',
   'sonnet46T',
   'opus48T',
   'gpt55',
