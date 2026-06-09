@@ -347,10 +347,10 @@ describe('CLI conversation transcript splitting', () => {
     ).toBe('  ef  ');
   });
 
-  it('budgets the visual gap after finalized user turns', () => {
+  it('does not reserve a spacer row after finalized user turns', () => {
     const user = entry('u1', 'user', 'why do you write as a latex?', true);
 
-    expect(estimateTranscriptEntryRows(user, 80)).toBe(2);
+    expect(estimateTranscriptEntryRows(user, 80)).toBe(1);
   });
 
   it('does not budget regular user margin for inquiry continuations', () => {
