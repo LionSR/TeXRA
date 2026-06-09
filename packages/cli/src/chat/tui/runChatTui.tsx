@@ -913,10 +913,11 @@ async function handleTuiSlashCommand(
         );
       } else {
         const suggestion = suggestSlashCommand(command);
+        const didYouMean = suggestion
+          ? ` Did you mean /${suggestion.name}?`
+          : '';
         appendLocalAssistantTranscript(
-          suggestion
-            ? `Unknown command: /${parsed.name}. Did you mean /${suggestion.name}? Type /help to list commands.`
-            : `Unknown command: /${parsed.name}. Type /help to list commands.`,
+          `Unknown command: /${parsed.name}.${didYouMean} Type /help to list commands.`,
         );
       }
       return true;
