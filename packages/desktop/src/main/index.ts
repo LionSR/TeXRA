@@ -452,7 +452,9 @@ function createWindow(options: {
   const getAgentExecution = async (): Promise<DesktopAgentExecution> => {
     if (agentExecution) return agentExecution;
     if (windowClosed) {
-      throw new Error('Cannot load desktop agent execution after window close.');
+      throw new Error(
+        'Cannot load desktop agent execution after window close.',
+      );
     }
 
     agentExecutionLoad ??= import('./desktopAgentExecution.js')
