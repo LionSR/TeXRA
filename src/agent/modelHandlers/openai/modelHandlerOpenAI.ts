@@ -773,8 +773,8 @@ export class ModelHandlerOpenAI<
     userRequest: string,
     mediaFiles?: FileLocation[],
     systemPrompt?: string,
-  ): Promise<any[]> {
-    const messages: any[] = [];
+  ): Promise<ChatCompletionMessageParam[]> {
+    const messages: ChatCompletionMessageParam[] = [];
 
     // Handle system prompt differently for O1 models
     // O1 mini and O1 preview models do not support system prompt; use 'user' role instead.
@@ -836,10 +836,10 @@ export class ModelHandlerOpenAI<
 
   /** Adds user message content for subsequent rounds. */
   async createRoundMessages(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     userMessage: string,
     mediaFiles?: FileLocation[],
-  ): Promise<any[]> {
+  ): Promise<ChatCompletionMessageParam[]> {
     const roundContent: ChatCompletionContentPart[] = [];
 
     if (
@@ -872,9 +872,9 @@ export class ModelHandlerOpenAI<
   }
 
   async createUserFollowUpMessages(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     userMessage: string,
-  ): Promise<any[]> {
+  ): Promise<ChatCompletionMessageParam[]> {
     messages.push({
       role: 'user',
       content: [{ type: 'text', text: userMessage }],
@@ -1083,7 +1083,7 @@ export class ModelHandlerOpenAI<
 
   /** Manages continuation with prefill support (typically no-op for models with prefill). */
   addContinueMessageWithPrefill(
-    _messages: any[],
+    _messages: ChatCompletionMessageParam[],
     _workspaceState: AgentWorkspaceState,
     _agentSetting: AgentSetting,
   ): void {
@@ -1092,7 +1092,7 @@ export class ModelHandlerOpenAI<
 
   /** Manages continuation for models without prefill support by adding a continuation prompt. */
   addContinueMessageWithoutPrefill(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     workspaceState: AgentWorkspaceState,
     agentSetting: AgentSetting,
   ): void {
@@ -1116,11 +1116,11 @@ export class ModelHandlerOpenAI<
   async initializeOutputAndPrefill(
     _agentConfig: AgentConfig,
     agentSetting: AgentSetting,
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     workspaceState: AgentWorkspaceState,
     outputLocation: FileLocation,
     prefill: string,
-  ): Promise<[boolean, any[]]> {
+  ): Promise<[boolean, ChatCompletionMessageParam[]]> {
     let endTurn = false;
 
     if (!(await flexibleFS.existsAndNonTrivial(outputLocation))) {
@@ -1228,7 +1228,7 @@ export class ModelHandlerOpenAI<
 
   /** Updates message content for models with prefill support. */
   updateMessageContentWithPrefill(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     bestConnector: string,
     newResponse: string,
     workspaceState: AgentWorkspaceState,
@@ -1267,7 +1267,7 @@ export class ModelHandlerOpenAI<
 
   /** Updates message content for models without prefill support. */
   updateMessageContentWithoutPrefill(
-    messages: any[],
+    messages: ChatCompletionMessageParam[],
     bestConnector: string,
     newResponse: string,
     workspaceState: AgentWorkspaceState,

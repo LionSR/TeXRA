@@ -94,7 +94,7 @@ export class PersistedFlow<
    * @param kv - Storage backend (ExecutionKVStore)
    * @param runId - Optional run identifier. Defaults to kv.getExecutionId().
    */
-  constructor(start: BaseNode<any, any>, kv: ExecutionKVStore, runId?: string) {
+  constructor(start: BaseNode, kv: ExecutionKVStore, runId?: string) {
     super(start);
     this.kv = kv;
     this.runId = runId ?? kv.getExecutionId();
@@ -160,7 +160,7 @@ export class PersistedFlow<
       throw new Error('Invalid or corrupted flow record');
     }
 
-    let cursor: BaseNode<any, any> | undefined = this.start;
+    let cursor: BaseNode | undefined = this.start;
     for (const n of flow.nodes)
       cursor = cursor?.getNextNode(n.action as Action);
 
@@ -215,7 +215,7 @@ export class PersistedFlow<
   >(
     kv: ExecutionKVStore,
     runId: string | undefined,
-    start: BaseNode<any, any>,
+    start: BaseNode,
   ): Promise<PersistedFlow<S, P, Svc>> {
     const effectiveRunId = runId ?? kv.getExecutionId();
     const flow = await kv.read<FlowRecord>(flowKey(effectiveRunId));
