@@ -179,6 +179,56 @@ describe('LaTeXdiffService shadow output', () => {
     expect(diff).not.toContain('\\DIFadd{1}');
   });
 
+  it('sanitizes latexdiff markers from flattened bibliography macro preambles', async () => {
+    const { DiffFileProcessor } =
+      await import('@latex/latexdiff/diffFileProcessor');
+    const tempDir = await makeTempDir('texra-latexdiff-bbl-preamble-');
+    const sourceDir = path.join(tempDir, 'workspace');
+    await mkdir(sourceDir, { recursive: true });
+    await installNodeBackedPlatform(sourceDir, path.join(tempDir, 'storage'));
+    const diffPath = path.join(sourceDir, 'main-diff.tex');
+    await writeFile(
+      diffPath,
+      [
+        '\\documentclass{article}',
+        '\\begin{document}',
+        '\\begin{thebibliography}{}',
+        '\\makeatletter',
+        '\\providecommand \\@ifxundefined [\\DIFadd{1}]{%DIF >',
+        ' \\@ifx{#1\\undefined}',
+        '}%DIF >',
+        '\\providecommand \\@ifnum [\\DIFadd{1}]{%DIF >',
+        ' \\ifnum \\DIFadd{#1}\\expandafter \\@firstoftwo',
+        ' \\else \\expandafter \\@secondoftwo',
+        ' \\fi',
+        '}%DIF >',
+        '\\providecommand \\DIFadd{\\mbox{%DIFAUXCMD',
+        '\\citenamefont }\\hskip0pt%DIFAUXCMD',
+        '}[\\DIFadd{1}]{\\DIFadd{#1}}%DIF >',
+        '\\providecommand \\DIFadd{\\bibinfo  }[\\DIFadd{0}]{\\@secondoftwo}%DIF >',
+        '\\bibitem{sample}',
+        '\\DIFadd{added citation text}',
+        '\\end{thebibliography}',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    );
+
+    await new DiffFileProcessor().processDiffFile(
+      createExternalLocation(diffPath),
+    );
+
+    const diff = await readFile(diffPath, 'utf8');
+    expect(diff).toContain('\\providecommand \\@ifxundefined [1]{%');
+    expect(diff).toContain('\\ifnum #1\\expandafter \\@firstoftwo');
+    expect(diff).toContain('\\providecommand \\citenamefont [1]{#1}%');
+    expect(diff).toContain('\\providecommand \\bibinfo  [0]{\\@secondoftwo}%');
+    expect(diff).toContain('\\DIFadd{added citation text}');
+    expect(diff).not.toContain('\\DIFadd{1}');
+    expect(diff).not.toContain('DIFAUXCMD');
+    expect(diff).not.toContain('\\providecommand \\DIFadd');
+  });
+
   it('mirrors workspace dependencies into diff round storage', async () => {
     const tempDir = await makeTempDir('texra-diff-mirror-');
     const workspaceDir = path.join(tempDir, 'workspace');
