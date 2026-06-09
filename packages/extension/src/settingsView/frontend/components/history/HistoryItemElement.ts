@@ -9,7 +9,7 @@ import Mark from 'mark.js';
 // Local imports - shared
 import type { HistoryItem as HistoryItemData } from '@shared/schemas';
 import { badgeStyles, commonViewStyles, designTokens } from '@shared/styles';
-import { AGENT_CATEGORY } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas/agent';
 import { markdownStyles } from '@shared/styles/markdownStyles';
 import { getAgentCategoryDecorator } from '@shared/utils/icons';
 import { getLightweightMd } from '@shared/highlighting/lightweightMd';
@@ -264,7 +264,7 @@ export class HistoryItemElement extends LitElement {
 
     const config = this.item.agentConfig;
     const timestamp = new Date(this.item.timestamp).toLocaleString();
-    const isToolUse = config.agentCategory === AGENT_CATEGORY.TOOL_USE;
+    const isToolUse = config.agentCategory === AgentCategory.ToolUse;
     const categoryVariant: 'warning' | 'brand' = isToolUse
       ? 'warning'
       : 'brand';
@@ -276,7 +276,7 @@ export class HistoryItemElement extends LitElement {
 
     const extraDetails: Array<TemplateResult> = [];
 
-    if (config.agentCategory === AGENT_CATEGORY.WORKFLOW) {
+    if (config.agentCategory === AgentCategory.Workflow) {
       const contextSection = this.renderConfigSection('Context', [
         ['ContextFiles', config.contextFiles],
       ]);
@@ -297,7 +297,7 @@ export class HistoryItemElement extends LitElement {
         );
         if (toolSection) extraDetails.push(toolSection);
       }
-    } else if (config.agentCategory === AGENT_CATEGORY.TOOL_USE) {
+    } else if (config.agentCategory === AgentCategory.ToolUse) {
       const editedSection = this.renderConfigSection('Edited Files', [
         ['Files', config.editedFiles],
       ]);
@@ -321,7 +321,7 @@ export class HistoryItemElement extends LitElement {
       `Agent: ${config.agent ?? 'Unknown'}`,
       `Model: ${config.model ?? 'Unknown'}`,
     ];
-    if (config.agentCategory === AGENT_CATEGORY.WORKFLOW) {
+    if (config.agentCategory === AgentCategory.Workflow) {
       if (config.inputFiles?.length) {
         metaParts.push(`Inputs: ${config.inputFiles.join(', ')}`);
       }

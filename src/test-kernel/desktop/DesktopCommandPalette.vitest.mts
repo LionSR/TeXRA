@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports - shared schemas
-import { AGENT_CATEGORY } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 import { delay } from '@utils/core/async';
 
@@ -287,7 +287,7 @@ describe('desktop command palette', () => {
       {
         name: 'stream-proof',
         label: 'Spectral proof run',
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agentCategory: AgentCategory.Workflow,
         creationTimestamp: 1,
         description: 'Checking the main lemma',
       },

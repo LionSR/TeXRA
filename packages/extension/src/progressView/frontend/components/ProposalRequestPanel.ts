@@ -25,7 +25,7 @@ import {
 
 // Local imports - shared utils
 import {
-  AGENT_CATEGORY,
+  AgentCategory,
   type AgentProposalPermission,
   type WorkflowAgentProposalPermission,
 } from '@shared/schemas';
@@ -103,7 +103,7 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
       this.permission.kind === PERMISSION_KIND.PROPOSAL
         ? (this.permission.agentOptions ?? [])
         : [];
-    const isWorkflow = data.agentCategory === AGENT_CATEGORY.WORKFLOW;
+    const isWorkflow = data.agentCategory === AgentCategory.Workflow;
     const categoryLabel = isWorkflow ? 'Workflow' : 'Tool-Use';
     const currentModel = this.selectedModel ?? data.model;
     const currentAgent = this.selectedAgent ?? data.agent;

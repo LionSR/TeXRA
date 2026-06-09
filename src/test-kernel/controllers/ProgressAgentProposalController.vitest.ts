@@ -8,7 +8,7 @@ import { describe, it } from 'vitest';
 import { ProgressAgentProposalController } from '@controllers/progressView/ProgressAgentProposalController';
 
 // Local imports - shared
-import { AGENT_CATEGORY, type AgentProposalPermission } from '@shared/schemas';
+import { AgentCategory, type AgentProposalPermission } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
 
 function createWorkflowProposal(
@@ -17,7 +17,7 @@ function createWorkflowProposal(
   return {
     proposalId: 'proposal-1',
     streamId: 'stream-1',
-    agentCategory: AGENT_CATEGORY.WORKFLOW,
+    agentCategory: AgentCategory.Workflow,
     agent: 'proofreader',
     model: 'gemini31p',
     instruction: 'Check the paper.',
@@ -59,7 +59,7 @@ describe('ProgressAgentProposalController', () => {
     ]);
     assert.deepEqual(restored[0], {
       agentConfig: {
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agentCategory: AgentCategory.Workflow,
         agent: 'proofreader',
         model: 'gemini31p',
         instruction: 'Check the paper.',

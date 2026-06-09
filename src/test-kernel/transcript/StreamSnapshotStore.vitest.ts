@@ -24,7 +24,7 @@ import type {
   TodoItem,
   TokenUsageStats,
 } from '@shared/schemas';
-import { AGENT_CATEGORY } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas/agent';
 import { StorageFS } from '@utils/files';
 
 const tempDirs: string[] = [];
@@ -368,7 +368,7 @@ describe('StreamSnapshotStore', () => {
       agentConfig: {
         agent: 'search',
         model: 'deepseekproT',
-        agentCategory: AGENT_CATEGORY.TOOL_USE,
+        agentCategory: AgentCategory.ToolUse,
       },
     }) as TaskState;
     const executionId = 'abc123' as ExecutionId;
