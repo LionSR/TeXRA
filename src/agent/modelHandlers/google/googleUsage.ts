@@ -13,10 +13,11 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { normalizeUsage } from '../support/UsageNormalizer';
 import type { GenerateContentResponseUsageMetadata } from '@google/genai';
 
-/** Pricing inputs the handler supplies from its `config`. */
+/** Pricing inputs the handler supplies from its `config`/`capabilities`. */
 export interface GooglePricingConfig {
   inputPrice: number;
   outputPrice: number;
+  cacheDiscountFactor: number;
 }
 
 interface GoogleTokenCounts {
@@ -73,12 +74,24 @@ export function computeGooglePrice(
   if (!responseUsage) return 0.0;
   const { inputTokens, outputTokens } = computeGoogleTokenCounts(responseUsage);
 
-  return calculateTokenPrice(
+  let basePrice = calculateTokenPrice(
     inputTokens,
     outputTokens,
     config.inputPrice,
     config.outputPrice,
   );
+
+  // cachedContentTokenCount is a subset of promptTokenCount, so cached reads
+  // are first billed at the full input rate above; rebate them down to the
+  // discounted cache-read rate (mirrors computeOpenAIPrice).
+  const cachedTokens = responseUsage.cachedContentTokenCount ?? 0;
+  if (cachedTokens) {
+    basePrice -=
+      (cachedTokens * config.inputPrice * (1 - config.cacheDiscountFactor)) /
+      1e6;
+  }
+
+  return basePrice;
 }
 
 /** Normalizes Google GenAI usage data into a unified format. */

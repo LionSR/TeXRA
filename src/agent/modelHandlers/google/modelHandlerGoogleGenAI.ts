@@ -893,6 +893,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     return {
       inputPrice: this.config.inputPrice,
       outputPrice: this.config.outputPrice,
+      cacheDiscountFactor: this.capabilities.cacheDiscountFactor,
     };
   }
 
