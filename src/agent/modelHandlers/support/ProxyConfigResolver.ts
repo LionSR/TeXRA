@@ -1,7 +1,7 @@
 import { ModelProvider } from 'llm-zoo';
-import { getConfig } from '@utils/config/configUtils';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { shouldRouteModelThroughOpenRouter } from '@model/openRouterRouting';
+import { getConfig } from '@utils/config/configUtils';
 import {
   getProviderEndpoint,
   getDashScopeUseChina,

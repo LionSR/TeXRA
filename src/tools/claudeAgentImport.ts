@@ -17,10 +17,10 @@
 
 import * as path from 'path';
 
-import type { Options, Query } from '@anthropic-ai/claude-agent-sdk';
 
 import { isModuleNotFoundError } from '@common/errors';
 import { pathExists, resolveBinary } from './support/externalBinaryUtils';
+import type { Options, Query } from '@anthropic-ai/claude-agent-sdk';
 
 type QueryFn = (params: {
   prompt: string | AsyncIterable<unknown>;

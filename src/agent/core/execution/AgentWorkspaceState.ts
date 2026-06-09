@@ -9,8 +9,8 @@ import {
   type FileLocation,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
-import { isObject } from '@utils/core';
 import { FlattenedEditRecordSchema } from '@tools/result';
+import { isObject } from '@utils/core';
 import { pathToLocation } from '@utils/files';
 
 /** Schema for thinking blocks (used by model handlers). */

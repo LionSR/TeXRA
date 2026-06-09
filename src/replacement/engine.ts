@@ -5,10 +5,10 @@
 // Local imports - common
 
 // Local imports - log
-import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import { getConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'ReplacementEngine';
 logger.initialize(CHANNEL);

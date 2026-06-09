@@ -27,7 +27,6 @@ import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - common
-import { getConfig } from '@utils/config/configUtils';
 import {
   getSdkErrorMessage,
   attachStreamDiagnostics,
@@ -43,6 +42,7 @@ import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
 import { AbsoluteFS, flexibleFS, type FileLocation } from '@utils/files';
+import { getConfig } from '@utils/config/configUtils';
 import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
 import { objectToLogString } from '@utils/text/stringUtils';
 import {
