@@ -4,7 +4,7 @@ import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   type FileLocation,
   type OutputFileInfo,
-  type OutputXmlSummary,
+  type RoundOutput,
   type StorageKey,
 } from '@shared/schemas';
 import { flexibleFS, replaceInputCommands } from '@utils/files';
@@ -25,7 +25,7 @@ export interface ProcessingContext {
   logger: AgentTrace;
   xmlManager: XmlOutputManager;
   setRoundOutputs: (round: number, outputs: OutputFileInfo[]) => void;
-  ensureRoundData: (round: number) => { xmlSummary: OutputXmlSummary };
+  ensureRoundData: (round: number) => RoundOutput;
 }
 
 /** Handles processing of single and multiple output files. */
