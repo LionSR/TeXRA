@@ -19,6 +19,24 @@ describe('subagent delivery state', () => {
     );
   });
 
+  it('does not mark a failed delivery as delivered', () => {
+    const state = new SubagentDeliveryState();
+
+    expect(state.beginDelivery()).toBe(true);
+    expect(state.beginDelivery()).toBe(false);
+    expect(state.resolveBeforeWaiting('child-stream')).toBe(
+      SUBAGENT_DELIVERY_DECISION.AlreadyDelivered,
+    );
+
+    state.failDelivery();
+
+    expect(state.resolveBeforeWaiting('child-stream')).toBe(
+      SUBAGENT_DELIVERY_DECISION.Deliver,
+    );
+    expect(state.markDelivered()).toBe(true);
+    expect(state.markDelivered()).toBe(false);
+  });
+
   it('distinguishes missing child streams from deliverable cycles', () => {
     const state = new SubagentDeliveryState();
 
