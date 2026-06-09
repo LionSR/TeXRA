@@ -15,6 +15,7 @@ import {
   StreamStatusRegistry,
   StreamStatusService,
 } from '@agent/runtime/StreamStatusService';
+import { executionRegistry } from '@agent/runtime/executionRegistry';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordinator';
@@ -176,6 +177,41 @@ describe('runFlowWithLifecycle', () => {
       expect(onError).toHaveBeenCalledOnce();
       expect(onError.mock.calls[0][1]).toEqual(result);
     } finally {
+      streamStatus.clear(streamId, { emit: false });
+    }
+  });
+
+  it('keeps subagent errors registered until terminal delivery runs', async () => {
+    const executionId =
+      'execution-lifecycle-subagent-error-registered' as ExecutionId;
+    const streamId = 'stream-lifecycle-subagent-error-registered' as StreamTabId;
+    const streamStatus = new StreamStatusRegistry();
+    const ctx = createLifecycleContext({
+      executionId,
+      streamId,
+      streamStatus,
+    });
+    const onError = vi.fn(() => {
+      expect(executionRegistry.getHandle(executionId)).toBeDefined();
+    });
+
+    try {
+      streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
+
+      const result = await runFlowWithLifecycle(
+        ctx,
+        async () => {
+          throw new Error('subagent failed');
+        },
+        { isSubagent: true, onError },
+      );
+
+      expect(result.status).toBe(END_GROUP_STATUS.ERROR);
+      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.ERROR);
+      expect(onError).toHaveBeenCalledOnce();
+      expect(executionRegistry.getHandle(executionId)).toBeUndefined();
+    } finally {
+      executionRegistry.untrack(executionId);
       streamStatus.clear(streamId, { emit: false });
     }
   });
