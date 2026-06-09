@@ -20,7 +20,7 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
+import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 import {
@@ -54,7 +54,6 @@ import {
   type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import { evaluateDelegationGate } from '@shared/constants/delegationPolicy';
 import { formatBytes } from '@shared/utils/string';
 
 // Local imports - tools
@@ -277,13 +276,10 @@ function resolveDeliveryStreamId(
 
 /**
  * Runtime depth gate shared by fresh delegations and resumes.
- * Reads the current workspace delegation policy via readNestedDelegationConfig().
+ * Evaluates against the current workspace delegation policy.
  */
 function depthGateError(parentDelegationDepth: number): ToolResult | null {
-  const gate = evaluateDelegationGate(
-    parentDelegationDepth,
-    readNestedDelegationConfig(),
-  );
+  const gate = evaluateCurrentDelegationGate(parentDelegationDepth);
   if (gate.allowed) return null;
 
   const unknownDepth = gate.blockReason === 'unknown_depth';
@@ -651,11 +647,17 @@ async function resolveAvailableDelegationModel(input: {
   });
 }
 
+/** True when a visible agent of the given category matches the name. */
+function isVisibleAgent(category: AgentCategory, name: string): boolean {
+  return getVisibleAgents(category).some((a) => a.name === name);
+}
+
 /** Throw if no visible agent of the given category matches the name. */
 function assertVisibleAgent(category: AgentCategory, name: string): void {
-  const visible = getVisibleAgents(category);
-  if (visible.some((a) => a.name === name)) return;
-  const available = visible.map((a) => a.name).join(', ');
+  if (isVisibleAgent(category, name)) return;
+  const available = getVisibleAgents(category)
+    .map((a) => a.name)
+    .join(', ');
   throw new Error(
     `Unknown ${category} agent '${name}'. Available: ${available}`,
   );
@@ -760,15 +762,12 @@ async function proposeAndExecute(
   // approval the agent may have been removed/renamed, or the approval could
   // carry a malformed value. Fail fast so the orchestrator sees the problem
   // synchronously instead of after an async launch.
-  if (agentOverride) {
-    const visible = getVisibleAgents(proposal.agentCategory);
-    if (!visible.some((a) => a.name === agentOverride)) {
-      return {
-        summary: `Approved agent override '${agentOverride}' is not available`,
-        output: `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
-        isError: true,
-      };
-    }
+  if (agentOverride && !isVisibleAgent(proposal.agentCategory, agentOverride)) {
+    return {
+      summary: `Approved agent override '${agentOverride}' is not available`,
+      output: `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
+      isError: true,
+    };
   }
 
   const effective = {

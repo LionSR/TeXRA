@@ -43,6 +43,7 @@ import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import { getBasename } from '@shared/utils/path';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { renderLabeledActionButton } from '@shared/wa/actionButtons';
+import { renderWorkflowExtractFlagBadges } from '@shared/wa/extractFlagBadges';
 
 // Local imports - base class
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
@@ -237,25 +238,9 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
   private renderExtractFlags(
     data: WorkflowAgentProposalPermission,
   ): TemplateResult | typeof nothing {
-    const flags: string[] = [];
-    if (data.toolConfig.autoExtractFigure) flags.push('Extract Figures');
-    if (data.toolConfig.autoExtractTikzFigure) flags.push('Extract TikZ');
-    if (flags.length === 0) return nothing;
-    return html`<div class="workflow-proposal__extract-flags">
-      ${repeat(
-        flags,
-        (flag) => flag,
-        (flag) =>
-          html`<wa-badge variant="neutral" appearance="filled"
-            ><wa-icon
-              library="texra"
-              name="file-media"
-              aria-hidden="true"
-            ></wa-icon>
-            ${flag}</wa-badge
-          >`,
-      )}
-    </div>`;
+    const badges = renderWorkflowExtractFlagBadges(data.toolConfig);
+    if (badges === nothing) return nothing;
+    return html`<div class="workflow-proposal__extract-flags">${badges}</div>`;
   }
 
   private renderProposalFileList(

@@ -15,7 +15,7 @@ import type { AgentOptionData } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { AgentSource } from '@shared/schemas/agent';
 import { agentKey as createKey, agentName } from '@shared/schemas/agent';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { AbsoluteFS } from '@utils/files';
 import { filterNotNull } from '@utils/core';
 import {
@@ -672,7 +672,7 @@ function entryToOptionData(entry: AgentEntry): AgentOptionData {
     value: key,
     label: entry.name,
     isToolUse: entry.category === AgentCategory.ToolUse,
-    isOrchestrator: entry.tools?.some((t) => DELEGATION_TOOLS.has(t)),
+    isOrchestrator: hasDelegationTool(entry.tools),
     isRemote: entry.source === 'remote',
     isCustom: entry.source === 'custom',
     description: entry.description,
