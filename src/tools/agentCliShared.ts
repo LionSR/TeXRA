@@ -2,7 +2,15 @@
 // Host-agnostic, VS Code-free.
 
 import { type AgentTrace } from '@agent/trace';
-import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import {
+  EXECUTION_STATUS,
+  type ExecutionId,
+  type ExecutionStatus,
+  type StorageKey,
+  type StreamTabId,
+  type TokenUsageStats,
+} from '@shared/schemas';
 import { formatDuration } from '@utils/core';
 
 /** True for an AbortController-style cancellation error. */
@@ -30,6 +38,24 @@ export function agentCliLoopTerminalStatus(state: {
   return state.interrupted
     ? EXECUTION_STATUS.INTERRUPTED
     : EXECUTION_STATUS.COMPLETED;
+}
+
+/**
+ * Publish a turn's token usage to the progress UI for an agent-CLI child stream.
+ * Shared by the codex and claudeAgent session strategies.
+ */
+export function publishAgentCliStreamUsage(
+  childStreamId: StreamTabId,
+  executionId: ExecutionId,
+  usage: TokenUsageStats,
+  runtimeHost: AgentRuntimeHost,
+): void {
+  runtimeHost.emit('updateStreamUsage', {
+    streamId: childStreamId,
+    storageKey: executionId as StorageKey,
+    executionId,
+    usage,
+  });
 }
 
 /** Log a turn summary (duration + token usage) to the child stream. */
