@@ -18,7 +18,9 @@ type DesktopProgressIpcBridge = Pick<
 >;
 
 export interface DesktopProgressIpcOptions {
-  progress: DesktopProgressIpcBridge;
+  progress?: DesktopProgressIpcBridge;
+  getProgress?: () => DesktopProgressIpcBridge | undefined;
+  ensureProgress?: () => Promise<DesktopProgressIpcBridge>;
   onUnsupportedCommand?: (message: ProgressViewInboundMessage) => void;
   onAsyncError?: (error: unknown) => void;
 }
@@ -37,7 +39,8 @@ export function createDesktopProgressIpc(
   const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
   const onUnsupportedCommand =
     options.onUnsupportedCommand ?? defaultUnsupportedCommand;
-  const progress = options.progress;
+  const getProgress = () => options.getProgress?.() ?? options.progress;
+  const ensureProgress = options.ensureProgress;
 
   return {
     handleMessage(message: DesktopCommandMessage): boolean {
@@ -48,10 +51,40 @@ export function createDesktopProgressIpc(
       // WEBVIEW_READY and pass-through commands return false so sibling
       // handlers in the chain still receive them.
       if (command === PROGRESS_VIEW_COMMANDS.WEBVIEW_READY) {
-        progress.syncFullView();
+        const progress = getProgress();
+        if (progress) {
+          progress.syncFullView();
+        } else if (ensureProgress) {
+          void ensureProgress()
+            .then((loaded) => loaded.syncFullView())
+            .catch(reportAsyncError);
+        }
         return false;
       }
       if (passThroughCommands.has(command)) return false;
+
+      const progress = getProgress();
+      if (!progress && ensureProgress) {
+        void ensureProgress()
+          .then((loaded) => {
+            if (
+              dispatchProgressViewInbound(
+                message,
+                loaded.progressViewInboundHandlers,
+                reportAsyncError,
+              )
+            ) {
+              return;
+            }
+            onUnsupportedCommand(result.data);
+          })
+          .catch(reportAsyncError);
+        return true;
+      }
+      if (!progress) {
+        onUnsupportedCommand(result.data);
+        return true;
+      }
 
       if (
         dispatchProgressViewInbound(

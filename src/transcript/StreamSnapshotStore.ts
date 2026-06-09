@@ -981,7 +981,7 @@ export class StreamSnapshotStore {
       if (meta.taskState !== undefined) {
         const parsed = TaskStateSchema.safeParse(meta.taskState);
         if (parsed.success) {
-          this.taskStates.set(stream, parsed.data as TaskState);
+          this.taskStates.set(stream, parsed.data);
         }
       }
     } else {

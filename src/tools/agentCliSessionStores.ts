@@ -1,0 +1,45 @@
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
+
+import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
+import type { Thread } from '@openai/codex-sdk';
+import type {
+  ClaudeAgentEffort,
+  ClaudeAgentPermissionMode,
+} from './claudeAgentShared';
+
+export interface ActiveCodexThread {
+  thread: Thread;
+  childStreamId: StreamTabId;
+  parentStreamId: StreamTabId;
+  executionId: ExecutionId;
+}
+
+export interface ActiveClaudeAgentSession {
+  childStreamId: StreamTabId;
+  parentStreamId: StreamTabId;
+  executionId: ExecutionId;
+  model: string;
+  permissionMode: ClaudeAgentPermissionMode;
+  effort: ClaudeAgentEffort;
+  cwd?: string;
+  additionalDirectories?: string[];
+}
+
+export const codexThreads = new AgentCliSessionRegistry<ActiveCodexThread>(
+  'codex_thread_id',
+);
+
+export const claudeAgentSessions =
+  new AgentCliSessionRegistry<ActiveClaudeAgentSession>(
+    'claude_agent_session_id',
+  );
+
+/** Prevent Codex streams from remaining in stale WAITING state during reload. */
+export function interruptAllCodexSessions(): void {
+  codexThreads.interruptAll();
+}
+
+/** Prevent Claude Code streams from remaining in stale WAITING state during reload. */
+export function interruptAllClaudeAgentSessions(): void {
+  claudeAgentSessions.interruptAll();
+}
