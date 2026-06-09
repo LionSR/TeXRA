@@ -123,8 +123,7 @@ export interface AgentCliSessionStrategy<TTurn> {
 
   /**
    * Called in the finally block to release provider-owned registry entries.
-   * Runs before this loop unregisters the child stream from InterruptRegistry;
-   * implementations must not depend on interrupt-registry membership.
+   * Runs after this loop unregisters its interrupt and follow-up queue state.
    */
   onSessionCleanup?(): void;
 }
@@ -243,9 +242,9 @@ export function runAgentCliSession<TTurn>(
       }
     } finally {
       sessionStage.end(sawTurnFailure ? 'error' : 'stopped');
-      strategy.onSessionCleanup?.();
       interruptRegistry.unregister(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
+      strategy.onSessionCleanup?.();
       // Persist terminal status before childStream.finalize() untracks and
       // notifies waiters.
       await writeTerminalStatus(
