@@ -4,7 +4,10 @@ import {
   modelListDescription,
   modelSelectWindow,
 } from '@cli/chat/tui/forms/ModelListForm';
-import { shouldCloseAsyncListFormOnInput } from '@cli/chat/tui/forms/_shared/useAsyncListForm';
+import {
+  shouldBufferAsyncListFormInput,
+  shouldCloseAsyncListFormOnInput,
+} from '@cli/chat/tui/forms/_shared/useAsyncListForm';
 import {
   COMPACT_FORM_MAX_ROWS,
   isCompactFormRows,
@@ -74,6 +77,66 @@ describe('CLI async list form close input', () => {
         loading: false,
         error: undefined,
         empty: false,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('CLI async list form buffered input', () => {
+  it('captures ordinary keys while loading', () => {
+    expect(
+      shouldBufferAsyncListFormInput({
+        input: '6',
+        key: {},
+        loading: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldBufferAsyncListFormInput({
+        input: '21',
+        key: {},
+        loading: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('ignores navigation, enter, escape, and modified keys', () => {
+    expect(
+      shouldBufferAsyncListFormInput({
+        input: '2',
+        key: { downArrow: true },
+        loading: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldBufferAsyncListFormInput({
+        input: '\r',
+        key: { return: true },
+        loading: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldBufferAsyncListFormInput({
+        input: '\u001B',
+        key: { escape: true },
+        loading: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldBufferAsyncListFormInput({
+        input: 'c',
+        key: { ctrl: true },
+        loading: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('only buffers while loading', () => {
+    expect(
+      shouldBufferAsyncListFormInput({
+        input: '6',
+        key: {},
+        loading: false,
       }),
     ).toBe(false);
   });
