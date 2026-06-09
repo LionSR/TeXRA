@@ -7,6 +7,10 @@ const BASE_TIPS = [
   'Use /clear to start fresh',
   'Press /status to see session details',
   'Press /api to view or change API mode',
+  'Press Ctrl-T to read the full transcript',
+  'Type while a response is running to queue a follow-up',
+  'Press Ctrl-R to search your input history',
+  'Use /resume to continue a previous session',
 ] as const;
 
 const AGENT_SELECTION_TIP = 'Press /agent to choose the root agent';

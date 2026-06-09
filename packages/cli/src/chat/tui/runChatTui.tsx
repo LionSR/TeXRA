@@ -106,10 +106,12 @@ import {
   openCliSlashCommandForm,
   openRegisteredCliSlashForm,
 } from './commands/slashForms';
+import { formatSlashCommandHelp } from './commands/helpText';
 import {
   findSlashCommand,
   listSlashCommands,
   parseSlashInput,
+  suggestSlashCommand,
 } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
@@ -131,7 +133,11 @@ import {
   streamStatusFromState,
 } from './state/streamStatus';
 import { activeStreamScope } from './state/streamViews';
-import { discoverTerminalCapabilities } from './state/terminalCapabilities';
+import { defaultShortcutModifierLabel } from './panes/StatusBar';
+import {
+  discoverTerminalCapabilities,
+  terminalCapabilities,
+} from './state/terminalCapabilities';
 import { requestCliCompaction } from './state/compactionRequest';
 import {
   appendLocalAssistantTranscript,
@@ -768,10 +774,12 @@ async function handleTuiSlashCommand(
   }
   switch (command) {
     case 'help': {
-      const commands = listSlashCommands()
-        .map((cmd) => `/${cmd.name} - ${cmd.description}`)
-        .join('\n');
-      appendLocalAssistantTranscript(commands);
+      appendLocalAssistantTranscript(
+        formatSlashCommandHelp(listSlashCommands(), {
+          shortcutModifierLabel: defaultShortcutModifierLabel(),
+          shiftEnterNewline: terminalCapabilities.get().kittyKeyboard,
+        }),
+      );
       return true;
     }
     case 'clear':
@@ -904,7 +912,12 @@ async function handleTuiSlashCommand(
           `/${parsed.name} is registered but is not available in this CLI view yet.`,
         );
       } else {
-        appendLocalAssistantTranscript(`Unknown command: /${parsed.name}`);
+        const suggestion = suggestSlashCommand(command);
+        appendLocalAssistantTranscript(
+          suggestion
+            ? `Unknown command: /${parsed.name}. Did you mean /${suggestion.name}? Type /help to list commands.`
+            : `Unknown command: /${parsed.name}. Type /help to list commands.`,
+        );
       }
       return true;
     }

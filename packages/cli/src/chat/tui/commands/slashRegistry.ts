@@ -1,5 +1,14 @@
 // In-tree slash command registry.
 
+import {
+  editDistance,
+  typoSuggestionThreshold,
+} from '@utils/text/editDistance';
+
+/** Help-screen grouping. Uncategorized commands land in a trailing
+ *  "Other" section, so plugin-style registrations stay visible. */
+export type SlashCommandCategory = 'session' | 'configuration' | 'account';
+
 /** A structured-form component renders inline when the user picks a slash
  *  command that declares one (e.g. `/api`). Calls `onDone(result)` to
  *  commit the user's selection or `onDone(undefined)` on cancel. */
@@ -15,6 +24,8 @@ export interface SlashCommand {
   readonly description: string;
   /** Optional alias list for autocomplete (matches both `name` and aliases). */
   readonly aliases?: readonly string[];
+  /** Where the command appears in the grouped `/help` listing. */
+  readonly category?: SlashCommandCategory;
   /**
    * Fire-and-forget handler. Receives the raw remainder of the command line
    * (everything after the command name + whitespace).
@@ -78,6 +89,41 @@ export function matchSlashCommands(prefix: string): readonly SlashCommand[] {
     if (cmd.name.toLowerCase().startsWith(lower)) return true;
     return cmd.aliases?.some((a) => a.toLowerCase().startsWith(lower)) ?? false;
   });
+}
+
+/**
+ * Best "did you mean" candidate for a mistyped command name: the registered
+ * command (matching by name or alias) within the shared typo threshold,
+ * closest first, alphabetical on ties.
+ */
+export function suggestSlashCommand(
+  nameOrAlias: string,
+): SlashCommand | undefined {
+  const token = nameOrAlias.toLowerCase();
+  let best:
+    | {
+        readonly command: SlashCommand;
+        readonly candidate: string;
+        readonly distance: number;
+      }
+    | undefined;
+
+  for (const command of listSlashCommands()) {
+    for (const candidate of [command.name, ...(command.aliases ?? [])]) {
+      const lower = candidate.toLowerCase();
+      const distance = editDistance(token, lower);
+      if (distance > typoSuggestionThreshold(token, lower)) continue;
+      if (
+        best === undefined ||
+        distance < best.distance ||
+        (distance === best.distance && lower < best.candidate)
+      ) {
+        best = { command, candidate: lower, distance };
+      }
+    }
+  }
+
+  return best?.command;
 }
 
 export function slashPickIntent(
