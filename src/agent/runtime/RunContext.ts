@@ -2,7 +2,6 @@ import { AsyncLocalStorage } from 'async_hooks';
 
 import { noopTrace, type AgentTrace } from '@agent/trace';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
 import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import type { AgentProposalCoordinator } from './AgentProposalCoordinator';
@@ -37,11 +36,6 @@ export interface RunContext {
    * deep. Read by delegation tools to compute the child's depth.
    */
   readonly delegationDepth?: number;
-  /**
-   * Delegation policy snapshot for this run. Keeps delegation tool enforcement
-   * aligned with the tool list shown to the model.
-   */
-  readonly delegationConfig?: NestedDelegationConfig;
   /** Whether approval or user prompts cannot be answered by the current host. */
   readonly approvalPromptsUnavailable?: boolean;
   /** Whether this run should stop after one tool-use cycle instead of idling. */
@@ -62,7 +56,6 @@ export interface CreateRunContextOptions {
   agentName?: string;
   workingDirectory?: string;
   delegationDepth?: number;
-  delegationConfig?: NestedDelegationConfig;
   approvalPromptsUnavailable?: boolean;
   stopAfterCycle?: boolean;
 }
@@ -84,7 +77,6 @@ export function createRunContext(options: CreateRunContextOptions): RunContext {
     agentName: options.agentName,
     workingDirectory: options.workingDirectory,
     delegationDepth: options.delegationDepth,
-    delegationConfig: options.delegationConfig,
     approvalPromptsUnavailable: options.approvalPromptsUnavailable,
     stopAfterCycle: options.stopAfterCycle,
   });

@@ -14,7 +14,6 @@ import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
-import type { NestedDelegationConfig } from '@shared/constants/delegationPolicy';
 
 export interface AgentCore<C = unknown> {
   modelHandler: IModelHandler<
@@ -42,12 +41,6 @@ export interface AgentCore<C = unknown> {
    * to compute the child's depth.
    */
   delegationDepth?: number;
-  /**
-   * Delegation policy snapshot for this agent run. Tool-use flows set this once
-   * so the visible tool list and runtime delegation gate derive from the same
-   * max-depth setting without carrying a second depth value.
-   */
-  delegationConfig?: NestedDelegationConfig;
   /** Whether approval or user prompts cannot be answered by the current host. */
   approvalPromptsUnavailable?: boolean;
 }
