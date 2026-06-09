@@ -399,13 +399,49 @@ function formatAnsiLatexReference(
   return style.dim(style.underline(text));
 }
 
-let cachedProcessor: MarkdownProcessor | null = null;
 // Table layout needs the terminal width baked into the renderer (the shared
-// processor caches by content only), so the processor is bound to one width
-// and rebuilt when the width changes — a rare event (resize), unlike the
-// per-delta streaming calls the cache exists to serve.
-let cachedWidth: number | undefined;
-let cachedColorEnabled: boolean | undefined;
+// processor caches by content only), so each processor is bound to one
+// (width, colorEnabled) pair. Keep a small LRU of processors rather than a
+// single slot: the live-region row estimator renders with the default color
+// setting while a NO_COLOR painter renders without, and a single slot would
+// rebuild the processor — discarding its content LRU — on every alternation,
+// re-parsing all pending markdown each frame.
+const PROCESSOR_CACHE_MAX = 4;
+const processorCache = new Map<string, MarkdownProcessor>();
+
+function processorFor(
+  width: number | undefined,
+  colorEnabled: boolean,
+): MarkdownProcessor {
+  const key = `${width ?? 'auto'}:${colorEnabled ? 'color' : 'plain'}`;
+  const cached = processorCache.get(key);
+  if (cached) {
+    // Re-insert to mark as most recently used.
+    processorCache.delete(key);
+    processorCache.set(key, cached);
+    return cached;
+  }
+  const style = ansiMarkdownStyle(colorEnabled);
+  const renderer = createMarkdownRenderer({
+    highlight: (code, lang) => highlightForTui(code, lang, style),
+    configure: (md) => configureAnsi(md, width, style),
+  });
+  const processor = createMarkdownProcessor({
+    renderer,
+    formatLatexReference: (refType, label) =>
+      formatAnsiLatexReference(refType, label, style),
+    // The CLI shows LaTeX source verbatim (math rendering is disabled), so
+    // shield `$…$` / `$$…$$` / `\(…\)` / `\[…\]` spans from markdown-it, which
+    // would otherwise strip `\(`→`(`, `\;`→`;` and eat `_{…}` subscripts.
+    protectLatexMath: true,
+  });
+  if (processorCache.size >= PROCESSOR_CACHE_MAX) {
+    const oldest = processorCache.keys().next().value;
+    if (oldest !== undefined) processorCache.delete(oldest);
+  }
+  processorCache.set(key, processor);
+  return processor;
+}
 
 export interface RenderAnsiMarkdownOptions {
   readonly width?: number;
@@ -421,50 +457,25 @@ export function renderAnsiMarkdown(
   content: string,
   options: RenderAnsiMarkdownOptions = {},
 ): string {
-  const colorEnabled = options.colorEnabled ?? true;
-  if (
-    !cachedProcessor ||
-    cachedWidth !== options.width ||
-    cachedColorEnabled !== colorEnabled
-  ) {
-    const style = ansiMarkdownStyle(colorEnabled);
-    const renderer = createMarkdownRenderer({
-      highlight: (code, lang) => highlightForTui(code, lang, style),
-      configure: (md) => configureAnsi(md, options.width, style),
-    });
-    cachedProcessor = createMarkdownProcessor({
-      renderer,
-      formatLatexReference: (refType, label) =>
-        formatAnsiLatexReference(refType, label, style),
-      // The CLI shows LaTeX source verbatim (math rendering is disabled), so
-      // shield `$…$` / `$$…$$` / `\(…\)` / `\[…\]` spans from markdown-it, which
-      // would otherwise strip `\(`→`(`, `\;`→`;` and eat `_{…}` subscripts.
-      protectLatexMath: true,
-    });
-    cachedWidth = options.width;
-    cachedColorEnabled = colorEnabled;
-  }
-  return wrapAnsiToWidth(
-    cachedProcessor(content),
-    options.width,
-    true,
-  ).trimEnd();
+  const processor = processorFor(options.width, options.colorEnabled ?? true);
+  return wrapAnsiToWidth(processor(content), options.width, true).trimEnd();
 }
 
-/** Test seam: drop the cached processor so tests can re-init cleanly. */
+/** Test seam: drop the cached processors so tests can re-init cleanly. */
 export function _resetAnsiMarkdownForTests(): void {
-  cachedProcessor = null;
-  cachedWidth = undefined;
-  cachedColorEnabled = undefined;
+  processorCache.clear();
 }
 
-/** Test seam: returns cache hit/miss counters for the active processor. */
+/** Test seam: returns cache hit/miss counters across cached processors. */
 export function _ansiMarkdownStatsForTests(): {
   hits: number;
   misses: number;
 } {
-  return {
-    hits: cachedProcessor?.stats.hits() ?? 0,
-    misses: cachedProcessor?.stats.misses() ?? 0,
-  };
+  let hits = 0;
+  let misses = 0;
+  for (const processor of processorCache.values()) {
+    hits += processor.stats.hits();
+    misses += processor.stats.misses();
+  }
+  return { hits, misses };
 }
