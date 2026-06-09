@@ -119,22 +119,24 @@ function mockStorage({
     ]);
   });
 
-  vi.spyOn(StorageFS, 'readJson').mockImplementation(async (target) => {
+  // KVStore now calls StorageFS.read (raw string) via the Keyv adapter;
+  // return JSON strings so the custom deserializer can parse them.
+  vi.spyOn(StorageFS, 'read').mockImplementation(async (target) => {
     const key = streamKeyFromFile(target);
 
     if (target.startsWith(`${STREAM_LOG_SUMMARIES_DIR}${path.sep}`)) {
       if (!Object.hasOwn(summaries, key)) throw notFound();
-      return summaries[key] as never;
+      return JSON.stringify(summaries[key]);
     }
 
     if (target.startsWith(`${STREAM_LOGS_DIR}${path.sep}`)) {
       if (!Object.hasOwn(logs, key)) throw notFound();
       fullLogReads += 1;
       await onLogRead?.(key);
-      return logs[key] as never;
+      return JSON.stringify(logs[key]);
     }
 
-    throw new Error(`Unexpected readJson target: ${target}`);
+    throw new Error(`Unexpected read target: ${target}`);
   });
 
   vi.spyOn(StorageFS, 'ensureDir').mockResolvedValue(undefined);
