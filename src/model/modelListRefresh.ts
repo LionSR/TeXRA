@@ -49,7 +49,8 @@ function reconcileEnabledModels(
   // current. Introduced at version 15 (sonnet/opus tiers) and re-bumped to 16
   // when opus47/opus47T were deprecated in favor of opus48/opus48T. Bump the
   // guard to the current MODEL_LIST_VERSION whenever the registry deprecates
-  // more defaults. Version 18 leads DEFAULT_MODELS with gemini35f, so the
+  // more defaults. Version 18 leads DEFAULT_MODELS with gemini35f and version
+  // 19 adds fable5; both only add or reorder models (no removals), so the
   // deprecated-model sweep intentionally remains guarded at version 16.
   if ((previousVersion ?? 0) < 16) {
     for (const model of currentModels) {

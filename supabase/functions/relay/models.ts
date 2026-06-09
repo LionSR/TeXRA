@@ -11,7 +11,7 @@
  * - Ultra: everything else
  */
 
-import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.8.1';
+import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.9.0';
 import { FREE_TIER, MAX_TIER, ULTRA_TIER } from './tierConstants.ts';
 
 export { FREE_TIER, MAX_TIER, ULTRA_TIER };
