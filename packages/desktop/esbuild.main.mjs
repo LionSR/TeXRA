@@ -3,6 +3,8 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { esmCjsGlobalsBanner } from '../../scripts/esm-cjs-globals-banner.mjs';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const outdir = 'dist/main';
 const outdirPath = resolve(__dirname, outdir);
@@ -22,11 +24,7 @@ const result = await esbuild.build({
   external: ['electron', 'fsevents'],
   tsconfig: 'tsconfig.main.json',
   target: 'node22',
-  banner: {
-    js:
-      `import { createRequire as __texraCreateRequire } from 'node:module';\n` +
-      `const require = __texraCreateRequire(import.meta.url);`,
-  },
+  banner: { js: esmCjsGlobalsBanner },
 });
 
 await mkdir(outdirPath, { recursive: true });

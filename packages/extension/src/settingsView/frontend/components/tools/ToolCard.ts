@@ -2,6 +2,7 @@
 
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
@@ -103,11 +104,6 @@ export class ToolCard extends LitElement {
         font-size: var(--font-size-xs);
       }
 
-      .tool-guide-toggle::part(base) {
-        min-height: var(--height-control);
-        padding-inline: 0;
-      }
-
       .tool-guide {
         margin-top: var(--wa-space-2xs);
         padding: var(--wa-space-xs);
@@ -189,8 +185,14 @@ export class ToolCard extends LitElement {
     }
   }
 
-  private toggleGuide(): void {
-    this.guideExpanded = !this.guideExpanded;
+  private handleGuideShow(event: Event): void {
+    if (event.target !== event.currentTarget) return;
+    this.guideExpanded = true;
+  }
+
+  private handleGuideHide(event: Event): void {
+    if (event.target !== event.currentTarget) return;
+    this.guideExpanded = false;
   }
 
   private handleInstallUrl(): void {
@@ -312,108 +314,96 @@ export class ToolCard extends LitElement {
     const secondaryVariant = hasPrimaryInstallAction ? 'neutral' : 'brand';
 
     return html`
-      <wa-button
-        class="tool-guide-toggle"
-        appearance="plain"
-        size="small"
-        @click=${this.toggleGuide}
+      <wa-details
+        class="collapsible-quiet tool-guide-details"
+        summary="Installation Guide"
+        ?open=${this.guideExpanded}
+        @wa-show=${this.handleGuideShow}
+        @wa-hide=${this.handleGuideHide}
       >
-        <wa-icon
-          slot="start"
-          library=${TEXRA_ICON_LIBRARY}
-          name=${this.guideExpanded ? 'chevron-down' : 'chevron-right'}
-          variant="solid"
-        ></wa-icon>
-        Installation Guide
-      </wa-button>
-      ${this.guideExpanded
-        ? html`
-            ${this.item.installGuide
-              ? html`<div class="tool-guide">${this.item.installGuide}</div>`
-              : nothing}
-            <div class="tool-guide-actions">
-              ${this.item.installCommand
-                ? html`
-                    <wa-button
-                      appearance="filled"
-                      variant="brand"
-                      size="small"
-                      @click=${this.handleRunInstallCommand}
-                      title=${this.item.installCommand}
-                    >
-                      <wa-icon
-                        slot="start"
-                        library=${TEXRA_ICON_LIBRARY}
-                        name="terminal"
-                        variant="solid"
-                      ></wa-icon>
-                      Install in Terminal
-                    </wa-button>
-                  `
-                : nothing}
-              ${this.item.authCommand
-                ? html`
-                    <wa-button
-                      appearance=${secondaryAppearance}
-                      variant=${secondaryVariant}
-                      size="small"
-                      @click=${this.handleRunAuthCommand}
-                      title=${this.item.authCommand}
-                    >
-                      <wa-icon
-                        slot="start"
-                        library=${TEXRA_ICON_LIBRARY}
-                        name="right-to-bracket"
-                        variant="solid"
-                      ></wa-icon>
-                      Sign in
-                    </wa-button>
-                  `
-                : nothing}
-              ${this.item.installExtensionId
-                ? html`
-                    <wa-button
-                      appearance="filled"
-                      variant="brand"
-                      size="small"
-                      @click=${this.handleInstallExtension}
-                    >
-                      <wa-icon
-                        slot="start"
-                        library=${TEXRA_ICON_LIBRARY}
-                        name="cloud-arrow-down"
-                        variant="solid"
-                      ></wa-icon>
-                      Install Extension
-                    </wa-button>
-                  `
-                : nothing}
-              ${this.item.installUrl
-                ? html`
-                    <wa-button
-                      appearance=${secondaryAppearance}
-                      variant=${secondaryVariant}
-                      size="small"
-                      @click=${this.handleInstallUrl}
-                    >
-                      <wa-icon
-                        slot="start"
-                        library=${TEXRA_ICON_LIBRARY}
-                        name="arrow-up-right-from-square"
-                        variant="solid"
-                      ></wa-icon>
-                      Open Install Page
-                    </wa-button>
-                  `
-                : nothing}
-            </div>
-            ${this.item.configNotes
-              ? html`<div class="tool-config-note">
-                  ${this.item.configNotes}
-                </div>`
-              : nothing}
-          `
-        : nothing}
+        ${this.item.installGuide
+          ? html`<div class="tool-guide">${this.item.installGuide}</div>`
+          : nothing}
+        <div class="tool-guide-actions">
+          ${this.item.installCommand
+            ? html`
+                <wa-button
+                  appearance="filled"
+                  variant="brand"
+                  size="small"
+                  @click=${this.handleRunInstallCommand}
+                  title=${this.item.installCommand}
+                >
+                  <wa-icon
+                    slot="start"
+                    library=${TEXRA_ICON_LIBRARY}
+                    name="terminal"
+                    variant="solid"
+                  ></wa-icon>
+                  Install in Terminal
+                </wa-button>
+              `
+            : nothing}
+          ${this.item.authCommand
+            ? html`
+                <wa-button
+                  appearance=${secondaryAppearance}
+                  variant=${secondaryVariant}
+                  size="small"
+                  @click=${this.handleRunAuthCommand}
+                  title=${this.item.authCommand}
+                >
+                  <wa-icon
+                    slot="start"
+                    library=${TEXRA_ICON_LIBRARY}
+                    name="right-to-bracket"
+                    variant="solid"
+                  ></wa-icon>
+                  Sign in
+                </wa-button>
+              `
+            : nothing}
+          ${this.item.installExtensionId
+            ? html`
+                <wa-button
+                  appearance="filled"
+                  variant="brand"
+                  size="small"
+                  @click=${this.handleInstallExtension}
+                >
+                  <wa-icon
+                    slot="start"
+                    library=${TEXRA_ICON_LIBRARY}
+                    name="cloud-arrow-down"
+                    variant="solid"
+                  ></wa-icon>
+                  Install Extension
+                </wa-button>
+              `
+            : nothing}
+          ${this.item.installUrl
+            ? html`
+                <wa-button
+                  appearance=${secondaryAppearance}
+                  variant=${secondaryVariant}
+                  size="small"
+                  @click=${this.handleInstallUrl}
+                >
+                  <wa-icon
+                    slot="start"
+                    library=${TEXRA_ICON_LIBRARY}
+                    name="arrow-up-right-from-square"
+                    variant="solid"
+                  ></wa-icon>
+                  Open Install Page
+                </wa-button>
+              `
+            : nothing}
+        </div>
+        ${this.item.configNotes
+          ? html`<div class="tool-config-note">${this.item.configNotes}</div>`
+          : nothing}
+      </wa-details>
     `;
   }
 

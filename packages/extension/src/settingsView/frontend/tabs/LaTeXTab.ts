@@ -7,6 +7,7 @@ import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
+import '@awesome.me/webawesome/dist/components/details/details.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
@@ -263,22 +264,11 @@ export class LaTeXTab extends LitElement {
         margin-top: var(--wa-space-3xs);
       }
 
-      .dependency-guide-toggle {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        padding: var(--wa-space-3xs) 0;
+      .dependency-guide-details {
         margin-top: var(--wa-space-2xs);
-        font-size: var(--font-size-sm);
-        font-family: inherit;
-        color: var(--wa-color-text-link, #3794ff);
-        background: none;
-        border: none;
-        cursor: pointer;
       }
 
       .dependency-guide {
-        margin-top: var(--wa-space-2xs);
         padding: var(--wa-space-xs);
         background: var(--wa-color-surface-lowered, rgba(128, 128, 128, 0.08));
         border-radius: var(--border-radius);
@@ -393,15 +383,6 @@ export class LaTeXTab extends LitElement {
   @property({ type: Boolean }) inlineCriticismEnabled = false;
   @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
-  @state() private expandedGuides = new Set<string>();
-
-  private toggleGuide(key: string): void {
-    const next = new Set(this.expandedGuides);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    this.expandedGuides = next;
-  }
-
   private handleApply(field?: SettingInfo['key'], reset = false): void {
     this.dispatchEvent(createEvent('latex-apply-settings', { field, reset }));
   }
@@ -453,7 +434,6 @@ export class LaTeXTab extends LitElement {
 
   private renderDependencyCard(dep: DependencyInfo): TemplateResult {
     const installed = this.settings[dep.key];
-    const expanded = this.expandedGuides.has(dep.key);
     const platform = this.settings.platform;
     const guideText = dep.installGuide?.[platform] ?? dep.installGuide?.linux;
     const detectedPaths = installed ? this.getDetectedPaths(dep) : [];
@@ -519,19 +499,12 @@ export class LaTeXTab extends LitElement {
           : nothing}
         ${!installed && guideText
           ? html`
-              <button
-                class="dependency-guide-toggle"
-                @click=${() => this.toggleGuide(dep.key)}
+              <wa-details
+                class="collapsible-quiet dependency-guide-details"
+                summary="Installation Guide"
               >
-                <wa-icon
-                  library="texra"
-                  name=${expanded ? 'chevron-down' : 'chevron-right'}
-                ></wa-icon>
-                Installation Guide
-              </button>
-              ${expanded
-                ? html`<div class="dependency-guide">${guideText}</div>`
-                : nothing}
+                <div class="dependency-guide">${guideText}</div>
+              </wa-details>
             `
           : nothing}
       </div>

@@ -11,7 +11,6 @@ import { consume } from '@lit/context';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { keyed } from 'lit/directives/keyed.js';
-import { styleMap } from 'lit/directives/style-map.js';
 
 // Local imports - shared schemas and types
 import type { AgentOptionData, ModelOptionData } from '@shared/schemas';
@@ -670,28 +669,25 @@ export class InstructionPanel extends LitElement {
             class="instruction-header-actions"
             @click=${this.handleActionClick}
           >
-            <span
-              style=${styleMap({ display: session.debugMode ? '' : 'none' })}
-            >
-              ${renderIconActionButton({
-                id: 'packButton',
-                icon: 'archive',
-                label: 'Pack output to History',
-                title: 'Pack the output for this agent into the History folder',
-                action: 'pack',
-              })}
-            </span>
-            <span
-              style=${styleMap({ display: session.debugMode ? '' : 'none' })}
-            >
-              ${renderIconActionButton({
-                id: 'cleanButton',
-                icon: 'trash',
-                label: 'Clean output',
-                title: 'Clean the output for this agent',
-                action: 'clean',
-              })}
-            </span>
+            ${session.debugMode
+              ? html`
+                  ${renderIconActionButton({
+                    id: 'packButton',
+                    icon: 'archive',
+                    label: 'Pack output to History',
+                    title:
+                      'Pack the output for this agent into the History folder',
+                    action: 'pack',
+                  })}
+                  ${renderIconActionButton({
+                    id: 'cleanButton',
+                    icon: 'trash',
+                    label: 'Clean output',
+                    title: 'Clean the output for this agent',
+                    action: 'clean',
+                  })}
+                `
+              : nothing}
             ${renderIconActionButton({
               id: 'magicPolishButton',
               icon: 'sparkle',
