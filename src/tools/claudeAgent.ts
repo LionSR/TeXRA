@@ -430,8 +430,13 @@ function startClaudeAgentLoop(params: {
   pathToClaudeCodeExecutable: string | undefined;
   runtimeHost: AgentRuntimeHost;
 }): void {
-  const { childStream, parentStreamId, executionId, initialPrompt, runtimeHost } =
-    params;
+  const {
+    childStream,
+    parentStreamId,
+    executionId,
+    initialPrompt,
+    runtimeHost,
+  } = params;
   const { childStreamId, logger } = childStream;
 
   // The SDK needs the prior session id to resume the same conversation across

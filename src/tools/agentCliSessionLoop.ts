@@ -171,7 +171,11 @@ export function runAgentCliSession<TTurn>(
         let err: unknown = null;
         try {
           turn = await strategy.runTurn(prompt, abortController);
-          logTurnSummary(logger, Date.now() - startedAt, strategy.getUsage(turn));
+          logTurnSummary(
+            logger,
+            Date.now() - startedAt,
+            strategy.getUsage(turn),
+          );
           if (strategy.isTurnError?.(turn)) {
             strategy.onTurnError?.(turn, logger);
           }
@@ -187,7 +191,8 @@ export function runAgentCliSession<TTurn>(
 
         const wallTimeMs = Date.now() - startedAt;
         const turnFailed =
-          err != null || (turn != null && strategy.isTurnError?.(turn) === true);
+          err != null ||
+          (turn != null && strategy.isTurnError?.(turn) === true);
 
         if (!turnFailed && turn != null) {
           strategy.onTurnSuccess?.(turn);
