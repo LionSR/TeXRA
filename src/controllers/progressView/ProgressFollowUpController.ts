@@ -12,6 +12,9 @@ import {
   type WorkflowTaskState,
 } from '@agent/core/execution/TaskState';
 
+// Local imports - latex
+import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
+
 // Local imports - shared
 import type {
   CompileFailure,
@@ -293,12 +296,42 @@ export class ProgressFollowUpController {
     for (const candidate of preferred) {
       const location = this.deps.workspace.locatePath(candidate);
       if (location.kind === 'external') continue;
-      if (seen.has(location.relativePath)) continue;
-      if (!(await this.deps.workspace.exists(location.relativePath))) continue;
-      seen.add(location.relativePath);
-      targets.push(location.relativePath);
+      const editablePath = await this.editableCompileFixerCandidate(
+        location.relativePath,
+      );
+      if (!editablePath) continue;
+      if (seen.has(editablePath)) continue;
+      seen.add(editablePath);
+      targets.push(editablePath);
     }
     return targets;
+  }
+
+  private async editableCompileFixerCandidate(
+    relativePath: string,
+  ): Promise<string | null> {
+    const artifact = detectGeneratedLatexdiffArtifact(relativePath);
+    if (!artifact) {
+      return (await this.deps.workspace.exists(relativePath))
+        ? relativePath
+        : null;
+    }
+
+    const sourcePath = artifact.sourcePath;
+    if (await this.deps.workspace.exists(sourcePath)) {
+      return sourcePath;
+    }
+
+    // A user may legitimately name a source file `chapter_diff.tex`; only the
+    // stronger generated diff patterns are always excluded.
+    if (
+      artifact.kind === 'workspaceDiff' &&
+      (await this.deps.workspace.exists(relativePath))
+    ) {
+      return relativePath;
+    }
+
+    return null;
   }
 
   /**
