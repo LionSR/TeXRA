@@ -79,6 +79,7 @@ export class ToolUseWaitNode<C> extends Node<
       const delivered = await onBeforeWaiting?.(
         prepRes.lastResponse,
         prepRes.touchedFiles,
+        this.services.attachedMemoryMisses ?? [],
       );
       prepRes.deliveredToOrchestrator =
         onBeforeWaiting !== undefined && delivered !== false;
