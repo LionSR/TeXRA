@@ -12,31 +12,31 @@ const REPO_ROOT = resolve(
   '../../..',
 );
 
-interface OdysseyPromptsYaml {
+interface GoalPromptsYaml {
   continuation: { template: string };
   objective_updated: { template: string };
 }
 
-function readYaml(): OdysseyPromptsYaml {
+function readYaml(): GoalPromptsYaml {
   const text = readFileSync(
-    resolve(REPO_ROOT, 'packages/extension/resources/odyssey/odyssey.yaml'),
+    resolve(REPO_ROOT, 'packages/extension/resources/goal/goal.yaml'),
     'utf8',
   );
-  return yaml.parse(text) as OdysseyPromptsYaml;
+  return yaml.parse(text) as GoalPromptsYaml;
 }
 
 function readInlineFallbackSource(): string {
   return readFileSync(
-    resolve(REPO_ROOT, 'src/agent/odyssey/promptLoader.ts'),
+    resolve(REPO_ROOT, 'src/agent/goal/promptLoader.ts'),
     'utf8',
   );
 }
 
 // The inline fallback in promptLoader.ts ships verbatim to hosts that
-// haven't called initializeOdysseyPrompts (tests, partial wiring, file-read
+// haven't called initializeGoalPrompts (tests, partial wiring, file-read
 // errors). Drift between the two paths would silently disable the
 // completion-audit discipline. Both must render the same template.
-describe('Odyssey prompt parity (YAML ↔ inline fallback)', () => {
+describe('Goal prompt parity (YAML ↔ inline fallback)', () => {
   it('continuation template in YAML is fully reflected in the inline fallback', () => {
     const ymlTemplate = readYaml().continuation.template;
     const loader = readInlineFallbackSource();

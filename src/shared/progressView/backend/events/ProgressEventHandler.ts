@@ -24,7 +24,7 @@ import {
   type StreamExecutionState,
 } from '@shared/progressView/backend/state/ProgressViewState';
 import { WebviewBridge } from '@shared/progressView/backend/WebviewBridge';
-import { OdysseyStore, isOdysseyInFlight } from '@tools/odyssey';
+import { GoalStore, isGoalInFlight } from '@tools/goal';
 import {
   isApprovalBypassedForStream,
   proposalApprovalState,
@@ -503,8 +503,8 @@ export class ProgressEventHandler {
     // Always include toggle bypass state so buttons render correctly on tab switch.
     const toolEditBypass = isApprovalBypassedForStream(stream);
     const superYoloBypass = proposalApprovalState.isBypassed(stream);
-    const odyssey = OdysseyStore.getForStream(stream);
-    const odysseyActive = isOdysseyInFlight(odyssey);
+    const goal = GoalStore.getForStream(stream);
+    const goalActive = isGoalInFlight(goal);
 
     this.webviewUpdater.sendSyncStreamContent({
       stream,
@@ -519,9 +519,9 @@ export class ProgressEventHandler {
       parentStreamId,
       toolEditBypass,
       superYoloBypass,
-      odysseyActive,
-      odysseyStatus: odysseyActive ? odyssey?.status : undefined,
-      odysseyObjective: odysseyActive ? odyssey?.objective : undefined,
+      goalActive,
+      goalStatus: goalActive ? goal?.status : undefined,
+      goalObjective: goalActive ? goal?.objective : undefined,
     });
   }
 

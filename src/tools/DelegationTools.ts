@@ -28,8 +28,12 @@ import {
   AgentExecutionHandle,
   executionRegistry,
 } from '@agent/runtime/executionRegistry';
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import {
+  getAgentFlowErrorResult,
+  type AgentFlowResult,
+} from '@agent/runtime/AgentFlowResult';
 import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
+import { getCurrentToolCallContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
 
@@ -360,6 +364,17 @@ async function executeSubagent(
   const parentExecutionId = parentContext.executionId;
   const parentDelegationDepth = parentContext.delegationDepth ?? 0;
   const runtimeHost = parentContext.runtimeHost;
+  // Captured now (while the launching tool call's ALS frame is live) so the
+  // async completion callbacks below can still roll the child's cost into the
+  // parent run after this tool call has returned. Subagents count toward
+  // parent usage totals and the goal cost cap only — they never drive the loop.
+  const recordSubagentCost = getCurrentToolCallContext()?.recordSubagentCost;
+  let subagentCostSettled = false;
+  function settleSubagentCost(result?: AgentFlowResult): void {
+    if (subagentCostSettled) return;
+    subagentCostSettled = true;
+    recordSubagentCost?.(result?.totalCostUsd ?? 0);
+  }
 
   const gated = depthGateError(parentDelegationDepth);
   if (gated) return gated;
@@ -404,6 +419,7 @@ async function executeSubagent(
           subagentError = err;
         },
       });
+      settleSubagentCost(result);
       if (result.status === 'error') {
         const msg = formatSubagentError(
           executionId,
@@ -440,6 +456,7 @@ async function executeSubagent(
         output: msg,
       };
     } catch (err) {
+      settleSubagentCost(getAgentFlowErrorResult(err));
       const msg = formatSubagentError(executionId, agentName, err, {
         wallTimeMs: Date.now() - startedAt,
         workingDirectory: configPayload.workingDirectory ?? undefined,
@@ -507,6 +524,7 @@ async function executeSubagent(
     err: unknown,
     result?: AgentFlowResult,
   ): Promise<void> {
+    settleSubagentCost(result);
     const wallTimeMs = Date.now() - startedAt;
     const msg = formatSubagentError(executionId, agentName, err, {
       wallTimeMs,
@@ -583,6 +601,7 @@ async function executeSubagent(
       });
     },
     onCompleted: async (result) => {
+      settleSubagentCost(result);
       // For workflow results, compute diffs and write them as files to the
       // execution's run directory. The delivery references diff file paths
       // so the orchestrator can read them on demand via /executions/{id}/files/.
@@ -614,6 +633,7 @@ async function executeSubagent(
   });
   promise
     .catch((err: unknown) => {
+      settleSubagentCost();
       void deliverSubagentError(err);
     })
     .finally(() => {

@@ -78,7 +78,7 @@ Two surprises from the deeper read:
    desktop passes `consoleLog`, and `src/agent/core/logger.ts` uses
    `consoleLog` before platform initialization.
 4. **`ProgressEventBus` and `StreamLogStore.onChange` are not redundant.**
-   The bus carries `odysseyStateChanged`, `inquiryThreadUpdated`,
+   The bus carries `goalStateChanged`, `inquiryThreadUpdated`,
    `resolveExternalInquiry` — three events, no log overlap. My first pass
    was wrong; do **not** merge them.
 

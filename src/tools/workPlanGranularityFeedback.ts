@@ -1,6 +1,5 @@
-import { collapseWhitespace } from '@utils/text/stringUtils';
-
 import { type Plan, type TodoItem } from '@shared/schemas';
+import { collapseWhitespace } from '@utils/text/stringUtils';
 
 function taskKey(value: string): string {
   return collapseWhitespace(value).toLowerCase();
@@ -23,7 +22,7 @@ export function formatWorkPlanGranularityWarning(
   return [
     'Warning: todo_write and plan use the same labels for work at different levels.',
     ...overlaps.map((overlap) => `- ${overlap}`),
-    'Use plan for long-running goal/odyssey milestones and todo_write for microscopic execution steps. Make plan items more macroscopic, or make todos more granular, instead of duplicating the same checklist item in both tools.',
+    'Use plan for long-running goal milestones and todo_write for microscopic execution steps. Make plan items more macroscopic, or make todos more granular, instead of duplicating the same checklist item in both tools.',
   ].join('\n');
 }
 

@@ -71,6 +71,7 @@ export interface RunReflectionFlowInput<
 export interface RunReflectionFlowResult {
   roundOutputs: RoundOutput[];
   status: EndGroupStatus;
+  totalCostUsd?: number;
 }
 
 export async function runReflectionFlow<C = unknown>(
@@ -316,8 +317,12 @@ export async function runReflectionFlow<C = unknown>(
     interruptRegistry.unregister(streamId);
   }
 
+  const totalCostUsd =
+    shared?.runStateSnapshot.usageAccumulator.totals.totalCost ?? 0;
+
   return {
     roundOutputs: shared?.roundOutputs ?? [],
     status,
+    ...(totalCostUsd > 0 ? { totalCostUsd } : {}),
   };
 }

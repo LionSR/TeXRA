@@ -20,16 +20,16 @@ import {
   createDispatcher,
   type HandlerRegistry,
 } from '@shared/utils/dispatcher';
-// Import OdysseySchema from its leaf module so this file (consumed by
-// webview frontends) does not pull in OdysseyTool/OdysseyStore runtime modules.
+// Import GoalSchema from its leaf module so this file (consumed by
+// webview frontends) does not pull in GoalTool/GoalStore runtime modules.
 import {
-  OdysseySchema,
-  formatOdysseyTime,
-  isOdysseyInFlight,
-  odysseyDurationMs,
-  odysseyElapsedMs,
-} from '@tools/odyssey/odysseyMeta';
-export type { Odyssey, OdysseyStatus } from '@tools/odyssey/odysseyMeta';
+  GoalSchema,
+  formatGoalTime,
+  isGoalInFlight,
+  goalDurationMs,
+  goalElapsedMs,
+} from '@tools/goal/goalMeta';
+export type { Goal, GoalStatus } from '@tools/goal/goalMeta';
 
 // SETTINGS_VIEW_CMD is defined in commands.ts to avoid circular dependency.
 // Re-exported here for consumers that expect it from the schema module.
@@ -81,11 +81,11 @@ import {
 import { StreamTabIdSchema } from './identifiers';
 export { SETTINGS_VIEW_CMD };
 export {
-  OdysseySchema,
-  formatOdysseyTime,
-  isOdysseyInFlight,
-  odysseyDurationMs,
-  odysseyElapsedMs,
+  GoalSchema,
+  formatGoalTime,
+  isGoalInFlight,
+  goalDurationMs,
+  goalElapsedMs,
 };
 
 /** Tab name order - single source of truth for tab indices */
@@ -99,7 +99,7 @@ export const SETTINGS_TAB_ORDER = [
   'AI_AGENTS',
   'GIT',
   'LATEX',
-  'ODYSSEY',
+  'GOAL',
 ] as const;
 
 export type SettingsTabName = (typeof SETTINGS_TAB_ORDER)[number];
@@ -976,20 +976,18 @@ const OpenVscodeSettingsMessageSchema = commandOnly(CMD.OPEN_VSCODE_SETTINGS);
 
 // Settings-tab IPC is read-only: state transitions are owned by the
 // agent-side plan tool, not the user. Don't add mutation commands here.
-const GetOdysseyListMessageSchema = commandOnly(CMD.GET_ODYSSEY_LIST);
-const RevealOdysseyStreamMessageSchema = z.object({
-  command: z.literal(CMD.REVEAL_ODYSSEY_STREAM),
+const GetGoalListMessageSchema = commandOnly(CMD.GET_GOAL_LIST);
+const RevealGoalStreamMessageSchema = z.object({
+  command: z.literal(CMD.REVEAL_GOAL_STREAM),
   streamId: StreamTabIdSchema,
 });
 
-/** Outbound: pushed when the list changes or in response to GET_ODYSSEY_LIST. */
-export const UpdateOdysseyListMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_ODYSSEY_LIST),
-  items: z.array(OdysseySchema),
+/** Outbound: pushed when the list changes or in response to GET_GOAL_LIST. */
+export const UpdateGoalListMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST),
+  items: z.array(GoalSchema),
 });
-export type UpdateOdysseyListMessage = z.infer<
-  typeof UpdateOdysseyListMessageSchema
->;
+export type UpdateGoalListMessage = z.infer<typeof UpdateGoalListMessageSchema>;
 
 // ============================================================
 // Discriminated union of all inbound messages
@@ -1109,9 +1107,9 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     ApplyAgentModePresetMessageSchema,
     SaveAgentModePresetMessageSchema,
     DeleteAgentModePresetMessageSchema,
-    // Odyssey settings-tab messages (read-only)
-    GetOdysseyListMessageSchema,
-    RevealOdysseyStreamMessageSchema,
+    // Goal settings-tab messages (read-only)
+    GetGoalListMessageSchema,
+    RevealGoalStreamMessageSchema,
   ],
 );
 
@@ -1162,7 +1160,7 @@ export const SettingsViewOutboundMessageSchema = z.discriminatedUnion(
     UpdateLatexSettingsStatusMessageSchema,
     UpdateLatexConfigValuesMessageSchema,
     UpdateInlineCriticismEnabledMessageSchema,
-    UpdateOdysseyListMessageSchema,
+    UpdateGoalListMessageSchema,
     UpdateProfileMessageSchema,
   ],
 );

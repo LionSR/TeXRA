@@ -1,14 +1,14 @@
 /**
- * Unified plan + odyssey tool.
+ * Unified plan + goal tool.
  *
  * `command: 'update'` (the default) creates or updates a structured
  * implementation plan with numbered steps, descriptions, and file
  * references. New plans (all steps pending) gate on user approval; the
- * user may approve the plan or approve and start an autonomous odyssey.
+ * user may approve the plan or approve and start an autonomous goal.
  *
  * `command: 'pause'` and `command: 'complete'` drive the lifecycle of the
- * odyssey running this plan: pause when user input is needed, complete
- * when every plan step is verified done. Both are no-ops if no odyssey
+ * goal running this plan: pause when user input is needed, complete
+ * when every plan step is verified done. Both are no-ops if no goal
  * is in flight on the current stream.
  */
 
@@ -32,13 +32,14 @@ import {
 } from '@shared/schemas';
 import { proposalApprovalState } from '@tools/approval';
 import {
-  OdysseyStore,
-  formatOdysseyTime,
-  isOdysseyEnabled,
-  isOdysseyInFlight,
-  odysseyElapsedMs,
-  type Odyssey,
-} from '@tools/odyssey';
+  GoalStore,
+  formatGoalTime,
+  isGoalEnabled,
+  isGoalInFlight,
+  goalElapsedMs,
+  setGoalSessionAutoApprovals,
+  type Goal,
+} from '@tools/goal';
 import { ToolError, type ToolResult } from '@tools/result';
 import { requireNonEmptyString } from '@tools/utils';
 import {
@@ -46,7 +47,6 @@ import {
   formatWorkPlanGranularityWarning,
 } from '@tools/workPlanGranularityFeedback';
 import { defineTool } from '@tools/core/define';
-import { filterNotNull } from '@utils/core';
 
 const logger = createChannelTrace('PlanTool');
 
@@ -54,11 +54,11 @@ const logger = createChannelTrace('PlanTool');
 let approvalCounter = 0;
 
 /**
- * Render a plan as an odyssey objective: a verifiable stopping condition that
+ * Render a plan as a goal objective: a verifiable stopping condition that
  * names each step so the autonomous loop has the full structure in context,
  * not just the summary.
  */
-function buildOdysseyObjectiveFromPlan(plan: Plan): string {
+function buildGoalObjectiveFromPlan(plan: Plan): string {
   const stepLines = plan.steps.map((step, i) => {
     const head = `${i + 1}. ${step.title} — ${step.description}`;
     return step.files.length > 0
@@ -77,15 +77,12 @@ function buildOdysseyObjectiveFromPlan(plan: Plan): string {
   ].join('\n');
 }
 
-function formatOdysseyView(odyssey: Odyssey): string {
+function formatGoalView(goal: Goal): string {
   return [
-    `Odyssey: ${odyssey.odysseyId}`,
-    `Status: ${odyssey.status}`,
-    `Time elapsed: ${formatOdysseyTime(odysseyElapsedMs(odyssey))}`,
-    odyssey.completedReason ? `Reason: ${odyssey.completedReason}` : null,
-  ]
-    .filter(filterNotNull)
-    .join('\n');
+    `Goal: ${goal.goalId}`,
+    `Status: ${goal.status}`,
+    `Time elapsed: ${formatGoalTime(goalElapsedMs(goal))}`,
+  ].join('\n');
 }
 
 /**
@@ -120,12 +117,12 @@ export type PlanToolInput = z.infer<typeof PlanToolInputSchema>;
 
 export class PlanTool extends defineTool({
   name: 'plan',
-  description: `Manage a structured implementation plan and (optionally) the autonomous odyssey running it.
+  description: `Manage a structured implementation plan and (optionally) the autonomous goal running it.
 
 Commands:
-- update: Create or update the plan. Required field: \`plan\` with summary + steps. New plans (all steps pending) are presented to the user for approval; they may approve, approve & run autonomously (starts an odyssey), or reject. Progress updates (marking steps in_progress or completed) apply immediately.
-- pause: Self-pause the odyssey running this plan when you genuinely need user input to proceed. Required field: \`reason\` describing what you need.
-- complete: Mark the odyssey running this plan complete. Required field: \`reason\` describing HOW you verified completion against current external state. Only call this once every plan step is marked completed AND verified.
+- update: Create or update the plan. Required field: \`plan\` with summary + steps. New plans (all steps pending) are presented to the user for approval; they may approve, approve & run autonomously (starts a goal), or reject. Progress updates (marking steps in_progress or completed) apply immediately.
+- pause: Self-pause the goal running this plan when you genuinely need user input to proceed. Required field: \`reason\` describing what you need.
+- complete: Mark the goal running this plan complete. Required field: \`reason\` describing HOW you verified completion against current external state. Only call this once every plan step is marked completed AND verified.
 
 Plan structure (for command="update"):
 - summary: Brief overview of the approach (1-3 sentences).
@@ -141,7 +138,7 @@ Best practices:
 - Each step should be a distinct, meaningful unit of work.
 - Update step statuses as you progress through the plan.
 - Include file paths to help the user understand the scope.
-- pause/complete are no-ops if no odyssey is running on this stream.`,
+- pause/complete are no-ops if no goal is running on this stream.`,
   schema: PlanToolInputSchema,
 }) {
   protected async execute(input: PlanToolInput): Promise<ToolResult> {
@@ -228,61 +225,67 @@ Best practices:
     streamId: string,
     reason: string,
   ): Promise<ToolResult> {
-    const odyssey = OdysseyStore.getForStream(streamId);
-    if (!odyssey) {
+    const goal = GoalStore.getForStream(streamId);
+    if (!goal) {
       return {
-        summary: 'No odyssey running — pause is a no-op.',
+        summary: 'No goal running — pause is a no-op.',
         output:
-          'No autonomous odyssey is currently running on this stream. ' +
+          'No autonomous goal is currently running on this stream. ' +
           'If you need user input, return a message describing what you need; ' +
           'no pause is necessary.',
       };
     }
-    if (odyssey.status !== 'active') {
+    if (goal.status !== 'active') {
       return {
-        summary: `Odyssey already ${odyssey.status} — pause is a no-op.`,
-        output: `Odyssey is ${odyssey.status}; pause is a no-op.\n\n${formatOdysseyView(odyssey)}`,
+        summary: `Goal already ${goal.status} — pause is a no-op.`,
+        output: `Goal is ${goal.status}; pause is a no-op.\n\n${formatGoalView(goal)}`,
       };
     }
-    const updated =
-      (await OdysseyStore.setStatus(streamId, 'paused', reason)) ?? odyssey;
+    const updated = (await GoalStore.setStatus(streamId, 'paused')) ?? goal;
+    await this.setAutoApprovals(streamId, false);
     return {
-      summary: 'Odyssey paused.',
-      output: `Odyssey paused: ${reason}\n\n${formatOdysseyView(updated)}`,
+      summary: 'Goal paused.',
+      output: `Goal paused: ${reason}\n\n${formatGoalView(updated)}`,
     };
+  }
+
+  /**
+   * Engage/clear the goal's bash + edit auto-approval bypass when the run
+   * context can reach the host. Best-effort: without a runtime host (e.g.
+   * tests or headless edge paths) approvals simply keep prompting.
+   */
+  private async setAutoApprovals(
+    streamId: string,
+    enabled: boolean,
+  ): Promise<void> {
+    const runtimeHost = getCurrentToolContexts()?.runContext?.runtimeHost;
+    if (runtimeHost) {
+      await setGoalSessionAutoApprovals(streamId, enabled, runtimeHost);
+    }
   }
 
   private async executeComplete(
     streamId: string,
     reason: string,
   ): Promise<ToolResult> {
-    const odyssey = OdysseyStore.getForStream(streamId);
-    if (!odyssey) {
+    const goal = GoalStore.getForStream(streamId);
+    if (!goal) {
       return {
-        summary: 'No odyssey running — complete is a no-op.',
+        summary: 'No goal running — complete is a no-op.',
         output:
-          'No autonomous odyssey is currently running on this stream. ' +
+          'No autonomous goal is currently running on this stream. ' +
           'The plan is the only artifact; you may simply summarize the result for the user.',
       };
     }
-    if (odyssey.status === 'complete') {
-      return {
-        summary: 'Odyssey already complete.',
-        output: `Odyssey is already complete. Reason on record: ${odyssey.completedReason ?? '(none)'}`,
-      };
-    }
-    if (odyssey.status === 'abandoned') {
-      throw new ToolError(
-        'Odyssey was abandoned by the user; complete is rejected. ' +
-          'The user must start a new odyssey explicitly.',
-      );
-    }
-    const updated =
-      (await OdysseyStore.setStatus(streamId, 'complete', reason)) ?? odyssey;
+    // Completing forgets the record — a goal is a live pursuit, not an
+    // archived one. The autonomous loop stops because no `active` record
+    // remains for the next wait-node continuation check.
+    await GoalStore.forget(streamId);
+    await this.setAutoApprovals(streamId, false);
     return {
-      summary: 'Odyssey complete.',
+      summary: 'Goal complete.',
       output:
-        `Odyssey ${updated.odysseyId} marked complete.\n\n` +
+        `Goal ${goal.goalId} marked complete.\n\n` +
         `Reason: ${reason}\n\n` +
         `The autonomous continuation loop has stopped. ` +
         `Returning control to the user.`,
@@ -299,7 +302,7 @@ Best practices:
     granularityWarning?: string,
   ): Promise<ToolResult> {
     const approvalId = `plan-${Date.now().toString(36)}-${++approvalCounter}`;
-    const odysseyEnabled = isOdysseyEnabled();
+    const goalEnabled = isGoalEnabled();
 
     logger.info(`Requesting approval for plan: ${plan.summary}`);
 
@@ -307,7 +310,7 @@ Best practices:
       await runCoordinatorBridge.waitForPlanApproval(streamId, {
         approvalId,
         plan,
-        odysseyEnabled,
+        goalEnabled,
       });
 
     if (result.action === 'approve') {
@@ -318,9 +321,9 @@ Best practices:
       });
     }
 
-    if (result.action === 'approve_and_odyssey') {
-      logger.info('Plan approved by user with odyssey mode');
-      return this.startOdysseyForPlan(plan, streamId, granularityWarning);
+    if (result.action === 'approve_and_goal') {
+      logger.info('Plan approved by user with goal mode');
+      return this.startGoalForPlan(plan, streamId, granularityWarning);
     }
 
     // Rejected or timed out — clear the plan from UI
@@ -352,28 +355,28 @@ Best practices:
   }
 
   /**
-   * Start an autonomous odyssey whose objective is the just-approved plan.
-   * Falls back explicitly if odyssey is disabled. If one is already in flight
-   * for the stream, retarget that odyssey to the newly approved plan so future
+   * Start an autonomous goal whose objective is the just-approved plan.
+   * Falls back explicitly if goal is disabled. If one is already in flight
+   * for the stream, retarget that goal to the newly approved plan so future
    * continuations follow the current user decision.
    */
-  private async startOdysseyForPlan(
+  private async startGoalForPlan(
     plan: Plan,
     streamId: string,
     granularityWarning?: string,
   ): Promise<ToolResult> {
-    const odysseyEnabled = isOdysseyEnabled();
-    if (!odysseyEnabled) {
+    const goalEnabled = isGoalEnabled();
+    if (!goalEnabled) {
       logger.warn(
-        'Approve & Run Autonomously requested but odyssey feature flag is off; ' +
-          'continuing without an autonomous odyssey.',
+        'Approve & Run Autonomously requested but goal feature flag is off; ' +
+          'continuing without an autonomous goal.',
       );
       return {
         summary: 'Plan approved — autonomous run unavailable',
         output: appendWorkPlanGranularityWarning(
-          `The user selected Approve & Run, but the odyssey feature flag is ` +
+          `The user selected Approve & Run, but the goal feature flag is ` +
             `currently disabled. The plan is approved, but no autonomous ` +
-            `odyssey was started.\n\n` +
+            `goal was started.\n\n` +
             `Proceed with the plan steps as a normal turn-by-turn workflow. ` +
             `Update plan step statuses as you go.`,
           granularityWarning,
@@ -381,37 +384,31 @@ Best practices:
       };
     }
 
-    const objective = buildOdysseyObjectiveFromPlan(plan);
+    const objective = buildGoalObjectiveFromPlan(plan);
 
-    // If an odyssey is already in flight on this stream, retarget it at
+    // If a goal is already in flight on this stream, retarget it at
     // the newly approved plan instead of silently leaving the loop driving
-    // the stale objective. `editObjective` resets the continuation budget so
-    // the new plan gets a fresh cap regardless of whether the prior odyssey
-    // was active or paused — see odysseyStore.editObjective for the rationale.
-    const existing = OdysseyStore.getForStream(streamId);
-    if (isOdysseyInFlight(existing)) {
+    // the stale objective. The cap amount stays with the running goal; if the
+    // goal was paused, resuming starts a fresh spend leg inside GoalStore.
+    const existing = GoalStore.getForStream(streamId);
+    if (isGoalInFlight(existing)) {
       try {
-        const retargeted = await OdysseyStore.editObjective(
-          streamId,
-          objective,
-          { plan },
-        );
+        const retargeted = await GoalStore.editObjective(streamId, objective, {
+          plan,
+        });
         const active =
           retargeted.status === 'paused'
-            ? ((await OdysseyStore.setStatus(
-                streamId,
-                'active',
-                'User approved a new plan and requested autonomous execution.',
-              )) ?? retargeted)
+            ? ((await GoalStore.setStatus(streamId, 'active')) ?? retargeted)
             : retargeted;
+        await this.setAutoApprovals(streamId, true);
         return {
-          summary: `Plan approved — odyssey ${active.odysseyId} retargeted`,
+          summary: `Plan approved — goal ${active.goalId} retargeted`,
           output: appendWorkPlanGranularityWarning(
-            `The user approved a new plan while odyssey ${active.odysseyId} ` +
-              `was already in flight. The odyssey has been retargeted to ` +
+            `The user approved a new plan while goal ${active.goalId} ` +
+              `was already in flight. The goal has been retargeted to ` +
               `the newly approved plan instead of leaving the old objective ` +
               `active.\n\n` +
-              `${formatOdysseyView(active)}\n\n` +
+              `${formatGoalView(active)}\n\n` +
               `Discipline:\n` +
               `- Work through the new plan steps and update their statuses with plan(command="update") as you progress.\n` +
               `- Discard any progress that only served the previous objective.\n` +
@@ -424,16 +421,16 @@ Best practices:
       } catch (err) {
         const reason = toErrorMessage(err);
         logger.warn(
-          `Failed to retarget in-flight odyssey for approved plan; returning an explicit error result. ${reason}`,
+          `Failed to retarget in-flight goal for approved plan; returning an explicit error result. ${reason}`,
         );
         return {
           summary:
-            'Plan approved — odyssey could not be retargeted, proceeding without it',
+            'Plan approved — goal could not be retargeted, proceeding without it',
           output:
             `The user approved this plan and requested autonomous execution, ` +
-            `but the in-flight odyssey could not be retargeted: ${reason}\n\n` +
+            `but the in-flight goal could not be retargeted: ${reason}\n\n` +
             `Proceed with the plan steps turn-by-turn. The pre-existing ` +
-            `odyssey is still active and will keep injecting continuations ` +
+            `goal is still active and will keep injecting continuations ` +
             `against its previous objective until the user pauses or abandons it.`,
           isError: true,
         };
@@ -441,12 +438,13 @@ Best practices:
     }
 
     try {
-      const odyssey = await OdysseyStore.start(streamId, objective, { plan });
+      const goal = await GoalStore.start(streamId, objective, { plan });
+      await this.setAutoApprovals(streamId, true);
       return {
-        summary: `Plan approved — odyssey ${odyssey.odysseyId} started`,
+        summary: `Plan approved — goal ${goal.goalId} started`,
         output: appendWorkPlanGranularityWarning(
-          `The user approved this plan and started an autonomous odyssey ` +
-            `(${odyssey.odysseyId}) toward the plan's stopping condition.\n\n` +
+          `The user approved this plan and started an autonomous goal ` +
+            `(${goal.goalId}) toward the plan's stopping condition.\n\n` +
             `Discipline:\n` +
             `- Work through the plan steps and update their statuses with plan(command="update") as you progress.\n` +
             `- Do not call plan(command="complete") until every plan step is marked completed AND the result is verified against current external state (file contents, command output, test results).\n` +
@@ -459,14 +457,14 @@ Best practices:
     } catch (err) {
       const reason = toErrorMessage(err);
       logger.warn(
-        `Failed to start odyssey for approved plan; falling back to plain approval. ${reason}`,
+        `Failed to start goal for approved plan; falling back to plain approval. ${reason}`,
       );
       return {
         summary:
-          'Plan approved — odyssey could not be started, proceeding without it',
+          'Plan approved — goal could not be started, proceeding without it',
         output:
           `The user approved this plan and requested autonomous execution, but ` +
-          `the odyssey could not be started: ${reason}\n\n` +
+          `the goal could not be started: ${reason}\n\n` +
           `Proceed with the plan steps as a normal turn-by-turn workflow. Update ` +
           `plan step statuses as you go.`,
       };

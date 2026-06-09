@@ -8,7 +8,7 @@
  *      (e.g. a subagent running without an interactive approval channel).
  *   4. Strip user-disabled tools (settings dashboard toggle).
  *   5. Strip tools whose external dependency is unavailable (probed at startup).
- *   6. Auto-inject conditional tools (memory, odyssey, etc.) registered at startup;
+ *   6. Auto-inject conditional tools (memory, goal, etc.) registered at startup;
  *      injected tools are subject to delegation and approval gates but bypass
  *      the disabled/unavailable filters (they are runtime infrastructure, not
  *      user-selectable tools).
