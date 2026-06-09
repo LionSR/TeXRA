@@ -1,14 +1,15 @@
-// Regression test for the width-adaptive `<Static>` user-message band
-// (TranscriptEntry full-width reverse-video band + the entry Static remount in
-// StaticConversationTranscript). Renders a minimal Ink app reproducing the pattern to
-// an in-memory fake stdout, simulates a terminal resize by bumping `columns` and
-// emitting `resize`, and asserts the highlighted band reflows to the NEW width
-// instead of staying baked at the original width.
+// Regression test for the patched Ink resize repaint path. Renders a minimal
+// Ink app with a deliberately remounted `<Static>` band to an in-memory fake
+// stdout, simulates a terminal resize by bumping `columns` and emitting
+// `resize`, and asserts the highlighted band reflows to the NEW width instead
+// of staying baked at the original width.
 //
 // This exercises the patched Ink resize full-repaint + the `<Static>` remount
-// (`handleStaticChange` regenerates `fullStaticOutput` at the new width) the
-// feature depends on — without a pty (node-pty's posix_spawn is unavailable in
-// sandboxed CI; the existing InkResizePatch test uses a recording stream too).
+// (`handleStaticChange` regenerates `fullStaticOutput` at the new width) without
+// a pty (node-pty's posix_spawn is unavailable in sandboxed CI; the existing
+// InkResizePatch test uses a recording stream too). The main transcript does
+// not use this pattern for historical rows, because terminal scrollback is
+// append-only and remounting old rows duplicates finalized output.
 
 // Set before Ink/chalk load so reverse-video SGR (`ESC[7m`) is actually emitted
 // to the non-TTY fake stdout; otherwise chalk no-ops `inverse` and the band has

@@ -164,7 +164,7 @@ export class InstructionPanel extends LitElement {
         margin-bottom: var(--wa-space-3xs);
         line-height: var(--line-height-normal);
         flex-wrap: wrap;
-        min-height: 22px;
+        min-height: var(--height-control-compact);
       }
 
       .instruction-header-leading {
@@ -234,7 +234,7 @@ export class InstructionPanel extends LitElement {
 
       .session-hint-time {
         color: var(--wa-color-text-quiet);
-        opacity: 0.85;
+        opacity: var(--opacity-normal);
       }
 
       .session-hint-dismiss {

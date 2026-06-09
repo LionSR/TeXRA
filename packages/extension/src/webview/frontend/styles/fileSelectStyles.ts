@@ -83,8 +83,8 @@ export const fileSelectLayoutStyles = css`
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
+    width: var(--height-control-compact);
+    height: var(--height-control-compact);
     color: var(--color-text-secondary);
     flex-shrink: 0;
   }
