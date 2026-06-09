@@ -388,9 +388,8 @@ Best practices:
 
     // If a goal is already in flight on this stream, retarget it at
     // the newly approved plan instead of silently leaving the loop driving
-    // the stale objective. `editObjective` resets the continuation budget so
-    // the new plan gets a fresh cap regardless of whether the prior goal
-    // was active or paused — see goalStore.editObjective for the rationale.
+    // the stale objective. The existing cost cap stays with the running goal;
+    // retargeting changes intent, not the user's approved spend envelope.
     const existing = GoalStore.getForStream(streamId);
     if (isGoalInFlight(existing)) {
       try {
