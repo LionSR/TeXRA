@@ -10,14 +10,15 @@ describe('FollowUpQueue', () => {
   it('batches visible follow-ups for normal user input', async () => {
     const queue = new FollowUpQueue();
 
-    queue.enqueue('first');
-    queue.enqueue('second');
+    queue.enqueue({ text: 'first' });
+    queue.enqueue({ text: 'second' });
 
     await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
-      items: ['first', 'second'],
-      displayItems: ['first', 'second'],
+      items: [
+        { text: 'first', origin: 'user' },
+        { text: 'second', origin: 'user' },
+      ],
       synthetic: false,
-      mediaFiles: [],
     });
   });
 
@@ -25,53 +26,85 @@ describe('FollowUpQueue', () => {
     const queue = new FollowUpQueue();
 
     queue.enqueueSynthetic('compact now');
-    queue.enqueue('user text');
+    queue.enqueue({ text: 'user text' });
 
     expect(queue.getAll()).toEqual(['user text']);
 
     await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
-      items: ['compact now'],
-      displayItems: ['compact now'],
+      items: [{ text: 'compact now', origin: 'synthetic' }],
       synthetic: true,
-      mediaFiles: [],
     });
     await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
-      items: ['user text'],
-      displayItems: ['user text'],
+      items: [{ text: 'user text', origin: 'user' }],
       synthetic: false,
-      mediaFiles: [],
     });
   });
 
-  it('carries media file paths and flattens them across a visible batch', async () => {
+  it('carries media file paths on their own visible batch items', async () => {
     const queue = new FollowUpQueue();
 
-    queue.enqueue('look at this', ['/tmp/pasted/a.png']);
-    queue.enqueue('and this', ['/tmp/pasted/b.png']);
+    queue.enqueue({
+      text: 'look at this',
+      mediaFiles: ['/tmp/pasted/a.png'],
+    });
+    queue.enqueue({ text: 'and this', mediaFiles: ['/tmp/pasted/b.png'] });
 
     await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
-      items: ['look at this', 'and this'],
-      displayItems: ['look at this', 'and this'],
+      items: [
+        {
+          text: 'look at this',
+          mediaFiles: ['/tmp/pasted/a.png'],
+          origin: 'user',
+        },
+        {
+          text: 'and this',
+          mediaFiles: ['/tmp/pasted/b.png'],
+          origin: 'user',
+        },
+      ],
       synthetic: false,
-      mediaFiles: ['/tmp/pasted/a.png', '/tmp/pasted/b.png'],
     });
   });
 
   it('keeps injected text separate from display text', async () => {
     const queue = new FollowUpQueue();
 
-    queue.enqueue(
-      '<skill_activation>hidden</skill_activation>',
-      undefined,
-      'fix theorem',
-    );
+    queue.enqueue({
+      text: '<skill_activation>hidden</skill_activation>',
+      displayText: 'fix theorem',
+    });
 
     expect(queue.getAll()).toEqual(['fix theorem']);
     await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
-      items: ['<skill_activation>hidden</skill_activation>'],
-      displayItems: ['fix theorem'],
+      items: [
+        {
+          text: '<skill_activation>hidden</skill_activation>',
+          displayText: 'fix theorem',
+          origin: 'user',
+        },
+      ],
       synthetic: false,
-      mediaFiles: [],
+    });
+  });
+
+  it('preserves subagent-result origin on queued delivery items', async () => {
+    const queue = new FollowUpQueue();
+
+    queue.enqueue({
+      text: '<subagent-result>done</subagent-result>',
+      origin: 'subagent_result',
+    });
+    queue.enqueue({ text: 'user correction' });
+
+    await expect(queue.waitAndDrainAll(() => false)).resolves.toEqual({
+      items: [
+        {
+          text: '<subagent-result>done</subagent-result>',
+          origin: 'subagent_result',
+        },
+        { text: 'user correction', origin: 'user' },
+      ],
+      synthetic: false,
     });
   });
 
@@ -85,10 +118,8 @@ describe('FollowUpQueue', () => {
       session.appendSyntheticFollowUp('compact again');
 
       await expect(session.waitForFollowUp(() => false)).resolves.toEqual({
-        items: ['compact now'],
-        displayItems: ['compact now'],
+        items: [{ text: 'compact now', origin: 'synthetic' }],
         synthetic: true,
-        mediaFiles: [],
       });
       expect(session.hasQueuedFollowUp()).toBe(false);
     } finally {
@@ -107,10 +138,8 @@ describe('FollowUpQueue', () => {
       session.appendSyntheticFollowUp('compact after interrupt');
 
       await expect(session.waitForFollowUp(() => false)).resolves.toEqual({
-        items: ['compact after interrupt'],
-        displayItems: ['compact after interrupt'],
+        items: [{ text: 'compact after interrupt', origin: 'synthetic' }],
         synthetic: true,
-        mediaFiles: [],
       });
     } finally {
       session.dispose();
@@ -123,13 +152,20 @@ describe('FollowUpQueue', () => {
     );
 
     try {
-      session.appendFollowUp('describe the figure', ['/tmp/pasted/fig.png']);
+      session.appendFollowUp({
+        text: 'describe the figure',
+        mediaFiles: ['/tmp/pasted/fig.png'],
+      });
 
       await expect(session.waitForFollowUp(() => false)).resolves.toEqual({
-        items: ['describe the figure'],
-        displayItems: ['describe the figure'],
+        items: [
+          {
+            text: 'describe the figure',
+            mediaFiles: ['/tmp/pasted/fig.png'],
+            origin: 'user',
+          },
+        ],
         synthetic: false,
-        mediaFiles: ['/tmp/pasted/fig.png'],
       });
     } finally {
       session.dispose();

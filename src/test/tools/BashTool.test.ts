@@ -34,6 +34,7 @@ import type { ExecResult } from '@agent/types/ResultTypes';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { StreamTabId } from '@shared/schemas';
 import { BashTool } from '@tools/bash';
+import { TaskRunFileService } from '@utils/files';
 import * as execUtils from '@utils/system/execUtils';
 
 // Type imports
@@ -172,6 +173,7 @@ describe('BashTool', () => {
       runtimeHost: noopAgentRuntimeHost,
       streamStatus: new StreamStatusRegistry(),
       client: {} as OpenAI,
+      fileService: new TaskRunFileService('test-execution-id'),
       toolRegistry: new MapToolRegistry({ bash: bashTool }),
       checkInterruption: () => false,
       setAbortController: () => {},
