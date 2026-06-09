@@ -44,6 +44,8 @@ export interface StatusBarSegment {
   readonly badge?: boolean;
   readonly badgeColor?: 'red' | 'yellow';
   readonly compactPriority?: number;
+  /** Purely visual glyphs hidden from screen readers (`aria-hidden`). */
+  readonly decorative?: boolean;
 }
 
 export interface StatusBarDisplayInput {
@@ -614,7 +616,9 @@ const BYPASS_BADGES: ReadonlyArray<{
 export function buildStatusBarDisplay(
   input: StatusBarDisplayInput,
 ): StatusBarDisplay {
-  const left: StatusBarSegment[] = [{ text: '◆', color: 'cyan' }];
+  const left: StatusBarSegment[] = [
+    { text: '◆', color: 'cyan', decorative: true },
+  ];
 
   if (input.pendingExitHint) {
     left.push({ text: PENDING_EXIT_HINT_TEXT, color: 'yellow' });
@@ -816,6 +820,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
             ) : (
               <Text
                 key={`${segment.text}-${index}`}
+                aria-hidden={segment.decorative}
                 color={segment.color === 'dim' ? undefined : segment.color}
                 dimColor={segment.color === 'dim'}
               >
