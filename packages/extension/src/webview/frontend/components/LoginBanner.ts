@@ -39,13 +39,13 @@ export class LoginBanner extends LitElement {
 
       .banner-lead {
         font-size: var(--font-size-sm);
-        opacity: 0.85;
+        opacity: var(--opacity-normal);
         line-height: var(--line-height-normal, 1.4);
       }
 
       .banner-fineprint {
         font-size: var(--font-size-xs);
-        opacity: 0.6;
+        opacity: var(--opacity-muted);
         line-height: var(--line-height-normal, 1.4);
       }
 
