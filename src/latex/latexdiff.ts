@@ -150,7 +150,7 @@ export class LaTeXdiffService {
       await flexibleFS.ensureDir(pathToLocation(outputDirectory));
       const outputLocation = pathToLocation(outputPath);
       await flexibleFS.write(outputLocation, result.stdout);
-      await this.fileProcessor.processDiffFile(outputLocation);
+      await this.fileProcessor.processDiffFile(outputLocation, editedLocation);
 
       logger.debug(
         this.channel,
@@ -203,7 +203,10 @@ export class LaTeXdiffService {
       // latexdiff-vc writes output alongside the input, relative to cwd
       const diffFilePath = filePath.replace('.tex', `-diff${commitHash}.tex`);
       const outputPath = path.join(cwd, diffFilePath);
-      await this.fileProcessor.processDiffFile(pathToLocation(outputPath));
+      await this.fileProcessor.processDiffFile(
+        pathToLocation(outputPath),
+        inputLocation,
+      );
 
       const diffFileName = path.basename(diffFilePath);
 
