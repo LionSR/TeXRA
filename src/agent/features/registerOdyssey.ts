@@ -1,8 +1,7 @@
 import { maybeBuildOdysseyContinuation } from '@agent/odyssey';
 import { idleContinuationRegistry } from '@agent/runtime/idleContinuation';
 import { toolInjectionRegistry } from '@agent/runtime/toolInjection';
-import { isOdysseyEnabled } from '@tools/odyssey/odysseyFeatureFlag';
-import { OdysseyStore } from '@tools/odyssey/odysseyStore';
+import { OdysseyStore, isOdysseyEnabled } from '@tools/odyssey';
 
 export function registerOdysseyFeature(): void {
   // The unified `plan` tool owns both planning and odyssey lifecycle commands

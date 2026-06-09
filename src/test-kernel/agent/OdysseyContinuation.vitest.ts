@@ -37,27 +37,47 @@ async function installPlatformWithConfig(
 }
 
 describe('isOdysseyEnabled', () => {
-  it('defaults on when neither the canonical nor legacy key is set', async () => {
-    await installPlatformWithConfig({});
+  it.each([
+    {
+      name: 'defaults on when neither key is set',
+      config: {},
+      expected: true,
+    },
+    {
+      name: 'honors explicit canonical false',
+      config: { [ODYSSEY_FEATURE_FLAG_KEY]: false },
+      expected: false,
+    },
+    {
+      name: 'honors explicit legacy false when canonical is absent',
+      config: { [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: false },
+      expected: false,
+    },
+    {
+      name: 'honors explicit legacy true when canonical is absent',
+      config: { [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: true },
+      expected: true,
+    },
+    {
+      name: 'lets canonical true override legacy false',
+      config: {
+        [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: false,
+        [ODYSSEY_FEATURE_FLAG_KEY]: true,
+      },
+      expected: true,
+    },
+    {
+      name: 'lets canonical false override legacy true',
+      config: {
+        [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: true,
+        [ODYSSEY_FEATURE_FLAG_KEY]: false,
+      },
+      expected: false,
+    },
+  ])('$name', async ({ config, expected }) => {
+    await installPlatformWithConfig(config);
 
-    expect(isOdysseyEnabled()).toBe(true);
-  });
-
-  it('honors the explicit legacy key when the canonical key is absent', async () => {
-    await installPlatformWithConfig({
-      [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: false,
-    });
-
-    expect(isOdysseyEnabled()).toBe(false);
-  });
-
-  it('lets the canonical key override the legacy key', async () => {
-    await installPlatformWithConfig({
-      [LEGACY_ODYSSEY_FEATURE_FLAG_KEY]: false,
-      [ODYSSEY_FEATURE_FLAG_KEY]: true,
-    });
-
-    expect(isOdysseyEnabled()).toBe(true);
+    expect(isOdysseyEnabled()).toBe(expected);
   });
 });
 
