@@ -1,8 +1,11 @@
 import { css, type CSSResult } from 'lit';
 
 // NOTE: the hand-rolled badge/pill rules formerly here (.badge, .category-badge,
-// .agent-category-badge, .tinted-badge) were retired in favor of native <wa-badge>.
-// What remains is search-highlight and empty-state styling shared by list views.
+// .agent-category-badge, .tinted-badge) were retired in favor of native <wa-badge>,
+// and the dead .no-data/.loading empty-state rules in favor of renderEmptyState.
+// What remains is the search-match highlight (mark.js) used by list views.
+// TODO: rename this export to searchHighlightStyles and drop it from importers
+// that no longer render <mark> (only HistoryItemElement still needs it).
 
 const searchHighlightStyles: CSSResult = css`
   mark {
@@ -18,21 +21,4 @@ const searchHighlightStyles: CSSResult = css`
   }
 `;
 
-const emptyStateStyles: CSSResult = css`
-  .no-data {
-    color: var(--color-text-secondary);
-    font-style: italic;
-    text-align: center;
-    padding: var(--wa-space-l);
-  }
-
-  .loading {
-    color: var(--color-text-secondary);
-    font-style: italic;
-  }
-`;
-
-export const badgeStyles: CSSResult[] = [
-  searchHighlightStyles,
-  emptyStateStyles,
-];
+export const badgeStyles: CSSResult[] = [searchHighlightStyles];
