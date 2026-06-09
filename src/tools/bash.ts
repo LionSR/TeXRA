@@ -16,9 +16,9 @@ import {
   interruptRegistry,
   type IInterruptible,
 } from '@agent/runtime/InterruptRegistry';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 
 // Local imports - tools
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
@@ -313,7 +313,7 @@ export class BashTool extends defineTool({
           stderrTail,
         );
         await store.writeReport(msg);
-        ToolUseFollowUpQueue.enqueue(parentStreamId, {
+        await sendFollowUp(parentStreamId, {
           text: msg,
           origin: 'subagent_result',
         });
@@ -328,7 +328,7 @@ export class BashTool extends defineTool({
 
         const msg = formatBashError(executionId, command, err);
         await getExecutionStore(executionId).writeReport(msg);
-        ToolUseFollowUpQueue.enqueue(parentStreamId, {
+        await sendFollowUp(parentStreamId, {
           text: msg,
           origin: 'subagent_result',
         });
