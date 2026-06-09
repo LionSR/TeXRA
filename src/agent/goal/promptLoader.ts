@@ -1,14 +1,14 @@
 /**
- * Loader for the packaged Odyssey prompt templates
- * (`<extension>/resources/odyssey/odyssey.yaml`).
+ * Loader for the packaged Goal prompt templates
+ * (`<extension>/resources/goal/goal.yaml`).
  *
  * Mirrors the shape of `src/agent/runtime/polishModel.ts`: each host calls
- * `initializeOdysseyPrompts(extensionPath)` once at startup with the path
+ * `initializeGoalPrompts(extensionPath)` once at startup with the path
  * to its own resource bundle. The agent code path is host-neutral and
  * reads through this loader; no `vscode` import is required.
  *
  * When the loader has not been initialized (e.g. on a host that has not
- * yet wired Odyssey, or under tests), template lookups fall back to the
+ * yet wired Goal, or under tests), template lookups fall back to the
  * inline copy in `inlineTemplates` so the continuation loop still works.
  */
 import * as path from 'path';
@@ -19,24 +19,24 @@ import { z } from 'zod';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 
-const OdysseyPromptsYamlSchema = z.object({
+const GoalPromptsYamlSchema = z.object({
   continuation: z.object({ template: z.string().min(1) }),
   objective_updated: z.object({ template: z.string().min(1) }),
 });
 
-type OdysseyPrompts = z.infer<typeof OdysseyPromptsYamlSchema>;
+type GoalPrompts = z.infer<typeof GoalPromptsYamlSchema>;
 
-// Trailing newline matches the YAML `|` (clip) chomping in odyssey.yaml so
+// Trailing newline matches the YAML `|` (clip) chomping in goal.yaml so
 // the rendered prompt is byte-identical across host-loaded and inline paths.
-// Keep this in sync with packages/extension/resources/odyssey/odyssey.yaml —
+// Keep this in sync with packages/extension/resources/goal/goal.yaml —
 // the YAML is the source of truth; this fallback fires only when the loader
 // hasn't been wired (e.g. in tests or under a host that hasn't called
-// initializeOdysseyPrompts).
-const inlineTemplates: OdysseyPrompts = {
+// initializeGoalPrompts).
+const inlineTemplates: GoalPrompts = {
   continuation: {
     template:
       [
-        '<odyssey_context>',
+        '<goal_context>',
         'Autonomous objective active. Keep working until it is verifiably done.',
         'Do not end your turn to summarize progress or hand back control; only',
         "stop when the objective's end state is true and you have inspected real",
@@ -58,13 +58,13 @@ const inlineTemplates: OdysseyPrompts = {
         "  behavior) for every requirement. Match the check's scope to the",
         "  requirement's scope, and gather stronger evidence when it is weak or",
         '  indirect.',
-        '</odyssey_context>',
+        '</goal_context>',
       ].join('\n') + '\n',
   },
   objective_updated: {
     template:
       [
-        '<odyssey_context>',
+        '<goal_context>',
         'The user has edited the objective. The new objective supersedes any',
         'previous one.',
         '',
@@ -75,48 +75,43 @@ const inlineTemplates: OdysseyPrompts = {
         'Re-orient against the new objective. Drop work that only served the',
         "previous one. Consider it done only when the new objective's end state",
         'is true and verified against current evidence.',
-        '</odyssey_context>',
+        '</goal_context>',
       ].join('\n') + '\n',
   },
 };
 
 let extensionPath: string | null = null;
-let cached: OdysseyPrompts | null = null;
+let cached: GoalPrompts | null = null;
 
 /**
- * Register the host's resource root. The Odyssey YAML is resolved at
- * `<extensionPath>/resources/odyssey/odyssey.yaml` on first use.
+ * Register the host's resource root. The Goal YAML is resolved at
+ * `<extensionPath>/resources/goal/goal.yaml` on first use.
  *
  * Safe to call multiple times; later calls replace the path and bust the
  * cache so a previously-loaded inline fallback won't stick once the host
  * is wired.
  */
-export function initializeOdysseyPrompts(extPath: string): void {
+export function initializeGoalPrompts(extPath: string): void {
   extensionPath = extPath;
   cached = null;
 }
 
-async function loadPrompts(): Promise<OdysseyPrompts> {
+async function loadPrompts(): Promise<GoalPrompts> {
   if (cached) return cached;
   if (!extensionPath) {
     cached = inlineTemplates;
     return cached;
   }
   try {
-    const yamlPath = path.join(
-      extensionPath,
-      'resources',
-      'odyssey',
-      'odyssey.yaml',
-    );
+    const yamlPath = path.join(extensionPath, 'resources', 'goal', 'goal.yaml');
     const content = await AbsoluteFS.read(yamlPath);
-    cached = OdysseyPromptsYamlSchema.parse(yaml.parse(content));
+    cached = GoalPromptsYamlSchema.parse(yaml.parse(content));
   } catch (err) {
     // Fall back to inline templates, but warn so a broken/missing bundled
-    // odyssey.yaml is detectable rather than silently masked.
+    // goal.yaml is detectable rather than silently masked.
     logger.warn(
-      'OdysseyPromptLoader',
-      `Failed to load bundled odyssey.yaml; using inline prompt templates: ${
+      'GoalPromptLoader',
+      `Failed to load bundled goal.yaml; using inline prompt templates: ${
         err instanceof Error ? err.message : String(err)
       }`,
     );

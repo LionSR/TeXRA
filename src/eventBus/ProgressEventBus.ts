@@ -181,12 +181,12 @@ export interface ProgressEventPayloads {
    *  child streams that should auto-close once their work is done). */
   removeStream: { streamId: StreamTabId };
 
-  /** Emitted whenever an Odyssey record mutates (start/pause/resume/
+  /** Emitted whenever a Goal record mutates (start/pause/resume/
    *  complete/abandon/edit-objective/cap-reached) so UI surfaces (header
    *  chip, settings tab, progress board) can refresh. The agent owns state
    *  transitions through the plan tool; the bus event is how those flow
    *  back to the UI. */
-  odysseyStateChanged: { streamId: StreamTabId };
+  goalStateChanged: { streamId: StreamTabId };
 
   extensionDeactivating: undefined;
 

@@ -38,7 +38,7 @@ import {
 import { handleExternalInquiryAction } from '@tools/inquiry';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import { handleProgressViewBashApprovalAction } from '@tools/approval';
-import { OdysseyStore, isOdysseyInFlight } from '@tools/odyssey';
+import { GoalStore, isGoalInFlight } from '@tools/goal';
 import { persistOpenTurnDraft } from '@tools/inquiry/externalInquiryStorage';
 import {
   createExternalLocation,
@@ -115,19 +115,19 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
 
     const unsubscribeRemoveStream = bus.on('removeStream', ({ streamId }) => {
       void this.streamLifecycleController.deleteStream(streamId);
-      void OdysseyStore.forget(streamId);
+      void GoalStore.forget(streamId);
     });
     context.subscriptions.push({ dispose: unsubscribeRemoveStream });
 
-    const unsubscribeOdyssey = bus.on('odysseyStateChanged', ({ streamId }) => {
-      const odyssey = OdysseyStore.getForStream(streamId);
-      this.provider.webviewUpdater.updateOdysseyActive(
+    const unsubscribeGoal = bus.on('goalStateChanged', ({ streamId }) => {
+      const goal = GoalStore.getForStream(streamId);
+      this.provider.webviewUpdater.updateGoalActive(
         streamId,
-        isOdysseyInFlight(odyssey),
-        { status: odyssey?.status, objective: odyssey?.objective },
+        isGoalInFlight(goal),
+        { status: goal?.status, objective: goal?.objective },
       );
     });
-    context.subscriptions.push({ dispose: unsubscribeOdyssey });
+    context.subscriptions.push({ dispose: unsubscribeGoal });
   }
 
   /**
@@ -748,9 +748,9 @@ export class ProgressViewMessageHandler extends BaseViewMessageHandler<
           action: 'approve',
         });
         break;
-      case 'approve_and_odyssey':
+      case 'approve_and_goal':
         runCoordinatorBridge.resolvePlanApproval(approvalId, {
-          action: 'approve_and_odyssey',
+          action: 'approve_and_goal',
         });
         break;
       case 'reject':

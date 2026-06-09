@@ -16,7 +16,7 @@ function readSource(path: string): string {
 }
 
 describe('progress toolbar icon consistency', () => {
-  it('uses registered and semantically specific icons for Odyssey and compaction', () => {
+  it('uses registered and semantically specific icons for Goal and compaction', () => {
     const constants = readSource(
       'packages/extension/src/progressView/frontend/constants.ts',
     );
@@ -25,8 +25,8 @@ describe('progress toolbar icon consistency', () => {
     );
     const iconRegistry = readSource('src/shared/wa/webAwesomeIcons.ts');
 
-    // Compass: Odyssey is no longer a toolbar toggle button — it's a passive
-    // header chip surfaced when the agent enters Odyssey mode through the
+    // Compass: Goal is no longer a toolbar toggle button — it's a passive
+    // header chip surfaced when the agent enters Goal mode through the
     // shared Web Awesome icon helper.
     expect(streamHeader).toContain("waIcon('compass')");
     expect(iconRegistry).toContain('compass: faCompass');

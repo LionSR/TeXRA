@@ -69,7 +69,7 @@ describe('work plan granularity feedback', () => {
     );
     expect(result.output).toContain(`1. ${todoItem.content}`);
     expect(result.output).toContain(
-      'Use plan for long-running goal/odyssey milestones and todo_write for microscopic execution steps.',
+      'Use plan for long-running goal/goal milestones and todo_write for microscopic execution steps.',
     );
     expect(result.output).not.toContain('todo is completed');
     expect(result.output).not.toContain('plan is completed');
