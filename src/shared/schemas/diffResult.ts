@@ -97,7 +97,7 @@ const LegacyLocationsSchema = z
 function parseRoundFromLabel(label: string | undefined): number | null {
   if (typeof label !== 'string') return null;
   const match = label.match(/\[r(\d+)\]/);
-  return match ? parseInt(match[1], 10) : null;
+  return match ? Number.parseInt(match[1], 10) : null;
 }
 
 /** Legacy DiffResult format - transforms to DiffResultDisplay on parse */

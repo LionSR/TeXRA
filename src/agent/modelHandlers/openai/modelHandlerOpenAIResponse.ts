@@ -2154,7 +2154,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     if (thoughtContent) {
       this.logger.debug(
-        `OpenAI Responses reasoning preview (${reasoningItems.length} item(s)): ${thoughtContent.substring(0, K_SLICE)}...`,
+        `OpenAI Responses reasoning preview (${reasoningItems.length} item(s)): ${thoughtContent.slice(0, K_SLICE)}...`,
       );
     }
 
