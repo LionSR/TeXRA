@@ -213,17 +213,17 @@ export class StreamHeader extends LitElement {
 
       /* Native wa-badge (brand=active / warning=paused, quiet 'filled'
          appearance), compacted to the prior chip padding. */
-      .odyssey-chip {
+      .goal-chip {
         flex-shrink: 0;
       }
 
-      .odyssey-chip::part(base) {
+      .goal-chip::part(base) {
         gap: var(--wa-space-3xs);
         padding: 0 var(--wa-space-2xs);
         font-weight: var(--font-weight-medium);
       }
 
-      .odyssey-chip wa-icon {
+      .goal-chip wa-icon {
         font-size: var(--font-size-xs);
       }
 
@@ -279,9 +279,9 @@ export class StreamHeader extends LitElement {
   @property({ attribute: false }) progress: ConversationProgress | undefined;
   @property({ attribute: false }) yoloActive = false;
   @property({ attribute: false }) superYoloActive = false;
-  @property({ attribute: false }) odysseyActive = false;
-  @property({ attribute: false }) odysseyStatus = '';
-  @property({ attribute: false }) odysseyObjective = '';
+  @property({ attribute: false }) goalActive = false;
+  @property({ attribute: false }) goalStatus = '';
+  @property({ attribute: false }) goalObjective = '';
 
   override render(): TemplateResult | typeof nothing {
     if (!this.stream) {
@@ -320,7 +320,7 @@ export class StreamHeader extends LitElement {
                 })}
               ></span>
             </wa-tooltip>
-            ${this.renderOdysseyChip()} ${this.renderProgressBadge()}
+            ${this.renderGoalChip()} ${this.renderProgressBadge()}
           </div>
           <div class="header-actions">
             <wa-button-group
@@ -389,15 +389,15 @@ export class StreamHeader extends LitElement {
     return { disabled, hidden };
   }
 
-  private renderOdysseyChip(): TemplateResult | typeof nothing {
-    if (!this.odysseyActive) return nothing;
-    const isPaused = this.odysseyStatus === 'paused';
-    const label = isPaused ? 'Odyssey paused' : 'Odyssey';
-    const tooltip = this.odysseyObjective
-      ? `${label}: ${this.odysseyObjective}`
+  private renderGoalChip(): TemplateResult | typeof nothing {
+    if (!this.goalActive) return nothing;
+    const isPaused = this.goalStatus === 'paused';
+    const label = isPaused ? 'Goal paused' : 'Goal';
+    const tooltip = this.goalObjective
+      ? `${label}: ${this.goalObjective}`
       : label;
     return html`<wa-badge
-      class="odyssey-chip"
+      class="goal-chip"
       variant=${isPaused ? 'warning' : 'brand'}
       appearance="filled"
       title=${tooltip}

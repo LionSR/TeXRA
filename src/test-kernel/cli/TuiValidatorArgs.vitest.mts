@@ -78,14 +78,14 @@ describe('TUI validator args', () => {
     const result = runValidator([
       '--list-selected',
       'compact-user-question',
-      'plan-approval-odyssey',
+      'plan-approval-goal',
       'slash-palette',
     ]);
 
     expect(result.status).toBe(0);
     expect(result.stdout.trim().split('\n')).toEqual([
       'compact-user-question',
-      'plan-approval-odyssey',
+      'plan-approval-goal',
       'slash-palette',
     ]);
     expect(result.stderr).not.toContain('building tui-harness bundle');
@@ -154,13 +154,13 @@ describe('TUI validator args', () => {
     const result = runValidator([
       '--',
       '--list-selected',
-      'plan-approval-odyssey',
+      'plan-approval-goal',
       'compact-user-question',
     ]);
 
     expect(result.status).toBe(0);
     expect(result.stdout.trim().split('\n')).toEqual([
-      'plan-approval-odyssey',
+      'plan-approval-goal',
       'compact-user-question',
     ]);
     expect(result.stderr).toBe('');

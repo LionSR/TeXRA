@@ -5,7 +5,7 @@
 **Date:** 2026-05-15
 **Related issue:** [#4023 — external_inquiry should not block](https://github.com/LionSR/TeXRA/issues/4023)
 
-> **Naming.** The model-facing tool is renamed from `external_inquiry` to `inquiry` — shorter, parallel with `odyssey`/`memory`/`executions`, and "external" was implicit. Internal class/file names (`ExternalInquiryTool.ts`, `ExternalInquiryPanel.ts`, schema names like `ExternalInquiryThreadManifestSchema`) keep their current names for diff-locality; a mechanical rename pass is an independent follow-up.
+> **Naming.** The model-facing tool is renamed from `external_inquiry` to `inquiry` — shorter, parallel with `goal`/`memory`/`executions`, and "external" was implicit. Internal class/file names (`ExternalInquiryTool.ts`, `ExternalInquiryPanel.ts`, schema names like `ExternalInquiryThreadManifestSchema`) keep their current names for diff-locality; a mechanical rename pass is an independent follow-up.
 
 ## 1. Summary
 
@@ -13,7 +13,7 @@ Today the `external_inquiry` tool blocks the agent's tool-use cycle on an in-mem
 
 This PRD makes the tool — renamed `inquiry` — **non-blocking and durable**. The tool returns `dispatched` immediately. The user can paste the answer hours later — even after a reload. When the answer lands, a continuation message is injected into the originating stream's follow-up queue and the agent auto-resumes. Multiple inquiries dispatched in the same turn live independently; each resumes the agent on arrival.
 
-Mechanism rides on the existing follow-up pipeline (`src/agent/toolUse/ToolUseFollowUp.ts` → `sendFollowUp`) plus the host's `texra.resumeAgent` for the post-reload case — no new runtime, no polling, no background worker. (Odyssey writes to `ToolUseFollowUpQueue.enqueue` directly, which works for its always-in-process case but does **not** cover post-reload resume — see §6.5.)
+Mechanism rides on the existing follow-up pipeline (`src/agent/toolUse/ToolUseFollowUp.ts` → `sendFollowUp`) plus the host's `texra.resumeAgent` for the post-reload case — no new runtime, no polling, no background worker. (Goal writes to `ToolUseFollowUpQueue.enqueue` directly, which works for its always-in-process case but does **not** cover post-reload resume — see §6.5.)
 
 ## 2. Goals
 
@@ -276,7 +276,7 @@ async function emitInquiryThreadUpdate(
 
 The Background Tasks UI consumes `resumeOutcome` to render the appropriate badge (e.g. `parent_finished` → `answered · parent finished`). All UI changes are silent — no toasts, no host-level dialogs.
 
-The injected text is enqueued as a **user-role** message (same role `sendFollowUp` uses for typed-in follow-ups and Odyssey continuations).
+The injected text is enqueued as a **user-role** message (same role `sendFollowUp` uses for typed-in follow-ups and Goal continuations).
 
 **Four state cases**, end-to-end:
 
@@ -640,7 +640,7 @@ Mocha integration (`src/test/`):
 
 ## 13. Subcommand surface (endpoint tool shape)
 
-Reshape the tool (now `inquiry`) from a one-shot dispatch into a small command-style endpoint, parallel to `odyssey`, `memory`, `executions`. Single tool name, discriminated union input.
+Reshape the tool (now `inquiry`) from a one-shot dispatch into a small command-style endpoint, parallel to `goal`, `memory`, `executions`. Single tool name, discriminated union input.
 
 ### 13.1 Commands
 
