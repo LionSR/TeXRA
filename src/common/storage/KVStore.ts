@@ -54,6 +54,8 @@ function createStorageStore(dir: string): KeyvStoreAdapter {
         () => StorageFS.read(keyToPath(dir, key)),
         undefined,
       );
+      // Keyv expects the serialized store value here and applies our
+      // `deserialize` hook before returning from KVStore.read().
       return raw as StoredData<Value> | undefined;
     },
 
