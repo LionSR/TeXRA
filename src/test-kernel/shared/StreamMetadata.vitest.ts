@@ -9,17 +9,17 @@ import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 
 describe('buildStreamMetadata', () => {
   it('fills backend-owned defaults for a stream state metadata payload', () => {
-    expect(
-      buildStreamMetadata({ kind: AgentCategory.Workflow }),
-    ).toMatchObject({
-      kind: AgentCategory.Workflow,
-      status: STREAM_STATUS.READY,
-      conversationProgress: { conversationTurns: 0, toolCallCount: 0 },
-      activeSubagents: [],
-      finishedSubagentCount: 0,
-      activeProcesses: [],
-      finishedProcessCount: 0,
-    });
+    expect(buildStreamMetadata({ kind: AgentCategory.Workflow })).toMatchObject(
+      {
+        kind: AgentCategory.Workflow,
+        status: STREAM_STATUS.READY,
+        conversationProgress: { conversationTurns: 0, toolCallCount: 0 },
+        activeSubagents: [],
+        finishedSubagentCount: 0,
+        activeProcesses: [],
+        finishedProcessCount: 0,
+      },
+    );
   });
 
   it('preserves supplied status, progress, child badges, and timestamps', () => {
