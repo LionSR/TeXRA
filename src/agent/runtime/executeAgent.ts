@@ -43,13 +43,13 @@ import { executionRegistry } from './executionRegistry';
 import { createInterruptCallbacks } from './InterruptManager';
 import { generateSessionDescription } from './sessionDescription';
 import { getProgressViewBridge } from './ProgressViewBridge';
-import type { AgentRuntimeHost } from './AgentRuntimeHost';
 import {
   AgentFlowError,
   type AgentFlowResult,
   type CompileFailureSummary,
   type OutputFileSummary,
 } from './AgentFlowResult';
+import type { AgentRuntimeHost } from './AgentRuntimeHost';
 
 const CHANNEL = 'executeAgent';
 const logger = createChannelTrace(CHANNEL);
