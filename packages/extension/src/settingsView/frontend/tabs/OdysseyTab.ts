@@ -159,13 +159,10 @@ export class OdysseyTab extends LitElement {
     const metaParts: MetaPart[] = [
       html`<span class="stream-id">${item.streamId}</span>`,
       html`<span
-        title="Wall-clock duration from Odyssey start to completion, or to now while it is active"
+        title="Wall-clock duration from Odyssey start to now while it is active, or to when it was last touched"
         >duration ${formatOdysseyTime(odysseyDurationMs(item))}</span
       >`,
     ];
-    if (item.continuationCount > 0) {
-      metaParts.push(`${item.continuationCount} continuations`);
-    }
     return html`
       <div
         class=${'odyssey-row' + (inFlight ? ' is-clickable' : '')}

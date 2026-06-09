@@ -316,7 +316,7 @@ describe('PlanTool — pause/complete (odyssey lifecycle)', () => {
     expect(OdysseyStore.getForStream(STREAM_ID)?.status).toBe('paused');
   });
 
-  it('completes an active odyssey with a verification reason', async () => {
+  it('completes an active odyssey by forgetting the record', async () => {
     await OdysseyStore.start(STREAM_ID, 'Drive the plan to completion.', {
       plan,
     });
@@ -325,21 +325,19 @@ describe('PlanTool — pause/complete (odyssey lifecycle)', () => {
       reason: 'Ran pnpm test; all 142 tests pass.',
     });
     expect(result.isError).toBeFalsy();
-    expect(OdysseyStore.getForStream(STREAM_ID)?.status).toBe('complete');
-    expect(OdysseyStore.getForStream(STREAM_ID)?.completedReason).toContain(
-      'all 142 tests pass',
-    );
+    expect(result.output).toContain('all 142 tests pass');
+    // Completing is `forget()` — a finished odyssey is not archived, so no
+    // record remains and the wait-node loop has nothing to continue.
+    expect(OdysseyStore.getForStream(STREAM_ID)).toBeNull();
   });
 
-  it('refuses to complete an abandoned odyssey', async () => {
-    await OdysseyStore.start(STREAM_ID, 'objective', { plan });
-    await OdysseyStore.setStatus(STREAM_ID, 'abandoned', 'user abandoned');
+  it('complete is a no-op when no odyssey is running', async () => {
     const result = await callTool({
       command: 'complete',
       reason: 'I think I am done.',
     });
-    expect(result.isError).toBe(true);
-    expect(result.error).toMatch(/abandoned/i);
+    expect(result.isError).toBeFalsy();
+    expect(result.summary).toMatch(/no-op/i);
   });
 
   it('pause is a no-op when no odyssey is running', async () => {

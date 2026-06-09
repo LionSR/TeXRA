@@ -14,65 +14,33 @@ export const ODYSSEY_FEATURE_FLAG_KEY = 'texra.odyssey.enabled' as const;
 export const LEGACY_ODYSSEY_FEATURE_FLAG_KEY =
   'texra.experimental.odyssey.enabled' as const;
 
-/** Cap on the history-event ring buffer per Odyssey record (oldest dropped). */
-export const ODYSSEY_HISTORY_LIMIT = 200;
-
 /**
- * Default maximum continuations before the Odyssey auto-pauses for user
- * confirmation. Acts as a safety net so a model that never calls
- * `plan(command="complete")` doesn't loop forever.
+ * An odyssey is a live pursuit: it exists only while the autonomous loop is
+ * running (`active`) or waiting for the user (`paused`). Finishing or
+ * abandoning one drops the record entirely (`OdysseyStore.forget`) rather than
+ * parking it in a terminal state — there is no audit log to preserve.
  */
-export const ODYSSEY_DEFAULT_MAX_CONTINUATIONS = 50;
-
-export const OdysseyStatusSchema = z.enum([
-  'active',
-  'paused',
-  'complete',
-  'abandoned',
-]);
+export const OdysseyStatusSchema = z.enum(['active', 'paused']);
 export type OdysseyStatus = z.infer<typeof OdysseyStatusSchema>;
 
+/**
+ * True when a record exists for the stream. With only `active`/`paused` as
+ * persisted states, any record is an in-flight pursuit; complete/abandon
+ * forget the record instead of transitioning it.
+ */
 export function isOdysseyInFlight(
   odyssey: { status: OdysseyStatus } | null | undefined,
 ): boolean {
-  return odyssey?.status === 'active' || odyssey?.status === 'paused';
+  return odyssey != null;
 }
-
-export const OdysseyEventKindSchema = z.enum([
-  'started',
-  'paused',
-  'resumed',
-  'objective_edited',
-  'completed',
-  'abandoned',
-  'continuation_injected',
-  'continuation_cap_reached',
-]);
-export type OdysseyEventKind = z.infer<typeof OdysseyEventKindSchema>;
-
-export const OdysseyEventSchema = z.object({
-  at: z.iso.datetime(),
-  kind: OdysseyEventKindSchema,
-  detail: z.string().nullish(),
-});
-export type OdysseyEvent = z.infer<typeof OdysseyEventSchema>;
 
 export const OdysseySchema = z.object({
   odysseyId: z.string().min(1),
   streamId: StreamTabIdSchema,
   objective: z.string().min(1),
   status: OdysseyStatusSchema,
-  /** Continuations injected since the last resume / start. */
-  continuationCount: z.int().nonnegative().prefault(0),
-  /** Cap before auto-pause. Reset on resume so each leg gets a fresh budget. */
-  maxContinuations: z
-    .int()
-    .positive()
-    .prefault(ODYSSEY_DEFAULT_MAX_CONTINUATIONS),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-  completedReason: z.string().nullish(),
-  history: z.array(OdysseyEventSchema).default([]),
   /**
    * Structured plan that seeded the odyssey, when it was started from a
    * Plan-tool approval. Pure metadata for UI / inspection — the
@@ -80,6 +48,7 @@ export const OdysseySchema = z.object({
    */
   plan: PlanSchema.nullish(),
 });
+export type Odyssey = z.infer<typeof OdysseySchema>;
 
 /**
  * Wall-clock elapsed time since the odyssey was started.
@@ -117,4 +86,3 @@ export function formatOdysseyTime(ms: number): string {
   if (min > 0) return `${min}m ${sec}s`;
   return `${sec}s`;
 }
-export type Odyssey = z.infer<typeof OdysseySchema>;

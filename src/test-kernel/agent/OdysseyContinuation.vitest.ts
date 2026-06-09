@@ -104,10 +104,11 @@ describe('maybeBuildOdysseyContinuation', () => {
     });
     expect(out).toMatch(/<odyssey_context>/);
     expect(out).toContain('Complete the refactor until pnpm test passes');
-    expect(out).toContain('plan(command="complete")');
-    expect(out).toContain('plan(command="pause")');
-    expect(out).not.toContain('odyssey(complete)');
-    expect(out).not.toContain('odyssey(pause)');
+    expect(out).toContain('Autonomous objective active');
+    // The continuation no longer advertises the model-callable exit verbs;
+    // it steers toward persistence instead.
+    expect(out).not.toContain('plan(command="complete")');
+    expect(out).not.toContain('plan(command="pause")');
   });
 
   it('returns null in subagent mode (parent owns continuation)', async () => {
@@ -157,65 +158,28 @@ describe('maybeBuildOdysseyContinuation', () => {
     expect(out).toBeNull();
   });
 
-  it.each(['paused', 'complete', 'abandoned'] as const)(
-    'returns null when the odyssey status is %s',
-    async (status) => {
-      await OdysseyStore.start(STREAM_ID, 'objective');
-      await OdysseyStore.setStatus(STREAM_ID, status);
-      const out = await maybeBuildOdysseyContinuation({
-        streamId: STREAM_ID,
-        isSubagent: false,
-        hasQueuedFollowUp: false,
-      });
-      expect(out).toBeNull();
-    },
-  );
-
-  it('auto-pauses when continuationCount reaches maxContinuations', async () => {
-    const odyssey = await OdysseyStore.start(STREAM_ID, 'objective');
-    // Drive the count up to the cap.
-    for (let i = 0; i < odyssey.maxContinuations; i++) {
-      await OdysseyStore.recordContinuation(STREAM_ID);
-    }
-    expect(OdysseyStore.getForStream(STREAM_ID)?.continuationCount).toBe(
-      odyssey.maxContinuations,
-    );
-
-    // The next continuation attempt should pause the odyssey, not inject.
+  it('returns null when the odyssey is paused', async () => {
+    await OdysseyStore.start(STREAM_ID, 'objective');
+    await OdysseyStore.setStatus(STREAM_ID, 'paused');
     const out = await maybeBuildOdysseyContinuation({
       streamId: STREAM_ID,
       isSubagent: false,
       hasQueuedFollowUp: false,
     });
     expect(out).toBeNull();
-    const after = OdysseyStore.getForStream(STREAM_ID);
-    expect(after?.status).toBe('paused');
-    expect(
-      after?.history.some((e) => e.kind === 'continuation_cap_reached'),
-    ).toBe(true);
   });
 
-  it('resets continuationCount on resume so each leg gets a fresh budget', async () => {
-    await OdysseyStore.start(STREAM_ID, 'objective');
-    await OdysseyStore.recordContinuation(STREAM_ID);
-    await OdysseyStore.recordContinuation(STREAM_ID);
-    await OdysseyStore.setStatus(STREAM_ID, 'paused');
-    await OdysseyStore.setStatus(STREAM_ID, 'active');
-    expect(OdysseyStore.getForStream(STREAM_ID)?.continuationCount).toBe(0);
-  });
-
-  it('is a pure read — never records continuation_injected itself', async () => {
-    await OdysseyStore.start(STREAM_ID, 'objective');
+  it('is a pure read — leaves the record untouched', async () => {
+    const before = await OdysseyStore.start(STREAM_ID, 'objective');
     await maybeBuildOdysseyContinuation({
       streamId: STREAM_ID,
       isSubagent: false,
       hasQueuedFollowUp: false,
     });
-    const odyssey = OdysseyStore.getForStream(STREAM_ID);
-    // The wait-node records the event ONLY on the committed branch
-    // after re-checking hasQueuedFollowUp; the helper is pure.
-    expect(
-      odyssey?.history.some((e) => e.kind === 'continuation_injected'),
-    ).toBe(false);
+    const after = OdysseyStore.getForStream(STREAM_ID);
+    // No counter, no audit log: the helper only reads. The loop runs until
+    // the model completes or the user stops it.
+    expect(after?.status).toBe('active');
+    expect(after?.updatedAt).toBe(before.updatedAt);
   });
 });
