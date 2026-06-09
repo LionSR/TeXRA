@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  AGENT_CATEGORY,
+  AgentCategory,
   STREAM_STATUS,
   type ActiveChildInfo,
 } from '@shared/schemas';
@@ -10,9 +10,9 @@ import { buildStreamMetadata } from '@shared/streams/streamMetadata';
 describe('buildStreamMetadata', () => {
   it('fills backend-owned defaults for a stream state metadata payload', () => {
     expect(
-      buildStreamMetadata({ kind: AGENT_CATEGORY.WORKFLOW }),
+      buildStreamMetadata({ kind: AgentCategory.Workflow }),
     ).toMatchObject({
-      kind: AGENT_CATEGORY.WORKFLOW,
+      kind: AgentCategory.Workflow,
       status: STREAM_STATUS.READY,
       conversationProgress: { conversationTurns: 0, toolCallCount: 0 },
       activeSubagents: [],
@@ -31,7 +31,7 @@ describe('buildStreamMetadata', () => {
 
     expect(
       buildStreamMetadata({
-        kind: AGENT_CATEGORY.TOOL_USE,
+        kind: AgentCategory.ToolUse,
         status: STREAM_STATUS.RUNNING,
         lastTimestamp: 123,
         conversationProgress: { conversationTurns: 2, toolCallCount: 5 },
@@ -41,7 +41,7 @@ describe('buildStreamMetadata', () => {
         finishedProcessCount: 3,
       }),
     ).toEqual({
-      kind: AGENT_CATEGORY.TOOL_USE,
+      kind: AgentCategory.ToolUse,
       status: STREAM_STATUS.RUNNING,
       lastTimestamp: 123,
       conversationProgress: { conversationTurns: 2, toolCallCount: 5 },

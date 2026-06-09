@@ -86,7 +86,7 @@ import {
 import type { CliRuntimeHost } from '@cli/runtime/runtimeHost';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
-  AGENT_CATEGORY,
+  AgentCategory,
   MESSAGE_TYPES,
   STREAM_STATUS,
   type StorageKey,
@@ -445,7 +445,7 @@ describe('CLI TUI row allocation', () => {
           payload: {
             proposalId: 'proposal-1',
             streamId: root,
-            agentCategory: AGENT_CATEGORY.TOOL_USE,
+            agentCategory: AgentCategory.ToolUse,
             agent: 'review',
             model: 'harness-model',
             instruction: 'Review the proof.',

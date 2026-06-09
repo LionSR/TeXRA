@@ -9,7 +9,7 @@ import {
 } from '@cli/chat/tui/state/resumeHint';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
-  AGENT_CATEGORY,
+  AgentCategory,
   type ActiveChildInfo,
   type StreamTabId,
 } from '@shared/schemas';
@@ -79,11 +79,11 @@ describe('collectResumeTargets', () => {
     });
     const reviewer = makeSlice({
       streamId: 'reviewer@m#rev',
-      category: AGENT_CATEGORY.TOOL_USE,
+      category: AgentCategory.ToolUse,
     });
     const builder = makeSlice({
       streamId: 'builder@m#flow',
-      category: AGENT_CATEGORY.WORKFLOW,
+      category: AgentCategory.Workflow,
     });
 
     expect(
