@@ -400,7 +400,14 @@ function createWindow(options: {
   };
   attachRendererConsoleLog(window.webContents);
   const agentExecutionOptions: DesktopAgentExecutionOptions = {
-    postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
+    postToRenderer: (message) => {
+      const ipc = ipcRef.current;
+      if (!ipc || window.isDestroyed() || window.webContents.isDestroyed()) {
+        return false;
+      }
+      ipc.postToRenderer(message);
+      return true;
+    },
     opener: previewHost,
     diff: createDesktopDiffHost({
       openPath: previewHost.openPath,
@@ -441,12 +448,22 @@ function createWindow(options: {
   };
   let agentExecution: DesktopAgentExecution | undefined;
   let agentExecutionLoad: Promise<DesktopAgentExecution> | undefined;
+  let windowClosed = false;
   const getAgentExecution = async (): Promise<DesktopAgentExecution> => {
     if (agentExecution) return agentExecution;
+    if (windowClosed) {
+      throw new Error('Cannot load desktop agent execution after window close.');
+    }
 
     agentExecutionLoad ??= import('./desktopAgentExecution.js')
       .then(({ createDesktopAgentExecution }) => {
         const created = createDesktopAgentExecution(agentExecutionOptions);
+        if (windowClosed) {
+          created.dispose();
+          throw new Error(
+            'Desktop window closed before agent execution finished loading.',
+          );
+        }
         agentExecution = created;
         return created;
       })
@@ -627,11 +644,18 @@ function createWindow(options: {
   ipcRef.current = mainViewIpc;
   installDesktopMenu(shellActions);
   window.once('closed', () => {
+    windowClosed = true;
     if (mainWindow === window) {
       mainWindow = null;
     }
     disposeAgentResumeHandler();
-    agentExecution?.dispose();
+    if (agentExecution) {
+      agentExecution.dispose();
+    } else {
+      void agentExecutionLoad
+        ?.then((execution) => execution.dispose())
+        .catch(reportAsyncError);
+    }
     desktopAuth.dispose();
   });
   window.webContents.once('did-finish-load', () => {
