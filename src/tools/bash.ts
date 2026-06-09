@@ -288,15 +288,20 @@ export class BashTool extends defineTool({
     };
 
     const deliverParentFollowUp = async (text: string): Promise<void> => {
-      await sendFollowUp(parentStreamId, {
+      const result = await sendFollowUp(parentStreamId, {
         text,
         origin: 'subagent_result',
       });
+      if (result.status === 'no_session') {
+        logger.debug(
+          `Background bash follow-up dropped: parent stream ${parentStreamId} has no active session (${result.streamStatus ?? 'unknown'}).`,
+        );
+      }
     };
 
-    const logDeliveryFailure = (err: unknown): void => {
+    const logBackgroundFailure = (action: string, err: unknown): void => {
       logger.error(
-        `Failed to deliver background bash result: ${err instanceof Error ? err.message : String(err)}`,
+        `Failed to ${action} background bash result: ${err instanceof Error ? err.message : String(err)}`,
       );
     };
 
@@ -315,6 +320,15 @@ export class BashTool extends defineTool({
               `Background bash failed with exit code ${result.exitCode ?? 'unknown'}.`,
             );
 
+        const msg = formatBashDelivery(
+          executionId,
+          command,
+          wallTimeMs,
+          result,
+          stdoutTail,
+          stderrTail,
+        );
+
         try {
           const store = getExecutionStore(executionId);
           await store.writeResultMeta({
@@ -328,19 +342,15 @@ export class BashTool extends defineTool({
           await writeTerminalStatus(executionId, terminalStatus).catch(
             () => {},
           );
-
-          const msg = formatBashDelivery(
-            executionId,
-            command,
-            wallTimeMs,
-            result,
-            stdoutTail,
-            stderrTail,
-          );
           await store.writeReport(msg);
+        } catch (err: unknown) {
+          logBackgroundFailure('persist', err);
+        }
+
+        try {
           await deliverParentFollowUp(msg);
         } catch (err: unknown) {
-          logDeliveryFailure(err);
+          logBackgroundFailure('deliver', err);
         } finally {
           finalizeBackground({
             wallTimeMs,
@@ -352,13 +362,18 @@ export class BashTool extends defineTool({
       }
 
       const { error } = outcome;
+      const msg = formatBashError(executionId, command, error);
       try {
         await writeTerminalStatus(executionId, 'error').catch(() => {});
-        const msg = formatBashError(executionId, command, error);
         await getExecutionStore(executionId).writeReport(msg);
+      } catch (err: unknown) {
+        logBackgroundFailure('persist', err);
+      }
+
+      try {
         await deliverParentFollowUp(msg);
       } catch (err: unknown) {
-        logDeliveryFailure(err);
+        logBackgroundFailure('deliver', err);
       } finally {
         finalizeBackground({
           error,
