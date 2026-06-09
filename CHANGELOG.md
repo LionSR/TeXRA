@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Claude Fable 5** — Anthropic's most capable widely released model is now available as a selectable model and is added to the default model list. It runs with always-on adaptive thinking and summarized reasoning, supports the full effort range up to Extra High, and is eligible for context compaction in tool-use mode.
 - **Software Engineer team** — a new built-in multi-agent team for the code that accompanies a project (simulations, numerics, data pipelines, scripts, and small libraries). An `engineer` lead plans the work and delegates to specialists: `coder` (implementation, edits, and bug fixes), `codeReviewer` (correctness/security/style review), `testEngineer` (write and maintain tests), `codeSimplifier` (behaviour-preserving cleanup for clarity and reuse), and `progressCheck` (an outside-the-loop audit of what landed versus the goal). Pick it from the Multi-Agent settings tab, or launch it from the CLI with `texra multi-agent run software-engineer`. The local lead and specialists run offline; `progressCheck` loads after `texra login`.
 
 ### Shared (all surfaces)
