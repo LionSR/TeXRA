@@ -11,25 +11,6 @@ export const profileViewStyles: CSSResult = css`
     padding-bottom: var(--wa-space-2xs);
   }
 
-  .profile-container {
-    max-width: 1000px;
-    margin: 0 auto;
-  }
-
-  .not-authenticated {
-    text-align: center;
-    padding: var(--wa-space-l);
-  }
-
-  .not-authenticated p {
-    margin-bottom: var(--wa-space-l);
-    color: var(--color-text-secondary);
-  }
-
-  .remote-agents-section {
-    margin-top: var(--wa-space-l);
-  }
-
   /* ============================================
    * Provider Keys Table
    * ============================================ */
@@ -55,29 +36,6 @@ export const profileViewStyles: CSSResult = css`
     top: 0;
   }
 
-  /* Profile-specific badge modifiers (base category styles from @shared/styles) */
-  .category-badge {
-    text-transform: capitalize;
-  }
-
-  .visibility-badge {
-    text-transform: lowercase;
-  }
-
-  .badge.visibility-badge.public {
-    background: var(--wa-color-success-fill-loud);
-    color: var(--wa-color-brand-on-loud);
-  }
-
-  .badge.visibility-badge.custom {
-    background: var(--wa-color-neutral-fill-quiet);
-    color: var(--wa-color-neutral-on-quiet);
-  }
-
-  .select-btn {
-    white-space: nowrap;
-  }
-
   /* ============================================
    * API Access Options
    * ============================================ */
@@ -85,12 +43,6 @@ export const profileViewStyles: CSSResult = css`
   .api-access-section {
     margin-top: var(--wa-space-l);
     margin-bottom: var(--wa-space-l);
-  }
-
-  .api-access-description {
-    color: var(--color-text-secondary);
-    margin-bottom: var(--wa-space-xs);
-    line-height: var(--line-height-normal);
   }
 
   /* wa-radio-group provides layout + keyboard navigation; the per-option card
@@ -315,12 +267,6 @@ export const profileViewStyles: CSSResult = css`
 
   .model-selection-section h2 {
     margin-top: 0;
-  }
-
-  .model-selection-description {
-    color: var(--color-text-secondary);
-    margin-bottom: var(--wa-space-xs);
-    line-height: var(--line-height-normal);
   }
 
   .helper-model-row {
