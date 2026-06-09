@@ -37,7 +37,7 @@ export interface ModelListFormProps {
   readonly currentModel: string;
   readonly apiMode: CliApiMode;
   readonly availableRows?: number;
-  readonly selectable?: boolean;
+  readonly selectable: boolean;
   readonly getModelSwitchDisabledReason?: GetModelSwitchDisabledReason;
   readonly onSelect?: (value: string) => void;
   readonly onClose: () => void;
@@ -99,18 +99,17 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     props.apiMode,
     props.getModelSwitchDisabledReason,
   );
-  const selectable = props.selectable === true;
   const selectWindow = modelSelectWindow({
     availableRows: props.availableRows,
     itemCount: items.length,
   });
   const description = modelListDescription({
     itemCount: items.length,
-    selectable,
+    selectable: props.selectable,
   });
 
   function handleSelect(value: string): void {
-    if (selectable) {
+    if (props.selectable) {
       props.onSelect?.(value);
       return;
     }
@@ -118,7 +117,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
   }
 
   useEffect(() => {
-    if (loading || error || !selectable || !pendingInput) return;
+    if (loading || error || !props.selectable || !pendingInput) return;
     if (appliedPendingInput.current === pendingInput) return;
     appliedPendingInput.current = pendingInput;
 
@@ -135,7 +134,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
     loading,
     pendingInput,
     props.onSelect,
-    selectable,
+    props.selectable,
   ]);
 
   if (loading) {
@@ -171,7 +170,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
         />
         <CompactFormKeyHints
           primary={
-            selectable
+            props.selectable
               ? { key: '1-9/a-z/Enter', action: 'select' }
               : { key: 'Enter', action: 'close' }
           }
@@ -206,7 +205,7 @@ export function ModelListForm(props: ModelListFormProps): React.JSX.Element {
         </Box>
       )}
       <Box>
-        {selectable && items.length > 0 ? (
+        {props.selectable && items.length > 0 ? (
           <KeyHints
             hints={[
               { key: '↑/↓', action: 'navigate' },
