@@ -78,11 +78,11 @@ function getTierFromPrice(inputPrice: number, outputPrice: number): MinTier {
 }
 
 /**
- * Human-facing model name an over-tier free user is pointed at in a 403, so the
- * denial suggests something usable instead of only an upsell. Kept next to the
- * price ceiling it must satisfy (input <= 1.5, output <= 9).
+ * TeXRA model selector id an over-tier free user is pointed at in a 403, so the
+ * denial suggests something they can type instead of only an upsell. Kept next
+ * to the price ceiling it must satisfy (input <= 1.5, output <= 9).
  */
-export const FREE_TIER_SUGGESTED_MODEL = 'gemini-3.5-flash';
+export const FREE_TIER_SUGGESTED_MODEL = 'gemini35f';
 
 /** Convert llm-zoo model to relay model */
 function toRelayModel(config: ModelConfig): RelayModel {
