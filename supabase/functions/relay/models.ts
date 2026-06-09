@@ -2,10 +2,13 @@
  * Relay Model Configuration
  *
  * SINGLE SOURCE OF TRUTH: llm-zoo npm package
- * Tier assignments are derived from model pricing:
- * - free: Included non-premium models (up to $3/M input)
- * - Max: Free-tier models plus any future Max-only additions
- * - Ultra: All models above $3/M input
+ * Tier assignments are derived from model pricing. A model is "free" only when
+ * BOTH its input AND output prices are cheap, so a cheap-input / expensive-output
+ * flagship (gemini-3.x-pro at $2/$12, gpt-5 at $1.25/$10) can no longer leak into
+ * free on input price alone. See MAX_FREE_INPUT_PRICE / MAX_FREE_OUTPUT_PRICE.
+ * - free: input <= $1.5/M AND output <= $9/M
+ * - Max: free-tier models plus any future Max-only additions
+ * - Ultra: everything else
  */
 
 import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.8.1';
@@ -53,18 +56,41 @@ interface RelayModel {
 // Tier Assignment Logic
 // =============================================================================
 
-/** Derive tier from model pricing. */
-function getTierFromPrice(inputPrice: number): MinTier {
-  if (inputPrice <= 3) return 'free';
+/**
+ * Free-tier price ceiling. A model is included for free only when BOTH bounds
+ * hold, so a cheap-input / expensive-output flagship (the gemini-3.x-pro /
+ * gpt-5 abuse class) cannot ride in on input price alone. Output is the
+ * dominant cost in generation-heavy agent loops, hence the explicit output gate.
+ * gemini-3.5-flash ($1.5 in / $9 out) sits at the ceiling by design.
+ */
+const MAX_FREE_INPUT_PRICE = 1.5;
+const MAX_FREE_OUTPUT_PRICE = 9;
+
+/** Derive tier from model pricing (input AND output bounded for free). */
+function getTierFromPrice(inputPrice: number, outputPrice: number): MinTier {
+  if (
+    inputPrice <= MAX_FREE_INPUT_PRICE &&
+    outputPrice <= MAX_FREE_OUTPUT_PRICE
+  ) {
+    return 'free';
+  }
   return 'Ultra';
 }
+
+/**
+ * TeXRA model selector id for the free-tier model an over-tier user is pointed
+ * at in a 403, so the denial suggests something they can type instead of only
+ * an upsell. Kept next to the price ceiling it must satisfy (input <= 1.5,
+ * output <= 9).
+ */
+export const FREE_TIER_SUGGESTED_MODEL = 'gemini35f';
 
 /** Convert llm-zoo model to relay model */
 function toRelayModel(config: ModelConfig): RelayModel {
   return {
     shortName: config.name,
     apiPatterns: [config.fullName.toLowerCase()],
-    minTier: getTierFromPrice(config.inputPrice),
+    minTier: getTierFromPrice(config.inputPrice, config.outputPrice),
     inputPrice: config.inputPrice,
   };
 }
@@ -208,7 +234,8 @@ function resolveAllModelsByApiName(modelName: string): RelayModel[] {
 
 /**
  * Check if a model is allowed for a given tier.
- * Free/Max tier: all models up to $3/M input (currently identical access).
+ * Free/Max tier: models within the free price ceiling (input <= $1.5/M AND
+ * output <= $9/M); Max currently has identical access.
  * Ultra tier: all models.
  *
  * When multiple llm-zoo entries share the same API model name, a `some()`
