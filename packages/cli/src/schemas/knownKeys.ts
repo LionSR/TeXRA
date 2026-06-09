@@ -6,6 +6,7 @@ import { CORE_SETTING_PATHS } from '@shared/schemas/coreSettings';
 
 // Local imports - compatibility keys
 import {
+  GOAL_COST_CAP_CONFIG_KEY,
   GOAL_FEATURE_FLAG_KEY,
   LEGACY_GOAL_FEATURE_FLAG_KEYS,
 } from '@tools/goal';
@@ -29,6 +30,7 @@ export const KNOWN_TEXRA_KEYS: ReadonlySet<string> = new Set<string>([
   // goal flag plus the pre-rename `texra.odyssey.*` keys that `isGoalEnabled()`
   // still honors when explicitly set.
   GOAL_FEATURE_FLAG_KEY,
+  GOAL_COST_CAP_CONFIG_KEY,
   ...LEGACY_GOAL_FEATURE_FLAG_KEYS,
   // Git commit-author marking is stored as workspace state in the VS Code
   // extension, but the CLI reads it from `.texra/config.json`. Recognize the

@@ -30,6 +30,7 @@ import {
 } from '@agent/runtime/executionRegistry';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
+import { getCurrentToolCallContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
 
@@ -368,6 +369,11 @@ async function executeSubagent(
   const parentExecutionId = parentContext.executionId;
   const parentDelegationDepth = parentContext.delegationDepth ?? 0;
   const runtimeHost = parentContext.runtimeHost;
+  // Captured now (while the launching tool call's ALS frame is live) so the
+  // async completion callbacks below can still roll the child's cost into the
+  // parent run after this tool call has returned. Subagents count toward
+  // parent usage totals and the goal cost cap only — they never drive the loop.
+  const recordSubagentCost = getCurrentToolCallContext()?.recordSubagentCost;
 
   const gated = depthGateError(
     parentDelegationDepth,
@@ -415,6 +421,9 @@ async function executeSubagent(
           subagentError = err;
         },
       });
+      // Roll the child's spend into the parent run even on failure — the
+      // money was spent either way.
+      recordSubagentCost?.(result.totalCostUsd ?? 0);
       if (result.status === 'error') {
         const msg = formatSubagentError(
           executionId,
@@ -594,6 +603,8 @@ async function executeSubagent(
       });
     },
     onCompleted: async (result) => {
+      // Roll the finished child's spend into the (still-live) parent run.
+      recordSubagentCost?.(result.totalCostUsd ?? 0);
       // For workflow results, compute diffs and write them as files to the
       // execution's run directory. The delivery references diff file paths
       // so the orchestrator can read them on demand via /executions/{id}/files/.

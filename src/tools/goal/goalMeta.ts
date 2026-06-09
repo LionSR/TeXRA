@@ -18,6 +18,13 @@ export const LEGACY_GOAL_FEATURE_FLAG_KEYS = [
 ] as const;
 
 /**
+ * Optional USD spend cap for autonomous goals. `0` (the default) means
+ * unbounded. Snapshotted into the goal record at `GoalStore.start` so editing
+ * the setting mid-goal doesn't silently retarget a running budget.
+ */
+export const GOAL_COST_CAP_CONFIG_KEY = 'texra.goal.costCapUsd' as const;
+
+/**
  * A goal is a live pursuit: it exists only while the autonomous loop is
  * running (`active`) or waiting for the user (`paused`). Finishing or
  * abandoning one drops the record entirely (`GoalStore.forget`) rather than
@@ -50,6 +57,24 @@ export const GoalSchema = z.object({
    * continuation prompt still uses `objective` as the canonical instruction.
    */
   plan: PlanSchema.nullish(),
+  /**
+   * USD spend cap snapshot from `texra.goal.costCapUsd` at start.
+   * Null/absent = unbounded. When `spentUsd` reaches this, the goal
+   * auto-pauses (resumable) instead of continuing.
+   */
+  costCapUsd: z.number().positive().nullish(),
+  /**
+   * The stream's run cost (USD) when the goal first reported spend — spend
+   * from before the goal started is excluded from the cap. Set lazily by
+   * `GoalStore.noteRunCost` on its first observation.
+   */
+  baselineRunCostUsd: z.number().nonnegative().nullish(),
+  /**
+   * Total goal spend in USD: run cost since `baselineRunCostUsd`, which
+   * already includes completed subagents (their cost rolls into the parent
+   * run's usage accumulator at the delegation boundary).
+   */
+  spentUsd: z.number().nonnegative().prefault(0),
 });
 export type Goal = z.infer<typeof GoalSchema>;
 

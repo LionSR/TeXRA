@@ -186,6 +186,7 @@ describe('ToolUseWaitNode', () => {
         lastResponse: undefined,
         previouslyDeliveredToOrchestrator: false,
         touchedFiles: [],
+        runCostUsd: 0,
       },
       {
         followUps: [

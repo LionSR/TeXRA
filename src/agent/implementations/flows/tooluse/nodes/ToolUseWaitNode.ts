@@ -3,7 +3,7 @@ import { logUserMessage } from '@agent/trace';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { appendFollowUpAsUserMessage } from '@agent/toolUse/followUpMessages';
 import { maybeBuildGoalContinuation } from '@agent/goal';
-import { GoalStore } from '@tools/goal';
+import { GoalStore, setGoalSessionAutoApprovals } from '@tools/goal';
 import { STREAM_STATUS } from '@shared/schemas';
 
 import { findLastAssistantText, extractTouchedFiles } from './types';
@@ -19,6 +19,8 @@ interface WaitPrepResult {
   previouslyDeliveredToOrchestrator: boolean;
   /** Set after the current cycle has been delivered to an orchestrator. */
   deliveredToOrchestrator?: boolean;
+  /** Run cost so far (USD, including rolled-up subagents) for the goal cap. */
+  runCostUsd: number;
 }
 
 export class ToolUseWaitNode<C> extends Node<
@@ -33,6 +35,9 @@ export class ToolUseWaitNode<C> extends Node<
     // Only extract when the callback is wired (subagent mode)
     const previouslyDeliveredToOrchestrator =
       shared.deliveredToOrchestrator === true;
+    const runCostUsd =
+      shared.stateSlices?.runStateSnapshot.usageAccumulator.totals.totalCost ??
+      0;
 
     if (!onBeforeWaiting)
       return {
@@ -40,6 +45,7 @@ export class ToolUseWaitNode<C> extends Node<
         touchedFiles: [],
         afterError,
         previouslyDeliveredToOrchestrator,
+        runCostUsd,
       };
 
     return {
@@ -49,6 +55,7 @@ export class ToolUseWaitNode<C> extends Node<
       ),
       afterError,
       previouslyDeliveredToOrchestrator,
+      runCostUsd,
     };
   }
 
@@ -85,6 +92,7 @@ export class ToolUseWaitNode<C> extends Node<
       const goal = GoalStore.getForStream(streamId);
       if (goal?.status === 'active') {
         await GoalStore.setStatus(streamId, 'paused');
+        setGoalSessionAutoApprovals(streamId, false, runtimeHost);
       }
     }
     if (!prepRes.afterError) {
@@ -99,6 +107,23 @@ export class ToolUseWaitNode<C> extends Node<
 
     if (this.services.stopAfterCycle) {
       return { kind: 'stop' };
+    }
+
+    // Record this turn's spend against the goal and enforce the cost cap
+    // BEFORE the continuation check — a cap-pause must stop the loop on the
+    // same turn it trips, not one continuation later. No-op without a goal.
+    if (!prepRes.afterError) {
+      const costNote = await GoalStore.noteRunCost(
+        streamId,
+        prepRes.runCostUsd,
+      );
+      if (costNote?.pausedForCap) {
+        setGoalSessionAutoApprovals(streamId, false, runtimeHost);
+        this.services.logger.info(
+          `Goal paused: cost cap reached ($${costNote.goal.spentUsd.toFixed(2)} ` +
+            `of $${costNote.goal.costCapUsd?.toFixed(2)} cap). Resume the goal to continue.`,
+        );
+      }
     }
 
     // The Goal continuation runs BEFORE `waitForFollowUp` blocks; once
