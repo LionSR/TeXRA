@@ -1,10 +1,10 @@
-import { Node } from '@agent/node';
-import { logUserMessage } from '@agent/trace';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
-import { appendFollowUpAsUserMessage } from '@agent/toolUse/followUpMessages';
 import { maybeBuildGoalContinuation } from '@agent/goal';
-import { GoalStore, setGoalSessionAutoApprovals } from '@tools/goal';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { Node } from '@agent/node';
+import { appendFollowUpAsUserMessage } from '@agent/toolUse/followUpMessages';
+import { logUserMessage } from '@agent/trace';
 import { STREAM_STATUS } from '@shared/schemas';
+import { GoalStore, setGoalSessionAutoApprovals } from '@tools/goal';
 
 import { findLastAssistantText, extractTouchedFiles } from './types';
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
@@ -84,6 +84,21 @@ export class ToolUseWaitNode<C> extends Node<
     if (prepRes.afterError && isSubagent) {
       return { kind: 'stop' };
     }
+
+    // Record this turn's spend against the goal and enforce the cost cap
+    // BEFORE the continuation check — a cap-pause must stop the loop on the
+    // same turn it trips, not one continuation later. Failed/cancelled parent
+    // cycles still consumed model spend, so account for them before parking
+    // the autonomous leg below. No-op without a goal.
+    const costNote = await GoalStore.noteRunCost(streamId, prepRes.runCostUsd);
+    if (costNote?.pausedForCap) {
+      await setGoalSessionAutoApprovals(streamId, false, runtimeHost);
+      this.services.logger.info(
+        `Goal paused: cost cap reached ($${costNote.goal.spentUsd.toFixed(2)} ` +
+          `of $${costNote.goal.costCapUsd?.toFixed(2)} cap). Resume the goal to continue.`,
+      );
+    }
+
     // A failed/cancelled cycle ends the autonomous leg. Pause any active
     // goal so it surfaces as resumable — the in-cycle retry layer already
     // absorbed transient errors before we reach here — instead of leaving the
@@ -107,23 +122,6 @@ export class ToolUseWaitNode<C> extends Node<
 
     if (this.services.stopAfterCycle) {
       return { kind: 'stop' };
-    }
-
-    // Record this turn's spend against the goal and enforce the cost cap
-    // BEFORE the continuation check — a cap-pause must stop the loop on the
-    // same turn it trips, not one continuation later. No-op without a goal.
-    if (!prepRes.afterError) {
-      const costNote = await GoalStore.noteRunCost(
-        streamId,
-        prepRes.runCostUsd,
-      );
-      if (costNote?.pausedForCap) {
-        await setGoalSessionAutoApprovals(streamId, false, runtimeHost);
-        this.services.logger.info(
-          `Goal paused: cost cap reached ($${costNote.goal.spentUsd.toFixed(2)} ` +
-            `of $${costNote.goal.costCapUsd?.toFixed(2)} cap). Resume the goal to continue.`,
-        );
-      }
     }
 
     // The Goal continuation runs BEFORE `waitForFollowUp` blocks; once
