@@ -9,7 +9,7 @@ import {
   StreamLogStore,
 } from '@transcript';
 
-describe('AgentLogger error data', () => {
+describe('AgentTrace error data', () => {
   beforeEach(async () => {
     const store = new StreamLogStore();
     setDefaultStreamLogStore(store);

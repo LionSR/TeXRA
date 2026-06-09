@@ -1194,7 +1194,7 @@ export async function runChat(
         } else {
           session.runExitCode = CliExitCode.AgentError;
         }
-        // Pull any final MODEL_RESPONSE chunks out of the AgentLogger
+        // Pull any final MODEL_RESPONSE chunks out of the AgentTrace
         // buffer before falling back to `result.lastResponse`. Without
         // this, a reply that finalized between sync ticks would never
         // hit the transcript.
