@@ -17,11 +17,9 @@ import {
 import { describe, expect, it } from 'vitest';
 
 // Local imports - agent model handlers
-import {
-  tagAnthropicSdkError,
-  tagGoogleSdkError,
-  tagOpenAISdkError,
-} from '@agent/modelHandlers/support/sdkErrorAdapters';
+import { tagAnthropicSdkError } from '@agent/modelHandlers/anthropic/anthropicSdkError';
+import { tagGoogleSdkError } from '@agent/modelHandlers/google/googleSdkError';
+import { tagOpenAISdkError } from '@agent/modelHandlers/openai/openAISdkError';
 
 // Local imports - common errors
 import {
