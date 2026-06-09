@@ -48,6 +48,7 @@ import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 import '@awesome.me/webawesome/dist/components/radio/radio.js';
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 
@@ -194,25 +195,22 @@ export class InstructionPanel extends LitElement {
         font-size: var(--font-size-sm);
       }
 
+      /* Native wa-callout (brand), compacted to IDE density. The callout
+         supplies the tinted background + border + radius; we only tighten the
+         padding/typography and lay its content out in a single row. */
       .session-hint {
-        display: flex;
-        gap: var(--wa-space-2xs);
-        align-items: flex-start;
         margin-top: var(--wa-space-2xs);
         padding: var(--wa-space-3xs) var(--wa-space-2xs);
-        border-left: 2px solid
-          color-mix(in srgb, var(--wa-color-brand-fill-loud) 70%, transparent);
-        background: color-mix(
-          in srgb,
-          var(--wa-color-brand-fill-quiet) 35%,
-          transparent
-        );
-        border-radius: 0 var(--wa-border-radius-s, 4px)
-          var(--wa-border-radius-s, 4px) 0;
-        color: var(--wa-color-text-quiet);
         font-size: var(--font-size-sm);
         line-height: var(--line-height-relaxed);
         animation: session-hint-fade 150ms ease;
+      }
+
+      .session-hint::part(message) {
+        display: flex;
+        gap: var(--wa-space-2xs);
+        align-items: flex-start;
+        color: var(--wa-color-text-quiet);
       }
 
       @keyframes session-hint-fade {
@@ -454,8 +452,9 @@ export class InstructionPanel extends LitElement {
     return keyed(
       hintKey,
       html`
-        <div
+        <wa-callout
           class="session-hint"
+          variant="brand"
           role="note"
           data-hint-key=${hintKey}
           aria-label=${copy.ariaLabel}
@@ -472,7 +471,7 @@ export class InstructionPanel extends LitElement {
             className: 'session-hint-dismiss',
             onClick: this.handleDismissSessionHint,
           })}
-        </div>
+        </wa-callout>
       `,
     );
   }
