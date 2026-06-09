@@ -26,14 +26,14 @@
     "@playwright/test": "^1.60.0",
     "@texra/core": "workspace:*",
     "electron": "^42.3.3",
-    "electron-builder": "^26.15.2",
+    "electron-builder": "^26.15.0",
     "esbuild": "^0.28.0",
     "playwright": "^1.60.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.16"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.169",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.168",
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
     "@openai/codex-sdk": "^0.137.0",
     "@sentry/electron": "^7.13.0",
