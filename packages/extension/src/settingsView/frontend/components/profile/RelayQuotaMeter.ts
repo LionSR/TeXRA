@@ -2,6 +2,7 @@
 
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
 
 import { designTokens } from '@shared/styles';
 import type { SpendingStatus } from '@shared/schemas/spendingStatus';
@@ -81,23 +82,18 @@ export class RelayQuotaMeter extends LitElement {
         font-size: var(--wa-font-size-s);
         color: var(--wa-color-neutral-text-quiet);
       }
+      /* Native wa-progress-bar, compacted to a 6px track; colour the indicator
+         per quota state via its --indicator-color custom property. */
       .quota-bar {
-        position: relative;
-        height: 6px;
-        background: var(--wa-color-neutral-border-quiet);
-        border-radius: var(--border-radius);
-        overflow: hidden;
+        --track-height: 6px;
+        --track-color: var(--wa-color-neutral-border-quiet);
+        --indicator-color: var(--wa-color-brand-fill-loud);
       }
-      .quota-bar-fill {
-        height: 100%;
-        background: var(--wa-color-brand-fill-loud);
-        transition: width 200ms ease-out;
+      .quota-meter[data-state='warning'] .quota-bar {
+        --indicator-color: var(--wa-color-warning-fill-loud);
       }
-      .quota-meter[data-state='warning'] .quota-bar-fill {
-        background: var(--wa-color-warning-fill-loud);
-      }
-      .quota-meter[data-state='exhausted'] .quota-bar-fill {
-        background: var(--wa-color-danger-fill-loud);
+      .quota-meter[data-state='exhausted'] .quota-bar {
+        --indicator-color: var(--wa-color-danger-fill-loud);
       }
       .quota-note {
         margin-top: var(--wa-space-xs);
@@ -131,15 +127,11 @@ export class RelayQuotaMeter extends LitElement {
           <span class="quota-label">Relay usage this month</span>
           <span class="quota-amount">${formatPercent(percent)} used</span>
         </div>
-        <div
+        <wa-progress-bar
           class="quota-bar"
-          role="progressbar"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          aria-valuenow=${Math.round(percent)}
-        >
-          <div class="quota-bar-fill" style="width: ${percent}%"></div>
-        </div>
+          value=${Math.round(percent)}
+          label="Relay usage this month"
+        ></wa-progress-bar>
         ${note ? html`<div class="quota-note">${note}</div>` : nothing}
       </div>
     `;
