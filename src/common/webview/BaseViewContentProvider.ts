@@ -96,23 +96,13 @@ export abstract class BaseViewContentProvider {
   private static readonly COMMON_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
     [{ key: 'commonStyleUri', path: 'styles/common.css' }];
 
-  private static readonly SHARED_MODULE_DESCRIPTORS: readonly ModuleDescriptor[] =
-    [{ key: 'commonsBundleUri', path: 'commons.js' }];
-
   private getCommonModuleUris(
     webview: vscode.Webview,
   ): Record<string, vscode.Uri> {
-    return {
-      ...this.buildUriRecord(
-        webview,
-        BaseViewContentProvider.COMMON_MODULE_DESCRIPTORS,
-        ['src', 'common'],
-      ),
-      ...this.buildUriRecord(
-        webview,
-        BaseViewContentProvider.SHARED_MODULE_DESCRIPTORS,
-        ['dist', 'shared'],
-      ),
-    };
+    return this.buildUriRecord(
+      webview,
+      BaseViewContentProvider.COMMON_MODULE_DESCRIPTORS,
+      ['src', 'common'],
+    );
   }
 }
