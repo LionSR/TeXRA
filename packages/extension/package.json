@@ -1523,7 +1523,7 @@
   },
   "homepage": "https://texra.ai",
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.168",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.169",
     "@anthropic-ai/sdk": "^0.102.0",
     "@awesome.me/webawesome": "^3.8.0",
     "@cantoo/pdf-lib": "^2.7.1",
@@ -1537,7 +1537,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@openai/codex-sdk": "^0.137.0",
     "@openrouter/sdk": "^0.12.79",
-    "@supabase/supabase-js": "2.107.0",
+    "@supabase/supabase-js": "2.108.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "arxiv-client": "^0.0.9",
