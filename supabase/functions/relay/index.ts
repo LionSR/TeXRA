@@ -691,10 +691,9 @@ app.all('/:provider{[^/]+}/*', async (c) => {
         userTier,
         FREE_TIER_SUGGESTED_MODEL,
       );
-      const hint =
-        suggestedModelAllowed
-          ? `Switch to an available model such as '${FREE_TIER_SUGGESTED_MODEL}', or upgrade for access.`
-          : 'Upgrade to Ultra for access.';
+      const hint = suggestedModelAllowed
+        ? `Switch to an available model such as '${FREE_TIER_SUGGESTED_MODEL}', or upgrade for access.`
+        : 'Upgrade to Ultra for access.';
 
       return jsonError(
         modelName
