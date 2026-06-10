@@ -18,4 +18,11 @@ export interface AgentResumePort {
    * the message queued for the next manual resume.
    */
   tryResumeStream(streamId: StreamTabId): Promise<boolean>;
+
+  /**
+   * Whether the host has already accepted a resume for this stream and is
+   * still preparing it. A queued-delivery wake uses this to avoid releasing a
+   * force-reopened queue while a host-initiated resume is about to drain it.
+   */
+  isResumeInFlight?(streamId: StreamTabId): boolean;
 }

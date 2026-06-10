@@ -63,18 +63,18 @@ export async function wakeOrReleaseQueuedStream(
   // outcome instead of re-poking the port and releasing the queue the
   // in-flight resume is about to drain.
   let attempt = wakeAttempts.get(streamId);
+  const resumePort = platform().agentResume;
   if (!attempt) {
-    attempt = platform()
-      .agentResume.tryResumeStream(streamId)
-      .finally(() => {
-        wakeAttempts.delete(streamId);
-      });
+    attempt = resumePort.tryResumeStream(streamId).finally(() => {
+      wakeAttempts.delete(streamId);
+    });
     wakeAttempts.set(streamId, attempt);
   }
   const resumed = await attempt;
   if (
     resumed ||
     result.reason !== 'children_running' ||
+    resumePort.isResumeInFlight?.(streamId) === true ||
     StreamStatusService.isActiveOrResuming(streamId)
   ) {
     return true;

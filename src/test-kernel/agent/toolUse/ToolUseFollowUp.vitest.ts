@@ -323,6 +323,54 @@ describe('ToolUseFollowUp', () => {
     }
   });
 
+  it('keeps the reopened queue while the host has a resume in flight', async () => {
+    const parentStreamId = 'parent-stream-wake-in-flight' as StreamTabId;
+    const childStreamId = 'child-stream-wake-in-flight' as StreamTabId;
+    const executionId = 'exec-wake-in-flight';
+
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform(
+        {},
+        {
+          agentResume: {
+            tryResumeStream: async () => false,
+            isResumeInFlight: (stream) => stream === parentStreamId,
+          },
+        },
+      ),
+    );
+
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'test-subagent',
+      'toolUse',
+      noopAgentRuntimeHost,
+    );
+    executionRegistry.track(handle);
+
+    try {
+      const result = await sendFollowUp(parentStreamId, 'late result');
+      assert.deepEqual(result, {
+        status: 'queued',
+        reason: 'children_running',
+      });
+
+      assert.equal(
+        await wakeOrReleaseQueuedStream(parentStreamId, result),
+        true,
+      );
+      assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), [
+        'late result',
+      ]);
+    } finally {
+      executionRegistry.untrack(executionId);
+      ToolUseFollowUpQueue.release(parentStreamId);
+    }
+  });
+
   it('creates valid snapshot structure', () => {
     // Test that snapshot structure is valid (used for resume operations)
     assert.equal(snapshot.version, 2);

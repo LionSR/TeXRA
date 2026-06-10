@@ -29,6 +29,7 @@ import {
   executeAgent,
   resumeToolUseFromSnapshot,
 } from '@agent/runtime/executeAgent';
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import {
   notifyFollowUpSent,
   sendFollowUp,
@@ -285,6 +286,7 @@ export async function markRegisteredChatExecutionError(
 export interface ClearableTuiSessionState {
   streamId: StreamTabId | undefined;
   executionId: string | undefined;
+  runtimeHost?: AgentRuntimeHost;
   runPromise: Promise<void> | undefined;
   runExitCode: CliExitCode;
   runCompleted: boolean;
@@ -306,6 +308,7 @@ export function clearTuiSessionRunState(
 ): void {
   session.streamId = undefined;
   session.executionId = undefined;
+  session.runtimeHost = undefined;
   session.runPromise = undefined;
   session.runExitCode = CliExitCode.Success;
   session.runCompleted = false;
@@ -316,8 +319,10 @@ export function clearTuiSessionRunState(
 export function markChatTuiRunPending(
   session: ClearableTuiSessionState,
   runPromise: Promise<void>,
+  runtimeHost?: AgentRuntimeHost,
 ): void {
   session.streamId = undefined;
+  session.runtimeHost = runtimeHost;
   session.runPromise = runPromise;
   session.runExitCode = CliExitCode.Success;
   session.runCompleted = false;
@@ -1088,6 +1093,7 @@ export async function runChat(
   const session: TuiSession = {
     streamId: undefined,
     executionId: undefined,
+    runtimeHost: undefined,
     runPromise: undefined,
     runExitCode: CliExitCode.Success,
     runCompleted: false,
@@ -1145,6 +1151,7 @@ export async function runChat(
           WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
           false,
         ) === true,
+      runtimeHost: session.runtimeHost,
     });
   };
 
@@ -1280,10 +1287,11 @@ export async function runChat(
           : CliExitCode.AgentError;
       })
       .finally(() => {
+        if (session.runtimeHost === wrapped) session.runtimeHost = undefined;
         markChatTuiRunCompleted(session);
         void runtimeHost.close();
       });
-    markChatTuiRunPending(session, runPromise);
+    markChatTuiRunPending(session, runPromise, wrapped);
   };
 
   // Interactive resume: continue a suspended tool-use session by execution id.
@@ -1361,6 +1369,7 @@ export async function runChat(
 
     const runtimeHost = createCliRuntimeHost(sessionContext);
     const wrapped = wrapRuntimeHost(runtimeHost);
+    session.runtimeHost = wrapped;
     const unbindApprovals = installTuiApprovals(wrapped, sessionContext);
     disposers.push(unbindApprovals);
     const approvalsUnavailable = approvalPromptsUnavailable(sessionContext);
@@ -1390,6 +1399,7 @@ export async function runChat(
           : CliExitCode.AgentError;
       })
       .finally(() => {
+        if (session.runtimeHost === wrapped) session.runtimeHost = undefined;
         markChatTuiRunCompleted(session);
         void runtimeHost.close();
       });
