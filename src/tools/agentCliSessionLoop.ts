@@ -9,6 +9,7 @@
 //
 // Host-agnostic, VS Code-free.
 
+import { platform } from '@platform';
 import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
 import {
@@ -222,13 +223,30 @@ export function runAgentCliSession<TTurn>(
             : strategy.formatError(turn, prompt, err);
         try {
           await getExecutionStore(executionId).writeReport(msg);
-        } catch {
-          // Best-effort; delivery must not block on storage.
+        } catch (storageErr) {
+          // Best-effort; delivery must not block on storage. But the report is
+          // the only durable copy when delivery fails, so leave a trace.
+          logger.warn(
+            `Failed to persist report for ${executionId}: ${toErrorMessage(storageErr)}`,
+          );
         }
-        await sendFollowUp(parentStreamId, {
+        const delivery = await sendFollowUp(parentStreamId, {
           text: msg,
           origin: 'subagent_result',
         });
+        if (delivery.status === 'no_session') {
+          logger.warn(
+            `Turn result for ${executionId} not delivered: parent stream ${parentStreamId} has no active session (status: ${delivery.streamStatus ?? 'unknown'}). The result remains in the execution report.`,
+          );
+        } else if (
+          delivery.status === 'queued' &&
+          (delivery.reason === 'waiting' ||
+            delivery.reason === 'children_running')
+        ) {
+          // The parent's cycle has exited; wake it so the queued result is
+          // consumed instead of sitting until the user pokes the stream.
+          await platform().agentResume.tryResumeStream(parentStreamId);
+        }
 
         if (turnFailed) {
           sawTurnFailure = true;

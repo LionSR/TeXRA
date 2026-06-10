@@ -2,7 +2,10 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type { ToolUseFlowResult } from '@agent/runtime/AgentFlowResult';
+import type {
+  ToolUseFlowResult,
+  WorkflowFlowResult,
+} from '@agent/runtime/AgentFlowResult';
 import {
   formatBashDelivery,
   formatSubagentDelivery,
@@ -47,6 +50,52 @@ describe('formatSubagentDelivery', () => {
     expect(delivery).toContain('<memory-misses>');
     expect(delivery).toContain(
       '<memory-miss path="/memories/missing.md" reason="Path is missing &amp; unreadable" />',
+    );
+  });
+
+  it('flags failed diff computation so orchestrators read outputs directly', () => {
+    const result = {
+      category: 'workflow',
+      executionId: 'abc123',
+      streamId: 'child-stream',
+      status: 'stopped',
+      outputs: [
+        {
+          round: 0,
+          relativePath: 'paper.tex',
+          absolutePath: '/ws/paper.tex',
+          location: 'workspace',
+          originalPath: '/ws/.texra/paper.orig.tex',
+          added: 3,
+          removed: 1,
+        },
+      ],
+      compileFailures: [],
+    } satisfies WorkflowFlowResult;
+
+    const delivery = formatSubagentDelivery('polish', result, {
+      diffsUnavailable: 'ENOSPC: no space left & disk full',
+    });
+
+    expect(delivery).toContain(
+      '<diffs-unavailable reason="ENOSPC: no space left &amp; disk full">',
+    );
+    expect(delivery).toContain('read the output files directly');
+    expect(delivery).toContain('<file path="paper.tex"');
+  });
+
+  it('omits the diffs-unavailable element on clean deliveries', () => {
+    const result = {
+      category: 'workflow',
+      executionId: 'abc123',
+      streamId: 'child-stream',
+      status: 'stopped',
+      outputs: [],
+      compileFailures: [],
+    } satisfies WorkflowFlowResult;
+
+    expect(formatSubagentDelivery('polish', result)).not.toContain(
+      'diffs-unavailable',
     );
   });
 

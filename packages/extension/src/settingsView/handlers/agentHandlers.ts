@@ -10,6 +10,10 @@ import * as vscode from 'vscode';
 
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
 import { createKey, getAgent, loadAgents } from '@agent/index';
+import {
+  BUILTIN_TEAM_ROOT_AGENT_NAMES,
+  getToolUseAgents,
+} from '@agent/index/agentRegistry';
 import { EdgeFunctionResponseSchema } from '@agent/remote/types';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, SUPABASE_CONFIG } from '@auth/config';
@@ -21,6 +25,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { createSettingsAgentControllers } from '@shared/settingsView/handlers/agentControllerFactory';
 import {
   SETTINGS_VIEW_CMD,
@@ -414,6 +419,7 @@ export class AgentHandlers {
     await webview.postMessage({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
       customPresets: this.catalogController.getCustomPresets(),
+      orchestratorAgents: collectOrchestratorAgentNames(),
     });
   }
 
@@ -564,4 +570,18 @@ export class AgentHandlers {
       vscode.commands.executeCommand('texra.refreshAllOptions'),
     ]);
   }
+}
+
+/**
+ * Agent names that can lead a team. Combines the known built-in team roots
+ * (valid even before the registry has loaded remote agents) with any loaded
+ * tool-use agent that carries delegation tools, so custom orchestrators are
+ * recognized by capability instead of by name.
+ */
+function collectOrchestratorAgentNames(): string[] {
+  const names = new Set<string>(BUILTIN_TEAM_ROOT_AGENT_NAMES);
+  for (const agent of getToolUseAgents()) {
+    if (hasDelegationTool(agent.tools)) names.add(agent.name);
+  }
+  return [...names].sort();
 }

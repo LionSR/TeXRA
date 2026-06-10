@@ -283,6 +283,12 @@ export type UpdateSuperYoloEnabledMessage = z.infer<
 export const UpdateAgentModePresetsMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS),
   customPresets: z.array(AgentModePresetSchema),
+  /**
+   * Agent names that can lead a team (carry delegation tools), computed from
+   * the agent registry so preset cards badge orchestrators by capability
+   * instead of guessing from the agent's name.
+   */
+  orchestratorAgents: z.array(z.string()).prefault([]),
 });
 export type UpdateAgentModePresetsMessage = z.infer<
   typeof UpdateAgentModePresetsMessageSchema

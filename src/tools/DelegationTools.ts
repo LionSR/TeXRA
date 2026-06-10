@@ -13,6 +13,7 @@ import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 // Local imports - agent
+import { platform } from '@platform';
 import { getExecutionStore, registerExecution } from '@agent/storage';
 import { getVisibleAgents } from '@agent/index/agentRegistry';
 import {
@@ -32,8 +33,12 @@ import {
 } from '@agent/runtime/AgentFlowResult';
 import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/toolUse/ToolFileInteractionContext';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
+
+// Local imports - platform
 
 // Local imports - logger
 import { toErrorMessage } from '@common/errors';
@@ -228,19 +233,28 @@ async function subagentDeliveryMessage(
   },
 ): Promise<string> {
   let diffInfos: Map<string, DiffFileInfo> | undefined;
+  let diffsUnavailable: string | undefined;
   if (result.category === 'workflow' && result.outputs.length > 0) {
     try {
       diffInfos = await computeAndWriteWorkflowDiffs(
         executionId,
         result.outputs,
       );
-    } catch {
-      // Diff computation failure is non-fatal — deliver without diffs.
+    } catch (err) {
+      // Diff computation failure is non-fatal — deliver without diffs, but
+      // tell the orchestrator so it can read the output files directly
+      // instead of assuming the revision was a no-op.
+      diffsUnavailable = toErrorMessage(err);
+      logger.warn(
+        'subagentDelivery',
+        `Diff computation failed for ${executionId}: ${diffsUnavailable}`,
+      );
     }
   }
 
   return formatSubagentDelivery(agentName, result, {
     diffInfos,
+    diffsUnavailable,
     wallTimeMs: Date.now() - options.startedAt,
     workingDirectory: options.workingDirectory,
   });
@@ -252,8 +266,13 @@ async function writeSubagentReport(
 ): Promise<void> {
   try {
     await getExecutionStore(executionId).writeReport(message);
-  } catch {
-    /* storage failure is non-fatal */
+  } catch (err) {
+    // Non-fatal, but the report is the only durable copy of the result when
+    // delivery later fails — leave a trace instead of vanishing silently.
+    logger.warn(
+      'subagentDelivery',
+      `Failed to persist subagent report for ${executionId}: ${toErrorMessage(err)}`,
+    );
   }
 }
 
@@ -478,7 +497,7 @@ async function executeSubagent(
   ): Promise<boolean> {
     if (!deliveryState.beginDelivery()) return false;
     try {
-      const delivered = await deliverFollowUp(followUp);
+      const delivered = await deliverTerminalResult(followUp);
       if (delivered) {
         deliveryState.completeDelivery();
       } else {
@@ -489,6 +508,53 @@ async function executeSubagent(
       deliveryState.failDelivery();
       throw err;
     }
+  }
+
+  /**
+   * Deliver a terminal result and, when the parent's cycle has exited, wake it
+   * via the host resume port so the queued result is consumed instead of
+   * sitting until the user pokes the stream. When the parent is gone for good
+   * (terminal status, no consumer, resume failed), re-release the
+   * force-reopened queue so late deliveries don't leak into the next run on
+   * that stream — the result stays readable in the execution report.
+   */
+  async function deliverTerminalResult(
+    followUp: FollowUpQueueInput,
+  ): Promise<boolean> {
+    const targetStreamId = resolveDeliveryStreamId(
+      executionId,
+      orchestratorStreamId,
+    );
+    if (!targetStreamId) return false;
+
+    const result = await sendFollowUp(targetStreamId, followUp);
+    if (result.status === 'no_session') {
+      logger.warn(
+        'subagentDelivery',
+        `Unable to deliver subagent result for ${executionId}: parent stream ${targetStreamId} has no active session (status: ${result.streamStatus ?? 'unknown'}).`,
+      );
+      return false;
+    }
+    if (
+      result.status === 'queued' &&
+      (result.reason === 'waiting' || result.reason === 'children_running')
+    ) {
+      const resumed =
+        await platform().agentResume.tryResumeStream(targetStreamId);
+      if (
+        !resumed &&
+        result.reason === 'children_running' &&
+        !StreamStatusService.isActiveOrResuming(targetStreamId)
+      ) {
+        ToolUseFollowUpQueue.release(targetStreamId);
+        logger.warn(
+          'subagentDelivery',
+          `Dropped subagent result for ${executionId}: parent stream ${targetStreamId} is gone and could not be resumed. The result remains in the execution report.`,
+        );
+        return false;
+      }
+    }
+    return true;
   }
 
   function onProgress(update: SubagentProgressUpdate): void {
@@ -583,8 +649,14 @@ async function executeSubagent(
     onError: (err, result) => deliverSubagentError(err, result),
   });
   promise
-    .catch((err: unknown) => {
-      void deliverSubagentError(err);
+    // Await the error delivery so the registry entry is not torn down while
+    // the delivery (and any resume-based follow-up routing) is in flight.
+    .catch((err: unknown) => deliverSubagentError(err))
+    .catch((deliveryErr: unknown) => {
+      logger.warn(
+        'subagentDelivery',
+        `Failed to deliver subagent error for ${executionId}: ${toErrorMessage(deliveryErr)}`,
+      );
     })
     .finally(() => {
       subagentDeliveryRegistry.finish(executionId);
@@ -1085,6 +1157,22 @@ Git worktree support: ${
     if (handle.category !== 'toolUse') {
       throw new Error(
         `Execution '${executionId}' is a workflow agent. Only tool-use subagents can be resumed.`,
+      );
+    }
+
+    // Results route to handle.parentStreamId — a detached subagent (parent ===
+    // child) delivers nowhere, and a subagent of another orchestrator reports
+    // to that orchestrator, not the caller. Fail fast instead of silently
+    // queueing instructions whose results would never come back here.
+    if (handle.parentStreamId === handle.childStreamId) {
+      throw new Error(
+        `Execution '${executionId}' was detached from its orchestrator and now runs top-level. Its results can no longer be delivered back to this session — start a new delegation instead.`,
+      );
+    }
+    const callerStreamId = parentContext?.streamId;
+    if (callerStreamId && handle.parentStreamId !== callerStreamId) {
+      throw new Error(
+        `Execution '${executionId}' belongs to a different orchestrator session. Its results would be delivered there, not here — start a new delegation instead.`,
       );
     }
 

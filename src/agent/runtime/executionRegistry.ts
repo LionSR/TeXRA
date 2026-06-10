@@ -445,11 +445,18 @@ export class ExecutionRegistry {
     });
   }
 
-  /** Interrupt all active subagents of a parent stream. */
+  /** Interrupt all active subagents of a parent stream, including descendants. */
   interruptActiveChildren(parentStreamId: StreamTabId): void {
+    this.terminateChildren(parentStreamId, new Set());
+  }
+
+  private terminateChildren(
+    parentStreamId: StreamTabId,
+    visited: Set<string>,
+  ): void {
     for (const handle of this.handles.values()) {
       if (isChildExecution(handle, parentStreamId)) {
-        this.terminate(handle);
+        this.terminate(handle, visited);
       }
     }
   }
@@ -494,6 +501,9 @@ export class ExecutionRegistry {
   ): boolean {
     const rootHandle = this.getAgentHandleByStream(streamId);
     const runtimeHost = options.runtimeHost ?? rootHandle?.runtimeHost;
+    // Shared across the child sweep and the root cascade so each execution in
+    // the chain is interrupted exactly once.
+    const visited = new Set<string>();
 
     if (options.detachActiveChildren === true) {
       if (!runtimeHost) {
@@ -503,11 +513,11 @@ export class ExecutionRegistry {
       }
       this.detachActiveChildren(streamId, runtimeHost);
     } else {
-      this.interruptActiveChildren(streamId);
+      this.terminateChildren(streamId, visited);
     }
 
     const stopped = rootHandle
-      ? this.terminate(rootHandle)
+      ? this.terminate(rootHandle, visited)
       : this.interruptRegisteredStream(streamId, runtimeHost);
     if (!stopped && runtimeHost) {
       this.streamStatus.set(streamId, STREAM_STATUS.STOPPED, { runtimeHost });
@@ -615,8 +625,16 @@ export class ExecutionRegistry {
     return false;
   }
 
-  private terminate(handle: ExecutionHandle): boolean {
+  private terminate(
+    handle: ExecutionHandle,
+    visited: Set<string> = new Set(),
+  ): boolean {
+    if (visited.has(handle.executionId)) return false;
+    visited.add(handle.executionId);
     if (handle instanceof AgentExecutionHandle) {
+      // Interrupt the handle's own subagents first so no descendant outlives
+      // the chain — killing an orchestrator must also stop its grandchildren.
+      this.terminateChildren(handle.childStreamId, visited);
       const interruptible = this.interrupts.get(handle.childStreamId);
       if (!interruptible) return false;
       interruptible.interrupt();
