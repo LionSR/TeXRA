@@ -9,7 +9,7 @@
 
 // Local imports - utils
 import * as logger from '@logger/logUtils';
-import { isString, isObject } from '@utils/core';
+import { isObject } from '@utils/core';
 
 // Local imports
 import { removeCDATA } from './xmlCdata';
@@ -129,40 +129,6 @@ export function extractMultipleTextFromTag(
 
   // Fallback: extract documents directly from the input content
   return extractNamedDocuments(inputContent);
-}
-
-/**
- * Extract content from XML document element for single document case
- * We should have a fall back to regex if this fails
- */
-export function extractContentFromXMLbyTag(
-  root: Record<string, unknown>,
-  documentTag: string,
-): string | null {
-  if (!isObject(root)) {
-    logger.error(
-      CHANNEL,
-      `Invalid root object. Structure: ${getObjectStructure(root)}`,
-    );
-    return null;
-  }
-
-  if (documentTag in root) {
-    const content = root[documentTag];
-    if (isString(content)) {
-      return content.trim();
-    }
-    logger.error(
-      CHANNEL,
-      `Content is not a string in single document case. Structure: ${getObjectStructure(root[documentTag])}`,
-    );
-  }
-
-  logger.error(
-    CHANNEL,
-    `No ${documentTag} found in output file. Structure: ${getObjectStructure(root)}`,
-  );
-  return null;
 }
 
 /**
