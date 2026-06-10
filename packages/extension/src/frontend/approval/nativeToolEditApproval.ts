@@ -15,12 +15,12 @@ import * as vscode from 'vscode';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { isLatexFile } from '@common/files/fileTypeUtils';
+import { VscodeDiffViewHost } from '@frontend/approval/VscodeDiffViewHost';
 import {
   type DiffSession,
   type DiffSource,
   type DiffViewHost,
-} from '@frontend/approval/DiffViewHost';
-import { VscodeDiffViewHost } from '@frontend/approval/VscodeDiffViewHost';
+} from '@hosts/diffViewHost';
 import type { StreamTabId } from '@shared/schemas';
 import type { LineChanges } from '@tools/result';
 import {

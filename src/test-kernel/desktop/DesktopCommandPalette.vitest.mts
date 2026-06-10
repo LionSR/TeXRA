@@ -36,11 +36,6 @@ interface DesktopCommandPaletteModule {
     entries: DesktopPaletteEntry[],
     query: string,
   ): DesktopPaletteEntry[];
-  getNextDesktopCommandPaletteIndex(
-    currentIndex: number,
-    itemCount: number,
-    delta: number,
-  ): number;
   executeDesktopCommandPaletteEntry(
     entry: DesktopPaletteEntry | undefined,
     actions: {
@@ -135,13 +130,13 @@ describe('desktop command palette', () => {
   });
 
   it('wraps active command selection through filtered entries', async () => {
-    const { getNextDesktopCommandPaletteIndex } =
-      await loadDesktopCommandPalette();
+    const { getNextCommandPaletteIndex } =
+      await import('@shared/wa/commandPalette');
 
-    expect(getNextDesktopCommandPaletteIndex(0, 3, 1)).toBe(1);
-    expect(getNextDesktopCommandPaletteIndex(2, 3, 1)).toBe(0);
-    expect(getNextDesktopCommandPaletteIndex(0, 3, -1)).toBe(2);
-    expect(getNextDesktopCommandPaletteIndex(0, 0, 1)).toBe(-1);
+    expect(getNextCommandPaletteIndex(0, 3, 1)).toBe(1);
+    expect(getNextCommandPaletteIndex(2, 3, 1)).toBe(0);
+    expect(getNextCommandPaletteIndex(0, 3, -1)).toBe(2);
+    expect(getNextCommandPaletteIndex(0, 0, 1)).toBe(-1);
   });
 
   it('does not dispatch disabled command palette entries', async () => {
