@@ -7,8 +7,26 @@ import {
   setDefaultStreamLogStore,
   StreamLogStore,
 } from '@transcript';
-import { endToolUseCard, startToolUseCard } from '@agent/trace';
+import {
+  endToolUseCard,
+  startToolUseCard,
+  type AgentTrace,
+} from '@agent/trace';
 import { MESSAGE_TYPES } from '@shared/schemas';
+
+/** Swap in a fresh default store (restored afterwards) around `run`. */
+function withStore(
+  run: (store: StreamLogStore, logger: AgentTrace) => void,
+): void {
+  const previousStore = getDefaultStreamLogStore();
+  const store = new StreamLogStore();
+  setDefaultStreamLogStore(store);
+  try {
+    run(store, createRunTrace('stream').trace);
+  } finally {
+    setDefaultStreamLogStore(previousStore);
+  }
+}
 
 describe('AgentTrace stream output', () => {
   afterEach(() => {
@@ -80,6 +98,103 @@ describe('AgentTrace stream output', () => {
     } finally {
       setDefaultStreamLogStore(previousStore);
     }
+  });
+
+  it('materializes streams at stream start, before any delta', () => {
+    withStore((store, logger) => {
+      const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
+
+      // The running entry exists immediately — the CLI keys its "model is
+      // thinking" indicator off it, and hidden reasoning may never emit a
+      // first chunk.
+      let entries = store.get('stream')?.getRange(0) ?? [];
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.THINKING);
+      expect(entries[0]?.text).toBe('');
+      expect(entries[0]?.data).toEqual({ status: 'running' });
+
+      thinking.finalize();
+      entries = store.get('stream')?.getRange(0) ?? [];
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.data).toEqual({ status: 'completed' });
+    });
+  });
+
+  it('emits nothing for a deferred stream until the first chunk', () => {
+    withStore((store, logger) => {
+      const thinking = logger.openStream(MESSAGE_TYPES.THINKING, {
+        deferStart: true,
+      });
+
+      expect(store.get('stream')).toBeUndefined();
+
+      thinking.append('reasoning delta');
+      flushPendingRunTraces();
+
+      const entries = store.get('stream')?.getRange(0) ?? [];
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.THINKING);
+      expect(entries[0]?.text).toBe('reasoning delta');
+
+      expect(thinking.finalize()).toBe('reasoning delta');
+      expect((store.get('stream')?.getRange(0) ?? [])[0]?.data).toEqual({
+        status: 'completed',
+      });
+    });
+  });
+
+  it('leaves no trace for a deferred stream finalized without content', () => {
+    withStore((store, logger) => {
+      const thinking = logger.openStream(MESSAGE_TYPES.THINKING, {
+        deferStart: true,
+      });
+
+      expect(thinking.finalize()).toBe('');
+      expect(store.get('stream')).toBeUndefined();
+    });
+  });
+
+  it('materializes a deferred stream finalized with reasoning text', () => {
+    withStore((store, logger) => {
+      const thinking = logger.openStream(MESSAGE_TYPES.THINKING, {
+        deferStart: true,
+      });
+
+      // Mirrors providers that only return reasoning in the final response.
+      expect(thinking.finalize('final reasoning')).toBe('final reasoning');
+
+      const entries = store.get('stream')?.getRange(0) ?? [];
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.text).toBe('final reasoning');
+      expect(entries[0]?.data).toEqual({ status: 'completed' });
+    });
+  });
+
+  it('announces phase boundaries without content for phase-only streams', () => {
+    withStore((store, logger) => {
+      // Workflow runs hide the response text (it is extracted and logged
+      // separately) but still announce that the response phase started.
+      const output = logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE, {
+        deferStart: true,
+        phaseOnly: true,
+      });
+
+      expect(store.get('stream')).toBeUndefined();
+
+      output.append('hidden partial output');
+
+      let entries = store.get('stream')?.getRange(0) ?? [];
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.MODEL_RESPONSE);
+      expect(entries[0]?.text).toBe('');
+      expect(entries[0]?.data).toEqual({ status: 'running' });
+
+      // finalize returns the locally buffered text but never publishes it.
+      expect(output.finalize('full output')).toBe('full output');
+      entries = store.get('stream')?.getRange(0) ?? [];
+      expect(entries[0]?.text).toBe('');
+      expect(entries[0]?.data).toEqual({ status: 'completed' });
+    });
   });
 
   it('accumulates disabled progress streams without scheduled updates', () => {

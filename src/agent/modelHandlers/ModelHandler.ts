@@ -230,19 +230,36 @@ export abstract class ModelHandler<
 
   /**
    * Convenience wrapper for thinking streams.
+   *
+   * Stream-timing contract: subscribers read `stream.start` as "this phase
+   * began" (the CLI lights its thinking indicator from it; a started output
+   * stream means the model response is underway). By default the start is
+   * deferred to the first content chunk — the only universally available
+   * signal — so a stream opened at request setup never announces a phase
+   * that doesn't happen. A handler that sees an explicit provider phase
+   * signal (Anthropic `content_block_start`, OpenAI Responses output items)
+   * opens the stream AT that signal with `atPhaseSignal: true`, which emits
+   * the start immediately. The safe polarity is the default: a mis-placed
+   * call site degrades to first-chunk timing instead of a false indicator.
    */
-  protected createThinkingStream() {
+  protected createThinkingStream(options?: { atPhaseSignal?: boolean }) {
     return this.logger.openStream(MESSAGE_TYPES.THINKING, {
       progressViewEnabled: this.progressViewEnabled,
+      deferStart: !options?.atPhaseSignal,
     });
   }
 
   /**
-   * Convenience wrapper for output streams.
+   * Convenience wrapper for output streams (timing contract above). When
+   * output streaming is disabled the stream still announces the response
+   * phase (start/end) but withholds the content — workflow runs extract and
+   * log the output separately instead of streaming it.
    */
-  protected createOutputStream() {
+  protected createOutputStream(options?: { atPhaseSignal?: boolean }) {
     return this.logger.openStream(MESSAGE_TYPES.MODEL_RESPONSE, {
       progressViewEnabled: this.progressViewEnabled,
+      deferStart: !options?.atPhaseSignal,
+      phaseOnly: !this.outputStreaming,
     });
   }
 
