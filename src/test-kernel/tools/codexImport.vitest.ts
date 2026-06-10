@@ -1,11 +1,11 @@
 // Third-party imports
-import { describe, it, beforeAll, afterEach } from 'vitest';
 
 // Node.js built-in imports
 import * as assert from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { describe, it, beforeAll, afterEach } from 'vitest';
 
 // Local imports - platform
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';

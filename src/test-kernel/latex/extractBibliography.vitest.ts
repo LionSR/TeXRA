@@ -1,9 +1,9 @@
 // Third-party imports
-import { describe, it, afterEach } from 'vitest';
 
 // Node.js built-in imports
 import * as assert from 'node:assert';
 import * as path from 'node:path';
+import { describe, it, afterEach } from 'vitest';
 
 // Local imports - latex helpers
 import {

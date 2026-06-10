@@ -1,9 +1,9 @@
 // Third-party imports
-import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Standard library imports
 import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
+import { describe, it, beforeEach, afterEach } from 'vitest';
 
 // Local imports - agent runtime
 import type { ResolvedAgent } from '@agent/index';
@@ -65,6 +65,9 @@ describe('loadAgentSettingAndPrompts', () => {
       [
         'name: polish',
         'settings:',
+        // agentCategory is the discriminator of AgentSettingSchema; only
+        // builtInToolUse agents get it defaulted, so custom YAMLs declare it.
+        '  agentCategory: workflow',
         '  rounds: 1',
         'prompts:',
         '  userRequest: unified variant',

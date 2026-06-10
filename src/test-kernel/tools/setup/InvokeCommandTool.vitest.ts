@@ -1,8 +1,8 @@
 // Third-party imports
+import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Node.js built-in imports
-import { strict as assert } from 'node:assert';
 
 // Local imports
 import { AUTH_COMMANDS } from '@auth/constants';

@@ -1,8 +1,8 @@
 // Third-party imports
+import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Standard library imports
-import { strict as assert } from 'node:assert';
 
 // Local imports - shared
 import {
@@ -102,8 +102,6 @@ describe('SettingsAgentCatalogController', () => {
           hasPath: true,
           filePath: '/agents/correct.yaml',
           tools: undefined,
-          hasMultiple: true,
-          hasMultiplePath: true,
           enabled: true,
         },
         {
@@ -114,8 +112,6 @@ describe('SettingsAgentCatalogController', () => {
           hasPath: false,
           filePath: undefined,
           tools: undefined,
-          hasMultiple: true,
-          hasMultiplePath: false,
           enabled: true,
         },
       ],
@@ -128,8 +124,6 @@ describe('SettingsAgentCatalogController', () => {
           hasPath: true,
           filePath: '/custom/customTool.yaml',
           tools: undefined,
-          hasMultiple: false,
-          hasMultiplePath: false,
           enabled: true,
         },
         {
@@ -140,8 +134,6 @@ describe('SettingsAgentCatalogController', () => {
           hasPath: true,
           filePath: '/tools/review.yaml',
           tools: ['grep'],
-          hasMultiple: false,
-          hasMultiplePath: false,
           enabled: false,
         },
       ],

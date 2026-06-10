@@ -1,19 +1,25 @@
 // Third-party imports
-import { describe, it } from 'vitest';
+import * as assert from 'node:assert';
+import { beforeAll, describe, it } from 'vitest';
 
 // Node.js built-in imports
-import * as assert from 'node:assert';
 
 // Internal imports
+import { createFakePlatform } from '@test/support/FakePlatform';
 import { flexibleFS } from '@utils/files/flexibleFS';
 import { pathToLocation } from '@utils/files/taskRunStorage';
 import { AbsoluteFS } from '@utils/files/absoluteFS';
 import { WorkspaceFS } from '@utils/files/workspaceFS';
 
+beforeAll(async () => {
+  // pathToLocation resolves paths against the platform workspace.
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(createFakePlatform());
+});
+
 describe('flexibleFS.write', () => {
-  it('retries workspace write after clearing symlink loops', async () => {
-    const originalWrite = WorkspaceFS.write;
-    const originalFullPath = WorkspaceFS.fullPath;
+  it('retries the write after clearing symlink loops', async () => {
+    const originalWrite = AbsoluteFS.write;
     const originalDelete = AbsoluteFS.delete;
 
     const writes: string[] = [];
@@ -21,7 +27,7 @@ describe('flexibleFS.write', () => {
     let attempt = 0;
 
     try {
-      (WorkspaceFS as unknown as { write: typeof WorkspaceFS.write }).write =
+      (AbsoluteFS as unknown as { write: typeof AbsoluteFS.write }).write =
         (async (target: string, content: string | Uint8Array) => {
           writes.push(target);
           attempt += 1;
@@ -36,12 +42,7 @@ describe('flexibleFS.write', () => {
               ? content
               : Buffer.from(content).toString('utf-8');
           assert.strictEqual(resolvedContent, 'content');
-        }) as typeof WorkspaceFS.write;
-
-      (
-        WorkspaceFS as unknown as { fullPath: typeof WorkspaceFS.fullPath }
-      ).fullPath = ((target: string) =>
-        `/tmp/workspace/${target}`) as typeof WorkspaceFS.fullPath;
+        }) as typeof AbsoluteFS.write;
 
       (AbsoluteFS as unknown as { delete: typeof AbsoluteFS.delete }).delete =
         (async (
@@ -52,16 +53,15 @@ describe('flexibleFS.write', () => {
           assert.deepEqual(options, { recursive: true, useTrash: false });
         }) as typeof AbsoluteFS.delete;
 
-      await flexibleFS.write(pathToLocation('file.tex'), 'content');
+      const location = pathToLocation('file.tex');
+      const expectedPath = WorkspaceFS.toAbsolute('file.tex');
+      await flexibleFS.write(location, 'content');
 
-      assert.deepEqual(writes, ['file.tex', 'file.tex']);
-      assert.strictEqual(deleteTarget, '/tmp/workspace/file.tex');
+      assert.deepEqual(writes, [expectedPath, expectedPath]);
+      assert.strictEqual(deleteTarget, expectedPath);
     } finally {
-      (WorkspaceFS as unknown as { write: typeof WorkspaceFS.write }).write =
+      (AbsoluteFS as unknown as { write: typeof AbsoluteFS.write }).write =
         originalWrite;
-      (
-        WorkspaceFS as unknown as { fullPath: typeof WorkspaceFS.fullPath }
-      ).fullPath = originalFullPath;
       (AbsoluteFS as unknown as { delete: typeof AbsoluteFS.delete }).delete =
         originalDelete;
     }

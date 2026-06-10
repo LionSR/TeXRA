@@ -1,5 +1,4 @@
 // Third-party imports
-import { describe, it, beforeAll, afterAll } from 'vitest';
 
 // Standard library imports
 import { Buffer } from 'node:buffer';
@@ -7,6 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { strict as assert } from 'node:assert';
+import { describe, it, beforeAll, afterAll } from 'vitest';
 
 // Third-party imports
 import { PDFDocument, StandardFonts } from '@cantoo/pdf-lib';

@@ -1,8 +1,8 @@
 // Third-party imports
+import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Node.js built-in imports
-import { strict as assert } from 'node:assert';
 
 // Internal imports
 import { applyReplacements } from '@replacement/engine';
@@ -13,8 +13,10 @@ import {
 
 describe('html entity replacements', () => {
   it('converts escaped xml tags into LaTeX environments', () => {
-    const input = '&lt;critique&gt;Great job&lt;/critique&gt;';
-    const expected = '\\begin{critique}Great job\\end{critique}';
+    // 'response' is one of the LATEX_ENVIRONMENTS covered by the XML-to-LaTeX
+    // conversions; arbitrary tag names are intentionally left untouched.
+    const input = '&lt;response&gt;Great job&lt;/response&gt;';
+    const expected = '\\begin{response}Great job\\end{response}';
 
     const result = applyReplacements(
       input,

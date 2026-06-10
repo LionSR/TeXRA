@@ -1,8 +1,8 @@
 // Third-party imports
+import { strict as assert } from 'node:assert';
 import { describe, it, afterEach } from 'vitest';
 
 // Standard library imports
-import { strict as assert } from 'node:assert';
 
 // Local imports - agent
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -203,6 +203,9 @@ describe('ToolUseFollowUp', () => {
         {
           text: 'child done',
           origin: 'subagent_result',
+          // Queue items always carry the optional metadata slots explicitly.
+          displayText: undefined,
+          mediaFiles: undefined,
         },
       ]);
     } finally {

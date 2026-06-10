@@ -1,7 +1,7 @@
 // Third-party imports
+import * as assert from 'assert';
 import { describe, it } from 'vitest';
 
-import * as assert from 'assert';
 import { getBasename } from '@shared/utils/path';
 
 describe('pathUtils Test Suite', () => {

@@ -1,9 +1,9 @@
 // Third-party imports
-import { describe, it } from 'vitest';
 
 // Standard library imports
 import { createRequire } from 'node:module';
 import { strict as assert } from 'node:assert';
+import { describe, it } from 'vitest';
 
 // Local imports - schemas
 import {

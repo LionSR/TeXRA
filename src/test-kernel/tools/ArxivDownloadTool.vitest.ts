@@ -1,15 +1,15 @@
 // Third-party imports
+import * as assert from 'node:assert';
 import { describe, it, afterEach } from 'vitest';
 
 // Node.js built-in imports
-import * as assert from 'node:assert';
 
 // Local imports - tools
 import * as arxivModule from '@latex/arxivProcessor';
 import { LsTool } from '@tools/ls';
 import type { ToolResult } from '@tools/result';
-import { WorkspaceFS } from '@utils/files';
 import { ArxivDownloadTool } from '@tools/arxiv/ArxivDownloadTool';
+import { WorkspaceFS } from '@utils/files';
 
 declare module '@latex/arxivProcessor' {
   interface ArxivSourceProcessor {

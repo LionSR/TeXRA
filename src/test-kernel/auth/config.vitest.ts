@@ -1,6 +1,6 @@
-import { describe, it, afterEach } from 'vitest';
-
+// Third-party imports
 import { strict as assert } from 'node:assert';
+import { describe, it, afterEach } from 'vitest';
 
 import {
   getExternalAuthCallbackInfo,

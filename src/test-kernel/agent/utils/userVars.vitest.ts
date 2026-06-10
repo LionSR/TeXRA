@@ -1,10 +1,14 @@
 // Third-party imports
-import { describe, it } from 'vitest';
+import { strict as assert } from 'node:assert';
+import { beforeAll, describe, it } from 'vitest';
 
 // Standard library imports
-import { strict as assert } from 'node:assert';
 
 // Local imports - agent components
+import {
+  createFakePlatform,
+  FakeConfigProvider,
+} from '@test/support/FakePlatform';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -17,7 +21,15 @@ import type {
 } from '@agent/core/definition/AgentDataclass';
 // Internal imports
 import { buildUserVars, getToolFlags } from '@agent/utils/userVars';
-import * as configModule from '@utils/config';
+
+// getConfig reads through the platform config provider; drive the setting
+// via this provider instead of patching the ESM export.
+const fakeConfig = new FakeConfigProvider();
+
+beforeAll(async () => {
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(createFakePlatform({}, { config: fakeConfig }));
+});
 
 const baseSetting: AgentSetting = {
   agentCategory: AgentCategory.Workflow,
@@ -55,37 +67,17 @@ const baseConfig: AgentConfig = AgentConfigSchema.parse({
 });
 
 describe('getToolFlags', () => {
-  it('uses texra.debug.saveInputPrompt setting for PRINT_INPUT_PROMPT', () => {
-    const originalGetConfig = configModule.getConfig;
-
+  it('uses texra.debug.saveInputPrompt setting for PRINT_INPUT_PROMPT', async () => {
     try {
-      (configModule as any).getConfig = (
-        path: string,
-        defaultValue?: unknown,
-      ) => {
-        if (path === 'debug.saveInputPrompt') {
-          return true;
-        }
-        return defaultValue as unknown;
-      };
-
+      fakeConfig.set('texra.debug.saveInputPrompt', true);
       const enabledFlags = getToolFlags(baseConfig, baseSetting, basePrompt);
       assert.equal(enabledFlags.PRINT_INPUT_PROMPT, true);
 
-      (configModule as any).getConfig = (
-        path: string,
-        defaultValue?: unknown,
-      ) => {
-        if (path === 'debug.saveInputPrompt') {
-          return false;
-        }
-        return defaultValue as unknown;
-      };
-
+      fakeConfig.set('texra.debug.saveInputPrompt', false);
       const disabledFlags = getToolFlags(baseConfig, baseSetting, basePrompt);
       assert.equal(disabledFlags.PRINT_INPUT_PROMPT, false);
     } finally {
-      (configModule as any).getConfig = originalGetConfig;
+      await fakeConfig.update('texra.debug.saveInputPrompt', undefined);
     }
   });
 

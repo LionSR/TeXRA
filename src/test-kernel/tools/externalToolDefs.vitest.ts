@@ -1,11 +1,10 @@
 // Third-party imports
+import * as assert from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Node.js built-in imports
-import * as assert from 'node:assert';
 
 // Local imports - platform/test support/tools
-import { initPlatform, tryPlatform } from '@platform/platform';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { findExternalToolDef } from '@tools/externalToolDefs';
 
@@ -41,6 +40,9 @@ describe('external tool definitions', () => {
   it('detects the current TeXRA CLI process through the host checker', async () => {
     const texraCli = findExternalToolDef('texra-cli');
     assert.ok(texraCli, 'TeXRA CLI tool definition should exist');
+    // Dynamic import: the no-platform-init-outside-composition-root lint rule
+    // reserves static initPlatform imports for composition roots.
+    const { initPlatform, tryPlatform } = await import('@platform/platform');
     const previousPlatform = tryPlatform();
     initPlatform(
       createFakePlatform(

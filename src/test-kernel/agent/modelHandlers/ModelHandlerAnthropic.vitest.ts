@@ -1,11 +1,11 @@
 // Third-party imports
-import { afterEach, beforeAll, describe, it, vi } from 'vitest';
 
 // Standard library imports
 import { strict as assert } from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { afterEach, beforeAll, describe, it, vi } from 'vitest';
 
 // Third-party imports
 import { APIUserAbortError as AnthropicUserAbortError } from '@anthropic-ai/sdk';
@@ -44,8 +44,8 @@ import {
 import * as serverKeysModule from '@auth/serverKeys';
 
 // Local imports - model config
-import * as configUtils from '@utils/config/configUtils';
 import { pathToLocation } from '@utils/files';
+import * as configUtils from '@utils/config/configUtils';
 
 // Type imports
 import type {

@@ -1,11 +1,11 @@
 // Third-party imports
-import { beforeAll, describe, it } from 'vitest';
 
 // Standard library imports
 import { strict as assert } from 'node:assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { beforeAll, describe, it } from 'vitest';
 
 // Third-party imports
 import {

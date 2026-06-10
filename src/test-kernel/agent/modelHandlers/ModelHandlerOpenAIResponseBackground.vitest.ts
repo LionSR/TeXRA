@@ -1,8 +1,8 @@
 // Third-party imports
+import { strict as assert } from 'node:assert';
 import { describe, it, afterEach, vi } from 'vitest';
 
 // Node.js built-in imports
-import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import {

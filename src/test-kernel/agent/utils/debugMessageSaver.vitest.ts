@@ -1,17 +1,28 @@
 // Third-party imports
-import { describe, it, beforeEach, afterEach } from 'vitest';
-
-// Standard library imports
 import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
+import { describe, it, beforeAll, beforeEach, afterEach } from 'vitest';
+
+// Standard library imports
 
 // Local imports - agent
 // Internal imports
+import { createFakePlatform } from '@test/support/FakePlatform';
 import { maybeSaveDebugObject } from '@agent/utils/debugMessageSaver';
 import type { ExecutionId } from '@shared/schemas';
-import * as configModule from '@utils/config';
 import { WorkspaceFS, StorageFS } from '@utils/files';
 import { TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
+
+beforeAll(async () => {
+  // getConfig reads through the platform config provider; enable the
+  // debug-object saving flag there instead of patching the ESM export.
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(
+    createFakePlatform({
+      config: { 'texra.debug.saveDebugObjects': true },
+    }),
+  );
+});
 
 describe('maybeSaveDebugObject', () => {
   type StorageFsMutable = {
@@ -33,7 +44,6 @@ describe('maybeSaveDebugObject', () => {
   const originalStorageFullPath = storageFs.fullPath;
   const originalWorkspaceWriteJson = workspaceFs.writeJson;
   const originalWorkspaceFullPath = workspaceFs.fullPath;
-  const originalGetConfig = configModule.getConfig;
 
   let storageWrites: { relativePath: string; value: unknown }[];
   let ensured: string[];
@@ -65,16 +75,6 @@ describe('maybeSaveDebugObject', () => {
 
     workspaceFs.fullPath = (relativePath) =>
       path.join('/mock/workspace', relativePath);
-
-    (configModule as { getConfig: typeof originalGetConfig }).getConfig = ((
-      key: string,
-      defaultValue?: unknown,
-    ) => {
-      if (key === 'texra.debug.saveDebugObjects') {
-        return true;
-      }
-      return defaultValue;
-    }) as typeof originalGetConfig;
   });
 
   afterEach(() => {
@@ -83,8 +83,6 @@ describe('maybeSaveDebugObject', () => {
     storageFs.fullPath = originalStorageFullPath;
     workspaceFs.writeJson = originalWorkspaceWriteJson;
     workspaceFs.fullPath = originalWorkspaceFullPath;
-    (configModule as { getConfig: typeof originalGetConfig }).getConfig =
-      originalGetConfig;
   });
 
   it('creates the run directory and writes debug objects under storage when executionId is provided', async () => {

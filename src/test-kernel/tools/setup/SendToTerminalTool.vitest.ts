@@ -1,11 +1,10 @@
 // Third-party imports
-import { describe, it, beforeAll } from 'vitest';
 
 // Node.js built-in imports
 import { strict as assert } from 'node:assert';
+import { describe, it, beforeAll } from 'vitest';
 
 // Local imports
-import { initPlatform, type Platform } from '@platform/platform';
 import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
 import { SendToTerminalTool } from '@tools/setup/SendToTerminalTool';
 import {
@@ -15,6 +14,7 @@ import {
 } from '@tools/setup/platform';
 
 import { createFakeSetupPlatform } from './fixtures';
+import type { Platform } from '@platform/platform';
 
 /**
  * `requestBashApproval` reads `texra.toolUse.requireBashApproval` via
@@ -25,14 +25,18 @@ import { createFakeSetupPlatform } from './fixtures';
  * approval flag resolves to `false`.
  *
  * `initPlatform` mutates module-scope state and the platform stays
- * registered for the rest of the mocha process; we don't reset it in an
- * `after` hook because there's no public reset API. That's fine here:
- * the stub returns `defaultValue` verbatim for every key except
- * `BASH_APPROVAL_CONFIG_KEY`, so any test that runs after this file in
- * the same process sees behaviour identical to "no platform registered"
- * unless it also checks the approval flag.
+ * registered for the rest of this file's worker process (vitest isolates
+ * suites per file); we don't reset it in an `afterAll` hook because there
+ * is no public reset API. That's fine here: the stub returns
+ * `defaultValue` verbatim for every key except `BASH_APPROVAL_CONFIG_KEY`,
+ * so behaviour stays identical to "no platform registered" unless a test
+ * also checks the approval flag.
+ *
+ * Dynamic import: the no-platform-init-outside-composition-root lint rule
+ * reserves static initPlatform imports for composition roots.
  */
-function installApprovalSkippingPlatform(): void {
+async function installApprovalSkippingPlatform(): Promise<void> {
+  const { initPlatform } = await import('@platform/platform');
   const stub: Partial<Platform> = {
     config: {
       get: <T>(key: string, defaultValue?: T): T =>

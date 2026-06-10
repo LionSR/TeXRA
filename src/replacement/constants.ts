@@ -87,7 +87,12 @@ const LINE_BREAK_PATTERN = String.raw`\r?\n`;
 // 5. Inline body content (empty for multiline matches)
 export const FENCED_LATEX_BLOCK_PATTERN_MULTILINE = String.raw`(^|${LINE_BREAK_PATTERN})([ \t]*):::\s*(${FENCED_LATEX_ENVIRONMENT_PATTERN})[^\S\r\n]*(?:${LINE_BREAK_PATTERN}([\s\S]*?))?${LINE_BREAK_PATTERN}[ \t]*():::(?=${LINE_BREAK_PATTERN}|$)`;
 
-export const FENCED_LATEX_BLOCK_PATTERN_INLINE = String.raw`(^|${LINE_BREAK_PATTERN})([ \t]*):::\s*(${FENCED_LATEX_ENVIRONMENT_PATTERN})[^\S\r\n]*()([^\r\n]*)[ \t]*:::(?=${LINE_BREAK_PATTERN}|$)`;
+// The inline pattern needs an explicit boundary after the environment name:
+// without it, alternation order lets a prefix win (e.g. `::: aligned x :::`
+// would match `align` and leak `ed ` into the body) because the catch-all
+// inline body can absorb the leftover characters. The multiline pattern is
+// immune since it requires a line break right after the name.
+export const FENCED_LATEX_BLOCK_PATTERN_INLINE = String.raw`(^|${LINE_BREAK_PATTERN})([ \t]*):::\s*(${FENCED_LATEX_ENVIRONMENT_PATTERN})(?![\w*])[^\S\r\n]*()([^\r\n]*)[ \t]*:::(?=${LINE_BREAK_PATTERN}|$)`;
 
 // Union of common LaTeX environments used across rules
 // prettier-ignore

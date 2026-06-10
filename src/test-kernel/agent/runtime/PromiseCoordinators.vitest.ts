@@ -1,8 +1,8 @@
 // Third-party imports
+import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Standard library imports
-import { strict as assert } from 'node:assert';
 
 // Local imports
 import { type AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
@@ -68,6 +68,7 @@ describe('promise coordinators', () => {
           approvalId: 'approval:runtime',
           streamId: 'stream:runtime',
           plan,
+          odysseyEnabled: false,
         },
       },
       {

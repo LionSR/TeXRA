@@ -1,7 +1,8 @@
 // Third-party imports
+import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
-import { strict as assert } from 'node:assert';
+// Third-party imports
 
 // Local imports - utils
 import {

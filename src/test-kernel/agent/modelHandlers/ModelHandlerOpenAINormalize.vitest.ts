@@ -1,8 +1,8 @@
 // Third-party imports
+import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Standard library imports
-import { strict as assert } from 'node:assert';
 
 // (none needed)
 

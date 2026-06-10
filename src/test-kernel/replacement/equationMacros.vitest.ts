@@ -1,8 +1,8 @@
 // Third-party imports
+import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Node.js built-in imports
-import { strict as assert } from 'node:assert';
 
 // Internal imports
 import { applyReplacements } from '@replacement/engine';
@@ -39,12 +39,11 @@ W = a
   });
 
   it('handles trailing whitespace on macro lines', () => {
-    const input = String.raw`\be\u0020\u0020\u0020
-E = mc^2
-\ee\t`;
-    const expected = String.raw`\begin{equation}\u0020\u0020\u0020
-E = mc^2
-\end{equation}\t`;
+    // Real trailing spaces after \be and a real tab after \ee. The previous
+    // String.raw fixture kept the \u0020 / \t escapes as literal text, which
+    // the own-line macro pattern (correctly) refuses to match.
+    const input = '\\be   \nE = mc^2\n\\ee\t';
+    const expected = '\\begin{equation}   \nE = mc^2\n\\end{equation}\t';
 
     const result = applyMacros(input);
     assert.strictEqual(result, expected);

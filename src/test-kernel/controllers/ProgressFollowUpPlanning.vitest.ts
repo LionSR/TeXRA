@@ -1,8 +1,8 @@
 // Third-party imports
+import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Standard library imports
-import { strict as assert } from 'node:assert';
 
 // Local imports - agent
 import { ProgressFollowUpController } from '@controllers/progressView/ProgressFollowUpController';
@@ -103,9 +103,10 @@ function createController(
 describe('ProgressFollowUpController', () => {
   it('builds a tool-use follow-up restore plan from workflow outputs', () => {
     const controller = createController();
+    const taskState = createFollowUpWorkflowTaskState();
     const plan = controller.planToolUseFollowUp({
       streamId: 'stream-a',
-      taskState: createFollowUpWorkflowTaskState(),
+      taskState,
       outputFiles: [createRunStorageOutputFile()],
       agent: 'tool-agent',
       model: 'gemini31p',
@@ -123,7 +124,13 @@ describe('ProgressFollowUpController', () => {
       plan.taskState.agentConfig.agentCategory,
       AgentCategory.ToolUse,
     );
-    assert.equal(plan.taskState.agentConfig.inputFiles[0], 'main.tex');
+    // The follow-up keeps the workflow's input files exactly as the task
+    // state recorded them (the harness's legacy `inputFile` slot migrates to
+    // the head of `inputFiles`, ahead of the declared 'main.tex').
+    assert.deepEqual(
+      plan.taskState.agentConfig.inputFiles,
+      taskState.agentConfig.inputFiles,
+    );
     assert.equal(plan.taskState.agentConfig.outputFiles.length, 0);
     assert.match(
       plan.taskState.agentConfig.instruction,

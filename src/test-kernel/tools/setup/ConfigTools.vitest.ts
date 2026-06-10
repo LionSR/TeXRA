@@ -1,6 +1,6 @@
-import { describe, it } from 'vitest';
-
+// Third-party imports
 import { strict as assert } from 'node:assert';
+import { describe, it } from 'vitest';
 
 import { ReadConfigTool, UpdateConfigTool } from '@tools/setup/ConfigTools';
 import { setSetupPlatform, type SetupPlatform } from '@tools/setup/platform';

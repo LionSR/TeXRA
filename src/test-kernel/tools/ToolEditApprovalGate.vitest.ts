@@ -1,7 +1,8 @@
 // Third-party imports
+import * as assert from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'vitest';
 
-import * as assert from 'node:assert';
+// Third-party imports
 
 // Local imports - tests
 import { createFakePlatform } from '@test/support/FakePlatform';

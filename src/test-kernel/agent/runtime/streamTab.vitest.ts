@@ -1,8 +1,8 @@
 // Third-party imports
+import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Standard library imports
-import { strict as assert } from 'node:assert';
 
 // Local imports
 import { getStreamTabId } from '@agent/runtime/streamTab';
@@ -17,7 +17,9 @@ describe('getStreamTabId', () => {
   });
 
   it('strips the source prefix from the agent name', () => {
-    const id = getStreamTabId('builtin:polish', 'sonnet', {
+    // Only valid AgentSource prefixes are stripped ('builtInWorkflow',
+    // 'builtInToolUse', 'custom', 'remote'); unknown prefixes are kept.
+    const id = getStreamTabId('builtInWorkflow:polish', 'sonnet', {
       executionId: EXEC_ID,
     });
     assert.equal(id, `polish@sonnet#${EXEC_ID}`);

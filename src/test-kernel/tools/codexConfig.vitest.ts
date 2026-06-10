@@ -1,9 +1,9 @@
 // Third-party imports
-import { describe, it, afterEach } from 'vitest';
 
 // Standard library imports
 import { strict as assert } from 'node:assert';
 import * as path from 'node:path';
+import { describe, it, afterEach } from 'vitest';
 
 // Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';

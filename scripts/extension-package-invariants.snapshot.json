@@ -192,6 +192,11 @@
         },
         {
           "category": "TeXRA",
+          "command": "texra.compactResponse",
+          "title": "Compact Response"
+        },
+        {
+          "category": "TeXRA",
           "command": "texra.execute",
           "title": "Execute Agent"
         },

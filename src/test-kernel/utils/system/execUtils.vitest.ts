@@ -1,11 +1,21 @@
 // Third-party imports
-import { describe, it } from 'vitest';
+import { strict as assert } from 'node:assert';
+import { beforeAll, describe, it } from 'vitest';
 
 // Standard library imports
-import { strict as assert } from 'node:assert';
+
+// Local imports - test support
+import { createFakePlatform } from '@test/support/FakePlatform';
 
 // Local imports - utils
 import { executeCommand } from '@utils/system/execUtils';
+
+beforeAll(async () => {
+  // executeCommand resolves its cwd from the workspace; point the fake
+  // platform at a directory that exists on disk so spawning succeeds.
+  const { initPlatform } = await import('@platform/platform');
+  initPlatform(createFakePlatform({ workspacePath: process.cwd() }));
+});
 
 describe('executeCommand', () => {
   it('runs string commands with shell operators intact', async () => {

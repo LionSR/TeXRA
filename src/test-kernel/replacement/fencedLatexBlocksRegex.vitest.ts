@@ -1,8 +1,8 @@
 // Third-party imports
+import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Node.js built-in imports
-import { strict as assert } from 'node:assert';
 
 // Internal imports
 import { applyReplacements } from '@replacement/engine';
@@ -54,9 +54,9 @@ describe('FENCED_LATEX_BLOCK_REPLACEMENTS', () => {
 
   it('converts inline fenced aligned blocks', () => {
     const input = '::: aligned {_i=1^n X_i t} &(-) :::';
-    const expected = String.raw`\begin{aligned}
-{_i=1^n X_i t} &(-)
-\end{aligned}`;
+    // Whitespace between the body and the closing fence stays part of the
+    // body (see the trailing-spaces test below).
+    const expected = '\\begin{aligned}\n{_i=1^n X_i t} &(-) \n\\end{aligned}';
     assert.strictEqual(convert(input), expected);
   });
 
