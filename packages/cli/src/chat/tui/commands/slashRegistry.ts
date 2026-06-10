@@ -171,7 +171,13 @@ export function slashPickIntent(
 /**
  * Parse a `"/cmd remainder"` input into `{ name, remainder }`.
  * Also accepts `\clear` as a compatibility alias.
- * Returns `undefined` if `text` is not a slash command.
+ * Returns `undefined` if `text` is not a slash command. Only command-shaped
+ * tokens qualify: command names are plain identifiers (letters, digits, `_`,
+ * `-`), so a leading token with any other character — `/Users/me/figure.pdf`,
+ * `/notes.txt`, `/3.14` — is a pasted path or message that must reach the
+ * agent instead of dying as "Unknown command". Command-shaped near-misses
+ * (`/hlp`) still parse so the typo suggestion can catch them, and the empty
+ * name (bare `/`) still parses so the palette opens.
  */
 export function parseSlashInput(
   text: string,
@@ -183,6 +189,8 @@ export function parseSlashInput(
   }
   const body = text.slice(1);
   const ws = body.search(/\s/);
-  if (ws === -1) return { name: body, remainder: '' };
-  return { name: body.slice(0, ws), remainder: body.slice(ws + 1) };
+  const name = ws === -1 ? body : body.slice(0, ws);
+  if (!/^[\w-]*$/.test(name)) return undefined;
+  if (ws === -1) return { name, remainder: '' };
+  return { name, remainder: body.slice(ws + 1) };
 }
