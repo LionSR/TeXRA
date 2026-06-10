@@ -3,7 +3,6 @@
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 import { when } from 'lit/directives/when.js';
 
 // Side-effect imports - register WA icon component
@@ -47,34 +46,23 @@ export class ToolEditRequestPanel extends BaseFeedbackPanel {
     const data = this.permission.data as ToolEditPermission;
     const diffMeta = this.renderDiffMeta(data);
 
-    return html`
-      <div
-        class=${classMap({
-          'approval-request': true,
-          'approval-request--feedback-active': this.showFeedback,
-        })}
-      >
-        <div class="approval-request__details">
-          <div class="approval-request__path">
-            ${data.relativePath || data.path}
-          </div>
-          <div class="approval-request__meta">
-            ${data.sourceTool ? `Requested by ${data.sourceTool}` : ''}
-            ${data.sourceTool && diffMeta ? html`<span>•</span>` : nothing}
-            ${diffMeta}
-          </div>
+    return this.renderRequestShell({
+      prefix: 'approval-request',
+      details: html`
+        <div class="approval-request__path">
+          ${data.relativePath || data.path}
         </div>
-        <div class="approval-request__actions">
-          ${this.renderDiffActions()} ${this.renderApproveButton('Approve (y)')}
-          ${this.renderRejectButton('Reject (n)')}
+        <div class="approval-request__meta">
+          ${data.sourceTool ? `Requested by ${data.sourceTool}` : ''}
+          ${data.sourceTool && diffMeta ? html`<span>•</span>` : nothing}
+          ${diffMeta}
         </div>
-        ${this.renderFeedbackSection(
-          'approval-request__feedback',
-          'approval-request__feedback-input',
-        )}
-        ${this.renderInlineDiff(data)}
-      </div>
-    `;
+      `,
+      approveTitle: 'Approve (y)',
+      rejectTitle: 'Reject (n)',
+      leadingActions: this.renderDiffActions(),
+      trailing: this.renderInlineDiff(data),
+    });
   }
 
   // ===========================================================================
