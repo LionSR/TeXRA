@@ -275,7 +275,7 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
   });
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" aria-role="listbox">
       {props.showOverflow && hiddenBefore > 0 ? (
         <Text dimColor>{`... ${hiddenBefore} earlier`}</Text>
       ) : null}
@@ -289,11 +289,24 @@ export function Select<T>(props: SelectProps<T>): React.JSX.Element {
         const shortcut = hotkey ? `${hotkey}.` : '  ';
         const showInlineOverflow = focused && inlineOverflowText;
         return (
-          <Box key={selectItemRenderKey(item, i)} minWidth={0}>
+          <Box
+            key={selectItemRenderKey(item, i)}
+            minWidth={0}
+            aria-role="option"
+            aria-state={{
+              selected: focused,
+              checked: active,
+              disabled: item.disabled,
+            }}
+          >
+            {/* Pointer/tick glyphs are decorative for screen readers — the
+                option role + state above already announce focus/active. The
+                hotkey stays audible because it is actionable. */}
             <Box flexShrink={0}>
-              <Text color={focused ? 'cyan' : undefined}>
-                {pointer} {tick} {shortcut}{' '}
+              <Text aria-hidden color={focused ? 'cyan' : undefined}>
+                {pointer} {tick}{' '}
               </Text>
+              <Text color={focused ? 'cyan' : undefined}>{shortcut} </Text>
             </Box>
             <Box flexShrink={0} maxWidth={SELECT_LABEL_MAX_COLS}>
               <Text

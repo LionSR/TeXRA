@@ -153,6 +153,9 @@ import { projectStreamTranscript } from './state/transcriptProjection';
 import {
   cleanupTerminalModes,
   clearTerminalScrollback,
+  installTerminalRestoreOnExit,
+  restoreTuiInputModes,
+  supportsTerminalJobControl,
 } from './terminalCleanup';
 import {
   transcriptViewportRepaintOptions,
@@ -1070,6 +1073,10 @@ export async function runChat(
   const snapshotStore = new StreamSnapshotStore();
 
   const disposers: Array<() => void> = [];
+  // Crash safety: if the process dies outside the orderly teardown below
+  // (uncaught exception, stray process.exit), still restore the terminal so
+  // the user's shell isn't left in raw/kitty/mouse mode with a hidden cursor.
+  disposers.push(installTerminalRestoreOnExit({ clearItermProgress }));
   disposers.push(subscribeStreamLog());
   disposers.push(subscribeStreamStatus());
   disposers.push(snapshotStore.subscribe(bus));
@@ -1578,6 +1585,7 @@ export async function runChat(
       onInterruptActive={interruptActive}
       onTranscriptViewportChange={repaintTranscriptViewport}
       onCtrlC={() => handleSigint()}
+      onSuspend={() => handleSigtstp()}
       onKillExecution={(executionId) => {
         clearApprovals();
         executionRegistry.kill(executionId);
@@ -1602,6 +1610,10 @@ export async function runChat(
       // plain Enter stays a legacy `\r`, and Ink pops the protocol on unmount.
       kittyKeyboard: {
         mode: terminalCaps.kittyKeyboard ? 'enabled' : 'disabled',
+        // Pin the flags rather than relying on Ink's default: the SIGCONT
+        // re-push in terminalCleanup re-arms exactly this set, so the two
+        // must not drift apart.
+        flags: ['disambiguateEscapeCodes'],
       },
     },
   );
@@ -1609,6 +1621,7 @@ export async function runChat(
 
   let pendingExitTimer: ReturnType<typeof setTimeout> | undefined;
   let exitArmed = false;
+  const terminalJobControlSupported = supportsTerminalJobControl();
   // Set once a signal exit (exitNow) starts: its ink.unmount() resolves
   // waitUntilExit and re-enters the post-waitUntilExit finally, so the finally
   // guards on this to avoid draining persistence / printing the resume hint a
@@ -1625,6 +1638,10 @@ export async function runChat(
     process.off('SIGINT', handleSigint);
     process.off('SIGTERM', handleSigterm);
     process.off('SIGHUP', handleSighup);
+    if (terminalJobControlSupported) {
+      process.off('SIGTSTP', handleSigtstp);
+      process.off('SIGCONT', handleSigcont);
+    }
   };
   // Persist the reopen hint to native scrollback: the main session plus each
   // resumable tool-use subagent, so any route can be continued by its own id.
@@ -1726,6 +1743,28 @@ export async function runChat(
   };
   const handleSigterm = (): void => handleTermSignal(143);
   const handleSighup = (): void => handleTermSignal(129);
+  // Suspend/resume (Ctrl-Z / `kill -TSTP` / `fg`). Raw mode keeps the tty
+  // driver from ever turning ^Z into a signal, so App's unified useInput
+  // routes the parsed Ctrl-Z here explicitly; external SIGTSTP lands in the
+  // same handler. Restore the terminal for the shell before stopping, then
+  // stop with SIGSTOP — this handler replaced the default stop action, so
+  // re-raising SIGTSTP would just recurse.
+  const handleSigtstp = (): void => {
+    if (!terminalJobControlSupported) return;
+    cleanupTerminalModes({ clearItermProgress });
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    process.kill(process.pid, 'SIGSTOP');
+  };
+  // On resume the shell restores only the termios snapshot from suspend time
+  // (non-raw, since handleSigtstp dropped raw mode first); the emulator-side
+  // modes were popped outright. Re-arm both, then repaint from a known origin
+  // — the shell prompt and `fg` echo have polluted the screen, so the same
+  // clear-and-reprint path as a width change is the only safe redraw.
+  const handleSigcont = (): void => {
+    if (process.stdin.isTTY) process.stdin.setRawMode(true);
+    restoreTuiInputModes({ kittyKeyboard: terminalCaps.kittyKeyboard });
+    inkRef.current?.repaint({ clearScrollback: true });
+  };
   function requestInputExit(): void {
     removeProcessHandlers();
     clearPendingExit();
@@ -1734,6 +1773,10 @@ export async function runChat(
   process.on('SIGINT', handleSigint);
   process.on('SIGTERM', handleSigterm);
   process.on('SIGHUP', handleSighup);
+  if (terminalJobControlSupported) {
+    process.on('SIGTSTP', handleSigtstp);
+    process.on('SIGCONT', handleSigcont);
+  }
 
   // Interactive resume: kick off the continued tool-use run now that Ink is
   // mounted (so the rehydrated transcript + streamed continuation render) and

@@ -3,6 +3,7 @@
 // markdown renderer; the live tail stays plain text to avoid re-parsing a
 // growing document on every chunk.
 
+import { memo } from 'react';
 import { Box, Text } from 'ink';
 
 import { Markdown } from '../render/Markdown';
@@ -193,7 +194,11 @@ function ProcessEntryRow({
   );
 }
 
-export function TranscriptEntry({
+// The entry renderers are memoized: stream sync keeps unchanged entry
+// objects reference-identical across ticks (see `renderLogEntry`'s
+// `entriesEqual` reuse), so a streaming delta re-wraps only the entry that
+// actually changed instead of every pending row on each 16ms tick.
+export const TranscriptEntry = memo(function TranscriptEntry({
   entry,
   width,
   colorEnabled,
@@ -267,7 +272,7 @@ export function TranscriptEntry({
       />
     </Box>
   );
-}
+});
 
 function boundedLines(
   lines: readonly string[],
@@ -323,7 +328,7 @@ export function boundedAssistantDisplayLines({
   );
 }
 
-export function BoundedTranscriptEntry({
+export const BoundedTranscriptEntry = memo(function BoundedTranscriptEntry({
   colorEnabled,
   entry,
   maxRows,
@@ -402,14 +407,14 @@ export function BoundedTranscriptEntry({
       </Text>
     </Box>
   );
-}
+});
 
 // Cap the live tail so a multi-megabyte assistant buffer doesn't re-wrap
 // every chunk. The static `<Static>` transcript owns the full history; we
 // only need enough characters here to fill a typical viewport.
 export const LIVE_TAIL_ROWS = 24;
 
-export function LiveTranscriptEntry({
+export const LiveTranscriptEntry = memo(function LiveTranscriptEntry({
   entry,
   width,
 }: {
@@ -423,4 +428,4 @@ export function LiveTranscriptEntry({
       <Text>{fillRows(rows.join('\n'), cols)}</Text>
     </Box>
   );
-}
+});
