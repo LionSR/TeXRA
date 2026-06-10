@@ -369,25 +369,24 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         { signal },
       );
       const aggregator = new OpenRouterStreamAggregator();
+      // Opened before the request; the deferred starts fire (if ever) at the
+      // first reasoning/content delta — the phase signal for this API.
       const thinking = this.createThinkingStream();
-      const output = this.isOutputStreamingEnabled()
-        ? this.createOutputStream()
-        : undefined;
+      const output = this.createOutputStream();
 
       try {
         for await (const chunk of stream) {
           const { contentDelta, reasoningDelta } =
             aggregator.consumeChunk(chunk);
           if (reasoningDelta) thinking.append(reasoningDelta);
-          if (contentDelta) output?.append(contentDelta);
+          if (contentDelta) output.append(contentDelta);
         }
 
         const response = aggregator.buildResponse();
         const finalReasoning = this.processThinkingBlock(response);
         thinking.finalize(finalReasoning ?? undefined);
         const finalOutput = response.choices?.[0]?.message?.content ?? '';
-        if (output)
-          output.finalize(typeof finalOutput === 'string' ? finalOutput : '');
+        output.finalize(typeof finalOutput === 'string' ? finalOutput : '');
 
         if (response.usage?.promptTokens) {
           this.lastKnownInputTokens = response.usage.promptTokens;
@@ -401,7 +400,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         // Ensure progress streams are finalized on error to prevent
         // the progress view from being stuck in a loading state
         thinking.finalize(undefined);
-        output?.finalize('');
+        output.finalize('');
         // Lift the accumulated partial text onto the error so the retry UI
         // can show the tail (parity with the other streaming providers).
         const partialTail = takeTail(

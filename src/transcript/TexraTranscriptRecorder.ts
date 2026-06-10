@@ -8,8 +8,10 @@
  * one of many possible subscribers.
  *
  * Streaming behavior mirrors the `AgentTrace` stream pattern:
- *   - first chunk creates the entry (with empty text if no chunks yet)
- *   - subsequent chunks are buffered + flushed on an interval
+ *   - stream.start creates the entry (empty text, status running) — it marks
+ *     the moment the phase began, so consumers can surface liveness from it
+ *   - the first content chunk flushes immediately; later chunks are
+ *     buffered + flushed on an interval
  *   - finalize flushes any pending chunks immediately
  */
 import { nanoid } from 'nanoid';
@@ -252,8 +254,8 @@ export function attachTranscriptRecorder(
         return;
       }
 
-      case 'stream.start':
-        streams.set(event.id, {
+      case 'stream.start': {
+        const state: StreamSinkState = {
           buffer: '',
           pending: [],
           created: false,
@@ -263,14 +265,27 @@ export function attachTranscriptRecorder(
           level: 'info',
           messageType: asMessageType(event.kind),
           updateTimer: null,
-        });
+        };
+        streams.set(event.id, state);
+        // The start IS the signal consumers care about — it marks the moment
+        // the phase began: a running THINKING entry drives the CLI's "model
+        // is thinking" indicator, and a running MODEL_RESPONSE entry says
+        // the response has started even when its content is withheld
+        // (phase-only workflow streams, hidden reasoning that never emits a
+        // chunk). Materialize the entry immediately; renderers already skip
+        // entries with empty text.
+        flushStream(state, event.id);
         return;
+      }
 
       case 'stream.chunk': {
         const state = streams.get(event.id);
         if (!state || !state.enabled) return;
         state.pending.push(event.text);
-        if (!state.created) {
+        // First content flushes immediately — the entry was materialized
+        // empty at stream.start, so without this the first paint would wait
+        // out the coalescing interval. Later chunks coalesce.
+        if (!state.created || state.buffer.length === 0) {
           flushStream(state, event.id);
         } else {
           scheduleStreamUpdate(state, event.id);

@@ -448,14 +448,14 @@ export class ModelHandlerOpenAI<
 
   protected finalizeStreams(
     thinking: ReturnType<ModelHandler['createThinkingStream']>,
-    output: ReturnType<ModelHandler['createOutputStream']> | undefined,
+    output: ReturnType<ModelHandler['createOutputStream']>,
     finalResponse: ChatCompletion,
   ): void {
     const finalReasoning = this.processThinkingBlock(finalResponse);
     thinking.finalize(finalReasoning ?? undefined);
 
     const finalOutput = finalResponse.choices?.[0]?.message?.content ?? '';
-    output?.finalize(finalOutput);
+    output.finalize(finalOutput);
   }
 
   protected async executeStreamingChat(
@@ -463,10 +463,10 @@ export class ModelHandlerOpenAI<
     baseParams: ChatCompletionRequestBase,
     signal?: AbortSignal,
   ): Promise<ChatCompletion> {
+    // Opened before the request; the deferred starts fire (if ever) at the
+    // first reasoning/content delta — the phase signal for this API.
     const thinking = this.createThinkingStream();
-    const output = this.isOutputStreamingEnabled()
-      ? this.createOutputStream()
-      : undefined;
+    const output = this.createOutputStream();
 
     const streamParams: ChatCompletionStreamParams = {
       ...baseParams,
@@ -481,7 +481,7 @@ export class ModelHandlerOpenAI<
 
     const onContentDelta = ({ delta }: ContentDeltaEvent): void => {
       if (delta) {
-        output?.append(delta);
+        output.append(delta);
         streamingAggregator?.appendContent(delta);
       }
     };

@@ -16,6 +16,7 @@ import {
   isFunctionCallArgumentsDoneEvent,
   isOutputItemDoneEvent,
   isReasoningDeltaEvent,
+  isReasoningItemAddedEvent,
   isTextDeltaEvent,
   isWebSearchInProgressEvent,
   isWebSearchItem,
@@ -28,12 +29,10 @@ import type {
 
 /** Collaborators the processor borrows from the owning handler. */
 export interface ResponseStreamProcessorDeps {
-  /** Open a fresh thinking stream (used on creation and after each rotation). */
+  /** Open a thinking stream for the current reasoning phase (one per phase). */
   createThinkingStream(): StreamHandle;
-  /** Open the output stream (only called when output streaming is enabled). */
+  /** Open the output stream for the response text. */
   createOutputStream(): StreamHandle;
-  /** Whether the final text should be streamed to an output stream. */
-  outputStreamingEnabled: boolean;
   /** Extract the final assistant text from a completed response. */
   extractText(response: Response): string;
   /** Emit a web-search result to the progress view. */
@@ -42,16 +41,21 @@ export interface ResponseStreamProcessorDeps {
 }
 
 export class ResponseStreamProcessor {
-  private thinkingStream: StreamHandle;
-  private readonly outputStream: StreamHandle | null;
+  /**
+   * Open only while the model is inside a reasoning phase. Opening on the
+   * reasoning output item — not the first summary delta — lets subscribers
+   * surface "the model is thinking" even when no summary text ever streams
+   * (e.g. gpt-5 with reasoning summaries disabled).
+   */
+  private thinkingStream: StreamHandle | null = null;
+  private readonly outputStream: StreamHandle;
   private readonly emittedWebSearchIds = new Set<string>();
-  private hasThinkingContent = false;
 
   constructor(private readonly deps: ResponseStreamProcessorDeps) {
-    this.thinkingStream = deps.createThinkingStream();
-    this.outputStream = deps.outputStreamingEnabled
-      ? deps.createOutputStream()
-      : null;
+    // Deferred start: announces the response phase at the first text delta.
+    // Whether content streams or only the phase boundaries is the handler's
+    // output-stream policy, not this processor's concern.
+    this.outputStream = deps.createOutputStream();
   }
 
   /**
@@ -60,25 +64,28 @@ export class ResponseStreamProcessor {
    */
   process(event: ResponseStreamEvent): void {
     if (isReasoningDeltaEvent(event)) {
-      this.thinkingStream.append(event.delta);
-      this.hasThinkingContent = true;
+      this.openThinkingStream().append(event.delta);
+    } else if (isReasoningItemAddedEvent(event)) {
+      this.openThinkingStream();
     } else if (isTextDeltaEvent(event)) {
-      this.outputStream?.append(event.delta);
+      this.outputStream.append(event.delta);
     } else if (isWebSearchInProgressEvent(event)) {
-      this.rotateThinkingStream();
+      this.closeThinkingStream();
     } else if (isFunctionCallArgumentsDoneEvent(event)) {
-      // Function call arguments complete - finalize streams since no more
-      // text/thinking deltas will arrive after tool calls begin.
-      this.rotateThinkingStream();
+      // Function call arguments complete - finalize the thinking stream since
+      // no more thinking deltas will arrive after tool calls begin.
+      this.closeThinkingStream();
       this.deps.logger.debug(`Tool call ready during streaming: ${event.name}`);
     } else if (isOutputItemDoneEvent(event)) {
       const item = event.item;
-      if (
+      if (item.type === 'reasoning') {
+        this.closeThinkingStream();
+      } else if (
         isWebSearchItem(item) &&
         !this.emittedWebSearchIds.has(item.id) &&
         hasOpenAIWebSearchData(item)
       ) {
-        this.rotateThinkingStream();
+        this.closeThinkingStream();
         this.emitWebSearch(item);
         this.emittedWebSearchIds.add(item.id);
       }
@@ -91,23 +98,23 @@ export class ResponseStreamProcessor {
    * reflects the completed response, not the pre-poll snapshot.
    */
   finalize(response: Response): void {
-    if (this.hasThinkingContent) {
-      this.thinkingStream.finalize();
-    }
-    const finalText = this.deps.extractText(response);
-    if (this.outputStream) this.outputStream.finalize(finalText);
+    this.closeThinkingStream();
+    this.outputStream.finalize(this.deps.extractText(response));
     this.emitWebSearchesFromResponse(response);
   }
 
+  private openThinkingStream(): StreamHandle {
+    return (this.thinkingStream ??= this.deps.createThinkingStream());
+  }
+
   /**
-   * Finalize and reset the thinking stream if it has content.
-   * Keeps interleaved thinking/web-search/text segments visually separated.
+   * Finalize and clear the active thinking stream at a phase boundary.
+   * Keeps interleaved thinking/web-search/text segments visually separated;
+   * the next reasoning signal opens a fresh stream.
    */
-  private rotateThinkingStream(): void {
-    if (!this.hasThinkingContent) return;
-    this.thinkingStream.finalize();
-    this.hasThinkingContent = false;
-    this.thinkingStream = this.deps.createThinkingStream();
+  private closeThinkingStream(): void {
+    this.thinkingStream?.finalize();
+    this.thinkingStream = null;
   }
 
   /** Emit a single web-search result to the progress view. */

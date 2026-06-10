@@ -80,8 +80,6 @@ interface StreamDiagnosticsState extends Omit<
  * Configuration for the stream handler.
  */
 interface StreamHandlerConfig {
-  /** Whether output streaming is enabled */
-  outputEnabled: boolean;
   /** Whether progress view is enabled */
   progressViewEnabled: boolean;
 }
@@ -270,7 +268,6 @@ export class AnthropicStreamHandler {
     // (we null it for thinking/tool blocks).
     const isConsecutiveText =
       blockType === 'text' &&
-      this.config.outputEnabled &&
       this.state.outputStream !== null &&
       blockIndex === this.state.lastBlockIndex + 1;
 
@@ -286,7 +283,7 @@ export class AnthropicStreamHandler {
       );
     } else if (blockType === 'compaction') {
       this.logger.debug('Compaction block started in stream');
-    } else if (blockType === 'text' && this.config.outputEnabled) {
+    } else if (blockType === 'text') {
       if (!isConsecutiveText) {
         this.state.outputStream = this.factories.createOutputStream();
       }
