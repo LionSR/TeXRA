@@ -1,21 +1,38 @@
 // Local imports - shared
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { AgentCategoryFilter, StreamTabId } from '@shared/schemas';
-import type { ProgressViewInboundHandlerRegistry } from '@shared/schemas/progressView';
+import type {
+  ProgressViewInboundHandlerRegistry,
+  ProgressViewInboundMessage,
+} from '@shared/schemas/progressView';
+import {
+  isApprovalBypassedForStream,
+  proposalApprovalState,
+  setBashApprovalSessionBypass,
+  setToolEditApprovalSessionBypass,
+  toggleToolEditApprovalSessionBypass,
+} from '@tools/approval';
 
-// Local imports - controllers
-import {
-  createProgressViewApprovalCommandHandlers,
-  type ProgressViewApprovalCommandActions,
-} from './ProgressViewApprovalCommandHandlers';
-import {
-  createProgressViewBypassCommandHandlers,
-  type ProgressViewBypassCommandOptions,
-} from './ProgressViewBypassCommandHandlers';
-import {
-  createProgressViewFollowUpCommandHandlers,
-  type ProgressViewFollowUpCommandActions,
-} from './ProgressViewFollowUpCommandHandlers';
+// Local imports - utilities
+import { savePastedImageBase64 } from '@utils/files/pastedImageUtils';
+
+type ProgressViewMessage<C extends ProgressViewInboundMessage['command']> =
+  Extract<ProgressViewInboundMessage, { command: C }>;
+
+type SendFollowUpMessage = ProgressViewMessage<
+  typeof PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP
+>;
+
+export type ProgressViewFollowUpImage = NonNullable<
+  SendFollowUpMessage['images']
+>[number];
+
+export interface ProgressViewFollowUpSubmission {
+  stream: StreamTabId;
+  text: string;
+  mediaFiles?: readonly string[];
+}
 
 export interface ProgressViewLifecycleCommandActions {
   setActiveStream(stream: StreamTabId): Promise<void> | void;
@@ -46,6 +63,51 @@ export interface ProgressViewFileCommandActions {
   openLabel(label: string): Promise<void> | void;
 }
 
+export interface ProgressViewFollowUpCommandActions {
+  sendFollowUp(
+    submission: ProgressViewFollowUpSubmission,
+  ): Promise<void> | void;
+  reportImageSaveError(image: ProgressViewFollowUpImage, error: unknown): void;
+}
+
+export interface ProgressViewBypassCommandOptions {
+  runtimeHost: AgentRuntimeHost;
+  showInfo?(message: string): void | PromiseLike<unknown>;
+}
+
+export interface ProgressViewApprovalCommandActions {
+  handleToolEditApprovalAction(
+    message: ProgressViewMessage<
+      typeof PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
+    >,
+  ): boolean | Promise<boolean>;
+  onUnsupportedToolEditApproval?(
+    message: ProgressViewMessage<
+      typeof PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION
+    >,
+  ): void;
+  handleBashApprovalAction(
+    message: ProgressViewMessage<
+      typeof PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION
+    >,
+  ): unknown;
+  handlePlanApprovalAction(
+    message: ProgressViewMessage<
+      typeof PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION
+    >,
+  ): unknown;
+  handleUserQuestionAction(
+    message: ProgressViewMessage<
+      typeof PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION
+    >,
+  ): unknown;
+  handleAgentProposalAction(
+    message: ProgressViewMessage<
+      typeof PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION
+    >,
+  ): unknown;
+}
+
 export interface ProgressViewCommandActions {
   lifecycle: ProgressViewLifecycleCommandActions;
   run: ProgressViewRunCommandActions;
@@ -56,17 +118,19 @@ export interface ProgressViewCommandActions {
 }
 
 /**
- * Shared progress-view command groups used by both extension and desktop.
+ * Shared progress-view command handlers used by both extension and desktop.
  *
- * Host-only commands stay with each host; this factory owns the command groups
- * whose routing should not drift across hosts. Lifecycle, run, and file
- * commands are plain action plumbing and route inline; follow-up, bypass, and
- * approval handlers carry shared policy and live in their own modules.
+ * Host-only commands stay with each host; this factory owns the command
+ * routing that should not drift across hosts. Lifecycle, run, and file
+ * commands are plain action plumbing; follow-up image persistence, the
+ * bypass-toggle symmetry rules, and approval routing carry shared policy so
+ * hosts do not each reimplement them.
  */
 export function createProgressViewCommandHandlers(
   actions: ProgressViewCommandActions,
 ): ProgressViewInboundHandlerRegistry {
-  const { lifecycle, run, file } = actions;
+  const { lifecycle, run, file, followUp, approval } = actions;
+  const { runtimeHost, showInfo } = actions.bypass;
   return {
     [PROGRESS_VIEW_COMMANDS.SWITCH_STREAM]: (data) =>
       lifecycle.setActiveStream(data.stream),
@@ -99,8 +163,98 @@ export function createProgressViewCommandHandlers(
       file.latexdiffFile(data.file, data.base),
     [PROGRESS_VIEW_COMMANDS.OPEN_LABEL]: (data) => file.openLabel(data.label),
 
-    ...createProgressViewFollowUpCommandHandlers(actions.followUp),
-    ...createProgressViewBypassCommandHandlers(actions.bypass),
-    ...createProgressViewApprovalCommandHandlers(actions.approval),
+    [PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP]: async (data) => {
+      const mediaFiles = await saveFollowUpImages(
+        data.images ?? [],
+        followUp.reportImageSaveError,
+      );
+      await followUp.sendFollowUp({
+        stream: data.stream,
+        text: data.text,
+        ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
+      });
+    },
+
+    // The UI exposes one shield for file edits + bash and one stronger
+    // delegated task auto-approval; keep the cross-approval side effects
+    // symmetric here.
+    [PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS]: async (data) => {
+      const isNowEnabled = toggleToolEditApprovalSessionBypass(
+        data.stream,
+        runtimeHost,
+      );
+      setBashApprovalSessionBypass(data.stream, isNowEnabled, runtimeHost, {
+        silent: true,
+      });
+      await showInfo?.(
+        isNowEnabled
+          ? 'YOLO mode enabled: Tool actions and bash commands will be auto-approved for this stream.'
+          : 'YOLO mode disabled: Tool actions and bash commands will prompt for approval.',
+      );
+    },
+    [PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS]: async (data) => {
+      const isNowEnabled = proposalApprovalState.toggleBypass(
+        data.stream,
+        runtimeHost,
+      );
+      if (isNowEnabled) {
+        if (!isApprovalBypassedForStream(data.stream)) {
+          setToolEditApprovalSessionBypass(data.stream, true, runtimeHost);
+        }
+      } else {
+        setToolEditApprovalSessionBypass(data.stream, false, runtimeHost);
+      }
+      setBashApprovalSessionBypass(data.stream, isNowEnabled, runtimeHost, {
+        silent: true,
+      });
+      await showInfo?.(
+        isNowEnabled
+          ? 'Delegated task auto-approval enabled for this stream.'
+          : 'Delegated task auto-approval disabled for this stream.',
+      );
+    },
+
+    [PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION]: (data) => {
+      const handled = approval.handleToolEditApprovalAction(data);
+      if (handled instanceof Promise) {
+        return handled.then((result) => {
+          if (result === false) {
+            approval.onUnsupportedToolEditApproval?.(data);
+          }
+        });
+      }
+      if (handled === false) {
+        approval.onUnsupportedToolEditApproval?.(data);
+      }
+    },
+    [PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION]: async (data) => {
+      await approval.handleBashApprovalAction(data);
+    },
+    [PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION]: async (data) => {
+      await approval.handlePlanApprovalAction(data);
+    },
+    [PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION]: async (data) => {
+      await approval.handleUserQuestionAction(data);
+    },
+    [PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION]: async (data) => {
+      await approval.handleAgentProposalAction(data);
+    },
   };
+}
+
+async function saveFollowUpImages(
+  images: readonly ProgressViewFollowUpImage[],
+  reportImageSaveError: ProgressViewFollowUpCommandActions['reportImageSaveError'],
+): Promise<string[]> {
+  const mediaFiles: string[] = [];
+  for (const image of images) {
+    try {
+      mediaFiles.push(
+        await savePastedImageBase64(image.base64, image.fileName),
+      );
+    } catch (error) {
+      reportImageSaveError(image, error);
+    }
+  }
+  return mediaFiles;
 }

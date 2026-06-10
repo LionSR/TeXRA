@@ -24,10 +24,12 @@ export const WorkflowSpecificFieldsSchema = FileFieldsSchema.extend({
   toolConfig: ToolConfigSchema,
 });
 
+const ProposalFileFieldsSchema = FileFieldsSchema.extend({
+  memories: z.array(z.string()),
+});
+
 /** File fields shape used by all three rendering sites (toolFormatters, RequestPanels, PermissionCard). */
-type FileFields = Partial<z.infer<typeof FileFieldsSchema>> & {
-  memories?: string[];
-};
+type FileFields = Partial<z.infer<typeof ProposalFileFieldsSchema>>;
 
 export interface ProposalFileGroup {
   label: string;
