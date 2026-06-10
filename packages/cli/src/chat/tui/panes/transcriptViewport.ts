@@ -3,8 +3,10 @@
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
 import {
+  ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS,
   isInquiryContinuationText,
   LIVE_TAIL_ROWS,
+  PROCESS_ENTRY_MARGIN_BOTTOM_ROWS,
   USER_ENTRY_MARGIN_BOTTOM_ROWS,
   tailWindow,
 } from './TranscriptEntry';
@@ -45,13 +47,19 @@ export function estimateTranscriptEntryRows(
   if (entry.role === 'process' && entry.process) {
     const process = entry.process;
     return estimateEntryRows(() => {
-      return Math.max(1, completedProcessDisplayLines(process).length) + 1;
+      return (
+        Math.max(1, completedProcessDisplayLines(process).length) +
+        PROCESS_ENTRY_MARGIN_BOTTOM_ROWS
+      );
     });
   }
   if (entry.role === 'assistant') {
     return estimateEntryRows(() => {
       const rendered = renderAnsiMarkdown(entry.text, { width });
-      return Math.max(1, rendered.split('\n').length) + 1;
+      return (
+        Math.max(1, rendered.split('\n').length) +
+        ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS
+      );
     });
   }
   if (entry.role === 'user') {
