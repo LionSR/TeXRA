@@ -22,7 +22,7 @@ import {
   fetchWithTimeout,
   parseTokenExchangeResponse,
   SupabaseSessionCoordinator,
-  toStorableGitHubTokenExchangeSession,
+  toStorableSupabaseSession,
   type SupabaseSession,
 } from './SupabaseSession';
 import type { SupabaseUriHandler } from './UriHandler';
@@ -385,11 +385,10 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
       }
 
       const data = await parseTokenExchangeResponse(response, logger);
-      const session = toStorableGitHubTokenExchangeSession(
-        data,
-        githubSession.account.label,
-        DEFAULT_SESSION_EXPIRY_MS,
-      );
+      const session = toStorableSupabaseSession(data, {
+        fallbackLabel: githubSession.account.label,
+        defaultExpiryMs: DEFAULT_SESSION_EXPIRY_MS,
+      });
 
       await this.storeSession(session, true);
       void vscode.window.showInformationMessage(
