@@ -2131,7 +2131,7 @@ describe('CLI transcript state', () => {
       finalized: true,
     } as const;
 
-    expect(estimateTranscriptEntryRows(entry, width)).toBe(renderedRows + 1);
+    expect(estimateTranscriptEntryRows(entry, width)).toBe(renderedRows);
   });
 
   it('does not reserve spacer rows for compact one-line tool calls', () => {

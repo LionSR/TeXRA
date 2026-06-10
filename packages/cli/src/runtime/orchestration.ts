@@ -8,7 +8,10 @@ import {
   formatCliMultiAgentPresetLauncherSummary,
   type CliMultiAgentPresetRunPlan,
 } from './multiAgentPresets';
-import { implicitDefaultToolUseAgents } from './defaultAgents';
+import {
+  BUILTIN_DEFAULT_CHAT_AGENT,
+  implicitDefaultToolUseAgents,
+} from './defaultAgents';
 import { formatCliHistoryResumeSummary } from './historyLabels';
 import {
   resumableCliHistoryEntries,
@@ -99,6 +102,7 @@ function recentAgentItems(
 
   for (const entry of history) {
     if (entry.category && entry.category !== AgentCategory.ToolUse) continue;
+    if (entry.agent === BUILTIN_DEFAULT_CHAT_AGENT) continue;
     if (!toolUseNames.has(entry.agent) || seen.has(entry.agent)) continue;
     seen.add(entry.agent);
     items.push({

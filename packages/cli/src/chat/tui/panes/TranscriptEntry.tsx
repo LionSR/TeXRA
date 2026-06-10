@@ -21,6 +21,8 @@ import type {
 const INQUIRY_CONTINUATION_RE =
   /^\[inquiry\]\s+\S+\s+(?:answered|dropped by user)\.(?:\n|$)/;
 export const USER_ENTRY_MARGIN_BOTTOM_ROWS = 0;
+export const ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS = 0;
+export const PROCESS_ENTRY_MARGIN_BOTTOM_ROWS = 1;
 
 export function isInquiryContinuationText(text: string): boolean {
   return INQUIRY_CONTINUATION_RE.test(text);
@@ -156,7 +158,11 @@ function ProcessEntryRow({
   if (fillWidth === true) {
     const cols = Math.max(1, Math.floor(width ?? 80) - 2);
     return (
-      <Box marginBottom={1} paddingX={1} flexDirection="column">
+      <Box
+        marginBottom={PROCESS_ENTRY_MARGIN_BOTTOM_ROWS}
+        paddingX={1}
+        flexDirection="column"
+      >
         <Text>
           {fillRows(completedProcessDisplayLines(process).join('\n'), cols)}
         </Text>
@@ -167,7 +173,11 @@ function ProcessEntryRow({
   const color = process.isError ? 'red' : 'green';
   const [, ...tailLines] = completedProcessDisplayLines(process);
   return (
-    <Box marginBottom={1} paddingX={1} flexDirection="column">
+    <Box
+      marginBottom={PROCESS_ENTRY_MARGIN_BOTTOM_ROWS}
+      paddingX={1}
+      flexDirection="column"
+    >
       <Box>
         <Text color={color}>● </Text>
         <Text>{process.title}</Text>
@@ -263,7 +273,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
       break;
   }
   return (
-    <Box marginBottom={1}>
+    <Box marginBottom={ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS}>
       <Markdown
         content={entry.text}
         width={width}

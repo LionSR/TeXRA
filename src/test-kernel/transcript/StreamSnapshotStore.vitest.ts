@@ -437,6 +437,7 @@ describe('StreamSnapshotStore', () => {
       plan: PLAN,
       planSummary: PLAN.summary,
     });
+    await store.flush();
   });
 
   it('deleteStream cancels queued writes before removing the sidecar directory', async () => {
