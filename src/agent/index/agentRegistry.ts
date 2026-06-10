@@ -226,24 +226,6 @@ const LEGACY_AGENT_ALIASES: Record<string, string> = {
 };
 
 /**
- * Map a legacy agent name to its canonical replacement (identity when not
- * aliased). Single source of truth for rename handling — every exact-name
- * comparison against user-supplied or persisted agent names (visibility sets,
- * delegation targets) should go through this rather than hardcoding renames.
- */
-export function canonicalAgentName(
-  identifier: string,
-  preferToolUse = false,
-): string {
-  const plainName = agentName(identifier);
-  return (
-    getAgent(plainName, preferToolUse)?.name ??
-    LEGACY_AGENT_ALIASES[plainName] ??
-    plainName
-  );
-}
-
-/**
  * Canonical agent resolver: look up an agent by identifier.
  *
  * Supports "source:name" format or just "name". Plain names are matched
@@ -270,8 +252,7 @@ export function getAgent(
 
   // Legacy-name fallback, for both bare names ("chat") and source-qualified
   // keys ("builtInToolUse:chat"): map the name part through the alias table
-  // and retry once. Uses the raw table rather than canonicalAgentName, which
-  // resolves through getAgent and would recurse back here.
+  // and retry once.
   const name = agentName(identifier);
   const alias = LEGACY_AGENT_ALIASES[name];
   if (alias) {
@@ -411,6 +392,28 @@ export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
 }
 
 /**
+ * Resolve an identifier to a currently visible agent entry. Visibility and
+ * legacy aliases are owned by the registry, so callers do not need to repeat
+ * rename or enabled-agent matching rules.
+ */
+export function getVisibleAgent(
+  category: AgentCategory,
+  identifier: string,
+): AgentEntry | undefined {
+  const entries = getVisibleAgents(category);
+  const name = agentName(identifier);
+  const exact = entries.find(
+    (entry) =>
+      entry.name === name || createKey(entry.source, entry.name) === identifier,
+  );
+  if (exact) return exact;
+
+  const entry = getAgent(identifier, category === AgentCategory.ToolUse);
+  if (!entry) return undefined;
+  return entries.find((visible) => visible.name === entry.name);
+}
+
+/**
  * Deduplicate agents by name, keeping only the highest priority source.
  * Priority: custom > remote > builtInWorkflow > builtInToolUse.
  * When the same agent name exists in multiple sources (e.g. local + remote),
@@ -450,7 +453,7 @@ function filterVisible(
     configured.flatMap((value) => {
       const name = agentName(value);
       if (entries.some((entry) => entry.name === name)) return [name];
-      return [canonicalAgentName(name, category === 'toolUse')];
+      return [getAgent(value, category === AgentCategory.ToolUse)?.name ?? name];
     }),
   );
   return entries.filter((entry) => enabledNames.has(entry.name));
