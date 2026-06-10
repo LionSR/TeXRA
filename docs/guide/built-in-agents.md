@@ -474,6 +474,18 @@ Simplify the numerical solver in solver.py. Look for duplicated code, inline any
 single-use helper functions, and remove dead code. Run existing tests after each change.
 ```
 
+### `orchestrator`
+
+Coordinates multi-agent work on LaTeX research projects. It reads project context, turns broad goals into focused tasks, routes each task to the right specialist, tracks results, reviews generated files, and keeps follow-up work organized. The lead agent for the Physicist, Mathematician, and Computer Scientist (ML) [teams](#built-in-teams).
+
+**Best for:** Multi-step research goals that span several specialists
+
+### `progressCheck`
+
+An end-of-session reviewer. It looks at what was just done, the project's standing goal, and the git/PR state to decide whether the orchestrator is actually finished or whether meaningful, low-risk progress is still on the table. Read-only — it advises, but does not edit or delegate. Bundled with every [team](#built-in-teams).
+
+**Best for:** Auditing what a team run actually delivered versus the goal
+
 ::: tip
 Additional remote agents may be available depending on your access level. In the VS Code extension, run **TeXRA: View Profile** from the Command Palette for the full list. See [Remote Agents](./remote-agents.md) to sign in and sync them.
 :::
