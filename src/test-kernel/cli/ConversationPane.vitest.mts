@@ -112,6 +112,21 @@ function compactExecutionsEntry(id: string, path: string): ConversationEntry {
   };
 }
 
+function processEntry(id: string): ConversationEntry {
+  return {
+    id,
+    role: 'process',
+    text: '',
+    finalized: true,
+    process: {
+      executionId: 'ei_process',
+      title: 'search',
+      isError: false,
+      tailLines: [],
+    },
+  };
+}
+
 describe('CLI conversation transcript splitting', () => {
   it('keeps only explicit finalized entries in scrollback', () => {
     const user = entry('u1', 'user', '1+1', true);
@@ -547,6 +562,40 @@ describe('CLI conversation transcript splitting', () => {
       'u1',
       'a1',
     ]);
+  });
+
+  it('budgets process margins before inserting compact static headers', () => {
+    const process = processEntry('p1');
+    const compact = appendStaticTranscriptItems({
+      scrollbackStreamId: STREAM_ID,
+      currentItems: [],
+      streams: streamsFromEntries(STREAM_ID, [process]),
+      meta: SESSION_META,
+      maxRows: 0,
+      width: 80,
+    });
+
+    expect(compact.map((item) => item.id)).toEqual(['p1']);
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: STREAM_ID,
+        currentItems: compact,
+        streams: streamsFromEntries(STREAM_ID, [process]),
+        meta: SESSION_META,
+        maxRows: 5,
+        width: 80,
+      }).map((item) => item.id),
+    ).toEqual(['p1']);
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: STREAM_ID,
+        currentItems: compact,
+        streams: streamsFromEntries(STREAM_ID, [process]),
+        meta: SESSION_META,
+        maxRows: 6,
+        width: 80,
+      }).map((item) => item.id),
+    ).toEqual(['session-header', 'p1']);
   });
 
   it('preserves static transcript order when an entry exceeds the compact row budget', () => {

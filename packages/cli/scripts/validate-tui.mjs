@@ -153,6 +153,24 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'assistant-tool-preamble-spacing',
+    env: {
+      HARNESS_ASSISTANT_TOOL_PREAMBLE: '1',
+    },
+    expect: [
+      '› what is this repo about',
+      'I will read the README first.',
+      '● read_file (Read README.md)',
+    ],
+    maxBlankLinesBetween: [
+      {
+        from: 'I will read the README first.',
+        to: '● read_file (Read README.md)',
+        max: 0,
+      },
+    ],
+  },
+  {
     name: 'queued-followups',
     cols: 120,
     env: {

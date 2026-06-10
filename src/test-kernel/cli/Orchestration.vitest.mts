@@ -302,6 +302,21 @@ describe('CLI orchestration items', () => {
     );
   });
 
+  it('does not duplicate the default chat agent in startup recent agents', () => {
+    const items = buildCliOrchestrationItems({
+      presetPlans: [],
+      history: [
+        historyEntry('aaaaaaaaaaaa', { agent: 'chat' }),
+        historyEntry('bbbbbbbbbbbb', { agent: 'review' }),
+      ],
+      toolUseAgents: [toolUseAgent('chat'), toolUseAgent('review')],
+    });
+
+    expect(items.map((item) => item.label)).toContain('New chat');
+    expect(items.map((item) => item.label)).toContain('Chat with review');
+    expect(items.map((item) => item.label)).not.toContain('Chat with chat');
+  });
+
   it('lists team presets as runnable orchestration actions', () => {
     const items = buildCliOrchestrationItems({
       presetPlans: [readyPresetPlan()],
