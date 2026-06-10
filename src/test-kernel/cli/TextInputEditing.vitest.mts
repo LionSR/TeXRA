@@ -4,10 +4,16 @@ import {
   applyTerminalInputChunk,
   deleteAtCursor,
   deleteBeforeCursor,
+  deleteNextWord,
   deletePreviousWord,
   deleteToEnd,
   deleteToStart,
   insertText,
+  lineEndCursor,
+  lineStartCursor,
+  nextWordCursor,
+  previousWordCursor,
+  verticalCursorMove,
 } from '@cli/chat/tui/input/textInputEditing';
 import {
   isCtrlInput,
@@ -280,5 +286,61 @@ describe('CLI TUI text input editing', () => {
       value: 'one three',
       cursor: 4,
     });
+  });
+
+  it('scopes Ctrl-U and Ctrl-K to the current line in multiline drafts', () => {
+    expect(deleteToStart('alpha\nbeta gamma\ndelta', 10)).toEqual({
+      value: 'alpha\n gamma\ndelta',
+      cursor: 6,
+    });
+    expect(deleteToEnd('alpha\nbeta gamma\ndelta', 10)).toEqual({
+      value: 'alpha\nbeta\ndelta',
+      cursor: 10,
+    });
+    // Ctrl-K at the end of a line kills the newline (joins the next line).
+    expect(deleteToEnd('alpha\nbeta', 5)).toEqual({
+      value: 'alphabeta',
+      cursor: 5,
+    });
+  });
+
+  it('moves Home/End (Ctrl-A/E) to the current line boundaries', () => {
+    expect(lineStartCursor('one two', 4)).toBe(0);
+    expect(lineEndCursor('one two', 4)).toBe(7);
+    expect(lineStartCursor('alpha\nbeta gamma', 10)).toBe(6);
+    expect(lineEndCursor('alpha\nbeta gamma\ndelta', 10)).toBe(16);
+  });
+
+  it('implements word-wise movement for Alt-B/F and Ctrl-arrows', () => {
+    expect(previousWordCursor('one two three', 8)).toBe(4);
+    expect(previousWordCursor('one two three', 6)).toBe(4);
+    expect(previousWordCursor('one two three', 0)).toBe(0);
+    expect(nextWordCursor('one two three', 8)).toBe(13);
+    expect(nextWordCursor('one two three', 3)).toBe(7);
+    expect(nextWordCursor('one two three', 13)).toBe(13);
+  });
+
+  it('implements Alt-D forward word kill', () => {
+    expect(deleteNextWord('one two three', 4)).toEqual({
+      value: 'one  three',
+      cursor: 4,
+    });
+    expect(deleteNextWord('one two three', 3)).toEqual({
+      value: 'one three',
+      cursor: 3,
+    });
+    expect(deleteNextWord('one', 3)).toEqual({ value: 'one', cursor: 3 });
+  });
+
+  it('moves the caret between logical lines on ↑/↓, preserving the column', () => {
+    // "alpha\nbe\ngamma": ↓ from column 3 of line 0 clamps to line 1's end.
+    expect(verticalCursorMove('alpha\nbe\ngamma', 3, 1)).toBe(8);
+    expect(verticalCursorMove('alpha\nbe\ngamma', 7, 1)).toBe(10);
+    expect(verticalCursorMove('alpha\nbe\ngamma', 10, -1)).toBe(7);
+    // Boundary lines yield undefined so the caller can recall history.
+    expect(verticalCursorMove('alpha\nbe', 2, -1)).toBeUndefined();
+    expect(verticalCursorMove('alpha\nbe', 7, 1)).toBeUndefined();
+    expect(verticalCursorMove('single line', 4, -1)).toBeUndefined();
+    expect(verticalCursorMove('single line', 4, 1)).toBeUndefined();
   });
 });

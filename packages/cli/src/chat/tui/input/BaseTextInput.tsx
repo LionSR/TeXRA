@@ -8,18 +8,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, useInput, usePaste } from 'ink';
 
 import {
-  clampCursor,
-  deleteAtCursor,
-  deleteBeforeCursor,
-  deletePreviousWord,
-  deleteToEnd,
-  deleteToStart,
   applyTerminalInputChunk,
+  clampCursor,
   insertText,
   maskDisplayValue,
+  verticalCursorMove,
   type CursorEdit,
   type TextEdit,
 } from './textInputEditing';
+import { matchTextInputBinding } from './textInputBindings';
 import {
   isPlainReturnInput,
   isCtrlInput,
@@ -46,6 +43,12 @@ export interface BaseTextInputProps {
   readonly onSubmit: (value: string) => void;
   readonly onInputChunkSubmit?: (value: string) => void;
   readonly onChange: (value: string) => void;
+  /** ↑ pressed while the caret is on the first line of the draft (where ↑ has
+   *  no in-draft meaning) — input bars use this for shell-style history
+   *  recall. Within a multiline draft, ↑/↓ move the caret between lines. */
+  readonly onHistoryUp?: () => void;
+  /** ↓ pressed while the caret is on the last line of the draft. */
+  readonly onHistoryDown?: () => void;
   /** Optionally transform pasted text before it is inserted — e.g. collapse a
    *  large paste into a `[Pasted text #N +M lines]` chip and stash the content
    *  elsewhere. Defaults to inserting the paste verbatim. */
@@ -349,6 +352,14 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     [isControlled, onCursorChange],
   );
 
+  const moveCursorTo = useCallback(
+    (target: (value: string, cursor: number) => number) => {
+      const { value: v, cursor: c } = latestStateRef.current;
+      moveCursor(target(v, c));
+    },
+    [moveCursor],
+  );
+
   const applyEdit = useCallback(
     (edit: TextEdit) => {
       const c = clampCursor(edit.cursor, edit.value.length);
@@ -413,40 +424,22 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         submitAfterImagePastes(onSubmit, latestStateRef.current.value);
         return;
       }
-      if (key.backspace) {
-        applyLatestEdit(deleteBeforeCursor);
+      if (key.upArrow || key.downArrow) {
+        const { value: v, cursor: c } = latestStateRef.current;
+        const moved = verticalCursorMove(v, c, key.upArrow ? -1 : 1);
+        if (moved !== undefined) {
+          moveCursor(moved);
+        } else {
+          (key.upArrow ? props.onHistoryUp : props.onHistoryDown)?.();
+        }
         return;
       }
-      if (key.delete) {
-        applyLatestEdit(deleteAtCursor);
-        return;
-      }
-      if (key.leftArrow) {
-        moveCursor(latestStateRef.current.cursor - 1);
-        return;
-      }
-      if (key.rightArrow) {
-        moveCursor(latestStateRef.current.cursor + 1);
-        return;
-      }
-      if (key.home || isCtrlInput(input, key, 'a')) {
-        moveCursor(0);
-        return;
-      }
-      if (key.end || isCtrlInput(input, key, 'e')) {
-        moveCursor(latestStateRef.current.value.length);
-        return;
-      }
-      if (isCtrlInput(input, key, 'u')) {
-        applyLatestEdit(deleteToStart);
-        return;
-      }
-      if (isCtrlInput(input, key, 'k')) {
-        applyLatestEdit(deleteToEnd);
-        return;
-      }
-      if (isCtrlInput(input, key, 'w')) {
-        applyLatestEdit(deletePreviousWord);
+      // Stateless editing chords dispatch through the declarative keymap;
+      // unmatched meta/ctrl combos fall through to the drop branch below.
+      const binding = matchTextInputBinding(input, key);
+      if (binding) {
+        if ('edit' in binding) applyLatestEdit(binding.edit);
+        else moveCursorTo(binding.move);
         return;
       }
       if (isCtrlInput(input, key, 'v') && props.onImagePaste) {

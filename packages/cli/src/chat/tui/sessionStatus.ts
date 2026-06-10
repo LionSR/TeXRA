@@ -15,6 +15,9 @@ export interface CliSessionStatusInput {
   readonly approvalBypasses?: Partial<BypassState>;
   readonly status: string;
   readonly queuedFollowUpMessages: readonly string[];
+  /** Root execution id, when a run has started. Surfaces the resume command
+   *  mid-session instead of only in the exit hint. */
+  readonly sessionId?: string;
 }
 
 export function formatCliStatusLabel(status: string | undefined): string {
@@ -62,6 +65,12 @@ export function formatCliSessionStatus(input: CliSessionStatusInput): string {
       ? [`auto-approvals: ${bypassLabels.join(', ')}`]
       : []),
     `status: ${formatCliStatusLabel(input.status)}`,
+    ...(input.sessionId
+      ? [
+          `session: ${input.sessionId}`,
+          `resume later with: texra --resume ${input.sessionId}`,
+        ]
+      : []),
     ...queuedFollowUpStatusLines(input.queuedFollowUpMessages),
   ].join('\n');
 }
