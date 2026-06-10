@@ -47,10 +47,10 @@ function commandSections(commands: readonly SlashCommand[]): string[] {
 }
 
 function keyboardSection(options: SlashCommandHelpOptions): string {
-  const focusChord = metaChordLabel(
-    options.shortcutModifierLabel ?? 'Alt',
-    '1..9',
-  );
+  const modifier = options.shortcutModifierLabel ?? 'Alt';
+  const focusChord = metaChordLabel(modifier, '1..9');
+  const tasksChord = metaChordLabel(modifier, 'p');
+  const subagentsChord = metaChordLabel(modifier, 's');
   const newline =
     options.shiftEnterNewline === true
       ? '`Shift-Enter` or `Ctrl-J` insert a newline'
@@ -62,6 +62,7 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
     '- `Esc` stops the current response · `Ctrl-C` stops, twice exits',
     '- `Ctrl-T` opens the transcript viewer for the focused stream',
     `- \`Tab\` switches streams · \`${focusChord}\` jumps to one (when subagents are running)`,
+    `- \`${tasksChord}\` opens tasks · \`${subagentsChord}\` opens subagents (when available)`,
   ].join('\n');
 }
 

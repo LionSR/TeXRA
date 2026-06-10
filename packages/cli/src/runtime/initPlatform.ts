@@ -1,3 +1,6 @@
+// Node imports
+import * as nodePath from 'node:path';
+
 // Local imports - platform
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore } from '@platform/defaults/jsonStore';
@@ -38,7 +41,7 @@ import { applyCliGitAuthorConfig } from './gitAuthor';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
 import { writeTextStderr } from './logSinks';
-import { workspaceCliConfigPath } from './cliConfig';
+import { CLI_CONFIG_FILE, workspaceCliConfigPath } from './cliConfig';
 import { getCliAuthProvider, initializeCliSupabaseAuth } from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
@@ -70,7 +73,7 @@ type CliPlatformInitOptions = Pick<
 };
 
 function logAt(
-  level: 'debug' | 'info' | 'warn',
+  level: 'debug' | 'info' | 'warn' | 'error',
   channel: string,
   message: string,
 ): void {
@@ -161,16 +164,27 @@ export async function initCliPlatform(
       storageRoot: context.storageRoot,
       workspacePath: () => cliWorkspaceCwd,
     });
+    // User-level config (`~/.texra/config.json`) backs the global target,
+    // mirroring the desktop host: workspace values shadow global on read and
+    // `update(..., 'global')` has somewhere to write instead of throwing.
+    const globalConfigStore = await JsonStore.open(
+      nodePath.join(stateStores.storage.getGlobalStoragePath(), CLI_CONFIG_FILE),
+    );
+    // Same severity and wording as the extension/desktop hosts: a shutdown
+    // handler failure is an error everywhere, not a warning in one host.
     const lifecycle = createLifecycleHost({
       onError: (phase, error) => {
         logAt(
-          'warn',
+          'error',
           'cli.lifecycle',
-          `${phase} handler failed: ${toErrorMessage(error)}`,
+          `Lifecycle ${phase} handler failed: ${toErrorMessage(error)}`,
         );
       },
     });
-    const config = new JsonConfigProvider({ workspace: configStore });
+    const config = new JsonConfigProvider({
+      workspace: configStore,
+      global: globalConfigStore,
+    });
     initPlatform({
       config,
       globalState: stateStores.globalState,

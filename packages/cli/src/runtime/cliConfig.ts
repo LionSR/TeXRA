@@ -1,9 +1,13 @@
 import { readFile } from 'node:fs/promises';
-import path from 'node:path';
 
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { z } from 'zod';
 
+import {
+  TEXRA_CONFIG_FILE_NAME,
+  TEXRA_STORAGE_DIR_NAME,
+  workspaceTexraConfigPath,
+} from '@platform/defaults/nodeStorage';
 import { isFileNotFoundError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { isObject } from '@utils/core/typeGuards';
@@ -17,8 +21,8 @@ import {
 } from '../schemas/cliSettings';
 import { KNOWN_TEXRA_KEYS } from '../schemas/knownKeys';
 
-export const CLI_CONFIG_DIR = '.texra';
-export const CLI_CONFIG_FILE = 'config.json';
+export const CLI_CONFIG_DIR = TEXRA_STORAGE_DIR_NAME;
+export const CLI_CONFIG_FILE = TEXRA_CONFIG_FILE_NAME;
 export const CLI_BUILTIN_DEFAULT_MODEL = 'deepseekT';
 
 export interface CliCommandConfig {
@@ -196,7 +200,7 @@ export function parseCliConfigValues(value: unknown): CliConfigValues {
 }
 
 export function workspaceCliConfigPath(cwd: string): string {
-  return path.join(cwd, CLI_CONFIG_DIR, CLI_CONFIG_FILE);
+  return workspaceTexraConfigPath(cwd);
 }
 
 export async function loadWorkspaceCliConfig(
