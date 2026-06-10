@@ -61,13 +61,13 @@ Run history and agent settings are shared between both surfaces.
 
 Five built-in presets cover the most common research disciplines:
 
-| Team                        | Built for                                                                        |
-| --------------------------- | -------------------------------------------------------------------------------- |
-| **Physicist**               | Analytical derivations, numerical experiments, literature search, slide drafting |
-| **Mathematician**           | Attacking open problems, proofs, Lean 4 formalization, LaTeX correction          |
-| **Computer Scientist**      | Algorithm design, code-driven experiments and ablations, tests, literature       |
-| **Lean Project**            | Mathlib search, tactic simplification, blueprint-driven formalization            |
-| **Software Engineer**       | An engineer lead delegating implementation, review, debugging, and testing       |
+| Team                   | Built for                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| **Physicist**          | Analytical derivations, numerical experiments, literature search, slide drafting |
+| **Mathematician**      | Attacking open problems, proofs, Lean 4 formalization, LaTeX correction          |
+| **Computer Scientist** | Algorithm design, code-driven experiments and ablations, tests, literature       |
+| **Lean Project**       | Mathlib search, tactic simplification, blueprint-driven formalization            |
+| **Software Engineer**  | An engineer lead delegating implementation, review, debugging, and testing       |
 
 Pick a team in **Settings → Multi-Agent**, or with `texra multi-agent
 run <preset>`. Or define your own roster in YAML.
