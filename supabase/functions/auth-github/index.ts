@@ -301,7 +301,28 @@ app.post('/exchange', async (c) => {
         console.error('[AUTH] Failed to load linked user:', userError?.message);
         return errorResponse(c, 'Failed to load linked user', 500);
       }
-      userEmail = userData.user.email ?? email;
+      const storedEmail = userData.user.email?.trim();
+      if (storedEmail) {
+        userEmail = storedEmail;
+      } else {
+        const { data: updatedUser, error: updateError } =
+          await supabase.auth.admin.updateUserById(userId, {
+            email,
+            email_confirm: true,
+          });
+        if (updateError || !updatedUser?.user?.email) {
+          console.error(
+            '[AUTH] Failed to bind GitHub email to linked user:',
+            updateError?.message,
+          );
+          return errorResponse(
+            c,
+            'Failed to bind verified GitHub email to linked account',
+            500,
+          );
+        }
+        userEmail = updatedUser.user.email;
+      }
     } else {
       // Check by email
       const { data: authUser } = await supabase
