@@ -15,37 +15,47 @@
  * - RPC: usage_logs_upsert (service role only)
  */
 
-import { createClient } from 'jsr:@supabase/supabase-js@2.104.1';
-import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
+import { createClient } from '@supabase/supabase-js';
+import { z } from 'zod';
+import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
+import { handleCors } from '../_shared/cors.ts';
+import { versionedJsonResponse } from '../_shared/responses.ts';
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-const LOG_USAGE_VERSION = '1.1.0';
+const LOG_USAGE_VERSION = '1.2.1';
 
 // =============================================================================
-// Types
+// Schemas
 // =============================================================================
 
-interface UsageLogEntry {
-  timestamp: string;
-  model: string;
-  provider: string;
-  agentName?: string;
-  agentCategory?: 'workflow' | 'toolUse';
-  isMultipleOutput?: boolean;
-  inputTokens: number;
-  outputTokens: number;
-  cost: number;
-  responseTimeMs?: number;
-  cachedInputTokens?: number;
-  reasoningTokens?: number;
-  usedRelay?: boolean;
-  streamId?: string;
-  extensionVersion?: string;
-  editorType?: string;
-}
+// Invalid optional fields are dropped (`.catch(undefined)`) rather than
+// rejecting the whole entry; invalid required fields reject the entry.
+const UsageLogEntrySchema = z.object({
+  timestamp: z.string(),
+  model: z.string(),
+  provider: z.string(),
+  inputTokens: z.number().nonnegative(),
+  outputTokens: z.number().nonnegative(),
+  cost: z.number().nonnegative(),
+  agentName: z.string().optional().catch(undefined),
+  agentCategory: z.enum(['workflow', 'toolUse']).optional().catch(undefined),
+  isMultipleOutput: z.boolean().optional().catch(undefined),
+  responseTimeMs: z.number().nonnegative().optional().catch(undefined),
+  cachedInputTokens: z.number().nonnegative().optional().catch(undefined),
+  reasoningTokens: z.number().nonnegative().optional().catch(undefined),
+  usedRelay: z.boolean().optional().catch(undefined),
+  streamId: z.string().optional().catch(undefined),
+  extensionVersion: z.string().optional().catch(undefined),
+  editorType: z.string().optional().catch(undefined),
+});
+
+const UsageBatchSchema = z.object({
+  entries: z.array(z.unknown()),
+  batchId: z.string(),
+});
 
 // =============================================================================
 // Helpers
@@ -56,77 +66,11 @@ function jsonResponse(
   body: Record<string, unknown>,
   status: number,
 ): Response {
-  const corsHeaders = getCorsHeaders(req);
-  return new Response(
-    JSON.stringify({ _version: LOG_USAGE_VERSION, ...body }),
-    {
-      status,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    },
-  );
+  return versionedJsonResponse(req, LOG_USAGE_VERSION, body, status);
 }
 
 function errorResponse(req: Request, error: string, status: number): Response {
   return jsonResponse(req, { success: false, accepted: 0, error }, status);
-}
-
-/**
- * Validate a single usage entry.
- * Returns null if invalid, the entry if valid.
- */
-function validateEntry(entry: unknown): UsageLogEntry | null {
-  if (!entry || typeof entry !== 'object') {
-    return null;
-  }
-
-  const e = entry as Record<string, unknown>;
-
-  // Required fields
-  if (
-    typeof e.timestamp !== 'string' ||
-    typeof e.model !== 'string' ||
-    typeof e.provider !== 'string' ||
-    typeof e.inputTokens !== 'number' ||
-    typeof e.outputTokens !== 'number' ||
-    typeof e.cost !== 'number'
-  ) {
-    return null;
-  }
-
-  // Validate non-negative numbers
-  if (e.inputTokens < 0 || e.outputTokens < 0 || e.cost < 0) {
-    return null;
-  }
-
-  // Validate agentCategory enum
-  const agentCategory =
-    e.agentCategory === 'workflow' || e.agentCategory === 'toolUse'
-      ? e.agentCategory
-      : undefined;
-
-  return {
-    timestamp: e.timestamp,
-    model: e.model,
-    provider: e.provider,
-    agentName: typeof e.agentName === 'string' ? e.agentName : undefined,
-    agentCategory,
-    isMultipleOutput:
-      typeof e.isMultipleOutput === 'boolean' ? e.isMultipleOutput : undefined,
-    inputTokens: e.inputTokens,
-    outputTokens: e.outputTokens,
-    cost: e.cost,
-    responseTimeMs:
-      typeof e.responseTimeMs === 'number' ? e.responseTimeMs : undefined,
-    cachedInputTokens:
-      typeof e.cachedInputTokens === 'number' ? e.cachedInputTokens : undefined,
-    reasoningTokens:
-      typeof e.reasoningTokens === 'number' ? e.reasoningTokens : undefined,
-    usedRelay: typeof e.usedRelay === 'boolean' ? e.usedRelay : undefined,
-    streamId: typeof e.streamId === 'string' ? e.streamId : undefined,
-    extensionVersion:
-      typeof e.extensionVersion === 'string' ? e.extensionVersion : undefined,
-    editorType: typeof e.editorType === 'string' ? e.editorType : undefined,
-  };
 }
 
 // =============================================================================
@@ -147,7 +91,7 @@ if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
 
 Deno.serve(async (req: Request) => {
   // Handle CORS
-  const { response } = handleCors(req);
+  const response = handleCors(req);
   if (response) return response;
 
   // Only accept POST requests
@@ -162,26 +106,17 @@ Deno.serve(async (req: Request) => {
 
   try {
     // 1. Extract and validate JWT
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
+    const jwtToken = bearerToken(req);
+    if (!jwtToken) {
       return errorResponse(req, 'Missing authorization token', 401);
     }
 
-    const jwtToken = authHeader.slice(7);
-
     // 2. Validate user with Supabase
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${jwtToken}` } },
-    });
-
-    const {
-      data: { user },
-      error: userError,
-    } = await userClient.auth.getUser();
-
-    if (userError || !user) {
+    const auth = await authenticateJwt(jwtToken);
+    if (!auth) {
       return errorResponse(req, 'Invalid or expired token', 401);
     }
+    const { user } = auth;
 
     // 3. Parse request body
     let body: unknown;
@@ -192,26 +127,21 @@ Deno.serve(async (req: Request) => {
     }
 
     // 4. Validate batch structure
-    if (!body || typeof body !== 'object') {
-      return errorResponse(req, 'Invalid request body', 400);
-    }
-
-    const batch = body as Record<string, unknown>;
-    if (!Array.isArray(batch.entries) || typeof batch.batchId !== 'string') {
+    const batchResult = UsageBatchSchema.safeParse(body);
+    if (!batchResult.success) {
       return errorResponse(
         req,
         'Invalid batch format: expected { entries: [], batchId: string }',
         400,
       );
     }
+    const batch = batchResult.data;
 
     // 5. Validate and transform entries
-    const validEntries: UsageLogEntry[] = [];
+    const validEntries: z.infer<typeof UsageLogEntrySchema>[] = [];
     for (const entry of batch.entries) {
-      const validated = validateEntry(entry);
-      if (validated) {
-        validEntries.push(validated);
-      }
+      const result = UsageLogEntrySchema.safeParse(entry);
+      if (result.success) validEntries.push(result.data);
     }
 
     if (validEntries.length === 0) {
