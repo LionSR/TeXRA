@@ -159,7 +159,7 @@ describe('CLI doctor', () => {
     expect(text).toContain(
       [
         'FAIL Models: No model is currently available.',
-        '     Run `texra models list --all` to inspect access, sign in with `texra login`, or configure a provider API key.',
+        '     Run `texra models list --all` to inspect access, sign in with `texra login`, or add a provider API key with `texra setup`.',
       ].join('\n'),
     );
     expect(text).not.toContain('/api personal');

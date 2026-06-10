@@ -21,6 +21,7 @@ class WelcomeWebviewProvider implements vscode.WebviewViewProvider {
 function renderWelcomeHtml(): string {
   const openFolder = 'command:workbench.action.files.openFolder';
   const cloneRepo = 'command:git.clone';
+  const createSample = 'command:texra.createSampleProject';
   const docs = 'https://texra.ai';
   // CSP nonces must be unpredictable — nanoid is crypto-random.
   const nonce = nanoid();
@@ -66,12 +67,14 @@ function renderWelcomeHtml(): string {
   </p>
   <p><strong>To get started:</strong></p>
   <ol>
-    <li>Open a folder containing your LaTeX project (or create a sample).</li>
+    <li>Open a folder containing your LaTeX project — or create the bundled
+        sample project if you just want to try TeXRA.</li>
     <li>TeXRA will reload and walk you through sign-in or API key setup.</li>
     <li>Pick an input file, choose the orchestrator, and hit Execute.</li>
   </ol>
   <div class="actions">
     <a href="${openFolder}">Open Folder</a>
+    <a href="${createSample}">Try the Sample Project</a>
     <a href="${cloneRepo}">Clone Repository</a>
     <a href="${docs}">Read the docs</a>
   </div>
