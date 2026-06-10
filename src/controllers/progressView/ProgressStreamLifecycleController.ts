@@ -51,12 +51,17 @@ export class ProgressStreamLifecycleController {
     }
 
     this.deps.host.cleanupDeletedStream(stream);
-    // Deleting the conversation ends any goal with it — without this the
-    // record (and its Goal-tab entry) outlives the stream forever.
-    await GoalStore.forget(stream);
 
+    // The wasActive snapshot must happen before the first await: callers may
+    // switch streams synchronously after invoking deleteStream, and that
+    // switch belongs to the post-deletion state, not this snapshot.
     const wasActive = this.deps.state.getActiveStream() === stream;
-    await this.deps.state.clearStream(stream);
+    await Promise.all([
+      this.deps.state.clearStream(stream),
+      // Deleting the conversation ends any goal with it — without this the
+      // record (and its Goal-tab entry) outlives the stream forever.
+      GoalStore.forget(stream),
+    ]);
 
     let shouldActivateStream = false;
     const activeAfterClear = this.deps.state.getActiveStream();
