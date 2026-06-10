@@ -95,7 +95,7 @@ jobs:
         run: pnpm run check:extension-package-invariants
 
       - name: Kernel tests
-        run: pnpm run test:kernel
+        run: pnpm run test
 
       - name: Compile
         run: pnpm run compile

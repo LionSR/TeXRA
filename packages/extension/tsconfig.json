@@ -58,7 +58,7 @@
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "types": ["node", "mocha", "vscode"]
+    "types": ["node", "vscode"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "../../src/types/**/*.d.ts"],
   "exclude": [
