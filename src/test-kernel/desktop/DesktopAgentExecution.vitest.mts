@@ -6,9 +6,11 @@ import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
 import {
   AgentCategory,
   LOG_LEVELS,
+  RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_STATUS,
   type RestoredStreamSnapshot,
+  type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
 import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
@@ -57,6 +59,7 @@ type RunExecutionRequest = (
   request: unknown,
   options: {
     openWorkflowOutput(result: {
+      outcome: RunOutcome;
       outputs: Array<{ absolutePath: string }>;
     }): Promise<void>;
   },
@@ -1264,7 +1267,7 @@ describe('DesktopProgressBridge', () => {
     const opener = { openPath: vi.fn(async (_filePath: string) => {}) };
     const runAgent = vi.fn(async (_request, options) => {
       await options.openWorkflowOutput({
-        outcome: 'completed',
+        outcome: RUN_OUTCOME.COMPLETED,
         outputs: [{ absolutePath: '/tmp/result.pdf' }],
       });
     });
@@ -1293,7 +1296,7 @@ describe('DesktopProgressBridge', () => {
     const opener = { openPath: vi.fn(async (_filePath: string) => {}) };
     const runAgent = vi.fn(async (_request, options) => {
       await options.openWorkflowOutput({
-        outcome: 'cancelled',
+        outcome: RUN_OUTCOME.CANCELLED,
         outputs: [{ absolutePath: '/tmp/result.pdf' }],
       });
     });

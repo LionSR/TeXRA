@@ -43,6 +43,7 @@ import type { DiffViewHost } from '@hosts/diffViewHost';
 import type { ExternalOpener } from '@hosts/externalOpener';
 import { createChannelTrace } from '@logger';
 import {
+  RUN_OUTCOME,
   STREAM_STATUS,
   type AgentProposalPermission,
   type AgentCategoryFilter,
@@ -1194,7 +1195,7 @@ export class DesktopProgressBridge {
         if (!getConfig<boolean>('texra.agentOutputs.autoOpenFinal', true)) {
           return;
         }
-        if (result.outcome !== 'completed') return;
+        if (result.outcome !== RUN_OUTCOME.COMPLETED) return;
         const output = result.outputs.at(-1);
         if (!output) return;
         await this.options.openPath?.(output.absolutePath);
