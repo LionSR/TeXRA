@@ -35,6 +35,11 @@ export interface ActiveStreamAncestor<T> {
   readonly value: T;
 }
 
+export interface ActiveStreamTreeEntry {
+  readonly id: StreamTabId;
+  readonly shortcutIndex?: number;
+}
+
 export function activeStreamScope(init: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
@@ -161,19 +166,19 @@ function activeTreeRoot(init: OrderedStreamViewInput): StreamTabId | undefined {
   return activeStreamParentOrSelfId(init) ?? init.streams.keys().next().value;
 }
 
-function orderedStreamTree(init: {
-  readonly root: StreamTabId;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-}): readonly Pick<StreamView, 'id' | 'shortcutIndex'>[] {
+export function activeStreamTreeEntries(
+  init: OrderedStreamViewInput,
+): readonly ActiveStreamTreeEntry[] {
+  const root = activeTreeRoot(init);
+  if (!root) return [];
   const ordered = orderedDescendantsFromTree({
-    parent: init.root,
-    parentSlice: init.streams.get(init.root),
+    parent: root,
+    parentSlice: init.streams.get(root),
     parentStream: init.parentStream,
     streams: init.streams,
   });
-  const out: Pick<StreamView, 'id' | 'shortcutIndex'>[] = [];
-  if (init.streams.has(init.root)) out.push({ id: init.root });
+  const out: ActiveStreamTreeEntry[] = [];
+  if (init.streams.has(root)) out.push({ id: root });
   for (const [index, id] of ordered.entries()) {
     if (!init.streams.has(id)) continue;
     const position = index + 1;
@@ -186,13 +191,7 @@ function orderedStreamTree(init: {
 export function activeStreamTreeViews(
   init: OrderedStreamViewInput,
 ): readonly StreamView[] {
-  const root = activeTreeRoot(init);
-  if (!root) return [];
-  const ordered = orderedStreamTree({
-    root,
-    parentStream: init.parentStream,
-    streams: init.streams,
-  });
+  const ordered = activeStreamTreeEntries(init);
   if (ordered.length < 2) return [];
   return ordered.map((entry) =>
     streamViewForId({
