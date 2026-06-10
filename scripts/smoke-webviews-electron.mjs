@@ -18,7 +18,6 @@ const nonce = 'texra-webview-smoke';
 const commonReplacements = {
   cspSource: 'file:',
   commonStyleUri: fileUri('packages/extension/src/common/styles/common.css'),
-  commonsBundleUri: fileUri('packages/extension/dist/shared/commons.js'),
   desktopThemeTokensUri: fileUri(
     'packages/desktop/src/renderer/themeTokens.css',
   ),

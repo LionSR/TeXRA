@@ -11,7 +11,7 @@ declare module '*.css?inline' {
   export default content;
 }
 
-// Standard CSS imports (Vite or webpack)
+// Standard CSS imports (Vite)
 declare module '*.css' {
   const content: string;
   export default content;

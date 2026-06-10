@@ -56,7 +56,7 @@
         "node_modules/@openrouter/sdk/esm/models/errors/index.d.ts"
       ],
       "@controllers/*": ["src/controllers/*"],
-      "@test/*": ["src/test/*"],
+      "@test/*": ["src/test-kernel/*"],
       "@cli/*": ["packages/cli/src/*"],
       "@desktop/*": ["packages/desktop/src/*"]
     },
@@ -64,7 +64,7 @@
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "types": ["node", "mocha", "vscode"]
+    "types": ["node", "vscode"]
   },
   "include": [
     "src/**/*.d.ts",
