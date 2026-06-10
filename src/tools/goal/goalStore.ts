@@ -13,7 +13,6 @@ import { PlanSchema, type Plan } from '@shared/schemas/plan';
 import { filterNotNull } from '@utils/core';
 import { hexId12 } from '@utils/core/executionId';
 import {
-  GOAL_COST_CAP_CONFIG_KEY,
   GoalSchema,
   isGoalInFlight,
   type Goal,
@@ -76,9 +75,6 @@ function normalizeGoalRecord(raw: unknown): Goal | null {
     createdAt: legacy.createdAt,
     updatedAt: legacy.updatedAt,
     plan: legacy.plan ?? null,
-    costCapUsd: null,
-    baselineRunCostUsd: null,
-    spentUsd: 0,
   };
 }
 
@@ -144,8 +140,8 @@ async function removeFromIndex(streamId: StreamTabId): Promise<void> {
 async function update(
   streamId: StreamTabId,
   mutate: (goal: Goal) => Goal,
-  // Callers that already read the record (setStatus, noteRunCost) pass it in
-  // to skip a second read-and-parse of the same workspaceState key.
+  // Callers that already read the record (setStatus) pass it in to skip a
+  // second read-and-parse of the same workspaceState key.
   existing?: Goal,
 ): Promise<Goal | null> {
   const goal = existing ?? readRaw(streamId);
@@ -172,14 +168,6 @@ function requireNonEmpty(value: string, label: string): string {
     throw new Error(`${label} must not be empty or whitespace-only.`);
   }
   return trimmed;
-}
-
-/** Read the configured USD cost cap; `0`/unset/invalid mean unbounded (null). */
-function configuredCostCapUsd(): number | null {
-  const raw = platform().config.get<number>(GOAL_COST_CAP_CONFIG_KEY, 0);
-  return typeof raw === 'number' && Number.isFinite(raw) && raw > 0
-    ? raw
-    : null;
 }
 
 export const GoalStore = {
@@ -221,9 +209,6 @@ export const GoalStore = {
       createdAt: now,
       updatedAt: now,
       plan: options?.plan ?? null,
-      costCapUsd: configuredCostCapUsd(),
-      baselineRunCostUsd: null,
-      spentUsd: 0,
     };
     await Promise.all([writeRaw(goal), addToIndex(streamId)]);
     bus.emit('goalStateChanged', { streamId });
@@ -250,65 +235,9 @@ export const GoalStore = {
     }
     return update(
       streamId,
-      (goal) => ({
-        ...goal,
-        status: nextStatus,
-        ...(nextStatus === 'active'
-          ? { baselineRunCostUsd: null, spentUsd: 0 }
-          : {}),
-      }),
+      (goal) => ({ ...goal, status: nextStatus }),
       current,
     );
-  },
-
-  /**
-   * Record the stream's current run cost against the goal and enforce the
-   * cost cap. Called by the tool-use wait node before each continuation.
-   *
-   * The first observation becomes the baseline so conversation spend from
-   * before the goal started doesn't count toward the cap. The run cost
-   * already includes completed subagents (rolled up at the delegation
-   * boundary), so subagents count toward the cap but never drive the loop.
-   *
-   * Returns `pausedForCap: true` only on the call that performs the
-   * cap-pause, so callers can log the transition exactly once. No-op
-   * (returns null) when the stream has no goal; paused goals keep their
-   * parked spend until resume re-baselines the next autonomous leg.
-   */
-  async noteRunCost(
-    streamId: StreamTabId,
-    runCostUsd: number,
-  ): Promise<{ goal: Goal; pausedForCap: boolean } | null> {
-    const current = readRaw(streamId);
-    if (!current) return null;
-    if (current.status !== 'active') {
-      return { goal: current, pausedForCap: false };
-    }
-    const baseline = current.baselineRunCostUsd ?? runCostUsd;
-    const spentUsd = Math.max(0, runCostUsd - baseline);
-    // The early return above guarantees the goal is active here, so an
-    // exceeded cap always performs the pause.
-    const pausedForCap =
-      current.costCapUsd != null && spentUsd >= current.costCapUsd;
-    // Skip the write (and its broadcast) when nothing material changed.
-    if (
-      current.baselineRunCostUsd != null &&
-      Math.abs(spentUsd - current.spentUsd) < 1e-9 &&
-      !pausedForCap
-    ) {
-      return { goal: current, pausedForCap: false };
-    }
-    const goal = await update(
-      streamId,
-      (g) => ({
-        ...g,
-        baselineRunCostUsd: baseline,
-        spentUsd,
-        status: pausedForCap ? 'paused' : g.status,
-      }),
-      current,
-    );
-    return goal ? { goal, pausedForCap } : null;
   },
 
   /**

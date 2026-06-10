@@ -22,6 +22,7 @@ import {
 import { mergeChildStreams } from './childStreamMerge';
 import { appendCompletedProcessEntries } from './completedProcessTranscript';
 import { sumResumeUsageStats } from './resumeHint';
+import { appendLocalAssistantTranscript } from './transcript';
 
 type Emit = <K extends ProgressEvent>(
   event: K,
@@ -227,6 +228,16 @@ function applyToState<K extends ProgressEvent>(
       // The event itself has no delta payload, so re-read the queue directly.
       const p = payload as ProgressEventPayloads['updateQueuedFollowUps'];
       refreshQueuedFollowUps(p.streamId);
+      return;
+    }
+    case 'goalPaused': {
+      // Without a transcript line, an auto-paused goal is indistinguishable
+      // from a hang: the agent simply stops mid-objective.
+      const p = payload as ProgressEventPayloads['goalPaused'];
+      appendLocalAssistantTranscript(
+        'Goal paused after a failed cycle. Send a message to continue.',
+        p.streamId,
+      );
       return;
     }
     case 'followUpSent': {

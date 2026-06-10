@@ -13,7 +13,7 @@ import {
 } from '@agent/runtime/StreamStatusService';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
-import { GOAL_COST_CAP_CONFIG_KEY, GoalStore } from '@tools/goal';
+import { GoalStore } from '@tools/goal';
 
 describe('ToolUseWaitNode', () => {
   it('marks a delivered subagent cycle before stopping on interruption', async () => {
@@ -188,7 +188,6 @@ describe('ToolUseWaitNode', () => {
         lastResponse: undefined,
         previouslyDeliveredToOrchestrator: false,
         touchedFiles: [],
-        runCostUsd: 0,
       },
       {
         followUps: [
@@ -209,17 +208,12 @@ describe('ToolUseWaitNode', () => {
     expect(addMediaToUserMessage).toHaveBeenCalledOnce();
   });
 
-  it('records goal spend before pausing after a failed parent cycle', async () => {
+  it('pauses the goal after a failed parent cycle', async () => {
     const streamId = 'wait-node-error-goal' as StreamTabId;
     const { initPlatform } = await import('@platform/platform');
-    initPlatform(
-      createFakePlatform({
-        config: { [GOAL_COST_CAP_CONFIG_KEY]: 10 },
-      }),
-    );
+    initPlatform(createFakePlatform({}));
 
     await GoalStore.start(streamId, 'finish the refactor');
-    await GoalStore.noteRunCost(streamId, 1);
 
     const shared: ToolUseRunShared = {
       lastError: { message: 'cycle failed', userRetryable: false },
@@ -250,7 +244,6 @@ describe('ToolUseWaitNode', () => {
         afterError: true,
         lastResponse: undefined,
         previouslyDeliveredToOrchestrator: false,
-        runCostUsd: 3.5,
         touchedFiles: [],
       });
 
@@ -258,7 +251,9 @@ describe('ToolUseWaitNode', () => {
       expect(exec.kind).toBe('stop');
       expect(waitForFollowUp).not.toHaveBeenCalled();
       expect(goal?.status).toBe('paused');
-      expect(goal?.spentUsd).toBeCloseTo(2.5);
+      expect(runtimeHost.emit).toHaveBeenCalledWith('goalPaused', {
+        streamId,
+      });
       expect(runtimeHost.emit).toHaveBeenCalledWith(
         'updateBashApprovalBypassState',
         { streamId, bypassActive: false },

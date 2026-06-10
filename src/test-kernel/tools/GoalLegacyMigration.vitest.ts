@@ -43,9 +43,6 @@ describe('GoalStore legacy Odyssey migration', () => {
       streamId: STREAM_ID,
       objective: 'finish the proof',
       status: 'active',
-      costCapUsd: null,
-      baselineRunCostUsd: null,
-      spentUsd: 0,
     });
     expect(GoalStore.list().map((g) => g.streamId)).toEqual([STREAM_ID]);
   });

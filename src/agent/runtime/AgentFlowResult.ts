@@ -64,7 +64,7 @@ const AgentFlowMetaSchema = z.object({
   /**
    * Total model cost (USD) of the run, including its own subagents.
    * Parents use this to roll a completed subagent's spend into their own
-   * usage totals and goal cost cap without branching on the subagent flow.
+   * usage totals without branching on the subagent flow.
    */
   totalCostUsd: z.number().nonnegative().optional(),
 });
