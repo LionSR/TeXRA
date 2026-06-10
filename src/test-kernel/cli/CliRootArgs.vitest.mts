@@ -798,6 +798,7 @@ describe('CLI root argument routing', () => {
           compileFailures: [],
         },
         cliContext(),
+        { terminalStatus: EXECUTION_STATUS.ERROR },
       ),
     ).rejects.toThrow(
       'Workflow error without a generated output; corrected.tex was not written.',
