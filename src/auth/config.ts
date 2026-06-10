@@ -86,7 +86,7 @@ export const DEFAULT_OAUTH_PROVIDER: OAuthProvider = 'github';
  * This is the default/fallback value. At runtime, use getExtensionId()
  * which returns the actual extension ID from context if available.
  */
-export const EXTENSION_ID = 'texra-ai.texra';
+const EXTENSION_ID = 'texra-ai.texra';
 
 /**
  * Runtime extension ID set during activation.
@@ -107,7 +107,7 @@ export function setRuntimeExtensionId(id: string): void {
  * Get the extension ID for OAuth redirects.
  * Returns the runtime ID if set, otherwise falls back to the default.
  */
-export function getExtensionId(): string {
+function getExtensionId(): string {
   return runtimeExtensionId ?? EXTENSION_ID;
 }
 

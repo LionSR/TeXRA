@@ -26,7 +26,6 @@ export {
   extractMultipleTextFromTag,
   extractContentFromXMLbyTagMultiple,
   extractScratchpad,
-  extractDocument,
   extractDocuments,
   type ExtractionResult,
   type MultipleExtractionResult,

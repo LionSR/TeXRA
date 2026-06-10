@@ -14,7 +14,7 @@ import { compileLatex2Pdf } from './texTools';
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-export class TikzPictureManager {
+class TikzPictureManager {
   constructor(
     private readonly channel: string = CHANNEL,
     private readonly fileService?: TaskRunFileService,

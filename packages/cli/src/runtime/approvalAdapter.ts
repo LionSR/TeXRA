@@ -45,7 +45,7 @@ const AGENT_PROPOSAL_INSTRUCTION_MAX_LINES = 40;
 const AGENT_PROPOSAL_INSTRUCTION_MAX_LINE_CHARS = 240;
 const AGENT_PROPOSAL_FILE_GROUP_MAX_FILES = 10;
 
-export const CLI_PERSONAL_API_RETRY_HINT =
+const CLI_PERSONAL_API_RETRY_HINT =
   'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to personal API keys.';
 
 const deniedApprovalContexts = new WeakSet<CliContext>();
@@ -65,7 +65,7 @@ export function hasCliApprovalDenied(context: CliContext): boolean {
   return deniedApprovalContexts.has(context);
 }
 
-export function isCliMonthlySpendingLimitMessage(
+function isCliMonthlySpendingLimitMessage(
   message: string | undefined,
 ): boolean {
   return (

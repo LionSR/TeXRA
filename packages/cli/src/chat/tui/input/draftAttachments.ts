@@ -33,7 +33,7 @@ export interface PastedImageEntry {
 export type DraftAttachment = PastedTextEntry | PastedImageEntry;
 
 /** Count newline sequences, matching the chip's "+M lines" suffix. */
-export function pastedNewlineCount(text: string): number {
+function pastedNewlineCount(text: string): number {
   return (text.match(/\r\n|\r|\n/g) ?? []).length;
 }
 
@@ -45,13 +45,13 @@ export function shouldCollapsePaste(text: string): boolean {
   );
 }
 
-export function formatPastedTextChip(id: number, numLines: number): string {
+function formatPastedTextChip(id: number, numLines: number): string {
   return numLines === 0
     ? `[Pasted text #${id}]`
     : `[Pasted text #${id} +${numLines} lines]`;
 }
 
-export function formatImageChip(id: number): string {
+function formatImageChip(id: number): string {
   return `[Image #${id}]`;
 }
 

@@ -2,7 +2,7 @@
 export const DEFAULT_COMPACTION_THRESHOLD_PERCENT = 75;
 
 /** Minimum completion tokens when reducing max tokens due to context pressure. */
-export const MIN_COMPLETION_TOKENS = 100;
+const MIN_COMPLETION_TOKENS = 100;
 
 /** Safety buffer for exact token counting (Anthropic, Google). */
 export const TOKEN_SAFETY_BUFFER = 10;
@@ -23,8 +23,8 @@ export const CHAINED_RESPONSE_SAFETY_MARGIN_PERCENT = 5;
 export const MAX_TOOL_RESULT_TEXT_LENGTH = 200_000;
 
 /** Max PDF pages per Anthropic API request: 600 for 1M-context models, 100 for 200K-context models. */
-export const ANTHROPIC_MAX_PDF_PAGES_1M = 600;
-export const ANTHROPIC_MAX_PDF_PAGES_200K = 100;
+const ANTHROPIC_MAX_PDF_PAGES_1M = 600;
+const ANTHROPIC_MAX_PDF_PAGES_200K = 100;
 
 /** Returns the PDF page limit based on the model's effective context window. */
 export function getAnthropicMaxPdfPages(contextWindow: number): number {

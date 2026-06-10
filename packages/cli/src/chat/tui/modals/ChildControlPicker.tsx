@@ -45,12 +45,12 @@ export interface ChildControlPickerProps {
 }
 
 export const TASK_DETAIL_LABEL_WIDTH = 13;
-export const ULTRA_COMPACT_PICKER_MAX_ROWS = 6;
-export const ULTRA_COMPACT_TASK_DETAIL_MAX_ROWS = 4;
-export const NARROW_TASK_DETAIL_HINT_MAX_COLUMNS = 56;
-export const TASK_DETAIL_HORIZONTAL_CHROME_COLUMNS = 4;
-export const PICKER_HORIZONTAL_CHROME_COLUMNS = 4;
-export const MIN_COLUMNS_FOR_KILL_HINT = 44;
+const ULTRA_COMPACT_PICKER_MAX_ROWS = 6;
+const ULTRA_COMPACT_TASK_DETAIL_MAX_ROWS = 4;
+const NARROW_TASK_DETAIL_HINT_MAX_COLUMNS = 56;
+const TASK_DETAIL_HORIZONTAL_CHROME_COLUMNS = 4;
+const PICKER_HORIZONTAL_CHROME_COLUMNS = 4;
+const MIN_COLUMNS_FOR_KILL_HINT = 44;
 
 export function pickerTitle(mode: ChildControlMode): string {
   return mode === 'subagents' ? 'Subagents' : 'Tasks and sub-workflows';
@@ -168,7 +168,7 @@ export function pickerKeyHintsForColumns(
   );
 }
 
-export function framedPickerHintColumns(
+function framedPickerHintColumns(
   availableColumns: number | undefined,
 ): number | undefined {
   return availableColumns === undefined
@@ -207,7 +207,7 @@ export function taskDetailKeyHintsForColumns({
   return hints;
 }
 
-export function taskDetailOutputColumnCount(
+function taskDetailOutputColumnCount(
   availableColumns: number | undefined,
 ): number | undefined {
   return availableColumns === undefined

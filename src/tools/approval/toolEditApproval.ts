@@ -21,7 +21,7 @@ import { countLines } from '@utils/text/stringUtils';
 import { bashApprovalController } from './bashApproval';
 import { createStreamApprovalController } from './streamApprovalQueue';
 
-export const ToolEditApprovalRequestSchema = z.object({
+const ToolEditApprovalRequestSchema = z.object({
   path: z.string(),
   originalContent: z.string(),
   proposedContent: z.string(),
@@ -32,7 +32,7 @@ export type ToolEditApprovalRequest = z.infer<
   typeof ToolEditApprovalRequestSchema
 >;
 
-export const ToolEditApprovalResultSchema = z.object({
+const ToolEditApprovalResultSchema = z.object({
   accepted: z.boolean(),
   userMessage: z.string().optional(),
   appliedContent: z.string().optional(),
@@ -45,8 +45,7 @@ export type ToolEditApprovalResult = z.infer<
   typeof ToolEditApprovalResultSchema
 >;
 
-export const TOOL_EDIT_APPROVAL_CONFIG_KEY =
-  'texra.toolUse.requireEditApproval';
+const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'texra.toolUse.requireEditApproval';
 
 export const REVEAL_TIMEOUT_MS = 1500;
 

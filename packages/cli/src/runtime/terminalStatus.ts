@@ -26,7 +26,7 @@ export type CliRunResult = ExecuteAgentResult extends infer T
     : never
   : never;
 
-export function isExecutionStatus(
+function isExecutionStatus(
   value: string | undefined,
 ): value is ExecutionStatus {
   return (

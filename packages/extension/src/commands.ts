@@ -119,16 +119,3 @@ export function registerCommands(context: vscode.ExtensionContext): void {
     ),
   );
 }
-
-export { linterCommands, arXivCommands } from '@commands/latex';
-export { runExecuteCommand, agentCreatorCommands } from '@commands/agent';
-export {
-  xmlCommands,
-  yamlCommands,
-  helpCommands,
-  mainViewCommands,
-  sampleProjectCommands,
-} from '@commands/system';
-export { apiKeyCommands } from '@commands/api/apiKeyCommands';
-export { historyCommands } from '@commands/history';
-export { settingsViewCommands } from '@commands/settings';

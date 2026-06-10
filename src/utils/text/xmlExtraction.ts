@@ -210,7 +210,7 @@ export interface MultipleExtractionResult {
  * the extractor prioritizes named document matches before other fallbacks.
  * @returns Extraction result with content and method used
  */
-export function extractDocument(
+function extractDocument(
   outputContent: string,
   documentTag: string,
   preferredName?: string,

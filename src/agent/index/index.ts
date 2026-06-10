@@ -5,7 +5,6 @@
 export { AgentSource } from '@shared/schemas/agent';
 
 export {
-  DEFAULT_CUSTOM_AGENTS_DIR_NAME,
   AgentDirectoryService,
   type AbsoluteDirectoryAccess,
   type AgentDirectoryDocsId,
@@ -16,15 +15,10 @@ export {
   type CustomAgentDirectoryStore,
 } from './AgentDirectoryService';
 
-export {
-  BUNDLED_AGENT_DIRECTORY_NAMES,
-  type BundledAgentDirectoryName,
-} from './BundledAgentDirectories';
+export { type BundledAgentDirectoryName } from './BundledAgentDirectories';
 
 export {
-  BundledAgentDirectorySync,
   GlobalStorageAgentDirectoryStorage,
-  PathAgentDirectoryBundleSource,
   type AgentDirectoryBundleSource,
   type AgentDirectoryStorage,
   type AgentDirectorySyncLogger,
@@ -41,8 +35,6 @@ export { toRemoteAgentProfileData } from './remoteAgentProfileData';
 
 export { buildStreamTabInfo, type StreamTabInfoInputs } from './streamTabInfo';
 
-export { peekWorktreeInfo, resolveWorktreeInfo } from './worktreeInfo';
-
 export {
   // Types
   type AgentEntry,
@@ -54,7 +46,6 @@ export {
   getWorkflowAgents,
   getToolUseAgents,
   getAgentsBySource,
-  isAgentRegistryReady,
   refresh,
   // Typed data options
   computeAgentOptionsData,
@@ -65,12 +56,6 @@ export {
   isRemoteAgent,
   // Visible agents (for dropdowns and tools)
   getVisibleAgents,
-  // Metadata update (for remote agent loading)
-  updateAgentMeta,
-  // Built-in relay-served orchestrator roots
-  REMOTE_ORCHESTRATOR_AGENT_NAMES,
-  // Bundled (offline) orchestrator roots
-  BUNDLED_ORCHESTRATOR_AGENT_NAMES,
   // All built-in delegating team roots (relay-served + bundled)
   BUILTIN_TEAM_ROOT_AGENT_NAMES,
 } from './agentRegistry';

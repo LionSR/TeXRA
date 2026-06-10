@@ -28,9 +28,7 @@ function formatSkillIssue(issue: SkillLoadIssue): string {
   return `${issue.severity}: ${issue.message}${location}`;
 }
 
-export function formatRuntimeSkillCatalog(
-  skills: readonly SourcedSkill[],
-): string {
+function formatRuntimeSkillCatalog(skills: readonly SourcedSkill[]): string {
   return skills
     .map(({ skill, source }) => {
       const sourceLabel = source.label ?? source.scope;

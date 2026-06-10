@@ -16,7 +16,7 @@ import { sampleProjectCommands } from './sampleProjectCommands';
 
 const CHANNEL = 'mainViewCommands';
 
-export const mainViewCommands = {
+const mainViewCommands = {
   reset: 'texra.mainView.reset',
   refreshModelOptions: 'texra.refreshModelOptions',
   refreshAgentOptions: 'texra.refreshAgentOptions',

@@ -2,7 +2,7 @@ import type { StreamTabId } from '@shared/schemas';
 
 import { activeStreamScope } from './streamViews';
 
-export const ROOT_SCROLLBACK_VIEWPORT_KEY = 'root-scrollback';
+const ROOT_SCROLLBACK_VIEWPORT_KEY = 'root-scrollback';
 
 /**
  * The root stream owns ordinary terminal scrollback through Ink `<Static>`.
