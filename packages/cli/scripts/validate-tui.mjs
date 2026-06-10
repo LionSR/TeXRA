@@ -759,7 +759,7 @@ const SCENARIOS = [
     expect: [
       '/model · personal API keys',
       'Available models',
-      '+3 more',
+      '+4 more',
       '↑/↓ navigate',
       'Enter close',
       'Esc close',
