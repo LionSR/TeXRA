@@ -3,7 +3,8 @@
  *
  * Consumes streamLogContext to get groups and messages.
  * Renders one TaskGroupList per visited stream, hiding inactive ones with
- * display:none. Tab switching toggles visibility — zero DOM re-creation.
+ * the hidden attribute. Tab switching toggles visibility — zero DOM
+ * re-creation.
  *
  * Handles event delegation for clicks, toggles, and file links.
  *
@@ -151,7 +152,7 @@ export class LogList extends LitElement {
       ([id, data]) => html`
         <task-group-list
           ${ref(data.ref)}
-          style=${id === this.activeStreamId ? '' : 'display:none'}
+          ?hidden=${id !== this.activeStreamId}
           .groups=${data.groups}
           .messages=${data.messages}
           .updatedMessageIndices=${data.updatedMessageIndices}

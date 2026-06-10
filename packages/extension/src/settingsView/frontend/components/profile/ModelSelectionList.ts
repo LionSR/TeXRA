@@ -3,6 +3,7 @@
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -325,7 +326,10 @@ export class ModelSelectionList extends LitElement {
             <wa-icon
               library="texra"
               name="chevron-right"
-              class="provider-group-chevron ${isExpanded ? 'expanded' : ''}"
+              class=${classMap({
+                'provider-group-chevron': true,
+                expanded: isExpanded,
+              })}
             ></wa-icon>
             <span class="provider-group-name">${group.displayName}</span>
             <span class="provider-group-count">

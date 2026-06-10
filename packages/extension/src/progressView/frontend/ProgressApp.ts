@@ -4,6 +4,7 @@ import { create } from 'mutative';
 import { html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
+import { ifDefined } from 'lit/directives/if-defined.js';
 
 import { z } from 'zod';
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -291,8 +292,8 @@ export class ProgressApp extends ProgressAppBase {
 
       .desktop-empty-progress p {
         margin: 0;
-        font-size: var(--font-size-md, 14px);
-        line-height: 1.5;
+        font-size: var(--font-size);
+        line-height: var(--line-height-relaxed);
       }
 
       .desktop-empty-progress__actions {
@@ -380,8 +381,10 @@ export class ProgressApp extends ProgressAppBase {
           >
             <wa-tab
               panel="launcher"
-              class=${isEditorMode ? 'focus-sidebar-tab' : ''}
-              title=${isEditorMode ? 'Focus Launcher sidebar' : ''}
+              class=${classMap({ 'focus-sidebar-tab': isEditorMode })}
+              title=${ifDefined(
+                isEditorMode ? 'Focus Launcher sidebar' : undefined,
+              )}
               @click=${this.onFocusLauncherTab}
             >
               <wa-icon

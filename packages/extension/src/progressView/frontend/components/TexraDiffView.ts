@@ -108,7 +108,7 @@ export class TexraDiffView extends LitElement {
         height: 42vh;
         max-height: 640px;
         border: var(--border-thin) solid var(--color-border);
-        background: var(--color-background);
+        background: var(--wa-color-surface-default);
       }
 
       .editor {
@@ -125,8 +125,8 @@ export class TexraDiffView extends LitElement {
         min-height: 240px;
         padding: var(--wa-space-xs);
         border: var(--border-thin) solid var(--color-border);
-        color: var(--color-text-muted);
-        background: var(--color-background-secondary);
+        color: var(--color-text-secondary);
+        background: var(--color-bg-secondary);
       }
 
       .error {
