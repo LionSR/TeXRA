@@ -539,45 +539,40 @@ interface StatusBarVisibleStream {
   readonly status: StreamStatus | undefined;
 }
 
-export function statusBarCanStopVisibleRun({
-  activeStreamId,
-  parentStream,
-  status,
-  streams,
-}: {
-  readonly activeStreamId: StreamTabId | undefined;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly status: StreamStatus | undefined;
-  readonly streams: ReadonlyMap<StreamTabId, StatusBarVisibleStream>;
-}): boolean {
-  if (isLiveStreamStatus(status)) return true;
-  return (
-    nearestActiveStreamAncestor({
-      activeStreamId,
-      parentStream,
-      values: streams,
-      canUseValue: (stream) => isLiveStreamStatus(stream.status),
-    }) !== undefined
-  );
+export interface StatusBarStreamTarget {
+  readonly ctrlCAction: CtrlCAction;
+  readonly displaySlice: StreamSlice | undefined;
 }
 
-export function statusBarDisplaySlice({
+export function statusBarStreamTarget({
   activeStreamId,
+  canStopActiveRun,
   parentStream,
   streams,
 }: {
   readonly activeStreamId: StreamTabId | undefined;
+  readonly canStopActiveRun: boolean;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
-}): StreamSlice | undefined {
+}): StatusBarStreamTarget {
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  if (activeSlice) return activeSlice;
-  return nearestActiveStreamAncestor({
+  const liveAncestor = nearestActiveStreamAncestor({
     activeStreamId,
     parentStream,
     values: streams,
-    canUseValue: (stream) => isLiveStreamStatus(stream.status),
-  })?.value;
+    canUseValue: (stream: StatusBarVisibleStream) =>
+      isLiveStreamStatus(stream.status),
+  });
+  const canStopVisibleRun =
+    isLiveStreamStatus(activeSlice?.status) || liveAncestor !== undefined;
+  return {
+    ctrlCAction: ctrlCActionForFocus({
+      activeStreamId,
+      canStopActiveRun: canStopActiveRun || canStopVisibleRun,
+      parentStream,
+    }),
+    displaySlice: activeSlice ?? liveAncestor?.value,
+  };
 }
 
 // Bypass badges, in emission order. One row per BypassState flag.
@@ -728,12 +723,13 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const approvals = useSignal(approvalQueueStatus);
   const caps = useSignal(terminalCapabilities);
   const { columns } = useWindowSize();
-  const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
-  const statusSlice = statusBarDisplaySlice({
+  const target = statusBarStreamTarget({
     activeStreamId,
+    canStopActiveRun: props.canStopActiveRun?.() === true,
     parentStream,
     streams,
   });
+  const statusSlice = target.displaySlice;
 
   const runStartedAt =
     statusSlice?.status === STREAM_STATUS.RUNNING
@@ -765,18 +761,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     shiftEnterNewline: caps.kittyKeyboard,
     transcriptAvailable: props.transcriptAvailable,
     width: columns,
-    ctrlCAction: ctrlCActionForFocus({
-      activeStreamId,
-      canStopActiveRun:
-        props.canStopActiveRun?.() === true ||
-        statusBarCanStopVisibleRun({
-          activeStreamId,
-          parentStream,
-          status: slice?.status,
-          streams,
-        }),
-      parentStream,
-    }),
+    ctrlCAction: target.ctrlCAction,
     foregroundEscapeAction: props.foregroundEscapeAction,
     shortcutsActive: props.shortcutsActive,
   });
