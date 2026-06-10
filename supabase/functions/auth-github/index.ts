@@ -297,11 +297,11 @@ app.post('/exchange', async (c) => {
       userId = identities[0].user_id;
       const { data: userData, error: userError } =
         await supabase.auth.admin.getUserById(userId);
-      if (userError || !userData?.user?.email) {
+      if (userError || !userData?.user) {
         console.error('[AUTH] Failed to load linked user:', userError?.message);
         return errorResponse(c, 'Failed to load linked user', 500);
       }
-      userEmail = userData.user.email;
+      userEmail = userData.user.email ?? email;
     } else {
       // Check by email
       const { data: authUser } = await supabase
