@@ -2,10 +2,10 @@ import { z } from 'zod';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
-import { getConfig } from '@utils/config/configUtils';
 import { StreamTabIdSchema, type StreamTabId } from '@shared/schemas';
 import { requireRuntimeHost } from '@tools/contextHelpers';
 import { type ToolResult } from '@tools/result';
+import { getConfig } from '@utils/config/configUtils';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { createStreamApprovalController } from './streamApprovalQueue';

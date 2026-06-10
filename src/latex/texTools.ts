@@ -2,7 +2,6 @@
 import * as path from 'path';
 
 // Local imports - common
-import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@common/errors';
 import {
   LaTeXCompileOptionsSchema,
@@ -16,6 +15,7 @@ import * as logger from '@logger/logUtils';
 import { WorkspaceFS, flexibleFS, pathToLocation } from '@utils/files';
 import type { FileLocation } from '@utils/files';
 import { runToolWithCheck } from '@utils/system';
+import { getConfig } from '@utils/config/configUtils';
 
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);

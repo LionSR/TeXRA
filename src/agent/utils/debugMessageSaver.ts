@@ -1,10 +1,10 @@
 import * as path from 'path';
 
 import type { AgentTrace } from '@agent/trace';
-import { getConfig } from '@utils/config/configUtils';
 import { toErrorMessage } from '@common/errors';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceFS, StorageFS } from '@utils/files';
+import { getConfig } from '@utils/config/configUtils';
 import { ensureRunDir, TASK_RUNS_DIR } from '@utils/files/taskRunStorage';
 
 export interface DebugContext {

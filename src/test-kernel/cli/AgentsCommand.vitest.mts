@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -58,6 +58,12 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
 }
 
 describe('CLI agents command', () => {
+  // Warm the module graph so the first test isn't charged the import cost,
+  // which can exceed the per-test timeout on slow machines.
+  beforeAll(async () => {
+    await import('@cli/commands/agents');
+  }, 30_000);
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getToolUseAgents.mockReturnValue([]);
