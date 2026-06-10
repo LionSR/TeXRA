@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildStreamTabInfo } from '@agent/index';
-import { AGENT_CATEGORY } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { isProcessAgent } from '@shared/streams/agentKind';
 
 describe('buildStreamTabInfo', () => {
@@ -9,7 +9,7 @@ describe('buildStreamTabInfo', () => {
     const info = buildStreamTabInfo({
       streamId: 'bash@tool#exec:child-stream',
       hints: {
-        agentCategory: AGENT_CATEGORY.TOOL_USE,
+        agentCategory: AgentCategory.ToolUse,
       },
       creationTimestamp: 1,
     });

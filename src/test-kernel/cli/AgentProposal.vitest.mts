@@ -7,7 +7,7 @@ import {
   maxAgentProposalInstructionScrollOffset,
 } from '@cli/chat/tui/modals/AgentProposal';
 import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
-import { AGENT_CATEGORY, agentProposalCategoryLabel } from '@shared/schemas';
+import { AgentCategory, agentProposalCategoryLabel } from '@shared/schemas';
 
 const LONG_AGENT_PROMPT = [
   'Review the mathematical proof in triangular_square_mod5.tex for correctness, completeness, and rigor.',
@@ -20,10 +20,10 @@ const LONG_AGENT_PROMPT = [
 
 describe('CLI agent proposal approval layout', () => {
   it('uses human-facing category labels', () => {
-    expect(agentProposalCategoryLabel(AGENT_CATEGORY.TOOL_USE)).toBe(
+    expect(agentProposalCategoryLabel(AgentCategory.ToolUse)).toBe(
       'tool-use agent',
     );
-    expect(agentProposalCategoryLabel(AGENT_CATEGORY.WORKFLOW)).toBe(
+    expect(agentProposalCategoryLabel(AgentCategory.Workflow)).toBe(
       'workflow agent',
     );
   });

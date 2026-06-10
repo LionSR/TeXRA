@@ -3,7 +3,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { buildInitialToolUsePrompts } from '@utils/prompt';
 
 import type { ToolUseServices, ToolUseFlowParams } from '../ToolUseServices';
@@ -24,9 +24,7 @@ export class ToolUsePrepareNode<C> extends Node<
     const { userVarChannels, logger, snapshot, config, fileService } =
       this.services;
     const resolvedToolNames = this.services.resolvedTools.map((t) => t.name);
-    const hasDelegationTools = this.services.resolvedTools.some((t) =>
-      DELEGATION_TOOLS.has(t.name),
-    );
+    const hasDelegationTools = hasDelegationTool(resolvedToolNames);
     const promptOptions = {
       resolvedToolNames,
       hasDelegationTools,

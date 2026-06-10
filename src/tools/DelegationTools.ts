@@ -19,9 +19,8 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { executeAgent } from '@agent/runtime/executeAgent';
-import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
+import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
 import {
@@ -46,7 +45,7 @@ import * as logger from '@logger/logUtils';
 // Local imports - model
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import {
-  AGENT_CATEGORY,
+  AgentCategory,
   DEFAULT_TOOL_CONFIG,
   WorkflowAgentProposalSchema,
   ToolUseAgentProposalSchema,
@@ -55,7 +54,6 @@ import {
   type StreamTabId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import { evaluateDelegationGate } from '@shared/constants/delegationPolicy';
 import { formatBytes } from '@shared/utils/string';
 
 // Local imports - tools
@@ -208,19 +206,6 @@ function getRequiredContext(): RunContext & {
   return ctx as RunContext & { streamId: StreamTabId };
 }
 
-/** Build config payload from a proposal. */
-function toConfigPayload(
-  proposal: WorkflowAgentProposal | ToolUseAgentProposal,
-): AgentConfigPayload {
-  return {
-    ...proposal,
-    agentCategory:
-      proposal.agentCategory === AGENT_CATEGORY.TOOL_USE
-        ? AgentCategory.ToolUse
-        : AgentCategory.Workflow,
-  };
-}
-
 /** Metadata about how the delegation was approved, included in the tool result. */
 interface ApprovalMeta {
   autoApproved: boolean;
@@ -230,6 +215,12 @@ interface ApprovalMeta {
   requestedAgent?: string;
 }
 
+/**
+ * Format a subagent result for delivery to the orchestrator.
+ * For workflow results, computes latexdiffs and writes them as files to the
+ * execution's run directory first — the delivery references diff file paths
+ * so the orchestrator can read them on demand via /executions/{id}/files/.
+ */
 async function subagentDeliveryMessage(
   executionId: string,
   agentName: string,
@@ -285,13 +276,10 @@ function resolveDeliveryStreamId(
 
 /**
  * Runtime depth gate shared by fresh delegations and resumes.
- * Reads the current workspace delegation policy via readNestedDelegationConfig().
+ * Evaluates against the current workspace delegation policy.
  */
 function depthGateError(parentDelegationDepth: number): ToolResult | null {
-  const gate = evaluateDelegationGate(
-    parentDelegationDepth,
-    readNestedDelegationConfig(),
-  );
+  const gate = evaluateCurrentDelegationGate(parentDelegationDepth);
   if (gate.allowed) return null;
 
   const unknownDepth = gate.blockReason === 'unknown_depth';
@@ -381,6 +369,7 @@ async function executeSubagent(
 
   const executionId = generateExecutionId();
   const startedAt = Date.now();
+  const workingDirectory = configPayload.workingDirectory ?? undefined;
 
   const syntheticConfig = AgentConfigSchema.parse(configPayload);
   await registerExecution(
@@ -392,7 +381,33 @@ async function executeSubagent(
     parentDelegationDepth + 1,
   );
 
+  const inheritChildStreamApprovals = (resolvedStreamId: StreamTabId): void => {
+    // Bash bypass follows the parent regardless of edit-YOLO, so a bash-only
+    // parent (CLI AUTO-BASH without AUTO-APPROVE) still propagates to the child.
+    inheritBashBypassOnChildStream(resolvedStreamId, orchestratorStreamId);
+    if (options?.enableYoloOnChild) {
+      enableYoloOnChildStream(resolvedStreamId);
+    }
+  };
+
   if (parentContext.stopAfterCycle) {
+    const failureResult = async (
+      err: unknown,
+      memoryMisses?: AgentFlowResult['memoryMisses'],
+    ): Promise<ToolResult> => {
+      const msg = formatSubagentError(executionId, agentName, err, {
+        wallTimeMs: Date.now() - startedAt,
+        workingDirectory,
+        memoryMisses,
+      });
+      await writeSubagentReport(executionId, msg);
+      return {
+        summary: `Subagent '${agentName}' failed`,
+        output: msg,
+        error: toErrorMessage(err),
+        isError: true,
+      };
+    };
     try {
       let subagentError: unknown;
       const result = await executeAgent(configPayload, executionId, {
@@ -403,52 +418,23 @@ async function executeSubagent(
         delegationDepth: parentDelegationDepth + 1,
         approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
         stopAfterCycle: true,
-        onStreamResolved: (resolvedStreamId) => {
-          // Bash bypass follows the parent regardless of edit-YOLO, so a
-          // bash-only parent (CLI AUTO-BASH without AUTO-APPROVE) still
-          // propagates to the child.
-          inheritBashBypassOnChildStream(
-            resolvedStreamId,
-            orchestratorStreamId,
-          );
-          if (options?.enableYoloOnChild) {
-            enableYoloOnChildStream(resolvedStreamId);
-          }
-        },
+        onStreamResolved: inheritChildStreamApprovals,
         onError: (err) => {
           subagentError = err;
         },
       });
       settleSubagentCost(result);
       if (result.status === 'error') {
-        const msg = formatSubagentError(
-          executionId,
-          agentName,
+        return failureResult(
           subagentError ?? 'Subagent ended with error status.',
-          {
-            wallTimeMs: Date.now() - startedAt,
-            workingDirectory: configPayload.workingDirectory ?? undefined,
-            memoryMisses: result.memoryMisses,
-          },
+          result.memoryMisses,
         );
-        await writeSubagentReport(executionId, msg);
-        return {
-          summary: `Subagent '${agentName}' failed`,
-          output: msg,
-          error: toErrorMessage(
-            subagentError ?? 'Subagent ended with error status.',
-          ),
-          isError: true,
-        };
       }
       const msg = await subagentDeliveryMessage(
         executionId,
         agentName,
         result,
-        {
-          startedAt,
-          workingDirectory: configPayload.workingDirectory ?? undefined,
-        },
+        { startedAt, workingDirectory },
       );
       await writeSubagentReport(executionId, msg);
       return {
@@ -457,17 +443,7 @@ async function executeSubagent(
       };
     } catch (err) {
       settleSubagentCost(getAgentFlowErrorResult(err));
-      const msg = formatSubagentError(executionId, agentName, err, {
-        wallTimeMs: Date.now() - startedAt,
-        workingDirectory: configPayload.workingDirectory ?? undefined,
-      });
-      await writeSubagentReport(executionId, msg);
-      return {
-        summary: `Subagent '${agentName}' failed`,
-        output: msg,
-        error: toErrorMessage(err),
-        isError: true,
-      };
+      return failureResult(err);
     }
   }
 
@@ -525,13 +501,12 @@ async function executeSubagent(
     result?: AgentFlowResult,
   ): Promise<void> {
     settleSubagentCost(result);
-    const wallTimeMs = Date.now() - startedAt;
     const msg = formatSubagentError(executionId, agentName, err, {
-      wallTimeMs,
-      workingDirectory: configPayload.workingDirectory ?? undefined,
+      wallTimeMs: Date.now() - startedAt,
+      workingDirectory,
       memoryMisses: result?.memoryMisses,
     });
-    void getExecutionStore(executionId).writeReport(msg);
+    await writeSubagentReport(executionId, msg);
     await deliverTerminalFollowUp({
       text: msg,
       origin: 'subagent_result',
@@ -547,12 +522,7 @@ async function executeSubagent(
     approvalPromptsUnavailable: parentContext.approvalPromptsUnavailable,
     onStreamResolved: (resolvedStreamId) => {
       childStreamId = resolvedStreamId;
-      // Bash bypass follows the parent regardless of edit-YOLO, so a bash-only
-      // parent (CLI AUTO-BASH without AUTO-APPROVE) still propagates to the child.
-      inheritBashBypassOnChildStream(resolvedStreamId, orchestratorStreamId);
-      if (options?.enableYoloOnChild) {
-        enableYoloOnChildStream(resolvedStreamId);
-      }
+      inheritChildStreamApprovals(resolvedStreamId);
     },
     onProgress,
     onFollowUpConsumed: () => {
@@ -570,7 +540,6 @@ async function executeSubagent(
       const resolvedChildStreamId = childStreamId;
       if (!resolvedChildStreamId) return false;
 
-      const wallTimeMs = Date.now() - startedAt;
       const msg = formatSubagentDelivery(
         agentName,
         {
@@ -583,16 +552,12 @@ async function executeSubagent(
           memoryMisses: memoryMisses.length > 0 ? [...memoryMisses] : undefined,
         },
         {
-          wallTimeMs,
-          workingDirectory: configPayload.workingDirectory ?? undefined,
+          wallTimeMs: Date.now() - startedAt,
+          workingDirectory,
         },
       );
       // Best-effort persist — must never block delivery or abort the subagent.
-      try {
-        await getExecutionStore(executionId).writeReport(msg);
-      } catch {
-        /* storage failure is non-fatal */
-      }
+      await writeSubagentReport(executionId, msg);
       // Claim only the enqueue step: formatting/storage failures before this
       // still leave onCompleted/onError available as terminal fallbacks.
       return await deliverTerminalFollowUp({
@@ -602,28 +567,13 @@ async function executeSubagent(
     },
     onCompleted: async (result) => {
       settleSubagentCost(result);
-      // For workflow results, compute diffs and write them as files to the
-      // execution's run directory. The delivery references diff file paths
-      // so the orchestrator can read them on demand via /executions/{id}/files/.
-      let diffInfos: Map<string, DiffFileInfo> | undefined;
-      if (result.category === 'workflow' && result.outputs.length > 0) {
-        try {
-          diffInfos = await computeAndWriteWorkflowDiffs(
-            executionId,
-            result.outputs,
-          );
-        } catch {
-          // Diff computation failure is non-fatal — deliver without diffs.
-        }
-      }
-
-      const wallTimeMs = Date.now() - startedAt;
-      const msg = formatSubagentDelivery(agentName, result, {
-        diffInfos,
-        wallTimeMs,
-        workingDirectory: configPayload.workingDirectory ?? undefined,
-      });
-      void getExecutionStore(executionId).writeReport(msg);
+      const msg = await subagentDeliveryMessage(
+        executionId,
+        agentName,
+        result,
+        { startedAt, workingDirectory },
+      );
+      await writeSubagentReport(executionId, msg);
       await deliverTerminalFollowUp({
         text: msg,
         origin: 'subagent_result',
@@ -633,7 +583,6 @@ async function executeSubagent(
   });
   promise
     .catch((err: unknown) => {
-      settleSubagentCost();
       void deliverSubagentError(err);
     })
     .finally(() => {
@@ -698,11 +647,17 @@ async function resolveAvailableDelegationModel(input: {
   });
 }
 
+/** True when a visible agent of the given category matches the name. */
+function isVisibleAgent(category: AgentCategory, name: string): boolean {
+  return getVisibleAgents(category).some((a) => a.name === name);
+}
+
 /** Throw if no visible agent of the given category matches the name. */
 function assertVisibleAgent(category: AgentCategory, name: string): void {
-  const visible = getVisibleAgents(category);
-  if (visible.some((a) => a.name === name)) return;
-  const available = visible.map((a) => a.name).join(', ');
+  if (isVisibleAgent(category, name)) return;
+  const available = getVisibleAgents(category)
+    .map((a) => a.name)
+    .join(', ');
   throw new Error(
     `Unknown ${category} agent '${name}'. Available: ${available}`,
   );
@@ -775,7 +730,7 @@ async function proposeAndExecute(
   streamId: StreamTabId,
 ): Promise<ToolResult> {
   if (proposalApprovalState.isBypassed(streamId)) {
-    return executeSubagent(toConfigPayload(proposal), agentName, streamId, {
+    return executeSubagent(proposal, agentName, streamId, {
       enableYoloOnChild: true,
       approvalMeta: { autoApproved: true },
     });
@@ -807,15 +762,12 @@ async function proposeAndExecute(
   // approval the agent may have been removed/renamed, or the approval could
   // carry a malformed value. Fail fast so the orchestrator sees the problem
   // synchronously instead of after an async launch.
-  if (agentOverride) {
-    const visible = getVisibleAgents(proposal.agentCategory);
-    if (!visible.some((a) => a.name === agentOverride)) {
-      return {
-        summary: `Approved agent override '${agentOverride}' is not available`,
-        output: `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
-        isError: true,
-      };
-    }
+  if (agentOverride && !isVisibleAgent(proposal.agentCategory, agentOverride)) {
+    return {
+      summary: `Approved agent override '${agentOverride}' is not available`,
+      output: `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
+      isError: true,
+    };
   }
 
   const effective = {
@@ -824,25 +776,20 @@ async function proposeAndExecute(
     ...(agentOverride && { agent: agentOverride }),
   };
   const effectiveAgentName = agentOverride ?? agentName;
-  return executeSubagent(
-    toConfigPayload(effective),
-    effectiveAgentName,
-    streamId,
-    {
-      enableYoloOnChild: isApprovalBypassedForStream(streamId),
-      approvalMeta: {
-        autoApproved: false,
-        ...(modelOverride && {
-          modelOverride,
-          requestedModel: proposal.model,
-        }),
-        ...(agentOverride && {
-          agentOverride,
-          requestedAgent: proposal.agent,
-        }),
-      },
+  return executeSubagent(effective, effectiveAgentName, streamId, {
+    enableYoloOnChild: isApprovalBypassedForStream(streamId),
+    approvalMeta: {
+      autoApproved: false,
+      ...(modelOverride && {
+        modelOverride,
+        requestedModel: proposal.model,
+      }),
+      ...(agentOverride && {
+        agentOverride,
+        requestedAgent: proposal.agent,
+      }),
     },
-  );
+  });
 }
 
 // ============================================================================
@@ -965,13 +912,6 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
       requestedModel: input.model,
       parentModel: ctx.model,
     });
-
-    // Validate at least one input file is provided
-    if (input.inputFiles.length === 0) {
-      throw new Error(
-        'At least one entry in inputFiles is required for workflow agents.',
-      );
-    }
 
     // Validate all file paths exist (parallel for performance)
     const toValidate = (
