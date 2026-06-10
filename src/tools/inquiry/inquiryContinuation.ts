@@ -11,7 +11,6 @@
  * Returns an `InjectionOutcome` so the caller (action handler) can
  * forward it to the UI via the `inquiryThreadUpdated` event.
  */
-import { collapseWhitespace } from '@utils/text/stringUtils';
 
 import { platform } from '@platform/platform';
 
@@ -24,6 +23,7 @@ import type {
   InquiryResumeOutcome,
   StreamTabId,
 } from '@shared/schemas';
+import { collapseWhitespace } from '@utils/text/stringUtils';
 
 import {
   getThreadSummary,

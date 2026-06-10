@@ -16,10 +16,9 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 // Local imports - shared styles
 import { CopyButtonController } from '@shared/controllers';
 import { compactIconActionButtonStyles } from '@shared/styles';
+import { decodeXmlEntities } from '@shared/subagentFollowup';
 import { designTokens } from '@shared/styles/litStyles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
-// Shared, host-neutral entity decoding for subagent/structured-delivery bodies.
-import { decodeXmlEntities } from '@shared/subagentFollowup';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - formatter helpers

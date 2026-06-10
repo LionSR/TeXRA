@@ -19,8 +19,8 @@ import {
   requestApprovedEditContent,
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
-import { countLines } from '@utils/text/stringUtils';
 import { WorkspaceFS } from '@utils/files';
+import { countLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
