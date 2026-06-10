@@ -539,13 +539,11 @@ describe('createProgressViewCommandHandlers - approvals', () => {
 
     await Promise.resolve();
 
-    expect(actions.approval.handleToolEditApprovalAction).toHaveBeenCalledWith(
-      {
-        command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
-        requestId: 'edit-1',
-        action: 'approve',
-      },
-    );
+    expect(actions.approval.handleToolEditApprovalAction).toHaveBeenCalledWith({
+      command: PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION,
+      requestId: 'edit-1',
+      action: 'approve',
+    });
     expect(actions.approval.handleBashApprovalAction).toHaveBeenCalledWith({
       command: PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION,
       requestId: 'bash-1',
