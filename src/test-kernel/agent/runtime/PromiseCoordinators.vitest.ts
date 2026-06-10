@@ -68,7 +68,7 @@ describe('promise coordinators', () => {
           approvalId: 'approval:runtime',
           streamId: 'stream:runtime',
           plan,
-          odysseyEnabled: false,
+          goalEnabled: false,
         },
       },
       {
