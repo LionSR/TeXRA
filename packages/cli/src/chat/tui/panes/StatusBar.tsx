@@ -336,29 +336,38 @@ function fitStatusBarLeftSegments(
     ),
   ].sort((a, b) => a - b);
 
-  // First pass: shrink segments to their compactText (lowest priority first)
-  // before removing anything — a narrowed segment beats a missing one.
-  for (const priority of priorities) {
-    for (let index = compacted.length - 1; index >= 0; index -= 1) {
-      const segment = compacted[index];
-      if (segment?.compactPriority !== priority) continue;
+  // Lowest-priority segments compact first; returns as soon as the row fits.
+  const sweep = (
+    apply: (index: number, segment: StatusBarSegment) => boolean,
+  ): readonly StatusBarSegment[] | undefined => {
+    for (const priority of priorities) {
+      for (let index = compacted.length - 1; index >= 0; index -= 1) {
+        const segment = compacted[index];
+        if (segment?.compactPriority !== priority || !apply(index, segment)) {
+          continue;
+        }
+        if (statusBarSegmentsWidth(compacted) <= innerWidth) return compacted;
+      }
+    }
+    return undefined;
+  };
+
+  return (
+    // Shrink segments to their compactText before removing anything — a
+    // narrowed segment beats a missing one.
+    sweep((index, segment) => {
       if (!segment.compactText || segment.compactText === segment.text) {
-        continue;
+        return false;
       }
       compacted[index] = { ...segment, text: segment.compactText };
-      if (statusBarSegmentsWidth(compacted) <= innerWidth) return compacted;
-    }
-  }
-
-  for (const priority of priorities) {
-    for (let index = compacted.length - 1; index >= 0; index -= 1) {
-      if (compacted[index]?.compactPriority !== priority) continue;
+      return true;
+    }) ??
+    sweep((index) => {
       compacted.splice(index, 1);
-      if (statusBarSegmentsWidth(compacted) <= innerWidth) return compacted;
-    }
-  }
-
-  return compacted;
+      return true;
+    }) ??
+    compacted
+  );
 }
 
 export function defaultShortcutModifierLabel(

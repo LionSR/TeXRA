@@ -175,14 +175,27 @@ export function toolUsePatchDisplayLines(
   ]);
 }
 
+/** One-line input/summary preview for a tool header, truncated to fit.
+ *  Bash rows prefer the command text (input) over the generic header summary;
+ *  all other tools prefer the curated per-tool summary first. */
+function toolHeaderPreview(
+  toolUse: NormalizedToolUse,
+  maxPreview = MAX_HEADER_PREVIEW,
+  preferInputPreview = false,
+): string {
+  const sourceText = preferInputPreview
+    ? previewInput(toolUse.input) || toolUse.headerSummary || ''
+    : toolUse.headerSummary || previewInput(toolUse.input) || '';
+  return sourceText
+    ? truncateWithEllipsis(collapseWhitespace(sourceText), maxPreview)
+    : '';
+}
+
 function formatHeader(
   toolUse: NormalizedToolUse,
   displayName = displayToolName(toolUse.toolName) || 'tool',
 ): string {
-  const sourceText = toolUse.headerSummary || previewInput(toolUse.input) || '';
-  const preview = sourceText
-    ? truncateWithEllipsis(collapseWhitespace(sourceText), MAX_HEADER_PREVIEW)
-    : '';
+  const preview = toolHeaderPreview(toolUse);
   return `${STATUS_DOT} ${displayName}${preview ? ` (${preview})` : ''}`;
 }
 
@@ -436,24 +449,18 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
     props.fallbackName ||
     'tool';
 
-  const { patchGroups, preview, visibleOutput } = useMemo(() => {
-    // Bash rows prefer the command text (input) over the generic header summary;
-    // all other tools prefer the summary (which is curated per-tool) first.
-    const sourceText = preferInputPreview
-      ? previewInput(toolUse.input) || toolUse.headerSummary || ''
-      : toolUse.headerSummary || previewInput(toolUse.input) || '';
-    const previewText = sourceText
-      ? truncateWithEllipsis(
-          collapseWhitespace(sourceText),
-          toolHeaderPreviewBudget(columns, name),
-        )
-      : '';
-    return {
+  const { patchGroups, preview, visibleOutput } = useMemo(
+    () => ({
       patchGroups: showPatch ? toolUsePatchGroups(toolUse) : undefined,
-      preview: previewText,
+      preview: toolHeaderPreview(
+        toolUse,
+        toolHeaderPreviewBudget(columns, name),
+        preferInputPreview,
+      ),
       visibleOutput: showOutput ? visibleOutputLines(toolUse) : [],
-    };
-  }, [toolUse, showPatch, showOutput, preferInputPreview, columns, name]);
+    }),
+    [toolUse, showPatch, showOutput, preferInputPreview, columns, name],
+  );
 
   const errorText = errorTextForDisplay(toolUse);
   const exitCode = showExitCode ? extractExitCode(toolUse) : undefined;

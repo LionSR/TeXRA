@@ -68,14 +68,19 @@ export function listSlashCommands(): readonly SlashCommand[] {
   return [...COMMANDS.values()];
 }
 
+/** Lowercased name + aliases a command can be addressed by. */
+function commandCandidates(command: SlashCommand): string[] {
+  return [command.name, ...(command.aliases ?? [])].map((name) =>
+    name.toLowerCase(),
+  );
+}
+
 export function findSlashCommand(
   nameOrAlias: string,
 ): SlashCommand | undefined {
   const lower = nameOrAlias.toLowerCase();
-  return listSlashCommands().find(
-    (cmd) =>
-      cmd.name.toLowerCase() === lower ||
-      cmd.aliases?.some((alias) => alias.toLowerCase() === lower) === true,
+  return listSlashCommands().find((cmd) =>
+    commandCandidates(cmd).includes(lower),
   );
 }
 
@@ -89,19 +94,13 @@ export function findSlashCommand(
 export function matchSlashCommands(prefix: string): readonly SlashCommand[] {
   const lower = prefix.toLowerCase();
   const commands = listSlashCommands();
-  const matchesBy = (
-    predicate: (candidate: string) => boolean,
-  ): readonly SlashCommand[] =>
-    commands.filter(
-      (cmd) =>
-        predicate(cmd.name.toLowerCase()) ||
-        (cmd.aliases?.some((a) => predicate(a.toLowerCase())) ?? false),
-    );
+  const matching = (test: (candidate: string) => boolean) =>
+    commands.filter((cmd) => commandCandidates(cmd).some(test));
 
-  const prefixMatches = matchesBy((candidate) => candidate.startsWith(lower));
-  if (prefixMatches.length > 0 || lower.length === 0) return prefixMatches;
+  const prefixMatches = matching((candidate) => candidate.startsWith(lower));
+  if (prefixMatches.length > 0 || !lower) return prefixMatches;
 
-  const substringMatches = matchesBy((candidate) => candidate.includes(lower));
+  const substringMatches = matching((candidate) => candidate.includes(lower));
   if (substringMatches.length > 0) return substringMatches;
 
   const suggestion = suggestSlashCommand(lower);
@@ -126,16 +125,15 @@ export function suggestSlashCommand(
     | undefined;
 
   for (const command of listSlashCommands()) {
-    for (const candidate of [command.name, ...(command.aliases ?? [])]) {
-      const lower = candidate.toLowerCase();
-      const distance = editDistance(token, lower);
-      if (distance > typoSuggestionThreshold(token, lower)) continue;
+    for (const candidate of commandCandidates(command)) {
+      const distance = editDistance(token, candidate);
+      if (distance > typoSuggestionThreshold(token, candidate)) continue;
       if (
         best === undefined ||
         distance < best.distance ||
-        (distance === best.distance && lower < best.candidate)
+        (distance === best.distance && candidate < best.candidate)
       ) {
-        best = { command, candidate: lower, distance };
+        best = { command, candidate, distance };
       }
     }
   }

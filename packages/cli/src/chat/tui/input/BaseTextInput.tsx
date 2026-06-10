@@ -361,6 +361,14 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
     [isControlled, onCursorChange],
   );
 
+  const moveCursorTo = useCallback(
+    (target: (value: string, cursor: number) => number) => {
+      const { value: v, cursor: c } = latestStateRef.current;
+      moveCursor(target(v, c));
+    },
+    [moveCursor],
+  );
+
   const applyEdit = useCallback(
     (edit: TextEdit) => {
       const c = clampCursor(edit.cursor, edit.value.length);
@@ -444,14 +452,10 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         applyLatestEdit(deleteAtCursor);
         return;
       }
-      if (key.leftArrow) {
-        const { value: v, cursor: c } = latestStateRef.current;
-        moveCursor(key.ctrl || key.meta ? previousWordCursor(v, c) : c - 1);
-        return;
-      }
-      if (key.rightArrow) {
-        const { value: v, cursor: c } = latestStateRef.current;
-        moveCursor(key.ctrl || key.meta ? nextWordCursor(v, c) : c + 1);
+      if (key.leftArrow || key.rightArrow) {
+        const word = key.leftArrow ? previousWordCursor : nextWordCursor;
+        const step = key.leftArrow ? -1 : 1;
+        moveCursorTo(key.ctrl || key.meta ? word : (_, c) => c + step);
         return;
       }
       if (key.upArrow || key.downArrow) {
@@ -459,23 +463,15 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         const moved = verticalCursorMove(v, c, key.upArrow ? -1 : 1);
         if (moved !== undefined) {
           moveCursor(moved);
-        } else if (key.upArrow) {
-          props.onHistoryUp?.();
         } else {
-          props.onHistoryDown?.();
+          (key.upArrow ? props.onHistoryUp : props.onHistoryDown)?.();
         }
         return;
       }
       // Readline word chords: Alt-B / Alt-F move by word, Alt-D kills the
       // next word. Other meta chords fall through to the drop branch below.
-      if (chord === 'b') {
-        const { value: v, cursor: c } = latestStateRef.current;
-        moveCursor(previousWordCursor(v, c));
-        return;
-      }
-      if (chord === 'f') {
-        const { value: v, cursor: c } = latestStateRef.current;
-        moveCursor(nextWordCursor(v, c));
+      if (chord === 'b' || chord === 'f') {
+        moveCursorTo(chord === 'b' ? previousWordCursor : nextWordCursor);
         return;
       }
       if (chord === 'd') {
@@ -483,13 +479,11 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         return;
       }
       if (key.home || isCtrlInput(input, key, 'a')) {
-        const { value: v, cursor: c } = latestStateRef.current;
-        moveCursor(lineStartCursor(v, c));
+        moveCursorTo(lineStartCursor);
         return;
       }
       if (key.end || isCtrlInput(input, key, 'e')) {
-        const { value: v, cursor: c } = latestStateRef.current;
-        moveCursor(lineEndCursor(v, c));
+        moveCursorTo(lineEndCursor);
         return;
       }
       if (isCtrlInput(input, key, 'u')) {
