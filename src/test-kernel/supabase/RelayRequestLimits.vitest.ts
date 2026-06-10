@@ -280,7 +280,7 @@ describe('relay free-tier request limits', () => {
                 }
               : name === 'relay_request_refresh'
                 ? { refreshed: true }
-              : {},
+                : {},
           error: null,
         };
       },
@@ -322,7 +322,7 @@ describe('relay free-tier request limits', () => {
                 }
               : name === 'relay_request_refresh'
                 ? { refreshed: false }
-              : {},
+                : {},
           error: null,
         };
       },
