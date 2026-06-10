@@ -34,6 +34,13 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
+// Service-role client that bypasses bucket policies for storage operations
+// (env is fixed at cold start; no per-request state)
+const adminClient =
+  supabaseUrl && serviceRoleKey
+    ? createClient(supabaseUrl, serviceRoleKey)
+    : null;
+
 // =============================================================================
 // Request Handler
 // =============================================================================
@@ -49,7 +56,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // Check environment
-  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
+  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey || !adminClient) {
     console.error('[GET_AGENT_CONFIG] Missing required environment variables');
     return errorResponse(req, 'Server configuration error', 500);
   }
@@ -67,9 +74,6 @@ Deno.serve(async (req: Request) => {
       return errorResponse(req, 'Invalid token', 401);
     }
     const userClient = auth.client;
-
-    // Admin client: bypasses bucket policies for storage operations
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     // 3. Get agent name from request
     let body: { agentName?: string };
