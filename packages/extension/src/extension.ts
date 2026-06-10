@@ -360,7 +360,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // synchronous glob probes of TeX install directories, which would
   // otherwise block activation on slow disks. (Never rejects — the body is
   // fully wrapped in try/catch.)
-  setImmediate(() => void configureLatexSettings());
+  setTimeout(() => void configureLatexSettings(), 0);
   registerCommands(context);
   registerFileDecorations(context);
 

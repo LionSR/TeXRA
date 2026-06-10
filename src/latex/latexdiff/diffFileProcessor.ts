@@ -88,7 +88,9 @@ export class DiffFileProcessor {
 
   private findBibliographyDirective(content?: string): string | undefined {
     // First \bibliography directive on a non-comment line.
-    return content?.match(/^(?![ \t]*%).*?(\\bibliography\s*\{[^}]+\})/m)?.[1];
+    return content?.match(
+      /^(?![^\S\r\n]*%).*?(\\bibliography\s*\{[^}]+\})/m,
+    )?.[1];
   }
 
   private sanitizeFlattenedBibliographyMacroPreamble(content: string): string {

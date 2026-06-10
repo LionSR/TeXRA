@@ -141,10 +141,16 @@ export function normalizeOpenAIMessageContent<T extends MessageLike>(
   } = options;
 
   // Shallow per-message copies suffice: merging and string conversion only
-  // replace top-level fields (content / reasoning_content) and build new
-  // arrays, never mutating nested content items — so a structuredClone of
-  // the whole (potentially multi-megabyte) history per request is wasted work.
-  let working: T[] = messages.map((message) => ({ ...message }));
+  // replace top-level fields (content / reasoning_content) and content-array
+  // containers. Nested content items are never mutated, so a structuredClone
+  // of the whole history per request is wasted work.
+  let working: T[] = messages.map((message) => {
+    const copy = { ...message };
+    if (Array.isArray(copy.content)) {
+      copy.content = [...copy.content];
+    }
+    return copy;
+  });
 
   if (mergeConsecutiveRoles) {
     const merged: T[] = [];
