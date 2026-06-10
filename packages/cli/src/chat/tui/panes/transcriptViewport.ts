@@ -8,6 +8,7 @@ import {
   USER_ENTRY_MARGIN_BOTTOM_ROWS,
   tailWindow,
 } from './TranscriptEntry';
+import { isRenderableTranscriptEntry } from './transcriptEntries';
 import { toolUseDisplayLines } from './toolRenderers';
 import type { ConversationEntry } from '../state/cliState';
 
@@ -111,6 +112,7 @@ export function selectTranscriptEntriesForViewport(
   let usedRows = 0;
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
+    if (!isRenderableTranscriptEntry(entry)) continue;
     const entryRows = estimateLiveTranscriptEntryRows(entry, width);
     if (usedRows + entryRows > maxRows) {
       if (selected.length === 0) {

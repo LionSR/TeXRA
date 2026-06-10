@@ -5,6 +5,19 @@ import {
 
 import type { ConversationEntry } from '../state/cliState';
 
+export function isRenderableTranscriptEntry(entry: ConversationEntry): boolean {
+  switch (entry.role) {
+    case 'assistant':
+    case 'error':
+    case 'user':
+      return entry.text.trim().length > 0;
+    case 'process':
+      return entry.process !== undefined;
+    case 'tool':
+      return entry.toolUse !== undefined;
+  }
+}
+
 export function splitTranscriptEntries(
   entries: readonly ConversationEntry[],
   status: StreamStatus | undefined,
@@ -25,6 +38,7 @@ export function splitTranscriptEntries(
   const finalized: ConversationEntry[] = [];
   const pending: ConversationEntry[] = [];
   for (const entry of entries) {
+    if (!isRenderableTranscriptEntry(entry)) continue;
     if (entry.finalized) {
       finalized.push(entry);
       continue;

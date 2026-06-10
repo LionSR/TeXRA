@@ -23,6 +23,7 @@ import { streamViewForId } from '../state/streamViews';
 import { transcriptEntryLines } from '../state/transcriptLines';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
+import { isRenderableTranscriptEntry } from './transcriptEntries';
 import {
   isInquiryContinuationText,
   TranscriptEntry,
@@ -231,6 +232,7 @@ export function appendStaticTranscriptItems({
     ? streams.get(scrollbackStreamId)
     : undefined;
   for (const entry of slice?.entries ?? []) {
+    if (!isRenderableTranscriptEntry(entry)) continue;
     if (!entry.finalized) continue;
     if (seen.has(entry.id)) continue;
     nextItems ??= [...currentItems];
