@@ -253,17 +253,17 @@ describe('CLI orchestration items', () => {
       presetPlans: [],
       history: [
         historyEntry('aaaaaaaaaaaa', {
-          agent: 'chat',
+          agent: 'assistant',
           status: CLI_HISTORY_RESUMABLE_STATUS,
           inputBasename: '-',
           description: 'Sketching inductive Lean proof of Nat.add_comm.',
         }),
       ],
-      toolUseAgents: [toolUseAgent('chat')],
+      toolUseAgents: [toolUseAgent('assistant')],
     });
 
     expect(items[1]?.description).toBe(
-      'chat; resumable; Sketching inductive Lean proof of Nat.add_comm.',
+      'assistant; resumable; Sketching inductive Lean proof of Nat.add_comm.',
     );
   });
 
@@ -306,15 +306,17 @@ describe('CLI orchestration items', () => {
     const items = buildCliOrchestrationItems({
       presetPlans: [],
       history: [
-        historyEntry('aaaaaaaaaaaa', { agent: 'chat' }),
+        historyEntry('aaaaaaaaaaaa', { agent: 'assistant' }),
         historyEntry('bbbbbbbbbbbb', { agent: 'review' }),
       ],
-      toolUseAgents: [toolUseAgent('chat'), toolUseAgent('review')],
+      toolUseAgents: [toolUseAgent('assistant'), toolUseAgent('review')],
     });
 
     expect(items.map((item) => item.label)).toContain('New chat');
     expect(items.map((item) => item.label)).toContain('Chat with review');
-    expect(items.map((item) => item.label)).not.toContain('Chat with chat');
+    expect(items.map((item) => item.label)).not.toContain(
+      'Chat with assistant',
+    );
   });
 
   it('lists team presets as runnable orchestration actions', () => {
