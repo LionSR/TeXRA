@@ -28,7 +28,21 @@ describe('agent registry legacy aliases', () => {
     // Real bundled agent YAMLs on disk, so the test exercises the actual
     // rename (chat → assistant) rather than synthetic fixtures.
     const { initPlatform } = await import('@platform/platform');
-    initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
+    initPlatform(
+      createFakePlatform(
+        {
+          // Pre-seed legacy keys to exercise the load-time state migration.
+          workspaceState: {
+            [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
+              'chat',
+              'builtInToolUse:chat',
+              'review',
+            ],
+          },
+        },
+        { fs: nodeFilesystem },
+      ),
+    );
     setAgentDirectories({
       custom: async () => '',
       builtIn: async () =>
@@ -58,6 +72,19 @@ describe('agent registry legacy aliases', () => {
     expect(getAgent('builtInToolUse:chat')?.name).toBe('assistant');
     expect(getAgent('builtInToolUse:assistant')?.name).toBe('assistant');
     expect(getAgent('custom:no-such-agent')).toBeUndefined();
+  });
+
+  it('migrates persisted legacy keys at load time', () => {
+    // Stale chat keys would desync the Agents settings UI (which matches
+    // keys literally) from picker visibility — loadAgents rewrites them.
+    const stored = platform().workspaceState.get<string[]>(
+      WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+    );
+    expect(stored).toEqual([
+      'assistant',
+      'builtInToolUse:assistant',
+      'review',
+    ]);
   });
 
   it('keeps assistant visible for workspaces that opted into chat', async () => {
