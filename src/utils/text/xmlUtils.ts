@@ -24,7 +24,6 @@ export {
   DOCUMENT_NAME_REGEX,
   extractTextFromTag,
   extractMultipleTextFromTag,
-  extractContentFromXMLbyTag,
   extractContentFromXMLbyTagMultiple,
   extractScratchpad,
   extractDocument,
