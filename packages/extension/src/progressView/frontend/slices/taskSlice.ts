@@ -7,7 +7,7 @@ import { create } from 'mutative';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 import { updateToolUseState } from '../stateUtils';
-import type { HandlerRegistry } from '../messageDispatcher';
+import type { HandlerRegistry } from '../messageHandlerTypes';
 
 export const taskHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_TODOS]: (data, ctx) => {

@@ -6,9 +6,9 @@ import { execa, execaSync } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
 // Local imports
-import type { ExecResult } from '@agent/types/ResultTypes';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import type { ExecResult } from '@shared/schemas/opResults';
 import {
   PDFLATEX_INSTALL_GUIDE,
   LATEXDIFF_INSTALL_GUIDE,

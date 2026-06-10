@@ -1,5 +1,5 @@
 // Local imports - agent
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type {
   AgentPrompt,
   AgentWorkflowSetting,

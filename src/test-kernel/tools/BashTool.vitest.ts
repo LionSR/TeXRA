@@ -34,11 +34,11 @@ import { noopAgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 // Type imports
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import type { ExecResult } from '@agent/types/ResultTypes';
 
 // Internal imports
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { StreamTabId } from '@shared/schemas';
+import type { ExecResult } from '@shared/schemas/opResults';
 import { BashTool } from '@tools/bash';
 import { TaskRunFileService } from '@utils/files';
 import * as execUtils from '@utils/system/execUtils';

@@ -1,5 +1,5 @@
-import { getCleanAgentName } from '@agent/index/agentRegistry';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import { getCleanAgentName } from '@shared/schemas/agent';
 
 /**
  * Build a stream tab ID from an agent, model, and executionId.

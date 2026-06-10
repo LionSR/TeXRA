@@ -2,7 +2,6 @@
 import * as path from 'node:path';
 import { promises as fs } from 'node:fs';
 
-import { WORKFLOW_OUTPUT_BASENAME } from '@agent/output/workflowOutputLayout';
 import { isFileNotFoundError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import {
@@ -13,6 +12,7 @@ import {
   type RunStorageFileLocation,
   type WorkspaceFileLocation,
 } from '@shared/schemas';
+import { WORKFLOW_OUTPUT_BASENAME } from '@shared/constants/workflowOutput';
 import { getPathSegments } from '@utils/core/pathCore';
 import { StorageFS } from './storageFS';
 import { WorkspaceFS } from './workspaceFS';

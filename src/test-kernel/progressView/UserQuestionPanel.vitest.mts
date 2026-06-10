@@ -3,7 +3,7 @@ import { JSDOM } from 'jsdom';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports - progress view component types
-import type { PermissionState } from '@progressView/frontend/components/PermissionCard';
+import type { PermissionState } from '@progressView/frontend/permissionState';
 import type { UserQuestionPanel } from '@progressView/frontend/components/UserQuestionPanel';
 
 // Local imports - shared constants

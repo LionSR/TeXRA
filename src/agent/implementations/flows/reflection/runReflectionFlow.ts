@@ -13,7 +13,7 @@ import {
   interruptRegistry,
   type IInterruptible,
 } from '@agent/runtime/InterruptRegistry';
-import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
+import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import { getOutputFileName } from '@agent/utils/outputFileUtils';
 import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';

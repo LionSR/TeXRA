@@ -1,5 +1,6 @@
 // Local imports
-import type { IndentLatexResult, LatexdiffPackResult } from '@housekeeping';
+import type { LatexdiffPackResult } from '@housekeeping';
+import type { IndentLatexResult } from '@latex/formatter/indentDirectory';
 
 export interface LatexHousekeepingNotification {
   // "message" maps to showLoggedMessage, which uses VS Code's error toast.

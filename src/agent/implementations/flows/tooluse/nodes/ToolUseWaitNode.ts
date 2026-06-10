@@ -1,8 +1,8 @@
 import { maybeBuildGoalContinuation } from '@agent/goal';
-import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { Node } from '@agent/node';
-import { appendFollowUpAsUserMessage } from '@agent/toolUse/followUpMessages';
 import { logUserMessage } from '@agent/trace';
+import { FlowTransition } from '@agent/core/flows/FlowTransitions';
+import { appendFollowUpAsUserMessage } from '@agent/toolUse/followUpMessages';
 import { STREAM_STATUS } from '@shared/schemas';
 import { GoalStore, setGoalSessionAutoApprovals } from '@tools/goal';
 

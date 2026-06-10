@@ -12,7 +12,7 @@ import { getStreamState, isToolUseState } from '../store';
 import type {
   HandlerRegistry,
   MessageHandlerContext,
-} from '../messageDispatcher';
+} from '../messageHandlerTypes';
 
 /**
  * Buffer for subagent descriptions that race their own UPDATE_STREAMS

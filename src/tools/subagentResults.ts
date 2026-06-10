@@ -13,7 +13,6 @@ import type {
   OutputFileSummary,
 } from '@agent/runtime/AgentFlowResult';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
-import type { ExecResult } from '@agent/types/ResultTypes';
 import { normalizeProviderError, toErrorMessage } from '@common/errors';
 import type {
   ActiveChildInfo,
@@ -21,6 +20,7 @@ import type {
   TodoItem,
   WorkPlanSnapshot,
 } from '@shared/schemas';
+import type { ExecResult } from '@shared/schemas/opResults';
 import { countByStatus, STATUS_DISPLAY } from '@shared/schemas/todoDisplay';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration } from '@utils/core';

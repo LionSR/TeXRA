@@ -22,7 +22,6 @@ import {
 import {
   EMPTY_INQUIRY_THREADS,
   EMPTY_LOG_CONTEXT,
-  EMPTY_PROCESS_OUTPUTS,
   EMPTY_STREAM_BY_ID,
   EMPTY_STREAM_CONTEXT,
   inquiryThreadsContext,
@@ -31,12 +30,12 @@ import {
   streamByIdContext,
   streamLogContext,
   streamStateContext,
-  type ProcessOutputMap,
   type StreamByIdMap,
   type StreamContextValue,
   type StreamLogContextValue,
 } from '../contexts/streamContexts';
-import type { PermissionState } from './PermissionCard';
+import { EMPTY_PROCESS_OUTPUTS, type ProcessOutputMap } from '../store';
+import type { PermissionState } from '../permissionState';
 
 // Side-effect imports - body components rendered below.
 import './ToolUseStreamContent';
