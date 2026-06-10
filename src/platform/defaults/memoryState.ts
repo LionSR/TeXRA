@@ -1,6 +1,7 @@
 // Local imports - platform
 import type { StateStore } from '../interfaces/state';
 
+/** In-memory platform state store for CLI, tests, and lightweight hosts. */
 export class MemoryStateStore implements StateStore {
   private readonly values = new Map<string, unknown>();
 
@@ -21,9 +22,4 @@ export class MemoryStateStore implements StateStore {
     }
     this.values.set(key, value);
   }
-}
-
-/** In-memory platform state store for CLI, tests, and lightweight hosts. */
-export function createMemoryStore(): StateStore {
-  return new MemoryStateStore();
 }

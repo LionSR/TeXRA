@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createMemoryStore } from '@platform/defaults/memoryState';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
@@ -42,8 +42,8 @@ async function installPlatform(): Promise<void> {
         fs: nodeFilesystem,
         workspace: createNodeWorkspace(() => workspaceDir),
         storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-        globalState: createMemoryStore(),
-        workspaceState: createMemoryStore(),
+        globalState: new MemoryStateStore(),
+        workspaceState: new MemoryStateStore(),
       },
     ),
   );

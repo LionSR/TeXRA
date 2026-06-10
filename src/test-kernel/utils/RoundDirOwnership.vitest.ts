@@ -14,7 +14,7 @@ import * as path from 'path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createMemoryStore } from '@platform/defaults/memoryState';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { createNodeWorkspace } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
@@ -47,8 +47,8 @@ async function installPlatform(
         fs: nodeFilesystem,
         workspace: createNodeWorkspace(() => workspaceDir),
         storage: new WorkspaceStorageProvider(storageRoot, workspaceDir),
-        globalState: createMemoryStore(),
-        workspaceState: createMemoryStore(),
+        globalState: new MemoryStateStore(),
+        workspaceState: new MemoryStateStore(),
       },
     ),
   );
