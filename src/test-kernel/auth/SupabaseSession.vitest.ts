@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   parseStoredSupabaseSession,
-  toStorableGitHubTokenExchangeSession,
   toStorableSupabaseSession,
   type SupabaseSession,
 } from '@auth/SupabaseSession';
@@ -32,7 +31,7 @@ describe('SupabaseSession account labels', () => {
         email: '  native@example.com  ',
       },
     } as unknown as SupabaseNativeSession;
-    const githubSession = toStorableGitHubTokenExchangeSession(
+    const githubSession = toStorableSupabaseSession(
       {
         access_token: 'access-token',
         refresh_token: 'refresh-token',
@@ -42,8 +41,10 @@ describe('SupabaseSession account labels', () => {
           email: null,
         },
       },
-      '  github@example.com  ',
-      DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+      {
+        fallbackLabel: '  github@example.com  ',
+        defaultExpiryMs: DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
+      },
     );
 
     expect(

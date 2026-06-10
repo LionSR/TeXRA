@@ -144,10 +144,6 @@ function clampRecordField(
   };
 }
 
-function describeFields(fields: string[]): string {
-  return fields.join(', ');
-}
-
 function clampGoogleGenerationConfig(
   body: JsonRecord,
   limit: number,
@@ -257,7 +253,7 @@ export function clampFreeTierMaxOutputTokens(
     body: nextBody,
     changed,
     limit,
-    fieldPath: describeFields(changed ? changedFields : fields),
+    fieldPath: (changed ? changedFields : fields).join(', '),
     originalValue: firstOriginalValue,
   };
 }
