@@ -1,9 +1,6 @@
 import * as vscode from 'vscode';
 
-import {
-  polishTextWithAI,
-  FileContext,
-} from '@agent/runtime/textEnhancement';
+import { polishTextWithAI, FileContext } from '@agent/runtime/textEnhancement';
 import { toErrorMessage } from '@common/errors';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';

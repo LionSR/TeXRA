@@ -36,7 +36,6 @@ import {
 import { mapToRecord } from '@shared/progressView/backend/persistence/serializationUtils';
 import { isObject } from '@utils/core';
 
-
 import { STREAM_DATA_KEYS } from './streamDataPaths';
 
 const CHANNEL = 'StreamSnapshotStore';

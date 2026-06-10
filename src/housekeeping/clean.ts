@@ -2,7 +2,6 @@
 import { sync as globSync } from 'glob';
 import { MODELS } from 'llm-zoo';
 
-
 // Internal imports
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
