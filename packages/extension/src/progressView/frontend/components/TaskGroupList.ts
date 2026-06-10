@@ -2,7 +2,7 @@
 
 // Third-party imports
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
-import { customElement, property, query } from 'lit/decorators.js';
+import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { guard } from 'lit/directives/guard.js';
 import { repeat } from 'lit/directives/repeat.js';
@@ -114,10 +114,11 @@ export class TaskGroupList extends LitElement {
   private readonly terminalBuffer = new TerminalBuffer();
 
   /** Number of recent top-level timeline entries currently rendered. */
-  private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
+  @state() private timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
 
-  /** Number of recent message entries rendered for each group. */
-  private groupMessageWindows = new Map<string, number>();
+  /** Number of recent message entries rendered for each group. Reassigned
+   *  (never mutated in place) so the reactive update cycle picks up changes. */
+  @state() private groupMessageWindows = new Map<string, number>();
 
   /** Reference to the scroll container */
   @query(`#${ELEMENT_IDS.LOG_CONTENT}`)
@@ -306,7 +307,7 @@ export class TaskGroupList extends LitElement {
 
   private resetRenderWindows(): void {
     this.timelineItemWindow = DEFAULT_TIMELINE_ITEM_WINDOW;
-    this.groupMessageWindows.clear();
+    this.groupMessageWindows = new Map();
   }
 
   private groupMessageScope(groupId: string): string {
@@ -382,9 +383,11 @@ export class TaskGroupList extends LitElement {
     } else if (kind === 'messages') {
       const current =
         this.groupMessageWindows.get(scope) ?? DEFAULT_GROUP_MESSAGE_WINDOW;
-      this.groupMessageWindows.set(scope, current + GROUP_MESSAGE_WINDOW_STEP);
+      this.groupMessageWindows = new Map(this.groupMessageWindows).set(
+        scope,
+        current + GROUP_MESSAGE_WINDOW_STEP,
+      );
     }
-    this.requestUpdate();
   }
 
   private visibleTimelineEntries(): typeof this.index.timeline {

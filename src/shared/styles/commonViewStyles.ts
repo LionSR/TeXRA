@@ -303,6 +303,7 @@ export const commonViewStyles: CSSResult = css`
     opacity: var(--opacity-subtle);
     font-size: var(--font-size-sm);
     display: inline-block;
+    transition: transform var(--transition-fast);
   }
 
   details[open] > summary .toggle-icon {
@@ -469,7 +470,7 @@ export const commonViewStyles: CSSResult = css`
     font-weight: var(--font-weight-medium);
     color: var(--color-text-secondary);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: var(--letter-spacing-caps);
   }
 
   /* Utility: single-line text truncation with ellipsis */

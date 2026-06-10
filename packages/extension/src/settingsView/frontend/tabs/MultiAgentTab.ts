@@ -3,6 +3,7 @@
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 import { designTokens, commonViewStyles } from '@shared/styles';
@@ -283,7 +284,7 @@ export class MultiAgentTab extends LitElement {
     const isActive = this.activePresetId === preset.id;
     return html`
       <div
-        class="preset-card ${isActive ? 'active' : ''}"
+        class=${classMap({ 'preset-card': true, active: isActive })}
         @click=${() => this.handlePresetClick(preset)}
         title="Apply ${preset.name} team"
       >
