@@ -406,7 +406,7 @@ describe('CLI multi-agent presets', () => {
         ],
         [
           'cs-ml',
-          'unavailable; no runnable team root; 4/8 tool-use agents; 1/5 workflow agents',
+          'unavailable; no runnable team root; 5/11 tool-use agents; 1/5 workflow agents',
         ],
         [
           'software-engineer',
@@ -517,7 +517,7 @@ describe('CLI multi-agent presets', () => {
       'lean-project',
     );
     expect(
-      findCliMultiAgentPreset(presets, 'computer-scientist-(ml)')?.id,
+      findCliMultiAgentPreset(presets, 'computer-scientist')?.id,
     ).toBe('cs-ml');
   });
 
