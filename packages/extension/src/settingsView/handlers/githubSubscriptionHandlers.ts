@@ -1,0 +1,178 @@
+/**
+ * GitHub token and PR/repo/issue subscription handlers.
+ *
+ * Extracted from SettingsViewMessageHandler to improve cohesion.
+ * Handles the GitHub personal access token secret plus the live list of
+ * PR/repo/issue subscriptions surfaced in the Git tab, including revealing
+ * a subscription's agent stream in the Progress view.
+ */
+import * as vscode from 'vscode';
+
+import { SecretManager } from '@frontend/secretManager';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
+import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
+import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
+import {
+  SETTINGS_VIEW_CMD,
+  type SettingsMessageFor,
+} from '@shared/schemas/settingsViewMessages';
+import {
+  issuePollingSource,
+  listIssueSubscriptionBindings,
+  listPRSubscriptionBindings,
+  listRepoSubscriptionBindings,
+  prPollingSource,
+  repoPollingSource,
+  unbindAllForIssue,
+  unbindAllForPR,
+  unbindAllForRepo,
+} from '@tools/github';
+
+import type { SettingsHandlerContext } from './SettingsHandlerContext';
+
+/** GitHub token and subscription handler delegate. */
+export class GitHubSubscriptionHandlers {
+  constructor(private readonly ctx: SettingsHandlerContext) {}
+
+  async sendGitHubTokenStatus(webview: vscode.Webview): Promise<void> {
+    const status = await SecretManager.gitHubTokenExists();
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
+      status,
+    });
+  }
+
+  async handleSetGitHubToken(): Promise<void> {
+    const token = await vscode.window.showInputBox({
+      prompt:
+        'Paste a GitHub personal access token (repo or public_repo scope)',
+      password: true,
+      placeHolder: 'ghp_…',
+      ignoreFocusOut: true,
+    });
+    if (!token) return;
+    try {
+      await SecretManager.set(SecretManager.GITHUB_TOKEN_KEY, token.trim());
+      void vscode.window.showInformationMessage('GitHub token saved.');
+      await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.ctx.channel,
+        'Failed to save GitHub token',
+        error,
+      );
+    }
+  }
+
+  async handleRemoveGitHubToken(): Promise<void> {
+    try {
+      await SecretManager.delete(SecretManager.GITHUB_TOKEN_KEY);
+      void vscode.window.showInformationMessage('GitHub token removed.');
+      await this.ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
+    } catch (error) {
+      await showLoggedErrorMessage(
+        this.ctx.channel,
+        'Failed to remove GitHub token',
+        error,
+      );
+    }
+  }
+
+  async openGitHubTokenUrl(): Promise<void> {
+    await vscode.env.openExternal(
+      vscode.Uri.parse(
+        'https://github.com/settings/tokens/new?description=TeXRA%20PR%20subscription&scopes=repo',
+      ),
+    );
+  }
+
+  async sendPRSubscriptions(webview: vscode.Webview): Promise<void> {
+    const state = ProgressViewProvider.getInstance()?.state;
+    const toEntry = (
+      key: string,
+      streamIds: readonly string[],
+    ): { key: string; owners: { streamId: string; label: string }[] } => ({
+      key,
+      owners: streamIds.map((streamId) => ({
+        streamId,
+        label: state
+          ? (buildStreamInfo(state, streamId, 'all')?.label ?? streamId)
+          : streamId,
+      })),
+    });
+    const prEntries = listPRSubscriptionBindings(
+      prPollingSource.activeKeys(),
+    ).map(({ key, streamIds }) => toEntry(key, streamIds));
+    const repoEntries = listRepoSubscriptionBindings(
+      repoPollingSource.activeKeys(),
+    ).map(({ key, streamIds }) => toEntry(key, streamIds));
+    const issueEntries = listIssueSubscriptionBindings(
+      issuePollingSource.activeKeys(),
+    ).map(({ key, streamIds }) => toEntry(key, streamIds));
+
+    await webview.postMessage({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
+      subscriptions: [...prEntries, ...repoEntries, ...issueEntries],
+    });
+  }
+
+  handleUnsubscribePR(
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.UNSUBSCRIBE_PR>,
+  ): void {
+    // Path form mirrors GitHub's REST URL shape:
+    //   owner/repo               → repo
+    //   owner/repo/pulls/N       → PR
+    //   owner/repo/issues/N      → issue
+    const k = data.key;
+    let removed: number;
+    if (k.includes('/pulls/')) {
+      removed = unbindAllForPR(k, extensionAgentRuntimeHost);
+    } else if (k.includes('/issues/')) {
+      removed = unbindAllForIssue(k, extensionAgentRuntimeHost);
+    } else {
+      removed = unbindAllForRepo(k, extensionAgentRuntimeHost);
+    }
+    if (removed === 0) {
+      void vscode.window.showInformationMessage(
+        `No active subscription for ${k}.`,
+      );
+    }
+  }
+
+  async handleOpenPRSubscriptionStream(
+    data: SettingsMessageFor<
+      typeof SETTINGS_VIEW_CMD.OPEN_PR_SUBSCRIPTION_STREAM
+    >,
+  ): Promise<void> {
+    const provider = ProgressViewProvider.getInstance();
+    if (!provider) {
+      await vscode.window.showErrorMessage(
+        'Progress View is not available. Please try again.',
+      );
+      return;
+    }
+
+    const { state } = provider;
+    if (!state.streamLogs.has(data.streamId)) {
+      await vscode.window.showWarningMessage(
+        'The agent stream is no longer available.',
+      );
+      return;
+    }
+
+    await provider.showProgressView();
+
+    // If the current filter would hide the target stream, clear it to 'all'
+    // so SET_ACTIVE_STREAM doesn't silently land on the wrong tab.
+    if (
+      buildStreamInfo(state, data.streamId, state.agentCategoryFilter) === null
+    ) {
+      state.agentCategoryFilter = 'all';
+      provider.syncFullView();
+    }
+
+    provider.setActiveStream(data.streamId);
+  }
+}
