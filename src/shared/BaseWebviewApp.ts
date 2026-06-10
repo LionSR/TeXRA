@@ -1,6 +1,6 @@
 // Third-party imports
 import { LitElement } from 'lit';
-import { provide } from '@lit/context';
+import { createContext, provide } from '@lit/context';
 import { state } from 'lit/decorators.js';
 
 // Local imports - shared handlers
@@ -9,13 +9,12 @@ import { postMessage } from '@shared/hostBridge';
 import { installToolbarTooltips } from '@shared/controllers';
 import { handleCommonMessage } from '@shared/handlers/commonMessageHandlers';
 
-// Local imports - shared contexts
-import { themeContext } from '@shared/contexts/themeContext';
-
 // Local imports - webview commands
 import type { StateRestoreMessage } from '@shared/schemas/commonViewMessages';
 import { setWaColorScheme } from '@shared/wa/waColorScheme';
 import { themeIsDark } from '@shared/wa/hostTheme';
+
+export const themeContext = createContext<string>('shared-theme');
 
 /**
  * Base class for Lit-powered webview apps.

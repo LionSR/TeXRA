@@ -36,10 +36,7 @@ import {
   nextFocusBack,
   nextFocusForward,
 } from '@cli/chat/tui/state/focusCycle';
-import {
-  hasChildControlItems,
-  hasChildExecutionRows,
-} from '@cli/chat/tui/state/childControls';
+import { hasChildControlItems } from '@cli/chat/tui/state/childControls';
 import { visibleSubagentRows } from '@cli/chat/tui/state/childStreamMerge';
 import {
   finalizeSettledPrefix,
@@ -53,8 +50,8 @@ import {
   COMPLETED_PROCESS_TAIL_LINES,
   buildCompletedProcessTranscript,
   completedProcessDisplayLines,
-  isCompletedProcessError,
 } from '@cli/chat/tui/state/completedProcessTranscript';
+import { isChildExecutionErrorStatus } from '@cli/chat/tui/state/childExecutionStatus';
 import {
   estimateTranscriptEntryRows,
   selectTranscriptEntriesForViewport,
@@ -170,7 +167,6 @@ describe('cliState Phase 4 fields', () => {
     }));
     patchStream(child1, (s) => ({ ...s, status: STREAM_STATUS.WAITING }));
 
-    expect(hasChildExecutionRows(cliState.streams.get().get(root))).toBe(true);
     expect(
       hasChildControlItems(cliState.streams.get().get(root), 'tasks'),
     ).toBe(true);
@@ -188,7 +184,6 @@ describe('cliState Phase 4 fields', () => {
     expect(parent.activeSubagents).toEqual([]);
     expect(parent.activeProcesses).toEqual([]);
     expect(visibleSubagentRows(parent)).toEqual([]);
-    expect(hasChildExecutionRows(parent)).toBe(false);
     expect(hasChildControlItems(parent, 'tasks')).toBe(false);
     expect(hasChildControlItems(parent, 'subagents')).toBe(false);
     expect(nextFocusForward()).toBeUndefined();
@@ -2506,11 +2501,11 @@ describe('subscribeRuntimeHost.updateActiveProcesses', () => {
   });
 
   it('classifies completed process error statuses', () => {
-    expect(isCompletedProcessError('running')).toBe(false);
-    expect(isCompletedProcessError('exit 0')).toBe(false);
-    expect(isCompletedProcessError('exit 1')).toBe(true);
-    expect(isCompletedProcessError('exited with code 2')).toBe(true);
-    expect(isCompletedProcessError('failed')).toBe(true);
+    expect(isChildExecutionErrorStatus('running')).toBe(false);
+    expect(isChildExecutionErrorStatus('exit 0')).toBe(false);
+    expect(isChildExecutionErrorStatus('exit 1')).toBe(true);
+    expect(isChildExecutionErrorStatus('exited with code 2')).toBe(true);
+    expect(isChildExecutionErrorStatus('failed')).toBe(true);
   });
 
   it('does not keep a stale running status after a process leaves the active list', () => {
