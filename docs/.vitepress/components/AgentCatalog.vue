@@ -1,6 +1,6 @@
 <script setup>
 // Frameless agent catalog for guide/built-in-agents.md's "Quick Reference". The
-// source is a 17-row markdown table whose "Type" column is the page's central
+// source is an 18-row markdown table whose "Type" column is the page's central
 // idea — every built-in agent is either a tool-use loop or a workflow pipeline.
 // A flat table makes the reader scan that column to reconstruct the split;
 // rendering the catalog as two grouped cards makes the split the figure itself,
@@ -20,6 +20,10 @@ const groups = [
     title: 'Tool-use',
     icon: 'comments',
     agents: [
+      {
+        name: 'prover',
+        purpose: 'Attack open math problems — recon, experiments, proofs',
+      },
       {
         name: 'research',
         purpose: 'Analytical derivations & numerical programming with Wolfram',

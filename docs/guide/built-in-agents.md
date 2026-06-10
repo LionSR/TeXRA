@@ -18,6 +18,7 @@ TeXRA ships with built-in agents for common research tasks—polishing prose, fi
       label: 'Tool-use',
       items: [
         { name: 'chat', icon: 'comment' },
+        { name: 'prover', icon: 'lightbulb' },
         { name: 'research', icon: 'robot' },
         { name: 'numerics', icon: 'pulse' },
         { name: 'review', icon: 'circle-check' },
@@ -84,6 +85,22 @@ A general research companion. It can read your project, edit files, run shell co
 ```
 Review my introduction in paper.tex and suggest improvements for clarity.
 Then update the file with your changes.
+```
+
+## Problem-Solving Agents
+
+### `prover`
+
+A research mathematician for open and research-level problems — Erdős problems, conjectures posed at the end of papers, or questions from your own work. It checks the problem's current status in the literature first, computes small cases and hunts for counterexamples, lays out candidate lines of attack, and develops proofs lemma-by-lemma with adversarial self-verification. It reports honestly: SOLVED, DISPROVED, PARTIAL, or OPEN with the exact obstruction — partial progress (special cases, reductions, improved bounds) is written up as such, never oversold.
+
+**Best for:** Attacking open problems, counterexample searches, turning conjectures into verified partial results
+
+**Example instruction:**
+
+```
+Attack the open problem stated in problem.tex. Check its current status on
+erdosproblems.com and arXiv first, compute small cases, then either prove it,
+disprove it, or report the strongest partial result you can rigorously verify.
 ```
 
 ## Research & Discovery Agents
@@ -496,13 +513,13 @@ Teams are predefined collections of agents for a discipline. Pick one from the
 **Multi-Agent** tab in the Dashboard, or run one from the CLI with
 `texra multi-agent run <team>`:
 
-| Team                    | For                                                                                        | Lead agent         |
-| :---------------------- | :----------------------------------------------------------------------------------------- | :----------------- |
-| Lean Project            | Lean 4 projects — theorem search, tactic simplification, and blueprints                    | `leanOrchestrator` |
-| Physicist               | Physics papers — derivations, numerical experiments, literature search, slides, and review | `orchestrator`     |
-| Mathematician           | Math papers — proofs, Lean 4 formalization, research, and LaTeX correction                 | `orchestrator`     |
-| Computer Scientist (ML) | ML/CS papers — algorithm design, experiments and ablations, review, and reproducibility    | `orchestrator`     |
-| Software Engineer       | A project's code — implementation, review, debugging, and testing across specialists       | `engineer`         |
+| Team                    | For                                                                                         | Lead agent         |
+| :---------------------- | :------------------------------------------------------------------------------------------ | :----------------- |
+| Lean Project            | Lean 4 projects — theorem search, tactic simplification, and blueprints                     | `leanOrchestrator` |
+| Physicist               | Physics papers — derivations, numerical experiments, literature search, slides, and review  | `orchestrator`     |
+| Mathematician           | Math research — attacking open problems, proofs, Lean 4 formalization, and LaTeX correction | `orchestrator`     |
+| Computer Scientist (ML) | ML/CS papers — algorithm design, experiments and ablations, review, and reproducibility     | `orchestrator`     |
+| Software Engineer       | A project's code — implementation, review, debugging, and testing across specialists        | `engineer`         |
 
 Every team bundles the `progressCheck` audit helper, and the paper-focused
 teams also include `latexFixer`. The Software Engineer lead and its specialists
