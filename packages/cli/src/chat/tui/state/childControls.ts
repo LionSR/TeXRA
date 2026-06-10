@@ -42,12 +42,12 @@ export interface ChildControlItem {
 
 export interface ChildControlStreamTarget {
   readonly fallbackFromStreamId?: StreamTabId;
+  readonly hasItems: boolean;
   readonly slice: StreamSlice | undefined;
   readonly streamId: StreamTabId | undefined;
 }
 
 export interface ChildControlDisplayTarget extends ChildControlStreamTarget {
-  readonly hasItems: boolean;
   readonly streamLabel: string | undefined;
   readonly streamScopeDetail: string | undefined;
 }
@@ -288,7 +288,11 @@ export function resolveChildControlStreamTarget({
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const activeHasRows = hasChildControlItems(activeSlice, mode);
   if (!activeStreamId || activeHasRows) {
-    return { streamId: activeStreamId, slice: activeSlice };
+    return {
+      hasItems: activeHasRows,
+      streamId: activeStreamId,
+      slice: activeSlice,
+    };
   }
 
   const ancestor = nearestActiveStreamAncestor({
@@ -300,12 +304,17 @@ export function resolveChildControlStreamTarget({
   if (ancestor) {
     return {
       fallbackFromStreamId: activeStreamId,
+      hasItems: true,
       streamId: ancestor.streamId,
       slice: ancestor.value,
     };
   }
 
-  return { streamId: activeStreamId, slice: activeSlice };
+  return {
+    hasItems: false,
+    streamId: activeStreamId,
+    slice: activeSlice,
+  };
 }
 
 function childControlFallbackDetail(
@@ -352,7 +361,6 @@ export function resolveChildControlDisplayTarget({
     : undefined;
   return {
     ...target,
-    hasItems: hasChildControlItems(target.slice, mode),
     streamLabel,
     streamScopeDetail: childControlFallbackDetail(
       mode,
