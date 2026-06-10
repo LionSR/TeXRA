@@ -85,6 +85,12 @@ if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
   console.error('[LOG_USAGE] Missing required environment variables');
 }
 
+// Service-role client for writes (env is fixed at cold start; no per-request state)
+const adminClient =
+  supabaseUrl && supabaseServiceKey
+    ? createClient(supabaseUrl, supabaseServiceKey)
+    : null;
+
 // =============================================================================
 // Request Handler
 // =============================================================================
@@ -99,8 +105,9 @@ Deno.serve(async (req: Request) => {
     return errorResponse(req, 'Method not allowed', 405);
   }
 
-  // Check environment on each request (allows for hot-reload)
-  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
+  // Module-level init only logs, so requests must get an explicit 500 here
+  // rather than crashing on a null dereference deeper in the handler.
+  if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey || !adminClient) {
     return errorResponse(req, 'Server configuration error', 500);
   }
 
@@ -152,10 +159,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 6. Insert entries into database (service role for write access)
-    const adminClient = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Check for duplicate batch (idempotency for client retries).
+    // 6. Check for duplicate batch (idempotency for client retries).
     // After per-stream compaction the canonical row keeps only one batch_id
     // out of the inputs that produced it, so this is best-effort: it catches
     // the common case of an immediate retry of an in-flight request.

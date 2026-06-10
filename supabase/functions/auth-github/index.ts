@@ -347,8 +347,9 @@ app.post('/exchange', async (c) => {
         userId = newUser.user.id;
       }
 
-      // Duplicate/constraint failures are non-fatal; thrown transport/runtime
-      // failures should fail the exchange instead of leaving auth state split.
+      // Identity linking is best-effort: constraint/duplicate failures are
+      // logged and the exchange proceeds, since the session mint below is what
+      // actually signs the user in.
       const { error: identityError } = await supabase
         .schema('auth')
         .from('identities')

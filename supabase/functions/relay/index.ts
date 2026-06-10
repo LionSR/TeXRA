@@ -107,6 +107,17 @@ const RELAY_VERSION = '1.9.1';
 // Upstream request timeout (390s to fit within Supabase's 400s wall clock limit)
 const UPSTREAM_TIMEOUT_MS = 390000;
 
+// Env and the service-role client are fixed at cold start; no per-request state.
+// adminClient is null when SUPABASE_SERVICE_ROLE_KEY is absent — spending and
+// request gates are skipped but requests are still served.
+const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const adminClient =
+  supabaseUrl && serviceRoleKey
+    ? createClient(supabaseUrl, serviceRoleKey)
+    : null;
+
 const OPENAI_GPT5_REASONING_EFFORT_CAPS: Record<string, ReasoningEffortCap> = {
   [FREE_TIER]: 'medium',
   [MAX_TIER]: 'high',
@@ -440,8 +451,6 @@ app.get('/providers', (c) => {
  * When authenticated, also includes user's access status and spending info.
  */
 app.get('/tier-config', async (c) => {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   const jwtToken = extractJwtFromRequest(c.req.raw);
 
   // Override static providers list with actually enabled providers
@@ -474,9 +483,9 @@ app.get('/tier-config', async (c) => {
 
           // Include current spending if service role key is available
           let spendingStatus = null;
-          if (serviceRoleKey) {
+          if (adminClient) {
             const spending = await checkSpendingLimit(
-              createClient(supabaseUrl, serviceRoleKey),
+              adminClient,
               user.id,
               profile.tier || FREE_TIER,
             );
@@ -526,9 +535,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     return jsonError('Missing authorization token', 401);
   }
 
-  // 3. Get Supabase config (authenticateJwt reads its own env internally)
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  // 3. Check Supabase config (authenticateJwt reads its own env internally)
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error('Missing required Supabase environment variables');
     return jsonError('Server configuration error', 500);
@@ -580,10 +587,6 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   const userTier = profile.tier || FREE_TIER;
 
   // 5.5. Check monthly spending limit
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  const adminClient = serviceRoleKey
-    ? createClient(supabaseUrl, serviceRoleKey)
-    : null;
   if (adminClient) {
     const spending = await checkSpendingLimit(adminClient, user.id, userTier);
 
