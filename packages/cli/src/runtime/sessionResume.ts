@@ -35,6 +35,11 @@ export type CliResumeResolution =
   /** Execution metadata or resume state exists but could not be loaded. */
   | { readonly kind: 'load-failed'; readonly reason: string };
 
+export type CliToolUseResumeResolution = Extract<
+  CliResumeResolution,
+  { readonly kind: 'toolUse' }
+>;
+
 export async function resolveCliResumeSnapshot(
   id: ExecutionId,
 ): Promise<CliResumeResolution> {

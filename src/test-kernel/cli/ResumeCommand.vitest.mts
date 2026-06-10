@@ -56,7 +56,7 @@ function resumableResolution() {
       agent: 'review',
       model: 'gpt-5',
     },
-  };
+  } as const;
 }
 
 describe('runResumeExecution', () => {
@@ -68,6 +68,8 @@ describe('runResumeExecution', () => {
   });
 
   it('uses the CLI context TTY snapshot before reopening chat', async () => {
+    const resolution = resumableResolution();
+    mocks.resolveCliResumeSnapshot.mockResolvedValueOnce(resolution);
     const { runResumeExecution } = await import('@cli/commands/resume');
 
     await expect(
@@ -77,9 +79,10 @@ describe('runResumeExecution', () => {
     expect(mocks.runChat).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({
-        resumeExecutionId: EXECUTION_ID,
-        agentOverride: 'review',
-        modelOverride: 'gpt-5',
+        initialResume: {
+          id: EXECUTION_ID,
+          resolution,
+        },
       }),
     );
     expect(mocks.writeTextStderr).not.toHaveBeenCalled();
