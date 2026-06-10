@@ -20,9 +20,10 @@
  * stage diff inputs.
  */
 
-import { randomUUID } from 'node:crypto';
 import { unlink, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
+
+import { nanoid } from 'nanoid';
 
 import { debug } from '@logger/logUtils';
 
@@ -46,7 +47,7 @@ export interface WriteApprovalTempFilesInput {
 }
 
 /**
- * File names use a per-side UUID so reusing a shared directory across
+ * File names use a per-side random ID so reusing a shared directory across
  * concurrent requests cannot collide.
  */
 export async function writeApprovalTempFiles(
@@ -54,8 +55,8 @@ export async function writeApprovalTempFiles(
 ): Promise<ApprovalTempFiles> {
   const { directory, targetPath, originalContent, proposedContent } = input;
   const ext = path.extname(targetPath) || '.txt';
-  const originalPath = path.join(directory, `${randomUUID()}-original${ext}`);
-  const proposedPath = path.join(directory, `${randomUUID()}-proposed${ext}`);
+  const originalPath = path.join(directory, `${nanoid()}-original${ext}`);
+  const proposedPath = path.join(directory, `${nanoid()}-proposed${ext}`);
 
   await Promise.all([
     writeFile(originalPath, originalContent, 'utf8'),

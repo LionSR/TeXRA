@@ -65,12 +65,6 @@ function extractApiMessage(data: unknown, fallback: string): string {
   return fallback;
 }
 
-function abortAfter(ms: number): { signal: AbortSignal; cancel: () => void } {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
-  return { signal: controller.signal, cancel: () => clearTimeout(timer) };
-}
-
 /**
  * Defeat octokit's legacy URI-template colon syntax. `@octokit/endpoint`
  * rewrites `:name` (lowercase letter + word chars) into `{name}` before
@@ -96,7 +90,7 @@ export async function ghGet<T>(
   if (token) headers.authorization = `Bearer ${token}`;
   if (etag) headers['if-none-match'] = etag;
 
-  const { signal, cancel } = abortAfter(TIMEOUT_MS);
+  const signal = AbortSignal.timeout(TIMEOUT_MS);
   try {
     const res = await octokitRequest(
       `GET ${escapeOctokitLegacyTemplate(path)}`,
@@ -164,7 +158,5 @@ export async function ghGet<T>(
       throw new Error(`GitHub request failed: ${err.message}`);
     }
     throw err;
-  } finally {
-    cancel();
   }
 }

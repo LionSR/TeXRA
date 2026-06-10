@@ -13,7 +13,7 @@
  * helper functions but ultimately reduce to the same `toolStart` /
  * `toolEnd` emissions.
  */
-import { randomUUID } from 'node:crypto';
+import { nanoid } from 'nanoid';
 
 import type { AgentTrace, ToolStatus } from './index';
 
@@ -33,7 +33,7 @@ export function startToolUseCard(
   input: unknown,
   stageId?: string,
 ): ToolUseCardRef {
-  const logId = randomUUID();
+  const logId = nanoid();
   const groupId = stageId ?? trace.activeStageId();
   trace.toolStart({ logId, toolName, input }, { stageId: groupId });
   return { logId, groupId };

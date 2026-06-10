@@ -1,8 +1,8 @@
 // Standard library imports
 import { Buffer } from 'node:buffer';
-import { randomUUID } from 'node:crypto';
 
 // Third-party imports
+import { nanoid } from 'nanoid';
 import {
   GoogleGenAI,
   Part,
@@ -1132,7 +1132,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
       if (!call?.name) continue;
       results.push({
         provider: 'google',
-        callId: call.id ?? randomUUID(),
+        callId: call.id ?? nanoid(),
         name: call.name,
         input: call.args,
         raw: call,

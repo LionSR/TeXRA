@@ -142,7 +142,7 @@ function SessionHeaderBlock({
   );
 }
 
-// Dedupe `<Static>` rows by the entry's own id (a randomUUID from the
+// Dedupe `<Static>` rows by the entry's own id (a random id from the
 // stream log, or a unique `local:…` id for synthetic rows) rather than
 // pairing it with the stream id. `moveLocalTranscriptToStream` re-homes
 // pre-agent local rows onto the real stream keeping their id; a

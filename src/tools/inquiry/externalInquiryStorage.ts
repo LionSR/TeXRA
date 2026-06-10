@@ -1,5 +1,4 @@
 import * as path from 'node:path';
-import { randomBytes } from 'node:crypto';
 
 import AsyncLock from 'async-lock';
 import { z } from 'zod';
@@ -19,6 +18,7 @@ import {
 import { normalizeFilePath } from '@shared/utils/path';
 import { ToolError } from '@tools/result';
 import { GlobalStorageFS, StorageFS } from '@utils/files';
+import { hexId12 } from '@utils/core/executionId';
 import { isDirectory, isFile } from '@utils/files/fsEntryType';
 
 const THREADS_DIR = 'ei_threads';
@@ -320,7 +320,7 @@ export async function recordOpenQuestion(params: {
 }): Promise<PersistedOpenTurn> {
   const threadId =
     params.threadId ??
-    (`ei_${randomBytes(6).toString('hex')}` as ExternalInquiryThreadId);
+    (`ei_${hexId12()}` as ExternalInquiryThreadId);
 
   return threadLock.acquire(threadId, async () => {
     const existing = await readThreadManifest(threadId);

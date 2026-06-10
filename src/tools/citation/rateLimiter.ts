@@ -1,14 +1,24 @@
-import Bottleneck from 'bottleneck';
+import pThrottle from 'p-throttle';
 
-const limiters = new Map<string, Bottleneck>();
+interface ApiLimiter {
+  minDelayMs: number;
+  wait: () => Promise<void>;
+}
 
-function getLimiter(apiName: string, minDelayMs: number): Bottleneck {
+const limiters = new Map<string, ApiLimiter>();
+
+function getLimiter(apiName: string, minDelayMs: number): ApiLimiter {
   const existing = limiters.get(apiName);
-  if (existing) {
-    void existing.updateSettings({ minTime: minDelayMs });
+  if (existing && existing.minDelayMs === minDelayMs) {
     return existing;
   }
-  const limiter = new Bottleneck({ minTime: minDelayMs, maxConcurrent: 1 });
+  // p-throttle's interval is fixed at creation, so a changed delay (callers
+  // pass a constant per API in practice) rebuilds the limiter.
+  const throttle = pThrottle({ limit: 1, interval: minDelayMs });
+  const limiter: ApiLimiter = {
+    minDelayMs,
+    wait: throttle(() => Promise.resolve()),
+  };
   limiters.set(apiName, limiter);
   return limiter;
 }
@@ -18,5 +28,5 @@ export async function waitForRateLimit(
   apiName: string,
   minDelayMs: number,
 ): Promise<void> {
-  await getLimiter(apiName, minDelayMs).schedule(() => Promise.resolve());
+  await getLimiter(apiName, minDelayMs).wait();
 }
