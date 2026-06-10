@@ -1,30 +1,39 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
-import * as path from 'node:path';
-import { glob } from 'glob';
-import * as yaml from 'yaml';
-
 import { platform } from '@platform/platform';
-import {
-  AgentCategory,
-  AgentDefinitionSchema,
-} from '@agent/core/definition/AgentDataclass';
-import { toErrorMessage } from '@common/errors';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import * as logger from '@logger/logUtils';
-import type { AgentOptionData } from '@shared/schemas';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import type { AgentSource } from '@shared/schemas/agent';
 import { agentKey as createKey, agentName } from '@shared/schemas/agent';
-import { hasDelegationTool } from '@shared/constants/delegationTools';
-import { AbsoluteFS } from '@utils/files';
-import { filterNotNull } from '@utils/core';
+import { getAgentDirectories } from './agentDirectoriesRegistry';
 import {
-  getAgentDirectories,
-  type AgentDirectories,
-} from './agentDirectoriesRegistry';
+  DEFAULT_WORKFLOW_AGENT,
+  LOOKUP_PRIORITY,
+  PREFERRED_TOOL_USE_AGENTS,
+  TOOL_USE_LOOKUP_PRIORITY,
+} from './agentRegistryConstants';
+import { scanDirectory } from './agentYamlScanner';
+import { loadRemoteAgents, persistRemoteAgentMeta } from './remoteAgentMeta';
+import {
+  entryToOptionData,
+  sortAgentEntries,
+  type AgentOptionsDataPayload,
+} from './agentOptionsBuilder';
+import type { AgentEntry, ResolvedAgent } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';
 logger.initialize(CHANNEL);
+
+// Re-exports kept stable for external consumers.
+export type { AgentEntry, ResolvedAgent } from './agentEntry';
+export { extractToolNames } from './agentYamlScanner';
+export {
+  BUILTIN_TEAM_ROOT_AGENT_NAMES,
+  BUNDLED_ORCHESTRATOR_AGENT_NAMES,
+  REMOTE_ORCHESTRATOR_AGENT_NAMES,
+} from './agentRegistryConstants';
+export { createKey };
 
 /** Legacy prefix from pre-rename era (builtIn → builtInWorkflow). */
 const LEGACY_BUILTIN_PREFIX = 'builtIn:';
@@ -58,104 +67,6 @@ function migrateLegacySourceKeys(): void {
     logger.info(CHANNEL, `Migrated legacy builtIn keys in ${stateKey}`);
   }
 }
-
-// =============================================================================
-// TYPES (AgentSource canonical source: @shared/schemas/agent)
-// =============================================================================
-
-/**
- * Minimal agent metadata for dropdown display and path resolution.
- * No redundant fields - derive what you need.
- */
-export interface AgentEntry {
-  name: string;
-  source: AgentSource;
-  path: string; // absolute path to YAML (empty for remote)
-  category: AgentCategory;
-  description?: string;
-  tools?: string[]; // tool names for tool-use agents
-  defaultOutputFiles?: string[];
-  visibility?: string[]; // remote only: group names that can access the agent
-  internal?: boolean; // internal agents are hidden from dropdowns but launchable by commands
-}
-
-/**
- * Result of resolving an agent. Replaces the old AgentPathResolution interface.
- * Simple, flat, no redundant fields.
- */
-export interface ResolvedAgent {
-  /** The full agent entry from the registry. */
-  entry: AgentEntry;
-  /** Absolute path to the YAML definition (empty for remote). */
-  definitionPath: string;
-  /** Agent name as resolved. */
-  resolvedName: string;
-}
-
-// =============================================================================
-// CONSTANTS
-// =============================================================================
-
-/** Source priority for lookups (higher priority first). */
-const LOOKUP_PRIORITY: AgentSource[] = [
-  'custom',
-  'remote',
-  'builtInWorkflow',
-  'builtInToolUse',
-];
-
-/** Source priority for tool-use sessions (prefers tool-use agents over workflow). */
-const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
-  'custom',
-  'remote',
-  'builtInToolUse',
-  'builtInWorkflow',
-];
-
-/**
- * Preferred agents for dropdowns, in priority order.
- * Preferred agents present in the workspace are sorted to the top of the
- * dropdown (in the order listed here); all others follow alphabetically.
- * Remote orchestrators come first because they need sign-in, then bundled
- * orchestrators such as `engineer`, then `research`/`review` as local
- * general-purpose fallbacks. This keeps signed-out users in presets like
- * Physicist/Mathematician from landing on task-specific agents (e.g.
- * `presenter`) by alphabetical accident.
- */
-const DEFAULT_WORKFLOW_AGENT = 'correct';
-
-/**
- * Relay-served orchestrator roots that delegate to a team. They need sign-in,
- * so UIs surface them first.
- */
-export const REMOTE_ORCHESTRATOR_AGENT_NAMES = [
-  'orchestrator',
-  'leanOrchestrator',
-] as const;
-
-/**
- * Bundled (local) orchestrator roots that delegate to a team. Unlike the
- * relay-served roots above, these ship in the extension/CLI and are available
- * offline without sign-in (e.g. the Software Engineer team's `engineer` lead).
- */
-export const BUNDLED_ORCHESTRATOR_AGENT_NAMES = ['engineer'] as const;
-
-/**
- * Single source of truth for "the built-in delegating team roots" (relay-served
- * plus bundled). Consumed by the CLI multi-agent presets to pick a preset's
- * root agent.
- */
-export const BUILTIN_TEAM_ROOT_AGENT_NAMES = [
-  ...REMOTE_ORCHESTRATOR_AGENT_NAMES,
-  ...BUNDLED_ORCHESTRATOR_AGENT_NAMES,
-] as const;
-
-const PREFERRED_TOOL_USE_AGENTS = [
-  ...REMOTE_ORCHESTRATOR_AGENT_NAMES,
-  ...BUNDLED_ORCHESTRATOR_AGENT_NAMES,
-  'research',
-  'review',
-] as const;
 
 // =============================================================================
 // STATE
@@ -374,174 +285,8 @@ export async function refresh(): Promise<void> {
 }
 
 // =============================================================================
-// HELPERS
-// =============================================================================
-
-/**
- * Extract tool names from raw YAML tool configs.
- * Tools can be plain strings ("web_search") or objects ({ name: "web_search", ... }).
- */
-export function extractToolNames(
-  rawTools: unknown[] | undefined,
-): string[] | undefined {
-  return rawTools?.flatMap((t) => {
-    if (typeof t === 'string') return t;
-    const name = (t as Record<string, unknown>)?.name;
-    return typeof name === 'string' ? name : [];
-  });
-}
-
-async function scanDirectory(
-  dir: string,
-  source: AgentSource,
-): Promise<AgentEntry[]> {
-  if (!dir) return [];
-
-  try {
-    const files = await glob('**/*.yaml', {
-      cwd: dir,
-      absolute: true,
-      nodir: true,
-    });
-    const entries = await Promise.all(
-      files.map((f) => {
-        const name = path.basename(f, '.yaml');
-        return scanYaml(name, f, source);
-      }),
-    );
-
-    const result = entries.filter(filterNotNull);
-    logger.debug(CHANNEL, `Scanned ${result.length} agents from ${source}`);
-    return result;
-  } catch (err) {
-    logger.error(CHANNEL, `Failed to scan ${dir}: ${toErrorMessage(err)}`);
-    return [];
-  }
-}
-
-async function scanYaml(
-  name: string,
-  yamlPath: string,
-  source: AgentSource,
-): Promise<AgentEntry | null> {
-  try {
-    const content = await AbsoluteFS.read(yamlPath);
-    const parsed = yaml.parse(content);
-    const validated = AgentDefinitionSchema.parse(parsed);
-
-    // Extract lightweight metadata
-    const rawSettings = (validated.settings ?? {}) as Record<string, unknown>;
-    const defaultOutputFiles = rawSettings.defaultOutputFiles as
-      | string[]
-      | undefined;
-
-    const tools = extractToolNames(rawSettings.tools as unknown[] | undefined);
-
-    // Determine category from source or explicit setting
-    const rawCategory = rawSettings.agentCategory as string | undefined;
-    const category =
-      source === 'builtInToolUse' || rawCategory === AgentCategory.ToolUse
-        ? AgentCategory.ToolUse
-        : AgentCategory.Workflow;
-
-    const internal = rawSettings.internal === true || undefined;
-
-    return {
-      name,
-      source,
-      path: yamlPath,
-      category,
-      description: validated.description,
-      tools: tools?.length ? tools : undefined,
-      defaultOutputFiles: defaultOutputFiles?.length
-        ? defaultOutputFiles
-        : undefined,
-      internal,
-    };
-  } catch (err) {
-    logger.warn(CHANNEL, `Failed to scan ${yamlPath}: ${toErrorMessage(err)}`);
-    return null;
-  }
-}
-
-// =============================================================================
-// REMOTE AGENT METADATA PERSISTENCE
-// =============================================================================
-
-/**
- * Cached metadata for a remote agent, persisted in globalState.
- * Populated lazily when a remote agent's YAML is first loaded.
- */
-interface RemoteAgentMetaCache {
-  [agentName: string]: {
-    tools?: string[];
-    defaultOutputFiles?: string[];
-  };
-}
-
-/** Persist remote agent metadata to globalState for cross-session availability. */
-function persistRemoteAgentMeta(
-  agentName: string,
-  meta: { tools?: string[]; defaultOutputFiles?: string[] },
-): void {
-  const stored =
-    platform().globalState.get<RemoteAgentMetaCache>(
-      GlobalStateKey.REMOTE_AGENT_META_CACHE,
-      {},
-    ) ?? {};
-  stored[agentName] = { ...stored[agentName], ...meta };
-  void platform().globalState.update(
-    GlobalStateKey.REMOTE_AGENT_META_CACHE,
-    stored,
-  );
-}
-
-/** Load persisted remote agent metadata from globalState. */
-function getPersistedRemoteAgentMeta(): RemoteAgentMetaCache {
-  return (
-    platform().globalState.get<RemoteAgentMetaCache>(
-      GlobalStateKey.REMOTE_AGENT_META_CACHE,
-      {},
-    ) ?? {}
-  );
-}
-
-async function loadRemoteAgents(): Promise<AgentEntry[]> {
-  try {
-    const { RemoteAgentLoader } =
-      await import('@agent/remote/RemoteAgentLoader');
-    const remotes = await RemoteAgentLoader.listRemoteAgents();
-    const metaCache = getPersistedRemoteAgentMeta();
-
-    return remotes.map((remote) => {
-      const isToolUse = remote.agentCategory === AgentCategory.ToolUse;
-      const cached = metaCache[remote.name];
-      const dbTools = remote.tools?.length ? remote.tools : undefined;
-      return {
-        name: remote.name,
-        source: 'remote' as const,
-        path: '',
-        category: isToolUse ? AgentCategory.ToolUse : AgentCategory.Workflow,
-        description: remote.description ?? undefined,
-        visibility: remote.visibility ?? undefined,
-        tools: dbTools ?? cached?.tools,
-        defaultOutputFiles: cached?.defaultOutputFiles,
-      };
-    });
-  } catch (err) {
-    logger.warn(
-      CHANNEL,
-      `Failed to load remote agents: ${toErrorMessage(err)}`,
-    );
-    return [];
-  }
-}
-
-// =============================================================================
 // KEY HELPERS
 // =============================================================================
-
-export { createKey };
 
 /**
  * Resolve an agent identifier to its full source:name key.
@@ -628,51 +373,6 @@ function filterVisible(
 // =============================================================================
 // TYPED OPTIONS BUILDER (Lit-native)
 // =============================================================================
-
-// AgentOptionData type is imported from @shared/schemas (single source of truth)
-
-interface AgentOptionsDataPayload {
-  workflow: AgentOptionData[];
-  toolUse: AgentOptionData[];
-}
-
-/**
- * Convert AgentEntry to typed option data.
- */
-function entryToOptionData(entry: AgentEntry): AgentOptionData {
-  const key = createKey(entry.source, entry.name);
-  return {
-    value: key,
-    label: entry.name,
-    isToolUse: entry.category === AgentCategory.ToolUse,
-    isOrchestrator: hasDelegationTool(entry.tools),
-    isRemote: entry.source === 'remote',
-    isCustom: entry.source === 'custom',
-    description: entry.description,
-  };
-}
-
-/**
- * Sort entries: preferred agents first (in priority order), then alphabetically.
- */
-function sortAgentEntries(
-  entries: AgentEntry[],
-  preferredNames: readonly string[],
-): AgentEntry[] {
-  const preferredSet = new Map(
-    preferredNames
-      .map((name, i) => [entries.find((e) => e.name === name), i] as const)
-      .filter(([entry]) => entry != null),
-  );
-  return entries.toSorted((a, b) => {
-    const aIdx = preferredSet.get(a);
-    const bIdx = preferredSet.get(b);
-    if (aIdx != null && bIdx != null) return aIdx - bIdx;
-    if (aIdx != null) return -1;
-    if (bIdx != null) return 1;
-    return a.name.localeCompare(b.name);
-  });
-}
 
 /**
  * Compute typed agent options data for Lit-native rendering.
