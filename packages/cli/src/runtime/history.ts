@@ -260,10 +260,14 @@ export function resolveCliHistoryStatus(input: {
 }): string {
   // An absent terminal status means the run never reached its terminal write
   // (crash, kill, old build) — never report that as 'completed'.
-  return (
-    input.terminalStatus ??
-    (input.hasFlowRecord ? CLI_HISTORY_RESUMABLE_STATUS : 'unknown')
-  );
+  if (
+    input.hasFlowRecord &&
+    (input.terminalStatus === undefined ||
+      input.terminalStatus === EXECUTION_STATUS.INTERRUPTED)
+  ) {
+    return CLI_HISTORY_RESUMABLE_STATUS;
+  }
+  return input.terminalStatus ?? 'unknown';
 }
 
 export function formatCliHistoryDetailsText(

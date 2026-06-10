@@ -40,19 +40,36 @@ beforeEach(async () => {
 });
 
 describe('CLI history status formatting', () => {
-  it('keeps terminal statuses authoritative', () => {
+  it('keeps failed terminal statuses authoritative', () => {
     expect(
       resolveCliHistoryStatus({
         terminalStatus: EXECUTION_STATUS.ERROR,
         hasFlowRecord: true,
       }),
     ).toBe(EXECUTION_STATUS.ERROR);
+  });
+
+  it('marks interrupted tool-use sessions with flow records as resumable', () => {
     expect(
       resolveCliHistoryStatus({
         terminalStatus: EXECUTION_STATUS.INTERRUPTED,
         hasFlowRecord: true,
       }),
-    ).toBe(EXECUTION_STATUS.INTERRUPTED);
+    ).toBe(CLI_HISTORY_RESUMABLE_STATUS);
+
+    expect(
+      resumableCliHistoryEntries([
+        {
+          id: 'stopped-with-flow',
+          status: resolveCliHistoryStatus({
+            terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+            hasFlowRecord: true,
+          }),
+        },
+      ]),
+    ).toEqual([
+      { id: 'stopped-with-flow', status: CLI_HISTORY_RESUMABLE_STATUS },
+    ]);
   });
 
   it('uses nullish fallback semantics for persisted terminal status', () => {
