@@ -25,7 +25,7 @@ import { versionedJsonResponse } from '../_shared/responses.ts';
 // Constants
 // =============================================================================
 
-const LOG_USAGE_VERSION = '1.2.0';
+const LOG_USAGE_VERSION = '1.2.1';
 
 // =============================================================================
 // Schemas
@@ -43,9 +43,9 @@ const UsageLogEntrySchema = z.object({
   agentName: z.string().optional().catch(undefined),
   agentCategory: z.enum(['workflow', 'toolUse']).optional().catch(undefined),
   isMultipleOutput: z.boolean().optional().catch(undefined),
-  responseTimeMs: z.number().optional().catch(undefined),
-  cachedInputTokens: z.number().optional().catch(undefined),
-  reasoningTokens: z.number().optional().catch(undefined),
+  responseTimeMs: z.number().nonnegative().optional().catch(undefined),
+  cachedInputTokens: z.number().nonnegative().optional().catch(undefined),
+  reasoningTokens: z.number().nonnegative().optional().catch(undefined),
   usedRelay: z.boolean().optional().catch(undefined),
   streamId: z.string().optional().catch(undefined),
   extensionVersion: z.string().optional().catch(undefined),

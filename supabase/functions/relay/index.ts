@@ -526,10 +526,9 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     return jsonError('Missing authorization token', 401);
   }
 
-  // 3. Get Supabase config
+  // 3. Get Supabase config (authenticateJwt reads its own env internally)
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-
-  if (!supabaseUrl || !Deno.env.get('SUPABASE_ANON_KEY')) {
+  if (!supabaseUrl) {
     console.error('Missing required Supabase environment variables');
     return jsonError('Server configuration error', 500);
   }
