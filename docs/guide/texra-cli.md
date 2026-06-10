@@ -285,7 +285,7 @@ defaults.
   "outputFormat": "text",
   "approvalPolicy": "never",
   "chat": {
-    "agent": "chat",
+    "agent": "assistant",
     "model": "deepseekT"
   },
   "run": {

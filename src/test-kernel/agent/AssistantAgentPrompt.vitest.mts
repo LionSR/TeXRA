@@ -12,7 +12,8 @@ const REPO_ROOT = resolve(
   '../../..',
 );
 
-interface ChatAgentYaml {
+interface AssistantAgentYaml {
+  name: string;
   settings: {
     tools: string[];
   };
@@ -21,25 +22,48 @@ interface ChatAgentYaml {
   };
 }
 
-function readChatAgent(): ChatAgentYaml {
+function readAssistantAgent(): AssistantAgentYaml {
   const text = readFileSync(
     resolve(
       REPO_ROOT,
-      'packages/extension/resources/tool_use_agents/chat.yaml',
+      'packages/extension/resources/tool_use_agents/assistant.yaml',
     ),
     'utf8',
   );
-  return yaml.parse(text) as ChatAgentYaml;
+  return yaml.parse(text) as AssistantAgentYaml;
 }
 
-describe('chat agent prompt', () => {
+describe('assistant agent prompt', () => {
+  it('is named assistant (renamed from chat)', () => {
+    expect(readAssistantAgent().name).toBe('assistant');
+  });
+
   it('uses TeXRA delegation for internal subagents instead of inquiry', () => {
-    const agent = readChatAgent();
+    const agent = readAssistantAgent();
     const systemPrompt = agent.prompts.systemPrompt;
 
     expect(agent.settings.tools).toContain('delegate_agent');
     expect(agent.settings.tools).toContain('inquiry');
     expect(systemPrompt).toContain('Use `delegate_agent`');
     expect(systemPrompt).toContain('Reserve `inquiry`');
+  });
+
+  it('mentions every declared tool family in the system prompt', () => {
+    const agent = readAssistantAgent();
+    const systemPrompt = agent.prompts.systemPrompt;
+
+    for (const tool of [
+      'wolfram',
+      'zotero',
+      'lean_loogle',
+      'open_pdf',
+      'texcount',
+      'memory',
+      'codex',
+      'claude_code',
+      'delegate_workflow',
+    ]) {
+      expect(systemPrompt).toContain(tool);
+    }
   });
 });
