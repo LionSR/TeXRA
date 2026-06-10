@@ -652,11 +652,26 @@ describe('parseSlashInput', () => {
     });
   });
 
-  it('treats absolute paths as chat messages, not commands', () => {
+  it('treats non-command-shaped leading tokens as chat messages', () => {
+    // Pasted absolute paths.
     expect(parseSlashInput('/Users/me/poster/mpq_logo.pdf')).toBeUndefined();
     expect(
       parseSlashInput('/Users/me/poster/mpq_logo.pdf just use this then'),
     ).toBeUndefined();
     expect(parseSlashInput('/tmp/figure.png looks wrong')).toBeUndefined();
+    // Single-segment tokens with characters no command name contains.
+    expect(parseSlashInput('/mpq_logo.pdf')).toBeUndefined();
+    expect(parseSlashInput('/3.14 is pi')).toBeUndefined();
+    expect(parseSlashInput('/(a+b)')).toBeUndefined();
+  });
+
+  it('still parses command-shaped near-misses so typo suggestions fire', () => {
+    expect(parseSlashInput('/hlp')).toEqual({ name: 'hlp', remainder: '' });
+    expect(parseSlashInput('/my-cmd_2 arg')).toEqual({
+      name: 'my-cmd_2',
+      remainder: 'arg',
+    });
+    // Bare `/` keeps parsing so the palette opens on an empty query.
+    expect(parseSlashInput('/')).toEqual({ name: '', remainder: '' });
   });
 });
