@@ -305,38 +305,42 @@ export class WorkPlanState {
   }
 
   private _todosEqual(a: TodoItem[], b: TodoItem[]): boolean {
-    return (
-      a.length === b.length &&
-      a.every((ai, i) => {
-        const bi = b[i];
-        return (
-          bi !== undefined &&
-          ai.content === bi.content &&
-          ai.status === bi.status &&
-          ai.activeForm === bi.activeForm
-        );
-      })
-    );
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      const ai = a[i];
+      const bi = b[i];
+      if (!ai || !bi) return false;
+      if (
+        ai.content !== bi.content ||
+        ai.status !== bi.status ||
+        ai.activeForm !== bi.activeForm
+      ) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private _planEqual(a: Plan | null, b: Plan | null): boolean {
     if (a === b) return true;
     if (!a || !b) return false;
-    return (
-      a.summary === b.summary &&
-      a.steps.length === b.steps.length &&
-      a.steps.every((ai, i) => {
-        const bi = b.steps[i];
-        return (
-          bi !== undefined &&
-          ai.title === bi.title &&
-          ai.description === bi.description &&
-          ai.status === bi.status &&
-          ai.files.length === bi.files.length &&
-          ai.files.every((f, j) => f === bi.files[j])
-        );
-      })
-    );
+    if (a.summary !== b.summary) return false;
+    if (a.steps.length !== b.steps.length) return false;
+    for (let i = 0; i < a.steps.length; i++) {
+      const ai = a.steps[i];
+      const bi = b.steps[i];
+      if (!ai || !bi) return false;
+      if (
+        ai.title !== bi.title ||
+        ai.description !== bi.description ||
+        ai.status !== bi.status ||
+        ai.files.length !== bi.files.length ||
+        ai.files.some((f, j) => f !== bi.files[j])
+      ) {
+        return false;
+      }
+    }
+    return true;
   }
 
   reset(): void {
