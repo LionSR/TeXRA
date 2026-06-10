@@ -84,7 +84,7 @@ async function waitFor(
 }
 
 describe('Static band resize', () => {
-  it('reflows the full-width user band to the new width on resize', async () => {
+  it('reflows the user band to the new width on resize', async () => {
     // Dynamic import so FORCE_COLOR is set first and the patched workspace Ink
     // (not a hoisted copy) is loaded.
     const ink = (await import(cliRequire.resolve('ink'))) as any;
