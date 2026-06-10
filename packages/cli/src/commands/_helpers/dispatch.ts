@@ -9,6 +9,10 @@ import {
 import { writeRawStderr, writeRawStdout } from '@cli/runtime/logSinks';
 import { readCliAmbientState } from '@cli/runtime/cliContext';
 import { stripAnsiSequences } from '@cli/runtime/ansiEscapes';
+import {
+  editDistance,
+  typoSuggestionThreshold,
+} from '@utils/text/editDistance';
 
 import {
   GLOBAL_ARGS,
@@ -404,30 +408,6 @@ function isPureSubCommandContainer(
   );
 }
 
-function editDistance(a: string, b: string): number {
-  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
-  let current = new Array<number>(b.length + 1);
-
-  for (let i = 1; i <= a.length; i += 1) {
-    current[0] = i;
-    for (let j = 1; j <= b.length; j += 1) {
-      const substitutionCost = a[i - 1] === b[j - 1] ? 0 : 1;
-      current[j] = Math.min(
-        previous[j] + 1,
-        current[j - 1] + 1,
-        previous[j - 1] + substitutionCost,
-      );
-    }
-    [previous, current] = [current, previous];
-  }
-
-  return previous[b.length];
-}
-
-function suggestionThreshold(token: string, candidate: string): number {
-  return Math.max(1, Math.floor(Math.max(token.length, candidate.length) / 3));
-}
-
 function suggestSubCommand(
   token: string,
   subCommands: Record<string, AnyCommand>,
@@ -436,7 +416,7 @@ function suggestSubCommand(
 
   for (const name of Object.keys(subCommands)) {
     const distance = editDistance(token, name);
-    if (distance > suggestionThreshold(token, name)) continue;
+    if (distance > typoSuggestionThreshold(token, name)) continue;
     if (
       best === undefined ||
       distance < best.distance ||
