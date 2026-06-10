@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Local imports - progress schemas
 import { DESKTOP_SHELL_COMMANDS } from '@desktop/desktopShellMessages';
 import {
-  AGENT_CATEGORY,
+  AgentCategory,
   LOG_LEVELS,
   STREAM_LOG_ENTRY_TYPES,
   STREAM_STATUS,
@@ -350,7 +350,7 @@ function workflowTaskState(): {
   agentConfig: {
     agent: string;
     model: string;
-    agentCategory: typeof AGENT_CATEGORY.WORKFLOW;
+    agentCategory: typeof AgentCategory.Workflow;
     toolConfig: typeof DEFAULT_TOOL_CONFIG;
   };
   activeFiles: Record<string, boolean>;
@@ -359,7 +359,7 @@ function workflowTaskState(): {
     agentConfig: {
       agent: 'proofreader',
       model: 'deepseekproT',
-      agentCategory: AGENT_CATEGORY.WORKFLOW,
+      agentCategory: AgentCategory.Workflow,
       toolConfig: DEFAULT_TOOL_CONFIG,
     },
     activeFiles: {},
@@ -430,7 +430,7 @@ describe('DesktopProgressBridge', () => {
     try {
       bridge.handleProgressEvent('setActiveStream', {
         streamId: 'parent',
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agentCategory: AgentCategory.Workflow,
       });
       bridge.handleProgressEvent('updateConversationProgress', {
         streamId: 'parent',
@@ -479,7 +479,7 @@ describe('DesktopProgressBridge', () => {
     try {
       bridge.handleProgressEvent('setActiveStream', {
         streamId: 'parent',
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agentCategory: AgentCategory.Workflow,
       });
       bridge.handleProgressEvent('updateActiveProcesses', {
         parentStreamId: 'parent',
@@ -622,7 +622,7 @@ describe('DesktopProgressBridge', () => {
         {
           streamId: 'ghost-stream',
           label: 'ghost-stream',
-          agentCategory: AGENT_CATEGORY.WORKFLOW,
+          agentCategory: AgentCategory.Workflow,
           lastKnownStatus: STREAM_STATUS.STOPPED,
           creationTimestamp: 1_000,
           persistedAt: 2_000,
@@ -695,7 +695,7 @@ describe('DesktopProgressBridge', () => {
         {
           streamId: 'ghost-stream',
           label: 'ghost-stream',
-          agentCategory: AGENT_CATEGORY.WORKFLOW,
+          agentCategory: AgentCategory.Workflow,
           lastKnownStatus: STREAM_STATUS.STOPPED,
           creationTimestamp: 1_000,
           persistedAt: 2_000,
@@ -752,7 +752,7 @@ describe('DesktopProgressBridge', () => {
         {
           streamId: 'ghost-stream',
           label: 'ghost-stream',
-          agentCategory: AGENT_CATEGORY.WORKFLOW,
+          agentCategory: AgentCategory.Workflow,
           lastKnownStatus: STREAM_STATUS.STOPPED,
           creationTimestamp: 1_000,
           persistedAt: 2_000,
@@ -820,7 +820,7 @@ describe('DesktopProgressBridge', () => {
         {
           streamId: 'ghost-stream',
           label: 'ghost-stream',
-          agentCategory: AGENT_CATEGORY.WORKFLOW,
+          agentCategory: AgentCategory.Workflow,
           lastKnownStatus: STREAM_STATUS.STOPPED,
           creationTimestamp: 1_000,
           persistedAt: 2_000,
@@ -893,7 +893,7 @@ describe('DesktopProgressBridge', () => {
         {
           streamId: 'ghost-one',
           label: 'ghost-one',
-          agentCategory: AGENT_CATEGORY.WORKFLOW,
+          agentCategory: AgentCategory.Workflow,
           lastKnownStatus: STREAM_STATUS.STOPPED,
           creationTimestamp: 1_000,
           persistedAt: 2_000,
@@ -901,7 +901,7 @@ describe('DesktopProgressBridge', () => {
         {
           streamId: 'ghost-two',
           label: 'ghost-two',
-          agentCategory: AGENT_CATEGORY.WORKFLOW,
+          agentCategory: AgentCategory.Workflow,
           lastKnownStatus: STREAM_STATUS.STOPPED,
           creationTimestamp: 1_100,
           persistedAt: 2_100,
@@ -947,7 +947,7 @@ describe('DesktopProgressBridge', () => {
     try {
       bridge.handleProgressEvent('setActiveStream', {
         streamId: 'child-stream',
-        agentCategory: AGENT_CATEGORY.TOOL_USE,
+        agentCategory: AgentCategory.ToolUse,
         suppressViewSwitch: true,
       });
       await settleProgressEvents();
@@ -973,11 +973,11 @@ describe('DesktopProgressBridge', () => {
     try {
       bridge.handleProgressEvent('setActiveStream', {
         streamId: 'first',
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agentCategory: AgentCategory.Workflow,
       });
       bridge.handleProgressEvent('setActiveStream', {
         streamId: 'second',
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agentCategory: AgentCategory.Workflow,
       });
       bridge.streamLogs.append('first', {
         id: 'first-log',
@@ -1025,7 +1025,7 @@ describe('DesktopProgressBridge', () => {
       agentConfig: {
         agent: 'search',
         model: 'deepseekproT',
-        agentCategory: AGENT_CATEGORY.TOOL_USE,
+        agentCategory: AgentCategory.ToolUse,
       },
     };
     const retrieveSessionResumeData = vi.fn(async () => ({
@@ -1071,15 +1071,15 @@ describe('DesktopProgressBridge', () => {
     try {
       bridge.handleProgressEvent('setActiveStream', {
         streamId: 'first',
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agentCategory: AgentCategory.Workflow,
       });
       bridge.handleProgressEvent('setActiveStream', {
         streamId: 'second',
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agentCategory: AgentCategory.Workflow,
       });
       bridge.handleProgressEvent('setActiveStream', {
         streamId: 'third',
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agentCategory: AgentCategory.Workflow,
       });
       await settleProgressEvents();
       bridge.setActiveStream('second');
@@ -1116,11 +1116,11 @@ describe('DesktopProgressBridge', () => {
     try {
       bridge.handleProgressEvent('setActiveStream', {
         streamId: 'first',
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agentCategory: AgentCategory.Workflow,
       });
       bridge.handleProgressEvent('setActiveStream', {
         streamId: 'second',
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agentCategory: AgentCategory.Workflow,
       });
       await settleProgressEvents();
       bridge.setActiveStream('first');
@@ -1129,7 +1129,7 @@ describe('DesktopProgressBridge', () => {
       const deletePromise = bridge.deleteStream('second');
       bridge.handleProgressEvent('setActiveStream', {
         streamId: 'second',
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agentCategory: AgentCategory.Workflow,
       });
       await deletePromise;
 
@@ -1161,7 +1161,7 @@ describe('DesktopProgressBridge', () => {
     try {
       bridge.handleProgressEvent('setActiveStream', {
         streamId: 'active',
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agentCategory: AgentCategory.Workflow,
       });
       await settleProgressEvents();
       messages.length = 0;
@@ -1411,7 +1411,7 @@ describe('DesktopProgressBridge', () => {
           streamId: 'stream-1',
           label: 'proofreader',
           agent: 'proofreader',
-          agentCategory: AGENT_CATEGORY.WORKFLOW,
+          agentCategory: AgentCategory.Workflow,
           lastKnownStatus: STREAM_STATUS.STOPPED,
           executionId,
           creationTimestamp: 1_000,
@@ -1448,7 +1448,7 @@ describe('DesktopProgressBridge', () => {
         agentConfig: {
           agent: 'search',
           model: 'deepseekproT',
-          agentCategory: AGENT_CATEGORY.TOOL_USE,
+          agentCategory: AgentCategory.ToolUse,
         },
       },
     }));
@@ -1466,7 +1466,7 @@ describe('DesktopProgressBridge', () => {
       agentConfig: {
         agent: 'search',
         model: 'deepseekproT',
-        agentCategory: AGENT_CATEGORY.TOOL_USE,
+        agentCategory: AgentCategory.ToolUse,
       },
     };
 
@@ -1533,7 +1533,7 @@ describe('DesktopProgressBridge', () => {
         agentConfig: {
           agent: 'search',
           model: 'deepseekproT',
-          agentCategory: AGENT_CATEGORY.TOOL_USE,
+          agentCategory: AgentCategory.ToolUse,
         },
       },
     }));
@@ -1557,7 +1557,7 @@ describe('DesktopProgressBridge', () => {
           agentConfig: {
             agent: 'search',
             model: 'deepseekproT',
-            agentCategory: AGENT_CATEGORY.TOOL_USE,
+            agentCategory: AgentCategory.ToolUse,
           },
         },
       });
@@ -1618,7 +1618,7 @@ describe('DesktopProgressBridge', () => {
           agentConfig: {
             agent: 'search',
             model: 'deepseekproT',
-            agentCategory: AGENT_CATEGORY.TOOL_USE,
+            agentCategory: AgentCategory.ToolUse,
           },
         },
       };
@@ -1635,7 +1635,7 @@ describe('DesktopProgressBridge', () => {
           agentConfig: {
             agent: 'search',
             model: 'deepseekproT',
-            agentCategory: AGENT_CATEGORY.TOOL_USE,
+            agentCategory: AgentCategory.ToolUse,
           },
         },
       });
@@ -1660,7 +1660,7 @@ describe('DesktopProgressBridge', () => {
       bridge.handleProgressEvent('showAgentProposal', {
         proposalId: 'proposal-1',
         streamId: 'stream-1',
-        agentCategory: AGENT_CATEGORY.WORKFLOW,
+        agentCategory: AgentCategory.Workflow,
         agent: 'proofreader',
         model: 'gemini31p',
         instruction: 'Check this draft.',

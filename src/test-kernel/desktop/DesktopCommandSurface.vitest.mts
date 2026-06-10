@@ -7,7 +7,7 @@ import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
 
 // Local imports - command catalog and shared schemas
 import { commandCatalogById, type CommandId } from '@shared/commands/catalog';
-import { AGENT_CATEGORY } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - desktop test paths
@@ -288,10 +288,10 @@ describe('desktop command surface', () => {
     expect(
       buildDesktopSettingsTabMessage(
         SETTINGS_TAB.AGENTS,
-        AGENT_CATEGORY.TOOL_USE,
+        AgentCategory.ToolUse,
       ),
     ).toEqual({
-      agentSubTab: AGENT_CATEGORY.TOOL_USE,
+      agentSubTab: AgentCategory.ToolUse,
       command: SETTINGS_VIEW_COMMANDS.SET_TAB,
       tabIndex: SETTINGS_TAB.AGENTS,
     });

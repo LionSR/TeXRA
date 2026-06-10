@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { AGENT_CATEGORY } from './agent';
+import { AgentCategory } from './agent';
 import { ProviderErrorPartialSchema } from './errors';
 import { StreamTabIdSchema } from './identifiers';
 import { PlanSchema } from './plan';
@@ -50,16 +50,16 @@ export const RetryPermissionSchema = z.strictObject({
 export type RetryPermission = z.infer<typeof RetryPermissionSchema>;
 
 /** Workflow agent proposal - includes file fields for document processing */
-export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.merge(
-  WorkflowSpecificFieldsSchema,
+export const WorkflowAgentProposalSchema = BaseProposalFieldsSchema.extend(
+  WorkflowSpecificFieldsSchema.shape,
 ).extend({
-  agentCategory: z.literal(AGENT_CATEGORY.WORKFLOW),
+  agentCategory: z.literal(AgentCategory.Workflow),
 });
 export type WorkflowAgentProposal = z.infer<typeof WorkflowAgentProposalSchema>;
 
 /** Tool-use agent proposal - agents access files through their own tools */
 export const ToolUseAgentProposalSchema = BaseProposalFieldsSchema.extend({
-  agentCategory: z.literal(AGENT_CATEGORY.TOOL_USE),
+  agentCategory: z.literal(AgentCategory.ToolUse),
 });
 export type ToolUseAgentProposal = z.infer<typeof ToolUseAgentProposalSchema>;
 

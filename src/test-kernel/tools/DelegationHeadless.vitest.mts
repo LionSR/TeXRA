@@ -34,12 +34,15 @@ vi.mock('@agent/runtime/executeAgent', () => ({
   executeAgent: mocks.executeAgent,
 }));
 
-vi.mock('@agent/runtime/delegationPolicy', () => ({
-  readNestedDelegationConfig: () => ({
-    enabled: true,
-    maxDepth: 3,
-  }),
-}));
+vi.mock('@agent/runtime/delegationPolicy', async () => {
+  const { evaluateDelegationGate } = await vi.importActual<
+    typeof import('@shared/constants/delegationPolicy')
+  >('@shared/constants/delegationPolicy');
+  return {
+    evaluateCurrentDelegationGate: (depth: number) =>
+      evaluateDelegationGate(depth, { maxDepth: 3 }),
+  };
+});
 
 vi.mock('@agent/storage', () => ({
   getExecutionStore: mocks.getExecutionStore,

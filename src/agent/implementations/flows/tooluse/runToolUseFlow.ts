@@ -19,7 +19,7 @@ import type { BaseFlowContextInit } from '@agent/implementations/flows/common/Ba
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
-import { readNestedDelegationConfig } from '@agent/runtime/delegationPolicy';
+import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
 import { executionToEndStatus } from '@common/constants/streamStatus';
 import {
   END_GROUP_STATUS,
@@ -27,7 +27,6 @@ import {
   type EndGroupStatus,
 } from '@shared/schemas';
 import type { SubagentProgressUpdate } from '@shared/schemas';
-import { evaluateDelegationGate } from '@shared/constants/delegationPolicy';
 
 import { getDefaultToolRegistry } from '@tools/registry';
 import { TaskRunFileService } from '@utils/files';
@@ -141,11 +140,7 @@ export async function runToolUseFlow<C = unknown>(
   const sessionLifecycle = new ToolUseSessionLifecycle(streamId);
   const registry = toolRegistry ?? getDefaultToolRegistry();
   const delegationDepth = input.delegationDepth ?? 0;
-  const delegationConfig = readNestedDelegationConfig();
-  const delegationGate = evaluateDelegationGate(
-    delegationDepth,
-    delegationConfig,
-  );
+  const delegationGate = evaluateCurrentDelegationGate(delegationDepth);
   const { tools: resolvedTools, delegationTrimmed } = await resolveAgentTools({
     tools: setting.tools,
     registry,
