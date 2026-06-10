@@ -1,7 +1,10 @@
 // Third-party imports
 import arxivClient from 'arxiv-client';
-import { extract as extractArxivId } from 'identifiers-arxiv';
 import { z } from 'zod';
+
+import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
+
+export { normaliseArxivIdentifier };
 
 /** Infer ArxivEntry type from the client's execute() return type */
 type ArxivEntry = Awaited<ReturnType<typeof arxivClient.execute>>[number];
@@ -59,20 +62,6 @@ export function createArxivClient(options?: unknown): ArxivClientInstance {
     new (ctorOptions?: unknown): ArxivClientInstance;
   };
   return new ClientCtor(options);
-}
-
-/**
- * Normalize an arXiv identifier by extracting it from various formats.
- * Handles URLs (abs/pdf), plain IDs, arxiv: prefixes, and old/new format IDs.
- * Uses the identifiers-arxiv package for robust extraction.
- */
-export function normaliseArxivIdentifier(value: string): string {
-  // Convert PDF URLs to abs URLs and strip .pdf suffix (identifiers-arxiv doesn't handle these)
-  const preprocessed = value
-    .replace(/^https?:\/\/arxiv\.org\/pdf\//, 'https://arxiv.org/abs/')
-    .replace(/\.pdf$/i, '');
-  const extracted = extractArxivId(preprocessed);
-  return extracted[0] || value;
 }
 
 function extractEntryIdentifier(rawId: unknown): string | null {

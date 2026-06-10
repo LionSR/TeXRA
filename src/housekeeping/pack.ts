@@ -2,13 +2,13 @@
 import * as path from 'node:path';
 
 // Local imports - result types
-import { getCleanAgentName } from '@agent/index';
-import type { FileOpResult } from '@agent/types/ResultTypes';
-
-// Local imports - log
-import { parseWorkflowOutputRoundDir } from '@agent/output/workflowOutputLayout';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import { getCleanAgentName } from '@shared/schemas/agent';
+import type { FileOpResult } from '@shared/schemas/opResults';
+
+// Local imports - log
+import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import { WorkspaceFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 

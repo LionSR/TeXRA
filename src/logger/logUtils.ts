@@ -27,11 +27,10 @@
  * stdout/stderr sinks in `logSinks.ts` are a deliberate non-redacting exception —
  * they target the operator's own terminal, not a persisted/exported artifact.)
  */
-import type {
-  AgentEvent,
-  AgentTrace,
-  AgentTraceSubscriber,
-} from '@agent/trace';
+// Type-only imports from the leaf trace modules (not the `@agent/trace`
+// barrel, which pulls in TraceEmitter and would cycle back into this logger).
+import type { AgentTrace, AgentTraceSubscriber } from '@agent/trace/AgentTrace';
+import type { AgentEvent } from '@agent/trace/events';
 import { LOG_LEVELS, MESSAGE_TYPES, type LogLevel } from '@shared/schemas';
 import { getConfig } from '@utils/config';
 import { serializeError } from '@utils/core';

@@ -3,8 +3,7 @@ import * as path from 'node:path';
 import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
-import type { AgentTrace } from '@agent/trace';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 
 import { toErrorMessage } from '@common/errors';
 import type { FileLocation } from '@shared/schemas';
@@ -41,6 +40,15 @@ const LATEX_CONCURRENCY = 4;
  * Provides API consistency while maintaining caller convenience.
  */
 type PathInput = string | FileLocation;
+
+/**
+ * The slice of agent workspace state this manager writes media results into.
+ * Structurally satisfied by `AgentWorkspaceState`; declared here so LaTeX
+ * processing stays independent of agent execution internals.
+ */
+export interface MediaWorkspaceState {
+  media: { addMediaFiles(locations: FileLocation[]): void };
+}
 
 /**
  * Handles LaTeX related media extraction and compilation for agents.
@@ -97,7 +105,7 @@ export class LatexMediaManager {
    */
   private async compilePdfs(
     files: FileLocation[],
-    workspaceState: AgentWorkspaceState,
+    workspaceState: MediaWorkspaceState,
   ): Promise<void> {
     const texFiles = files.filter((file) =>
       hasExtension(file.absolutePath, '.tex'),
@@ -367,7 +375,7 @@ export class LatexMediaManager {
 
   private async extractFiguresFromFiles(
     files: FileLocation[],
-    workspaceState: AgentWorkspaceState,
+    workspaceState: MediaWorkspaceState,
   ): Promise<void> {
     const figureResults = await pMap(
       files,
@@ -430,7 +438,7 @@ export class LatexMediaManager {
 
   private async compileTikzFigures(
     files: FileLocation[],
-    workspaceState: AgentWorkspaceState,
+    workspaceState: MediaWorkspaceState,
     logSummary: boolean,
   ): Promise<void> {
     const tikzResults = await pMap(
@@ -462,7 +470,7 @@ export class LatexMediaManager {
 
   private async processFiles(
     files: FileLocation[],
-    workspaceState: AgentWorkspaceState,
+    workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
     {
@@ -548,7 +556,7 @@ export class LatexMediaManager {
    */
   async processInputFiles(
     inputFiles: FileLocation[],
-    workspaceState: AgentWorkspaceState,
+    workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
     extraMediaFiles: PathInput[] = [],
@@ -572,7 +580,7 @@ export class LatexMediaManager {
    */
   async processOutputFiles(
     outputFiles: FileLocation[],
-    workspaceState: AgentWorkspaceState,
+    workspaceState: MediaWorkspaceState,
     cfg: ToolConfig,
     supportsVision: boolean,
   ): Promise<void> {

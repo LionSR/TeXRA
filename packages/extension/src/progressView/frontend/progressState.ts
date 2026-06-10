@@ -37,13 +37,12 @@ import {
 } from './store';
 import {
   EMPTY_LOG_CONTEXT,
-  EMPTY_PROCESS_OUTPUTS,
   EMPTY_STREAM_CONTEXT,
-  type ProcessOutputMap,
   type StreamContextValue,
   type StreamLogContextValue,
 } from './contexts/streamContexts';
-import type { PermissionState } from './components/PermissionCard';
+import { EMPTY_PROCESS_OUTPUTS, type ProcessOutputMap } from './store';
+import type { PermissionState } from './permissionState';
 
 // ---------------------------------------------------------------------------
 // Stable empty references — avoid allocating new arrays/maps per read.

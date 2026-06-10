@@ -12,7 +12,20 @@ import {
   type InquiryThreadUpdatedEvent,
   type ExternalInquiryThreadId,
 } from '@shared/schemas';
-import type { ProcessOutputMap } from './contexts/streamContexts';
+
+/**
+ * Background process outputs, keyed by executionId → accumulated stdout/stderr.
+ * Defined here (not in contexts/streamContexts) so the store stays the single
+ * home for state data shapes; the context object lives with the other contexts.
+ */
+export interface ProcessOutputEntry {
+  stdout: string;
+  stderr: string;
+}
+
+export type ProcessOutputMap = Map<string, ProcessOutputEntry>;
+
+export const EMPTY_PROCESS_OUTPUTS: ProcessOutputMap = new Map();
 
 // Re-export schema types for components (single source of truth)
 export {

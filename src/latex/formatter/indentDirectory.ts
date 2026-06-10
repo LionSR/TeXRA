@@ -2,17 +2,18 @@ import * as path from 'node:path';
 
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors';
-import { runLatexFormatter } from '@latex/texFormatter';
 import * as logger from '@logger/logUtils';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
+import { EXCLUDED_DIRS } from '@shared/constants/workspaceDirs';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 import { getConfig } from '@utils/config';
 import { isDirectory, isFile, isSymlink } from '@utils/files/fsEntryType';
 import { hasExtension } from '@utils/core/pathCore';
-import { EXCLUDED_DIRS } from './constants';
 
-const CHANNEL = 'Housekeeping';
+import { runLatexFormatter } from '../texFormatter';
+
+const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
 export type IndentLatexResult =

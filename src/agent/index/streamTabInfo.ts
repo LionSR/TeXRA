@@ -4,10 +4,10 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { StreamTabInfo, WorktreeInfo } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas/agent';
+import { AgentCategory, getCleanAgentName } from '@shared/schemas/agent';
 import { isProcessAgent } from '@shared/streams/agentKind';
 
-import { getCleanAgentName, isRemoteAgent } from './agentRegistry';
+import { isRemoteAgent } from './agentRegistry';
 
 export interface StreamTabInfoInputs {
   streamId: string;

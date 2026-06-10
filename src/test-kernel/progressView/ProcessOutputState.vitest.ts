@@ -13,7 +13,7 @@ import {
   type StreamLogs,
   type StreamState,
 } from '@progressView/frontend/store';
-import type { MessageHandlerContext } from '@progressView/frontend/messageDispatcher';
+import type { MessageHandlerContext } from '@progressView/frontend/messageHandlerTypes';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - shared schemas

@@ -29,29 +29,12 @@ import type {
   StreamEventDetail,
   ToolbarCommandDetail,
 } from './events';
-import type { MessageHandlerContext } from './messageDispatcher';
+import type {
+  FrontendEventHandlerContext,
+  MessageHandlerContext,
+} from './messageHandlerTypes';
 
-/**
- * Context passed to frontend event handlers providing access to state and refs.
- *
- * Note: Named "FrontendEventHandlerContext" to distinguish from the backend
- * EventHandlerContext in @shared/progressView/backend/events has different
- * shape (state manager + webview updater vs getters/setters).
- */
-export interface FrontendEventHandlerContext {
-  getState(): ProgressState;
-  setState(updater: (prev: ProgressState) => ProgressState): void;
-  setStreamState(
-    streamId: StreamTabId,
-    updater: (prev: StreamState) => StreamState,
-  ): void;
-  setStreamLogs(
-    streamId: StreamTabId,
-    updater: (prev: StreamLogs) => StreamLogs,
-  ): void;
-  /** Persist filter preference to webview state. */
-  savePrefs?(prefs: Partial<{ streamFilter: StreamFilter }>): void;
-}
+export type { FrontendEventHandlerContext } from './messageHandlerTypes';
 
 export function handleStreamSwitch(
   event: CustomEvent<StreamEventDetail>,

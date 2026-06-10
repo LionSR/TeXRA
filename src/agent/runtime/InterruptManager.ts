@@ -1,4 +1,4 @@
-import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
+import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 
 /**
  * Interrupt callbacks passed to flow execution — the subset of

@@ -2,20 +2,16 @@
 import { sync as globSync } from 'glob';
 import { MODELS } from 'llm-zoo';
 
-import type { FileOpResult } from '@agent/types/ResultTypes';
 
 // Internal imports
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
+import type { FileOpResult } from '@shared/schemas/opResults';
+import { EXCLUDED_DIRS } from '@shared/constants/workspaceDirs';
 import { WorkspaceFS } from '@utils/files';
 
 // Local file imports
-import {
-  EXCLUDED_DIRS,
-  TEMP_EXTENSIONS,
-  PACK_EXTENSIONS,
-  HISTORY_DIR,
-} from './constants';
+import { TEMP_EXTENSIONS, PACK_EXTENSIONS, HISTORY_DIR } from './constants';
 import { findFilesFromPatterns, resolveHousekeepingTargets } from './utils';
 
 const CHANNEL = 'Housekeeping';

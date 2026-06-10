@@ -10,10 +10,15 @@ import type {
   AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
-import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
+import type { AgentRunStateSnapshot } from '@agent/core/execution/AgentState';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamStatusRegistry } from '@agent/runtime/StreamStatusService';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
+
+/** Callback invoked when a round/cycle completes for usage tracking. */
+export type RoundFinalizedCallback = (
+  run: AgentRunStateSnapshot,
+) => void | Promise<void>;
 
 export interface AgentCore<C = unknown> {
   modelHandler: IModelHandler<

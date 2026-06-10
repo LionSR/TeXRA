@@ -15,7 +15,8 @@
  */
 import { nanoid } from 'nanoid';
 
-import type { AgentTrace, ToolStatus } from './index';
+import type { AgentTrace } from './AgentTrace';
+import type { ToolStatus } from './events';
 
 export interface ToolUseCardRef {
   readonly logId: string;

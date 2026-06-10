@@ -76,10 +76,8 @@ import {
   runCompileFixer,
   sendFollowupCommand,
 } from './eventHandlers';
-import {
-  dispatchMessage,
-  type MessageHandlerContext,
-} from './messageDispatcher';
+import { dispatchMessage } from './messageDispatcher';
+import type { MessageHandlerContext } from './messageHandlerTypes';
 
 import type { FrontendEventHandlerContext } from './eventHandlers';
 // Local imports - progress view components

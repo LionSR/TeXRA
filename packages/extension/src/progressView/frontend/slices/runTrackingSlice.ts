@@ -14,7 +14,7 @@ import { sumUsageStats } from '@shared/schemas';
 
 import { isToolUseState, isWorkflowState } from '../store';
 import { updateWorkflowState, updateRounds } from '../stateUtils';
-import type { HandlerRegistry } from '../messageDispatcher';
+import type { HandlerRegistry } from '../messageHandlerTypes';
 
 export const runTrackingHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.UPDATE_FILES]: (data, ctx) => {

@@ -13,4 +13,4 @@ export type { TokenUsageStats, ExtendedTokenUsageStats } from '@shared/schemas';
 export type { NormalizedUsage } from './NormalizedUsage';
 
 // Result types
-export type { ExecResult, FileOpResult } from './ResultTypes';
+export type { ExecResult, FileOpResult } from '@shared/schemas/opResults';
