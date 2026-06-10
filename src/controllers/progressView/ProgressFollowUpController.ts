@@ -42,6 +42,15 @@ export interface ProgressFollowUpControllerDeps {
   workspace: ProgressFollowUpWorkspace;
 }
 
+interface CompileFixerTarget {
+  path: string;
+  latexdiffArtifact?: {
+    sourcePath: string;
+    sourceExists: boolean;
+  };
+  missingLatexdiffArtifact?: string;
+}
+
 export type ProgressFollowUpPlan =
   | { kind: 'warning'; message: string }
   | { kind: 'info'; message: string }
@@ -157,19 +166,20 @@ export class ProgressFollowUpController {
       };
     }
 
-    const editableFiles = await this.resolveCompileFixerInputFiles(
+    const targets = await this.compileFixerTargets(
       input.taskState.agentConfig,
       input.compileFailures,
       input.runOutputs,
     );
-    if (editableFiles.length === 0) {
+    if (targets.length === 0) {
       return {
         kind: 'warning',
         message:
-          'No editable workspace source file matched the compile failure. Accept the output into the workspace first, then run latexFixer.',
+          'No editable workspace file matched the compile failure. Accept the output into the workspace first, then run latexFixer.',
       };
     }
 
+    const editableFiles = targets.map((target) => target.path);
     return {
       kind: 'execute',
       request: {
@@ -179,7 +189,7 @@ export class ProgressFollowUpController {
           editableFiles,
           this.buildCompileFixerQuestion(
             input.compileFailures,
-            editableFiles,
+            targets,
             input.executionId,
           ),
         ),
@@ -233,11 +243,13 @@ export class ProgressFollowUpController {
 
   private buildCompileFixerQuestion(
     compileFailures: CompileFailure[],
-    editableFiles: string[],
+    targets: CompileFixerTarget[],
     executionId: string | undefined,
   ): string {
     const executionHint = executionId ? `Execution: ${executionId}` : undefined;
+    const editableFiles = targets.map((target) => target.path);
     const editableHint = `Editable workspace ${pluralize(editableFiles.length, 'target')}: ${editableFiles.join(', ')}`;
+    const latexdiffContext = this.formatLatexdiffTargetContext(targets);
     const failureLines = compileFailures.map((failure) => {
       const outputPath =
         executionId && failure.output.kind === 'runStorage'
@@ -255,12 +267,35 @@ export class ProgressFollowUpController {
       'The workflow compile check failed. Diagnose and fix the generated LaTeX output using the compile log context below.',
       executionHint,
       editableHint,
+      latexdiffContext,
       ...failureLines,
       'Use read_file/edit_file on the editable workspace target files. Use /executions paths only to inspect the generated output and logs.',
       'If the failure is caused by a missing external dependency rather than editable LaTeX, report that clearly instead of inventing the missing file.',
     ]
       .filter(Boolean)
       .join('\n');
+  }
+
+  private formatLatexdiffTargetContext(
+    targets: CompileFixerTarget[],
+  ): string | undefined {
+    const lines = targets.flatMap((target) => {
+      if (target.missingLatexdiffArtifact) {
+        return `- ${target.missingLatexdiffArtifact} was a latexdiff artifact candidate, but it is not present in the workspace. ${target.path} is the inferred source fallback.`;
+      }
+      const artifact = target.latexdiffArtifact;
+      if (!artifact) return [];
+      const sourceHint = artifact.sourceExists
+        ? ` generated from ${artifact.sourcePath}`
+        : `; inferred source ${artifact.sourcePath} is not present in the workspace`;
+      const sourceFixHint = artifact.sourceExists
+        ? ` If the error originates in the original source document, fix ${artifact.sourcePath} too so a regenerated diff stays fixed.`
+        : '';
+      return `- ${target.path} is a latexdiff artifact${sourceHint}. If the error comes from broken latexdiff markup (\\DIFadd/\\DIFdel or DIF preamble blocks), repair this artifact in place and keep diff annotations intact.${sourceFixHint}`;
+    });
+    return lines.length > 0
+      ? ['Latexdiff context:', ...lines].join('\n')
+      : undefined;
   }
 
   private buildCompileFixerConfig(
@@ -282,57 +317,73 @@ export class ProgressFollowUpController {
     };
   }
 
-  private async resolveCompileFixerInputFiles(
+  private async compileFixerTargets(
     originalConfig: AgentConfig,
     compileFailures: CompileFailure[],
     runOutputs: Map<number, OutputFileInfo[]>,
-  ): Promise<string[]> {
+  ): Promise<CompileFixerTarget[]> {
     const preferred = this.compileFixerInputCandidates(
       originalConfig,
       compileFailures,
       runOutputs,
     );
-    const targets: string[] = [];
-    const seen = new Set<string>();
+    const targets: CompileFixerTarget[] = [];
+    const targetByPath = new Map<string, CompileFixerTarget>();
     for (const candidate of preferred) {
       const location = this.deps.workspace.locatePath(candidate);
       if (location.kind === 'external') continue;
-      const editablePath = await this.editableCompileFixerCandidate(
+      const candidateTargets = await this.compileFixerTargetsForCandidate(
         location.relativePath,
       );
-      if (!editablePath) continue;
-      if (seen.has(editablePath)) continue;
-      seen.add(editablePath);
-      targets.push(editablePath);
+      for (const target of candidateTargets) {
+        const existing = targetByPath.get(target.path);
+        if (existing) {
+          existing.latexdiffArtifact ??= target.latexdiffArtifact;
+          existing.missingLatexdiffArtifact ??= target.missingLatexdiffArtifact;
+          continue;
+        }
+        targetByPath.set(target.path, target);
+        targets.push(target);
+      }
     }
     return targets;
   }
 
-  private async editableCompileFixerCandidate(
+  private async compileFixerTargetsForCandidate(
     relativePath: string,
-  ): Promise<string | null> {
+  ): Promise<CompileFixerTarget[]> {
     const artifact = detectGeneratedLatexdiffArtifact(relativePath);
     if (!artifact) {
       return (await this.deps.workspace.exists(relativePath))
-        ? relativePath
-        : null;
+        ? [{ path: relativePath }]
+        : [];
     }
 
     const sourcePath = artifact.sourcePath;
-    if (await this.deps.workspace.exists(sourcePath)) {
-      return sourcePath;
+    const sourceExists = await this.deps.workspace.exists(sourcePath);
+    const artifactExists = await this.deps.workspace.exists(relativePath);
+    if (!artifactExists) {
+      return sourceExists
+        ? [{ path: sourcePath, missingLatexdiffArtifact: relativePath }]
+        : [];
     }
 
-    // A user may legitimately name a source file `chapter_diff.tex`; only the
-    // stronger generated diff patterns are always excluded.
-    if (
-      artifact.kind === 'workspaceDiff' &&
-      (await this.deps.workspace.exists(relativePath))
-    ) {
-      return relativePath;
+    // A user may legitimately name a source file `chapter_diff.tex`. Treat the
+    // weak workspace suffix as generated only when its inferred source exists.
+    if (artifact.kind === 'workspaceDiff' && !sourceExists) {
+      return [{ path: relativePath }];
     }
 
-    return null;
+    const targets: CompileFixerTarget[] = [
+      {
+        path: relativePath,
+        latexdiffArtifact: { sourcePath, sourceExists },
+      },
+    ];
+    if (sourceExists) {
+      targets.push({ path: sourcePath });
+    }
+    return targets;
   }
 
   /**
