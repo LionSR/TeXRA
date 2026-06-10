@@ -143,7 +143,7 @@ Chat requires an interactive terminal — for scripted, non-TTY runs use
 
 ## Multi-Agent Teams
 
-The CLI can list, inspect, and run the same built-in team presets as the
+The CLI can list, inspect, and run the same built-in teams as the
 extension's Multi-Agent settings tab — Lean Project, Physicist, Mathematician,
 Computer Scientist (ML), and Software Engineer:
 
