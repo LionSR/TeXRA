@@ -109,6 +109,8 @@ const PLAN_APPROVAL_GOAL = process.env.HARNESS_PLAN_APPROVAL_GOAL === '1';
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
 const SHOW_LIVE_TOOL_ONLY = process.env.HARNESS_LIVE_TOOL_ONLY === '1';
+const SHOW_LIVE_INVISIBLE_ASSISTANT =
+  process.env.HARNESS_LIVE_INVISIBLE_ASSISTANT === '1';
 const SHOW_PROJECT_SKILL = process.env.HARNESS_PROJECT_SKILL === '1';
 const WIDE_TRANSCRIPT_SUFFIX =
   ' hidden-middle wide-column-A wide-column-B wide-column-C wide-column-D wide-column-E wide-column-F';
@@ -489,7 +491,9 @@ function seedLiveToolOnlyTranscript(): void {
     level: LOG_LEVELS.INFO,
     timestamp: timestamp + 1,
     messageType: MESSAGE_TYPES.MODEL_RESPONSE,
-    text: '',
+    text: SHOW_LIVE_INVISIBLE_ASSISTANT
+      ? `${String.fromCharCode(27)}[2m${String.fromCharCode(27)}[22m`
+      : '',
   });
   store.append(STREAM_ID, {
     id: 'live-tool-ls',
