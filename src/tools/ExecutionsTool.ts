@@ -34,6 +34,9 @@ import {
 import { executionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
 import { onFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
 
+// Local imports - shared
+import { EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS } from '@shared/constants/toolDefaults';
+
 // Local imports - utils
 import { toErrorMessage } from '@common/errors';
 import {
@@ -272,7 +275,10 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         );
       }
       if (input.action === 'wait')
-        await this.waitForAnyChange(input.timeout ?? 300, input.ids);
+        await this.waitForAnyChange(
+          input.timeout ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+          input.ids,
+        );
       return this.listExecutions(input.offset ?? 0, input.limit ?? 100);
     }
 
@@ -291,7 +297,10 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         return this.handleUnsubscribe(executionId);
       }
       if (input.action === 'wait')
-        await this.waitForChange(executionId, input.timeout ?? 300);
+        await this.waitForChange(
+          executionId,
+          input.timeout ?? EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+        );
       return this.showSummary(executionId);
     }
 

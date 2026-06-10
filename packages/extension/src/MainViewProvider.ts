@@ -13,6 +13,7 @@ import {
   setActiveSidebarView,
 } from '@common/webview';
 import { consumePendingState } from '@common/state';
+import { EXTENSION_CATEGORIES, getFilterExtensions } from '@common/files';
 
 import { agentDirectories } from '@frontend/agents';
 import { computeModelOptionsData } from '@model/computeModelOptions';
@@ -153,8 +154,14 @@ export class MainViewProvider
   }
 
   private setupFileWatcher() {
+    // Watch exactly the categories the launcher file lists are built from
+    // (fileListingRules), including user-configured extension overrides, so
+    // the watched set cannot drift from what the lists display.
+    const extensions = new Set(
+      EXTENSION_CATEGORIES.flatMap(getFilterExtensions),
+    );
     const filePattern =
-      '**/*.{tex,txt,md,cls,png,pdf,jpeg,jpg,svg,gif,heic,heif,webp,wav,mp3,m4a,aiff,aac,ogg,flac}';
+      extensions.size === 0 ? '**/*' : `**/*.{${[...extensions].join(',')}}`;
     this.fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern);
     this.fileWatcher.onDidCreate(this.refreshFiles.bind(this));
     this.fileWatcher.onDidDelete(this.refreshFiles.bind(this));

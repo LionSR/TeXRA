@@ -1,9 +1,10 @@
 import { readFile } from 'node:fs/promises';
-import path from 'node:path';
 
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { z } from 'zod';
 
+import { configKeyVariants } from '@platform/defaults/configKeyHelpers';
+import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { isFileNotFoundError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import { isObject } from '@utils/core/typeGuards';
@@ -17,8 +18,6 @@ import {
 } from '../schemas/cliSettings';
 import { KNOWN_TEXRA_KEYS } from '../schemas/knownKeys';
 
-export const CLI_CONFIG_DIR = '.texra';
-export const CLI_CONFIG_FILE = 'config.json';
 export const CLI_BUILTIN_DEFAULT_MODEL = 'deepseekT';
 
 export interface CliCommandConfig {
@@ -66,11 +65,6 @@ const COMMAND_SECTIONS = ['chat', 'run'] as const;
 
 const TOP_LEVEL_KEYS = new Set<string>(CLI_SETTING_PATHS);
 const COMMAND_KEYS = new Set(COMMAND_FIELD_SCHEMAS.map(([key]) => key));
-
-/** Preferred config key order: unified `texra.*` first, legacy bare key second. */
-function configKeyVariants(bareKey: string): readonly [string, string] {
-  return [`texra.${bareKey}`, bareKey];
-}
 
 function isKnownConfigKey(key: string): boolean {
   return (
@@ -195,14 +189,10 @@ export function parseCliConfigValues(value: unknown): CliConfigValues {
   return isObject(value) ? pickConfigValues(value) : {};
 }
 
-export function workspaceCliConfigPath(cwd: string): string {
-  return path.join(cwd, CLI_CONFIG_DIR, CLI_CONFIG_FILE);
-}
-
 export async function loadWorkspaceCliConfig(
   cwd: string,
 ): Promise<LoadedCliConfig> {
-  const filePath = workspaceCliConfigPath(cwd);
+  const filePath = workspaceTexraConfigPath(cwd);
   let raw: string;
   try {
     raw = await readFile(filePath, 'utf8');

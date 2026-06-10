@@ -3,7 +3,9 @@ import { join } from 'node:path';
 import { app } from 'electron';
 
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
+import { configKeyVariants } from '@platform/defaults/configKeyHelpers';
 import { JsonStore } from '@platform/defaults/jsonStore';
+import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability';
 import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
@@ -13,6 +15,7 @@ import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { StreamSnapshotStore } from '@transcript';
 import { registerAgentFeatures } from '@agent/features';
+import { toErrorMessage } from '@common/errors';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
 import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
@@ -32,9 +35,14 @@ export interface ElectronPlatformInitResult {
   progressSnapshotStore: StreamSnapshotStore;
 }
 
+const WORKSPACE_CONFIG_MIGRATED_KEY =
+  'desktop.workspaceConfigMigratedToProject';
+
 export async function initializeElectronPlatform(
   mainDirname: string,
 ): Promise<ElectronPlatformInitResult> {
+  // The default handler's console.error is mirrored into the desktop app log,
+  // so shutdown-handler failures land at error severity like the other hosts.
   const lifecycle = createLifecycleHost();
   const userDataPath = app.getPath('userData');
   const globalStateStore = await JsonStore.open(
@@ -52,9 +60,58 @@ export async function initializeElectronPlatform(
   const globalConfigStore = await JsonStore.open(
     join(userDataPath, 'config', 'global.json'),
   );
-  const workspaceConfigStore = await JsonStore.open(
-    join(storage.getStoragePath(), 'config.json'),
+  // Workspace config lives in the project's `.texra/config.json` — the same
+  // file the CLI reads and writes — so a checked-in config behaves
+  // identically in both hosts. Sessions without a workspace, and read-only
+  // project trees where the file cannot be created or written, fall back to
+  // the internal per-workspace store so startup never fails on config.
+  const legacyWorkspaceConfigPath = join(
+    storage.getStoragePath(),
+    'config.json',
   );
+  let projectConfigStore: JsonStore | undefined;
+  if (workspacePath) {
+    try {
+      projectConfigStore = await JsonStore.open(
+        workspaceTexraConfigPath(workspacePath),
+      );
+    } catch (error) {
+      console.warn(
+        `[desktop] Cannot open project .texra/config.json; using the internal workspace config store. Cause: ${toErrorMessage(error)}`,
+      );
+    }
+  }
+  const workspaceConfigStore =
+    projectConfigStore ?? (await JsonStore.open(legacyWorkspaceConfigPath));
+  // One-time copy from the pre-project-file internal store into the project
+  // file; existing project values win, so a checked-in config is never
+  // overwritten. Presence is checked across key variants because checked-in
+  // CLI configs use bare keys (`model`) while this store wrote canonical
+  // `texra.*` keys, which shadow bare ones on read. A write failure (e.g. a
+  // read-only tree) only skips the merge-only migration — the readable
+  // project file stays the config source — and retries on the next launch.
+  if (
+    projectConfigStore &&
+    workspaceStateStore.get<boolean>(WORKSPACE_CONFIG_MIGRATED_KEY) !== true
+  ) {
+    const projectStore = projectConfigStore;
+    try {
+      const legacyStore = await JsonStore.open(legacyWorkspaceConfigPath);
+      for (const [key, value] of Object.entries(legacyStore.snapshot())) {
+        const inProject = configKeyVariants(key).some((variant) =>
+          projectStore.has(variant),
+        );
+        if (!inProject) {
+          await projectStore.set(key, value);
+        }
+      }
+      await workspaceStateStore.update(WORKSPACE_CONFIG_MIGRATED_KEY, true);
+    } catch (error) {
+      console.warn(
+        `[desktop] Legacy workspace config migration failed; will retry on next launch. Cause: ${toErrorMessage(error)}`,
+      );
+    }
+  }
   const secretsStore = await JsonStore.open(join(userDataPath, 'secrets.json'));
 
   repairLaunchPath();
