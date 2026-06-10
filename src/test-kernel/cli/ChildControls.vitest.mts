@@ -593,6 +593,7 @@ describe('CLI child execution controls', () => {
 
     expect(target.streamId).toBe('main');
     expect(target.fallbackFromStreamId).toBe('review-stream');
+    expect(target.hasItems).toBe(true);
     expect(buildChildControlItems(target.slice!, 'subagents')).toMatchObject([
       {
         executionId: 'agent-1',
@@ -697,6 +698,7 @@ describe('CLI child execution controls', () => {
     });
 
     expect(target.streamId).toBe('review-stream');
+    expect(target.hasItems).toBe(true);
     expect(buildChildControlItems(target.slice!, 'subagents')).toMatchObject([
       {
         executionId: 'agent-2',
@@ -721,6 +723,7 @@ describe('CLI child execution controls', () => {
 
     expect(target.streamId).toBe('review-stream');
     expect(target.slice).toBe(child);
+    expect(target.hasItems).toBe(false);
   });
 
   it('falls back to the nearest ancestor subagent list when a focused grandchild is a leaf', () => {
@@ -753,6 +756,7 @@ describe('CLI child execution controls', () => {
 
     expect(target.streamId).toBe('main');
     expect(target.fallbackFromStreamId).toBe('detail-stream');
+    expect(target.hasItems).toBe(true);
     expect(buildChildControlItems(target.slice!, 'subagents')).toMatchObject([
       {
         executionId: 'agent-1',
@@ -790,6 +794,7 @@ describe('CLI child execution controls', () => {
 
     expect(target.streamId).toBe('main');
     expect(target.fallbackFromStreamId).toBe('review-stream');
+    expect(target.hasItems).toBe(true);
     expect(buildChildControlItems(target.slice!, 'tasks')).toMatchObject([
       {
         executionId: 'agent-1',
@@ -827,6 +832,7 @@ describe('CLI child execution controls', () => {
 
     expect(target.streamId).toBe('main');
     expect(target.fallbackFromStreamId).toBe('review-stream');
+    expect(target.hasItems).toBe(true);
     expect(buildChildControlItems(target.slice!, 'tasks')).toMatchObject([
       {
         executionId: 'agent-1',
@@ -875,6 +881,7 @@ describe('CLI child execution controls', () => {
 
     expect(target.streamId).toBe('review-stream');
     expect(target.slice).toBe(child);
+    expect(target.hasItems).toBe(true);
     expect(buildChildControlItems(target.slice!, 'tasks')).toMatchObject([
       {
         executionId: 'proc-1',
