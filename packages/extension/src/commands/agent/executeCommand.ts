@@ -56,9 +56,8 @@ export async function runExecuteCommand(input: unknown): Promise<void> {
       return;
     }
 
-    logger.error(CHANNEL, 'Agent execution failed before start.', {
-      data: error,
-    });
+    // Post-start failures are already logged and surfaced by the run
+    // lifecycle; rethrow without a second (mislabeled) log entry.
     throw error;
   }
 }

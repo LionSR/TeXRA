@@ -64,6 +64,12 @@ export async function runFlowWithLifecycle(
   );
   executionRegistry.track(handle);
   try {
+    // The lifecycle owns every stream-status transition: RUNNING here,
+    // terminal states in the success/error arms below. Runners must not
+    // set stream status themselves.
+    ctx.streamStatus.set(streamId, STREAM_STATUS.RUNNING, {
+      runtimeHost: ctx.runtimeHost,
+    });
     const result = await runner(handle);
     await options?.onCompleted?.(result);
     const terminalStatus =

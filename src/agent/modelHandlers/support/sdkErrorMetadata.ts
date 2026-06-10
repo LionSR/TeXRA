@@ -1,6 +1,7 @@
 // Local imports - common errors
 import {
   attachSdkErrorMetadata,
+  detectStatusCode,
   sdkErrorKindFromStatusCode,
   type SdkErrorKind,
 } from '@common/errors/sdkErrorUtils';
@@ -39,7 +40,7 @@ export function matchMappedSdkError(
   }
 
   if (apiErrorCtor && err instanceof apiErrorCtor) {
-    const statusCode = sdkErrorStatusCode(err);
+    const statusCode = detectStatusCode(err);
     tagSdkError(
       err,
       provider,
@@ -47,11 +48,4 @@ export function matchMappedSdkError(
       statusCode,
     );
   }
-}
-
-export function sdkErrorStatusCode(err: unknown): number | undefined {
-  const status = (err as { status?: unknown }).status;
-  return typeof status === 'number' && Number.isFinite(status)
-    ? status
-    : undefined;
 }

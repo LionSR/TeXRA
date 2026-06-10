@@ -210,7 +210,12 @@ export class DesktopProgressBridge {
       hasTarget: () => true,
       configureUi: ({ webviewUpdater }) => ({
         callbacks: {
-          showRetryRequest: () => undefined,
+          // Desktop has no retry panel yet: decline the affordance so the
+          // run takes the normal cancel path instead of hanging in WAITING
+          // for an answer that can never arrive.
+          showRetryRequest: (payload) => {
+            runCoordinatorBridge.cancelRetry(payload.streamId);
+          },
           resolveRetryRequest: () => undefined,
           showToolEditPermission: (payload) =>
             webviewUpdater.showPermission({

@@ -1,9 +1,16 @@
 # Dependency Injection Cleanup — "Deep Injection" Audit & Plan
 
-**Status:** Audit (2026-06-07). Findings verified against current source; no code changed yet.
+**Status:** Audit (2026-06-07; status addendum 2026-06-10 — see below). Findings verified against current source; plan steps 1–5 not yet implemented.
 **Scope:** How dependencies flow through the agent core — `src/agent/` (runtime, flows, toolUse), `src/tools/`, `src/platform/`, and the host composition roots (`packages/extension/src/extension.ts`, `packages/desktop`, `packages/cli`).
 **Target:** Make every dependency **visible at the point it is used**, **wired once** at a single composition root, **scoped** to the right lifetime (process vs. run vs. tool-call), and **carried only where read**.
 **Related:** [`agent-sdk-readiness.md`](./agent-sdk-readiness.md) (process-global registries as the concurrency blocker), [`logger-simplification-feasibility.md`](./logger-simplification-feasibility.md). See also `CLAUDE.md` → "Discouraged Factory Patterns", "Flattening Abstraction Layers", "Separation of Concerns: VS Code Coupling".
+
+> **Status addendum (2026-06-10, from the [`error-pipeline-and-ownership.md`](./error-pipeline-and-ownership.md) audit):**
+>
+> - **Plan step 6 is now PARTIAL:** SDK-readiness Steps 7a–c landed — `interruptRegistry`, `executionRegistry`, and `runCoordinatorBridge` are classes with module-default instances + delegators (`InterruptRegistry` / `ExecutionRegistry` / `RunCoordinatorBridge`). Residue (audit §15): the `clearAll*` path and one remaining module-level subscription. 7d (`SessionHandle`) is the remaining piece.
+> - **Registry inventory grows by one:** `executionSubscriptionBinder` (`ExecutionSubscriptionBinder.ts`) belongs in the Finding-C list and in the 7d composition.
+> - **`AgentCore` is still 13 fields but with different membership** (`streamStatus` added 06-08; `delegationConfig` deleted 06-09, `092358d86`); the cohesion split in Finding A should place `streamStatus` with `RunIdentity`-adjacent runtime wiring and drop `delegationConfig` from the `DelegationPolicy` group when step 3 lands.
+> - **Re-spread cites drifted:** `ToolUseCycleNode.ts:76` / `ResponseCycleNode.ts:95` (was :75/:94). Anchor on the `{...this.services}` clause text, not line numbers.
 
 ## How this was produced
 

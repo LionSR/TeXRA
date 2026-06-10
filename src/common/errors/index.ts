@@ -21,10 +21,8 @@ export {
 
 // These SDK utilities are exposed in the barrel because they have broad usage
 // across the codebase (model handlers, runtime, UI layers).
-export {
-  formatProviderHttpError,
-  getSdkErrorMessage,
-  normalizeProviderError,
-} from './sdkErrorUtils';
+// normalizeProviderError is the single public normalization entry; the
+// non-caching formatProviderHttpError stays internal to sdkErrorUtils.
+export { getSdkErrorMessage, normalizeProviderError } from './sdkErrorUtils';
 
 export { AgentError } from './agentErrors';

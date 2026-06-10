@@ -10,7 +10,12 @@ import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  attachPartialText,
+  getSdkErrorMessage,
+  takeTail,
+  PARTIAL_TEXT_TAIL_MAX,
+} from '@common/errors/sdkErrorUtils';
 
 // Local imports - tools and utils
 import type { ToolFileAttachment } from '@tools/result';
@@ -108,6 +113,12 @@ class OpenRouterStreamAggregator {
   private model = '';
   private id = '';
   private created = 0;
+
+  /** Text accumulated so far — read on stream failure so the retry UI can
+   *  show the partial tail (parity with the other streaming providers). */
+  get partialContent(): string {
+    return this.content;
+  }
 
   consumeChunk(chunk: ChatStreamChunk): {
     contentDelta: string;
@@ -391,6 +402,15 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         // the progress view from being stuck in a loading state
         thinking.finalize(undefined);
         output?.finalize('');
+        // Lift the accumulated partial text onto the error so the retry UI
+        // can show the tail (parity with the other streaming providers).
+        const partialTail = takeTail(
+          aggregator.partialContent,
+          PARTIAL_TEXT_TAIL_MAX,
+        );
+        if (partialTail) {
+          attachPartialText(err, partialTail);
+        }
         throw err;
       }
     }
