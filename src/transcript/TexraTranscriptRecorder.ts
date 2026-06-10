@@ -252,8 +252,8 @@ export function attachTranscriptRecorder(
         return;
       }
 
-      case 'stream.start':
-        streams.set(event.id, {
+      case 'stream.start': {
+        const state: StreamSinkState = {
           buffer: '',
           pending: [],
           created: false,
@@ -263,8 +263,18 @@ export function attachTranscriptRecorder(
           level: 'info',
           messageType: asMessageType(event.kind),
           updateTimer: null,
-        });
+        };
+        streams.set(event.id, state);
+        // A thinking stream's start IS the signal consumers care about: the
+        // CLI keys its "model is thinking" liveness indicator off a running
+        // THINKING entry, and hidden reasoning (e.g. gpt-5 without summaries)
+        // may never produce a first chunk to create one. Materialize the
+        // entry at phase start — renderers already skip empty thinking text.
+        if (state.messageType === MESSAGE_TYPES.THINKING) {
+          flushStream(state, event.id);
+        }
         return;
+      }
 
       case 'stream.chunk': {
         const state = streams.get(event.id);

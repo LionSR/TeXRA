@@ -369,7 +369,9 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
         { signal },
       );
       const aggregator = new OpenRouterStreamAggregator();
-      const thinking = this.createThinkingStream();
+      // Deferred: opened before the request, but the thinking phase only
+      // starts (if ever) at the first reasoning delta.
+      const thinking = this.createThinkingStream({ deferStart: true });
       const output = this.isOutputStreamingEnabled()
         ? this.createOutputStream()
         : undefined;

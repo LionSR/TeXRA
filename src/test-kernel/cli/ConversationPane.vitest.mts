@@ -6,6 +6,7 @@ import {
   compactPrefixedDisplayRows,
   isInquiryContinuationText,
 } from '@cli/chat/tui/panes/TranscriptEntry';
+import { thinkingRowVisible } from '@cli/chat/tui/panes/ConversationPane';
 import { formatRenderError } from '@cli/chat/tui/panes/EntryErrorBoundary';
 import {
   splitTranscriptEntries,
@@ -835,6 +836,36 @@ describe('CLI conversation transcript splitting', () => {
       clearScrollback: true,
       preserveStatic: false,
     });
+  });
+
+  it('shows the thinking liveness row only while a running stream is thinking', () => {
+    expect(thinkingRowVisible(undefined)).toBe(false);
+    expect(
+      thinkingRowVisible(
+        sliceWithEntries(STREAM_ID, [], {
+          thinkingActive: true,
+          status: STREAM_STATUS.RUNNING,
+        }),
+      ),
+    ).toBe(true);
+    // Off once visible activity (or a final status) takes over — the row is
+    // a liveness signal for the silent reasoning phase only.
+    expect(
+      thinkingRowVisible(
+        sliceWithEntries(STREAM_ID, [], {
+          thinkingActive: false,
+          status: STREAM_STATUS.RUNNING,
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      thinkingRowVisible(
+        sliceWithEntries(STREAM_ID, [], {
+          thinkingActive: true,
+          status: STREAM_STATUS.WAITING,
+        }),
+      ),
+    ).toBe(false);
   });
 
   it('detects generated inquiry continuation rows only', () => {

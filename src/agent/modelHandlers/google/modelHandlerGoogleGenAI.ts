@@ -554,7 +554,9 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         };
         const stream = await chat.sendMessageStream(streamParams);
 
-        const thinking = this.createThinkingStream();
+        // Deferred: opened before the request, but the thinking phase only
+        // starts (if ever) at the first thought part.
+        const thinking = this.createThinkingStream({ deferStart: true });
         const output = this.isOutputStreamingEnabled()
           ? this.createOutputStream()
           : undefined;

@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
+- **Thinking indicator** — while the model is in its reasoning phase, the chat TUI now shows an animated `Thinking…` row in the conversation area instead of sitting silent. The phase is detected from provider stream signals where available, so it also works for models whose reasoning never streams any text (e.g. GPT-5 with reasoning summaries disabled).
 - **Honest history statuses** — runs that never reached a terminal state (e.g. the process was killed) now show `unknown` in `texra history` instead of being reported as `completed`, and interrupted chat sessions are checked for a resumable record like unfinished ones.
 
 ## [0.38.7] - 2026-06-09
