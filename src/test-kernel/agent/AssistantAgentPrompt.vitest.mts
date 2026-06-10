@@ -14,6 +14,7 @@ const REPO_ROOT = resolve(
 
 interface AssistantAgentYaml {
   name: string;
+  description: string;
   settings: {
     tools: string[];
   };
@@ -36,6 +37,14 @@ function readAssistantAgent(): AssistantAgentYaml {
 describe('assistant agent prompt', () => {
   it('is named assistant (renamed from chat)', () => {
     expect(readAssistantAgent().name).toBe('assistant');
+  });
+
+  it('owns general-purpose delegation guidance in the agent definition', () => {
+    const description = readAssistantAgent().description;
+
+    expect(description).toContain('General-purpose');
+    expect(description).toContain('Prefer a more specialized agent');
+    expect(description).toContain('pick assistant');
   });
 
   it('uses TeXRA delegation for internal subagents instead of inquiry', () => {
