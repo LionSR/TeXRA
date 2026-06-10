@@ -375,9 +375,10 @@ describe('relay free-tier request limits', () => {
     }
   });
 
-  it('releases request slots when stream lease refresh keeps failing', async () => {
+  it('keeps streams open through transient lease refresh failures', async () => {
     vi.useFakeTimers();
     try {
+      let refreshes = 0;
       let releases = 0;
       const wrapped = await releaseWhenStreamCloses(
         byteStream([new Uint8Array([1])]),
@@ -385,6 +386,7 @@ describe('relay free-tier request limits', () => {
           releases += 1;
         },
         async () => {
+          refreshes += 1;
           throw new Error('refresh unavailable');
         },
         10,
@@ -392,13 +394,78 @@ describe('relay free-tier request limits', () => {
       if (wrapped === null) assert.fail('expected wrapped stream');
 
       await vi.advanceTimersByTimeAsync(30);
-      assert.equal(releases, 1);
+      assert.equal(refreshes, 3);
+      assert.equal(releases, 0);
 
       const reader = wrapped.getReader();
-      await assert.rejects(reader.read(), /refresh unavailable/);
+      assert.deepEqual(await reader.read(), {
+        done: false,
+        value: new Uint8Array([1]),
+      });
+      assert.deepEqual(await reader.read(), {
+        done: true,
+        value: undefined,
+      });
+      assert.equal(releases, 1);
 
       await vi.advanceTimersByTimeAsync(30);
       assert.equal(releases, 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('releases request slots when stream lease refresh loses the slot', async () => {
+    vi.useFakeTimers();
+    try {
+      const calls: string[] = [];
+      const client = {
+        async rpc(name: string, args: Record<string, unknown>) {
+          calls.push(name);
+          return {
+            data:
+              name === 'relay_request_gate'
+                ? {
+                    allowed: true,
+                    slotId: args.p_slot_id,
+                    activeRequests: 1,
+                    concurrencyLimit: 2,
+                    requestsThisMinute: 1,
+                    rateLimitPerMinute: 20,
+                  }
+                : name === 'relay_request_refresh'
+                  ? { refreshed: false }
+                  : {},
+            error: null,
+          };
+        },
+      };
+      const slot = await acquireRelayRequestSlot(client, crypto.randomUUID(), {
+        ratePerMinute: 20,
+        concurrent: 2,
+      });
+      if (!slot.allowed) assert.fail('expected slot to be allowed');
+
+      const wrapped = await releaseWhenStreamCloses(
+        byteStream([new Uint8Array([1])]),
+        slot.release,
+        slot.refresh,
+        10,
+      );
+      if (wrapped === null) assert.fail('expected wrapped stream');
+
+      await vi.advanceTimersByTimeAsync(10);
+      assert.deepEqual(calls, [
+        'relay_request_gate',
+        'relay_request_refresh',
+        'relay_request_release',
+      ]);
+
+      const reader = wrapped.getReader();
+      await assert.rejects(
+        reader.read(),
+        /relay_request_refresh did not find request slot/,
+      );
     } finally {
       vi.useRealTimers();
     }

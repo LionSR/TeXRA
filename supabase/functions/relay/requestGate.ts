@@ -39,7 +39,13 @@ export type RelayRequestSlot =
     };
 
 export const RELAY_SLOT_REFRESH_INTERVAL_MS = 60_000;
-export const RELAY_SLOT_REFRESH_MAX_FAILURES = 3;
+
+class RelayRequestSlotLostError extends Error {
+  constructor() {
+    super('relay_request_refresh did not find request slot');
+    this.name = 'RelayRequestSlotLostError';
+  }
+}
 
 function asNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value)
@@ -87,24 +93,18 @@ function once(release: () => Promise<void>): () => Promise<void> {
 function startStreamLeaseRefresh(
   refresh: (() => Promise<void>) | undefined,
   intervalMs: number,
-  onFailure: (error: unknown) => void,
+  onLeaseLost: (error: unknown) => void,
 ): () => void {
   if (!refresh || intervalMs <= 0) return () => {};
 
-  let consecutiveFailures = 0;
   const timer = setInterval(() => {
-    void refresh()
-      .then(() => {
-        consecutiveFailures = 0;
-      })
-      .catch((error) => {
-        consecutiveFailures += 1;
-        console.error('[RELAY] Stream lease refresh failed:', error);
-        if (consecutiveFailures >= RELAY_SLOT_REFRESH_MAX_FAILURES) {
-          clearInterval(timer);
-          onFailure(error);
-        }
-      });
+    void refresh().catch((error) => {
+      console.error('[RELAY] Stream lease refresh failed:', error);
+      if (error instanceof RelayRequestSlotLostError) {
+        clearInterval(timer);
+        onLeaseLost(error);
+      }
+    });
   }, intervalMs);
   return () => clearInterval(timer);
 }
@@ -165,7 +165,7 @@ export async function acquireRelayRequestSlot(
       );
     }
     if (!didRefreshSlot(refreshResult.data)) {
-      throw new Error('relay_request_refresh did not find request slot');
+      throw new RelayRequestSlotLostError();
     }
   };
 
@@ -183,24 +183,25 @@ export async function releaseWhenStreamCloses(
     return null;
   }
 
+  let leaseError: Error | null = null;
+  let stopRefreshing = () => {};
   let streamController: ReadableStreamDefaultController<Uint8Array> | null =
     null;
-  let stopRefreshing = () => {};
   const releaseOnce = once(async () => {
     stopRefreshing();
     await release();
   });
   const reader = body.getReader();
-  const failStreamForLeaseError = (error: unknown) => {
-    const streamError =
-      error instanceof Error ? error : new Error(String(error));
-    streamController?.error(streamError);
+  const stopForLeaseLoss = (error: unknown) => {
+    leaseError = error instanceof Error ? error : new Error(String(error));
+    stopRefreshing();
+    streamController?.error(leaseError);
     void reader
-      .cancel(streamError)
+      .cancel(leaseError)
       .then(releaseOnce, releaseOnce)
       .catch((releaseError) => {
         console.error(
-          '[RELAY] Failed to release request slot after refresh failure:',
+          '[RELAY] Failed to release request slot after lease loss:',
           releaseError,
         );
       });
@@ -211,12 +212,15 @@ export async function releaseWhenStreamCloses(
       stopRefreshing = startStreamLeaseRefresh(
         refresh,
         refreshIntervalMs,
-        failStreamForLeaseError,
+        stopForLeaseLoss,
       );
     },
     async pull(controller) {
       try {
         const { done, value } = await reader.read();
+        if (leaseError) {
+          throw leaseError;
+        }
         if (done) {
           controller.close();
           await releaseOnce();
