@@ -624,7 +624,7 @@ A build-time guard plugin (custom esbuild plugin: any `import 'vscode'` in `pack
 
 ### 8.4 Resources
 
-`resources/agents/`, `resources/walkthroughs/`, `resources/logo-128x128.png`, replacement rules — bundled **inside `app.asar`** via `electron-builder`'s `files` glob (so `app.getAppPath() + '/resources/...'` resolves correctly in dev and after packaging). Existing code reads via `platform().fs.readFile`, so no path code changes.
+`resources/agents/`, `resources/walkthroughs/`, `resources/logo-512x512.png`, replacement rules — bundled **inside `app.asar`** via `electron-builder`'s `files` glob (so `app.getAppPath() + '/resources/...'` resolves correctly in dev and after packaging). Existing code reads via `platform().fs.readFile`, so no path code changes.
 
 **Two distinct asset locations to keep straight in `electron-builder.yml`:**
 
