@@ -528,7 +528,8 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
   // 3. Get Supabase config (authenticateJwt reads its own env internally)
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  if (!supabaseUrl) {
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!supabaseUrl || !supabaseAnonKey) {
     console.error('Missing required Supabase environment variables');
     return jsonError('Server configuration error', 500);
   }
