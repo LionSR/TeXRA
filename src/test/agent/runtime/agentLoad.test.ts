@@ -1,6 +1,6 @@
 // Standard library imports
-import { strict as assert } from 'assert';
-import * as path from 'path';
+import { strict as assert } from 'node:assert';
+import * as path from 'node:path';
 
 // Local imports - agent runtime
 import type { ResolvedAgent } from '@agent/index';

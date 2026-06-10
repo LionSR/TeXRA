@@ -135,7 +135,7 @@ The tool returns a JSON object whose keys are the original question texts and wh
     const requestId = `user-question-${Date.now().toString(36)}-${++questionCounter}`;
 
     logger.info(
-      `User question requested: ${input.questions[0]?.question.substring(0, 100) ?? ''}`,
+      `User question requested: ${input.questions[0]?.question.slice(0, 100) ?? ''}`,
     );
 
     try {

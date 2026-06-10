@@ -1,6 +1,6 @@
 // Standard library imports
-import { createRequire } from 'module';
-import { strict as assert } from 'assert';
+import { createRequire } from 'node:module';
+import { strict as assert } from 'node:assert';
 
 // Local imports - schemas
 import {

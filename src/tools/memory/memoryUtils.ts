@@ -1,7 +1,7 @@
 /**
  * Shared utilities for memory tool and memory view.
  */
-import * as path from 'path';
+import * as path from 'node:path';
 
 import { normalizeFilePath } from '@shared/utils/path';
 

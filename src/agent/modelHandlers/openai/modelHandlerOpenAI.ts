@@ -1389,7 +1389,7 @@ export class ModelHandlerOpenAI<
     }
 
     this.logger.debug(
-      `Reasoning content preview: ${reasoning.substring(0, K_SLICE)}...`,
+      `Reasoning content preview: ${reasoning.slice(0, K_SLICE)}...`,
     );
     return reasoning;
   }

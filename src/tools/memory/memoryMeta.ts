@@ -6,7 +6,7 @@
  * no locking, no orphan cleanup — delete/rename just works.
  */
 
-import * as path from 'path';
+import * as path from 'node:path';
 
 import { StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';

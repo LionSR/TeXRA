@@ -85,7 +85,7 @@ export async function handleTestTextEditor(): Promise<void> {
           const startLine = await vscode.window.showInputBox({
             prompt: 'Enter start line number',
             validateInput: (value) => {
-              const num = parseInt(value);
+              const num = Number.parseInt(value, 10);
               return isNaN(num) || num < 1
                 ? 'Please enter a valid line number'
                 : '';
@@ -95,13 +95,16 @@ export async function handleTestTextEditor(): Promise<void> {
           const endLine = await vscode.window.showInputBox({
             prompt: 'Enter end line number (or -1 for end of file)',
             validateInput: (value) => {
-              const num = parseInt(value);
+              const num = Number.parseInt(value, 10);
               return isNaN(num) ? 'Please enter a valid line number' : '';
             },
           });
 
           if (startLine && endLine) {
-            input.view_range = [parseInt(startLine), parseInt(endLine)];
+            input.view_range = [
+              Number.parseInt(startLine, 10),
+              Number.parseInt(endLine, 10),
+            ];
           }
         }
         break;
@@ -130,7 +133,7 @@ export async function handleTestTextEditor(): Promise<void> {
         const insertLine = await vscode.window.showInputBox({
           prompt: 'Enter line number to insert at',
           validateInput: (value) => {
-            const num = parseInt(value);
+            const num = Number.parseInt(value, 10);
             return isNaN(num) || num < 0
               ? 'Please enter a valid line number (0 or greater)'
               : '';
@@ -150,7 +153,7 @@ export async function handleTestTextEditor(): Promise<void> {
           return;
         }
 
-        input.insert_line = parseInt(insertLine);
+        input.insert_line = Number.parseInt(insertLine, 10);
         input.new_str = textToInsert;
         break;
 

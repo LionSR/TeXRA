@@ -8,7 +8,7 @@
  * Tool implementations access it via the injectable `LeanLanguageServices`.
  */
 
-import * as path from 'path';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { toErrorMessage } from '@common/errors';

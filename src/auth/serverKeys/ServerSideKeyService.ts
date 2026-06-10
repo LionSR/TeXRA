@@ -14,7 +14,7 @@
  * - free tier: Included non-premium models (up to $3/M input)
  */
 
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 import { toErrorMessage } from '@common/errors';
 import {
   SERVER_SIDE_CACHE_TTL_MS,
