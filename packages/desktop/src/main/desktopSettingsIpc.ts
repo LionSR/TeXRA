@@ -99,6 +99,14 @@ import {
   type DesktopAuthProfileData,
 } from './desktopSupabaseAuth.js';
 import { refreshDesktopModelListStateIfNeeded } from './desktopModelListRefresh.js';
+import {
+  buildDefaultToolDashboardItems,
+  defaultOnError,
+  emptySecrets,
+  findToolCommand,
+  getCachedToolCheckResults,
+  refreshDefaultDisabledToolCache,
+} from './desktopSettingsIpcHelpers.js';
 import type { ConfigProvider } from '@platform/interfaces/config';
 import type { StateStore } from '@platform/interfaces/state';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -159,41 +167,6 @@ export interface DesktopSettingsIpcOptions {
 
 export interface DesktopSettingsIpc extends DesktopMessageHandler {
   refreshAuthDependentData(): Promise<void>;
-}
-
-const emptySecrets: PlatformSecrets = {
-  get: () => Promise.resolve(undefined),
-  set: () => Promise.resolve(),
-  delete: () => Promise.resolve(),
-};
-
-async function buildDefaultToolDashboardItems(
-  cachedResults?: ExternalToolCheckResult[],
-): Promise<ToolDashboardItem[]> {
-  const { buildToolDashboardItems } =
-    await import('@settingsView/utils/toolDashboardData');
-  return buildToolDashboardItems(cachedResults);
-}
-
-async function getCachedToolCheckResults(): Promise<
-  ExternalToolCheckResult[] | undefined
-> {
-  const { getLastCheckResults } = await import('@tools/toolAvailability');
-  return getLastCheckResults() ?? undefined;
-}
-
-async function refreshDefaultDisabledToolCache(): Promise<void> {
-  const { refreshDisabledToolCache } = await import('@tools/toolAvailability');
-  refreshDisabledToolCache();
-}
-
-async function findToolCommand(
-  toolId: string,
-  kind: 'install' | 'auth',
-): Promise<string | undefined> {
-  const { findExternalToolDef } = await import('@tools/externalToolDefs');
-  const def = findExternalToolDef(toolId);
-  return kind === 'install' ? def?.installCommand : def?.authCommand;
 }
 
 export function createDesktopSettingsIpc(
@@ -1137,8 +1110,4 @@ export function createDesktopSettingsIpc(
       return dispatchSettingsViewInbound(message, settingsHandlers, onError);
     },
   };
-}
-
-function defaultOnError(error: unknown): void {
-  console.error(error);
 }

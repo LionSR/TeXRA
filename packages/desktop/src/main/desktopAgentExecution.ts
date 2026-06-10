@@ -1,4 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -41,14 +41,6 @@ import { KVStore } from '@common/storage/KVStore';
 import { bus, type ProgressEventPayloads } from '@eventBus/ProgressEventBus';
 import type { DiffViewHost } from '@hosts/diffViewHost';
 import type { ExternalOpener } from '@hosts/externalOpener';
-import {
-  buildAcceptConfirmMessage,
-  buildAcceptSuccessMessage,
-  getAcceptedFileTarget,
-} from '@latex/acceptedFileTarget';
-import { openFirstLabelMatch } from '@latex/labelSearch';
-import { LaTeXdiffService } from '@latex/latexdiff';
-import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
 import { createChannelTrace } from '@logger';
 import {
   STREAM_STATUS,
@@ -76,12 +68,6 @@ import {
 import { GoalStore, isGoalInFlight } from '@tools/goal';
 import { handleUserQuestionAction } from '@tools/userQuestion';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
-import {
-  AbsoluteFS,
-  createExternalLocation,
-  pathToLocation,
-  type FileLocation,
-} from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 
 import { DESKTOP_SHELL_COMMANDS } from '../desktopShellMessages.js';
@@ -89,6 +75,7 @@ import {
   createDesktopToolEditApprovalController,
   type DesktopToolEditApprovalController,
 } from './desktopToolEditApproval.js';
+import { DesktopProgressFileActions } from './desktopProgressFileActions.js';
 import type { DesktopStreamSnapshotStore } from './desktopStreamSnapshot.js';
 
 export interface DesktopAgentExecutionOptions {
@@ -140,12 +127,6 @@ export interface DesktopProgressBridgeOptions {
   progressSnapshotStore?: StreamSnapshotStore;
 }
 
-function toFileLocation(filePath: string): FileLocation {
-  return path.isAbsolute(filePath)
-    ? createExternalLocation(filePath)
-    : pathToLocation(filePath);
-}
-
 class MemoryProgressStorage implements MementoStorage {
   private readonly values = new Map<string, unknown>();
 
@@ -178,6 +159,7 @@ export class DesktopProgressBridge {
   private readonly deletedStreams = new Set<StreamTabId>();
   private readonly unsubscribe: () => void;
   private readonly toolEditApprovals: DesktopToolEditApprovalController;
+  private readonly fileActions: DesktopProgressFileActions;
   /**
    * Restored "ghost" streams hydrated from the cross-launch snapshot.
    * Keyed by streamId. An entry is removed once a live progress event
@@ -313,6 +295,21 @@ export class DesktopProgressBridge {
       openDiff: options.openDiff,
       showErrorMessage: this.options.showErrorMessage,
     });
+    this.fileActions = new DesktopProgressFileActions(
+      {
+        openPath: options.openPath,
+        openBuildDisplay: options.openBuildDisplay,
+        openDiff: options.openDiff,
+        confirmAcceptFile: options.confirmAcceptFile,
+        showInfoMessage: options.showInfoMessage,
+        showErrorMessage: options.showErrorMessage,
+      },
+      {
+        runtimeHost: this.runtimeHost,
+        runExecution: (request) => this.runExecution(request),
+        listWorkspaceCandidateFiles: () => this.listWorkspaceCandidateFiles(),
+      },
+    );
     this.workflowFileActions = new ProgressWorkflowFileActionsController({
       state: {
         getActiveStream: () => this.state.activeStream,
@@ -326,17 +323,17 @@ export class DesktopProgressBridge {
       },
       host: {
         compareFiles: (baseFile, editedFile) =>
-          this.compareFiles(baseFile, editedFile),
+          this.fileActions.compareFiles(baseFile, editedFile),
         acceptEditedFile: (baseFile, editedFile) =>
-          this.acceptEditedFile(baseFile, editedFile),
+          this.fileActions.acceptEditedFile(baseFile, editedFile),
         mergeFile: (baseFile, editedFile) =>
-          this.runMergeFile(baseFile, editedFile),
+          this.fileActions.runMergeFile(baseFile, editedFile),
         latexdiffFile: (baseFile, editedFile) =>
-          this.runLatexdiffFile(baseFile, editedFile),
+          this.fileActions.runLatexdiffFile(baseFile, editedFile),
         openDirectory: async (directory) => {
           await this.options.openPath?.(directory);
         },
-        openLabel: (label) => this.findAndOpenLabel(label),
+        openLabel: (label) => this.fileActions.findAndOpenLabel(label),
         readFile: (file) => readFile(file, 'utf8'),
         showInfo: async (message) => {
           await this.options.showInfoMessage?.(message);
@@ -1054,13 +1051,7 @@ export class DesktopProgressBridge {
   }
 
   async openFileCompile(filePath: string): Promise<void> {
-    if (this.options.openBuildDisplay) {
-      await this.options.openBuildDisplay(toFileLocation(filePath));
-      return;
-    }
-    await this.options.showErrorMessage?.(
-      'Desktop LaTeX preview is unavailable. Cannot compile and open this file.',
-    );
+    await this.fileActions.openFileCompile(filePath);
   }
 
   async runExecution(request: ValidatedExecutionRequest): Promise<void> {
@@ -1075,139 +1066,20 @@ export class DesktopProgressBridge {
     });
   }
 
-  private async compareFiles(
-    baseFile: string,
-    editedFile: string,
-  ): Promise<void> {
-    if (!this.options.openDiff) {
-      await this.options.showErrorMessage?.(
-        'Desktop file comparison is not available in this host yet.',
-      );
-      return;
-    }
-
-    await this.options.openDiff(
-      { filePath: baseFile },
-      { filePath: editedFile },
-      `Compare: ${path.basename(editedFile)} <-> ${path.basename(baseFile)}`,
-    );
-  }
-
-  private async runMergeFile(
-    baseFile: string,
-    editedFile: string,
-  ): Promise<void> {
-    const [{ getHelperModelName }, { validateExecutionRequest }] =
-      await Promise.all([
-        import('@agent/runtime/helperModelName'),
-        import('@agent/core/execution/executionRequests'),
-      ]);
-    const validation = validateExecutionRequest({
-      config: {
-        agent: 'merge',
-        model: getHelperModelName(),
-        inputFiles: [baseFile],
-        editedFile,
-      },
-    });
-    if (!validation.valid) {
-      await this.options.showErrorMessage?.(`Merge: ${validation.message}`);
-      return;
-    }
-    await this.runExecution(validation.request);
-  }
-
-  private async acceptEditedFile(
-    baseFile: string,
-    editedFile: string,
-  ): Promise<boolean> {
-    const baseLocation = pathToLocation(baseFile);
-    const editedLocation = pathToLocation(editedFile);
-    const target = getAcceptedFileTarget(
-      baseLocation,
-      editedLocation.absolutePath,
-    );
-    const { targetLocation, targetFileName, isNewFile } = target;
-    const targetExists =
-      isNewFile && (await AbsoluteFS.exists(targetLocation.absolutePath));
-    const confirmMessage = buildAcceptConfirmMessage(
-      target,
-      baseFile,
-      editedFile,
-      targetExists,
-    );
-
-    if (this.options.confirmAcceptFile) {
-      const confirmed = await this.options.confirmAcceptFile(confirmMessage);
-      if (!confirmed) return false;
-    }
-
-    const editedContent = await readFile(editedLocation.absolutePath, 'utf8');
-    await writeFile(targetLocation.absolutePath, editedContent, 'utf8');
-    if (targetLocation.kind === 'workspace') {
-      this.runtimeHost.emit('workspaceFilesWritten', {
-        absolutePaths: [targetLocation.absolutePath],
-      });
-    }
-
-    await this.options.showInfoMessage?.(
-      buildAcceptSuccessMessage(
-        targetFileName,
-        editedFile,
-        !isNewFile || targetExists,
-      ),
-    );
-    return true;
-  }
-
-  private async runLatexdiffFile(
-    baseFile: string,
-    editedFile: string,
-  ): Promise<void> {
-    const service = new LaTeXdiffService('DesktopProgressBridge');
-    const result = await service.runDiff(
-      pathToLocation(baseFile),
-      pathToLocation(editedFile),
-      '_diff',
-      false,
-      DEFAULT_MATH_MARKUP,
-    );
-
-    if (!result.success || !result.diffFileName) {
-      await this.options.showErrorMessage?.(
-        result.message ?? 'Failed to generate diff file.',
-      );
-      return;
-    }
-
-    const diffFilePath = path.join(path.dirname(baseFile), result.diffFileName);
-    if (this.options.openBuildDisplay) {
-      await this.options.openBuildDisplay(createExternalLocation(diffFilePath));
-      return;
-    }
-    await this.options.openPath?.(diffFilePath);
-  }
-
-  private async findAndOpenLabel(label: string): Promise<boolean> {
+  /**
+   * Absolute paths of workspace input + context files, used by label search.
+   * Empty when no workspace is open so the caller resolves no matches.
+   */
+  private async listWorkspaceCandidateFiles(): Promise<string[]> {
     const workspacePath = platform().workspace.getWorkspacePath();
-    if (!workspacePath) return false;
+    if (!workspacePath) return [];
 
-    const candidates = new Set(
-      [
-        ...(await this.listWorkspaceFiles('input')),
-        ...(await this.listWorkspaceFiles('context')),
-      ].map((file) =>
-        path.isAbsolute(file) ? file : path.join(workspacePath, file),
-      ),
-    );
-
-    return openFirstLabelMatch(
-      label,
-      candidates,
-      (file) => readFile(file, 'utf8'),
-      async (file) => {
-        await this.options.openPath?.(file);
-      },
+    const files = [
+      ...(await this.listWorkspaceFiles('input')),
+      ...(await this.listWorkspaceFiles('context')),
+    ];
+    return files.map((file) =>
+      path.isAbsolute(file) ? file : path.join(workspacePath, file),
     );
   }
 

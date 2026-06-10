@@ -3,13 +3,13 @@
 // Local imports - agent
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import type { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - tools and utils
-import type { ToolFileAttachment } from '@tools/result';
 import type { FileLocation } from '@shared/schemas';
+import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - model handlers
 import { ModelHandler } from './ModelHandler';
