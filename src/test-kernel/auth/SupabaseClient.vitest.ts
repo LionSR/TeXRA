@@ -5,6 +5,7 @@ import { describe, it, afterEach } from 'vitest';
 // Standard library imports
 
 // Local imports - auth
+import { RELAY_CI_TOKEN_PREFIX, RELAY_TOKEN_ENV_VAR } from '@auth/relayToken';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import type { AuthTokenProvider } from '@auth/TokenProvider';
 
@@ -37,6 +38,36 @@ describe('SupabaseClient', () => {
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
     });
+  });
+
+  it('keeps session tokens separate from CI relay bearer tokens', async () => {
+    const previousRelayToken = process.env[RELAY_TOKEN_ENV_VAR];
+    process.env[RELAY_TOKEN_ENV_VAR] = `${RELAY_CI_TOKEN_PREFIX}abcdef`;
+    const provider: AuthTokenProvider = {
+      whenReady: async () => {},
+      ensureFreshToken: async () => 'session-token',
+      getSessionTokens: async () => ({
+        accessToken: 'session-token',
+        refreshToken: 'refresh-token',
+      }),
+    };
+
+    try {
+      SupabaseClient.setAuthProvider(provider);
+
+      assert.equal(await SupabaseClient.getAccessToken(), 'session-token');
+      assert.equal(
+        await SupabaseClient.getRelayAccessToken(),
+        `${RELAY_CI_TOKEN_PREFIX}abcdef`,
+      );
+      assert.equal(await SupabaseClient.isAuthenticated(), true);
+    } finally {
+      if (previousRelayToken === undefined) {
+        delete process.env[RELAY_TOKEN_ENV_VAR];
+      } else {
+        process.env[RELAY_TOKEN_ENV_VAR] = previousRelayToken;
+      }
+    }
   });
 
   it('returns null when the token provider throws while reading session tokens', async () => {

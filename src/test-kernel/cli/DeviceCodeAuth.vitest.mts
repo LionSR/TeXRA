@@ -188,6 +188,20 @@ describe('CLI device-code sign-in (texra login --device)', () => {
     ).rejects.toThrow('socket hang up');
   });
 
+  it('treats rate-limited poll responses as transient', async () => {
+    const clock = fakeClock();
+    const { fetchImpl } = queuedFetch([
+      jsonResponse({ error: 'rate_limited' }, 429),
+      jsonResponse(SESSION_PAYLOAD),
+    ]);
+    const exchange = await pollForDeviceSession(AUTHORIZATION, {
+      fetchImpl,
+      sleep: clock.sleep,
+      now: clock.now,
+    });
+    expect(exchange.access_token).toBe('access-token');
+  });
+
   it('describes device login as any-device auth with the code inline', () => {
     const message = formatCliDeviceAuthMessage(AUTHORIZATION);
     expect(message).toContain(CLI_DEVICE_AUTH_URL_PROMPT);

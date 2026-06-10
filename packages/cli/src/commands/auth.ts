@@ -314,6 +314,12 @@ const usageCommand = defineCliCommand({
         writeTextStderr('Not signed in. Run `texra login` first.');
         return CliExitCode.ModelOrNetworkError;
       }
+      if (profile.credentialSource === 'relayToken') {
+        writeTextStderr(
+          '`texra auth usage` requires an interactive TeXRA session. Run `texra login`, or inspect relay spending from the account dashboard.',
+        );
+        return CliExitCode.ModelOrNetworkError;
+      }
       summary = await fetchRelayUsageSummary({
         tier: profile.tier ?? 'free',
         month,

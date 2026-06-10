@@ -274,7 +274,7 @@ export function initializeDesktopServerSideKeyAccess(
     {
       isAuthenticated: () => SupabaseClient.isAuthenticated(),
       getUserTier: () => SupabaseClient.getUserTier(),
-      getAccessToken: () => SupabaseClient.getAccessToken(),
+      getAccessToken: () => SupabaseClient.getRelayAccessToken(),
     },
   );
 }

@@ -231,7 +231,7 @@ export async function activate(context: vscode.ExtensionContext) {
     {
       isAuthenticated: () => SupabaseClient.isAuthenticated(),
       getUserTier: () => SupabaseClient.getUserTier(),
-      getAccessToken: () => SupabaseClient.getAccessToken(),
+      getAccessToken: () => SupabaseClient.getRelayAccessToken(),
     },
   );
 

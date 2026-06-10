@@ -4,10 +4,9 @@
  * A CI relay token is a long-lived, relay-scoped bearer credential for
  * headless pipelines, configured through the TEXRA_RELAY_TOKEN environment
  * variable — a deliberately distinct path from the Supabase session secrets.
- * When configured, SupabaseClient.getAccessToken() returns it, so every
- * relay-bound call (model proxy, tier-config, usage logging) presents it;
- * the server maps it to the owning user and enforces scope, expiry, and
- * revocation hash-at-rest.
+ * When configured, SupabaseClient.getRelayAccessToken() returns it for
+ * relay-bound calls (model proxy, tier-config, usage logging). Normal Supabase
+ * APIs still use GoTrue session tokens.
  */
 
 import { z } from 'zod';

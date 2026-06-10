@@ -45,6 +45,7 @@ export interface LogBackend {
 
 export interface CliAuthProfile {
   authenticated: boolean;
+  credentialSource?: 'session' | 'relayToken';
   accountLabel?: string;
   tier?: string;
   expiresAt?: string;
@@ -84,7 +85,7 @@ const deferredAuthLog: LogBackend = {
 const cliAuthProvider = {
   isAuthenticated: () => SupabaseClient.isAuthenticated(),
   getUserTier: () => SupabaseClient.getUserTier(),
-  getAccessToken: () => SupabaseClient.getAccessToken(),
+  getAccessToken: () => SupabaseClient.getRelayAccessToken(),
 };
 
 function getCliSupabaseAuthCoordinator(): SupabaseSessionCoordinator {
@@ -219,6 +220,7 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
   if (relayToken) {
     return {
       authenticated: true,
+      credentialSource: 'relayToken',
       accountLabel: `CI relay token (${RELAY_TOKEN_ENV_VAR})`,
       tier: await fetchRelayTokenTier(relayToken),
     };
@@ -236,6 +238,7 @@ export async function getCliAuthProfile(): Promise<CliAuthProfile> {
   }
   return {
     authenticated: true,
+    credentialSource: 'session',
     accountLabel: session?.account.label,
     tier,
     expiresAt: session ? new Date(session.expiresAt).toISOString() : undefined,

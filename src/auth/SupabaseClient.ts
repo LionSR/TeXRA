@@ -146,20 +146,11 @@ export class SupabaseClient {
   }
 
   /**
-   * Get the current user's access token.
-   * Returns null if not authenticated or auth system not ready.
+   * Get the current GoTrue session access token.
+   * Returns null if no session is authenticated or auth system is not ready.
    * @param forceRefresh - When true, forces a token refresh (e.g., after relay 401).
    */
   static async getAccessToken(forceRefresh?: boolean): Promise<string | null> {
-    // A configured CI relay token (TEXRA_RELAY_TOKEN) takes precedence over
-    // session-based auth: every relay-bound call presents it as the bearer
-    // credential, and the server maps it to the owning user. It is static —
-    // refresh requests simply return it again.
-    const relayToken = getConfiguredRelayToken();
-    if (relayToken) {
-      return relayToken;
-    }
-
     if (!this.authProvider) {
       // Auth provider not set - system not initialized
       return null;
@@ -174,6 +165,19 @@ export class SupabaseClient {
       );
       return null;
     }
+  }
+
+  /**
+   * Bearer token for TeXRA relay endpoints. A configured CI relay token
+   * deliberately overrides the interactive session only for relay-bound calls;
+   * PostgREST and Supabase Auth still require a normal GoTrue session token.
+   */
+  static async getRelayAccessToken(
+    forceRefresh?: boolean,
+  ): Promise<string | null> {
+    const relayToken = getConfiguredRelayToken();
+    if (relayToken) return relayToken;
+    return this.getAccessToken(forceRefresh);
   }
 
   /**
@@ -288,6 +292,7 @@ export class SupabaseClient {
    * Check if user is authenticated.
    */
   static async isAuthenticated(): Promise<boolean> {
+    if (getConfiguredRelayToken()) return true;
     const token = await this.getAccessToken();
     return token !== null;
   }

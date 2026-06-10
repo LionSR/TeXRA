@@ -143,7 +143,7 @@ export async function pollForDeviceSession(
       case 'access_denied':
         throw new Error('Sign-in was denied in the browser.');
       default:
-        if (response.status >= 500) {
+        if (response.status === 429 || response.status >= 500) {
           transientFailures += 1;
           if (transientFailures >= MAX_TRANSIENT_POLL_FAILURES) {
             throw new Error(

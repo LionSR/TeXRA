@@ -33,6 +33,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
 import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
 import { mintGoTrueSession } from '../_shared/goTrueSession.ts';
+import { sha256Hex } from '../_shared/relayCiToken.ts';
 import { versionedJsonResponse } from '../_shared/responses.ts';
 
 // =============================================================================
@@ -162,16 +163,6 @@ function randomDeviceCode(): string {
     .replace(/=+$/, '');
 }
 
-async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(value),
-  );
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-}
-
 /** XXXX-XXXX display form shown to humans. */
 function formatUserCode(userCode: string): string {
   return `${userCode.slice(0, 4)}-${userCode.slice(4)}`;
@@ -249,7 +240,7 @@ app.post('/code', async (c) => {
         device_code: deviceCode,
         user_code: displayCode,
         verification_uri: verifyUri,
-        verification_uri_complete: `${verifyUri}?code=${encodeURIComponent(displayCode)}`,
+        verification_uri_complete: `${verifyUri}?device_code=${encodeURIComponent(displayCode)}`,
         expires_in: DEVICE_CODE_TTL_SECONDS,
         interval: POLL_INTERVAL_SECONDS,
       },
@@ -466,8 +457,9 @@ Deno.serve(app.fetch);
 
 function verifyPageHtml(projectUrl: string, anonKey: string): string {
   // Static page: sign in with the normal Supabase OAuth web flow (redirecting
-  // back here, keeping ?code= through the round trip), then approve or deny
-  // the code with the signed-in user's JWT.
+  // back here, keeping ?device_code= through the round trip), then approve or
+  // deny the code with the signed-in user's JWT. Supabase owns ?code= for the
+  // OAuth PKCE callback, so the device user code must use a distinct query key.
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -510,7 +502,7 @@ function verifyPageHtml(projectUrl: string, anonKey: string): string {
   const signedIn = document.getElementById('signed-in');
 
   const params = new URLSearchParams(window.location.search);
-  if (params.get('code')) codeInput.value = params.get('code');
+  if (params.get('device_code')) codeInput.value = params.get('device_code');
 
   function setStatus(message, kind) {
     statusEl.textContent = message;
@@ -542,7 +534,7 @@ function verifyPageHtml(projectUrl: string, anonKey: string): string {
       const code = requireCode();
       if (!code) return;
       const redirectTo = window.location.origin + window.location.pathname +
-        '?code=' + encodeURIComponent(code);
+        '?device_code=' + encodeURIComponent(code);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: button.dataset.provider,
         options: { redirectTo },

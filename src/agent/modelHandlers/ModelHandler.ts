@@ -367,7 +367,7 @@ export abstract class ModelHandler<
 
     // Use centralized check to ensure consistency with getBaseUrl()
     if (this.shouldUseServerSideKeys()) {
-      const accessToken = await SupabaseClient.getAccessToken();
+      const accessToken = await SupabaseClient.getRelayAccessToken();
       if (accessToken) {
         this.logger.debug(
           `Using server-side API keys via relay for ${this.config.provider}`,
