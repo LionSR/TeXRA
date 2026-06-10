@@ -100,6 +100,13 @@ function isCompactToolEntry(
   return entry.role === 'tool' && lines.length <= 1;
 }
 
+function isPromptToToolTurn(
+  previousEntry: ConversationEntry,
+  nextEntry: ConversationEntry,
+): boolean {
+  return previousEntry.role === 'user' && nextEntry.role === 'tool';
+}
+
 function shouldSeparateEntries({
   previousEntry,
   previousLines,
@@ -112,6 +119,7 @@ function shouldSeparateEntries({
   readonly nextLines: readonly string[];
 }): boolean {
   if (!previousEntry) return false;
+  if (isPromptToToolTurn(previousEntry, nextEntry)) return false;
   return !(
     isCompactToolEntry(previousEntry, previousLines) &&
     isCompactToolEntry(nextEntry, nextLines)
@@ -119,8 +127,8 @@ function shouldSeparateEntries({
 }
 
 /** Render the active slice into a flat line array with blank separators between
- *  substantial entries. Adjacent one-line tool calls stay stacked so compact
- *  tool-heavy traces do not waste half the viewer on empty expansion space. */
+ *  substantial entries. Tool execution rows stay attached to the prompt or
+ *  adjacent compact tools so command-heavy traces do not waste vertical space. */
 export function transcriptToLines(
   slice: StreamSlice | undefined,
   cols: number,
