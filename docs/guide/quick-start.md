@@ -53,38 +53,20 @@ You can also place a `.env` file in your workspace with variables like `OPENAI_A
 
 ## Basic Workflow
 
-The typical TeXRA workflow consists of these steps:
+Haven't run an agent yet? [First run](./first-run.md) walks through the
+whole loop — sample file, one `polish` run, read the diff — in five
+minutes, side-by-side for the extension and the CLI. The sections below
+cover the Launcher controls you'll use beyond that.
 
-1. Select files to process (input, reference, auxiliary, figures)
-2. Choose the appropriate agent (correct, polish, research, etc.)
-3. Select the AI model to use
-4. Provide specific instructions
-5. Execute the agent
-6. Review the generated output
+## The Launcher in Detail
 
-## Your First TeXRA Task
+Open the TeXRA panel from the brain icon in the sidebar, or press
+`Ctrl+Alt+M` (`Cmd+Option+M` on macOS).
 
-Let's go through an example to illustrate the basic workflow.
-
-### Step 1: Open a Document
-
-1. Open VS Code
-2. Navigate to the TeXRA panel in the sidebar (click the brain icon) or press `Ctrl+Alt+M` (`Cmd+Option+M` on macOS)
-3. Open or create a LaTeX document from the workspace you'd like to improve
-
-::: tip Example
-Run **TeXRA: Create Sample Project** from the Command Palette to add a ready-made example to your workspace. This creates a `draft.tex` file under `texra-sample/`. Open it, add your credentials in the Settings Dashboard's **Models** tab (see [Set Up API Keys](#set-up-api-keys) above), then select an agent and model in the TeXRA panel. Finally, write your instruction and execute the agent to see results.
-:::
-
-### Step 2: Select Files
+### Select Files
 
 1. In the **Input** section, click <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick your document from the file picker. You can also drag-and-drop it from the OS file manager. If you have several `.tex` files open and want them all, use <wa-icon library="texra" name="folder-opened"></wa-icon> **Add opened files** — it appends every editor tab whose extension matches.
-2. (Optional) Use the same buttons in **Context** or **Media** to add reference, auxiliary, or figure files.
-
-::: tip Onboarding Prompt
-The first time you choose an input file, TeXRA shows a tooltip explaining the selector.
-Select **Never remind again** to hide it permanently.
-:::
+2. (Optional) Use the same buttons in **Context** to add read-only references or preamble, and **Media** to add figure files.
 
 ::: info Multiple Files
 Each category holds an ordered list — add as many files as the task needs and drag rows to reorder them.
@@ -94,20 +76,11 @@ Each category holds an ordered list — add as many files as the task needs and 
 
 <p class="hero-caption">The file selector: Input holds the document you're editing, Context holds references and preamble, and Media holds figures.</p>
 
-### Step 3: Choose Agent and Model
+### Choose Agent, Model, and Instruction
 
-1. In the dropdown menus at the bottom of the instruction box, select:
-   - **Agent**: `polish` (for improving writing)
-   - **Model**: `sonnet46` (Claude Sonnet 4.6) or another available model
-
-::: tip Onboarding Prompt
-When you first open the agent or model dropdown, a tooltip explains its role.
-You can dismiss these prompts with **Never remind again**.
-:::
-
-### Step 4: Write Instructions
-
-In the instruction text area, provide specific guidance for the AI. For example:
+The dropdown menus at the bottom of the instruction box pick the agent
+(e.g. `polish` for improving writing) and the model (e.g. `sonnet46`).
+Then write a specific instruction in the text area:
 
 ```
 Improve the clarity and flow of this document. Focus on making the technical
@@ -116,10 +89,10 @@ Ensure consistent terminology throughout.
 ```
 
 ::: tip Effective Instructions
-Be specific about what you want! Vague instructions are like asking a genie for "something cool" – results may vary wildly. Include what should change and what should remain the same.
+Be specific about what you want! Include what should change and what should remain the same.
 :::
 
-### Step 5: Configure Tools
+### Configure Tools
 
 Two icon buttons sit in the file-group header rows of the file selector — one next to the **Input** label, one next to the **Media** label. They light up when a helper is active.
 
@@ -140,17 +113,15 @@ Reflection rounds are controlled by the selected agent—most writing agents alr
 For advanced debugging, enable the `texra.debug.saveInputPrompt` setting (in `.texra/config.json` or VS Code settings) to store the generated prompt alongside other debug artifacts.
 :::
 
-### Step 6: Execute the Agent
+### Execute and Watch the Run
 
-1. Click the "Execute" button (<wa-icon library="texra" name="play"></wa-icon>)
-2. The ProgressBoard opens in the TeXRA view and streams the run live. See the [ProgressBoard guide](./progress-board.md) for more details on interpreting the logs.
-3. Wait for the process to complete - this may take a few moments depending on the document size and model choice
+Press **Execute** (<wa-icon library="texra" name="play"></wa-icon>). The ProgressBoard opens in the TeXRA view and streams the run live — see the [ProgressBoard guide](./progress-board.md) for interpreting the logs.
 
 <GuideIntroHero />
 
 <p class="hero-caption">The ProgressBoard streams the run live — todos, delegated subagents, and the tool-use log — with the output files alongside.</p>
 
-### Step 7: Review Results
+### Review Results
 
 1. When the agent completes, VS Code will open the generated output file from the run's task storage folder (e.g., `r0/draft.tex`, preserving the input filename).
 2. Review the changes made by the AI. Remember, it's smart, but hasn't passed its quals yet!
