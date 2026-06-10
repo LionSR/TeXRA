@@ -21,6 +21,9 @@ code --install-extension texra-ai.texra
 
 # Terminal — requires Node.js >=22.9.0
 npm install -g @texra-ai/cli
+
+# Or via Homebrew (macOS / Linux)
+brew install texra-ai/tap/texra
 ```
 
 Sign in with GitHub or Google for hosted access (no key management

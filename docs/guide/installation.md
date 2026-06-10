@@ -49,6 +49,12 @@ Node.js >=22.9.0):
 npm install -g @texra-ai/cli
 ```
 
+Or with [Homebrew](https://github.com/texra-ai/homebrew-tap) on macOS and Linux:
+
+```bash
+brew install texra-ai/tap/texra
+```
+
 See [TeXRA CLI](./texra-cli.md) for usage, shell completion, and workspace defaults.
 
 ### From VSIX File
