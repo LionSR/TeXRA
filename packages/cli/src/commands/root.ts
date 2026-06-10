@@ -113,9 +113,12 @@ export const rootCommand = withUsageSections(
     {
       title: 'EXAMPLES',
       rows: [
+        ['texra', 'open the interactive launcher'],
+        ['texra setup', 'sign in or add a provider API key (guided)'],
         ['texra chat', 'start an interactive tool-use session'],
         ['texra run <agent> --input file.tex', 'run a workflow agent headless'],
         ['texra agents list', 'list the available agents'],
+        ['texra init', 'save workspace defaults to .texra/config.json'],
         ['texra doctor', 'check your environment and configuration'],
       ],
     },
