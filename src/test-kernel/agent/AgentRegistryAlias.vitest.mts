@@ -139,5 +139,12 @@ describe('agent registry legacy aliases', () => {
     ).toEqual(['chat', 'builtInToolUse:assistant']);
     expect(getAgent('chat')?.source).toBe('custom');
     expect(getAgent('builtInToolUse:chat')?.name).toBe('assistant');
+
+    // Visible resolution must agree with getAgent: the bare name picks the
+    // custom agent, while the qualified key names the renamed built-in.
+    expect(getVisibleAgent('toolUse', 'chat')?.source).toBe('custom');
+    expect(getVisibleAgent('toolUse', 'builtInToolUse:chat')?.name).toBe(
+      'assistant',
+    );
   });
 });
