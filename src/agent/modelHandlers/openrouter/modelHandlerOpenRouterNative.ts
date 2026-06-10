@@ -5,10 +5,11 @@ import { ModelProvider } from 'llm-zoo';
 // Local imports - agent
 import { logContextManagementEvent, logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentSetting, hasEndTag } from '@agent/core/definition/AgentDataclass';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import { hasEndTag } from '@agent/core/definition/AgentDataclass';
+import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
+import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
   attachPartialText,
@@ -18,9 +19,9 @@ import {
 } from '@common/errors/sdkErrorUtils';
 
 // Local imports - tools and utils
+import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
-import type { FileLocation } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { extractMimeSubtype } from '@utils/text/stringUtils';
@@ -42,7 +43,10 @@ import {
 } from '../utils/toolAttachmentUtils';
 import { parseToolArguments } from '../utils/parseArguments';
 import { extractTextFromReasoningDetails } from '../utils/openRouterReasoning';
-import { ToolCallAccumulator } from '../utils/toolCallAccumulator';
+import {
+  OpenRouterStreamAggregator,
+  toOpenRouterReasoningEffort,
+} from './openRouterStreaming';
 import { ModelHandler } from '../ModelHandler';
 import {
   CLIENT_COMPACTION_SUMMARY_MAX_TOKENS,
@@ -51,7 +55,6 @@ import {
 } from '../contextManagementConstants';
 import type {
   ChatResult,
-  ChatStreamChunk,
   ChatUsage,
   ChatMessages,
   ChatAssistantMessage,
@@ -60,8 +63,6 @@ import type {
   ChatContentItems,
   ChatContentText,
   ChatRequest,
-  ChatFinishReasonEnum,
-  ReasoningDetailUnion,
 } from '@openrouter/sdk/models';
 import type {
   CreateResponseOptions,
@@ -70,153 +71,6 @@ import type {
   OpenRouterToolCall,
 } from '../types/IModelHandler';
 import type { ProviderStopReason } from '../types/StopReasonTypes';
-
-type OpenRouterReasoningEffort = NonNullable<
-  NonNullable<ChatRequest['reasoning']>['effort']
->;
-
-// OpenRouter's reasoning tiers passed through unchanged. It has no 'max' tier,
-// so 'max' maps to the top tier 'xhigh' and anything unknown falls back to 'low'.
-const OPENROUTER_REASONING_EFFORTS: ReadonlySet<string> = new Set([
-  'xhigh',
-  'high',
-  'medium',
-  'low',
-  'minimal',
-  'none',
-]);
-
-export function toOpenRouterReasoningEffort(
-  effort: string,
-): OpenRouterReasoningEffort {
-  if (effort === 'max') return 'xhigh';
-  return OPENROUTER_REASONING_EFFORTS.has(effort)
-    ? (effort as OpenRouterReasoningEffort)
-    : 'low';
-}
-
-// ============================================================================
-// Streaming aggregator
-// ============================================================================
-
-/**
- * Accumulates streaming chunks into a final ChatResult since the OpenRouter SDK
- * does not provide a `finalChatCompletion()` helper.
- */
-class OpenRouterStreamAggregator {
-  private content = '';
-  private reasoning = '';
-  private reasoningDetails: ReasoningDetailUnion[] = [];
-  private toolCalls = new ToolCallAccumulator();
-  private finishReason: ChatFinishReasonEnum | null = null;
-  private usage: ChatUsage | null = null;
-  private model = '';
-  private id = '';
-  private created = 0;
-
-  /** Text accumulated so far — read on stream failure so the retry UI can
-   *  show the partial tail (parity with the other streaming providers). */
-  get partialContent(): string {
-    return this.content;
-  }
-
-  consumeChunk(chunk: ChatStreamChunk): {
-    contentDelta: string;
-    reasoningDelta: string;
-  } {
-    if (!this.id && chunk.id) this.id = chunk.id;
-    if (!this.model && chunk.model) this.model = chunk.model;
-    if (!this.created && chunk.created) this.created = chunk.created;
-    if (chunk.usage) this.usage = chunk.usage;
-
-    // Surface streaming errors instead of silently ignoring them
-    if (chunk.error) {
-      throw new Error(
-        `OpenRouter streaming error (${chunk.error.code}): ${chunk.error.message}`,
-      );
-    }
-
-    const choice = chunk.choices[0];
-    if (!choice) return { contentDelta: '', reasoningDelta: '' };
-
-    if (choice.finishReason != null) {
-      this.finishReason = choice.finishReason;
-    }
-
-    const delta = choice.delta;
-    const contentDelta = delta.content ?? '';
-    if (contentDelta) this.content += contentDelta;
-
-    // Reasoning - try reasoningDetails first, then reasoning string
-    let reasoningDelta = '';
-    if (delta.reasoningDetails?.length) {
-      for (const detail of delta.reasoningDetails) {
-        this.reasoningDetails.push(detail);
-      }
-      reasoningDelta = extractTextFromReasoningDetails(delta.reasoningDetails);
-    } else if (delta.reasoning) {
-      reasoningDelta = delta.reasoning;
-    }
-    if (reasoningDelta) this.reasoning += reasoningDelta;
-
-    // Accumulate tool calls by index
-    if (delta.toolCalls) {
-      for (const tc of delta.toolCalls) {
-        this.toolCalls.add({
-          index: tc.index,
-          id: tc.id,
-          name: tc.function?.name,
-          arguments: tc.function?.arguments,
-        });
-      }
-    }
-
-    return { contentDelta, reasoningDelta };
-  }
-
-  buildResponse(): ChatResult {
-    // Preserve the original OpenRouter materialization: emit every accumulated
-    // entry with its raw id (no empty-dropping, no fallback id).
-    const toolCalls: ChatToolCall[] = this.toolCalls.build(
-      ({ id, name, arguments: args }) => ({
-        id,
-        type: 'function',
-        function: { name, arguments: args },
-      }),
-      { dropEmpty: false, fallbackId: false },
-    );
-
-    const message: ChatAssistantMessage & { role: 'assistant' } = {
-      role: 'assistant',
-      content: this.content || undefined,
-    };
-    if (toolCalls.length > 0) {
-      message.toolCalls = toolCalls;
-    }
-    if (this.reasoning) {
-      message.reasoning = this.reasoning;
-    }
-    if (this.reasoningDetails.length > 0) {
-      message.reasoningDetails = this.reasoningDetails;
-    }
-
-    return {
-      id: this.id,
-      choices: [
-        {
-          index: 0,
-          message,
-          finishReason: this.finishReason,
-        },
-      ],
-      created: this.created || Math.floor(Date.now() / 1000),
-      model: this.model,
-      object: 'chat.completion',
-      systemFingerprint: null,
-      usage: this.usage ?? undefined,
-    };
-  }
-}
 
 // ============================================================================
 // Handler

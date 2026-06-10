@@ -2,49 +2,36 @@
 import OpenAI from 'openai';
 
 // Local imports - core utilities
-import {
-  ChatCompletion,
-  ChatCompletionChunk,
-  ChatCompletionContentPart,
-  ChatCompletionContentPartInputAudio,
-  ChatCompletionAssistantMessageParam,
-  ChatCompletionCreateParamsNonStreaming,
-  ChatCompletionCreateParamsStreaming,
-  ChatCompletionMessageParam,
-  ChatCompletionMessageToolCall,
-  ChatCompletionToolMessageParam,
-  ChatCompletionStreamParams,
-} from 'openai/resources/chat/completions';
 import { isAssistantMessage } from 'openai/lib/chatCompletionUtils';
 import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 
 // Local imports - agent components
 import { logContextManagementEvent, logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentSetting, hasEndTag } from '@agent/core/definition/AgentDataclass';
-import {
+import { hasEndTag } from '@agent/core/definition/AgentDataclass';
+import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
+import type {
   OpenAIAPIResponseUsage,
   ExtendedCompletionUsage,
 } from '@agent/core/usage/ResponseUsage';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE, MESSAGE_PREVIEW_LENGTH } from '@agent/core/constants';
 import { toOpenAIReasoningEffort } from '@agent/runtime/reasoningEffort';
 import {
   getSdkErrorMessage,
   isMissingFinishReasonError,
   attachPartialText,
-  takeTail,
   isUserAbort,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
 import type { ToolDefinition } from '@model';
 
 // Local imports - tools and utils
+import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
-import type { FileLocation } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { extractMimeSubtype, objectToLogString } from '@utils/text/stringUtils';
@@ -58,10 +45,11 @@ import {
   type OpenAIPricingConfig,
 } from './openAIUsage';
 import { OPENAI_CHAT_FINISH } from '../types/StopReasonTypes';
+import { normalizeOpenAIMessageContent } from './openAIMessageUtils';
 import {
-  normalizeOpenAIMessageContent,
-  NormalizeOpenAIMessageContentOptions,
-} from './openAIMessageUtils';
+  extractOpenAIPartialTail,
+  extractReasoningDelta as extractReasoningDeltaFromChunk,
+} from './openAIChatHelpers';
 import { toOpenAITools } from '../toolConversion';
 import {
   formatAttachmentSummary,
@@ -79,6 +67,20 @@ import {
   COMPACTION_SYSTEM_PROMPT,
   DEFAULT_COMPACTION_THRESHOLD_PERCENT,
 } from '../contextManagementConstants';
+import type { NormalizeOpenAIMessageContentOptions } from './openAIMessageUtils';
+import type {
+  ChatCompletion,
+  ChatCompletionChunk,
+  ChatCompletionContentPart,
+  ChatCompletionContentPartInputAudio,
+  ChatCompletionAssistantMessageParam,
+  ChatCompletionCreateParamsNonStreaming,
+  ChatCompletionCreateParamsStreaming,
+  ChatCompletionMessageParam,
+  ChatCompletionMessageToolCall,
+  ChatCompletionToolMessageParam,
+  ChatCompletionStreamParams,
+} from 'openai/resources/chat/completions';
 import type {
   CreateResponseOptions,
   CreateResponseResult,
@@ -100,42 +102,9 @@ type ChatCompletionSummaryParams = ChatCompletionCreateParamsNonStreaming & {
   thinking?: { type: 'disabled' };
 };
 
-// Reasoning content type for DeepSeek, o1 models (not in SDK)
-type ReasoningContent = string | Array<{ type: string; text?: string }>;
-
-function extractReasoningText(content: ReasoningContent | undefined): string {
-  if (!content) return '';
-  if (typeof content === 'string') return content;
-  return content.map((item) => item.text ?? '').join('');
-}
-
 const DEEPSEEK_OFFICIAL_API_MAX_TOKENS = 8192;
 
 // COMPACTION_SYSTEM_PROMPT imported from contextManagementConstants
-
-/** Extracts `reasoning_content` from a streaming chunk delta. */
-function extractReasoningDelta(chunk: ChatCompletionChunk): string {
-  const delta = chunk.choices[0]?.delta as
-    | { reasoning_content?: ReasoningContent }
-    | undefined;
-  if (!delta || !('reasoning_content' in delta)) return '';
-  return extractReasoningText(delta.reasoning_content);
-}
-
-/**
- * Extracts a capped tail of the assistant content accumulated by the SDK's
- * ChatCompletionStream in its currentChatCompletionSnapshot. Returns the
- * suffix because continuation prompts reference the tail of the response.
- */
-function extractOpenAIPartialTail(
-  snapshot:
-    | { choices?: Array<{ message?: { content?: string | null } }> }
-    | undefined,
-  maxChars: number,
-): string {
-  const content = snapshot?.choices?.[0]?.message?.content ?? '';
-  return takeTail(content, maxChars);
-}
 
 /**
  * OpenAI-specific handlers.
@@ -364,7 +333,7 @@ export class ModelHandlerOpenAI<
    * Override in subclasses to handle provider-specific reasoning fields.
    */
   protected extractReasoningDelta(chunk: ChatCompletionChunk): string {
-    return extractReasoningDelta(chunk);
+    return extractReasoningDeltaFromChunk(chunk);
   }
 
   /**

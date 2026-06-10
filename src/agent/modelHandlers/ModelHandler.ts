@@ -21,8 +21,8 @@ import type {
   ConversationRoundStateSnapshot,
   AgentRunStateSnapshot,
 } from '@agent/core/execution/AgentState';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
-import { MediaEntry } from '@agent/utils/mediaTypes';
+import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import type { MediaEntry } from '@agent/utils/mediaTypes';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
 import { K_SLICE } from '@agent/core/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -44,10 +44,10 @@ import { isGpt5ModelName } from '@model/modelNames';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
 // Local imports - tools
+import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import type { FileLocation } from '@shared/schemas';
 import {
   getProviderStreaming,
   getGlobalStreaming,

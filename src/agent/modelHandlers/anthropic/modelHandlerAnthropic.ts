@@ -14,17 +14,17 @@ import {
   type AgentSetting,
   hasEndTag,
 } from '@agent/core/definition/AgentDataclass';
-import {
+import type {
   AnthropicAPIResponseUsage,
   AnthropicUsage,
 } from '@agent/core/usage/ResponseUsage';
-import {
+import type {
   AgentWorkspaceState,
   ThinkingBlock,
 } from '@agent/core/execution/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/utils/mediaTypes';
 
 // Local imports - common
 import {
@@ -38,10 +38,10 @@ import {
 import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
+import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import type { FileLocation } from '@shared/schemas';
 import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';

@@ -13,9 +13,9 @@ import {
   type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
 import { type OpenAIAPIResponseUsage } from '@agent/core/usage/ResponseUsage';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
 import { toOpenAIReasoningEffort } from '@agent/runtime/reasoningEffort';
@@ -32,6 +32,7 @@ import {
 import { isGpt5ModelName, isGptFamilyModelName } from '@model/modelNames';
 
 // Type imports
+import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
@@ -42,7 +43,6 @@ import {
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
 import { flexibleFS } from '@utils/files/flexibleFS';
-import type { FileLocation } from '@shared/schemas';
 import { normalizeUsage } from '../support/UsageNormalizer';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagOpenAISdkError } from './openAISdkError';
