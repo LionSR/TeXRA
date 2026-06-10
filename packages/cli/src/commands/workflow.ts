@@ -173,7 +173,7 @@ export async function runWorkflowAgent(
       text:
         displayResult.category === AgentCategory.Workflow
           ? formatWorkflowTextResult(displayResult)
-          : result.status,
+          : terminalStatus,
     });
 
     return terminalStatusExitCode(terminalStatus, runContext);

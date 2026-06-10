@@ -20,9 +20,9 @@ export async function openFinalOutputIfAvailable(
   if (!getConfig<boolean>('texra.agentOutputs.autoOpenFinal', true)) {
     return;
   }
-  // END_GROUP_STATUS has only 'error' and 'stopped'; a completed workflow
-  // ends as 'stopped' with outputs attached. 'error' means the flow crashed.
-  if (result.status === 'error' || result.outputs.length === 0) {
+  // Only a completed workflow auto-opens its final output — cancelled runs
+  // may carry partial outputs the user did not ask to review.
+  if (result.outcome !== 'completed' || result.outputs.length === 0) {
     return;
   }
 

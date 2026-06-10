@@ -22,14 +22,14 @@ import {
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
+import {
+  deriveRunOutcome,
+  projectRunOutcome,
+} from '@common/constants/streamStatus';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { STREAM_STATUS } from '@shared/schemas';
 
-import {
-  agentCliLoopTerminalStatus,
-  isCleanInterruption,
-  logTurnSummary,
-} from './agentCliShared';
+import { isCleanInterruption, logTurnSummary } from './agentCliShared';
 import type { ChildStream } from './childStream';
 
 /** Minimal token usage shape consumed by the loop's turn summary. */
@@ -259,19 +259,25 @@ export function runAgentCliSession<TTurn>(
         }
       }
     } finally {
-      sessionStage.end(sawTurnFailure ? 'error' : 'stopped');
+      // One outcome derivation; the stage and the persisted terminal status
+      // are projections of it. The child-stream finalize below is NOT a
+      // projection: child streams reset to READY on clean exit so the tab
+      // clears, which has no outcome equivalent.
+      const projection = projectRunOutcome(
+        deriveRunOutcome({
+          failed: sawTurnFailure,
+          cancelled: session.isInterrupted(),
+        }),
+      );
+      sessionStage.end(projection.endGroupStatus);
       interruptRegistry.unregister(childStreamId);
       ToolUseFollowUpQueue.release(childStreamId);
       strategy.onSessionCleanup?.();
       // Persist terminal status before childStream.finalize() untracks and
       // notifies waiters.
-      await writeTerminalStatus(
-        executionId,
-        agentCliLoopTerminalStatus({
-          interrupted: session.isInterrupted(),
-          sawTurnFailure,
-        }),
-      ).catch(() => {});
+      await writeTerminalStatus(executionId, projection.executionStatus).catch(
+        () => {},
+      );
 
       childStream.finalize({
         status: sawTurnFailure ? STREAM_STATUS.ERROR : STREAM_STATUS.READY,

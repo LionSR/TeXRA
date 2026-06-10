@@ -15,6 +15,7 @@ export {
   isNotADirectoryError,
 } from './errorPredicates';
 export {
+  AGENT_ERROR_OUTCOME,
   classifyAgentError,
   type AgentErrorKind,
 } from './agentErrorClassification';

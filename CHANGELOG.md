@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Shared (all surfaces)
+
+#### Bug Fixes
+
+- **Stopping a run is no longer recorded as an error** — interrupting an agent (stop button, Ctrl+C, closing an idle chat) now consistently records the run as _interrupted_ instead of _error_: history shows the right status, the transcript group ends neutral instead of red, orchestrators see a cancelled subagent as cancelled rather than failed, and the CLI exits with the interrupt code (130) instead of the error code (1).
+
+### CLI
+
+#### Improvements
+
+- **Honest history statuses** — runs that never reached a terminal state (e.g. the process was killed) now show `unknown` in `texra history` instead of being reported as `completed`, and interrupted chat sessions are checked for a resumable record like unfinished ones.
+
 ## [0.38.7] - 2026-06-09
 
 ### Features

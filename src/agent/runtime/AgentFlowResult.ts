@@ -2,11 +2,11 @@ import { z } from 'zod';
 
 import { AttachedMemoryMissSchema } from '@agent/types/AttachedMemory';
 import {
-  EndGroupStatusSchema,
   ExecutionIdSchema,
+  RunOutcomeSchema,
   StreamTabIdSchema,
-  type EndGroupStatus,
   type ExecutionId,
+  type RunOutcome,
   type StreamTabId,
 } from '@shared/schemas';
 
@@ -71,7 +71,7 @@ const AgentFlowMetaSchema = z.object({
 
 export const WorkflowFlowResultSchema = AgentFlowMetaSchema.extend({
   category: z.literal('workflow'),
-  status: EndGroupStatusSchema,
+  outcome: RunOutcomeSchema,
   outputs: z.array(OutputFileSummarySchema),
   compileFailures: z.array(CompileFailureSummarySchema).prefault(() => []),
 });
@@ -80,7 +80,7 @@ export type WorkflowFlowResult = z.infer<typeof WorkflowFlowResultSchema>;
 
 export const ToolUseFlowResultSchema = AgentFlowMetaSchema.extend({
   category: z.literal('toolUse'),
-  status: EndGroupStatusSchema,
+  outcome: RunOutcomeSchema,
   lastResponse: z.string().optional(),
   /** Workspace-relative paths of files edited by tool calls during this session. */
   touchedFiles: z.array(z.string()).optional(),
@@ -117,7 +117,7 @@ export type AgentFlowCategory = AgentFlowResult['category'];
 
 export function buildTerminalFlowResult(
   category: AgentFlowCategory,
-  status: EndGroupStatus,
+  outcome: RunOutcome,
   executionId: ExecutionId,
   streamId: StreamTabId,
   memoryMisses?: z.infer<typeof AttachedMemoryMissSchema>[],
@@ -128,11 +128,11 @@ export function buildTerminalFlowResult(
     ...(memoryMisses && memoryMisses.length > 0 ? { memoryMisses } : {}),
   };
   if (category === 'toolUse') {
-    return { category, status, ...meta };
+    return { category, outcome, ...meta };
   }
   return {
     category,
-    status,
+    outcome,
     ...meta,
     outputs: [],
     compileFailures: [],

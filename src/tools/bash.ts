@@ -19,10 +19,14 @@ import {
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import {
+  deriveRunOutcome,
+  projectRunOutcome,
+} from '@common/constants/streamStatus';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - tools
-import type { StreamTabId, ExecutionId } from '@shared/schemas';
+import { type StreamTabId, type ExecutionId } from '@shared/schemas';
 import { BASH_TOOL_DEFAULT_TIMEOUT_MS } from '@shared/constants/toolDefaults';
 import { ToolError, type ToolResult } from '@tools/result';
 import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
@@ -52,6 +56,12 @@ const SHELL_BACKGROUNDING_PATTERN =
 const SHELL_BACKGROUNDING_MESSAGE =
   'This command uses shell-level backgrounding (`nohup ... &`) inside a foreground bash tool call. ' +
   'Do not emulate background execution inside the shell; call the bash tool again with `run_in_background: true` and the command without `nohup` or a trailing `&`.';
+
+function backgroundBashTerminalStatus(success: boolean) {
+  return projectRunOutcome(
+    deriveRunOutcome({ failed: !success, cancelled: false }),
+  ).executionStatus;
+}
 
 const BashInputSchema = z.strictObject({
   command: z.string(),
@@ -339,10 +349,10 @@ export class BashTool extends defineTool({
             timedOut: result.timedOut,
             command,
           });
-          const terminalStatus = result.success ? 'completed' : 'error';
-          await writeTerminalStatus(executionId, terminalStatus).catch(
-            () => {},
-          );
+          await writeTerminalStatus(
+            executionId,
+            backgroundBashTerminalStatus(result.success),
+          ).catch(() => {});
           await store.writeReport(msg);
         } catch (err: unknown) {
           logBackgroundFailure('persist', err);
@@ -365,7 +375,10 @@ export class BashTool extends defineTool({
       const { error } = outcome;
       const msg = formatBashError(executionId, command, error);
       try {
-        await writeTerminalStatus(executionId, 'error').catch(() => {});
+        await writeTerminalStatus(
+          executionId,
+          backgroundBashTerminalStatus(false),
+        ).catch(() => {});
         await getExecutionStore(executionId).writeReport(msg);
       } catch (err: unknown) {
         logBackgroundFailure('persist', err);

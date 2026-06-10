@@ -40,19 +40,36 @@ beforeEach(async () => {
 });
 
 describe('CLI history status formatting', () => {
-  it('keeps terminal statuses authoritative', () => {
+  it('keeps failed terminal statuses authoritative', () => {
     expect(
       resolveCliHistoryStatus({
         terminalStatus: EXECUTION_STATUS.ERROR,
         hasFlowRecord: true,
       }),
     ).toBe(EXECUTION_STATUS.ERROR);
+  });
+
+  it('marks interrupted tool-use sessions with flow records as resumable', () => {
     expect(
       resolveCliHistoryStatus({
         terminalStatus: EXECUTION_STATUS.INTERRUPTED,
         hasFlowRecord: true,
       }),
-    ).toBe(EXECUTION_STATUS.INTERRUPTED);
+    ).toBe(CLI_HISTORY_RESUMABLE_STATUS);
+
+    expect(
+      resumableCliHistoryEntries([
+        {
+          id: 'stopped-with-flow',
+          status: resolveCliHistoryStatus({
+            terminalStatus: EXECUTION_STATUS.INTERRUPTED,
+            hasFlowRecord: true,
+          }),
+        },
+      ]),
+    ).toEqual([
+      { id: 'stopped-with-flow', status: CLI_HISTORY_RESUMABLE_STATUS },
+    ]);
   });
 
   it('uses nullish fallback semantics for persisted terminal status', () => {
@@ -91,10 +108,10 @@ describe('CLI history status formatting', () => {
     ).toEqual([{ id: 'root' }, { id: 'root-with-depth', delegationDepth: 0 }]);
   });
 
-  it('keeps legacy terminal-status-free entries completed when no flow remains', () => {
-    expect(resolveCliHistoryStatus({ hasFlowRecord: false })).toBe(
-      EXECUTION_STATUS.COMPLETED,
-    );
+  it('reports legacy terminal-status-free entries as unknown when no flow remains', () => {
+    // A missing terminal status means the terminal write never happened
+    // (crash, kill, old build) — reporting 'completed' would mask crashes.
+    expect(resolveCliHistoryStatus({ hasFlowRecord: false })).toBe('unknown');
   });
 
   it('prints resumable details instead of inventing completed status', () => {
@@ -134,7 +151,9 @@ describe('CLI history status formatting', () => {
     const details = await readCliHistoryDetails(id);
 
     expect(details?.hasFlowRecord).toBe(false);
-    expect(details?.status).toBe(EXECUTION_STATUS.COMPLETED);
+    // Absent terminal status without a valid flow record is reported as
+    // 'unknown', never invented as completed (crash-masking guard).
+    expect(details?.status).toBe('unknown');
     expect(formatCliHistoryDetailsText(details!)).not.toContain(
       'Resumable flow record: present',
     );

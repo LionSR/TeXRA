@@ -23,7 +23,8 @@ import { RetryRequestCoordinatorImpl } from '@agent/runtime/RetryRequestCoordina
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { UsageMonitor } from '@agent/utils/UsageMonitor';
 import {
-  END_GROUP_STATUS,
+  EXECUTION_STATUS,
+  RUN_OUTCOME,
   STREAM_STATUS,
   type ExecutionId,
   type StorageKey,
@@ -139,7 +140,7 @@ describe('runFlowWithLifecycle', () => {
       // StreamStatusService must stay untouched.
       await runFlowWithLifecycle(ctx, async () => ({
         category: 'toolUse',
-        status: END_GROUP_STATUS.STOPPED,
+        outcome: RUN_OUTCOME.COMPLETED,
         executionId,
         streamId,
       }));
@@ -175,7 +176,7 @@ describe('runFlowWithLifecycle', () => {
         { isSubagent: true, onError },
       );
 
-      expect(result.status).toBe(END_GROUP_STATUS.STOPPED);
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
       expect(result.memoryMisses).toEqual(ctx.attachedMemoryMisses);
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
       expect(onError).toHaveBeenCalledOnce();
@@ -209,12 +210,131 @@ describe('runFlowWithLifecycle', () => {
         { isSubagent: true, onError },
       );
 
-      expect(result.status).toBe(END_GROUP_STATUS.ERROR);
+      expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
       expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.ERROR);
       expect(onError).toHaveBeenCalledOnce();
       expect(executionRegistry.getHandle(executionId)).toBeUndefined();
     } finally {
       executionRegistry.untrack(executionId);
+      streamStatus.clear(streamId, { emit: false });
+    }
+  });
+
+  // The canonical outcome is decided once and projected three ways. This
+  // matrix pins the projections for every terminal path — in particular that
+  // a user stop (the no-throw `cancelled` exit, the dominant stop path)
+  // persists `interrupted` and ends the stage neutral, never as an error.
+  it('projects returned outcomes to terminal status, stage end, and stream status', async () => {
+    const cases = [
+      {
+        outcome: RUN_OUTCOME.COMPLETED,
+        terminal: EXECUTION_STATUS.COMPLETED,
+        stageEnd: 'stopped',
+        stream: STREAM_STATUS.STOPPED,
+      },
+      {
+        outcome: RUN_OUTCOME.CANCELLED,
+        terminal: EXECUTION_STATUS.INTERRUPTED,
+        stageEnd: 'stopped',
+        stream: STREAM_STATUS.STOPPED,
+      },
+      {
+        outcome: RUN_OUTCOME.FAILED,
+        terminal: EXECUTION_STATUS.ERROR,
+        stageEnd: 'error',
+        stream: STREAM_STATUS.ERROR,
+      },
+    ] as const;
+
+    for (const expected of cases) {
+      const executionId =
+        `execution-outcome-${expected.outcome}` as ExecutionId;
+      const streamId = `stream-outcome-${expected.outcome}` as StreamTabId;
+      const streamStatus = new StreamStatusRegistry();
+      const ctx = createLifecycleContext({
+        executionId,
+        streamId,
+        streamStatus,
+      });
+      const stageEnd = vi.spyOn(ctx.parentStage, 'end');
+      storageMocks.writeTerminalStatus.mockClear();
+
+      try {
+        const result = await runFlowWithLifecycle(ctx, async () => ({
+          category: 'toolUse',
+          outcome: expected.outcome,
+          executionId,
+          streamId,
+        }));
+
+        expect(result.outcome).toBe(expected.outcome);
+        expect(storageMocks.writeTerminalStatus).toHaveBeenCalledWith(
+          executionId,
+          expected.terminal,
+        );
+        expect(stageEnd).toHaveBeenCalledWith(expected.stageEnd);
+        expect(streamStatus.get(streamId)).toBe(expected.stream);
+      } finally {
+        streamStatus.clear(streamId, { emit: false });
+      }
+    }
+  });
+
+  it('projects a thrown abort as cancelled (interrupted, neutral stage)', async () => {
+    const executionId = 'execution-outcome-thrown-abort' as ExecutionId;
+    const streamId = 'stream-outcome-thrown-abort' as StreamTabId;
+    const streamStatus = new StreamStatusRegistry();
+    const ctx = createLifecycleContext({
+      executionId,
+      streamId,
+      streamStatus,
+    });
+    const stageEnd = vi.spyOn(ctx.parentStage, 'end');
+    storageMocks.writeTerminalStatus.mockClear();
+
+    try {
+      const result = await runFlowWithLifecycle(ctx, async () => {
+        throw new DOMException('Request aborted', 'AbortError');
+      });
+
+      expect(result.outcome).toBe(RUN_OUTCOME.CANCELLED);
+      expect(storageMocks.writeTerminalStatus).toHaveBeenCalledWith(
+        executionId,
+        EXECUTION_STATUS.INTERRUPTED,
+      );
+      expect(stageEnd).toHaveBeenCalledWith('stopped');
+      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+    } finally {
+      streamStatus.clear(streamId, { emit: false });
+    }
+  });
+
+  it('projects an unexpected throw as failed', async () => {
+    const executionId = 'execution-outcome-thrown-error' as ExecutionId;
+    const streamId = 'stream-outcome-thrown-error' as StreamTabId;
+    const streamStatus = new StreamStatusRegistry();
+    const ctx = createLifecycleContext({
+      executionId,
+      streamId,
+      streamStatus,
+    });
+    const stageEnd = vi.spyOn(ctx.parentStage, 'end');
+    storageMocks.writeTerminalStatus.mockClear();
+
+    try {
+      await expect(
+        runFlowWithLifecycle(ctx, async () => {
+          throw new Error('model exploded');
+        }),
+      ).rejects.toThrow('model exploded');
+
+      expect(storageMocks.writeTerminalStatus).toHaveBeenCalledWith(
+        executionId,
+        EXECUTION_STATUS.ERROR,
+      );
+      expect(stageEnd).toHaveBeenCalledWith('error');
+      expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.ERROR);
+    } finally {
       streamStatus.clear(streamId, { emit: false });
     }
   });
@@ -231,7 +351,7 @@ describe('runFlowWithLifecycle', () => {
     });
     const carriedResult = {
       category: 'toolUse' as const,
-      status: END_GROUP_STATUS.ERROR,
+      outcome: RUN_OUTCOME.FAILED,
       executionId,
       streamId,
       totalCostUsd: 0.73,
