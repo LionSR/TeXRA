@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
-- **`chat` is now a general-purpose scientific assistant** — the built-in `chat` agent gained the full research toolset: web search and fetch, Zotero reference management, Wolfram computation, word counts (`texcount`), linter diagnostics, PDF opening, persistent memory, planning and todo tracking, and full delegation (`delegate_workflow`, `executions`, `accept_run_files`) alongside its existing file editing and arXiv/Crossref tools. Its system prompt now covers literature research, computation, and document tooling in addition to the established mathematical writing guidance.
+- **`chat` is now `assistant`, a general-purpose scientific assistant** — the built-in `chat` agent was renamed to `assistant` and upgraded with the broadest toolset of any built-in agent: web search and fetch, Zotero reference management, Wolfram computation, Lean 4 proof tools, word counts (`texcount`), linter diagnostics, PDF opening, persistent memory, planning and todo tracking, full delegation (`delegate_workflow`, `executions`, `accept_run_files`), external AI coding agents (`codex`, `claude_code`), and opt-in GitHub activity subscription — alongside its existing file editing and arXiv/Crossref tools. Its system prompt takes a holistic view of the research workflow, with guidance organized by phase (orient, research, compute, formalize, write, verify, delegate) on top of the established mathematical writing rules. The old `chat` name still resolves to the renamed agent, so existing configs and histories keep working; it remains the CLI's default chat agent under its new name.
 
 #### Bug Fixes
 

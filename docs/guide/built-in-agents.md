@@ -17,7 +17,7 @@ TeXRA ships with built-in agents for common research tasks—polishing prose, fi
     {
       label: 'Tool-use',
       items: [
-        { name: 'chat', icon: 'comment' },
+        { name: 'assistant', icon: 'comment' },
         { name: 'prover', icon: 'lightbulb' },
         { name: 'research', icon: 'robot' },
         { name: 'numerics', icon: 'pulse' },
@@ -68,15 +68,15 @@ For details on the underlying structure and execution flow common to all agents,
 
 ## Conversational Agents
 
-### `chat`
+### `assistant`
 
 ::: tip Opt-in
-`chat` is not included in any of the [built-in teams](#built-in-teams). Enable it from the **Agents** tab if you want to use it.
+`assistant` (formerly `chat`) is not included in any of the [built-in teams](#built-in-teams). Enable it from the **Agents** tab if you want to use it. The old `chat` name still resolves to it.
 :::
 
-A general-purpose scientific assistant. It can read your project, edit files, run shell commands, search the literature (arXiv, Crossref, web), manage Zotero references, run Wolfram computations, and delegate to other agents—all in a back-and-forth conversation.
+A general-purpose scientific assistant with the broadest toolset of any built-in agent. It can read your project, edit files, run shell commands, search the literature (arXiv, Crossref, web), manage Zotero references, run Wolfram computations, work on Lean 4 proofs, and delegate to specialist agents or external AI coding agents (Codex, Claude Code)—all in a back-and-forth conversation.
 
-> **User story:** You just got reviewer comments back. Instead of manually hunting through a 40-page paper, you open `chat` and paste the reviewer's feedback: "Address comment 3 about missing error bars in Table 2—add them and update the caption." The agent reads your files, makes the edits, and shows you a diff to approve.
+> **User story:** You just got reviewer comments back. Instead of manually hunting through a 40-page paper, you open `assistant` and paste the reviewer's feedback: "Address comment 3 about missing error bars in Table 2—add them and update the caption." The agent reads your files, makes the edits, and shows you a diff to approve.
 
 **Best for:** General research assistance, literature search, code/LaTeX editing, computations, running compilations
 
