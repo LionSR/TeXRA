@@ -1,3 +1,5 @@
+import { isJsonRecord, type JsonRecord } from './reasoning.ts';
+
 const BYTES_PER_KIB = 1024;
 const BYTES_PER_MIB = BYTES_PER_KIB * 1024;
 
@@ -6,6 +8,7 @@ const BYTES_PER_MIB = BYTES_PER_KIB * 1024;
  * normal research requests.
  */
 export const FREE_TIER_REQUEST_BODY_LIMIT_BYTES = 2 * BYTES_PER_MIB;
+export const FREE_TIER_MAX_OUTPUT_TOKENS = 8192;
 
 const textEncoder = new TextEncoder();
 
@@ -103,4 +106,161 @@ export function formatRequestBytes(bytes: number): string {
     return `${bytes / BYTES_PER_KIB} KiB`;
   }
   return `${bytes} bytes`;
+}
+
+const OPENAI_COMPATIBLE_MAX_OUTPUT_FIELDS = [
+  'max_tokens',
+  'max_completion_tokens',
+  'max_output_tokens',
+];
+
+export interface MaxOutputTokenClampResult {
+  body: unknown;
+  changed: boolean;
+  limit: number;
+  fieldPath: string | null;
+  originalValue: number | null;
+}
+
+function numericValue(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function clampRecordField(
+  record: JsonRecord,
+  field: string,
+  limit: number,
+): { record: JsonRecord; changed: boolean; originalValue: number | null } {
+  const current = numericValue(record[field]);
+  if (current !== null && current > 0 && current <= limit) {
+    return { record, changed: false, originalValue: current };
+  }
+
+  return {
+    record: { ...record, [field]: limit },
+    changed: true,
+    originalValue: current,
+  };
+}
+
+function describeFields(fields: string[]): string {
+  return fields.join(', ');
+}
+
+function clampGoogleGenerationConfig(
+  body: JsonRecord,
+  limit: number,
+): MaxOutputTokenClampResult {
+  const currentConfig = isJsonRecord(body.generationConfig)
+    ? body.generationConfig
+    : {};
+  const clamped = clampRecordField(currentConfig, 'maxOutputTokens', limit);
+  if (!clamped.changed) {
+    return {
+      body,
+      changed: false,
+      limit,
+      fieldPath: 'generationConfig.maxOutputTokens',
+      originalValue: clamped.originalValue,
+    };
+  }
+
+  return {
+    body: { ...body, generationConfig: clamped.record },
+    changed: true,
+    limit,
+    fieldPath: 'generationConfig.maxOutputTokens',
+    originalValue: clamped.originalValue,
+  };
+}
+
+function isOpenAICompletionTokenModel(model: unknown): boolean {
+  if (typeof model !== 'string') return false;
+  const normalized = model.toLowerCase().trim();
+  const modelName = normalized.includes('/')
+    ? normalized.slice(normalized.indexOf('/') + 1)
+    : normalized;
+  return (
+    modelName.startsWith('gpt-5') ||
+    modelName.startsWith('gpt5') ||
+    modelName.startsWith('o1') ||
+    modelName.startsWith('o3') ||
+    modelName.startsWith('o4')
+  );
+}
+
+function defaultMaxOutputFieldForProvider(
+  provider: string,
+  apiPath: string,
+  body: JsonRecord,
+): string {
+  if (provider === 'openai' && apiPath.includes('/responses')) {
+    return 'max_output_tokens';
+  }
+  if (
+    provider === 'openai' &&
+    apiPath.includes('/chat') &&
+    isOpenAICompletionTokenModel(body.model)
+  ) {
+    return 'max_completion_tokens';
+  }
+  return 'max_tokens';
+}
+
+function maxOutputFieldsForProvider(
+  provider: string,
+  apiPath: string,
+  body: JsonRecord,
+): string[] {
+  const fields = new Set(
+    OPENAI_COMPATIBLE_MAX_OUTPUT_FIELDS.filter((field) =>
+      Object.hasOwn(body, field),
+    ),
+  );
+  fields.add(defaultMaxOutputFieldForProvider(provider, apiPath, body));
+  return [...fields];
+}
+
+export function clampFreeTierMaxOutputTokens(
+  provider: string,
+  apiPath: string,
+  body: unknown,
+  limit: number = FREE_TIER_MAX_OUTPUT_TOKENS,
+): MaxOutputTokenClampResult {
+  if (!isJsonRecord(body)) {
+    return {
+      body,
+      changed: false,
+      limit,
+      fieldPath: null,
+      originalValue: null,
+    };
+  }
+
+  if (provider === 'google') {
+    return clampGoogleGenerationConfig(body, limit);
+  }
+
+  const fields = maxOutputFieldsForProvider(provider, apiPath, body);
+  let nextBody = body;
+  let changed = false;
+  let firstOriginalValue: number | null = null;
+  const changedFields: string[] = [];
+  for (const field of fields) {
+    const clamped = clampRecordField(nextBody, field, limit);
+    if (clamped.changed) {
+      nextBody = clamped.record;
+      changed = true;
+      changedFields.push(field);
+      firstOriginalValue ??= clamped.originalValue;
+    }
+  }
+
+  return {
+    body: nextBody,
+    changed,
+    limit,
+    fieldPath: describeFields(changed ? changedFields : fields),
+    originalValue: firstOriginalValue,
+  };
 }

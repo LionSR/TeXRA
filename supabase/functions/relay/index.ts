@@ -68,6 +68,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2.104.1';
 import {
   TIER_CONFIG,
   TIER_SPENDING_LIMITS,
+  getRequestLimits,
   isModelAllowedForTier,
   getSpendingLimit,
   FREE_TIER_SUGGESTED_MODEL,
@@ -81,9 +82,15 @@ import {
   type ReasoningEffortCap,
 } from './reasoning.ts';
 import {
+  clampFreeTierMaxOutputTokens,
+  FREE_TIER_MAX_OUTPUT_TOKENS,
   formatRequestBytes,
   readRequestBodyWithinSizeLimit,
 } from './requestLimits.ts';
+import {
+  acquireRelayRequestSlot,
+  releaseWhenStreamCloses,
+} from './requestGate.ts';
 
 // =============================================================================
 // Constants
@@ -705,12 +712,36 @@ app.all('/:provider{[^/]+}/*', async (c) => {
       );
     }
 
-    const cappedBody = capOpenAIReasoningEffortForTier(requestBodyJson, {
+    if (userTier === FREE_TIER && !isJsonRecord(requestBodyJson)) {
+      return jsonError(
+        'Free tier relay requests to model endpoints must use a JSON object body so server-side limits can be enforced.',
+        400,
+        { invalidRequestBody: true },
+      );
+    }
+
+    let cappedBody = capOpenAIReasoningEffortForTier(requestBodyJson, {
       provider,
       tier: userTier,
       modelName,
       tierCaps: OPENAI_GPT5_REASONING_EFFORT_CAPS,
     });
+    if (userTier === FREE_TIER) {
+      const outputClamp = clampFreeTierMaxOutputTokens(
+        provider,
+        apiPath,
+        cappedBody,
+      );
+      if (outputClamp.changed) {
+        console.info(
+          `[RELAY] Free tier ${outputClamp.fieldPath} capped at ${FREE_TIER_MAX_OUTPUT_TOKENS} tokens` +
+            (outputClamp.originalValue === null
+              ? ''
+              : ` (was ${outputClamp.originalValue})`),
+        );
+        cappedBody = outputClamp.body;
+      }
+    }
     if (cappedBody !== requestBodyJson) {
       requestBody = JSON.stringify(cappedBody);
     }
@@ -721,6 +752,57 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   if (!apiKey) {
     console.error(`[RELAY] API key not configured: ${providerConfig.envKey}`);
     return jsonError(`API key not configured for ${provider}`, 503);
+  }
+
+  // 7.5. Enforce server-side per-user request gates. This lives after local
+  // request validation so rejected requests do not consume active slots.
+  let releaseRelaySlot: (() => Promise<void>) | null = null;
+  let refreshRelaySlot: (() => Promise<void>) | null = null;
+  if (serviceRoleKey) {
+    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+    try {
+      const slot = await acquireRelayRequestSlot(
+        adminClient,
+        user.id,
+        getRequestLimits(userTier),
+      );
+      if (!slot.allowed) {
+        const decision = slot.decision;
+        if (decision.reason === 'concurrency') {
+          return jsonError(
+            `Too many concurrent relay requests. Limit: ${decision.concurrencyLimit ?? 'unknown'}.`,
+            429,
+            {
+              requestLimitReached: true,
+              reason: 'concurrency',
+              activeRequests: decision.activeRequests,
+              concurrencyLimit: decision.concurrencyLimit,
+              retryAfterSeconds: decision.retryAfterSeconds,
+            },
+          );
+        }
+        return jsonError(
+          `Relay request rate limit reached. Limit: ${decision.rateLimitPerMinute ?? 'unknown'} requests per minute.`,
+          429,
+          {
+            requestLimitReached: true,
+            reason: 'rate',
+            requestsThisMinute: decision.requestsThisMinute,
+            rateLimitPerMinute: decision.rateLimitPerMinute,
+            retryAfterSeconds: decision.retryAfterSeconds,
+          },
+        );
+      }
+      releaseRelaySlot = slot.release;
+      refreshRelaySlot = slot.refresh;
+    } catch (error) {
+      console.error('[RELAY] Failed to enforce request gate:', error);
+      return jsonError(
+        'Unable to verify relay request limits right now. Please try again shortly, or switch to your own API keys.',
+        503,
+        { requestLimitCheckFailed: true },
+      );
+    }
   }
 
   // 8. Build target URL
@@ -790,6 +872,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     });
   } catch (error) {
     clearTimeout(timeoutId);
+    await releaseRelaySlot?.();
     if (error instanceof Error && error.name === 'AbortError') {
       return jsonError('Upstream request timed out', 504);
     }
@@ -843,7 +926,15 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   // via the `messageStopReceived` diagnostic and throws a retryable error,
   // so the impact of not having keepalives is a retry, not silent data loss.
 
-  return new Response(upstreamResponse.body, {
+  const responseBody = releaseRelaySlot
+    ? await releaseWhenStreamCloses(
+        upstreamResponse.body,
+        releaseRelaySlot,
+        refreshRelaySlot ?? undefined,
+      )
+    : upstreamResponse.body;
+
+  return new Response(responseBody, {
     status: upstreamResponse.status,
     headers: responseHeaders,
   });
