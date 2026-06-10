@@ -69,6 +69,7 @@ export interface CliNoAvailableModelsRecoveryOptions {
   readonly includedModeAction?: string;
   readonly loginAction?: string;
   readonly personalModeAction?: string;
+  readonly configureKeyAction?: string;
 }
 
 export type CliNoRunnableModelsMessageOptions =
@@ -113,6 +114,10 @@ const DEFAULT_CLI_MODEL_RECOVERY_ACTIONS = {
   includedModeAction: 'retry with `--api-mode included`',
   loginAction: 'run `texra login`',
   personalModeAction: 'retry with `--api-mode personal`',
+  // Point shell users at the guided setup picker rather than leaving them to
+  // figure out key storage on their own; TUI contexts override this with
+  // slash-command phrasing.
+  configureKeyAction: 'add a provider API key with `texra setup`',
 } satisfies Required<CliNoAvailableModelsRecoveryOptions>;
 
 function startSentence(text: string): string {
@@ -132,6 +137,9 @@ function cliModelRecoveryActions(
     personalModeAction:
       options.personalModeAction ??
       DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.personalModeAction,
+    configureKeyAction:
+      options.configureKeyAction ??
+      DEFAULT_CLI_MODEL_RECOVERY_ACTIONS.configureKeyAction,
   };
 }
 
@@ -197,8 +205,12 @@ function formatCliNoRunnableModelsRecovery(
   reason: NoRunnableModelAccessReason,
   options: CliNoRunnableModelsMessageOptions = {},
 ): string {
-  const { includedModeAction, loginAction, personalModeAction } =
-    cliModelRecoveryActions(options);
+  const {
+    includedModeAction,
+    loginAction,
+    personalModeAction,
+    configureKeyAction,
+  } = cliModelRecoveryActions(options);
 
   if (reason === 'includedLoginRequired') {
     return `${startSentence(loginAction)} or ${personalModeAction}.`;
@@ -206,7 +218,7 @@ function formatCliNoRunnableModelsRecovery(
   if (reason === 'included') {
     return `${startSentence(personalModeAction)} or try again later.`;
   }
-  return `Configure a provider key or ${includedModeAction}.`;
+  return `${startSentence(configureKeyAction)} or ${includedModeAction}.`;
 }
 
 export function formatCliNoRunnableModelsMessage(
@@ -283,16 +295,20 @@ export function formatCliNoAvailableModelsRecovery(
   apiMode?: CliApiMode,
   options: CliNoAvailableModelsRecoveryOptions = {},
 ): string {
-  const { includedModeAction, loginAction, personalModeAction } =
-    cliModelRecoveryActions(options);
+  const {
+    includedModeAction,
+    loginAction,
+    personalModeAction,
+    configureKeyAction,
+  } = cliModelRecoveryActions(options);
 
   if (apiMode === 'personal') {
-    return `Configure a provider API key for personal mode, or ${includedModeAction} and ${loginAction} for included relay access.`;
+    return `${startSentence(configureKeyAction)} for personal mode, or ${includedModeAction} and ${loginAction} for included relay access.`;
   }
   if (apiMode === 'included') {
     return `${startSentence(loginAction)} for included relay access, or ${personalModeAction} after configuring a provider API key.`;
   }
-  return `${startSentence(loginAction)} for included relay access, ${includedModeAction}, or configure a provider API key.`;
+  return `${startSentence(loginAction)} for included relay access, ${includedModeAction}, or ${configureKeyAction}.`;
 }
 
 function toCliModelAccess(

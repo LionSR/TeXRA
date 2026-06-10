@@ -67,6 +67,7 @@ const INTERACTIVE_RECOVERY = {
   includedModeAction: 'switch with /api included',
   loginAction: 'run /login',
   personalModeAction: 'switch with /api personal',
+  configureKeyAction: 'configure a provider API key',
 } as const;
 
 describe('CLI model access resolution', () => {
@@ -586,7 +587,7 @@ describe('CLI model access resolution', () => {
     expect(
       formatCliNoRunnableModelsMessage('personal', INTERACTIVE_RECOVERY),
     ).toBe(
-      'No personal API-key models are runnable. Configure a provider key or switch with /api included.',
+      'No personal API-key models are runnable. Configure a provider API key or switch with /api included.',
     );
     expect(
       formatCliNoAvailableModelsRecovery('included', INTERACTIVE_RECOVERY),
@@ -653,7 +654,7 @@ describe('CLI model access resolution', () => {
         INTERACTIVE_RECOVERY,
       ),
     ).toBe(
-      'No personal API-key models are runnable. Configure a provider key or switch with /api included.',
+      'No personal API-key models are runnable. Configure a provider API key or switch with /api included.',
     );
   });
 
@@ -727,13 +728,13 @@ describe('CLI model access resolution', () => {
         { fallbackSource: 'config' },
       ),
     ).rejects.toThrow(
-      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra login` for included relay access, retry with `--api-mode included`, or configure a provider API key.',
+      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Run `texra login` for included relay access, retry with `--api-mode included`, or add a provider API key with `texra setup`.',
     );
   });
 
   it('keeps personal-mode recovery scoped to provider keys or included mode', async () => {
     expect(formatCliNoAvailableModelsRecovery('personal')).toBe(
-      'Configure a provider API key for personal mode, or retry with `--api-mode included` and run `texra login` for included relay access.',
+      'Add a provider API key with `texra setup` for personal mode, or retry with `--api-mode included` and run `texra login` for included relay access.',
     );
     await expect(
       resolveModelFromAccessList(
@@ -752,7 +753,7 @@ describe('CLI model access resolution', () => {
         { fallbackSource: 'config', apiMode: 'personal' },
       ),
     ).rejects.toThrow(
-      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Configure a provider API key for personal mode, or retry with `--api-mode included` and run `texra login` for included relay access.',
+      'Model "gemini31p" is not available in the active API mode (missing api key). No models are currently available. Add a provider API key with `texra setup` for personal mode, or retry with `--api-mode included` and run `texra login` for included relay access.',
     );
   });
 
