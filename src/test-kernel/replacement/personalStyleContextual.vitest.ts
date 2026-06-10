@@ -5,7 +5,7 @@ import { describe, it } from 'vitest';
 // Node.js built-in imports
 
 // Internal imports
-import { replacementEngine } from '@replacement/engine';
+import replacementEngine from '@replacement/engine';
 
 describe('personal style contextual replacements', () => {
   it('keeps macro definitions intact while rewriting usages', () => {

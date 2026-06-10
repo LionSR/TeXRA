@@ -8,7 +8,7 @@ import { type AgentTrace } from '@agent/trace';
 import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 
 // Local imports - replacement
-import { replacementEngine } from '@replacement/engine';
+import replacementEngine from '@replacement/engine';
 
 // Local imports - files
 import type { FileLocation } from '@shared/schemas';

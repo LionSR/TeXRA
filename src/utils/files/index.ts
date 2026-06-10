@@ -1,10 +1,8 @@
 // Core filesystem abstractions
-export { isFile, isDirectory, isSymlink } from './fsEntryType';
-export { locatePathInRoot, type ResolvedPath } from './workspaceRoot';
+export { type ResolvedPath } from './workspaceRoot';
 export { WorkspaceFS } from './workspaceFS';
 export { AbsoluteFS } from './absoluteFS';
 export { StorageFS, GlobalStorageFS } from './storageFS';
-export { RelativeFS } from './relativeFS';
 
 // Heavily-used utilities (re-exported for convenience)
 export * from './fileMappingUtils';

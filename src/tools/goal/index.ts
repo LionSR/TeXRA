@@ -4,14 +4,11 @@ export {
   GOAL_COST_CAP_CONFIG_KEY,
   GOAL_FEATURE_FLAG_KEY,
   LEGACY_GOAL_FEATURE_FLAG_KEYS,
-  GoalStatusSchema,
-  GoalSchema,
   type Goal,
   type GoalStatus,
   isGoalInFlight,
   formatGoalTime,
   goalElapsedMs,
-  goalDurationMs,
 } from './goalMeta';
 
 export { GoalStore } from './goalStore';

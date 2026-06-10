@@ -4,12 +4,7 @@ import { formatError, formatZodError, toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { z } from 'zod';
 
-export { formatError, formatZodError };
-export {
-  isDiskFullError,
-  isFileNotFoundError,
-  toErrorMessage,
-} from '@common/errors';
+export { isFileNotFoundError, toErrorMessage } from '@common/errors';
 
 /** Valid documentation identifiers for error messages. */
 export type DocId = 'intelligent-merge' | 'custom-agents' | 'latex-diff';

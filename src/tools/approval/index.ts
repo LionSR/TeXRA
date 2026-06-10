@@ -55,14 +55,10 @@ export { enableYoloOnChildStream, inheritBashBypassOnChildStream };
 // Re-export commonly used functions from individual modules
 export {
   // Bash approval
-  requestBashApproval,
-  buildBashApprovalRejectedResult,
   handleProgressViewBashApprovalAction,
   setBashApprovalSessionBypass,
   toggleBashApprovalSessionBypass,
   isBashApprovalBypassedForStream,
-  BASH_APPROVAL_CONFIG_KEY,
-  BASH_APPROVAL_ACTIONS,
   type BashApprovalAction,
   type BashApprovalRequest,
   type BashApprovalResult,
@@ -75,17 +71,10 @@ export {
 
 export {
   // Tool edit approval
-  requestToolEditApproval,
-  buildApprovalRejectedResult,
   setToolEditApprovalHandler,
   setToolEditApprovalSessionBypass,
   toggleToolEditApprovalSessionBypass,
   isApprovalBypassedForStream,
-  getApprovedContent,
-  writeApprovedContent,
-  formatUnifiedApprovalUserDiff,
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
-  TOOL_EDIT_APPROVAL_ACTIONS,
   type ToolEditApprovalAction,
   type ToolEditApprovalRequest,
   type ToolEditApprovalResult,

@@ -1,10 +1,6 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-export const helpCommands = {
-  openDoc: 'texra.openDoc',
-};
-
 export async function openDoc(page: string): Promise<void> {
   if (!page) {
     return;

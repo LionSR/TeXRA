@@ -149,7 +149,7 @@ export function getEditedFileListConfig(
   };
 }
 
-export function sanitizeDirectories(directories: readonly string[]): string[] {
+function sanitizeDirectories(directories: readonly string[]): string[] {
   return directories
     .map((dir) => dir.trim())
     .filter((dir) => dir.length > 0)
@@ -170,13 +170,13 @@ export function prepareFileFilters(
   };
 }
 
-export function containsHiddenSegment(relativePath: string): boolean {
+function containsHiddenSegment(relativePath: string): boolean {
   return getPathSegments(relativePath).some(
     (segment) => segment.startsWith('.') && segment.length > 1,
   );
 }
 
-export function containsExcludedDirectory(
+function containsExcludedDirectory(
   relativePath: string,
   excludeDirs: readonly string[],
 ): boolean {
@@ -224,7 +224,7 @@ export function shouldVisitDirectory(
   return !containsExcludedDirectory(relativePath, filters.excludeDirs);
 }
 
-export function getBaseNameWithoutRound(baseName: string): string {
+function getBaseNameWithoutRound(baseName: string): string {
   return baseName.match(/^(.+?)(?:_r\d+)?$/)?.[1] ?? baseName;
 }
 

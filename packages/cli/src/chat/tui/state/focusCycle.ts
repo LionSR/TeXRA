@@ -15,7 +15,7 @@ import { type StreamTabId } from '@shared/schemas';
 import { visibleSubagentRows } from './childStreamMerge';
 import { cliState, type StreamSlice } from './cliState';
 
-export function orderedDescendantsFromSlice(
+function orderedDescendantsFromSlice(
   slice:
     | Pick<StreamSlice, 'activeSubagents' | 'activeProcesses' | 'childStreams'>
     | undefined,
@@ -53,7 +53,7 @@ export function orderedDescendantsFromTree(init: {
   return out;
 }
 
-export function orderedDescendants(parent: StreamTabId): StreamTabId[] {
+function orderedDescendants(parent: StreamTabId): StreamTabId[] {
   const streams = cliState.streams.get();
   return orderedDescendantsFromTree({
     parent,

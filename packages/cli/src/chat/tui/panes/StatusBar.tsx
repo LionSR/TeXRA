@@ -403,7 +403,7 @@ function statusBarBindingRow(
 let lastBindingsKey: string | undefined;
 let lastBindingsText = '';
 
-export function statusBarBindingsText(
+function statusBarBindingsText(
   taskControlsAvailable = true,
   agentSelectionAvailable = false,
   subagentControlsAvailable: boolean,

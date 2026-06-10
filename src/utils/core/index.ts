@@ -8,7 +8,6 @@
 export {
   isNonEmptyString,
   isString,
-  escapeRegExp,
   extractErrorMessage,
   formatDuration,
   serializeError,

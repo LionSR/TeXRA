@@ -5,9 +5,4 @@ export { registerFigureCommands } from './figCommands';
 export { registerImageCommands } from './imageCommands';
 export { registerLatexCommands } from './latexCommands';
 export { registerLatexdiffCommands } from './latexdiffCommands';
-export {
-  linterCommands,
-  handleShowLinterMessages,
-  handleCountLinterMessages,
-  registerLinterCommands,
-} from './linterCommands';
+export { registerLinterCommands } from './linterCommands';

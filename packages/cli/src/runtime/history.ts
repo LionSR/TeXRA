@@ -85,7 +85,7 @@ export interface CliHistoryFile {
 
 export const CLI_HISTORY_RESUMABLE_STATUS = 'resumable';
 
-export function isCliHistoryEntryResumable(
+function isCliHistoryEntryResumable(
   entry: Pick<CliHistoryEntry, 'status'>,
 ): boolean {
   return entry.status === CLI_HISTORY_RESUMABLE_STATUS;
@@ -97,7 +97,7 @@ export function resumableCliHistoryEntries<
   return entries.filter(isCliHistoryEntryResumable);
 }
 
-export function isCliHistoryEntryUserStarted(
+function isCliHistoryEntryUserStarted(
   entry: Pick<CliHistoryEntry, 'parentExecutionId' | 'delegationDepth'>,
 ): boolean {
   return (

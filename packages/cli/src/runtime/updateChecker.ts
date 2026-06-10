@@ -17,7 +17,7 @@ import { askCliQuestion, writeTextStderr } from './logSinks';
 import { createCliStyle, type CliStyle } from './style';
 
 /** Published package name on npm; the `texra` bin lives here. */
-export const CLI_PACKAGE_NAME = '@texra-ai/cli';
+const CLI_PACKAGE_NAME = '@texra-ai/cli';
 
 const DEFAULT_REGISTRY = 'https://registry.npmjs.org';
 const DEFAULT_TIMEOUT_MS = 2500;
