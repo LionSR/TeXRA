@@ -79,9 +79,9 @@ Configure how TeXRA connects to AI model providers:
 
 ### Anthropic 1M Context Window
 
-Claude Opus 4.8 and Sonnet 4.6 include the full 1M context window at standard pricing. No opt-in setting or beta header is required — 1M context is enabled automatically. Up to 600 PDF pages per request are supported (100 for models with a 200K context window). Other Claude models use a 200K context window.
+Claude Fable 5, Opus 4.8, and Sonnet 4.6 include the full 1M context window at standard pricing. No opt-in setting or beta header is required — 1M context is enabled automatically. Up to 600 PDF pages per request are supported (100 for models with a 200K context window). Other Claude models use a 200K context window.
 
-Opus 4.8 uses adaptive thinking only — manual thinking budgets are not supported. TeXRA selects the appropriate thinking mode automatically based on the reasoning-effort level you pick in the Models tab (Low / Medium / High / Extra High / Max). On Opus 4.8, **Extra High** maps to Anthropic's `xhigh` ("extra") effort tier and **Max** maps to the top `max` tier — both are recommended for difficult tasks and long-running work, with Max reserved for the hardest, longest-horizon runs. The earlier Opus 4.6/4.7 models predate the `xhigh`/`max` split and accept only `max`, so both Extra High and Max collapse onto `max` there.
+Fable 5 and Opus 4.8 use adaptive thinking only — manual thinking budgets are not supported (on Fable 5, thinking is always on). TeXRA selects the appropriate thinking mode automatically based on the reasoning-effort level you pick in the Models tab (Low / Medium / High / Extra High / Max). On Opus 4.8, **Extra High** maps to Anthropic's `xhigh` ("extra") effort tier and **Max** maps to the top `max` tier — both are recommended for difficult tasks and long-running work, with Max reserved for the hardest, longest-horizon runs. The earlier Opus 4.6/4.7 models predate the `xhigh`/`max` split and accept only `max`, so both Extra High and Max collapse onto `max` there.
 
 ### Bibliography Settings
 
@@ -220,6 +220,14 @@ Pick the formatter (`latexindent`, `tex-fmt`, or `none` to disable) from the **D
 - `showLatexindentWarning`: Disabled by default. Set to `true` to show a popup when `latexindent` is missing.
 - `latexindentConfig`: Path to a `latexindent` configuration file.
 - `texfmtConfig`: Path to a `tex-fmt` configuration file.
+
+### Workflow Compile Check
+
+The **Dashboard → LaTeX** tab also controls what happens after a workflow agent writes `.tex` outputs:
+
+- **Auto-compile after each round** (on by default): attempt to compile each root document (`latexmk`, falling back to `pdflatex`) in run storage, with a configurable timeout.
+- **Open compiled PDF or log** (on by default): after auto-compile finishes, open the latest PDF on success or the truncated LaTeX log on failure.
+- **Reject rounds when compile fails** (on by default): when the compile check fails, the workflow uses its next planned round to repair the output from the compile log instead of treating the round as done. Turn this off to keep failing rounds as-is.
 
 ### TikZ Figure Processing
 
