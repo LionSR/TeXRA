@@ -270,9 +270,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    */
   private createStreamProcessor(): ResponseStreamProcessor {
     return new ResponseStreamProcessor({
-      createThinkingStream: () => this.createThinkingStream(),
+      // The processor opens this at the reasoning output item — the
+      // provider's explicit phase signal — so the start emits eagerly.
+      createThinkingStream: () =>
+        this.createThinkingStream({ atPhaseSignal: true }),
       createOutputStream: () => this.createOutputStream(),
-      outputStreamingEnabled: this.isOutputStreamingEnabled(),
       extractText: (response) => this.extractResponse(response, '').text,
       emitWebSearchResult: (result) => this.emitWebSearchResult(result),
       logger: this.logger,

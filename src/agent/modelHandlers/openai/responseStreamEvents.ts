@@ -13,6 +13,7 @@ import type {
   ResponseTextDeltaEvent,
   ResponseReasoningTextDeltaEvent,
   ResponseReasoningSummaryTextDeltaEvent,
+  ResponseOutputItemAddedEvent,
   ResponseOutputItemDoneEvent,
   ResponseWebSearchCallInProgressEvent,
   ResponseFunctionCallArgumentsDoneEvent,
@@ -34,6 +35,20 @@ export function isReasoningDeltaEvent(
   return (
     event.type === 'response.reasoning_text.delta' ||
     event.type === 'response.reasoning_summary_text.delta'
+  );
+}
+
+/**
+ * Type guard for the start of a reasoning output item. This fires even when
+ * no reasoning summary text will ever stream (e.g. gpt-5 with summaries
+ * disabled), so it is the reliable "model started thinking" signal.
+ */
+export function isReasoningItemAddedEvent(
+  event: ResponseStreamEvent,
+): event is ResponseOutputItemAddedEvent {
+  return (
+    event.type === 'response.output_item.added' &&
+    event.item.type === 'reasoning'
   );
 }
 

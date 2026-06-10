@@ -116,6 +116,22 @@ export interface StreamSlice {
   readonly bypass: BypassState;
 }
 
+/**
+ * Shared gate for the "model is thinking" indicators (the StatusBar segment
+ * and the conversation pane's liveness row) so the two can never disagree:
+ * the hidden reasoning phase is only worth surfacing while the stream is
+ * actually running — any final or waiting status supersedes it.
+ */
+export function thinkingIndicatorVisible(
+  slice:
+    | { readonly status: string | undefined; readonly thinkingActive: boolean }
+    | undefined,
+): boolean {
+  return (
+    slice?.thinkingActive === true && slice.status === STREAM_STATUS.RUNNING
+  );
+}
+
 const EMPTY_SESSION_META: SessionMeta = {
   agent: '',
   model: '',
