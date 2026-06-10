@@ -300,6 +300,25 @@ body {
   box-sizing: border-box;
 }
 
+/* Match light-DOM text selection to the host editor theme. Shadow-root
+   content gets the same rule from the designTokens sheet (litStyles.ts). */
+::selection {
+  background-color: var(--wa-color-editor-selection);
+}
+
+/* Honor the OS-level reduced-motion preference for light-DOM content.
+   Shadow-root content gets the same damping from the designTokens sheet. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* VS Code-compact dropdown items. WA defaults to ~0.5em padding which makes
    each option ~32px tall; VS Code menus run ~22-24px. */
 wa-option::part(base),

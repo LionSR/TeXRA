@@ -25,7 +25,12 @@ import {
 } from './logFormatters';
 
 // Local imports - Lit template utilities
-import { html, type TemplateResult, type FormatResult } from './litTemplates';
+import {
+  html,
+  nothing,
+  type TemplateResult,
+  type FormatResult,
+} from './litTemplates';
 
 // Local imports - shared schemas
 
@@ -40,7 +45,7 @@ const AUTO_EXPANDED_TYPES: Set<MessageType> = new Set([
   'scratchpad',
 ]);
 
-/** Message types that return empty template when formatter produces no result. */
+/** Message types that render nothing when the formatter produces no result. */
 const NULLABLE_TYPES: Set<MessageType> = new Set([
   'thinking',
   'scratchpad',
@@ -136,7 +141,7 @@ const TEMPLATE_FORMATTERS: Record<string, TemplateFormatterFn | null> = {
 export function formatLogEntry(
   logMessage: LogMessageData,
   options: FormatOptions = {},
-): TemplateResult {
+): TemplateResult | typeof nothing {
   const { messageType } = logMessage;
 
   // Determine if details should be open (undefined = no preference)
@@ -152,8 +157,8 @@ export function formatLogEntry(
   if (messageType && typeof formatter === 'function') {
     const result = formatter(logMessage, templateOptions);
     if (result) return result;
-    if (NULLABLE_TYPES.has(messageType)) return html``;
+    if (NULLABLE_TYPES.has(messageType)) return nothing;
   }
 
-  return formatDefaultLogMessageTemplate(logMessage) ?? html``;
+  return formatDefaultLogMessageTemplate(logMessage) ?? nothing;
 }

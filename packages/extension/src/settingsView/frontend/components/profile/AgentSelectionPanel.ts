@@ -11,6 +11,7 @@ import {
   type TemplateResult,
 } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
@@ -509,7 +510,7 @@ export class AgentSelectionPanel extends LitElement {
 
     return html`
       <div
-        class="agent-list-item ${isSelected ? 'selected' : ''}"
+        class=${classMap({ 'agent-list-item': true, selected: isSelected })}
         data-source=${sourceTone}
         role="option"
         aria-selected=${isSelected}
