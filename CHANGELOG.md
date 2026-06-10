@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Safer LaTeX cleanup** — inline fenced LaTeX blocks now distinguish environment names like `align` and `aligned` correctly, and trace-style replacements preserve command definitions while still rewriting ordinary `\mathrm{Tr}` and `\mathrm{tr}` usages.
+- **Safer LaTeX cleanup** — inline fenced LaTeX blocks now distinguish environment names like `align` and `aligned` correctly, and `\mathrm{Tr}` / `\mathrm{tr}` cleanup now leaves command definitions intact while still rewriting ordinary usages.
 
 #### Improvements
 
