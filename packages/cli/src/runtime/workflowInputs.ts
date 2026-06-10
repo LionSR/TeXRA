@@ -147,7 +147,7 @@ function requireStdinWorkflowInputFile(
  * Defaults to `--input` for the common case; callers that pass context paths
  * (multi-agent `--context`) should override.
  */
-export async function expandWorkflowInputSpec(
+async function expandWorkflowInputSpec(
   inputSpec: string,
   cwd: string,
   flagLabel: string = '--input',

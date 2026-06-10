@@ -7,7 +7,7 @@ const TOOL_STATUS_FALLBACK_LABELS = {
   'coming-soon': 'Coming soon',
 } satisfies Record<ToolStatus, string>;
 
-export function toolStatusFallbackLabel(status: string): string {
+function toolStatusFallbackLabel(status: string): string {
   if (Object.hasOwn(TOOL_STATUS_FALLBACK_LABELS, status)) {
     return TOOL_STATUS_FALLBACK_LABELS[status as ToolStatus];
   }

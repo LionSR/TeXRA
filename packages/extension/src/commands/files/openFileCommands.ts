@@ -20,7 +20,7 @@ import { WorkspaceFS } from '@utils/files';
 const CHANNEL = 'openFileCommands';
 logger.initialize(CHANNEL);
 
-export const openFileCommands = {
+const openFileCommands = {
   openFileCompile: 'texra.openFileCompile',
   openFile: 'texra.openFile',
   openLabel: 'texra.openLabel',
@@ -36,7 +36,7 @@ function revealPosition(editor: vscode.TextEditor, pos: vscode.Position): void {
   editor.selection = new vscode.Selection(pos, pos);
 }
 
-export async function openFile(file: string, line?: number): Promise<void> {
+async function openFile(file: string, line?: number): Promise<void> {
   const uri = vscode.Uri.file(WorkspaceFS.toAbsolute(file));
 
   if (line !== undefined && line > 0) {
@@ -48,7 +48,7 @@ export async function openFile(file: string, line?: number): Promise<void> {
   }
 }
 
-export async function openLabel(
+async function openLabel(
   label: string,
   options: OpenLabelOptions = {},
 ): Promise<boolean> {

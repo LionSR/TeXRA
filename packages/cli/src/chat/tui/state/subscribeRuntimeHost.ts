@@ -61,7 +61,7 @@ function refreshQueuedFollowUps(
  *  units, not bytes — markdown-it / ink work in JS strings). Beyond this
  *  we truncate at the head via the shared `appendTail` helper so the live
  *  pane never grows unbounded. */
-export const PROCESS_TAIL_CHARS_MAX = 8 * 1024;
+const PROCESS_TAIL_CHARS_MAX = 8 * 1024;
 
 export function wrapRuntimeHost(host: CliRuntimeHost): CliRuntimeHost {
   const original = host.emit;

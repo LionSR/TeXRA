@@ -138,7 +138,7 @@ function shouldWrapCritiqueInAlign(): boolean {
  * Get all non-regex replacements combined into a single category.
  * These replacements are subject to user configuration via enabledReplacements.
  */
-export function getAllReplacements(): ReplacementCategory {
+function getAllReplacements(): ReplacementCategory {
   const enabledCategoryNames = getConfig<string[]>(
     'texra.latex.enabledReplacements',
     DEFAULT_CORE_SETTINGS.latex.enabledReplacements,
@@ -171,7 +171,7 @@ export function getAllReplacements(): ReplacementCategory {
  * Filters by enabled categories from user configuration and includes
  * custom regex replacements from settings.
  */
-export function getAllReplacementsRegex(): ReplacementCategory[] {
+function getAllReplacementsRegex(): ReplacementCategory[] {
   const enabledCategoryNames = getConfig<string[]>(
     'texra.latex.enabledReplacementsRegex',
     DEFAULT_CORE_SETTINGS.latex.enabledReplacementsRegex,
@@ -286,6 +286,6 @@ export function applyReplacements(
 /**
  * Provides high-level APIs for applying text replacement rules.
  */
-export const replacementEngine: ReplacementEngine = new ReplacementEngineImpl();
+const replacementEngine: ReplacementEngine = new ReplacementEngineImpl();
 
 export default replacementEngine;

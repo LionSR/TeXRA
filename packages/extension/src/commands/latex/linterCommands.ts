@@ -14,11 +14,6 @@ import {
 const CHANNEL = 'LinterCommands';
 logger.initialize(CHANNEL);
 
-export const linterCommands = {
-  showLinterMessages: 'texra.showLinterMessages',
-  countLinterMessages: 'texra.countLinterMessages',
-};
-
 function showNoIssuesMessage(): void {
   vscode.window.showInformationMessage(
     'No linter issues found in the current file',

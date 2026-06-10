@@ -2,14 +2,11 @@
 export {
   commonViewStyles,
   compactIconActionButtonStyles,
-  filledButtonStyles,
 } from './commonViewStyles';
 export { designTokens, animationStyles } from './litStyles';
 
 // Component styles
 export { selectStyles, compactFormControlStyles } from './selectStyles';
-export { statusIndicatorStyles } from './statusIndicatorStyles';
-export { permissionCardStyles } from './permissionCardStyles';
 export { requestPanelStyles } from './requestPanelStyles';
 export { viewTabStyles, waTabThemeTokenStyles } from './viewTabStyles';
 
