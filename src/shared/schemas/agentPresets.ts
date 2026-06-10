@@ -68,12 +68,14 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
     id: 'mathematician',
     name: 'Mathematician',
     description:
-      'For math papers -- proofs, Lean 4 formalization, research, and LaTeX correction.',
+      'For math research -- attacking open problems, proofs, Lean 4 formalization, and LaTeX correction.',
     icon: 'codicon-symbol-number',
     workflowAgents: ['correct', 'polish', 'generic', 'devise', 'apply'],
     toolUseAgents: [
+      'prover',
       'lean',
       'research',
+      'numerics',
       'review',
       'simplifier',
       'latexFixer',
