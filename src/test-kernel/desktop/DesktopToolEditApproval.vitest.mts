@@ -439,7 +439,7 @@ describe('desktop tool edit approval', () => {
       expect(messages).toEqual([]);
       expect(displayed[0].options).toEqual({ preserveFocus: true });
       expect(path.basename(displayed[0].absolutePath)).toMatch(
-        /^main_preview-[a-f0-9]{8}\.tex$/,
+        /^main_preview-[\w-]{8}\.tex$/,
       );
       await expect(pathExists(displayed[0].absolutePath)).resolves.toBe(true);
 

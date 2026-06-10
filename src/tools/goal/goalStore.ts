@@ -1,5 +1,3 @@
-import { randomUUID } from 'crypto';
-
 import { z } from 'zod';
 
 import { platform } from '@platform/platform';
@@ -13,6 +11,7 @@ import {
 import { PlanSchema, type Plan } from '@shared/schemas/plan';
 
 import { filterNotNull } from '@utils/core';
+import { hexId12 } from '@utils/core/executionId';
 import {
   GOAL_COST_CAP_CONFIG_KEY,
   GoalSchema,
@@ -46,7 +45,7 @@ function nowIso(): string {
 }
 
 function generateGoalId(): string {
-  return `goal_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
+  return `goal_${hexId12()}`;
 }
 
 const LegacyOdysseySchema = z.object({

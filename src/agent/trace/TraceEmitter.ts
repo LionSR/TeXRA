@@ -11,7 +11,8 @@
  *   - swallow per-subscriber exceptions so one bad sink can't break the run
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { randomUUID } from 'node:crypto';
+
+import { nanoid } from 'nanoid';
 
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
@@ -201,7 +202,7 @@ export class TraceEmitter implements AgentTrace {
       return new SkippedStageHandle(this, parentId);
     }
 
-    const id = options.id ?? randomUUID();
+    const id = options.id ?? nanoid();
     this.emit({ type: 'stage.start', id, label, parentId });
     return new StageHandleImpl(this, id, defaultStatus);
   }
@@ -209,7 +210,7 @@ export class TraceEmitter implements AgentTrace {
   // ─── Streams ───────────────────────────────────────────────────────
 
   openStream(kind: StreamKind, options: StreamOptions = {}): StreamHandle {
-    const id = options.id ?? randomUUID();
+    const id = options.id ?? nanoid();
     const progressEnabled = options.progressViewEnabled ?? true;
 
     if (!progressEnabled) {

@@ -2,7 +2,7 @@
  * No-op AgentTrace. Used as the default for SDK consumers who don't
  * subscribe to the run's event stream.
  */
-import { randomUUID } from 'node:crypto';
+import { nanoid } from 'nanoid';
 
 import type { EndGroupStatus } from '@shared/schemas';
 
@@ -25,7 +25,7 @@ class NoopStageHandle implements StageHandle {
     return Promise.resolve(fn());
   }
   child(_label: string, _options?: StageOptions): StageHandle {
-    return new NoopStageHandle(randomUUID());
+    return new NoopStageHandle(nanoid());
   }
 }
 
@@ -56,9 +56,9 @@ export const noopTrace: AgentTrace = {
   domain: NOOP,
 
   openStage(_label, options) {
-    return new NoopStageHandle(options?.id ?? randomUUID());
+    return new NoopStageHandle(options?.id ?? nanoid());
   },
   openStream(_kind, options) {
-    return new NoopStreamHandle(options?.id ?? randomUUID());
+    return new NoopStreamHandle(options?.id ?? nanoid());
   },
 };
