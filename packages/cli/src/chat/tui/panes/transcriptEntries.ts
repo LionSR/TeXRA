@@ -36,7 +36,7 @@ export function trimAssistantTranscriptLead(text: string): string {
   while (index < text.length) {
     if (text[index] === ANSI_ESCAPE_START) {
       const end = ansiEscapeEnd(text, index);
-      if (!consumedInvisibleLead) leadingAnsi += text.slice(index, end);
+      leadingAnsi += text.slice(index, end);
       index = end;
       continue;
     }

@@ -416,6 +416,9 @@ describe('CLI conversation transcript splitting', () => {
     expect(trimAssistantTranscriptLead('\u001B[2m\u200B\nvisible')).toBe(
       '\u001B[2mvisible',
     );
+    expect(trimAssistantTranscriptLead('\n\u001B[31mvisible')).toBe(
+      '\u001B[31mvisible',
+    );
     expect(
       splitTranscriptEntries(
         [user, invisibleAssistant, tool],
