@@ -319,8 +319,7 @@ export async function recordOpenQuestion(params: {
   attachFiles?: string[];
 }): Promise<PersistedOpenTurn> {
   const threadId =
-    params.threadId ??
-    (`ei_${hexId12()}` as ExternalInquiryThreadId);
+    params.threadId ?? (`ei_${hexId12()}` as ExternalInquiryThreadId);
 
   return threadLock.acquire(threadId, async () => {
     const existing = await readThreadManifest(threadId);

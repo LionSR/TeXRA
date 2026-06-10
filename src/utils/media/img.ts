@@ -140,10 +140,7 @@ async function resizeImageIfNeeded(imagePath: string): Promise<string> {
   }
 
   const ext = path.extname(imagePath);
-  const tempPath = path.join(
-    os.tmpdir(),
-    `texra-resized-${nanoid()}${ext}`,
-  );
+  const tempPath = path.join(os.tmpdir(), `texra-resized-${nanoid()}${ext}`);
 
   // ImageMagick v7+: magick input -resize ... output
   // GraphicsMagick: gm convert input -resize ... output
