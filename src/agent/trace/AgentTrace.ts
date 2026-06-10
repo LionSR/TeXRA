@@ -73,6 +73,15 @@ export interface StreamOptions {
    * still returns the buffered text. Useful for tests / off-progress paths.
    */
   readonly progressViewEnabled?: boolean;
+  /**
+   * Defer the `stream.start` emission until the first non-empty chunk (or a
+   * finalize that carries text). Subscribers treat `stream.start` as "this
+   * phase began" — e.g. thinking streams drive a "model is thinking" liveness
+   * indicator — so a stream opened eagerly at request setup must not announce
+   * a phase that may never happen. A deferred stream that ends without
+   * content emits nothing at all.
+   */
+  readonly deferStart?: boolean;
 }
 
 /** Handle returned by `openStream` — append chunks then finalize. */

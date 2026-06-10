@@ -1555,11 +1555,20 @@ describe('CLI transcript state', () => {
     try {
       const logger = createRunTrace(root).trace;
       const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
+
+      // Opening the stream alone marks the phase — hidden reasoning (e.g.
+      // gpt-5 without summaries) may never produce a text delta.
+      syncStreamLog(root);
+
+      let slice = cliState.streams.get().get(root);
+      expect(slice?.thinkingActive).toBe(true);
+      expect(slice?.entries).toEqual([]);
+
       thinking.append('private reasoning summary');
 
       syncStreamLog(root);
 
-      let slice = cliState.streams.get().get(root);
+      slice = cliState.streams.get().get(root);
       expect(slice?.thinkingActive).toBe(true);
       expect(slice?.entries).toEqual([]);
 
