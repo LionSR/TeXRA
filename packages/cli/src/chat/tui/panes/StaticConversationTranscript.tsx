@@ -167,12 +167,14 @@ function staticTranscriptItemRowCount(
   const cols = Math.max(1, Math.floor(width ?? 80));
   const isUserBand =
     item.entry.role === 'user' && !isInquiryContinuationText(item.entry.text);
-  // Pass cols-2 for user entries: transcriptEntryLines subtracts the
+  const isPaddedPrefixRow =
+    item.entry.role === 'user' || item.entry.role === 'error';
+  // Pass cols-2 for user/error entries: transcriptEntryLines subtracts the
   // 2-char prefix internally, so the effective wrap width is cols-4,
   // matching the paddingX={1} + prefix geometry of the renderer.
   const lines = transcriptEntryLines(
     item.entry,
-    item.entry.role === 'user' ? Math.max(1, cols - 2) : cols,
+    isPaddedPrefixRow ? Math.max(1, cols - 2) : cols,
   ).length;
   let marginRows = 0;
   if (isUserBand) {
