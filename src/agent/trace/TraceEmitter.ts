@@ -13,6 +13,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { END_GROUP_STATUS, type EndGroupStatus } from '@shared/schemas';
 
@@ -82,9 +83,7 @@ export class TraceEmitter implements AgentTrace {
         // sink is diagnosable without recursing into the trace stream.
         logger.debug(
           'TraceEmitter',
-          `Trace subscriber threw while handling event: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
+          `Trace subscriber threw while handling event: ${toErrorMessage(err)}`,
         );
       }
     }

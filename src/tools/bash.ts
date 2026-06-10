@@ -19,6 +19,7 @@ import {
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import { toErrorMessage } from '@common/errors';
 
 // Local imports - tools
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
@@ -301,7 +302,7 @@ export class BashTool extends defineTool({
 
     const logBackgroundFailure = (action: string, err: unknown): void => {
       logger.error(
-        `Failed to ${action} background bash result: ${err instanceof Error ? err.message : String(err)}`,
+        `Failed to ${action} background bash result: ${toErrorMessage(err)}`,
       );
     };
 

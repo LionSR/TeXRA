@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { isFileNotFoundError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import { isObject } from '@utils/core/typeGuards';
 
 import {
   CLI_APPROVAL_POLICIES,
@@ -71,10 +72,6 @@ function configKeyVariants(bareKey: string): readonly [string, string] {
   return [`texra.${bareKey}`, bareKey];
 }
 
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 function isKnownConfigKey(key: string): boolean {
   return (
     TOP_LEVEL_KEYS.has(key) ||
@@ -133,7 +130,7 @@ function collectValidationWarnings(
     for (const sectionKey of configKeyVariants(section)) {
       if (!Object.hasOwn(record, sectionKey)) continue;
       const sectionValue = record[sectionKey];
-      if (!isPlainRecord(sectionValue)) {
+      if (!isObject(sectionValue)) {
         warnings.push(`Ignoring invalid ${filePath} key "${sectionKey}".`);
         continue;
       }
@@ -176,7 +173,7 @@ function pickRecord(
 ): Record<string, unknown> | undefined {
   for (const key of configKeyVariants(bareKey)) {
     const value = record[key];
-    if (isPlainRecord(value)) return value;
+    if (isObject(value)) return value;
   }
   return undefined;
 }
@@ -195,7 +192,7 @@ function pickConfigValues(record: Record<string, unknown>): CliConfigValues {
 }
 
 export function parseCliConfigValues(value: unknown): CliConfigValues {
-  return isPlainRecord(value) ? pickConfigValues(value) : {};
+  return isObject(value) ? pickConfigValues(value) : {};
 }
 
 export function workspaceCliConfigPath(cwd: string): string {
@@ -231,7 +228,7 @@ export async function loadWorkspaceCliConfig(
     };
   }
 
-  if (!isPlainRecord(parsed)) {
+  if (!isObject(parsed)) {
     return {
       path: filePath,
       values: {},

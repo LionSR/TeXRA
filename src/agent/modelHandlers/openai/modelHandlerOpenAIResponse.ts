@@ -29,6 +29,7 @@ import {
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
 } from '@common/errors/sdkErrorUtils';
+import { isGpt5ModelName, isGptFamilyModelName } from '@model/modelNames';
 
 // Type imports
 import type { ToolFileAttachment } from '@tools/result';
@@ -205,8 +206,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
    * on per-step streaming.
    */
   private isBackgroundModeEligible(): boolean {
-    const isGpt = this.config.name.toLowerCase().startsWith('gpt');
-    return isGpt && this.isWorkflowMode();
+    return isGptFamilyModelName(this.config.name) && this.isWorkflowMode();
   }
 
   private static readonly BACKGROUND_POLL_INTERVAL_MS = 15000;
@@ -1351,7 +1351,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     // Extend reasoning with summary option for API call (not needed for token counting)
     if (this.capabilities.supportsReasoning) {
-      const isGpt5 = this.config.name.startsWith('gpt5');
+      const isGpt5 = isGpt5ModelName(this.config.name);
       const includeSummary =
         !isGpt5 ||
         getConfig<boolean>('texra.model.gpt5ReasoningSummary', false);
