@@ -76,6 +76,7 @@
   "exclude": [
     "node_modules",
     "prototypes",
+    "src/test-kernel",
     "supabase",
     "packages/desktop",
     "packages/core",
