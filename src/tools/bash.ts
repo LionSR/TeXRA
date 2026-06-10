@@ -23,6 +23,7 @@ import { toErrorMessage } from '@common/errors';
 
 // Local imports - tools
 import type { StreamTabId, ExecutionId } from '@shared/schemas';
+import { BASH_TOOL_DEFAULT_TIMEOUT_MS } from '@shared/constants/toolDefaults';
 import { ToolError, type ToolResult } from '@tools/result';
 import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
 import {
@@ -43,7 +44,6 @@ import { defineTool } from './core/define';
 import { createChildStream } from './childStream';
 import { parseWorkingDirectory } from './pathResolution';
 
-const BASH_TIMEOUT_MS = 120_000; // 120 s
 const BACKGROUND_OUTPUT_TAIL_CHARS = 12_000;
 /** Max chars logged to the child stream tab to prevent unbounded memory growth. */
 const BACKGROUND_LOG_CAP_CHARS = 200_000;
@@ -127,7 +127,7 @@ export class BashTool extends defineTool({
     const runContext = contexts?.runContext;
     callContext?.onExecutionReady?.();
 
-    const timeoutMs = input.timeout ?? BASH_TIMEOUT_MS;
+    const timeoutMs = input.timeout ?? BASH_TOOL_DEFAULT_TIMEOUT_MS;
 
     const cwd = parseWorkingDirectory(runContext?.workingDirectory);
 

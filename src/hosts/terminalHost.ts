@@ -10,6 +10,13 @@ export interface TerminalRunRequest extends TerminalOptions {
   timeoutMs: number;
 }
 
+/**
+ * Length cap (chars) for {@link TerminalRunResult.output}. Every host's
+ * `TerminalRunner` keeps the same sliding-window tail so agents see identical
+ * truncation regardless of where a setup command ran.
+ */
+export const TERMINAL_OUTPUT_MAX_CHARS = 12_000;
+
 export interface TerminalRunResult {
   /** Undefined when the host cannot observe the command exit code. */
   exitCode: number | undefined;

@@ -1,3 +1,6 @@
+// Node imports
+import * as nodePath from 'node:path';
+
 // Local imports - platform
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore } from '@platform/defaults/jsonStore';
@@ -13,6 +16,10 @@ import { UsageLogService } from '@telemetry/UsageLogService';
 
 // Local imports - agent index
 import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
+import {
+  TEXRA_CONFIG_FILE_NAME,
+  workspaceTexraConfigPath,
+} from '@platform/defaults/nodeStorage';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 
 // Local imports - auth
@@ -38,7 +45,6 @@ import { applyCliGitAuthorConfig } from './gitAuthor';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
 import { writeTextStderr } from './logSinks';
-import { workspaceCliConfigPath } from './cliConfig';
 import { getCliAuthProvider, initializeCliSupabaseAuth } from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
@@ -70,7 +76,7 @@ type CliPlatformInitOptions = Pick<
 };
 
 function logAt(
-  level: 'debug' | 'info' | 'warn',
+  level: 'debug' | 'info' | 'warn' | 'error',
   channel: string,
   message: string,
 ): void {
@@ -155,22 +161,37 @@ export async function initCliPlatform(
 
   if (!tryPlatform()) {
     const configStore = await JsonStore.open(
-      workspaceCliConfigPath(cliWorkspaceCwd),
+      workspaceTexraConfigPath(cliWorkspaceCwd),
     );
     const stateStores = await createCliStateStores({
       storageRoot: context.storageRoot,
       workspacePath: () => cliWorkspaceCwd,
     });
+    // User-level config (`~/.texra/global-storage/config.json`, the same file
+    // chatDefaults reads) backs the global target, mirroring the desktop host:
+    // workspace values shadow global on read and `update(..., 'global')` has
+    // somewhere to write instead of throwing.
+    const globalConfigStore = await JsonStore.open(
+      nodePath.join(
+        stateStores.storage.getGlobalStoragePath(),
+        TEXRA_CONFIG_FILE_NAME,
+      ),
+    );
+    // Same severity and wording as the extension/desktop hosts: a shutdown
+    // handler failure is an error everywhere, not a warning in one host.
     const lifecycle = createLifecycleHost({
       onError: (phase, error) => {
         logAt(
-          'warn',
+          'error',
           'cli.lifecycle',
-          `${phase} handler failed: ${toErrorMessage(error)}`,
+          `Lifecycle ${phase} handler failed: ${toErrorMessage(error)}`,
         );
       },
     });
-    const config = new JsonConfigProvider({ workspace: configStore });
+    const config = new JsonConfigProvider({
+      workspace: configStore,
+      global: globalConfigStore,
+    });
     initPlatform({
       config,
       globalState: stateStores.globalState,
