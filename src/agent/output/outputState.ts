@@ -18,6 +18,7 @@ import { normalizeRunId } from '@common/constants/runIds';
 import {
   OutputXmlSummarySchema,
   type CompileFailure,
+  type FileLocation,
   type OutputFileInfo,
   type RoundOutput,
   type StorageKey,
@@ -26,7 +27,6 @@ import {
   TaskRunFileService,
   getComparablePath,
   pathToLocation,
-  type FileLocation,
 } from '@utils/files';
 
 export interface OutputState {

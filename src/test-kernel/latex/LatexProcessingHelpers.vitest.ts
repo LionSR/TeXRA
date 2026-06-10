@@ -20,7 +20,8 @@ import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { DiffFileProcessor } from '@latex/latexdiff/diffFileProcessor';
 import type { ToolConfig } from '@shared/schemas/toolConfig';
-import { createExternalLocation, type FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
+import { createExternalLocation } from '@utils/files';
 
 const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn(),

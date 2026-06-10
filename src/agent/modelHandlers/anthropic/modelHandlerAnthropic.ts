@@ -41,7 +41,8 @@ import replacementEngine from '@replacement/engine';
 import type { ToolFileAttachment } from '@tools/result';
 
 // Local imports - utils
-import { AbsoluteFS, flexibleFS, type FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
+import { AbsoluteFS, flexibleFS } from '@utils/files';
 import { getConfig } from '@utils/config/configUtils';
 import { getAnthropicDynamicFiltering } from '@utils/config/providerConfig';
 import { objectToLogString } from '@utils/text/stringUtils';

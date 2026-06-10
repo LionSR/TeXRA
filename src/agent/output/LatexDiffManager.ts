@@ -10,6 +10,7 @@ import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
 import {
   type DiffResult,
   type ExecutionId,
+  type FileLocation,
   MESSAGE_TYPES,
   type OutputFileInfo,
 } from '@shared/schemas';
@@ -24,7 +25,6 @@ import {
   createWorkspaceLocation,
   flexibleFS,
   TaskRunFileService,
-  type FileLocation,
 } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
 import { getComparablePath } from '@utils/files/taskRunStorage';

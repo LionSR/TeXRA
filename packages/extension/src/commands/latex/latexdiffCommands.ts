@@ -40,7 +40,11 @@ import {
 } from '@latex/latexdiff/mathMarkup';
 import * as logger from '@logger/logUtils';
 import { ExecutionIdSchema, RoundKeySchema } from '@shared/schemas';
-import type { ExecutionId, OutputFileInfo } from '@shared/schemas';
+import type {
+  ExecutionId,
+  FileLocation,
+  OutputFileInfo,
+} from '@shared/schemas';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { getConfig } from '@utils/config';
 import {
@@ -51,7 +55,6 @@ import {
   getComparablePath,
   pathToLocation,
   resolveRunDir,
-  type FileLocation,
 } from '@utils/files';
 import { checkToolInstalled } from '@utils/system';
 import { hasExtension } from '@utils/core/pathCore';
