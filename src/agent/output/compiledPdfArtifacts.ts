@@ -8,10 +8,7 @@ import type {
   FileLocation,
   RunStorageFileLocation,
 } from '@shared/schemas';
-import {
-  createRunStorageLocation,
-  getComparablePath,
-} from '@utils/files';
+import { createRunStorageLocation, getComparablePath } from '@utils/files';
 import { isFile } from '@utils/files/fsEntryType';
 
 // Local imports - file utilities

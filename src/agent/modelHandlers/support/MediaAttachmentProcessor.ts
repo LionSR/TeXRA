@@ -14,11 +14,7 @@ import type { FileLocation } from '@shared/schemas';
 
 // Local imports - utils
 import { ensureArray } from '@utils/core';
-import {
-  AbsoluteFS,
-  getMimeType,
-  getShortDisplayPath,
-} from '@utils/files';
+import { AbsoluteFS, getMimeType, getShortDisplayPath } from '@utils/files';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import {
   countPdfPages,

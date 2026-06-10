@@ -4,10 +4,7 @@ import type { OutputState } from '@agent/output/outputState';
 import type { LatexDiffManager } from '@agent/output/LatexDiffManager';
 import type { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import type { LatexMediaManager } from '@latex';
-import type {
-  AgentFileLocation,
-  WorkspaceFileLocation,
-} from '@shared/schemas';
+import type { AgentFileLocation, WorkspaceFileLocation } from '@shared/schemas';
 import type { PromptBuilder } from '@utils/prompt';
 import type { TaskRunFileService } from '@utils/files';
 import type {
