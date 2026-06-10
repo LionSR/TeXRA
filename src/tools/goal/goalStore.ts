@@ -318,6 +318,9 @@ export const GoalStore = {
     executionIds: readonly ExecutionId[],
   ): Promise<void> {
     if (executionIds.length === 0) return;
+    // Stream ids include the execution id as a final `#${executionId}` suffix.
+    // ExecutionIdSchema permits only hex/dash characters, so `#` is a safe
+    // delimiter rather than a character that can appear inside the id itself.
     const suffixes = [...new Set(executionIds.map((id) => `#${id}`))];
     const streamIds = readIndex().filter((streamId) =>
       suffixes.some((suffix) => streamId.endsWith(suffix)),
