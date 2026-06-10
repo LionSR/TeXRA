@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { z } from 'zod';
 
+import { configKeyVariants } from '@platform/defaults/configKeyHelpers';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { isFileNotFoundError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';
@@ -64,11 +65,6 @@ const COMMAND_SECTIONS = ['chat', 'run'] as const;
 
 const TOP_LEVEL_KEYS = new Set<string>(CLI_SETTING_PATHS);
 const COMMAND_KEYS = new Set(COMMAND_FIELD_SCHEMAS.map(([key]) => key));
-
-/** Preferred config key order: unified `texra.*` first, legacy bare key second. */
-function configKeyVariants(bareKey: string): readonly [string, string] {
-  return [`texra.${bareKey}`, bareKey];
-}
 
 function isKnownConfigKey(key: string): boolean {
   return (
