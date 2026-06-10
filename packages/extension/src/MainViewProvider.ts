@@ -15,6 +15,7 @@ import {
 import { consumePendingState } from '@common/state';
 
 import { agentDirectories } from '@frontend/agents';
+import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
@@ -86,13 +87,9 @@ export class MainViewProvider
   }
 
   private setupAuthListener() {
-    this.context.subscriptions.push(
-      vscode.authentication.onDidChangeSessions((e) => {
-        if (e.provider.id === 'texra-supabase') {
-          void this.refreshOptionsAndView();
-        }
-      }),
-    );
+    onTexraAuthSessionsChanged(this.context, () => {
+      void this.refreshOptionsAndView();
+    });
     this.context.subscriptions.push(
       getServerSideKeyService().onDidChangeModelAccess(() => {
         void this.refreshOptionsAndView();

@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 // Local imports - common webview
 import { BaseWebviewProvider } from '@common/webview';
+import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsTab } from '@shared/schemas/settingsViewMessages';
 
@@ -25,13 +26,11 @@ export class SettingsViewProvider
     this.messageHandler = new SettingsViewMessageHandler(context);
 
     // Listen for auth state changes to refresh all data
-    context.subscriptions.push(
-      vscode.authentication.onDidChangeSessions((e) => {
-        if (e.provider.id === 'texra-supabase' && this._view) {
-          void this.messageHandler.sendAllData(this._view.webview);
-        }
-      }),
-    );
+    onTexraAuthSessionsChanged(context, () => {
+      if (this._view) {
+        void this.messageHandler.sendAllData(this._view.webview);
+      }
+    });
   }
 
   protected override getViewPath(): string {
