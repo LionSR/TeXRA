@@ -17,6 +17,7 @@ import { SlashPalette } from '../commands/SlashPalette';
 import {
   matchSlashCommands,
   parseSlashInput,
+  prefixSlashCommands,
   slashPickIntent,
   type SlashCommand,
   type SlashPickIntent,
@@ -238,7 +239,11 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     (submitted: string) => {
       const slash = parseSlashInput(submitted);
       if (slash !== undefined && !/\s/.test(submitted.slice(1))) {
-        const chosen = matchSlashCommands(slash.name)[0];
+        // Batched chunks (e.g. a paste ending in a newline) never showed the
+        // palette, so only auto-run prefix matches here — the substring/typo
+        // fallbacks are palette-only, where the user previews the match.
+        // Unmatched input falls through to the unknown-command suggestion.
+        const chosen = prefixSlashCommands(slash.name)[0];
         if (chosen !== undefined) {
           acceptSlashCommand(
             chosen,

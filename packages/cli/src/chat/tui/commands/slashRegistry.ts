@@ -85,22 +85,33 @@ export function findSlashCommand(
 }
 
 /**
+ * Commands whose name or an alias starts with `prefix` — the palette's first
+ * tier, and the only tier safe to auto-run on a submit the user never
+ * previewed (e.g. a pasted chunk ending in a newline).
+ */
+export function prefixSlashCommands(prefix: string): readonly SlashCommand[] {
+  const lower = prefix.toLowerCase();
+  return listSlashCommands().filter((cmd) =>
+    commandCandidates(cmd).some((candidate) => candidate.startsWith(lower)),
+  );
+}
+
+/**
  * Returns registered commands matching `prefix`, case-insensitively and in
  * registration order. Prefix matches (on name or alias) win; when there are
  * none, falls back to substring matches (`/odel` still finds `/model`), and
  * finally to the closest typo suggestion (`/hlp` → `/help`) so the palette
- * recovers from mistypes instead of going blank.
+ * recovers from mistypes instead of going blank. The fallback tiers are for
+ * the palette, where the user sees the match before Enter runs it.
  */
 export function matchSlashCommands(prefix: string): readonly SlashCommand[] {
   const lower = prefix.toLowerCase();
-  const commands = listSlashCommands();
-  const matching = (test: (candidate: string) => boolean) =>
-    commands.filter((cmd) => commandCandidates(cmd).some(test));
-
-  const prefixMatches = matching((candidate) => candidate.startsWith(lower));
+  const prefixMatches = prefixSlashCommands(prefix);
   if (prefixMatches.length > 0 || !lower) return prefixMatches;
 
-  const substringMatches = matching((candidate) => candidate.includes(lower));
+  const substringMatches = listSlashCommands().filter((cmd) =>
+    commandCandidates(cmd).some((candidate) => candidate.includes(lower)),
+  );
   if (substringMatches.length > 0) return substringMatches;
 
   const suggestion = suggestSlashCommand(lower);

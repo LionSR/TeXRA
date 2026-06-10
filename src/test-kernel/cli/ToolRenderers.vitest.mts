@@ -248,8 +248,9 @@ describe('CLI tool renderer registry', () => {
     expect(toolHeaderPreviewBudget(200, 'bash')).toBe(191);
     // Narrow terminals truncate to fit one row instead of wrapping.
     expect(toolHeaderPreviewBudget(60, 'bash')).toBe(51);
-    // Never collapse below a readable floor.
-    expect(toolHeaderPreviewBudget(20, 'a-rather-long-tool-name')).toBe(24);
+    // When the name + chrome already eat the row, drop the preview entirely
+    // instead of overflowing into a second row.
+    expect(toolHeaderPreviewBudget(20, 'a-rather-long-tool-name')).toBe(0);
     // Unknown width falls back to the historical fixed budget.
     expect(toolHeaderPreviewBudget(undefined, 'bash')).toBe(80);
   });
