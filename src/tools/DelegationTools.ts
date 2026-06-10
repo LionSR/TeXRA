@@ -679,7 +679,7 @@ function formatAgentList(
     .map((agent) => {
       const desc =
         agent.name === 'assistant'
-          ? `${agent.description || 'No description'} Fallback-only: use this only after ruling out every specialized tool-use agent.`
+          ? `${agent.description || 'No description'} General-purpose: prefer a more specialized agent when the task maps cleanly to one; pick assistant when the work spans several of its domains.`
           : agent.description || 'No description';
       const toolsSuffix = agent.tools?.length
         ? `\n  Tools: ${agent.tools.join(', ')}`
