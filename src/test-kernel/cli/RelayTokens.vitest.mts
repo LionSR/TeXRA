@@ -158,9 +158,9 @@ describe('relay-tokens edge function client', () => {
     const { fetchImpl } = singleFetch(
       jsonResponse({ error: 'Active CI token limit reached (10).' }, 409),
     );
-    await expect(mintRelayToken('session-jwt', {}, { fetchImpl })).rejects.toThrow(
-      'Active CI token limit reached (10).',
-    );
+    await expect(
+      mintRelayToken('session-jwt', {}, { fetchImpl }),
+    ).rejects.toThrow('Active CI token limit reached (10).');
   });
 
   it('lists token metadata and revokes by id', async () => {

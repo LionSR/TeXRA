@@ -82,7 +82,9 @@ export async function fetchRelayTokenTier(
     );
     if (!response.ok) return 'free';
     const parsed = TierConfigUserStatusSchema.safeParse(await response.json());
-    const tier = parsed.success ? (parsed.data.userStatus?.tier ?? 'free') : 'free';
+    const tier = parsed.success
+      ? (parsed.data.userStatus?.tier ?? 'free')
+      : 'free';
     cachedTier = { token, tier, timestamp: Date.now() };
     return tier;
   } catch {

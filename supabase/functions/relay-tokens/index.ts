@@ -114,7 +114,10 @@ function randomTokenSecret(): string {
   crypto.getRandomValues(bytes);
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+  return btoa(binary)
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replace(/=+$/, '');
 }
 
 function tokenHint(token: string): string {
@@ -216,7 +219,12 @@ app.get('/list', async (c) => {
       console.error('[RELAY_TOKENS] list failed:', error.message);
       return errorResponse(c, 'Failed to list tokens', 500);
     }
-    return versionedJsonResponse(c.req.raw, VERSION, { tokens: data ?? [] }, 200);
+    return versionedJsonResponse(
+      c.req.raw,
+      VERSION,
+      { tokens: data ?? [] },
+      200,
+    );
   } catch (error) {
     console.error('[RELAY_TOKENS] list error:', error);
     return errorResponse(c, 'Internal server error', 500);

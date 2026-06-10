@@ -63,7 +63,8 @@ export async function authenticateRelayCiToken(
     return {
       ok: false,
       status: 401,
-      message: 'This CI token has expired. Mint a new one with `texra setup-token`.',
+      message:
+        'This CI token has expired. Mint a new one with `texra setup-token`.',
     };
   }
   const scopes: string[] = Array.isArray(row.scopes) ? row.scopes : [];
@@ -84,7 +85,10 @@ export async function authenticateRelayCiToken(
       .eq('id', row.id)
       .then(({ error: updateError }: { error: { message: string } | null }) => {
         if (updateError) {
-          console.warn('[CI_TOKEN] last_used_at update failed:', updateError.message);
+          console.warn(
+            '[CI_TOKEN] last_used_at update failed:',
+            updateError.message,
+          );
         }
       });
   }

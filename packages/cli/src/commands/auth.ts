@@ -101,7 +101,9 @@ async function runDeviceLogin(context: CliContext): Promise<number> {
     session = await signInCliSupabaseDeviceCode({
       onDeviceCode: (authorization) => {
         writeProgress(formatCliDeviceAuthMessage(authorization));
-        writeProgress('Waiting for you to approve in the browser… (Ctrl-C cancels)');
+        writeProgress(
+          'Waiting for you to approve in the browser… (Ctrl-C cancels)',
+        );
       },
     });
   } catch (error) {
@@ -226,7 +228,11 @@ async function runLoginCommand(
   if (choice === 'device') {
     return runDeviceLogin(context);
   }
-  return runLogin(context, { ...init, provider: choice, providerExplicit: true });
+  return runLogin(context, {
+    ...init,
+    provider: choice,
+    providerExplicit: true,
+  });
 }
 
 export const logoutCommand = defineCliCommand({

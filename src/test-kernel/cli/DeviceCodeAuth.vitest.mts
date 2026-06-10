@@ -40,8 +40,7 @@ function queuedFetch(queue: Array<Response | Error>): {
   const fetchImpl = ((input: RequestInfo | URL, init?: RequestInit) => {
     calls.push({
       url: String(input),
-      body:
-        typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
+      body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
     });
     const next = queue.shift();
     if (!next) throw new Error('queuedFetch ran out of responses');

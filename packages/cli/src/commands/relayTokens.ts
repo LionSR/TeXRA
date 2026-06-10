@@ -13,7 +13,11 @@ import { RELAY_TOKEN_ENV_VAR } from '@auth/relayToken';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import { writeErrorStderr, writeTextStderr, writeTextStdout } from '../runtime/logSinks';
+import {
+  writeErrorStderr,
+  writeTextStderr,
+  writeTextStdout,
+} from '../runtime/logSinks';
 import {
   listRelayTokens,
   mintRelayToken,
@@ -70,9 +74,7 @@ export function formatMintedTokenText(minted: MintedRelayToken): string {
   ].join('\n');
 }
 
-export function formatTokenListText(
-  tokens: readonly RelayTokenInfo[],
-): string {
+export function formatTokenListText(tokens: readonly RelayTokenInfo[]): string {
   if (tokens.length === 0) {
     return 'No CI relay tokens. Mint one with `texra setup-token`.';
   }
@@ -237,7 +239,9 @@ const authTokenRevokeCommand = defineCliCommand({
   async run(context, ctx) {
     const id = optString(ctx.args.id);
     if (!id) {
-      writeTextStderr('Token id required. Find it with `texra auth token list`.');
+      writeTextStderr(
+        'Token id required. Find it with `texra auth token list`.',
+      );
       return CliExitCode.Usage;
     }
 
@@ -264,7 +268,8 @@ const authTokenRevokeCommand = defineCliCommand({
 export const authTokenCommand = defineCommand({
   meta: {
     name: 'token',
-    description: 'List and revoke CI relay tokens (mint with `texra setup-token`)',
+    description:
+      'List and revoke CI relay tokens (mint with `texra setup-token`)',
   },
   args: {
     ...GLOBAL_ARGS,

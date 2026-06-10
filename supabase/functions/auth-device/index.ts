@@ -156,7 +156,10 @@ function randomDeviceCode(): string {
   crypto.getRandomValues(bytes);
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+  return btoa(binary)
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replace(/=+$/, '');
 }
 
 async function sha256Hex(value: string): Promise<string> {
@@ -357,8 +360,7 @@ app.post('/token', async (c) => {
       const lastPolled = row.last_polled_at
         ? new Date(row.last_polled_at).getTime()
         : 0;
-      const minGapMs =
-        row.poll_interval_seconds * 1000 - POLL_TOLERANCE_MS;
+      const minGapMs = row.poll_interval_seconds * 1000 - POLL_TOLERANCE_MS;
       const tooFast = now - lastPolled < minGapMs;
       await supabase
         .from('device_auth_requests')
@@ -370,7 +372,11 @@ app.post('/token', async (c) => {
           }),
         })
         .eq('id', row.id);
-      return errorResponse(c, tooFast ? 'slow_down' : 'authorization_pending', 400);
+      return errorResponse(
+        c,
+        tooFast ? 'slow_down' : 'authorization_pending',
+        400,
+      );
     }
 
     // Approved: mint a native session, then burn the row (single use).

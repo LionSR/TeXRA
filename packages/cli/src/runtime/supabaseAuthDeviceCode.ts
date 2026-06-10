@@ -87,7 +87,10 @@ export async function requestDeviceAuthorization(
  * and `expired_token` semantics.
  */
 export async function pollForDeviceSession(
-  authorization: Pick<DeviceAuthorization, 'device_code' | 'expires_in' | 'interval'>,
+  authorization: Pick<
+    DeviceAuthorization,
+    'device_code' | 'expires_in' | 'interval'
+  >,
   hooks: DeviceAuthPollHooks = {},
 ): Promise<GitHubTokenExchangeResponse> {
   const now = hooks.now ?? Date.now;
