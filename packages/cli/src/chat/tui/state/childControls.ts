@@ -13,11 +13,10 @@ import { formatDuration } from '@utils/core';
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 import { visibleSubagentRows } from './childStreamMerge';
 import {
-  activeStreamParentOrSelfId,
+  activeStreamTreeEntries,
   nearestActiveStreamAncestor,
   streamDisplayLabel,
 } from './streamViews';
-import { orderedDescendantsFromTree } from './focusCycle';
 import { transcriptEntryLines } from './transcriptLines';
 import type {
   ConversationEntry,
@@ -429,18 +428,13 @@ export function numericFocusTargetForActiveStream(init: {
   readonly streams: ReadonlyMap<StreamTabId, StreamSlice>;
   readonly zeroBasedIndex: number;
 }): StreamTabId | undefined {
-  const activeStreamId = init.activeStreamId;
-  if (!activeStreamId || init.zeroBasedIndex < 0) return undefined;
-  const root = activeStreamParentOrSelfId({
-    activeStreamId,
-    parentStream: init.parentStream,
-  });
-  return orderedDescendantsFromTree({
-    parent: root,
-    parentSlice: init.streams.get(root),
+  if (!init.activeStreamId || init.zeroBasedIndex < 0) return undefined;
+  const shortcutIndex = init.zeroBasedIndex + 1;
+  return activeStreamTreeEntries({
+    activeStreamId: init.activeStreamId,
     parentStream: init.parentStream,
     streams: init.streams,
-  })[init.zeroBasedIndex];
+  }).find((entry) => entry.shortcutIndex === shortcutIndex)?.id;
 }
 
 export function nextPickerIndex(
