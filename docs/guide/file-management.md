@@ -91,6 +91,8 @@ TeXRA supports directly pasting images from your clipboard into the instruction 
    - Added to the Media Files list
    - Made available to the AI model
 
+Pasted images appear in the file selector like any other media file, so you can review or remove them before sending. If the selected model cannot read images, TeXRA warns you so you can switch to a vision-capable model.
+
 The clipboard paste feature accepts many image formats (JPEG, PNG, GIF, WebP, BMP, SVG, TIFF, HEIC, HEIF, AVIF, PSD), but the actual formats that can be processed depend on what the selected AI model supports. Most vision models support common formats like JPEG, PNG, GIF, and WebP.
 
 Note: Pasted images are stored in workspace storage and automatically cleaned up after 3 days to save space.

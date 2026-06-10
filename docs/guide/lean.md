@@ -52,7 +52,7 @@ Open **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) 
 
 ## Choosing an Agent
 
-The built-in `lean` agent is always available. The **Lean Project** team adds a `leanOrchestrator` plus the Lean specialists it delegates to (`leanSearch`, `leanSimplifier`, `leanBlueprint`) — all [remote agents](./remote-agents.md), so [sign in](./remote-agents.md) to sync them. The team also bundles the `latexFixer` and `progressCheck` helpers that every preset shares.
+The built-in `lean` agent is always available. The **Lean Project** team adds a `leanOrchestrator` plus the Lean specialists it delegates to (`leanSearch`, `leanSimplifier`, `leanBlueprint`) — all [remote agents](./remote-agents.md), so [sign in](./remote-agents.md) to sync them. The team also bundles the `latexFixer` and `progressCheck` helpers.
 
 | Agent              | Availability       | Best for                                                                 |
 | ------------------ | ------------------ | ------------------------------------------------------------------------ |
