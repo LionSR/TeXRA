@@ -1,7 +1,7 @@
 import { createHelperModelKit } from '@agent/runtime/helperModel';
 import { renderPolishPrompt } from '@agent/runtime/polishModel';
 import type { TaskState } from '@agent/core/execution/TaskState';
-import { toErrorMessage } from '@common/errors';
+import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { isNonEmptyString } from '@utils/core';
 
@@ -104,7 +104,8 @@ export async function polishTextWithAI(
     }
     return { success: true, text: (corrected ?? responseText).trim() };
   } catch (error) {
-    logger.error(CHANNEL, `Error polishing text: ${toErrorMessage(error)}`);
-    return { success: false, text, error: toErrorMessage(error) };
+    const message = getSdkErrorMessage(error);
+    logger.error(CHANNEL, `Error polishing text: ${message}`);
+    return { success: false, text, error: message };
   }
 }

@@ -15,8 +15,10 @@ import OpenAI, {
 } from 'openai';
 
 import type { AgentTrace } from '@agent/trace';
-import { logSdkError } from '@agent/trace';
-import { getSdkErrorMessage } from '@common/errors/sdkErrorUtils';
+import {
+  buildErrorLogData,
+  getSdkErrorMessage,
+} from '@common/errors/sdkErrorUtils';
 import type { ToolFileAttachment } from '@tools/result';
 import { isNonEmptyString } from '@utils/core';
 import { OFFICE_MIME_TYPES } from '@utils/files/mimeUtils';
@@ -137,11 +139,11 @@ async function replaceFileDataWithUpload(
       return;
     }
 
-    logSdkError(
-      logger,
+    // The retry layer owns the visible failure row for this rethrow; keep
+    // the upload diagnostics at debug to avoid a duplicate ERROR entry.
+    logger.debug(
       `Failed to upload file ${filename}: ${getSdkErrorMessage(err)}`,
-      err,
-      { operation: 'upload file' },
+      { data: buildErrorLogData(err, { operation: 'upload file' }) },
     );
     throw err;
   } finally {

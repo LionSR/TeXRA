@@ -6,7 +6,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { ModelHandlerOpenAI } from '@agent/modelHandlers/openai/modelHandlerOpenAI';
 import { ModelHandlerAnthropic } from '@agent/modelHandlers/anthropic/modelHandlerAnthropic';
 import { createHelperModelKit } from '@agent/runtime/helperModel';
-import { getSdkErrorMessage } from '@common/errors';
+import { classifyAgentError, getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'LaTeXCommands';
@@ -24,12 +24,6 @@ const CASE_CONNECTORS: Record<string, string> = {
 };
 
 const DEFAULT_RESULT: ConnectionResult = { connector: ' ', choice: 'B' };
-
-function isMissingApiKeyMessage(message: string): boolean {
-  return (
-    message.includes('Missing API key') || message.includes('No API key found')
-  );
-}
 
 function buildPrompt(str1: string, str2: string): string {
   return (
@@ -141,7 +135,10 @@ export async function bestConnectionMethod(
     return getMajorityChoice(choices);
   } catch (err) {
     const message = getSdkErrorMessage(err);
-    const log = isMissingApiKeyMessage(message) ? logger.debug : logger.error;
+    const log =
+      classifyAgentError(err) === 'missing-api-key'
+        ? logger.debug
+        : logger.error;
     log(CHANNEL, `Error in bestConnectionMethod: ${message}`);
     return DEFAULT_RESULT;
   }
@@ -186,7 +183,10 @@ export async function bestConnectionMethodAnthropic(
     return getMajorityChoice(choices);
   } catch (err) {
     const message = getSdkErrorMessage(err);
-    const log = isMissingApiKeyMessage(message) ? logger.debug : logger.error;
+    const log =
+      classifyAgentError(err) === 'missing-api-key'
+        ? logger.debug
+        : logger.error;
     log(CHANNEL, `Error in bestConnectionMethodAnthropic: ${message}`);
     return DEFAULT_RESULT;
   }
