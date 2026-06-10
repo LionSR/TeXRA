@@ -2,8 +2,15 @@
 // Finalized history is owned by the static scrollback renderer.
 
 import { Box } from 'ink';
+import { Spinner } from '@inkjs/ui';
 
-import { cliState, type ConversationEntry } from '../state/cliState';
+import { STREAM_STATUS } from '@shared/schemas';
+
+import {
+  cliState,
+  type ConversationEntry,
+  type StreamSlice,
+} from '../state/cliState';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import { BoundedTranscriptEntry, LiveTranscriptEntry } from './TranscriptEntry';
@@ -13,6 +20,28 @@ import { selectTranscriptEntriesForViewport } from './transcriptViewport';
 
 const DEFAULT_TRANSCRIPT_ROWS = 24;
 const MIN_PENDING_ROWS = 1;
+
+/**
+ * True while the stream's live activity is a hidden reasoning phase: the
+ * model is working but nothing streams into the transcript, so the pane
+ * shows an explicit liveness row instead of sitting silent. The thinking
+ * text itself is never rendered — only the fact that thinking is happening.
+ */
+export function thinkingRowVisible(
+  slice: Pick<StreamSlice, 'status' | 'thinkingActive'> | undefined,
+): boolean {
+  return (
+    slice?.thinkingActive === true && slice.status === STREAM_STATUS.RUNNING
+  );
+}
+
+function ThinkingRow(): React.JSX.Element {
+  return (
+    <Box>
+      <Spinner label="Thinking…" />
+    </Box>
+  );
+}
 
 export interface ConversationPaneProps {
   readonly width?: number;
@@ -72,6 +101,7 @@ export function ConversationPane(
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
   const displayEntries = splitTranscriptEntries(entries, slice?.status).pending;
+  const showThinking = thinkingRowVisible(slice);
   if (props.allowNativeScrollbackOverflow) {
     return (
       <Box flexDirection="column">
@@ -82,20 +112,25 @@ export function ConversationPane(
             width: props.width,
           }),
         )}
+        {showThinking ? <ThinkingRow /> : null}
       </Box>
     );
   }
 
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
+  // The thinking liveness row is budgeted like any other live content: it
+  // takes one row off the entry viewport so the pane's explicit height never
+  // exceeds maxRows (an overflow would leak live rows into scrollback).
+  const thinkingRows = showThinking ? 1 : 0;
   const visibleEntries = selectTranscriptEntriesForViewport(
     displayEntries,
-    maxRows,
+    maxRows - thinkingRows,
     props.width,
   );
   const visibleRows =
-    displayEntries.length > 0
+    (visibleEntries.entries.length > 0
       ? Math.max(MIN_PENDING_ROWS, visibleEntries.usedRows)
-      : 0;
+      : 0) + thinkingRows;
 
   // Keep stream order intact so in-flight text stays interleaved with tool rows.
   // The explicit height keeps the input bar pinned and prevents bursts from
@@ -110,6 +145,7 @@ export function ConversationPane(
           width: props.width,
         });
       })}
+      {thinkingRows > 0 ? <ThinkingRow /> : null}
     </Box>
   );
 }
