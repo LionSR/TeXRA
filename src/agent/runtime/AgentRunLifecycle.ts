@@ -2,18 +2,15 @@ import { writeTerminalStatus } from '@agent/storage';
 import { logSdkError } from '@agent/trace';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
+  AGENT_ERROR_OUTCOME,
   AgentError,
   classifyAgentError,
   getSdkErrorMessage,
 } from '@common/errors';
+import { projectRunOutcome } from '@common/constants/streamStatus';
 import { INSTRUCTION_ACTION } from '@eventBus/ProgressEventBus';
 import { createChannelTrace } from '@logger';
-import {
-  STREAM_STATUS,
-  END_GROUP_STATUS,
-  EXECUTION_STATUS,
-  type StreamTabId,
-} from '@shared/schemas';
+import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 
 import { AgentExecutionHandle, executionRegistry } from './executionRegistry';
 import {
@@ -72,34 +69,33 @@ export async function runFlowWithLifecycle(
     });
     const result = await runner(handle);
     await options?.onCompleted?.(result);
-    const terminalStatus =
-      result.status === END_GROUP_STATUS.ERROR
-        ? EXECUTION_STATUS.ERROR
-        : EXECUTION_STATUS.COMPLETED;
-    await writeTerminalStatus(ctx.executionId, terminalStatus).catch(() => {});
+    // The flow's outcome is the canonical terminal fact; everything below is
+    // one row of the projection table. No other layer may re-derive these.
+    const projection = projectRunOutcome(result.outcome);
+    await writeTerminalStatus(
+      ctx.executionId,
+      projection.executionStatus,
+    ).catch(() => {});
 
     executionRegistry.untrack(ctx.executionId);
-    ctx.parentStage.end(result.status);
+    ctx.parentStage.end(projection.endGroupStatus);
 
     if (!ctx.streamStatus.shouldPreserveOnCompletion(streamId)) {
-      const status =
-        result.status === 'error' ? STREAM_STATUS.ERROR : STREAM_STATUS.STOPPED;
-      ctx.streamStatus.set(streamId, status, {
+      ctx.streamStatus.set(streamId, projection.streamStatus, {
         runtimeHost: ctx.runtimeHost,
-        terminalStatus,
+        terminalStatus: projection.executionStatus,
       });
     }
-    logger.debug(`Task completed with status: ${result.status}`);
+    logger.debug(`Task completed with outcome: ${result.outcome}`);
     return result;
   } catch (err) {
     const kind = classifyAgentError(err);
-    const status =
-      kind === 'abort' ? END_GROUP_STATUS.STOPPED : END_GROUP_STATUS.ERROR;
-    const terminalStatus =
-      kind === 'abort' ? EXECUTION_STATUS.INTERRUPTED : EXECUTION_STATUS.ERROR;
-    const streamStatus =
-      kind === 'abort' ? STREAM_STATUS.STOPPED : STREAM_STATUS.ERROR;
-    await writeTerminalStatus(ctx.executionId, terminalStatus).catch(() => {});
+    const outcome = AGENT_ERROR_OUTCOME[kind];
+    const projection = projectRunOutcome(outcome);
+    await writeTerminalStatus(
+      ctx.executionId,
+      projection.executionStatus,
+    ).catch(() => {});
     const sdkMsg = getSdkErrorMessage(err);
     const errorMsg = `Error executing agent ${agentName}: ${sdkMsg}`;
 
@@ -112,10 +108,10 @@ export async function runFlowWithLifecycle(
       });
     }
 
-    ctx.parentStage.end(status);
-    ctx.streamStatus.set(streamId, streamStatus, {
+    ctx.parentStage.end(projection.endGroupStatus);
+    ctx.streamStatus.set(streamId, projection.streamStatus, {
       runtimeHost: ctx.runtimeHost,
-      terminalStatus,
+      terminalStatus: projection.executionStatus,
     });
 
     // Subagents propagate errors to the orchestrator via FollowUpQueue —
@@ -148,7 +144,7 @@ export async function runFlowWithLifecycle(
         getAgentFlowErrorResult(err) ??
         buildTerminalFlowResult(
           category,
-          status,
+          outcome,
           ctx.executionId,
           streamId,
           ctx.attachedMemoryMisses,
@@ -168,7 +164,7 @@ export async function runFlowWithLifecycle(
     if (kind === 'abort') {
       return buildTerminalFlowResult(
         category,
-        END_GROUP_STATUS.STOPPED,
+        outcome,
         ctx.executionId,
         streamId,
         ctx.attachedMemoryMisses,

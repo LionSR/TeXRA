@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { CliContext } from '@cli/runtime/cliContext';
+import { RUN_OUTCOME } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => {
   const stdinInputFile = Object.assign(vi.fn(), { cleanup: vi.fn() });
@@ -106,7 +107,7 @@ describe('CLI agents run command', () => {
       result: {
         category: AgentCategory.ToolUse,
         executionId: 'exec-1',
-        status: 'completed',
+        outcome: RUN_OUTCOME.COMPLETED,
         lastResponse: 'Correct.',
       },
       terminalStatus: 'completed',

@@ -442,9 +442,9 @@ async function executeSubagent(
         },
       });
       settleSubagentCost(result);
-      if (result.status === 'error') {
+      if (result.outcome === 'failed') {
         return failureResult(
-          subagentError ?? 'Subagent ended with error status.',
+          subagentError ?? 'Subagent ended with failed outcome.',
           result.memoryMisses,
         );
       }
@@ -456,7 +456,10 @@ async function executeSubagent(
       );
       await writeSubagentReport(executionId, msg);
       return {
-        summary: `Completed '${agentName}'`,
+        summary:
+          result.outcome === 'cancelled'
+            ? `Cancelled '${agentName}'`
+            : `Completed '${agentName}'`,
         output: msg,
       };
     } catch (err) {
@@ -583,7 +586,9 @@ async function executeSubagent(
         agentName,
         {
           category: 'toolUse' as const,
-          status: 'stopped' as const,
+          // The turn finished and the subagent is entering WAITING — for the
+          // orchestrator this interim delivery is a completed turn.
+          outcome: 'completed' as const,
           lastResponse,
           touchedFiles,
           executionId,
