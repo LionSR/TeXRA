@@ -258,11 +258,11 @@ export function resolveCliHistoryStatus(input: {
   readonly terminalStatus?: string;
   readonly hasFlowRecord?: boolean;
 }): string {
+  // An absent terminal status means the run never reached its terminal write
+  // (crash, kill, old build) — never report that as 'completed'.
   return (
     input.terminalStatus ??
-    (input.hasFlowRecord
-      ? CLI_HISTORY_RESUMABLE_STATUS
-      : EXECUTION_STATUS.COMPLETED)
+    (input.hasFlowRecord ? CLI_HISTORY_RESUMABLE_STATUS : 'unknown')
   );
 }
 
@@ -317,8 +317,13 @@ async function toCliHistoryEntry(
   entry: ExecutionListingEntry,
 ): Promise<CliHistoryEntry> {
   const inputBasename = firstInputBasename(entry.agentConfig);
+  // Cancelled sessions persist 'interrupted' and may keep a resumable flow
+  // record — check it for those too, not only for missing terminal statuses.
+  const mayBeResumable =
+    entry.terminalStatus === undefined ||
+    entry.terminalStatus === EXECUTION_STATUS.INTERRUPTED;
   const resumeData =
-    entry.terminalStatus === undefined && entry.agentConfig
+    mayBeResumable && entry.agentConfig
       ? await readCliToolUseResumeDataForListing(entry.id, entry.agentConfig)
       : null;
   return {

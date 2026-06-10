@@ -4,34 +4,50 @@
 // Local imports - shared schemas
 import {
   EXECUTION_STATUS,
+  RUN_OUTCOME,
   STREAM_STATUS,
   type ExecutionStatus,
+  type RunOutcome,
   type StreamStatus,
 } from '@shared/schemas';
 
 // ============================================================================
-// Status Transformation Functions
+// Run-outcome projections
 // ============================================================================
+//
+// `RunOutcome` is the canonical terminal fact, decided once at the run
+// lifecycle boundary. These projections are the ONLY place the legacy
+// vocabularies are derived from it — flows and hosts must not hand-roll
+// their own mappings.
+
+/** Persisted-history projection (`ExecutionMeta.terminalStatus`). */
+export function outcomeToExecutionStatus(outcome: RunOutcome): ExecutionStatus {
+  switch (outcome) {
+    case RUN_OUTCOME.COMPLETED:
+      return EXECUTION_STATUS.COMPLETED;
+    case RUN_OUTCOME.CANCELLED:
+      return EXECUTION_STATUS.INTERRUPTED;
+    case RUN_OUTCOME.FAILED:
+      return EXECUTION_STATUS.ERROR;
+  }
+}
 
 /**
- * Convert ExecutionStatus to terminal status string for logger.
- *
- * Returns 'error' | 'stopped' - the EndGroupStatus values.
- * Using string literal return type to avoid circular import with messageTypes.
- *
- * Transformation rules:
- * - `completed` → `stopped` (green/neutral in UI)
- * - `interrupted` → `error` (red in UI)
- * - `error` → `error` (red in UI)
- *
- * UX note: User-initiated interruption shows as error (red) to make it visually
- * distinct from successful completion. This is intentional - interrupted runs
- * did not produce complete results, so a warning color is appropriate.
+ * Transcript-group projection (`stage.end()` / group-end rows).
+ * A cancelled run ends its group neutral like a completed one — a user stop
+ * is not a failure and must not paint the transcript red.
  */
-export function executionToEndStatus(
-  status: ExecutionStatus,
+export function outcomeToEndGroupStatus(
+  outcome: RunOutcome,
 ): 'error' | 'stopped' {
-  return status === EXECUTION_STATUS.COMPLETED ? 'stopped' : 'error';
+  return outcome === RUN_OUTCOME.FAILED ? 'error' : 'stopped';
+}
+
+/** Live stream-state projection for the terminal transition. */
+export function outcomeToStreamStatus(outcome: RunOutcome): StreamStatus {
+  return outcome === RUN_OUTCOME.FAILED
+    ? STREAM_STATUS.ERROR
+    : STREAM_STATUS.STOPPED;
 }
 
 // ============================================================================

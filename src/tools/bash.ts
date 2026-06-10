@@ -22,7 +22,11 @@ import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - tools
-import type { StreamTabId, ExecutionId } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  type StreamTabId,
+  type ExecutionId,
+} from '@shared/schemas';
 import { BASH_TOOL_DEFAULT_TIMEOUT_MS } from '@shared/constants/toolDefaults';
 import { ToolError, type ToolResult } from '@tools/result';
 import { formatBashDelivery, formatBashError } from '@tools/subagentResults';
@@ -339,7 +343,9 @@ export class BashTool extends defineTool({
             timedOut: result.timedOut,
             command,
           });
-          const terminalStatus = result.success ? 'completed' : 'error';
+          const terminalStatus = result.success
+            ? EXECUTION_STATUS.COMPLETED
+            : EXECUTION_STATUS.ERROR;
           await writeTerminalStatus(executionId, terminalStatus).catch(
             () => {},
           );
@@ -365,7 +371,9 @@ export class BashTool extends defineTool({
       const { error } = outcome;
       const msg = formatBashError(executionId, command, error);
       try {
-        await writeTerminalStatus(executionId, 'error').catch(() => {});
+        await writeTerminalStatus(executionId, EXECUTION_STATUS.ERROR).catch(
+          () => {},
+        );
         await getExecutionStore(executionId).writeReport(msg);
       } catch (err: unknown) {
         logBackgroundFailure('persist', err);

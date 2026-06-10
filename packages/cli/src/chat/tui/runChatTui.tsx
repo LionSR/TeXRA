@@ -1243,7 +1243,7 @@ export async function runChat(
       })
       .then((result) => {
         agentSettled = true;
-        if (session.stopRequested || result.status !== 'error') {
+        if (session.stopRequested || result.outcome !== 'failed') {
           session.runExitCode = CliExitCode.Success;
         } else if (hasCliApprovalDenied(sessionContext)) {
           session.runExitCode = CliExitCode.ApprovalDenied;

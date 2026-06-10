@@ -2,6 +2,10 @@ import { getExecutionStore } from '@agent/storage';
 import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
 import { runAgent } from '@agent/runtime/runAgent';
 
+import {
+  outcomeToEndGroupStatus,
+  outcomeToExecutionStatus,
+} from '@common/constants/streamStatus';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 
 import { hasCliApprovalDenied } from './approvalAdapter';
@@ -10,9 +14,10 @@ import type { CliContext } from './cliContext';
 
 export type ExecuteAgentResult = Awaited<ReturnType<typeof runAgent>>;
 
-type CliRunResultFor<T extends ExecuteAgentResult> = Omit<T, 'status'> & {
+type CliRunResultFor<T extends ExecuteAgentResult> = T & {
   status: ExecutionStatus;
-  endGroupStatus: T['status'];
+  /** Legacy 2-value projection kept for JSON-output compatibility. */
+  endGroupStatus: 'error' | 'stopped';
   terminalStatus: ExecutionStatus;
   workingDirectory?: string;
   runDirectory?: string;
@@ -55,8 +60,7 @@ export function cliTerminalStatus(
   storedTerminalStatus?: string,
 ): ExecutionStatus {
   if (isExecutionStatus(storedTerminalStatus)) return storedTerminalStatus;
-  if (result.status === 'error') return EXECUTION_STATUS.ERROR;
-  return EXECUTION_STATUS.COMPLETED;
+  return outcomeToExecutionStatus(result.outcome);
 }
 
 export function createCliRunResult<T extends ExecuteAgentResult>(
@@ -69,11 +73,10 @@ export function createCliRunResult<T extends ExecuteAgentResult>(
     readonly copiedOutputs?: string[];
   } = {},
 ): T extends ExecuteAgentResult ? CliRunResultFor<T> : never {
-  const { status: endGroupStatus, ...rest } = result;
   return {
-    ...rest,
+    ...result,
     status: terminalStatus,
-    endGroupStatus,
+    endGroupStatus: outcomeToEndGroupStatus(result.outcome),
     terminalStatus,
     ...extras,
   } as T extends ExecuteAgentResult ? CliRunResultFor<T> : never;

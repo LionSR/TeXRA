@@ -53,6 +53,29 @@ export const ExecutionStatusSchema = z.enum([
 ]);
 export type ExecutionStatus = z.infer<typeof ExecutionStatusSchema>;
 
+/**
+ * Canonical terminal outcome of an agent run — the single fact "how did this
+ * run end", decided exactly once at the run-lifecycle boundary. The legacy
+ * vocabularies are pure projections of it (see `@common/constants/streamStatus`):
+ * `ExecutionStatus` for persisted history, `EndGroupStatus` for transcript
+ * groups, `StreamStatus` for the live stream state machine.
+ *
+ * `cancelled` is a sibling of `failed`, never folded into it — a user stop is
+ * not an error. Matches the planned `ResultEvent.outcome` triad (SDK 7d/T3-2).
+ */
+export const RUN_OUTCOME = {
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+  FAILED: 'failed',
+} as const;
+
+export const RunOutcomeSchema = z.enum([
+  RUN_OUTCOME.COMPLETED,
+  RUN_OUTCOME.CANCELLED,
+  RUN_OUTCOME.FAILED,
+]);
+export type RunOutcome = z.infer<typeof RunOutcomeSchema>;
+
 export const WORKTREE_PR_STATE = {
   OPEN: 'open',
   MERGED: 'merged',

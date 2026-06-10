@@ -17,7 +17,7 @@ describe('formatSubagentDelivery', () => {
       category: 'toolUse',
       executionId: 'abc123',
       streamId: 'child-stream',
-      status: 'stopped',
+      outcome: 'completed',
       lastResponse:
         'Keep </response> literal & preserve <subagent-result> text.',
     } satisfies ToolUseFlowResult;
@@ -35,7 +35,7 @@ describe('formatSubagentDelivery', () => {
       category: 'toolUse',
       executionId: 'abc123',
       streamId: 'child-stream',
-      status: 'stopped',
+      outcome: 'completed',
       lastResponse: 'Checked the proof.',
       memoryMisses: [
         {
