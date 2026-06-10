@@ -9,33 +9,33 @@ All notable changes to this project will be documented in this file.
 #### Bug Fixes
 
 - **Stopping a run is no longer recorded as an error** — interrupting an agent (stop button, Ctrl+C, closing an idle chat) now consistently records the run as _interrupted_ instead of _error_: history shows the right status, the transcript group ends neutral instead of red, orchestrators see a cancelled subagent as cancelled rather than failed, and the CLI exits with the interrupt code (130) instead of the error code (1).
-- **Fix LaTeX compilation works on latexdiff output** — running the LaTeX fixer on a generated `latexdiff` file is no longer blocked. Since `latexdiff` itself often emits non-compiling markup (DIF commands inside math, citations, or macro definitions), the fixer now treats the file as a diff artifact: it repairs broken DIF markup in place while keeping the change annotations, and when an error traces back to the original source it fixes the source too so a regenerated diff stays fixed.
-- **Orchestrators manage their team reliably** — stopping or killing an orchestrator now interrupts the entire delegation chain, including subagents of subagents, instead of leaving them running against a dead parent; a waiting orchestrator now wakes up when a queued subagent finishes instead of stalling until your next message; resuming a subagent that was detached or belongs to another orchestrator now fails fast with the reason instead of silently queueing instructions whose results can never come back; and when a subagent's output diffs cannot be computed, the orchestrator is told so instead of assuming nothing changed.
+- **Fix LaTeX Compilation Errors works on latexdiff output** — running the fixer on a generated `latexdiff` file is no longer blocked. Since `latexdiff` itself often emits non-compiling markup (DIF commands inside math, citations, or macro definitions), the fixer now treats the file as a diff artifact: it repairs broken DIF markup in place while keeping the change annotations, and when an error traces back to the original source it fixes the source too so a regenerated diff stays fixed.
+- **Orchestrators manage their team reliably** — stopping an orchestrator now stops the entire delegation chain, including subagents of subagents, instead of leaving them running; a waiting orchestrator now learns that a subagent finished without you having to send another message; and when a subagent's output diffs cannot be computed, the orchestrator is told so instead of assuming nothing changed.
 - **Goal records are cleaned up with their conversations** — deleting a conversation (or a run from CLI history) now also removes its goal record, so the Goal tab no longer accumulates entries for conversations that no longer exist.
 - **Relay streams survive transient hiccups** — a brief transient error on the included relay no longer cuts off an in-flight response.
 
 #### Improvements
 
-- **Plans are now a single objective document** — a plan states what to achieve, the approach, and a verifiable stopping condition; step-by-step tracking lives solely in the agent's todo list instead of being duplicated in the plan. Updating a plan always asks for your approval again, and Approve & Run seeds the goal with the document verbatim. The `texra.goal.costCapUsd` setting is removed — a goal is driven by its objective, not a budget — and when a goal auto-pauses after an error, the CLI now prints a notice instead of appearing to hang.
+- **Plans are now a single objective document** — a plan states what to achieve, the approach, and a verifiable stopping condition; step-by-step tracking lives solely in the agent's todo list instead of being duplicated in the plan. Updating a plan always asks for your approval again, and Approve & Run uses the document verbatim as the goal objective. Plans saved in the old step-list format are no longer displayed. The `texra.goal.costCapUsd` setting is removed — a goal is driven by its objective, not a budget — and when a goal auto-pauses after an error, the CLI now prints a notice instead of appearing to hang.
 
 ### CLI
 
 #### Features
 
 - **Suspend the chat with Ctrl+Z** — press `Ctrl+Z` to drop back to your shell mid-session and `fg` to return; the terminal is handed back cleanly on suspend and the screen repaints on resume.
-- **Screen-reader support** — with Ink's `INK_SCREEN_READER` environment variable enabled, menus and pickers expose proper option roles with selected and disabled states, the chat input reads as a text box, and decorative glyphs are hidden from the reader.
+- **Screen-reader support** — with the `INK_SCREEN_READER` environment variable set, menus and pickers announce their options with selected and disabled states, the chat input reads as a text box, and decorative glyphs are hidden from the reader.
 
 #### Bug Fixes
 
 - **Terminal always restored on exit** — a crash or unexpected exit can no longer leave your shell stuck in raw mode with a hidden cursor or mouse reporting left on.
-- **Stopping honors the detach setting** — stopping an agent now respects your detach-subagents-on-stop preference instead of always interrupting running subagents.
+- **Stopping honors your subagent preference** — stopping an orchestrator now respects the "Keep agents running if I stop the orchestrator" setting instead of always interrupting running subagents.
 
 #### Improvements
 
 - **Honest history statuses** — runs that never reached a terminal state (e.g. the process was killed) now show `unknown` in `texra history` instead of being reported as `completed`, and interrupted chat sessions are checked for a resumable record like unfinished ones.
-- **Calmer transcript layout** — your messages now render as an inset band with a blank line above and below, tool rows sit directly under the prompt that triggered them, stray blank rows at startup and between turns are gone, tool rows are sized to their content, and the status bar compacts gracefully on narrow terminals.
+- **Calmer transcript layout** — your messages now render as an inset band with a blank line above and below, tool rows sit directly under the prompt that triggered them, stray blank rows at startup and between turns are gone, and on narrow terminals the status bar shortens its segments (context usage degrades to a bare percentage) before dropping anything.
 - **Forgiving slash-command matching** — when nothing starts with what you typed, the palette falls back to substring matches (`/odel` still finds `/model`) and then to the closest typo suggestion (`/hlp` suggests `/help`) instead of going blank; only exact prefix matches run without preview, so a pasted line never triggers a command you didn't see. `/help` now also lists the text-editing shortcuts from the active keymap and the chords for the tasks and subagents panels.
-- **Lighter streaming redraws** — while a response streams, only the row that changed re-renders, reducing flicker and CPU on long transcripts.
+- **Lighter streaming redraws** — while a response streams, only the row that changed re-renders, reducing CPU usage during long responses.
 
 ### Desktop
 
@@ -47,7 +47,7 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **In-editor GitHub sign-in works again** — signing in with GitHub through the editor's account flow had been failing with a server configuration error and silently falling back to browser sign-in; it now completes and issues a standard session, and previously stored sessions migrate automatically on their next refresh.
+- **In-editor GitHub sign-in works again** — signing in with GitHub through the editor's account flow had been failing with a server configuration error and silently falling back to browser sign-in; it now completes again. Long-standing existing sessions may ask you to sign in one more time.
 
 ## [0.38.7] - 2026-06-09
 
