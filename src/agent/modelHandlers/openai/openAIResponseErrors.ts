@@ -1,6 +1,5 @@
 // Local imports - common errors
 import {
-  formatProviderHttpError,
   isRetryableStatusCode,
   normalizeProviderError,
 } from '@common/errors/sdkErrorUtils';
@@ -74,7 +73,7 @@ export function createOpenAIBackgroundPollingError(
   provider: string,
 ): Error {
   tagOpenAISdkError(cause, provider);
-  const causeError = formatProviderHttpError(cause);
+  const causeError = normalizeProviderError(cause);
   const pollingError: RequestIdTaggedError = new Error(
     `Background response polling failed for ${responseId}: ${causeError.message}`,
     { cause },

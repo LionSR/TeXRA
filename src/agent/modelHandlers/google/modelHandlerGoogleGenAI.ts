@@ -241,6 +241,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     const client = await this.getClient();
     const uploadedParts: Part[] = [];
     const uploadSummaries: MediaFileResult[] = [];
+    const uploadFailures: string[] = [];
     const inlineLimit = this.getInlineUploadLimitBytes();
 
     for (const entry of entries) {
@@ -319,12 +320,14 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         uploadSummaries.push({ path: fileName, ok: true });
       } catch (error) {
         uploadSummaries.push({ path: fileName, ok: false });
+        uploadFailures.push(`${fileName}: ${getSdkErrorMessage(error)}`);
       }
     }
 
     if (uploadSummaries.some((summary) => !summary.ok)) {
       this.logger.warn(
-        'Some media files failed to upload via Google GenAI SDK',
+        'Some media files failed to upload via Google GenAI SDK' +
+          (uploadFailures.length > 0 ? `: ${uploadFailures.join('; ')}` : ''),
       );
     }
     return uploadedParts;
