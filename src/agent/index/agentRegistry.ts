@@ -193,8 +193,16 @@ const LEGACY_AGENT_ALIASES: Record<string, string> = {
  * comparison against user-supplied or persisted agent names (visibility sets,
  * delegation targets) should go through this rather than hardcoding renames.
  */
-export function canonicalAgentName(name: string): string {
-  return LEGACY_AGENT_ALIASES[name] ?? name;
+export function canonicalAgentName(
+  identifier: string,
+  preferToolUse = false,
+): string {
+  const plainName = agentName(identifier);
+  return (
+    getAgent(plainName, preferToolUse)?.name ??
+    LEGACY_AGENT_ALIASES[plainName] ??
+    plainName
+  );
 }
 
 /**
@@ -353,7 +361,7 @@ export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
       ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
       : WorkspaceStateKey.ENABLED_AGENTS;
   const raw = platform().workspaceState.get<string[]>(stateKey);
-  return filterVisible(entries, raw);
+  return filterVisible(entries, raw, category);
 }
 
 /**
@@ -385,6 +393,7 @@ function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
 function filterVisible(
   entries: AgentEntry[],
   configured: string[] | undefined,
+  category: AgentCategory,
 ): AgentEntry[] {
   // undefined = never configured → show all; [] = explicitly empty → show none
   if (configured === undefined) return entries;
@@ -394,8 +403,8 @@ function filterVisible(
   const enabledNames = new Set(
     configured.flatMap((value) => {
       const name = agentName(value);
-      const canonical = canonicalAgentName(name);
-      return canonical === name ? [name] : [name, canonical];
+      if (entries.some((entry) => entry.name === name)) return [name];
+      return [canonicalAgentName(name, category === 'toolUse')];
     }),
   );
   return entries.filter((entry) => enabledNames.has(entry.name));
