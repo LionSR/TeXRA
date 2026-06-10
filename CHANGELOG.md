@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
+#### Bug Fixes
+
+- **Safer LaTeX cleanup** — inline fenced LaTeX blocks now distinguish environment names like `align` and `aligned` correctly, and trace-style replacements preserve command definitions while still rewriting ordinary `\mathrm{Tr}` and `\mathrm{tr}` usages.
+
 #### Improvements
 
 - **Cheaper default helper model** — the built-in helper model used for auxiliary tasks (session descriptions, instruction polishing, AI-assisted agent creation, and merges) now defaults to DeepSeek V4 Flash (~$0.14/$0.28 per MTok) instead of Sonnet 4.6, cutting the cost of these background calls by roughly 20×. Override it any time from the Models settings tab.
