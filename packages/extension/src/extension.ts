@@ -36,6 +36,7 @@ import {
 import { getAuthStatus } from '@auth/authCommands';
 import { AUTH_PROVIDER_ID } from '@auth/constants';
 import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
+import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
 import { toErrorMessage } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
 import { globalSM, initializeStateManagers, workspaceSM } from '@common/state';
@@ -146,6 +147,16 @@ export async function activate(context: vscode.ExtensionContext) {
 
   if (!workspaceFolders || workspaceFolders.length !== 1) {
     registerWelcomeView(context);
+    // The full command surface (including the workspace-backed
+    // `texra.createSampleProject`) is only registered on the single-folder
+    // path below, so the welcome view registers its own standalone variant:
+    // a first-time user without a LaTeX project can create the sample and
+    // land directly in a working workspace.
+    context.subscriptions.push(
+      vscode.commands.registerCommand('texra.createSampleProject', () =>
+        createSampleProjectWithoutWorkspace(context.extensionPath),
+      ),
+    );
     return;
   }
   const workspaceRoot = workspaceFolders[0].uri.fsPath;
