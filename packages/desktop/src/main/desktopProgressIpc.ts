@@ -38,7 +38,9 @@ export function createDesktopProgressIpc(
 ): DesktopProgressIpc {
   const reportAsyncError = createDesktopErrorReporter(options.onAsyncError);
   const onUnsupportedCommand =
-    options.onUnsupportedCommand ?? defaultUnsupportedCommand;
+    options.onUnsupportedCommand ??
+    ((message: ProgressViewInboundMessage) =>
+      console.warn(`Unsupported desktop Progress command: ${message.command}`));
   const getProgress = () => options.getProgress?.() ?? options.progress;
   const ensureProgress = options.ensureProgress;
 
@@ -100,8 +102,4 @@ export function createDesktopProgressIpc(
       return true;
     },
   };
-}
-
-function defaultUnsupportedCommand(message: ProgressViewInboundMessage): void {
-  console.warn(`Unsupported desktop Progress command: ${message.command}`);
 }

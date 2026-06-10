@@ -7,8 +7,7 @@ export const AttachedMemoryMissSchema = z.object({
 
 export type AttachedMemoryMiss = z.infer<typeof AttachedMemoryMissSchema>;
 
-const AttachedMemoryMissesSchema = z.array(AttachedMemoryMissSchema);
-
-export function readAttachedMemoryMisses(value: unknown): AttachedMemoryMiss[] {
-  return AttachedMemoryMissesSchema.catch([]).parse(value);
-}
+/** Tolerant: malformed or missing input parses to an empty list. */
+export const AttachedMemoryMissesSchema = z
+  .array(AttachedMemoryMissSchema)
+  .catch([]);

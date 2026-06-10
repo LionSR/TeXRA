@@ -6,9 +6,8 @@ import type { CliContext } from '@cli/runtime/cliContext';
 const mocks = vi.hoisted(() => ({
   emitCliResult: vi.fn(),
   getAgent: vi.fn(),
-  getToolUseAgents: vi.fn(),
+  getAgentsByCategory: vi.fn(),
   getVisibleAgents: vi.fn(),
-  getWorkflowAgents: vi.fn(),
   initLocalCliPlatform: vi.fn(),
   loadAgents: vi.fn(),
   resolveCliAgent: vi.fn(),
@@ -17,9 +16,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/index', () => ({
   getAgent: mocks.getAgent,
-  getToolUseAgents: mocks.getToolUseAgents,
+  getAgentsByCategory: mocks.getAgentsByCategory,
   getVisibleAgents: mocks.getVisibleAgents,
-  getWorkflowAgents: mocks.getWorkflowAgents,
   loadAgents: mocks.loadAgents,
 }));
 
@@ -66,9 +64,8 @@ describe('CLI agents command', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getToolUseAgents.mockReturnValue([]);
+    mocks.getAgentsByCategory.mockReturnValue([]);
     mocks.getVisibleAgents.mockReturnValue([]);
-    mocks.getWorkflowAgents.mockReturnValue([]);
   });
 
   it('parses agent category filter spellings', async () => {
@@ -102,7 +99,9 @@ describe('CLI agents command', () => {
     mocks.getVisibleAgents.mockImplementation((category: AgentCategory) =>
       category === AgentCategory.ToolUse ? [visibleAgent] : [],
     );
-    mocks.getToolUseAgents.mockReturnValue([visibleAgent, hiddenAgent]);
+    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) =>
+      category === AgentCategory.ToolUse ? [visibleAgent, hiddenAgent] : [],
+    );
     const { listAgents } = await import('@cli/commands/agents');
 
     const exitCode = await listAgents(cliContext());
@@ -144,13 +143,12 @@ describe('CLI agents command', () => {
       }
       return [visibleToolUseAgent];
     });
-    mocks.getWorkflowAgents.mockImplementation(() => {
-      throw new Error('workflow agents should not be loaded');
+    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) => {
+      if (category !== AgentCategory.ToolUse) {
+        throw new Error('workflow agents should not be loaded');
+      }
+      return [visibleToolUseAgent, hiddenToolUseAgent];
     });
-    mocks.getToolUseAgents.mockReturnValue([
-      visibleToolUseAgent,
-      hiddenToolUseAgent,
-    ]);
     const { listAgents } = await import('@cli/commands/agents');
 
     const exitCode = await listAgents(cliContext(), {
@@ -158,7 +156,9 @@ describe('CLI agents command', () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(mocks.getWorkflowAgents).not.toHaveBeenCalled();
+    expect(mocks.getAgentsByCategory).not.toHaveBeenCalledWith(
+      AgentCategory.Workflow,
+    );
     expect(mocks.emitCliResult).toHaveBeenCalledWith(
       expect.anything(),
       {
@@ -188,8 +188,9 @@ describe('CLI agents command', () => {
       category: AgentCategory.ToolUse,
       description: 'Interactive assistant.',
     };
-    mocks.getWorkflowAgents.mockReturnValue([workflowAgent]);
-    mocks.getToolUseAgents.mockReturnValue([toolUseAgent]);
+    mocks.getAgentsByCategory.mockImplementation((category: AgentCategory) =>
+      category === AgentCategory.Workflow ? [workflowAgent] : [toolUseAgent],
+    );
     const { listAgents } = await import('@cli/commands/agents');
 
     const exitCode = await listAgents(cliContext(), { includeHidden: true });

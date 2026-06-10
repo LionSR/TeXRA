@@ -96,8 +96,7 @@ export {
   loadAgents,
   getAgent,
   resolveAgent,
-  getWorkflowAgents,
-  getToolUseAgents,
+  getAgentsByCategory,
   type AgentEntry,
   type ResolvedAgent,
 } from '@agent/index';

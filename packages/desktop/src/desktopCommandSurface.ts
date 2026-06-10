@@ -226,7 +226,12 @@ export function getDesktopCommandMenuEntries(
 ): DesktopCommandMenuEntry[] {
   return ids.map((id) => {
     if (isDesktopLocalCommandId(id)) {
-      return resolveLocalCommandEntry(id, platform);
+      const localEntry = DESKTOP_LOCAL_COMMAND_ENTRIES.get(id);
+      if (!localEntry) throw new Error(`Missing desktop command entry: ${id}`);
+      return {
+        ...localEntry,
+        accelerator: toPlatformAccelerator(localEntry.accelerator, platform),
+      };
     }
 
     const entry = commandCatalogById.get(id);
@@ -246,18 +251,6 @@ export function getDesktopCommandMenuEntries(
       ...(unavailableReason && { unavailableReason }),
     };
   });
-}
-
-function resolveLocalCommandEntry(
-  id: DesktopLocalCommandId,
-  platform: NodeJS.Platform,
-): DesktopCommandMenuEntry {
-  const entry = DESKTOP_LOCAL_COMMAND_ENTRIES.get(id);
-  if (!entry) throw new Error(`Missing desktop command entry: ${id}`);
-  return {
-    ...entry,
-    accelerator: toPlatformAccelerator(entry.accelerator, platform),
-  };
 }
 
 const DESKTOP_COMMAND_HANDLERS = {
