@@ -35,37 +35,12 @@ export interface ElectronPlatformInitResult {
 
 const WORKSPACE_CONFIG_MIGRATED_KEY = 'desktop.workspaceConfigMigratedToProject';
 
-/**
- * One-time copy of workspace config from the pre-project-file internal store
- * (`<workspace-storage>/config.json`) into the project's `.texra/config.json`.
- * Existing project values win — a checked-in config is never overwritten.
- */
-async function migrateLegacyWorkspaceConfig(init: {
-  legacyPath: string;
-  projectStore: JsonStore;
-  workspaceState: JsonStore;
-}): Promise<void> {
-  if (init.workspaceState.get<boolean>(WORKSPACE_CONFIG_MIGRATED_KEY) === true) {
-    return;
-  }
-  const legacyStore = await JsonStore.open(init.legacyPath);
-  for (const [key, value] of Object.entries(legacyStore.snapshot())) {
-    if (!init.projectStore.has(key)) {
-      await init.projectStore.set(key, value);
-    }
-  }
-  await init.workspaceState.update(WORKSPACE_CONFIG_MIGRATED_KEY, true);
-}
-
 export async function initializeElectronPlatform(
   mainDirname: string,
 ): Promise<ElectronPlatformInitResult> {
-  // console.error is mirrored into the desktop app log; wording matches the
-  // extension and CLI hosts so support logs read the same everywhere.
-  const lifecycle = createLifecycleHost({
-    onError: (phase, error) =>
-      console.error(`[lifecycle] Lifecycle ${phase} handler failed:`, error),
-  });
+  // The default handler's console.error is mirrored into the desktop app log,
+  // so shutdown-handler failures land at error severity like the other hosts.
+  const lifecycle = createLifecycleHost();
   const userDataPath = app.getPath('userData');
   const globalStateStore = await JsonStore.open(
     join(userDataPath, 'state', 'global.json'),
@@ -92,12 +67,20 @@ export async function initializeElectronPlatform(
       ? workspaceTexraConfigPath(workspacePath)
       : legacyWorkspaceConfigPath,
   );
-  if (workspacePath) {
-    await migrateLegacyWorkspaceConfig({
-      legacyPath: legacyWorkspaceConfigPath,
-      projectStore: workspaceConfigStore,
-      workspaceState: workspaceStateStore,
-    });
+  // One-time copy from the pre-project-file internal store into the project
+  // file; existing project values win, so a checked-in config is never
+  // overwritten.
+  if (
+    workspacePath &&
+    workspaceStateStore.get<boolean>(WORKSPACE_CONFIG_MIGRATED_KEY) !== true
+  ) {
+    const legacyStore = await JsonStore.open(legacyWorkspaceConfigPath);
+    for (const [key, value] of Object.entries(legacyStore.snapshot())) {
+      if (!workspaceConfigStore.has(key)) {
+        await workspaceConfigStore.set(key, value);
+      }
+    }
+    await workspaceStateStore.update(WORKSPACE_CONFIG_MIGRATED_KEY, true);
   }
   const secretsStore = await JsonStore.open(join(userDataPath, 'secrets.json'));
 

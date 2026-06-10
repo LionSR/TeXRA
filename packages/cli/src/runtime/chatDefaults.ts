@@ -1,9 +1,9 @@
+import { TEXRA_CONFIG_FILE_NAME } from '@platform/defaults/nodeStorage';
 import { listExecutions } from '@agent/storage';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { GlobalStorageFS } from '@utils/files/storageFS';
 import {
   CLI_BUILTIN_DEFAULT_MODEL,
-  CLI_CONFIG_FILE,
   loadWorkspaceCliConfig,
   parseCliConfigValues,
   resolveConfiguredAgent,
@@ -64,7 +64,7 @@ async function loadWorkspaceDefaults(cwd: string): Promise<PartialDefaults> {
 async function loadUserDefaults(): Promise<PartialDefaults> {
   try {
     return defaultsFromConfigValues(
-      parseCliConfigValues(await GlobalStorageFS.readJson(CLI_CONFIG_FILE)),
+      parseCliConfigValues(await GlobalStorageFS.readJson(TEXRA_CONFIG_FILE_NAME)),
     );
   } catch {
     return {};

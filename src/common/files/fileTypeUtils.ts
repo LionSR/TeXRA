@@ -29,6 +29,11 @@ const INCLUDED_EXTENSION_KEYS: Record<ExtensionCategory, string> = {
   edited: 'texra.files.included.editedExtensions',
 };
 
+/** Every configurable extension category, for callers that aggregate them all. */
+export const EXTENSION_CATEGORIES = Object.keys(
+  INCLUDED_EXTENSION_KEYS,
+) as readonly ExtensionCategory[];
+
 /** Legacy keys preserved so older user customizations carry through the rename. */
 const LEGACY_REFERENCE_EXTENSIONS_KEY =
   'texra.files.included.referenceExtensions';

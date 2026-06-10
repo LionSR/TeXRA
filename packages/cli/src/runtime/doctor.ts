@@ -6,6 +6,7 @@ import { access, stat } from 'node:fs/promises';
 import { satisfies as semverSatisfies } from 'semver';
 
 // Local imports - LaTeX
+import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import {
   probeLatexToolchain,
   type LatexToolchainProbe,
@@ -17,7 +18,6 @@ import {
 import { extractErrorMessage } from '@utils/core';
 
 // Local imports - CLI runtime
-import { workspaceCliConfigPath } from './cliConfig';
 import { CliExitCode } from './exitCodes';
 import {
   writeNdjsonStdout,
@@ -311,7 +311,7 @@ async function checkConfig(context: CliContext): Promise<DoctorCheck> {
       context.configWarnings?.join(' '),
     );
   }
-  const workspaceConfig = workspaceCliConfigPath(context.cwd);
+  const workspaceConfig = workspaceTexraConfigPath(context.cwd);
   try {
     await access(workspaceConfig, fsConstants.R_OK);
     return pass('config', 'Config', `Workspace config: ${workspaceConfig}`);

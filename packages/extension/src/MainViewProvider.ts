@@ -13,7 +13,7 @@ import {
   setActiveSidebarView,
 } from '@common/webview';
 import { consumePendingState } from '@common/state';
-import { getFilterExtensions } from '@common/files';
+import { EXTENSION_CATEGORIES, getFilterExtensions } from '@common/files';
 
 import { agentDirectories } from '@frontend/agents';
 import { computeModelOptionsData } from '@model/computeModelOptions';
@@ -158,9 +158,7 @@ export class MainViewProvider
     // (fileListingRules), including user-configured extension overrides, so
     // the watched set cannot drift from what the lists display.
     const extensions = new Set(
-      (['input', 'context', 'media', 'audio', 'edited'] as const).flatMap(
-        (category) => getFilterExtensions(category),
-      ),
+      EXTENSION_CATEGORIES.flatMap(getFilterExtensions),
     );
     const filePattern = `**/*.{${[...extensions].join(',')}}`;
     this.fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern);

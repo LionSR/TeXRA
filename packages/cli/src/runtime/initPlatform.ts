@@ -16,6 +16,10 @@ import { UsageLogService } from '@telemetry/UsageLogService';
 
 // Local imports - agent index
 import { defaultSkillSources, setRuntimeSkillSources } from '@skills/index';
+import {
+  TEXRA_CONFIG_FILE_NAME,
+  workspaceTexraConfigPath,
+} from '@platform/defaults/nodeStorage';
 import { bootstrapPlatformAgentDirectories } from '@agent/index/platformAgentDirectories';
 
 // Local imports - auth
@@ -41,7 +45,6 @@ import { applyCliGitAuthorConfig } from './gitAuthor';
 import { getCliSecrets } from './cliSecrets';
 import { isTexraCliEntrypointPath, readCliEntrypointPath } from './cliContext';
 import { writeTextStderr } from './logSinks';
-import { CLI_CONFIG_FILE, workspaceCliConfigPath } from './cliConfig';
 import { getCliAuthProvider, initializeCliSupabaseAuth } from './supabaseAuth';
 import { createCliStateStores } from './cliStateStores';
 import { CliExitCode } from './exitCodes';
@@ -158,7 +161,7 @@ export async function initCliPlatform(
 
   if (!tryPlatform()) {
     const configStore = await JsonStore.open(
-      workspaceCliConfigPath(cliWorkspaceCwd),
+      workspaceTexraConfigPath(cliWorkspaceCwd),
     );
     const stateStores = await createCliStateStores({
       storageRoot: context.storageRoot,
@@ -168,7 +171,10 @@ export async function initCliPlatform(
     // mirroring the desktop host: workspace values shadow global on read and
     // `update(..., 'global')` has somewhere to write instead of throwing.
     const globalConfigStore = await JsonStore.open(
-      nodePath.join(stateStores.storage.getGlobalStoragePath(), CLI_CONFIG_FILE),
+      nodePath.join(
+        stateStores.storage.getGlobalStoragePath(),
+        TEXRA_CONFIG_FILE_NAME,
+      ),
     );
     // Same severity and wording as the extension/desktop hosts: a shutdown
     // handler failure is an error everywhere, not a warning in one host.

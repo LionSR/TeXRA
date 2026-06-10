@@ -7,7 +7,11 @@
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { CLI_CONFIG_DIR, workspaceCliConfigPath } from './cliConfig';
+import {
+  TEXRA_STORAGE_DIR_NAME,
+  workspaceTexraConfigPath,
+} from '@platform/defaults/nodeStorage';
+
 import type {
   CliApprovalPolicy,
   CliOutputFormat,
@@ -33,7 +37,7 @@ export interface InitConfigShape {
  * storage with a different shape and loader; bootstrapping it is a follow-up.)
  */
 export function initConfigPath(cwd: string): string {
-  return workspaceCliConfigPath(cwd);
+  return workspaceTexraConfigPath(cwd);
 }
 
 /** Map wizard answers to the canonical config object. */
@@ -74,11 +78,11 @@ export async function writeInitConfig(
  * existing content and a single trailing newline.
  */
 export function gitignoreWithTexra(existing: string): string | null {
-  const entry = `${CLI_CONFIG_DIR}/`;
+  const entry = `${TEXRA_STORAGE_DIR_NAME}/`;
   const present = existing
     .split('\n')
     .map((line) => line.trim())
-    .some((line) => line === entry || line === CLI_CONFIG_DIR);
+    .some((line) => line === entry || line === TEXRA_STORAGE_DIR_NAME);
   if (present) return null;
   const trimmed = existing.replace(/\n+$/, '');
   return trimmed.length > 0 ? `${trimmed}\n${entry}\n` : `${entry}\n`;
