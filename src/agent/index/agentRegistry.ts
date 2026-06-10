@@ -348,9 +348,7 @@ export function resolveAgent(identifier: string): ResolvedAgent | undefined {
 /** Get non-internal agents for a category, deduplicated by name. */
 export function getAgentsByCategory(category: AgentCategory): AgentEntry[] {
   return deduplicateByName(
-    [...cache.values()].filter(
-      (e) => e.category === category && !e.internal,
-    ),
+    [...cache.values()].filter((e) => e.category === category && !e.internal),
   );
 }
 
@@ -582,9 +580,10 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  */
 export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
   const entries = getAgentsByCategory(category);
-  const stateKey = category === 'toolUse'
-    ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
-    : WorkspaceStateKey.ENABLED_AGENTS;
+  const stateKey =
+    category === 'toolUse'
+      ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
+      : WorkspaceStateKey.ENABLED_AGENTS;
   const raw = platform().workspaceState.get<string[]>(stateKey);
   return filterVisible(entries, raw);
 }

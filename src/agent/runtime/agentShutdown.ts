@@ -24,7 +24,9 @@ export function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
   );
   // Interrupt CLI-backed sessions so their streams don't reload in a stale
   // WAITING state.
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => codexThreads.interruptAll());
+  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
+    codexThreads.interruptAll(),
+  );
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
     claudeAgentSessions.interruptAll(),
   );
