@@ -3,7 +3,6 @@ import { platform as osPlatform } from 'node:os';
 import { toErrorMessage } from '@common/errors';
 import type { ChildProcess } from 'node:child_process';
 
-
 export type ClipboardTextWriteResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: string };
