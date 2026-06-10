@@ -33,6 +33,9 @@ export type SendFollowUpResult =
     }
   | { status: 'no_session'; streamStatus: string | undefined };
 
+/** In-flight resume attempts per stream — see {@link wakeOrReleaseQueuedStream}. */
+const wakeAttempts = new Map<StreamTabId, Promise<boolean>>();
+
 /**
  * After a queued delivery, wake a stream whose cycle has exited (WAITING
  * snapshot or disposed-with-children) via the host resume port so the queued
@@ -54,7 +57,21 @@ export async function wakeOrReleaseQueuedStream(
   ) {
     return true;
   }
-  const resumed = await platform().agentResume.tryResumeStream(streamId);
+  // Serialize wakes per stream: hosts report an already-in-flight resume as
+  // `false`, indistinguishable from "unresumable", and may not have set
+  // RESUMING yet — so a concurrent wake must await the first attempt's
+  // outcome instead of re-poking the port and releasing the queue the
+  // in-flight resume is about to drain.
+  let attempt = wakeAttempts.get(streamId);
+  if (!attempt) {
+    attempt = platform()
+      .agentResume.tryResumeStream(streamId)
+      .finally(() => {
+        wakeAttempts.delete(streamId);
+      });
+    wakeAttempts.set(streamId, attempt);
+  }
+  const resumed = await attempt;
   if (
     resumed ||
     result.reason !== 'children_running' ||
