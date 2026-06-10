@@ -80,11 +80,7 @@ describe('agent registry legacy aliases', () => {
     const stored = platform().workspaceState.get<string[]>(
       WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
     );
-    expect(stored).toEqual([
-      'assistant',
-      'builtInToolUse:assistant',
-      'review',
-    ]);
+    expect(stored).toEqual(['assistant', 'builtInToolUse:assistant', 'review']);
   });
 
   it('keeps assistant visible for workspaces that opted into chat', async () => {
