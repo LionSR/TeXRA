@@ -3,7 +3,7 @@ import * as logger from '@logger/logUtils';
 
 // Local imports - filesystem
 import { AbsoluteFS } from './absoluteFS';
-import type { FileLocation } from './taskRunStorage';
+import type { FileLocation } from '@shared/schemas';
 
 const CHANNEL = 'flexibleFS';
 logger.initialize(CHANNEL);

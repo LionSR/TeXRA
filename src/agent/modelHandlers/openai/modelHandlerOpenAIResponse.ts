@@ -42,7 +42,7 @@ import {
   getUseOpenRouter,
 } from '@utils/config/providerConfig';
 import { flexibleFS } from '@utils/files/flexibleFS';
-import type { FileLocation } from '@utils/files/taskRunStorage';
+import type { FileLocation } from '@shared/schemas';
 import { normalizeUsage } from '../support/UsageNormalizer';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagOpenAISdkError } from './openAISdkError';

@@ -12,8 +12,8 @@ import * as path from 'node:path';
 
 // Local imports
 import { platform } from '@platform/platform';
+import type { FileLocation } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';
-import type { FileLocation } from '@utils/files';
 import { ensureExtension, joinLatexPath } from '@utils/core/pathCore';
 
 // Local file imports

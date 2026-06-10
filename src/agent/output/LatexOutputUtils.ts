@@ -1,5 +1,5 @@
 import { runLatexFormatter } from '@latex/texFormatter';
-import { type FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import { hasExtension } from '@utils/core/pathCore';
 
 interface Logger {

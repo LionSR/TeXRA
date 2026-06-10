@@ -22,8 +22,8 @@ import {
 } from '@latex/acceptedFileTarget';
 import * as logger from '@logger/logUtils';
 import { DIFF_REGISTRATION_DELAY_MS } from '@shared/constants/latex';
+import type { FileLocation } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';
-import type { FileLocation } from '@utils/files';
 
 /** Run agent/model/round used to build the legacy postfixed copy name. */
 type AcceptCopyMeta = { agent: string; model: string; round: number };

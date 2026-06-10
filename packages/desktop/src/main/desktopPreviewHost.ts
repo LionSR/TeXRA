@@ -5,7 +5,7 @@ import { toErrorMessage } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import type { ExternalOpener } from '@hosts/externalOpener';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
-import type { FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
 import { createExternalLocation } from '@utils/files';
 
 import { buildDesktopShowPdfMessage } from '../desktopPdfMessages.js';
