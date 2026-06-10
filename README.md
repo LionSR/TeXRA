@@ -80,7 +80,7 @@ run <preset>`. Or define your own roster in YAML.
 
 **Tool-use agents** work conversationally with file, shell, and search
 access: `research`, `numerics`, `review`, `presenter`, `latexFixer`,
-`latexDiff`, `creator`, `lean`, `chat`, `setup`, plus a
+`latexDiff`, `creator`, `lean`, `assistant`, `setup`, plus a
 software-engineering line — `engineer`, `coder`, `codeReviewer`,
 `testEngineer`, `codeSimplifier`.
 

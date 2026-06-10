@@ -53,7 +53,7 @@ prompts:
         `merge` (combine drafts), `ocr` (PDF → LaTeX), `transcribe_audio`
         (audio → notes), `paper2poster` / `paper2slide`.
       - **Tool-use agents** — interactive, multi-step assistants:
-        `chat` (general scientist collaborator), `research` (Wolfram-backed
+        `assistant` (general-purpose scientific assistant), `research` (Wolfram-backed
         derivations), `review` (critical reading), `creator` (writes new
         agents), `latexFixer` / `latexDiff` (compile + diff helpers),
         `lean` (Lean 4), `presenter` (slides), `setup` (you).
