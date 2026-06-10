@@ -63,7 +63,7 @@ export function slashPaletteWindow({
     return { start: 0, end: 0, hiddenBefore: 0, hiddenAfter: 0 };
   }
 
-  const visibleAtEdge = Math.min(Math.max(1, maxVisibleCommands), itemCount);
+  const visibleAtEdge = clamp(maxVisibleCommands, 1, itemCount);
   if (itemCount <= visibleAtEdge) {
     return { start: 0, end: itemCount, hiddenBefore: 0, hiddenAfter: 0 };
   }

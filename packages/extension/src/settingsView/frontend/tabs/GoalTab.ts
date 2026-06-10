@@ -13,13 +13,10 @@ import {
 import type { Goal, GoalStatus } from '@shared/schemas';
 import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import type { MetaPart } from '@shared/wa/metaStrip';
+import { capitalize } from '@utils/text/stringUtils';
 
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
-
-function statusLabel(status: GoalStatus): string {
-  return status[0].toUpperCase() + status.slice(1);
-}
 
 /** Map a Goal status to a wa-badge variant. */
 function statusVariant(status: GoalStatus): 'success' | 'warning' {
@@ -171,7 +168,7 @@ export class GoalTab extends LitElement {
           class="status-chip"
           variant=${statusVariant(item.status)}
           appearance="filled"
-          >${statusLabel(item.status)}</wa-badge
+          >${capitalize(item.status)}</wa-badge
         >
         <div>
           <div class="objective" title=${item.objective}>${item.objective}</div>

@@ -5,7 +5,7 @@ import { z } from 'zod';
 // Local imports - tools
 import { toErrorMessage } from '@common/errors';
 import { ToolError, ToolResult } from '@tools/result';
-import { formatToolOutput, pluralize } from '@tools/formatting';
+import { formatToolOutput } from '@tools/formatting';
 import {
   joinWorkspaceRelativePath,
   resolveAndFormat,
@@ -13,6 +13,7 @@ import {
 } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { WorkspaceFS } from '@utils/files';
+import { pluralize } from '@utils/text/stringUtils';
 import { toPosixPath } from '@utils/core/pathCore';
 
 // Local file imports

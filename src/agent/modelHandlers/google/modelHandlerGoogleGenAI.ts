@@ -56,6 +56,7 @@ import type { FileLocation } from '@utils/files';
 
 // Local imports - utils
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
+import { pluralize } from '@utils/text/stringUtils';
 import {
   computeGooglePrice,
   normalizeGoogleUsage,
@@ -714,13 +715,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (mediaFiles?.length && this.supportsFileUploads()) {
       const formattedMedia = await this.createMediaMessage(mediaFiles);
       if (formattedMedia.length > 0) {
-        const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
         const attachmentLabel = mediaFiles
           .map((loc) => getShortDisplayPath(loc))
           .join(', ');
         userContentParts.push(
           createPartFromText(
-            `\nAttached file${pluralSuffix}: ${attachmentLabel}`,
+            `\nAttached ${pluralize(mediaFiles.length, 'file')}: ${attachmentLabel}`,
           ),
         );
         userContentParts.push(...formattedMedia);
@@ -743,13 +743,12 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
     if (mediaFiles?.length && this.supportsFileUploads()) {
       const formattedMedia = await this.createMediaMessage(mediaFiles);
       if (formattedMedia.length > 0) {
-        const pluralSuffix = mediaFiles.length > 1 ? 's' : '';
         const attachmentLabel = mediaFiles
           .map((loc) => getShortDisplayPath(loc))
           .join(', ');
         roundParts.push(
           createPartFromText(
-            `\nProcessing file${pluralSuffix}: ${attachmentLabel}`,
+            `\nProcessing ${pluralize(mediaFiles.length, 'file')}: ${attachmentLabel}`,
           ),
         );
         roundParts.push(...formattedMedia);

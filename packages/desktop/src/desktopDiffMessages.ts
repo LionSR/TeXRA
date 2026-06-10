@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { getBasename } from '@shared/utils/path';
+
 // IPC plumbing for the in-app diff overlay (audit item C, trajectory #18).
 //
 // The desktop main process used to satisfy `DiffViewHost.openDiff` by
@@ -95,14 +97,9 @@ export function monacoLanguageForFilePath(
   filePath: string | undefined,
 ): string {
   if (!filePath) return 'plaintext';
-  // Use `lastIndexOf` rather than path.extname so this works in the
-  // renderer (no node:path) too. We accept any segment after the last
-  // dot in the basename.
-  const slashIndex = Math.max(
-    filePath.lastIndexOf('/'),
-    filePath.lastIndexOf('\\'),
-  );
-  const basename = filePath.slice(slashIndex + 1);
+  // Browser-safe (no node:path): getBasename handles both separators. We
+  // accept any segment after the last dot in the basename.
+  const basename = getBasename(filePath);
   const dotIndex = basename.lastIndexOf('.');
   if (dotIndex < 0) return 'plaintext';
   const ext = basename.slice(dotIndex).toLowerCase();

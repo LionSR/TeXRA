@@ -18,7 +18,9 @@
 import * as path from 'node:path';
 
 import { isModuleNotFoundError } from '@common/errors';
-import { pathExists, resolveBinary } from './support/externalBinaryUtils';
+import { AbsoluteFS } from '@utils/files';
+import { IS_WINDOWS } from '@utils/system/platformPaths';
+import { resolveBinary } from './support/externalBinaryUtils';
 import type { Options, Query } from '@anthropic-ai/claude-agent-sdk';
 
 type QueryFn = (params: {
@@ -102,8 +104,7 @@ const PLATFORM_INFO: Record<string, PlatformInfo> = {
 };
 
 /** Native CLI binary filename for the current platform. */
-const CLAUDE_BINARY_NAME =
-  process.platform === 'win32' ? 'claude.exe' : 'claude';
+const CLAUDE_BINARY_NAME = IS_WINDOWS ? 'claude.exe' : 'claude';
 
 /** Cached result — found paths are cached; misses are retried. */
 let cachedBinaryPath: string | undefined;
@@ -127,7 +128,7 @@ export async function findClaudeBinaryPath(): Promise<string | undefined> {
     platformPkgDir: string,
   ): Promise<string | undefined> => {
     const binary = path.join(platformPkgDir, CLAUDE_BINARY_NAME);
-    return (await pathExists(binary)) ? binary : undefined;
+    return (await AbsoluteFS.exists(binary)) ? binary : undefined;
   };
 
   const result = await resolveBinary({

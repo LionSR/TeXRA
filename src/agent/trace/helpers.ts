@@ -19,6 +19,7 @@ import {
   type ErrorContext,
   type FileListEntry,
 } from '@shared/schemas';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 import type { AgentTrace } from './AgentTrace';
 
@@ -174,7 +175,7 @@ export function logMissingOutputs(
   const count = Array.isArray(info.missing) ? info.missing.length : 0;
   trace.domain({
     key: 'missingOutputs',
-    text: `${count} output file${count === 1 ? '' : 's'} missing`,
+    text: `${formatResultCount(count, 'output file')} missing`,
     data: info,
     stageId,
   });

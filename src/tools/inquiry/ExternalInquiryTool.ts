@@ -29,6 +29,7 @@ import {
 import { ToolError, type ToolResult } from '@tools/result';
 import { requireRuntimeHost } from '@tools/contextHelpers';
 import { defineTool } from '@tools/core/define';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 import { collectKnownSessionLinks } from './externalInquiryResultFormatter';
 import {
@@ -219,7 +220,7 @@ function buildReadOutput(manifest: ExternalInquiryThreadManifest): ToolResult {
   }
 
   return {
-    summary: `Inquiry thread ${manifest.threadId} (${manifest.status}, ${manifest.turns.length} turn${manifest.turns.length === 1 ? '' : 's'})`,
+    summary: `Inquiry thread ${manifest.threadId} (${manifest.status}, ${formatResultCount(manifest.turns.length, 'turn')})`,
     output: lines.join('\n'),
   };
 }

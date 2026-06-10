@@ -17,7 +17,9 @@
 import * as path from 'node:path';
 
 import { isModuleNotFoundError } from '@common/errors';
-import { pathExists, resolveBinary } from './support/externalBinaryUtils';
+import { AbsoluteFS } from '@utils/files';
+import { IS_WINDOWS } from '@utils/system/platformPaths';
+import { resolveBinary } from './support/externalBinaryUtils';
 
 type CodexConstructor = new (options?: any) => any;
 type PlatformInfo = { pkg: string; triple: string };
@@ -100,7 +102,7 @@ const PLATFORM_INFO: Record<string, PlatformInfo> = {
 let cachedBinaryPath: string | undefined;
 
 /** Native CLI binary filename for the current platform. */
-const CODEX_BINARY_NAME = process.platform === 'win32' ? 'codex.exe' : 'codex';
+const CODEX_BINARY_NAME = IS_WINDOWS ? 'codex.exe' : 'codex';
 
 /**
  * Locate the native Codex binary inside a resolved platform-package directory.
@@ -117,7 +119,7 @@ async function codexBinaryInPlatformPackage(
     'codex',
     CODEX_BINARY_NAME,
   );
-  return (await pathExists(binary)) ? binary : undefined;
+  return (await AbsoluteFS.exists(binary)) ? binary : undefined;
 }
 
 /**

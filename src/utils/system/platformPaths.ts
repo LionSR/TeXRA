@@ -15,6 +15,9 @@ import { hasExtension } from '@utils/core/pathCore';
 /** Whether the current platform is Windows (cached at module load). */
 export const IS_WINDOWS = process.platform === 'win32';
 
+/** Whether the current platform is macOS (cached at module load). */
+export const IS_MACOS = process.platform === 'darwin';
+
 // Common LaTeX tool names used across the system
 const TEX_TOOLS = ['latexdiff', 'latexindent', 'latexmk'] as const;
 

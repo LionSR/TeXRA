@@ -7,9 +7,10 @@
 
 // Third-party imports
 import { z } from 'zod';
+import { defineTool } from '@tools/core/define';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 // Local imports - core
-import { defineTool } from '@tools/core/define';
 
 // Local imports - zotero
 import {
@@ -189,7 +190,7 @@ export class ZoteroSearchTool extends defineTool({
     });
 
     return {
-      summary: `Found ${result.length} item${result.length === 1 ? '' : 's'} matching ${label}`,
+      summary: `Found ${formatResultCount(result.length, 'item')} matching ${label}`,
       output: items.join('\n'),
     };
   }

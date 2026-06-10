@@ -20,6 +20,7 @@ import {
 import { assertToolCallsAreChatCompletionFunctionToolCalls } from 'openai/lib/parser';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import { filterNotNullish } from '@utils/core';
+import { isoDateOnly } from '@utils/text/stringUtils';
 import type { Part } from '@google/genai';
 import type {
   ChatCompletionMessageParam,
@@ -818,7 +819,7 @@ export function generateExportFolderName(input: ChatExportInput): string {
 
 function generateExportStem(input: ChatExportInput): string {
   const date = new Date(input.timestamp);
-  const datePart = date.toISOString().slice(0, 10);
+  const datePart = isoDateOnly(date);
 
   const parts = ['texra-chat', datePart];
 

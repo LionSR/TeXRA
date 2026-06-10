@@ -7,7 +7,6 @@ import {
   recordToolFileRead,
   requireFileReadForEdit,
 } from '@tools/fileInteractions';
-import { pluralize } from '@tools/formatting';
 import {
   assertWritable,
   resolveAndFormat,
@@ -20,6 +19,7 @@ import {
   writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { WorkspaceFS } from '@utils/files';
+import { pluralize } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
