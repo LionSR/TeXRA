@@ -13,16 +13,11 @@ import {
 } from 'electron';
 
 import { platform } from '@platform/platform';
-import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { getAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import type { TerminalRunResult } from '@hosts/terminalHost';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
-import {
-  interruptAllClaudeAgentSessions,
-  interruptAllCodexSessions,
-} from '@tools/agentCliSessionStores';
 import { setOpenBuildDisplay } from '@tools/approval/latexPreview';
 import { setDesktopAgentResumeHandler } from './desktopAgentResume.js';
 import {
@@ -686,15 +681,7 @@ if (protocolLifecycle.shouldContinue) {
     .then(async () => {
       const platformInit = await initializeElectronPlatform(desktopMainDir);
       const { lifecycle } = platformInit;
-      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-        executionRegistry.killBackgroundProcesses(),
-      );
-      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-        interruptAllCodexSessions(),
-      );
-      lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-        interruptAllClaudeAgentSessions(),
-      );
+      registerAgentShutdownHandlers(lifecycle);
 
       // before-quit semantics: hold every quit event until shutdown handlers
       // have finished draining (a second Cmd+Q while we're mid-drain must NOT

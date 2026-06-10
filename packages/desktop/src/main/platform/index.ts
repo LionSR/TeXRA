@@ -14,8 +14,7 @@ import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { StreamSnapshotStore } from '@transcript';
 import { registerAgentFeatures } from '@agent/features';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
-import { createDirectLspLeanAdapter } from '@tools/lean/direct/directLspAdapter';
-import { setLeanLanguageServices } from '@tools/lean/leanLanguageServices';
+import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
 import { bootstrapElectronAgentDirectories } from './agentDirectories.js';
 import { ElectronSecrets } from './electronSecrets.js';
@@ -86,10 +85,7 @@ export async function initializeElectronPlatform(
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => snapshotStore.flush());
 
   // Lean tools talk to `lake env lean --server` directly in the desktop build.
-  // Servers are spawned lazily per Lake project root on first request.
-  const leanAdapter = createDirectLspLeanAdapter();
-  setLeanLanguageServices(leanAdapter);
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, () => leanAdapter.dispose());
+  registerDirectLeanLanguageServices(lifecycle);
 
   await bootstrapElectronAgentDirectories(
     resolveResourcesPath(mainDirname),
