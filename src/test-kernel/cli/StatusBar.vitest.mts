@@ -5,9 +5,8 @@ import {
   ctrlCActionForFocus,
   defaultShortcutModifierLabel,
   queuedFollowUpsSummary,
-  statusBarCanStopVisibleRun,
-  statusBarDisplaySlice,
   statusBarSegmentText,
+  statusBarStreamTarget,
 } from '@cli/chat/tui/panes/StatusBar';
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
 import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
@@ -713,53 +712,80 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
-  it('treats visible live stream status as stoppable', () => {
+  it('projects the focused status target and visible stoppable run once', () => {
     const root = 'root';
     const child = 'child';
     const grandchild = 'grandchild';
-    const streams = new Map([
-      [root, { streamId: root, status: STREAM_STATUS.RUNNING }],
-      [child, { streamId: child, status: STREAM_STATUS.STOPPED }],
-      [grandchild, { streamId: grandchild, status: STREAM_STATUS.STOPPED }],
+    const rootSlice = {
+      streamId: root,
+      status: STREAM_STATUS.RUNNING,
+    } as StreamSlice;
+    const childSlice = {
+      streamId: child,
+      status: STREAM_STATUS.STOPPED,
+    } as StreamSlice;
+    const grandchildSlice = {
+      streamId: grandchild,
+      status: STREAM_STATUS.STOPPED,
+    } as StreamSlice;
+    const streams = new Map<StreamSlice['streamId'], StreamSlice>([
+      [root, rootSlice],
+      [child, childSlice],
+      [grandchild, grandchildSlice],
     ]);
 
     expect(
-      statusBarCanStopVisibleRun({
+      statusBarStreamTarget({
         activeStreamId: root,
+        canStopActiveRun: false,
         parentStream: new Map([[child, root]]),
-        status: STREAM_STATUS.RUNNING,
         streams,
       }),
-    ).toBe(true);
+    ).toMatchObject({
+      ctrlCAction: 'stop',
+      displaySlice: rootSlice,
+    });
     expect(
-      statusBarCanStopVisibleRun({
+      statusBarStreamTarget({
         activeStreamId: child,
+        canStopActiveRun: false,
         parentStream: new Map([[child, root]]),
-        status: STREAM_STATUS.STOPPED,
         streams,
       }),
-    ).toBe(true);
+    ).toMatchObject({
+      ctrlCAction: 'stop root',
+      displaySlice: childSlice,
+    });
     expect(
-      statusBarCanStopVisibleRun({
+      statusBarStreamTarget({
         activeStreamId: grandchild,
+        canStopActiveRun: false,
         parentStream: new Map([
           [child, root],
           [grandchild, child],
         ]),
-        status: STREAM_STATUS.STOPPED,
         streams,
       }),
-    ).toBe(true);
+    ).toMatchObject({
+      ctrlCAction: 'stop root',
+      displaySlice: grandchildSlice,
+    });
     expect(
-      statusBarCanStopVisibleRun({
+      statusBarStreamTarget({
         activeStreamId: root,
+        canStopActiveRun: false,
         parentStream: new Map([[child, root]]),
-        status: STREAM_STATUS.WAITING,
-        streams: new Map([
-          [root, { streamId: root, status: STREAM_STATUS.WAITING }],
+        streams: new Map<StreamSlice['streamId'], StreamSlice>([
+          [
+            root,
+            { streamId: root, status: STREAM_STATUS.WAITING } as StreamSlice,
+          ],
         ]),
       }),
-    ).toBe(false);
+    ).toMatchObject({
+      ctrlCAction: 'exit',
+      displaySlice: { streamId: root, status: STREAM_STATUS.WAITING },
+    });
   });
 
   it('uses focused stream status when a stopped child stream is focused', () => {
@@ -779,25 +805,28 @@ describe('CLI StatusBar display model', () => {
     ]);
 
     expect(
-      statusBarDisplaySlice({
+      statusBarStreamTarget({
         activeStreamId: 'child',
+        canStopActiveRun: false,
         parentStream: new Map([['child', 'root']]),
         streams,
-      }),
+      }).displaySlice,
     ).toBe(childSlice);
     expect(
-      statusBarDisplaySlice({
+      statusBarStreamTarget({
         activeStreamId: 'waiting-child',
+        canStopActiveRun: false,
         parentStream: new Map([['waiting-child', 'root']]),
         streams,
-      }),
+      }).displaySlice,
     ).toBe(waitingChildSlice);
     expect(
-      statusBarDisplaySlice({
+      statusBarStreamTarget({
         activeStreamId: 'root',
+        canStopActiveRun: false,
         parentStream: new Map([['child', 'root']]),
         streams,
-      }),
+      }).displaySlice,
     ).toBe(rootSlice);
   });
 
