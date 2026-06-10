@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   inheritBashBypassOnChildStream: vi.fn(),
   executeAgent: vi.fn(),
   getExecutionStore: vi.fn(),
+  getVisibleAgent: vi.fn(),
   getVisibleAgents: vi.fn(),
   isApprovalBypassedForStream: vi.fn(),
   isProposalBypassed: vi.fn(),
@@ -27,6 +28,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/index/agentRegistry', () => ({
+  getVisibleAgent: mocks.getVisibleAgent,
   getVisibleAgents: mocks.getVisibleAgents,
 }));
 
@@ -76,6 +78,10 @@ describe('headless delegation', () => {
         tools: [],
       },
     ]);
+    mocks.getVisibleAgent.mockImplementation(
+      (_category: AgentCategory, name: string) =>
+        name === 'review' ? { name: 'review' } : undefined,
+    );
     mocks.computeModelOptionsData.mockResolvedValue([
       {
         value: 'deepseekT',
@@ -319,6 +325,50 @@ describe('headless delegation', () => {
       expect.anything(),
       expect.any(String),
       expect.not.objectContaining({ stopAfterCycle: true }),
+    );
+  });
+
+  it('canonicalizes legacy tool-use agent names before launch', async () => {
+    mocks.getVisibleAgents.mockReturnValue([
+      {
+        name: 'assistant',
+        description: 'General assistant.',
+        tools: [],
+      },
+    ]);
+    mocks.getVisibleAgent.mockImplementation(
+      (_category: AgentCategory, name: string) =>
+        name === 'chat' || name === 'assistant'
+          ? { name: 'assistant' }
+          : undefined,
+    );
+
+    const result = await withRunContext(
+      createRunContext({
+        runtimeHost: runtimeHost(),
+        streamId: 'parent-stream',
+        executionId: 'parent-exec',
+        model: 'deepseekT',
+      }),
+      () =>
+        new DelegateAgentTool().call({
+          agent: 'chat',
+          model: null,
+          instruction: 'Check the proof.',
+          memories: [],
+          working_directory: null,
+          execution_id: null,
+        }),
+    );
+
+    expect(result.summary).toBe("Launched 'assistant' (async)");
+    expect(mocks.executeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'assistant',
+        agentCategory: AgentCategory.ToolUse,
+      }),
+      expect.any(String),
+      expect.anything(),
     );
   });
 
