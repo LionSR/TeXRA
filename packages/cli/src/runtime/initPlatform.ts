@@ -167,9 +167,10 @@ export async function initCliPlatform(
       storageRoot: context.storageRoot,
       workspacePath: () => cliWorkspaceCwd,
     });
-    // User-level config (`~/.texra/config.json`) backs the global target,
-    // mirroring the desktop host: workspace values shadow global on read and
-    // `update(..., 'global')` has somewhere to write instead of throwing.
+    // User-level config (`~/.texra/global-storage/config.json`, the same file
+    // chatDefaults reads) backs the global target, mirroring the desktop host:
+    // workspace values shadow global on read and `update(..., 'global')` has
+    // somewhere to write instead of throwing.
     const globalConfigStore = await JsonStore.open(
       nodePath.join(
         stateStores.storage.getGlobalStoragePath(),

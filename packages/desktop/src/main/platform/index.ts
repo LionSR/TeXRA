@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { app } from 'electron';
 
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
+import { configKeyVariants } from '@platform/defaults/configKeyHelpers';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
@@ -73,14 +74,19 @@ export async function initializeElectronPlatform(
   );
   // One-time copy from the pre-project-file internal store into the project
   // file; existing project values win, so a checked-in config is never
-  // overwritten.
+  // overwritten. Presence is checked across key variants because checked-in
+  // CLI configs use bare keys (`model`) while this store wrote canonical
+  // `texra.*` keys, which shadow bare ones on read.
   if (
     workspacePath &&
     workspaceStateStore.get<boolean>(WORKSPACE_CONFIG_MIGRATED_KEY) !== true
   ) {
     const legacyStore = await JsonStore.open(legacyWorkspaceConfigPath);
     for (const [key, value] of Object.entries(legacyStore.snapshot())) {
-      if (!workspaceConfigStore.has(key)) {
+      const inProject = configKeyVariants(key).some((variant) =>
+        workspaceConfigStore.has(variant),
+      );
+      if (!inProject) {
         await workspaceConfigStore.set(key, value);
       }
     }
