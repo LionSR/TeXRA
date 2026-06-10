@@ -9,7 +9,6 @@
 //
 // Host-agnostic, VS Code-free.
 
-import { platform } from '@platform';
 import { getExecutionStore, writeTerminalStatus } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
 import {
@@ -18,7 +17,7 @@ import {
 } from '@agent/runtime/InterruptRegistry';
 import {
   sendFollowUp,
-  shouldWakeQueuedStream,
+  wakeOrReleaseQueuedStream,
 } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
@@ -241,8 +240,12 @@ export function runAgentCliSession<TTurn>(
           logger.warn(
             `Turn result for ${executionId} not delivered: parent stream ${parentStreamId} has no active session (status: ${delivery.streamStatus ?? 'unknown'}). The result remains in the execution report.`,
           );
-        } else if (shouldWakeQueuedStream(delivery)) {
-          await platform().agentResume.tryResumeStream(parentStreamId);
+        } else if (
+          !(await wakeOrReleaseQueuedStream(parentStreamId, delivery))
+        ) {
+          logger.warn(
+            `Turn result for ${executionId} dropped: parent stream ${parentStreamId} is gone and could not be resumed. The result remains in the execution report.`,
+          );
         }
 
         if (turnFailed) {

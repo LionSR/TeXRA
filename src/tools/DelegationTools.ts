@@ -13,7 +13,6 @@ import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 // Local imports - agent
-import { platform } from '@platform';
 import { getExecutionStore, registerExecution } from '@agent/storage';
 import { getVisibleAgents } from '@agent/index/agentRegistry';
 import {
@@ -33,15 +32,11 @@ import {
 } from '@agent/runtime/AgentFlowResult';
 import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/toolUse/ToolFileInteractionContext';
-import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import {
   sendFollowUp,
-  shouldWakeQueuedStream,
+  wakeOrReleaseQueuedStream,
 } from '@agent/toolUse/ToolUseFollowUp';
-import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
-
-// Local imports - platform
 
 // Local imports - logger
 import { toErrorMessage } from '@common/errors';
@@ -503,21 +498,15 @@ async function executeSubagent(
       );
       return false;
     }
-    if (options?.wake && shouldWakeQueuedStream(result)) {
-      const resumed =
-        await platform().agentResume.tryResumeStream(targetStreamId);
-      if (
-        !resumed &&
-        result.reason === 'children_running' &&
-        !StreamStatusService.isActiveOrResuming(targetStreamId)
-      ) {
-        ToolUseFollowUpQueue.release(targetStreamId);
-        logger.warn(
-          'subagentDelivery',
-          `Dropped subagent result for ${executionId}: parent stream ${targetStreamId} is gone and could not be resumed. The result remains in the execution report.`,
-        );
-        return false;
-      }
+    if (
+      options?.wake &&
+      !(await wakeOrReleaseQueuedStream(targetStreamId, result))
+    ) {
+      logger.warn(
+        'subagentDelivery',
+        `Dropped subagent result for ${executionId}: parent stream ${targetStreamId} is gone and could not be resumed. The result remains in the execution report.`,
+      );
+      return false;
     }
     return true;
   }

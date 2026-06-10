@@ -466,6 +466,7 @@ export class ExecutionRegistry {
   detachActiveChildren(
     parentStreamId: StreamTabId,
     runtimeHost: AgentRuntimeHost,
+    visited: Set<string> = new Set(),
   ): void {
     for (const handle of this.handles.values()) {
       if (handle.parentStreamId !== parentStreamId) continue;
@@ -479,7 +480,9 @@ export class ExecutionRegistry {
           parentStreamId: null,
         });
       } else if (handle instanceof ProcessExecutionHandle) {
-        this.terminate(handle);
+        // Killed processes keep parentStreamId === parentStreamId, so without
+        // the shared visited set the root cascade would kill them again.
+        this.terminate(handle, visited);
       }
     }
     this.emitActiveSubagentsUpdate(parentStreamId, runtimeHost);
@@ -507,7 +510,7 @@ export class ExecutionRegistry {
           'stopAgentStream requires a runtimeHost to detach active children',
         );
       }
-      this.detachActiveChildren(streamId, runtimeHost);
+      this.detachActiveChildren(streamId, runtimeHost, visited);
     } else {
       this.interruptActiveChildren(streamId, visited);
     }

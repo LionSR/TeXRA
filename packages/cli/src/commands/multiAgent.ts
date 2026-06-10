@@ -306,7 +306,9 @@ export async function runMultiAgentPreset(
     // Otherwise the silent second load makes runs behave differently from a
     // signed-out shell with no visible reason.
     writeTextStderr(
-      `Preset ${plan.preset.id} referenced agents not available locally; loaded remote agents to fill the gaps.`,
+      cliMultiAgentPlanHasGaps(plan)
+        ? `Preset ${plan.preset.id} referenced agents not available locally; a remote agent load did not fill all the gaps.`
+        : `Preset ${plan.preset.id} referenced agents not available locally; loaded remote agents to fill the gaps.`,
     );
   }
   if (plan.missingAgentOverride) {

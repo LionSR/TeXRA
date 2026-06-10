@@ -10,10 +10,12 @@
  * showing appropriate UI notifications based on the returned result.
  */
 
+import { platform } from '@platform';
 import {
   executionRegistry,
   type ToolUseFollowUpQueueReason,
 } from '@agent/runtime/executionRegistry';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
@@ -32,18 +34,36 @@ export type SendFollowUpResult =
   | { status: 'no_session'; streamStatus: string | undefined };
 
 /**
- * True when a queued follow-up landed on a stream whose cycle has exited
- * (WAITING snapshot or disposed-with-children) — the cases where the caller
- * should try `platform().agentResume.tryResumeStream` so the queued item is
- * consumed instead of sitting until the user pokes the stream.
+ * After a queued delivery, wake a stream whose cycle has exited (WAITING
+ * snapshot or disposed-with-children) via the host resume port so the queued
+ * item is consumed instead of sitting until the user pokes the stream. When
+ * the wake fails and the stream is gone for good (`children_running` on a
+ * non-in-flight stream), re-release the force-reopened queue so late
+ * deliveries don't leak into the next run on that stream.
+ *
+ * Returns false when the queued item was dropped by the re-release; callers
+ * should treat the delivery as failed and rely on their durable copy.
  */
-export function shouldWakeQueuedStream(
+export async function wakeOrReleaseQueuedStream(
+  streamId: StreamTabId,
   result: SendFollowUpResult,
-): result is SendFollowUpResult & { status: 'queued' } {
-  return (
-    result.status === 'queued' &&
-    (result.reason === 'waiting' || result.reason === 'children_running')
-  );
+): Promise<boolean> {
+  if (
+    result.status !== 'queued' ||
+    (result.reason !== 'waiting' && result.reason !== 'children_running')
+  ) {
+    return true;
+  }
+  const resumed = await platform().agentResume.tryResumeStream(streamId);
+  if (
+    resumed ||
+    result.reason !== 'children_running' ||
+    StreamStatusService.isActiveOrResuming(streamId)
+  ) {
+    return true;
+  }
+  ToolUseFollowUpQueue.release(streamId);
+  return false;
 }
 
 const logger = createChannelTrace('ToolUseFollowUp');
