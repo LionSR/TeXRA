@@ -3,7 +3,7 @@ import { Box, Text } from 'ink';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 
-import { truncateToWidth } from '../render/terminalText';
+import { textDisplayWidth, truncateToWidth } from '../render/terminalText';
 import { cliState, type StreamSlice } from '../state/cliState';
 import { activeStreamTreeViews } from '../state/streamViews';
 import { useSignal } from '../state/useSignal';
@@ -88,7 +88,7 @@ function buildLineSegments(
   for (const [index, item] of items.entries()) {
     const leadingSpace = index > 0;
     const text = streamTabSegmentText(item);
-    const totalWidth = text.length + (leadingSpace ? 1 : 0);
+    const totalWidth = textDisplayWidth(text) + (leadingSpace ? 1 : 0);
     if (totalWidth <= remaining) {
       segments.push({ item, leadingSpace, text });
       remaining -= totalWidth;
@@ -133,7 +133,7 @@ export function streamTabsLineSegments(
 }
 
 function streamTabsTextLength(items: readonly StreamTabDisplayItem[]): number {
-  return streamTabsLineText(items).length;
+  return textDisplayWidth(streamTabsLineText(items));
 }
 
 function collapseMiddle(
