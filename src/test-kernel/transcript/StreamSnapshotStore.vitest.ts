@@ -61,16 +61,13 @@ const TODO: TodoItem = {
 };
 
 const PLAN: Plan = {
-  summary: 'Draft and polish the paper',
-  steps: [
-    {
-      title: 'Draft',
-      description: 'Write the first draft',
-      status: 'pending',
-      files: ['paper.tex'],
-    },
-  ],
+  objective: [
+    'Draft and polish the paper',
+    '',
+    'Write the first draft, then revise until the reviewers sign off.',
+  ].join('\n'),
 };
+const PLAN_SUMMARY = 'Draft and polish the paper';
 
 function usage(input: number, output: number, cost: number): TokenUsageStats {
   return { inputTokens: input, outputTokens: output, cost };
@@ -128,7 +125,7 @@ describe('StreamSnapshotStore', () => {
 
     expect(snap.todos).toEqual([TODO]);
     expect(snap.plan).toEqual(PLAN);
-    expect(snap.planSummary).toBe(PLAN.summary);
+    expect(snap.planSummary).toBe(PLAN_SUMMARY);
     expect(snap.runUsage[RUN]).toMatchObject({
       inputTokens: 150,
       outputTokens: 30,
@@ -435,7 +432,7 @@ describe('StreamSnapshotStore', () => {
     expect(store.getWorkPlan(STREAM)).toEqual({
       todos: [TODO],
       plan: PLAN,
-      planSummary: PLAN.summary,
+      planSummary: PLAN_SUMMARY,
     });
     await store.flush();
   });
@@ -485,7 +482,7 @@ describe('StreamSnapshotStore', () => {
         schemaVersion: 999,
         todos: [TODO],
         plan: PLAN,
-        planSummary: PLAN.summary,
+        planSummary: PLAN_SUMMARY,
       }),
     );
     const snap = await new StreamSnapshotStore().read(STREAM);

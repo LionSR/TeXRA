@@ -17,6 +17,7 @@ import {
   ExecutionIdSchema,
   type ExecutionId,
 } from '@shared/schemas';
+import { GoalStore } from '@tools/goal';
 import { StorageFS } from '@utils/files';
 import { isObject } from '@utils/core/typeGuards';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -197,17 +198,22 @@ export async function deleteCliHistory(options: {
   preCountForAll?: number;
 }): Promise<CliHistoryDeleteResult> {
   if (options.all) {
-    const count = options.preCountForAll ?? (await listExecutions()).length;
-    await deleteAllExecutions();
+    const deletedExecutionIds = await deleteAllExecutions();
+    await GoalStore.forgetByExecutionIds(deletedExecutionIds);
+    const count = options.preCountForAll ?? deletedExecutionIds.length;
     return { deleted: 'all', count };
   }
   if (!options.id) {
     throw new Error('Expected an execution id, or --all.');
   }
+  const found = await deleteExecution(options.id);
+  if (found) {
+    await GoalStore.forgetByExecutionIds([options.id]);
+  }
   return {
     deleted: 'one',
     id: options.id,
-    found: await deleteExecution(options.id),
+    found,
   };
 }
 

@@ -144,16 +144,6 @@ export class GoalTab extends LitElement {
         >duration ${formatGoalTime(goalDurationMs(item))}</span
       >`,
     ];
-    if (item.spentUsd > 0 || item.costCapUsd != null) {
-      const cap =
-        item.costCapUsd != null ? ` / $${item.costCapUsd.toFixed(2)} cap` : '';
-      metaParts.push(
-        html`<span
-          title="Model spend since the Goal started, including delegated subagents"
-          >spent $${item.spentUsd.toFixed(2)}${cap}</span
-        >`,
-      );
-    }
     return html`
       <div
         class=${'goal-row' + (inFlight ? ' is-clickable' : '')}
