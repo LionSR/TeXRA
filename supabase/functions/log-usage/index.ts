@@ -61,16 +61,30 @@ const UsageBatchSchema = z.object({
 // Helpers
 // =============================================================================
 
-function jsonResponse(
+function successResponse(
   req: Request,
-  body: Record<string, unknown>,
-  status: number,
+  accepted: number,
+  message?: string,
 ): Response {
-  return versionedJsonResponse(req, LOG_USAGE_VERSION, body, status);
+  return versionedJsonResponse(
+    req,
+    LOG_USAGE_VERSION,
+    {
+      success: true,
+      accepted,
+      ...(message ? { message } : {}),
+    },
+    200,
+  );
 }
 
 function errorResponse(req: Request, error: string, status: number): Response {
-  return jsonResponse(req, { success: false, accepted: 0, error }, status);
+  return versionedJsonResponse(
+    req,
+    LOG_USAGE_VERSION,
+    { success: false, accepted: 0, error },
+    status,
+  );
 }
 
 // =============================================================================
@@ -152,11 +166,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (validEntries.length === 0) {
-      return jsonResponse(
-        req,
-        { success: true, accepted: 0, message: 'No valid entries in batch' },
-        200,
-      );
+      return successResponse(req, 0, 'No valid entries in batch');
     }
 
     // 6. Check for duplicate batch (idempotency for client retries).
@@ -171,14 +181,10 @@ Deno.serve(async (req: Request) => {
       .limit(1);
 
     if (existingBatch && existingBatch.length > 0) {
-      return jsonResponse(
+      return successResponse(
         req,
-        {
-          success: true,
-          accepted: validEntries.length,
-          message: 'Batch already processed (deduplicated)',
-        },
-        200,
+        validEntries.length,
+        'Batch already processed (deduplicated)',
       );
     }
 
@@ -215,11 +221,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // 7. Return success response
-    return jsonResponse(
-      req,
-      { success: true, accepted: validEntries.length },
-      200,
-    );
+    return successResponse(req, validEntries.length);
   } catch (error) {
     console.error('[LOG_USAGE] Unexpected error:', error);
     return errorResponse(req, 'Internal server error', 500);

@@ -48,6 +48,20 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 
+const adminSupabase =
+  supabaseUrl && supabaseServiceKey
+    ? createClient<any>(supabaseUrl, supabaseServiceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : null;
+
+const anonSupabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient<any>(supabaseUrl, supabaseAnonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : null;
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -84,7 +98,7 @@ app.use('*', async (c, next) => {
 
 // Initialize Supabase client
 app.use('*', async (c, next) => {
-  if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
+  if (!adminSupabase || !anonSupabase) {
     return versionedJsonResponse(
       c.req.raw,
       VERSION,
@@ -93,18 +107,8 @@ app.use('*', async (c, next) => {
     );
   }
 
-  c.set(
-    'supabase',
-    createClient<any>(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    }),
-  );
-  c.set(
-    'authClient',
-    createClient<any>(supabaseUrl, supabaseAnonKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    }),
-  );
+  c.set('supabase', adminSupabase);
+  c.set('authClient', anonSupabase);
 
   await next();
 });
@@ -145,16 +149,16 @@ function sessionResponse(c: Context, session: Session) {
 
 /**
  * Mint a native GoTrue session for an existing user. Generates an admin
- * magic-link token and consumes it immediately server-side (nothing is
- * emailed), so GoTrue issues a standard session with rotating refresh.
+ * magic-link token and consumes it immediately server-side, so GoTrue issues a
+ * standard session with rotating refresh.
  */
 async function mintGoTrueSession(
   adminClient: SupabaseClient<any>,
   authClient: SupabaseClient<any>,
   email: string,
 ): Promise<Session | null> {
-  // Supabase admin.generateLink returns a link/OTP payload for custom delivery;
-  // this flow consumes the token hash server-side instead of emailing the link.
+  // Supabase admin.generateLink returns link/OTP material for custom delivery;
+  // this function consumes the token hash server-side and does not send mail.
   const { data: linkData, error: linkError } =
     await adminClient.auth.admin.generateLink({ type: 'magiclink', email });
 
