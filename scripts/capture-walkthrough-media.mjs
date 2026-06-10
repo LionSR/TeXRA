@@ -21,7 +21,6 @@ const nonce = 'texra-walkthrough-capture';
 const commonReplacements = {
   cspSource: 'file:',
   commonStyleUri: fileUri('packages/extension/src/common/styles/common.css'),
-  commonsBundleUri: fileUri('packages/extension/dist/shared/commons.js'),
   desktopThemeTokensUri: fileUri(
     'packages/desktop/src/renderer/themeTokens.css',
   ),
@@ -599,7 +598,6 @@ async function prepareViewHtml(view) {
 
 function assertBuiltAssetsExist() {
   const required = [
-    'packages/extension/dist/shared/commons.js',
     'packages/extension/dist/webview/bundle.js',
     'packages/extension/dist/webview/index.css',
     'packages/extension/dist/settingsView/bundle.js',

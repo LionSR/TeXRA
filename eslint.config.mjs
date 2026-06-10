@@ -189,9 +189,7 @@ const localRules = {
       },
       create(context) {
         const filename = path.normalize(context.filename);
-        const isAllowedFile =
-          COMPOSITION_ROOT_FILES.has(filename) ||
-          filename.includes(`${path.sep}src${path.sep}test${path.sep}`);
+        const isAllowedFile = COMPOSITION_ROOT_FILES.has(filename);
 
         if (isAllowedFile) {
           return {};
