@@ -2,7 +2,7 @@
   "manifest": {
     "name": "texra",
     "displayName": "TeXRA",
-    "description": "TeXRA: Your LLM-powered 24/7 LaTeX Research Assistant.",
+    "description": "TeXRA: Your 24/7 AI Theorist.",
     "publisher": "texra-ai",
     "engines": {
       "vscode": "^1.105.0"

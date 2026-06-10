@@ -61,7 +61,7 @@ function renderWelcomeHtml(): string {
 </head>
 <body>
   <p>
-    <strong>Welcome to TeXRA</strong> — an AI research assistant for LaTeX. It
+    <strong>Welcome to TeXRA</strong> — an AI theorist for your LaTeX work. It
     coordinates specialized agents to edit manuscripts, derive results, draw
     figures, and verify proofs.
   </p>
