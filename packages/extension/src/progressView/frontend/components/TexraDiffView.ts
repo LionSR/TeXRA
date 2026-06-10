@@ -1,11 +1,13 @@
 // Third-party imports
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { consume } from '@lit/context';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
 
-// Local imports - shared constants
+// Local imports - shared webview
+import { themeContext } from '@shared/BaseWebviewApp';
 import { DESKTOP_THEME_KIND } from '@shared/constants/desktopTheme';
 
 type MonacoModule = typeof import('monaco-editor/esm/vs/editor/editor.api.js');
@@ -83,12 +85,12 @@ async function loadMonaco(): Promise<MonacoModule> {
   return monacoLoad;
 }
 
-function monacoThemeForDocument(): 'vs' | 'vs-dark' | 'hc-black' | 'hc-light' {
-  const themeKind = document.body.dataset.vscodeThemeKind;
+function monacoThemeForHostTheme(
+  themeKind: string,
+): 'vs' | 'vs-dark' | 'hc-black' | 'hc-light' {
   if (themeKind === DESKTOP_THEME_KIND.LIGHT) return 'vs';
   if (themeKind === DESKTOP_THEME_KIND.HIGH_CONTRAST) return 'hc-black';
-  if (themeKind === DESKTOP_THEME_KIND.DARK) return 'vs-dark';
-  return document.body.classList.contains('vscode-light') ? 'vs' : 'vs-dark';
+  return 'vs-dark';
 }
 
 @customElement('texra-diff-view')
@@ -139,6 +141,9 @@ export class TexraDiffView extends LitElement {
   @property({ attribute: false }) proposedText = '';
   @property() language = 'plaintext';
 
+  @consume({ context: themeContext, subscribe: true })
+  @property({ attribute: false })
+  hostTheme: string = DESKTOP_THEME_KIND.DARK;
   @state() private loading = false;
   @state() private errorMessage = '';
 
@@ -147,18 +152,11 @@ export class TexraDiffView extends LitElement {
   private originalModel?: TextModel;
   private proposedModel?: TextModel;
   private resizeObserver?: ResizeObserver;
-  private mutationObserver?: MutationObserver;
   private loadGeneration = 0;
-
-  override connectedCallback(): void {
-    super.connectedCallback();
-    this.observeTheme();
-  }
 
   override disconnectedCallback(): void {
     this.loadGeneration += 1;
     this.resizeObserver?.disconnect();
-    this.mutationObserver?.disconnect();
     this.disposeMonacoObjects();
     super.disconnectedCallback();
   }
@@ -174,6 +172,9 @@ export class TexraDiffView extends LitElement {
       changed.has('language')
     ) {
       this.syncModels();
+    }
+    if (changed.has('hostTheme')) {
+      this.applyTheme();
     }
   }
 
@@ -253,17 +254,8 @@ export class TexraDiffView extends LitElement {
     this.editor?.layout();
   }
 
-  private observeTheme(): void {
-    if (typeof MutationObserver === 'undefined') return;
-    this.mutationObserver = new MutationObserver(() => this.applyTheme());
-    this.mutationObserver.observe(document.body, {
-      attributes: true,
-      attributeFilter: ['class', 'data-vscode-theme-kind'],
-    });
-  }
-
   private applyTheme(): void {
-    this.monaco?.editor.setTheme(monacoThemeForDocument());
+    this.monaco?.editor.setTheme(monacoThemeForHostTheme(this.hostTheme));
   }
 
   private disposeMonacoObjects(): void {
