@@ -44,9 +44,9 @@ const VERSION = '3.0.0';
 // Environment
 // =============================================================================
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 
 // =============================================================================
 // Types
@@ -64,6 +64,7 @@ interface GitHubUser {
 // `any` schema so `.schema('auth')` queries typecheck (service-role client).
 type Variables = {
   supabase: SupabaseClient<any>;
+  authClient: SupabaseClient<any>;
 };
 
 // =============================================================================
@@ -98,6 +99,12 @@ app.use('*', async (c, next) => {
       auth: { autoRefreshToken: false, persistSession: false },
     }),
   );
+  c.set(
+    'authClient',
+    createClient<any>(supabaseUrl, supabaseAnonKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    }),
+  );
 
   await next();
 });
@@ -108,41 +115,32 @@ app.use('*', async (c, next) => {
 
 type Context = HonoContext<{ Variables: Variables }>;
 
-function jsonResponse(
-  c: Context,
-  body: Record<string, unknown>,
-  status: number,
-) {
-  return versionedJsonResponse(c.req.raw, VERSION, body, status);
-}
-
 function errorResponse(c: Context, error: string, status: number) {
-  return jsonResponse(c, { error }, status);
+  return versionedJsonResponse(c.req.raw, VERSION, { error }, status);
 }
 
 /** Session payload returned by both exchange and refresh. */
-function buildSessionResponse(session: Session) {
-  return {
-    access_token: session.access_token,
-    refresh_token: session.refresh_token,
-    expires_at: session.expires_at,
-    expires_in: session.expires_in,
-    token_type: session.token_type,
-    user: {
-      id: session.user.id,
-      email: session.user.email,
-      user_metadata: {
-        avatar_url: session.user.user_metadata?.avatar_url,
-        user_name: session.user.user_metadata?.user_name,
+function sessionResponse(c: Context, session: Session) {
+  return versionedJsonResponse(
+    c.req.raw,
+    VERSION,
+    {
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+      expires_at: session.expires_at,
+      expires_in: session.expires_in,
+      token_type: session.token_type,
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        user_metadata: {
+          avatar_url: session.user.user_metadata?.avatar_url,
+          user_name: session.user.user_metadata?.user_name,
+        },
       },
     },
-  };
-}
-
-function anonAuthClient() {
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+    200,
+  );
 }
 
 /**
@@ -152,6 +150,7 @@ function anonAuthClient() {
  */
 async function mintGoTrueSession(
   adminClient: SupabaseClient<any>,
+  authClient: SupabaseClient<any>,
   email: string,
 ): Promise<Session | null> {
   const { data: linkData, error: linkError } =
@@ -166,7 +165,7 @@ async function mintGoTrueSession(
     return null;
   }
 
-  const { data, error } = await anonAuthClient().auth.verifyOtp({
+  const { data, error } = await authClient.auth.verifyOtp({
     type: 'email',
     token_hash: tokenHash,
   });
@@ -371,14 +370,18 @@ app.post('/exchange', async (c) => {
       }
     }
 
-    const session = await mintGoTrueSession(supabase, userEmail);
+    const session = await mintGoTrueSession(
+      supabase,
+      c.get('authClient'),
+      userEmail,
+    );
     if (!session) {
       return errorResponse(c, 'Failed to create session', 500);
     }
 
     console.log(`[AUTH] Exchange successful for user ${userId}`);
 
-    return jsonResponse(c, buildSessionResponse(session), 200);
+    return sessionResponse(c, session);
   } catch (error) {
     console.error('[AUTH] Exchange error:', error);
     return errorResponse(c, 'Internal server error', 500);
@@ -395,7 +398,7 @@ app.post('/refresh', async (c) => {
       return errorResponse(c, 'refresh_token required', 400);
     }
 
-    const { data, error } = await anonAuthClient().auth.refreshSession({
+    const { data, error } = await c.get('authClient').auth.refreshSession({
       refresh_token: body.refresh_token,
     });
 
@@ -405,7 +408,7 @@ app.post('/refresh', async (c) => {
 
     console.log(`[AUTH] Refresh successful for user ${data.session.user.id}`);
 
-    return jsonResponse(c, buildSessionResponse(data.session), 200);
+    return sessionResponse(c, data.session);
   } catch (error) {
     console.error('[AUTH] Refresh error:', error);
     return errorResponse(c, 'Internal server error', 500);
