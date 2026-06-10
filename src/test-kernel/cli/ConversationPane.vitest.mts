@@ -449,15 +449,20 @@ describe('CLI conversation transcript splitting', () => {
     ).toEqual(['› what is this repo about', '● Bash (ls)']);
   });
 
-  it('does not budget regular user margin for inquiry continuations', () => {
+  it('wraps live user rows at the padded width with no margin rows', () => {
     const continuation = entry(
       'u1',
       'user',
       '[inquiry] ei_123 answered.\nQ: Can this be simplified?\nA: Yes.',
       true,
     );
-
     expect(estimateTranscriptEntryRows(continuation, 80)).toBe(3);
+
+    // 77 chars exceeds the padded wrap width (80 - 4 = 76) by one, so the
+    // row estimate must reflect the gutter + prefix geometry, not the
+    // terminal width.
+    const long = entry('u2', 'user', 'x'.repeat(77), true);
+    expect(estimateTranscriptEntryRows(long, 80)).toBe(2);
   });
 
   it('appends only finalized entries to terminal scrollback items', () => {
@@ -597,6 +602,118 @@ describe('CLI conversation transcript splitting', () => {
         width: 80,
       }).map((item) => item.id),
     ).toEqual(['session-header', 'p1']);
+  });
+
+  it('budgets user band margins before inserting compact static headers', () => {
+    const band = entry('u1', 'user', 'short prompt', true);
+    const compact = appendStaticTranscriptItems({
+      scrollbackStreamId: STREAM_ID,
+      currentItems: [],
+      streams: streamsFromEntries(STREAM_ID, [band]),
+      meta: SESSION_META,
+      maxRows: 0,
+      width: 80,
+    });
+
+    expect(compact.map((item) => item.id)).toEqual(['u1']);
+    // One text row plus the band's top and bottom margin rows = 3; the full
+    // header needs 4 more.
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: STREAM_ID,
+        currentItems: compact,
+        streams: streamsFromEntries(STREAM_ID, [band]),
+        meta: SESSION_META,
+        maxRows: 6,
+        width: 80,
+      }).map((item) => item.id),
+    ).toEqual(['u1']);
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: STREAM_ID,
+        currentItems: compact,
+        streams: streamsFromEntries(STREAM_ID, [band]),
+        meta: SESSION_META,
+        maxRows: 7,
+        width: 80,
+      }).map((item) => item.id),
+    ).toEqual(['session-header', 'u1']);
+  });
+
+  it('budgets static error rows at the padded wrap width', () => {
+    const error = entry('e1', 'error', 'x'.repeat(77), true);
+    const compact = appendStaticTranscriptItems({
+      scrollbackStreamId: STREAM_ID,
+      currentItems: [],
+      streams: streamsFromEntries(STREAM_ID, [error]),
+      meta: SESSION_META,
+      maxRows: 0,
+      width: 80,
+    });
+
+    expect(compact.map((item) => item.id)).toEqual(['e1']);
+    // 77 chars wraps to two rows at the padded width (80 - 4 = 76);
+    // the full header needs 4 more.
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: STREAM_ID,
+        currentItems: compact,
+        streams: streamsFromEntries(STREAM_ID, [error]),
+        meta: SESSION_META,
+        maxRows: 5,
+        width: 80,
+      }).map((item) => item.id),
+    ).toEqual(['e1']);
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: STREAM_ID,
+        currentItems: compact,
+        streams: streamsFromEntries(STREAM_ID, [error]),
+        meta: SESSION_META,
+        maxRows: 6,
+        width: 80,
+      }).map((item) => item.id),
+    ).toEqual(['session-header', 'e1']);
+  });
+
+  it('does not budget band margins for inquiry continuations in the static budget', () => {
+    const continuation = entry(
+      'u1',
+      'user',
+      '[inquiry] ei_123 answered.',
+      true,
+    );
+    const compact = appendStaticTranscriptItems({
+      scrollbackStreamId: STREAM_ID,
+      currentItems: [],
+      streams: streamsFromEntries(STREAM_ID, [continuation]),
+      meta: SESSION_META,
+      maxRows: 0,
+      width: 80,
+    });
+
+    expect(compact.map((item) => item.id)).toEqual(['u1']);
+    // One text row and no margin rows; the full header needs 4 more.
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: STREAM_ID,
+        currentItems: compact,
+        streams: streamsFromEntries(STREAM_ID, [continuation]),
+        meta: SESSION_META,
+        maxRows: 4,
+        width: 80,
+      }).map((item) => item.id),
+    ).toEqual(['u1']);
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: STREAM_ID,
+        currentItems: compact,
+        streams: streamsFromEntries(STREAM_ID, [continuation]),
+        meta: SESSION_META,
+        maxRows: 5,
+        width: 80,
+      }).map((item) => item.id),
+    ).toEqual(['session-header', 'u1']);
   });
 
   it('preserves static transcript order when an entry exceeds the compact row budget', () => {
