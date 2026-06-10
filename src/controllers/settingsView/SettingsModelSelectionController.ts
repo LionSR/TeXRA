@@ -9,6 +9,7 @@ import {
 import { LEVEL_TO_EFFORT } from '@agent/runtime/reasoningEffort';
 import { FREE_TIER, MAX_TIER } from '@auth/sharedConfig';
 import { computeModelOptionsData } from '@model/computeModelOptions';
+import { isGpt5ModelName } from '@model/modelNames';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import type { ModelOptionData } from '@shared/schemas';
 import {
@@ -215,7 +216,7 @@ export class SettingsModelSelectionController {
   ): ReasoningLevel | undefined {
     if (
       !this.deps.useIncludedAccess?.() ||
-      !config.name.startsWith('gpt5') ||
+      !isGpt5ModelName(config.name) ||
       config.capabilities.reasoningEffort !== ReasoningEffort.XHIGH
     ) {
       return undefined;

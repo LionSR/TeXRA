@@ -9,6 +9,7 @@
 import { platform } from '@platform/platform';
 import { getExecutionStore } from '@agent/storage';
 import type { ExecutionMeta } from '@agent/storage/ExecutionKVStore';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -61,9 +62,9 @@ async function readMetaSafely(
     // unreadable ancestor isn't an invisible cause of blocked delegation.
     logger.warn(
       'DelegationPolicy',
-      `Failed to read execution meta for ${executionId}: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      `Failed to read execution meta for ${executionId}: ${toErrorMessage(
+        err,
+      )}`,
     );
     return 'error';
   }

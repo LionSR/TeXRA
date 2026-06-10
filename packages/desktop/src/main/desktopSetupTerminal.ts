@@ -1,6 +1,9 @@
 // Third-party imports
 import { spawn } from 'node:child_process';
 
+// Local imports - shared utilities
+import { quotePosixShellArg } from '@utils/system/shellQuote';
+
 const OPEN_TERMINAL_TIMEOUT_MS = 10_000;
 
 export function setupCommandNeedsInteractiveTerminal(command: string): boolean {
@@ -60,10 +63,6 @@ export async function openMacTerminalCommand(
 
 export function buildMacTerminalCommand(command: string, cwd: string): string {
   return `cd ${quotePosixShellArg(cwd)} && ${command}`;
-}
-
-function quotePosixShellArg(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function escapeAppleScriptString(value: string): string {

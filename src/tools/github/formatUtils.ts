@@ -9,6 +9,7 @@
 
 import { isNonEmptyString } from '@utils/core';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import type { GhIssueComment } from './prTypes';
 
 const WEBHOOK_TAG = 'github-webhook-activity';
@@ -63,9 +64,7 @@ export function sections(
 }
 
 export function truncate(s: string | null | undefined, max: number): string {
-  const body = (s ?? '').trim();
-  if (body.length <= max) return body;
-  return body.slice(0, max) + '…';
+  return truncateWithEllipsis((s ?? '').trim(), max);
 }
 
 /**

@@ -1,4 +1,5 @@
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
+import { normalizeFilePath } from '@shared/utils/path';
 
 import {
   LEGACY_AUXILIARY_KEYWORDS_KEY,
@@ -39,12 +40,8 @@ export interface PreparedFileFilters {
 
 type ConfigReader = (key: string, fallback: string[]) => string[];
 
-function normalizePathSeparators(filePath: string): string {
-  return filePath.replaceAll('\\', '/');
-}
-
 function getPathSegments(filePath: string): string[] {
-  return normalizePathSeparators(filePath).split('/');
+  return normalizeFilePath(filePath).split('/');
 }
 
 function getPathFileName(filePath: string): string {
@@ -162,9 +159,7 @@ export function sanitizeDirectories(directories: readonly string[]): string[] {
   return directories
     .map((dir) => dir.trim())
     .filter((dir) => dir.length > 0)
-    .map((dir) =>
-      normalizePathSeparators(dir).replace(/^\//, '').replace(/\/$/, ''),
-    );
+    .map((dir) => normalizeFilePath(dir).replace(/^\//, '').replace(/\/$/, ''));
 }
 
 export function prepareFileFilters(
@@ -191,7 +186,7 @@ export function containsExcludedDirectory(
   relativePath: string,
   excludeDirs: readonly string[],
 ): boolean {
-  const normalizedPath = normalizePathSeparators(relativePath).toLowerCase();
+  const normalizedPath = normalizeFilePath(relativePath).toLowerCase();
   const pathSegments = normalizedPath.split('/');
 
   return excludeDirs.some((dir) => {
