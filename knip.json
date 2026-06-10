@@ -1,11 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreDependencies": [
-    ".*"
-  ],
-  "ignoreBinaries": [
-    ".*"
-  ],
+  "ignoreDependencies": [".*"],
+  "ignoreBinaries": [".*"],
   "workspaces": {
     ".": {
       "entry": [
@@ -13,12 +9,8 @@
         "scripts/**/*.mjs",
         "vitest.config.mjs"
       ],
-      "project": [
-        "src/**/*.ts"
-      ],
-      "ignore": [
-        "src/platform/index.ts"
-      ]
+      "project": ["src/**/*.ts"],
+      "ignore": ["src/platform/index.ts"]
     },
     "packages/extension": {
       "entry": [
@@ -27,18 +19,11 @@
         "esbuild.config.mjs",
         "vite.config.ts"
       ],
-      "project": [
-        "src/**/*.{ts,tsx}"
-      ]
+      "project": ["src/**/*.{ts,tsx}"]
     },
     "packages/cli": {
-      "entry": [
-        "src/bin/texra.ts",
-        "scripts/**/*.{ts,tsx,mjs}"
-      ],
-      "project": [
-        "src/**/*.{ts,tsx}"
-      ]
+      "entry": ["src/bin/texra.ts", "scripts/**/*.{ts,tsx,mjs}"],
+      "project": ["src/**/*.{ts,tsx}"]
     },
     "packages/desktop": {
       "entry": [
@@ -52,20 +37,12 @@
         "playwright.config.ts",
         "tests/**/*.{ts,tsx}"
       ],
-      "project": [
-        "src/**/*.{ts,tsx}"
-      ],
-      "ignore": [
-        "src/renderer/vite-env.d.ts"
-      ]
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignore": ["src/renderer/vite-env.d.ts"]
     },
     "packages/core": {
-      "entry": [
-        "src/index.ts"
-      ],
-      "project": [
-        "src/**/*.ts"
-      ]
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"]
     }
   }
 }
