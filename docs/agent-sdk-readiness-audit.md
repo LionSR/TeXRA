@@ -1382,3 +1382,165 @@ meaningfully toward its target on their own, and the Software Engineer team conf
 "new subagents are config, not code" thesis in practice. The remaining ledger is exactly §2.6
 (relocate), §4 (gated two-sink consolidation), and §5/Step 7 — now narrowed to the `clearAll*`
 reset path and the one module-level status subscription. No rewrite warranted.
+
+---
+
+## 16. Re-verification addendum — 2026-06-10 (eleventh pass — confirmation; two dead-shim removals applied)
+
+An eleventh pass — three parallel fresh-eyes audits (agent core/runtime, model handlers,
+logger/public-surface) plus a direct line-by-line re-check of every open item against branch
+`claude/eager-noether-eoozsh` at HEAD `8b868e3` (baseline: §15's `c096237`, reachable from this
+branch). **All 2026-05-28 → 06-09 findings hold without change. No new structural
+over-abstraction surfaced.** Each of the three independent audits, on its own, re-reached the
+standing verdict: TeXRA is well-architected and SDK-aligned; the gaps are incremental, not
+structural. Like §12/§13/§14, this pass **applied two of the backlog's safest, behavior-neutral
+items** — both anti-shim dead-export removals freshly created/exposed by the intervening drift.
+
+### Applied this pass (behavior-preserving; full `npm run typecheck` ×4 projects + `eslint` green)
+
+- **Dead re-export shim removed — `helperModel.ts` `export { getHelperModelName }`.** The
+  `getHelperModelName` accessor was extracted into its own `runtime/helperModelName.ts` this
+  period (new file in the `c096237..8b868e3` drift), and `runtime/helperModel.ts:30` carried a
+  re-export `export { getHelperModelName };`. Both **external** importers
+  (`packages/extension/src/frontend/agents/optionsLoader.ts:2`,
+  `packages/extension/src/commands/agent/mergeCommands.ts:5`) already import directly from
+  `@agent/runtime/helperModelName` — **zero** files route through the re-export
+  (`grep "from '@agent/runtime/helperModel'"` for the name → empty). Deleted the dead re-export;
+  the local `import { getHelperModelName }` (still used internally at `:34`) stays. Exactly the
+  repo's anti-shim convention ("don't leave re-export shims behind").
+- **Dead namespace barrel line removed — `@logger/index.ts` `export * as logUtils`.** The barrel
+  re-exported `logUtils` as a namespace, but **no file imports `{ logUtils } from '@logger'`** —
+  all ~124 logging consumers use the deep `@logger/logUtils` path, and every **bare** `@logger`
+  importer pulls only `createChannelTrace` (22 sites) or `redactSecrets` (desktop/CLI sinks). The
+  namespace line was pure dead surface (re-confirms the logger audit's L3 and the prior §12 "two
+  ways to log" tension). Deleted line 1 of `src/logger/index.ts`; left `redactSecrets` and
+  `createChannelTrace` (both live). The migration of `@logger/logUtils` → a single `@logger`
+  entry stays the larger, deferred consistency question — only the dead line was removed.
+
+### Drift since the §15 baseline (`c096237` → `8b868e3`) — audited clean; no new abstraction
+
+93 files / +1094/−992 across the audited dirs. The new files are a **declarative SDK-error split**
+(`anthropic/anthropicSdkError.ts`, `google/googleSdkError.ts`, `openai/openAISdkError.ts`,
+`openrouter/openRouterSdkError.ts` + shared `support/sdkErrorMetadata.ts` / `sdkErrorTagging.ts`,
+landed with the ESM-safe startup fix `a6bd0c2`), the goal/odyssey collapse (`6fb5b3d` — `features/registerGoal.ts`,
+`goal/maybeBuildGoalContinuation.ts`, `goal/promptLoader.ts`; `runtime/idleContinuation.ts` **removed**),
+the `helperModelName.ts` extract, and a streaming-hot-path perf pass (`e70adb9`, `TraceEmitter.ts`
+−net). The per-provider `sdkError` files are each shared by the base `ModelHandler` + multiple
+provider handlers (`grep` confirms multi-caller) — a clean extraction, **not** a single-use
+forwarder. `git diff --name-status` shows **no new `index.ts` barrel and no new run-entry
+wrapper**; the agent core / `src/model` / `src/latex` / `src/tools` stay **`vscode`-free** (grep
+clean); `@texra/core` is still the curated 13-export barrel.
+
+### Re-rebutted false positive (sixth time — fresh model-handler audit re-flagged it as HIGH)
+
+- **"`IModelHandler` is a redundant duplicate of `ModelHandler` — delete the port, make the
+  abstract class the contract."** **Refuted, verified at HEAD.** The fresh audit's grep is
+  correct as far as it goes (`implements IModelHandler` → only the base class; everything else
+  `extends ModelHandler`), but it misses what makes the port non-redundant: the **optional**
+  `createBatchedToolUseFollowUpMessages?(...)` is declared on the port
+  (`types/IModelHandler.ts:392`, with `?`) and is **not** on the abstract base.
+  `ToolUseCycleFlow.ts:830-831` **feature-detects** it on the port-typed handler
+  (`modelHandler.requiresBatchedParallelToolResults && !!modelHandler.createBatchedToolUseFollowUpMessages`)
+  then calls it with `!` at `:835`. Re-typing those sites to the concrete `ModelHandler` (which
+  lacks the method) fails to compile — the port's optional-method surface is exactly the
+  provider-agnostic feature-detection seam. Consistent with §9/§12/§13/§14/§15. **Not redundant;
+  do not delete.** (The audit-endorsed _sliver_ — extracting the standalone option/result type
+  aliases into a pure types module — remains available, but is cosmetic, not a removal.)
+
+### Genuinely-new candidates recorded for the backlog (none are blockers; none applied)
+
+1. **`agentRegistry.ts` mixes the Lit-UI options builder into the SDK-exported core
+   (low–med, surface altitude).** `src/agent/index/agentRegistry.ts` (~723 LOC) bundles
+   load/cache/lookup (the `@texra/core`-exported core) with `computeAgentOptionsData` /
+   `entryToOptionData` / `sortAgentEntries` — pure dropdown-presentation policy ("preferred
+   agents first") consumed only by UI hosts — plus remote-meta `globalState` persistence and
+   legacy-key migration. An SDK consumer importing `loadAgents`/`getAgent` pulls a module that
+   also knows Lit dropdown ordering. **Suggested (move-only, deferred):** split the UI options
+   builder into a UI-side module and the remote-meta/migration into internal modules, leaving the
+   SDK-exported core baggage-free. Move-only across several consumers — not a quick line-removal.
+   _(Distinct from, and complementary to, §13's `@agent/index` barrel-leakage item, which is the
+   directory-wiring DI interfaces; this is the registry module's internal altitude mix.)_
+2. **Redundant idempotent `ensureAgentCategoryForSource` call (low, judgment — leans keep).**
+   `loadAgentSettingAndPrompts` already applies it at `agentLoad.ts:123`; `AgentLaunchContext.ts:188`
+   re-applies it with the **same** `resolution.entry.source` right after calling that loader.
+   `ensureAgentCategoryForSource` is idempotent, so the outer call is a no-op today. **Recorded,
+   not applied** — it is a behavior-touching call site (not a dead export), and the outer call is
+   cheap defensive depth that becomes load-bearing if the loader ever stops defaulting. The
+   audit's discipline is to apply only pure dead-code/anti-shim removals (above) and defer
+   behavior-touching ones; this is the latter.
+3. **`createRedactingSink` safety affordance (low, optional).** Re-surfaces the §9/§12 redaction
+   contract from the consumer-ergonomics angle: emit-time redaction is intentionally off, and
+   desktop + CLI each hand-roll the `redactSecrets`-in-sink wrapper. A `createRedactingSink(inner)`
+   helper from `@logger` would make the safe path the easy path for SDK consumers wiring a custom
+   `setOutputChannelFactory`. The documented contract (§12 TSDoc) already covers correctness; this
+   is an affordance, not a fix. Deferred.
+4. **`@logger ↔ @agent/trace` package-level import cycle (low, latent).** `logger/runTrace.ts`
+   imports `TraceEmitter` from `@agent/trace`, while `@agent/trace`'s `TraceEmitter.ts:16` imports
+   `@logger/logUtils` for subscriber-error logging. Harmless at the file level today, but a latent
+   layering smell for anyone extracting `@logger` or `@agent/trace` as a standalone SDK package.
+   Recorded for the eventual package-extraction step; no action now.
+
+### Settled rejects / lean-keeps re-confirmed (do not re-flag)
+
+The three fresh audits independently re-reached the standing verdict and re-discovered only
+documented items. Re-confirmed with current line evidence at HEAD `8b868e3`: there are exactly
+**two** agent-implementation strategies (`Workflow`/`ToolUse`), not six — "Direct/CoT/Merge" are
+config/prompt variations inside the reflection flow sharing one `BaseFlowContextInit` contract,
+not separate classes (agent-core audit, consistent with §5); the `Node.exec()→createFlow()→run()`
+cycle factories, the `runAgent`/`runAgentStream` two-tier entry, `buildAgentLaunchContext`'s
+saga assembly, `RunContext`'s frozen-object factory, and the coordinator hierarchy are all
+load-bearing, not wrappers to inline; `ModelFactory` is the exhaustive three-path router with
+justified capability-gated decorators (`withReasoningOverride`/`withModelHandlerCompatibilityKey`,
+§14); the 40 KB `ModelHandler` base is legitimate shared logic with collaborators already
+composed out (`MediaAttachmentProcessor`/`ProxyConfigResolver`/`UsageNormalizer`/`sdkErrorTagging`),
+not a god-class; the thin OpenAI-compatible subclasses are a lean-keep (each carries genuine
+deltas — Kimi's token-count API, MiniMax's `reasoning_details`, DeepSeek's effort mapping — and
+maps 1:1 to a `PROVIDER_HANDLER_ROUTES` arm); `createChannelTrace`'s 22 module-singletons remain
+the recorded judgment-call (§12/§15); `redactSecrets` is **not** dead (`desktopAppLog.ts`, 4 sites).
+
+### Open ledger at HEAD `8b868e3` (line numbers refreshed; all still present)
+
+- **§2.6** — `src/agent/modelHandlers/modelHandlerValidation.ts` still in the production handler
+  dir, gated by `TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL` (`ModelFactory.ts:52`,
+  dynamic-imported at `:326`). Relocate-with-injection (CLI machinery, not vitest-only) still
+  recommended; still low priority.
+- **§4** — token usage still a deliberate two-sink fan-out in `src/agent/utils/UsageMonitor.ts`:
+  `runtimeHost.emit('updateStreamUsage', …)` `:155` (progress-view sidebar, **all** agents) and
+  `logger.usage(payload, …)` `:164` gated to `AgentCategory.Workflow` `:160` (transcript stats
+  line). Per §13 Finding A this is two audiences, not a duplicate — its fix is a sink
+  consolidation onto `AgentTrace` preserving the workflow-only gate (a progress-view consumer
+  rewire).
+- **§5 / proposal Step 7** — still no first-class `delegateTo(...)` primitive (`grep delegateTo`
+  over `src/**` + `packages/**` empty); delegation remains a tool call. The Step-7 plumbing
+  landed in prior periods (`RunCoordinatorBridge` injectable class `runCoordinators.ts:33`,
+  `InterruptRegistry.retainOnly` `:25`, `getActiveExecutionIds` removed). Per §13 Finding B the
+  remaining cross-session seams narrow to the **`clearAll*` reset path**
+  (`runCoordinators.ts:142` `cleanupAllRequests`, reachable via `tools/approval`) and the **single
+  module-level `StreamStatusRegistry.onDidChange` subscription** (`executionRegistry.ts:115`) —
+  scope these by session and the in-process multi-session blocker closes. The keyed registries
+  themselves need not move for correctness (no current single-session host exhibits a bug).
+- **§3.1** — still no `@agent/runtime/index.ts` barrel; still optional polish (the `@texra/core`
+  and `src/platform/index.ts` surfaces already cover the underlying concern).
+- **§13 finding #1 (`AgentRuntimeHost.emit` mixes UI + essential events)** — unchanged; the
+  headless-contract TSDoc is present, structural split deferred.
+- **SDK-008** — remains CLOSED (`core/config` removed #5349; `core/stateStore` inlined §14).
+
+**Subagent split points — unchanged and accurate** (§5 + proposal): config-driven YAML agents
+over the two flows (reflection / tool-use) + the `delegate_*` tools are the existing subagent
+mechanism; the `agentCategory` dispatch in `executeAgent` is the cleanest internal seam; the
+helper-model tasks (now including the freshly-extracted `helperModelName`) and the node-level
+candidates (`MediaExtractionNode`, `TeXCountNode`, `OutputNode`, the `sessionDescription`
+background call) stay the lowest-risk extractions, gated behind the same Step-7 coupling blocker.
+
+**Net for 2026-06-10:** thesis reaffirmed for the eleventh pass — incremental, not structural.
+The post-06-09 drift is a declarative SDK-error split, a goal/odyssey collapse, a hot-path perf
+pass, and the `helperModelName` extract — all moving _with_ the audit, none adding a wrapper,
+barrel, or run-entry indirection. **Two behavior-neutral anti-shim removals applied** (the dead
+`helperModel` re-export exposed by the new `helperModelName.ts`; the dead `@logger` `logUtils`
+namespace line), each verified by `typecheck` ×4 + `eslint`. The fresh model-handler audit's
+`IModelHandler`-is-redundant claim was re-rebutted a sixth time with fresh line evidence; four
+genuinely-new low-priority candidates were recorded (the `agentRegistry` UI-altitude split, the
+idempotent double category call, the `createRedactingSink` affordance, the `@logger`↔`@agent/trace`
+cycle), none a blocker. The remaining ledger is unchanged: §2.6 (relocate), §4 (gated two-sink
+consolidation), and §5/Step 7 (multi-session isolation, narrowed to two unscoped seams). No
+rewrite warranted.
