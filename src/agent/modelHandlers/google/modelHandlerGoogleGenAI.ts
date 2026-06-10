@@ -5,15 +5,9 @@ import { Buffer } from 'node:buffer';
 import { nanoid } from 'nanoid';
 import {
   GoogleGenAI,
-  Part,
-  Content,
-  GenerateContentResponse,
   FinishReason,
   ThinkingLevel,
   PartMediaResolutionLevel,
-  type FunctionCall,
-  type FunctionResponsePart,
-  type Tool as GeminiTool,
   File,
   createPartFromText,
   createPartFromUri,
@@ -23,24 +17,22 @@ import {
   createFunctionResponsePartFromBase64,
   createUserContent,
   createModelContent,
-  GenerateContentConfig,
-  type CreateChatParameters,
-  type SendMessageParameters,
 } from '@google/genai';
 
 // Local imports - agent
 import { ReasoningEffort } from 'llm-zoo';
-import { logSdkError, type AgentTrace } from '@agent/trace';
+import { logSdkError } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentSetting, hasEndTag } from '@agent/core/definition/AgentDataclass';
-import {
+import { hasEndTag } from '@agent/core/definition/AgentDataclass';
+import type { AgentSetting } from '@agent/core/definition/AgentDataclass';
+import type {
   OpenAIAPIResponseUsage,
   GenerateContentResponseUsageMetadata,
 } from '@agent/core/usage/ResponseUsage';
-import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
+import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import { ModelHandler } from '@agent/modelHandlers/ModelHandler';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { MediaEntry } from '@agent/utils/mediaTypes';
+import type { MediaEntry } from '@agent/utils/mediaTypes';
 import { K_SLICE } from '@agent/core/constants';
 import {
   getSdkErrorMessage,
@@ -51,9 +43,9 @@ import {
 import replacementEngine from '@replacement/engine';
 
 // Local imports - tools
+import type { FileLocation } from '@shared/schemas';
 import type { ToolFileAttachment } from '@tools/result';
 // Local imports - utils
-import type { FileLocation } from '@shared/schemas';
 import { flexibleFS, getShortDisplayPath } from '@utils/files';
 import { pluralize } from '@utils/text/stringUtils';
 import {
@@ -63,6 +55,14 @@ import {
 } from './googleUsage';
 import { prepareExistingOutputContent } from '../utils/fileContentUtils';
 import { tagGoogleSdkError } from './googleSdkError';
+import {
+  extractNonThinkingText,
+  isTextPart,
+  validateGoogleMessageHistory,
+} from './googleMessageHelpers';
+
+// Re-exported for tests and external callers that import from the handler path.
+export { validateGoogleMessageHistory } from './googleMessageHelpers';
 
 // Local file imports
 import {
@@ -73,6 +73,17 @@ import {
   type ToolResultPayload,
 } from '../utils/toolAttachmentUtils';
 import { toGoogleTools } from '../toolConversion';
+import type {
+  Part,
+  Content,
+  GenerateContentResponse,
+  FunctionCall,
+  FunctionResponsePart,
+  Tool as GeminiTool,
+  GenerateContentConfig,
+  CreateChatParameters,
+  SendMessageParameters,
+} from '@google/genai';
 
 // Type imports
 import type { MediaFileResult } from '../support/MediaAttachmentProcessor';
@@ -84,61 +95,6 @@ import type {
   GoogleToolCall,
   TokenCountOptions,
 } from '../types/IModelHandler';
-
-function isTextPart(part: Part): part is Part & { text: string } {
-  return typeof part.text === 'string';
-}
-
-/** Extract concatenated text from parts, excluding thought parts */
-function extractNonThinkingText(parts: Part[], trim = false): string {
-  const text = parts
-    .filter(
-      (part): part is Part & { text: string } =>
-        isTextPart(part) && !part.thought,
-    )
-    .map((part) => part.text)
-    .join('');
-  return trim ? text.trim() : text;
-}
-
-/**
- * Validates that messages have proper alternating user/model turns.
- * All message creation should enforce this natively, so this is a safety check.
- * Logs warnings for any issues found but returns messages unchanged.
- */
-export function validateGoogleMessageHistory(
-  messages: Content[],
-  logger: AgentTrace,
-): void {
-  let lastRole: string | undefined;
-
-  for (const message of messages) {
-    const role = message.role;
-
-    // Check for unsupported roles
-    if (role !== 'user' && role !== 'model') {
-      logger.warn(
-        `Unexpected role in Google message history: ${role}. Expected 'user' or 'model'.`,
-      );
-    }
-
-    // Check for consecutive same-role messages
-    if (lastRole && role === lastRole) {
-      logger.warn(
-        `Consecutive ${role} messages detected in Google history. This may cause API errors.`,
-      );
-    }
-
-    // Check for empty parts
-    if (!Array.isArray(message.parts) || message.parts.length === 0) {
-      logger.warn(`Message with role ${role} has no parts.`);
-    }
-
-    lastRole = role;
-  }
-
-  logger.debug(`Validated message history length: ${messages.length}`);
-}
 
 /**
  * Handler for Google models using the native @google/genai SDK and Chat API.
