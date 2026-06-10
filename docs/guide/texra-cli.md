@@ -80,7 +80,7 @@ texra login github          # choose the OAuth provider explicitly
 texra login --no-browser    # print the loopback sign-in URL
 ```
 
-Run interactively, a bare `texra login` asks which provider to use instead of
+When run interactively, a bare `texra login` asks which provider to use instead of
 silently defaulting.
 
 `--no-browser` still uses a local callback server. Open the printed URL in a
