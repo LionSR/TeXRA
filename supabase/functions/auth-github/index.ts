@@ -81,6 +81,8 @@ type Variables = {
   authClient: SupabaseClient<any>;
 };
 
+type MetadataRecord = Record<string, unknown>;
+
 // =============================================================================
 // Hono App
 // =============================================================================
@@ -145,6 +147,21 @@ function sessionResponse(c: Context, session: Session) {
     },
     200,
   );
+}
+
+function githubAppMetadata(
+  existing: MetadataRecord | null | undefined,
+): MetadataRecord {
+  const currentProviders = Array.isArray(existing?.providers)
+    ? existing.providers.filter(
+        (provider): provider is string => typeof provider === 'string',
+      )
+    : [];
+  return {
+    ...(existing ?? {}),
+    provider: 'github',
+    providers: [...new Set([...currentProviders, 'github'])],
+  };
 }
 
 /**
@@ -279,6 +296,11 @@ app.post('/exchange', async (c) => {
     const { user: githubUser, email } = githubResult;
     const githubProviderId = githubUser.id.toString();
     const supabase = c.get('supabase');
+    const githubUserMetadata = {
+      avatar_url: githubUser.avatar_url,
+      user_name: githubUser.login,
+      full_name: githubUser.name || githubUser.login,
+    };
 
     console.log(`[AUTH] Exchange for GitHub user ${githubUser.login}`);
 
@@ -303,26 +325,39 @@ app.post('/exchange', async (c) => {
         return errorResponse(c, 'Failed to load linked user', 500);
       }
       const storedEmail = userData.user.email?.trim();
+      const identityUpdate: MetadataRecord = {
+        user_metadata: {
+          ...userData.user.user_metadata,
+          ...githubUserMetadata,
+        },
+        app_metadata: githubAppMetadata(userData.user.app_metadata),
+      };
       if (storedEmail) {
         userEmail = storedEmail;
       } else {
-        const { data: updatedUser, error: updateError } =
-          await supabase.auth.admin.updateUserById(userId, {
-            email,
-            email_confirm: true,
-          });
-        if (updateError || !updatedUser?.user?.email) {
-          console.error(
-            '[AUTH] Failed to bind GitHub email to linked user:',
-            updateError?.message,
-          );
+        identityUpdate.email = email;
+        identityUpdate.email_confirm = true;
+      }
+      const { data: updatedUser, error: updateError } =
+        await supabase.auth.admin.updateUserById(userId, identityUpdate);
+      if (updateError) {
+        console.error(
+          '[AUTH] Failed to update linked GitHub user:',
+          updateError.message,
+        );
+        return errorResponse(c, 'Failed to update linked GitHub user', 500);
+      }
+      if (!storedEmail) {
+        const boundEmail = updatedUser?.user?.email?.trim();
+        if (!boundEmail) {
+          console.error('[AUTH] GitHub email bind produced no stored email');
           return errorResponse(
             c,
             'Failed to bind verified GitHub email to linked account',
             500,
           );
         }
-        userEmail = updatedUser.user.email;
+        userEmail = boundEmail;
       }
     } else {
       // Check by email
@@ -336,13 +371,23 @@ app.post('/exchange', async (c) => {
       if (authUser) {
         userId = authUser.id;
         userEmail = authUser.email ?? email;
-        await supabase.auth.admin.updateUserById(userId, {
-          user_metadata: {
-            ...authUser.raw_user_meta_data,
-            avatar_url: githubUser.avatar_url,
-            user_name: githubUser.login,
+        const { error: updateError } = await supabase.auth.admin.updateUserById(
+          userId,
+          {
+            user_metadata: {
+              ...authUser.raw_user_meta_data,
+              ...githubUserMetadata,
+            },
+            app_metadata: githubAppMetadata(authUser.raw_app_meta_data),
           },
-        });
+        );
+        if (updateError) {
+          console.error(
+            '[AUTH] Failed to update email-matched GitHub user:',
+            updateError.message,
+          );
+          return errorResponse(c, 'Failed to update GitHub user', 500);
+        }
       } else {
         // New user — enforce sign-up policy (existing users are never re-checked).
         const emailDecision = checkEmailDomain(email);
@@ -365,12 +410,8 @@ app.post('/exchange', async (c) => {
         const { data: newUser, error } = await supabase.auth.admin.createUser({
           email,
           email_confirm: true,
-          user_metadata: {
-            avatar_url: githubUser.avatar_url,
-            user_name: githubUser.login,
-            full_name: githubUser.name || githubUser.login,
-          },
-          app_metadata: { provider: 'github', providers: ['github'] },
+          user_metadata: githubUserMetadata,
+          app_metadata: githubAppMetadata(null),
         });
 
         if (error || !newUser?.user) {
