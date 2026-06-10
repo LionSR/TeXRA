@@ -4,6 +4,7 @@ import { NO_BYPASS, type StreamSlice } from '@cli/chat/tui/state/cliState';
 import {
   activeStreamParentOrSelfId,
   activeStreamScope,
+  activeStreamTreeEntries,
   nearestActiveStreamAncestor,
 } from '@cli/chat/tui/state/streamViews';
 import {
@@ -223,6 +224,50 @@ describe('CLI stream tabs strip', () => {
       'main*',
       '1:setup(idle)',
       '[2:bash]*',
+    ]);
+  });
+
+  it('projects active stream tree order once for tabs and shortcuts', () => {
+    const root = streamId('root');
+    const child1 = streamId('child-1');
+    const child2 = streamId('child-2');
+    const streams = new Map<StreamTabId, StreamSlice>([
+      [
+        root,
+        slice('root', {
+          activeSubagents: [
+            child({
+              executionId: 'r1',
+              childStreamId: child1,
+              agentName: 'setup',
+            }),
+          ],
+          activeProcesses: [
+            child({
+              executionId: 'p1',
+              childStreamId: child2,
+              toolName: 'bash',
+            }),
+          ],
+        }),
+      ],
+      [child1, slice('child-1')],
+      [child2, slice('child-2')],
+    ]);
+
+    expect(
+      activeStreamTreeEntries({
+        activeStreamId: child2,
+        parentStream: new Map([
+          [child1, root],
+          [child2, root],
+        ]),
+        streams,
+      }),
+    ).toEqual([
+      { id: root },
+      { id: child1, shortcutIndex: 1 },
+      { id: child2, shortcutIndex: 2 },
     ]);
   });
 
