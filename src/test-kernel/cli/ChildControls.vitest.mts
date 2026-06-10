@@ -29,7 +29,7 @@ import {
   buildChildControlItems,
   childElapsed,
   childPickerKeyAction,
-  hasChildExecutionRows,
+  hasChildControlItems,
   liveChildExecutionElapsedKey,
   nextPickerIndex,
   numericFocusTargetForActiveStream,
@@ -550,7 +550,7 @@ describe('CLI child execution controls', () => {
         status: 'completed',
       },
     ]);
-    expect(hasChildExecutionRows(state)).toBe(true);
+    expect(hasChildControlItems(state, 'tasks')).toBe(true);
   });
 
   it('opens the child side panel when only retained subagent streams remain', () => {
@@ -565,7 +565,7 @@ describe('CLI child execution controls', () => {
       ],
     });
 
-    expect(hasChildExecutionRows(state)).toBe(true);
+    expect(hasChildControlItems(state, 'tasks')).toBe(true);
   });
 
   it('falls back to the parent subagent list when the focused child is a leaf', () => {

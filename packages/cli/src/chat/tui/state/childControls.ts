@@ -414,14 +414,6 @@ export function liveChildExecutionElapsedKey(
   return liveKeys.length > 0 ? liveKeys.join(',') : undefined;
 }
 
-export function hasChildExecutionRows(
-  slice:
-    | Pick<StreamSlice, 'activeProcesses' | 'activeSubagents' | 'childStreams'>
-    | undefined,
-): boolean {
-  return hasChildControlItems(slice, 'tasks');
-}
-
 export function numericFocusTargetForActiveStream(init: {
   readonly activeStreamId: StreamTabId | undefined;
   readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;

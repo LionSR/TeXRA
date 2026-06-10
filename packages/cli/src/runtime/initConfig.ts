@@ -7,10 +7,7 @@
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import {
-  TEXRA_STORAGE_DIR_NAME,
-  workspaceTexraConfigPath,
-} from '@platform/defaults/nodeStorage';
+import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
 
 import type {
   CliApprovalPolicy,
@@ -30,14 +27,6 @@ export interface InitConfigShape {
   readonly outputFormat: CliOutputFormat;
   readonly approvalPolicy: CliApprovalPolicy;
   readonly chat: { readonly agent: string; readonly model: string };
-}
-
-/**
- * Resolve the workspace config file path. (User-scope config lives in global
- * storage with a different shape and loader; bootstrapping it is a follow-up.)
- */
-export function initConfigPath(cwd: string): string {
-  return workspaceTexraConfigPath(cwd);
 }
 
 /** Map wizard answers to the canonical config object. */
