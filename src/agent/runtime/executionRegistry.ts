@@ -57,6 +57,10 @@ export interface FinishAgentExecutionOptions {
   readonly status: StreamStatus;
 }
 
+interface TerminateOptions {
+  readonly cascadeChildren?: boolean;
+}
+
 export type ToolUseFollowUpQueueReason =
   | 'resuming'
   | 'waiting'
@@ -354,7 +358,9 @@ export class ExecutionRegistry {
   kill(executionId: string): boolean {
     const handle = this.handles.get(executionId);
     if (!handle) return false;
-    const result = this.terminate(handle);
+    const result = this.terminate(handle, new Set(), {
+      cascadeChildren: true,
+    });
     // Always notify waiters — even if terminate() returned false (e.g. PID not
     // yet assigned), callers blocking on this execution should be unblocked.
     this.notifyWaiters(executionId);
@@ -445,11 +451,15 @@ export class ExecutionRegistry {
     });
   }
 
-  /** Interrupt all active subagents of a parent stream. */
-  interruptActiveChildren(parentStreamId: StreamTabId): void {
+  /** Interrupt all active subagents of a parent stream, including descendants. */
+  interruptActiveChildren(
+    parentStreamId: StreamTabId,
+    visited: Set<string> = new Set(),
+    options: TerminateOptions = { cascadeChildren: true },
+  ): void {
     for (const handle of this.handles.values()) {
       if (isChildExecution(handle, parentStreamId)) {
-        this.terminate(handle);
+        this.terminate(handle, visited, options);
       }
     }
   }
@@ -463,6 +473,7 @@ export class ExecutionRegistry {
   detachActiveChildren(
     parentStreamId: StreamTabId,
     runtimeHost: AgentRuntimeHost,
+    visited: Set<string> = new Set(),
   ): void {
     for (const handle of this.handles.values()) {
       if (handle.parentStreamId !== parentStreamId) continue;
@@ -476,7 +487,7 @@ export class ExecutionRegistry {
           parentStreamId: null,
         });
       } else if (handle instanceof ProcessExecutionHandle) {
-        this.terminate(handle);
+        this.terminate(handle, visited, { cascadeChildren: false });
       }
     }
     this.emitActiveSubagentsUpdate(parentStreamId, runtimeHost);
@@ -494,6 +505,9 @@ export class ExecutionRegistry {
   ): boolean {
     const rootHandle = this.getAgentHandleByStream(streamId);
     const runtimeHost = options.runtimeHost ?? rootHandle?.runtimeHost;
+    // Shared across the child sweep and the root cascade so each execution in
+    // the chain is interrupted exactly once.
+    const visited = new Set<string>();
 
     if (options.detachActiveChildren === true) {
       if (!runtimeHost) {
@@ -501,13 +515,17 @@ export class ExecutionRegistry {
           'stopAgentStream requires a runtimeHost to detach active children',
         );
       }
-      this.detachActiveChildren(streamId, runtimeHost);
+      this.detachActiveChildren(streamId, runtimeHost, visited);
     } else {
-      this.interruptActiveChildren(streamId);
+      this.interruptActiveChildren(streamId, visited, {
+        cascadeChildren: true,
+      });
     }
 
     const stopped = rootHandle
-      ? this.terminate(rootHandle)
+      ? this.terminate(rootHandle, visited, {
+          cascadeChildren: options.detachActiveChildren !== true,
+        })
       : this.interruptRegisteredStream(streamId, runtimeHost);
     if (!stopped && runtimeHost) {
       this.streamStatus.set(streamId, STREAM_STATUS.STOPPED, { runtimeHost });
@@ -615,8 +633,17 @@ export class ExecutionRegistry {
     return false;
   }
 
-  private terminate(handle: ExecutionHandle): boolean {
+  private terminate(
+    handle: ExecutionHandle,
+    visited: Set<string> = new Set(),
+    options: TerminateOptions = {},
+  ): boolean {
+    if (visited.has(handle.executionId)) return false;
+    visited.add(handle.executionId);
     if (handle instanceof AgentExecutionHandle) {
+      if (options.cascadeChildren === true) {
+        this.interruptActiveChildren(handle.childStreamId, visited, options);
+      }
       const interruptible = this.interrupts.get(handle.childStreamId);
       if (!interruptible) return false;
       interruptible.interrupt();

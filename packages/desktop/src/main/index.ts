@@ -470,8 +470,8 @@ function createWindow(options: {
       });
     return agentExecutionLoad;
   };
-  const disposeAgentResumeHandler = setDesktopAgentResumeHandler(
-    async (streamId) => {
+  const disposeAgentResumeHandler = setDesktopAgentResumeHandler({
+    async tryResumeStream(streamId) {
       try {
         return await (
           await getAgentExecution()
@@ -481,7 +481,10 @@ function createWindow(options: {
         return false;
       }
     },
-  );
+    isResumeInFlight(streamId) {
+      return agentExecution?.progress.isResumeInFlight(streamId) ?? false;
+    },
+  });
   const fileSelection = createDesktopFileSelection({
     postToRenderer: (message) => ipcRef.current?.postToRenderer(message),
     showOpenFileDialog: async (options) => {
