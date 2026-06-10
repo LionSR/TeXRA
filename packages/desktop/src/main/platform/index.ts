@@ -15,6 +15,7 @@ import { initPlatform } from '@platform/platform';
 import { SHUTDOWN_PHASE } from '@platform/interfaces/lifecycle';
 import { StreamSnapshotStore } from '@transcript';
 import { registerAgentFeatures } from '@agent/features';
+import { toErrorMessage } from '@common/errors';
 import { DESKTOP_WORKSPACE_PATH_STATE_KEY } from '@desktop/workspacePath.js';
 import { registerDirectLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 
@@ -61,37 +62,48 @@ export async function initializeElectronPlatform(
   );
   // Workspace config lives in the project's `.texra/config.json` — the same
   // file the CLI reads and writes — so a checked-in config behaves
-  // identically in both hosts. Sessions without a workspace fall back to the
-  // internal per-workspace store.
+  // identically in both hosts. Sessions without a workspace, and read-only
+  // project trees where the file cannot be created or written, fall back to
+  // the internal per-workspace store so startup never fails on config.
   const legacyWorkspaceConfigPath = join(
     storage.getStoragePath(),
     'config.json',
   );
-  const workspaceConfigStore = await JsonStore.open(
-    workspacePath
-      ? workspaceTexraConfigPath(workspacePath)
-      : legacyWorkspaceConfigPath,
-  );
-  // One-time copy from the pre-project-file internal store into the project
-  // file; existing project values win, so a checked-in config is never
-  // overwritten. Presence is checked across key variants because checked-in
-  // CLI configs use bare keys (`model`) while this store wrote canonical
-  // `texra.*` keys, which shadow bare ones on read.
-  if (
-    workspacePath &&
-    workspaceStateStore.get<boolean>(WORKSPACE_CONFIG_MIGRATED_KEY) !== true
-  ) {
-    const legacyStore = await JsonStore.open(legacyWorkspaceConfigPath);
-    for (const [key, value] of Object.entries(legacyStore.snapshot())) {
-      const inProject = configKeyVariants(key).some((variant) =>
-        workspaceConfigStore.has(variant),
+  let workspaceConfigStore: JsonStore | undefined;
+  if (workspacePath) {
+    try {
+      const projectStore = await JsonStore.open(
+        workspaceTexraConfigPath(workspacePath),
       );
-      if (!inProject) {
-        await workspaceConfigStore.set(key, value);
+      // One-time copy from the pre-project-file internal store into the
+      // project file; existing project values win, so a checked-in config is
+      // never overwritten. Presence is checked across key variants because
+      // checked-in CLI configs use bare keys (`model`) while this store wrote
+      // canonical `texra.*` keys, which shadow bare ones on read. Merge-only,
+      // so a write failure here safely retries on the next launch.
+      if (
+        workspaceStateStore.get<boolean>(WORKSPACE_CONFIG_MIGRATED_KEY) !== true
+      ) {
+        const legacyStore = await JsonStore.open(legacyWorkspaceConfigPath);
+        for (const [key, value] of Object.entries(legacyStore.snapshot())) {
+          const inProject = configKeyVariants(key).some((variant) =>
+            projectStore.has(variant),
+          );
+          if (!inProject) {
+            await projectStore.set(key, value);
+          }
+        }
+        await workspaceStateStore.update(WORKSPACE_CONFIG_MIGRATED_KEY, true);
       }
+      workspaceConfigStore = projectStore;
+    } catch (error) {
+      console.warn(
+        `[desktop] Project .texra/config.json is not writable; using the internal workspace config store. Cause: ${toErrorMessage(error)}`,
+      );
+      workspaceConfigStore = undefined;
     }
-    await workspaceStateStore.update(WORKSPACE_CONFIG_MIGRATED_KEY, true);
   }
+  workspaceConfigStore ??= await JsonStore.open(legacyWorkspaceConfigPath);
   const secretsStore = await JsonStore.open(join(userDataPath, 'secrets.json'));
 
   repairLaunchPath();
