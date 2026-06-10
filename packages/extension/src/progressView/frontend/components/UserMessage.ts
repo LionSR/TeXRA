@@ -179,12 +179,14 @@ export class UserMessage extends LitElement {
     isStructuredDelivery: false,
     hasRawMessage: false,
     displayText: '',
+    structuredMarkdownHtml: '',
   };
 
   private getDisplayState(): {
     isStructuredDelivery: boolean;
     hasRawMessage: boolean;
     displayText: string;
+    structuredMarkdownHtml: string;
   } {
     if (this.displayCache.text === this.text) {
       return this.displayCache;
@@ -202,6 +204,11 @@ export class UserMessage extends LitElement {
       isStructuredDelivery,
       hasRawMessage,
       displayText,
+      // Cached alongside displayText: message text is immutable after
+      // creation, so the Markdown parse must not rerun on every render.
+      structuredMarkdownHtml: isStructuredDelivery
+        ? processMarkdownContent(displayText)
+        : '',
     };
     return this.displayCache;
   }
@@ -212,14 +219,15 @@ export class UserMessage extends LitElement {
     );
     const copyState = this.copyController.state;
     const rawMessageCopyState = this.rawMessageCopyController.state;
-    const { isStructuredDelivery, hasRawMessage, displayText } =
-      this.getDisplayState();
     // processMarkdownContent uses MarkdownIt with html:false and escapes
     // restored LaTeX reference labels before the renderer output reaches
     // unsafeHTML.
-    const structuredMarkdownHtml = isStructuredDelivery
-      ? processMarkdownContent(displayText)
-      : '';
+    const {
+      isStructuredDelivery,
+      hasRawMessage,
+      displayText,
+      structuredMarkdownHtml,
+    } = this.getDisplayState();
 
     return html`
       <div class="user-message-container">
