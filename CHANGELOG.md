@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Shared (all surfaces)
 
+#### Improvements
+
+- **`chat` is now a general-purpose scientific assistant** — the built-in `chat` agent gained the full research toolset: web search and fetch, Zotero reference management, Wolfram computation, word counts (`texcount`), linter diagnostics, PDF opening, persistent memory, planning and todo tracking, and full delegation (`delegate_workflow`, `executions`, `accept_run_files`) alongside its existing file editing and arXiv/Crossref tools. Its system prompt now covers literature research, computation, and document tooling in addition to the established mathematical writing guidance.
+
 #### Bug Fixes
 
 - **Stopping a run is no longer recorded as an error** — interrupting an agent (stop button, Ctrl+C, closing an idle chat) now consistently records the run as _interrupted_ instead of _error_: history shows the right status, the transcript group ends neutral instead of red, orchestrators see a cancelled subagent as cancelled rather than failed, and the CLI exits with the interrupt code (130) instead of the error code (1).
