@@ -56,10 +56,10 @@ import {
   STREAM_DATA_KEYS,
   streamDataDir,
 } from './streamDataPaths';
+import { mapToRecord } from '@shared/progressView/backend/persistence/serializationUtils';
 import {
   assembleSnapshot,
   EMPTY_WORK_PLAN,
-  mapToRecord,
   readStreamData,
   type StreamData,
 } from './streamSnapshotRead';

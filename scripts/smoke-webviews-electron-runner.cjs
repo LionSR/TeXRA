@@ -91,14 +91,15 @@ async function waitForRenderedElement(window, view) {
           }
         }
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        const unregisteredVscodeElements = [
-          ...document.querySelectorAll('*'),
-          ...[...document.querySelectorAll('*')]
-            .flatMap((node) => [...(node.shadowRoot?.querySelectorAll('*') ?? [])]),
-        ]
-          .map((node) => node.localName)
-          .filter((name) => name.startsWith('vscode-'))
-          .filter((name, index, names) => names.indexOf(name) === index)
+        const unregisteredVscodeElements = [...new Set(
+          [
+            ...document.querySelectorAll('*'),
+            ...[...document.querySelectorAll('*')]
+              .flatMap((node) => [...(node.shadowRoot?.querySelectorAll('*') ?? [])]),
+          ]
+            .map((node) => node.localName)
+            .filter((name) => name.startsWith('vscode-'))
+        )]
           .filter((name) => customElements.get(name) === undefined);
         if (unregisteredVscodeElements.length > 0) {
           throw new Error(
