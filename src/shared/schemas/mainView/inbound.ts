@@ -1,0 +1,348 @@
+/**
+ * MainView inbound message schemas (frontend -> backend): SELECT_*, REQUEST_*,
+ * EXECUTE, git-diff, housekeeping, and the dispatcher they compose into.
+ *
+ * Messages are grouped by domain into `as const` tuples and spread into a
+ * single `discriminatedUnion('command', ...)` so the dispatcher narrows by
+ * command literal.
+ */
+import { z } from 'zod';
+
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  createDispatcher,
+  type HandlerRegistry,
+} from '@shared/utils/dispatcher';
+
+import {
+  commandOnly,
+  withFilesArray,
+  withOptionalFilePath,
+} from '../messageFactories';
+import {
+  ExtendedDocumentFileTypeSchema,
+  MultipleDocumentFileTypeSchema,
+  SessionTypeSchema,
+} from './state';
+
+const CommonMessages = [
+  commandOnly(MAIN_VIEW_COMMANDS.WEBVIEW_READY),
+  commandOnly(MAIN_VIEW_COMMANDS.GET_THEME),
+  commandOnly(MAIN_VIEW_COMMANDS.GET_DEBUG_MODE),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.SWITCH_VIEW),
+    view: z.enum(['main', 'progress', 'dashboard']),
+    openInEditor: z.boolean().nullish(),
+  }),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.THEME_SET),
+    theme: z.enum(['dark', 'light']),
+  }),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.DEBUG_MODE_SET),
+    debugMode: z.boolean(),
+  }),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE),
+    text: z.string().min(1),
+  }),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.SHOW_INSTRUCTION),
+    key: z.string().min(1),
+    text: z.string().min(1),
+  }),
+] as const;
+
+export const OpenAgentSettingsMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS),
+  sessionType: SessionTypeSchema.optional(),
+});
+
+export const OpenAgentDirectoryMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.OPEN_AGENT_DIRECTORY),
+  customDirSet: z.boolean().optional(),
+});
+
+const SettingsMessages = [
+  commandOnly(MAIN_VIEW_COMMANDS.SETTINGS_OPEN),
+  commandOnly(MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS),
+  commandOnly(MAIN_VIEW_COMMANDS.OPEN_MULTI_AGENT_SETTINGS),
+  commandOnly(MAIN_VIEW_COMMANDS.OPEN_AGENT_DOCS),
+  commandOnly(MAIN_VIEW_COMMANDS.OPEN_INSTALLATION_DOCS),
+  OpenAgentSettingsMessageSchema,
+  OpenAgentDirectoryMessageSchema,
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.MODEL_SELECTED),
+    model: z.string().min(1),
+  }),
+] as const;
+
+const ExecutionMessages = [
+  z.looseObject({ command: z.literal(MAIN_VIEW_COMMANDS.EXECUTE) }),
+  z.looseObject({ command: z.literal(MAIN_VIEW_COMMANDS.MERGE) }),
+  z.looseObject({ command: z.literal(MAIN_VIEW_COMMANDS.COMPARE) }),
+  z.looseObject({ command: z.literal(MAIN_VIEW_COMMANDS.ACCEPT_EDITED) }),
+] as const;
+
+const FileSelectionMessages = [
+  commandOnly(MAIN_VIEW_COMMANDS.SELECT_EDITED_FILE),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.SELECT_MULTIPLE_FILES),
+    fileType: ExtendedDocumentFileTypeSchema,
+    currentFile: z.string().optional(),
+  }),
+] as const;
+
+const FileSelectedMessages = [
+  withOptionalFilePath(MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED),
+] as const;
+
+const RequestFileMessages = [
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_EDITED_FILE),
+    notifyWhenEmpty: z.boolean().nullish(),
+    baseFile: z.string().optional(),
+  }),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_BASE_FILE),
+    notifyWhenEmpty: z.boolean().nullish(),
+    preserveBaseFile: z.boolean().optional(),
+  }),
+] as const;
+
+const SetFilesMessages = [
+  withFilesArray(MAIN_VIEW_COMMANDS.SET_INPUT_FILES),
+  withFilesArray(MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES),
+  withFilesArray(MAIN_VIEW_COMMANDS.SET_MEDIA_FILES),
+] as const;
+
+const FileOperationMessages = [
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.GET_CURRENT_FILE),
+    fileType: z.string().optional(),
+    baseFile: z.string().optional(),
+  }),
+  commandOnly(MAIN_VIEW_COMMANDS.REFRESH_ALL_FILES),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.ADD_OPENED_FILES),
+    fileType: ExtendedDocumentFileTypeSchema,
+  }),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.ATTACH_DROPPED_FILES),
+    paths: z.array(z.string()),
+    target: MultipleDocumentFileTypeSchema.nullish(),
+  }),
+  // Note: Use withFilesArray (required files) directly instead of
+  // withOptionalFiles + .extend() override pattern
+  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_INPUT_FILES).extend({
+    fileType: z.literal('input'),
+  }),
+  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_CONTEXT_FILES).extend({
+    fileType: z.literal('context'),
+  }),
+  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_MEDIA_FILES).extend({
+    fileType: z.literal('media'),
+  }),
+  withFilesArray(MAIN_VIEW_COMMANDS.UPDATE_OUTPUT_FILES).extend({
+    fileType: z.literal('output'),
+  }),
+] as const;
+
+const InstructionMessages = [
+  commandOnly(MAIN_VIEW_COMMANDS.TRANSCRIBE_INSTRUCTION),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.POLISH_INSTRUCTION_TEXT),
+    text: z.string(),
+    agent: z.string().optional(),
+    model: z.string().optional(),
+    inputFiles: z.array(z.string()).optional(),
+    contextFiles: z.array(z.string()).optional(),
+    mediaFiles: z.array(z.string()).optional(),
+    outputFiles: z.array(z.string()).optional(),
+    inputFilesActive: z.boolean().optional(),
+    contextFilesActive: z.boolean().optional(),
+    mediaFilesActive: z.boolean().optional(),
+    outputFilesActive: z.boolean().optional(),
+  }),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.CLIPBOARD_IMAGE),
+    base64: z.string(),
+    mediaType: z.string(),
+    fileName: z.string(),
+  }),
+] as const;
+
+const RecordingMessages = [
+  commandOnly(MAIN_VIEW_COMMANDS.START_RECORDING),
+  commandOnly(MAIN_VIEW_COMMANDS.STOP_RECORDING),
+] as const;
+
+const ApiKeyMessages = [
+  commandOnly(MAIN_VIEW_COMMANDS.OPEN_SET_API_KEY),
+  commandOnly(MAIN_VIEW_COMMANDS.OPEN_API_KEY_GUIDE),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.OPEN_SET_PROVIDER_API_KEY),
+    provider: z.string().min(1).optional(),
+  }),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.OPEN_PROVIDER_API_KEY_URL),
+    provider: z.string().min(1).optional(),
+  }),
+] as const;
+
+const BannerMessages = [
+  commandOnly(MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER),
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER),
+  commandOnly(MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER),
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER),
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER),
+  commandOnly(MAIN_VIEW_COMMANDS.RECHECK_DEPENDENCIES),
+  commandOnly(MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER),
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER),
+  commandOnly(MAIN_VIEW_COMMANDS.SIGN_IN_FROM_BANNER),
+  commandOnly(MAIN_VIEW_COMMANDS.DISMISS_LOGIN_BANNER),
+  commandOnly(MAIN_VIEW_COMMANDS.DISMISS_GETTING_STARTED_BANNER),
+  commandOnly(MAIN_VIEW_COMMANDS.DISMISS_ORCHESTRATOR_BANNER),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER),
+    missingTools: z.array(z.string()).optional(),
+  }),
+  z.object({
+    command: z.literal(MAIN_VIEW_COMMANDS.OPEN_INSTALL_GUIDE),
+    tool: z.string().min(1),
+  }),
+] as const;
+
+// ============================================================
+// Git diff message schemas (shared by the inbound union and the
+// extension's DiffManager, which parses each individually).
+// ============================================================
+
+export const RequestRecentCommitsMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS),
+  notifyWhenEmpty: z.boolean().nullish(),
+});
+export type RequestRecentCommitsMessage = z.infer<
+  typeof RequestRecentCommitsMessageSchema
+>;
+
+export const LatexdiffMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.LATEXDIFF),
+  inputFile: z.string(),
+  baseFile: z.string(),
+  editedFile: z.string(),
+});
+export type LatexdiffMessage = z.infer<typeof LatexdiffMessageSchema>;
+
+export const LatexdiffvcMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.LATEXDIFFVC),
+  inputFile: z.string(),
+  baseFile: z.string(),
+  commitHash: z.string(),
+});
+export type LatexdiffvcMessage = z.infer<typeof LatexdiffvcMessageSchema>;
+
+const latexdiffvcOperationFields = {
+  inputFile: z.string(),
+  baseFile: z.string(),
+  commitHash: z.string(),
+  clean: z.boolean().nullish(),
+};
+
+const PackLatexdiffvcMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.PACK_LATEXDIFFVC),
+  ...latexdiffvcOperationFields,
+});
+
+const CleanLatexdiffvcMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.CLEAN_LATEXDIFFVC),
+  ...latexdiffvcOperationFields,
+});
+
+export const LatexdiffvcOperationMessageSchema = z.discriminatedUnion(
+  'command',
+  [PackLatexdiffvcMessageSchema, CleanLatexdiffvcMessageSchema],
+);
+export type LatexdiffvcOperationMessage = z.infer<
+  typeof LatexdiffvcOperationMessageSchema
+>;
+
+const GitDiffMessages = [
+  RequestRecentCommitsMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.REFRESH_COMMITS),
+  LatexdiffMessageSchema,
+  LatexdiffvcMessageSchema,
+  PackLatexdiffvcMessageSchema,
+  CleanLatexdiffvcMessageSchema,
+] as const;
+
+const singleOperationFields = {
+  inputFile: z.string(),
+  agent: z.string(),
+  model: z.string(),
+};
+
+const PackSingleMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.PACK_SINGLE),
+  ...singleOperationFields,
+});
+
+const CleanSingleMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.CLEAN_SINGLE),
+  ...singleOperationFields,
+});
+
+const PackMultipleMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.PACK_MULTIPLE),
+  ...singleOperationFields,
+  inputFiles: z.array(z.string()).optional(),
+});
+
+const CleanMultipleMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.CLEAN_MULTIPLE),
+  ...singleOperationFields,
+  inputFiles: z.array(z.string()).optional(),
+});
+
+const HousekeepingMessages = [
+  commandOnly(MAIN_VIEW_COMMANDS.CLEAN_OUTPUT),
+  commandOnly(MAIN_VIEW_COMMANDS.CLEAN_BUILD),
+  commandOnly(MAIN_VIEW_COMMANDS.INDENT_TEX),
+  PackSingleMessageSchema,
+  CleanSingleMessageSchema,
+  PackMultipleMessageSchema,
+  CleanMultipleMessageSchema,
+] as const;
+
+const NavigationMessages = [
+  commandOnly(MAIN_VIEW_COMMANDS.SHOW_AGENT_HISTORY),
+] as const;
+
+export const MainViewInboundMessageSchema = z.discriminatedUnion('command', [
+  ...CommonMessages,
+  ...SettingsMessages,
+  ...ExecutionMessages,
+  ...FileSelectionMessages,
+  ...FileSelectedMessages,
+  ...RequestFileMessages,
+  ...SetFilesMessages,
+  ...FileOperationMessages,
+  ...InstructionMessages,
+  ...RecordingMessages,
+  ...ApiKeyMessages,
+  ...BannerMessages,
+  ...GitDiffMessages,
+  ...HousekeepingMessages,
+  ...NavigationMessages,
+]);
+
+export type MainViewInboundMessage = z.infer<
+  typeof MainViewInboundMessageSchema
+>;
+
+export type MainViewInboundHandlerRegistry =
+  HandlerRegistry<MainViewInboundMessage>;
+
+export const dispatchMainViewInbound = createDispatcher(
+  MainViewInboundMessageSchema,
+);
