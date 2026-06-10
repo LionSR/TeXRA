@@ -39,7 +39,7 @@ import { registerCopyContent } from './copyContentStore';
 /** Build a tool-use section template. Empty label omits the label element. */
 export function buildToolUseSection(
   label: string,
-  content: TemplateResult,
+  content: TemplateResult | typeof nothing,
 ): TemplateResult {
   // prettier-ignore
   return html`<div class="tool-use-section"><div class="tool-use-subsection">${label ? html`<span class="tool-use-sublabel">${label}</span>` : nothing}${content}</div></div>`;
@@ -281,8 +281,8 @@ export function buildCodeBlock(
 export function buildFileLinkWithLines(
   filePath: string,
   options: { startLine?: number; endLine?: number } = {},
-): TemplateResult {
-  if (!filePath) return html``;
+): TemplateResult | typeof nothing {
+  if (!filePath) return nothing;
 
   const { startLine, endLine } = options;
   const fileName = getBasename(filePath) || filePath;
@@ -298,8 +298,10 @@ export function buildFileLinkWithLines(
 // ============================================================================
 
 /** Build a memory path display with database icon. Memory paths are virtual (/memories/...) and not directly openable in the editor. */
-export function buildMemoryPathDisplay(memoryPath: string): TemplateResult {
-  if (!memoryPath) return html``;
+export function buildMemoryPathDisplay(
+  memoryPath: string,
+): TemplateResult | typeof nothing {
+  if (!memoryPath) return nothing;
   const fileName = getBasename(memoryPath) || memoryPath;
   // prettier-ignore
   return html`<span class="memory-path"><wa-icon library="texra" name="database" aria-hidden="true"></wa-icon> ${fileName} <span class="file-source">(${memoryPath})</span></span>`;
@@ -310,8 +312,10 @@ export function buildMemoryPathDisplay(memoryPath: string): TemplateResult {
 // ============================================================================
 
 /** Build an executions path display with history icon. Execution paths are virtual (/executions/...) and not directly openable in the editor. */
-export function buildExecutionsPathDisplay(execPath: string): TemplateResult {
-  if (!execPath) return html``;
+export function buildExecutionsPathDisplay(
+  execPath: string,
+): TemplateResult | typeof nothing {
+  if (!execPath) return nothing;
   // prettier-ignore
   return html`<span class="memory-path"><wa-icon library="texra" name="history" aria-hidden="true"></wa-icon> ${execPath}</span>`;
 }

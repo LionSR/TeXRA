@@ -55,7 +55,7 @@ export const logEntryStyles = css`
     display: inline-flex;
     align-items: center;
     gap: var(--wa-space-3xs);
-    min-height: 24px;
+    min-height: var(--height-control);
     padding: 0 var(--wa-space-xs);
     border: var(--border-thin) solid var(--wa-color-surface-border);
     border-radius: var(--border-radius-small);
@@ -67,13 +67,13 @@ export const logEntryStyles = css`
   }
 
   .log-reveal-button:hover {
-    color: var(--color-text);
+    color: var(--wa-color-text-normal);
     border-color: var(--color-border);
   }
 
   .log-reveal-button:focus-visible {
     outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 2px;
+    outline-offset: 1px;
   }
 
   .render-error-icon {
@@ -199,7 +199,11 @@ export const logEntryStyles = css`
   .banner-details:focus-within .banner-content-copy,
   .banner-content-copy:focus-visible {
     opacity: var(--opacity-full);
+  }
+
+  .banner-content-copy:focus-visible {
     outline: var(--border-thin) solid var(--wa-color-focus);
+    outline-offset: 1px;
   }
 
   .banner-content-copy.copy-success {
