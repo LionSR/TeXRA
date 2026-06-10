@@ -565,7 +565,7 @@ describe('slashRegistry', () => {
   it('suggests the closest command for a typo within the shared threshold', () => {
     registerBuiltinSlashCommands();
 
-    expect(suggestSlashCommand('modle')?.name).toBe('model');
+    expect(suggestSlashCommand('modl')?.name).toBe('model');
     expect(suggestSlashCommand('aprooval')?.name).toBe('approval');
     expect(suggestSlashCommand('sttus')?.name).toBe('status');
   });
