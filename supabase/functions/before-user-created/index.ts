@@ -104,8 +104,8 @@ Deno.serve(async (req) => {
   let payload: HookRequest;
   if (webhook) {
     try {
-      // verify() checks the v1 HMAC signature (all rotation candidates) and
-      // timestamp tolerance, then returns the parsed JSON payload.
+      // verify() enforces the spec's timestamp tolerance (anti-replay) and
+      // returns the parsed JSON payload.
       payload = webhook.verify(rawBody, {
         'webhook-id': req.headers.get('webhook-id') ?? '',
         'webhook-timestamp': req.headers.get('webhook-timestamp') ?? '',

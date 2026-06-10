@@ -64,7 +64,7 @@
 
 import { Hono } from '@hono/hono';
 import { cors } from '@hono/hono/cors';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { authenticateJwt } from '../_shared/auth.ts';
 import {
   TIER_CONFIG,
@@ -326,8 +326,7 @@ function getCurrentMonthStartUTC(): string {
  * This is acceptable for soft limits. See migration for mitigation options.
  */
 async function checkSpendingLimit(
-  supabaseUrl: string,
-  serviceRoleKey: string,
+  adminClient: SupabaseClient,
   userId: string,
   tier: string,
 ): Promise<{
@@ -339,9 +338,6 @@ async function checkSpendingLimit(
 }> {
   const limit = getSpendingLimit(tier);
   const monthStart = getCurrentMonthStartUTC();
-
-  // Use service role to bypass RLS for admin query
-  const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
   // Call database function for efficient server-side aggregation
   // Aggregates relay usage server-side, summing workflow streams and
@@ -480,8 +476,7 @@ app.get('/tier-config', async (c) => {
           let spendingStatus = null;
           if (serviceRoleKey) {
             const spending = await checkSpendingLimit(
-              supabaseUrl,
-              serviceRoleKey,
+              createClient(supabaseUrl, serviceRoleKey),
               user.id,
               profile.tier || FREE_TIER,
             );
@@ -533,9 +528,8 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
   // 3. Get Supabase config
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 
-  if (!supabaseUrl || !supabaseAnonKey) {
+  if (!supabaseUrl || !Deno.env.get('SUPABASE_ANON_KEY')) {
     console.error('Missing required Supabase environment variables');
     return jsonError('Server configuration error', 500);
   }
@@ -587,13 +581,11 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
   // 5.5. Check monthly spending limit
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (serviceRoleKey) {
-    const spending = await checkSpendingLimit(
-      supabaseUrl,
-      serviceRoleKey,
-      user.id,
-      userTier,
-    );
+  const adminClient = serviceRoleKey
+    ? createClient(supabaseUrl, serviceRoleKey)
+    : null;
+  if (adminClient) {
+    const spending = await checkSpendingLimit(adminClient, user.id, userTier);
 
     if (!spending.allowed) {
       if (spending.spendCheckFailed) {
@@ -746,8 +738,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   // request validation so rejected requests do not consume active slots.
   let releaseRelaySlot: (() => Promise<void>) | null = null;
   let refreshRelaySlot: (() => Promise<void>) | null = null;
-  if (serviceRoleKey) {
-    const adminClient = createClient(supabaseUrl, serviceRoleKey);
+  if (adminClient) {
     try {
       const slot = await acquireRelayRequestSlot(
         adminClient,

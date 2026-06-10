@@ -21,6 +21,9 @@ export interface AuthenticatedUser {
   client: SupabaseClient;
 }
 
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+
 /**
  * Validate a user JWT and return the user plus a user-scoped client.
  * Returns null when the JWT is missing, invalid, or expired (callers should
@@ -30,8 +33,6 @@ export interface AuthenticatedUser {
 export async function authenticateJwt(
   jwt: string | null,
 ): Promise<AuthenticatedUser | null> {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
   if (!jwt || !supabaseUrl || !supabaseAnonKey) return null;
 
   const client = createClient(supabaseUrl, supabaseAnonKey, {

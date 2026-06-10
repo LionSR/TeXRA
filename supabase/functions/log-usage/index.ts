@@ -138,10 +138,11 @@ Deno.serve(async (req: Request) => {
     const batch = batchResult.data;
 
     // 5. Validate and transform entries
-    const validEntries = batch.entries
-      .map((entry) => UsageLogEntrySchema.safeParse(entry))
-      .filter((result) => result.success)
-      .map((result) => result.data);
+    const validEntries: z.infer<typeof UsageLogEntrySchema>[] = [];
+    for (const entry of batch.entries) {
+      const result = UsageLogEntrySchema.safeParse(entry);
+      if (result.success) validEntries.push(result.data);
+    }
 
     if (validEntries.length === 0) {
       return jsonResponse(
