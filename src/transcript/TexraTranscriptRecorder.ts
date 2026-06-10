@@ -12,7 +12,7 @@
  *   - subsequent chunks are buffered + flushed on an interval
  *   - finalize flushes any pending chunks immediately
  */
-import { randomUUID } from 'node:crypto';
+import { nanoid } from 'nanoid';
 
 import type {
   AgentEvent,
@@ -140,7 +140,7 @@ export function attachTranscriptRecorder(
     if (!shouldEmit(event.level, messageType)) return;
 
     store.append(streamId, {
-      id: randomUUID(),
+      id: nanoid(),
       type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: event.level,
       timestamp: Date.now(),
@@ -219,7 +219,7 @@ export function attachTranscriptRecorder(
 
       case 'usage':
         store.append(streamId, {
-          id: randomUUID(),
+          id: nanoid(),
           type: STREAM_LOG_ENTRY_TYPES.LOG,
           level: 'info',
           timestamp: Date.now(),
@@ -235,7 +235,7 @@ export function attachTranscriptRecorder(
         const utilizationPercent =
           (event.inputTokens / event.contextWindow) * 100;
         store.append(streamId, {
-          id: randomUUID(),
+          id: nanoid(),
           type: STREAM_LOG_ENTRY_TYPES.LOG,
           level: 'info',
           timestamp: Date.now(),
@@ -301,7 +301,7 @@ export function attachTranscriptRecorder(
           const entries = payload?.entries ?? [];
           const okCount = entries.filter((e) => e?.ok).length;
           store.append(streamId, {
-            id: randomUUID(),
+            id: nanoid(),
             type: STREAM_LOG_ENTRY_TYPES.LOG,
             level: 'info',
             timestamp: Date.now(),
@@ -314,7 +314,7 @@ export function attachTranscriptRecorder(
           return;
         }
         store.append(streamId, {
-          id: randomUUID(),
+          id: nanoid(),
           type: STREAM_LOG_ENTRY_TYPES.LOG,
           level: 'info',
           timestamp: Date.now(),

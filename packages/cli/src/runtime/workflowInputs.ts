@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { glob, hasMagic } from 'glob';
+import { nanoid } from 'nanoid';
 
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
@@ -120,7 +120,7 @@ async function materializeStdinWorkflowInput(options: {
   }
   const inputFile = path.join(
     options.tempDir,
-    `${STDIN_TEMP_PREFIX}${process.pid}-${randomUUID()}.tex`,
+    `${STDIN_TEMP_PREFIX}${process.pid}-${nanoid()}.tex`,
   );
   await fs.writeFile(inputFile, text, { encoding: 'utf8', flag: 'wx' });
   return inputFile;

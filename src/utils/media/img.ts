@@ -1,10 +1,10 @@
 // Standard library imports
-import * as crypto from 'node:crypto';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
 import { PDFDocument } from '@cantoo/pdf-lib';
+import { nanoid } from 'nanoid';
 import { fromPath } from 'pdf2pic';
 
 // Local imports - log
@@ -140,10 +140,7 @@ async function resizeImageIfNeeded(imagePath: string): Promise<string> {
   }
 
   const ext = path.extname(imagePath);
-  const tempPath = path.join(
-    os.tmpdir(),
-    `texra-resized-${crypto.randomUUID()}${ext}`,
-  );
+  const tempPath = path.join(os.tmpdir(), `texra-resized-${nanoid()}${ext}`);
 
   // ImageMagick v7+: magick input -resize ... output
   // GraphicsMagick: gm convert input -resize ... output

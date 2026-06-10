@@ -1,7 +1,8 @@
-import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+
+import { nanoid } from 'nanoid';
 
 import {
   type DiffSession,
@@ -88,7 +89,7 @@ export function createDesktopDiffHost(
       computeUserPatch(originalContent, proposedContent) ??
       `No textual changes for ${path.basename(proposed.filePath)}.\n`;
     const tempDir = await mkdtemp(path.join(tmpdir(), 'texra-desktop-diff-'));
-    const diffPath = path.join(tempDir, `${randomUUID()}.diff`);
+    const diffPath = path.join(tempDir, `${nanoid()}.diff`);
 
     await writeFile(diffPath, patch, 'utf8');
     await options.openPath(diffPath);

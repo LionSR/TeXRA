@@ -1,7 +1,8 @@
-import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+
+import { nanoid } from 'nanoid';
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { toErrorMessage } from '@common/errors';
@@ -71,7 +72,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
       throw new Error('Desktop tool edit approval controller is disposed.');
     }
 
-    const requestId = `desktop-approval-${randomUUID()}`;
+    const requestId = `desktop-approval-${nanoid()}`;
     const lineChanges = computeLineChangeSummary(
       request.originalContent,
       request.proposedContent,
@@ -276,7 +277,7 @@ class DesktopToolEditApprovalControllerImpl implements DesktopToolEditApprovalCo
     const patch =
       computeUserPatch(entry.originalContent, entry.proposedContent) ??
       `No textual changes for ${entry.request.path}.\n`;
-    const diffPath = path.join(entry.tempDir, `${randomUUID()}-changes.diff`);
+    const diffPath = path.join(entry.tempDir, `${nanoid()}-changes.diff`);
     await writeFile(diffPath, patch, 'utf8');
     entry.workspaceTempCleanup.push(() => rm(diffPath, { force: true }));
     await this.options.openPath(diffPath);
