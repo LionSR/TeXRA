@@ -153,6 +153,8 @@ async function mintGoTrueSession(
   authClient: SupabaseClient<any>,
   email: string,
 ): Promise<Session | null> {
+  // Supabase admin.generateLink returns a link/OTP payload for custom delivery;
+  // this flow consumes the token hash server-side instead of emailing the link.
   const { data: linkData, error: linkError } =
     await adminClient.auth.admin.generateLink({ type: 'magiclink', email });
 
@@ -166,7 +168,7 @@ async function mintGoTrueSession(
   }
 
   const { data, error } = await authClient.auth.verifyOtp({
-    type: 'email',
+    type: 'magiclink',
     token_hash: tokenHash,
   });
 
