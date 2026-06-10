@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
-- **Plans are now a single objective document** — a plan states what to achieve, the approach, and a verifiable stopping condition; step-by-step tracking lives solely in the agent's todo list instead of being duplicated in the plan. Updating a plan always asks for your approval again, and Approve & Run uses the document verbatim as the goal objective. Plans saved in the old step-list format are no longer displayed. The `texra.goal.costCapUsd` setting is removed — a goal is driven by its objective, not a budget — and when a goal auto-pauses after an error, the CLI now prints a notice instead of appearing to hang.
+- **Stronger Computer Scientist team** — the CS team now bundles the `coder` and `testEngineer` specialists, so its orchestrator can delegate implementing experiment code, fixing bugs in training and ablation scripts, and pinning results down with tests — work the team previously had no dedicated lane for despite its focus on experiments and reproducibility. The `research` agent also joins the roster for analytical derivations (convergence bounds, complexity analysis) with Wolfram-backed verification, matching the Physicist and Mathematician teams.
 
 ### CLI
 
@@ -32,6 +32,7 @@ All notable changes to this project will be documented in this file.
 
 #### Improvements
 
+- **Plans are now objective documents** — plans describe the goal, approach, and stopping condition; step tracking lives in todos. Old step-list plans are hidden, goal cost caps are removed, and auto-paused goals now print a CLI notice.
 - **Thinking indicator** — while the model is in its reasoning phase, the chat TUI now shows an animated `Thinking…` row in the conversation area instead of sitting silent. The phase is detected from provider stream signals where available, so it also works for models whose reasoning never streams any text (e.g. GPT-5 with reasoning summaries disabled).
 - **Honest history statuses** — runs that never reached a terminal state (e.g. the process was killed) now show `unknown` in `texra history` instead of being reported as `completed`, and interrupted chat sessions are checked for a resumable record like unfinished ones.
 - **Calmer transcript layout** — your messages now render as an inset band with a blank line above and below, tool rows sit directly under the prompt that triggered them, stray blank rows at startup and between turns are gone, and on narrow terminals the status bar shortens its segments (context usage degrades to a bare percentage) before dropping anything.
@@ -356,7 +357,7 @@ All notable changes to this project will be documented in this file.
 ### Features
 
 - **GPT-5.5 Pro** — OpenAI's GPT-5.5 Pro (`gpt55pro`) is now available in the model catalog as an opt-in choice for the hardest planning, long-horizon, and large-codebase tasks. It extends GPT-5.5 with a 1.05M-token context window and `xhigh` default reasoning effort. Premium pricing ($30/M input, $180/M output); available on premium plans — enable it from Settings → Models when GPT-5.5 isn't enough.
-- **Computer Scientist (ML) multi-agent preset** — a new built-in team preset tuned for empirical ML and CS work pairs a numerics agent for code-driven experiments with a search agent for literature and a review/criticize agent for methodology and baseline scrutiny.
+- **Computer Scientist multi-agent preset** — a new built-in team preset tuned for empirical computer science work pairs a numerics agent for code-driven experiments with a search agent for literature and a review/criticize agent for methodology and baseline scrutiny.
 - **Setup assistant can run terminal commands** — the setup wizard can now hand off sudo prompts and interactive installers to your VS Code terminal instead of stalling on them.
 
 ### Improvements

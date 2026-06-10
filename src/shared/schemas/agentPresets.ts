@@ -85,14 +85,17 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
   },
   {
     id: 'cs-ml',
-    name: 'Computer Scientist (ML)',
+    name: 'Computer Scientist',
     description:
-      'For ML/CS papers -- algorithm design, experiments and ablations, literature search, critical review, and reproducibility.',
+      'For CS papers -- algorithm design, code-driven experiments and ablations, tests for reproducibility, literature search, and critical review.',
     icon: 'codicon-symbol-method',
     workflowAgents: ['criticize', 'generic', 'devise', 'apply', 'polish'],
     toolUseAgents: [
       'orchestrator',
+      'research',
       'numerics',
+      'coder',
+      'testEngineer',
       'search',
       'review',
       'presenter',
