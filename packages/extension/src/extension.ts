@@ -34,6 +34,7 @@ import {
   setRuntimeExtensionId,
 } from '@auth/config';
 import { getAuthStatus } from '@auth/authCommands';
+import { AUTH_PROVIDER_ID } from '@auth/constants';
 import { tryResumeFromSnapshot } from '@commands/agent/resumeFromSnapshot';
 import { toErrorMessage } from '@common/errors';
 import { SIDEBAR_VIEWS, setActiveSidebarView } from '@common/webview';
@@ -57,6 +58,7 @@ import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
 import { initializeNativeToolEditApproval } from '@frontend/approval/nativeToolEditApproval';
 import { registerAgentEventListeners } from '@frontend/events/agentEventListeners';
+import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
 import * as leanVscodeIntegration from '@frontend/lean/VscodeIntegration';
 import { applyGitAuthorConfig } from '@frontend/git/gitAuthorSetup';
@@ -297,7 +299,7 @@ export async function activate(context: vscode.ExtensionContext) {
       const authProvider = new SupabaseAuthProvider(context);
       context.subscriptions.push(
         vscode.authentication.registerAuthenticationProvider(
-          'texra-supabase',
+          AUTH_PROVIDER_ID,
           'TeXRA Account',
           authProvider,
           { supportsMultipleAccounts: false },
@@ -563,12 +565,10 @@ export async function activate(context: vscode.ExtensionContext) {
   void safeRefreshApiKeyStatus();
   // Without these listeners the pill stayed on "Get Started" forever after
   // a Researcher Access sign-in or after the first API key was stored.
+  onTexraAuthSessionsChanged(context, () => {
+    void safeRefreshApiKeyStatus();
+  });
   context.subscriptions.push(
-    vscode.authentication.onDidChangeSessions((e) => {
-      if (e.provider.id === 'texra-supabase') {
-        void safeRefreshApiKeyStatus();
-      }
-    }),
     getServerSideKeyService().onDidChangeModelAccess(() => {
       void safeRefreshApiKeyStatus();
     }),

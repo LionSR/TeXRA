@@ -30,8 +30,8 @@ export function cleanupApprovalsForStream(streamId: StreamTabId): void {
   toolEditApprovalController.rejectPendingForStream(streamId);
   bashApprovalController.rejectPendingForStream(streamId);
   _rejectPendingUserQuestionsForStream(streamId);
-  toolEditApprovalController.clearBypassForStream(streamId);
-  bashApprovalController.clearBypassForStream(streamId);
+  toolEditApprovalController.bypass.clearForStream(streamId);
+  bashApprovalController.bypass.clearForStream(streamId);
   proposalApprovalState.clearForStream(streamId);
   runCoordinatorBridge.cleanupRequestsForStream(streamId);
 }
@@ -44,8 +44,8 @@ export function cleanupAllApprovals(): void {
   toolEditApprovalController.rejectAllPending();
   bashApprovalController.rejectAllPending();
   _rejectAllPendingUserQuestions();
-  toolEditApprovalController.clearAllBypass();
-  bashApprovalController.clearAllBypass();
+  toolEditApprovalController.bypass.clearAll();
+  bashApprovalController.bypass.clearAll();
   proposalApprovalState.clearAll();
   runCoordinatorBridge.cleanupAllRequests();
 }

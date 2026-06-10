@@ -2,13 +2,16 @@
 import * as vscode from 'vscode';
 
 // Local imports - common webview
-import { BaseWebviewProvider } from '@common/webview';
+import {
+  BaseWebviewProvider,
+  BundledViewContentProvider,
+} from '@common/webview';
+import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsTab } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - settings view components
 import type { AgentCategory } from '@shared/schemas/agent';
-import { SettingsViewContentProvider } from './SettingsViewContentProvider';
 import { SettingsViewMessageHandler } from './SettingsViewMessageHandler';
 
 export class SettingsViewProvider
@@ -16,22 +19,28 @@ export class SettingsViewProvider
   implements vscode.WebviewViewProvider
 {
   public static readonly viewType = 'texra.settingsView';
-  protected contentProvider: SettingsViewContentProvider;
+  protected contentProvider: BundledViewContentProvider;
   protected messageHandler: SettingsViewMessageHandler;
 
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
-    this.contentProvider = new SettingsViewContentProvider(context);
+    this.contentProvider = new BundledViewContentProvider(
+      context,
+      'SettingsView',
+      {
+        dist: 'settingsView',
+        bundleKey: 'settingsBundleUri',
+        styleKey: 'settingsStyleUri',
+      },
+    );
     this.messageHandler = new SettingsViewMessageHandler(context);
 
     // Listen for auth state changes to refresh all data
-    context.subscriptions.push(
-      vscode.authentication.onDidChangeSessions((e) => {
-        if (e.provider.id === 'texra-supabase' && this._view) {
-          void this.messageHandler.sendAllData(this._view.webview);
-        }
-      }),
-    );
+    onTexraAuthSessionsChanged(context, () => {
+      if (this._view) {
+        void this.messageHandler.sendAllData(this._view.webview);
+      }
+    });
   }
 
   protected override getViewPath(): string {

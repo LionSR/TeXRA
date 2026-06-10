@@ -3,7 +3,6 @@
 // Third-party imports
 import { html, nothing, type PropertyValues, type TemplateResult } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
@@ -111,83 +110,67 @@ export class ProposalRequestPanel extends BaseFeedbackPanel {
     const hasModelOptions = modelOptions.length > 0;
     const hasAgentOptions = agentOptions.length > 0;
 
-    return html`
-      <div
-        class=${classMap({
-          'workflow-proposal': true,
-          'workflow-proposal--feedback-active': this.showFeedback,
-        })}
-      >
-        <div class="workflow-proposal__details">
-          <div class="workflow-proposal__header-row">
-            <wa-badge
-              variant=${isWorkflow ? 'neutral' : 'brand'}
-              appearance="filled"
-            >
-              ${categoryLabel}
-            </wa-badge>
-            ${hasAgentOptions
-              ? html`
-                  <div class="workflow-proposal__agent-select">
-                    <wa-icon
-                      library="texra"
-                      name="sparkle"
-                      aria-hidden="true"
-                    ></wa-icon>
-                    <wa-select
-                      class="proposal-agent-dropdown"
-                      .value=${currentAgent}
-                      @change=${this.handleAgentSelectChange}
-                    >
-                      ${renderAgentOptions(agentOptions, currentAgent)}
-                    </wa-select>
-                  </div>
-                `
-              : html`<span class="workflow-proposal__agent"
-                  >${data.agent}</span
-                >`}
-            ${hasModelOptions
-              ? html`
-                  <div class="workflow-proposal__model-select">
-                    <wa-icon
-                      library="texra"
-                      name="robot"
-                      aria-hidden="true"
-                    ></wa-icon>
-                    <wa-select
-                      class="proposal-model-dropdown"
-                      .value=${currentModel}
-                      @change=${this.handleSelectChange}
-                    >
-                      ${renderModelOptions(modelOptions, currentModel)}
-                    </wa-select>
-                  </div>
-                `
-              : html`<span class="workflow-proposal__model"
-                  >${data.model}</span
-                >`}
-          </div>
-          ${this.renderInstruction(data.instruction)}
-          ${isWorkflow ? this.renderExtractFlags(data) : nothing}
-          ${this.renderProposalFiles(data)}
+    return this.renderRequestShell({
+      prefix: 'workflow-proposal',
+      details: html`
+        <div class="workflow-proposal__header-row">
+          <wa-badge
+            variant=${isWorkflow ? 'neutral' : 'brand'}
+            appearance="filled"
+          >
+            ${categoryLabel}
+          </wa-badge>
+          ${hasAgentOptions
+            ? html`
+                <div class="workflow-proposal__agent-select">
+                  <wa-icon
+                    library="texra"
+                    name="sparkle"
+                    aria-hidden="true"
+                  ></wa-icon>
+                  <wa-select
+                    class="proposal-agent-dropdown"
+                    .value=${currentAgent}
+                    @change=${this.handleAgentSelectChange}
+                  >
+                    ${renderAgentOptions(agentOptions, currentAgent)}
+                  </wa-select>
+                </div>
+              `
+            : html`<span class="workflow-proposal__agent">${data.agent}</span>`}
+          ${hasModelOptions
+            ? html`
+                <div class="workflow-proposal__model-select">
+                  <wa-icon
+                    library="texra"
+                    name="robot"
+                    aria-hidden="true"
+                  ></wa-icon>
+                  <wa-select
+                    class="proposal-model-dropdown"
+                    .value=${currentModel}
+                    @change=${this.handleSelectChange}
+                  >
+                    ${renderModelOptions(modelOptions, currentModel)}
+                  </wa-select>
+                </div>
+              `
+            : html`<span class="workflow-proposal__model">${data.model}</span>`}
         </div>
-        <div class="workflow-proposal__actions">
-          ${this.renderApproveButton('Approve (y)')}
-          ${this.renderRejectButton('Reject (n)')}
-          ${renderLabeledActionButton({
-            icon: 'reply',
-            text: 'Setup',
-            title: 'Setup (s)',
-            action: 'setup',
-            onClick: () => this.emitAction('setup'),
-          })}
-        </div>
-        ${this.renderFeedbackSection(
-          'workflow-proposal__feedback',
-          'workflow-proposal__feedback-input',
-        )}
-      </div>
-    `;
+        ${this.renderInstruction(data.instruction)}
+        ${isWorkflow ? this.renderExtractFlags(data) : nothing}
+        ${this.renderProposalFiles(data)}
+      `,
+      approveTitle: 'Approve (y)',
+      rejectTitle: 'Reject (n)',
+      trailingActions: renderLabeledActionButton({
+        icon: 'reply',
+        text: 'Setup',
+        title: 'Setup (s)',
+        action: 'setup',
+        onClick: () => this.emitAction('setup'),
+      }),
+    });
   }
 
   // ===========================================================================
