@@ -17,6 +17,54 @@ export const sampleProjectCommands = {
   createSampleProject: 'texra.createSampleProject',
 };
 
+/**
+ * No-workspace variant for the welcome view: ask where to put the sample,
+ * copy it there, and open the folder (which reloads the window into full
+ * activation, so the regular onboarding takes over). Must not touch
+ * `platform()`/`WorkspaceFS` — the no-workspace activation path returns
+ * before `initPlatform()` runs.
+ */
+export async function createSampleProjectWithoutWorkspace(
+  extensionPath: string,
+): Promise<void> {
+  try {
+    const picked = await vscode.window.showOpenDialog({
+      canSelectFiles: false,
+      canSelectFolders: true,
+      canSelectMany: false,
+      openLabel: 'Create sample project here',
+      title: 'Choose where to create the TeXRA sample project',
+    });
+    const parent = picked?.[0];
+    if (!parent) {
+      return;
+    }
+
+    const dest = path.join(parent.fsPath, 'texra-sample');
+    if (await fsExtra.pathExists(dest)) {
+      void vscode.window.showInformationMessage(
+        'A texra-sample folder already exists there — opening it.',
+      );
+    } else {
+      await fsExtra.copy(
+        path.join(extensionPath, 'resources', 'examples'),
+        dest,
+      );
+    }
+    await vscode.commands.executeCommand(
+      'vscode.openFolder',
+      vscode.Uri.file(dest),
+      { forceNewWindow: false },
+    );
+  } catch (err) {
+    await showLoggedErrorMessage(
+      CHANNEL,
+      'Failed to create sample project',
+      err,
+    );
+  }
+}
+
 export async function createSampleProject(
   extensionPath: string,
 ): Promise<void> {
