@@ -7,7 +7,6 @@ import {
   RUN_OUTCOME,
   STREAM_STATUS,
   STREAM_STATUS_TRAITS,
-  streamStatusesWithTrait,
   type ExecutionStatus,
   type RunOutcome,
   type StreamStatus,
@@ -97,14 +96,6 @@ export function projectRunOutcome(outcome: RunOutcome): RunOutcomeProjection {
 // Membership lives in the declarative trait table in `@shared/schemas`
 // (`STREAM_STATUS_TRAITS`); these are thin readers over it. Do not declare
 // new status lists by hand — add a trait column instead.
-
-/**
- * Terminal statuses — stream execution has ended and won't resume
- * automatically. Used by status bar to determine running vs idle state.
- */
-export const TERMINAL_STATUSES: readonly StreamStatus[] = [
-  ...streamStatusesWithTrait('terminal'),
-];
 
 /** Check if a status indicates active execution (running or resuming). */
 export function isActiveStatus(status: StreamStatus | undefined): boolean {

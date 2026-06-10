@@ -3,7 +3,11 @@ import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
 import { runAgent } from '@agent/runtime/runAgent';
 
 import { projectRunOutcome } from '@common/constants/streamStatus';
-import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
+import {
+  EXECUTION_STATUS,
+  ExecutionStatusSchema,
+  type ExecutionStatus,
+} from '@shared/schemas';
 
 import { hasCliApprovalDenied } from './approvalAdapter';
 import { CliExitCode } from './exitCodes';
@@ -31,11 +35,8 @@ export type CliRunResult = ExecuteAgentResult extends infer T
 function isExecutionStatus(
   value: string | undefined,
 ): value is ExecutionStatus {
-  return (
-    value === EXECUTION_STATUS.COMPLETED ||
-    value === EXECUTION_STATUS.ERROR ||
-    value === EXECUTION_STATUS.INTERRUPTED
-  );
+  // Schema is the source of truth — no hand-maintained value list.
+  return ExecutionStatusSchema.safeParse(value).success;
 }
 
 export type CliToolUseRunResult = Extract<

@@ -4,13 +4,11 @@
 import { type AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { isAbortError } from '@common/errors';
-import {
-  EXECUTION_STATUS,
-  type ExecutionId,
-  type ExecutionStatus,
-  type StorageKey,
-  type StreamTabId,
-  type TokenUsageStats,
+import type {
+  ExecutionId,
+  StorageKey,
+  StreamTabId,
+  TokenUsageStats,
 } from '@shared/schemas';
 import { formatDuration } from '@utils/core';
 
@@ -24,16 +22,6 @@ export function isCleanInterruption(
   session: { isInterrupted(): boolean },
 ): boolean {
   return signal.aborted || session.isInterrupted() || isAbortError(err);
-}
-
-export function agentCliLoopTerminalStatus(state: {
-  readonly interrupted: boolean;
-  readonly sawTurnFailure: boolean;
-}): ExecutionStatus {
-  if (state.sawTurnFailure) return EXECUTION_STATUS.ERROR;
-  return state.interrupted
-    ? EXECUTION_STATUS.INTERRUPTED
-    : EXECUTION_STATUS.COMPLETED;
 }
 
 /**

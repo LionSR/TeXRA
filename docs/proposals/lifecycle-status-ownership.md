@@ -83,7 +83,14 @@ The mappings are data, not code — four tables now declare the whole status alg
 
 Side effect worth keeping: reads go through `projectRunOutcome`, which fails with a named error on an out-of-vocabulary value. Stale test mocks that still returned the old `status` field had silently projected `undefined → 'stopped'` under the ternary form; now a missing outcome is a loud failure at the seam, not a quiet success status (the `Record<RunOutcome, …>` key type keeps the table itself compile-time exhaustive).
 
-Remaining candidates the tables make arguable (not done): fold the CLI `terminalStatusExitCode` and `formatRunProgressStatus` mappings into outcome-keyed columns (blocked on the approval-denied special case and on STOPPED+terminalStatus being a two-key lookup); retire `TaskGroupStatus` into a trait once group rendering reads the trait table.
+**Second wave (retired the same day, once the tables existed):**
+
+- `TERMINAL_STATUSES` array export — zero consumers once the predicates read the trait table directly; deleted.
+- `agentCliLoopTerminalStatus` (`agentCliShared.ts`) and the session loop's `sawTurnFailure ? 'error' : 'stopped'` stage ternary — a **third** hand-rolled facts→status derivation hiding in the codex/claude CLI session loop; both now one `deriveRunOutcome` + `projectRunOutcome` call. (Its `childStream.finalize(ERROR | READY)` is deliberately _not_ a projection — READY clears the child tab and has no outcome equivalent; recorded in a comment.)
+- `isExecutionStatus` (CLI) — hand-maintained value list replaced by `ExecutionStatusSchema.safeParse` (schema as the single source of values, per the repo's Zod-first rule).
+- One algebra vitest (`test-kernel/common/RunOutcomeAlgebra.vitest.ts`) now pins the derivation priority, every projection row, the loud out-of-vocabulary failure, the trait-derived memberships, and the two oddball rows — replacing the per-helper pins (`CodexLoopStatus.vitest.ts` deleted).
+
+Remaining candidates the tables make arguable (not done): fold the CLI `terminalStatusExitCode` and `formatRunProgressStatus` mappings into outcome-keyed columns (blocked on the approval-denied special case and on STOPPED+terminalStatus being a two-key lookup); retire `TaskGroupStatus` into a trait once group rendering reads the trait table; decide whether the TUI subagent list's red `'stopped'` coloring (`childExecutionStatus.ts`, test-pinned) should follow the cancelled-is-neutral ruling. The structural consolidations stay gated as sequenced: Step 2 (single error carrier — would delete `ToolUseFlowError`/`getToolUseFlowErrorResult` and the `executeAgent` rewrap) on T2-2, Step 3 (lifecycle owns interrupt registration / coordinator cleanup / record retention) on 7d PR 2.
 
 ---
 
