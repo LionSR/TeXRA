@@ -1,9 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   installTerminalRestoreOnExit,
+  supportsTerminalJobControl,
   tuiInputModeRestoreSequence,
 } from '@cli/chat/tui/terminalCleanup';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('tuiInputModeRestoreSequence', () => {
   it('re-arms bracketed paste and cursor hide after a SIGCONT resume', () => {
@@ -19,20 +24,33 @@ describe('tuiInputModeRestoreSequence', () => {
   });
 });
 
+describe('supportsTerminalJobControl', () => {
+  it('disables Ctrl-Z suspend on Windows where SIGSTOP is unsupported', () => {
+    expect(supportsTerminalJobControl('win32')).toBe(false);
+    expect(supportsTerminalJobControl('darwin')).toBe(true);
+    expect(supportsTerminalJobControl('linux')).toBe(true);
+  });
+});
+
 describe('installTerminalRestoreOnExit', () => {
   it('registers a process exit listener and removes it on dispose', () => {
-    const before = process.listenerCount('exit');
+    const on = vi.spyOn(process, 'on').mockReturnThis();
+    const off = vi.spyOn(process, 'off').mockReturnThis();
+
     const dispose = installTerminalRestoreOnExit();
-    expect(process.listenerCount('exit')).toBe(before + 1);
+    const listener = on.mock.calls[0]?.[1];
+
+    expect(on).toHaveBeenCalledWith('exit', expect.any(Function));
     dispose();
-    expect(process.listenerCount('exit')).toBe(before);
+    expect(off).toHaveBeenCalledWith('exit', listener);
   });
 
   it('tolerates double dispose', () => {
-    const before = process.listenerCount('exit');
+    vi.spyOn(process, 'on').mockReturnThis();
+    const off = vi.spyOn(process, 'off').mockReturnThis();
     const dispose = installTerminalRestoreOnExit();
     dispose();
     dispose();
-    expect(process.listenerCount('exit')).toBe(before);
+    expect(off).toHaveBeenCalledTimes(2);
   });
 });

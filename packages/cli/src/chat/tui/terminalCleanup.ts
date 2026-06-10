@@ -20,6 +20,9 @@ const CLEAR_ITERM_PROGRESS = '\x1b]9;4;0\x07';
 // Ink's own flag table and must match the `flags` runChatTui passes to
 // `render()`; bracketed paste is re-enabled unconditionally because Ink's
 // `usePaste` enables it unconditionally too — this only restores Ink's state.
+// Mouse modes are reset defensively above, but not re-armed because this TUI
+// does not enable mouse input. Add them here only if a future mouse path turns
+// them on during normal render.
 const KITTY_PUSH_DISAMBIGUATE = `\x1b[>${kittyFlags.disambiguateEscapeCodes}u`;
 const REARM_INPUT_MODES = '\x1b[?2004h\x1b[?25l';
 // Clear visible screen + erase scrollback + home cursor. Required by
@@ -30,6 +33,12 @@ const CLEAR_VISIBLE_SCREEN = '\x1b[2J\x1b[H';
 
 export interface CleanupTerminalModesOptions {
   readonly clearItermProgress?: boolean;
+}
+
+export function supportsTerminalJobControl(
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  return platform !== 'win32';
 }
 
 export function cleanupTerminalModes(

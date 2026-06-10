@@ -146,6 +146,7 @@ import {
   clearTerminalScrollback,
   installTerminalRestoreOnExit,
   restoreTuiInputModes,
+  supportsTerminalJobControl,
 } from './terminalCleanup';
 import {
   transcriptViewportRepaintOptions,
@@ -1602,6 +1603,7 @@ export async function runChat(
 
   let pendingExitTimer: ReturnType<typeof setTimeout> | undefined;
   let exitArmed = false;
+  const terminalJobControlSupported = supportsTerminalJobControl();
   // Set once a signal exit (exitNow) starts: its ink.unmount() resolves
   // waitUntilExit and re-enters the post-waitUntilExit finally, so the finally
   // guards on this to avoid draining persistence / printing the resume hint a
@@ -1618,8 +1620,10 @@ export async function runChat(
     process.off('SIGINT', handleSigint);
     process.off('SIGTERM', handleSigterm);
     process.off('SIGHUP', handleSighup);
-    process.off('SIGTSTP', handleSigtstp);
-    process.off('SIGCONT', handleSigcont);
+    if (terminalJobControlSupported) {
+      process.off('SIGTSTP', handleSigtstp);
+      process.off('SIGCONT', handleSigcont);
+    }
   };
   // Persist the reopen hint to native scrollback: the main session plus each
   // resumable tool-use subagent, so any route can be continued by its own id.
@@ -1728,6 +1732,7 @@ export async function runChat(
   // stop with SIGSTOP — this handler replaced the default stop action, so
   // re-raising SIGTSTP would just recurse.
   const handleSigtstp = (): void => {
+    if (!terminalJobControlSupported) return;
     cleanupTerminalModes({ clearItermProgress });
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
     process.kill(process.pid, 'SIGSTOP');
@@ -1750,8 +1755,10 @@ export async function runChat(
   process.on('SIGINT', handleSigint);
   process.on('SIGTERM', handleSigterm);
   process.on('SIGHUP', handleSighup);
-  process.on('SIGTSTP', handleSigtstp);
-  process.on('SIGCONT', handleSigcont);
+  if (terminalJobControlSupported) {
+    process.on('SIGTSTP', handleSigtstp);
+    process.on('SIGCONT', handleSigcont);
+  }
 
   // Interactive resume: kick off the continued tool-use run now that Ink is
   // mounted (so the rehydrated transcript + streamed continuation render) and
