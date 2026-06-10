@@ -44,6 +44,12 @@ logger.initialize(CHANNEL);
 
 const DEFAULT_LATEXDIFF_TIMEOUT_MS = LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs;
 
+function hasDocumentEnvironment(content: string): boolean {
+  return (
+    content.includes('\\begin{document}') && content.includes('\\end{document}')
+  );
+}
+
 export class LaTeXdiffService {
   private readonly fileProcessor: DiffFileProcessor;
   private readonly commandExecutor: DiffCommandExecutor;
@@ -101,20 +107,21 @@ export class LaTeXdiffService {
         return { success: false, message: 'Input file is empty or undefined' };
       }
 
-      const [inputExists, editedExists] = await Promise.all([
-        flexibleFS.exists(inputLocation),
-        flexibleFS.exists(editedLocation),
-      ]);
-      if (!inputExists || !editedExists) {
+      // Direct callers use one read pass for both existence and document
+      // structure validation. Round-specific wrappers keep their earlier
+      // exists checks so they can report round-specific error messages.
+      let contents: string[];
+      try {
+        contents = await Promise.all([
+          flexibleFS.read(inputLocation),
+          flexibleFS.read(editedLocation),
+        ]);
+      } catch {
         const message = `One or both files do not exist. Input: ${inputFile}, Edited: ${editedFile}`;
         logger.warn(this.channel, message);
         return { success: false, message };
       }
-
-      // Validate document structure
-      if (
-        !(await this.validateDocumentStructure(inputLocation, editedLocation))
-      ) {
+      if (!contents.every(hasDocumentEnvironment)) {
         return {
           success: false,
           message: 'Files missing document environment',
@@ -365,16 +372,10 @@ export class LaTeXdiffService {
   private async validateDocumentStructure(
     ...files: FileLocation[]
   ): Promise<boolean> {
-    for (const file of files) {
-      const content = await flexibleFS.read(file);
-      if (
-        !content.includes('\\begin{document}') ||
-        !content.includes('\\end{document}')
-      ) {
-        return false;
-      }
-    }
-    return true;
+    const contents = await Promise.all(
+      files.map((file) => flexibleFS.read(file)),
+    );
+    return contents.every(hasDocumentEnvironment);
   }
 
   private async getGitRoot(cwd: string): Promise<string | null> {

@@ -56,17 +56,12 @@ export interface ReplacementEngine {
 class ReplacementEngineImpl implements ReplacementEngine {
   /**
    * Apply all configured non-regex replacement rules.
-   * Accepts optional pre-fetched config to avoid redundant getConfig() calls
-   * when called multiple times (e.g. from applyAll).
    */
-  applyNonRegex(
-    text: string,
-    preloaded?: { replacements: ReplacementCategory; wrapCritique: boolean },
-  ): string {
-    const replacements = preloaded?.replacements ?? getAllReplacements();
-    const wrapCritique = preloaded?.wrapCritique ?? shouldWrapCritiqueInAlign();
-    const processed = applyReplacements(text, replacements).trim();
-    return wrapCritique ? wrapCritiqueInAlign(processed) : processed;
+  applyNonRegex(text: string): string {
+    const processed = applyReplacements(text, getAllReplacements()).trim();
+    return shouldWrapCritiqueInAlign()
+      ? wrapCritiqueInAlign(processed)
+      : processed;
   }
 
   /**
@@ -81,19 +76,22 @@ class ReplacementEngineImpl implements ReplacementEngine {
    * Non-regex replacements run before and after regex replacements to fix
    * artifacts they may introduce.
    *
-   * Config values are read once and reused across both non-regex passes
-   * to avoid redundant getConfig() calls (~7 → 3 per invocation).
+   * Config values are read once and reused across all passes. Whole-document
+   * cleanup runs once at the end instead of after each intermediate pass.
    */
   applyAll(text: string): string {
-    // Snapshot config-derived data once for both non-regex passes.
-    const preloaded = {
-      replacements: getAllReplacements(),
-      wrapCritique: shouldWrapCritiqueInAlign(),
-    };
+    const replacements = getAllReplacements();
+    const wrapCritique = shouldWrapCritiqueInAlign();
 
-    const afterNonRegex = this.applyNonRegex(text, preloaded);
-    const afterRegex = this.applyRegex(afterNonRegex);
-    return this.applyNonRegex(afterRegex, preloaded);
+    let result = applyReplacements(text, replacements, {
+      cleanupPasses: false,
+    }).trim();
+    if (wrapCritique) result = wrapCritiqueInAlign(result);
+    result = applyReplacements(result, getAllReplacementsRegex(), {
+      cleanupPasses: false,
+    }).trim();
+    result = applyReplacements(result, replacements).trim();
+    return wrapCritique ? wrapCritiqueInAlign(result) : result;
   }
 }
 
@@ -205,6 +203,30 @@ export function getAllReplacementsRegex(): ReplacementCategory[] {
 }
 
 /**
+ * Cache compiled replacement regexes keyed by pattern and flags. The replacement
+ * engine runs several times per model response over mostly static rule sets, so
+ * compiling each pattern once removes repeated RegExp construction from the
+ * streaming hot path.
+ */
+const compiledRegexCache = new Map<string, RegExp>();
+const MAX_COMPILED_REGEX_CACHE = 1000;
+
+function getCompiledRegex(pattern: string, flags?: string): RegExp {
+  const key = `${flags ?? ''}\u0000${pattern}`;
+  let regex = compiledRegexCache.get(key);
+  if (regex) {
+    return regex;
+  }
+
+  regex = new RegExp(pattern, flags);
+  if (compiledRegexCache.size >= MAX_COMPILED_REGEX_CACHE) {
+    compiledRegexCache.clear();
+  }
+  compiledRegexCache.set(key, regex);
+  return regex;
+}
+
+/**
  * Apply replacements to text, handling both regex and non-regex patterns.
  */
 export function applyReplacements(
@@ -213,6 +235,8 @@ export function applyReplacements(
   options?: {
     /** Whether to apply Unicode-to-LaTeX within math environments (defaults to true) */
     processMathUnicode?: boolean;
+    /** Whether to run trailing whole-document cleanup passes (defaults to true). */
+    cleanupPasses?: boolean;
   },
 ): string {
   // Apply Unicode replacements in math environments unless disabled
@@ -227,7 +251,7 @@ export function applyReplacements(
     if (category.isRegex) {
       for (const [pattern, repl] of Object.entries(category.patterns)) {
         try {
-          const regex = new RegExp(pattern, category.flags);
+          const regex = getCompiledRegex(pattern, category.flags);
           result = result.replace(regex, repl as string);
         } catch (regexErr) {
           logger.error(
@@ -250,9 +274,11 @@ export function applyReplacements(
     }
   }
 
-  result = applyLatexQuotesFormatting(result);
-  result = fixLatexQuoteIssues(result);
-  result = escapeTextttUnderscores(result);
+  if (options?.cleanupPasses !== false) {
+    result = applyLatexQuotesFormatting(result);
+    result = fixLatexQuoteIssues(result);
+    result = escapeTextttUnderscores(result);
+  }
 
   return result;
 }

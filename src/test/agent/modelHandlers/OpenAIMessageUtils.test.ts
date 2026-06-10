@@ -47,6 +47,39 @@ describe('normalizeOpenAIMessageContent', () => {
     );
   });
 
+  it('does not share merged content array containers with input messages', () => {
+    const secondContent = [{ type: 'text', text: 'second' }];
+    const first = {
+      role: 'user',
+      content: '',
+    };
+    const second = {
+      role: 'user',
+      content: secondContent,
+    };
+
+    const normalized = normalizeOpenAIMessageContent([first, second], {
+      mergeConsecutiveRoles: true,
+    });
+
+    const merged = normalized[0].content as Array<{
+      type: string;
+      text: string;
+    }>;
+    assert.notStrictEqual(
+      merged,
+      secondContent,
+      'normalized content array should not reuse the input array container',
+    );
+
+    merged.push({ type: 'text', text: 'mutation' });
+    assert.deepEqual(
+      second.content,
+      [{ type: 'text', text: 'second' }],
+      'mutating normalized content should not mutate the input message',
+    );
+  });
+
   it('converts array content to joined strings', () => {
     const messages = [
       {

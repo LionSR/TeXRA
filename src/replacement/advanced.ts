@@ -20,77 +20,71 @@ logger.initialize(CHANNEL);
  * @returns Text with quotes replaced
  */
 export function applyLatexQuotesFormatting(text: string): string {
+  // Fast path: nothing to do without a document block containing a quote.
+  if (!text.includes('\\begin{document}') || !text.includes('"')) {
+    return text;
+  }
+
   logger.debug(CHANNEL, 'Starting LaTeX quotes formatting');
 
   // Extract document content (everything between \begin{document} and \end{document})
   const documentRegex = /\\begin\{document\}([\s\S]*?)\\end\{document\}/g;
-  let documentMatch: RegExpExecArray | null;
-  let processedText = text;
   let documentCount = 0;
   let totalReplacements = 0;
 
-  // Process each document block separately
-  while ((documentMatch = documentRegex.exec(text)) !== null) {
-    documentCount++;
-    const fullMatch = documentMatch[0];
-    const documentContent = documentMatch[1];
-    const startIndex = documentMatch.index;
-    const endIndex = startIndex + fullMatch.length;
+  // Process each document block separately; replaceAll rebuilds the result in
+  // one pass instead of splicing the full text per block.
+  const processedText = text.replaceAll(
+    documentRegex,
+    (_fullMatch, documentContent: string) => {
+      documentCount++;
 
-    // Store tikzpicture environments to avoid processing them
-    const tikzEnvironments: string[] = [];
-    const tikzRegex = /\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g;
-    let tikzCounter = 0;
+      // Store tikzpicture environments to avoid processing them
+      const tikzEnvironments: string[] = [];
+      const tikzRegex = /\\begin\{tikzpicture\}[\s\S]*?\\end\{tikzpicture\}/g;
+      let tikzCounter = 0;
 
-    // Replace tikzpicture environments with placeholders
-    const contentWithoutTikz = documentContent.replaceAll(
-      tikzRegex,
-      (tikzMatchStr: string) => {
-        const placeholder = `__TIKZ_PLACEHOLDER_${tikzCounter++}__`;
-        tikzEnvironments.push(tikzMatchStr);
-        return placeholder;
-      },
-    );
+      // Replace tikzpicture environments with placeholders
+      const contentWithoutTikz = documentContent.replaceAll(
+        tikzRegex,
+        (tikzMatchStr: string) => {
+          const placeholder = `__TIKZ_PLACEHOLDER_${tikzCounter++}__`;
+          tikzEnvironments.push(tikzMatchStr);
+          return placeholder;
+        },
+      );
 
-    logger.debug(CHANNEL, `Removed ${tikzCounter} tikzpicture environments`);
+      logger.debug(CHANNEL, `Removed ${tikzCounter} tikzpicture environments`);
 
-    // Process quotes in the remaining content
-    let replacementCount = 0;
-    const processedContent = contentWithoutTikz.replaceAll(
-      /(?<!\\"|\{)"([^"]{3,16})"(?!\})/g,
-      (_match, quotedText) => {
-        replacementCount++;
-        logger.debug(
-          CHANNEL,
-          `Converting quote: "${quotedText}" → \`\`${quotedText}''`,
-        );
-        return `\`\`${quotedText}''`;
-      },
-    );
+      // Process quotes in the remaining content
+      let replacementCount = 0;
+      const processedContent = contentWithoutTikz.replaceAll(
+        /(?<!\\"|\{)"([^"]{3,16})"(?!\})/g,
+        (_match, quotedText) => {
+          replacementCount++;
+          logger.debug(
+            CHANNEL,
+            `Converting quote: "${quotedText}" → \`\`${quotedText}''`,
+          );
+          return `\`\`${quotedText}''`;
+        },
+      );
 
-    logger.debug(
-      CHANNEL,
-      `Made ${replacementCount} quote replacements in document #${documentCount}`,
-    );
-    totalReplacements += replacementCount;
+      logger.debug(
+        CHANNEL,
+        `Made ${replacementCount} quote replacements in document #${documentCount}`,
+      );
+      totalReplacements += replacementCount;
 
-    // Restore tikzpicture environments
-    const restoredContent = tikzEnvironments.reduce(
-      (content, env, i) => content.replace(`__TIKZ_PLACEHOLDER_${i}__`, env),
-      processedContent,
-    );
+      // Restore tikzpicture environments
+      const restoredContent = tikzEnvironments.reduce(
+        (content, env, i) => content.replace(`__TIKZ_PLACEHOLDER_${i}__`, env),
+        processedContent,
+      );
 
-    // Replace the current document block with the processed one
-    const processedDocumentBlock = `\\begin{document}${restoredContent}\\end{document}`;
-    processedText =
-      processedText.substring(0, startIndex) +
-      processedDocumentBlock +
-      processedText.substring(endIndex);
-
-    // Update regex lastIndex to account for any changes in string length
-    const lengthDifference = processedDocumentBlock.length - fullMatch.length;
-    documentRegex.lastIndex += lengthDifference;
-  }
+      return `\\begin{document}${restoredContent}\\end{document}`;
+    },
+  );
 
   logger.debug(
     CHANNEL,
@@ -288,13 +282,27 @@ const MATH_ENVIRONMENTS = [
 ];
 
 /**
+ * Single alternation regex over all mapped Unicode characters, so each math
+ * segment is converted in one pass instead of one `replaceAll` per map entry
+ * (~150 passes). Keys are literal characters (no regex metacharacters), so
+ * joining them is safe; the `u` flag keeps astral-plane keys (e.g. 𝒜) intact.
+ */
+const MATH_UNICODE_REGEX = new RegExp(
+  Object.keys(MATH_UNICODE_MAP).join('|'),
+  'gu',
+);
+// Non-global twin for stateless `.test()` probes.
+const MATH_UNICODE_PROBE = new RegExp(MATH_UNICODE_REGEX.source, 'u');
+
+/**
  * Convert Unicode characters and HTML sub/sup tags to LaTeX within math content.
  */
 function convertMathContent(content: string): string {
-  let result = content;
-  for (const [unicode, latex] of Object.entries(MATH_UNICODE_MAP)) {
-    result = result.replaceAll(unicode, latex);
-  }
+  const result = content.replaceAll(
+    MATH_UNICODE_REGEX,
+    (char) => MATH_UNICODE_MAP[char],
+  );
+  if (!result.includes('<')) return result;
   return result
     .replaceAll(/<sub>(.*?)<\/sub>/g, '_{$1}')
     .replaceAll(/<sup>(.*?)<\/sup>/g, '^{$1}');
@@ -305,6 +313,17 @@ function convertMathContent(content: string): string {
  * within math environments only
  */
 export function replaceMathUnicode(text: string): string {
+  // Fast path: skip the per-environment scans (and the inline `$...$` pass,
+  // which reallocates the string even when nothing changes) if the text
+  // contains nothing convertMathContent would touch.
+  if (
+    !MATH_UNICODE_PROBE.test(text) &&
+    !text.includes('<sub>') &&
+    !text.includes('<sup>')
+  ) {
+    return text;
+  }
+
   // Process each block math environment
   for (const env of MATH_ENVIRONMENTS) {
     let startIdx = 0;
@@ -398,19 +417,24 @@ export function stripCriticizeAnnotations(content: string): {
  * @param text LaTeX document text
  * @returns Text with \critique and \comment commands wrapped in \intertext within align blocks
  */
+const ALIGN_BLOCK_RE = /\\begin\{align\*?\}[\s\S]*?\\end\{align\*?\}/g;
+// One precompiled regex per wrapped command — bare instances not already
+// inside \intertext.
+const BARE_COMMAND_RES = (['critique', 'comment'] as const).map(
+  (cmd) =>
+    [
+      new RegExp(`(?<!\\\\intertext{)\\\\${cmd}{((?:[^{}]|{[^{}]*})*)}`, 'g'),
+      `\\intertext{\\${cmd}{$1}}`,
+    ] as const,
+);
+
 export function wrapCritiqueInAlign(text: string): string {
-  const alignRegex = /\\begin\{align\*?\}[\s\S]*?\\end\{align\*?\}/g;
   // Helper to wrap both \critique and \comment
   function wrapCommands(block: string): string {
-    // For each command, wrap bare instances not already inside \intertext
-    for (const cmd of ['critique', 'comment']) {
-      const regex = new RegExp(
-        `(?<!\\\\intertext{)\\\\${cmd}{((?:[^{}]|{[^{}]*})*)}`,
-        'g',
-      );
-      block = block.replace(regex, `\\intertext{\\${cmd}{$1}}`);
+    for (const [regex, replacement] of BARE_COMMAND_RES) {
+      block = block.replace(regex, replacement);
     }
     return block;
   }
-  return text.replaceAll(alignRegex, wrapCommands);
+  return text.replaceAll(ALIGN_BLOCK_RE, wrapCommands);
 }
