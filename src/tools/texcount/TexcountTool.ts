@@ -6,6 +6,7 @@ import { getTeXCount } from '@latex/texcount';
 import { ToolError, type ToolResult } from '@tools/result';
 import { defineTool } from '@tools/core/define';
 import { ensureArray } from '@utils/core';
+import { formatResultCount } from '@utils/text/stringUtils';
 
 const TexcountInputSchema = z.strictObject({
   files: z
@@ -61,7 +62,7 @@ export class TexcountTool extends defineTool({
       };
     }
 
-    const summary = `Analyzed: ${files.length} file${files.length === 1 ? '' : 's'}`;
+    const summary = `Analyzed: ${formatResultCount(files.length, 'file')}`;
 
     return {
       summary,

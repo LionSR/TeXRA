@@ -12,7 +12,6 @@ export {
   containsHiddenSegment,
   getBaseNameWithoutRound,
   getEditedFileListConfig,
-  getFileBaseName,
   getFileListConfig,
   loadFileListSettings,
   matchesEditedFile,

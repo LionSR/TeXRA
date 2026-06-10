@@ -8,11 +8,11 @@ import * as path from 'node:path';
 import { minimatch } from 'minimatch';
 
 import { normalizeFilePath } from '@shared/utils/path';
+import { IS_MACOS, IS_WINDOWS } from '@utils/system/platformPaths';
 
 import type { WorkspaceProvider } from '../interfaces/workspace';
 
-const CASE_INSENSITIVE_GLOBS =
-  process.platform === 'win32' || process.platform === 'darwin';
+const CASE_INSENSITIVE_GLOBS = IS_WINDOWS || IS_MACOS;
 
 function shouldTraverseDirectory(
   root: string,

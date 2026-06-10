@@ -1,5 +1,9 @@
 import { DEFAULT_CORE_SETTINGS } from '@shared/schemas/coreSettings';
-import { normalizeFilePath } from '@shared/utils/path';
+import {
+  getBasename,
+  getFileStem,
+  normalizeFilePath,
+} from '@shared/utils/path';
 
 import {
   LEGACY_AUXILIARY_KEYWORDS_KEY,
@@ -42,16 +46,6 @@ type ConfigReader = (key: string, fallback: string[]) => string[];
 
 function getPathSegments(filePath: string): string[] {
   return normalizeFilePath(filePath).split('/');
-}
-
-function getPathFileName(filePath: string): string {
-  return getPathSegments(filePath).at(-1) ?? '';
-}
-
-export function getFileBaseName(filePath: string): string {
-  const fileName = getPathFileName(filePath);
-  const dotIndex = fileName.lastIndexOf('.');
-  return dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
 }
 
 function normalizeList(values: readonly string[]): string[] {
@@ -206,7 +200,7 @@ export function passesFileFilters(
     return false;
 
   const lowerPath = relativePath.toLowerCase();
-  const fileNameLower = getPathFileName(lowerPath);
+  const fileNameLower = getBasename(lowerPath);
   if (filters.excludeFiles.includes(fileNameLower)) return false;
   if (
     filters.includeExt.length > 0 &&
@@ -238,8 +232,8 @@ export function matchesEditedFile(
   filePath: string,
   baseFileName: string,
 ): boolean {
-  const baseName = getFileBaseName(baseFileName);
-  const fileBase = getFileBaseName(filePath);
+  const baseName = getFileStem(baseFileName);
+  const fileBase = getFileStem(filePath);
   if (fileBase === baseName) return false;
   const baseNameWithoutRound = getBaseNameWithoutRound(baseName);
   return (

@@ -1,16 +1,9 @@
+import { withTimeout } from '@utils/core';
+
 export const IMAGE_PASTE_TIMEOUT_MS = 15_000;
 
 export function withImagePasteTimeout<T>(promise: Promise<T>): Promise<T> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<never>((_resolve, reject) => {
-    timeout = setTimeout(
-      () => reject(new Error('Image paste timed out.')),
-      IMAGE_PASTE_TIMEOUT_MS,
-    );
-  });
-  return Promise.race([promise, timeoutPromise]).finally(() => {
-    if (timeout) clearTimeout(timeout);
-  });
+  return withTimeout(promise, IMAGE_PASTE_TIMEOUT_MS, 'Image paste timed out.');
 }
 
 export class ImagePasteQueue {

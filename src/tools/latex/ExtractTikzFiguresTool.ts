@@ -4,9 +4,10 @@ import { z } from 'zod';
 // Local imports - tools
 import { tikzPictureManager } from '@latex/TikzPictureManager';
 import { type ToolFileAttachment } from '@tools/result';
-import { formatResultCount, formatToolOutput } from '@tools/formatting';
+import { formatToolOutput } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
 import { pathToLocation } from '@utils/files';
+import { formatResultCount } from '@utils/text/stringUtils';
 import {
   buildLimitedAttachments,
   resolveLatexFileOrThrow,

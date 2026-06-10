@@ -7,6 +7,35 @@ export function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+/**
+ * Pluralize a word based on count.
+ * Returns the singular form for count === 1, plural form otherwise.
+ */
+export function pluralize(
+  count: number,
+  singular: string,
+  plural?: string,
+): string {
+  return count === 1 ? singular : (plural ?? `${singular}s`);
+}
+
+/**
+ * Format a result count with proper pluralization.
+ * Example: formatResultCount(3, 'result') returns "3 results"
+ */
+export function formatResultCount(
+  count: number,
+  singular: string,
+  plural?: string,
+): string {
+  return `${count} ${pluralize(count, singular, plural)}`;
+}
+
+/** UTC calendar date (`YYYY-MM-DD`) of a Date; defaults to now. */
+export function isoDateOnly(date: Date = new Date()): string {
+  return date.toISOString().slice(0, 10);
+}
+
 export function objectToLogString(
   obj: unknown,
   maxLength: number = 1000,

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isAbortError } from '@common/errors';
 import { toErrorMessage } from '@common/errors/errorMessage';
 import {
   parseAuthCallbackTokens,
@@ -156,7 +157,7 @@ export async function fetchWithTimeout(
   try {
     return await fetchImpl(url, { ...options, signal });
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (isAbortError(error)) {
       if (options.signal?.aborted && !controller.signal.aborted) {
         throw error;
       }

@@ -19,6 +19,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 import type { CompileFailure, OutputFileInfo } from '@shared/schemas';
 import { designTokens, commonViewStyles } from '@shared/styles';
+import { normalizeFilePath } from '@shared/utils/path';
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 import { type TeXRAIconName, waIcon } from '@shared/wa/webAwesomeIcons';
 import { ELEMENT_IDS } from '../constants';
@@ -71,7 +72,7 @@ interface ParsedPath {
 
 /** Parse a path into directory and basename components */
 function parsePath(path: string): ParsedPath {
-  const normalized = path.replaceAll('\\', '/');
+  const normalized = normalizeFilePath(path);
   const lastSlash = normalized.lastIndexOf('/');
   return {
     dir: lastSlash >= 0 ? normalized.slice(0, lastSlash + 1) : '',

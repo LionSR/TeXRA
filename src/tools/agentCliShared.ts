@@ -3,6 +3,7 @@
 
 import { type AgentTrace } from '@agent/trace';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import { isAbortError } from '@common/errors';
 import {
   EXECUTION_STATUS,
   type ExecutionId,
@@ -12,11 +13,6 @@ import {
   type TokenUsageStats,
 } from '@shared/schemas';
 import { formatDuration } from '@utils/core';
-
-/** True for an AbortController-style cancellation error. */
-export function isAbortError(err: unknown): boolean {
-  return err instanceof Error && err.name === 'AbortError';
-}
 
 /**
  * True when an error/abort represents a clean, caller-initiated interruption

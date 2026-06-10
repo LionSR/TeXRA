@@ -9,7 +9,7 @@ import { Box, Text, useInput } from 'ink';
 import type { StreamTabId } from '@shared/schemas';
 
 // Local imports - CLI state and UI
-import { clampIndex } from '@utils/core';
+import { clamp, clampIndex } from '@utils/core';
 
 import {
   buildChildControlItems,
@@ -242,7 +242,7 @@ export function taskDetailVisibleLineCountFromOffsetForColumns({
   const outputColumns = taskDetailOutputColumnCount(availableColumns);
   if (outputColumns === undefined) return visibleRowBudget;
 
-  const start = Math.min(Math.max(0, offset), tailLines.length - 1);
+  const start = clamp(offset, 0, tailLines.length - 1);
   let usedRows = 0;
   let visibleLines = 0;
   for (let index = start; index < tailLines.length; index += 1) {
@@ -572,7 +572,7 @@ function taskDetailScrollOffsetFromAnchor(
     offset += taskDetailLineRowCount(context, index);
   }
   const rowCount = taskDetailLineRowCount(context, lineIndex);
-  offset += Math.min(Math.max(0, anchor.wrappedRowOffset), rowCount - 1);
+  offset += clamp(anchor.wrappedRowOffset, 0, rowCount - 1);
   return Math.min(offset, maxOffset);
 }
 

@@ -18,6 +18,7 @@ import {
   SpendingStatusSchema,
   type SpendingStatus,
 } from '@shared/schemas/spendingStatus';
+import { formatResultCount } from '@utils/text/stringUtils';
 import { SERVER_SIDE_CACHE_TTL_MS, type UserTier } from '../sharedConfig';
 import {
   NOOP_AUTH_SERVICE_LOGGER,
@@ -284,7 +285,7 @@ export class TierService {
     if (tierConfig.models === '*') return 'All models included';
     const modelCount = tierConfig.models.length;
     if (modelCount === 0) return 'No included model access';
-    return `${modelCount} model${modelCount === 1 ? '' : 's'} included`;
+    return `${formatResultCount(modelCount, 'model')} included`;
   }
 
   // ===========================================================================
