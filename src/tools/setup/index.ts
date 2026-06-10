@@ -28,7 +28,6 @@ export { ReadConfigTool, UpdateConfigTool } from './ConfigTools';
 export { SendToTerminalTool } from './SendToTerminalTool';
 export {
   setSetupPlatform,
-  getSetupPlatform,
   type SetupPlatform,
   type SetupSecretsAdapter,
   type SetupCommandAdapter,

@@ -634,7 +634,7 @@ async function showCliAuthStatus(): Promise<void> {
   );
 }
 
-export const CHAT_LOGIN_USAGE =
+const CHAT_LOGIN_USAGE =
   'Usage: /login [github | google] [--no-browser] [--select-account] [--login-hint <account>]';
 
 const CHAT_API_MODE_MODEL_RECOVERY = {

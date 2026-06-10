@@ -11,7 +11,7 @@ const JPEG_MAX_SCAN_BYTES = 65536;
  * Parse image dimensions from buffer header bytes (PNG, JPEG, GIF, WebP).
  * Returns undefined if format is unrecognized or header is truncated.
  */
-export function getImageDimensionsFromBuffer(
+function getImageDimensionsFromBuffer(
   buffer: Buffer,
 ): { width: number; height: number } | undefined {
   if (buffer.length < 10) return undefined;

@@ -39,16 +39,16 @@ const THINKING_TEMPERATURE_EXCLUDED_PATTERNS = [
   'claude-mythos-',
 ];
 
-export const isClaudeOpus46 = (fullName: string): boolean =>
+const isClaudeOpus46 = (fullName: string): boolean =>
   fullName.startsWith(OPUS_46_FULLNAME);
 
-export const isClaudeOpus47 = (fullName: string): boolean =>
+const isClaudeOpus47 = (fullName: string): boolean =>
   fullName.startsWith(OPUS_47_FULLNAME);
 
-export const isClaudeOpus48 = (fullName: string): boolean =>
+const isClaudeOpus48 = (fullName: string): boolean =>
   fullName.startsWith(OPUS_48_FULLNAME);
 
-export const isClaudeSonnet46 = (fullName: string): boolean =>
+const isClaudeSonnet46 = (fullName: string): boolean =>
   fullName.startsWith(SONNET_46_FULLNAME);
 
 /**
@@ -58,7 +58,7 @@ export const isClaudeSonnet46 = (fullName: string): boolean =>
  * "omitted"), and sampling parameters are rejected. They also support the same
  * effort tiers as Opus 4.8 (including the distinct "xhigh").
  */
-export const isMythosClass = (fullName: string): boolean =>
+const isMythosClass = (fullName: string): boolean =>
   fullName.startsWith(FABLE_5_FULLNAME) ||
   fullName.startsWith(MYTHOS_5_FULLNAME);
 

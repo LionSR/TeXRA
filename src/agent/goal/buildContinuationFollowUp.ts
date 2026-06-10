@@ -1,10 +1,7 @@
 import type { Goal } from '@tools/goal';
 import { formatGoalTime, goalElapsedMs } from '@tools/goal/goalMeta';
 
-import {
-  getContinuationTemplate,
-  getObjectiveUpdatedTemplate,
-} from './promptLoader';
+import { getContinuationTemplate } from './promptLoader';
 
 function render(template: string, vars: Record<string, string>): string {
   return template.replaceAll(/\{\{(\w+)\}\}/g, (match, key: string) =>
@@ -23,14 +20,4 @@ export async function buildContinuationFollowUp(goal: Goal): Promise<string> {
     objective: goal.objective,
     timeUsed: formatGoalTime(goalElapsedMs(goal)),
   });
-}
-
-/**
- * Render the objective-updated prompt for the user-driven edit flow.
- */
-export async function buildObjectiveUpdatedFollowUp(
-  goal: Goal,
-): Promise<string> {
-  const template = await getObjectiveUpdatedTemplate();
-  return render(template, { objective: goal.objective });
 }

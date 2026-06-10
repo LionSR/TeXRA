@@ -21,12 +21,6 @@ import * as logger from '@logger/logUtils';
 const CHANNEL = 'TestCommands';
 logger.initialize(CHANNEL);
 
-export const yamlCommands = {
-  testAgentLoading: 'texra.testAgentLoading',
-  loadSpecificAgent: 'texra.loadSpecificAgent',
-  parseYaml: 'texra.parseYaml',
-};
-
 export async function handleTestAgentLoading(): Promise<void> {
   try {
     logger.info(CHANNEL, 'Testing agent loading from registry:');
