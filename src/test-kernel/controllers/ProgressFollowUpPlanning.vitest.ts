@@ -229,7 +229,7 @@ describe('ProgressFollowUpController', () => {
     assert.deepEqual(plan, {
       kind: 'warning',
       message:
-        'No editable workspace source file matched the compile failure. Accept the output into the workspace first, then run latexFixer.',
+        'No editable workspace file matched the compile failure. Accept the output into the workspace first, then run latexFixer.',
     });
   });
 });
