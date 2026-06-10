@@ -25,8 +25,8 @@ import {
   handleToolbarCommand,
   runCompileFixer,
   sendFollowupCommand,
-  type FrontendEventHandlerContext,
 } from '@progressView/frontend/eventHandlers';
+import type { FrontendEventHandlerContext } from '@progressView/frontend/messageHandlerTypes';
 import { dispatchMessage } from '@progressView/frontend/messageDispatcher';
 import {
   activeStreamId$,

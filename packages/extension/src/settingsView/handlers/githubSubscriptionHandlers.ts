@@ -1,7 +1,6 @@
 /**
  * GitHub token and PR/repo/issue subscription handlers.
  *
- * Extracted from SettingsViewMessageHandler to improve cohesion.
  * Handles the GitHub personal access token secret plus the live list of
  * PR/repo/issue subscriptions surfaced in the Git tab, including revealing
  * a subscription's agent stream in the Progress view.

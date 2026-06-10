@@ -27,7 +27,6 @@ export {
   DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
   GitHubTokenExchangeSchema,
   SupabaseSessionSchema,
-  firstAccountLabel,
   parseStoredSupabaseSession,
   parseTokenExchangeResponse,
   toStorableGitHubTokenExchangeSession,
