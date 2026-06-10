@@ -1,5 +1,6 @@
 // Local imports - shared
 import type { StreamTabId } from '@shared/schemas';
+import { GoalStore } from '@tools/goal';
 
 export interface ProgressStreamLifecycleState {
   getActiveStream(): StreamTabId | '';
@@ -50,6 +51,9 @@ export class ProgressStreamLifecycleController {
     }
 
     this.deps.host.cleanupDeletedStream(stream);
+    // Deleting the conversation ends any goal with it — without this the
+    // record (and its Goal-tab entry) outlives the stream forever.
+    await GoalStore.forget(stream);
 
     const wasActive = this.deps.state.getActiveStream() === stream;
     await this.deps.state.clearStream(stream);
@@ -86,6 +90,7 @@ export class ProgressStreamLifecycleController {
     );
 
     this.deps.host.cleanupDeletedStreams(streamIds);
+    await GoalStore.forgetMany(streamIds);
     await this.deps.state.clearAll();
     this.deps.host.rebuildRenderedStreams({ forceRebuild: true });
   }

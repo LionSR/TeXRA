@@ -11,7 +11,7 @@
  * yet wired Goal, or under tests), template lookups fall back to the
  * inline copy in `inlineTemplates` so the continuation loop still works.
  */
-import * as path from 'path';
+import * as path from 'node:path';
 
 import * as yaml from 'yaml';
 import { z } from 'zod';
@@ -22,7 +22,6 @@ import { AbsoluteFS } from '@utils/files';
 
 const GoalPromptsYamlSchema = z.object({
   continuation: z.object({ template: z.string().min(1) }),
-  objective_updated: z.object({ template: z.string().min(1) }),
 });
 
 type GoalPrompts = z.infer<typeof GoalPromptsYamlSchema>;
@@ -59,23 +58,6 @@ const inlineTemplates: GoalPrompts = {
         "  behavior) for every requirement. Match the check's scope to the",
         "  requirement's scope, and gather stronger evidence when it is weak or",
         '  indirect.',
-        '</goal_context>',
-      ].join('\n') + '\n',
-  },
-  objective_updated: {
-    template:
-      [
-        '<goal_context>',
-        'The user has edited the objective. The new objective supersedes any',
-        'previous one.',
-        '',
-        '<objective>',
-        '{{objective}}',
-        '</objective>',
-        '',
-        'Re-orient against the new objective. Drop work that only served the',
-        "previous one. Consider it done only when the new objective's end state",
-        'is true and verified against current evidence.',
         '</goal_context>',
       ].join('\n') + '\n',
   },

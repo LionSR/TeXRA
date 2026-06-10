@@ -17,6 +17,7 @@ import {
   ExecutionIdSchema,
   type ExecutionId,
 } from '@shared/schemas';
+import { GoalStore } from '@tools/goal';
 import { StorageFS } from '@utils/files';
 import { isObject } from '@utils/core/typeGuards';
 import { isDirectory } from '@utils/files/fsEntryType';
@@ -199,15 +200,28 @@ export async function deleteCliHistory(options: {
   if (options.all) {
     const count = options.preCountForAll ?? (await listExecutions()).length;
     await deleteAllExecutions();
+    await GoalStore.forgetMany(GoalStore.list().map((g) => g.streamId));
     return { deleted: 'all', count };
   }
   if (!options.id) {
     throw new Error('Expected an execution id, or --all.');
   }
+  const found = await deleteExecution(options.id);
+  if (found) {
+    // Goal records are keyed by stream id (`agent@model#executionId`);
+    // deleting a stored execution must drop its goal too, or the record
+    // dangles in workspace state forever.
+    const executionSuffix = `#${options.id}`;
+    await GoalStore.forgetMany(
+      GoalStore.list()
+        .filter((g) => g.streamId.endsWith(executionSuffix))
+        .map((g) => g.streamId),
+    );
+  }
   return {
     deleted: 'one',
     id: options.id,
-    found: await deleteExecution(options.id),
+    found,
   };
 }
 

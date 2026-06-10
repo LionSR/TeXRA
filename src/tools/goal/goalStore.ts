@@ -122,10 +122,19 @@ async function addToIndex(streamId: StreamTabId): Promise<void> {
 }
 
 async function removeFromIndex(streamId: StreamTabId): Promise<void> {
+  const state = tryGetWorkspaceState();
+  if (!state) return;
+  // `readIndex` unions in the legacy index, so a removal must also migrate
+  // that union into the new key and drop the legacy one — otherwise the
+  // removed entry resurfaces from `odysseys:index` on the next read.
+  const hasLegacyIndex = state.get<unknown>(LEGACY_INDEX_KEY) != null;
   const index = readIndex();
   const next = index.filter((id) => id !== streamId);
-  if (next.length === index.length) return;
-  await platform().workspaceState.update(INDEX_KEY, next);
+  if (!hasLegacyIndex && next.length === index.length) return;
+  await Promise.all([
+    platform().workspaceState.update(INDEX_KEY, next),
+    hasLegacyIndex ? state.update(LEGACY_INDEX_KEY, undefined) : null,
+  ]);
 }
 
 /**
@@ -277,9 +286,10 @@ export const GoalStore = {
     }
     const baseline = current.baselineRunCostUsd ?? runCostUsd;
     const spentUsd = Math.max(0, runCostUsd - baseline);
-    const capExceeded =
+    // The early return above guarantees the goal is active here, so an
+    // exceeded cap always performs the pause.
+    const pausedForCap =
       current.costCapUsd != null && spentUsd >= current.costCapUsd;
-    const pausedForCap = capExceeded && current.status === 'active';
     // Skip the write (and its broadcast) when nothing material changed.
     if (
       current.baselineRunCostUsd != null &&
@@ -334,7 +344,12 @@ export const GoalStore = {
   async forget(streamId: StreamTabId): Promise<void> {
     const state = tryGetWorkspaceState();
     if (!state) return;
-    const existed = readRaw(streamId) !== null;
+    // Gate on raw key presence, not parse success — an unparseable or
+    // terminal-status legacy blob (which `readRaw` normalizes to null) must
+    // still be cleaned up, or its key lingers forever.
+    const existed =
+      state.get<unknown>(streamKey(streamId)) != null ||
+      state.get<unknown>(legacyStreamKey(streamId)) != null;
     if (!existed) return;
     await Promise.all([
       state.update(streamKey(streamId), undefined),
@@ -355,17 +370,27 @@ export const GoalStore = {
   async forgetMany(streamIds: readonly StreamTabId[]): Promise<void> {
     const state = tryGetWorkspaceState();
     if (!state) return;
-    const toRemove = streamIds.filter((id) => readRaw(id) !== null);
+    // Same raw-presence gate as `forget` so unparseable blobs are cleaned.
+    const toRemove = streamIds.filter(
+      (id) =>
+        state.get<unknown>(streamKey(id)) != null ||
+        state.get<unknown>(legacyStreamKey(id)) != null,
+    );
     if (toRemove.length === 0) return;
+    const hasLegacyIndex = state.get<unknown>(LEGACY_INDEX_KEY) != null;
     const index = readIndex();
     const dropped = new Set(toRemove);
     const nextIndex = index.filter((id) => !dropped.has(id));
     await Promise.all([
       ...toRemove.map((id) => state.update(streamKey(id), undefined)),
       ...toRemove.map((id) => state.update(legacyStreamKey(id), undefined)),
-      nextIndex.length === index.length
-        ? Promise.resolve()
-        : state.update(INDEX_KEY, nextIndex),
+      hasLegacyIndex || nextIndex.length !== index.length
+        ? state.update(INDEX_KEY, nextIndex)
+        : Promise.resolve(),
+      // Migrated into the union write above; see removeFromIndex.
+      hasLegacyIndex
+        ? state.update(LEGACY_INDEX_KEY, undefined)
+        : Promise.resolve(),
     ]);
     for (const id of toRemove) bus.emit('goalStateChanged', { streamId: id });
   },
