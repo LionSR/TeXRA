@@ -31,9 +31,9 @@ export interface IconActionButtonOptions {
    */
   readonly busy?: boolean;
   /**
-   * Native Web Awesome tooltip text. Requires `id` — the `<wa-tooltip>`
-   * anchors via `for` within the same shadow root. Replaces the `title`
-   * attribute so the browser tooltip never doubles up with the WA one.
+   * Native Web Awesome tooltip text. When `id` is present, the `<wa-tooltip>`
+   * anchors via `for` within the same shadow root. Without an anchor, this
+   * falls back to the native `title` attribute so the hint is still visible.
    */
   readonly tooltip?: string;
   readonly onClick?: (event: MouseEvent) => void;
@@ -78,11 +78,12 @@ function renderActionButtonBase({
     .filter(Boolean)
     .join(' ');
   const ariaLabel = label ?? text ?? '';
+  const useWebAwesomeTooltip = Boolean(tooltip && id);
   // wa-tooltip is position:absolute, so the sibling never affects flex flow.
-  const tooltipTemplate =
-    tooltip && id
-      ? html`<wa-tooltip for=${id}>${tooltip}</wa-tooltip>`
-      : nothing;
+  const tooltipTemplate = useWebAwesomeTooltip
+    ? html`<wa-tooltip for=${id}>${tooltip}</wa-tooltip>`
+    : nothing;
+  const nativeTitle = tooltip && !id ? tooltip : (title ?? ariaLabel);
 
   const button = html`
     <wa-button
@@ -93,9 +94,7 @@ function renderActionButtonBase({
       size="small"
       type="button"
       aria-label=${ariaLabel}
-      title=${ifDefined(
-        tooltipTemplate === nothing ? (title ?? ariaLabel) : undefined,
-      )}
+      title=${ifDefined(useWebAwesomeTooltip ? undefined : nativeTitle)}
       data-action=${ifDefined(action)}
       ?disabled=${disabled || busy}
       @click=${onClick}

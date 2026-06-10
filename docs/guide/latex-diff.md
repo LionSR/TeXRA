@@ -107,7 +107,7 @@ TeXRA runs the same five-stage pipeline shown above — only this route uses the
 
 ### Step 3: Manage Diff Outputs
 
-After generating a Git-based diff using the "latexdiff-vc" button, you can manage the resulting files from the Commit section's **Pack** (<wa-icon library="texra" name="archive"></wa-icon>) and **Clean** (<wa-icon library="texra" name="trash"></wa-icon>) buttons. Pack archives the diff files; Clean removes them.
+After generating a Git-based diff using the **Diff** button beneath the Commit dropdown, you can manage the resulting files from the Commit section's **Pack** (<wa-icon library="texra" name="archive"></wa-icon>) and **Clean** (<wa-icon library="texra" name="trash"></wa-icon>) buttons. Pack archives the diff files; Clean removes them.
 
 Each diff route writes its own predictably-named artifacts alongside the source pair — `latexdiff` produces `_diff.tex`, `latexdiff-vc` appends the commit hash (`_diff_rev<hash>.tex`), and between-round runs use `_diff_rN-rM.tex` — and every `.tex` compiles to a matching `.pdf`. Pack and Clean act on this whole set:
 
