@@ -34,8 +34,6 @@ import type {
   MessageHandlerContext,
 } from './messageHandlerTypes';
 
-export type { FrontendEventHandlerContext } from './messageHandlerTypes';
-
 export function handleStreamSwitch(
   event: CustomEvent<StreamEventDetail>,
   ctx: FrontendEventHandlerContext,

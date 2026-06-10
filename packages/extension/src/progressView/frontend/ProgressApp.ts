@@ -79,7 +79,7 @@ import {
 import { dispatchMessage } from './messageDispatcher';
 import type { MessageHandlerContext } from './messageHandlerTypes';
 
-import type { FrontendEventHandlerContext } from './eventHandlers';
+import type { FrontendEventHandlerContext } from './messageHandlerTypes';
 // Local imports - progress view components
 import './components/StreamTabs';
 import './components/StreamConversation';
