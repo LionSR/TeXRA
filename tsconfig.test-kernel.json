@@ -1,9 +1,15 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "module": "esnext",
     "moduleResolution": "bundler",
     "types": ["node"]
   },
-  "include": ["src/test-kernel/**/*.mts", "src/types/**/*.d.ts"]
+  "include": [
+    "src/test-kernel/**/*.mts",
+    "src/test-kernel/**/*.ts",
+    "src/types/**/*.d.ts"
+  ],
+  "exclude": ["node_modules"]
 }

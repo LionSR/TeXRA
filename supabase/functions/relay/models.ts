@@ -32,6 +32,19 @@ export interface TierSpendingLimits {
   Ultra: number;
 }
 
+/** Per-user request gates enforced by the relay edge function. */
+export interface TierRequestLimit {
+  /** Per clock-minute request count. */
+  ratePerMinute: number;
+  /** In-flight upstream requests for this user. */
+  concurrent: number;
+}
+
+export type TierRequestLimits = Record<
+  'free' | 'Max' | 'Ultra',
+  TierRequestLimit
+>;
+
 export interface TierModelConfig {
   /** All supported providers (same for all tiers) */
   providers: string[];
@@ -154,6 +167,16 @@ export const TIER_SPENDING_LIMITS: TierSpendingLimits = {
   Ultra: 300, // $300/month - sponsor access
 };
 
+/**
+ * Server-side fairness gates. These are deliberately loose enough for normal
+ * interactive use while blocking bulk free-tier fanout before costs are logged.
+ */
+export const TIER_REQUEST_LIMITS: TierRequestLimits = {
+  free: { ratePerMinute: 20, concurrent: 2 },
+  Max: { ratePerMinute: 60, concurrent: 4 },
+  Ultra: { ratePerMinute: 120, concurrent: 8 },
+};
+
 // =============================================================================
 // Tier Constants
 // =============================================================================
@@ -165,6 +188,14 @@ export function getSpendingLimit(tier: string): number {
   return (
     TIER_SPENDING_LIMITS[tier as keyof TierSpendingLimits] ??
     TIER_SPENDING_LIMITS.free
+  );
+}
+
+/** Get per-user request gates for a tier. */
+export function getRequestLimits(tier: string): TierRequestLimit {
+  return (
+    TIER_REQUEST_LIMITS[tier as keyof TierRequestLimits] ??
+    TIER_REQUEST_LIMITS.free
   );
 }
 
