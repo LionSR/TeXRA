@@ -1407,13 +1407,13 @@ launcher render path.
 
 Shipped as `builtIn: true` records in code, not in workspace state:
 
-| id              | name               | icon | lead               | specialists                                                                                          | workflows                                           |
-| --------------- | ------------------ | ---- | ------------------ | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `mathematician` | Mathematician      | 🎓   | `orchestrator`     | `chat`, `research`, `review`, `lean`, `simplifier`, `latexFixer`, `progressCheck`                    | `correct`, `polish`, `merge`, `devise`, `apply`     |
-| `physicist`     | Physicist          | ⚛    | `orchestrator`     | `research`, `numerics`, `review`, `search`, `presenter`, `simplifier`, `latexFixer`, `progressCheck` | `criticize`, `generic`, `devise`, `apply`           |
-| `lean-project`  | Lean Project       | ⚙    | `leanOrchestrator` | `lean`, `leanSearch`, `leanBlueprint`, `leanSimplifier`, `latexFixer`, `progressCheck`               | (none)                                              |
+| id              | name               | icon | lead               | specialists                                                                                                                   | workflows                                           |
+| --------------- | ------------------ | ---- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `mathematician` | Mathematician      | 🎓   | `orchestrator`     | `chat`, `research`, `review`, `lean`, `simplifier`, `latexFixer`, `progressCheck`                                             | `correct`, `polish`, `merge`, `devise`, `apply`     |
+| `physicist`     | Physicist          | ⚛    | `orchestrator`     | `research`, `numerics`, `review`, `search`, `presenter`, `simplifier`, `latexFixer`, `progressCheck`                          | `criticize`, `generic`, `devise`, `apply`           |
+| `lean-project`  | Lean Project       | ⚙    | `leanOrchestrator` | `lean`, `leanSearch`, `leanBlueprint`, `leanSimplifier`, `latexFixer`, `progressCheck`                                        | (none)                                              |
 | `cs-ml`         | Computer Scientist | 💻   | `orchestrator`     | `research`, `numerics`, `coder`, `testEngineer`, `search`, `review`, `presenter`, `simplifier`, `latexFixer`, `progressCheck` | `criticize`, `generic`, `devise`, `apply`, `polish` |
-| `onboarding`    | Onboarding         | 🛠   | `setup`            | `latexFixer`                                                                                         | (none)                                              |
+| `onboarding`    | Onboarding         | 🛠   | `setup`            | `latexFixer`                                                                                                                  | (none)                                              |
 
 Each id is stable across upgrades; renaming a built-in team requires a
 migration entry that maps the old id to the new one.
