@@ -1472,11 +1472,11 @@
         }
       ]
     },
-    "icon": "resources/logo-128x128.png"
+    "icon": "resources/logo-512x512.png"
   },
   "manifestAssetReferences": [
-    "resources/logo-128x128.png",
     "resources/logo-128x128.svg",
+    "resources/logo-512x512.png",
     "resources/walkthroughs/getting-started.md",
     "resources/walkthroughs/media/agent-model-selection.png",
     "resources/walkthroughs/media/api-key-setup.png",
@@ -1492,8 +1492,8 @@
     "resources/agents",
     "resources/docs/agent-creation",
     "resources/examples",
-    "resources/logo-128x128.png",
     "resources/logo-128x128.svg",
+    "resources/logo-512x512.png",
     "resources/shared/latex_style_rules.txt",
     "resources/templates",
     "resources/tool_use_agents",

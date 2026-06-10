@@ -60,6 +60,10 @@ All notable changes to this project will be documented in this file.
 
 - **In-editor GitHub sign-in works again** — signing in with GitHub through the editor's account flow had been failing with a server configuration error and silently falling back to browser sign-in; it now completes again. Long-standing existing sessions may ask you to sign in one more time.
 
+#### Improvements
+
+- **Sharper Marketplace icon** — the extension icon is now shipped at 512×512 instead of 128×128, so it no longer looks blurry on the Marketplace listing and high-DPI displays.
+
 ## [0.38.6] - 2026-06-07
 
 ### CLI
