@@ -106,7 +106,7 @@ export function streamStatusesWithTrait(
   trait: StreamStatusTrait,
 ): ReadonlySet<StreamStatus> {
   return new Set(
-    (Object.keys(STREAM_STATUS_TRAITS) as StreamStatus[]).filter(
+    StreamStatusSchema.options.filter(
       (status) => STREAM_STATUS_TRAITS[status][trait],
     ),
   );
