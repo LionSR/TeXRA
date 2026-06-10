@@ -446,13 +446,9 @@ export class ExecutionRegistry {
   }
 
   /** Interrupt all active subagents of a parent stream, including descendants. */
-  interruptActiveChildren(parentStreamId: StreamTabId): void {
-    this.terminateChildren(parentStreamId, new Set());
-  }
-
-  private terminateChildren(
+  interruptActiveChildren(
     parentStreamId: StreamTabId,
-    visited: Set<string>,
+    visited: Set<string> = new Set(),
   ): void {
     for (const handle of this.handles.values()) {
       if (isChildExecution(handle, parentStreamId)) {
@@ -513,7 +509,7 @@ export class ExecutionRegistry {
       }
       this.detachActiveChildren(streamId, runtimeHost);
     } else {
-      this.terminateChildren(streamId, visited);
+      this.interruptActiveChildren(streamId, visited);
     }
 
     const stopped = rootHandle
@@ -634,7 +630,7 @@ export class ExecutionRegistry {
     if (handle instanceof AgentExecutionHandle) {
       // Interrupt the handle's own subagents first so no descendant outlives
       // the chain — killing an orchestrator must also stop its grandchildren.
-      this.terminateChildren(handle.childStreamId, visited);
+      this.interruptActiveChildren(handle.childStreamId, visited);
       const interruptible = this.interrupts.get(handle.childStreamId);
       if (!interruptible) return false;
       interruptible.interrupt();

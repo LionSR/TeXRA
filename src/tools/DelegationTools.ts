@@ -34,7 +34,10 @@ import {
 import { tryUseRunContext, type RunContext } from '@agent/runtime/RunContext';
 import { getCurrentToolCallContext } from '@agent/toolUse/ToolFileInteractionContext';
 import { StreamStatusService } from '@agent/runtime/StreamStatusService';
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import {
+  sendFollowUp,
+  shouldWakeQueuedStream,
+} from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
 
@@ -474,52 +477,17 @@ async function executeSubagent(
   const deliveryState = subagentDeliveryRegistry.start(executionId);
   let childStreamId: StreamTabId | undefined;
 
+  /**
+   * Deliver a follow-up to the parent stream. For terminal results (`wake`),
+   * a parent whose cycle has exited is resumed via the host port so the
+   * queued result is consumed instead of sitting until the user pokes the
+   * stream; if the parent is gone for good (terminal status, resume failed),
+   * the force-reopened queue is re-released so late deliveries don't leak
+   * into the next run — the result stays readable in the execution report.
+   */
   async function deliverFollowUp(
     followUp: FollowUpQueueInput,
-  ): Promise<boolean> {
-    const targetStreamId = resolveDeliveryStreamId(
-      executionId,
-      orchestratorStreamId,
-    );
-    if (!targetStreamId) return false;
-
-    const result = await sendFollowUp(targetStreamId, followUp);
-    if (result.status !== 'no_session') return true;
-    logger.warn(
-      'subagentDelivery',
-      `Unable to deliver subagent result for ${executionId}: parent stream ${targetStreamId} has no active session (status: ${result.streamStatus ?? 'unknown'}).`,
-    );
-    return false;
-  }
-
-  async function deliverTerminalFollowUp(
-    followUp: FollowUpQueueInput,
-  ): Promise<boolean> {
-    if (!deliveryState.beginDelivery()) return false;
-    try {
-      const delivered = await deliverTerminalResult(followUp);
-      if (delivered) {
-        deliveryState.completeDelivery();
-      } else {
-        deliveryState.failDelivery();
-      }
-      return delivered;
-    } catch (err) {
-      deliveryState.failDelivery();
-      throw err;
-    }
-  }
-
-  /**
-   * Deliver a terminal result and, when the parent's cycle has exited, wake it
-   * via the host resume port so the queued result is consumed instead of
-   * sitting until the user pokes the stream. When the parent is gone for good
-   * (terminal status, no consumer, resume failed), re-release the
-   * force-reopened queue so late deliveries don't leak into the next run on
-   * that stream — the result stays readable in the execution report.
-   */
-  async function deliverTerminalResult(
-    followUp: FollowUpQueueInput,
+    options?: { wake?: boolean },
   ): Promise<boolean> {
     const targetStreamId = resolveDeliveryStreamId(
       executionId,
@@ -535,10 +503,7 @@ async function executeSubagent(
       );
       return false;
     }
-    if (
-      result.status === 'queued' &&
-      (result.reason === 'waiting' || result.reason === 'children_running')
-    ) {
+    if (options?.wake && shouldWakeQueuedStream(result)) {
       const resumed =
         await platform().agentResume.tryResumeStream(targetStreamId);
       if (
@@ -555,6 +520,24 @@ async function executeSubagent(
       }
     }
     return true;
+  }
+
+  async function deliverTerminalFollowUp(
+    followUp: FollowUpQueueInput,
+  ): Promise<boolean> {
+    if (!deliveryState.beginDelivery()) return false;
+    try {
+      const delivered = await deliverFollowUp(followUp, { wake: true });
+      if (delivered) {
+        deliveryState.completeDelivery();
+      } else {
+        deliveryState.failDelivery();
+      }
+      return delivered;
+    } catch (err) {
+      deliveryState.failDelivery();
+      throw err;
+    }
   }
 
   function onProgress(update: SubagentProgressUpdate): void {

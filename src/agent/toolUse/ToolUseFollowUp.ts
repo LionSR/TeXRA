@@ -31,6 +31,21 @@ export type SendFollowUpResult =
     }
   | { status: 'no_session'; streamStatus: string | undefined };
 
+/**
+ * True when a queued follow-up landed on a stream whose cycle has exited
+ * (WAITING snapshot or disposed-with-children) — the cases where the caller
+ * should try `platform().agentResume.tryResumeStream` so the queued item is
+ * consumed instead of sitting until the user pokes the stream.
+ */
+export function shouldWakeQueuedStream(
+  result: SendFollowUpResult,
+): result is SendFollowUpResult & { status: 'queued' } {
+  return (
+    result.status === 'queued' &&
+    (result.reason === 'waiting' || result.reason === 'children_running')
+  );
+}
+
 const logger = createChannelTrace('ToolUseFollowUp');
 const followUpSentObservers = new Set<(streamId: StreamTabId) => void>();
 
