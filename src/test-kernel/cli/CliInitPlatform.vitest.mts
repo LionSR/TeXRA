@@ -21,7 +21,6 @@ const mocks = vi.hoisted(() => ({
   // Collects callbacks registered via the (mocked) lifecycle host's onShutdown
   // so a test can run them and assert the usage-log dispose was wired.
   shutdownHandlers: [] as Array<() => unknown>,
-  leanAdapter: { dispose: vi.fn() },
 }));
 
 vi.mock('@agent/index/platformAgentDirectories', () => ({
@@ -94,11 +93,7 @@ vi.mock('@cli/runtime/cliStateStores', () => ({
 vi.mock('@cli/runtime/gitAuthor', () => ({ applyCliGitAuthorConfig: vi.fn() }));
 
 vi.mock('@tools/lean/direct/directLspAdapter', () => ({
-  createDirectLspLeanAdapter: () => mocks.leanAdapter,
-}));
-
-vi.mock('@tools/lean/leanLanguageServices', () => ({
-  setLeanLanguageServices: vi.fn(),
+  registerDirectLeanLanguageServices: vi.fn(),
 }));
 
 function cliContext(

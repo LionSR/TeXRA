@@ -32,13 +32,20 @@ function readMainApp(): string {
   );
 }
 
+function readFileDropHandler(): string {
+  return readFileSync(
+    repoPath('packages/extension/src/webview/frontend/fileDropHandler.ts'),
+    'utf8',
+  );
+}
+
 /**
- * Extract the body of the `private handleDrop(...)` method from a component
+ * Extract the body of the `handleDrop` handler from the FileDropController
  * source so we can assert on its statement ordering.
  */
 function extractHandleDropBody(source: string): string {
-  const start = source.indexOf('private handleDrop(');
-  expect(start, 'handleDrop method should exist').toBeGreaterThan(-1);
+  const start = source.indexOf('readonly handleDrop = (');
+  expect(start, 'handleDrop handler should exist').toBeGreaterThan(-1);
   const braceStart = source.indexOf('{', start);
   let depth = 0;
   for (let i = braceStart; i < source.length; i += 1) {
@@ -83,29 +90,36 @@ describe('drop-target drag-active reset', () => {
   // drop-active outline. At drop time the payload is readable and rejected by
   // `hasDroppedFilePayload`, and no `dragleave` fires after a `drop` — so the
   // reset MUST run before the rejection early-return, or the outline sticks
-  // forever. Guard both drop targets against regressing into the old ordering
-  // where the reset lived after the `hasDroppedFilePayload` guard.
+  // forever. Guard the shared FileDropController against regressing into the
+  // old ordering where the reset lived after the `hasDroppedFilePayload` guard.
+  it('FileDropController resets drag state before the rejection early-return', () => {
+    const body = extractHandleDropBody(readFileDropHandler());
+
+    const resetAt = body.indexOf('this.reset();');
+    const guardReturnAt = body.indexOf('if (!hasDroppedFilePayload(');
+
+    expect(resetAt, 'resets drag state').toBeGreaterThan(-1);
+    expect(guardReturnAt, 'guards on hasDroppedFilePayload').toBeGreaterThan(
+      -1,
+    );
+
+    // The reset runs before the payload guard, so a rejected drop still
+    // clears the drop-active visuals.
+    expect(resetAt).toBeLessThan(guardReturnAt);
+  });
+
+  // Both drop targets must route drag events through the shared controller
+  // rather than reintroducing per-component handlers.
   for (const [name, read] of [
     ['FileSelectGroup', readFileSelectGroup],
     ['InstructionPanel', readInstructionPanel],
   ] as const) {
-    it(`${name} resets drag state before the rejection early-return`, () => {
-      const body = extractHandleDropBody(read());
+    it(`${name} binds its drop target to the FileDropController`, () => {
+      const component = read();
 
-      const resetDepthAt = body.indexOf('this.dragDepth = 0;');
-      const resetActiveAt = body.indexOf('this.isDragActive = false;');
-      const guardReturnAt = body.indexOf('if (!hasDroppedFilePayload(');
-
-      expect(resetDepthAt, 'resets dragDepth').toBeGreaterThan(-1);
-      expect(resetActiveAt, 'resets isDragActive').toBeGreaterThan(-1);
-      expect(guardReturnAt, 'guards on hasDroppedFilePayload').toBeGreaterThan(
-        -1,
-      );
-
-      // Both resets run before the payload guard, so a rejected drop still
-      // clears the drop-active visuals.
-      expect(resetDepthAt).toBeLessThan(guardReturnAt);
-      expect(resetActiveAt).toBeLessThan(guardReturnAt);
+      expect(component).toContain('new FileDropController(this,');
+      expect(component).toContain('@drop=${this.fileDrop.handleDrop}');
+      expect(component).not.toContain('private handleDrop(');
     });
   }
 });
