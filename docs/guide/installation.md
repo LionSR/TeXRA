@@ -89,10 +89,10 @@ Run `texra doctor` to see what TeXRA found — the LaTeX toolchain, runtime and 
 
 <p class="hero-caption"><code>texra doctor</code> groups its findings: the full LaTeX toolchain and runtime/auth are verified up front, while the optional image tools and Wolfram are checked on demand the first time a feature needs them.</p>
 
-### Homebrew (macOS only) {#homebrew}
+### Homebrew {#homebrew}
 
 ::: info WHAT IS HOMEBREW?
-[Homebrew](https://brew.sh/) is a free package manager for macOS that makes it easy to install command-line tools and applications from the terminal. Many of the macOS instructions below use `brew install` commands, which require Homebrew to be installed first.
+[Homebrew](https://brew.sh/) is a free package manager for macOS and Linux that makes it easy to install command-line tools and applications from the terminal. Many of the macOS instructions below use `brew install` commands, which require Homebrew to be installed first.
 :::
 
 If you're on macOS and don't have Homebrew yet, open the **Terminal** app (found in Applications → Utilities) and paste this command:
