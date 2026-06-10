@@ -108,6 +108,7 @@ const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
 const PLAN_APPROVAL_GOAL = process.env.HARNESS_PLAN_APPROVAL_GOAL === '1';
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
+const SHOW_LIVE_TOOL_ONLY = process.env.HARNESS_LIVE_TOOL_ONLY === '1';
 const SHOW_PROJECT_SKILL = process.env.HARNESS_PROJECT_SKILL === '1';
 const WIDE_TRANSCRIPT_SUFFIX =
   ' hidden-middle wide-column-A wide-column-B wide-column-C wide-column-D wide-column-E wide-column-F';
@@ -471,6 +472,43 @@ function makeLongToolOutputEntries(): ConversationEntry[] {
   ];
 }
 
+function seedLiveToolOnlyTranscript(): void {
+  const store = getDefaultStreamLogStore();
+  const timestamp = Date.now();
+  store.append(STREAM_ID, {
+    id: 'live-tool-user',
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: LOG_LEVELS.INFO,
+    timestamp,
+    messageType: MESSAGE_TYPES.USER_MESSAGE,
+    text: 'what is this repo about',
+  });
+  store.append(STREAM_ID, {
+    id: 'live-tool-empty-assistant',
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: LOG_LEVELS.INFO,
+    timestamp: timestamp + 1,
+    messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+    text: '',
+  });
+  store.append(STREAM_ID, {
+    id: 'live-tool-ls',
+    type: STREAM_LOG_ENTRY_TYPES.LOG,
+    level: LOG_LEVELS.INFO,
+    timestamp: timestamp + 2,
+    messageType: MESSAGE_TYPES.TOOL_USE,
+    data: {
+      toolName: 'ls',
+      input: { path: '.' },
+      output: '',
+      summary: 'Listed 36 entries in .',
+      isError: false,
+      status: TOOL_USE_STATUS.COMPLETED,
+    },
+  });
+  syncStreamLog(STREAM_ID);
+}
+
 function makeRejectedBashToolEntries(): ConversationEntry[] {
   const command = "printf 'approval-reject-live\\n'";
   const message = `User rejected bash command: ${command}`;
@@ -826,10 +864,16 @@ patchStream(STREAM_ID, (slice) => ({
     ? makeRejectedBashToolEntries()
     : SHOW_LONG_TOOL_OUTPUT
       ? makeLongToolOutputEntries()
-      : makeEntries(ENTRY_COUNT),
+      : SHOW_LIVE_TOOL_ONLY
+        ? []
+        : makeEntries(ENTRY_COUNT),
   queuedFollowUps: QUEUED_FOLLOW_UPS.length,
   queuedFollowUpMessages: QUEUED_FOLLOW_UPS,
 }));
+
+if (SHOW_LIVE_TOOL_ONLY) {
+  seedLiveToolOnlyTranscript();
+}
 
 if (SHOW_SUBAGENT_FOLLOWUPS) {
   seedSubagentFollowupTranscript();

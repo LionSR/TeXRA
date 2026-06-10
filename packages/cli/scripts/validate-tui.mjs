@@ -110,6 +110,14 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'live-tool-only-spacing',
+    env: { HARNESS_LIVE_TOOL_ONLY: '1' },
+    expect: ['what is this repo about', '● ls (Listed 36 entries in .)'],
+    maxBlankLinesBetween: [
+      { from: 'what is this repo about', to: '● ls', max: 1 },
+    ],
+  },
+  {
     name: 'queued-followups',
     cols: 120,
     env: {
