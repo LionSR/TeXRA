@@ -13,12 +13,12 @@ import {
 } from '@cli/commands/root';
 import { doctorPlatformInitContext } from '@cli/commands/doctor';
 import {
-  formatUnknownCliCommand,
-  formatUnknownCliFlag,
-  hasUsageNoColorFlag,
   normalizeRootShortcuts,
   reorderGlobalFlags,
-} from '@cli/commands/_helpers/dispatch';
+} from '@cli/commands/_helpers/dispatch/reorderFlags';
+import { hasUsageNoColorFlag } from '@cli/commands/_helpers/dispatch/usage';
+import { formatUnknownCliCommand } from '@cli/commands/_helpers/dispatch/unknownCommand';
+import { formatUnknownCliFlag } from '@cli/commands/_helpers/dispatch/unknownFlag';
 import { CliUsageError, formatCrashReportLine } from '@cli/runtime/cliContext';
 import { resolveLoginProvider } from '@cli/runtime/loginOptions';
 import {
