@@ -87,7 +87,7 @@ export interface RoundCallbacks<S extends RoundAwareState> {
  * After each full pass through the node graph, this class checks whether to
  * continue and handles incrementing, stages, resets, and bounds checking.
  *
- * Returns ExecutionStatus directly from run() — no onFlowEnd callback needed.
+ * Returns RunOutcome directly from run() — no onFlowEnd callback needed.
  */
 export class RoundPersistedFlow<
   S extends RoundAwareState = RoundAwareState,
