@@ -151,6 +151,8 @@ function renderLogEntryText(
   text: string,
 ): string {
   switch (role) {
+    case 'assistant':
+      return text.replace(/^(?:[ \t]*\r?\n)+/, '');
     case 'error':
       return appendCliApiSwitchHint(text);
     case 'user':
