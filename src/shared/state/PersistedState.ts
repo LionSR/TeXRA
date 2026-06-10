@@ -41,12 +41,12 @@ export function createWebviewStorage(hostBridge: {
   setState(state: unknown): void;
 }): StateStorage {
   // Cache full state - read once, update in memory
-  let cache = (hostBridge.getState() as Record<string, unknown>) ?? {};
+  const cache = (hostBridge.getState() as Record<string, unknown>) ?? {};
 
   return {
     get: (key) => cache[key],
     set: (key, value) => {
-      cache = { ...cache, [key]: value };
+      cache[key] = value;
       hostBridge.setState(cache);
     },
   };
