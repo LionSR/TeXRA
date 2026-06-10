@@ -9,11 +9,14 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { SettingsAgentFileController } from '@controllers/settingsView/SettingsAgentFileController';
-import { createKey, getAgent, loadAgents } from '@agent/index';
 import {
-  BUILTIN_TEAM_ROOT_AGENT_NAMES,
-  getToolUseAgents,
-} from '@agent/index/agentRegistry';
+  createKey,
+  getAgent,
+  getAgentsByCategory,
+  loadAgents,
+} from '@agent/index';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@agent/index/agentRegistry';
 import { EdgeFunctionResponseSchema } from '@agent/remote/types';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { ULTRA_TIER, SUPABASE_CONFIG } from '@auth/config';
@@ -580,7 +583,7 @@ export class AgentHandlers {
  */
 function collectOrchestratorAgentNames(): string[] {
   const names = new Set<string>(BUILTIN_TEAM_ROOT_AGENT_NAMES);
-  for (const agent of getToolUseAgents()) {
+  for (const agent of getAgentsByCategory(AgentCategory.ToolUse)) {
     if (hasDelegationTool(agent.tools)) names.add(agent.name);
   }
   return [...names].sort();
