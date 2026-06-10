@@ -18,6 +18,7 @@
 
 import type { ExecutionKVStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
+import { deriveRunOutcome } from '@common/constants/streamStatus';
 import {
   RUN_OUTCOME,
   type RetryErrorInfo,
@@ -201,22 +202,12 @@ export class RoundPersistedFlow<
     );
   }
 
-  /**
-   * Derive the canonical RunOutcome from shared state after the round loop exits.
-   *
-   * Priority:
-   * 1. lastError → FAILED (node-level failure)
-   * 2. interrupted / !continueRounds → CANCELLED (early stop)
-   * 3. otherwise → COMPLETED (all rounds finished normally)
-   */
+  /** Derive the canonical RunOutcome from shared state after the round loop exits. */
   private resolveOutcome(shared: S): RunOutcome {
-    if (shared.lastError) {
-      return RUN_OUTCOME.FAILED;
-    }
-    if (this.callbacks.checkInterruption?.() || !shared.continueRounds) {
-      return RUN_OUTCOME.CANCELLED;
-    }
-    return RUN_OUTCOME.COMPLETED;
+    return deriveRunOutcome({
+      failed: Boolean(shared.lastError),
+      cancelled: this.callbacks.checkInterruption?.() || !shared.continueRounds,
+    });
   }
 
   /**

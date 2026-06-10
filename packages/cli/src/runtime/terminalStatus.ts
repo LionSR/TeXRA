@@ -2,10 +2,7 @@ import { getExecutionStore } from '@agent/storage';
 import type { OutputFileSummary } from '@agent/runtime/AgentFlowResult';
 import { runAgent } from '@agent/runtime/runAgent';
 
-import {
-  outcomeToEndGroupStatus,
-  outcomeToExecutionStatus,
-} from '@common/constants/streamStatus';
+import { projectRunOutcome } from '@common/constants/streamStatus';
 import { EXECUTION_STATUS, type ExecutionStatus } from '@shared/schemas';
 
 import { hasCliApprovalDenied } from './approvalAdapter';
@@ -60,7 +57,7 @@ export function cliTerminalStatus(
   storedTerminalStatus?: string,
 ): ExecutionStatus {
   if (isExecutionStatus(storedTerminalStatus)) return storedTerminalStatus;
-  return outcomeToExecutionStatus(result.outcome);
+  return projectRunOutcome(result.outcome).executionStatus;
 }
 
 export function createCliRunResult<T extends ExecuteAgentResult>(
@@ -76,7 +73,7 @@ export function createCliRunResult<T extends ExecuteAgentResult>(
   return {
     ...result,
     status: terminalStatus,
-    endGroupStatus: outcomeToEndGroupStatus(result.outcome),
+    endGroupStatus: projectRunOutcome(result.outcome).endGroupStatus,
     terminalStatus,
     ...extras,
   } as T extends ExecuteAgentResult ? CliRunResultFor<T> : never;

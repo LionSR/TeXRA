@@ -7,7 +7,11 @@
 
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
-import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
+import {
+  STREAM_STATUS,
+  streamStatusesWithTrait,
+  type StreamTabId,
+} from '@shared/schemas';
 import type { AgentCategory } from '@shared/schemas/agent';
 import type { RunCoordinators } from './RunContext';
 
@@ -22,13 +26,13 @@ export interface ExecutionStatusInfo {
   elapsed: string | null;
 }
 
-/** Statuses that represent a live execution (running, transitioning, or paused). */
-export const ACTIVE_STATUSES: ReadonlySet<string> = new Set([
-  STREAM_STATUS.RUNNING,
-  STREAM_STATUS.INITIALIZING,
-  STREAM_STATUS.RESUMING,
-  STREAM_STATUS.WAITING,
-]);
+/**
+ * Statuses that represent a live execution (running, transitioning, or
+ * paused). This is exactly the `inFlight` trait — derived from the shared
+ * trait table rather than re-declared.
+ */
+export const ACTIVE_STATUSES: ReadonlySet<string> =
+  streamStatusesWithTrait('inFlight');
 
 export interface ExecutionHandle {
   readonly executionId: string;

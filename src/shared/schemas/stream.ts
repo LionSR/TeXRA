@@ -24,12 +24,97 @@ export const StreamStatusSchema = z.enum([
 ]);
 export type StreamStatus = z.infer<typeof StreamStatusSchema>;
 
+/**
+ * Declarative trait table for the live stream state machine — the single
+ * source of truth for every status-membership question. Predicates and sets
+ * (here and in `@common/constants/streamStatus`) are derived from this table;
+ * never declare a new status list by hand.
+ *
+ * Traits:
+ * - `active`      — a model/tool cycle is executing right now.
+ * - `inFlight`    — a cycle may still append to the stream; the stream must
+ *                   not be evicted or acquired by a new run.
+ * - `liveElapsed` — elapsed-time displays keep advancing.
+ * - `terminal`    — the current execution cycle has ended; resumption needs
+ *                   an explicit user action.
+ *
+ * The table makes the two deliberate oddballs visible:
+ * - WAITING is `terminal` AND `inFlight`: the cycle ended (status bar shows
+ *   idle) but a follow-up appends to the same log, so the stream is not
+ *   acquirable.
+ * - INITIALIZING is neither `active` nor `terminal`: a brief pre-start state
+ *   that ticks elapsed time and blocks acquisition, but runs no model calls.
+ */
+export const STREAM_STATUS_TRAITS = {
+  [STREAM_STATUS.RUNNING]: {
+    active: true,
+    inFlight: true,
+    liveElapsed: true,
+    terminal: false,
+  },
+  [STREAM_STATUS.RESUMING]: {
+    active: true,
+    inFlight: true,
+    liveElapsed: true,
+    terminal: false,
+  },
+  [STREAM_STATUS.INITIALIZING]: {
+    active: false,
+    inFlight: true,
+    liveElapsed: true,
+    terminal: false,
+  },
+  [STREAM_STATUS.WAITING]: {
+    active: false,
+    inFlight: true,
+    liveElapsed: false,
+    terminal: true,
+  },
+  [STREAM_STATUS.STOPPED]: {
+    active: false,
+    inFlight: false,
+    liveElapsed: false,
+    terminal: true,
+  },
+  [STREAM_STATUS.ERROR]: {
+    active: false,
+    inFlight: false,
+    liveElapsed: false,
+    terminal: true,
+  },
+  [STREAM_STATUS.READY]: {
+    active: false,
+    inFlight: false,
+    liveElapsed: false,
+    terminal: true,
+  },
+} as const satisfies Record<
+  StreamStatus,
+  {
+    active: boolean;
+    inFlight: boolean;
+    liveElapsed: boolean;
+    terminal: boolean;
+  }
+>;
+
+export type StreamStatusTrait =
+  keyof (typeof STREAM_STATUS_TRAITS)[StreamStatus];
+
+/** Derive the set of statuses carrying a trait — the only list constructor. */
+export function streamStatusesWithTrait(
+  trait: StreamStatusTrait,
+): ReadonlySet<StreamStatus> {
+  return new Set(
+    (Object.keys(STREAM_STATUS_TRAITS) as StreamStatus[]).filter(
+      (status) => STREAM_STATUS_TRAITS[status][trait],
+    ),
+  );
+}
+
 /** Statuses whose elapsed display should keep advancing while active. */
-export const LIVE_ELAPSED_STREAM_STATUSES: ReadonlySet<string> = new Set([
-  STREAM_STATUS.RUNNING,
-  STREAM_STATUS.INITIALIZING,
-  STREAM_STATUS.RESUMING,
-]);
+export const LIVE_ELAPSED_STREAM_STATUSES: ReadonlySet<string> =
+  streamStatusesWithTrait('liveElapsed');
 
 /** Subset of StreamStatus used for task groups */
 export const TaskGroupStatusSchema = z.enum([

@@ -6,130 +6,120 @@ import {
   EXECUTION_STATUS,
   RUN_OUTCOME,
   STREAM_STATUS,
+  STREAM_STATUS_TRAITS,
+  streamStatusesWithTrait,
   type ExecutionStatus,
   type RunOutcome,
   type StreamStatus,
 } from '@shared/schemas';
 
-function unhandledRunOutcome(outcome: never): never {
-  throw new Error(`Unhandled run outcome: ${String(outcome)}`);
-}
-
 // ============================================================================
-// Run-outcome projections
+// Run-outcome algebra
 // ============================================================================
 //
 // `RunOutcome` is the canonical terminal fact, decided once at the run
-// lifecycle boundary. These projections are the ONLY place the legacy
-// vocabularies are derived from it — flows and hosts must not hand-roll
-// their own mappings.
+// lifecycle boundary. The declarative tables below are the ONLY places the
+// derivation rule and the legacy-vocabulary projections are defined — flows
+// and hosts must not hand-roll their own mappings.
 
-/** Persisted-history projection (`ExecutionMeta.terminalStatus`). */
-export function outcomeToExecutionStatus(outcome: RunOutcome): ExecutionStatus {
-  switch (outcome) {
-    case RUN_OUTCOME.COMPLETED:
-      return EXECUTION_STATUS.COMPLETED;
-    case RUN_OUTCOME.CANCELLED:
-      return EXECUTION_STATUS.INTERRUPTED;
-    case RUN_OUTCOME.FAILED:
-      return EXECUTION_STATUS.ERROR;
-    default:
-      return unhandledRunOutcome(outcome);
-  }
+/**
+ * The single facts → outcome derivation rule, shared by every flow exit.
+ * Priority: failed > cancelled > completed.
+ */
+export function deriveRunOutcome(facts: {
+  readonly failed: boolean;
+  readonly cancelled: boolean;
+}): RunOutcome {
+  if (facts.failed) return RUN_OUTCOME.FAILED;
+  if (facts.cancelled) return RUN_OUTCOME.CANCELLED;
+  return RUN_OUTCOME.COMPLETED;
+}
+
+export interface RunOutcomeProjection {
+  /** Persisted-history projection (`ExecutionMeta.terminalStatus`). */
+  readonly executionStatus: ExecutionStatus;
+  /** Transcript-group projection (`stage.end()` / group-end rows). */
+  readonly endGroupStatus: 'error' | 'stopped';
+  /** Live stream-state projection for the terminal transition. */
+  readonly streamStatus: StreamStatus;
 }
 
 /**
- * Transcript-group projection (`stage.end()` / group-end rows).
- * A cancelled run ends its group neutral like a completed one — a user stop
- * is not a failure and must not paint the transcript red.
+ * Projection table: one row per outcome, one column per legacy vocabulary.
+ *
+ * Reading the columns:
+ * - `executionStatus` is the only injective projection — persisted history
+ *   keeps all three outcomes apart.
+ * - `endGroupStatus` and `streamStatus` are isomorphic (completed/cancelled
+ *   fold to the same neutral value; only failed is distinct): a cancelled run
+ *   ends neutral, never red — a user stop is not a failure. If the transcript
+ *   group vocabulary ever learns a third value, consolidate these two columns
+ *   into one.
+ *
+ * The `Record` key type keeps the table compile-time exhaustive; read it
+ * through {@link projectRunOutcome} so an out-of-vocabulary value (stale
+ * fixture, unparsed legacy data) fails with a named error instead of an
+ * undefined-property crash downstream.
  */
-export function outcomeToEndGroupStatus(
-  outcome: RunOutcome,
-): 'error' | 'stopped' {
-  switch (outcome) {
-    case RUN_OUTCOME.COMPLETED:
-    case RUN_OUTCOME.CANCELLED:
-      return 'stopped';
-    case RUN_OUTCOME.FAILED:
-      return 'error';
-    default:
-      return unhandledRunOutcome(outcome);
-  }
-}
+export const RUN_OUTCOME_PROJECTION: Readonly<
+  Record<RunOutcome, RunOutcomeProjection>
+> = {
+  [RUN_OUTCOME.COMPLETED]: {
+    executionStatus: EXECUTION_STATUS.COMPLETED,
+    endGroupStatus: 'stopped',
+    streamStatus: STREAM_STATUS.STOPPED,
+  },
+  [RUN_OUTCOME.CANCELLED]: {
+    executionStatus: EXECUTION_STATUS.INTERRUPTED,
+    endGroupStatus: 'stopped',
+    streamStatus: STREAM_STATUS.STOPPED,
+  },
+  [RUN_OUTCOME.FAILED]: {
+    executionStatus: EXECUTION_STATUS.ERROR,
+    endGroupStatus: 'error',
+    streamStatus: STREAM_STATUS.ERROR,
+  },
+};
 
-/** Live stream-state projection for the terminal transition. */
-export function outcomeToStreamStatus(outcome: RunOutcome): StreamStatus {
-  switch (outcome) {
-    case RUN_OUTCOME.COMPLETED:
-    case RUN_OUTCOME.CANCELLED:
-      return STREAM_STATUS.STOPPED;
-    case RUN_OUTCOME.FAILED:
-      return STREAM_STATUS.ERROR;
-    default:
-      return unhandledRunOutcome(outcome);
+/** Guarded table read — loud, named failure on an unhandled outcome. */
+export function projectRunOutcome(outcome: RunOutcome): RunOutcomeProjection {
+  const projection = RUN_OUTCOME_PROJECTION[outcome];
+  if (!projection) {
+    throw new Error(`Unhandled run outcome: ${String(outcome)}`);
   }
+  return projection;
 }
 
 // ============================================================================
-// Status Helper Functions
+// Status trait predicates (derived from STREAM_STATUS_TRAITS)
 // ============================================================================
+//
+// Membership lives in the declarative trait table in `@shared/schemas`
+// (`STREAM_STATUS_TRAITS`); these are thin readers over it. Do not declare
+// new status lists by hand — add a trait column instead.
 
 /**
- * Terminal statuses - stream execution has ended and won't resume automatically.
- * Used by status bar to determine running vs idle state.
- *
- * Includes:
- * - STOPPED: Flow completed successfully
- * - ERROR: Flow failed due to error
- * - WAITING: Flow paused awaiting user input (follow-up, retry decision).
- *   Classified as terminal because the current execution cycle has ended -
- *   resumption requires explicit user action, not automatic continuation.
- * - READY: Initial state, no execution started
- *
- * Note: INITIALIZING is intentionally excluded - it's a brief transitional state
- * during workflow launch that will quickly become RUNNING or fail. It's neither
- * terminal (execution hasn't ended) nor actively processing (no model calls yet).
+ * Terminal statuses — stream execution has ended and won't resume
+ * automatically. Used by status bar to determine running vs idle state.
  */
-const TERMINAL_STATUSES: readonly StreamStatus[] = [
-  STREAM_STATUS.STOPPED,
-  STREAM_STATUS.ERROR,
-  STREAM_STATUS.WAITING,
-  STREAM_STATUS.READY,
-] as const;
+export const TERMINAL_STATUSES: readonly StreamStatus[] = [
+  ...streamStatusesWithTrait('terminal'),
+];
 
-/**
- * Check if a status indicates active execution (running or resuming).
- * This is the single source of truth for "active" status checks.
- *
- * Note: INITIALIZING is not considered active - it's a transitional state
- * before execution actually begins. Use StreamStatusService.tryAcquire()
- * to check for both INITIALIZING and active states when guarding against
- * concurrent operations.
- */
+/** Check if a status indicates active execution (running or resuming). */
 export function isActiveStatus(status: StreamStatus | undefined): boolean {
-  return status === STREAM_STATUS.RUNNING || status === STREAM_STATUS.RESUMING;
+  return status !== undefined && STREAM_STATUS_TRAITS[status].active;
 }
 
 /**
  * Statuses during which an agent cycle may still be appending to the stream
- * and it must not be evicted from memory or acquired by a new run. Superset
- * of {@link isActiveStatus} — also covers INITIALIZING (pre-start) and
- * WAITING (paused on user input; follow-up appends to the same log).
+ * and it must not be evicted from memory or acquired by a new run.
  */
-const IN_FLIGHT_STATUSES: ReadonlySet<StreamStatus> = new Set<StreamStatus>([
-  STREAM_STATUS.RUNNING,
-  STREAM_STATUS.RESUMING,
-  STREAM_STATUS.INITIALIZING,
-  STREAM_STATUS.WAITING,
-]);
-
 export function isInFlightStatus(status: StreamStatus | undefined): boolean {
-  return status !== undefined && IN_FLIGHT_STATUSES.has(status);
+  return status !== undefined && STREAM_STATUS_TRAITS[status].inFlight;
 }
 
-/**
- * Check if a status is terminal (execution ended).
- */
+/** Check if a status is terminal (execution ended). */
 export function isTerminalStatus(status: StreamStatus | undefined): boolean {
-  return status !== undefined && TERMINAL_STATUSES.includes(status);
+  return status !== undefined && STREAM_STATUS_TRAITS[status].terminal;
 }

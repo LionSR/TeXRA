@@ -20,6 +20,7 @@ import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { ToolInjectionRegistry } from '@agent/runtime/toolInjection';
 import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
+import { deriveRunOutcome } from '@common/constants/streamStatus';
 import { RUN_OUTCOME, type RunOutcome } from '@shared/schemas';
 import type { SubagentProgressUpdate } from '@shared/schemas';
 
@@ -340,8 +341,16 @@ export async function runToolUseFlow<C = unknown>(
       ? extractedTouchedFiles
       : undefined;
 
+    const isInterrupted = input.checkInterruption();
+    const interruptedAfterDeliveredSubagentResult =
+      input.isSubagent &&
+      shared.deliveredToOrchestrator === true &&
+      isInterrupted;
+    outcome = deriveRunOutcome({
+      failed: Boolean(shared.lastError),
+      cancelled: isInterrupted && !interruptedAfterDeliveredSubagentResult,
+    });
     if (shared.lastError) {
-      outcome = RUN_OUTCOME.FAILED;
       // Re-throw so runFlowWithLifecycle logs the error and shows
       // the user notification, while preserving terminal run accounting.
       throw new ToolUseFlowError(shared.lastError.message, {
@@ -351,16 +360,6 @@ export async function runToolUseFlow<C = unknown>(
         totalCostUsd,
       });
     }
-
-    const isInterrupted = input.checkInterruption();
-    const interruptedAfterDeliveredSubagentResult =
-      input.isSubagent &&
-      shared.deliveredToOrchestrator === true &&
-      isInterrupted;
-    outcome =
-      isInterrupted && !interruptedAfterDeliveredSubagentResult
-        ? RUN_OUTCOME.CANCELLED
-        : RUN_OUTCOME.COMPLETED;
   } finally {
     activePersistedFlow = undefined;
     teardownSetup?.();
