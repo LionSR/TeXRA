@@ -82,6 +82,104 @@ describe('AgentTrace stream output', () => {
     }
   });
 
+  it('materializes thinking streams at stream start, before any delta', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace('stream').trace;
+      const thinking = logger.openStream(MESSAGE_TYPES.THINKING);
+
+      // The running entry exists immediately — the CLI keys its "model is
+      // thinking" indicator off it, and hidden reasoning may never emit a
+      // first chunk.
+      let entries = store.get('stream')?.getRange(0) ?? [];
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.THINKING);
+      expect(entries[0]?.text).toBe('');
+      expect(entries[0]?.data).toEqual({ status: 'running' });
+
+      thinking.finalize();
+      entries = store.get('stream')?.getRange(0) ?? [];
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.data).toEqual({ status: 'completed' });
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
+  it('emits nothing for a deferred stream until the first chunk', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace('stream').trace;
+      const thinking = logger.openStream(MESSAGE_TYPES.THINKING, {
+        deferStart: true,
+      });
+
+      expect(store.get('stream')).toBeUndefined();
+
+      thinking.append('reasoning delta');
+      flushPendingRunTraces();
+
+      const entries = store.get('stream')?.getRange(0) ?? [];
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.messageType).toBe(MESSAGE_TYPES.THINKING);
+      expect(entries[0]?.text).toBe('reasoning delta');
+
+      expect(thinking.finalize()).toBe('reasoning delta');
+      expect((store.get('stream')?.getRange(0) ?? [])[0]?.data).toEqual({
+        status: 'completed',
+      });
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
+  it('leaves no trace for a deferred stream finalized without content', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace('stream').trace;
+      const thinking = logger.openStream(MESSAGE_TYPES.THINKING, {
+        deferStart: true,
+      });
+
+      expect(thinking.finalize()).toBe('');
+      expect(store.get('stream')).toBeUndefined();
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
+  it('materializes a deferred stream finalized with reasoning text', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace('stream').trace;
+      const thinking = logger.openStream(MESSAGE_TYPES.THINKING, {
+        deferStart: true,
+      });
+
+      // Mirrors providers that only return reasoning in the final response.
+      expect(thinking.finalize('final reasoning')).toBe('final reasoning');
+
+      const entries = store.get('stream')?.getRange(0) ?? [];
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.text).toBe('final reasoning');
+      expect(entries[0]?.data).toEqual({ status: 'completed' });
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
   it('accumulates disabled progress streams without scheduled updates', () => {
     vi.useFakeTimers();
 

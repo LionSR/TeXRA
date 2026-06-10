@@ -230,10 +230,18 @@ export abstract class ModelHandler<
 
   /**
    * Convenience wrapper for thinking streams.
+   *
+   * Subscribers read the stream's start as "the model began its thinking
+   * phase" (the CLI shows a thinking indicator from it). Call sites that
+   * open the stream exactly when the provider signals that phase (Anthropic
+   * `content_block_start`, OpenAI Responses reasoning items) open eagerly;
+   * call sites that open at request setup must pass `deferStart` so the
+   * start is only emitted once a reasoning delta proves the phase happened.
    */
-  protected createThinkingStream() {
+  protected createThinkingStream(options?: { deferStart?: boolean }) {
     return this.logger.openStream(MESSAGE_TYPES.THINKING, {
       progressViewEnabled: this.progressViewEnabled,
+      deferStart: options?.deferStart,
     });
   }
 
