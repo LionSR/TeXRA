@@ -1,6 +1,8 @@
 // Standard library imports
 import { spawn, type ChildProcess } from 'node:child_process';
 
+import { IS_WINDOWS } from '@utils/system/platformPaths';
+
 import type { LogBackend } from './supabaseAuth';
 
 function quoteWindowsStartUrl(url: string): string {
@@ -33,7 +35,7 @@ export function openBrowser(
     try {
       child = spawn(command, args, {
         stdio: 'ignore',
-        windowsVerbatimArguments: process.platform === 'win32',
+        windowsVerbatimArguments: IS_WINDOWS,
       });
     } catch (error) {
       rejectBrowserLaunch(error);

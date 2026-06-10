@@ -9,6 +9,8 @@ import { execa } from 'execa';
 import { escapeTextStrict } from '@shared/utils/xmlEscape';
 import { WorkspaceFS } from '@utils/files';
 import { listExternalRoots } from '@utils/files/externalRoots';
+import { isoDateOnly } from '@utils/text/stringUtils';
+import { IS_WINDOWS } from './platformPaths';
 import { isWSL } from './wslDetect';
 
 /** Timeout for git commands in milliseconds. */
@@ -31,7 +33,7 @@ interface GitInfo {
 
 /** Detect the user's default shell basename (e.g., "bash", "zsh", "PowerShell"). */
 function detectShell(): string | undefined {
-  if (process.platform === 'win32') {
+  if (IS_WINDOWS) {
     const comspec = process.env.ComSpec;
     if (!comspec) return undefined;
     const name = path.basename(comspec).toLowerCase();
@@ -109,7 +111,7 @@ async function gatherWorkspaceInfo(
     workspacePath: wsPath,
     platform: getPlatformLabel(),
     shell: detectShell(),
-    date: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
+    date: isoDateOnly(),
     git: wsPath ? await getGitInfo(wsPath) : null,
   };
 }

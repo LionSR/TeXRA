@@ -17,6 +17,7 @@ import { defineTool } from '@tools/core/define';
 
 // Local imports - zotero
 import { filterNotNull } from '@utils/core';
+import { formatResultCount } from '@utils/text/stringUtils';
 import {
   callBetterBibTeX,
   getZoteroPort,
@@ -219,7 +220,7 @@ export class ZoteroCollectionsTool extends defineTool({
 
     const context = query ? ` matching "${query}"` : '';
     return {
-      summary: `Found ${totalCollections} collection${totalCollections === 1 ? '' : 's'}${context} across ${librariesWithResults} ${librariesWithResults === 1 ? 'library' : 'libraries'}.`,
+      summary: `Found ${formatResultCount(totalCollections, 'collection')}${context} across ${formatResultCount(librariesWithResults, 'library', 'libraries')}.`,
       output: outputParts.join('\n'),
     };
   }

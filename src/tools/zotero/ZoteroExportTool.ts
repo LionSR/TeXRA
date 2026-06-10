@@ -10,8 +10,8 @@ import { z } from 'zod';
 
 // Local imports - core
 import { ToolError } from '@tools/result';
-import { pluralize } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
+import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - zotero
 import { callBetterBibTeX, getZoteroPort } from './bbtClient';

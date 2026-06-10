@@ -21,6 +21,7 @@ import type {
   OutputFileInfo,
   StreamTabId,
 } from '@shared/schemas';
+import { pluralize } from '@utils/text/stringUtils';
 
 export interface ProgressFollowUpModelOption {
   value: string;
@@ -236,7 +237,7 @@ export class ProgressFollowUpController {
     executionId: string | undefined,
   ): string {
     const executionHint = executionId ? `Execution: ${executionId}` : undefined;
-    const editableHint = `Editable workspace target${editableFiles.length === 1 ? '' : 's'}: ${editableFiles.join(', ')}`;
+    const editableHint = `Editable workspace ${pluralize(editableFiles.length, 'target')}: ${editableFiles.join(', ')}`;
     const failureLines = compileFailures.map((failure) => {
       const outputPath =
         executionId && failure.output.kind === 'runStorage'

@@ -47,7 +47,11 @@ import { AbsoluteFS, StorageFS } from '@utils/files';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 import { getPathSegments } from '@utils/core/pathCore';
-import { formatTimestamp, splitContentLines } from '@utils/text/stringUtils';
+import {
+  formatResultCount,
+  formatTimestamp,
+  splitContentLines,
+} from '@utils/text/stringUtils';
 import { formatSize } from './memory/memoryUtils';
 import {
   formatListingLine,
@@ -440,7 +444,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     ).length;
     const bgSuffix =
       bgCount > 0
-        ? `, ${bgCount} background process${bgCount > 1 ? 'es' : ''} running`
+        ? `, ${formatResultCount(bgCount, 'background process', 'background processes')} running`
         : '';
 
     const header = `Executions (showing ${start}\u2013${end} of ${total}${bgSuffix}, most recent first):`;

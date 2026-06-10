@@ -35,6 +35,7 @@ import {
   summarizeLeanServers,
 } from '@tools/lean/leanServerRegistry';
 import { getZoteroPort } from '@tools/zotero/bbtClient';
+import { formatResultCount } from '@utils/text/stringUtils';
 import { isGitRepository } from '@utils/system/isGitRepository';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { isWSL } from '@utils/system/wslDetect';
@@ -334,7 +335,7 @@ export const EXTERNAL_TOOL_DEFS: readonly ExternalToolDef[] = [
       if (!extensionAvailable && !lakeAvailable) return 'Needs setup';
       const activeCount = listLeanServers().filter(isLeanServerActive).length;
       return activeCount > 0
-        ? `${activeCount} server${activeCount > 1 ? 's' : ''} active`
+        ? `${formatResultCount(activeCount, 'server')} active`
         : undefined;
     },
     detailCheck: async (probeResult) => {
