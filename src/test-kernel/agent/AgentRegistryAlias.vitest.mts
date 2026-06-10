@@ -1,4 +1,6 @@
 // Standard library imports
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,7 +16,7 @@ import {
   canonicalAgentName,
   getAgent,
   getVisibleAgents,
-  loadAgents,
+  refresh,
 } from '@agent/index/agentRegistry';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
@@ -50,7 +52,7 @@ describe('agent registry legacy aliases', () => {
       builtInToolUse: async () =>
         resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
     });
-    await loadAgents({ includeRemote: false });
+    await refresh({ includeRemote: false });
   });
 
   it('maps chat to assistant in canonicalAgentName', () => {
@@ -91,5 +93,54 @@ describe('agent registry legacy aliases', () => {
 
     const visible = getVisibleAgents('toolUse').map((a) => a.name);
     expect(visible).toContain('assistant');
+  });
+
+  it('preserves bare custom chat while migrating qualified built-in chat keys', async () => {
+    const customDir = await mkdtemp(resolve(tmpdir(), 'texra-custom-agent-'));
+    await writeFile(
+      resolve(customDir, 'chat.yaml'),
+      [
+        'name: chat',
+        'description: Custom chat agent',
+        'settings:',
+        '  agentCategory: toolUse',
+        '  tools: []',
+        'prompts:',
+        '  systemPrompt: Custom chat agent.',
+        '',
+      ].join('\n'),
+    );
+
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform(
+        {
+          workspaceState: {
+            [WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS]: [
+              'chat',
+              'builtInToolUse:chat',
+            ],
+          },
+        },
+        { fs: nodeFilesystem },
+      ),
+    );
+    setAgentDirectories({
+      custom: async () => customDir,
+      builtIn: async () =>
+        resolve(REPO_ROOT, 'packages/extension/resources/agents'),
+      builtInToolUse: async () =>
+        resolve(REPO_ROOT, 'packages/extension/resources/tool_use_agents'),
+    });
+
+    await refresh({ includeRemote: false });
+
+    expect(
+      platform().workspaceState.get<string[]>(
+        WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+      ),
+    ).toEqual(['chat', 'builtInToolUse:assistant']);
+    expect(getAgent('chat')?.source).toBe('custom');
+    expect(getAgent('builtInToolUse:chat')?.name).toBe('assistant');
   });
 });
