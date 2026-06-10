@@ -23,7 +23,7 @@ import type {
   InquiryResumeOutcome,
   StreamTabId,
 } from '@shared/schemas';
-import { collapseWhitespace } from '@utils/text/stringUtils';
+import { truncateSummary, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import {
   getThreadSummary,
@@ -39,15 +39,6 @@ export type InjectionOutcome = 'sent' | 'queued' | 'resumed' | 'archived';
 const QUESTION_TRUNCATION = 400;
 const ANSWER_TRUNCATION = 2000;
 
-function truncate(text: string, limit: number): string {
-  if (text.length <= limit) return text;
-  return text.slice(0, limit).trimEnd() + ' …';
-}
-
-function previewText(text: string, limit: number): string {
-  return truncate(collapseWhitespace(text), limit);
-}
-
 function readThreadCommand(threadId: ExternalInquiryThreadId): string {
   return `inquiry { command: 'read', thread_id: '${threadId}' }`;
 }
@@ -58,7 +49,7 @@ function formatStillOpen(threads: ExternalInquiryThreadSummary[]): string[] {
   for (const t of threads) {
     const since = formatRelativeTime(t.lastActivityIso);
     lines.push(
-      `  - ${t.threadId}  "${truncate(t.lastQuestionPreview, 60)}"  (dispatched ${since})`,
+      `  - ${t.threadId}  "${truncateWithEllipsis(t.lastQuestionPreview, 60)}"  (dispatched ${since})`,
     );
   }
   return lines;
@@ -87,10 +78,10 @@ export function buildContinuationText(params: {
 
   if (event === 'answered') {
     lines.push(`[inquiry] ${threadId} answered.`);
-    lines.push(`Q: ${previewText(question, QUESTION_TRUNCATION)}`);
+    lines.push(`Q: ${truncateSummary(question, QUESTION_TRUNCATION)}`);
     if (answer !== undefined) {
       lines.push(
-        `A: ${previewText(answer, ANSWER_TRUNCATION)}` +
+        `A: ${truncateSummary(answer, ANSWER_TRUNCATION)}` +
           (answer.length > ANSWER_TRUNCATION
             ? ` (full text via ${readThreadCommand(threadId)})`
             : ''),
@@ -112,7 +103,7 @@ export function buildContinuationText(params: {
 
   // dropped
   lines.push(`[inquiry] ${threadId} dropped by user.`);
-  lines.push(`Q: ${previewText(question, QUESTION_TRUNCATION)}`);
+  lines.push(`Q: ${truncateSummary(question, QUESTION_TRUNCATION)}`);
   lines.push(`Full thread: ${readThreadCommand(threadId)}`);
   lines.push(...formatStillOpen(stillOpen));
   lines.push(
