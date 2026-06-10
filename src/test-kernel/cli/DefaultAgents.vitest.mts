@@ -8,12 +8,12 @@ import {
 } from '@cli/runtime/defaultAgents';
 
 describe('CLI implicit default agent policy', () => {
-  it('keeps chat as the built-in default chat agent', () => {
-    expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('chat');
+  it('keeps assistant as the built-in default chat agent', () => {
+    expect(BUILTIN_DEFAULT_CHAT_AGENT).toBe('assistant');
   });
 
   it('does not allow simplifier to become an implicit default', () => {
-    expect(isImplicitDefaultToolUseAgentAllowed('chat')).toBe(true);
+    expect(isImplicitDefaultToolUseAgentAllowed('assistant')).toBe(true);
     expect(isImplicitDefaultToolUseAgentAllowed(' simplifier ')).toBe(false);
     expect(isImplicitDefaultToolUseAgentAllowed('SIMPLIFIER')).toBe(false);
     expect(
@@ -25,12 +25,12 @@ describe('CLI implicit default agent policy', () => {
     const candidates = [
       { name: 'simplifier', source: 'built-in' },
       { name: 'builtInToolUse:simplifier', source: 'built-in' },
-      { name: 'chat', source: 'built-in' },
+      { name: 'assistant', source: 'built-in' },
       { name: 'review', source: 'built-in' },
     ] as const;
 
     expect(implicitDefaultToolUseAgents(candidates)).toEqual([
-      { name: 'chat', source: 'built-in' },
+      { name: 'assistant', source: 'built-in' },
       { name: 'review', source: 'built-in' },
     ]);
   });

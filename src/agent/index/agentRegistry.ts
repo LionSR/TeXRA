@@ -178,6 +178,16 @@ async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
 }
 
 /**
+ * Legacy agent-name aliases — keep prior configs, histories, and delegation
+ * calls working when a built-in agent is renamed. Each entry maps
+ * `<old name> → <canonical name>`. Applied only when the original identifier
+ * resolves to nothing, so a user-defined agent with the old name still wins.
+ */
+const LEGACY_AGENT_ALIASES: Record<string, string> = {
+  chat: 'assistant',
+};
+
+/**
  * Canonical agent resolver: look up an agent by identifier.
  *
  * Supports "source:name" format or just "name". Plain names are matched
@@ -201,6 +211,9 @@ export function getAgent(
     const entry = cache.get(`${source}:${identifier}`);
     if (entry) return entry;
   }
+
+  const alias = LEGACY_AGENT_ALIASES[identifier];
+  if (alias) return getAgent(alias, preferToolUse);
   return undefined;
 }
 

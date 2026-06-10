@@ -16,7 +16,7 @@ You're deep in a manuscript and realise you need to cite "that attention paper f
 
 ### <wa-icon library="texra" name="mortar-board"></wa-icon> Find Papers
 
-Ask a literature-search agent — `search`, `chat`, `review`, or `presenter` — to find papers. TeXRA queries **arXiv** (preprints) and **Crossref** (published works) automatically:
+Ask a literature-search agent — `search`, `assistant`, `review`, or `presenter` — to find papers. TeXRA queries **arXiv** (preprints) and **Crossref** (published works) automatically:
 
 ```
 Find recent papers on transformer architectures for document understanding.
