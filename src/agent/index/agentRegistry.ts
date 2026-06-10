@@ -203,7 +203,9 @@ function migrateLegacyAgentNameKeys(): void {
       const name = agentName(key);
       const alias = LEGACY_AGENT_ALIASES[name];
       if (!alias) return key;
-      if (getAgent(name)?.name === name) return key;
+      if (key === name ? getAgent(name)?.name === name : cache.has(key)) {
+        return key;
+      }
       return key.slice(0, key.length - name.length) + alias;
     });
     if (migrated.every((key, i) => key === stored[i])) continue;
@@ -353,10 +355,10 @@ export function isAgentRegistryReady(): boolean {
 }
 
 /** Refresh the cache. */
-export async function refresh(): Promise<void> {
+export async function refresh(options: LoadAgentsOptions = {}): Promise<void> {
   initialized = false;
   cacheIncludesRemote = false;
-  await loadAgents();
+  await loadAgents(options);
 }
 
 // =============================================================================
