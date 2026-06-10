@@ -19,7 +19,6 @@ import { compactIconActionButtonStyles } from '@shared/styles';
 import { decodeXmlEntities } from '@shared/subagentFollowup';
 import { designTokens } from '@shared/styles/litStyles';
 import { markdownStyles } from '@shared/styles/markdownStyles';
-// Shared, host-neutral entity decoding for subagent/structured-delivery bodies.
 import { renderIconActionButton } from '@shared/wa/actionButtons';
 
 // Local imports - formatter helpers
