@@ -1,7 +1,7 @@
 import { create } from 'mutative';
 
 // Third-party imports
-import { html, css, type TemplateResult } from 'lit';
+import { html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -35,6 +35,7 @@ import '@shared/wa/tabs';
 import type { MutableWaTabGroup, WaTabShowEvent } from '@shared/wa/tabs';
 
 // Local imports - progress view frontend
+import { progressAppStyles } from './progressAppStyles';
 import { webviewStorage } from './webviewStorage';
 import {
   createInitialState,
@@ -106,207 +107,7 @@ const ProgressAppBase = SignalWatcher(
 @customElement('progress-app')
 export class ProgressApp extends ProgressAppBase {
   // Static 'styles' override lost through mixin type erasure; still works at runtime.
-  static styles = [
-    designTokens,
-    viewTabStyles,
-    css`
-      :host {
-        display: flex;
-        flex: 1;
-        min-height: 0;
-        min-width: 0;
-      }
-
-      .main-container {
-        display: flex;
-        flex: 1;
-        min-height: 0;
-        min-width: 0;
-        flex-direction: column;
-        overflow: hidden;
-      }
-
-      .view-header {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        padding: var(--wa-space-2xs) var(--wa-space-2xs) var(--wa-space-3xs);
-        border-bottom: var(--border-thin) solid var(--color-border);
-        flex-shrink: 0;
-      }
-
-      .main-container.desktop .view-header {
-        display: none;
-      }
-
-      .view-header wa-tab.focus-sidebar-tab {
-        opacity: var(--opacity-subtle);
-        cursor: default;
-      }
-
-      .header-action {
-        flex-shrink: 0;
-      }
-
-      .header-action::part(base) {
-        min-height: var(--height-control, 24px);
-      }
-
-      .split-container {
-        display: flex;
-        flex: 1;
-        min-height: 0;
-      }
-
-      .progress-empty-state {
-        display: grid;
-        flex: 1;
-        min-height: 0;
-        /* Center the empty-state card on both axes so the route does not
-           show a tall stripe of unused space below the panel. The
-           align-content: safe center keeps the card visible if the
-           viewport is short enough that centering would clip it. */
-        place-items: center;
-        align-content: safe center;
-        padding: var(--wa-space-l, 24px) var(--wa-space-s, 16px);
-        overflow: auto;
-        font-family:
-          var(--wa-font-family-body, var(--wa-font-family-body, system-ui)),
-          sans-serif;
-      }
-
-      .progress-empty-panel {
-        box-sizing: border-box;
-        width: min(720px, 100%);
-        padding: var(--wa-space-l, 24px);
-        border: var(--border-thin, 1px) solid
-          var(--color-border, var(--wa-color-surface-border, #d0d7de));
-        border-radius: var(--border-radius, 6px);
-        background: var(--wa-color-surface-default, #fff);
-      }
-
-      .progress-empty-panel .empty-state-kicker {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--wa-space-2xs, 8px);
-        margin-bottom: var(--wa-space-xs, 12px);
-        color: var(--color-text-secondary, #57606a);
-        font-size: var(--font-size-sm, 13px);
-        font-weight: var(--font-weight-semibold, 600);
-      }
-
-      .progress-empty-panel .empty-state-title {
-        margin: 0 0 var(--wa-space-2xs, 8px);
-        color: var(--wa-color-text-normal, #24292f);
-        font-size: var(--font-size-h2, 1.25em);
-        font-weight: var(--font-weight-semibold, 600);
-        line-height: var(--line-height-heading, 1.25);
-      }
-
-      .progress-empty-panel .empty-state-body {
-        margin: 0;
-        color: var(--color-text-secondary, #57606a);
-        line-height: var(--line-height-normal, 1.5);
-      }
-
-      .progress-empty-panel .empty-state-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--wa-space-2xs, 8px);
-        margin-top: var(--wa-space-s, 16px);
-      }
-
-      .progress-empty-panel .empty-state-actions wa-button::part(base) {
-        min-height: var(--height-button, 30px);
-      }
-
-      wa-icon {
-        font-size: 1em;
-      }
-
-      wa-split-panel {
-        width: 100%;
-        height: 100%;
-        /* The divider is the one and only seam between the conversation and
-           the stream rail. Collapse WebAwesome's default 4px neutral bar to a
-           1px hairline that matches every other border in the view; the
-           invisible 0.75rem hit-area still makes it easy to drag. */
-        --divider-width: var(--border-thin, 1px);
-      }
-
-      wa-split-panel::part(divider) {
-        background-color: var(--color-border);
-      }
-
-      stream-tabs {
-        min-width: 180px;
-      }
-
-      .main-container.narrow stream-tabs {
-        min-width: 48px;
-      }
-
-      .main-container.desktop stream-tabs {
-        min-width: 240px;
-        max-width: 360px;
-      }
-
-      /* .content-area and stream-content layout rules moved to
-         components/StreamConversation.ts (the :host block + its shadow
-         scope). The <stream-conversation> element is now the slot=start
-         element directly. */
-
-      .desktop-empty-progress {
-        display: grid;
-        place-items: center;
-        flex: 1;
-        min-height: 0;
-        padding: clamp(32px, 8vh, 72px) 32px;
-        box-sizing: border-box;
-        background: var(--wa-color-surface-default, var(--background-color));
-      }
-
-      .desktop-empty-progress__body {
-        display: grid;
-        justify-items: center;
-        gap: var(--wa-space-xs);
-        max-width: 560px;
-        text-align: center;
-        color: var(--wa-color-text-quiet);
-      }
-
-      .desktop-empty-progress__icon {
-        color: var(--wa-color-brand-fill-loud);
-        font-size: 44px;
-      }
-
-      .desktop-empty-progress h1 {
-        margin: var(--wa-space-2xs) 0 0;
-        color: var(--wa-color-text-normal);
-        font-size: 24px;
-        font-weight: var(--font-weight-semibold);
-        letter-spacing: 0;
-      }
-
-      .desktop-empty-progress p {
-        margin: 0;
-        font-size: var(--font-size);
-        line-height: var(--line-height-relaxed);
-      }
-
-      .desktop-empty-progress__actions {
-        display: flex;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: var(--wa-space-xs);
-        margin-top: var(--wa-space-2xs);
-      }
-
-      .desktop-empty-progress wa-button::part(base) {
-        min-height: 32px;
-      }
-    `,
-  ];
+  static styles = [designTokens, viewTabStyles, progressAppStyles];
 
   // --- Signal-based state ---
   // State lives at module scope in `progressState.ts` (PRD: docs/prd/electron-shell-layout.md § 7.A)

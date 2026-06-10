@@ -151,6 +151,28 @@ function installContentSecurityPolicy(): void {
   });
 }
 
+function describeSetupCommandOutcome(result: TerminalRunResult): {
+  type: 'warning' | 'error' | 'info';
+  message: string;
+} {
+  if (result.timedOut) {
+    return { type: 'warning', message: 'Setup command timed out' };
+  }
+  if (result.exitCode === undefined) {
+    return {
+      type: 'warning',
+      message: 'Setup command finished without an observable exit code',
+    };
+  }
+  if (result.exitCode !== 0) {
+    return {
+      type: 'error',
+      message: `Setup command failed with exit code ${result.exitCode}`,
+    };
+  }
+  return { type: 'info', message: 'Setup command finished' };
+}
+
 async function showSetupCommandResult(
   window: BrowserWindow,
   command: string,
@@ -158,22 +180,13 @@ async function showSetupCommandResult(
 ): Promise<void> {
   const output = result.output.trim();
   const hasOutput = output.length > 0;
-  const timedOut = result.timedOut;
-  const failed =
-    !timedOut && result.exitCode !== undefined && result.exitCode !== 0;
-  const unknownExit = !timedOut && result.exitCode === undefined;
   const buttons = hasOutput
     ? ['Copy Output', 'Copy Command', 'Close']
     : ['Copy Command', 'Close'];
+  const { type, message } = describeSetupCommandOutcome(result);
   const response = await dialog.showMessageBox(window, {
-    type: timedOut || unknownExit ? 'warning' : failed ? 'error' : 'info',
-    message: timedOut
-      ? 'Setup command timed out'
-      : failed
-        ? `Setup command failed with exit code ${result.exitCode}`
-        : unknownExit
-          ? 'Setup command finished without an observable exit code'
-          : 'Setup command finished',
+    type,
+    message,
     detail: [`Command:\n${command}`, output ? `Output:\n${output}` : '']
       .filter(Boolean)
       .join('\n\n'),

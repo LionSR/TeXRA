@@ -1,0 +1,425 @@
+/**
+ * ProgressView inbound message schemas (frontend -> backend): SWITCH_STREAM,
+ * SEND_FOLLOW_UP, approval actions, file diff actions, and the discriminated
+ * union + dispatcher they compose into.
+ */
+import { z } from 'zod';
+
+import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  createDispatcher,
+  type HandlerRegistry,
+} from '@shared/utils/dispatcher';
+
+import { StreamTabIdSchema } from '../identifiers';
+import {
+  ExternalInquirySessionLinksSchema,
+  ExternalInquiryThreadIdSchema,
+  InquiryDraftSchema,
+} from '../inquiry';
+import {
+  AgentProposalSchema,
+  PLAN_APPROVAL_ACTIONS,
+  USER_QUESTION_ACTIONS,
+  UserQuestionAnswersSchema,
+} from '../prompts';
+import { AgentCategoryFilterSchema } from './data';
+
+const TOOL_EDIT_APPROVAL_ACTIONS = [
+  'approve',
+  'reject',
+  'openDiff',
+  'showLatexdiff',
+  'previewProposed',
+] as const;
+
+const BASH_APPROVAL_ACTIONS = ['approve', 'reject'] as const;
+
+const TrimmedStringSchema = z
+  .string()
+  .transform((s) => s.trim())
+  .pipe(z.string().min(1));
+
+const WebviewReadyMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.WEBVIEW_READY),
+});
+
+const SwitchViewMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SWITCH_VIEW),
+  view: z.enum(['main', 'progress', 'dashboard']),
+  openInEditor: z.boolean().nullish(),
+});
+
+const InboundDeleteAllMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_ALL),
+});
+
+const OpenProfileMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_PROFILE),
+});
+
+const OpenMemoryViewMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_MEMORY_VIEW),
+});
+
+const StartRecordingMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.START_RECORDING),
+});
+
+const StopRecordingMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.STOP_RECORDING),
+});
+
+const PopOutMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.POP_OUT),
+});
+
+const PopBackMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.POP_BACK),
+});
+
+const ThemeSetMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.THEME_SET),
+  theme: z.enum(['dark', 'light']),
+});
+
+const DebugModeSetMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.DEBUG_MODE_SET),
+  debugMode: z.boolean(),
+});
+
+const SwitchStreamMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SWITCH_STREAM),
+  stream: StreamTabIdSchema,
+});
+
+const InboundDeleteStreamMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.DELETE_STREAM),
+  stream: StreamTabIdSchema,
+});
+
+const StopStreamMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.STOP_STREAM),
+  stream: StreamTabIdSchema,
+});
+
+const CompactResponseMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.COMPACT_RESPONSE),
+  stream: StreamTabIdSchema,
+});
+
+const ResumeMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.RESUME),
+  stream: StreamTabIdSchema,
+});
+
+const RunNewMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.RUN_NEW),
+  stream: StreamTabIdSchema,
+});
+
+const DiffStreamMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.DIFF_STREAM),
+  stream: StreamTabIdSchema,
+});
+
+const PackStreamMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.PACK_STREAM),
+  stream: StreamTabIdSchema,
+});
+
+const CleanStreamMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.CLEAN_STREAM),
+  stream: StreamTabIdSchema,
+});
+
+const RestoreStateMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.RESTORE_STATE),
+  stream: StreamTabIdSchema,
+});
+
+const OpenTaskStorageMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_TASK_STORAGE),
+  stream: StreamTabIdSchema,
+});
+
+const RunCompileFixerMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.RUN_COMPILE_FIXER),
+  stream: StreamTabIdSchema,
+});
+
+const GetFollowupOptionsMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.GET_FOLLOWUP_OPTIONS),
+  stream: StreamTabIdSchema,
+});
+
+const FollowupConfigSchema = z.object({
+  stream: StreamTabIdSchema,
+  agent: TrimmedStringSchema,
+  model: TrimmedStringSchema,
+  initialQuestion: z.string().optional(),
+});
+
+const SetupFollowupMessageSchema = FollowupConfigSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SETUP_FOLLOWUP),
+});
+
+const RunFollowupMessageSchema = FollowupConfigSchema.extend({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.RUN_FOLLOWUP),
+});
+
+const CancelRetryRequestMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.CANCEL_RETRY_REQUEST),
+  stream: StreamTabIdSchema,
+});
+
+const UseOwnApiKeyMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.USE_OWN_API_KEY),
+  stream: StreamTabIdSchema,
+  provider: z.string().optional(),
+  /** True when the underlying cause is an upstream provider credit
+   *  depletion (Anthropic 400 "credit balance is too low"), meaning the
+   *  stored key IS the depleted credential. The handler requires a new
+   *  key for these rather than reusing the stored one. */
+  upstreamCreditDepleted: z.boolean().optional(),
+  /** True when the failing request went through the TeXRA relay. When
+   *  false, relay wasn't in the path (direct-key call) and the handler
+   *  must not globally disable relay access — other providers may still
+   *  be served successfully by relay. */
+  viaRelay: z.boolean().optional(),
+});
+
+const ToggleToolEditApprovalBypassMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_TOOL_EDIT_APPROVAL_BYPASS),
+  stream: StreamTabIdSchema,
+});
+
+const ToggleSuperYoloBypassMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.TOGGLE_SUPER_YOLO_BYPASS),
+  stream: StreamTabIdSchema,
+});
+
+const SendFollowUpMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SEND_FOLLOW_UP),
+  stream: StreamTabIdSchema,
+  text: TrimmedStringSchema,
+  /** Pasted images (base64) to attach to this follow-up turn. */
+  images: z
+    .array(
+      z.object({
+        base64: z.string(),
+        mediaType: z.string(),
+        fileName: z.string(),
+      }),
+    )
+    .optional(),
+});
+
+const PolishFollowUpMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.POLISH_FOLLOW_UP),
+  stream: StreamTabIdSchema,
+  text: TrimmedStringSchema,
+});
+
+const RetryStreamRequestMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.RETRY_STREAM_REQUEST),
+  stream: StreamTabIdSchema,
+  feedback: z.string().optional(),
+});
+
+const FilterStreamsMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.FILTER_STREAMS),
+  filter: AgentCategoryFilterSchema,
+});
+
+const ShowInformationMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.SHOW_INFORMATION_MESSAGE),
+  text: TrimmedStringSchema,
+});
+
+const ToolEditApprovalActionMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.TOOL_EDIT_APPROVAL_ACTION),
+  requestId: z.string().min(1),
+  action: z.enum(TOOL_EDIT_APPROVAL_ACTIONS),
+  feedback: z.string().optional(),
+});
+
+const BashApprovalActionMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.BASH_APPROVAL_ACTION),
+  requestId: z.string().min(1),
+  action: z.enum(BASH_APPROVAL_ACTIONS),
+  feedback: z.string().optional(),
+});
+
+const AgentProposalActionMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.AGENT_PROPOSAL_ACTION),
+  proposalId: z.string().min(1),
+  action: z.enum(['approve', 'reject', 'setup']),
+  feedback: z.string().optional(),
+  model: z.string().optional(),
+  agent: z.string().optional(),
+});
+export type ProgressAgentProposalActionMessage = z.infer<
+  typeof AgentProposalActionMessageSchema
+>;
+
+const PlanApprovalActionMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.PLAN_APPROVAL_ACTION),
+  approvalId: z.string().min(1),
+  action: z.enum(PLAN_APPROVAL_ACTIONS),
+  feedback: z.string().optional(),
+});
+
+const ExternalInquiryActionMessageSchema = z
+  .object({
+    command: z.literal(PROGRESS_VIEW_COMMANDS.EXTERNAL_INQUIRY_ACTION),
+    action: z.enum(['submit', 'drop', 'draft']),
+    threadId: ExternalInquiryThreadIdSchema,
+    answer: z.string().min(1).optional(),
+    sessionLinks: ExternalInquirySessionLinksSchema.nullish(),
+    feedback: z.string().optional(),
+    draft: InquiryDraftSchema.nullable().optional(),
+  })
+  .superRefine((message, ctx) => {
+    if (message.action === 'submit' && !message.answer) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['answer'],
+        message: 'Submit actions require an answer.',
+      });
+    }
+    if (message.action === 'draft' && message.draft === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['draft'],
+        message: 'Draft actions require a draft value.',
+      });
+    }
+  });
+
+const UserQuestionActionMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.USER_QUESTION_ACTION),
+  requestId: z.string().min(1),
+  action: z.enum([...USER_QUESTION_ACTIONS, 'skip'] as const),
+  answers: UserQuestionAnswersSchema.optional(),
+  feedback: z.string().optional(),
+});
+
+const RestoreProposalConfigMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.RESTORE_PROPOSAL_CONFIG),
+  proposal: AgentProposalSchema,
+});
+
+const OpenFileMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_FILE),
+  file: z.string().min(1),
+  line: z.int().nonnegative().optional(),
+});
+
+const OpenFileCompileMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_FILE_COMPILE),
+  file: z.string().min(1),
+});
+
+const CompareOriginalMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.COMPARE_ORIGINAL),
+  file: z.string().min(1),
+  base: z.string().min(1).optional(),
+});
+
+const ComparePreviousMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.COMPARE_PREVIOUS),
+  file: z.string().min(1),
+  base: z.string().min(1).optional(),
+  prev: z.string().min(1).optional(),
+});
+
+const AcceptFileMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.ACCEPT_FILE),
+  file: z.string().min(1),
+  base: z.string().min(1).optional(),
+});
+
+const MergeFileMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.MERGE_FILE),
+  file: z.string().min(1),
+  base: z.string().min(1).optional(),
+});
+
+const LatexdiffFileMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.LATEXDIFF_FILE),
+  file: z.string().min(1),
+  base: z.string().min(1).optional(),
+});
+
+const OpenLabelMessageSchema = z.object({
+  command: z.literal(PROGRESS_VIEW_COMMANDS.OPEN_LABEL),
+  label: z.string().min(1),
+});
+
+export const ProgressViewInboundMessageSchema = z.discriminatedUnion(
+  'command',
+  [
+    WebviewReadyMessageSchema,
+    SwitchViewMessageSchema,
+    ThemeSetMessageSchema,
+    DebugModeSetMessageSchema,
+    SwitchStreamMessageSchema,
+    InboundDeleteStreamMessageSchema,
+    InboundDeleteAllMessageSchema,
+    StopStreamMessageSchema,
+    CompactResponseMessageSchema,
+    ResumeMessageSchema,
+    RunNewMessageSchema,
+    DiffStreamMessageSchema,
+    PackStreamMessageSchema,
+    CleanStreamMessageSchema,
+    RestoreStateMessageSchema,
+    OpenTaskStorageMessageSchema,
+    RunCompileFixerMessageSchema,
+    FilterStreamsMessageSchema,
+    SendFollowUpMessageSchema,
+    PolishFollowUpMessageSchema,
+    RetryStreamRequestMessageSchema,
+    CancelRetryRequestMessageSchema,
+    UseOwnApiKeyMessageSchema,
+    StartRecordingMessageSchema,
+    StopRecordingMessageSchema,
+    PopOutMessageSchema,
+    PopBackMessageSchema,
+    ToolEditApprovalActionMessageSchema,
+    ToggleToolEditApprovalBypassMessageSchema,
+    ToggleSuperYoloBypassMessageSchema,
+    BashApprovalActionMessageSchema,
+    AgentProposalActionMessageSchema,
+    PlanApprovalActionMessageSchema,
+    ExternalInquiryActionMessageSchema,
+    UserQuestionActionMessageSchema,
+    RestoreProposalConfigMessageSchema,
+    ShowInformationMessageSchema,
+    OpenProfileMessageSchema,
+    OpenMemoryViewMessageSchema,
+    OpenFileMessageSchema,
+    OpenFileCompileMessageSchema,
+    CompareOriginalMessageSchema,
+    ComparePreviousMessageSchema,
+    AcceptFileMessageSchema,
+    MergeFileMessageSchema,
+    LatexdiffFileMessageSchema,
+    OpenLabelMessageSchema,
+    GetFollowupOptionsMessageSchema,
+    SetupFollowupMessageSchema,
+    RunFollowupMessageSchema,
+  ],
+);
+
+export type ProgressViewInboundMessage = z.infer<
+  typeof ProgressViewInboundMessageSchema
+>;
+
+export type ProgressViewInboundHandlerRegistry =
+  HandlerRegistry<ProgressViewInboundMessage>;
+
+export const dispatchProgressViewInbound = createDispatcher(
+  ProgressViewInboundMessageSchema,
+);
