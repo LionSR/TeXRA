@@ -13,10 +13,10 @@ import { customElement, property, state } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { renderLoadingState } from '@shared/wa/loadingState';
 
-// Web Awesome icon + spinner bundles (side-effect imports)
+// Web Awesome icon bundle (side-effect import)
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 
 // Local imports - shared schemas
 import {
@@ -432,12 +432,7 @@ export class LaTeXTab extends LitElement {
     if (!this.loaded) {
       return html`
         <div class="tab-content-container">
-          <div
-            style="text-align:center;padding:var(--wa-space-s);color:var(--color-text-secondary)"
-          >
-            <wa-spinner></wa-spinner>
-            Loading LaTeX settings...
-          </div>
+          ${renderLoadingState('Loading LaTeX settings...')}
         </div>
       `;
     }

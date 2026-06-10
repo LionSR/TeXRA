@@ -7,6 +7,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { renderLoadingState } from '@shared/wa/loadingState';
 
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
@@ -15,9 +16,8 @@ import type {
   ToolCategory,
 } from '@shared/schemas/settingsViewMessages';
 
-// Side-effect imports - register WA icon and spinner components
+// Side-effect imports - register WA icon and switch components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
@@ -170,13 +170,6 @@ export class ToolsTab extends LitElement {
       .category-count {
         font-weight: normal;
         opacity: var(--opacity-normal);
-      }
-
-      .tools-empty {
-        text-align: center;
-        padding: var(--wa-space-s);
-        color: var(--color-text-secondary);
-        font-size: var(--font-size-sm);
       }
 
       .tools-header-actions {
@@ -421,10 +414,7 @@ export class ToolsTab extends LitElement {
     if (!this.loaded) {
       return html`
         <div class="tools-container tab-content-container">
-          <div class="tools-empty">
-            <wa-spinner></wa-spinner>
-            Loading tool information...
-          </div>
+          ${renderLoadingState('Loading tool information...')}
         </div>
       `;
     }

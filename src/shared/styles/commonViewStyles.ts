@@ -325,6 +325,16 @@ export const commonViewStyles: CSSResult = css`
     font-style: italic;
   }
 
+  /* Structure owned by the shared renderLoadingState helper (@shared/wa) */
+  .loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--wa-space-xs);
+    padding: var(--wa-space-l);
+    color: var(--color-text-secondary);
+  }
+
   .empty-state wa-icon {
     font-size: calc(var(--font-size) * 2.5);
     opacity: var(--opacity-disabled);
