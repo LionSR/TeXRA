@@ -554,10 +554,10 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
         };
         const stream = await chat.sendMessageStream(streamParams);
 
+        // Opened before the request; the deferred starts fire (if ever) at
+        // the first thought/text part — the phase signal for this API.
         const thinking = this.createThinkingStream();
-        const output = this.isOutputStreamingEnabled()
-          ? this.createOutputStream()
-          : undefined;
+        const output = this.createOutputStream();
 
         let baseResponse: GenerateContentResponse | undefined;
         let latestCandidate:
@@ -585,7 +585,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
             : '';
           if (chunkText) {
             aggregatedText += chunkText;
-            output?.append(chunkText);
+            output.append(chunkText);
           }
 
           if (chunk.usageMetadata) {
@@ -644,7 +644,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
           baseResponse.candidates?.[0]?.content?.parts ?? [];
         const finalOutputText =
           aggregatedText || extractNonThinkingText(responseParts);
-        output?.finalize(finalOutputText);
+        output.finalize(finalOutputText);
 
         // Ensure text field excludes thinking content
         // Part.thought is a native property of the Google GenAI SDK Part interface
