@@ -13,11 +13,11 @@ import { openFirstLabelMatch } from '@latex/labelSearch';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
+import type { FileLocation } from '@shared/schemas';
 import {
   AbsoluteFS,
   createExternalLocation,
   pathToLocation,
-  type FileLocation,
 } from '@utils/files';
 
 export interface DesktopProgressFileActionOptions {
@@ -41,7 +41,7 @@ export interface DesktopProgressFileActionHost {
   listWorkspaceCandidateFiles(): Promise<string[]>;
 }
 
-export function toFileLocation(filePath: string): FileLocation {
+function toFileLocation(filePath: string): FileLocation {
   return path.isAbsolute(filePath)
     ? createExternalLocation(filePath)
     : pathToLocation(filePath);

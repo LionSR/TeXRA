@@ -30,7 +30,7 @@ function formatBlock(block: unknown): string {
   }
 }
 
-export function formatMessageContent(content: unknown): string {
+function formatMessageContent(content: unknown): string {
   if (content == null) return '';
   if (typeof content === 'string') {
     return truncate(content, 500);

@@ -35,7 +35,7 @@ export const TOOL_USE_STATUS = {
   COMPLETED: 'completed',
 } as const;
 
-export const ToolUseStatusSchema = z.enum([
+const ToolUseStatusSchema = z.enum([
   TOOL_USE_STATUS.IN_PROGRESS,
   TOOL_USE_STATUS.COMPLETED,
 ]);
@@ -53,7 +53,7 @@ export const ToolUseLogSchema = z.object({
 });
 export type ToolUseLog = z.infer<typeof ToolUseLogSchema>;
 
-export const NormalizedToolUseSchema = z.object({
+const NormalizedToolUseSchema = z.object({
   parsed: z.record(z.string(), z.unknown()),
   toolName: z.string(),
   errorText: z.string(),

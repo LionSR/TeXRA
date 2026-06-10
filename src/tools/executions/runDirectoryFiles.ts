@@ -26,7 +26,7 @@ const KV_FILES = new Set([
   'result-meta.json',
 ]);
 
-export function isKVFile(name: string): boolean {
+function isKVFile(name: string): boolean {
   return (
     KV_FILES.has(name) || name.startsWith('child-') || name.startsWith('flow_')
   );
