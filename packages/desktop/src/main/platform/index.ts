@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { app } from 'electron';
 
 import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
-import { JsonStateStore } from '@platform/defaults/jsonStateStore';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { NO_TOOL_AVAILABILITY_HOST } from '@platform/interfaces/toolAvailability';
@@ -65,8 +64,8 @@ export async function initializeElectronPlatform(
       workspace: workspaceConfigStore,
       global: globalConfigStore,
     }),
-    globalState: new JsonStateStore(globalStateStore),
-    workspaceState: new JsonStateStore(workspaceStateStore),
+    globalState: globalStateStore,
+    workspaceState: workspaceStateStore,
     fs: nodeFilesystem,
     workspace: createNodeWorkspace(() => workspacePath),
     storage,

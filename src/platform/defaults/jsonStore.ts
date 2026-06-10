@@ -6,6 +6,8 @@ import writeFileAtomic from 'write-file-atomic';
 import { isFileNotFoundError } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
+import type { StateStore } from '../interfaces/state';
+
 const CHANNEL = 'JsonStore';
 
 type JsonRecord = Record<string, unknown>;
@@ -43,7 +45,7 @@ async function readJsonRecord(filePath: string): Promise<JsonRecord> {
  * that they land in call order (the per-flush `mkdir` await could otherwise let
  * an earlier snapshot overtake a later one and silently revert it).
  */
-export class JsonStore {
+export class JsonStore implements StateStore {
   private writeChain = Promise.resolve();
 
   private constructor(
@@ -72,6 +74,11 @@ export class JsonStore {
       this.data[key] = value;
     }
     await this.enqueueFlush(this.snapshot());
+  }
+
+  /** {@link StateStore} conformance; same persistence semantics as `set`. */
+  update(key: string, value: unknown): Promise<void> {
+    return this.set(key, value);
   }
 
   snapshot(): JsonRecord {

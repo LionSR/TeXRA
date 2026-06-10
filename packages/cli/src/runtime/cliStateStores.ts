@@ -1,6 +1,5 @@
 import * as path from 'node:path';
 
-import { JsonStateStore } from '@platform/defaults/jsonStateStore';
 import { JsonStore } from '@platform/defaults/jsonStore';
 import { createNodeStorageProvider } from '@platform/defaults/nodeStorage';
 
@@ -32,7 +31,7 @@ export async function createCliStateStores(
 
   return {
     storage,
-    globalState: new JsonStateStore(globalStore),
-    workspaceState: new JsonStateStore(workspaceStore),
+    globalState: globalStore,
+    workspaceState: workspaceStore,
   };
 }
