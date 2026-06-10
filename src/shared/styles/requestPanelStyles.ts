@@ -521,34 +521,11 @@ export const requestPanelStyles: CSSResult = css`
     color: var(--wa-color-text-link);
   }
 
-  .plan-approval-request__summary {
-    font-weight: var(--font-weight-semibold);
-    color: var(--wa-color-text-normal);
-  }
-
-  .plan-approval-request__steps {
+  .plan-approval-request__objective {
     margin: ${sp.small} 0;
-    padding-left: ${sp.xlarge};
-  }
-
-  .plan-approval-request__steps li {
-    margin-bottom: ${sp.small};
-  }
-
-  .plan-approval-request__step-desc {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-sm);
-  }
-
-  .plan-approval-request__step-files {
-    font-family: var(--wa-font-family-mono);
-    font-size: var(--font-size-xs);
-    color: var(--color-text-secondary);
-    margin-top: ${sp.tiny};
-  }
-
-  .plan-approval-request__file {
-    color: var(--wa-color-text-link);
+    color: var(--wa-color-text-normal);
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
   /* ================================================================

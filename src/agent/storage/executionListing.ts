@@ -185,10 +185,12 @@ export async function deleteExecution(
 
 /**
  * Delete all executions, optionally excluding a set of IDs (e.g. active runs).
+ * Returns the execution ids selected for deletion so callers can clean up
+ * adjacent per-execution state without re-scanning storage.
  */
 export async function deleteAllExecutions(
   exclude?: ReadonlySet<string>,
-): Promise<void> {
+): Promise<ExecutionId[]> {
   const entries = await readDirOrEmpty(TASK_RUNS_DIR);
 
   const executionDirs = entries
@@ -208,6 +210,7 @@ export async function deleteAllExecutions(
   } finally {
     invalidateListingCache();
   }
+  return executionDirs;
 }
 
 // ============================================================================

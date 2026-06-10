@@ -23,24 +23,28 @@ export function isCompactPlanApprovalRows(
   );
 }
 
+export function renderCompactPlanLine(
+  line: string,
+  isLastVisibleLine: boolean,
+  hiddenLineCount: number,
+): string {
+  if (!isLastVisibleLine || hiddenLineCount === 0) return line || ' ';
+  if (!line.trim()) return `… ${hiddenLineCount} more lines`;
+  return `${line} · … ${hiddenLineCount} more`;
+}
+
 export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
-  const { summary, steps } = props.payload.plan;
+  const bodyLines = props.payload.plan.objective.split('\n');
   const compact = isCompactPlanApprovalRows(props.availableRows);
   const compactBodyRows = compact
     ? Math.max(0, (props.availableRows ?? 1) - 1)
     : undefined;
-  const compactBodyLines = [
-    ...(summary ? [summary] : []),
-    ...steps.map((step, i) => `${i + 1}. ${step.title}`),
-  ];
   const visibleCompactBodyLines =
-    compactBodyRows === undefined
-      ? []
-      : compactBodyLines.slice(0, compactBodyRows);
+    compactBodyRows === undefined ? [] : bodyLines.slice(0, compactBodyRows);
   const hiddenCompactBodyLines =
     compactBodyRows === undefined
       ? 0
-      : Math.max(0, compactBodyLines.length - compactBodyRows);
+      : Math.max(0, bodyLines.length - compactBodyRows);
 
   return (
     <ConfirmCard
@@ -69,29 +73,20 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
         <Box flexDirection="column">
           {visibleCompactBodyLines.map((line, index) => (
             <Text key={index} wrap="truncate-end">
-              {index === visibleCompactBodyLines.length - 1 &&
-              hiddenCompactBodyLines > 0
-                ? `${line} · … ${hiddenCompactBodyLines} more`
-                : line}
+              {renderCompactPlanLine(
+                line,
+                index === visibleCompactBodyLines.length - 1,
+                hiddenCompactBodyLines,
+              )}
             </Text>
           ))}
         </Box>
       ) : (
-        <>
-          {summary ? (
-            <Box marginY={1}>
-              <Text>{summary}</Text>
-            </Box>
-          ) : null}
-          <Box flexDirection="column">
-            {steps.map((step, i) => (
-              <Text key={i}>
-                {i + 1}. {step.title}
-                {step.description ? ` — ${step.description}` : ''}
-              </Text>
-            ))}
-          </Box>
-        </>
+        <Box flexDirection="column" marginY={1}>
+          {bodyLines.map((line, index) => (
+            <Text key={index}>{line || ' '}</Text>
+          ))}
+        </Box>
       )}
     </ConfirmCard>
   );

@@ -14,7 +14,6 @@ const REPO_ROOT = resolve(
 
 interface GoalPromptsYaml {
   continuation: { template: string };
-  objective_updated: { template: string };
 }
 
 function readYaml(): GoalPromptsYaml {
@@ -49,18 +48,6 @@ describe('Goal prompt parity (YAML ↔ inline fallback)', () => {
       expect(
         loader,
         `Inline fallback in promptLoader.ts is missing this continuation line — update both files in lockstep:\n  ${line}`,
-      ).toContain(line);
-    }
-  });
-
-  it('objective_updated template in YAML is fully reflected in the inline fallback', () => {
-    const ymlTemplate = readYaml().objective_updated.template;
-    const loader = readInlineFallbackSource();
-    const lines = ymlTemplate.split('\n').filter((l) => l.trim().length >= 4);
-    for (const line of lines) {
-      expect(
-        loader,
-        `Inline fallback in promptLoader.ts is missing this objective_updated line — update both files in lockstep:\n  ${line}`,
       ).toContain(line);
     }
   });

@@ -1,12 +1,12 @@
-// Renders the active stream's todo checklist and (if present) the numbered
-// plan steps. Hidden when both lists are empty.
+// Renders the active stream's todo checklist and (if present) a one-line
+// plan summary. Hidden when both are empty.
 
 import { Box, Text } from 'ink';
 
 import {
   TODO_STATUS,
+  planSummaryLine,
   type Plan,
-  type PlanStep,
   type TodoItem,
   type TodoStatus,
 } from '@shared/schemas';
@@ -61,30 +61,14 @@ function TodoRow({
 
 export type CompactTodosPlanRow =
   | { kind: 'todo'; sourceIndex: number; todo: TodoItem }
-  | { kind: 'planSummary'; sourceIndex: number; summary: string }
-  | {
-      kind: 'planStep';
-      sourceIndex: number;
-      step: PlanStep;
-      stepIndex: number;
-    };
+  | { kind: 'planSummary'; sourceIndex: number; summary: string };
 
-// Sort priority by (row kind, status). Statuses absent for a kind use
+// Sort priority by (row kind, status). Statuses absent for the todo kind use
 // DEFAULT_TODO_ROW_PRIORITY; planSummary has a single fixed priority.
-const COMPACT_ROW_PRIORITY: Record<
-  'todo' | 'planStep',
-  Partial<Record<TodoStatus, number>>
-> = {
-  todo: {
-    [TODO_STATUS.IN_PROGRESS]: 0,
-    [TODO_STATUS.PENDING]: 1,
-    [TODO_STATUS.COMPLETED]: 4,
-  },
-  planStep: {
-    [TODO_STATUS.IN_PROGRESS]: 2,
-    [TODO_STATUS.PENDING]: 3,
-    [TODO_STATUS.COMPLETED]: 6,
-  },
+const COMPACT_TODO_ROW_PRIORITY: Partial<Record<TodoStatus, number>> = {
+  [TODO_STATUS.IN_PROGRESS]: 0,
+  [TODO_STATUS.PENDING]: 1,
+  [TODO_STATUS.COMPLETED]: 4,
 };
 const DEFAULT_TODO_ROW_PRIORITY = 3;
 const PLAN_SUMMARY_PRIORITY = 5;
@@ -93,12 +77,7 @@ function compactRowPriority(row: CompactTodosPlanRow): number {
   switch (row.kind) {
     case 'todo':
       return (
-        COMPACT_ROW_PRIORITY.todo[row.todo.status] ?? DEFAULT_TODO_ROW_PRIORITY
-      );
-    case 'planStep':
-      return (
-        COMPACT_ROW_PRIORITY.planStep[row.step.status] ??
-        DEFAULT_TODO_ROW_PRIORITY
+        COMPACT_TODO_ROW_PRIORITY[row.todo.status] ?? DEFAULT_TODO_ROW_PRIORITY
       );
     case 'planSummary':
       return PLAN_SUMMARY_PRIORITY;
@@ -129,16 +108,8 @@ export function compactTodosPlanRows({
     allRows.push({
       kind: 'planSummary',
       sourceIndex: allRows.length,
-      summary: plan.summary,
+      summary: planSummaryLine(plan.objective),
     });
-    for (const [stepIndex, step] of plan.steps.entries()) {
-      allRows.push({
-        kind: 'planStep',
-        sourceIndex: allRows.length,
-        step,
-        stepIndex,
-      });
-    }
   }
 
   if (allRows.length <= rowBudget) {
@@ -168,14 +139,14 @@ export function compactTodosPlanRows({
 
 /**
  * Natural (uncapped) compact-row count for a slice's todos + plan: one row per
- * todo, plus the plan summary and one row per plan step. Drives the bottom-panel
- * reservation in App so the panel takes only the height it needs.
+ * todo, plus one row for the plan summary. Drives the bottom-panel reservation
+ * in App so the panel takes only the height it needs.
  */
 export function todosPlanPanelRowCount(
   todos: readonly TodoItem[],
   plan: Plan | null,
 ): number {
-  return todos.length + (plan ? 1 + plan.steps.length : 0);
+  return todos.length + (plan ? 1 : 0);
 }
 
 function CompactRow({ row }: { row: CompactTodosPlanRow }): React.JSX.Element {
@@ -188,17 +159,6 @@ function CompactRow({ row }: { row: CompactTodosPlanRow }): React.JSX.Element {
           <Text dimColor wrap="truncate-end">
             {row.summary}
           </Text>
-        </Box>
-      );
-    case 'planStep':
-      return (
-        <Box height={1} minWidth={0} overflowY="hidden">
-          <Box flexShrink={0}>
-            <Text color={todoColor(row.step.status)}>
-              {todoMarker(row.step.status)}{' '}
-            </Text>
-          </Box>
-          <Text wrap="truncate-end">{`${row.stepIndex + 1}. ${row.step.title}`}</Text>
         </Box>
       );
   }
@@ -274,15 +234,7 @@ export function TodosPlanPanel(
           <Text bold dimColor>
             Plan
           </Text>
-          <Text dimColor>{plan.summary}</Text>
-          {plan.steps.map((step, i) => (
-            <Box key={i}>
-              <Text color={todoColor(step.status)}>
-                {todoMarker(step.status)}{' '}
-              </Text>
-              <Text>{`${i + 1}. ${step.title}`}</Text>
-            </Box>
-          ))}
+          <Text dimColor>{planSummaryLine(plan.objective)}</Text>
         </Box>
       ) : null}
     </Box>

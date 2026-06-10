@@ -19,7 +19,6 @@ import {
 } from '@agent/runtime/executionRegistry';
 import {
   AgentCategory,
-  TODO_STATUS,
   type AgentProposal,
   type Plan,
   type StreamTabId,
@@ -29,15 +28,11 @@ import { createRecordingHost } from '../progressTestUtils';
 
 const streamId = 'stream:run-coordinator-test' as StreamTabId;
 const plan: Plan = {
-  summary: 'Move coordinator ownership into RunContext.',
-  steps: [
-    {
-      title: 'Use run coordinator',
-      description: 'Create interactive waits through the active run context.',
-      status: TODO_STATUS.PENDING,
-      files: ['src/agent/runtime/runCoordinators.ts'],
-    },
-  ],
+  objective: [
+    'Move coordinator ownership into RunContext.',
+    '',
+    'Create interactive waits through the active run context.',
+  ].join('\n'),
 };
 const proposal: AgentProposal = {
   agentCategory: AgentCategory.ToolUse,
