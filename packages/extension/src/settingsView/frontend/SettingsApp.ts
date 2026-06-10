@@ -289,6 +289,7 @@ export class SettingsApp extends SettingsAppBase {
 
   // Agent teams state
   private readonly customPresets = signal<AgentModePreset[]>([]);
+  private readonly orchestratorAgents = signal<string[]>([]);
 
   // Multi-agent coordination state
   private readonly reliabilitySettings = signal<NumberVscodeSetting[]>([]);
@@ -408,6 +409,7 @@ export class SettingsApp extends SettingsAppBase {
     },
     [SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS]: (data) => {
       this.customPresets.set(data.customPresets);
+      this.orchestratorAgents.set(data.orchestratorAgents ?? []);
     },
     [SETTINGS_VIEW_COMMANDS.UPDATE_APPROVAL_SETTINGS]: (data) => {
       this.bashApprovalEnabled.set(data.bashApprovalEnabled);
@@ -1185,6 +1187,7 @@ export class SettingsApp extends SettingsAppBase {
           <wa-tab-panel name="multi-agent">
             <multi-agent-tab
               .customPresets=${this.customPresets.get()}
+              .orchestratorAgents=${this.orchestratorAgents.get()}
               .allowOrchestratorKill=${this.allowOrchestratorKill.get()}
               .detachSubagentsOnStop=${this.detachSubagentsOnStop.get()}
               .worktreeSupport=${this.gitWorktreeSupport.get()}

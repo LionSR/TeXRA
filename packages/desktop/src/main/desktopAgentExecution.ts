@@ -961,6 +961,10 @@ export class DesktopProgressBridge {
     }
   }
 
+  isResumeInFlight(streamId: StreamTabId): boolean {
+    return this.resumeAttempts.has(streamId);
+  }
+
   private async resolveResumeState(
     streamId: StreamTabId,
   ): Promise<ResumeState | undefined> {

@@ -118,6 +118,56 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('interrupts grandchildren when killing a subagent chain', () => {
+    const explicit = createRecordingHost();
+    const interrupts = new InterruptRegistry();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ interrupts, streamStatus });
+    const rootStreamId = 'root-cascade-test' as StreamTabId;
+    const childStreamId = 'child-cascade-test' as StreamTabId;
+    const grandchildStreamId = 'grandchild-cascade-test' as StreamTabId;
+    const childInterrupt = vi.fn();
+    const grandchildInterrupt = vi.fn();
+
+    try {
+      interrupts.register(childStreamId, { interrupt: childInterrupt });
+      interrupts.register(grandchildStreamId, {
+        interrupt: grandchildInterrupt,
+      });
+      registry.track(
+        new AgentExecutionHandle(
+          'exec-child-cascade-test',
+          rootStreamId,
+          childStreamId,
+          'test-subagent',
+          'toolUse',
+          explicit.host,
+        ),
+      );
+      registry.track(
+        new AgentExecutionHandle(
+          'exec-grandchild-cascade-test',
+          childStreamId,
+          grandchildStreamId,
+          'test-grandchild',
+          'toolUse',
+          explicit.host,
+        ),
+      );
+
+      expect(registry.kill('exec-child-cascade-test')).toBe(true);
+
+      expect(childInterrupt).toHaveBeenCalledOnce();
+      expect(grandchildInterrupt).toHaveBeenCalledOnce();
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(grandchildStreamId)).toBe(STREAM_STATUS.STOPPED);
+    } finally {
+      registry.dispose();
+      interrupts.unregister(childStreamId);
+      interrupts.unregister(grandchildStreamId);
+    }
+  });
+
   it('detaches children when stopping a stream with detached subagents', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();
@@ -125,12 +175,18 @@ describe('executionRegistry', () => {
     const registry = new ExecutionRegistry({ interrupts, streamStatus });
     const rootStreamId = 'root-detach-stop-policy-test' as StreamTabId;
     const childStreamId = 'child-detach-stop-policy-test' as StreamTabId;
+    const grandchildStreamId =
+      'grandchild-detach-stop-policy-test' as StreamTabId;
     const rootInterrupt = vi.fn();
     const childInterrupt = vi.fn();
+    const grandchildInterrupt = vi.fn();
 
     try {
       interrupts.register(rootStreamId, { interrupt: rootInterrupt });
       interrupts.register(childStreamId, { interrupt: childInterrupt });
+      interrupts.register(grandchildStreamId, {
+        interrupt: grandchildInterrupt,
+      });
       registry.track(
         new AgentExecutionHandle(
           'exec-root-detach-stop-policy-test',
@@ -151,6 +207,16 @@ describe('executionRegistry', () => {
           explicit.host,
         ),
       );
+      registry.track(
+        new AgentExecutionHandle(
+          'exec-grandchild-detach-stop-policy-test',
+          childStreamId,
+          grandchildStreamId,
+          'test-grandchild',
+          'toolUse',
+          explicit.host,
+        ),
+      );
 
       expect(
         registry.stopAgentStream(rootStreamId, {
@@ -161,14 +227,22 @@ describe('executionRegistry', () => {
 
       expect(rootInterrupt).toHaveBeenCalledOnce();
       expect(childInterrupt).not.toHaveBeenCalled();
+      expect(grandchildInterrupt).not.toHaveBeenCalled();
       expect(registry.getActiveChildren(rootStreamId).subagents).toHaveLength(
         0,
       );
       expect(
         registry.getAgentHandleByStream(childStreamId)?.parentStreamId,
       ).toBe(childStreamId);
+      expect(
+        registry.getAgentHandleByStream(grandchildStreamId)?.parentStreamId,
+      ).toBe(childStreamId);
+      expect(registry.getActiveChildren(childStreamId).subagents).toEqual([
+        expect.objectContaining({ childStreamId: grandchildStreamId }),
+      ]);
       expect(streamStatus.get(rootStreamId)).toBe(STREAM_STATUS.STOPPED);
       expect(streamStatus.get(childStreamId)).toBeUndefined();
+      expect(streamStatus.get(grandchildStreamId)).toBeUndefined();
       expect(explicit.events).toContainEqual({
         event: 'setParentStream',
         payload: {

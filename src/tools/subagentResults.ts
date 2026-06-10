@@ -128,6 +128,8 @@ export function formatSubagentDelivery(
   result: AgentFlowResult,
   options?: {
     diffInfos?: Map<string, DiffFileInfo>;
+    /** Reason diff computation failed — emitted so the orchestrator can read the output files directly instead of assuming a no-op revision. */
+    diffsUnavailable?: string;
     wallTimeMs?: number;
     workingDirectory?: string;
   },
@@ -148,6 +150,11 @@ export function formatSubagentDelivery(
   lines.push(...formatMemoryMisses(result.memoryMisses));
 
   if (result.category === 'workflow') {
+    if (options?.diffsUnavailable) {
+      lines.push(
+        `<diffs-unavailable reason="${escapeAttr(options.diffsUnavailable)}">Diff computation failed — read the output files directly to review the changes.</diffs-unavailable>`,
+      );
+    }
     if (result.outputs.length > 0) {
       lines.push(...formatWorkflowOutputs(result.outputs, options?.diffInfos));
     }

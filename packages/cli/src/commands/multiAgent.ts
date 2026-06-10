@@ -300,7 +300,17 @@ export async function runMultiAgentPreset(
 
   await initCliPlatform({ ...context, quietLogs: true });
 
-  const { plan } = await loadCliMultiAgentRunPlan(init);
+  const { plan, remoteAgentLoadAttempted } =
+    await loadCliMultiAgentRunPlan(init);
+  if (remoteAgentLoadAttempted) {
+    // Otherwise the silent second load makes runs behave differently from a
+    // signed-out shell with no visible reason.
+    writeTextStderr(
+      cliMultiAgentPlanHasGaps(plan)
+        ? `Preset ${plan.preset.id} referenced agents not available locally; a remote agent load did not fill all the gaps.`
+        : `Preset ${plan.preset.id} referenced agents not available locally; loaded remote agents to fill the gaps.`,
+    );
+  }
   if (plan.missingAgentOverride) {
     throw new CliUsageError(
       missingToolUseAgentMessage(plan.missingAgentOverride),

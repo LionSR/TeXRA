@@ -24,7 +24,10 @@ import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
 import { resolveResourcesPath, resolveWorkspacePath } from './paths.js';
 import { showSecretStorageWarningDialog } from './secretStorageWarningDialog.js';
-import { tryResumeDesktopStream } from '../desktopAgentResume.js';
+import {
+  isDesktopResumeInFlight,
+  tryResumeDesktopStream,
+} from '../desktopAgentResume.js';
 
 // Type imports - platform
 import type { LifecycleHost } from '@platform/interfaces/lifecycle';
@@ -129,7 +132,10 @@ export async function initializeElectronPlatform(
       showWarningMessage: showSecretStorageWarningDialog,
     }),
     lifecycle,
-    agentResume: { tryResumeStream: tryResumeDesktopStream },
+    agentResume: {
+      tryResumeStream: tryResumeDesktopStream,
+      isResumeInFlight: isDesktopResumeInFlight,
+    },
     toolAvailability: NO_TOOL_AVAILABILITY_HOST,
   });
   registerAgentFeatures();

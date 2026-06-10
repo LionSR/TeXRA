@@ -5,6 +5,7 @@ import { describe, it, afterEach } from 'vitest';
 // Standard library imports
 
 // Local imports - agent
+import { createFakePlatform } from '@test/support/FakePlatform';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import { AgentRunStateSnapshotSchema } from '@agent/core/execution/AgentState';
@@ -14,7 +15,10 @@ import {
   executionRegistry,
   type LiveToolUseFlowContext,
 } from '@agent/runtime/executionRegistry';
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import {
+  sendFollowUp,
+  wakeOrReleaseQueuedStream,
+} from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueueInput } from '@agent/toolUse/FollowUpQueue';
 import type { ToolUseSessionSnapshot } from '@agent/implementations/flows/tooluse/ToolUseSessionTypes';
@@ -207,6 +211,159 @@ describe('ToolUseFollowUp', () => {
           displayText: undefined,
           mediaFiles: undefined,
         },
+      ]);
+    } finally {
+      executionRegistry.untrack(executionId);
+      ToolUseFollowUpQueue.release(parentStreamId);
+    }
+  });
+
+  it('serializes concurrent wakes so an in-flight resume keeps the queue', async () => {
+    // Regression: hosts report an already-in-flight resume as `false` before
+    // RESUMING is set, so a second concurrent wake used to release the queue
+    // the first resume was about to drain.
+    const parentStreamId = 'parent-stream-wake-race' as StreamTabId;
+    const childStreamId = 'child-stream-wake-race' as StreamTabId;
+    const executionId = 'exec-wake-race';
+
+    let resumeCalls = 0;
+    let resolveResume!: (resumed: boolean) => void;
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform(
+        {},
+        {
+          agentResume: {
+            tryResumeStream: () => {
+              resumeCalls++;
+              return new Promise<boolean>((resolve) => {
+                resolveResume = resolve;
+              });
+            },
+          },
+        },
+      ),
+    );
+
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'test-subagent',
+      'toolUse',
+      noopAgentRuntimeHost,
+    );
+    executionRegistry.track(handle);
+
+    try {
+      const first = await sendFollowUp(parentStreamId, 'result one');
+      const second = await sendFollowUp(parentStreamId, 'result two');
+      assert.deepEqual(first, { status: 'queued', reason: 'children_running' });
+      assert.deepEqual(second, {
+        status: 'queued',
+        reason: 'children_running',
+      });
+
+      const wakes = Promise.all([
+        wakeOrReleaseQueuedStream(parentStreamId, first),
+        wakeOrReleaseQueuedStream(parentStreamId, second),
+      ]);
+      resolveResume(true);
+
+      assert.deepEqual(await wakes, [true, true]);
+      assert.equal(resumeCalls, 1);
+      assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), [
+        'result one',
+        'result two',
+      ]);
+    } finally {
+      executionRegistry.untrack(executionId);
+      ToolUseFollowUpQueue.release(parentStreamId);
+    }
+  });
+
+  it('releases the reopened queue when the parent cannot be resumed', async () => {
+    const parentStreamId = 'parent-stream-wake-dead' as StreamTabId;
+    const childStreamId = 'child-stream-wake-dead' as StreamTabId;
+    const executionId = 'exec-wake-dead';
+
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform(
+        {},
+        { agentResume: { tryResumeStream: async () => false } },
+      ),
+    );
+
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'test-subagent',
+      'toolUse',
+      noopAgentRuntimeHost,
+    );
+    executionRegistry.track(handle);
+
+    try {
+      const result = await sendFollowUp(parentStreamId, 'late result');
+      assert.deepEqual(result, {
+        status: 'queued',
+        reason: 'children_running',
+      });
+
+      assert.equal(
+        await wakeOrReleaseQueuedStream(parentStreamId, result),
+        false,
+      );
+      assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), []);
+    } finally {
+      executionRegistry.untrack(executionId);
+      ToolUseFollowUpQueue.release(parentStreamId);
+    }
+  });
+
+  it('keeps the reopened queue while the host has a resume in flight', async () => {
+    const parentStreamId = 'parent-stream-wake-in-flight' as StreamTabId;
+    const childStreamId = 'child-stream-wake-in-flight' as StreamTabId;
+    const executionId = 'exec-wake-in-flight';
+
+    const { initPlatform } = await import('@platform/platform');
+    initPlatform(
+      createFakePlatform(
+        {},
+        {
+          agentResume: {
+            tryResumeStream: async () => false,
+            isResumeInFlight: (stream) => stream === parentStreamId,
+          },
+        },
+      ),
+    );
+
+    const handle = new AgentExecutionHandle(
+      executionId,
+      parentStreamId,
+      childStreamId,
+      'test-subagent',
+      'toolUse',
+      noopAgentRuntimeHost,
+    );
+    executionRegistry.track(handle);
+
+    try {
+      const result = await sendFollowUp(parentStreamId, 'late result');
+      assert.deepEqual(result, {
+        status: 'queued',
+        reason: 'children_running',
+      });
+
+      assert.equal(
+        await wakeOrReleaseQueuedStream(parentStreamId, result),
+        true,
+      );
+      assert.deepEqual(ToolUseFollowUpQueue.getAll(parentStreamId), [
+        'late result',
       ]);
     } finally {
       executionRegistry.untrack(executionId);
