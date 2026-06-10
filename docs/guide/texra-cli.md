@@ -10,12 +10,19 @@ import ConfigPrecedenceStack from '../.vitepress/components/ConfigPrecedenceStac
 The TeXRA CLI provides a local `texra` command for running TeXRA agents from a
 terminal. It is published to npm as [`@texra-ai/cli`](https://www.npmjs.com/package/@texra-ai/cli).
 
-## Install From npm
+## Install
 
-Install the CLI globally (requires Node.js >=22.9.0):
+Install the CLI globally from npm (requires Node.js >=22.9.0):
 
 ```bash
 npm install -g @texra-ai/cli
+```
+
+Or with [Homebrew](https://github.com/texra-ai/homebrew-tap) on macOS and
+Linux, which installs Node.js for you if needed:
+
+```bash
+brew install texra-ai/tap/texra
 ```
 
 Verify the command:
