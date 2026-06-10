@@ -3,6 +3,7 @@ import { StringDecoder } from 'node:string_decoder';
 import pMap from 'p-map';
 
 import { platform } from '@platform/platform';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { StreamTabId } from '@shared/schemas';
 
@@ -195,9 +196,9 @@ export class ProcessOutputPoller {
         // Log at debug so a persistent read failure is still observable.
         logger.debug(
           'ProcessOutputPoller',
-          `Process output read failed for ${executionId}: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
+          `Process output read failed for ${executionId}: ${toErrorMessage(
+            err,
+          )}`,
         );
       }
     })();

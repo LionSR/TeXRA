@@ -6,7 +6,7 @@ import {
   type ToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import { normalizeProviderError } from '@common/errors';
+import { normalizeProviderError, toErrorMessage } from '@common/errors';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
 import {
@@ -97,9 +97,7 @@ export class ToolUseCycleNode<C> extends Node<
             // are diagnosable without disrupting the update stream.
             .catch((err: unknown) => {
               this.services.logger.debug(
-                `Failed to persist todos: ${
-                  err instanceof Error ? err.message : String(err)
-                }`,
+                `Failed to persist todos: ${toErrorMessage(err)}`,
               );
             });
         }

@@ -6,6 +6,7 @@
  */
 
 import { flowKey, type FlowRecord } from '@agent/node/persistedFlow';
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { filterNotNull } from '@utils/core';
@@ -37,9 +38,9 @@ export async function hasPersistedFlowRecord(
     // no record, but log so silent KV-read failures are diagnosable.
     logger.debug(
       'DetectWaitingStreams',
-      `Failed to read persisted flow record for ${executionId}: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      `Failed to read persisted flow record for ${executionId}: ${toErrorMessage(
+        err,
+      )}`,
     );
     return false;
   }

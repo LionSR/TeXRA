@@ -10,6 +10,7 @@
 
 import { z } from 'zod';
 
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 
 // SDK type imports - using native types for better type safety
@@ -497,9 +498,7 @@ export function extractDomain(url: string): string {
     // isn't silently rendered as an empty domain.
     logger.debug(
       'ServerTools',
-      `extractDomain: unparseable URL "${url}": ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      `extractDomain: unparseable URL "${url}": ${toErrorMessage(err)}`,
     );
     return '';
   }

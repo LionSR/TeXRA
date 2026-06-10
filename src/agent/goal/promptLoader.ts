@@ -16,6 +16,7 @@ import * as path from 'path';
 import * as yaml from 'yaml';
 import { z } from 'zod';
 
+import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { AbsoluteFS } from '@utils/files';
 
@@ -111,9 +112,9 @@ async function loadPrompts(): Promise<GoalPrompts> {
     // goal.yaml is detectable rather than silently masked.
     logger.warn(
       'GoalPromptLoader',
-      `Failed to load bundled goal.yaml; using inline prompt templates: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      `Failed to load bundled goal.yaml; using inline prompt templates: ${toErrorMessage(
+        err,
+      )}`,
     );
     cached = inlineTemplates;
   }
