@@ -1,0 +1,186 @@
+/**
+ * MainView outbound message schemas (backend -> frontend): SET_*, file
+ * selection responses, banners, and the dispatcher they compose into.
+ */
+import { z } from 'zod';
+
+import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
+import {
+  createDispatcher,
+  type HandlerRegistry,
+} from '@shared/utils/dispatcher';
+
+import { commandOnly } from '../messageFactories';
+import { AgentOptionDataSchema, ModelOptionDataSchema } from './state';
+
+const FileListSchema = z.array(z.string());
+const FilesPayloadSchema = z.object({ files: FileListSchema });
+const SingleFileSelectedSchema = z.object({ filePath: z.string() });
+
+export const SetModelOptionsMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_MODEL_OPTIONS),
+  optionsData: z.array(ModelOptionDataSchema).optional(),
+});
+
+export const SetAgentOptionsMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_AGENT_OPTIONS),
+  optionsData: z
+    .object({
+      workflow: z.array(AgentOptionDataSchema).optional(),
+      toolUse: z.array(AgentOptionDataSchema).optional(),
+    })
+    .optional(),
+});
+
+export const SetEditedFileMessageSchema = FilesPayloadSchema.extend({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_EDITED_FILE),
+});
+
+export const SetBaseFileMessageSchema = FilesPayloadSchema.extend({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_BASE_FILE),
+  preserveBaseFile: z.boolean().nullish(),
+});
+
+export const EditedFileSelectedMessageSchema = SingleFileSelectedSchema.extend({
+  command: z.literal(MAIN_VIEW_COMMANDS.EDITED_FILE_SELECTED),
+});
+
+export const SetInputFilesMessageSchema = FilesPayloadSchema.extend({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_INPUT_FILES),
+});
+
+export const SetContextFilesMessageSchema = FilesPayloadSchema.extend({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_CONTEXT_FILES),
+});
+
+export const SetMediaFilesMessageSchema = FilesPayloadSchema.extend({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_MEDIA_FILES),
+});
+
+export const SetOutputFilesMessageSchema = FilesPayloadSchema.extend({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_OUTPUT_FILES),
+});
+
+export const AddMediaFileMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.ADD_MEDIA_FILE),
+  file: z.string(),
+});
+
+export const SetRecentCommitsMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_RECENT_COMMITS),
+  commits: FileListSchema,
+  isGitRepo: z.boolean().nullish(),
+});
+
+export const SetCurrentFileMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_CURRENT_FILE),
+  filePath: z.string(),
+  fileType: z.string(),
+});
+
+export const SetSelectedCommitMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_SELECTED_COMMIT),
+  commitHash: z.string(),
+  commitLabel: z.string().nullish(),
+});
+
+export const SetOpenedFilesMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_OPENED_FILES),
+  files: FileListSchema,
+  fileType: z.string(),
+  shouldFilter: z.boolean().nullish(),
+});
+
+export const InstructionTextPolishedMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISHED),
+  text: z.string(),
+});
+
+export const InstructionTextPolishErrorMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_POLISH_ERROR),
+  error: z.string().nullish(),
+});
+
+export const InstructionTextTranscribedMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.INSTRUCTION_TEXT_TRANSCRIBED),
+  text: z.string().nullish(),
+});
+
+export const ShowApiKeyBannerMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SHOW_API_KEY_BANNER),
+  provider: z.string().nullish(),
+  requiresKey: z.boolean().nullish(),
+});
+
+export const ShowAgentConfigBannerMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SHOW_AGENT_CONFIG_BANNER),
+  agentName: z.string().nullish(),
+  customDirSet: z.boolean().nullish(),
+});
+
+export const ShowDependencyBannerMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SHOW_DEPENDENCY_BANNER),
+  missingTools: z.array(z.string()).nullish(),
+});
+
+export const ShowGettingStartedBannerMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SHOW_GETTING_STARTED_BANNER),
+});
+
+export const ShowOrchestratorBannerMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SHOW_ORCHESTRATOR_BANNER),
+});
+
+export const ShowLoginBannerMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SHOW_LOGIN_BANNER),
+});
+
+export const SetSelectedAgentMessageSchema = z.object({
+  command: z.literal(MAIN_VIEW_COMMANDS.SET_SELECTED_AGENT),
+  agentId: z.string().nullish(),
+  sessionType: z.string().nullish(),
+});
+
+export const MainViewMessageSchema = z.discriminatedUnion('command', [
+  SetModelOptionsMessageSchema,
+  SetAgentOptionsMessageSchema,
+  SetEditedFileMessageSchema,
+  SetBaseFileMessageSchema,
+  EditedFileSelectedMessageSchema,
+  SetInputFilesMessageSchema,
+  SetContextFilesMessageSchema,
+  SetMediaFilesMessageSchema,
+  SetOutputFilesMessageSchema,
+  AddMediaFileMessageSchema,
+  SetRecentCommitsMessageSchema,
+  SetCurrentFileMessageSchema,
+  SetSelectedCommitMessageSchema,
+  SetOpenedFilesMessageSchema,
+  InstructionTextPolishedMessageSchema,
+  InstructionTextPolishErrorMessageSchema,
+  InstructionTextTranscribedMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.RECORDING_STARTED),
+  commandOnly(MAIN_VIEW_COMMANDS.RECORDING_STOPPED),
+  commandOnly(MAIN_VIEW_COMMANDS.RECORDING_ERROR),
+  ShowApiKeyBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_API_KEY_BANNER),
+  ShowAgentConfigBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_AGENT_CONFIG_BANNER),
+  ShowDependencyBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_DEPENDENCY_BANNER),
+  ShowGettingStartedBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_GETTING_STARTED_BANNER),
+  ShowOrchestratorBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_ORCHESTRATOR_BANNER),
+  ShowLoginBannerMessageSchema,
+  commandOnly(MAIN_VIEW_COMMANDS.HIDE_LOGIN_BANNER),
+  SetSelectedAgentMessageSchema,
+]);
+
+export type MainViewMessage = z.infer<typeof MainViewMessageSchema>;
+
+/** Handler registry for messages the webview receives (extension → webview). */
+export type MainViewHandlerRegistry = HandlerRegistry<MainViewMessage>;
+
+/** Dispatcher for messages the webview receives (extension → webview). */
+export const dispatchMainView = createDispatcher(MainViewMessageSchema);
