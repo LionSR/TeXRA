@@ -15,12 +15,12 @@ import * as vscode from 'vscode';
 import stripAnsi from 'strip-ansi';
 
 // Local imports - hosts
-import type {
-  TerminalRunRequest,
-  TerminalRunResult,
+import {
+  TERMINAL_OUTPUT_MAX_CHARS,
+  type TerminalRunRequest,
+  type TerminalRunResult,
 } from '@hosts/terminalHost';
 
-const OUTPUT_MAX_CHARS = 12_000;
 const SHELL_INTEGRATION_WAIT_MS = 2_000;
 const READER_DRAIN_MS = 250;
 
@@ -94,7 +94,9 @@ async function captureExecution(
   // Drain the stream into a sliding-window tail. `.catch` swallows
   // late stream errors (terminal closed after we stopped awaiting)
   // so they cannot bubble up as unhandled rejections.
-  const reader = tail(execution.read(), OUTPUT_MAX_CHARS).catch(() => '');
+  const reader = tail(execution.read(), TERMINAL_OUTPUT_MAX_CHARS).catch(
+    () => '',
+  );
 
   const result = await raced;
 

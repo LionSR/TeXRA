@@ -2,13 +2,16 @@
 import stripAnsi from 'strip-ansi';
 
 // Local imports - hosts
-import type { TerminalRunner, TerminalRunRequest } from '@hosts/terminalHost';
+import {
+  TERMINAL_OUTPUT_MAX_CHARS,
+  type TerminalRunner,
+  type TerminalRunRequest,
+} from '@hosts/terminalHost';
 
 // Local imports - system
 import { executeCommand } from '@utils/system/execUtils';
 
-const OUTPUT_MAX_CHARS = 12_000;
-const RAW_OUTPUT_MAX_CHARS = OUTPUT_MAX_CHARS * 2;
+const RAW_OUTPUT_MAX_CHARS = TERMINAL_OUTPUT_MAX_CHARS * 2;
 
 export interface DesktopTerminalRunnerOptions {
   cwd?: string;
@@ -64,7 +67,7 @@ function normalizeEnv(
 
 function tail(output: string): string {
   const stripped = stripAnsi(output);
-  return stripped.length > OUTPUT_MAX_CHARS
-    ? stripped.slice(-OUTPUT_MAX_CHARS)
+  return stripped.length > TERMINAL_OUTPUT_MAX_CHARS
+    ? stripped.slice(-TERMINAL_OUTPUT_MAX_CHARS)
     : stripped;
 }

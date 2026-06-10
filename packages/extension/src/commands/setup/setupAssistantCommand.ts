@@ -4,7 +4,10 @@ import * as vscode from 'vscode';
 // Local imports
 import { loadAgents } from '@agent/index';
 import { registerExecution } from '@agent/storage';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
+import {
+  AgentConfigSchema,
+  DEFAULT_AGENT_MODEL,
+} from '@agent/core/definition/AgentConfig';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
@@ -19,12 +22,6 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 const CHANNEL = 'SetupAssistant';
 logger.initialize(CHANNEL);
-
-/**
- * Model to launch with when the user is signed in to Researcher Access
- * (server-side keys cover Gemini).
- */
-const SIGNED_IN_SETUP_MODEL = 'gemini35f';
 
 /**
  * Provider → model mapping used when the user only has a direct API key.
@@ -75,9 +72,9 @@ interface LaunchModelResolution {
  *      on AND the signed-in setup model is in the user's tier. A plain
  *      `canUseServerSideKeys()` pass is insufficient because a lower-tier
  *      user may have server-side access to *some* models but not
- *      `SIGNED_IN_SETUP_MODEL`; we'd otherwise fall through preflight
+ *      `DEFAULT_AGENT_MODEL`; we'd otherwise fall through preflight
  *      and fail at runtime when tier enforcement kicks in.
- *   2. If the user is signed in but `SIGNED_IN_SETUP_MODEL` is not in
+ *   2. If the user is signed in but `DEFAULT_AGENT_MODEL` is not in
  *      tier, scan `API_KEY_MODEL_BY_PROVIDER` for any model that IS in
  *      tier so a lower-tier signed-in user still gets a working launch.
  *   3. Any direct API key for a provider whose default model routes
@@ -105,8 +102,8 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
     };
   }
 
-  if (await serverKeys.canUseServerSideKeysForModel(SIGNED_IN_SETUP_MODEL)) {
-    return { model: SIGNED_IN_SETUP_MODEL, requiresOpenRouter: false };
+  if (await serverKeys.canUseServerSideKeysForModel(DEFAULT_AGENT_MODEL)) {
+    return { model: DEFAULT_AGENT_MODEL, requiresOpenRouter: false };
   }
 
   // Step 2: signed-in user whose tier excludes the default signed-in
@@ -124,7 +121,7 @@ async function resolveLaunchModel(): Promise<LaunchModelResolution | null> {
   }
 
   // Step 3: direct provider key. Only consider providers we know how to
-  // map to a default model — silently falling back to `SIGNED_IN_SETUP_MODEL`
+  // map to a default model — silently falling back to `DEFAULT_AGENT_MODEL`
   // (a Google model) for an unmapped provider would produce a runtime
   // auth failure with a credential that can't reach Google.
   for (const provider of SecretManager.API_PROVIDERS) {
