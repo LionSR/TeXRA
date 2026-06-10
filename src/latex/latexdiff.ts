@@ -107,8 +107,9 @@ export class LaTeXdiffService {
         return { success: false, message: 'Input file is empty or undefined' };
       }
 
-      // One read pass covers both the existence check and the document
-      // structure validation.
+      // Direct callers use one read pass for both existence and document
+      // structure validation. Round-specific wrappers keep their earlier
+      // exists checks so they can report round-specific error messages.
       let contents: string[];
       try {
         contents = await Promise.all([

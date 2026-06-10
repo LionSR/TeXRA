@@ -88,12 +88,9 @@ class ReplacementEngineImpl implements ReplacementEngine {
     }).trim();
     if (wrapCritique) result = wrapCritiqueInAlign(result);
     result = applyReplacements(result, getAllReplacementsRegex(), {
-      processMathUnicode: false,
       cleanupPasses: false,
     }).trim();
-    result = applyReplacements(result, replacements, {
-      processMathUnicode: false,
-    }).trim();
+    result = applyReplacements(result, replacements).trim();
     return wrapCritique ? wrapCritiqueInAlign(result) : result;
   }
 }
