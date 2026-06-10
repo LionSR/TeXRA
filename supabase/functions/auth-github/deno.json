@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "@hono/hono": "jsr:@hono/hono@4.12.24",
+    "@supabase/supabase-js": "jsr:@supabase/supabase-js@2.108.1",
+    "djwt": "https://deno.land/x/djwt@v3.0.2/mod.ts"
+  }
+}

@@ -68,27 +68,18 @@ export function getCorsHeaders(req: Request): Record<string, string> {
  * Handle CORS preflight or reject disallowed origins.
  * @returns Response if handled (preflight or rejected), null if request should proceed.
  */
-export function handleCors(req: Request): {
-  corsHeaders: Record<string, string>;
-  response?: Response;
-} {
+export function handleCors(req: Request): Response | null {
   const corsHeaders = getCorsHeaders(req);
 
   // Reject requests from disallowed origins
   if (!corsHeaders['Access-Control-Allow-Origin']) {
-    return {
-      corsHeaders,
-      response: new Response('Forbidden', { status: 403 }),
-    };
+    return new Response('Forbidden', { status: 403 });
   }
 
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return {
-      corsHeaders,
-      response: new Response('ok', { headers: corsHeaders }),
-    };
+    return new Response('ok', { headers: corsHeaders });
   }
 
-  return { corsHeaders };
+  return null;
 }
