@@ -336,7 +336,10 @@ export class DesktopProgressBridge {
           },
           hasPendingPermissions: (streamId) => {
             for (const pending of this.pendingPermissionStreams.values()) {
-              if (pending === streamId) return true;
+              // An empty id means the prompt has no stream context; treat it
+              // as blocking any switch, matching the extension's
+              // ApprovalRequestHandler.hasPendingForStream.
+              if (!pending || pending === streamId) return true;
             }
             return false;
           },
