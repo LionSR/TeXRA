@@ -36,7 +36,6 @@ import {
 } from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
-import { hasCliApprovalDenied } from '@cli/runtime/approvalAdapter';
 import { approvalPromptsUnavailable } from '@cli/runtime/approvalPolicyAvailability';
 import {
   effectiveCliApiMode,
@@ -71,6 +70,10 @@ import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
 } from '@cli/runtime/terminalRequirements';
+import {
+  cliTerminalStatus,
+  terminalStatusExitCode,
+} from '@cli/runtime/terminalStatus';
 import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
@@ -1243,13 +1246,10 @@ export async function runChat(
       })
       .then((result) => {
         agentSettled = true;
-        if (session.stopRequested || result.outcome !== 'failed') {
-          session.runExitCode = CliExitCode.Success;
-        } else if (hasCliApprovalDenied(sessionContext)) {
-          session.runExitCode = CliExitCode.ApprovalDenied;
-        } else {
-          session.runExitCode = CliExitCode.AgentError;
-        }
+        session.runExitCode = terminalStatusExitCode(
+          cliTerminalStatus(result),
+          sessionContext,
+        );
         // Pull any final MODEL_RESPONSE chunks out of the AgentTrace
         // buffer before falling back to `result.lastResponse`. Without
         // this, a reply that finalized between sync ticks would never

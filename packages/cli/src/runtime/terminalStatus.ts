@@ -87,7 +87,7 @@ export function createCliRunResult<T extends ExecuteAgentResult>(
 export function terminalStatusExitCode(
   terminalStatus: ExecutionStatus,
   context: CliContext,
-): number {
+): CliExitCode {
   if (terminalStatus === EXECUTION_STATUS.ERROR) {
     return hasCliApprovalDenied(context)
       ? CliExitCode.ApprovalDenied
