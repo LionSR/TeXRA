@@ -1,22 +1,32 @@
 /**
  * Auth GitHub Edge Function - VS Code GitHub authentication for Supabase.
  *
- * Provides authentication for VS Code web/Codespaces where standard OAuth
- * callbacks don't work reliably. Uses VS Code's built-in GitHub auth.
+ * Lets the VS Code extension sign users in with VS Code's built-in GitHub
+ * auth (works on desktop, Codespaces, Remote SSH) where standard OAuth
+ * callbacks don't work reliably. The extension posts the GitHub token here;
+ * this function validates it with GitHub, finds or creates the Supabase
+ * user, and returns a NATIVE GoTrue session (minted via an admin magic-link
+ * token consumed server-side). Tokens are therefore signed
+ * with the project's current JWT signing keys and refresh through GoTrue's
+ * standard rotation; there is no hand-rolled JWT or custom session store.
  *
  * Routes:
- * - POST /exchange - Exchange GitHub token for Supabase session
- * - POST /refresh  - Refresh an access token
+ * - POST /exchange - Exchange GitHub token for a GoTrue session
+ * - POST /refresh  - Refresh a session (GoTrue refresh-token passthrough,
+ *                    kept for older extension clients; new clients refresh
+ *                    directly via supabase-js)
  *
  * Security:
  * - GitHub token validated with GitHub's API
- * - Service role key for user management
- * - JWTs signed with Supabase's JWT secret
+ * - Service role key for user management; sign-up policy enforced for new users
  */
 
 import { Hono, type Context as HonoContext } from '@hono/hono';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { create, getNumericDate } from 'djwt';
+import {
+  createClient,
+  type Session,
+  type SupabaseClient,
+} from '@supabase/supabase-js';
 import { handleCors } from '../_shared/cors.ts';
 import {
   checkEmailDomain,
@@ -28,17 +38,29 @@ import { versionedJsonResponse } from '../_shared/responses.ts';
 // Constants
 // =============================================================================
 
-const VERSION = '2.0.1';
-const ACCESS_TOKEN_EXPIRY_SECONDS = 3600;
-const REFRESH_TOKEN_EXPIRY_DAYS = 7;
+const VERSION = '3.0.0';
 
 // =============================================================================
 // Environment
 // =============================================================================
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const jwtSecret = Deno.env.get('SUPABASE_JWT_SECRET')!;
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+
+const adminSupabase =
+  supabaseUrl && supabaseServiceKey
+    ? createClient<any>(supabaseUrl, supabaseServiceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : null;
+
+const anonSupabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient<any>(supabaseUrl, supabaseAnonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : null;
 
 // =============================================================================
 // Types
@@ -56,13 +78,18 @@ interface GitHubUser {
 // `any` schema so `.schema('auth')` queries typecheck (service-role client).
 type Variables = {
   supabase: SupabaseClient<any>;
+  authClient: SupabaseClient<any>;
 };
+
+type MetadataRecord = Record<string, unknown>;
 
 // =============================================================================
 // Hono App
 // =============================================================================
 
-const app = new Hono<{ Variables: Variables }>();
+// The edge runtime hands over paths including the function slug
+// (/auth-github/exchange), same as the relay function.
+const app = new Hono<{ Variables: Variables }>().basePath('/auth-github');
 
 // CORS middleware using shared utilities
 app.use('*', async (c, next) => {
@@ -73,7 +100,7 @@ app.use('*', async (c, next) => {
 
 // Initialize Supabase client
 app.use('*', async (c, next) => {
-  if (!supabaseUrl || !supabaseServiceKey || !jwtSecret) {
+  if (!adminSupabase || !anonSupabase) {
     return versionedJsonResponse(
       c.req.raw,
       VERSION,
@@ -82,12 +109,8 @@ app.use('*', async (c, next) => {
     );
   }
 
-  c.set(
-    'supabase',
-    createClient<any>(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    }),
-  );
+  c.set('supabase', adminSupabase);
+  c.set('authClient', anonSupabase);
 
   await next();
 });
@@ -98,44 +121,85 @@ app.use('*', async (c, next) => {
 
 type Context = HonoContext<{ Variables: Variables }>;
 
-function jsonResponse(
-  c: Context,
-  body: Record<string, unknown>,
-  status: number,
-) {
-  return versionedJsonResponse(c.req.raw, VERSION, body, status);
-}
-
 function errorResponse(c: Context, error: string, status: number) {
-  return jsonResponse(c, { error }, status);
+  return versionedJsonResponse(c.req.raw, VERSION, { error }, status);
 }
 
-/** Build session response payload used by both exchange and refresh. */
-function buildSessionResponse(
-  accessToken: string,
-  refreshToken: string,
-  user: {
-    id: string;
-    email?: string | null;
-    user_metadata?: Record<string, unknown>;
-  },
-) {
-  const now = Math.floor(Date.now() / 1000);
-  return {
-    access_token: accessToken,
-    refresh_token: refreshToken,
-    expires_at: now + ACCESS_TOKEN_EXPIRY_SECONDS,
-    expires_in: ACCESS_TOKEN_EXPIRY_SECONDS,
-    token_type: 'bearer',
-    user: {
-      id: user.id,
-      email: user.email,
-      user_metadata: {
-        avatar_url: user.user_metadata?.avatar_url,
-        user_name: user.user_metadata?.user_name,
+/** Session payload returned by both exchange and refresh. */
+function sessionResponse(c: Context, session: Session) {
+  return versionedJsonResponse(
+    c.req.raw,
+    VERSION,
+    {
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+      expires_at: session.expires_at,
+      expires_in: session.expires_in,
+      token_type: session.token_type,
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        user_metadata: {
+          avatar_url: session.user.user_metadata?.avatar_url,
+          user_name: session.user.user_metadata?.user_name,
+        },
       },
     },
+    200,
+  );
+}
+
+function githubAppMetadata(
+  existing: MetadataRecord | null | undefined,
+): MetadataRecord {
+  const currentProviders = Array.isArray(existing?.providers)
+    ? existing.providers.filter(
+        (provider): provider is string => typeof provider === 'string',
+      )
+    : [];
+  return {
+    ...(existing ?? {}),
+    provider: 'github',
+    providers: [...new Set([...currentProviders, 'github'])],
   };
+}
+
+/**
+ * Mint a native GoTrue session for an existing user. Generates an admin
+ * magic-link token and consumes it immediately server-side, so GoTrue issues a
+ * standard session with rotating refresh.
+ */
+async function mintGoTrueSession(
+  adminClient: SupabaseClient<any>,
+  authClient: SupabaseClient<any>,
+  email: string,
+): Promise<Session | null> {
+  // Supabase admin.generateLink returns link/OTP material for custom delivery.
+  // Consume the hash immediately server-side; GoTrue mailer behavior depends on
+  // the deployment's auth email configuration.
+  const { data: linkData, error: linkError } =
+    await adminClient.auth.admin.generateLink({ type: 'magiclink', email });
+
+  const tokenHash = linkData?.properties?.hashed_token;
+  if (linkError || !tokenHash) {
+    console.error(
+      '[AUTH] generateLink failed:',
+      linkError?.message ?? 'no hashed_token',
+    );
+    return null;
+  }
+
+  const { data, error } = await authClient.auth.verifyOtp({
+    type: 'magiclink',
+    token_hash: tokenHash,
+  });
+
+  if (error || !data.session) {
+    console.error('[AUTH] verifyOtp failed:', error?.message);
+    return null;
+  }
+
+  return data.session;
 }
 
 async function validateGitHubToken(
@@ -212,44 +276,6 @@ async function validateGitHubToken(
   return { user, email: primaryEmail };
 }
 
-async function createJWT(
-  userId: string,
-  email: string,
-  userMetadata: Record<string, unknown>,
-  appMetadata: Record<string, unknown>,
-): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(jwtSecret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign', 'verify'],
-  );
-
-  return create(
-    { alg: 'HS256', typ: 'JWT' },
-    {
-      iss: `${supabaseUrl}/auth/v1`,
-      sub: userId,
-      aud: 'authenticated',
-      exp: getNumericDate(ACCESS_TOKEN_EXPIRY_SECONDS),
-      iat: getNumericDate(0),
-      email,
-      phone: '',
-      app_metadata: appMetadata,
-      user_metadata: userMetadata,
-      role: 'authenticated',
-      aal: 'aal1',
-      amr: [{ method: 'oauth', timestamp: now }],
-      session_id: crypto.randomUUID(),
-      is_anonymous: false,
-    },
-    key,
-  );
-}
-
 // =============================================================================
 // Routes
 // =============================================================================
@@ -270,6 +296,11 @@ app.post('/exchange', async (c) => {
     const { user: githubUser, email } = githubResult;
     const githubProviderId = githubUser.id.toString();
     const supabase = c.get('supabase');
+    const githubUserMetadata = {
+      avatar_url: githubUser.avatar_url,
+      user_name: githubUser.login,
+      full_name: githubUser.name || githubUser.login,
+    };
 
     console.log(`[AUTH] Exchange for GitHub user ${githubUser.login}`);
 
@@ -287,8 +318,47 @@ app.post('/exchange', async (c) => {
 
     if (identities?.length) {
       userId = identities[0].user_id;
-      const { data: userData } = await supabase.auth.admin.getUserById(userId);
-      userEmail = userData?.user?.email || email;
+      const { data: userData, error: userError } =
+        await supabase.auth.admin.getUserById(userId);
+      if (userError || !userData?.user) {
+        console.error('[AUTH] Failed to load linked user:', userError?.message);
+        return errorResponse(c, 'Failed to load linked user', 500);
+      }
+      const storedEmail = userData.user.email?.trim();
+      const identityUpdate: MetadataRecord = {
+        user_metadata: {
+          ...userData.user.user_metadata,
+          ...githubUserMetadata,
+        },
+        app_metadata: githubAppMetadata(userData.user.app_metadata),
+      };
+      if (storedEmail) {
+        userEmail = storedEmail;
+      } else {
+        identityUpdate.email = email;
+        identityUpdate.email_confirm = true;
+      }
+      const { data: updatedUser, error: updateError } =
+        await supabase.auth.admin.updateUserById(userId, identityUpdate);
+      if (updateError) {
+        console.error(
+          '[AUTH] Failed to update linked GitHub user:',
+          updateError.message,
+        );
+        return errorResponse(c, 'Failed to update linked GitHub user', 500);
+      }
+      if (!storedEmail) {
+        const boundEmail = updatedUser?.user?.email?.trim();
+        if (!boundEmail) {
+          console.error('[AUTH] GitHub email bind produced no stored email');
+          return errorResponse(
+            c,
+            'Failed to bind verified GitHub email to linked account',
+            500,
+          );
+        }
+        userEmail = boundEmail;
+      }
     } else {
       // Check by email
       const { data: authUser } = await supabase
@@ -300,13 +370,24 @@ app.post('/exchange', async (c) => {
 
       if (authUser) {
         userId = authUser.id;
-        await supabase.auth.admin.updateUserById(userId, {
-          user_metadata: {
-            ...authUser.raw_user_meta_data,
-            avatar_url: githubUser.avatar_url,
-            user_name: githubUser.login,
+        userEmail = authUser.email ?? email;
+        const { error: updateError } = await supabase.auth.admin.updateUserById(
+          userId,
+          {
+            user_metadata: {
+              ...authUser.raw_user_meta_data,
+              ...githubUserMetadata,
+            },
+            app_metadata: githubAppMetadata(authUser.raw_app_meta_data),
           },
-        });
+        );
+        if (updateError) {
+          console.error(
+            '[AUTH] Failed to update email-matched GitHub user:',
+            updateError.message,
+          );
+          return errorResponse(c, 'Failed to update GitHub user', 500);
+        }
       } else {
         // New user — enforce sign-up policy (existing users are never re-checked).
         const emailDecision = checkEmailDomain(email);
@@ -329,22 +410,20 @@ app.post('/exchange', async (c) => {
         const { data: newUser, error } = await supabase.auth.admin.createUser({
           email,
           email_confirm: true,
-          user_metadata: {
-            avatar_url: githubUser.avatar_url,
-            user_name: githubUser.login,
-            full_name: githubUser.name || githubUser.login,
-          },
-          app_metadata: { provider: 'github', providers: ['github'] },
+          user_metadata: githubUserMetadata,
+          app_metadata: githubAppMetadata(null),
         });
 
         if (error || !newUser?.user) {
           return errorResponse(c, 'Failed to create user', 500);
         }
         userId = newUser.user.id;
+        userEmail = newUser.user.email ?? email;
       }
 
-      // Duplicate/constraint failures are non-fatal; thrown transport/runtime
-      // failures should fail the exchange instead of leaving auth state split.
+      // Identity linking is best-effort: constraint/duplicate failures are
+      // logged and the exchange proceeds, since the session mint below is what
+      // actually signs the user in.
       const { error: identityError } = await supabase
         .schema('auth')
         .from('identities')
@@ -368,61 +447,33 @@ app.post('/exchange', async (c) => {
       }
     }
 
-    // Generate tokens
-    const accessToken = await createJWT(
-      userId,
+    const session = await mintGoTrueSession(
+      supabase,
+      c.get('authClient'),
       userEmail,
-      {
-        avatar_url: githubUser.avatar_url,
-        user_name: githubUser.login,
-        email: userEmail,
-        email_verified: true,
-      },
-      { provider: 'github', providers: ['github'] },
     );
-
-    const refreshToken =
-      crypto.randomUUID().replace(/-/g, '') +
-      crypto.randomUUID().replace(/-/g, '');
-
-    // Store session
-    const { error: sessionError } = await supabase.from('sessions').insert({
-      id: crypto.randomUUID(),
-      user_id: userId,
-      refresh_token: refreshToken,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      not_after: new Date(
-        Date.now() + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
-      ).toISOString(),
-    });
-
-    if (sessionError) {
-      console.error('[AUTH] Session storage failed:', sessionError.message);
+    if (!session) {
+      return errorResponse(c, 'Failed to create session', 500);
+    }
+    if (session.user.id !== userId) {
+      console.error(
+        `[AUTH] Session user mismatch: resolved ${userId}, minted ${session.user.id}`,
+      );
       return errorResponse(c, 'Failed to create session', 500);
     }
 
     console.log(`[AUTH] Exchange successful for user ${userId}`);
 
-    return jsonResponse(
-      c,
-      buildSessionResponse(accessToken, refreshToken, {
-        id: userId,
-        email: userEmail,
-        user_metadata: {
-          avatar_url: githubUser.avatar_url,
-          user_name: githubUser.login,
-        },
-      }),
-      200,
-    );
+    return sessionResponse(c, session);
   } catch (error) {
     console.error('[AUTH] Exchange error:', error);
     return errorResponse(c, 'Internal server error', 500);
   }
 });
 
-// POST /refresh - Refresh an access token
+// POST /refresh - Refresh an access token (GoTrue passthrough). Pre-3.0
+// custom refresh tokens are unknown to GoTrue and get a 401, prompting a
+// clean re-sign-in.
 app.post('/refresh', async (c) => {
   try {
     const body = await c.req.json().catch(() => null);
@@ -430,57 +481,17 @@ app.post('/refresh', async (c) => {
       return errorResponse(c, 'refresh_token required', 400);
     }
 
-    const supabase = c.get('supabase');
+    const { data, error } = await c.get('authClient').auth.refreshSession({
+      refresh_token: body.refresh_token,
+    });
 
-    // Look up session
-    const { data: session, error: sessionError } = await supabase
-      .from('sessions')
-      .select('id, user_id, not_after')
-      .eq('refresh_token', body.refresh_token)
-      .limit(1)
-      .single();
-
-    if (sessionError || !session) {
+    if (error || !data.session) {
       return errorResponse(c, 'Invalid refresh token', 401);
     }
 
-    // Check expiry
-    if (new Date(session.not_after) < new Date()) {
-      await supabase.from('sessions').delete().eq('id', session.id);
-      return errorResponse(c, 'Refresh token expired', 401);
-    }
+    console.log(`[AUTH] Refresh successful for user ${data.session.user.id}`);
 
-    // Get user
-    const { data: userData, error: userError } =
-      await supabase.auth.admin.getUserById(session.user_id);
-    if (userError || !userData?.user) {
-      return errorResponse(c, 'User not found', 401);
-    }
-
-    const user = userData.user;
-    const accessToken = await createJWT(
-      user.id,
-      user.email || '',
-      user.user_metadata || {},
-      user.app_metadata || {},
-    );
-
-    await supabase
-      .from('sessions')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', session.id);
-
-    console.log(`[AUTH] Refresh successful for user ${user.id}`);
-
-    return jsonResponse(
-      c,
-      buildSessionResponse(accessToken, body.refresh_token, {
-        id: user.id,
-        email: user.email,
-        user_metadata: user.user_metadata,
-      }),
-      200,
-    );
+    return sessionResponse(c, data.session);
   } catch (error) {
     console.error('[AUTH] Refresh error:', error);
     return errorResponse(c, 'Internal server error', 500);

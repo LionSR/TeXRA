@@ -1,31 +1,25 @@
 import { z } from 'zod';
 
 import { StreamTabIdSchema } from './identifiers';
-import { TodoStatusSchema } from './todo';
 
-export const PlanStepSchema = z.strictObject({
-  title: z.string().min(1).describe('Short title for this step'),
-  description: z
-    .string()
-    .min(1)
-    .describe('Detailed description of what this step involves'),
-  status: TodoStatusSchema,
-  files: z
-    .array(z.string())
-    .prefault([])
-    .describe('Files involved in this step'),
-});
-export type PlanStep = z.infer<typeof PlanStepSchema>;
-
+/**
+ * A plan is a plain objective document: what to achieve, the intended
+ * approach, and a verifiable stopping condition. It deliberately has no
+ * structured steps — step tracking belongs to the todo tool — so the
+ * document stays a clear objective statement that can seed an autonomous
+ * goal verbatim.
+ *
+ * Pre-June-2026 plans were structured ({summary, steps[]}); those simply
+ * fail to parse and read back as "no plan", which is fine — a plan only
+ * matters for the session it was approved in.
+ */
 export const PlanSchema = z.strictObject({
-  summary: z
+  objective: z
     .string()
     .min(1)
-    .describe('Brief overview of the implementation plan'),
-  steps: z
-    .array(PlanStepSchema)
-    .min(1)
-    .describe('Ordered list of implementation steps'),
+    .describe(
+      'The plan document: what to achieve, the approach, and a verifiable stopping condition',
+    ),
 });
 export type Plan = z.infer<typeof PlanSchema>;
 

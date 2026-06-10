@@ -30,6 +30,7 @@ import {
   PROCESS_ENTRY_MARGIN_BOTTOM_ROWS,
   TranscriptEntry,
   USER_ENTRY_MARGIN_BOTTOM_ROWS,
+  USER_ENTRY_MARGIN_TOP_ROWS,
 } from './TranscriptEntry';
 
 export type StaticTranscriptItem =
@@ -163,16 +164,18 @@ function staticTranscriptItemRowCount(
   }
   // Compact budgeting can over-count tool rows because the transcript viewer
   // keeps full tool output while the static scrollback renderer elides it.
+  const cols = Math.max(1, Math.floor(width ?? 80));
+  const isUser = item.entry.role === 'user';
+  const isUserBand = isUser && !isInquiryContinuationText(item.entry.text);
+  // User rows render inside a 1-col padded box, so their text wraps two
+  // columns narrower than the flush rows the viewer renderer assumes.
   const lines = transcriptEntryLines(
     item.entry,
-    Math.max(1, Math.floor(width ?? 80)),
+    isUser ? Math.max(1, cols - 2) : cols,
   ).length;
   let marginRows = 0;
-  if (
-    item.entry.role === 'user' &&
-    !isInquiryContinuationText(item.entry.text)
-  ) {
-    marginRows = USER_ENTRY_MARGIN_BOTTOM_ROWS;
+  if (isUserBand) {
+    marginRows = USER_ENTRY_MARGIN_TOP_ROWS + USER_ENTRY_MARGIN_BOTTOM_ROWS;
   } else if (item.entry.role === 'assistant') {
     marginRows = ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS;
   } else if (item.entry.role === 'process') {

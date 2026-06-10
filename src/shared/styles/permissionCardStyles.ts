@@ -138,13 +138,10 @@ export const permissionCardStyles: CSSResult = css`
     border-radius: var(--border-radius-small);
   }
 
-  .plan-steps-list {
+  .plan-document {
     margin: var(--wa-space-2xs) 0;
-    padding-left: var(--wa-space-l);
-  }
-
-  .plan-steps-list li {
-    margin-bottom: var(--wa-space-2xs);
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
   .feedback-section {

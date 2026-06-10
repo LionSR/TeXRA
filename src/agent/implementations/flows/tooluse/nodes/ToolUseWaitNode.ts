@@ -19,8 +19,6 @@ interface WaitPrepResult {
   previouslyDeliveredToOrchestrator: boolean;
   /** Set after the current cycle has been delivered to an orchestrator. */
   deliveredToOrchestrator?: boolean;
-  /** Run cost so far (USD, including rolled-up subagents) for the goal cap. */
-  runCostUsd: number;
 }
 
 export class ToolUseWaitNode<C> extends Node<
@@ -35,9 +33,6 @@ export class ToolUseWaitNode<C> extends Node<
     // Only extract when the callback is wired (subagent mode)
     const previouslyDeliveredToOrchestrator =
       shared.deliveredToOrchestrator === true;
-    const runCostUsd =
-      shared.stateSlices?.runStateSnapshot.usageAccumulator.totals.totalCost ??
-      0;
 
     if (!onBeforeWaiting)
       return {
@@ -45,7 +40,6 @@ export class ToolUseWaitNode<C> extends Node<
         touchedFiles: [],
         afterError,
         previouslyDeliveredToOrchestrator,
-        runCostUsd,
       };
 
     return {
@@ -55,7 +49,6 @@ export class ToolUseWaitNode<C> extends Node<
       ),
       afterError,
       previouslyDeliveredToOrchestrator,
-      runCostUsd,
     };
   }
 
@@ -85,29 +78,18 @@ export class ToolUseWaitNode<C> extends Node<
       return { kind: 'stop' };
     }
 
-    // Record this turn's spend against the goal and enforce the cost cap
-    // BEFORE the continuation check — a cap-pause must stop the loop on the
-    // same turn it trips, not one continuation later. Failed/cancelled parent
-    // cycles still consumed model spend, so account for them before parking
-    // the autonomous leg below. No-op without a goal.
-    const costNote = await GoalStore.noteRunCost(streamId, prepRes.runCostUsd);
-    if (costNote?.pausedForCap) {
-      await setGoalSessionAutoApprovals(streamId, false, runtimeHost);
-      this.services.logger.info(
-        `Goal paused: cost cap reached ($${costNote.goal.spentUsd.toFixed(2)} ` +
-          `of $${costNote.goal.costCapUsd?.toFixed(2)} cap). Resume the goal to continue.`,
-      );
-    }
-
     // A failed/cancelled cycle ends the autonomous leg. Pause any active
     // goal so it surfaces as resumable — the in-cycle retry layer already
     // absorbed transient errors before we reach here — instead of leaving the
     // record `active` while the loop is actually stalled on a blocking wait.
+    // The goalPaused event makes the pause user-visible: a silent stop
+    // mid-objective reads as a hang.
     if (prepRes.afterError) {
       const goal = GoalStore.getForStream(streamId);
       if (goal?.status === 'active') {
         await GoalStore.setStatus(streamId, 'paused');
         await setGoalSessionAutoApprovals(streamId, false, runtimeHost);
+        runtimeHost.emit('goalPaused', { streamId });
       }
     }
     if (!prepRes.afterError) {

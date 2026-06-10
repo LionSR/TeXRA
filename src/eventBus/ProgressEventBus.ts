@@ -151,6 +151,12 @@ export interface ProgressEventPayloads {
     progress: ConversationProgress;
   };
   updateQueuedFollowUps: { streamId: StreamTabId };
+  /**
+   * An autonomous goal auto-paused after a failed cycle ended the
+   * autonomous leg. Hosts surface this so a paused goal is
+   * distinguishable from a hang.
+   */
+  goalPaused: { streamId: StreamTabId };
   updateActiveSubagents: {
     parentStreamId: StreamTabId;
     children: ActiveChildInfo[];

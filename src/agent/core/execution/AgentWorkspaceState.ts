@@ -4,6 +4,7 @@ import type { ServerToolContentBlock } from '@agent/modelHandlers/types/ServerTo
 import {
   FileLocationSchema,
   WorkPlanSnapshotSchema,
+  planSummaryLine,
   type TodoItem,
   type Plan,
   type FileLocation,
@@ -250,13 +251,8 @@ export class WorkPlanState {
   toSnapshot(): WorkPlanSnapshot {
     return WorkPlanSnapshotSchema.parse({
       todos: [...this._todos],
-      plan: this._plan
-        ? {
-            ...this._plan,
-            steps: this._plan.steps.map((s) => ({ ...s, files: [...s.files] })),
-          }
-        : null,
-      planSummary: this._plan?.summary ?? this._planSummary,
+      plan: this._plan ? { ...this._plan } : null,
+      planSummary: this._planSummary,
     });
   }
 
@@ -269,7 +265,7 @@ export class WorkPlanState {
   }
 
   get planSummary(): string | null {
-    return this._plan?.summary ?? this._planSummary;
+    return this._planSummary;
   }
 
   setOnUpdate(callbacks: {
@@ -292,7 +288,7 @@ export class WorkPlanState {
   }
 
   updatePlan(plan: Plan | null): void {
-    const nextPlanSummary = plan?.summary ?? null;
+    const nextPlanSummary = plan ? planSummaryLine(plan.objective) : null;
     if (
       this._planEqual(this._plan, plan) &&
       this._planSummary === nextPlanSummary
@@ -324,23 +320,7 @@ export class WorkPlanState {
   private _planEqual(a: Plan | null, b: Plan | null): boolean {
     if (a === b) return true;
     if (!a || !b) return false;
-    if (a.summary !== b.summary) return false;
-    if (a.steps.length !== b.steps.length) return false;
-    for (let i = 0; i < a.steps.length; i++) {
-      const ai = a.steps[i];
-      const bi = b.steps[i];
-      if (!ai || !bi) return false;
-      if (
-        ai.title !== bi.title ||
-        ai.description !== bi.description ||
-        ai.status !== bi.status ||
-        ai.files.length !== bi.files.length ||
-        ai.files.some((f, j) => f !== bi.files[j])
-      ) {
-        return false;
-      }
-    }
-    return true;
+    return a.objective === b.objective;
   }
 
   reset(): void {

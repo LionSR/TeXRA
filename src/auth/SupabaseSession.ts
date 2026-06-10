@@ -9,7 +9,6 @@ import {
   firstAccountLabel,
   parseStoredSupabaseSession,
   parseTokenExchangeResponse,
-  toStorableGitHubTokenExchangeSession,
   toStorableSupabaseSession,
   type SupabaseCallbackResult,
   type SupabaseSession,
@@ -29,7 +28,6 @@ export {
   SupabaseSessionSchema,
   parseStoredSupabaseSession,
   parseTokenExchangeResponse,
-  toStorableGitHubTokenExchangeSession,
   toStorableSupabaseSession,
   type GitHubTokenExchangeResponse,
   type SupabaseCallbackParseError,
@@ -366,11 +364,10 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     }
 
     const data = await parseTokenExchangeResponse(response, this.options.log);
-    const refreshed = toStorableGitHubTokenExchangeSession(
-      data,
-      session.account.label,
-      this.options.defaultSessionExpiryMs,
-    );
+    const refreshed = toStorableSupabaseSession(data, {
+      fallbackLabel: session.account.label,
+      defaultExpiryMs: this.options.defaultSessionExpiryMs,
+    });
 
     return refreshed;
   }

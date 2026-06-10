@@ -76,7 +76,7 @@ export interface RunToolUseFlowResult {
   /**
    * Total model cost (USD) accumulated by this run, including any subagents
    * it delegated to (rolled up at the delegation boundary). Used by parent
-   * runs and the goal cost cap.
+   * runs.
    */
   totalCostUsd?: number;
 }
