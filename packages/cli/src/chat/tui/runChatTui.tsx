@@ -106,10 +106,12 @@ import {
   openCliSlashCommandForm,
   openRegisteredCliSlashForm,
 } from './commands/slashForms';
+import { formatSlashCommandHelp } from './commands/helpText';
 import {
   findSlashCommand,
   listSlashCommands,
   parseSlashInput,
+  suggestSlashCommand,
 } from './commands/slashRegistry';
 import { loadInputHistory } from './history/inputHistory';
 import { notify } from './notifications/terminalNotifier';
@@ -131,7 +133,11 @@ import {
   streamStatusFromState,
 } from './state/streamStatus';
 import { activeStreamScope } from './state/streamViews';
-import { discoverTerminalCapabilities } from './state/terminalCapabilities';
+import { defaultShortcutModifierLabel } from './panes/StatusBar';
+import {
+  discoverTerminalCapabilities,
+  terminalCapabilities,
+} from './state/terminalCapabilities';
 import { requestCliCompaction } from './state/compactionRequest';
 import {
   appendLocalAssistantTranscript,
@@ -768,10 +774,12 @@ async function handleTuiSlashCommand(
   }
   switch (command) {
     case 'help': {
-      const commands = listSlashCommands()
-        .map((cmd) => `/${cmd.name} - ${cmd.description}`)
-        .join('\n');
-      appendLocalAssistantTranscript(commands);
+      appendLocalAssistantTranscript(
+        formatSlashCommandHelp(listSlashCommands(), {
+          shortcutModifierLabel: defaultShortcutModifierLabel(),
+          shiftEnterNewline: terminalCapabilities.get().kittyKeyboard,
+        }),
+      );
       return true;
     }
     case 'clear':
@@ -904,7 +912,13 @@ async function handleTuiSlashCommand(
           `/${parsed.name} is registered but is not available in this CLI view yet.`,
         );
       } else {
-        appendLocalAssistantTranscript(`Unknown command: /${parsed.name}`);
+        const suggestion = suggestSlashCommand(command);
+        const didYouMean = suggestion
+          ? ` Did you mean /${suggestion.name}?`
+          : '';
+        appendLocalAssistantTranscript(
+          `Unknown command: /${parsed.name}.${didYouMean} Type /help to list commands.`,
+        );
       }
       return true;
     }
@@ -1124,9 +1138,8 @@ export async function runChat(
 
     if (
       (isRunPending && activeStatus !== STREAM_STATUS.WAITING) ||
-      activeStatus === STREAM_STATUS.INITIALIZING ||
-      activeStatus === STREAM_STATUS.RUNNING ||
-      activeStatus === STREAM_STATUS.RESUMING
+      (activeStatus !== undefined &&
+        LIVE_ELAPSED_STREAM_STATUSES.has(activeStatus))
     ) {
       appendLocalAssistantTranscript(
         'Wait for the active response to finish, or press Ctrl-C before /clear.',
