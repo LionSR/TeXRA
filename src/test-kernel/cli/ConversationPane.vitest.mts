@@ -394,7 +394,7 @@ describe('CLI conversation transcript splitting', () => {
         sliceWithEntries(STREAM_ID, [user, emptyAssistant, tool]),
         80,
       ),
-    ).toEqual(['› what is this repo about', '', '● Bash (ls)']);
+    ).toEqual(['› what is this repo about', '● Bash (ls)']);
   });
 
   it('does not budget regular user margin for inquiry continuations', () => {
