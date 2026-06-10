@@ -4,7 +4,7 @@
  * Encapsulates the shared concerns of bash and tool-edit approvals:
  *   - serialized request queue (one prompt at a time)
  *   - registry of in-flight pending approvals keyed by request id
- *   - per-stream bypass state with optional UI notification hook
+ *   - per-stream bypass state announced over a bound progress event
  *   - rejection on stream cleanup
  *
  * Parameterized by the approval result type so each controller can carry
@@ -13,7 +13,76 @@
 
 import PQueue from 'p-queue';
 
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import type { StreamTabId } from '@shared/schemas';
+
+/** Progress events that announce per-stream approval-bypass changes. */
+export type ApprovalBypassEvent =
+  | 'updateToolEditApprovalBypassState'
+  | 'updateBashApprovalBypassState'
+  | 'updateSuperYoloBypassState';
+
+/**
+ * Per-stream bypass state bound to the progress event that announces it.
+ *
+ * Single implementation behind the tool-edit, bash, and proposal (super-YOLO)
+ * bypass toggles, so set/toggle/clear semantics and UI notification stay
+ * uniform across approval kinds.
+ */
+export interface StreamApprovalBypass {
+  isBypassed(streamId: StreamTabId): boolean;
+  /**
+   * Set bypass for a stream. Emits the bound progress event when a
+   * `runtimeHost` is provided (unless `silent`); omit the host for
+   * pre-activation setup where no UI exists yet.
+   */
+  setBypass(
+    streamId: StreamTabId,
+    enabled: boolean,
+    runtimeHost?: AgentRuntimeHost,
+    options?: { silent?: boolean },
+  ): void;
+  /** Toggle per-stream bypass, announce it, and return the new state. */
+  toggleBypass(streamId: StreamTabId, runtimeHost: AgentRuntimeHost): boolean;
+  clearForStream(streamId: StreamTabId): void;
+  clearAll(): void;
+}
+
+export function createStreamApprovalBypass(
+  event: ApprovalBypassEvent,
+): StreamApprovalBypass {
+  const byStream = new Map<StreamTabId, boolean>();
+
+  const setBypass: StreamApprovalBypass['setBypass'] = (
+    streamId,
+    enabled,
+    runtimeHost,
+    options,
+  ) => {
+    byStream.set(streamId, enabled);
+    if (runtimeHost && !options?.silent) {
+      runtimeHost.emit(event, { streamId, bypassActive: enabled });
+    }
+  };
+
+  return {
+    isBypassed(streamId) {
+      return byStream.get(streamId) ?? false;
+    },
+    setBypass,
+    toggleBypass(streamId, runtimeHost) {
+      const next = !byStream.get(streamId);
+      setBypass(streamId, next, runtimeHost);
+      return next;
+    },
+    clearForStream(streamId) {
+      byStream.delete(streamId);
+    },
+    clearAll() {
+      byStream.clear();
+    },
+  };
+}
 
 export interface PendingApproval<R extends { accepted: boolean }> {
   streamId?: StreamTabId;
@@ -25,26 +94,23 @@ export interface StreamApprovalController<R extends { accepted: boolean }> {
   registerPending(id: string, entry: PendingApproval<R>): void;
   unregisterPending(id: string): void;
   getPending(id: string): PendingApproval<R> | undefined;
-  isBypassed(streamId: StreamTabId): boolean;
-  setBypass(streamId: StreamTabId, enabled: boolean): void;
+  bypass: StreamApprovalBypass;
   enqueue<T>(run: () => Promise<T>): Promise<T>;
   rejectPendingForStream(streamId: StreamTabId): void;
   rejectAllPending(): void;
-  clearBypassForStream(streamId: StreamTabId): void;
-  clearAllBypass(): void;
 }
 
 export interface StreamApprovalControllerOptions<
   R extends { accepted: boolean },
 > {
   rejectionResult: () => R;
+  bypassEvent: ApprovalBypassEvent;
 }
 
 export function createStreamApprovalController<R extends { accepted: boolean }>(
   options: StreamApprovalControllerOptions<R>,
 ): StreamApprovalController<R> {
   const pending = new Map<string, PendingApproval<R>>();
-  const bypassedByStream = new Map<StreamTabId, boolean>();
   // Serialize approvals so only one prompt is in flight at a time.
   const queue = new PQueue({ concurrency: 1 });
 
@@ -67,12 +133,7 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
     getPending(id) {
       return pending.get(id);
     },
-    isBypassed(streamId) {
-      return bypassedByStream.get(streamId) ?? false;
-    },
-    setBypass(streamId, enabled) {
-      bypassedByStream.set(streamId, enabled);
-    },
+    bypass: createStreamApprovalBypass(options.bypassEvent),
     enqueue<T>(run: () => Promise<T>): Promise<T> {
       // `add` widens to `T | void` to cover abort via signal/timeout; we pass
       // neither, so the task always runs and resolves with `T`.
@@ -83,12 +144,6 @@ export function createStreamApprovalController<R extends { accepted: boolean }>(
     },
     rejectAllPending() {
       rejectMatching();
-    },
-    clearBypassForStream(streamId) {
-      bypassedByStream.delete(streamId);
-    },
-    clearAllBypass() {
-      bypassedByStream.clear();
     },
   };
 }
