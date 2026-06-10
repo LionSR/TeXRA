@@ -560,12 +560,35 @@ export function pickToolRenderer(
   return REGISTRY.find((renderer) => renderer.matches(toolUse));
 }
 
+// Memoized per NormalizedToolUse object. `subscribeStreamLog` keeps the
+// toolUse reference stable across sync ticks unless its content changed, so
+// the derived lines (including diff hunks for edit tools) can be shared by
+// the live row estimator, the bounded renderer, and static row counting
+// instead of being recomputed for every visible tool row on every frame.
+interface ToolUseDisplayLinesCacheEntry {
+  elided?: readonly string[];
+  full?: readonly string[];
+}
+const displayLinesCache = new WeakMap<
+  NormalizedToolUse,
+  ToolUseDisplayLinesCacheEntry
+>();
+
 export function toolUseDisplayLines(
   toolUse: NormalizedToolUse,
   options?: DisplayLineOptions,
 ): readonly string[] {
-  return (
+  const slot = options?.elide === false ? 'full' : 'elided';
+  let cached = displayLinesCache.get(toolUse);
+  const hit = cached?.[slot];
+  if (hit) return hit;
+  const lines =
     pickToolRenderer(toolUse)?.displayLines(toolUse, options) ??
-    universalToolUseDisplayLines(toolUse, { elide: options?.elide })
-  );
+    universalToolUseDisplayLines(toolUse, { elide: options?.elide });
+  if (!cached) {
+    cached = {};
+    displayLinesCache.set(toolUse, cached);
+  }
+  cached[slot] = lines;
+  return lines;
 }

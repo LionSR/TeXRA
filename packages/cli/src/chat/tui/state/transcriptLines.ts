@@ -43,7 +43,34 @@ function wrapLines(lines: readonly string[], cols: number): string[] {
   return lines.flatMap((line) => wrapDisplayLine(line, cols));
 }
 
+// Wrapped-line cache keyed by the immutable entry object. Entries are
+// replaced (never mutated in place) when their content changes, so hits are
+// always current. Each entry can be rendered at several widths in the same
+// frame (terminal transcript, static row budget, task-detail panel), so keep
+// the width dimension inside the entry cache instead of letting callers thrash
+// a single slot.
+const entryLinesCache = new WeakMap<
+  ConversationEntry,
+  Map<number, readonly string[]>
+>();
+
 export function transcriptEntryLines(
+  entry: ConversationEntry,
+  cols: number,
+): readonly string[] {
+  const cachedByCols = entryLinesCache.get(entry);
+  const cached = cachedByCols?.get(cols);
+  if (cached) return cached;
+  const lines = computeTranscriptEntryLines(entry, cols);
+  if (cachedByCols) {
+    cachedByCols.set(cols, lines);
+  } else {
+    entryLinesCache.set(entry, new Map([[cols, lines]]));
+  }
+  return lines;
+}
+
+function computeTranscriptEntryLines(
   entry: ConversationEntry,
   cols: number,
 ): readonly string[] {
