@@ -1146,15 +1146,16 @@ export async function runChat(
     chatTuiCanInterruptActiveRun(session);
   const canStopActiveRun = (): boolean =>
     chatTuiCanStopVisibleRun(session, rootStreamStatus());
+  const shouldDetachSubagentsOnStop = (): boolean =>
+    tryPlatform()?.workspaceState.get<boolean>(
+      WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+      false,
+    ) === true;
   const interruptActive = (): void => {
     clearApprovals();
     if (!session.streamId) return;
     executionRegistry.stopAgentStream(session.streamId, {
-      detachActiveChildren:
-        tryPlatform()?.workspaceState.get<boolean>(
-          WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
-          false,
-        ) === true,
+      detachActiveChildren: shouldDetachSubagentsOnStop(),
       runtimeHost: session.runtimeHost,
     });
   };
@@ -1609,7 +1610,9 @@ export async function runChat(
       onSuspend={() => handleSigtstp()}
       onKillExecution={(executionId) => {
         clearApprovals();
-        executionRegistry.kill(executionId);
+        executionRegistry.kill(executionId, {
+          detachActiveChildren: shouldDetachSubagentsOnStop(),
+        });
       }}
       history={inputHistory}
     />,
