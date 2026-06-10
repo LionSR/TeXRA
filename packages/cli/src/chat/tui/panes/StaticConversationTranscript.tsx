@@ -6,7 +6,7 @@
 
 import path from 'node:path';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Box, Static, Text } from 'ink';
 
 import { shortCliApiMode } from '@cli/runtime/apiAccessMode';
@@ -317,13 +317,16 @@ export function StaticConversationTranscript({
     width,
   ]);
 
-  // Cast instead of copying: `<Static>` declares `items: T[]` but only ever
-  // reads it (`items.slice(index)`), and a fresh spread here would allocate
-  // an O(history) array on every render.
+  // Keep our scrollback state readonly and adapt once at the Ink boundary.
+  // `<Static>` declares `items: T[]`; memoizing the defensive copy avoids the
+  // old O(history) spread on unrelated renders without exposing state to a
+  // mutable third-party prop.
+  const staticItems = useMemo(() => [...items], [items]);
+
   return (
     <Static
       key={`transcript:${ownerKey}`}
-      items={items as StaticTranscriptItem[]}
+      items={staticItems}
     >
       {(item: StaticTranscriptItem) => (
         <Box key={item.id} flexDirection="column">
