@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports - shared schemas
 import {
   pickToolRenderer,
+  toolHeaderPreviewBudget,
   toolUseDisplayLines,
 } from '@cli/chat/tui/panes/toolRenderers';
 import { TOOL_USE_STATUS, type NormalizedToolUse } from '@shared/schemas';
@@ -240,5 +241,17 @@ describe('CLI tool renderer registry', () => {
         "● read_file (paper.tex)",
       ]
     `);
+  });
+
+  it('sizes live header previews to the terminal width', () => {
+    // Wide terminals show more of the command than the historical 80 columns.
+    expect(toolHeaderPreviewBudget(200, 'bash')).toBe(191);
+    // Narrow terminals truncate to fit one row instead of wrapping.
+    expect(toolHeaderPreviewBudget(60, 'bash')).toBe(51);
+    // When the name + chrome already eat the row, drop the preview entirely
+    // instead of overflowing into a second row.
+    expect(toolHeaderPreviewBudget(20, 'a-rather-long-tool-name')).toBe(0);
+    // Unknown width falls back to the historical fixed budget.
+    expect(toolHeaderPreviewBudget(undefined, 'bash')).toBe(80);
   });
 });

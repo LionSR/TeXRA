@@ -68,27 +68,54 @@ export function listSlashCommands(): readonly SlashCommand[] {
   return [...COMMANDS.values()];
 }
 
+/** Lowercased name + aliases a command can be addressed by. */
+function commandCandidates(command: SlashCommand): string[] {
+  return [command.name, ...(command.aliases ?? [])].map((name) =>
+    name.toLowerCase(),
+  );
+}
+
 export function findSlashCommand(
   nameOrAlias: string,
 ): SlashCommand | undefined {
   const lower = nameOrAlias.toLowerCase();
-  return listSlashCommands().find(
-    (cmd) =>
-      cmd.name.toLowerCase() === lower ||
-      cmd.aliases?.some((alias) => alias.toLowerCase() === lower) === true,
+  return listSlashCommands().find((cmd) =>
+    commandCandidates(cmd).includes(lower),
   );
 }
 
 /**
- * Returns registered commands whose name or an alias starts with `prefix`.
- * Results are case-insensitive and preserve registration order.
+ * Commands whose name or an alias starts with `prefix` — the palette's first
+ * tier, and the only tier safe to auto-run on a submit the user never
+ * previewed (e.g. a pasted chunk ending in a newline).
+ */
+export function prefixSlashCommands(prefix: string): readonly SlashCommand[] {
+  const lower = prefix.toLowerCase();
+  return listSlashCommands().filter((cmd) =>
+    commandCandidates(cmd).some((candidate) => candidate.startsWith(lower)),
+  );
+}
+
+/**
+ * Returns registered commands matching `prefix`, case-insensitively and in
+ * registration order. Prefix matches (on name or alias) win; when there are
+ * none, falls back to substring matches (`/odel` still finds `/model`), and
+ * finally to the closest typo suggestion (`/hlp` → `/help`) so the palette
+ * recovers from mistypes instead of going blank. The fallback tiers are for
+ * the palette, where the user sees the match before Enter runs it.
  */
 export function matchSlashCommands(prefix: string): readonly SlashCommand[] {
   const lower = prefix.toLowerCase();
-  return listSlashCommands().filter((cmd) => {
-    if (cmd.name.toLowerCase().startsWith(lower)) return true;
-    return cmd.aliases?.some((a) => a.toLowerCase().startsWith(lower)) ?? false;
-  });
+  const prefixMatches = prefixSlashCommands(prefix);
+  if (prefixMatches.length > 0 || !lower) return prefixMatches;
+
+  const substringMatches = listSlashCommands().filter((cmd) =>
+    commandCandidates(cmd).some((candidate) => candidate.includes(lower)),
+  );
+  if (substringMatches.length > 0) return substringMatches;
+
+  const suggestion = suggestSlashCommand(lower);
+  return suggestion ? [suggestion] : [];
 }
 
 /**
@@ -109,16 +136,15 @@ export function suggestSlashCommand(
     | undefined;
 
   for (const command of listSlashCommands()) {
-    for (const candidate of [command.name, ...(command.aliases ?? [])]) {
-      const lower = candidate.toLowerCase();
-      const distance = editDistance(token, lower);
-      if (distance > typoSuggestionThreshold(token, lower)) continue;
+    for (const candidate of commandCandidates(command)) {
+      const distance = editDistance(token, candidate);
+      if (distance > typoSuggestionThreshold(token, candidate)) continue;
       if (
         best === undefined ||
         distance < best.distance ||
-        (distance === best.distance && lower < best.candidate)
+        (distance === best.distance && candidate < best.candidate)
       ) {
-        best = { command, candidate: lower, distance };
+        best = { command, candidate, distance };
       }
     }
   }

@@ -862,6 +862,9 @@ async function handleTuiSlashCommand(
           approval: formatApprovalPolicy(context.getApprovalPolicy()),
           approvalBypasses: slice?.bypass,
           status: slice?.status ?? 'not started',
+          // Only surface the resume id once a stream exists — never next to
+          // a "not started" status.
+          sessionId: slice ? context.session.executionId : undefined,
           queuedFollowUpMessages:
             activeStreamId === undefined
               ? []
