@@ -31,6 +31,7 @@ const TUI_MODEL_EMPTY_RECOVERY = {
   includedModeAction: 'switch with /api included',
   loginAction: 'run /login',
   personalModeAction: 'switch with /api personal',
+  configureKeyAction: 'configure a provider API key',
 } satisfies CliNoRunnableModelsMessageOptions;
 
 export interface ModelListFormProps {
