@@ -381,7 +381,8 @@ See [Intelligent Merge](./intelligent-merge.md) for details on the merge workflo
 
 These agents make up the [Software Engineer team](#built-in-teams) for the code
 that accompanies a project — simulations, numerics, data pipelines, scripts,
-and small libraries.
+and small libraries. The Computer Scientist team also includes `coder` and
+`testEngineer` for implementing and pinning down experiment code.
 
 ### `engineer`
 
@@ -493,7 +494,7 @@ single-use helper functions, and remove dead code. Run existing tests after each
 
 ### `orchestrator`
 
-Coordinates multi-agent work on LaTeX research projects. It reads project context, turns broad goals into focused tasks, routes each task to the right specialist, tracks results, reviews generated files, and keeps follow-up work organized. The lead agent for the Physicist, Mathematician, and Computer Scientist (ML) [teams](#built-in-teams).
+Coordinates multi-agent work on LaTeX research projects. It reads project context, turns broad goals into focused tasks, routes each task to the right specialist, tracks results, reviews generated files, and keeps follow-up work organized. The lead agent for the Physicist, Mathematician, and Computer Scientist [teams](#built-in-teams).
 
 **Best for:** Multi-step research goals that span several specialists
 
@@ -513,13 +514,13 @@ Teams are predefined collections of agents for a discipline. Pick one from the
 **Multi-Agent** tab in the Dashboard, or run one from the CLI with
 `texra multi-agent run <team>`:
 
-| Team                    | For                                                                                         | Lead agent         |
-| :---------------------- | :------------------------------------------------------------------------------------------ | :----------------- |
-| Lean Project            | Lean 4 projects — theorem search, tactic simplification, and blueprints                     | `leanOrchestrator` |
-| Physicist               | Physics papers — derivations, numerical experiments, literature search, slides, and review  | `orchestrator`     |
-| Mathematician           | Math research — attacking open problems, proofs, Lean 4 formalization, and LaTeX correction | `orchestrator`     |
-| Computer Scientist (ML) | ML/CS papers — algorithm design, experiments and ablations, review, and reproducibility     | `orchestrator`     |
-| Software Engineer       | A project's code — implementation, review, debugging, and testing across specialists        | `engineer`         |
+| Team               | For                                                                                         | Lead agent         |
+| :----------------- | :------------------------------------------------------------------------------------------ | :----------------- |
+| Lean Project       | Lean 4 projects — theorem search, tactic simplification, and blueprints                     | `leanOrchestrator` |
+| Physicist          | Physics papers — derivations, numerical experiments, literature search, slides, and review  | `orchestrator`     |
+| Mathematician      | Math research — attacking open problems, proofs, Lean 4 formalization, and LaTeX correction | `orchestrator`     |
+| Computer Scientist | CS papers — algorithm design, code-driven experiments and ablations, tests, and review      | `orchestrator`     |
+| Software Engineer  | A project's code — implementation, review, debugging, and testing across specialists        | `engineer`         |
 
 Every team bundles the `progressCheck` audit helper, and the paper-focused
 teams also include `latexFixer`. The Software Engineer lead and its specialists
