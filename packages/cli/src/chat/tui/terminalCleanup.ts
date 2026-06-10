@@ -1,5 +1,7 @@
 import { writeSync } from 'node:fs';
 
+import { kittyFlags } from 'ink';
+
 // Undo exactly the input/display modes the TUI turns on: mouse tracking
 // (1000/1003/1006), the kitty keyboard stack (<u), bracketed paste (2004), and
 // cursor visibility (25h). The TUI deliberately never enters the alternate
@@ -11,14 +13,14 @@ import { writeSync } from 'node:fs';
 const RESET_TERMINAL_MODES = '\x1b[?1000;1003;1006l\x1b[<u\x1b[?2004l\x1b[?25h';
 const CLEAR_ITERM_PROGRESS = '\x1b]9;4;0\x07';
 // Re-arm the emulator-side input modes after a SIGCONT resume: kitty
-// disambiguate push (matches Ink's default `CSI > 1 u`), bracketed paste, and
-// cursor hide. The tty driver state (raw mode) is restored separately — the
-// shell only restores the termios snapshot it took at suspend, never these
-// escape-sequence modes, which cleanupTerminalModes popped before stopping.
-// The kitty push stays capability-gated (the caller passes the DA1-discovered
-// flag); bracketed paste is re-enabled unconditionally because Ink's
+// disambiguate push, bracketed paste, and cursor hide. The tty driver state
+// (raw mode) is restored separately — the shell only restores the termios
+// snapshot it took at suspend, never these escape-sequence modes, which
+// cleanupTerminalModes popped before stopping. The push value comes from
+// Ink's own flag table and must match the `flags` runChatTui passes to
+// `render()`; bracketed paste is re-enabled unconditionally because Ink's
 // `usePaste` enables it unconditionally too — this only restores Ink's state.
-const KITTY_PUSH_DISAMBIGUATE = '\x1b[>1u';
+const KITTY_PUSH_DISAMBIGUATE = `\x1b[>${kittyFlags.disambiguateEscapeCodes}u`;
 const REARM_INPUT_MODES = '\x1b[?2004h\x1b[?25l';
 // Clear visible screen + erase scrollback + home cursor. Required by
 // `/clear` since the TUI no longer uses the alternate screen, so prior

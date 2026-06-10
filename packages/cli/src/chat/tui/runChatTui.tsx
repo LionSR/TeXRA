@@ -1591,6 +1591,10 @@ export async function runChat(
       // plain Enter stays a legacy `\r`, and Ink pops the protocol on unmount.
       kittyKeyboard: {
         mode: terminalCaps.kittyKeyboard ? 'enabled' : 'disabled',
+        // Pin the flags rather than relying on Ink's default: the SIGCONT
+        // re-push in terminalCleanup re-arms exactly this set, so the two
+        // must not drift apart.
+        flags: ['disambiguateEscapeCodes'],
       },
     },
   );
