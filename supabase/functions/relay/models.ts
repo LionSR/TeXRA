@@ -11,7 +11,8 @@
  * - Ultra: everything else
  */
 
-import { MODEL_CONFIGS, type ModelConfig } from 'npm:llm-zoo@^1.9.0';
+import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
+import { normalizeModelName, stripProviderPrefix } from './modelNames.ts';
 import { FREE_TIER, MAX_TIER, ULTRA_TIER } from './tierConstants.ts';
 
 export { FREE_TIER, MAX_TIER, ULTRA_TIER };
@@ -221,10 +222,8 @@ const BOUNDARY_RE = /^[-/:@.]/;
  * tiers for the same model). The caller decides how to interpret the set.
  */
 function resolveAllModelsByApiName(modelName: string): RelayModel[] {
-  const name = modelName.toLowerCase().trim();
-  const modelPart = name.includes('/')
-    ? name.slice(name.indexOf('/') + 1)
-    : name;
+  const name = normalizeModelName(modelName);
+  const modelPart = stripProviderPrefix(name);
 
   const exactMatches: RelayModel[] = [];
   let bestBoundaryLen = -1;

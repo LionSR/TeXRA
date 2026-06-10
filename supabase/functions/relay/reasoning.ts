@@ -1,3 +1,6 @@
+import { isJsonRecord, type JsonRecord } from './json.ts';
+import { isGpt5Model } from './modelNames.ts';
+
 export interface ReasoningEffortCapContext {
   provider: string;
   tier: string;
@@ -6,22 +9,6 @@ export interface ReasoningEffortCapContext {
 }
 
 export type ReasoningEffortCap = 'high' | 'medium';
-export type JsonRecord = Record<string, unknown>;
-
-export function isJsonRecord(value: unknown): value is JsonRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isGpt5Model(modelName: string | null): boolean {
-  if (!modelName) return false;
-
-  const normalized = modelName.toLowerCase().trim();
-  const modelPart = normalized.includes('/')
-    ? normalized.slice(normalized.indexOf('/') + 1)
-    : normalized;
-
-  return modelPart.startsWith('gpt-5') || modelPart.startsWith('gpt5');
-}
 
 function capForTier(
   tier: string,

@@ -62,9 +62,10 @@
  * (SDKs send JWT in provider-specific headers, not the standard Authorization header).
  */
 
-import { Hono } from 'jsr:@hono/hono@4.12.15';
-import { cors } from 'jsr:@hono/hono@4.12.15/cors';
-import { createClient } from 'jsr:@supabase/supabase-js@2.104.1';
+import { Hono } from '@hono/hono';
+import { cors } from '@hono/hono/cors';
+import { createClient } from '@supabase/supabase-js';
+import { authenticateJwt } from '../_shared/auth.ts';
 import {
   TIER_CONFIG,
   TIER_SPENDING_LIMITS,
@@ -76,9 +77,9 @@ import {
   FREE_TIER,
   MAX_TIER,
 } from './models.ts';
+import { isJsonRecord } from './json.ts';
 import {
   capOpenAIReasoningEffortForTier,
-  isJsonRecord,
   type ReasoningEffortCap,
 } from './reasoning.ts';
 import {
@@ -96,7 +97,7 @@ import {
 // Constants
 // =============================================================================
 
-const RELAY_VERSION = '1.9.0';
+const RELAY_VERSION = '1.9.1';
 
 // Tier constants imported from models.ts (single source of truth)
 // CROSS-REFERENCE: Keep models.ts in sync with:
@@ -444,7 +445,6 @@ app.get('/providers', (c) => {
  */
 app.get('/tier-config', async (c) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   const jwtToken = extractJwtFromRequest(c.req.raw);
 
@@ -457,17 +457,12 @@ app.get('/tier-config', async (c) => {
   };
 
   // Try to include user status if authenticated
-  if (jwtToken && supabaseUrl && supabaseAnonKey) {
+  if (jwtToken && supabaseUrl) {
     try {
-      const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-        global: { headers: { Authorization: `Bearer ${jwtToken}` } },
-      });
+      const auth = await authenticateJwt(jwtToken);
 
-      const {
-        data: { user },
-      } = await supabaseClient.auth.getUser();
-
-      if (user) {
+      if (auth) {
+        const { user, client: supabaseClient } = auth;
         const { data: profile } = await supabaseClient
           .from('profiles')
           .select('tier, access_expires_at, banned_until')
@@ -546,18 +541,11 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   }
 
   // 4. Validate user and check tier
-  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: `Bearer ${jwtToken}` } },
-  });
-
-  const {
-    data: { user },
-    error: userError,
-  } = await userClient.auth.getUser();
-
-  if (userError || !user) {
+  const auth = await authenticateJwt(jwtToken);
+  if (!auth) {
     return jsonError('Invalid or expired token', 401);
   }
+  const { user, client: userClient } = auth;
 
   // 5. Get user profile and check ban / expiration
   const { data: profile, error: profileError } = await userClient
@@ -849,12 +837,6 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   }
 
   // 10. Forward request with timeout
-  const abortController = new AbortController();
-  const timeoutId = setTimeout(
-    () => abortController.abort(),
-    UPSTREAM_TIMEOUT_MS,
-  );
-
   let upstreamResponse: Response;
   try {
     const bodyToSend =
@@ -868,17 +850,18 @@ app.all('/:provider{[^/]+}/*', async (c) => {
       method: c.req.method,
       headers: upstreamHeaders,
       body: bodyToSend,
-      signal: abortController.signal,
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
   } catch (error) {
-    clearTimeout(timeoutId);
     await releaseRelaySlot?.();
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (
+      error instanceof Error &&
+      (error.name === 'TimeoutError' || error.name === 'AbortError')
+    ) {
       return jsonError('Upstream request timed out', 504);
     }
     throw error;
   }
-  clearTimeout(timeoutId);
 
   if (upstreamResponse.status >= 400) {
     console.error(

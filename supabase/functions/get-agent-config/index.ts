@@ -7,33 +7,23 @@
  * - POST /get-agent-config - Fetch agent YAML config by name
  */
 
-import { createClient } from 'jsr:@supabase/supabase-js@2.104.1';
-import { handleCors, getCorsHeaders } from '../_shared/cors.ts';
+import { createClient } from '@supabase/supabase-js';
+import { authenticateJwt, bearerToken } from '../_shared/auth.ts';
+import { handleCors } from '../_shared/cors.ts';
+import { versionedJsonResponse } from '../_shared/responses.ts';
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 
 // =============================================================================
 // Helpers
 // =============================================================================
 
-function jsonResponse(
-  req: Request,
-  body: Record<string, unknown>,
-  status: number,
-): Response {
-  const corsHeaders = getCorsHeaders(req);
-  return new Response(JSON.stringify({ _version: VERSION, ...body }), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
-}
-
 function errorResponse(req: Request, error: string, status: number): Response {
-  return jsonResponse(req, { error }, status);
+  return versionedJsonResponse(req, VERSION, { error }, status);
 }
 
 // =============================================================================
@@ -41,6 +31,7 @@ function errorResponse(req: Request, error: string, status: number): Response {
 // =============================================================================
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
 const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
 // =============================================================================
@@ -49,7 +40,7 @@ const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
 Deno.serve(async (req: Request) => {
   // Handle CORS
-  const { corsHeaders, response } = handleCors(req);
+  const { response } = handleCors(req);
   if (response) return response;
 
   // Only accept POST
@@ -58,35 +49,27 @@ Deno.serve(async (req: Request) => {
   }
 
   // Check environment
-  if (!supabaseUrl || !serviceRoleKey) {
+  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
     console.error('[GET_AGENT_CONFIG] Missing required environment variables');
     return errorResponse(req, 'Server configuration error', 500);
   }
 
   try {
     // 1. Extract and validate auth
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    const jwtToken = bearerToken(req);
+    if (!jwtToken) {
       return errorResponse(req, 'Unauthorized', 401);
     }
 
-    // User client: uses user's JWT for auth verification and RLS-protected queries
-    const userClient = createClient(supabaseUrl, serviceRoleKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    // 2. Verify user; the returned client runs queries as the user (RLS applies)
+    const auth = await authenticateJwt(jwtToken);
+    if (!auth) {
+      return errorResponse(req, 'Invalid token', 401);
+    }
+    const userClient = auth.client;
 
     // Admin client: bypasses bucket policies for storage operations
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
-
-    // 2. Verify user
-    const {
-      data: { user },
-      error: userError,
-    } = await userClient.auth.getUser();
-
-    if (userError || !user) {
-      return errorResponse(req, 'Invalid token', 401);
-    }
 
     // 3. Get agent name from request
     let body: { agentName?: string };
@@ -125,8 +108,9 @@ Deno.serve(async (req: Request) => {
     // 6. Return config (client parses YAML and extracts description)
     const yamlContent = await fileData.text();
 
-    return jsonResponse(
+    return versionedJsonResponse(
       req,
+      VERSION,
       {
         config: yamlContent,
         name: agent.name,

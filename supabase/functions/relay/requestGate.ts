@@ -1,3 +1,5 @@
+import { asFiniteNumber, isJsonRecord } from './json.ts';
+
 interface RpcError {
   message?: string;
 }
@@ -8,10 +10,11 @@ interface RequestLimit {
 }
 
 interface RpcClient {
+  // PromiseLike, not Promise: supabase-js rpc() returns a thenable builder.
   rpc(
     name: string,
     args: Record<string, unknown>,
-  ): Promise<{ data: unknown; error: RpcError | null }>;
+  ): PromiseLike<{ data: unknown; error: RpcError | null }>;
 }
 
 interface GateDecision {
@@ -47,17 +50,8 @@ class RelayRequestSlotLostError extends Error {
   }
 }
 
-function asNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? value
-    : undefined;
-}
-
 function parseGateDecision(data: unknown): GateDecision {
-  const record =
-    typeof data === 'object' && data !== null
-      ? (data as Record<string, unknown>)
-      : {};
+  const record = isJsonRecord(data) ? data : {};
   return {
     allowed: record.allowed === true,
     slotId: typeof record.slotId === 'string' ? record.slotId : undefined,
@@ -65,20 +59,16 @@ function parseGateDecision(data: unknown): GateDecision {
       record.reason === 'rate' || record.reason === 'concurrency'
         ? record.reason
         : undefined,
-    rateLimitPerMinute: asNumber(record.rateLimitPerMinute),
-    concurrencyLimit: asNumber(record.concurrencyLimit),
-    requestsThisMinute: asNumber(record.requestsThisMinute),
-    activeRequests: asNumber(record.activeRequests),
-    retryAfterSeconds: asNumber(record.retryAfterSeconds),
+    rateLimitPerMinute: asFiniteNumber(record.rateLimitPerMinute),
+    concurrencyLimit: asFiniteNumber(record.concurrencyLimit),
+    requestsThisMinute: asFiniteNumber(record.requestsThisMinute),
+    activeRequests: asFiniteNumber(record.activeRequests),
+    retryAfterSeconds: asFiniteNumber(record.retryAfterSeconds),
   };
 }
 
 function didRefreshSlot(data: unknown): boolean {
-  const record =
-    typeof data === 'object' && data !== null
-      ? (data as Record<string, unknown>)
-      : {};
-  return record.refreshed === true;
+  return isJsonRecord(data) && data.refreshed === true;
 }
 
 function once(release: () => Promise<void>): () => Promise<void> {
