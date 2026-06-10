@@ -198,9 +198,9 @@ export async function deleteCliHistory(options: {
   preCountForAll?: number;
 }): Promise<CliHistoryDeleteResult> {
   if (options.all) {
-    const count = options.preCountForAll ?? (await listExecutions()).length;
-    await deleteAllExecutions();
-    await GoalStore.forgetMany(GoalStore.list().map((g) => g.streamId));
+    const deletedExecutionIds = await deleteAllExecutions();
+    await GoalStore.forgetByExecutionIds(deletedExecutionIds);
+    const count = options.preCountForAll ?? deletedExecutionIds.length;
     return { deleted: 'all', count };
   }
   if (!options.id) {
@@ -208,15 +208,7 @@ export async function deleteCliHistory(options: {
   }
   const found = await deleteExecution(options.id);
   if (found) {
-    // Goal records are keyed by stream id (`agent@model#executionId`);
-    // deleting a stored execution must drop its goal too, or the record
-    // dangles in workspace state forever.
-    const executionSuffix = `#${options.id}`;
-    await GoalStore.forgetMany(
-      GoalStore.list()
-        .filter((g) => g.streamId.endsWith(executionSuffix))
-        .map((g) => g.streamId),
-    );
+    await GoalStore.forgetByExecutionIds([options.id]);
   }
   return {
     deleted: 'one',

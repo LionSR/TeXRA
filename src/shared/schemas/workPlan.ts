@@ -20,7 +20,7 @@ export function planSummaryLine(objective: string): string {
     .split('\n')
     .map((line) => line.trim())
     .find((line) => line.length > 0);
-  return first ?? objective.trim();
+  return first ?? '(empty plan)';
 }
 
 function normalizeWorkPlanSnapshot(input: unknown): unknown {

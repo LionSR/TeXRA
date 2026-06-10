@@ -23,6 +23,16 @@ export function isCompactPlanApprovalRows(
   );
 }
 
+export function renderCompactPlanLine(
+  line: string,
+  isLastVisibleLine: boolean,
+  hiddenLineCount: number,
+): string {
+  if (!isLastVisibleLine || hiddenLineCount === 0) return line || ' ';
+  if (!line.trim()) return `… ${hiddenLineCount} more lines`;
+  return `${line} · … ${hiddenLineCount} more`;
+}
+
 export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
   const bodyLines = props.payload.plan.objective.split('\n');
   const compact = isCompactPlanApprovalRows(props.availableRows);
@@ -63,10 +73,11 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
         <Box flexDirection="column">
           {visibleCompactBodyLines.map((line, index) => (
             <Text key={index} wrap="truncate-end">
-              {index === visibleCompactBodyLines.length - 1 &&
-              hiddenCompactBodyLines > 0
-                ? `${line} · … ${hiddenCompactBodyLines} more`
-                : line || ' '}
+              {renderCompactPlanLine(
+                line,
+                index === visibleCompactBodyLines.length - 1,
+                hiddenCompactBodyLines,
+              )}
             </Text>
           ))}
         </Box>

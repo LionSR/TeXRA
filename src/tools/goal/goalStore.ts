@@ -4,6 +4,7 @@ import { platform } from '@platform/platform';
 import { tryGetWorkspaceState } from '@agent/core/stateStore';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
+  type ExecutionId,
   StreamTabIdSchema,
   type StreamTabId,
 } from '@shared/schemas/identifiers';
@@ -124,7 +125,7 @@ async function removeFromIndex(streamId: StreamTabId): Promise<void> {
   const next = index.filter((id) => id !== streamId);
   if (!hasLegacyIndex && next.length === index.length) return;
   await Promise.all([
-    platform().workspaceState.update(INDEX_KEY, next),
+    state.update(INDEX_KEY, next),
     hasLegacyIndex ? state.update(LEGACY_INDEX_KEY, undefined) : null,
   ]);
 }
@@ -306,5 +307,21 @@ export const GoalStore = {
         : Promise.resolve(),
     ]);
     for (const id of toRemove) bus.emit('goalStateChanged', { streamId: id });
+  },
+
+  /**
+   * Drop goals whose stream id belongs to one of the deleted executions.
+   * GoalStore owns this suffix convention because it already owns the stream
+   * index and legacy-key migration; callers should pass execution ids only.
+   */
+  async forgetByExecutionIds(
+    executionIds: readonly ExecutionId[],
+  ): Promise<void> {
+    if (executionIds.length === 0) return;
+    const suffixes = [...new Set(executionIds.map((id) => `#${id}`))];
+    const streamIds = readIndex().filter((streamId) =>
+      suffixes.some((suffix) => streamId.endsWith(suffix)),
+    );
+    await GoalStore.forgetMany(streamIds);
   },
 };

@@ -235,7 +235,7 @@ function applyToState<K extends ProgressEvent>(
       // from a hang: the agent simply stops mid-objective.
       const p = payload as ProgressEventPayloads['goalPaused'];
       appendLocalAssistantTranscript(
-        'Goal paused after a failed cycle. Send a message to continue.',
+        'Goal paused after a failed cycle. Review the error before starting a new goal.',
         p.streamId,
       );
       return;

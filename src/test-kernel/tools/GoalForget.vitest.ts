@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createFakePlatform } from '@test/support/FakePlatform';
-import type { StreamTabId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { GoalStore } from '@tools/goal';
 
 const STREAM_A = 'stream:forget-a' as StreamTabId;
@@ -101,5 +101,28 @@ describe('GoalStore.forget (abandon-on-delete contract)', () => {
     expect(state.get('odysseys:index')).toBeUndefined();
     expect(state.get(`odysseys:byStream:${STREAM_B}`)).toBeUndefined();
     expect(GoalStore.getForStream(STREAM_A)).toBeNull();
+  });
+
+  it('forgets indexed streams owned by deleted execution ids, including unparseable blobs', async () => {
+    const { platform } = await import('@platform/platform');
+    const state = platform().workspaceState;
+    const deleted = 'abc123' as ExecutionId;
+    const kept = 'def456' as ExecutionId;
+    const deletedStream = `chat@deepseek#${deleted}` as StreamTabId;
+    const keptStream = `chat@deepseek#${kept}` as StreamTabId;
+
+    await state.update('goals:index', [deletedStream, keptStream]);
+    await state.update(`goals:byStream:${deletedStream}`, {
+      goalId: 'not-a-valid-goal',
+    });
+    await GoalStore.start(keptStream, 'keep this goal');
+
+    await GoalStore.forgetByExecutionIds([deleted]);
+
+    expect(state.get(`goals:byStream:${deletedStream}`)).toBeUndefined();
+    expect(GoalStore.getForStream(keptStream)?.objective).toBe(
+      'keep this goal',
+    );
+    expect(GoalStore.list().map((g) => g.streamId)).toEqual([keptStream]);
   });
 });
