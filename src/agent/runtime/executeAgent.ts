@@ -16,6 +16,7 @@ import {
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
+import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
@@ -35,6 +36,7 @@ import { ensureRunDir } from '@utils/files/taskRunStorage';
 import {
   buildAgentLaunchContext,
   withExecutionRunContext,
+  type AgentLaunchContext,
 } from './AgentLaunchContext';
 import { runFlowWithLifecycle } from './AgentRunLifecycle';
 import { executionRegistry } from './executionRegistry';
@@ -177,6 +179,15 @@ function createRoundProgressCallback(
   };
 }
 
+/** Create the awaited round-finalized callback used by agent flows. */
+function createUsageRecordingCallback(
+  ctx: AgentLaunchContext,
+): RoundFinalizedCallback {
+  return async (run) => {
+    await ctx.usageMonitor.recordUsage(run);
+  };
+}
+
 /** Toast payload shown when the progress view cannot be opened. */
 type FallbackNotification = NonNullable<
   ProgressEventPayloads['requestEnsureProgressView']['fallbackNotification']
@@ -308,14 +319,13 @@ export async function executeAgent(
 
         if (setting.agentCategory === AgentCategory.ToolUse) {
           let toolUseTurns = 0;
+          const onRoundFinalized = createUsageRecordingCallback(ctx);
           try {
             const result = await runToolUseFlow(
               {
                 ...ctx,
                 ...interrupts,
-                onRoundFinalized: async (run) => {
-                  await ctx.usageMonitor.recordUsage(run);
-                },
+                onRoundFinalized,
                 setting,
                 isSubagent,
                 approvalPromptsUnavailable: options.approvalPromptsUnavailable,
@@ -382,12 +392,11 @@ export async function executeAgent(
           ctx.runtimeHost,
           options.onProgress,
         );
+        const onRoundFinalized = createUsageRecordingCallback(ctx);
         const result = await runReflectionFlow({
           ...ctx,
           ...interrupts,
-          onRoundFinalized: async (run) => {
-            await ctx.usageMonitor.recordUsage(run);
-          },
+          onRoundFinalized,
           setting,
           parentStage: ctx.parentStage,
           onRoundCompleted,
@@ -454,9 +463,7 @@ export async function resumeToolUseFromSnapshot(
         {
           ...ctx,
           ...createInterruptCallbacks(),
-          onRoundFinalized: async (run) => {
-            await ctx.usageMonitor.recordUsage(run);
-          },
+          onRoundFinalized: createUsageRecordingCallback(ctx),
           setting,
           resumeSnapshot: snapshot,
           // Derive from the recovered parent chain: any execution with a
