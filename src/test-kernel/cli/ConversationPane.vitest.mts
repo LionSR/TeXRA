@@ -640,6 +640,42 @@ describe('CLI conversation transcript splitting', () => {
     ).toEqual(['session-header', 'u1']);
   });
 
+  it('budgets static error rows at the padded wrap width', () => {
+    const error = entry('e1', 'error', 'x'.repeat(77), true);
+    const compact = appendStaticTranscriptItems({
+      scrollbackStreamId: STREAM_ID,
+      currentItems: [],
+      streams: streamsFromEntries(STREAM_ID, [error]),
+      meta: SESSION_META,
+      maxRows: 0,
+      width: 80,
+    });
+
+    expect(compact.map((item) => item.id)).toEqual(['e1']);
+    // 77 chars wraps to two rows at the padded width (80 - 4 = 76);
+    // the full header needs 4 more.
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: STREAM_ID,
+        currentItems: compact,
+        streams: streamsFromEntries(STREAM_ID, [error]),
+        meta: SESSION_META,
+        maxRows: 5,
+        width: 80,
+      }).map((item) => item.id),
+    ).toEqual(['e1']);
+    expect(
+      appendStaticTranscriptItems({
+        scrollbackStreamId: STREAM_ID,
+        currentItems: compact,
+        streams: streamsFromEntries(STREAM_ID, [error]),
+        meta: SESSION_META,
+        maxRows: 6,
+        width: 80,
+      }).map((item) => item.id),
+    ).toEqual(['session-header', 'e1']);
+  });
+
   it('does not budget band margins for inquiry continuations in the static budget', () => {
     const continuation = entry(
       'u1',
