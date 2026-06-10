@@ -12,7 +12,6 @@ import { getRunDir } from '@utils/files';
 
 import { CliUsageError, type CliContext } from './cliContext';
 import {
-  cliTerminalStatus,
   createCliRunResult,
   type CliRunResult,
   type ExecuteAgentResult,
@@ -84,7 +83,7 @@ export type CliWorkflowRunResult = Extract<
 export interface WorkflowOutputResolutionOptions {
   readonly expectedOutputFiles?: readonly string[];
   readonly runDirectory?: string;
-  readonly terminalStatus?: ExecutionStatus;
+  readonly terminalStatus: ExecutionStatus;
 }
 
 function outputCopyRelativePath(output: OutputFileSummary): string {
@@ -129,12 +128,12 @@ export async function resolveWorkflowOutput(
   outputDir: string | undefined,
   result: ExecuteAgentResult,
   context: CliContext,
-  options: WorkflowOutputResolutionOptions = {},
+  options: WorkflowOutputResolutionOptions,
 ): Promise<{
   copiedOutput: string | undefined;
   displayResult: CliRunResult;
 }> {
-  const terminalStatus = options.terminalStatus ?? cliTerminalStatus(result);
+  const { terminalStatus } = options;
   if (
     result.category === AgentCategory.Workflow &&
     result.outputs.length === 0 &&
