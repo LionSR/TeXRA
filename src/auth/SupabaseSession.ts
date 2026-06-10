@@ -6,10 +6,7 @@ import {
   type AuthCallbackUriParts,
 } from './core/authCallback';
 import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
-import type {
-  Session as SupabaseNativeSession,
-  SupabaseClient as Client,
-} from '@supabase/supabase-js';
+import type { SupabaseClient as Client } from '@supabase/supabase-js';
 
 export const DEFAULT_SUPABASE_SESSION_EXPIRY_MS = 60 * 60 * 1000;
 
@@ -47,6 +44,17 @@ export const GitHubTokenExchangeSchema = z.object({
 export type GitHubTokenExchangeResponse = z.infer<
   typeof GitHubTokenExchangeSchema
 >;
+
+type StorableSessionInput = {
+  access_token: string;
+  refresh_token: string;
+  expires_at?: number;
+  token_type?: string;
+  user: {
+    id: string;
+    email?: string | null;
+  };
+};
 
 export interface SupabaseSessionParseOptions {
   logSource?: string;
@@ -219,12 +227,16 @@ export async function parseTokenExchangeResponse(
 }
 
 /**
- * Convert Supabase's native Session to our storage format.
+ * Convert Supabase's native session-shaped responses to our storage format.
  * Handles the snake_case to camelCase and seconds to milliseconds conversions.
  */
 export function toStorableSupabaseSession(
-  nativeSession: SupabaseNativeSession,
-  options?: { useCustomRefresh?: boolean },
+  nativeSession: StorableSessionInput,
+  options?: {
+    fallbackLabel?: string;
+    defaultExpiryMs?: number;
+    useCustomRefresh?: boolean;
+  },
 ): SupabaseSession {
   return {
     id: nativeSession.user.id,
@@ -232,37 +244,19 @@ export function toStorableSupabaseSession(
     refreshToken: nativeSession.refresh_token,
     account: {
       id: nativeSession.user.id,
-      label: firstAccountLabel(nativeSession.user.email, nativeSession.user.id),
+      label: firstAccountLabel(
+        nativeSession.user.email,
+        options?.fallbackLabel,
+        nativeSession.user.id,
+      ),
     },
     expiresAt: nativeSession.expires_at
       ? nativeSession.expires_at * 1000
-      : Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-    useCustomRefresh: options?.useCustomRefresh,
-  };
-}
-
-/**
- * Convert Edge Function token responses into the stored session shape.
- * The exchange endpoint returns native GoTrue sessions (auth-github v3+),
- * so these refresh through the standard Supabase path; `useCustomRefresh`
- * persists only on legacy stored sessions.
- */
-export function toStorableGitHubTokenExchangeSession(
-  data: GitHubTokenExchangeResponse,
-  fallbackLabel: string,
-  defaultSessionExpiryMs: number,
-): SupabaseSession {
-  return {
-    id: data.user.id,
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    account: {
-      id: data.user.id,
-      label: firstAccountLabel(data.user.email, fallbackLabel, data.user.id),
-    },
-    expiresAt: data.expires_at
-      ? data.expires_at * 1000
-      : Date.now() + defaultSessionExpiryMs,
+      : Date.now() +
+        (options?.defaultExpiryMs ?? DEFAULT_SUPABASE_SESSION_EXPIRY_MS),
+    ...(options?.useCustomRefresh === undefined
+      ? {}
+      : { useCustomRefresh: options.useCustomRefresh }),
   };
 }
 
@@ -573,11 +567,10 @@ export class SupabaseSessionCoordinator implements AuthTokenProvider {
     }
 
     const data = await parseTokenExchangeResponse(response, this.options.log);
-    const refreshed = toStorableGitHubTokenExchangeSession(
-      data,
-      session.account.label,
-      this.options.defaultSessionExpiryMs,
-    );
+    const refreshed = toStorableSupabaseSession(data, {
+      fallbackLabel: session.account.label,
+      defaultExpiryMs: this.options.defaultSessionExpiryMs,
+    });
 
     return refreshed;
   }

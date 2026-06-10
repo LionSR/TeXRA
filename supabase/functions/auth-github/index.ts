@@ -6,7 +6,7 @@
  * callbacks don't work reliably. The extension posts the GitHub token here;
  * this function validates it with GitHub, finds or creates the Supabase
  * user, and returns a NATIVE GoTrue session (minted via an admin magic-link
- * token consumed server-side — never emailed). Tokens are therefore signed
+ * token consumed server-side). Tokens are therefore signed
  * with the project's current JWT signing keys and refresh through GoTrue's
  * standard rotation; there is no hand-rolled JWT or custom session store.
  *
