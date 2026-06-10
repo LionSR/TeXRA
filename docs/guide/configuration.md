@@ -221,6 +221,14 @@ Pick the formatter (`latexindent`, `tex-fmt`, or `none` to disable) from the **D
 - `latexindentConfig`: Path to a `latexindent` configuration file.
 - `texfmtConfig`: Path to a `tex-fmt` configuration file.
 
+### Workflow Compile Check
+
+The **Dashboard → LaTeX** tab also controls what happens after a workflow agent writes `.tex` outputs:
+
+- **Auto-compile after each round** (on by default): attempt to compile each root document (`latexmk`, falling back to `pdflatex`) in run storage, with a configurable timeout.
+- **Open compiled PDF or log** (on by default): after auto-compile finishes, open the latest PDF on success or the truncated LaTeX log on failure.
+- **Reject rounds when compile fails** (on by default): when the compile check fails, the workflow uses its next planned round to repair the output from the compile log instead of treating the round as done. Turn this off to keep failing rounds as-is.
+
 ### TikZ Figure Processing
 
 Configure how TikZ figures are extracted and compiled:

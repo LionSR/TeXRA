@@ -81,7 +81,9 @@ texra login --no-browser    # print the loopback sign-in URL
 ```
 
 When run interactively, a bare `texra login` asks which provider to use instead of
-silently defaulting.
+silently defaulting. If you juggle multiple accounts, `--select-account` forces
+the OAuth account chooser and `--login-hint <email>` suggests which account to
+use.
 
 `--no-browser` still uses a local callback server. Open the printed URL in a
 browser that can reach the terminal session; SSH and container sessions may need
