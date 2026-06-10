@@ -539,25 +539,6 @@ interface StatusBarVisibleStream {
   readonly status: StreamStatus | undefined;
 }
 
-function statusBarFindAncestorStream<T extends StatusBarVisibleStream>({
-  activeStreamId,
-  parentStream,
-  streams,
-  canUseStream,
-}: {
-  readonly activeStreamId: StreamTabId | undefined;
-  readonly parentStream: ReadonlyMap<StreamTabId, StreamTabId>;
-  readonly streams: ReadonlyMap<StreamTabId, T>;
-  readonly canUseStream: (stream: T) => boolean;
-}): T | undefined {
-  return nearestActiveStreamAncestor({
-    activeStreamId,
-    parentStream,
-    values: streams,
-    canUseValue: canUseStream,
-  })?.value;
-}
-
 export function statusBarCanStopVisibleRun({
   activeStreamId,
   parentStream,
@@ -571,11 +552,11 @@ export function statusBarCanStopVisibleRun({
 }): boolean {
   if (isLiveStreamStatus(status)) return true;
   return (
-    statusBarFindAncestorStream({
+    nearestActiveStreamAncestor({
       activeStreamId,
       parentStream,
-      streams,
-      canUseStream: (stream) => isLiveStreamStatus(stream.status),
+      values: streams,
+      canUseValue: (stream) => isLiveStreamStatus(stream.status),
     }) !== undefined
   );
 }
@@ -591,12 +572,12 @@ export function statusBarDisplaySlice({
 }): StreamSlice | undefined {
   const activeSlice = activeStreamId ? streams.get(activeStreamId) : undefined;
   if (activeSlice) return activeSlice;
-  return statusBarFindAncestorStream({
+  return nearestActiveStreamAncestor({
     activeStreamId,
     parentStream,
-    streams,
-    canUseStream: (stream) => isLiveStreamStatus(stream.status),
-  });
+    values: streams,
+    canUseValue: (stream) => isLiveStreamStatus(stream.status),
+  })?.value;
 }
 
 // Bypass badges, in emission order. One row per BypassState flag.
