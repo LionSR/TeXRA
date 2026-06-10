@@ -171,7 +171,10 @@ export function slashPickIntent(
 /**
  * Parse a `"/cmd remainder"` input into `{ name, remainder }`.
  * Also accepts `\clear` as a compatibility alias.
- * Returns `undefined` if `text` is not a slash command.
+ * Returns `undefined` if `text` is not a slash command — including when the
+ * leading token contains another `/`: command names never do, so input like
+ * `/Users/me/figure.pdf` is a pasted absolute path that must reach the agent
+ * as a chat message instead of dying as "Unknown command".
  */
 export function parseSlashInput(
   text: string,
@@ -183,6 +186,8 @@ export function parseSlashInput(
   }
   const body = text.slice(1);
   const ws = body.search(/\s/);
-  if (ws === -1) return { name: body, remainder: '' };
-  return { name: body.slice(0, ws), remainder: body.slice(ws + 1) };
+  const name = ws === -1 ? body : body.slice(0, ws);
+  if (name.includes('/')) return undefined;
+  if (ws === -1) return { name, remainder: '' };
+  return { name, remainder: body.slice(ws + 1) };
 }

@@ -651,4 +651,12 @@ describe('parseSlashInput', () => {
       remainder: ' reasoner',
     });
   });
+
+  it('treats absolute paths as chat messages, not commands', () => {
+    expect(parseSlashInput('/Users/me/poster/mpq_logo.pdf')).toBeUndefined();
+    expect(
+      parseSlashInput('/Users/me/poster/mpq_logo.pdf just use this then'),
+    ).toBeUndefined();
+    expect(parseSlashInput('/tmp/figure.png looks wrong')).toBeUndefined();
+  });
 });
