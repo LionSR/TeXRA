@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/index/agentRegistry', () => ({
+  canonicalAgentName: (name: string) => name,
   getVisibleAgents: mocks.getVisibleAgents,
 }));
 

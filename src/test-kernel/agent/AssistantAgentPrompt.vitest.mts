@@ -62,6 +62,7 @@ describe('assistant agent prompt', () => {
       'codex',
       'claude_code',
       'delegate_workflow',
+      'github_subscription',
     ]) {
       expect(systemPrompt).toContain(tool);
     }
