@@ -5,6 +5,7 @@
 
 import { wrapAnsiToWidth } from '../render/ansiWrap';
 import { completedProcessDisplayLines } from './completedProcessTranscript';
+import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
 import { toolUseDisplayLines } from '../panes/toolRenderers';
 import type { ConversationEntry, StreamSlice } from './cliState';
 
@@ -129,6 +130,7 @@ export function transcriptToLines(
   let previousEntry: ConversationEntry | undefined;
   let previousLines: readonly string[] = [];
   for (const entry of slice.entries) {
+    if (!isRenderableTranscriptEntry(entry)) continue;
     const lines = transcriptEntryLines(entry, cols);
     if (lines.length === 0) continue;
     if (
