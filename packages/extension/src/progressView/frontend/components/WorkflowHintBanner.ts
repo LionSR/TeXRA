@@ -29,6 +29,13 @@ export class WorkflowHintBanner extends LitElement {
       /* wa-callout ignores --padding; set the real property (its :host hardcodes 1em). */
       padding: var(--wa-space-2xs) var(--wa-space-xs);
     }
+    /* Pair the icon with the first text line instead of centering it in the
+       multi-line block. */
+    wa-callout::part(icon) {
+      align-self: flex-start;
+      margin-block-start: 0.2em;
+      padding-inline-end: var(--wa-space-2xs);
+    }
     .banner-row {
       display: flex;
       align-items: flex-start;
