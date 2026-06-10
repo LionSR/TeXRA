@@ -65,9 +65,7 @@ export async function runResumeExecution(
 
   const { runChat } = await import('../chat/tui/runChatTui');
   const result = await runChat(context, {
-    resumeExecutionId: id,
-    agentOverride: resolution.config.agent,
-    modelOverride: resolution.config.model,
+    initialResume: { id, resolution },
   });
   return result.exitCode;
 }
