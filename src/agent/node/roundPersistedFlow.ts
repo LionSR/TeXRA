@@ -18,10 +18,11 @@
 
 import type { ExecutionKVStore } from '@agent/storage';
 import type { StageHandle } from '@agent/trace';
+import { deriveRunOutcome } from '@common/constants/streamStatus';
 import {
-  EXECUTION_STATUS,
-  type ExecutionStatus,
+  RUN_OUTCOME,
   type RetryErrorInfo,
+  type RunOutcome,
 } from '@shared/schemas';
 
 import { BaseNode } from './index';
@@ -86,7 +87,7 @@ export interface RoundCallbacks<S extends RoundAwareState> {
  * After each full pass through the node graph, this class checks whether to
  * continue and handles incrementing, stages, resets, and bounds checking.
  *
- * Returns ExecutionStatus directly from run() — no onFlowEnd callback needed.
+ * Returns RunOutcome directly from run() — no onFlowEnd callback needed.
  */
 export class RoundPersistedFlow<
   S extends RoundAwareState = RoundAwareState,
@@ -129,10 +130,10 @@ export class RoundPersistedFlow<
    * continue to the next round. This eliminates the need for a dedicated
    * "round complete" decision node — the flow itself owns the decision.
    *
-   * Returns the execution status directly.
+   * Returns the canonical run outcome directly.
    */
-  async run(shared: S): Promise<ExecutionStatus> {
-    let status: ExecutionStatus = EXECUTION_STATUS.COMPLETED;
+  async run(shared: S): Promise<RunOutcome> {
+    let outcome: RunOutcome = RUN_OUTCOME.COMPLETED;
 
     await this.init(shared);
     let currentShared = shared;
@@ -150,9 +151,9 @@ export class RoundPersistedFlow<
         currentShared = await this.executeRoundSteps(currentShared);
       }
 
-      // Determine final status
-      status = this.resolveTerminalStatus(currentShared);
-      if (status === EXECUTION_STATUS.COMPLETED) {
+      // Determine final outcome
+      outcome = this.resolveOutcome(currentShared);
+      if (outcome === RUN_OUTCOME.COMPLETED) {
         await this.callbacks.onRoundCompleted?.(
           currentShared.currentRound,
           currentShared,
@@ -163,7 +164,7 @@ export class RoundPersistedFlow<
       this.currentRoundStage = null;
     }
 
-    return status;
+    return outcome;
   }
 
   /**
@@ -201,22 +202,12 @@ export class RoundPersistedFlow<
     );
   }
 
-  /**
-   * Derive terminal ExecutionStatus from shared state after the round loop exits.
-   *
-   * Priority:
-   * 1. lastError → ERROR (node-level failure)
-   * 2. interrupted / !continueRounds → INTERRUPTED (early stop)
-   * 3. otherwise → COMPLETED (all rounds finished normally)
-   */
-  private resolveTerminalStatus(shared: S): ExecutionStatus {
-    if (shared.lastError) {
-      return EXECUTION_STATUS.ERROR;
-    }
-    if (this.callbacks.checkInterruption?.() || !shared.continueRounds) {
-      return EXECUTION_STATUS.INTERRUPTED;
-    }
-    return EXECUTION_STATUS.COMPLETED;
+  /** Derive the canonical RunOutcome from shared state after the round loop exits. */
+  private resolveOutcome(shared: S): RunOutcome {
+    return deriveRunOutcome({
+      failed: Boolean(shared.lastError),
+      cancelled: this.callbacks.checkInterruption?.() || !shared.continueRounds,
+    });
   }
 
   /**

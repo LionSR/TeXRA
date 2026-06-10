@@ -7,7 +7,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { resolveWorkflowOutput } from '@cli/runtime/workflowOutput';
 import type { CliContext } from '@cli/runtime/cliContext';
-import { END_GROUP_STATUS, EXECUTION_STATUS } from '@shared/schemas';
+import {
+  END_GROUP_STATUS,
+  EXECUTION_STATUS,
+  RUN_OUTCOME,
+} from '@shared/schemas';
 
 type WorkflowResult = Parameters<typeof resolveWorkflowOutput>[2];
 
@@ -48,7 +52,7 @@ function workflowResult(
 ): WorkflowResult {
   return {
     category: AgentCategory.Workflow,
-    status: END_GROUP_STATUS.STOPPED,
+    outcome: RUN_OUTCOME.COMPLETED,
     executionId: 'workflow-output-test',
     streamId: 'workflow-output-test',
     compileFailures: [],
