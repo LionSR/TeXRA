@@ -61,9 +61,6 @@ import {
   validateGoogleMessageHistory,
 } from './googleMessageHelpers';
 
-// Re-exported for tests and external callers that import from the handler path.
-export { validateGoogleMessageHistory } from './googleMessageHelpers';
-
 // Local file imports
 import {
   DEFAULT_ATTACHMENT_MIME_TYPE,

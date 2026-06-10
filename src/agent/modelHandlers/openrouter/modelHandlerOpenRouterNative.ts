@@ -72,9 +72,6 @@ import type {
 } from '../types/IModelHandler';
 import type { ProviderStopReason } from '../types/StopReasonTypes';
 
-// Re-exported for tests and external callers that import from the handler path.
-export { toOpenRouterReasoningEffort } from './openRouterStreaming';
-
 // ============================================================================
 // Handler
 // ============================================================================

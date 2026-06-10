@@ -28,9 +28,11 @@ import {
 } from '../agent';
 import { AgentModePresetSchema } from '../agentPresets';
 import { ModelAvailabilityFieldsSchema } from '../mainView';
-import { NumberVscodeSettingSchema } from '../profileViewMessages';
+import {
+  NumberVscodeSettingSchema,
+  UpdateProfileMessageSchema,
+} from '../profileViewMessages';
 import { StreamTabIdSchema } from '../identifiers';
-import { UpdateProfileMessageSchema } from '../profileViewMessages';
 import {
   UpdateMemoryEnabledMessageSchema,
   UpdateMemoryMessageSchema,
