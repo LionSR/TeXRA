@@ -12,6 +12,7 @@ import {
 } from '@shared/wa/statusIcons';
 
 // Web Awesome icon bundle (side-effect import)
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/input/input.js';
@@ -100,7 +101,7 @@ export class GitTab extends LitElement {
         flex-wrap: wrap;
       }
 
-      .token-remove-btn:hover {
+      .token-remove-btn::part(base):hover {
         color: var(--wa-color-danger-on-quiet);
       }
 
@@ -257,29 +258,48 @@ export class GitTab extends LitElement {
                   <span class="token-row-label">Status:</span>
                   ${this.renderTokenStatusBadge()}
                   <span class="token-actions">
-                    <button
-                      class="tab-action-btn"
+                    <wa-button
+                      appearance="outlined"
+                      variant="neutral"
+                      size="small"
                       @click=${this.handleSetGitHubToken}
                     >
-                      <wa-icon library="texra" name="key"></wa-icon>
+                      <wa-icon
+                        slot="start"
+                        library="texra"
+                        name="key"
+                      ></wa-icon>
                       ${tokenIsSet ? 'Replace token' : 'Set token'}
-                    </button>
+                    </wa-button>
                     ${this.githubTokenStatus === 'secret'
-                      ? html`<button
-                          class="tab-action-btn token-remove-btn"
+                      ? html`<wa-button
+                          class="token-remove-btn"
+                          appearance="outlined"
+                          variant="neutral"
+                          size="small"
                           @click=${this.handleRemoveGitHubToken}
                         >
-                          <wa-icon library="texra" name="trash"></wa-icon>
+                          <wa-icon
+                            slot="start"
+                            library="texra"
+                            name="trash"
+                          ></wa-icon>
                           Remove
-                        </button>`
+                        </wa-button>`
                       : nothing}
-                    <button
-                      class="tab-action-btn"
+                    <wa-button
+                      appearance="outlined"
+                      variant="neutral"
+                      size="small"
                       @click=${this.handleOpenGitHubTokenUrl}
                     >
-                      <wa-icon library="texra" name="github"></wa-icon>
+                      <wa-icon
+                        slot="start"
+                        library="texra"
+                        name="github"
+                      ></wa-icon>
                       Create on GitHub…
-                    </button>
+                    </wa-button>
                   </span>
                 </div>
                 <div class="instructions">
@@ -347,19 +367,22 @@ export class GitTab extends LitElement {
                                         <span class="subscription-owner-label"
                                           >${owner.label}</span
                                         >
-                                        <button
-                                          class="tab-action-btn"
+                                        <wa-button
+                                          appearance="outlined"
+                                          variant="neutral"
+                                          size="small"
                                           @click=${() =>
                                             this.handleOpenPRSubscriptionStream(
                                               owner.streamId,
                                             )}
                                         >
                                           <wa-icon
+                                            slot="start"
                                             library="texra"
                                             name="comment-discussion"
                                           ></wa-icon>
                                           Jump to agent
-                                        </button>
+                                        </wa-button>
                                       </div>
                                     `,
                                   )}
@@ -371,14 +394,20 @@ export class GitTab extends LitElement {
                                 </p>
                               `}
                         </div>
-                        <button
-                          class="tab-action-btn"
+                        <wa-button
+                          appearance="outlined"
+                          variant="neutral"
+                          size="small"
                           @click=${() =>
                             this.handleUnsubscribePR(subscription.key)}
                         >
-                          <wa-icon library="texra" name="debug-stop"></wa-icon>
+                          <wa-icon
+                            slot="start"
+                            library="texra"
+                            name="debug-stop"
+                          ></wa-icon>
                           Stop
-                        </button>
+                        </wa-button>
                       </li>
                     `,
                   )}

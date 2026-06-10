@@ -28,6 +28,7 @@ import { AgentSelectionEvents } from '../components/profile/events';
 
 // Local imports - settings view components (side-effect: register)
 import '../components/profile/AgentSelectionPanel';
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 const AGENT_SUB_TAB_PANELS = [
@@ -87,14 +88,12 @@ export class AgentsTab extends LitElement {
         opacity: var(--opacity-normal);
       }
 
-      /* Base styles provided by .tab-action-btn in commonViewStyles */
-
       .agents-header-actions {
         display: flex;
         gap: var(--wa-space-2xs);
       }
 
-      .agents-create-btn {
+      .agents-create-btn::part(base) {
         color: var(--wa-color-text-normal);
         border-color: var(--wa-color-focus);
         font-weight: var(--font-weight-medium);
@@ -255,33 +254,44 @@ export class AgentsTab extends LitElement {
             </wa-tab>
           </wa-tab-group>
           <div class="agents-header-actions">
-            <button
-              class="tab-action-btn"
-              @click=${this.handleSaveTeam}
+            <wa-button
+              appearance="outlined"
+              variant="neutral"
+              size="small"
               title="Save current agent configuration as a team"
+              @click=${this.handleSaveTeam}
             >
-              <wa-icon library="texra" name="save"></wa-icon>
+              <wa-icon slot="start" library="texra" name="save"></wa-icon>
               Save Team
-            </button>
+            </wa-button>
             ${this.desktopHost
               ? nothing
               : html`
-                  <button
-                    class="tab-action-btn"
-                    @click=${this.handleCreateFromTemplate}
+                  <wa-button
+                    appearance="outlined"
+                    variant="neutral"
+                    size="small"
                     title="Create a new agent from a blank YAML template"
+                    @click=${this.handleCreateFromTemplate}
                   >
-                    <wa-icon library="texra" name="new-file"></wa-icon>
+                    <wa-icon
+                      slot="start"
+                      library="texra"
+                      name="new-file"
+                    ></wa-icon>
                     From Template
-                  </button>
-                  <button
-                    class="tab-action-btn agents-create-btn"
-                    @click=${this.handleCreateAgent}
+                  </wa-button>
+                  <wa-button
+                    class="agents-create-btn"
+                    appearance="outlined"
+                    variant="neutral"
+                    size="small"
                     title="Create a new agent with AI"
+                    @click=${this.handleCreateAgent}
                   >
-                    <wa-icon library="texra" name="add"></wa-icon>
+                    <wa-icon slot="start" library="texra" name="add"></wa-icon>
                     New Agent
-                  </button>
+                  </wa-button>
                 `}
           </div>
         </div>
@@ -309,21 +319,25 @@ export class AgentsTab extends LitElement {
             >
               <wa-icon library="texra" name="folder-opened"></wa-icon>
             </button>
-            <button
-              class="tab-action-btn"
-              @click=${this.handleChangeCustomDir}
+            <wa-button
+              appearance="outlined"
+              variant="neutral"
+              size="small"
               title="Change custom agents directory"
+              @click=${this.handleChangeCustomDir}
             >
               Change
-            </button>
+            </wa-button>
             ${!this.customAgentDirIsDefault
-              ? html`<button
-                  class="tab-action-btn"
-                  @click=${this.handleResetCustomDir}
+              ? html`<wa-button
+                  appearance="outlined"
+                  variant="neutral"
+                  size="small"
                   title="Reset to default directory"
+                  @click=${this.handleResetCustomDir}
                 >
                   Reset
-                </button>`
+                </wa-button>`
               : nothing}
           </div>
         </div>

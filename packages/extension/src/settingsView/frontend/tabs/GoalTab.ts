@@ -15,6 +15,7 @@ import { metaStripStyles, renderDotMeta } from '@shared/wa/metaStrip';
 import type { MetaPart } from '@shared/wa/metaStrip';
 import { capitalize } from '@utils/text/stringUtils';
 
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/badge/badge.js';
 
@@ -126,10 +127,19 @@ export class GoalTab extends LitElement {
             only.
           </div>
           <div class="settings-reminder-actions">
-            <button class="tab-action-btn" @click=${this.handleRefresh}>
-              <wa-icon library="texra" name="rotate-right"></wa-icon>
+            <wa-button
+              appearance="outlined"
+              variant="neutral"
+              size="small"
+              @click=${this.handleRefresh}
+            >
+              <wa-icon
+                slot="start"
+                library="texra"
+                name="rotate-right"
+              ></wa-icon>
               Refresh
-            </button>
+            </wa-button>
           </div>
         </div>
       </div>

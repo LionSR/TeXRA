@@ -7,6 +7,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { commonViewStyles, designTokens } from '@shared/styles';
 
 // Web Awesome icon bundle (side-effect import)
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 // Local imports - shared schemas
@@ -74,12 +75,14 @@ export class ModelsTab extends LitElement {
         : 'To use your own keys for OpenAI, Anthropic, Google, and other providers, scroll to the API Configuration section below.';
 
     const accessJump = this.authenticated
-      ? html`<button
-          class="tab-action-btn"
+      ? html`<wa-button
+          appearance="outlined"
+          variant="neutral"
+          size="small"
           @click=${this.handleScrollToApiAccess}
         >
           Model Access
-        </button>`
+        </wa-button>`
       : nothing;
 
     return html`
@@ -94,13 +97,15 @@ export class ModelsTab extends LitElement {
           <div class="settings-reminder-description">${description}</div>
           <div class="settings-reminder-actions">
             ${accessJump}
-            <button
-              class="tab-action-btn"
+            <wa-button
+              appearance="outlined"
+              variant="neutral"
+              size="small"
               @click=${this.handleScrollToApiConfig}
             >
-              <wa-icon library="texra" name="key"></wa-icon>
+              <wa-icon slot="start" library="texra" name="key"></wa-icon>
               Jump to API Configuration
-            </button>
+            </wa-button>
           </div>
         </div>
       </div>
