@@ -94,6 +94,30 @@ Remaining candidates the tables make arguable (not done): fold the CLI `terminal
 
 ---
 
+## Wrong-layer inventory (2026-06-10)
+
+Asked directly: which complications come from code sitting in the wrong layer? Three placements verified first-hand, ranked by complication yield. (The bus-vs-runtimeHost dual emission surface is the already-ruled umbrella — error-pipeline Map 3 / 7d; not re-litigated here.)
+
+### L1 — restart recovery lives in the extension's view layer (the big one)
+
+The recovery _mechanism_ is correctly host-neutral (`detectWaitingStreams` in `src/agent/storage`), but the recovery _orchestration_ — `cleanupTasksAfterRestart` → `resetRunningTasksToError` + `endRunningTaskGroups` — lives on `ProgressViewProvider` (extension package) and `ProgressEventHandler` / `ProgressViewState` (the _view_ backend), and is invoked from exactly one place: `packages/extension/src/extension.ts`. Verified: zero recovery call sites under `packages/desktop` or `packages/cli` — **the desktop recovery gap (severity finding #9) is now confirmed, and it is a direct consequence of the layering**: a runtime/storage concern was parked in a view provider, so any host that doesn't construct that exact view wiring silently has no recovery. Second consequence: recovery can repair what its layer owns (transcript groups → `'error'`) but not what it doesn't (`ExecutionMeta.terminalStatus` stays stale/absent — contradiction P4). Third: the view backend mutates `@agent/runtime` singletons (`StreamStatusService.set`, `interruptRegistry`) — the dependency arrow points the wrong way.
+
+**Right home:** a host-neutral recovery routine (runtime/storage or `src/controllers`), called by every host at startup; the view layer only re-renders the result. With `RunOutcome` it can also do the repair coherently: a reload-interrupted run is a _cancellation_ — non-resumable streams should persist `interrupted` and end groups neutral, not be painted as errors. **Sequencing:** coordinate with 7d PR 4 (hosts holding the session handle is the natural place to invoke it); the move itself is independent of T2-2.
+
+### L2 — relay auth recovery inside the generic retry base class
+
+`src/agent/core/flows/RetryState.ts` imports `@auth/SupabaseClient` and implements relay-401 token refresh and proactive expiry refresh (`attemptRelay401Recovery`, `isTokenExpiringSoon`) inside `RetryableInvocationNode` — provider-credential policy in the PocketFlow node retry machinery. Complications: every flow node type drags auth into its dependency cone; the same token logic exists in `ModelHandler.ts` (which also imports `SupabaseClient`), so credential policy has two owners; T2-1's "single retry owner" goal gets harder; testing retry behavior requires auth fakes. The injection point already exists — `refreshClient` is passed into the node services. **Right home:** the 401-refresh policy moves behind that injected boundary (model-handler/client layer); `RetryState` keeps only "ask the client to refresh, retry once". Independent of other gates; coordinate with the error-pipeline doc (touches its retry-owner territory).
+
+### L3 — non-lifecycle executions hand-roll terminal choreography in the tools layer
+
+bash background jobs and the codex/claude session loop never traverse `runFlowWithLifecycle`, so each re-implements the terminal sequence (stage end → `writeTerminalStatus` → finalize/untrack ordering). The session loop does it correctly behind a warning comment; `bash.ts` does it inside a fire-and-forget async closure with different ordering relative to `finalizeBackground` (persist can race host death — P1's writer-matrix hazard). The second consolidation wave unified the _values_ (projections); the _choreography_ — ordering and exactly-once — still has three owners. **Right home:** `finalizeChildStream` (`src/tools/childStream.ts`) accepts an outcome and owns stage-end + terminal-status write + finalize ordering; bash and the session loop already call it. Small, independent.
+
+### Ruled fine / already gated (do not move)
+
+- `RetryState` / `ToolUseWaitNode` WAITING–RUNNING–STOPPED writes: interaction states, genuinely in-run (error-pipeline ruling) — they are the asterisk on "the lifecycle owns all transitions", not a violation.
+- `StreamStatusService` living in `agent/runtime` while UI layers read it: ruled a shared keyed singleton (7d lifetimes table).
+- `StreamStatusChange.terminalStatus` — the persisted vocabulary riding the live-status event because hosts lack a result event; dissolves with T3-2's `ResultEvent`, don't fix twice.
+
 ## The persistence dimension (deep-dive, 2026-06-10)
 
 The outcome decision doesn't just feed the UI — it is written to disk in four places with different lifetimes, and the writers disagree. Map from four parallel sub-audits (execution meta, flow records/resume, restart recovery, downstream consumers), spot-checked.
