@@ -220,7 +220,7 @@ export class LatexDiffsSection extends LitElement {
   }
 
   private renderFileOptions(options: string[]): TemplateResult {
-    const sortedOptions = [...options].sort((a, b) => a.localeCompare(b));
+    const sortedOptions = options.toSorted((a, b) => a.localeCompare(b));
     return html`
       <wa-option value="">None</wa-option>
       ${repeat(

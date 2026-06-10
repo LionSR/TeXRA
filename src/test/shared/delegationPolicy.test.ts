@@ -1,5 +1,5 @@
 // Node.js built-in imports
-import * as assert from 'assert';
+import * as assert from 'node:assert';
 
 // Local imports - shared constants
 import {

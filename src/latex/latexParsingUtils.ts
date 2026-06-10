@@ -6,7 +6,7 @@
  * bibliography directive matching.
  */
 
-import * as path from 'path';
+import * as path from 'node:path';
 
 import { platform } from '@platform/platform';
 import * as logger from '@logger/logUtils';

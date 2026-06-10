@@ -1,4 +1,4 @@
-import * as path from 'path';
+import * as path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 

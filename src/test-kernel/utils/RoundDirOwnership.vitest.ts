@@ -8,9 +8,9 @@ import {
   stat,
   unlink,
   writeFile,
-} from 'fs/promises';
-import * as os from 'os';
-import * as path from 'path';
+} from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 

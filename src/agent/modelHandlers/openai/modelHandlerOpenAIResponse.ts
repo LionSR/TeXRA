@@ -2154,7 +2154,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
 
     if (thoughtContent) {
       this.logger.debug(
-        `OpenAI Responses reasoning preview (${reasoningItems.length} item(s)): ${thoughtContent.substring(0, K_SLICE)}...`,
+        `OpenAI Responses reasoning preview (${reasoningItems.length} item(s)): ${thoughtContent.slice(0, K_SLICE)}...`,
       );
     }
 
@@ -2205,8 +2205,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
     // to satisfy both API requirements (reasoning needs following item, web_search needs preceding reasoning)
     const contentBlocks: (ResponseFunctionWebSearch | ResponseReasoningItem)[] =
       [];
-    for (let i = 0; i < output.length; i++) {
-      const item = output[i];
+    for (const [i, item] of output.entries()) {
       if (isOpenAIWebSearchCall(item)) {
         // Check if there's a reasoning item immediately before this web_search_call
         if (i > 0 && isOpenAIReasoningItem(output[i - 1])) {

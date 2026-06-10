@@ -1,4 +1,4 @@
-import * as path from 'path';
+import * as path from 'node:path';
 
 import { ZodError } from 'zod';
 import { MODEL_CONFIGS } from 'llm-zoo';

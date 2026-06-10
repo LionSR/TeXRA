@@ -30,8 +30,7 @@ export function processTerminalText(text: string): string {
       // the erase point is still written at the cursor, so just strip the markers.
       let current = segs[0]!.split(ERASE_SENTINEL).join('');
 
-      for (let i = 1; i < segs.length; i++) {
-        const seg = segs[i]!;
+      for (const seg of segs.slice(1)) {
         const eraseAt = seg.indexOf(ERASE_SENTINEL);
         if (eraseAt >= 0) {
           // \r overlays the prefix up to the erase point; \x1b[K clears from there to EOL.

@@ -14,7 +14,7 @@
  *    are cached for the session.
  */
 
-import * as path from 'path';
+import * as path from 'node:path';
 
 import { isModuleNotFoundError } from '@common/errors';
 import { pathExists, resolveBinary } from './support/externalBinaryUtils';

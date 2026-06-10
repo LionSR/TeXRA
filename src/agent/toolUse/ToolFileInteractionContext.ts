@@ -1,5 +1,5 @@
 // Third-party imports
-import { AsyncLocalStorage } from 'async_hooks';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 // Type imports
 import type {
