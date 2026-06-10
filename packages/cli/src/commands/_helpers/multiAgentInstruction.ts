@@ -34,9 +34,17 @@ export function formatMultiAgentRunInstruction(
     inputFiles: init.inputFiles,
     contextFiles: init.contextFiles,
   });
-  if (inputFileInstruction) parts.push(inputFileInstruction);
-
   const instruction = init.instruction.trim();
+  if (inputFileInstruction) {
+    parts.push(inputFileInstruction);
+  } else if (instruction) {
+    // Say so explicitly — otherwise orchestrators tend to assume files were
+    // attached and delegate file rewrites with invented paths.
+    parts.push(
+      'No input or context files were attached to this run; work from the user instruction below.',
+    );
+  }
+
   if (instruction) {
     parts.push(
       inputFileInstruction
