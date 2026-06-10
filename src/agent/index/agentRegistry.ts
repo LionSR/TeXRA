@@ -171,11 +171,59 @@ async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
     cache.set(key, entry);
   }
 
+  // Migrate legacy agent names (chat → assistant) in persisted visibility
+  // sets. Runs after registration so a user-defined agent that still uses
+  // the legacy name keeps its key.
+  migrateLegacyAgentNameKeys();
+
   logger.info(
     CHANNEL,
     `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
   );
 }
+
+/**
+ * Rewrite persisted enabled-agent keys whose name part is a legacy alias
+ * (e.g. `chat` or `builtInToolUse:chat`) to the canonical agent name. The
+ * Agents settings UI matches these keys literally, so leaving stale legacy
+ * names in state would show the renamed agent as disabled while
+ * {@link filterVisible} still surfaces it — and toggling it off in the UI
+ * could never remove the stale key. A registered agent that genuinely uses
+ * the legacy name (e.g. a custom `chat`) keeps its key untouched.
+ */
+function migrateLegacyAgentNameKeys(): void {
+  for (const stateKey of [
+    WorkspaceStateKey.ENABLED_AGENTS,
+    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+  ] as const) {
+    const stored = platform().workspaceState.get<string[]>(stateKey, []);
+    if (!stored?.length) continue;
+
+    const migrated = stored.map((key) => {
+      const name = agentName(key);
+      const alias = LEGACY_AGENT_ALIASES[name];
+      if (!alias) return key;
+      if (key === name ? getAgent(name)?.name === name : cache.has(key)) {
+        return key;
+      }
+      return key.slice(0, key.length - name.length) + alias;
+    });
+    if (migrated.every((key, i) => key === stored[i])) continue;
+
+    void platform().workspaceState.update(stateKey, [...new Set(migrated)]);
+    logger.info(CHANNEL, `Migrated legacy agent names in ${stateKey}`);
+  }
+}
+
+/**
+ * Legacy agent-name aliases — keep prior configs, histories, and delegation
+ * calls working when a built-in agent is renamed. Each entry maps
+ * `<old name> → <canonical name>`. Applied only when the original identifier
+ * resolves to nothing, so a user-defined agent with the old name still wins.
+ */
+const LEGACY_AGENT_ALIASES: Record<string, string> = {
+  chat: 'assistant',
+};
 
 /**
  * Canonical agent resolver: look up an agent by identifier.
@@ -200,6 +248,16 @@ export function getAgent(
   for (const source of priority) {
     const entry = cache.get(`${source}:${identifier}`);
     if (entry) return entry;
+  }
+
+  // Legacy-name fallback, for both bare names ("chat") and source-qualified
+  // keys ("builtInToolUse:chat"): map the name part through the alias table
+  // and retry once.
+  const name = agentName(identifier);
+  const alias = LEGACY_AGENT_ALIASES[name];
+  if (alias) {
+    const prefix = identifier.slice(0, identifier.length - name.length);
+    return getAgent(`${prefix}${alias}`, preferToolUse);
   }
   return undefined;
 }
@@ -278,10 +336,10 @@ export function isAgentRegistryReady(): boolean {
 }
 
 /** Refresh the cache. */
-export async function refresh(): Promise<void> {
+export async function refresh(options: LoadAgentsOptions = {}): Promise<void> {
   initialized = false;
   cacheIncludesRemote = false;
-  await loadAgents();
+  await loadAgents(options);
 }
 
 // =============================================================================
@@ -330,7 +388,34 @@ export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
       ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
       : WorkspaceStateKey.ENABLED_AGENTS;
   const raw = platform().workspaceState.get<string[]>(stateKey);
-  return filterVisible(entries, raw);
+  return filterVisible(entries, raw, category);
+}
+
+/**
+ * Resolve an identifier to a currently visible agent entry. Visibility and
+ * legacy aliases are owned by the registry, so callers do not need to repeat
+ * rename or enabled-agent matching rules.
+ */
+export function getVisibleAgent(
+  category: AgentCategory,
+  identifier: string,
+): AgentEntry | undefined {
+  const entries = getVisibleAgents(category);
+  const name = agentName(identifier);
+  // A source-qualified identifier names one specific entry, so only an exact
+  // key match counts — matching its bare name could hit a different visible
+  // agent that shares the legacy name (e.g. a custom `chat` shadowing the
+  // renamed built-in). Bare identifiers may match any visible agent by name.
+  const exact = entries.find((entry) =>
+    identifier === name
+      ? entry.name === name
+      : createKey(entry.source, entry.name) === identifier,
+  );
+  if (exact) return exact;
+
+  const entry = getAgent(identifier, category === AgentCategory.ToolUse);
+  if (!entry) return undefined;
+  return entries.find((visible) => visible.name === entry.name);
 }
 
 /**
@@ -362,11 +447,22 @@ function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
 function filterVisible(
   entries: AgentEntry[],
   configured: string[] | undefined,
+  category: AgentCategory,
 ): AgentEntry[] {
   // undefined = never configured → show all; [] = explicitly empty → show none
   if (configured === undefined) return entries;
   // Match by name so visibility survives when dedup changes the winning source.
-  const enabledNames = new Set(configured.map(agentName));
+  // A persisted legacy name also enables its canonical replacement, so agent
+  // renames don't silently hide an agent the user opted into.
+  const enabledNames = new Set(
+    configured.flatMap((value) => {
+      const name = agentName(value);
+      if (entries.some((entry) => entry.name === name)) return [name];
+      return [
+        getAgent(value, category === AgentCategory.ToolUse)?.name ?? name,
+      ];
+    }),
+  );
   return entries.filter((entry) => enabledNames.has(entry.name));
 }
 
