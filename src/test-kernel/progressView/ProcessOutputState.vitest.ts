@@ -18,7 +18,7 @@ import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
 // Local imports - shared schemas
 import {
-  AGENT_CATEGORY,
+  AgentCategory,
   createStreamState,
   STREAM_STATUS,
   type ProgressViewOutboundMessage,
@@ -61,7 +61,7 @@ function createProcessState(streamId: StreamTabId): ProgressState {
   state.activeStreamId = streamId;
   state.streamStates.set(
     streamId,
-    createStreamState(AGENT_CATEGORY.WORKFLOW, {
+    createStreamState(AgentCategory.Workflow, {
       activeProcesses: [
         {
           executionId: 'active-process',
@@ -160,13 +160,13 @@ describe('process output frontend state', () => {
     state.streamById.set(parent, {
       name: parent,
       label: 'parent',
-      agentCategory: AGENT_CATEGORY.WORKFLOW,
+      agentCategory: AgentCategory.Workflow,
       creationTimestamp: 1,
     });
     state.streamById.set(child, {
       name: child,
       label: 'child',
-      agentCategory: AGENT_CATEGORY.TOOL_USE,
+      agentCategory: AgentCategory.ToolUse,
       creationTimestamp: 2,
       parentStreamId: parent,
     });

@@ -17,7 +17,7 @@ import { toErrorMessage } from '@common/errors';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { platform, tryPlatform } from '@platform/platform';
 import {
-  AGENT_CATEGORY,
+  AgentCategory,
   LOG_LEVELS,
   MESSAGE_TYPES,
   STREAM_STATUS,
@@ -272,7 +272,7 @@ function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
       model: 'harness-model',
       status: CLI_HISTORY_RESUMABLE_STATUS,
       inputBasename: '-',
-      category: AGENT_CATEGORY.TOOL_USE,
+      category: AgentCategory.ToolUse,
       parentExecutionId: 'root-session' as ExecutionId,
       delegationDepth: 1,
     },
@@ -283,7 +283,7 @@ function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
       model: 'harness-model',
       status: CLI_HISTORY_RESUMABLE_STATUS,
       inputBasename: '-',
-      category: AGENT_CATEGORY.TOOL_USE,
+      category: AgentCategory.ToolUse,
       delegationDepth: 1,
     },
     {
@@ -293,7 +293,7 @@ function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {
       model: 'harness-model',
       status: CLI_HISTORY_RESUMABLE_STATUS,
       inputBasename: '-',
-      category: AGENT_CATEGORY.TOOL_USE,
+      category: AgentCategory.ToolUse,
     },
   ];
 }
@@ -710,7 +710,7 @@ function makeAgentProposalPayload() {
   return {
     proposalId: 'harness-agent-proposal',
     streamId: STREAM_ID,
-    agentCategory: AGENT_CATEGORY.TOOL_USE,
+    agentCategory: AgentCategory.ToolUse,
     agent: 'review',
     model: 'deepseekT',
     instruction: AGENT_PROPOSAL_INSTRUCTION,

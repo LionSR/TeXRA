@@ -28,7 +28,7 @@ import type {
   ToolEditPermission,
   UserQuestionPermission,
 } from '@shared/schemas';
-import { AGENT_CATEGORY } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { ProgressBackend } from '@shared/progressView/backend/ProgressBackend';
 import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 import { collectKnownSessionLinks } from '@tools/inquiry/externalInquiryResultFormatter';
@@ -295,7 +295,7 @@ export class ProgressViewProvider
     // the dropdown still appears if ServerSideKeyService isn't ready. Agent
     // options have no static equivalent, so the agent dropdown is omitted
     // when the registry fetch fails.
-    const isWorkflow = proposal.agentCategory === AGENT_CATEGORY.WORKFLOW;
+    const isWorkflow = proposal.agentCategory === AgentCategory.Workflow;
     const loadAgentOptions = async () => {
       const all = await computeAgentOptionsData();
       const raw = isWorkflow ? all.workflow : all.toolUse;
