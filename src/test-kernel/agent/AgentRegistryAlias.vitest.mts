@@ -6,17 +6,17 @@ import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 // Local imports
+import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
+import { platform } from '@platform/platform';
+import { createFakePlatform } from '@test/support/FakePlatform';
+import { setAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import {
   canonicalAgentName,
   getAgent,
   getVisibleAgents,
   loadAgents,
 } from '@agent/index/agentRegistry';
-import { setAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
-import { initPlatform, platform } from '@platform/platform';
-import { nodeFilesystem } from '@platform/defaults/nodeFilesystem';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { createFakePlatform } from '@test/support/FakePlatform';
 
 const REPO_ROOT = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
@@ -27,6 +27,7 @@ describe('agent registry legacy aliases', () => {
   beforeAll(async () => {
     // Real bundled agent YAMLs on disk, so the test exercises the actual
     // rename (chat → assistant) rather than synthetic fixtures.
+    const { initPlatform } = await import('@platform/platform');
     initPlatform(createFakePlatform({}, { fs: nodeFilesystem }));
     setAgentDirectories({
       custom: async () => '',
