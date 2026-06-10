@@ -22,8 +22,8 @@ import {
 import {
   generateTimestamp,
   getAgentFirstNameChunk,
-  getFilePatterns,
   findFilesFromPatterns,
+  resolveHousekeepingTargets,
 } from './utils';
 
 const CHANNEL = 'Housekeeping';
@@ -40,29 +40,13 @@ export async function runPackSingle(
     `Starting packing with model=${model}, inputFile=${inputFile}, agent=${agent}, outputFolder=${outputFolder}`,
   );
 
-  if (!inputFile || !model || !agent) {
-    logger.error(
-      CHANNEL,
-      `Missing required parameters: model=${model}, inputFile=${inputFile}, agent=${agent}`,
-    );
+  const targets = resolveHousekeepingTargets(model, inputFile, agent);
+  if (!targets) {
     return { status: 'missingParams' };
   }
-
-  const baseName = path.parse(inputFile).name;
-  const inputDir = path.dirname(inputFile);
-  logger.debug(
-    CHANNEL,
-    `Parsed paths: baseName=${baseName}, inputDir=${inputDir}`,
-  );
-
-  const maxRounds = getConfig<number>('texra.agent.rounds', DEFAULT_MAX_ROUNDS);
-  // Pass the raw agent; getFilePatterns derives both the legacy chunk and
-  // the new clean-agent forms internally so both disk layouts are matched.
-  const filePatterns = [
-    ...getFilePatterns(baseName, model, agent, maxRounds),
-    baseName,
-  ];
-  logger.debug(CHANNEL, `Generated patterns: ${filePatterns}`);
+  const { baseName, inputDir } = targets;
+  // Pack also matches the input document itself (it is copied, not moved).
+  const filePatterns = [...targets.filePatterns, baseName];
 
   const allFiles = findFilesFromPatterns(
     inputDir,

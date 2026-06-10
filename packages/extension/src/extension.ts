@@ -18,7 +18,7 @@ import { loadAgents, setAgentDirectories } from '@agent/index';
 import { clearStoreCache } from '@agent/storage';
 import { registerAgentFeatures } from '@agent/features';
 import { initializeGoalPrompts } from '@agent/goal';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
+import { registerAgentShutdownHandlers } from '@agent/runtime/agentShutdown';
 import { initializePolishModel } from '@agent/runtime/polishModel';
 import {
   getServerSideKeyService,
@@ -75,10 +75,6 @@ import { VscodeConfigProvider } from '@frontend/vscode/vscodeConfig';
 import * as logger from '@logger/logUtils';
 import { refreshModelListStateIfNeeded } from '@model/modelListRefresh';
 import { STREAM_STATUS, type StreamStatus } from '@shared/schemas';
-import {
-  interruptAllClaudeAgentSessions,
-  interruptAllCodexSessions,
-} from '@tools/agentCliSessionStores';
 import { setOpenPdfOpener } from '@tools/OpenPdfTool';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { setSetupPlatform } from '@tools/setup';
@@ -194,15 +190,7 @@ export async function activate(context: vscode.ExtensionContext) {
   });
   registerAgentFeatures();
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => disposeStatusListener?.());
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    executionRegistry.killBackgroundProcesses(),
-  );
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    interruptAllCodexSessions(),
-  );
-  lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    interruptAllClaudeAgentSessions(),
-  );
+  registerAgentShutdownHandlers(lifecycle);
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => killActiveRecording());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () => UsageLogService.dispose());
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>

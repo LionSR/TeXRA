@@ -8,17 +8,16 @@
  */
 
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import {
+  computeStandardPrice,
+  type StandardPricingConfig,
+} from '@agent/utils/priceUtils';
 
 import { normalizeUsage } from '../support/UsageNormalizer';
 import type { GenerateContentResponseUsageMetadata } from '@google/genai';
 
 /** Pricing inputs the handler supplies from its `config`/`capabilities`. */
-export interface GooglePricingConfig {
-  inputPrice: number;
-  outputPrice: number;
-  cacheDiscountFactor: number;
-}
+export type GooglePricingConfig = StandardPricingConfig;
 
 interface GoogleTokenCounts {
   inputTokens: number;
@@ -74,24 +73,17 @@ export function computeGooglePrice(
   if (!responseUsage) return 0.0;
   const { inputTokens, outputTokens } = computeGoogleTokenCounts(responseUsage);
 
-  let basePrice = calculateTokenPrice(
-    inputTokens,
-    outputTokens,
-    config.inputPrice,
-    config.outputPrice,
-  );
-
+  // No reasoning surcharge: thoughtsTokenCount is already part of outputTokens.
   // cachedContentTokenCount is a subset of promptTokenCount, so cached reads
-  // are first billed at the full input rate above; rebate them down to the
-  // discounted cache-read rate (mirrors computeOpenAIPrice).
-  const cachedTokens = responseUsage.cachedContentTokenCount ?? 0;
-  if (cachedTokens) {
-    basePrice -=
-      (cachedTokens * config.inputPrice * (1 - config.cacheDiscountFactor)) /
-      1e6;
-  }
-
-  return basePrice;
+  // are billed at the full input rate and rebated by computeStandardPrice.
+  return computeStandardPrice(
+    {
+      inputTokens,
+      outputTokens,
+      cachedTokens: responseUsage.cachedContentTokenCount ?? 0,
+    },
+    config,
+  );
 }
 
 /** Normalizes Google GenAI usage data into a unified format. */
