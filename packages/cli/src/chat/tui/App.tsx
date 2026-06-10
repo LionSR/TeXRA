@@ -469,6 +469,7 @@ export function App(props: AppProps): React.JSX.Element {
   const [childControlMode, setChildControlMode] = useState<
     ChildControlMode | undefined
   >(undefined);
+  const [tipHour] = useState(() => new Date().getHours());
   const canStopActiveRun =
     props.canStopActiveRun ?? props.canInterruptActiveRun;
   const agentSelectionAvailable = rootRunStartAvailable;
@@ -832,7 +833,10 @@ export function App(props: AppProps): React.JSX.Element {
           </Box>
         ) : null}
         {tipRowVisible ? (
-          <TipRow agentSelectionAvailable={agentSelectionAvailable} />
+          <TipRow
+            agentSelectionAvailable={agentSelectionAvailable}
+            hour={tipHour}
+          />
         ) : null}
         {queuedFollowUpPanelVisible ? (
           <QueuedFollowUpsPanel

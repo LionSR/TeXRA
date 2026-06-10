@@ -890,4 +890,5 @@ function postWebviewReady(): void {
 
 function applyDesktopTheme(theme: DesktopThemeKind): void {
   applyHostBodyTheme(theme);
+  diffOverlay.setTheme(theme);
 }

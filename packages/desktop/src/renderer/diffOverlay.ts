@@ -1,4 +1,8 @@
 import { render } from 'lit';
+import {
+  DESKTOP_THEME_KIND,
+  type DesktopThemeKind,
+} from '@shared/constants/desktopTheme';
 import { waIcon } from '@shared/wa/webAwesomeIcons';
 import type { DesktopShowDiffMessage } from '../desktopDiffMessages';
 import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
@@ -7,11 +11,13 @@ interface DiffViewElement extends HTMLElement {
   originalText: string;
   proposedText: string;
   language: string;
+  hostTheme: string;
 }
 
 export interface DiffOverlayController {
   open(payload: DesktopShowDiffMessage): void;
   close(): void;
+  setTheme(theme: DesktopThemeKind): void;
 }
 
 export function createDiffOverlay(appRoot: HTMLElement): DiffOverlayController {
@@ -19,6 +25,7 @@ export function createDiffOverlay(appRoot: HTMLElement): DiffOverlayController {
   let viewEl: DiffViewElement | null = null;
   let titleEl: HTMLElement | null = null;
   let subtitleEl: HTMLElement | null = null;
+  let currentTheme: DesktopThemeKind = DESKTOP_THEME_KIND.DARK;
 
   function ensure(): WaDialog {
     if (dialog) return dialog;
@@ -47,6 +54,7 @@ export function createDiffOverlay(appRoot: HTMLElement): DiffOverlayController {
     // across re-opens — Lit's @property setter handles content swaps.
     const view = document.createElement('texra-diff-view') as DiffViewElement;
     view.classList.add('desktop-diff-view');
+    view.hostTheme = currentTheme;
     viewEl = view;
 
     body.append(header, view);
@@ -90,5 +98,10 @@ export function createDiffOverlay(appRoot: HTMLElement): DiffOverlayController {
     if (dialog) dialog.open = false;
   }
 
-  return { open, close };
+  function setTheme(theme: DesktopThemeKind): void {
+    currentTheme = theme;
+    if (viewEl) viewEl.hostTheme = theme;
+  }
+
+  return { open, close, setTheme };
 }
