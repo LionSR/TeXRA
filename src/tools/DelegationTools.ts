@@ -15,7 +15,7 @@ import { z } from 'zod';
 // Local imports - agent
 import { getExecutionStore, registerExecution } from '@agent/storage';
 import {
-  canonicalAgentName,
+  getVisibleAgent,
   getVisibleAgents,
 } from '@agent/index/agentRegistry';
 import {
@@ -700,29 +700,13 @@ async function resolveAvailableDelegationModel(input: {
   });
 }
 
-/** Return the visible, current agent name for an identifier. */
-function findVisibleAgentName(
+/** Return the visible current agent, or throw with the current visible list. */
+function requireVisibleAgent(
   category: AgentCategory,
   name: string,
-): string | undefined {
-  const visibleAgents = getVisibleAgents(category);
-  if (visibleAgents.some((agent) => agent.name === name)) return name;
-  const canonicalName = canonicalAgentName(
-    name,
-    category === AgentCategory.ToolUse,
-  );
-  return visibleAgents.some((agent) => agent.name === canonicalName)
-    ? canonicalName
-    : undefined;
-}
-
-/** Return the visible current name, or throw if no visible agent matches. */
-function requireVisibleAgentName(
-  category: AgentCategory,
-  name: string,
-): string {
-  const resolvedName = findVisibleAgentName(category, name);
-  if (resolvedName) return resolvedName;
+): { name: string } {
+  const agent = getVisibleAgent(category, name);
+  if (agent) return agent;
   const available = getVisibleAgents(category)
     .map((a) => a.name)
     .join(', ');
@@ -826,7 +810,7 @@ async function proposeAndExecute(
   const agentOverride =
     result.agent && result.agent !== proposal.agent ? result.agent : undefined;
   const resolvedAgentOverride = agentOverride
-    ? findVisibleAgentName(proposal.agentCategory, agentOverride)
+    ? getVisibleAgent(proposal.agentCategory, agentOverride)?.name
     : undefined;
 
   // Re-validate against the current registry — between proposal display and
@@ -976,7 +960,7 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
   schema: WorkflowAgentInputSchema,
 }) {
   protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
-    const agentName = requireVisibleAgentName('workflow', input.agent);
+    const agentName = requireVisibleAgent('workflow', input.agent).name;
     const ctx = getRequiredContext();
 
     const model = await resolveAvailableDelegationModel({
@@ -1113,7 +1097,7 @@ Git worktree support: ${
       );
     }
 
-    const agentName = requireVisibleAgentName('toolUse', input.agent);
+    const agentName = requireVisibleAgent('toolUse', input.agent).name;
 
     const ctx = getRequiredContext();
 

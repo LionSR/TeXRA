@@ -18,17 +18,17 @@ const mocks = vi.hoisted(() => ({
   inheritBashBypassOnChildStream: vi.fn(),
   executeAgent: vi.fn(),
   getExecutionStore: vi.fn(),
+  getVisibleAgent: vi.fn(),
   getVisibleAgents: vi.fn(),
   isApprovalBypassedForStream: vi.fn(),
   isProposalBypassed: vi.fn(),
   registerExecution: vi.fn(),
   writeReport: vi.fn(),
   computeModelOptionsData: vi.fn(),
-  canonicalAgentName: vi.fn(),
 }));
 
 vi.mock('@agent/index/agentRegistry', () => ({
-  canonicalAgentName: mocks.canonicalAgentName,
+  getVisibleAgent: mocks.getVisibleAgent,
   getVisibleAgents: mocks.getVisibleAgents,
 }));
 
@@ -78,8 +78,9 @@ describe('headless delegation', () => {
         tools: [],
       },
     ]);
-    mocks.canonicalAgentName.mockImplementation((name: string) =>
-      name === 'chat' ? 'assistant' : name,
+    mocks.getVisibleAgent.mockImplementation(
+      (_category: AgentCategory, name: string) =>
+        name === 'review' ? { name: 'review' } : undefined,
     );
     mocks.computeModelOptionsData.mockResolvedValue([
       {
@@ -335,6 +336,12 @@ describe('headless delegation', () => {
         tools: [],
       },
     ]);
+    mocks.getVisibleAgent.mockImplementation(
+      (_category: AgentCategory, name: string) =>
+        name === 'chat' || name === 'assistant'
+          ? { name: 'assistant' }
+          : undefined,
+    );
 
     const result = await withRunContext(
       createRunContext({

@@ -13,8 +13,8 @@ import { platform } from '@platform/platform';
 import { createFakePlatform } from '@test/support/FakePlatform';
 import { setAgentDirectories } from '@agent/index/agentDirectoriesRegistry';
 import {
-  canonicalAgentName,
   getAgent,
+  getVisibleAgent,
   getVisibleAgents,
   refresh,
 } from '@agent/index/agentRegistry';
@@ -55,13 +55,9 @@ describe('agent registry legacy aliases', () => {
     await refresh({ includeRemote: false });
   });
 
-  it('maps chat to assistant in canonicalAgentName', () => {
-    expect(canonicalAgentName('chat')).toBe('assistant');
-    expect(canonicalAgentName('assistant')).toBe('assistant');
-    expect(canonicalAgentName('research')).toBe('research');
-    // Unknown names pass through unchanged and must not recurse.
-    expect(canonicalAgentName('no-such-agent')).toBe('no-such-agent');
+  it('keeps unknown names unresolved', () => {
     expect(getAgent('no-such-agent')).toBeUndefined();
+    expect(getVisibleAgent('toolUse', 'no-such-agent')).toBeUndefined();
   });
 
   it('resolves the legacy chat identifier to the assistant entry', () => {
@@ -93,6 +89,7 @@ describe('agent registry legacy aliases', () => {
 
     const visible = getVisibleAgents('toolUse').map((a) => a.name);
     expect(visible).toContain('assistant');
+    expect(getVisibleAgent('toolUse', 'chat')?.name).toBe('assistant');
   });
 
   it('preserves bare custom chat while migrating qualified built-in chat keys', async () => {
