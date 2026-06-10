@@ -430,13 +430,14 @@ function rerenderShell(): void {
   railTabs.childStreamsByParent = childStreamsByParent$.get();
 }
 
+function toBootstrapErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  return 'TeXRA could not finish starting up.';
+}
+
 function renderBootstrapFallback(error: unknown): void {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : 'TeXRA could not finish starting up.';
+  const message = toBootstrapErrorMessage(error);
   const reload = () => window.location.reload();
   render(
     html`
@@ -846,29 +847,34 @@ function wireConversation(): void {
     handleFollowUpClear(ctx()),
   );
   // followup-focus-complete: clear the focus/polish/transcribe trigger flags.
-  conversationView.addEventListener('followup-focus-complete', () => {
-    const streamId = appState.get().activeStreamId;
-    if (!streamId) return;
-    setStreamStateForId(streamId, (prev) => {
-      // The followup-focus-complete handler in ProgressApp is a no-op when
-      // not a tool-use state; mirror that here. Importing the type guard
-      // would create a circular dep, so use structural shape.
-      if (!('ui' in prev)) return prev;
-      return mutate(prev, (draft) => {
-        if (!('ui' in draft)) return;
-        const ui = (
-          draft as {
-            ui: {
-              shouldFocusFollowUp?: boolean;
-              polishedText?: string | null;
-              transcribedText?: string | null;
-            };
-          }
-        ).ui;
-        ui.shouldFocusFollowUp = false;
-        ui.polishedText = null;
-        ui.transcribedText = null;
-      });
+  conversationView.addEventListener(
+    'followup-focus-complete',
+    clearActiveFollowUpFocusFlags,
+  );
+}
+
+interface FollowUpFocusUiState {
+  ui: {
+    shouldFocusFollowUp?: boolean;
+    polishedText?: string | null;
+    transcribedText?: string | null;
+  };
+}
+
+function clearActiveFollowUpFocusFlags(): void {
+  const streamId = appState.get().activeStreamId;
+  if (!streamId) return;
+  setStreamStateForId(streamId, (prev) => {
+    // The followup-focus-complete handler in ProgressApp is a no-op when
+    // not a tool-use state; mirror that here. Importing the type guard
+    // would create a circular dep, so match the structural shape instead.
+    if (!('ui' in prev)) return prev;
+    return mutate(prev, (draft) => {
+      if (!('ui' in draft)) return;
+      const { ui } = draft as FollowUpFocusUiState;
+      ui.shouldFocusFollowUp = false;
+      ui.polishedText = null;
+      ui.transcribedText = null;
     });
   });
 }
