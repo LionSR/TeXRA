@@ -54,6 +54,7 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 // Local file imports
 import { defineTool } from './core/define';
+import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import { importCodexClass, findCodexBinaryPath } from './codexImport';
 import { createChildStream, type ChildStream } from './childStream';
 import { codexThreads } from './agentCliSessionStores';
@@ -87,9 +88,9 @@ import type {
 // ============================================================================
 
 // CODEX_SANDBOX_MODES must be inlined (used at module-level by the schema).
-// All other config (model, reasoning, buildCodexConfig, workspace, sandbox
-// getter) is lazy-imported from codexConfig.ts at runtime to avoid pulling
-// vscode into the module graph — src/tools/ is a VS Code-free zone.
+// All other config (model, reasoning, buildCodexConfig, sandbox getter) is
+// lazy-imported from codexConfig.ts at runtime to avoid pulling vscode into
+// the module graph — src/tools/ is a VS Code-free zone.
 
 /** All sandbox modes from the SDK, exposed to the LLM. */
 const CODEX_SANDBOX_MODES = [
@@ -472,7 +473,7 @@ async function createCodexThread(
   // Resumed threads keep their stored workspace unless explicitly overridden.
   const workspace =
     workingDir || !input.thread_id
-      ? config.buildCodexWorkspaceOptions(workingDir)
+      ? buildAgentWorkspaceOptions(workingDir)
       : {};
   const threadOptions: ThreadOptions = {
     ...workspace,

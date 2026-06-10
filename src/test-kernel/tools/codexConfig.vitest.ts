@@ -2,14 +2,12 @@
 
 // Standard library imports
 import { strict as assert } from 'node:assert';
-import * as path from 'node:path';
-import { describe, it, afterEach } from 'vitest';
+import { describe, it } from 'vitest';
 
 // Local imports
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import {
   buildCodexConfig,
-  buildCodexWorkspaceOptions,
   parseCodexApprovalPolicy,
   toCodexCliReasoningEffort,
 } from '@tools/codexConfig';
@@ -28,7 +26,6 @@ import {
   buildCodexUsageStats,
   CODEX_TURN_TOOL,
 } from '@tools/codexShared';
-import { WorkspaceFS } from '@utils/files';
 
 describe('buildCodexConfig', () => {
   it('uses Codex-specific tool-use metadata for child streams', () => {
@@ -66,45 +63,6 @@ describe('parseCodexApprovalPolicy', () => {
 
   it('defaults to automatic approval for invalid persisted values', () => {
     assert.equal(parseCodexApprovalPolicy('ask'), 'never');
-  });
-});
-
-describe('buildCodexWorkspaceOptions', () => {
-  const originalGetPath = WorkspaceFS.getPath;
-
-  afterEach(() => {
-    WorkspaceFS.getPath = originalGetPath;
-  });
-
-  it('defaults Codex to the workspace root', () => {
-    WorkspaceFS.getPath = () => '/tmp/workspace';
-
-    const options = buildCodexWorkspaceOptions();
-
-    assert.deepEqual(options, {
-      workingDirectory: '/tmp/workspace',
-    });
-  });
-
-  it('keeps the whole workspace available when running from a subdirectory', () => {
-    WorkspaceFS.getPath = () => '/tmp/workspace';
-
-    const options = buildCodexWorkspaceOptions('packages/app');
-
-    assert.deepEqual(options, {
-      workingDirectory: path.resolve('/tmp/workspace', 'packages/app'),
-      additionalDirectories: ['/tmp/workspace'],
-    });
-  });
-
-  it('does not inject the current workspace into an external worktree path', () => {
-    WorkspaceFS.getPath = () => '/tmp/workspace';
-
-    const options = buildCodexWorkspaceOptions('/tmp/worktrees/feature-a');
-
-    assert.deepEqual(options, {
-      workingDirectory: '/tmp/worktrees/feature-a',
-    });
   });
 });
 

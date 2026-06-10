@@ -20,7 +20,7 @@ import {
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { UserVariableChannels } from '@agent/core/definition/AgentCycleOptions';
 import {
-  readAttachedMemoryMisses,
+  AttachedMemoryMissesSchema,
   type AttachedMemoryMiss,
 } from '@agent/types/AttachedMemory';
 import {
@@ -299,7 +299,7 @@ async function assembleAgentLaunchContext(
     input: Object.freeze(baseVars),
     transient: { ...baseVars },
   };
-  const attachedMemoryMisses = readAttachedMemoryMisses(
+  const attachedMemoryMisses = AttachedMemoryMissesSchema.parse(
     baseVars.ATTACHED_MEMORY_MISSES,
   );
 

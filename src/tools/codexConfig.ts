@@ -4,10 +4,6 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
-import {
-  buildAgentWorkspaceOptions,
-  type AgentWorkspaceOptions,
-} from './agentWorkspaceOptions';
 import { createEnumParser, createEnumStateGetter } from './support/enumConfig';
 import { CODEX_AGENT_NAME, CODEX_DISPLAY_MODEL } from './codexShared';
 
@@ -135,22 +131,4 @@ export function buildCodexConfig(prompt: string): AgentConfig {
     instruction: prompt,
     agentCategory: AgentCategory.ToolUse,
   });
-}
-
-export type CodexWorkspaceOptions = AgentWorkspaceOptions;
-
-/**
- * Compute Codex workspace access options.
- *
- * When no directory is provided, Codex runs from the workspace root.
- * When a subdirectory inside the workspace is provided, we still add the
- * workspace root so the agent can inspect sibling files across the project.
- * Absolute paths outside the workspace (for example a separate git worktree)
- * run in that directory without inheriting the current workspace as an
- * additional root.
- */
-export function buildCodexWorkspaceOptions(
-  workingDirectoryInput?: string | null,
-): CodexWorkspaceOptions {
-  return buildAgentWorkspaceOptions(workingDirectoryInput);
 }
