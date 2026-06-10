@@ -70,7 +70,9 @@ type Variables = {
 // Hono App
 // =============================================================================
 
-const app = new Hono<{ Variables: Variables }>();
+// The edge runtime hands over paths including the function slug
+// (/auth-github/exchange), same as the relay function.
+const app = new Hono<{ Variables: Variables }>().basePath('/auth-github');
 
 // CORS middleware using shared utilities
 app.use('*', async (c, next) => {
