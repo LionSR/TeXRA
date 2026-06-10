@@ -91,7 +91,7 @@ export const SERVER_SIDE_CACHE_TTL_MS = 5 * 60 * 1000;
  * Deno Edge Functions cannot import this source file, so update both files
  * when changing relay spending policy.
  */
-export const RELAY_TIER_SPENDING_LIMITS: Record<UserTier, number> = {
+const RELAY_TIER_SPENDING_LIMITS: Record<UserTier, number> = {
   [FREE_TIER]: 10,
   [MAX_TIER]: 50,
   [ULTRA_TIER]: 300,

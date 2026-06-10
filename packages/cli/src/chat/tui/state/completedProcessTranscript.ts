@@ -18,7 +18,7 @@ export function isCompletedProcessError(status: string | undefined): boolean {
   return isChildExecutionErrorStatus(status);
 }
 
-export function completedProcessTailLines(
+function completedProcessTailLines(
   tail: ProcessOutputTail | undefined,
 ): string[] {
   if (!tail) return [];
@@ -64,7 +64,7 @@ export function completedProcessDisplayLines(
   ];
 }
 
-export function buildCompletedProcessEntry(params: {
+function buildCompletedProcessEntry(params: {
   readonly streamId: StreamTabId;
   readonly info: ActiveChildInfo;
   readonly tail: ProcessOutputTail | undefined;

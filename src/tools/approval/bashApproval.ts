@@ -10,13 +10,13 @@ import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import { createStreamApprovalController } from './streamApprovalQueue';
 
-export const BashApprovalRequestSchema = z.object({
+const BashApprovalRequestSchema = z.object({
   command: z.string(),
   streamId: StreamTabIdSchema.optional(),
 });
 export type BashApprovalRequest = z.infer<typeof BashApprovalRequestSchema>;
 
-export const BashApprovalResultSchema = z.object({
+const BashApprovalResultSchema = z.object({
   accepted: z.boolean(),
   userMessage: z.string().optional(),
 });

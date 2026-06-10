@@ -77,7 +77,7 @@ export function estimateTranscriptEntryRows(
   return estimateWrappedRows(entry.text, width) + 1;
 }
 
-export function estimateLiveTranscriptEntryRows(
+function estimateLiveTranscriptEntryRows(
   entry: ConversationEntry,
   width = 80,
 ): number {

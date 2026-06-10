@@ -6,7 +6,7 @@ import { registerCommands } from '@commands/_shared/registerCommands';
 import { SettingsViewProvider } from '@settingsView/SettingsViewProvider';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
-export const settingsViewCommands = {
+const settingsViewCommands = {
   showSettingsView: 'texra.showSettingsView',
   showDashboard: 'texra.showDashboard',
   // Tab-specific commands

@@ -37,7 +37,7 @@ export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
  * `RunUsageTotalsSchema` drive the result, so adding a new field there
  * automatically extends this default without manual sync.
  */
-export function createDefaultTotals(): RunUsageTotals {
+function createDefaultTotals(): RunUsageTotals {
   return RunUsageTotalsSchema.parse({});
 }
 

@@ -28,10 +28,6 @@ import { extractTextFromTag } from '@utils/text/xmlExtraction';
 const CHANNEL = 'AgentCreator';
 logger.initialize(CHANNEL);
 
-export const agentCreatorCommands = {
-  createAgentWithAI: 'texra.createAgentWithAI',
-};
-
 // ── Types & constants ───────────────────────────────────────
 
 type AgentCategory = 'workflow' | 'toolUse';

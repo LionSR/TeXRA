@@ -13,7 +13,7 @@ const ANNOTATION_LEVEL_RANK: Readonly<
   failure: 2,
 };
 
-export function normalizeCheckAnnotationLevel(
+function normalizeCheckAnnotationLevel(
   level: string | null | undefined,
 ): GitHubCheckAnnotationLevel {
   if (level === 'warning' || level === 'failure') {

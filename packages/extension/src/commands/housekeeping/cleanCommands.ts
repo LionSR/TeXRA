@@ -122,7 +122,7 @@ async function handleCleanMultiple(
   });
 }
 
-export async function handleClean(config: unknown): Promise<void> {
+async function handleClean(config: unknown): Promise<void> {
   const data = await parseWithErrorDisplay(
     CHANNEL,
     CleanConfigSchema,

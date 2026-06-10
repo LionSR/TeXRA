@@ -18,24 +18,14 @@ export {
 } from './StreamLogStore';
 export {
   StreamLog,
-  isRunningGroupEntry,
   type StreamLogAppendInput,
   type StreamLogUpdatePatch,
 } from './StreamLog';
-export {
-  attachTranscriptRecorder,
-  type TranscriptRecorderHandle,
-} from './TexraTranscriptRecorder';
+export { type TranscriptRecorderHandle } from './TexraTranscriptRecorder';
 export {
   createRunTrace,
   flushPendingRunTraces,
   type RunTrace,
 } from './runTrace';
-export {
-  STREAM_DATA_DIR,
-  STREAM_DATA_KEYS,
-  encodeStreamId,
-  streamDataDir,
-  type StreamDataKey,
-} from './streamDataPaths';
+export { streamDataDir, type StreamDataKey } from './streamDataPaths';
 export { StreamSnapshotStore } from './StreamSnapshotStore';

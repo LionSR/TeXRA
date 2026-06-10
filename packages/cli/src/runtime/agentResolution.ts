@@ -2,7 +2,7 @@ import { getAgent, loadAgents, type AgentEntry } from '@agent/index';
 
 import { getCliAuthProvider } from './supabaseAuth';
 
-export async function shouldHonorRemoteAgentPriority(
+async function shouldHonorRemoteAgentPriority(
   agentName: string,
 ): Promise<boolean> {
   if (agentName.includes(':')) return false;
