@@ -439,7 +439,10 @@ export class LatexDiffsSection extends LitElement {
                   tooltip: 'Refresh edited files',
                   onClick: this.handleRefreshEditedFiles,
                 })}
-                <label for="editedFile">Edited</label>
+                <label id="editedFileLabel" for="editedFile">Edited</label>
+                <wa-tooltip for="editedFileLabel">
+                  File containing edits to merge into the base file
+                </wa-tooltip>
               </div>
               <div
                 class="file-select-actions"
