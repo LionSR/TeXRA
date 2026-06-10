@@ -175,6 +175,14 @@ async function runOnboardingFlow(options: {
     await setOnboardingDeclined(platform().globalState, false).catch(() => {});
   }
   if (resolution.summary) writeTextStdout(resolution.summary);
+  // Standalone `texra setup` ends here, so tell the user where to go next
+  // (matches `texra init`). The first-run gate skips this: orchestrate/chat
+  // continue into the launcher in the same process.
+  if (resolution.configured && !options.firstRun) {
+    writeTextStdout(
+      'Next: run `texra` for the launcher, or `texra chat` to start.',
+    );
+  }
   return { configured: resolution.configured, declined: resolution.declined };
 }
 
