@@ -2,6 +2,7 @@ import {
   LIVE_ELAPSED_STREAM_STATUSES,
   type StreamStatus,
 } from '@shared/schemas';
+import { stripAnsiSequences } from '@cli/runtime/ansiEscapes';
 
 import type { ConversationEntry } from '../state/cliState';
 
@@ -10,7 +11,7 @@ export function isRenderableTranscriptEntry(entry: ConversationEntry): boolean {
     case 'assistant':
     case 'error':
     case 'user':
-      return entry.text.trim().length > 0;
+      return stripAnsiSequences(entry.text).trim().length > 0;
     case 'process':
       return entry.process !== undefined;
     case 'tool':
