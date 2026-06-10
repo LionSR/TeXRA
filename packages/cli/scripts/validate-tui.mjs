@@ -121,6 +121,38 @@ const SCENARIOS = [
     ],
   },
   {
+    name: 'live-tool-stack-spacing',
+    rows: 34,
+    env: {
+      HARNESS_LIVE_INVISIBLE_ASSISTANT: '1',
+      HARNESS_LIVE_TOOL_COUNT: '3',
+      HARNESS_LIVE_TOOL_ONLY: '1',
+    },
+    expect: [
+      'what is this repo about',
+      '● ls (Listed 36 entries in .)',
+      '● glob (Found 7 files for "*.md" in .)',
+      '● glob (Found 6 files for "**/*.tex" in .)',
+    ],
+    maxBlankLinesBetween: [
+      {
+        from: 'what is this repo about',
+        to: '● ls (Listed 36 entries in .)',
+        max: 0,
+      },
+      {
+        from: '● ls (Listed 36 entries in .)',
+        to: '● glob (Found 7 files for "*.md" in .)',
+        max: 0,
+      },
+      {
+        from: '● glob (Found 7 files for "*.md" in .)',
+        to: '● glob (Found 6 files for "**/*.tex" in .)',
+        max: 0,
+      },
+    ],
+  },
+  {
     name: 'queued-followups',
     cols: 120,
     env: {

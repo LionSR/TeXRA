@@ -109,6 +109,10 @@ const PLAN_APPROVAL_GOAL = process.env.HARNESS_PLAN_APPROVAL_GOAL === '1';
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
 const SHOW_LIVE_TOOL_ONLY = process.env.HARNESS_LIVE_TOOL_ONLY === '1';
+const LIVE_TOOL_COUNT = Math.max(
+  1,
+  Number.parseInt(process.env.HARNESS_LIVE_TOOL_COUNT ?? '1', 10) || 1,
+);
 const SHOW_LIVE_INVISIBLE_ASSISTANT =
   process.env.HARNESS_LIVE_INVISIBLE_ASSISTANT === '1';
 const SHOW_PROJECT_SKILL = process.env.HARNESS_PROJECT_SKILL === '1';
@@ -495,21 +499,30 @@ function seedLiveToolOnlyTranscript(): void {
       ? `${String.fromCharCode(27)}[2m${String.fromCharCode(27)}[22m`
       : '',
   });
-  store.append(STREAM_ID, {
-    id: 'live-tool-ls',
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    level: LOG_LEVELS.INFO,
-    timestamp: timestamp + 2,
-    messageType: MESSAGE_TYPES.TOOL_USE,
-    data: {
-      toolName: 'ls',
-      input: { path: '.' },
-      output: '',
-      summary: 'Listed 36 entries in .',
-      isError: false,
-      status: TOOL_USE_STATUS.COMPLETED,
-    },
-  });
+  const tools = [
+    ['ls', { path: '.' }, 'Listed 36 entries in .'],
+    ['glob', { pattern: '*.md' }, 'Found 7 files for "*.md" in .'],
+    ['glob', { pattern: '**/*.tex' }, 'Found 6 files for "**/*.tex" in .'],
+  ] as const;
+  for (const [index, [toolName, input, summary]] of tools
+    .slice(0, LIVE_TOOL_COUNT)
+    .entries()) {
+    store.append(STREAM_ID, {
+      id: `live-tool-${toolName}-${index}`,
+      type: STREAM_LOG_ENTRY_TYPES.LOG,
+      level: LOG_LEVELS.INFO,
+      timestamp: timestamp + 2 + index,
+      messageType: MESSAGE_TYPES.TOOL_USE,
+      data: {
+        toolName,
+        input,
+        output: '',
+        summary,
+        isError: false,
+        status: TOOL_USE_STATUS.COMPLETED,
+      },
+    });
+  }
   syncStreamLog(STREAM_ID);
 }
 
