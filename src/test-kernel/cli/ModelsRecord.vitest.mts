@@ -181,7 +181,7 @@ describe('CLI model list empty-state text', () => {
       [
         'No models are currently available.',
         'Run `texra models list --all` to see unavailable models and access status.',
-        'Configure a provider API key for personal mode, or retry with `--api-mode included` and run `texra login` for included relay access.',
+        'Add a provider API key with `texra setup` for personal mode, or retry with `--api-mode included` and run `texra login` for included relay access.',
       ].join('\n'),
     );
   });
@@ -197,7 +197,7 @@ describe('CLI model list empty-state text', () => {
       [
         'No models are currently available.',
         'Run `texra models list --all` to see unavailable models and access status.',
-        'Run `texra login` for included relay access, retry with `--api-mode included`, or configure a provider API key.',
+        'Run `texra login` for included relay access, retry with `--api-mode included`, or add a provider API key with `texra setup`.',
       ].join('\n'),
     );
   });
