@@ -27,7 +27,6 @@ import type { ExecutionId, FileLocation } from '@shared/schemas';
 // Local imports - tools
 import { requireRuntimeHost } from '@tools/contextHelpers';
 import { ToolError, type ToolResult } from '@tools/result';
-import { formatResultCount, pluralize } from '@tools/formatting';
 import { defineTool } from '@tools/core/define';
 import {
   buildApprovalRejectedResult,
@@ -46,6 +45,7 @@ import {
   createWorkspaceLocation,
 } from '@utils/files';
 import { filterNotNull } from '@utils/core';
+import { formatResultCount, pluralize } from '@utils/text/stringUtils';
 import {
   getOriginalSnapshotPath,
   resolveStoragePath,

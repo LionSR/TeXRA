@@ -17,6 +17,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { toErrorMessage } from '@common/errors';
 import { debug, info, warn } from '@logger/logUtils';
+import { withTimeout } from '@utils/core';
 import {
   registerLeanServer,
   unregisterLeanServer,
@@ -459,21 +460,4 @@ export function fileUriToPath(uri: string): string | null {
     debug(LOG_CHANNEL, `Ignoring unmappable file URI ${uri}`, { data: err });
     return null;
   }
-}
-
-function withTimeout<T>(
-  promise: Promise<T>,
-  ms: number,
-  message: string,
-): Promise<T> {
-  let timer: NodeJS.Timeout | undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error(message)), ms);
-  });
-  return Promise.race([
-    promise.finally(() => {
-      if (timer) clearTimeout(timer);
-    }),
-    timeout,
-  ]);
 }

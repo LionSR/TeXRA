@@ -11,7 +11,7 @@
 import { Box, Text, useInput } from 'ink';
 import { useEffect, useState } from 'react';
 
-import { clampIndex } from '@utils/core';
+import { clamp, clampIndex } from '@utils/core';
 
 import { isEscapeInput, isPlainReturnInput } from '../input/inputKeys';
 
@@ -113,9 +113,7 @@ export function visibleSelectRange({
 }): { readonly start: number; readonly end: number } {
   if (itemCount <= 0) return { start: 0, end: 0 };
   const visibleCount =
-    maxVisibleItems == null
-      ? itemCount
-      : Math.min(Math.max(0, maxVisibleItems), itemCount);
+    maxVisibleItems == null ? itemCount : clamp(maxVisibleItems, 0, itemCount);
   if (visibleCount <= 0) return { start: 0, end: 0 };
   const clampedHighlight = clampIndex(highlight, itemCount);
   const centerOffset = Math.floor(visibleCount / 2);

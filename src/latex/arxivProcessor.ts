@@ -11,6 +11,7 @@ import { toErrorMessage } from '@common/errors';
 import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 import * as logger from '@logger/logUtils';
 import { normaliseArxivIdentifier } from '@tools/latex/arxivShared';
+import { withTimeout } from '@utils/core';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
 
 export interface ExtractResult {
@@ -202,15 +203,7 @@ export class ArxivSourceProcessor {
     try {
       const extraction = tar.x({ file: tarPath, cwd: destDir });
       if (options.timeout) {
-        await Promise.race([
-          extraction,
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error('Extraction timed out')),
-              options.timeout,
-            ),
-          ),
-        ]);
+        await withTimeout(extraction, options.timeout, 'Extraction timed out');
       } else {
         await extraction;
       }

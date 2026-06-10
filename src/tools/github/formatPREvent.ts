@@ -9,6 +9,8 @@
  * conclusion is a one-line table edit.
  */
 
+import { formatResultCount } from '@utils/text/stringUtils';
+
 import {
   authorOf,
   formatCommentEvent,
@@ -212,9 +214,7 @@ export function formatCIStarted(
   const body = [
     ...shownNames.map((name) => `- ${name}`),
     ...(remainingNames > 0
-      ? [
-          `…and ${remainingNames} more check name${remainingNames === 1 ? '' : 's'}.`,
-        ]
+      ? [`…and ${formatResultCount(remainingNames, 'more check name')}.`]
       : []),
   ].join('\n');
 

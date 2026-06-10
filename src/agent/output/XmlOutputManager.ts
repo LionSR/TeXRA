@@ -20,6 +20,7 @@ import {
   TaskRunFileService,
   type FileLocation,
 } from '@utils/files';
+import { formatResultCount } from '@utils/text/stringUtils';
 import {
   addCdataToTagsMultiple,
   DOCUMENT_NAME_REGEX,
@@ -89,7 +90,7 @@ export class XmlOutputManager {
         EXTRACTION_METHOD_MESSAGES[result.method] ?? 'using fallback method';
       logInternal(
         this.logger,
-        `Recovered ${documentTag} ${suffix} (${result.documents.length} document${result.documents.length === 1 ? '' : 's'})`,
+        `Recovered ${documentTag} ${suffix} (${formatResultCount(result.documents.length, 'document')})`,
       );
       return result.documents;
     }

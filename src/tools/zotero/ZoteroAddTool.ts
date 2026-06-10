@@ -25,10 +25,11 @@ import { z } from 'zod';
 import { toErrorMessage } from '@common/errors';
 import { ToolError } from '@tools/result';
 import { isTimeoutErrorCode } from '@tools/timeouts';
-import { pluralize } from '@tools/formatting';
 import { waitForRateLimit } from '@tools/citation/rateLimiter';
 import { CROSSREF_CONSTANTS, crossrefClient } from '@tools/citation/constants';
 import { defineTool } from '@tools/core/define';
+import { withTimeout } from '@utils/core';
+import { pluralize } from '@utils/text/stringUtils';
 
 // Local imports - zotero
 import { type CslCreator, getZoteroPort } from './bbtClient';
@@ -225,15 +226,11 @@ async function resolveDOI(
     await waitForRateLimit('crossref', CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS);
 
     // The CrossrefClient has no timeout support, so we race against one.
-    const response = await Promise.race([
+    const response = await withTimeout(
       crossrefClient.work(doi),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error('Crossref lookup timed out')),
-          CROSSREF_RESOLVE_TIMEOUT_MS,
-        ),
-      ),
-    ]);
+      CROSSREF_RESOLVE_TIMEOUT_MS,
+      'Crossref lookup timed out',
+    );
 
     if (!response.ok || !response.content?.message) return null;
 
