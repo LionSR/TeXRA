@@ -52,6 +52,7 @@ import { memoryCommand } from './memory';
 import { modelsCommand } from './models';
 import { multiAgentCommand } from './multiAgent';
 import { orchestrationCommand } from './orchestrate';
+import { setupTokenCommand } from './relayTokens';
 import { resumeCommand } from './resume';
 import { setupCommand } from './setup';
 import { skillsCommand } from './skills';
@@ -96,10 +97,11 @@ export const rootCommand = withUsageSections(
       'multi-agent': multiAgentCommand,
       models: modelsCommand,
       // `login`/`logout` are convenience shortcuts; the full auth surface
-      // (login, logout, status, usage) lives under `auth`.
+      // (login, logout, status, usage, token) lives under `auth`.
       login: loginCommand,
       logout: logoutCommand,
       auth: authCommand,
+      'setup-token': setupTokenCommand,
       doctor: doctorCommand,
       completion: completionCommand,
       version: versionCommand,

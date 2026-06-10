@@ -49,6 +49,11 @@
  * The relay validates the JWT, checks user tier, then replaces it with the
  * real API key before forwarding to the upstream provider.
  *
+ * CI relay tokens minted by `texra setup-token` (prefix `texra_relay_`,
+ * validated hash-at-rest against relay_ci_tokens) are accepted in the same
+ * headers and resolve to their owning user with identical tier, spending,
+ * and rate enforcement.
+ *
  * Endpoints:
  * - GET /relay/providers - Returns list of providers with configured API keys (public)
  * - GET /relay/tier-config - Returns tier-based model access configuration (public)
@@ -66,6 +71,10 @@ import { Hono } from '@hono/hono';
 import { cors } from '@hono/hono/cors';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { authenticateJwt } from '../_shared/auth.ts';
+import {
+  authenticateRelayCiToken,
+  isRelayCiToken,
+} from '../_shared/relayCiToken.ts';
 import {
   TIER_CONFIG,
   TIER_SPENDING_LIMITS,
@@ -97,7 +106,7 @@ import {
 // Constants
 // =============================================================================
 
-const RELAY_VERSION = '1.9.1';
+const RELAY_VERSION = '1.10.0';
 
 // Tier constants imported from models.ts (single source of truth)
 // CROSS-REFERENCE: Keep models.ts in sync with:
@@ -457,17 +466,32 @@ app.get('/tier-config', async (c) => {
     spendingLimits: TIER_SPENDING_LIMITS,
   };
 
-  // Try to include user status if authenticated
+  // Try to include user status if authenticated (user JWT or CI relay token)
   if (jwtToken && supabaseUrl) {
     try {
-      const auth = await authenticateJwt(jwtToken);
+      let userId: string | null = null;
+      let profileClient: SupabaseClient | null = null;
+      if (isRelayCiToken(jwtToken)) {
+        if (adminClient) {
+          const ciAuth = await authenticateRelayCiToken(adminClient, jwtToken);
+          if (ciAuth.ok) {
+            userId = ciAuth.userId;
+            profileClient = adminClient;
+          }
+        }
+      } else {
+        const auth = await authenticateJwt(jwtToken);
+        if (auth) {
+          userId = auth.user.id;
+          profileClient = auth.client;
+        }
+      }
 
-      if (auth) {
-        const { user, client: supabaseClient } = auth;
-        const { data: profile } = await supabaseClient
+      if (userId && profileClient) {
+        const { data: profile } = await profileClient
           .from('profiles')
           .select('tier, access_expires_at, banned_until')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .single();
 
         if (profile) {
@@ -482,7 +506,7 @@ app.get('/tier-config', async (c) => {
           if (adminClient) {
             const spending = await checkSpendingLimit(
               adminClient,
-              user.id,
+              userId,
               profile.tier || FREE_TIER,
             );
             spendingStatus = {
@@ -537,18 +561,39 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     return jsonError('Server configuration error', 500);
   }
 
-  // 4. Validate user and check tier
-  const auth = await authenticateJwt(jwtToken);
-  if (!auth) {
-    return jsonError('Invalid or expired token', 401);
+  // 4. Validate the credential: a normal user JWT, or a CI relay token
+  // (texra setup-token) recognized by its prefix and checked hash-at-rest
+  // against relay_ci_tokens (revocation, expiry, scope). Both resolve to the
+  // owning user id; everything below is identical for the two paths.
+  let userId: string;
+  let profileClient: SupabaseClient;
+  if (isRelayCiToken(jwtToken)) {
+    if (!adminClient) {
+      console.error('[RELAY] CI token presented but service role key missing');
+      return jsonError('Server configuration error', 500);
+    }
+    const ciAuth = await authenticateRelayCiToken(adminClient, jwtToken);
+    if (!ciAuth.ok) {
+      return jsonError(ciAuth.message, ciAuth.status);
+    }
+    userId = ciAuth.userId;
+    // CI tokens carry no JWT, so RLS-scoped reads are impossible; the profile
+    // read below uses the service-role client with an explicit user filter.
+    profileClient = adminClient;
+  } else {
+    const auth = await authenticateJwt(jwtToken);
+    if (!auth) {
+      return jsonError('Invalid or expired token', 401);
+    }
+    userId = auth.user.id;
+    profileClient = auth.client;
   }
-  const { user, client: userClient } = auth;
 
   // 5. Get user profile and check ban / expiration
-  const { data: profile, error: profileError } = await userClient
+  const { data: profile, error: profileError } = await profileClient
     .from('profiles')
     .select('tier, access_expires_at, banned_until')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .single();
 
   if (profileError || !profile) {
@@ -584,7 +629,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
 
   // 5.5. Check monthly spending limit
   if (adminClient) {
-    const spending = await checkSpendingLimit(adminClient, user.id, userTier);
+    const spending = await checkSpendingLimit(adminClient, userId, userTier);
 
     if (!spending.allowed) {
       if (spending.spendCheckFailed) {
@@ -741,7 +786,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
     try {
       const slot = await acquireRelayRequestSlot(
         adminClient,
-        user.id,
+        userId,
         getRequestLimits(userTier),
       );
       if (!slot.allowed) {

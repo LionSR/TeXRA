@@ -11,6 +11,11 @@ import {
   type SupabaseSessionCoordinator,
 } from '@auth/SupabaseSession';
 import { type OAuthProvider } from '@auth/sharedConfig';
+import {
+  RELAY_TOKEN_ENV_VAR,
+  fetchRelayTokenTier,
+  getConfiguredRelayToken,
+} from '@auth/relayToken';
 import { getServerSideKeyService } from '@auth/serverKeys';
 
 // Local imports - CLI runtime
@@ -195,8 +200,30 @@ export async function signOutCliSupabase(): Promise<void> {
   serverSideKeyService.clearAllCaches({ resetQuotaFlip: true });
 }
 
+/**
+ * Fresh access token for the stored CLI session, bypassing any configured
+ * TEXRA_RELAY_TOKEN. Token management (texra setup-token) must authenticate
+ * with a real user session — a CI token cannot mint or revoke tokens.
+ */
+export async function getCliSessionAccessToken(): Promise<string | null> {
+  return getCliSupabaseAuthCoordinator().ensureFreshToken();
+}
+
 export async function getCliAuthProfile(): Promise<CliAuthProfile> {
   initializeCliSupabaseAuth();
+
+  // A configured CI relay token authenticates relay calls without a session;
+  // report it as the active credential so `texra auth status` / `texra
+  // doctor` explain where access is coming from.
+  const relayToken = getConfiguredRelayToken();
+  if (relayToken) {
+    return {
+      authenticated: true,
+      accountLabel: `CI relay token (${RELAY_TOKEN_ENV_VAR})`,
+      tier: await fetchRelayTokenTier(relayToken),
+    };
+  }
+
   const authenticated = await SupabaseClient.isAuthenticated();
   if (!authenticated) return { authenticated: false };
 

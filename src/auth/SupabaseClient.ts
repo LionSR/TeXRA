@@ -11,6 +11,7 @@ import {
   UserAuthContextSchema,
   TOKEN_REFRESH_THRESHOLD_MS,
 } from './config';
+import { fetchRelayTokenTier, getConfiguredRelayToken } from './relayToken';
 import type { AuthTokenProvider, SessionTokens } from './TokenProvider';
 
 /**
@@ -150,6 +151,15 @@ export class SupabaseClient {
    * @param forceRefresh - When true, forces a token refresh (e.g., after relay 401).
    */
   static async getAccessToken(forceRefresh?: boolean): Promise<string | null> {
+    // A configured CI relay token (TEXRA_RELAY_TOKEN) takes precedence over
+    // session-based auth: every relay-bound call presents it as the bearer
+    // credential, and the server maps it to the owning user. It is static —
+    // refresh requests simply return it again.
+    const relayToken = getConfiguredRelayToken();
+    if (relayToken) {
+      return relayToken;
+    }
+
     if (!this.authProvider) {
       // Auth provider not set - system not initialized
       return null;
@@ -222,6 +232,14 @@ export class SupabaseClient {
    */
   static async getUserAuthContext(): Promise<UserAuthContext> {
     const defaultContext: UserAuthContext = { permissions: [], tier: 'free' };
+
+    // CI relay tokens are not GoTrue sessions, so the profiles query below
+    // can't run. The relay's tier-config endpoint resolves the token to its
+    // owning user's tier — the only profile surface a relay-scoped token has.
+    const relayToken = getConfiguredRelayToken();
+    if (relayToken) {
+      return { permissions: [], tier: await fetchRelayTokenTier(relayToken) };
+    }
 
     const tokens = await this.getSessionTokens();
     if (!tokens) return defaultContext;

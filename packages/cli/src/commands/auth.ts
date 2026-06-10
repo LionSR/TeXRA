@@ -36,6 +36,7 @@ import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
+import { authTokenCommand } from './relayTokens';
 import type { CliContext } from '../runtime/cliContext';
 
 type LoginCommandArgs = Record<string, unknown>;
@@ -338,6 +339,7 @@ const AUTH_SUBCOMMANDS = {
   logout: logoutCommand,
   status: authStatusCommand,
   usage: usageCommand,
+  token: authTokenCommand,
 } as const;
 
 export const AUTH_SUBCOMMAND_NAMES = Object.keys(AUTH_SUBCOMMANDS);
