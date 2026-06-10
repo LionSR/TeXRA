@@ -2,13 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.38.8] - 2026-06-10
+## [0.38.7] - 2026-06-11
 
 ### Shared (all surfaces)
 
-#### Improvements
+#### Features
 
-- **`chat` is now `assistant`, a general-purpose scientific assistant** — the built-in `chat` agent was renamed to `assistant` and upgraded with the broadest toolset of any built-in agent: web search and fetch, Zotero reference management, Wolfram computation, Lean 4 proof tools, word counts (`texcount`), linter diagnostics, PDF opening, persistent memory, planning and todo tracking, full delegation (`delegate_workflow`, `executions`, `accept_run_files`), external AI coding agents (`codex`, `claude_code`), and opt-in GitHub activity subscription — alongside its existing file editing and arXiv/Crossref tools. Its system prompt takes a holistic view of the research workflow, with guidance organized by phase (orient, research, compute, formalize, write, verify, delegate) on top of the established mathematical writing rules. The old `chat` name still resolves to the renamed agent, so existing configs and histories keep working; it remains the CLI's default chat agent under its new name.
+- **Claude Fable 5** — Anthropic's most capable widely released model is now available as a selectable model and is added to the default model list. It runs with always-on adaptive thinking and summarized reasoning, supports the full effort range up to Extra High, and is eligible for context compaction in tool-use mode.
+- **Software Engineer team** — a new built-in multi-agent team for the code that accompanies a project (simulations, numerics, data pipelines, scripts, and small libraries). An `engineer` lead plans the work and delegates to specialists: `coder` (implementation, edits, and bug fixes), `codeReviewer` (correctness/security/style review), `testEngineer` (write and maintain tests), `codeSimplifier` (behaviour-preserving cleanup for clarity and reuse), and `progressCheck` (an outside-the-loop audit of what landed versus the goal). Pick it from the Multi-Agent settings tab, or launch it from the CLI with `texra multi-agent run software-engineer`. The local lead and specialists run offline; `progressCheck` loads after `texra login`.
 
 #### Bug Fixes
 
@@ -17,10 +18,14 @@ All notable changes to this project will be documented in this file.
 - **Orchestrators manage their team reliably** — stopping an orchestrator now stops the entire delegation chain, including subagents of subagents, instead of leaving them running; a waiting orchestrator now learns that a subagent finished without you having to send another message; and when a subagent's output diffs cannot be computed, the orchestrator is told so instead of assuming nothing changed.
 - **Goal records are cleaned up with their conversations** — deleting a conversation (or a run from CLI history) now also removes its goal record, so the Goal tab no longer accumulates entries for conversations that no longer exist.
 - **Relay streams survive transient hiccups** — a brief transient error on the included relay no longer cuts off an in-flight response.
+- **Safer LaTeX cleanup** — inline fenced LaTeX blocks now distinguish environment names like `align` and `aligned` correctly, and `\mathrm{Tr}` / `\mathrm{tr}` cleanup now leaves command definitions intact while still rewriting ordinary usages.
 
 #### Improvements
 
+- **`chat` is now `assistant`, a general-purpose scientific assistant** — the built-in `chat` agent was renamed to `assistant` and upgraded with the broadest toolset of any built-in agent: web search and fetch, Zotero reference management, Wolfram computation, Lean 4 proof tools, word counts (`texcount`), linter diagnostics, PDF opening, persistent memory, planning and todo tracking, full delegation (`delegate_workflow`, `executions`, `accept_run_files`), external AI coding agents (`codex`, `claude_code`), and opt-in GitHub activity subscription — alongside its existing file editing and arXiv/Crossref tools. Its system prompt takes a holistic view of the research workflow, with guidance organized by phase (orient, research, compute, formalize, write, verify, delegate) on top of the established mathematical writing rules. The old `chat` name still resolves to the renamed agent, so existing configs and histories keep working; it remains the CLI's default chat agent under its new name.
 - **Stronger Computer Scientist team** — the CS team now bundles the `coder` and `testEngineer` specialists, so its orchestrator can delegate implementing experiment code, fixing bugs in training and ablation scripts, and pinning results down with tests — work the team previously had no dedicated lane for despite its focus on experiments and reproducibility. The `research` agent also joins the roster for analytical derivations (convergence bounds, complexity analysis) with Wolfram-backed verification, matching the Physicist and Mathematician teams.
+- **Cheaper default helper model** — the built-in helper model used for auxiliary tasks (session descriptions, instruction polishing, AI-assisted agent creation, and merges) now defaults to DeepSeek V4 Flash (~$0.14/$0.28 per MTok) instead of Sonnet 4.6, cutting the cost of these background calls by roughly 20×. Override it any time from the Models settings tab.
+- **Odyssey is now on by default** — Odyssey, the autonomous-continuation mode that lets an agent keep working toward a stated objective across turns until it reports the goal complete, has graduated from experimental and is enabled out of the box. The setting moved from `texra.experimental.odyssey.enabled` to `texra.odyssey.enabled`; if you previously set the old key, your choice is still honored. Set `texra.odyssey.enabled` to `false` to require manual continuation.
 
 ### CLI
 
@@ -54,24 +59,6 @@ All notable changes to this project will be documented in this file.
 #### Bug Fixes
 
 - **In-editor GitHub sign-in works again** — signing in with GitHub through the editor's account flow had been failing with a server configuration error and silently falling back to browser sign-in; it now completes again. Long-standing existing sessions may ask you to sign in one more time.
-
-## [0.38.7] - 2026-06-09
-
-### Features
-
-- **Claude Fable 5** — Anthropic's most capable widely released model is now available as a selectable model and is added to the default model list. It runs with always-on adaptive thinking and summarized reasoning, supports the full effort range up to Extra High, and is eligible for context compaction in tool-use mode.
-- **Software Engineer team** — a new built-in multi-agent team for the code that accompanies a project (simulations, numerics, data pipelines, scripts, and small libraries). An `engineer` lead plans the work and delegates to specialists: `coder` (implementation, edits, and bug fixes), `codeReviewer` (correctness/security/style review), `testEngineer` (write and maintain tests), `codeSimplifier` (behaviour-preserving cleanup for clarity and reuse), and `progressCheck` (an outside-the-loop audit of what landed versus the goal). Pick it from the Multi-Agent settings tab, or launch it from the CLI with `texra multi-agent run software-engineer`. The local lead and specialists run offline; `progressCheck` loads after `texra login`.
-
-### Shared (all surfaces)
-
-#### Bug Fixes
-
-- **Safer LaTeX cleanup** — inline fenced LaTeX blocks now distinguish environment names like `align` and `aligned` correctly, and `\mathrm{Tr}` / `\mathrm{tr}` cleanup now leaves command definitions intact while still rewriting ordinary usages.
-
-#### Improvements
-
-- **Cheaper default helper model** — the built-in helper model used for auxiliary tasks (session descriptions, instruction polishing, AI-assisted agent creation, and merges) now defaults to DeepSeek V4 Flash (~$0.14/$0.28 per MTok) instead of Sonnet 4.6, cutting the cost of these background calls by roughly 20×. Override it any time from the Models settings tab.
-- **Odyssey is now on by default** — Odyssey, the autonomous-continuation mode that lets an agent keep working toward a stated objective across turns until it reports the goal complete, has graduated from experimental and is enabled out of the box. The setting moved from `texra.experimental.odyssey.enabled` to `texra.odyssey.enabled`; if you previously set the old key, your choice is still honored. Set `texra.odyssey.enabled` to `false` to require manual continuation.
 
 ## [0.38.6] - 2026-06-07
 
