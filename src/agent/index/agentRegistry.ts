@@ -230,8 +230,16 @@ export function getAgent(
     if (entry) return entry;
   }
 
-  const alias = LEGACY_AGENT_ALIASES[identifier];
-  if (alias) return getAgent(alias, preferToolUse);
+  // Legacy-name fallback, for both bare names ("chat") and source-qualified
+  // keys ("builtInToolUse:chat"): map the name part through the alias table
+  // and retry once. Uses the raw table rather than canonicalAgentName, which
+  // resolves through getAgent and would recurse back here.
+  const name = agentName(identifier);
+  const alias = LEGACY_AGENT_ALIASES[name];
+  if (alias) {
+    const prefix = identifier.slice(0, identifier.length - name.length);
+    return getAgent(`${prefix}${alias}`, preferToolUse);
+  }
   return undefined;
 }
 

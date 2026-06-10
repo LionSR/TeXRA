@@ -43,12 +43,21 @@ describe('agent registry legacy aliases', () => {
     expect(canonicalAgentName('chat')).toBe('assistant');
     expect(canonicalAgentName('assistant')).toBe('assistant');
     expect(canonicalAgentName('research')).toBe('research');
+    // Unknown names pass through unchanged and must not recurse.
+    expect(canonicalAgentName('no-such-agent')).toBe('no-such-agent');
+    expect(getAgent('no-such-agent')).toBeUndefined();
   });
 
   it('resolves the legacy chat identifier to the assistant entry', () => {
     const entry = getAgent('chat');
     expect(entry?.name).toBe('assistant');
     expect(getAgent('assistant')?.name).toBe('assistant');
+  });
+
+  it('resolves source-qualified legacy keys', () => {
+    expect(getAgent('builtInToolUse:chat')?.name).toBe('assistant');
+    expect(getAgent('builtInToolUse:assistant')?.name).toBe('assistant');
+    expect(getAgent('custom:no-such-agent')).toBeUndefined();
   });
 
   it('keeps assistant visible for workspaces that opted into chat', async () => {
