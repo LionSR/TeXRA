@@ -1,0 +1,358 @@
+/**
+ * Build and execute latexdiff operations from either run metadata
+ * (`OutputFileInfo` per round) or a workspace scan of legacy/mid-era layouts.
+ */
+
+// Standard library imports
+import * as path from 'node:path';
+
+// Third-party imports
+import * as vscode from 'vscode';
+
+// Local imports
+import {
+  legacyWorkflowOutputRoundRegex,
+  midEraWorkflowOutputStem,
+  parseWorkflowOutputRoundDir,
+} from '@agent/output/workflowOutputLayout';
+import type { MathMarkupOption } from '@latex/latexdiff/mathMarkup';
+import * as logger from '@logger/logUtils';
+import { RoundKeySchema } from '@shared/schemas';
+import type { OutputFileInfo } from '@shared/schemas';
+import {
+  WorkspaceFS,
+  TaskRunFileService,
+  flexibleFS,
+  getComparablePath,
+  pathToLocation,
+} from '@utils/files';
+import { hasExtension } from '@utils/core/pathCore';
+
+import { CHANNEL, service } from './service';
+import type { DiffOperation, DiffRunOutcome, DiffRunResult } from './types';
+
+export async function executeDiffOperations(
+  operations: DiffOperation[],
+  mathMarkup: MathMarkupOption | undefined,
+  progress: vscode.Progress<{ message?: string; increment?: number }>,
+  immediateResults: DiffRunResult[] = [],
+): Promise<DiffRunOutcome> {
+  const results: DiffRunResult[] = [...immediateResults];
+  const incrementPct = operations.length > 0 ? 100 / operations.length : 0;
+
+  for (const operation of operations) {
+    progress.report({
+      increment: incrementPct,
+      message: `Running ${operation.type} diff for ${operation.description}`,
+    });
+
+    const baseExists = await flexibleFS.exists(operation.base);
+    const revisedExists = await flexibleFS.exists(operation.revised);
+
+    if (!baseExists || !revisedExists) {
+      results.push({
+        success: false,
+        message: 'Required files are missing on disk',
+        description: operation.description,
+      });
+      continue;
+    }
+
+    logger.debug(
+      CHANNEL,
+      `Running ${operation.type} diff: ${operation.description}`,
+    );
+
+    const diffResult =
+      operation.type === 'round'
+        ? await service.runDiffForRound(
+            operation.base,
+            operation.revised,
+            operation.round ?? 0,
+            mathMarkup,
+            { cwd: operation.cwd },
+          )
+        : await service.runDiffBetweenRounds(
+            operation.base,
+            operation.revised,
+            mathMarkup,
+            { cwd: operation.cwd },
+          );
+
+    results.push({
+      success: diffResult.success,
+      message: diffResult.message,
+      basePath: operation.base.absolutePath,
+      diffFileName: diffResult.diffFileName,
+      description: operation.description,
+    });
+  }
+
+  return { results, totalOperations: results.length };
+}
+
+export async function runLatexdiffFromMetadata(params: {
+  rounds: Map<number, OutputFileInfo[]>;
+  mathMarkup?: MathMarkupOption;
+  generateBetweenRoundDiffs: boolean;
+  progress: vscode.Progress<{ message?: string; increment?: number }>;
+  fileService: TaskRunFileService;
+}): Promise<DiffRunOutcome> {
+  const { rounds, mathMarkup, generateBetweenRoundDiffs, progress } = params;
+
+  const getFileLabel = (info: OutputFileInfo): string =>
+    info.source ?? path.basename(getComparablePath(info.location));
+
+  const immediateResults: DiffRunResult[] = [];
+  const operations: DiffOperation[] = [];
+  const groupedByRelative = new Map<
+    string,
+    Array<{ round: number; info: OutputFileInfo }>
+  >();
+
+  for (const [round, infos] of rounds.entries()) {
+    for (const info of infos) {
+      // Prefer the immutable pre-run snapshot (diffBase): lineage.original now
+      // points at the live workspace file, which for in-place rewrites is the
+      // post-run file itself, so latexdiff would compare it against itself.
+      const base = info.lineage?.diffBase ?? info.lineage?.original ?? null;
+      const description = `${getFileLabel(info)} (r${round})`;
+
+      if (!base) {
+        immediateResults.push({
+          success: false,
+          message: 'Missing base file path',
+          description,
+        });
+        continue;
+      }
+
+      operations.push({
+        type: 'round',
+        base,
+        revised: info.location,
+        description,
+        cwd: WorkspaceFS.getPath() ?? path.dirname(base.absolutePath),
+        round,
+      });
+
+      const key = getComparablePath(info.location);
+      if (!groupedByRelative.has(key)) {
+        groupedByRelative.set(key, []);
+      }
+      groupedByRelative.get(key)!.push({ round, info });
+    }
+  }
+
+  if (generateBetweenRoundDiffs) {
+    for (const group of groupedByRelative.values()) {
+      group.sort((a, b) => a.round - b.round);
+      for (let index = 1; index < group.length; index += 1) {
+        const previous = group[index - 1];
+        const current = group[index];
+        const base = previous.info.location;
+        const revised = current.info.location;
+        const description = `${getFileLabel(current.info)} (r${previous.round}→r${current.round})`;
+
+        operations.push({
+          type: 'between-rounds',
+          base,
+          revised,
+          description,
+          cwd: WorkspaceFS.getPath() ?? path.dirname(base.absolutePath),
+          fromRound: previous.round,
+          toRound: current.round,
+        });
+      }
+    }
+  }
+
+  return executeDiffOperations(
+    operations,
+    mathMarkup,
+    progress,
+    immediateResults,
+  );
+}
+
+export async function runLatexdiffViaWorkspaceScan(params: {
+  agent: string;
+  model: string;
+  inputFile: string;
+  outputFiles?: string[];
+  mathMarkup?: MathMarkupOption;
+  generateBetweenRoundDiffs: boolean;
+  progress: vscode.Progress<{ message?: string; increment?: number }>;
+}): Promise<DiffRunOutcome> {
+  const {
+    agent,
+    model,
+    inputFile,
+    outputFiles,
+    mathMarkup,
+    generateBetweenRoundDiffs,
+    progress,
+  } = params;
+
+  const workspacePath = WorkspaceFS.getPath();
+  if (!workspacePath) {
+    throw new Error('No workspace path found');
+  }
+
+  const configuredInputFiles =
+    outputFiles && outputFiles.length > 0 ? outputFiles : [inputFile];
+
+  logger.debug(CHANNEL, `Input files: ${configuredInputFiles.join(', ')}`);
+
+  const inputToOutputsMap = new Map<string, Map<number, string>>();
+
+  for (const candidateInput of configuredInputFiles) {
+    const outputDirPath = path.dirname(candidateInput);
+    const baseInputName = path.basename(
+      candidateInput,
+      path.extname(candidateInput),
+    );
+
+    const absoluteDir = path.join(workspacePath, outputDirPath);
+    const dirEntries = await vscode.workspace.fs.readDirectory(
+      vscode.Uri.file(absoluteDir),
+    );
+
+    const roundOutputsMap = new Map<number, string>();
+
+    // Legacy flat layout: files sit directly under outputDirPath as
+    // `<base>_<chunk>_r{round}_<normalizedModel>.tex`.
+    const legacyPattern = legacyWorkflowOutputRoundRegex(
+      baseInputName,
+      agent,
+      model,
+    );
+    for (const [fileName, fileType] of dirEntries) {
+      if (
+        fileType !== vscode.FileType.File ||
+        !hasExtension(fileName, '.tex') ||
+        fileName.includes('_diff')
+      ) {
+        continue;
+      }
+      const match = fileName.match(legacyPattern);
+      if (!match) continue;
+      const round = RoundKeySchema.safeParse(match[1]);
+      if (!round.success) continue;
+      roundOutputsMap.set(round.data, path.join(outputDirPath, fileName));
+    }
+
+    // Mid-era layout: outputs under `r{round}/<base>_<cleanAgent>_<model>.tex`.
+    // Some upgraded workspaces may still hold these files. Only look in
+    // known `r{round}/` subdirectories so we don't descend the whole tree.
+    const midEraFilename = `${midEraWorkflowOutputStem({
+      base: baseInputName,
+      agent,
+      model,
+    })}.tex`;
+    for (const [entryName, entryType] of dirEntries) {
+      if (entryType !== vscode.FileType.Directory) continue;
+      const round = parseWorkflowOutputRoundDir(entryName);
+      if (round == null) continue;
+      if (roundOutputsMap.has(round)) continue;
+
+      const roundAbsoluteDir = path.join(absoluteDir, entryName);
+      let roundEntries: [string, vscode.FileType][];
+      try {
+        roundEntries = await vscode.workspace.fs.readDirectory(
+          vscode.Uri.file(roundAbsoluteDir),
+        );
+      } catch (error) {
+        // Skip unreadable round dirs but record which one so a missing
+        // round output isn't silently invisible during diagnosis.
+        logger.debug(
+          CHANNEL,
+          `Skipping round dir '${roundAbsoluteDir}': ${error}`,
+        );
+        continue;
+      }
+      const match = roundEntries.find(
+        ([fileName, nestedType]) =>
+          nestedType === vscode.FileType.File && fileName === midEraFilename,
+      );
+      if (!match) continue;
+      roundOutputsMap.set(
+        round,
+        path.join(outputDirPath, entryName, midEraFilename),
+      );
+    }
+
+    // New-layout workflow outputs live inside task-run storage
+    // (`executions/{id}/r{round}/output.tex`), not in the workspace. That
+    // path is driven by execution metadata (`OutputFileInfo.outputsByRound`)
+    // via `runLatexdiffFromMetadata`; the workspace scan here only covers
+    // pre-refactor files.
+
+    if (roundOutputsMap.size > 0) {
+      inputToOutputsMap.set(candidateInput, roundOutputsMap);
+      logger.debug(
+        CHANNEL,
+        `Found ${roundOutputsMap.size} matching outputs for ${candidateInput}`,
+      );
+    } else {
+      logger.debug(CHANNEL, `No matching outputs found for ${candidateInput}`);
+    }
+  }
+
+  if (inputToOutputsMap.size === 0) {
+    return { results: [], totalOperations: 0 };
+  }
+
+  const operations: DiffOperation[] = [];
+
+  for (const [baseFile, roundOutputs] of inputToOutputsMap.entries()) {
+    const rounds = [...roundOutputs.keys()].sort((a, b) => a - b);
+
+    for (const round of rounds) {
+      const outputFile = roundOutputs.get(round)!;
+      const resolvedBase = path.isAbsolute(baseFile)
+        ? baseFile
+        : path.join(workspacePath, baseFile);
+      const resolvedOutput = path.isAbsolute(outputFile)
+        ? outputFile
+        : path.join(workspacePath, outputFile);
+
+      operations.push({
+        type: 'round',
+        base: pathToLocation(resolvedBase),
+        revised: pathToLocation(resolvedOutput),
+        description: `${path.basename(baseFile)} (r${round})`,
+        cwd: path.dirname(resolvedOutput),
+        round,
+      });
+    }
+
+    if (generateBetweenRoundDiffs && rounds.length > 1) {
+      for (let index = 0; index < rounds.length - 1; index += 1) {
+        const currentRound = rounds[index];
+        const nextRound = rounds[index + 1];
+        const currentFile = roundOutputs.get(currentRound)!;
+        const nextFile = roundOutputs.get(nextRound)!;
+
+        const resolvedCurrent = path.isAbsolute(currentFile)
+          ? currentFile
+          : path.join(workspacePath, currentFile);
+        const resolvedNext = path.isAbsolute(nextFile)
+          ? nextFile
+          : path.join(workspacePath, nextFile);
+
+        operations.push({
+          type: 'between-rounds',
+          base: pathToLocation(resolvedCurrent),
+          revised: pathToLocation(resolvedNext),
+          description: `${path.basename(currentFile)} (r${currentRound}→r${nextRound})`,
+          cwd: path.dirname(resolvedCurrent),
+          fromRound: currentRound,
+          toRound: nextRound,
+        });
+      }
+    }
+  }
+
+  return executeDiffOperations(operations, mathMarkup, progress);
+}

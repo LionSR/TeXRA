@@ -1,0 +1,177 @@
+/**
+ * Web-search and web-fetch log-entry formatters.
+ *
+ * IMPORTANT: Lit templates preserve whitespace literally. Always use
+ * single-line templates with `// prettier-ignore` to prevent whitespace issues.
+ */
+
+import {
+  html,
+  classMap,
+  type TemplateResult,
+  type FormatResult,
+} from '@progressView/frontend/formatters/litTemplates';
+import {
+  buildToolUseSection,
+  wrapInPre,
+  buildDetailsSummary,
+  SPINNER_ICON_NAME,
+} from '@progressView/frontend/formatters/htmlBuilders';
+import type {
+  WebSearchPayload,
+  WebFetchPayload,
+  LogMessageData,
+} from '@shared/schemas';
+import { buildBannerContent, joinWithSeparator } from './helpers';
+
+// Web search provider display names
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+};
+
+// Web search status suffixes for title
+const STATUS_SUFFIXES: Record<string, string> = {
+  in_progress: ' (searching...)',
+  failed: ' (failed)',
+};
+
+// Web search status-based wa-icon names; SPINNER_ICON_NAME triggers a spinner.
+const STATUS_ICONS: Record<string, string> = {
+  failed: 'error',
+  in_progress: SPINNER_ICON_NAME,
+};
+
+/** Format web search results as TemplateResult. */
+export function formatWebSearchTemplate(
+  message: LogMessageData,
+  options?: { defaultOpen?: boolean },
+): FormatResult {
+  const { data } = message;
+  if (!data || typeof data !== 'object') return null;
+
+  const { query, results, provider, status } = data as WebSearchPayload;
+  const resultCount = Array.isArray(results) ? results.length : 0;
+  const providerKey = typeof provider === 'string' ? provider : 'web';
+  const statusKey = typeof status === 'string' ? status : '';
+
+  const providerLabel = PROVIDER_LABELS[providerKey] ?? 'Web';
+  const statusSuffix = STATUS_SUFFIXES[statusKey] ?? '';
+  const iconName = STATUS_ICONS[statusKey] ?? 'globe';
+
+  let titleText = `${providerLabel} Search`;
+  if (query) titleText += `: "${query}"`;
+  titleText += statusSuffix;
+
+  // Build content sections — query is already in the title, only show sources
+  const sections: TemplateResult[] = [];
+
+  if (resultCount > 0) {
+    // prettier-ignore
+    const resultItems = (results ?? []).map(
+      (r) => html`<li class="detail-item"><wa-icon library="texra" name="link" aria-hidden="true"></wa-icon> <a href=${r.url ?? ''} class="web-search-link" target="_blank" rel="noopener noreferrer">${r.title ?? r.domain ?? r.url}</a>${r.domain ? html` <span class="file-source">(${r.domain})</span>` : ''}</li>`,
+    );
+    // prettier-ignore
+    const resultsTemplate = html`<span class="file-list-summary">Results (${resultCount})</span><ul class="detail-list">${resultItems}</ul>`;
+    sections.push(buildToolUseSection('Sources:', resultsTemplate));
+  } else if (statusKey === 'completed') {
+    sections.push(
+      buildToolUseSection(
+        'Sources:',
+        html`<span class="file-list-summary">No results found</span>`,
+      ),
+    );
+  }
+
+  const contentTemplate =
+    sections.length === 0
+      ? html`<pre>Web search executed</pre>`
+      : joinWithSeparator(sections);
+
+  const shouldOpen = options?.defaultOpen ?? false;
+  const bannerContentTemplate = buildBannerContent(message, contentTemplate);
+
+  // prettier-ignore
+  return html`<details class=${classMap({
+    'banner-details': true,
+    'tool-use-details': true,
+    'tool-use-error': statusKey === 'failed',
+  })} ?open=${shouldOpen}>${buildDetailsSummary({
+    iconName,
+    label: titleText,
+    labelClass: 'tool-use-title',
+  })}${bannerContentTemplate}</details>`;
+}
+
+// Web fetch error code display labels
+const FETCH_ERROR_LABELS: Record<string, string> = {
+  invalid_tool_input: 'Invalid URL format',
+  url_too_long: 'URL exceeds maximum length',
+  url_not_allowed: 'URL blocked by domain filter',
+  url_not_accessible: 'Failed to access URL',
+  unsupported_content_type: 'Unsupported content type',
+  too_many_requests: 'Rate limit exceeded',
+  max_uses_exceeded: 'Maximum fetch uses exceeded',
+  unavailable: 'Service unavailable',
+};
+
+/** Format web fetch results as TemplateResult. */
+export function formatWebFetchTemplate(
+  message: LogMessageData,
+  options?: { defaultOpen?: boolean },
+): FormatResult {
+  const { data } = message;
+  if (!data || typeof data !== 'object') return null;
+
+  const { url, title, status, errorCode } = data as WebFetchPayload;
+  const statusKey = typeof status === 'string' ? status : '';
+  const isFailed = statusKey === 'failed';
+
+  const iconName = isFailed ? 'error' : 'cloud-download';
+
+  let titleText = 'Web Fetch';
+  if (url) {
+    try {
+      titleText += `: ${new URL(url).hostname}`;
+    } catch {
+      titleText += `: ${url}`;
+    }
+  }
+  if (isFailed) titleText += ' (failed)';
+
+  // Build content sections
+  const sections: TemplateResult[] = [];
+
+  if (url) {
+    // prettier-ignore
+    sections.push(buildToolUseSection('URL:', html`<a href=${url} class="web-search-link" target="_blank" rel="noopener noreferrer">${url}</a>`));
+  }
+
+  if (title) {
+    sections.push(buildToolUseSection('Title:', wrapInPre(title)));
+  }
+
+  if (isFailed && errorCode) {
+    const errorLabel = FETCH_ERROR_LABELS[errorCode] ?? errorCode;
+    sections.push(buildToolUseSection('Error:', wrapInPre(errorLabel)));
+  }
+
+  const contentTemplate =
+    sections.length === 0
+      ? html`<pre>Web fetch executed</pre>`
+      : joinWithSeparator(sections);
+
+  const shouldOpen = options?.defaultOpen ?? false;
+  const bannerContentTemplate = buildBannerContent(message, contentTemplate);
+
+  // prettier-ignore
+  return html`<details class=${classMap({
+    'banner-details': true,
+    'tool-use-details': true,
+    'tool-use-error': isFailed,
+  })} ?open=${shouldOpen}>${buildDetailsSummary({
+    iconName,
+    label: titleText,
+    labelClass: 'tool-use-title',
+  })}${bannerContentTemplate}</details>`;
+}
