@@ -24,26 +24,38 @@ export class LoginBanner extends LitElement {
     commonViewStyles,
     bannerStyles,
     css`
-      .banner-text {
+      /* Title and actions share one row so the buttons reuse the header's
+         empty right side instead of occupying a row of their own. The title's
+         min-content flex basis keeps the buttons pinned to the corner in
+         narrow sidebars (the title wraps instead); the row itself only wraps
+         when even the title's longest word no longer fits beside the buttons,
+         so they can't be pushed off-screen. */
+      .banner-header {
         display: flex;
-        flex-direction: column;
-        gap: var(--wa-space-3xs);
-        min-width: 0;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--wa-space-3xs) var(--wa-space-xs);
       }
 
       .banner-title {
+        flex: 1 1 min-content;
         font-weight: var(--font-weight-semibold);
         font-size: 1em;
         letter-spacing: -0.005em;
       }
 
       .banner-lead {
+        display: block;
+        margin-top: var(--wa-space-3xs);
         font-size: var(--font-size-sm);
         opacity: var(--opacity-normal);
         line-height: var(--line-height-normal, 1.4);
       }
 
       .banner-fineprint {
+        display: block;
+        margin-top: var(--wa-space-3xs);
         font-size: var(--font-size-xs);
         opacity: var(--opacity-muted);
         line-height: var(--line-height-normal, 1.4);
@@ -53,12 +65,10 @@ export class LoginBanner extends LitElement {
          taller text block. */
       #loginBanner::part(icon) {
         align-self: flex-start;
-        margin-block-start: 0.05em;
+        margin-block-start: 0.3em;
       }
 
       #loginBannerButton::part(base) {
-        min-height: 26px;
-        padding-inline: var(--wa-space-s);
         font-weight: var(--font-weight-semibold, 600);
         letter-spacing: 0.01em;
       }
@@ -86,14 +96,8 @@ export class LoginBanner extends LitElement {
       <div class="banner-frame">
         <wa-callout id="loginBanner" variant="brand">
           ${waIcon('wand-magic-sparkles', { slot: 'icon' })}
-          <div class="banner-row">
-            <div class="banner-text">
-              <span class="banner-title">Researcher Access Program</span>
-              <span class="banner-lead">${PROMO_NOTICE_SHORT.lead}</span>
-              <span class="banner-fineprint"
-                >${PROMO_NOTICE_SHORT.fineprint}</span
-              >
-            </div>
+          <div class="banner-header">
+            <span class="banner-title">Researcher Access Program</span>
             <div class="actions">
               <wa-button
                 id="loginBannerButton"
@@ -102,7 +106,7 @@ export class LoginBanner extends LitElement {
                 size="small"
                 @click=${this.handleSignIn}
               >
-                ${waIcon('right-to-bracket', { slot: 'start' })} Sign In
+                Sign In
               </wa-button>
               <wa-button
                 id="loginBannerDismissButton"
@@ -116,6 +120,8 @@ export class LoginBanner extends LitElement {
               </wa-button>
             </div>
           </div>
+          <span class="banner-lead">${PROMO_NOTICE_SHORT.lead}</span>
+          <span class="banner-fineprint">${PROMO_NOTICE_SHORT.fineprint}</span>
         </wa-callout>
       </div>
     `;
