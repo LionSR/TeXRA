@@ -196,14 +196,27 @@ function buildProcessItem(
   };
 }
 
+const EMPTY_TAIL_LINES: readonly string[] = [];
+// Tail objects are immutable and replaced wholesale by updateProcessOutput,
+// so the split is cached per object: the subagent panel re-renders on every
+// stream-sync tick and would otherwise re-split up to 16 KB per process row.
+const processTailLinesCache = new WeakMap<
+  ProcessOutputTail,
+  readonly string[]
+>();
+
 export function processTailLines(
   tail: ProcessOutputTail | undefined,
 ): readonly string[] {
-  if (!tail) return [];
-  return `${tail.stdout}\n${tail.stderr}`
+  if (!tail) return EMPTY_TAIL_LINES;
+  const cached = processTailLinesCache.get(tail);
+  if (cached) return cached;
+  const lines = `${tail.stdout}\n${tail.stderr}`
     .split('\n')
     .map((line) => line.trimEnd())
     .filter((line) => line.length > 0);
+  processTailLinesCache.set(tail, lines);
+  return lines;
 }
 
 export function buildChildControlItems(

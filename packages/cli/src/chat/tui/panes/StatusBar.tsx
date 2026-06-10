@@ -364,6 +364,14 @@ function statusBarBindingRow(
   );
 }
 
+// Single-slot memo for the bindings cascade below: it eagerly builds ~13
+// candidate rows and stringWidth-measures them until one fits, yet its
+// inputs are a handful of flags that change far less often than the
+// StatusBar re-renders (every stream-sync tick plus every elapsed-seconds
+// tick). Keyed on all inputs, so a changed flag just recomputes.
+let lastBindingsKey: string | undefined;
+let lastBindingsText = '';
+
 export function statusBarBindingsText(
   taskControlsAvailable = true,
   agentSelectionAvailable = false,
@@ -375,6 +383,18 @@ export function statusBarBindingsText(
   ctrlCAction: CtrlCAction = 'exit',
   maxColumns?: number,
 ): string {
+  const memoKey = [
+    taskControlsAvailable,
+    agentSelectionAvailable,
+    subagentControlsAvailable,
+    hasMultipleStreams,
+    modifierLabel,
+    shiftEnterNewline,
+    transcriptAvailable,
+    ctrlCAction,
+    maxColumns,
+  ].join('|');
+  if (memoKey === lastBindingsKey) return lastBindingsText;
   const focusBinding = metaShortcutLabel(modifierLabel, '1..9');
   const tasksBinding = metaShortcutLabel(modifierLabel, 'p');
   const subagentsBinding = metaShortcutLabel(modifierLabel, 's');
@@ -447,13 +467,15 @@ export function statusBarBindingsText(
     transcriptAvailable && statusBarBindingRow([transcript, ctrlC]),
   ];
 
-  return (
+  const text =
     candidates.find(
       (candidate): candidate is string =>
         typeof candidate === 'string' &&
         fitsStatusBindings(candidate, maxColumns),
-    ) ?? ctrlC
-  );
+    ) ?? ctrlC;
+  lastBindingsKey = memoKey;
+  lastBindingsText = text;
+  return text;
 }
 
 function joinStatusBindings(bindings: readonly string[]): string {
