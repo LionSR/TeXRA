@@ -4,16 +4,14 @@ import { platform } from '@platform/platform';
 import { tryGetWorkspaceState } from '@agent/core/stateStore';
 import { bus } from '@eventBus/ProgressEventBus';
 import {
+  type ExecutionId,
   StreamTabIdSchema,
   type StreamTabId,
 } from '@shared/schemas/identifiers';
 
-import { PlanSchema, type Plan } from '@shared/schemas/plan';
-
 import { filterNotNull } from '@utils/core';
 import { hexId12 } from '@utils/core/executionId';
 import {
-  GOAL_COST_CAP_CONFIG_KEY,
   GoalSchema,
   isGoalInFlight,
   type Goal,
@@ -55,7 +53,6 @@ const LegacyOdysseySchema = z.object({
   status: z.enum(['active', 'paused', 'complete', 'abandoned']),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-  plan: PlanSchema.nullish(),
 });
 
 function normalizeGoalRecord(raw: unknown): Goal | null {
@@ -75,10 +72,6 @@ function normalizeGoalRecord(raw: unknown): Goal | null {
     status: legacy.status,
     createdAt: legacy.createdAt,
     updatedAt: legacy.updatedAt,
-    plan: legacy.plan ?? null,
-    costCapUsd: null,
-    baselineRunCostUsd: null,
-    spentUsd: 0,
   };
 }
 
@@ -122,10 +115,19 @@ async function addToIndex(streamId: StreamTabId): Promise<void> {
 }
 
 async function removeFromIndex(streamId: StreamTabId): Promise<void> {
+  const state = tryGetWorkspaceState();
+  if (!state) return;
+  // `readIndex` unions in the legacy index, so a removal must also migrate
+  // that union into the new key and drop the legacy one — otherwise the
+  // removed entry resurfaces from `odysseys:index` on the next read.
+  const hasLegacyIndex = state.get<unknown>(LEGACY_INDEX_KEY) != null;
   const index = readIndex();
   const next = index.filter((id) => id !== streamId);
-  if (next.length === index.length) return;
-  await platform().workspaceState.update(INDEX_KEY, next);
+  if (!hasLegacyIndex && next.length === index.length) return;
+  await Promise.all([
+    state.update(INDEX_KEY, next),
+    hasLegacyIndex ? state.update(LEGACY_INDEX_KEY, undefined) : null,
+  ]);
 }
 
 /**
@@ -135,8 +137,8 @@ async function removeFromIndex(streamId: StreamTabId): Promise<void> {
 async function update(
   streamId: StreamTabId,
   mutate: (goal: Goal) => Goal,
-  // Callers that already read the record (setStatus, noteRunCost) pass it in
-  // to skip a second read-and-parse of the same workspaceState key.
+  // Callers that already read the record (setStatus) pass it in to skip a
+  // second read-and-parse of the same workspaceState key.
   existing?: Goal,
 ): Promise<Goal | null> {
   const goal = existing ?? readRaw(streamId);
@@ -165,14 +167,6 @@ function requireNonEmpty(value: string, label: string): string {
   return trimmed;
 }
 
-/** Read the configured USD cost cap; `0`/unset/invalid mean unbounded (null). */
-function configuredCostCapUsd(): number | null {
-  const raw = platform().config.get<number>(GOAL_COST_CAP_CONFIG_KEY, 0);
-  return typeof raw === 'number' && Number.isFinite(raw) && raw > 0
-    ? raw
-    : null;
-}
-
 export const GoalStore = {
   /** Get the goal for a stream, or null when none exists. */
   getForStream(streamId: StreamTabId): Goal | null {
@@ -190,11 +184,7 @@ export const GoalStore = {
    * Create a new active goal for the stream. Throws if one already exists
    * (active or paused). Finishing one (forget) and starting another is normal.
    */
-  async start(
-    streamId: StreamTabId,
-    objective: string,
-    options?: { plan?: Plan },
-  ): Promise<Goal> {
+  async start(streamId: StreamTabId, objective: string): Promise<Goal> {
     const trimmed = requireNonEmpty(objective, 'objective');
     const existing = readRaw(streamId);
     if (existing && isGoalInFlight(existing)) {
@@ -211,10 +201,6 @@ export const GoalStore = {
       status: 'active',
       createdAt: now,
       updatedAt: now,
-      plan: options?.plan ?? null,
-      costCapUsd: configuredCostCapUsd(),
-      baselineRunCostUsd: null,
-      spentUsd: 0,
     };
     await Promise.all([writeRaw(goal), addToIndex(streamId)]);
     bus.emit('goalStateChanged', { streamId });
@@ -241,86 +227,24 @@ export const GoalStore = {
     }
     return update(
       streamId,
-      (goal) => ({
-        ...goal,
-        status: nextStatus,
-        ...(nextStatus === 'active'
-          ? { baselineRunCostUsd: null, spentUsd: 0 }
-          : {}),
-      }),
+      (goal) => ({ ...goal, status: nextStatus }),
       current,
     );
   },
 
   /**
-   * Record the stream's current run cost against the goal and enforce the
-   * cost cap. Called by the tool-use wait node before each continuation.
-   *
-   * The first observation becomes the baseline so conversation spend from
-   * before the goal started doesn't count toward the cap. The run cost
-   * already includes completed subagents (rolled up at the delegation
-   * boundary), so subagents count toward the cap but never drive the loop.
-   *
-   * Returns `pausedForCap: true` only on the call that performs the
-   * cap-pause, so callers can log the transition exactly once. No-op
-   * (returns null) when the stream has no goal; paused goals keep their
-   * parked spend until resume re-baselines the next autonomous leg.
-   */
-  async noteRunCost(
-    streamId: StreamTabId,
-    runCostUsd: number,
-  ): Promise<{ goal: Goal; pausedForCap: boolean } | null> {
-    const current = readRaw(streamId);
-    if (!current) return null;
-    if (current.status !== 'active') {
-      return { goal: current, pausedForCap: false };
-    }
-    const baseline = current.baselineRunCostUsd ?? runCostUsd;
-    const spentUsd = Math.max(0, runCostUsd - baseline);
-    const capExceeded =
-      current.costCapUsd != null && spentUsd >= current.costCapUsd;
-    const pausedForCap = capExceeded && current.status === 'active';
-    // Skip the write (and its broadcast) when nothing material changed.
-    if (
-      current.baselineRunCostUsd != null &&
-      Math.abs(spentUsd - current.spentUsd) < 1e-9 &&
-      !pausedForCap
-    ) {
-      return { goal: current, pausedForCap: false };
-    }
-    const goal = await update(
-      streamId,
-      (g) => ({
-        ...g,
-        baselineRunCostUsd: baseline,
-        spentUsd,
-        status: pausedForCap ? 'paused' : g.status,
-      }),
-      current,
-    );
-    return goal ? { goal, pausedForCap } : null;
-  },
-
-  /**
-   * Replace the objective (and optionally the originating plan).
-   * Used by the Approve & Run path when a goal is already in flight —
-   * re-targeting an active loop is preferable to silently leaving it
-   * pointed at a stale objective.
+   * Replace the objective. Used by the Approve & Run path when a goal is
+   * already in flight — re-targeting an active loop is preferable to
+   * silently leaving it pointed at a stale objective.
    */
   async editObjective(
     streamId: StreamTabId,
     newObjective: string,
-    options?: { plan?: Plan | null },
   ): Promise<Goal> {
     const trimmed = requireNonEmpty(newObjective, 'objective');
-    // `options.plan !== undefined` keeps absent and explicit `undefined` both
-    // as "don't touch plan"; `null` still means "clear".
-    const planUpdate =
-      options?.plan !== undefined ? { plan: options.plan } : {};
     const updated = await update(streamId, (goal) => ({
       ...goal,
       objective: trimmed,
-      ...planUpdate,
     }));
     if (!updated) {
       throw new Error('No goal found for this stream.');
@@ -334,7 +258,12 @@ export const GoalStore = {
   async forget(streamId: StreamTabId): Promise<void> {
     const state = tryGetWorkspaceState();
     if (!state) return;
-    const existed = readRaw(streamId) !== null;
+    // Gate on raw key presence, not parse success — an unparseable or
+    // terminal-status legacy blob (which `readRaw` normalizes to null) must
+    // still be cleaned up, or its key lingers forever.
+    const existed =
+      state.get<unknown>(streamKey(streamId)) != null ||
+      state.get<unknown>(legacyStreamKey(streamId)) != null;
     if (!existed) return;
     await Promise.all([
       state.update(streamKey(streamId), undefined),
@@ -355,18 +284,47 @@ export const GoalStore = {
   async forgetMany(streamIds: readonly StreamTabId[]): Promise<void> {
     const state = tryGetWorkspaceState();
     if (!state) return;
-    const toRemove = streamIds.filter((id) => readRaw(id) !== null);
+    // Same raw-presence gate as `forget` so unparseable blobs are cleaned.
+    const toRemove = streamIds.filter(
+      (id) =>
+        state.get<unknown>(streamKey(id)) != null ||
+        state.get<unknown>(legacyStreamKey(id)) != null,
+    );
     if (toRemove.length === 0) return;
+    const hasLegacyIndex = state.get<unknown>(LEGACY_INDEX_KEY) != null;
     const index = readIndex();
     const dropped = new Set(toRemove);
     const nextIndex = index.filter((id) => !dropped.has(id));
     await Promise.all([
       ...toRemove.map((id) => state.update(streamKey(id), undefined)),
       ...toRemove.map((id) => state.update(legacyStreamKey(id), undefined)),
-      nextIndex.length === index.length
-        ? Promise.resolve()
-        : state.update(INDEX_KEY, nextIndex),
+      hasLegacyIndex || nextIndex.length !== index.length
+        ? state.update(INDEX_KEY, nextIndex)
+        : Promise.resolve(),
+      // Migrated into the union write above; see removeFromIndex.
+      hasLegacyIndex
+        ? state.update(LEGACY_INDEX_KEY, undefined)
+        : Promise.resolve(),
     ]);
     for (const id of toRemove) bus.emit('goalStateChanged', { streamId: id });
+  },
+
+  /**
+   * Drop goals whose stream id belongs to one of the deleted executions.
+   * GoalStore owns this suffix convention because it already owns the stream
+   * index and legacy-key migration; callers should pass execution ids only.
+   */
+  async forgetByExecutionIds(
+    executionIds: readonly ExecutionId[],
+  ): Promise<void> {
+    if (executionIds.length === 0) return;
+    // Stream ids include the execution id as a final `#${executionId}` suffix.
+    // ExecutionIdSchema permits only hex/dash characters, so `#` is a safe
+    // delimiter rather than a character that can appear inside the id itself.
+    const suffixes = [...new Set(executionIds.map((id) => `#${id}`))];
+    const streamIds = readIndex().filter((streamId) =>
+      suffixes.some((suffix) => streamId.endsWith(suffix)),
+    );
+    await GoalStore.forgetMany(streamIds);
   },
 };

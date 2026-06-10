@@ -34,6 +34,7 @@ import {
   isEmptyUsage,
   OutputFileInfoListSchema,
   PersistedWorkPlanSchema,
+  planSummaryLine,
   RoundKeySchema,
   sumUsageStats,
   TokenUsageStatsParsingSchema,
@@ -635,7 +636,7 @@ export class StreamSnapshotStore {
       const next = {
         ...this.getWorkPlan(stream),
         plan,
-        planSummary: plan?.summary ?? null,
+        planSummary: plan ? planSummaryLine(plan.objective) : null,
       };
       this.workPlan.set(stream, next);
       this.writeWorkPlan(stream, next);

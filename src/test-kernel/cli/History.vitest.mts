@@ -6,8 +6,9 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { ExecutionId } from '@shared/schemas';
+import type { ExecutionId, StreamTabId } from '@shared/schemas';
 import { DEFAULT_TOOL_CONFIG } from '@shared/schemas/toolConfig';
+import { GoalStore } from '@tools/goal';
 
 const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
@@ -462,6 +463,22 @@ describe('CLI history runtime', () => {
     });
   });
 
+  it('drops the goal owned by a deleted execution', async () => {
+    const streamId = 'chat@deepseek#a1' as StreamTabId;
+    await GoalStore.start(streamId, 'finish the cleanup');
+    mocks.deleteExecution.mockResolvedValue(true);
+
+    await expect(
+      deleteCliHistory({ id: 'a1' as ExecutionId }),
+    ).resolves.toEqual({
+      deleted: 'one',
+      id: 'a1',
+      found: true,
+    });
+
+    expect(GoalStore.getForStream(streamId)).toBeNull();
+  });
+
   it('validates execution id shape before command handlers use storage', () => {
     expect(parseCliHistoryId('abc123')).toBe('abc123');
     expect(parseCliHistoryId('../abc123')).toBeUndefined();
@@ -498,8 +515,7 @@ describe('CLI history runtime', () => {
   });
 
   it('surfaces the bulk-delete count in the structured result', async () => {
-    mocks.listExecutions.mockResolvedValue([{}, {}, {}, {}]);
-    mocks.deleteAllExecutions.mockResolvedValue(undefined);
+    mocks.deleteAllExecutions.mockResolvedValue(['a1', 'b2', 'c3', 'd4']);
 
     await expect(deleteCliHistory({ all: true })).resolves.toEqual({
       deleted: 'all',
@@ -508,7 +524,7 @@ describe('CLI history runtime', () => {
   });
 
   it('reuses the preflight count instead of re-listing', async () => {
-    mocks.deleteAllExecutions.mockResolvedValue(undefined);
+    mocks.deleteAllExecutions.mockResolvedValue(['a1']);
 
     await expect(
       deleteCliHistory({ all: true, preCountForAll: 7 }),
@@ -516,5 +532,21 @@ describe('CLI history runtime', () => {
 
     // listExecutions must not be called when the count was passed in.
     expect(mocks.listExecutions).not.toHaveBeenCalled();
+  });
+
+  it('drops only goals owned by deleted executions in the bulk path', async () => {
+    const deletedA = 'chat@deepseek#a1' as StreamTabId;
+    const deletedB = 'review@deepseek#b2' as StreamTabId;
+    const live = 'chat@deepseek#live' as StreamTabId;
+    await GoalStore.start(deletedA, 'delete a');
+    await GoalStore.start(deletedB, 'delete b');
+    await GoalStore.start(live, 'keep me');
+    mocks.deleteAllExecutions.mockResolvedValue(['a1', 'b2']);
+
+    await deleteCliHistory({ all: true });
+
+    expect(GoalStore.getForStream(deletedA)).toBeNull();
+    expect(GoalStore.getForStream(deletedB)).toBeNull();
+    expect(GoalStore.getForStream(live)?.objective).toBe('keep me');
   });
 });

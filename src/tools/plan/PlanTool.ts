@@ -1,15 +1,16 @@
 /**
  * Unified plan + goal tool.
  *
- * `command: 'update'` (the default) creates or updates a structured
- * implementation plan with numbered steps, descriptions, and file
- * references. New plans (all steps pending) gate on user approval; the
- * user may approve the plan or approve and start an autonomous goal.
+ * `command: 'update'` proposes or replaces the plan: a plain objective
+ * document stating what to achieve, the approach, and a verifiable
+ * stopping condition. Every update gates on user approval; the user may
+ * approve, approve and start an autonomous goal, or reject. Step tracking
+ * belongs to the todo tool — the plan has no structured steps.
  *
  * `command: 'pause'` and `command: 'complete'` drive the lifecycle of the
- * goal running this plan: pause when user input is needed, complete
- * when every plan step is verified done. Both are no-ops if no goal
- * is in flight on the current stream.
+ * goal pursuing this plan: pause when user input is needed, complete when
+ * the objective is verifiably done. Both are no-ops if no goal is in
+ * flight on the current stream.
  */
 
 // Third-party imports
@@ -23,13 +24,7 @@ import { getCurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContex
 import type { CurrentToolContexts } from '@agent/toolUse/ToolFileInteractionContext';
 import { toErrorMessage } from '@common/errors';
 import { createChannelTrace } from '@logger';
-import {
-  TODO_STATUS,
-  STATUS_DISPLAY,
-  PlanSchema,
-  countByStatus,
-  type Plan,
-} from '@shared/schemas';
+import type { Plan } from '@shared/schemas';
 import { proposalApprovalState } from '@tools/approval';
 import {
   GoalStore,
@@ -42,40 +37,12 @@ import {
 } from '@tools/goal';
 import { ToolError, type ToolResult } from '@tools/result';
 import { requireNonEmptyString } from '@tools/utils';
-import {
-  appendWorkPlanGranularityWarning,
-  formatWorkPlanGranularityWarning,
-} from '@tools/workPlanGranularityFeedback';
 import { defineTool } from '@tools/core/define';
 
 const logger = createChannelTrace('PlanTool');
 
 /** Counter for generating unique approval IDs */
 let approvalCounter = 0;
-
-/**
- * Render a plan as a goal objective: a verifiable stopping condition that
- * names each step so the autonomous loop has the full structure in context,
- * not just the summary.
- */
-function buildGoalObjectiveFromPlan(plan: Plan): string {
-  const stepLines = plan.steps.map((step, i) => {
-    const head = `${i + 1}. ${step.title} — ${step.description}`;
-    return step.files.length > 0
-      ? `${head}\n   Files: ${step.files.join(', ')}`
-      : head;
-  });
-  return [
-    `Complete the following plan in full, then stop.`,
-    ``,
-    `Plan summary: ${plan.summary}`,
-    ``,
-    `Steps:`,
-    ...stepLines,
-    ``,
-    `Stopping condition: every step above has been marked completed via the plan tool AND verified against current external state (file contents, command output, or test results).`,
-  ].join('\n');
-}
 
 function formatGoalView(goal: Goal): string {
   return [
@@ -92,7 +59,14 @@ function formatGoalView(goal: Goal): string {
 const PlanToolInputSchema = z.discriminatedUnion('command', [
   z.strictObject({
     command: z.literal('update'),
-    plan: PlanSchema.describe('The structured implementation plan'),
+    objective: z
+      .string()
+      .min(1)
+      .describe(
+        'The plan document: what to achieve, the intended approach, and a ' +
+          'verifiable stopping condition. Plain prose or markdown - no ' +
+          'structured steps (track those with the todo tool).',
+      ),
   }),
   z.strictObject({
     command: z.literal('pause'),
@@ -117,27 +91,17 @@ export type PlanToolInput = z.infer<typeof PlanToolInputSchema>;
 
 export class PlanTool extends defineTool({
   name: 'plan',
-  description: `Manage a structured implementation plan and (optionally) the autonomous goal running it.
+  description: `Manage the plan document and (optionally) the autonomous goal pursuing it.
 
 Commands:
-- update: Create or update the plan. Required field: \`plan\` with summary + steps. New plans (all steps pending) are presented to the user for approval; they may approve, approve & run autonomously (starts a goal), or reject. Progress updates (marking steps in_progress or completed) apply immediately.
-- pause: Self-pause the goal running this plan when you genuinely need user input to proceed. Required field: \`reason\` describing what you need.
-- complete: Mark the goal running this plan complete. Required field: \`reason\` describing HOW you verified completion against current external state. Only call this once every plan step is marked completed AND verified.
-
-Plan structure (for command="update"):
-- summary: Brief overview of the approach (1-3 sentences).
-- steps: Ordered list of implementation steps, each with:
-  - title: Short step name (e.g., "Add authentication middleware").
-  - description: What the step involves and why.
-  - status: pending | in_progress | completed.
-  - files: List of files that will be created or modified.
+- update: Propose or replace the plan. Required field: \`objective\` - a plain document stating what to achieve, the intended approach, and a verifiable stopping condition. Every update is presented to the user for approval; they may approve, approve & run autonomously (starts a goal), or reject.
+- pause: Self-pause the goal pursuing this plan when you genuinely need user input to proceed. Required field: \`reason\` describing what you need.
+- complete: Mark the goal pursuing this plan complete. Required field: \`reason\` describing HOW you verified completion against current external state. Only call this once the objective's stopping condition is verifiably true.
 
 Best practices:
-- Create the plan BEFORE starting implementation.
-- Keep summaries concise — focus on "why" and high-level "what".
-- Each step should be a distinct, meaningful unit of work.
-- Update step statuses as you progress through the plan.
-- Include file paths to help the user understand the scope.
+- Write the objective BEFORE starting implementation.
+- State a stopping condition that can be checked against external evidence (file contents, command output, test results).
+- Track execution steps with the todo tool; update the plan only when the objective or approach genuinely changes (every update requires re-approval).
 - pause/complete are no-ops if no goal is running on this stream.`,
   schema: PlanToolInputSchema,
 }) {
@@ -147,7 +111,7 @@ Best practices:
 
     switch (input.command) {
       case 'update':
-        return this.executeUpdate(input.plan, contexts);
+        return this.executeUpdate({ objective: input.objective }, contexts);
       case 'pause':
         if (!streamId) {
           throw new ToolError('plan(pause) requires an active stream context.');
@@ -189,36 +153,24 @@ Best practices:
       };
     }
 
-    const isNewPlan = plan.steps.every((s) => s.status === TODO_STATUS.PENDING);
-    const granularityWarning = formatWorkPlanGranularityWarning(
-      callContext.workPlanState.todos,
-      plan,
-    );
-
     callContext.workPlanState.updatePlan(plan);
 
-    if (isNewPlan) {
-      if (!runContext?.streamId) {
-        logger.warn(
-          'New plan created without streamId — skipping approval gate',
-        );
-      } else if (proposalApprovalState.isBypassed(runContext.streamId)) {
-        logger.info('Plan auto-approved via delegated-task auto-approval');
-        return this.buildApprovedResult({
-          autoApproved: true,
-          granularityWarning,
-        });
-      } else {
-        return this.requestApproval(
-          plan,
-          runContext.streamId,
-          callContext.workPlanState,
-          granularityWarning,
-        );
-      }
+    // Every update is a (re-)proposal: with no step statuses to record,
+    // the only reason to call update is a new or changed objective, and
+    // that decision belongs to the user.
+    if (!runContext?.streamId) {
+      logger.warn('Plan created without streamId — skipping approval gate');
+      return this.buildApprovedResult({ autoApproved: false });
     }
-
-    return this.buildProgressResult(plan, granularityWarning);
+    if (proposalApprovalState.isBypassed(runContext.streamId)) {
+      logger.info('Plan auto-approved via delegated-task auto-approval');
+      return this.buildApprovedResult({ autoApproved: true });
+    }
+    return this.requestApproval(
+      plan,
+      runContext.streamId,
+      callContext.workPlanState,
+    );
   }
 
   private async executePause(
@@ -299,12 +251,11 @@ Best practices:
     plan: Plan,
     streamId: string,
     workPlanState: WorkPlanState,
-    granularityWarning?: string,
   ): Promise<ToolResult> {
     const approvalId = `plan-${Date.now().toString(36)}-${++approvalCounter}`;
     const goalEnabled = isGoalEnabled();
 
-    logger.info(`Requesting approval for plan: ${plan.summary}`);
+    logger.info('Requesting approval for plan objective');
 
     const result: PlanApprovalResult =
       await runCoordinatorBridge.waitForPlanApproval(streamId, {
@@ -315,15 +266,12 @@ Best practices:
 
     if (result.action === 'approve') {
       logger.info('Plan approved by user');
-      return this.buildApprovedResult({
-        autoApproved: false,
-        granularityWarning,
-      });
+      return this.buildApprovedResult({ autoApproved: false });
     }
 
     if (result.action === 'approve_and_goal') {
       logger.info('Plan approved by user with goal mode');
-      return this.startGoalForPlan(plan, streamId, granularityWarning);
+      return this.startGoalForPlan(plan, streamId);
     }
 
     // Rejected or timed out — clear the plan from UI
@@ -355,47 +303,40 @@ Best practices:
   }
 
   /**
-   * Start an autonomous goal whose objective is the just-approved plan.
-   * Falls back explicitly if goal is disabled. If one is already in flight
-   * for the stream, retarget that goal to the newly approved plan so future
+   * Start an autonomous goal whose objective is the just-approved plan
+   * document, verbatim. Falls back explicitly if goal is disabled. If one
+   * is already in flight for the stream, retarget it so future
    * continuations follow the current user decision.
    */
   private async startGoalForPlan(
     plan: Plan,
     streamId: string,
-    granularityWarning?: string,
   ): Promise<ToolResult> {
-    const goalEnabled = isGoalEnabled();
-    if (!goalEnabled) {
+    if (!isGoalEnabled()) {
       logger.warn(
         'Approve & Run Autonomously requested but goal feature flag is off; ' +
           'continuing without an autonomous goal.',
       );
       return {
         summary: 'Plan approved — autonomous run unavailable',
-        output: appendWorkPlanGranularityWarning(
+        output:
           `The user selected Approve & Run, but the goal feature flag is ` +
-            `currently disabled. The plan is approved, but no autonomous ` +
-            `goal was started.\n\n` +
-            `Proceed with the plan steps as a normal turn-by-turn workflow. ` +
-            `Update plan step statuses as you go.`,
-          granularityWarning,
-        ),
+          `currently disabled. The plan is approved, but no autonomous ` +
+          `goal was started.\n\n` +
+          `Work toward the objective as a normal turn-by-turn workflow, ` +
+          `tracking concrete steps with the todo tool.`,
       };
     }
 
-    const objective = buildGoalObjectiveFromPlan(plan);
+    const objective = plan.objective;
 
-    // If a goal is already in flight on this stream, retarget it at
-    // the newly approved plan instead of silently leaving the loop driving
-    // the stale objective. The cap amount stays with the running goal; if the
-    // goal was paused, resuming starts a fresh spend leg inside GoalStore.
+    // If a goal is already in flight on this stream, retarget it at the
+    // newly approved objective instead of silently leaving the loop driving
+    // the stale one.
     const existing = GoalStore.getForStream(streamId);
     if (isGoalInFlight(existing)) {
       try {
-        const retargeted = await GoalStore.editObjective(streamId, objective, {
-          plan,
-        });
+        const retargeted = await GoalStore.editObjective(streamId, objective);
         const active =
           retargeted.status === 'paused'
             ? ((await GoalStore.setStatus(streamId, 'active')) ?? retargeted)
@@ -403,20 +344,17 @@ Best practices:
         await this.setAutoApprovals(streamId, true);
         return {
           summary: `Plan approved — goal ${active.goalId} retargeted`,
-          output: appendWorkPlanGranularityWarning(
+          output:
             `The user approved a new plan while goal ${active.goalId} ` +
-              `was already in flight. The goal has been retargeted to ` +
-              `the newly approved plan instead of leaving the old objective ` +
-              `active.\n\n` +
-              `${formatGoalView(active)}\n\n` +
-              `Discipline:\n` +
-              `- Work through the new plan steps and update their statuses with plan(command="update") as you progress.\n` +
-              `- Discard any progress that only served the previous objective.\n` +
-              `- Do not call plan(command="complete") until every step of the new plan is marked completed AND verified.\n` +
-              `- If you genuinely need user input to proceed, call plan(command="pause") with a reason.\n\n` +
-              `Objective:\n${objective}`,
-            granularityWarning,
-          ),
+            `was already in flight. The goal has been retargeted to the ` +
+            `new objective.\n\n` +
+            `${formatGoalView(active)}\n\n` +
+            `Discipline:\n` +
+            `- Drop work that only served the previous objective.\n` +
+            `- Track concrete steps with the todo tool as you work.\n` +
+            `- Do not call plan(command="complete") until the stopping condition is verifiably true.\n` +
+            `- If you genuinely need user input, call plan(command="pause") with a reason.\n\n` +
+            `Objective:\n${objective}`,
         };
       } catch (err) {
         const reason = toErrorMessage(err);
@@ -429,7 +367,7 @@ Best practices:
           output:
             `The user approved this plan and requested autonomous execution, ` +
             `but the in-flight goal could not be retargeted: ${reason}\n\n` +
-            `Proceed with the plan steps turn-by-turn. The pre-existing ` +
+            `Work toward the new objective turn-by-turn. The pre-existing ` +
             `goal is still active and will keep injecting continuations ` +
             `against its previous objective until the user pauses or abandons it.`,
           isError: true,
@@ -438,21 +376,19 @@ Best practices:
     }
 
     try {
-      const goal = await GoalStore.start(streamId, objective, { plan });
+      const goal = await GoalStore.start(streamId, objective);
       await this.setAutoApprovals(streamId, true);
       return {
         summary: `Plan approved — goal ${goal.goalId} started`,
-        output: appendWorkPlanGranularityWarning(
+        output:
           `The user approved this plan and started an autonomous goal ` +
-            `(${goal.goalId}) toward the plan's stopping condition.\n\n` +
-            `Discipline:\n` +
-            `- Work through the plan steps and update their statuses with plan(command="update") as you progress.\n` +
-            `- Do not call plan(command="complete") until every plan step is marked completed AND the result is verified against current external state (file contents, command output, test results).\n` +
-            `- If you genuinely need user input to proceed, call plan(command="pause") with a reason describing what you need.\n` +
-            `- Otherwise, keep working in scoped checkpoints until the plan is finished.\n\n` +
-            `Objective:\n${objective}`,
-          granularityWarning,
-        ),
+          `(${goal.goalId}) toward its stopping condition.\n\n` +
+          `Discipline:\n` +
+          `- Track concrete steps with the todo tool as you work.\n` +
+          `- Do not call plan(command="complete") until the stopping condition is verified against current external state (file contents, command output, test results).\n` +
+          `- If you genuinely need user input, call plan(command="pause") with a reason describing what you need.\n` +
+          `- Otherwise, keep working until the objective is done.\n\n` +
+          `Objective:\n${objective}`,
       };
     } catch (err) {
       const reason = toErrorMessage(err);
@@ -465,18 +401,16 @@ Best practices:
         output:
           `The user approved this plan and requested autonomous execution, but ` +
           `the goal could not be started: ${reason}\n\n` +
-          `Proceed with the plan steps as a normal turn-by-turn workflow. Update ` +
-          `plan step statuses as you go.`,
+          `Work toward the objective as a normal turn-by-turn workflow, ` +
+          `tracking concrete steps with the todo tool.`,
       };
     }
   }
 
   private buildApprovedResult({
     autoApproved,
-    granularityWarning,
   }: {
     autoApproved: boolean;
-    granularityWarning?: string;
   }): ToolResult {
     const prefix = autoApproved
       ? 'Plan auto-approved via delegated-task auto-approval (user did not review).'
@@ -485,41 +419,11 @@ Best practices:
       summary: autoApproved
         ? 'Plan auto-approved — proceed with implementation'
         : 'Plan approved — proceed with implementation',
-      output: appendWorkPlanGranularityWarning(
-        `${prefix} You may now begin implementing the plan steps. Update step statuses as you work through them.`,
-        granularityWarning,
-      ),
-    };
-  }
-
-  private buildProgressResult(
-    plan: Plan,
-    granularityWarning: string | undefined,
-  ): ToolResult {
-    const { completed, inProgress, pending } = countByStatus(plan.steps);
-
-    const summary = `Plan updated: ${completed} completed, ${inProgress} in progress, ${pending} pending`;
-
-    return {
-      summary: granularityWarning
-        ? `${summary}; todo/plan granularity overlap`
-        : summary,
-      output: appendWorkPlanGranularityWarning('OK', granularityWarning),
+      output: `${prefix} Work toward the objective, tracking concrete steps with the todo tool.`,
     };
   }
 
   private formatPlan(plan: Plan): string {
-    const lines: string[] = [`Plan: ${plan.summary}`, ''];
-
-    for (const [i, step] of plan.steps.entries()) {
-      const { icon, label } = STATUS_DISPLAY[step.status];
-      lines.push(`${i + 1}. ${icon} [${label}] ${step.title}`);
-      lines.push(`   ${step.description}`);
-      if (step.files.length > 0) {
-        lines.push(`   Files: ${step.files.join(', ')}`);
-      }
-    }
-
-    return lines.join('\n');
+    return `Plan objective:\n${plan.objective}`;
   }
 }
