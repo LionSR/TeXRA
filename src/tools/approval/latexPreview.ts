@@ -3,10 +3,10 @@
  * Handles creating temp files, running latexdiff, and building PDFs.
  */
 
-import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import { sync as globSync } from 'glob';
+import { nanoid } from 'nanoid';
 
 import { platform } from '@platform/platform';
 import { toErrorMessage } from '@common/errors';
@@ -54,8 +54,8 @@ export interface LatexPreviewEntry {
 type TempFileLocation = 'sameDirectory' | 'workspaceTemp';
 
 const TEXRA_TEMP_DIR = '.texra-temp';
-/** Length of UUID prefix for temp file names (8 chars = 4 billion combinations, sufficient for uniqueness) */
-const UUID_PREFIX_LENGTH = 8;
+/** Length of the random suffix for temp file names (8 nanoid chars ≈ 2^47 combinations, sufficient for uniqueness) */
+const TEMP_ID_LENGTH = 8;
 
 const latexdiffService = new LaTeXdiffService('ToolEditApproval');
 
@@ -153,7 +153,7 @@ async function createTempFileWithCleanup(
   const originalPath = entry.request.path;
   const ext = path.extname(originalPath);
   const basename = path.basename(originalPath, ext);
-  const tempFileName = `${basename}${suffix}-${randomUUID().slice(0, UUID_PREFIX_LENGTH)}${ext}`;
+  const tempFileName = `${basename}${suffix}-${nanoid(TEMP_ID_LENGTH)}${ext}`;
 
   let tempDir: string;
   if (location === 'workspaceTemp') {
