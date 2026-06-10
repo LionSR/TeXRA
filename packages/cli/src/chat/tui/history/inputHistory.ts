@@ -26,6 +26,10 @@ export interface InputHistory {
     needle: string,
     from?: number,
   ): { value: string; index: number } | undefined;
+  /** Entry at `index` (0 = oldest), for ↑/↓ history browsing. */
+  at(index: number): string | undefined;
+  /** Number of stored entries. */
+  length(): number;
 }
 
 function parseRecord(raw: string): HistoryRecord | undefined {
@@ -104,6 +108,12 @@ export async function loadInputHistory(): Promise<InputHistory> {
         }
       }
       return undefined;
+    },
+    at(index) {
+      return entries[index];
+    },
+    length() {
+      return entries.length;
     },
   };
 }

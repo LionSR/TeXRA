@@ -45,6 +45,9 @@ export interface StatusBarSegment {
   readonly badge?: boolean;
   readonly badgeColor?: 'red' | 'yellow';
   readonly compactPriority?: number;
+  /** Shorter replacement text tried (in priority order) before the segment
+   *  is removed outright when the bar overflows the terminal width. */
+  readonly compactText?: string;
   /** Purely visual glyphs hidden from screen readers (`aria-hidden`). */
   readonly decorative?: boolean;
 }
@@ -139,6 +142,9 @@ function formatUsage(
     text: `${formatCompactNumber(total)}/${formatCompactNumber(
       contextWindow,
     )} (${percent}%)`,
+    // Keep context visibility on narrow terminals: degrade to the bare
+    // percentage instead of dropping the segment entirely.
+    compactText: `${percent}%`,
     color,
   };
 }
@@ -330,15 +336,38 @@ function fitStatusBarLeftSegments(
     ),
   ].sort((a, b) => a - b);
 
-  for (const priority of priorities) {
-    for (let index = compacted.length - 1; index >= 0; index -= 1) {
-      if (compacted[index]?.compactPriority !== priority) continue;
-      compacted.splice(index, 1);
-      if (statusBarSegmentsWidth(compacted) <= innerWidth) return compacted;
+  // Lowest-priority segments compact first; returns as soon as the row fits.
+  const sweep = (
+    apply: (index: number, segment: StatusBarSegment) => boolean,
+  ): readonly StatusBarSegment[] | undefined => {
+    for (const priority of priorities) {
+      for (let index = compacted.length - 1; index >= 0; index -= 1) {
+        const segment = compacted[index];
+        if (segment?.compactPriority !== priority || !apply(index, segment)) {
+          continue;
+        }
+        if (statusBarSegmentsWidth(compacted) <= innerWidth) return compacted;
+      }
     }
-  }
+    return undefined;
+  };
 
-  return compacted;
+  return (
+    // Shrink segments to their compactText before removing anything — a
+    // narrowed segment beats a missing one.
+    sweep((index, segment) => {
+      if (!segment.compactText || segment.compactText === segment.text) {
+        return false;
+      }
+      compacted[index] = { ...segment, text: segment.compactText };
+      return true;
+    }) ??
+    sweep((index) => {
+      compacted.splice(index, 1);
+      return true;
+    }) ??
+    compacted
+  );
 }
 
 export function defaultShortcutModifierLabel(
@@ -597,6 +626,17 @@ export function buildStatusBarDisplay(
 
   if (input.pendingExitHint) {
     left.push({ text: PENDING_EXIT_HINT_TEXT, color: 'yellow' });
+    const queuedCount = input.queuedFollowUpMessages.length;
+    if (queuedCount > 0) {
+      // Exiting drops queued follow-ups silently — warn before the user
+      // confirms with the second Ctrl-C.
+      left.push({
+        text: `${queuedCount} queued follow-up${
+          queuedCount === 1 ? '' : 's'
+        } will be discarded`,
+        color: 'red',
+      });
+    }
   } else {
     left.push({ text: formatCliStatusLabel(input.status), color: 'dim' });
     if (

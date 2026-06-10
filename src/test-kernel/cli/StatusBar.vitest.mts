@@ -1159,6 +1159,75 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
+  it('warns that queued follow-ups are discarded while exit is armed', () => {
+    const display = buildStatusBarDisplay({
+      status: STREAM_STATUS.RUNNING,
+      pendingExitHint: true,
+      pendingExitResumeId: 'abc123',
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [
+        'Keep the proof under one page.',
+        'Also mention the finite monoid argument.',
+      ],
+      usage: undefined,
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: PERSONAL_API_MODE_LABEL,
+      shortcutModifierLabel: 'Alt',
+    });
+
+    expect(display.left.map(statusBarSegmentText)).toContain(
+      '2 queued follow-ups will be discarded',
+    );
+    expect(
+      display.left.find(
+        (segment) =>
+          statusBarSegmentText(segment) ===
+          '2 queued follow-ups will be discarded',
+      ),
+    ).toMatchObject({ color: 'red' });
+  });
+
+  it('compacts token usage to a percentage before dropping it on narrow widths', () => {
+    const input = {
+      status: STREAM_STATUS.RUNNING,
+      pendingExitHint: false,
+      pendingExitResumeId: undefined,
+      bypass: NO_BYPASS,
+      queuedFollowUpMessages: [],
+      usage: { inputTokens: 80_000, outputTokens: 25_000, cost: 0 },
+      conversation: undefined,
+      activeSubagents: 0,
+      activeProcesses: 0,
+      approvalDepth: 0,
+      subagentControlsAvailable: false,
+      hasMultipleStreams: false,
+      model: 'deepseekT',
+      apiMode: PERSONAL_API_MODE_LABEL,
+      shortcutModifierLabel: 'Alt',
+    } as const;
+
+    // Wide: the full usage segment fits.
+    expect(
+      buildStatusBarDisplay({ ...input, width: 80 }).left.map(
+        statusBarSegmentText,
+      ),
+    ).toContain('105k/1M (10%)');
+
+    // Narrow: the segment degrades to the bare percentage instead of
+    // disappearing, keeping context pressure visible.
+    const narrow = buildStatusBarDisplay({ ...input, width: 24 }).left.map(
+      statusBarSegmentText,
+    );
+    expect(narrow).not.toContain('105k/1M (10%)');
+    expect(narrow).toContain('10%');
+  });
+
   it('keeps the exit confirmation visible in very narrow footers', () => {
     const display = buildStatusBarDisplay({
       status: STREAM_STATUS.RUNNING,

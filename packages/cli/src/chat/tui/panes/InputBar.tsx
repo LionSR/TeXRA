@@ -17,6 +17,7 @@ import { SlashPalette } from '../commands/SlashPalette';
 import {
   matchSlashCommands,
   parseSlashInput,
+  prefixSlashCommands,
   slashPickIntent,
   type SlashCommand,
   type SlashPickIntent,
@@ -83,12 +84,35 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   const [reverseSearchOpen, setReverseSearchOpen] = useState(false);
   const [attachNotice, setAttachNotice] = useState<string | null>(null);
   const draftValueRef = useRef(value);
+  // ↑/↓ history browsing (shell-style). `index` walks the persisted entries,
+  // `savedDraft` restores whatever was typed before browsing began, and
+  // `applied` detects edits to a recalled entry, which end the browse.
+  const historyBrowseRef = useRef<
+    { index: number; savedDraft: string; applied: string } | undefined
+  >(undefined);
   const setValue = useCallback((next: string) => {
     draftValueRef.current = next;
+    if (next !== historyBrowseRef.current?.applied) {
+      historyBrowseRef.current = undefined;
+    }
     setValueState(next);
   }, []);
   const historyRef = useRef(history);
   historyRef.current = history;
+  const browseHistory = useCallback((direction: -1 | 1) => {
+    const entries = historyRef.current;
+    const browse = historyBrowseRef.current;
+    if (!entries || (!browse && direction === 1)) return;
+    const index = (browse?.index ?? entries.length()) + direction;
+    if (index < 0) return;
+    const savedDraft = browse?.savedDraft ?? draftValueRef.current;
+    // Walking ↓ past the newest entry restores the pre-browse draft.
+    const entry = entries.at(index);
+    historyBrowseRef.current =
+      entry === undefined ? undefined : { index, savedDraft, applied: entry };
+    draftValueRef.current = entry ?? savedDraft;
+    setValueState(entry ?? savedDraft);
+  }, []);
   const imagePasteQueueRef = useRef<ImagePasteQueue | null>(null);
   imagePasteQueueRef.current ??= new ImagePasteQueue();
   const imagePasteQueue = imagePasteQueueRef.current;
@@ -215,7 +239,11 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     (submitted: string) => {
       const slash = parseSlashInput(submitted);
       if (slash !== undefined && !/\s/.test(submitted.slice(1))) {
-        const chosen = matchSlashCommands(slash.name)[0];
+        // Batched chunks (e.g. a paste ending in a newline) never showed the
+        // palette, so only auto-run prefix matches here — the substring/typo
+        // fallbacks are palette-only, where the user previews the match.
+        // Unmatched input falls through to the unknown-command suggestion.
+        const chosen = prefixSlashCommands(slash.name)[0];
         if (chosen !== undefined) {
           acceptSlashCommand(
             chosen,
@@ -303,6 +331,10 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           value={value}
           focus={!disabled && !reverseSearchOpen}
           onChange={setValue}
+          // While the slash palette is open it owns ↑/↓ for row selection;
+          // history recall would clobber the draft mid-navigation.
+          onHistoryUp={showPalette ? undefined : () => browseHistory(-1)}
+          onHistoryDown={showPalette ? undefined : () => browseHistory(1)}
           imagePasteQueue={imagePasteQueue}
           transformPaste={transformPaste}
           onImagePaste={onImagePaste}
