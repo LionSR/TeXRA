@@ -1,6 +1,6 @@
 {
   "name": "@texra/core",
-  "version": "0.38.7",
+  "version": "0.38.8",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
