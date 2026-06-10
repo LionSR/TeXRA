@@ -2,15 +2,21 @@
 import { strict as assert } from 'node:assert';
 
 // Third-party imports
-import { describe, it } from 'vitest';
+import { describe, it, vi } from 'vitest';
 
 // Local imports - Supabase relay
 import {
+  FREE_TIER_MAX_OUTPUT_TOKENS,
   FREE_TIER_REQUEST_BODY_LIMIT_BYTES,
   checkRequestBodySizeLimit,
+  clampFreeTierMaxOutputTokens,
   formatRequestBytes,
   readRequestBodyWithinSizeLimit,
 } from '../../../supabase/functions/relay/requestLimits';
+import {
+  acquireRelayRequestSlot,
+  releaseWhenStreamCloses,
+} from '../../../supabase/functions/relay/requestGate';
 
 function byteStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   return new ReadableStream({
@@ -23,7 +29,7 @@ function byteStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
   });
 }
 
-describe('relay free-tier request size limits', () => {
+describe('relay free-tier request limits', () => {
   it('rejects free-tier request bodies over the byte cap', () => {
     assert.deepEqual(checkRequestBodySizeLimit('abc', 3), {
       allowed: true,
@@ -79,5 +85,415 @@ describe('relay free-tier request size limits', () => {
       formatRequestBytes(FREE_TIER_REQUEST_BODY_LIMIT_BYTES),
       '2 MiB',
     );
+  });
+
+  it('adds an OpenAI-compatible max token cap when missing', () => {
+    const result = clampFreeTierMaxOutputTokens('deepseek', '/v1/chat', {
+      model: 'deepseek-chat',
+    });
+
+    assert.equal(result.changed, true);
+    assert.equal(result.fieldPath, 'max_tokens');
+    assert.deepEqual(result.body, {
+      model: 'deepseek-chat',
+      max_tokens: FREE_TIER_MAX_OUTPUT_TOKENS,
+    });
+  });
+
+  it('preserves OpenAI-compatible max token requests under the cap', () => {
+    const body = { model: 'deepseek-chat', max_tokens: 1024 };
+    const result = clampFreeTierMaxOutputTokens('deepseek', '/v1/chat', body);
+
+    assert.equal(result.changed, false);
+    assert.equal(result.body, body);
+  });
+
+  it('replaces non-positive OpenAI-compatible max token requests', () => {
+    const result = clampFreeTierMaxOutputTokens('deepseek', '/v1/chat', {
+      model: 'deepseek-chat',
+      max_tokens: -1,
+    });
+
+    assert.equal(result.changed, true);
+    assert.equal(result.fieldPath, 'max_tokens');
+    assert.deepEqual(result.body, {
+      model: 'deepseek-chat',
+      max_tokens: FREE_TIER_MAX_OUTPUT_TOKENS,
+    });
+  });
+
+  it('caps Responses API max_output_tokens', () => {
+    const result = clampFreeTierMaxOutputTokens('openai', '/v1/responses', {
+      model: 'gpt-4.1-mini',
+      max_output_tokens: 128_000,
+    });
+
+    assert.equal(result.changed, true);
+    assert.equal(result.fieldPath, 'max_output_tokens');
+    assert.deepEqual(result.body, {
+      model: 'gpt-4.1-mini',
+      max_output_tokens: FREE_TIER_MAX_OUTPUT_TOKENS,
+    });
+  });
+
+  it('adds Responses API max_output_tokens when only a decoy field exists', () => {
+    const result = clampFreeTierMaxOutputTokens('openai', '/v1/responses', {
+      model: 'gpt-4.1-mini',
+      max_tokens: 1024,
+    });
+
+    assert.equal(result.changed, true);
+    assert.equal(result.fieldPath, 'max_output_tokens');
+    assert.deepEqual(result.body, {
+      model: 'gpt-4.1-mini',
+      max_tokens: 1024,
+      max_output_tokens: FREE_TIER_MAX_OUTPUT_TOKENS,
+    });
+  });
+
+  it('caps OpenAI-compatible max_completion_tokens', () => {
+    const result = clampFreeTierMaxOutputTokens('openai', '/v1/chat', {
+      model: 'gpt-5-mini',
+      max_completion_tokens: 128_000,
+    });
+
+    assert.equal(result.changed, true);
+    assert.equal(result.fieldPath, 'max_completion_tokens');
+    assert.deepEqual(result.body, {
+      model: 'gpt-5-mini',
+      max_completion_tokens: FREE_TIER_MAX_OUTPUT_TOKENS,
+    });
+  });
+
+  it('uses max_completion_tokens for GPT-5 chat requests without a cap', () => {
+    const result = clampFreeTierMaxOutputTokens(
+      'openai',
+      '/v1/chat/completions',
+      { model: 'gpt-5-mini' },
+    );
+
+    assert.equal(result.changed, true);
+    assert.equal(result.fieldPath, 'max_completion_tokens');
+    assert.deepEqual(result.body, {
+      model: 'gpt-5-mini',
+      max_completion_tokens: FREE_TIER_MAX_OUTPUT_TOKENS,
+    });
+  });
+
+  it('adds chat max_tokens when only a decoy Responses field exists', () => {
+    const result = clampFreeTierMaxOutputTokens(
+      'openai',
+      '/v1/chat/completions',
+      {
+        model: 'gpt-4.1-mini',
+        max_output_tokens: 1024,
+      },
+    );
+
+    assert.equal(result.changed, true);
+    assert.equal(result.fieldPath, 'max_tokens');
+    assert.deepEqual(result.body, {
+      model: 'gpt-4.1-mini',
+      max_output_tokens: 1024,
+      max_tokens: FREE_TIER_MAX_OUTPUT_TOKENS,
+    });
+  });
+
+  it('caps sibling OpenAI-compatible max token fields together', () => {
+    const result = clampFreeTierMaxOutputTokens('openai', '/v1/chat', {
+      model: 'gpt-4.1-mini',
+      max_completion_tokens: 1024,
+      max_tokens: 128_000,
+    });
+
+    assert.equal(result.changed, true);
+    assert.equal(result.fieldPath, 'max_tokens');
+    assert.deepEqual(result.body, {
+      model: 'gpt-4.1-mini',
+      max_completion_tokens: 1024,
+      max_tokens: FREE_TIER_MAX_OUTPUT_TOKENS,
+    });
+  });
+
+  it('caps Google generationConfig maxOutputTokens', () => {
+    const result = clampFreeTierMaxOutputTokens(
+      'google',
+      '/v1beta/models/gemini-3.5-flash:streamGenerateContent',
+      {
+        contents: [],
+        generationConfig: { maxOutputTokens: 128_000, temperature: 0.2 },
+      },
+    );
+
+    assert.equal(result.changed, true);
+    assert.equal(result.fieldPath, 'generationConfig.maxOutputTokens');
+    assert.deepEqual(result.body, {
+      contents: [],
+      generationConfig: {
+        maxOutputTokens: FREE_TIER_MAX_OUTPUT_TOKENS,
+        temperature: 0.2,
+      },
+    });
+  });
+
+  it('releases request slots when the upstream stream closes', async () => {
+    let releases = 0;
+    const wrapped = await releaseWhenStreamCloses(
+      byteStream([new Uint8Array([1]), new Uint8Array([2])]),
+      async () => {
+        releases += 1;
+      },
+    );
+    if (wrapped === null) assert.fail('expected wrapped stream');
+
+    const reader = wrapped.getReader();
+    assert.deepEqual(await reader.read(), {
+      done: false,
+      value: new Uint8Array([1]),
+    });
+    assert.deepEqual(await reader.read(), {
+      done: false,
+      value: new Uint8Array([2]),
+    });
+    assert.deepEqual(await reader.read(), {
+      done: true,
+      value: undefined,
+    });
+    assert.equal(releases, 1);
+  });
+
+  it('uses the same slot id for gate refresh and release RPCs', async () => {
+    const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+    const client = {
+      async rpc(name: string, args: Record<string, unknown>) {
+        calls.push({ name, args });
+        return {
+          data:
+            name === 'relay_request_gate'
+              ? {
+                  allowed: true,
+                  slotId: args.p_slot_id,
+                  activeRequests: 1,
+                  concurrencyLimit: 2,
+                  requestsThisMinute: 1,
+                  rateLimitPerMinute: 20,
+                }
+              : name === 'relay_request_refresh'
+                ? { refreshed: true }
+                : {},
+          error: null,
+        };
+      },
+    };
+
+    const slot = await acquireRelayRequestSlot(client, crypto.randomUUID(), {
+      ratePerMinute: 20,
+      concurrent: 2,
+    });
+    if (!slot.allowed) assert.fail('expected slot to be allowed');
+
+    const slotId = calls[0].args.p_slot_id;
+    assert.equal(typeof slotId, 'string');
+    await slot.refresh();
+    await slot.release();
+    await slot.release();
+
+    assert.deepEqual(
+      calls.map((call) => call.name),
+      ['relay_request_gate', 'relay_request_refresh', 'relay_request_release'],
+    );
+    assert.equal(calls[1].args.p_slot_id, slotId);
+    assert.equal(calls[2].args.p_slot_id, slotId);
+  });
+
+  it('rejects refreshes when the request slot is already gone', async () => {
+    const client = {
+      async rpc(name: string, args: Record<string, unknown>) {
+        return {
+          data:
+            name === 'relay_request_gate'
+              ? {
+                  allowed: true,
+                  slotId: args.p_slot_id,
+                  activeRequests: 1,
+                  concurrencyLimit: 2,
+                  requestsThisMinute: 1,
+                  rateLimitPerMinute: 20,
+                }
+              : name === 'relay_request_refresh'
+                ? { refreshed: false }
+                : {},
+          error: null,
+        };
+      },
+    };
+
+    const slot = await acquireRelayRequestSlot(client, crypto.randomUUID(), {
+      ratePerMinute: 20,
+      concurrent: 2,
+    });
+    if (!slot.allowed) assert.fail('expected slot to be allowed');
+
+    await assert.rejects(
+      slot.refresh(),
+      /relay_request_refresh did not find request slot/,
+    );
+  });
+
+  it('refreshes request slots while the upstream stream stays open', async () => {
+    vi.useFakeTimers();
+    try {
+      let refreshes = 0;
+      let releases = 0;
+      const wrapped = await releaseWhenStreamCloses(
+        byteStream([
+          new Uint8Array([1]),
+          new Uint8Array([2]),
+          new Uint8Array([3]),
+        ]),
+        async () => {
+          releases += 1;
+        },
+        async () => {
+          refreshes += 1;
+        },
+        10,
+      );
+      if (wrapped === null) assert.fail('expected wrapped stream');
+
+      await vi.advanceTimersByTimeAsync(35);
+      assert.equal(refreshes, 3);
+
+      const reader = wrapped.getReader();
+      await reader.cancel();
+      assert.equal(releases, 1);
+
+      await vi.advanceTimersByTimeAsync(35);
+      assert.equal(refreshes, 3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps streams open through transient lease refresh failures', async () => {
+    vi.useFakeTimers();
+    try {
+      let refreshes = 0;
+      let releases = 0;
+      const wrapped = await releaseWhenStreamCloses(
+        byteStream([new Uint8Array([1])]),
+        async () => {
+          releases += 1;
+        },
+        async () => {
+          refreshes += 1;
+          throw new Error('refresh unavailable');
+        },
+        10,
+      );
+      if (wrapped === null) assert.fail('expected wrapped stream');
+
+      await vi.advanceTimersByTimeAsync(30);
+      assert.equal(refreshes, 3);
+      assert.equal(releases, 0);
+
+      const reader = wrapped.getReader();
+      assert.deepEqual(await reader.read(), {
+        done: false,
+        value: new Uint8Array([1]),
+      });
+      assert.deepEqual(await reader.read(), {
+        done: true,
+        value: undefined,
+      });
+      assert.equal(releases, 1);
+
+      await vi.advanceTimersByTimeAsync(30);
+      assert.equal(releases, 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('releases request slots when stream lease refresh loses the slot', async () => {
+    vi.useFakeTimers();
+    try {
+      const calls: string[] = [];
+      const client = {
+        async rpc(name: string, args: Record<string, unknown>) {
+          calls.push(name);
+          return {
+            data:
+              name === 'relay_request_gate'
+                ? {
+                    allowed: true,
+                    slotId: args.p_slot_id,
+                    activeRequests: 1,
+                    concurrencyLimit: 2,
+                    requestsThisMinute: 1,
+                    rateLimitPerMinute: 20,
+                  }
+                : name === 'relay_request_refresh'
+                  ? { refreshed: false }
+                  : {},
+            error: null,
+          };
+        },
+      };
+      const slot = await acquireRelayRequestSlot(client, crypto.randomUUID(), {
+        ratePerMinute: 20,
+        concurrent: 2,
+      });
+      if (!slot.allowed) assert.fail('expected slot to be allowed');
+
+      const wrapped = await releaseWhenStreamCloses(
+        byteStream([new Uint8Array([1])]),
+        slot.release,
+        slot.refresh,
+        10,
+      );
+      if (wrapped === null) assert.fail('expected wrapped stream');
+
+      await vi.advanceTimersByTimeAsync(10);
+      assert.deepEqual(calls, [
+        'relay_request_gate',
+        'relay_request_refresh',
+        'relay_request_release',
+      ]);
+
+      const reader = wrapped.getReader();
+      await assert.rejects(
+        reader.read(),
+        /relay_request_refresh did not find request slot/,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('releases request slots when the upstream stream is canceled', async () => {
+    let releases = 0;
+    const wrapped = await releaseWhenStreamCloses(
+      byteStream([new Uint8Array([1])]),
+      async () => {
+        releases += 1;
+      },
+    );
+    if (wrapped === null) assert.fail('expected wrapped stream');
+
+    const reader = wrapped.getReader();
+    await reader.cancel();
+
+    assert.equal(releases, 1);
+  });
+
+  it('awaits request slot release for null upstream bodies', async () => {
+    let releases = 0;
+    const wrapped = await releaseWhenStreamCloses(null, async () => {
+      releases += 1;
+    });
+
+    assert.equal(wrapped, null);
+    assert.equal(releases, 1);
   });
 });
