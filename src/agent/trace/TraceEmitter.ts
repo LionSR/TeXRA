@@ -219,15 +219,15 @@ export class TraceEmitter implements AgentTrace {
       return new BufferOnlyStreamHandle(this, id);
     }
 
+    const phaseOnly = options.phaseOnly === true;
+
     if (options.deferStart) {
       // Capture the stage now so the deferred start lands in the same group
       // an eager start would have used, not whatever scope is active when
       // the first chunk finally arrives.
-      return new DeferredStartStreamHandle(
-        this,
-        id,
-        kind,
-        options.stageId ?? this.activeStageId(),
+      const stageId = options.stageId ?? this.activeStageId();
+      return new StreamHandleImpl(this, id, phaseOnly, () =>
+        this.emit({ type: 'stream.start', id, kind, stageId }),
       );
     }
 
@@ -235,16 +235,14 @@ export class TraceEmitter implements AgentTrace {
     // right stageId without forcing the caller to await.
     if (options.stageId && options.stageId !== this.activeStageId()) {
       const nextStack = [...this.currentStageStack(), options.stageId];
-      let handle!: StreamHandle;
       this.stageScope.run(nextStack, () => {
         this.emit({ type: 'stream.start', id, kind });
-        handle = new StreamHandleImpl(this, id);
       });
-      return handle;
+      return new StreamHandleImpl(this, id, phaseOnly, null);
     }
 
     this.emit({ type: 'stream.start', id, kind });
-    return new StreamHandleImpl(this, id);
+    return new StreamHandleImpl(this, id, phaseOnly, null);
   }
 }
 
@@ -323,15 +321,35 @@ class StreamHandleImpl implements StreamHandle {
   // stream costs O(n) instead of repeated full-buffer string copies.
   private readonly chunks: string[] = [];
   private finalText: string | undefined;
+  /**
+   * Deferred `stream.start` emission (see `StreamOptions.deferStart`); null
+   * once started — eager streams are constructed already started. A deferred
+   * stream finalized without content emits no events at all, while a
+   * finalize that carries text emits the start/end pair so reasoning that
+   * only arrives in the final response still lands as a single entry.
+   */
+  private pendingStart: (() => void) | null;
 
   constructor(
     private readonly trace: TraceEmitter,
     readonly id: string,
-  ) {}
+    private readonly phaseOnly: boolean,
+    pendingStart: (() => void) | null,
+  ) {
+    this.pendingStart = pendingStart;
+  }
+
+  private start(): void {
+    const pending = this.pendingStart;
+    this.pendingStart = null;
+    pending?.();
+  }
 
   append(text: string): void {
     if (this.finalText !== undefined || !text) return;
+    this.start();
     this.chunks.push(text);
+    if (this.phaseOnly) return;
     this.trace.emit({ type: 'stream.chunk', id: this.id, text });
   }
 
@@ -339,70 +357,19 @@ class StreamHandleImpl implements StreamHandle {
     if (this.finalText !== undefined) return this.finalText;
     this.finalText =
       typeof finalText === 'string' ? finalText : this.chunks.join('');
-    this.trace.emit({
-      type: 'stream.end',
-      id: this.id,
-      finalText: typeof finalText === 'string' ? finalText : undefined,
-    });
-    return this.finalText;
-  }
-}
-
-/**
- * Stream that holds back `stream.start` until content proves the phase
- * happened (see `StreamOptions.deferStart`). A deferred stream finalized
- * without content emits no events; a finalize that carries text emits the
- * start/end pair so reasoning that only arrives in the final response still
- * lands as a single entry.
- */
-class DeferredStartStreamHandle implements StreamHandle {
-  private readonly chunks: string[] = [];
-  private started = false;
-  private finalText: string | undefined;
-
-  constructor(
-    private readonly trace: TraceEmitter,
-    readonly id: string,
-    private readonly kind: StreamKind,
-    private readonly stageId: string | undefined,
-  ) {}
-
-  private start(): void {
-    if (this.started) return;
-    this.started = true;
-    this.trace.emit({
-      type: 'stream.start',
-      id: this.id,
-      kind: this.kind,
-      stageId: this.stageId,
-    });
-  }
-
-  append(text: string): void {
-    if (this.finalText !== undefined || !text) return;
-    this.start();
-    this.chunks.push(text);
-    this.trace.emit({
-      type: 'stream.chunk',
-      id: this.id,
-      text,
-      stageId: this.stageId,
-    });
-  }
-
-  finalize(finalText?: string): string {
-    if (this.finalText !== undefined) return this.finalText;
-    this.finalText =
-      typeof finalText === 'string' ? finalText : this.chunks.join('');
-    // Never started and nothing to say: the phase never happened, so the
-    // stream leaves no trace at all.
-    if (!this.started && this.finalText.length === 0) return this.finalText;
+    // Deferred and nothing to say: the phase never happened, so the stream
+    // leaves no trace at all.
+    if (this.pendingStart !== null && this.finalText.length === 0) {
+      return this.finalText;
+    }
     this.start();
     this.trace.emit({
       type: 'stream.end',
       id: this.id,
-      finalText: typeof finalText === 'string' ? finalText : undefined,
-      stageId: this.stageId,
+      finalText:
+        !this.phaseOnly && typeof finalText === 'string'
+          ? finalText
+          : undefined,
     });
     return this.finalText;
   }

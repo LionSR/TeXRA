@@ -44,7 +44,6 @@ function createProcessor() {
       return stream;
     },
     createOutputStream: () => recordedStream('output'),
-    outputStreamingEnabled: false,
     extractText: () => '',
     emitWebSearchResult: () => undefined,
     logger: noopTrace,

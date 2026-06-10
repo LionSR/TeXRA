@@ -29,12 +29,10 @@ import type {
 
 /** Collaborators the processor borrows from the owning handler. */
 export interface ResponseStreamProcessorDeps {
-  /** Open a fresh thinking stream (used on creation and after each rotation). */
+  /** Open a thinking stream for the current reasoning phase (one per phase). */
   createThinkingStream(): StreamHandle;
-  /** Open the output stream (only called when output streaming is enabled). */
+  /** Open the output stream for the response text. */
   createOutputStream(): StreamHandle;
-  /** Whether the final text should be streamed to an output stream. */
-  outputStreamingEnabled: boolean;
   /** Extract the final assistant text from a completed response. */
   extractText(response: Response): string;
   /** Emit a web-search result to the progress view. */
@@ -50,13 +48,14 @@ export class ResponseStreamProcessor {
    * (e.g. gpt-5 with reasoning summaries disabled).
    */
   private thinkingStream: StreamHandle | null = null;
-  private readonly outputStream: StreamHandle | null;
+  private readonly outputStream: StreamHandle;
   private readonly emittedWebSearchIds = new Set<string>();
 
   constructor(private readonly deps: ResponseStreamProcessorDeps) {
-    this.outputStream = deps.outputStreamingEnabled
-      ? deps.createOutputStream()
-      : null;
+    // Deferred start: announces the response phase at the first text delta.
+    // Whether content streams or only the phase boundaries is the handler's
+    // output-stream policy, not this processor's concern.
+    this.outputStream = deps.createOutputStream();
   }
 
   /**
@@ -69,7 +68,7 @@ export class ResponseStreamProcessor {
     } else if (isReasoningItemAddedEvent(event)) {
       this.openThinkingStream();
     } else if (isTextDeltaEvent(event)) {
-      this.outputStream?.append(event.delta);
+      this.outputStream.append(event.delta);
     } else if (isWebSearchInProgressEvent(event)) {
       this.closeThinkingStream();
     } else if (isFunctionCallArgumentsDoneEvent(event)) {
@@ -100,8 +99,7 @@ export class ResponseStreamProcessor {
    */
   finalize(response: Response): void {
     this.closeThinkingStream();
-    const finalText = this.deps.extractText(response);
-    if (this.outputStream) this.outputStream.finalize(finalText);
+    this.outputStream.finalize(this.deps.extractText(response));
     this.emitWebSearchesFromResponse(response);
   }
 
