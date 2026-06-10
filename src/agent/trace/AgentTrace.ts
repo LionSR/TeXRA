@@ -82,6 +82,15 @@ export interface StreamOptions {
    * content emits nothing at all.
    */
   readonly deferStart?: boolean;
+  /**
+   * Emit only the phase boundaries (`stream.start` / `stream.end`); chunk
+   * text and the finalize text never reach subscribers (`finalize` still
+   * returns the locally buffered text). Used when a phase should be visible
+   * as liveness — "the model response has started" — while its content is
+   * withheld, e.g. workflow runs that extract and log the output separately
+   * instead of streaming it.
+   */
+  readonly phaseOnly?: boolean;
 }
 
 /** Handle returned by `openStream` — append chunks then finalize. */
@@ -163,5 +172,12 @@ export interface AgentTrace {
 
   // ─── Stage + stream handles ─────────────────────────────────────────
   openStage(label: string, options?: StageOptions): StageHandle;
+  /**
+   * Open a streaming message. `stream.start` marks the moment the phase the
+   * stream represents actually began — emit it at the provider's phase
+   * signal, or use `deferStart` when the first content chunk is the only
+   * signal — so subscribers can surface liveness ("thinking…", "responding…")
+   * from the start event alone.
+   */
   openStream(kind: StreamKind, options?: StreamOptions): StreamHandle;
 }

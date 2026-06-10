@@ -1,16 +1,14 @@
 // Transcript region for the current stream's in-flight assistant/tool rows.
 // Finalized history is owned by the static scrollback renderer.
 
-import { Box } from 'ink';
-import { Spinner } from '@inkjs/ui';
-
-import { STREAM_STATUS } from '@shared/schemas';
+import { Box, Text } from 'ink';
 
 import {
   cliState,
+  thinkingIndicatorVisible,
   type ConversationEntry,
-  type StreamSlice,
 } from '../state/cliState';
+import { useLiveNowMs } from '../state/useLiveNowMs';
 import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import { BoundedTranscriptEntry, LiveTranscriptEntry } from './TranscriptEntry';
@@ -22,23 +20,19 @@ const DEFAULT_TRANSCRIPT_ROWS = 24;
 const MIN_PENDING_ROWS = 1;
 
 /**
- * True while the stream's live activity is a hidden reasoning phase: the
- * model is working but nothing streams into the transcript, so the pane
- * shows an explicit liveness row instead of sitting silent. The thinking
- * text itself is never rendered — only the fact that thinking is happening.
+ * Liveness row for the hidden reasoning phase: the model is working but
+ * nothing streams into the transcript, so the pane shows that thinking is
+ * happening (never the thinking text itself). Animated off the shared 1 Hz
+ * ticker — an autonomous 80 ms spinner would repaint the whole live region
+ * at ~12 Hz during exactly the phase where nothing else is streaming, while
+ * the shared tick batches with the StatusBar's elapsed-seconds render.
  */
-export function thinkingRowVisible(
-  slice: Pick<StreamSlice, 'status' | 'thinkingActive'> | undefined,
-): boolean {
-  return (
-    slice?.thinkingActive === true && slice.status === STREAM_STATUS.RUNNING
-  );
-}
-
 function ThinkingRow(): React.JSX.Element {
+  const now = useLiveNowMs(true);
+  const dots = '.'.repeat((Math.floor(now / 1000) % 3) + 1);
   return (
     <Box>
-      <Spinner label="Thinking…" />
+      <Text dimColor>✻ Thinking{dots}</Text>
     </Box>
   );
 }
@@ -101,7 +95,7 @@ export function ConversationPane(
   const slice = activeStreamId ? streams.get(activeStreamId) : undefined;
   const entries = slice?.entries ?? [];
   const displayEntries = splitTranscriptEntries(entries, slice?.status).pending;
-  const showThinking = thinkingRowVisible(slice);
+  const showThinking = thinkingIndicatorVisible(slice);
   if (props.allowNativeScrollbackOverflow) {
     return (
       <Box flexDirection="column">
@@ -145,7 +139,7 @@ export function ConversationPane(
           width: props.width,
         });
       })}
-      {thinkingRows > 0 ? <ThinkingRow /> : null}
+      {showThinking ? <ThinkingRow /> : null}
     </Box>
   );
 }

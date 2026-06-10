@@ -614,12 +614,15 @@ export class ModelHandlerAnthropic extends ModelHandler<
       const streamHandler = new AnthropicStreamHandler(
         this.logger,
         {
-          outputEnabled: this.isOutputStreamingEnabled(),
           progressViewEnabled: this.progressViewEnabled,
         },
         {
-          createThinkingStream: () => this.createThinkingStream(),
-          createOutputStream: () => this.createOutputStream(),
+          // The stream handler opens these at `content_block_start` — the
+          // provider's explicit phase signal — so the starts emit eagerly.
+          createThinkingStream: () =>
+            this.createThinkingStream({ atPhaseSignal: true }),
+          createOutputStream: () =>
+            this.createOutputStream({ atPhaseSignal: true }),
         },
       );
 

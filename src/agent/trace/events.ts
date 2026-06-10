@@ -113,7 +113,13 @@ export interface ContextStateEvent extends StageStamp {
   readonly contextWindow: number;
 }
 
-/** Streaming message opened — subsequent stream.chunk events append text. */
+/**
+ * Streaming message opened — subsequent stream.chunk events append text.
+ * Marks the moment the phase the stream represents actually began (emitters
+ * fire it at the provider's phase signal, or at the first content chunk via
+ * `StreamOptions.deferStart`), so subscribers may surface liveness — "the
+ * model is thinking / responding" — from this event alone.
+ */
 export interface StreamStartEvent extends StageStamp {
   readonly type: 'stream.start';
   readonly id: string;
