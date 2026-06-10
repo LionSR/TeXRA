@@ -40,7 +40,7 @@ export function generateTimestamp(): string {
  * helpers derive the legacy chunk form internally so the result matches
  * what pre-refactor runs wrote to disk.
  */
-export function getFilePatterns(
+function getFilePatterns(
   base: string,
   model: string,
   agent: string,

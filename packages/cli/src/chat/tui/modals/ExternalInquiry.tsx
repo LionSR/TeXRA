@@ -142,7 +142,7 @@ export function externalInquiryQuestionRowsBudget({
   return Math.max(0, availableRows - EXTERNAL_INQUIRY_FIXED_ROWS - answerRows);
 }
 
-export function externalInquiryQuestionLines({
+function externalInquiryQuestionLines({
   question,
   width,
 }: {
@@ -157,7 +157,7 @@ export function externalInquiryQuestionLines({
   );
 }
 
-export function maxExternalInquiryQuestionScrollOffset(
+function maxExternalInquiryQuestionScrollOffset(
   totalLines: number,
   maxDisplayLines: number,
 ): number {

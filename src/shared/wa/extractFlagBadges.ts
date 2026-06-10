@@ -10,7 +10,7 @@ import type { ToolConfig } from '@shared/schemas/toolConfig';
 import { waIcon } from './webAwesomeIcons';
 
 /** User-visible labels for a workflow proposal's media-extraction flags. */
-export function workflowExtractFlagLabels(toolConfig: ToolConfig): string[] {
+function workflowExtractFlagLabels(toolConfig: ToolConfig): string[] {
   const flags: string[] = [];
   if (toolConfig.autoExtractFigure) flags.push('Extract Figures');
   if (toolConfig.autoExtractTikzFigure) flags.push('Extract TikZ');

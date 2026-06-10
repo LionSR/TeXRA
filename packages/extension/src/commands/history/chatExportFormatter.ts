@@ -836,7 +836,7 @@ function generateExportStem(input: ChatExportInput): string {
   return parts.join('-');
 }
 
-export function sanitizeFilename(name: string): string {
+function sanitizeFilename(name: string): string {
   return name
     .toLowerCase()
     .replaceAll(/[^a-z0-9-]/g, '-')

@@ -105,7 +105,7 @@ const emptyChildReferenceSlice = {
   childStreams: [],
 } satisfies Pick<StreamSlice, 'activeSubagents' | 'childStreams'>;
 
-export function childStreamReferenceLabel(
+function childStreamReferenceLabel(
   parent:
     | Pick<StreamSlice, 'activeSubagents' | 'activeProcesses' | 'childStreams'>
     | undefined,

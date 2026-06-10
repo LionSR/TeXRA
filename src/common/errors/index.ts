@@ -10,7 +10,6 @@ export { formatError, formatZodError } from './errorFormatUtils';
 export { toErrorMessage, ensureError } from './errorMessage';
 export {
   isAbortError,
-  isDiskFullError,
   isFileNotFoundError,
   isModuleNotFoundError,
   isNotADirectoryError,

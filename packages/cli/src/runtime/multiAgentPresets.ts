@@ -132,7 +132,7 @@ export function planCliMultiAgentPresets(
   return presets.map((preset) => planCliMultiAgentPresetRun(preset, options));
 }
 
-export function cliMultiAgentPresetAvailabilityParts(
+function cliMultiAgentPresetAvailabilityParts(
   plan: CliMultiAgentPresetRunPlan,
 ): string[] {
   const availability = cliMultiAgentPresetAvailability(plan);
@@ -269,14 +269,14 @@ export function cliMultiAgentPlanHasGaps(
   );
 }
 
-export function cliMultiAgentPlanStatus(
+function cliMultiAgentPlanStatus(
   plan: CliMultiAgentPresetRunPlan,
 ): CliMultiAgentPlanStatus {
   if (cliMultiAgentPresetTeamLaunchBlockReason(plan)) return 'unavailable';
   return cliMultiAgentPlanHasGaps(plan) ? 'degraded' : 'available';
 }
 
-export function cliMultiAgentPresetTeamLaunchBlockReason(
+function cliMultiAgentPresetTeamLaunchBlockReason(
   plan: CliMultiAgentPresetRunPlan,
 ): string | undefined {
   if (!plan.rootAgent) return 'no runnable team root';
@@ -340,7 +340,7 @@ export function formatCliMultiAgentPresetRunWarnings(
   return warnings;
 }
 
-export function cliMultiAgentPresetAvailability(
+function cliMultiAgentPresetAvailability(
   plan: CliMultiAgentPresetRunPlan,
 ): CliMultiAgentPresetAvailability {
   return {

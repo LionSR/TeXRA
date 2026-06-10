@@ -22,14 +22,6 @@ import { getIndentTeXNotification } from './latexHousekeepingNotifications';
 const CHANNEL = 'LaTeXCommands';
 logger.initialize(CHANNEL);
 
-export const latexCommands = {
-  indentCurrentTeX: 'texra.indentCurrentTeX',
-  getTeXCount: 'texra.getTeXCount',
-  indentTeX: 'texra.indentTeX',
-  applyReplacements: 'texra.applyReplacements',
-  fixCompilation: 'texra.fixCompilation',
-};
-
 /**
  * All LaTeX entry-point commands (`indentTeX`, `indentCurrentTeX`,
  * `getTeXCount`, `applyReplacements`, `fixCompilation`) are now

@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 
-export async function readInstructionFile(
+async function readInstructionFile(
   instructionFile: string | undefined,
   cwd: string,
 ): Promise<string> {

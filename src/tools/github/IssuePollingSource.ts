@@ -80,10 +80,7 @@ function withSince(url: string, since: string | undefined): string {
   return `${url}${sep}since=${encodeURIComponent(since)}`;
 }
 
-export class IssuePollingSource extends PollingSourceBase<
-  string,
-  SubscriptionState
-> {
+class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
   constructor() {
     super({
       name: 'IssuePollingSource',

@@ -34,7 +34,7 @@ export interface SkillActivation {
   readonly activationPrompt: string;
 }
 
-export function formatSkillDescriptionForTui(skill: SourcedSkill): string {
+function formatSkillDescriptionForTui(skill: SourcedSkill): string {
   const record = skillListRecord(skill);
   return `${record.sourceLabel} · ${record.description}`;
 }
@@ -53,7 +53,7 @@ export function formatSkillActivationPrompt(skill: SourcedSkill): string {
   ].join('\n');
 }
 
-export function skillActivationForTui(skill: SourcedSkill): SkillActivation {
+function skillActivationForTui(skill: SourcedSkill): SkillActivation {
   const record = skillListRecord(skill);
   return {
     name: record.name,

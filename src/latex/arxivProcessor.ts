@@ -62,7 +62,7 @@ export function resolveArxivPaperDirectoryRelative(
   return options.destination === 'root' ? '.' : `References/${paperDirName}`;
 }
 
-export class ArxivSourceProcessor {
+class ArxivSourceProcessor {
   constructor(private readonly channel: string = 'arxivProcessor') {
     logger.initialize(this.channel);
   }

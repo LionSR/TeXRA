@@ -22,7 +22,7 @@ import {
 } from '@shared/constants/delegationPolicy';
 
 /** Read the current delegation policy from workspace state. */
-export function readNestedDelegationConfig(): NestedDelegationConfig {
+function readNestedDelegationConfig(): NestedDelegationConfig {
   const state = platform().workspaceState;
   const maxDepth = clampNestedDelegationDepth(
     state.get<number>(WorkspaceStateKey.NESTED_DELEGATION_MAX_DEPTH, undefined),

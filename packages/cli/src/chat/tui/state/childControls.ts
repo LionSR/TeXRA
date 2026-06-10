@@ -327,7 +327,7 @@ function childControlFallbackDetail(
     : `${fallbackFromStreamLabel} has no tasks or sub-workflows`;
 }
 
-export function resolveChildControlDisplayTarget({
+function resolveChildControlDisplayTarget({
   activeStreamId,
   mode,
   parentStream,

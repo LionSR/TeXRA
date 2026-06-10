@@ -54,7 +54,7 @@ export function executionToEndStatus(
  * during workflow launch that will quickly become RUNNING or fail. It's neither
  * terminal (execution hasn't ended) nor actively processing (no model calls yet).
  */
-export const TERMINAL_STATUSES: readonly StreamStatus[] = [
+const TERMINAL_STATUSES: readonly StreamStatus[] = [
   STREAM_STATUS.STOPPED,
   STREAM_STATUS.ERROR,
   STREAM_STATUS.WAITING,
