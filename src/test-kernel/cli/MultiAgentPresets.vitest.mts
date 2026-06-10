@@ -402,7 +402,7 @@ describe('CLI multi-agent presets', () => {
         ],
         [
           'mathematician',
-          'unavailable; no runnable team root; 4/7 tool-use agents; 2/5 workflow agents',
+          'unavailable; no runnable team root; 5/9 tool-use agents; 2/5 workflow agents',
         ],
         [
           'cs-ml',
