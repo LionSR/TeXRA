@@ -803,13 +803,15 @@ removed, not what stays.
 │ │ Lean 4 formalization     │ │ CS research workflow. │            │
 │ │ workflow.                │ │                          │            │
 │ │ Lead: 🎯 leanOrchestrator│ │ Lead: 🎯 orchestrator    │            │
-│ │ Specialists: lean,       │ │ Specialists: numerics,   │            │
-│ │  leanSearch, leanBlue-   │ │  search, review, present │            │
-│ │  print, leanSimplifier,  │ │  simplifier, latexFixer, │            │
-│ │  latexFixer, progress-   │ │  progressCheck           │            │
-│ │  Check                   │ │ Workflows: criticize,    │            │
-│ │ Workflows: (none)        │ │  generic, devise, apply, │            │
-│ │  [Use]  [Duplicate]      │ │  polish                  │            │
+│ │ Specialists: lean,       │ │ Specialists: research,   │            │
+│ │  leanSearch, leanBlue-   │ │  numerics, coder,        │            │
+│ │  print, leanSimplifier,  │ │  testEngineer, search,   │            │
+│ │  latexFixer, progress-   │ │  review, presenter,      │            │
+│ │  Check                   │ │  simplifier, latexFixer, │            │
+│ │ Workflows: (none)        │ │  progressCheck           │            │
+│ │  [Use]  [Duplicate]      │ │ Workflows: criticize,    │            │
+│ │                          │ │  generic, devise, apply, │            │
+│ │                          │ │  polish                  │            │
 │ │                          │ │  [Use]  [Duplicate]      │            │
 │ └──────────────────────────┘ └──────────────────────────┘            │
 │                                                                      │
@@ -1410,7 +1412,7 @@ Shipped as `builtIn: true` records in code, not in workspace state:
 | `mathematician` | Mathematician      | 🎓   | `orchestrator`     | `chat`, `research`, `review`, `lean`, `simplifier`, `latexFixer`, `progressCheck`                    | `correct`, `polish`, `merge`, `devise`, `apply`     |
 | `physicist`     | Physicist          | ⚛    | `orchestrator`     | `research`, `numerics`, `review`, `search`, `presenter`, `simplifier`, `latexFixer`, `progressCheck` | `criticize`, `generic`, `devise`, `apply`           |
 | `lean-project`  | Lean Project       | ⚙    | `leanOrchestrator` | `lean`, `leanSearch`, `leanBlueprint`, `leanSimplifier`, `latexFixer`, `progressCheck`               | (none)                                              |
-| `cs-ml`         | Computer Scientist | 💻   | `orchestrator`     | `numerics`, `search`, `review`, `presenter`, `simplifier`, `latexFixer`, `progressCheck`             | `criticize`, `generic`, `devise`, `apply`, `polish` |
+| `cs-ml`         | Computer Scientist | 💻   | `orchestrator`     | `research`, `numerics`, `coder`, `testEngineer`, `search`, `review`, `presenter`, `simplifier`, `latexFixer`, `progressCheck` | `criticize`, `generic`, `devise`, `apply`, `polish` |
 | `onboarding`    | Onboarding         | 🛠   | `setup`            | `latexFixer`                                                                                         | (none)                                              |
 
 Each id is stable across upgrades; renaming a built-in team requires a
