@@ -1,5 +1,5 @@
 // Third-party imports
-import OpenAI, { APIUserAbortError as OpenAIUserAbortError } from 'openai';
+import OpenAI from 'openai';
 
 // Local imports - core utilities
 import {
@@ -526,6 +526,9 @@ export class ModelHandlerOpenAI<
       this.finalizeStreams(thinking, output, finalResponse);
       return finalResponse;
     } catch (streamError) {
+      // Tag at the boundary so abort identity survives wrapping and
+      // minification (mirrors the Anthropic stream catch).
+      tagOpenAISdkError(streamError, this.config.provider);
       // On mid-stream failure, lift the partial content the SDK already
       // accumulated (currentChatCompletionSnapshot) onto the error so the
       // retry UI can show it and future continuation logic can reference
@@ -537,8 +540,7 @@ export class ModelHandlerOpenAI<
       if (partialText) {
         attachPartialText(streamError, partialText);
       }
-      const isAbort =
-        streamError instanceof OpenAIUserAbortError || isUserAbort(streamError);
+      const isAbort = isUserAbort(streamError);
       if (!isAbort) {
         this.logger.warn(`Stream failed: ${getSdkErrorMessage(streamError)}`, {
           data: {

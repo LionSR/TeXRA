@@ -20,9 +20,11 @@ import { calculateTokenPrice } from '@agent/utils/priceUtils';
 import { K_SLICE } from '@agent/core/constants';
 import { toOpenAIReasoningEffort } from '@agent/runtime/reasoningEffort';
 import {
+  detectStatusCode,
   getSdkErrorMessage,
   isContextWindowError,
   isPreviousResponseIdError,
+  isUserAbort,
   attachPartialText,
   takeTail,
   PARTIAL_TEXT_TAIL_MAX,
@@ -326,7 +328,11 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         signal ? { signal } : undefined,
       );
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      // Tag before checking: the SDK throws APIUserAbortError (not a
+      // DOMException) when the signal fires inside retrieve(), and the tag
+      // makes isUserAbort() robust even in minified bundles.
+      tagOpenAISdkError(err, this.config.provider);
+      if (isUserAbort(err)) {
         this.clearPendingBackgroundResponse();
         throw err;
       }
@@ -1789,7 +1795,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
       try {
         await delay(pollInterval, { signal });
       } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') {
+        if (isUserAbort(err)) {
           this.logger.debug(
             `Background polling aborted for response ${responseId} while waiting to poll.`,
             {
@@ -1835,7 +1841,10 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
           requestOptions,
         )) as T;
       } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') {
+        // Tag before checking: retrieve() throws the SDK's APIUserAbortError,
+        // not a DOMException, when the signal fires.
+        tagOpenAISdkError(err, this.config.provider);
+        if (isUserAbort(err)) {
           // User cancelled during retrieve - clear pending ID
           this.clearPendingBackgroundResponse();
           throw err;
@@ -1851,7 +1860,7 @@ export class ModelHandlerOpenAIResponse extends ModelHandler<
         // All other errors (401, 403, 5xx, network, etc.) propagate unchanged
         // so downstream handlers (relay 401 token refresh, retryability checks,
         // non-retryable classification) work correctly with full HTTP metadata.
-        const statusCode = (err as { status?: number }).status;
+        const statusCode = detectStatusCode(err);
         if (statusCode === 404) {
           this.clearPendingBackgroundResponse();
           throw createOpenAIBackgroundPollingError(

@@ -6,7 +6,7 @@ import {
   type ToolUseCycleShared,
 } from '@agent/core/flows/ToolUseCycleFlow';
 import type { ProviderMessage } from '@agent/modelHandlers/types/ProviderMessage';
-import { formatProviderHttpError } from '@common/errors';
+import { normalizeProviderError } from '@common/errors';
 import { MESSAGE_TYPES } from '@shared/schemas';
 
 import {
@@ -137,7 +137,7 @@ export class ToolUseCycleNode<C> extends Node<
     _prepRes: CyclePrepResult,
     error: Error,
   ): Promise<ToolUseCycleOutcome> {
-    const formatted = formatProviderHttpError(error);
+    const formatted = normalizeProviderError(error);
     return {
       outcome: 'failed',
       message: error.message,

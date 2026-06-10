@@ -327,7 +327,10 @@ function pickStatus(value: unknown): number | undefined {
   return isFiniteNumber(value) ? value : undefined;
 }
 
-function detectStatusCode(err: unknown): number | undefined {
+/** Canonical HTTP status extractor for thrown SDK/provider errors. The only
+ *  place that knows the candidate field shapes (`status`, `statusCode`,
+ *  `code`, `response.status`, `error.status`). */
+export function detectStatusCode(err: unknown): number | undefined {
   if (!isObject(err)) {
     return undefined;
   }
@@ -670,6 +673,13 @@ function isUpstreamCreditDepletedBody(rawErrorBody: unknown): boolean {
   });
 }
 
+/**
+ * Builds a fresh `ProviderError` without caching it on the thrown value.
+ *
+ * @internal Production code should call {@link normalizeProviderError}, the
+ * single public entry that classifies once and caches the result on the
+ * error. This stays module-exported for tests that assert raw formatting.
+ */
 export function formatProviderHttpError(err: unknown): ProviderError {
   const rawErrorBody = detectRawErrorBody(err);
   const streamDiagnostics = detectStreamDiagnostics(err);
