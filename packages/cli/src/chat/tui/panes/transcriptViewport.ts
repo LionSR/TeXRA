@@ -60,17 +60,11 @@ export function estimateTranscriptEntryRows(
       );
     });
   }
-  if (entry.role === 'user') {
-    // User rows — band and inquiry continuation alike — render inside a
-    // padded box plus the `› ` prefix, so long text wraps to `width - 4`
-    // (the same geometry as error rows). The static band's margins are not
-    // budgeted here: the live pane paints user rows through the margin-less
-    // bounded renderer.
-    return estimateWrappedRows(entry.text, Math.max(1, width - 4));
-  }
-  if (entry.role === 'error') {
-    // Error rows render inside a padded box plus the `! ` prefix, so long text
-    // wraps to `width - 4`.
+  if (entry.role === 'user' || entry.role === 'error') {
+    // Both roles render inside a paddingX={1} box plus a 2-col prefix
+    // (`› ` / `! `), so text wraps to `width - 4`. The static band's margins
+    // are not budgeted here: the live pane paints these rows through the
+    // margin-less bounded renderer.
     return estimateWrappedRows(entry.text, Math.max(1, width - 4));
   }
 
