@@ -453,7 +453,9 @@ function filterVisible(
     configured.flatMap((value) => {
       const name = agentName(value);
       if (entries.some((entry) => entry.name === name)) return [name];
-      return [getAgent(value, category === AgentCategory.ToolUse)?.name ?? name];
+      return [
+        getAgent(value, category === AgentCategory.ToolUse)?.name ?? name,
+      ];
     }),
   );
   return entries.filter((entry) => enabledNames.has(entry.name));
