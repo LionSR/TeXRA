@@ -18,6 +18,7 @@ import {
   type ExecutionId,
 } from '@shared/schemas';
 import { StorageFS } from '@utils/files';
+import { isObject } from '@utils/core/typeGuards';
 import { isDirectory } from '@utils/files/fsEntryType';
 import { resolveStoragePath } from '@utils/files/taskRunStorage';
 
@@ -377,7 +378,7 @@ function toConversationPreviewMessage(
   message: unknown,
   index: number,
 ): CliHistoryConversationPreviewMessage {
-  const raw = isRecord(message) ? message : {};
+  const raw = isObject(message) ? message : {};
   const role = typeof raw.role === 'string' ? raw.role : 'unknown';
   const content = formatConversationMessageContent(raw.content);
   const truncated = content.length > CONVERSATION_PREVIEW_CONTENT_LIMIT;
@@ -418,7 +419,7 @@ function formatConversationMessageContent(content: unknown): string {
 
 function formatConversationContentBlock(block: unknown): string {
   if (typeof block === 'string') return block;
-  if (!isRecord(block)) return formatJsonish(block);
+  if (!isObject(block)) return formatJsonish(block);
   if (typeof block.text === 'string') return block.text;
 
   switch (block.type) {
@@ -437,10 +438,6 @@ function formatJsonish(value: unknown): string {
   } catch {
     return String(value);
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
 
 async function listGeneratedFiles(id: ExecutionId): Promise<CliHistoryFile[]> {
@@ -504,7 +501,7 @@ function extractWorkspaceFileToolPaths(
 ): string[] {
   const paths: string[] = [];
   for (const message of conversation) {
-    if (!isRecord(message)) continue;
+    if (!isObject(message)) continue;
 
     const responseToolPath = extractResponseFunctionCallFilePath(message);
     if (responseToolPath) paths.push(responseToolPath);
@@ -546,8 +543,8 @@ function extractResponseFunctionCallFilePath(
 }
 
 function extractOpenAiToolCallFilePath(toolCall: unknown): string | undefined {
-  if (!isRecord(toolCall)) return undefined;
-  const fn = isRecord(toolCall.function) ? toolCall.function : {};
+  if (!isObject(toolCall)) return undefined;
+  const fn = isObject(toolCall.function) ? toolCall.function : {};
   if (typeof fn.name !== 'string' || !WORKSPACE_FILE_TOOL_NAMES.has(fn.name)) {
     return undefined;
   }
@@ -555,7 +552,7 @@ function extractOpenAiToolCallFilePath(toolCall: unknown): string | undefined {
 }
 
 function extractContentToolUseFilePath(block: unknown): string | undefined {
-  if (!isRecord(block) || block.type !== 'tool_use') return undefined;
+  if (!isObject(block) || block.type !== 'tool_use') return undefined;
   if (
     typeof block.name !== 'string' ||
     !WORKSPACE_FILE_TOOL_NAMES.has(block.name)
@@ -566,7 +563,7 @@ function extractContentToolUseFilePath(block: unknown): string | undefined {
 }
 
 function extractGoogleFunctionCallFilePath(part: unknown): string | undefined {
-  if (!isRecord(part) || !isRecord(part.functionCall)) return undefined;
+  if (!isObject(part) || !isObject(part.functionCall)) return undefined;
   const { functionCall } = part;
   if (
     typeof functionCall.name !== 'string' ||
@@ -588,11 +585,11 @@ function extractToolArgumentsFilePath(
 function parseToolArguments(
   argumentsValue: unknown,
 ): Record<string, unknown> | undefined {
-  if (isRecord(argumentsValue)) return argumentsValue;
+  if (isObject(argumentsValue)) return argumentsValue;
   if (typeof argumentsValue !== 'string') return undefined;
   try {
     const parsed: unknown = JSON.parse(argumentsValue);
-    return isRecord(parsed) ? parsed : undefined;
+    return isObject(parsed) ? parsed : undefined;
   } catch {
     return undefined;
   }

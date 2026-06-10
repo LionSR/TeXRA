@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { platform as osPlatform } from 'node:os';
+import { toErrorMessage } from '@common/errors';
 import type { ChildProcess } from 'node:child_process';
 
 export type ClipboardTextWriteResult =
@@ -84,7 +85,7 @@ function writeWithCommand(
     } catch (error) {
       resolve({
         ok: false,
-        reason: error instanceof Error ? error.message : String(error),
+        reason: toErrorMessage(error),
       });
       return;
     }

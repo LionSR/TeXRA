@@ -4,7 +4,7 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { WorkspaceFS } from '@utils/files';
 
-import { findFilesFromPatterns } from './utils';
+import { findFilesFromPatterns, generateTimestamp } from './utils';
 import { TEMP_EXTENSIONS } from './constants';
 
 const CHANNEL = 'Housekeeping';
@@ -69,7 +69,7 @@ export async function runPackLatexdiffvc(
     return { status: 'cleaned', inputFile };
   }
 
-  const now = new Date().toISOString().replaceAll(/[-:]/g, '').split('.')[0];
+  const now = generateTimestamp();
   const outputFolder = path.join(
     inputDir,
     'Diffs',

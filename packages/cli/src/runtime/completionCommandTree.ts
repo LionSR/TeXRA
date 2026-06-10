@@ -179,10 +179,6 @@ export async function collectCommands(
   return [current, ...children.flat()];
 }
 
-export function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
 export function commandKey(path: readonly string[]): string {
   return path.join(' ');
 }

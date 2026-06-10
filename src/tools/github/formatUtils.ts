@@ -8,8 +8,8 @@
  */
 
 import { isNonEmptyString } from '@utils/core';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { wrapAndSanitizeTag } from '@utils/text/sanitizeTag';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import type { GhIssueComment } from './prTypes';
 
 const WEBHOOK_TAG = 'github-webhook-activity';
