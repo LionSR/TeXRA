@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 #### Bug Fixes
 
-- **Stopping a run is no longer recorded as an error** — interrupting an agent (stop button, Ctrl+C, closing an idle chat) now consistently records the run as *interrupted* instead of *error*: history shows the right status, the transcript group ends neutral instead of red, orchestrators see a cancelled subagent as cancelled rather than failed, and the CLI exits with the interrupt code (130) instead of the error code (1).
+- **Stopping a run is no longer recorded as an error** — interrupting an agent (stop button, Ctrl+C, closing an idle chat) now consistently records the run as _interrupted_ instead of _error_: history shows the right status, the transcript group ends neutral instead of red, orchestrators see a cancelled subagent as cancelled rather than failed, and the CLI exits with the interrupt code (130) instead of the error code (1).
 
 ### CLI
 
