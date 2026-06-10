@@ -171,10 +171,46 @@ async function doLoad(options: LoadAgentsOptions = {}): Promise<void> {
     cache.set(key, entry);
   }
 
+  // Migrate legacy agent names (chat → assistant) in persisted visibility
+  // sets. Runs after registration so a user-defined agent that still uses
+  // the legacy name keeps its key.
+  migrateLegacyAgentNameKeys();
+
   logger.info(
     CHANNEL,
     `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
   );
+}
+
+/**
+ * Rewrite persisted enabled-agent keys whose name part is a legacy alias
+ * (e.g. `chat` or `builtInToolUse:chat`) to the canonical agent name. The
+ * Agents settings UI matches these keys literally, so leaving stale legacy
+ * names in state would show the renamed agent as disabled while
+ * {@link filterVisible} still surfaces it — and toggling it off in the UI
+ * could never remove the stale key. A registered agent that genuinely uses
+ * the legacy name (e.g. a custom `chat`) keeps its key untouched.
+ */
+function migrateLegacyAgentNameKeys(): void {
+  for (const stateKey of [
+    WorkspaceStateKey.ENABLED_AGENTS,
+    WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS,
+  ] as const) {
+    const stored = platform().workspaceState.get<string[]>(stateKey, []);
+    if (!stored?.length) continue;
+
+    const migrated = stored.map((key) => {
+      const name = agentName(key);
+      const alias = LEGACY_AGENT_ALIASES[name];
+      if (!alias) return key;
+      if (getAgent(name)?.name === name) return key;
+      return key.slice(0, key.length - name.length) + alias;
+    });
+    if (migrated.every((key, i) => key === stored[i])) continue;
+
+    void platform().workspaceState.update(stateKey, [...new Set(migrated)]);
+    logger.info(CHANNEL, `Migrated legacy agent names in ${stateKey}`);
+  }
 }
 
 /**
