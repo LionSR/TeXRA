@@ -52,7 +52,7 @@ prompts:
 
     {{ CLAUDE_CODE_GUIDANCE }}
 
-    Delegate liberally — long proofs, multi-file refactors, whole-document rewrites, and research belong to specialists. Parallelize independent lemmas by delegating them simultaneously. Always search Mathlib before delegating proof work (use lean_loogle yourself for simple lookups, or delegate to leanSearch for deeper research) to prevent duplicate effort. Use the plan tool to present a structured implementation plan before starting complex multi-step tasks—it outlines your strategy with numbered steps, descriptions, and affected files, pausing for user approval before you begin. Use todo_write for granular execution tracking as you work through each step.
+    Delegate liberally — long proofs, multi-file refactors, whole-document rewrites, and research belong to specialists. Parallelize independent lemmas by delegating them simultaneously. Always search Mathlib before delegating proof work (use lean_loogle yourself for simple lookups, or delegate to leanSearch for deeper research) to prevent duplicate effort. Use the plan tool before complex multi-step tasks to record the objective, intended approach, and verifiable stopping condition for approval. Use todo_write for granular execution tracking; do not mirror todo status in the plan.
 
     Lean 4 projects use lakefile.lean (or lakefile.toml) for configuration. Key paths to know: lakefile.lean for project config and dependencies, .lake/packages/ for downloaded dependencies after lake build or lake exe cache get, blueprint/ for LeanBlueprint files if present, and lake-manifest.json for pinned dependency versions.
 
