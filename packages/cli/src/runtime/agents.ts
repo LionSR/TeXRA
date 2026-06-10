@@ -1,7 +1,6 @@
 import {
-  getToolUseAgents,
+  getAgentsByCategory,
   getVisibleAgents,
-  getWorkflowAgents,
   loadAgents,
 } from '@agent/index';
 import type { AgentEntry } from '@agent/index';
@@ -38,11 +37,6 @@ const AGENT_CATEGORIES = [
   AgentCategory.Workflow,
   AgentCategory.ToolUse,
 ] as const satisfies readonly AgentCategory[];
-
-const ALL_AGENT_LOADERS = {
-  [AgentCategory.Workflow]: getWorkflowAgents,
-  [AgentCategory.ToolUse]: getToolUseAgents,
-} satisfies Record<AgentCategory, () => AgentEntry[]>;
 
 export function parseCliAgentCategoryFilter(
   input: string | undefined,
@@ -117,6 +111,6 @@ function collectCliAgents(
   return categories.flatMap((category) =>
     source === 'visible'
       ? getVisibleAgents(category)
-      : ALL_AGENT_LOADERS[category](),
+      : getAgentsByCategory(category),
   );
 }

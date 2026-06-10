@@ -43,8 +43,7 @@ export {
   loadAgents,
   getAgent,
   resolveAgent,
-  getWorkflowAgents,
-  getToolUseAgents,
+  getAgentsByCategory,
   getAgentsBySource,
   refresh,
   // Typed data options

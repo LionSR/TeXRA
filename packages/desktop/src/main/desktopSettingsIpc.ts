@@ -8,9 +8,8 @@ import {
 import { deleteAllExecutions, deleteExecution } from '@agent/storage';
 import {
   computeAgentOptionsData,
-  getToolUseAgents,
+  getAgentsByCategory,
   getVisibleAgents as getVisibleRegistryAgents,
-  getWorkflowAgents,
   loadAgents,
   type AgentEntry,
 } from '@agent/index/agentRegistry';
@@ -206,7 +205,7 @@ export function createDesktopSettingsIpc(
   const loadAgentRegistry = options.loadAgents ?? loadAgents;
   const loadAgentOptionsData =
     options.loadAgentOptionsData ?? computeAgentOptionsData;
-  const getAgentEntries = options.getAgents ?? getAgentRegistryEntries;
+  const getAgentEntries = options.getAgents ?? getAgentsByCategory;
   const getVisibleAgentEntries =
     options.getVisibleAgents ?? getVisibleRegistryAgents;
   const usesDefaultToolDashboardBuilder =
@@ -298,10 +297,6 @@ export function createDesktopSettingsIpc(
       command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_CONFIG_VALUES,
       values: readLatexConfigValues(),
     });
-  }
-
-  function getAgentRegistryEntries(category: AgentCategory): AgentEntry[] {
-    return category === 'workflow' ? getWorkflowAgents() : getToolUseAgents();
   }
 
   function getAgentDirectory(source: AgentSource): Promise<string | undefined> {

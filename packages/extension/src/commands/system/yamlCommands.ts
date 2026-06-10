@@ -6,7 +6,8 @@ import * as vscode from 'vscode';
 import * as yaml from 'yaml';
 
 // Local imports - utilities
-import { resolveAgent, getWorkflowAgents } from '@agent/index';
+import { getAgentsByCategory, resolveAgent } from '@agent/index';
+import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { loadYaml, loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getAgentPath } from '@agent/runtime/AgentLaunchContext';
 import { extensionAgentRuntimeHost } from '@frontend/agentRuntime/extensionAgentRuntimeHost';
@@ -26,7 +27,7 @@ export async function handleTestAgentLoading(): Promise<void> {
     logger.info(CHANNEL, 'Testing agent loading from registry:');
 
     // Get first two workflow agents from registry to test loading
-    const agents = getWorkflowAgents();
+    const agents = getAgentsByCategory(AgentCategory.Workflow);
     if (agents.length === 0) {
       throw new Error('No workflow agents found in registry');
     }
