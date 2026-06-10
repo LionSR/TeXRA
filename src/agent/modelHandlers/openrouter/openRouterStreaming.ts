@@ -1,0 +1,156 @@
+// Local file imports
+import { extractTextFromReasoningDetails } from '../utils/openRouterReasoning';
+import { ToolCallAccumulator } from '../utils/toolCallAccumulator';
+import type {
+  ChatAssistantMessage,
+  ChatFinishReasonEnum,
+  ChatRequest,
+  ChatResult,
+  ChatStreamChunk,
+  ChatToolCall,
+  ChatUsage,
+  ReasoningDetailUnion,
+} from '@openrouter/sdk/models';
+
+type OpenRouterReasoningEffort = NonNullable<
+  NonNullable<ChatRequest['reasoning']>['effort']
+>;
+
+// OpenRouter's reasoning tiers passed through unchanged. It has no 'max' tier,
+// so 'max' maps to the top tier 'xhigh' and anything unknown falls back to 'low'.
+const OPENROUTER_REASONING_EFFORTS: ReadonlySet<string> = new Set([
+  'xhigh',
+  'high',
+  'medium',
+  'low',
+  'minimal',
+  'none',
+]);
+
+export function toOpenRouterReasoningEffort(
+  effort: string,
+): OpenRouterReasoningEffort {
+  if (effort === 'max') return 'xhigh';
+  return OPENROUTER_REASONING_EFFORTS.has(effort)
+    ? (effort as OpenRouterReasoningEffort)
+    : 'low';
+}
+
+/**
+ * Accumulates streaming chunks into a final ChatResult since the OpenRouter SDK
+ * does not provide a `finalChatCompletion()` helper.
+ */
+export class OpenRouterStreamAggregator {
+  private content = '';
+  private reasoning = '';
+  private reasoningDetails: ReasoningDetailUnion[] = [];
+  private toolCalls = new ToolCallAccumulator();
+  private finishReason: ChatFinishReasonEnum | null = null;
+  private usage: ChatUsage | null = null;
+  private model = '';
+  private id = '';
+  private created = 0;
+
+  /** Text accumulated so far — read on stream failure so the retry UI can
+   *  show the partial tail (parity with the other streaming providers). */
+  get partialContent(): string {
+    return this.content;
+  }
+
+  consumeChunk(chunk: ChatStreamChunk): {
+    contentDelta: string;
+    reasoningDelta: string;
+  } {
+    if (!this.id && chunk.id) this.id = chunk.id;
+    if (!this.model && chunk.model) this.model = chunk.model;
+    if (!this.created && chunk.created) this.created = chunk.created;
+    if (chunk.usage) this.usage = chunk.usage;
+
+    // Surface streaming errors instead of silently ignoring them
+    if (chunk.error) {
+      throw new Error(
+        `OpenRouter streaming error (${chunk.error.code}): ${chunk.error.message}`,
+      );
+    }
+
+    const choice = chunk.choices[0];
+    if (!choice) return { contentDelta: '', reasoningDelta: '' };
+
+    if (choice.finishReason != null) {
+      this.finishReason = choice.finishReason;
+    }
+
+    const delta = choice.delta;
+    const contentDelta = delta.content ?? '';
+    if (contentDelta) this.content += contentDelta;
+
+    // Reasoning - try reasoningDetails first, then reasoning string
+    let reasoningDelta = '';
+    if (delta.reasoningDetails?.length) {
+      for (const detail of delta.reasoningDetails) {
+        this.reasoningDetails.push(detail);
+      }
+      reasoningDelta = extractTextFromReasoningDetails(delta.reasoningDetails);
+    } else if (delta.reasoning) {
+      reasoningDelta = delta.reasoning;
+    }
+    if (reasoningDelta) this.reasoning += reasoningDelta;
+
+    // Accumulate tool calls by index
+    if (delta.toolCalls) {
+      for (const tc of delta.toolCalls) {
+        this.toolCalls.add({
+          index: tc.index,
+          id: tc.id,
+          name: tc.function?.name,
+          arguments: tc.function?.arguments,
+        });
+      }
+    }
+
+    return { contentDelta, reasoningDelta };
+  }
+
+  buildResponse(): ChatResult {
+    // Preserve the original OpenRouter materialization: emit every accumulated
+    // entry with its raw id (no empty-dropping, no fallback id).
+    const toolCalls: ChatToolCall[] = this.toolCalls.build(
+      ({ id, name, arguments: args }) => ({
+        id,
+        type: 'function',
+        function: { name, arguments: args },
+      }),
+      { dropEmpty: false, fallbackId: false },
+    );
+
+    const message: ChatAssistantMessage & { role: 'assistant' } = {
+      role: 'assistant',
+      content: this.content || undefined,
+    };
+    if (toolCalls.length > 0) {
+      message.toolCalls = toolCalls;
+    }
+    if (this.reasoning) {
+      message.reasoning = this.reasoning;
+    }
+    if (this.reasoningDetails.length > 0) {
+      message.reasoningDetails = this.reasoningDetails;
+    }
+
+    return {
+      id: this.id,
+      choices: [
+        {
+          index: 0,
+          message,
+          finishReason: this.finishReason,
+        },
+      ],
+      created: this.created || Math.floor(Date.now() / 1000),
+      model: this.model,
+      object: 'chat.completion',
+      systemFingerprint: null,
+      usage: this.usage ?? undefined,
+    };
+  }
+}
