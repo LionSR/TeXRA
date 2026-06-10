@@ -59,15 +59,6 @@ export async function handleFixCompilation(): Promise<void> {
     await withLaTeXGuard(
       { channel: CHANNEL, action: 'fix compilation', saveDocument: true },
       async ({ editor, relativePath }) => {
-        if (
-          await showGeneratedLatexdiffTargetWarning(
-            editor.document.fileName,
-            relativePath,
-          )
-        ) {
-          return;
-        }
-
         logger.info(
           CHANNEL,
           `Launching tool-use agent to fix compilation for: ${relativePath}`,
@@ -75,7 +66,10 @@ export async function handleFixCompilation(): Promise<void> {
 
         await vscode.commands.executeCommand('texra.execute', {
           agent: 'latexFixer',
-          instruction: `Fix the LaTeX compilation errors in ${relativePath}.`,
+          instruction: await buildFixCompilationInstruction(
+            editor.document.fileName,
+            relativePath,
+          ),
         });
       },
     );
@@ -88,51 +82,37 @@ export async function handleFixCompilation(): Promise<void> {
   }
 }
 
-async function showGeneratedLatexdiffTargetWarning(
+/**
+ * Generated latexdiff artifacts are valid fixer targets — latexdiff itself
+ * often emits non-compiling markup that regenerating the diff would only
+ * reproduce — but the fixer should know the file is a diff so it repairs the
+ * markup in place, and should propagate source-rooted fixes to the source so
+ * they survive regeneration.
+ */
+async function buildFixCompilationInstruction(
   activeFilePath: string,
-  activeRelativePath: string,
-): Promise<boolean> {
+  relativePath: string,
+): Promise<string> {
+  const base = `Fix the LaTeX compilation errors in ${relativePath}.`;
   const artifact = detectGeneratedLatexdiffArtifact(activeFilePath);
-  if (!artifact) return false;
+  if (!artifact) return base;
 
   const sourceExists = await AbsoluteFS.exists(artifact.sourcePath);
   // A user may legitimately keep a source file named chapter_diff.tex. Treat
-  // a plain `_diff` suffix in the workspace as generated only when the inferred
-  // source exists. Shadow/temp diffs live outside the workspace and still need
-  // to be blocked even when their source is elsewhere.
-  if (
-    artifact.kind === 'workspaceDiff' &&
-    !sourceExists &&
-    isInsideWorkspace(activeFilePath)
-  ) {
-    return false;
+  // a plain `_diff` suffix as generated only when the inferred source exists.
+  if (artifact.kind === 'workspaceDiff' && !sourceExists) {
+    return base;
   }
 
-  const sourceRelativePath = WorkspaceFS.relativePath(artifact.sourcePath);
-  const message = sourceExists
-    ? `Cannot run latexFixer on generated LaTeXdiff artifact ${activeRelativePath}. Open ${sourceRelativePath} and fix the source, then regenerate the diff.`
-    : `Cannot run latexFixer on generated LaTeXdiff artifact ${activeRelativePath}. Fix the source document, then regenerate the diff.`;
-
-  logger.warn(CHANNEL, message);
-  const openSource = 'Open Source';
-  const selection = sourceExists
-    ? await vscode.window.showWarningMessage(message, openSource)
-    : await vscode.window.showWarningMessage(message);
-  if (selection === openSource) {
-    await openSourceDocument(artifact.sourcePath);
-  }
-  return true;
-}
-
-function isInsideWorkspace(filePath: string): boolean {
-  return vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath)) != null;
-}
-
-async function openSourceDocument(sourcePath: string): Promise<void> {
-  const document = await vscode.workspace.openTextDocument(
-    vscode.Uri.file(sourcePath),
-  );
-  await vscode.window.showTextDocument(document);
+  const sourceHint = sourceExists
+    ? ` generated from ${WorkspaceFS.relativePath(artifact.sourcePath)}`
+    : '';
+  return [
+    base,
+    `This file is a latexdiff artifact${sourceHint}.`,
+    'If an error comes from broken latexdiff markup (\\DIFadd/\\DIFdel or the DIF preamble blocks), repair the markup in place and keep the diff annotations intact.',
+    'If an error originates in the original source document, fix the source too so a regenerated diff stays fixed.',
+  ].join(' ');
 }
 
 export async function handleApplyReplacements(): Promise<void> {
