@@ -114,7 +114,7 @@ const SCENARIOS = [
     env: { HARNESS_LIVE_TOOL_ONLY: '1' },
     expect: ['what is this repo about', '● ls (Listed 36 entries in .)'],
     maxBlankLinesBetween: [
-      { from: 'what is this repo about', to: '● ls', max: 1 },
+      { from: 'what is this repo about', to: '● ls', max: 0 },
     ],
   },
   {
