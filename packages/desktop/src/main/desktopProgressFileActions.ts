@@ -1,0 +1,181 @@
+import { readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+
+import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
+import type { ValidatedExecutionRequest } from '@agent/core/execution/executionRequests';
+import type { DiffViewHost } from '@hosts/diffViewHost';
+import {
+  buildAcceptConfirmMessage,
+  buildAcceptSuccessMessage,
+  getAcceptedFileTarget,
+} from '@latex/acceptedFileTarget';
+import { openFirstLabelMatch } from '@latex/labelSearch';
+import { LaTeXdiffService } from '@latex/latexdiff';
+import { DEFAULT_MATH_MARKUP } from '@latex/latexdiff/mathMarkup';
+import type { BuildDisplayFn } from '@tools/approval/latexPreview';
+import type { FileLocation } from '@shared/schemas';
+import {
+  AbsoluteFS,
+  createExternalLocation,
+  pathToLocation,
+} from '@utils/files';
+
+export interface DesktopProgressFileActionOptions {
+  openPath?: (filePath: string, line?: number) => Promise<void>;
+  openBuildDisplay?: BuildDisplayFn;
+  openDiff?: DiffViewHost['openDiff'];
+  confirmAcceptFile?: (message: string) => Promise<boolean>;
+  showInfoMessage?: (message: string) => Promise<void> | void;
+  showErrorMessage?: (message: string) => Promise<void> | void;
+}
+
+/**
+ * Bridge-owned capabilities the file actions reach back into: starting a fresh
+ * agent execution (merge) and enumerating workspace input/context files (label
+ * search). Kept as a narrow interface so the actions stay decoupled from the
+ * full progress bridge.
+ */
+export interface DesktopProgressFileActionHost {
+  runtimeHost: AgentRuntimeHost;
+  runExecution(request: ValidatedExecutionRequest): Promise<void>;
+  listWorkspaceCandidateFiles(): Promise<string[]>;
+}
+
+function toFileLocation(filePath: string): FileLocation {
+  return path.isAbsolute(filePath)
+    ? createExternalLocation(filePath)
+    : pathToLocation(filePath);
+}
+
+export class DesktopProgressFileActions {
+  constructor(
+    private readonly options: DesktopProgressFileActionOptions,
+    private readonly host: DesktopProgressFileActionHost,
+  ) {}
+
+  async openFileCompile(filePath: string): Promise<void> {
+    if (this.options.openBuildDisplay) {
+      await this.options.openBuildDisplay(toFileLocation(filePath));
+      return;
+    }
+    await this.options.showErrorMessage?.(
+      'Desktop LaTeX preview is unavailable. Cannot compile and open this file.',
+    );
+  }
+
+  async compareFiles(baseFile: string, editedFile: string): Promise<void> {
+    if (!this.options.openDiff) {
+      await this.options.showErrorMessage?.(
+        'Desktop file comparison is not available in this host yet.',
+      );
+      return;
+    }
+
+    await this.options.openDiff(
+      { filePath: baseFile },
+      { filePath: editedFile },
+      `Compare: ${path.basename(editedFile)} <-> ${path.basename(baseFile)}`,
+    );
+  }
+
+  async runMergeFile(baseFile: string, editedFile: string): Promise<void> {
+    const [{ getHelperModelName }, { validateExecutionRequest }] =
+      await Promise.all([
+        import('@agent/runtime/helperModelName'),
+        import('@agent/core/execution/executionRequests'),
+      ]);
+    const validation = validateExecutionRequest({
+      config: {
+        agent: 'merge',
+        model: getHelperModelName(),
+        inputFiles: [baseFile],
+        editedFile,
+      },
+    });
+    if (!validation.valid) {
+      await this.options.showErrorMessage?.(`Merge: ${validation.message}`);
+      return;
+    }
+    await this.host.runExecution(validation.request);
+  }
+
+  async acceptEditedFile(
+    baseFile: string,
+    editedFile: string,
+  ): Promise<boolean> {
+    const baseLocation = pathToLocation(baseFile);
+    const editedLocation = pathToLocation(editedFile);
+    const target = getAcceptedFileTarget(
+      baseLocation,
+      editedLocation.absolutePath,
+    );
+    const { targetLocation, targetFileName, isNewFile } = target;
+    const targetExists =
+      isNewFile && (await AbsoluteFS.exists(targetLocation.absolutePath));
+    const confirmMessage = buildAcceptConfirmMessage(
+      target,
+      baseFile,
+      editedFile,
+      targetExists,
+    );
+
+    if (this.options.confirmAcceptFile) {
+      const confirmed = await this.options.confirmAcceptFile(confirmMessage);
+      if (!confirmed) return false;
+    }
+
+    const editedContent = await readFile(editedLocation.absolutePath, 'utf8');
+    await writeFile(targetLocation.absolutePath, editedContent, 'utf8');
+    if (targetLocation.kind === 'workspace') {
+      this.host.runtimeHost.emit('workspaceFilesWritten', {
+        absolutePaths: [targetLocation.absolutePath],
+      });
+    }
+
+    await this.options.showInfoMessage?.(
+      buildAcceptSuccessMessage(
+        targetFileName,
+        editedFile,
+        !isNewFile || targetExists,
+      ),
+    );
+    return true;
+  }
+
+  async runLatexdiffFile(baseFile: string, editedFile: string): Promise<void> {
+    const service = new LaTeXdiffService('DesktopProgressBridge');
+    const result = await service.runDiff(
+      pathToLocation(baseFile),
+      pathToLocation(editedFile),
+      '_diff',
+      false,
+      DEFAULT_MATH_MARKUP,
+    );
+
+    if (!result.success || !result.diffFileName) {
+      await this.options.showErrorMessage?.(
+        result.message ?? 'Failed to generate diff file.',
+      );
+      return;
+    }
+
+    const diffFilePath = path.join(path.dirname(baseFile), result.diffFileName);
+    if (this.options.openBuildDisplay) {
+      await this.options.openBuildDisplay(createExternalLocation(diffFilePath));
+      return;
+    }
+    await this.options.openPath?.(diffFilePath);
+  }
+
+  async findAndOpenLabel(label: string): Promise<boolean> {
+    const candidates = new Set(await this.host.listWorkspaceCandidateFiles());
+    return openFirstLabelMatch(
+      label,
+      candidates,
+      (file) => readFile(file, 'utf8'),
+      async (file) => {
+        await this.options.openPath?.(file);
+      },
+    );
+  }
+}

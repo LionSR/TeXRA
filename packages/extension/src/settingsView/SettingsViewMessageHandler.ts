@@ -18,30 +18,11 @@ import {
   loadAgents,
   toRemoteAgentProfileData,
 } from '@agent/index';
-import {
-  getExecutionStore,
-  deleteExecution,
-  deleteAllExecutions,
-} from '@agent/storage';
-import {
-  AgentConfigSchema,
-  type AgentConfig,
-} from '@agent/core/definition/AgentConfig';
-import { executionRegistry } from '@agent/runtime/executionRegistry';
-import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { FREE_TIER, ULTRA_TIER, MAX_TIER } from '@auth/config';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { getTierService } from '@auth/tier';
-import { runExecuteCommand } from '@commands/agent/executeCommand';
-import {
-  formatChatAsMarkdown,
-  formatChatAsLatex,
-  generateExportFilename,
-  generateExportFolderName,
-  type ChatExportInput,
-} from '@commands/history/chatExportFormatter';
 import { BaseViewMessageHandler } from '@common/webview';
 import {
   GlobalStateKey,
@@ -64,7 +45,6 @@ import {
   isInlineCriticismEnabled,
   setInlineCriticismEnabled,
 } from '@frontend/latex/inlineCriticism';
-import { compileLatex2Pdf } from '@latex/texTools';
 import { invalidateModelOptionsCache } from '@model/computeModelOptions';
 import {
   invalidateApiKeyCache,
@@ -72,7 +52,7 @@ import {
 } from '@model/apiProviders';
 import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { ExecutionId, StreamTabId } from '@shared/schemas';
+import type { StreamTabId } from '@shared/schemas';
 import { buildStreamInfo } from '@shared/progressView/backend/streamInfoUtils';
 import {
   dispatchSettingsViewInbound,
@@ -86,7 +66,6 @@ import {
   setBashApprovalEnabled as setBashApprovalEnabledShared,
   setWorkspaceAgentSetting,
 } from '@shared/settingsView/handlers/approvalHandlers';
-import { buildHistoryMessage } from '@shared/settingsView/handlers/historyHandlers';
 import {
   buildModelSelectionMessage,
   createModelSelectionController,
@@ -112,17 +91,6 @@ import {
   refreshDisabledToolCache,
 } from '@tools/toolAvailability';
 import { findExternalToolDef } from '@tools/externalToolDefs';
-import {
-  issuePollingSource,
-  listIssueSubscriptionBindings,
-  listPRSubscriptionBindings,
-  listRepoSubscriptionBindings,
-  prPollingSource,
-  repoPollingSource,
-  unbindAllForIssue,
-  unbindAllForPR,
-  unbindAllForRepo,
-} from '@tools/github';
 import { MEMORY_STORAGE_ROOT } from '@tools/memory/constants';
 import { resolveMemoryStoragePath } from '@tools/memory/memoryUtils';
 import { StorageFS } from '@utils/files';
@@ -145,6 +113,8 @@ import { setToolEnabled } from '@utils/config/constants';
 import { buildToolDashboardItems } from './utils/toolDashboardData';
 import { AgentHandlers } from './handlers/agentHandlers';
 import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
+import { HistoryHandlers } from './handlers/historyHandlers';
+import { GitHubSubscriptionHandlers } from './handlers/githubSubscriptionHandlers';
 import type { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
 import type { SettingsModelSelectionController } from '@controllers/settingsView/SettingsModelSelectionController';
 import type { SettingsHandlerContext } from './handlers/SettingsHandlerContext';
@@ -239,17 +209,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   // Domain-specific handler delegates
   private readonly agentHandlers: AgentHandlers;
   private readonly latexHandlers: LatexSettingsHandlers;
+  private readonly historyHandlers: HistoryHandlers;
+  private readonly githubHandlers: GitHubSubscriptionHandlers;
   private readonly memoryController: SettingsMemoryController;
   private readonly modelSelectionController: SettingsModelSelectionController;
   private readonly profileKeyController: SettingsProfileKeyController;
 
-  /** Used by handleExportChat to locate the bundled HTML export assets. */
-  private readonly extensionPath: string;
-
   constructor(context: vscode.ExtensionContext) {
     super('SettingsView', { trackActiveView: true });
-
-    this.extensionPath = context.extensionPath;
 
     const ctx: SettingsHandlerContext = {
       channel: this.channel,
@@ -293,12 +260,16 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
       this.refreshAfterAgentMutation(),
     );
     this.latexHandlers = new LatexSettingsHandlers(ctx);
+    this.historyHandlers = new HistoryHandlers(ctx);
+    this.githubHandlers = new GitHubSubscriptionHandlers(ctx);
 
     this.handlerRegistry = this.createHandlerRegistry();
 
     // Lifetime == extension; bus is process-global so no dispose needed.
     const refreshSubscriptions = () =>
-      void this.withActiveWebview((w) => this.sendPRSubscriptions(w));
+      void this.withActiveWebview((w) =>
+        this.githubHandlers.sendPRSubscriptions(w),
+      );
     bus.on('prSubscriptionsChanged', refreshSubscriptions);
     bus.on('prSubscriptionBindingsChanged', refreshSubscriptions);
     bus.on('repoSubscriptionsChanged', refreshSubscriptions);
@@ -348,20 +319,21 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       // History handlers
       [SETTINGS_VIEW_COMMANDS.GET_HISTORY_DATA]: () =>
-        this.withActiveWebview((w) => this.sendHistoryData(w)),
+        this.withActiveWebview((w) => this.historyHandlers.sendHistoryData(w)),
       [SETTINGS_VIEW_COMMANDS.RERUN_AGENT]: (data) =>
-        this.handleRerunAgent(data),
+        this.historyHandlers.handleRerunAgent(data),
       [SETTINGS_VIEW_COMMANDS.RESTORE_AGENT]: (data) =>
-        this.handleRestoreAgent(data),
+        this.historyHandlers.handleRestoreAgent(data),
       [SETTINGS_VIEW_COMMANDS.DELETE_AGENT]: (data) =>
-        this.handleDeleteAgent(data),
-      [SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY]: () => this.handleClearHistory(),
+        this.historyHandlers.handleDeleteAgent(data),
+      [SETTINGS_VIEW_COMMANDS.CLEAR_HISTORY]: () =>
+        this.historyHandlers.handleClearHistory(),
       [SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_MD]: (data) =>
-        this.handleExportChat(data, 'md'),
+        this.historyHandlers.handleExportChat(data, 'md'),
       [SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_TEX]: (data) =>
-        this.handleExportChat(data, 'tex'),
+        this.historyHandlers.handleExportChat(data, 'tex'),
       [SETTINGS_VIEW_COMMANDS.EXPORT_CHAT_HTML]: (data) =>
-        this.handleExportChat(data, 'html'),
+        this.historyHandlers.handleExportChat(data, 'html'),
 
       // Profile handlers
       [SETTINGS_VIEW_COMMANDS.GET_PROFILE_DATA]: () =>
@@ -493,39 +465,23 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
 
       // GitHub token handlers
       [SETTINGS_VIEW_COMMANDS.GET_GITHUB_TOKEN_STATUS]: () =>
-        this.withActiveWebview((w) => this.sendGitHubTokenStatus(w)),
+        this.withActiveWebview((w) =>
+          this.githubHandlers.sendGitHubTokenStatus(w),
+        ),
       [SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN]: () =>
-        this.handleSetGitHubToken(),
+        this.githubHandlers.handleSetGitHubToken(),
       [SETTINGS_VIEW_COMMANDS.REMOVE_GITHUB_TOKEN]: () =>
-        this.handleRemoveGitHubToken(),
-      [SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL]: async () => {
-        await vscode.env.openExternal(
-          vscode.Uri.parse(
-            'https://github.com/settings/tokens/new?description=TeXRA%20PR%20subscription&scopes=repo',
-          ),
-        );
-      },
+        this.githubHandlers.handleRemoveGitHubToken(),
+      [SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL]: () =>
+        this.githubHandlers.openGitHubTokenUrl(),
       [SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS]: () =>
-        this.withActiveWebview((w) => this.sendPRSubscriptions(w)),
-      [SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR]: (data) => {
-        // Path form mirrors GitHub's REST URL shape:
-        //   owner/repo               → repo
-        //   owner/repo/pulls/N       → PR
-        //   owner/repo/issues/N      → issue
-        const k = data.key;
-        const removed = k.includes('/pulls/')
-          ? unbindAllForPR(k, extensionAgentRuntimeHost)
-          : k.includes('/issues/')
-            ? unbindAllForIssue(k, extensionAgentRuntimeHost)
-            : unbindAllForRepo(k, extensionAgentRuntimeHost);
-        if (removed === 0) {
-          void vscode.window.showInformationMessage(
-            `No active subscription for ${k}.`,
-          );
-        }
-      },
+        this.withActiveWebview((w) =>
+          this.githubHandlers.sendPRSubscriptions(w),
+        ),
+      [SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR]: (data) =>
+        this.githubHandlers.handleUnsubscribePR(data),
       [SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM]: (data) =>
-        this.handleOpenPRSubscriptionStream(data),
+        this.githubHandlers.handleOpenPRSubscriptionStream(data),
 
       // ── Delegated to LatexSettingsHandlers ──
 
@@ -696,14 +652,14 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await Promise.all([
       this.sendMemoryData(webview),
       this.sendMemoryEnabled(webview),
-      this.sendHistoryData(webview),
+      this.historyHandlers.sendHistoryData(webview),
       this.agentHandlers.sendAgentSelectionData(webview),
       this.agentHandlers.sendCustomAgentDir(webview),
       this.sendSuperYoloEnabled(webview),
       this.agentHandlers.sendAgentModePresets(webview),
       this.sendGitAuthorSettings(webview),
-      this.sendGitHubTokenStatus(webview),
-      this.sendPRSubscriptions(webview),
+      this.githubHandlers.sendGitHubTokenStatus(webview),
+      this.githubHandlers.sendPRSubscriptions(webview),
       this.sendApprovalSettings(webview),
       this.latexHandlers.sendLatexSettingsStatus(webview),
       this.latexHandlers.sendLatexConfigValues(webview),
@@ -757,10 +713,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
   ): Promise<void> {
     await setInlineCriticismEnabled(enabled);
     await this.withActiveWebview((w) => this.sendInlineCriticismEnabled(w));
-  }
-
-  public async sendHistoryData(webview: vscode.Webview): Promise<void> {
-    await webview.postMessage(await buildHistoryMessage());
   }
 
   public async sendProfileData(webview: vscode.Webview): Promise<void> {
@@ -898,117 +850,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
     await this.withActiveWebview((w) =>
       this.sendGitAuthorSettings(w, settings),
     );
-  }
-
-  // ============================================================
-  // GitHub token handler implementations
-  // ============================================================
-
-  private async sendGitHubTokenStatus(webview: vscode.Webview): Promise<void> {
-    const status = await SecretManager.gitHubTokenExists();
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GITHUB_TOKEN_STATUS,
-      status,
-    });
-  }
-
-  private async handleSetGitHubToken(): Promise<void> {
-    const token = await vscode.window.showInputBox({
-      prompt:
-        'Paste a GitHub personal access token (repo or public_repo scope)',
-      password: true,
-      placeHolder: 'ghp_…',
-      ignoreFocusOut: true,
-    });
-    if (!token) return;
-    try {
-      await SecretManager.set(SecretManager.GITHUB_TOKEN_KEY, token.trim());
-      void vscode.window.showInformationMessage('GitHub token saved.');
-      await this.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.channel,
-        'Failed to save GitHub token',
-        error,
-      );
-    }
-  }
-
-  private async handleRemoveGitHubToken(): Promise<void> {
-    try {
-      await SecretManager.delete(SecretManager.GITHUB_TOKEN_KEY);
-      void vscode.window.showInformationMessage('GitHub token removed.');
-      await this.withActiveWebview((w) => this.sendGitHubTokenStatus(w));
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.channel,
-        'Failed to remove GitHub token',
-        error,
-      );
-    }
-  }
-
-  private async sendPRSubscriptions(webview: vscode.Webview): Promise<void> {
-    const state = ProgressViewProvider.getInstance()?.state;
-    const toEntry = (
-      key: string,
-      streamIds: readonly string[],
-    ): { key: string; owners: { streamId: string; label: string }[] } => ({
-      key,
-      owners: streamIds.map((streamId) => ({
-        streamId,
-        label: state
-          ? (buildStreamInfo(state, streamId, 'all')?.label ?? streamId)
-          : streamId,
-      })),
-    });
-    const prEntries = listPRSubscriptionBindings(
-      prPollingSource.activeKeys(),
-    ).map(({ key, streamIds }) => toEntry(key, streamIds));
-    const repoEntries = listRepoSubscriptionBindings(
-      repoPollingSource.activeKeys(),
-    ).map(({ key, streamIds }) => toEntry(key, streamIds));
-    const issueEntries = listIssueSubscriptionBindings(
-      issuePollingSource.activeKeys(),
-    ).map(({ key, streamIds }) => toEntry(key, streamIds));
-
-    await webview.postMessage({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_PR_SUBSCRIPTIONS,
-      subscriptions: [...prEntries, ...repoEntries, ...issueEntries],
-    });
-  }
-
-  private async handleOpenPRSubscriptionStream(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.OPEN_PR_SUBSCRIPTION_STREAM>,
-  ): Promise<void> {
-    const provider = ProgressViewProvider.getInstance();
-    if (!provider) {
-      await vscode.window.showErrorMessage(
-        'Progress View is not available. Please try again.',
-      );
-      return;
-    }
-
-    const { state } = provider;
-    if (!state.streamLogs.has(data.streamId)) {
-      await vscode.window.showWarningMessage(
-        'The agent stream is no longer available.',
-      );
-      return;
-    }
-
-    await provider.showProgressView();
-
-    // If the current filter would hide the target stream, clear it to 'all'
-    // so SET_ACTIVE_STREAM doesn't silently land on the wrong tab.
-    if (
-      buildStreamInfo(state, data.streamId, state.agentCategoryFilter) === null
-    ) {
-      state.agentCategoryFilter = 'all';
-      provider.syncFullView();
-    }
-
-    provider.setActiveStream(data.streamId);
   }
 
   // ============================================================
@@ -1157,246 +998,6 @@ export class SettingsViewMessageHandler extends BaseViewMessageHandler<
         `Failed to ${action} memory`,
         error,
       );
-    }
-  }
-
-  // ============================================================
-  // History handler implementations
-  // ============================================================
-
-  private async handleRerunAgent(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.RERUN_AGENT>,
-  ): Promise<void> {
-    await this.withHistoryConfig(
-      data.historyId,
-      'Failed to rerun agent',
-      async (config) => {
-        await vscode.window.showInformationMessage(
-          'Rerunning agent from history',
-        );
-        await runExecuteCommand(config);
-      },
-    );
-  }
-
-  private async handleRestoreAgent(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.RESTORE_AGENT>,
-  ): Promise<void> {
-    await this.withHistoryConfig(
-      data.historyId,
-      'Failed to restore configuration',
-      async (config) => {
-        const taskState = agentConfigToTaskState(config);
-        await vscode.commands.executeCommand('texra.restoreState', taskState);
-      },
-    );
-  }
-
-  private async handleDeleteAgent(
-    data: MessageFor<typeof SETTINGS_VIEW_CMD.DELETE_AGENT>,
-  ): Promise<void> {
-    try {
-      const activeIds = executionRegistry.getActiveIds();
-      if (activeIds.includes(data.historyId)) {
-        await vscode.window.showWarningMessage(
-          'Cannot delete a running execution',
-        );
-        return;
-      }
-      const deleted = await deleteExecution(data.historyId as ExecutionId);
-      if (deleted) {
-        await this.withActiveWebview((w) => this.sendHistoryData(w));
-      } else {
-        await vscode.window.showWarningMessage(
-          `History item not found: ${data.historyId}`,
-        );
-      }
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.channel,
-        'Failed to delete history item',
-        error,
-      );
-    }
-  }
-
-  private async handleClearHistory(): Promise<void> {
-    try {
-      await deleteAllExecutions(new Set(executionRegistry.getActiveIds()));
-      await vscode.window.showInformationMessage('Agent history cleared');
-      await this.withActiveWebview(async (w) => {
-        await w.postMessage({
-          command: SETTINGS_VIEW_COMMANDS.HISTORY_CLEARED,
-        });
-      });
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.channel,
-        'Failed to clear history',
-        error,
-      );
-    }
-  }
-
-  private async handleExportChat(
-    data: { historyId: string },
-    format: 'md' | 'tex' | 'html',
-  ): Promise<void> {
-    try {
-      const store = getExecutionStore(data.historyId as ExecutionId);
-      const [rawConfig, conversation, meta] = await Promise.all([
-        store.readConfig(),
-        store.readConversation(),
-        store.readMeta(),
-      ]);
-
-      if (!rawConfig) {
-        await vscode.window.showErrorMessage('History item not found');
-        return;
-      }
-
-      if (!conversation) {
-        await vscode.window.showErrorMessage(
-          'No conversation data available for this execution',
-        );
-        return;
-      }
-
-      const config = AgentConfigSchema.parse(rawConfig);
-
-      const exportInput: ChatExportInput = {
-        timestamp: meta?.timestamp ?? new Date().toISOString(),
-        description: meta?.description,
-        config: {
-          agent: config.agent,
-          model: config.model,
-          instruction: config.instruction,
-          inputFiles: config.inputFiles,
-          mediaFiles: config.mediaFiles,
-          contextFiles: config.contextFiles,
-          outputFiles: config.outputFiles,
-        },
-        messages: conversation,
-      };
-
-      if (format === 'html') {
-        await this.exportChatAsHtml(data.historyId, exportInput);
-        return;
-      }
-
-      const filename = generateExportFilename(exportInput, format);
-      const storagePath = `executions/${data.historyId}/${filename}`;
-
-      const content =
-        format === 'md'
-          ? formatChatAsMarkdown(exportInput)
-          : formatChatAsLatex(exportInput);
-
-      await StorageFS.write(storagePath, content);
-      const absolutePath = StorageFS.fullPath(storagePath);
-
-      if (format === 'tex') {
-        // Compile LaTeX to PDF
-        const { pathToLocation } = await import('@utils/files');
-        const location = pathToLocation(absolutePath);
-        const compiled = await compileLatex2Pdf(location);
-
-        if (compiled) {
-          // Open the generated PDF
-          const pdfPath = absolutePath.replace(/\.tex$/, '.pdf');
-          const pdfUri = vscode.Uri.file(pdfPath);
-          await vscode.commands.executeCommand('vscode.open', pdfUri);
-          void vscode.window.showInformationMessage(
-            `Chat exported and compiled: ${filename.replace('.tex', '.pdf')}`,
-          );
-        } else {
-          // Compilation failed — open the .tex source instead
-          const doc = await vscode.workspace.openTextDocument(absolutePath);
-          await vscode.window.showTextDocument(doc, { preview: false });
-          void vscode.window.showWarningMessage(
-            'LaTeX compilation failed. The .tex source file has been opened instead.',
-          );
-        }
-      } else {
-        // Open Markdown file
-        const doc = await vscode.workspace.openTextDocument(absolutePath);
-        await vscode.window.showTextDocument(doc, { preview: false });
-        void vscode.window.showInformationMessage(`Chat exported: ${filename}`);
-      }
-    } catch (error) {
-      await showLoggedErrorMessage(
-        this.channel,
-        'Failed to export chat',
-        error,
-      );
-    }
-  }
-
-  /**
-   * Build a self-contained HTML chat export.
-   *
-   * Layout (under the execution's storage folder):
-   *   texra-chat-{date}-{slug}/
-   *     index.html           ← TeXRA styling inlined; references ./assets/*
-   *     assets/              ← katex.min.css, texmath.css, hljs themes, fonts
-   *
-   * Opens index.html in the user's default browser so they see the same
-   * KaTeX/highlight.js rendering an audience would see.
-   */
-  private async exportChatAsHtml(
-    historyId: string,
-    exportInput: ChatExportInput,
-  ): Promise<void> {
-    const path = await import('node:path');
-    const { formatChatAsHtml } =
-      await import('@commands/history/htmlExport/htmlFormatter');
-
-    const folderName = generateExportFolderName(exportInput);
-    const folderPath = `executions/${historyId}/${folderName}`;
-    const assetsPath = `${folderPath}/assets`;
-
-    // Stage assets BEFORE writing index.html so a missing/failed asset
-    // copy can never leave behind an HTML file pointing at empty `./assets`.
-    const assetsSrc = path.join(this.extensionPath, 'resources', 'htmlExport');
-    const fsExtra = (await import('fs-extra')).default;
-    if (!(await fsExtra.pathExists(assetsSrc))) {
-      throw new Error(
-        `HTML export assets missing at ${assetsSrc} — rebuild the extension ` +
-          `(npm run package:fast) so scripts/copy-html-export-assets.mjs runs.`,
-      );
-    }
-    await StorageFS.ensureDir(folderPath);
-    await fsExtra.copy(assetsSrc, StorageFS.fullPath(assetsPath), {
-      overwrite: true,
-    });
-
-    const html = formatChatAsHtml(exportInput);
-    await StorageFS.write(`${folderPath}/index.html`, html);
-
-    const htmlAbsolute = StorageFS.fullPath(`${folderPath}/index.html`);
-    await vscode.env.openExternal(vscode.Uri.file(htmlAbsolute));
-    void vscode.window.showInformationMessage(
-      `Chat exported to ${folderName}/index.html`,
-    );
-  }
-
-  private async withHistoryConfig(
-    historyId: string,
-    errorPrefix: string,
-    action: (config: AgentConfig) => Promise<void>,
-  ): Promise<void> {
-    try {
-      const raw = await getExecutionStore(
-        historyId as ExecutionId,
-      ).readConfig();
-      if (!raw) {
-        await vscode.window.showErrorMessage('History item not found');
-        return;
-      }
-      const config = AgentConfigSchema.parse(raw);
-      await action(config);
-    } catch (error) {
-      await showLoggedErrorMessage(this.channel, errorPrefix, error);
     }
   }
 

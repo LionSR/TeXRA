@@ -29,7 +29,7 @@ import { notifyCliUpdate } from '../runtime/updateChecker';
 import { resolveChatDefaults } from '../runtime/chatDefaults';
 
 import { contextFromArgs } from './_helpers/context';
-import { withUsageSections } from './_helpers/dispatch';
+import { withUsageSections } from './_helpers/dispatch/usage';
 import { setExitCode } from './_helpers/exitCode';
 import {
   INTERACTIVE_AGENT_GLOBAL_ARGS,

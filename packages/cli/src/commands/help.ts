@@ -2,12 +2,12 @@ import { defineCommand } from 'citty';
 
 import { CliUsageError } from '../runtime/cliContext';
 
+import { resolveDeepestSubCommand } from './_helpers/dispatch/commandTree';
+import { showUsage } from './_helpers/dispatch/usage';
 import {
   detectUnknownCliCommand,
   formatUnknownCliCommand,
-  resolveDeepestSubCommand,
-  showUsage,
-} from './_helpers/dispatch';
+} from './_helpers/dispatch/unknownCommand';
 
 export const helpCommand = defineCommand({
   meta: { name: 'help', description: 'Show TeXRA CLI commands' },
