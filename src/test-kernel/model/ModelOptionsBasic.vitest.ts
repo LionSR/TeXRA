@@ -37,7 +37,7 @@ describe('default model list', () => {
     expect(DEFAULT_MODELS).toContain('fable5');
     expect(config).toMatchObject({
       fullName: 'claude-fable-5',
-      label: 'Fable 5',
+      label: 'Claude Fable 5',
       provider: 'anthropic',
       openRouterOnly: false,
     });
