@@ -1,8 +1,9 @@
 /**
  * VS Code adapter for the platform-agnostic PlatformSecrets.
  *
- * Uses vscode.SecretStorage for secure key storage, with
- * process.env fallback for API keys.
+ * Uses vscode.SecretStorage for secure key storage. Environment variables
+ * override persisted secrets, matching ElectronSecrets and CliSecrets so a
+ * key exported in the environment behaves identically in every host.
  */
 import * as vscode from 'vscode';
 
@@ -16,6 +17,8 @@ export class VscodeSecrets implements PlatformSecrets {
   }
 
   async get(key: string): Promise<string | undefined> {
+    const envValue = process.env[key];
+    if (envValue !== undefined) return envValue;
     return this.storage.get(key);
   }
 

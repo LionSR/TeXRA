@@ -16,6 +16,10 @@ import type {
 import { normalizeToolUseData } from '@shared/toolUse';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import {
+  BASH_TOOL_DEFAULT_TIMEOUT_MS,
+  EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS,
+} from '@shared/constants/toolDefaults';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
 import type { EditInput } from '@tools/EditTool';
 import type { TextEditorInput } from '@tools/TextEditorTool';
@@ -84,8 +88,8 @@ import '@awesome.me/webawesome/dist/components/divider/divider.js';
 
 /** Known per-tool default timeouts (ms) for display in the running timer. */
 const TOOL_DEFAULT_TIMEOUTS: Record<string, number> = {
-  bash: 120_000, // matches BASH_TIMEOUT_MS in src/tools/bash.ts
-  executions: 300_000, // matches code default in ExecutionsTool.ts
+  bash: BASH_TOOL_DEFAULT_TIMEOUT_MS,
+  executions: EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS * 1000,
   codex: 300_000, // generous default — Codex turns can be slow
 };
 

@@ -86,7 +86,7 @@ vi.mock('@cli/runtime/cliStateStores', () => ({
   createCliStateStores: vi.fn().mockResolvedValue({
     globalState: { update: vi.fn() },
     workspaceState: {},
-    storage: {},
+    storage: { getGlobalStoragePath: () => '/tmp/texra-global' },
   }),
 }));
 
