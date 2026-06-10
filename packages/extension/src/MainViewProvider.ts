@@ -160,7 +160,8 @@ export class MainViewProvider
     const extensions = new Set(
       EXTENSION_CATEGORIES.flatMap(getFilterExtensions),
     );
-    const filePattern = `**/*.{${[...extensions].join(',')}}`;
+    const filePattern =
+      extensions.size === 0 ? '**/*' : `**/*.{${[...extensions].join(',')}}`;
     this.fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern);
     this.fileWatcher.onDidCreate(this.refreshFiles.bind(this));
     this.fileWatcher.onDidDelete(this.refreshFiles.bind(this));

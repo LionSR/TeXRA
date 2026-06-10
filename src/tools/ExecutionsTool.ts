@@ -35,6 +35,7 @@ import { executionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptio
 import { onFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
 
 // Local imports - shared
+import { EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS } from '@shared/constants/toolDefaults';
 
 // Local imports - utils
 import { toErrorMessage } from '@common/errors';
@@ -43,7 +44,6 @@ import {
   ExecutionIdSchema,
   type ExecutionId,
 } from '@shared/schemas';
-import { EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS } from '@shared/constants/toolDefaults';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { requireRunStream } from '@tools/contextHelpers';
 import { AbsoluteFS, StorageFS } from '@utils/files';
