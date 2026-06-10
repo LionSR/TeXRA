@@ -64,7 +64,7 @@ Five built-in presets cover the most common research disciplines:
 | Team                        | Built for                                                                        |
 | --------------------------- | -------------------------------------------------------------------------------- |
 | **Physicist**               | Analytical derivations, numerical experiments, literature search, slide drafting |
-| **Mathematician**           | Proofs, Lean 4 formalization, research, LaTeX correction                         |
+| **Mathematician**           | Attacking open problems, proofs, Lean 4 formalization, LaTeX correction          |
 | **Computer Scientist (ML)** | Algorithm design, experiments and ablations, literature, reproducibility         |
 | **Lean Project**            | Mathlib search, tactic simplification, blueprint-driven formalization            |
 | **Software Engineer**       | An engineer lead delegating implementation, review, debugging, and testing       |
