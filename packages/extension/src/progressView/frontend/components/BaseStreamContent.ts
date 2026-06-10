@@ -19,7 +19,7 @@ import {
 } from '../contexts/streamContexts';
 
 // Local imports - types
-import type { PermissionState } from './PermissionCard';
+import type { PermissionState } from '../permissionState';
 
 export abstract class BaseStreamContent extends LitElement {
   static override styles = css`

@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Local imports - common
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - logger

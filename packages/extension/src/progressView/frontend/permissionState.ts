@@ -1,0 +1,43 @@
+/**
+ * Permission prompt state — the discriminated union of every pending
+ * permission/approval kind the progress view can display.
+ *
+ * Lives in its own leaf module (not `components/PermissionCard.ts`) so state
+ * files (store, contexts, slices, dispatcher) can type against it without
+ * importing the Lit component and its side-effect imports.
+ */
+import type {
+  AgentOptionData,
+  AgentProposalPermission,
+  BashPermission,
+  ExternalInquiryPermission,
+  ModelOptionData,
+  PlanApprovalPermission,
+  RetryPermission,
+  ToolEditPermission,
+  UserQuestionPermission,
+} from '@shared/schemas';
+import { PERMISSION_KIND } from '@shared/utils/uiConstants';
+
+export type PermissionState =
+  | { kind: typeof PERMISSION_KIND.TOOL_EDIT; data: ToolEditPermission }
+  | { kind: typeof PERMISSION_KIND.BASH; data: BashPermission }
+  | { kind: typeof PERMISSION_KIND.RETRY; data: RetryPermission }
+  | {
+      kind: typeof PERMISSION_KIND.PROPOSAL;
+      data: AgentProposalPermission;
+      modelOptions?: ModelOptionData[];
+      agentOptions?: AgentOptionData[];
+    }
+  | {
+      kind: typeof PERMISSION_KIND.PLAN_APPROVAL;
+      data: PlanApprovalPermission;
+    }
+  | {
+      kind: typeof PERMISSION_KIND.EXTERNAL_INQUIRY;
+      data: ExternalInquiryPermission;
+    }
+  | {
+      kind: typeof PERMISSION_KIND.USER_QUESTION;
+      data: UserQuestionPermission;
+    };

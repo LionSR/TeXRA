@@ -10,10 +10,7 @@
  */
 
 // Slice imports
-import type {
-  ProgressViewOutboundMessage,
-  ProgressViewPlacement,
-} from '@shared/schemas';
+import type { ProgressViewOutboundMessage } from '@shared/schemas';
 import { streamLifecycleHandlers } from './slices/streamLifecycleSlice';
 import { logHandlers } from './slices/logSlice';
 import { streamMetaHandlers } from './slices/streamMetaSlice';
@@ -25,40 +22,11 @@ import { inquiryHandlers } from './slices/inquirySlice';
 import { syncHandlers } from './slices/syncSlice';
 import { uiHandlers } from './slices/uiSlice';
 
-import type { FrontendEventHandlerContext } from './eventHandlers';
-import type { PermissionState } from './components/PermissionCard';
-
-// ============================================================
-// Types
-// ============================================================
-
-/**
- * Context passed to message handlers. Extends FrontendEventHandlerContext with
- * prompt state accessors needed for handling approval/retry messages.
- */
-export interface MessageHandlerContext extends FrontendEventHandlerContext {
-  getPermissions(): PermissionState[];
-  setPermissions(permissions: PermissionState[]): void;
-  setPlacement(placement: ProgressViewPlacement): void;
-}
-
-/**
- * Handler function type - receives typed message data (already validated).
- */
-export type TypedHandler<T extends ProgressViewOutboundMessage> = (
-  data: T,
-  ctx: MessageHandlerContext,
-) => void;
-
-/**
- * Handler registry mapping command to typed handler.
- * TypeScript ensures handlers receive the correct message type.
- */
-export type HandlerRegistry = {
-  [K in ProgressViewOutboundMessage['command']]?: TypedHandler<
-    Extract<ProgressViewOutboundMessage, { command: K }>
-  >;
-};
+import type {
+  HandlerRegistry,
+  MessageHandlerContext,
+  TypedHandler,
+} from './messageHandlerTypes';
 
 // ============================================================
 // Composed handler registry

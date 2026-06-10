@@ -8,7 +8,7 @@ import type { UserQuestionAnswers } from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
 import type { ExtractedClipboardImage } from '@shared/utils/clipboardImages';
 
-import type { PermissionState } from './components/PermissionCard';
+import type { PermissionState } from './permissionState';
 import type { StreamFilter } from './store';
 
 // =============================================================================

@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
+import { createFakePlatform } from '@test/support/FakePlatform';
 import { FlowTransition } from '@agent/core/flows/FlowTransitions';
 import { ToolUseWaitNode } from '@agent/implementations/flows/tooluse/nodes/ToolUseWaitNode';
 import type { ToolUseRunShared } from '@agent/implementations/flows/tooluse/nodes/types';
@@ -12,7 +13,6 @@ import {
 } from '@agent/runtime/StreamStatusService';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
-import { createFakePlatform } from '@test/support/FakePlatform';
 import { GOAL_COST_CAP_CONFIG_KEY, GoalStore } from '@tools/goal';
 
 describe('ToolUseWaitNode', () => {

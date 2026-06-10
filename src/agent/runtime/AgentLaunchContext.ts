@@ -11,7 +11,7 @@ import {
   type AgentTrace,
   type StageHandle,
 } from '@agent/trace';
-import type { AgentCore } from '@agent/implementations/flows/common/BaseFlowServices';
+import type { AgentCore } from '@agent/core/flows/BaseFlowServices';
 import {
   AgentConfigSchema,
   type AgentConfig,

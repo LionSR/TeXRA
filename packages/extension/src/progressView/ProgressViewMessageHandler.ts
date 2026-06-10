@@ -15,6 +15,10 @@ import {
   validateExecutionRequest,
   type ExecutionRequest,
 } from '@agent/core/execution/executionRequests';
+import {
+  buildFileContextFromTaskState,
+  polishTextWithAI,
+} from '@agent/runtime/textEnhancement';
 import { getServerSideKeyService } from '@auth/serverKeys';
 import { apiKeyCommands } from '@commands/api/apiKeyCommands';
 import { toErrorMessage } from '@common/errors';
@@ -46,10 +50,6 @@ import {
   pathToLocation,
   WorkspaceFS,
 } from '@utils/files';
-import {
-  buildFileContextFromTaskState,
-  polishTextWithAI,
-} from '@utils/text/textEnhancementUtils';
 
 import { ProgressStreamLifecycleHost } from './managers/ProgressStreamLifecycleHost';
 import type { ProgressViewProvider } from './ProgressViewProvider';

@@ -34,7 +34,8 @@ describe('bestConnectionMethod helper model routing', () => {
       },
     });
 
-    const { bestConnectionMethod } = await import('@latex/textConnection');
+    const { bestConnectionMethod } =
+      await import('@agent/runtime/textConnection');
     const result = await bestConnectionMethod('left', 'right');
 
     expect(result).toEqual({ connector: '', choice: 'A' });

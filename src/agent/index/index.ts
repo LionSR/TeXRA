@@ -60,7 +60,6 @@ export {
   computeAgentOptionsData,
   // Key helpers
   createKey,
-  getCleanAgentName,
   resolveAgentKey,
   // Source helpers
   isRemoteAgent,

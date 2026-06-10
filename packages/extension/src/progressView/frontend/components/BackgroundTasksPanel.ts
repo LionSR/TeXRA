@@ -36,15 +36,14 @@ import { ProgressEvents } from '../events';
 
 // Local imports - contexts
 import {
-  EMPTY_PROCESS_OUTPUTS,
   EMPTY_INQUIRY_THREADS,
   EMPTY_STREAM_BY_ID,
   inquiryThreadsContext,
   processOutputContext,
   streamByIdContext,
-  type ProcessOutputMap,
   type StreamByIdMap,
 } from '../contexts/streamContexts';
+import { EMPTY_PROCESS_OUTPUTS, type ProcessOutputMap } from '../store';
 
 // Side-effect imports - sibling components
 import './TerminalOutput';

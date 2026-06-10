@@ -1,14 +1,14 @@
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
-import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
+import type { RoundFinalizedCallback } from '@agent/core/flows/BaseFlowServices';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AttachedMemoryMiss } from '@agent/types/AttachedMemory';
-import type { ToolDefinition } from '@model';
-import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
-import type { TaskRunFileService } from '@utils/files';
 import type {
   BaseFlowContextInit,
   FlowParams,
-} from '../common/BaseFlowServices';
+} from '@agent/core/flows/BaseFlowServices';
+import type { ToolDefinition } from '@model';
+import type { SubagentProgressUpdate, TodoItem } from '@shared/schemas';
+import type { TaskRunFileService } from '@utils/files';
 import type { IToolUseSession } from './ToolUseSessionLifecycle';
 import type { ToolUseSessionSnapshot } from './ToolUseSessionTypes';
 

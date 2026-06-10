@@ -45,7 +45,7 @@ import {
 
 // Local imports - progress view component types
 import type { BaseRequestPanel } from './BaseRequestPanel';
-import type { PermissionState } from './PermissionCard';
+import type { PermissionState } from '../permissionState';
 
 // Side-effect imports to register sub-panel custom elements
 import './ToolEditRequestPanel';
