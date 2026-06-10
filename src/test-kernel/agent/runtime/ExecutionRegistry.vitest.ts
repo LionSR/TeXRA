@@ -168,6 +168,70 @@ describe('executionRegistry', () => {
     }
   });
 
+  it('detaches descendants when killing with detached subagents', () => {
+    const explicit = createRecordingHost();
+    const interrupts = new InterruptRegistry();
+    const streamStatus = new StreamStatusRegistry();
+    const registry = new ExecutionRegistry({ interrupts, streamStatus });
+    const rootStreamId = 'root-detach-kill-test' as StreamTabId;
+    const childStreamId = 'child-detach-kill-test' as StreamTabId;
+    const grandchildStreamId = 'grandchild-detach-kill-test' as StreamTabId;
+    const childInterrupt = vi.fn();
+    const grandchildInterrupt = vi.fn();
+
+    try {
+      interrupts.register(childStreamId, { interrupt: childInterrupt });
+      interrupts.register(grandchildStreamId, {
+        interrupt: grandchildInterrupt,
+      });
+      registry.track(
+        new AgentExecutionHandle(
+          'exec-child-detach-kill-test',
+          rootStreamId,
+          childStreamId,
+          'test-subagent',
+          'toolUse',
+          explicit.host,
+        ),
+      );
+      registry.track(
+        new AgentExecutionHandle(
+          'exec-grandchild-detach-kill-test',
+          childStreamId,
+          grandchildStreamId,
+          'test-grandchild',
+          'toolUse',
+          explicit.host,
+        ),
+      );
+
+      expect(
+        registry.kill('exec-child-detach-kill-test', {
+          detachActiveChildren: true,
+        }),
+      ).toBe(true);
+
+      expect(childInterrupt).toHaveBeenCalledOnce();
+      expect(grandchildInterrupt).not.toHaveBeenCalled();
+      expect(streamStatus.get(childStreamId)).toBe(STREAM_STATUS.STOPPED);
+      expect(streamStatus.get(grandchildStreamId)).toBeUndefined();
+      expect(
+        registry.getAgentHandleByStream(grandchildStreamId)?.parentStreamId,
+      ).toBe(grandchildStreamId);
+      expect(explicit.events).toContainEqual({
+        event: 'setParentStream',
+        payload: {
+          childStreamId: grandchildStreamId,
+          parentStreamId: null,
+        },
+      });
+    } finally {
+      registry.dispose();
+      interrupts.unregister(childStreamId);
+      interrupts.unregister(grandchildStreamId);
+    }
+  });
+
   it('detaches children when stopping a stream with detached subagents', () => {
     const explicit = createRecordingHost();
     const interrupts = new InterruptRegistry();

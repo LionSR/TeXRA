@@ -575,7 +575,12 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       };
     }
 
-    const success = executionRegistry.kill(executionId);
+    const success = executionRegistry.kill(executionId, {
+      detachActiveChildren: platform().workspaceState.get<boolean>(
+        WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+        false,
+      ),
+    });
     if (success) {
       return { output: `Execution ${executionId} terminated.` };
     }
