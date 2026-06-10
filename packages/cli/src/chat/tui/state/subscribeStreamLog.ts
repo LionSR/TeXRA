@@ -203,6 +203,12 @@ function renderLogEntry(
   const text = entry.text ?? '';
   const role = logEntryRole(entry.messageType);
   const renderedText = renderLogEntryText(role, text);
+  if (
+    entry.messageType === MESSAGE_TYPES.MODEL_RESPONSE &&
+    renderedText.trim().length === 0
+  ) {
+    return null;
+  }
   // Assistant text is promoted by `finalizeSettledPrefix` once the model
   // moves on to a later entry; inherit the prior flag here so a re-sync
   // can't de-finalize an already-promoted block. User/error rows can't

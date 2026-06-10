@@ -1590,6 +1590,35 @@ describe('CLI transcript state', () => {
     }
   });
 
+  it('does not project empty assistant responses into transcript rows', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info('', { messageType: MESSAGE_TYPES.MODEL_RESPONSE });
+
+      syncStreamLog(root);
+
+      let slice = cliState.streams.get().get(root);
+      expect(slice?.entries ?? []).toEqual([]);
+
+      logger.info('Visible answer.', {
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      });
+
+      syncStreamLog(root);
+
+      slice = cliState.streams.get().get(root);
+      expect(slice?.entries.map((entry) => entry.text)).toEqual([
+        'Visible answer.',
+      ]);
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
   // Regression: a sync tick that fires after `finalizeAssistantTranscriptEntries`
   // must not roll the entry back to `finalized: false`. Cursor Bugbot flagged
   // this when `entriesEqual` started comparing `finalized` — without this
