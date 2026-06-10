@@ -9,17 +9,16 @@
  */
 
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import {
+  computeStandardPrice,
+  type StandardPricingConfig,
+} from '@agent/utils/priceUtils';
 
 import { normalizeUsage } from '../support/UsageNormalizer';
 import type { ChatUsage } from '@openrouter/sdk/models';
 
 /** Pricing inputs the handler supplies from its `config`/`capabilities`. */
-export interface OpenRouterPricingConfig {
-  inputPrice: number;
-  outputPrice: number;
-  cacheDiscountFactor: number;
-}
+export type OpenRouterPricingConfig = StandardPricingConfig;
 
 /** Computes cost based on token usage and model pricing. */
 export function computeOpenRouterPrice(
@@ -28,30 +27,16 @@ export function computeOpenRouterPrice(
 ): number {
   if (!responseUsage) return 0;
 
-  const promptTokens = responseUsage.promptTokens ?? 0;
-  const completionTokens = responseUsage.completionTokens ?? 0;
-
-  let basePrice = calculateTokenPrice(
-    promptTokens,
-    completionTokens,
-    config.inputPrice,
-    config.outputPrice,
+  return computeStandardPrice(
+    {
+      inputTokens: responseUsage.promptTokens ?? 0,
+      outputTokens: responseUsage.completionTokens ?? 0,
+      cachedTokens: responseUsage.promptTokensDetails?.cachedTokens ?? 0,
+      reasoningTokens:
+        responseUsage.completionTokensDetails?.reasoningTokens ?? 0,
+    },
+    config,
   );
-
-  const reasoningTokens =
-    responseUsage.completionTokensDetails?.reasoningTokens ?? 0;
-  const cachedTokens = responseUsage.promptTokensDetails?.cachedTokens ?? 0;
-
-  if (reasoningTokens) {
-    basePrice += (reasoningTokens * config.outputPrice) / 1e6;
-  }
-  if (cachedTokens) {
-    basePrice -=
-      (cachedTokens * config.inputPrice * (1 - config.cacheDiscountFactor)) /
-      1e6;
-  }
-
-  return basePrice;
 }
 
 /** Normalizes OpenRouter usage data into a unified format. */

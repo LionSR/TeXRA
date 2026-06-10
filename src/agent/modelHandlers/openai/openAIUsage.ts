@@ -8,16 +8,15 @@
  */
 import type { ExtendedCompletionUsage } from '@agent/core/usage/ResponseUsage';
 import type { NormalizedUsage } from '@agent/types/NormalizedUsage';
-import { calculateTokenPrice } from '@agent/utils/priceUtils';
+import {
+  computeStandardPrice,
+  type StandardPricingConfig,
+} from '@agent/utils/priceUtils';
 
 import { normalizeUsage } from '../support/UsageNormalizer';
 
 /** Pricing inputs the handler supplies from its `config`/`capabilities`. */
-export interface OpenAIPricingConfig {
-  inputPrice: number;
-  outputPrice: number;
-  cacheDiscountFactor: number;
-}
+export type OpenAIPricingConfig = StandardPricingConfig;
 
 /** Computes cost based on token usage and model pricing. */
 export function computeOpenAIPrice(
@@ -33,29 +32,18 @@ export function computeOpenAIPrice(
   const promptTokens =
     responseUsage.prompt_tokens ??
     cachedTokens + (responseUsage.prompt_cache_miss_tokens ?? 0);
-  const completionTokens = responseUsage.completion_tokens ?? 0;
   // Note: OpenAI doesn't provide tool_use_tokens in their API response
 
-  let basePrice = calculateTokenPrice(
-    promptTokens,
-    completionTokens,
-    config.inputPrice,
-    config.outputPrice,
+  return computeStandardPrice(
+    {
+      inputTokens: promptTokens,
+      outputTokens: responseUsage.completion_tokens ?? 0,
+      cachedTokens,
+      reasoningTokens:
+        responseUsage.completion_tokens_details?.reasoning_tokens ?? 0,
+    },
+    config,
   );
-
-  // Retrieve nested token details if present
-  const reasoningTokens =
-    responseUsage.completion_tokens_details?.reasoning_tokens ?? 0;
-  if (reasoningTokens) {
-    basePrice += (reasoningTokens * config.outputPrice) / 1e6;
-  }
-  if (cachedTokens) {
-    basePrice -=
-      (cachedTokens * config.inputPrice * (1 - config.cacheDiscountFactor)) /
-      1e6;
-  }
-
-  return basePrice;
 }
 
 /** Normalizes OpenAI usage data into a unified format. */
