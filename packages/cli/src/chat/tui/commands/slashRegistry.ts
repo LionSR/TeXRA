@@ -80,15 +80,32 @@ export function findSlashCommand(
 }
 
 /**
- * Returns registered commands whose name or an alias starts with `prefix`.
- * Results are case-insensitive and preserve registration order.
+ * Returns registered commands matching `prefix`, case-insensitively and in
+ * registration order. Prefix matches (on name or alias) win; when there are
+ * none, falls back to substring matches (`/odel` still finds `/model`), and
+ * finally to the closest typo suggestion (`/hlp` → `/help`) so the palette
+ * recovers from mistypes instead of going blank.
  */
 export function matchSlashCommands(prefix: string): readonly SlashCommand[] {
   const lower = prefix.toLowerCase();
-  return listSlashCommands().filter((cmd) => {
-    if (cmd.name.toLowerCase().startsWith(lower)) return true;
-    return cmd.aliases?.some((a) => a.toLowerCase().startsWith(lower)) ?? false;
-  });
+  const commands = listSlashCommands();
+  const matchesBy = (
+    predicate: (candidate: string) => boolean,
+  ): readonly SlashCommand[] =>
+    commands.filter(
+      (cmd) =>
+        predicate(cmd.name.toLowerCase()) ||
+        (cmd.aliases?.some((a) => predicate(a.toLowerCase())) ?? false),
+    );
+
+  const prefixMatches = matchesBy((candidate) => candidate.startsWith(lower));
+  if (prefixMatches.length > 0 || lower.length === 0) return prefixMatches;
+
+  const substringMatches = matchesBy((candidate) => candidate.includes(lower));
+  if (substringMatches.length > 0) return substringMatches;
+
+  const suggestion = suggestSlashCommand(lower);
+  return suggestion ? [suggestion] : [];
 }
 
 /**

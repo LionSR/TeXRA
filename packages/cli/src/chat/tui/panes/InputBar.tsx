@@ -83,12 +83,66 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   const [reverseSearchOpen, setReverseSearchOpen] = useState(false);
   const [attachNotice, setAttachNotice] = useState<string | null>(null);
   const draftValueRef = useRef(value);
+  // ↑/↓ history browsing (shell-style). `index` walks the persisted entries;
+  // `savedDraft` restores whatever was typed before browsing began. Any edit
+  // that diverges from the recalled entry ends the browse.
+  const historyBrowseRef = useRef<
+    { index: number; savedDraft: string } | undefined
+  >(undefined);
+  const appliedHistoryValueRef = useRef<string | undefined>(undefined);
   const setValue = useCallback((next: string) => {
     draftValueRef.current = next;
+    if (
+      appliedHistoryValueRef.current !== undefined &&
+      next !== appliedHistoryValueRef.current
+    ) {
+      historyBrowseRef.current = undefined;
+      appliedHistoryValueRef.current = undefined;
+    }
     setValueState(next);
   }, []);
   const historyRef = useRef(history);
   historyRef.current = history;
+  const recallHistoryValue = useCallback((next: string) => {
+    draftValueRef.current = next;
+    appliedHistoryValueRef.current = next;
+    setValueState(next);
+  }, []);
+  const handleHistoryUp = useCallback(() => {
+    const entries = historyRef.current;
+    if (!entries) return;
+    const count = entries.length();
+    if (count === 0) return;
+    const browse = historyBrowseRef.current;
+    const nextIndex = browse === undefined ? count - 1 : browse.index - 1;
+    if (nextIndex < 0) return;
+    const entry = entries.at(nextIndex);
+    if (entry === undefined) return;
+    historyBrowseRef.current = {
+      index: nextIndex,
+      savedDraft: browse?.savedDraft ?? draftValueRef.current,
+    };
+    recallHistoryValue(entry);
+  }, [recallHistoryValue]);
+  const handleHistoryDown = useCallback(() => {
+    const entries = historyRef.current;
+    const browse = historyBrowseRef.current;
+    if (!entries || browse === undefined) return;
+    const nextIndex = browse.index + 1;
+    if (nextIndex >= entries.length()) {
+      // Walked past the newest entry — restore the pre-browse draft.
+      historyBrowseRef.current = undefined;
+      appliedHistoryValueRef.current = undefined;
+      const restored = browse.savedDraft;
+      draftValueRef.current = restored;
+      setValueState(restored);
+      return;
+    }
+    const entry = entries.at(nextIndex);
+    if (entry === undefined) return;
+    historyBrowseRef.current = { ...browse, index: nextIndex };
+    recallHistoryValue(entry);
+  }, [recallHistoryValue]);
   const imagePasteQueueRef = useRef<ImagePasteQueue | null>(null);
   imagePasteQueueRef.current ??= new ImagePasteQueue();
   const imagePasteQueue = imagePasteQueueRef.current;
@@ -303,6 +357,10 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           value={value}
           focus={!disabled && !reverseSearchOpen}
           onChange={setValue}
+          // While the slash palette is open it owns ↑/↓ for row selection;
+          // history recall would clobber the draft mid-navigation.
+          onHistoryUp={showPalette ? undefined : handleHistoryUp}
+          onHistoryDown={showPalette ? undefined : handleHistoryDown}
           imagePasteQueue={imagePasteQueue}
           transformPaste={transformPaste}
           onImagePaste={onImagePaste}

@@ -862,6 +862,7 @@ async function handleTuiSlashCommand(
           approval: formatApprovalPolicy(context.getApprovalPolicy()),
           approvalBypasses: slice?.bypass,
           status: slice?.status ?? 'not started',
+          sessionId: context.session.executionId,
           queuedFollowUpMessages:
             activeStreamId === undefined
               ? []

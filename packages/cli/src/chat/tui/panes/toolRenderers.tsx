@@ -18,11 +18,29 @@ import {
   editPatchGroups,
   type InlinePatchGroup,
 } from '../render/DiffView';
+import { textDisplayWidth } from '../render/terminalText';
 
 const STATUS_DOT = '●';
 const OUTPUT_CORNER = '⎿';
 const MAX_HEADER_PREVIEW = 80;
 const MAX_ERROR_PREVIEW = 240;
+// Header chrome around the preview: `● ` plus ` (` and `)`.
+const HEADER_CHROME_COLS = 5;
+const MIN_HEADER_PREVIEW = 24;
+
+/** Preview budget for live tool rows: fill the terminal row instead of the
+ *  historical fixed 80 columns, so wide terminals show the whole command and
+ *  narrow ones truncate to fit a single row. */
+export function toolHeaderPreviewBudget(
+  columns: number | undefined,
+  displayName: string,
+): number {
+  if (columns === undefined || columns <= 0) return MAX_HEADER_PREVIEW;
+  return Math.max(
+    MIN_HEADER_PREVIEW,
+    columns - textDisplayWidth(displayName) - HEADER_CHROME_COLS,
+  );
+}
 
 // Tool output can be arbitrarily large (a 50 KB bash dump, a long grep). The
 // finalized `<Static>` scrollback and the live region show a head+tail slice
@@ -411,6 +429,7 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
     showExitCode = false,
     preferInputPreview = false,
   } = props;
+  const { columns } = useWindowSize();
   const color = statusColor(toolUse);
   const name =
     (props.displayName ?? displayToolName(toolUse.toolName)) ||
@@ -424,14 +443,17 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
       ? previewInput(toolUse.input) || toolUse.headerSummary || ''
       : toolUse.headerSummary || previewInput(toolUse.input) || '';
     const previewText = sourceText
-      ? truncateWithEllipsis(collapseWhitespace(sourceText), MAX_HEADER_PREVIEW)
+      ? truncateWithEllipsis(
+          collapseWhitespace(sourceText),
+          toolHeaderPreviewBudget(columns, name),
+        )
       : '';
     return {
       patchGroups: showPatch ? toolUsePatchGroups(toolUse) : undefined,
       preview: previewText,
       visibleOutput: showOutput ? visibleOutputLines(toolUse) : [],
     };
-  }, [toolUse, showPatch, showOutput, preferInputPreview]);
+  }, [toolUse, showPatch, showOutput, preferInputPreview, columns, name]);
 
   const errorText = errorTextForDisplay(toolUse);
   const exitCode = showExitCode ? extractExitCode(toolUse) : undefined;

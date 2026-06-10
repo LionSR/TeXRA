@@ -11,12 +11,18 @@ import {
   clampCursor,
   deleteAtCursor,
   deleteBeforeCursor,
+  deleteNextWord,
   deletePreviousWord,
   deleteToEnd,
   deleteToStart,
   applyTerminalInputChunk,
   insertText,
+  lineEndCursor,
+  lineStartCursor,
   maskDisplayValue,
+  nextWordCursor,
+  previousWordCursor,
+  verticalCursorMove,
   type CursorEdit,
   type TextEdit,
 } from './textInputEditing';
@@ -46,6 +52,12 @@ export interface BaseTextInputProps {
   readonly onSubmit: (value: string) => void;
   readonly onInputChunkSubmit?: (value: string) => void;
   readonly onChange: (value: string) => void;
+  /** ↑ pressed while the caret is on the first line of the draft (where ↑ has
+   *  no in-draft meaning) — input bars use this for shell-style history
+   *  recall. Within a multiline draft, ↑/↓ move the caret between lines. */
+  readonly onHistoryUp?: () => void;
+  /** ↓ pressed while the caret is on the last line of the draft. */
+  readonly onHistoryDown?: () => void;
   /** Optionally transform pasted text before it is inserted — e.g. collapse a
    *  large paste into a `[Pasted text #N +M lines]` chip and stash the content
    *  elsewhere. Defaults to inserting the paste verbatim. */
@@ -413,6 +425,17 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         submitAfterImagePastes(onSubmit, latestStateRef.current.value);
         return;
       }
+      // Alt+Backspace (readline backward-kill-word). Terminals surface it as
+      // a meta-flagged backspace/DEL or as the raw ESC+DEL chord.
+      const chord = metaChordInput(input, key);
+      if (
+        ((key.backspace || key.delete) && key.meta) ||
+        chord === '\u007F' ||
+        chord === '\b'
+      ) {
+        applyLatestEdit(deletePreviousWord);
+        return;
+      }
       if (key.backspace) {
         applyLatestEdit(deleteBeforeCursor);
         return;
@@ -422,19 +445,51 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         return;
       }
       if (key.leftArrow) {
-        moveCursor(latestStateRef.current.cursor - 1);
+        const { value: v, cursor: c } = latestStateRef.current;
+        moveCursor(key.ctrl || key.meta ? previousWordCursor(v, c) : c - 1);
         return;
       }
       if (key.rightArrow) {
-        moveCursor(latestStateRef.current.cursor + 1);
+        const { value: v, cursor: c } = latestStateRef.current;
+        moveCursor(key.ctrl || key.meta ? nextWordCursor(v, c) : c + 1);
+        return;
+      }
+      if (key.upArrow || key.downArrow) {
+        const { value: v, cursor: c } = latestStateRef.current;
+        const moved = verticalCursorMove(v, c, key.upArrow ? -1 : 1);
+        if (moved !== undefined) {
+          moveCursor(moved);
+        } else if (key.upArrow) {
+          props.onHistoryUp?.();
+        } else {
+          props.onHistoryDown?.();
+        }
+        return;
+      }
+      // Readline word chords: Alt-B / Alt-F move by word, Alt-D kills the
+      // next word. Other meta chords fall through to the drop branch below.
+      if (chord === 'b') {
+        const { value: v, cursor: c } = latestStateRef.current;
+        moveCursor(previousWordCursor(v, c));
+        return;
+      }
+      if (chord === 'f') {
+        const { value: v, cursor: c } = latestStateRef.current;
+        moveCursor(nextWordCursor(v, c));
+        return;
+      }
+      if (chord === 'd') {
+        applyLatestEdit(deleteNextWord);
         return;
       }
       if (key.home || isCtrlInput(input, key, 'a')) {
-        moveCursor(0);
+        const { value: v, cursor: c } = latestStateRef.current;
+        moveCursor(lineStartCursor(v, c));
         return;
       }
       if (key.end || isCtrlInput(input, key, 'e')) {
-        moveCursor(latestStateRef.current.value.length);
+        const { value: v, cursor: c } = latestStateRef.current;
+        moveCursor(lineEndCursor(v, c));
         return;
       }
       if (isCtrlInput(input, key, 'u')) {

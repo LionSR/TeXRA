@@ -88,6 +88,35 @@ describe('CLI session status formatter', () => {
     expect(status).toContain('1. (empty follow-up)');
   });
 
+  it('surfaces the session id and resume command once a run has started', () => {
+    const status = formatCliSessionStatus({
+      agent: 'chat',
+      model: 'harness-model',
+      api: 'personal',
+      approval: 'ask',
+      status: 'running',
+      sessionId: 'abc123',
+      queuedFollowUpMessages: [],
+    });
+
+    expect(status).toContain('session: abc123');
+    expect(status).toContain('resume later with: texra --resume abc123');
+  });
+
+  it('omits session lines before the first run starts', () => {
+    const status = formatCliSessionStatus({
+      agent: 'chat',
+      model: 'harness-model',
+      api: 'personal',
+      approval: 'ask',
+      status: 'not started',
+      queuedFollowUpMessages: [],
+    });
+
+    expect(status).not.toContain('session:');
+    expect(status).not.toContain('--resume');
+  });
+
   it('reports an empty follow-up queue explicitly', () => {
     expect(
       formatCliSessionStatus({
