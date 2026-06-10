@@ -1505,7 +1505,7 @@
   },
   "license": "SEE LICENSE IN LICENSE.txt",
   "author": "TeXRA.ai",
-  "icon": "resources/logo-128x128.png",
+  "icon": "resources/logo-512x512.png",
   "keywords": [
     "latex",
     "tex",
