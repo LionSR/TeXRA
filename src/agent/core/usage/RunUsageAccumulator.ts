@@ -30,17 +30,6 @@ const RunUsageTotalsSchema = z.object({
 });
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;
 
-/**
- * Build a fresh default totals object from the schema.
- *
- * Single source of truth: the per-field `.prefault(0)` declarations on
- * `RunUsageTotalsSchema` drive the result, so adding a new field there
- * automatically extends this default without manual sync.
- */
-function createDefaultTotals(): RunUsageTotals {
-  return RunUsageTotalsSchema.parse({});
-}
-
 /** Schema for normalized usage snapshot. Internal only. */
 const NormalizedUsageSnapshotSchema = z.object({
   round: z.int().nonnegative(),
@@ -49,10 +38,12 @@ const NormalizedUsageSnapshotSchema = z.object({
 
 /**
  * Schema for RunUsageAccumulator JSON serialization.
- * Uses .prefault() for input normalization before validation.
+ * Uses .prefault() for input normalization before validation; the per-field
+ * `.prefault(0)` declarations on `RunUsageTotalsSchema` expand `{}` into a
+ * fully-defaulted totals object.
  */
 export const RunUsageAccumulatorJSONSchema = z.object({
-  totals: RunUsageTotalsSchema.prefault(() => createDefaultTotals()),
+  totals: RunUsageTotalsSchema.prefault({}),
   normalizedSnapshots: z.array(NormalizedUsageSnapshotSchema).prefault([]),
 });
 

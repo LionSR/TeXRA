@@ -345,23 +345,13 @@ export function resolveAgent(identifier: string): ResolvedAgent | undefined {
   return { entry, definitionPath: entry.path, resolvedName: entry.name };
 }
 
-function getAgentsByCategory(
-  category: AgentCategory,
-  includeInternal: boolean,
-): AgentEntry[] {
+/** Get non-internal agents for a category, deduplicated by name. */
+export function getAgentsByCategory(category: AgentCategory): AgentEntry[] {
   return deduplicateByName(
     [...cache.values()].filter(
-      (e) => e.category === category && (includeInternal || !e.internal),
+      (e) => e.category === category && !e.internal,
     ),
   );
-}
-
-export function getWorkflowAgents(includeInternal = false): AgentEntry[] {
-  return getAgentsByCategory(AgentCategory.Workflow, includeInternal);
-}
-
-export function getToolUseAgents(includeInternal = false): AgentEntry[] {
-  return getAgentsByCategory(AgentCategory.ToolUse, includeInternal);
 }
 
 /** Get agents by source. */
@@ -591,9 +581,8 @@ export function isRemoteAgent(identifier: string | undefined): boolean {
  * No default → undefined means "never configured" (show all).
  */
 export function getVisibleAgents(category: AgentCategory): AgentEntry[] {
-  const isToolUse = category === 'toolUse';
-  const entries = isToolUse ? getToolUseAgents() : getWorkflowAgents();
-  const stateKey = isToolUse
+  const entries = getAgentsByCategory(category);
+  const stateKey = category === 'toolUse'
     ? WorkspaceStateKey.ENABLED_TOOL_USE_AGENTS
     : WorkspaceStateKey.ENABLED_AGENTS;
   const raw = platform().workspaceState.get<string[]>(stateKey);

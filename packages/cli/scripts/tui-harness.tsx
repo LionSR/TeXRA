@@ -9,7 +9,7 @@ import path from 'node:path';
 import { render } from 'ink';
 import React from 'react';
 
-import { getToolUseAgents, getWorkflowAgents, loadAgents } from '@agent/index';
+import { getAgentsByCategory, loadAgents } from '@agent/index';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import { isInFlightStatus } from '@common/constants/streamStatus';
@@ -263,11 +263,11 @@ await loadAgents({ includeRemote: false });
 
 const HARNESS_ORCHESTRATION_ITEMS = buildCliOrchestrationItems({
   presetPlans: planCliMultiAgentPresets(cliMultiAgentPresets(undefined), {
-    workflowAgents: getWorkflowAgents(),
-    toolUseAgents: getToolUseAgents(),
+    workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
+    toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
   }),
   history: harnessOrchestrationHistory(),
-  toolUseAgents: getToolUseAgents(),
+  toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
 });
 
 function harnessOrchestrationHistory(): readonly CliHistoryEntry[] {

@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import { getToolUseAgents, getWorkflowAgents, loadAgents } from '@agent/index';
+import { getAgentsByCategory, loadAgents } from '@agent/index';
 import { writeTerminalStatus } from '@agent/storage';
 import {
   AgentConfigSchema,
@@ -110,8 +110,8 @@ function planCurrentMultiAgentRun(
     throw new CliUsageError(`Multi-agent preset not found: ${init.preset}`);
   }
   return planCliMultiAgentPresetRun(preset, {
-    workflowAgents: getWorkflowAgents(),
-    toolUseAgents: getToolUseAgents(),
+    workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
+    toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
     agentOverride: init.agent,
   });
 }
@@ -120,8 +120,8 @@ function planLoadedCliMultiAgentPresets(
   presets: readonly CliMultiAgentPreset[],
 ): CliMultiAgentPresetRunPlan[] {
   return planCliMultiAgentPresets(presets, {
-    workflowAgents: getWorkflowAgents(),
-    toolUseAgents: getToolUseAgents(),
+    workflowAgents: getAgentsByCategory(AgentCategory.Workflow),
+    toolUseAgents: getAgentsByCategory(AgentCategory.ToolUse),
   });
 }
 

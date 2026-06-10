@@ -53,10 +53,6 @@ const MULTI_SET_COMMAND_BY_FILE_TYPE = {
 
 type DesktopMultiFileType = keyof typeof MULTI_SET_COMMAND_BY_FILE_TYPE;
 
-function getListSettings() {
-  return loadFileListSettings(getConfig);
-}
-
 function readDirectory(directory: string) {
   return (tryPlatform()?.fs ?? nodeFilesystem).readDirectory(directory);
 }
@@ -116,7 +112,7 @@ export function createDesktopFileSelection(
 
   async function list(fileType: ListableFileType): Promise<string[]> {
     const workspacePath = getWorkspacePath();
-    const config = getFileListConfig(fileType, getListSettings());
+    const config = getFileListConfig(fileType, loadFileListSettings(getConfig));
     if (!workspacePath || !config) return [];
     return listFiles(workspacePath, config);
   }
@@ -149,7 +145,7 @@ export function createDesktopFileSelection(
       return;
     }
     const workspacePath = getWorkspacePath();
-    const config = getEditedFileListConfig(getListSettings());
+    const config = getEditedFileListConfig(loadFileListSettings(getConfig));
     if (!workspacePath) {
       postFileList('edited', []);
       return;
@@ -191,7 +187,10 @@ export function createDesktopFileSelection(
     if (!workspacePath) return;
 
     const { title, listType } = getDialogConfig(message.fileType);
-    const listConfig = getFileListConfig(listType, getListSettings());
+    const listConfig = getFileListConfig(
+      listType,
+      loadFileListSettings(getConfig),
+    );
     const currentFile =
       typeof message.currentFile === 'string' ? message.currentFile : undefined;
     const defaultPath =

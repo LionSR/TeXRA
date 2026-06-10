@@ -13,8 +13,7 @@ import { SettingsAgentDirectoryController } from '@controllers/settingsView/Sett
 import { SettingsAgentVisibilityController } from '@controllers/settingsView/SettingsAgentVisibilityController';
 import {
   getAgent,
-  getToolUseAgents,
-  getWorkflowAgents,
+  getAgentsByCategory,
   getVisibleAgents as getVisibleRegistryAgents,
   type AgentEntry,
 } from '@agent/index/agentRegistry';
@@ -39,10 +38,6 @@ export interface SettingsAgentControllers {
   readonly state: SettingsAgentCatalogState;
 }
 
-function defaultGetAgents(category: AgentCategory): AgentEntry[] {
-  return category === 'workflow' ? getWorkflowAgents() : getToolUseAgents();
-}
-
 function agentStateKey(category: AgentCategory): WorkspaceStateKey {
   return category === 'workflow'
     ? WorkspaceStateKey.ENABLED_AGENTS
@@ -53,7 +48,7 @@ export function createSettingsAgentControllers(
   options: AgentControllerFactoryOptions,
 ): SettingsAgentControllers {
   const { workspaceState, globalState } = options;
-  const getAgents = options.getAgents ?? defaultGetAgents;
+  const getAgents = options.getAgents ?? getAgentsByCategory;
   const getVisibleAgents = options.getVisibleAgents ?? getVisibleRegistryAgents;
 
   const state: SettingsAgentCatalogState = {

@@ -234,17 +234,17 @@ export async function preflightCliHistoryDeleteAll(options: {
 export function formatCliHistoryText(
   entries: readonly CliHistoryEntry[],
 ): string {
-  return entries.map(formatCliHistoryLine).join('\n');
-}
-
-function formatCliHistoryLine(entry: CliHistoryEntry): string {
-  return [
-    entry.id,
-    entry.timestamp,
-    entry.agent,
-    entry.status,
-    entry.inputBasename,
-  ].join('\t');
+  return entries
+    .map((entry) =>
+      [
+        entry.id,
+        entry.timestamp,
+        entry.agent,
+        entry.status,
+        entry.inputBasename,
+      ].join('\t'),
+    )
+    .join('\n');
 }
 
 export function cliHistoryNdjsonRecords(
@@ -304,7 +304,9 @@ export function formatCliHistoryDetailsText(
   lines.push('', `Files (${details.files.length}):`);
   lines.push(
     ...(details.files.length
-      ? details.files.map(formatCliHistoryFile)
+      ? details.files.map(
+          (file) => `${file.isDirectory ? '<dir>' : file.size}\t${file.path}`,
+        )
       : ['(none)']),
   );
   if (details.hasFlowRecord) lines.push('', 'Resumable flow record: present');
@@ -345,11 +347,6 @@ function isHistoryKvFile(name: string): boolean {
   return (
     KV_FILES.has(name) || name.startsWith('child-') || name.startsWith('flow_')
   );
-}
-
-function formatCliHistoryFile(file: CliHistoryFile): string {
-  const kind = file.isDirectory ? '<dir>' : `${file.size}`;
-  return `${kind}\t${file.path}`;
 }
 
 function createConversationPreview(

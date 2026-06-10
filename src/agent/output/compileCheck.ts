@@ -301,13 +301,8 @@ async function readLogTail(
   );
   try {
     const full = await flexibleFS.read(pathToLocation(latexLogAbs));
-    return formatCompileLogTail(full);
+    return splitContentLines(full).slice(-LOG_TAIL_LINES).join('\n');
   } catch (err) {
     return `(no LaTeX log at ${latexLogAbs}: ${toErrorMessage(err)})`;
   }
-}
-
-/** Format the diagnostic tail of a LaTeX log for compile-failure reports. */
-export function formatCompileLogTail(fullLog: string): string {
-  return splitContentLines(fullLog).slice(-LOG_TAIL_LINES).join('\n');
 }
