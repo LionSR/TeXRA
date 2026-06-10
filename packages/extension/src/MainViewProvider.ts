@@ -8,6 +8,7 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 // Local imports - common
 import {
   BaseWebviewProvider,
+  BundledViewContentProvider,
   getCombinedLocalResourceRoots,
   SIDEBAR_VIEWS,
   setActiveSidebarView,
@@ -16,6 +17,7 @@ import { consumePendingState } from '@common/state';
 import { EXTENSION_CATEGORIES, getFilterExtensions } from '@common/files';
 
 import { agentDirectories } from '@frontend/agents';
+import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { computeModelOptionsData } from '@model/computeModelOptions';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc';
 import { MainViewPersistedStateSchema } from '@shared/schemas';
@@ -24,10 +26,8 @@ import { debounce } from '@utils/core';
 
 // Local file imports
 import { MainViewMessageHandler } from './webview/MainViewMessageHandler';
-import { MainViewContentProvider } from './webview/MainViewContentProvider';
 
 import type { ProgressViewProvider } from './progressView/ProgressViewProvider';
-import type { ProgressViewContentProvider } from './progressView/ProgressViewContentProvider';
 
 export type SidebarMode = 'main' | 'progress';
 
@@ -37,7 +37,7 @@ export class MainViewProvider
 {
   public static readonly viewType = 'texra.mainView';
   protected messageHandler: MainViewMessageHandler;
-  protected contentProvider: MainViewContentProvider;
+  protected contentProvider: BundledViewContentProvider;
   private fileWatcher: vscode.FileSystemWatcher | undefined;
   private agentWatcher: vscode.Disposable | undefined;
 
@@ -46,7 +46,7 @@ export class MainViewProvider
   private _activeMode: SidebarMode = 'main';
   private _messageDisposable?: vscode.Disposable;
   private _progressViewProvider?: ProgressViewProvider;
-  private _progressContentProvider?: ProgressViewContentProvider;
+  private _progressContentProvider?: BundledViewContentProvider;
 
   // Debounced refresh for agent option changes
   private debouncedRefreshAgentOptions = debounce(
@@ -57,7 +57,16 @@ export class MainViewProvider
   constructor(protected readonly context: vscode.ExtensionContext) {
     super(context);
     this.messageHandler = new MainViewMessageHandler(context);
-    this.contentProvider = new MainViewContentProvider(context);
+    this.contentProvider = new BundledViewContentProvider(
+      context,
+      'MainView',
+      {
+        dist: 'webview',
+        bundleKey: 'mainViewBundleUri',
+        styleKey: 'mainViewStyleUri',
+      },
+      'webview',
+    );
     this.setupFileWatcher();
     this.setupAgentWatcher();
     this.setupConfigurationWatcher();
@@ -87,13 +96,9 @@ export class MainViewProvider
   }
 
   private setupAuthListener() {
-    this.context.subscriptions.push(
-      vscode.authentication.onDidChangeSessions((e) => {
-        if (e.provider.id === 'texra-supabase') {
-          void this.refreshOptionsAndView();
-        }
-      }),
-    );
+    onTexraAuthSessionsChanged(this.context, () => {
+      void this.refreshOptionsAndView();
+    });
     this.context.subscriptions.push(
       getServerSideKeyService().onDidChangeModelAccess(() => {
         void this.refreshOptionsAndView();
