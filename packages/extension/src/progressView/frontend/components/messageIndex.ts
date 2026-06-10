@@ -43,9 +43,10 @@ export class MessageIndex {
   ): boolean {
     if (previousGroups.length !== nextGroups.length) return false;
 
-    for (const [i, next] of nextGroups.entries()) {
+    for (let i = 0; i < nextGroups.length; i++) {
       const previous = previousGroups[i];
-      if (!previous) return false;
+      const next = nextGroups[i];
+      if (!previous || !next) return false;
       if (
         previous.id !== next.id ||
         previous.parentGroupId !== next.parentGroupId ||
@@ -277,7 +278,9 @@ export class MessageIndex {
       return;
     }
 
-    for (const item of this.timeline) {
+    for (let i = this.timeline.length - 1; i >= 0; i--) {
+      const item = this.timeline[i];
+      if (!item) continue;
       if (!('msg' in item)) continue;
       const fresh = this.ungroupedById.get(item.key);
       if (fresh && fresh !== item.msg) {

@@ -222,10 +222,11 @@ function buildFileListLog(movedFiles: string[], copiedFiles: string[]): string {
 function packDestinationName(file: string): string {
   const base = path.basename(file);
   const segments = path.dirname(file).split(/[\\/]+/);
-  const round = segments
-    .map(parseWorkflowOutputRoundDir)
-    .findLast((r) => r !== null);
-  return round != null ? `r${round}_${base}` : base;
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const round = parseWorkflowOutputRoundDir(segments[i]);
+    if (round !== null) return `r${round}_${base}`;
+  }
+  return base;
 }
 
 async function moveAndCopyFiles(
