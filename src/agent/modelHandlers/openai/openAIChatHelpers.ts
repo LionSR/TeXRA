@@ -2,11 +2,9 @@ import { takeTail } from '@common/errors/sdkErrorUtils';
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
 
 // Reasoning content type for DeepSeek, o1 models (not in SDK)
-export type ReasoningContent = string | Array<{ type: string; text?: string }>;
+type ReasoningContent = string | Array<{ type: string; text?: string }>;
 
-export function extractReasoningText(
-  content: ReasoningContent | undefined,
-): string {
+function extractReasoningText(content: ReasoningContent | undefined): string {
   if (!content) return '';
   if (typeof content === 'string') return content;
   return content.map((item) => item.text ?? '').join('');

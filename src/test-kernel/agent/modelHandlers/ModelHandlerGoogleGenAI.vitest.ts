@@ -22,10 +22,8 @@ import {
   ModelProvider,
 } from 'llm-zoo';
 import type { AgentTrace } from '@agent/trace';
-import {
-  ModelHandlerGoogleGenAI,
-  validateGoogleMessageHistory,
-} from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { ModelHandlerGoogleGenAI } from '@agent/modelHandlers/google/modelHandlerGoogleGenAI';
+import { validateGoogleMessageHistory } from '@agent/modelHandlers/google/googleMessageHelpers';
 import { extractToolAttachments } from '@agent/modelHandlers/utils/toolAttachmentUtils';
 import { MediaEntry } from '@agent/utils/mediaTypes';
 

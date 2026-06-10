@@ -1,7 +1,6 @@
 /**
  * History and chat-export domain handlers.
  *
- * Extracted from SettingsViewMessageHandler to improve cohesion.
  * Handles rerun/restore/delete of past executions, clearing history,
  * and exporting a conversation as Markdown, LaTeX/PDF, or self-contained HTML.
  */
