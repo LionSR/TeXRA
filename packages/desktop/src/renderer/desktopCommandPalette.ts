@@ -5,7 +5,6 @@ import {
   createCommandPalette,
   executeCommandPaletteEntry,
   filterCommandPaletteEntries,
-  getNextCommandPaletteIndex,
   isCommandPaletteShortcut,
   type CommandPaletteController,
   type CommandPaletteEntry,
@@ -41,14 +40,6 @@ export function filterDesktopCommandPaletteEntries(
   // label). The shared helper consults `category` first, then `meta`, so the
   // existing search behaviour (label + category + id) is preserved.
   return filterCommandPaletteEntries(entries, query);
-}
-
-export function getNextDesktopCommandPaletteIndex(
-  currentIndex: number,
-  itemCount: number,
-  delta: number,
-): number {
-  return getNextCommandPaletteIndex(currentIndex, itemCount, delta);
 }
 
 export function executeDesktopCommandPaletteEntry(

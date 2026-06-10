@@ -1,5 +1,6 @@
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
+import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 
 import { CLI_BUILTIN_DEFAULT_MODEL } from '../runtime/cliConfig';
 import {
@@ -18,7 +19,6 @@ import {
   buildInitConfig,
   configFileExists,
   ensureTexraGitignored,
-  initConfigPath,
   writeInitConfig,
   type InitAnswers,
 } from '../runtime/initConfig';
@@ -106,7 +106,7 @@ async function runInit(
   // included models), so the picker annotates and defaults correctly.
   await initCliPlatform({ ...context, quietLogs: true });
 
-  const filePath = initConfigPath(context.cwd);
+  const filePath = workspaceTexraConfigPath(context.cwd);
   if (!opts.force && (await configFileExists(filePath))) {
     writeTextStderr(
       `Refusing to overwrite existing config at ${filePath}. Re-run with --force to replace it.`,

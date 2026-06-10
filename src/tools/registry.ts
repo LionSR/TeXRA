@@ -22,7 +22,9 @@ import {
   ExtractLatexFiguresTool,
   ExtractTikzFiguresTool,
 } from './latex';
-import { ArxivDownloadTool, ArxivMetadataTool, ArxivSearchTool } from './arxiv';
+import { ArxivDownloadTool } from './arxiv/ArxivDownloadTool';
+import { ArxivMetadataTool } from './arxiv/ArxivMetadataTool';
+import { ArxivSearchTool } from './arxiv/ArxivSearchTool';
 import { ReadFileTool } from './ReadTool';
 import { TextEditorTool } from './TextEditorTool';
 import { WriteFileTool } from './WriteTool';
@@ -30,17 +32,16 @@ import { WebFetchTool } from './web/WebFetchTool';
 import { WebSearchTool } from './web/WebSearchTool';
 import { WolframTool } from './wolfram/WolframTool';
 import { TexcountTool } from './texcount/TexcountTool';
-import { CrossrefDoiTool, CrossrefSearchTool } from './citation';
+import { CrossrefDoiTool } from './citation/CrossrefDoiTool';
+import { CrossrefSearchTool } from './citation/CrossrefSearchTool';
 import { PlanTool } from './plan/PlanTool';
 import { TodoWriteTool } from './todo/TodoTool';
 import { MemoryTool } from './memory/MemoryTool';
 import { OpenPdfTool } from './OpenPdfTool';
-import {
-  ZoteroAddTool,
-  ZoteroCollectionsTool,
-  ZoteroSearchTool,
-  ZoteroExportTool,
-} from './zotero';
+import { ZoteroAddTool } from './zotero/ZoteroAddTool';
+import { ZoteroCollectionsTool } from './zotero/ZoteroCollectionsTool';
+import { ZoteroExportTool } from './zotero/ZoteroExportTool';
+import { ZoteroSearchTool } from './zotero/ZoteroSearchTool';
 import { CodexTool } from './codex';
 import { ClaudeAgentTool } from './claudeAgent';
 import { CLAUDE_AGENT_NAME } from './claudeAgentShared';

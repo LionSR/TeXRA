@@ -1,20 +1,9 @@
 /**
  * Core tool type definitions: ITool, IToolRegistry, MapToolRegistry.
- * Re-exports ToolResult types from @tools/result and ToolDefinition from @model.
  */
 
 import type { ToolDefinition as ToolDefinitionType } from '@model/ToolDefinition';
 import type { ToolResult as ToolResultType } from '@tools/result';
-
-export type {
-  ToolResult,
-  ErrorDiagnostics,
-  DiagnosticsPayload,
-  ToolFileAttachment,
-} from '@tools/result';
-export { ToolError } from '@tools/result';
-
-export type { ToolDefinition } from '@model/ToolDefinition';
 
 /**
  * Contract for tool implementations.
