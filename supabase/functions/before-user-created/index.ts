@@ -102,15 +102,22 @@ Deno.serve(async (req) => {
   const rawBody = await req.text();
 
   let payload: HookRequest;
+  try {
+    payload = JSON.parse(rawBody) as HookRequest;
+  } catch {
+    return new Response('Invalid JSON', { status: 400 });
+  }
+
   if (webhook) {
     try {
       // verify() enforces the spec's timestamp tolerance (anti-replay) and
-      // returns the parsed JSON payload.
-      payload = webhook.verify(rawBody, {
+      // validates the signed raw body. JSON was already parsed above so
+      // malformed payloads remain 400 rather than looking like auth failures.
+      webhook.verify(rawBody, {
         'webhook-id': req.headers.get('webhook-id') ?? '',
         'webhook-timestamp': req.headers.get('webhook-timestamp') ?? '',
         'webhook-signature': req.headers.get('webhook-signature') ?? '',
-      }) as HookRequest;
+      });
     } catch {
       console.warn('[before-user-created] Signature verification failed');
       return new Response('Unauthorized', { status: 401 });
@@ -120,11 +127,6 @@ Deno.serve(async (req) => {
       '[before-user-created] BEFORE_USER_CREATED_HOOK_SECRET is not set; ' +
         'allowing unsigned requests. Configure the hook secret to enforce verification.',
     );
-    try {
-      payload = JSON.parse(rawBody) as HookRequest;
-    } catch {
-      return new Response('Invalid JSON', { status: 400 });
-    }
   }
 
   const user = payload.user;

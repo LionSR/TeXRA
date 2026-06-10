@@ -40,7 +40,7 @@ const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
 Deno.serve(async (req: Request) => {
   // Handle CORS
-  const { response } = handleCors(req);
+  const response = handleCors(req);
   if (response) return response;
 
   // Only accept POST

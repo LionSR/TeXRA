@@ -66,7 +66,7 @@ const app = new Hono<{ Variables: Variables }>();
 
 // CORS middleware using shared utilities
 app.use('*', async (c, next) => {
-  const { response } = handleCors(c.req.raw);
+  const response = handleCors(c.req.raw);
   if (response) return response;
   await next();
 });
@@ -343,7 +343,8 @@ app.post('/exchange', async (c) => {
         userId = newUser.user.id;
       }
 
-      // Link identity (duplicate inserts are ignored)
+      // Duplicate/constraint failures are non-fatal; thrown transport/runtime
+      // failures should fail the exchange instead of leaving auth state split.
       const { error: identityError } = await supabase
         .schema('auth')
         .from('identities')
