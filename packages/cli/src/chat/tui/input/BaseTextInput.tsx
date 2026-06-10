@@ -8,24 +8,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Text, useInput, usePaste } from 'ink';
 
 import {
-  clampCursor,
-  deleteAtCursor,
-  deleteBeforeCursor,
-  deleteNextWord,
-  deletePreviousWord,
-  deleteToEnd,
-  deleteToStart,
   applyTerminalInputChunk,
+  clampCursor,
   insertText,
-  lineEndCursor,
-  lineStartCursor,
   maskDisplayValue,
-  nextWordCursor,
-  previousWordCursor,
   verticalCursorMove,
   type CursorEdit,
   type TextEdit,
 } from './textInputEditing';
+import { matchTextInputBinding } from './textInputBindings';
 import {
   isPlainReturnInput,
   isCtrlInput,
@@ -433,31 +424,6 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         submitAfterImagePastes(onSubmit, latestStateRef.current.value);
         return;
       }
-      // Alt+Backspace (readline backward-kill-word). Terminals surface it as
-      // a meta-flagged backspace/DEL or as the raw ESC+DEL chord.
-      const chord = metaChordInput(input, key);
-      if (
-        ((key.backspace || key.delete) && key.meta) ||
-        chord === '\u007F' ||
-        chord === '\b'
-      ) {
-        applyLatestEdit(deletePreviousWord);
-        return;
-      }
-      if (key.backspace) {
-        applyLatestEdit(deleteBeforeCursor);
-        return;
-      }
-      if (key.delete) {
-        applyLatestEdit(deleteAtCursor);
-        return;
-      }
-      if (key.leftArrow || key.rightArrow) {
-        const word = key.leftArrow ? previousWordCursor : nextWordCursor;
-        const step = key.leftArrow ? -1 : 1;
-        moveCursorTo(key.ctrl || key.meta ? word : (_, c) => c + step);
-        return;
-      }
       if (key.upArrow || key.downArrow) {
         const { value: v, cursor: c } = latestStateRef.current;
         const moved = verticalCursorMove(v, c, key.upArrow ? -1 : 1);
@@ -468,34 +434,12 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         }
         return;
       }
-      // Readline word chords: Alt-B / Alt-F move by word, Alt-D kills the
-      // next word. Other meta chords fall through to the drop branch below.
-      if (chord === 'b' || chord === 'f') {
-        moveCursorTo(chord === 'b' ? previousWordCursor : nextWordCursor);
-        return;
-      }
-      if (chord === 'd') {
-        applyLatestEdit(deleteNextWord);
-        return;
-      }
-      if (key.home || isCtrlInput(input, key, 'a')) {
-        moveCursorTo(lineStartCursor);
-        return;
-      }
-      if (key.end || isCtrlInput(input, key, 'e')) {
-        moveCursorTo(lineEndCursor);
-        return;
-      }
-      if (isCtrlInput(input, key, 'u')) {
-        applyLatestEdit(deleteToStart);
-        return;
-      }
-      if (isCtrlInput(input, key, 'k')) {
-        applyLatestEdit(deleteToEnd);
-        return;
-      }
-      if (isCtrlInput(input, key, 'w')) {
-        applyLatestEdit(deletePreviousWord);
+      // Stateless editing chords dispatch through the declarative keymap;
+      // unmatched meta/ctrl combos fall through to the drop branch below.
+      const binding = matchTextInputBinding(input, key);
+      if (binding) {
+        if ('edit' in binding) applyLatestEdit(binding.edit);
+        else moveCursorTo(binding.move);
         return;
       }
       if (isCtrlInput(input, key, 'v') && props.onImagePaste) {
