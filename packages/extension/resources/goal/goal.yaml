@@ -24,19 +24,3 @@ continuation:
       requirement's scope, and gather stronger evidence when it is weak or
       indirect.
     </goal_context>
-
-objective_updated:
-  description: Injected once after the user edits the objective.
-  template: |
-    <goal_context>
-    The user has edited the objective. The new objective supersedes any
-    previous one.
-
-    <objective>
-    {{objective}}
-    </objective>
-
-    Re-orient against the new objective. Drop work that only served the
-    previous one. Consider it done only when the new objective's end state
-    is true and verified against current evidence.
-    </goal_context>
