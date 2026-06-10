@@ -106,3 +106,43 @@ export abstract class BaseViewContentProvider {
     );
   }
 }
+
+/** Where a view's Vite-built assets land and the template keys they fill. */
+export interface ViewBundle {
+  /** Directory under `dist/` holding the view's `bundle.js` / `index.css`. */
+  dist: string;
+  /** Template variable for the JS bundle URI. */
+  bundleKey: string;
+  /** Template variable for the stylesheet URI. */
+  styleKey: string;
+}
+
+/**
+ * Content provider for views whose only view-specific assets are a Vite
+ * bundle and stylesheet under `dist/`. Covers the main, progress, and
+ * settings views; subclass {@link BaseViewContentProvider} directly only
+ * when a view needs more than that.
+ */
+export class BundledViewContentProvider extends BaseViewContentProvider {
+  constructor(
+    context: vscode.ExtensionContext,
+    viewName: string,
+    private readonly bundle: ViewBundle,
+    viewPath?: string,
+  ) {
+    super(context, viewName, [], viewPath);
+  }
+
+  protected override getModuleUris(
+    webview: vscode.Webview,
+  ): Record<string, vscode.Uri> {
+    return this.buildUriRecord(
+      webview,
+      [
+        { key: this.bundle.bundleKey, path: 'bundle.js' },
+        { key: this.bundle.styleKey, path: 'index.css' },
+      ],
+      ['dist', this.bundle.dist],
+    );
+  }
+}
