@@ -98,7 +98,7 @@ export class QueuedFollowUps extends LitElement {
       return { display: message, full: undefined };
     }
     return {
-      display: message.substring(0, MAX_MESSAGE_LENGTH) + '...',
+      display: message.slice(0, MAX_MESSAGE_LENGTH) + '...',
       full: message,
     };
   }

@@ -1,5 +1,5 @@
 // Standard library imports
-import { Buffer } from 'buffer';
+import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 
 // Third-party imports
@@ -1116,7 +1116,7 @@ export class ModelHandlerGoogleGenAI extends ModelHandler<
 
     if (thoughtContent) {
       this.logger.debug(
-        `Google GenAI thought summary preview: ${thoughtContent.substring(0, K_SLICE)}...`,
+        `Google GenAI thought summary preview: ${thoughtContent.slice(0, K_SLICE)}...`,
       );
     }
 

@@ -1,6 +1,6 @@
 // Standard library imports
-import * as path from 'path';
-import { Buffer } from 'buffer';
+import * as path from 'node:path';
+import { Buffer } from 'node:buffer';
 
 // Third-party imports
 import pMap from 'p-map';

@@ -859,7 +859,7 @@ export class ModelHandlerOpenRouterNative extends ModelHandler<
       workspaceState.reasoning.thinkingAdded = true;
     }
     this.logger.debug(
-      `Reasoning content preview: ${reasoning.substring(0, K_SLICE)}...`,
+      `Reasoning content preview: ${reasoning.slice(0, K_SLICE)}...`,
     );
   }
 

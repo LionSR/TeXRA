@@ -6,7 +6,7 @@
 // caller, so they live outside the handler as stateless functions.
 
 import { Buffer } from 'node:buffer';
-import * as path from 'path';
+import * as path from 'node:path';
 
 import OpenAI, {
   APIConnectionTimeoutError,

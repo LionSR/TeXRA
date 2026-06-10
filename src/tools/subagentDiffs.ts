@@ -1,4 +1,4 @@
-import path from 'path';
+import path from 'node:path';
 
 import { diff_match_patch } from 'diff-match-patch';
 
@@ -52,10 +52,10 @@ function computeReadableDiff(
     // Each chunk is one or more complete lines (with trailing \n).
     // Split and prefix each line, dropping the trailing empty entry from split.
     const chunkLines = text.split('\n');
-    for (let i = 0; i < chunkLines.length; i++) {
+    for (const [i, line] of chunkLines.entries()) {
       // Skip the empty string after the final \n
-      if (i === chunkLines.length - 1 && chunkLines[i] === '') continue;
-      lines.push(`${prefix}${chunkLines[i]}`);
+      if (i === chunkLines.length - 1 && line === '') continue;
+      lines.push(`${prefix}${line}`);
     }
   }
   return lines.join('\n');

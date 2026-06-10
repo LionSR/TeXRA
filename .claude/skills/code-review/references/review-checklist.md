@@ -90,6 +90,20 @@ Design rules in `CLAUDE.md` → "Schema and Type Guidelines" / "Backward Compati
 - **Renamed fields in persisted state** (`TaskState`, run records, session storage) → use `.prefault()` and tolerate the old shape (canonical pattern in `c9f8b2b`).
 - **Provider-handler `switch` over a discriminated union** → default branch should `assertNever` / `satisfies never` so adding a provider compile-fails.
 
+## 12. Modern TypeScript (ES2023)
+
+Full pattern list with examples in `AGENTS.md` → "ES2023+ Patterns". Greps for the diff:
+
+- **Bare Node builtin imports** — `grep -nE "from '(assert|buffer|child_process|crypto|events|fs|fs/promises|module|os|path|url|util)'"` → use the `node:` prefix (`from 'node:path'`). The whole repo is unified on it.
+- **`[...arr].sort(` / `.slice().sort(`** on a true array → `.toSorted()`. Keep the spread when copying out of a `Set` or `Map.entries()`.
+- **`for (let i = 0; i < arr.length; i++)`** where the body only reads `arr[i]` → `for...of` (with `.entries()` when the index is needed). The conversion usually deletes `!` assertions and `if (!item) continue` guards too — flag those leftovers.
+- **Backwards index loops** (`for (let i = arr.length - 1; i >= 0; i--)`) that search or visit in reverse → `.findLast()` / `.findLastIndex()` / iterate `.toReversed()`.
+- **Manual pairwise-equality loops** over two arrays → `a.length === b.length && a.every((x, i) => ...)`.
+- **`.substring(`** → `.slice()` (repo is unified on `slice`).
+- **Bare `parseInt(` / `parseFloat(`** → `Number.parseInt(x, 10)` / `Number.parseFloat(x)`; flag any missing radix.
+- **`new Promise((resolve) => setTimeout(resolve, ms))`** in Node-only code → `setTimeout` from `node:timers/promises`.
+- **Don't flag** the legitimate index loops: token consumers that advance `i` by variable strides, queue/BFS loops that append mid-iteration, and `charCodeAt(i)` hash loops (code-point iteration would change persisted hash output).
+
 ## Final pass
 
 - Cut findings not tied to a real `path:line` in the diff.

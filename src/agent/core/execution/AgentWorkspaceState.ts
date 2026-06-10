@@ -307,8 +307,8 @@ export class WorkPlanState {
   private _todosEqual(a: TodoItem[], b: TodoItem[]): boolean {
     if (a.length !== b.length) return false;
     for (let i = 0; i < a.length; i++) {
-      const ai = a[i],
-        bi = b[i];
+      const ai = a[i];
+      const bi = b[i];
       if (!ai || !bi) return false;
       if (
         ai.content !== bi.content ||
@@ -327,8 +327,8 @@ export class WorkPlanState {
     if (a.summary !== b.summary) return false;
     if (a.steps.length !== b.steps.length) return false;
     for (let i = 0; i < a.steps.length; i++) {
-      const ai = a.steps[i],
-        bi = b.steps[i];
+      const ai = a.steps[i];
+      const bi = b.steps[i];
       if (!ai || !bi) return false;
       if (
         ai.title !== bi.title ||

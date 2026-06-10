@@ -1,5 +1,5 @@
 // Standard library imports
-import * as path from 'path';
+import * as path from 'node:path';
 
 // Platform imports
 import { isFile } from './fsEntryType';

@@ -10,7 +10,7 @@
  */
 
 // Standard library imports
-import * as path from 'path';
+import * as path from 'node:path';
 
 // Third-party imports
 import { z } from 'zod';

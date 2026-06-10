@@ -7,7 +7,7 @@
  * envelope.
  */
 
-import * as path from 'path';
+import * as path from 'node:path';
 
 import Keyv, { type KeyvStoreAdapter, type StoredData } from 'keyv';
 

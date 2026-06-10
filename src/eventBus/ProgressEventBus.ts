@@ -1,4 +1,4 @@
-import { EventEmitter } from 'events';
+import { EventEmitter } from 'node:events';
 
 import type { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import type { TaskState } from '@agent/core/execution/TaskState';
