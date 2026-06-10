@@ -4,6 +4,7 @@
 // structure is worth preserving in a terminal. Everything else falls back to
 // the compact universal row.
 
+import { memo } from 'react';
 import { Box, Text } from 'ink';
 
 import { type NormalizedToolUse } from '@shared/schemas';
@@ -23,7 +24,10 @@ export function filledToolUseDisplayText(
   return fillRows(toolUseDisplayLines(toolUse).join('\n'), cols);
 }
 
-export function ToolUseRow({
+// Memoized: tool-use objects stay reference-identical across stream-sync
+// ticks unless their status/result changed, so streaming text deltas skip
+// re-rendering every settled tool row in the live region.
+export const ToolUseRow = memo(function ToolUseRow({
   fillWidth,
   toolUse,
   width,
@@ -46,4 +50,4 @@ export function ToolUseRow({
   ) : (
     <UniversalToolRow toolUse={toolUse} />
   );
-}
+});

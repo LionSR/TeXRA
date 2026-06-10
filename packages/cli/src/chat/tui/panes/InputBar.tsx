@@ -139,13 +139,17 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
 
   // Listen for Ctrl-R *outside* the text input — Ink emits the keystroke
   // to every `useInput` consumer, and BaseTextInput drops unhandled ctrl
-  // chords so this handler still fires.
-  useInput((input, key) => {
-    if (disabled) return;
-    if (isCtrlInput(input, key, 'r') && historyRef.current) {
-      setReverseSearchOpen(true);
-    }
-  });
+  // chords so this handler still fires. `isActive` (rather than an internal
+  // early-return) releases the stdin subscription entirely while a foreground
+  // surface owns input, matching BaseTextInput's `isActive: focus`.
+  useInput(
+    (input, key) => {
+      if (isCtrlInput(input, key, 'r') && historyRef.current) {
+        setReverseSearchOpen(true);
+      }
+    },
+    { isActive: !disabled },
+  );
 
   const handleSubmit = useCallback(
     (submitted: string) => {
@@ -286,8 +290,15 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
         />
       ) : null}
       {attachNotice ? <Text dimColor>{attachNotice}</Text> : null}
-      <Box borderStyle="round" borderColor="gray" paddingX={1}>
-        <Text color="cyan">{prompt ?? '›'} </Text>
+      <Box
+        borderStyle="round"
+        borderColor="gray"
+        paddingX={1}
+        aria-role="textbox"
+      >
+        <Text aria-hidden color="cyan">
+          {prompt ?? '›'}{' '}
+        </Text>
         <BaseTextInput
           value={value}
           focus={!disabled && !reverseSearchOpen}
