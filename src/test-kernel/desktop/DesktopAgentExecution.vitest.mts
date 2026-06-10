@@ -1264,6 +1264,7 @@ describe('DesktopProgressBridge', () => {
     const opener = { openPath: vi.fn(async (_filePath: string) => {}) };
     const runAgent = vi.fn(async (_request, options) => {
       await options.openWorkflowOutput({
+        outcome: 'completed',
         outputs: [{ absolutePath: '/tmp/result.pdf' }],
       });
     });
@@ -1283,6 +1284,35 @@ describe('DesktopProgressBridge', () => {
     try {
       await execution.handleExecute({ command: 'execute' });
       expect(opener.openPath).toHaveBeenCalledWith('/tmp/result.pdf');
+    } finally {
+      execution.dispose();
+    }
+  });
+
+  it('does not auto-open outputs of a non-completed workflow', async () => {
+    const opener = { openPath: vi.fn(async (_filePath: string) => {}) };
+    const runAgent = vi.fn(async (_request, options) => {
+      await options.openWorkflowOutput({
+        outcome: 'cancelled',
+        outputs: [{ absolutePath: '/tmp/result.pdf' }],
+      });
+    });
+    const execution = await createExecution({
+      opener,
+      runAgent,
+      prepareMainViewExecutionRequest: vi.fn(() => ({
+        valid: true,
+        request: {
+          agentName: 'default',
+          filePath: 'main.tex',
+          prompt: 'run',
+        },
+      })),
+    });
+
+    try {
+      await execution.handleExecute({ command: 'execute' });
+      expect(opener.openPath).not.toHaveBeenCalled();
     } finally {
       execution.dispose();
     }
