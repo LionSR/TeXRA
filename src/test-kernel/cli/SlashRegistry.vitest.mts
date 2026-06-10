@@ -9,6 +9,7 @@ import {
   parseSlashInput,
   registerSlashCommand,
   slashPickIntent,
+  suggestSlashCommand,
   unregisterSlashCommand,
 } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
@@ -559,6 +560,30 @@ describe('slashRegistry', () => {
 
     expect(slashPickIntent(foo, 'enter')).toBe('complete');
     expect(slashPickIntent(foo, 'tab')).toBe('complete');
+  });
+
+  it('suggests the closest command for a typo within the shared threshold', () => {
+    registerBuiltinSlashCommands();
+
+    expect(suggestSlashCommand('modl')?.name).toBe('model');
+    expect(suggestSlashCommand('aprooval')?.name).toBe('approval');
+    expect(suggestSlashCommand('sttus')?.name).toBe('status');
+  });
+
+  it('matches typo suggestions against aliases too', () => {
+    registerSlashCommand({
+      name: 'exit',
+      description: 'Exit the CLI session',
+      aliases: ['quit'],
+    });
+
+    expect(suggestSlashCommand('quitt')?.name).toBe('exit');
+  });
+
+  it('returns no suggestion for input far from every command', () => {
+    registerBuiltinSlashCommands();
+
+    expect(suggestSlashCommand('frobnicate')).toBeUndefined();
   });
 
   it('does not directly submit structured-form commands from the palette', () => {

@@ -265,82 +265,99 @@ export function registerBuiltinSlashCommands(options?: {
   registerSlashCommand({
     name: 'help',
     description: 'Show available slash commands',
+    category: 'session',
   });
   registerSlashCommand({
     name: 'clear',
     description: 'Start a fresh chat session',
+    category: 'session',
   });
   registerSlashCommand({
     name: 'agent',
     description: 'List or choose the root agent',
     aliases: ['agents'],
+    category: 'configuration',
     formComponent: AgentListFormAdapter,
   });
   registerSlashCommand({
     name: 'model',
     description: 'List available models',
     aliases: ['models'],
+    category: 'configuration',
     formComponent: ModelListFormAdapter,
   });
   registerSlashCommand({
     name: 'api',
     description: 'Switch between included relay and personal API keys',
+    category: 'configuration',
     formComponent: ApiModeFormAdapter,
   });
   registerSlashCommand({
     name: 'auth',
     description: 'Show TeXRA login status',
+    category: 'account',
   });
   registerSlashCommand({
     name: 'login',
     description: 'Sign in to TeXRA included access',
+    category: 'account',
   });
   registerSlashCommand({
     name: 'logout',
     description: 'Sign out of TeXRA',
+    category: 'account',
   });
   registerSlashCommand({
     name: 'approval',
     description: 'Switch approval policy',
+    category: 'configuration',
     formComponent: ApprovalPolicyFormAdapter,
     formEscapeAction: 'cancel',
   });
   registerSlashCommand({
     name: 'yolo',
     description: 'Auto-approve privileged actions',
+    category: 'configuration',
   });
   registerSlashCommand({
     name: 'status',
     description: 'Show session details',
+    category: 'session',
   });
   registerSlashCommand({
     name: 'resume',
     description: 'Resume a previous session',
+    category: 'session',
     formComponent: ResumeListFormAdapter,
   });
   registerSlashCommand({
     name: 'memory',
     description: 'List stored memories',
+    category: 'configuration',
     formComponent: MemoryListFormAdapter,
   });
   registerSlashCommand({
     name: 'skills',
     description: 'List available skills',
     aliases: ['skill'],
+    category: 'configuration',
     formComponent: SkillsListFormAdapter,
   });
   registerSlashCommand({
     name: 'tools',
     description: 'List or toggle external integrations',
+    category: 'configuration',
     formComponent: ToolsListFormAdapter,
   });
   registerSlashCommand({
     name: 'compact',
     description: 'Request context compaction',
+    category: 'session',
   });
   registerSlashCommand({
     name: 'exit',
     description: 'Exit the CLI session',
     aliases: ['quit'],
+    category: 'session',
   });
 }
