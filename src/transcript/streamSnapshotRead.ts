@@ -35,6 +35,8 @@ import {
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
 
+import { mapToRecord } from '@shared/progressView/backend/persistence/serializationUtils';
+
 import { STREAM_DATA_KEYS } from './streamDataPaths';
 
 const CHANNEL = 'StreamSnapshotStore';
@@ -58,13 +60,6 @@ export interface StreamData {
   workPlan: WorkPlanSnapshot;
   /** Category keys whose on-disk file was legacy-nested (need a one-time flat rewrite). */
   legacyKeys: string[];
-}
-
-/** Map → string-keyed Record for JSON persistence / the snapshot's record fields. */
-export function mapToRecord<K extends string | number, V>(
-  map: Map<K, V>,
-): Record<string, V> {
-  return Object.fromEntries(Array.from(map, ([k, v]) => [String(k), v]));
 }
 
 /**
