@@ -11,10 +11,6 @@ export {
   type ChildRecord,
   type ChildRecordData,
   type ResultMeta,
-  ExecutionMetaSchema,
-  TodoEntrySchema,
-  ChildRecordDataSchema,
-  ResultMetaSchema,
   getExecutionStore,
   clearStoreCache,
 } from './ExecutionKVStore';
@@ -24,10 +20,6 @@ export {
   resolveExecutionWorkspaceFilePath,
 } from './executionWorkspaceFiles';
 export {
-  detectWaitingStreams,
-  hasPersistedFlowRecord,
-} from './detectWaitingStreams';
-export {
   registerExecution,
   writeTerminalStatus,
   writeSessionDescription,
@@ -35,7 +27,6 @@ export {
 export {
   type ExecutionListingEntry,
   listExecutions,
-  invalidateListingCache,
   deleteExecution,
   deleteAllExecutions,
 } from './executionListing';

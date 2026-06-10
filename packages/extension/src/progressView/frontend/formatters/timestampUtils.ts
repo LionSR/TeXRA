@@ -16,7 +16,7 @@ export function getTimeFormatter(): Intl.DateTimeFormat {
 }
 
 /** Get the date-time formatter. */
-export function getDateTimeFormatter(): Intl.DateTimeFormat {
+function getDateTimeFormatter(): Intl.DateTimeFormat {
   DATE_TIME_FORMATTER ??= new Intl.DateTimeFormat(
     undefined,
     DATETIME_FORMAT_OPTIONS,

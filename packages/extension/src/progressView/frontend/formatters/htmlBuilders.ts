@@ -104,7 +104,7 @@ export function wrapInPre(text: string, className = ''): TemplateResult {
 // Always render the chevron-right icon and CSS will rotate when open.
 
 /** Build a copy button for banner content. */
-export function buildCopyButton(
+function buildCopyButton(
   title: string,
   options: { hidden?: boolean; content?: string; contentId?: string } = {},
 ): TemplateResult {

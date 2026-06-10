@@ -63,7 +63,7 @@ async function readStoragePrefix(
  * @param content - The full file content to preview
  * @returns Preview text and line count when the caller supplied complete content
  */
-export function buildPreview(
+function buildPreview(
   content: string,
   options?: { truncated?: boolean; exactLineCount?: boolean },
 ): {

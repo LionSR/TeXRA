@@ -91,7 +91,7 @@ export function getIncludedExtensions(category: ExtensionCategory): string[] {
   return getConfig<string[]>(INCLUDED_EXTENSION_KEYS[category], defaults);
 }
 
-export function readUserSetting<T>(key: string): T | undefined {
+function readUserSetting<T>(key: string): T | undefined {
   const inspected = inspectConfig<T>(key);
   return (
     inspected?.workspaceValue ??
@@ -117,7 +117,7 @@ export function isTexFile(filePath: string): boolean {
 /**
  * LaTeX file extensions that can be compiled to PDF.
  */
-export const LATEX_EXTENSIONS = ['.tex', '.ltx', '.latex'] as const;
+const LATEX_EXTENSIONS = ['.tex', '.ltx', '.latex'] as const;
 
 /**
  * Returns true if the file has a LaTeX extension (.tex, .ltx, .latex).

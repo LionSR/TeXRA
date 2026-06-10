@@ -150,10 +150,7 @@ interface SubscriptionState extends BasePollSubscriptionState {
   prMergeableByNumber: Map<number, string>;
 }
 
-export class RepoPollingSource extends PollingSourceBase<
-  RepoKey,
-  SubscriptionState
-> {
+class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
   constructor() {
     super({
       // Repo-scoped polling fans out to every active PR in the repo via three

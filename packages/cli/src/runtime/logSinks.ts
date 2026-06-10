@@ -141,7 +141,7 @@ export async function askCliQuestion(question: string): Promise<string> {
   }
 }
 
-export class StderrTextSink implements LogSink {
+class StderrTextSink implements LogSink {
   write(record: LogRecord): void {
     const stream = record.fields.streamId ? ` [${record.fields.streamId}]` : '';
     writeTextStderr(
@@ -150,7 +150,7 @@ export class StderrTextSink implements LogSink {
   }
 }
 
-export class NdjsonStdoutSink implements LogSink {
+class NdjsonStdoutSink implements LogSink {
   private readonly queue: LogRecord[] = [];
   private drainPromise: Promise<void> | undefined;
   private stdoutClosed = false;

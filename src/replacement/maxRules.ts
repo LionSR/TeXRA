@@ -17,7 +17,7 @@ import {
 } from './helpers';
 
 // Greek letter shortcut mappings
-export const GREEK_LETTER_SHORTCUTS: { [key: string]: string } = {
+const GREEK_LETTER_SHORTCUTS: { [key: string]: string } = {
   alpha: 'al',
   beta: 'bt',
   gamma: 'ga',
@@ -41,7 +41,7 @@ export const GREEK_LETTER_SHORTCUTS: { [key: string]: string } = {
 };
 
 // Automatically generated replacement patterns
-export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
+const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
   name: 'max_auto',
   description: 'Automatically generated maximum style replacements for LaTeX',
   isRegex: false,
@@ -311,7 +311,7 @@ export const MAX_AUTO_REPLACEMENTS: ReplacementCategory = {
 };
 
 // Manually specified replacement patterns
-export const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
+const MAX_MANUAL_REPLACEMENTS: ReplacementCategory = {
   name: 'max_manual',
   description: 'Manually specified maximum style replacements for LaTeX',
   isRegex: false,

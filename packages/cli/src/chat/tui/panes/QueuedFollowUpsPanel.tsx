@@ -5,7 +5,7 @@ import { summarizeFollowupMessage } from '@shared/subagentFollowup';
 
 import { truncateSummaryToWidth } from '../render/terminalText';
 
-export const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;
+const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;
 
 export interface QueuedFollowUpPanelRow {
   readonly kind: 'message' | 'overflow';

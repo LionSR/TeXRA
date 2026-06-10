@@ -53,7 +53,7 @@ import { toolsCommand } from './tools';
 import { versionCommand } from './version';
 import { runWorkflowCommand } from './workflow';
 
-export function defaultRootSubcommand(): 'orchestrate' | 'help' {
+function defaultRootSubcommand(): 'orchestrate' | 'help' {
   const ambient = readCliAmbientState();
   return ambient.stdinIsTty && ambient.stdoutIsTty ? 'orchestrate' : 'help';
 }

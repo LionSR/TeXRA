@@ -285,7 +285,7 @@ function outputDisplayLines(
   return out;
 }
 
-export function universalToolUseDisplayLines(
+function universalToolUseDisplayLines(
   toolUse: NormalizedToolUse,
   options: {
     readonly displayName?: string;
@@ -322,7 +322,7 @@ export function universalToolUseDisplayLines(
   ];
 }
 
-export function bashToolUseDisplayLines(
+function bashToolUseDisplayLines(
   toolUse: NormalizedToolUse,
   options: { readonly elide?: boolean } = {},
 ): readonly string[] {

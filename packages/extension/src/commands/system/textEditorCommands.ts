@@ -14,10 +14,6 @@ import { WorkspaceFS } from '@utils/files';
 const CHANNEL = 'TextEditorCommands';
 logger.initialize(CHANNEL);
 
-export const textEditorCommands = {
-  testTextEditor: 'texra.testTextEditor',
-};
-
 /**
  * `texra.testTextEditor` is now registered through the shared command
  * registry in `extensionCommandSurface.ts` (see #3775). This stub is kept

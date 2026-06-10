@@ -27,7 +27,7 @@ interface LeadingGlobalFlags {
   readonly stoppedOnUnknownFlag: boolean;
 }
 
-export function knownGlobalFlagTokenCount(
+function knownGlobalFlagTokenCount(
   rawArgs: readonly string[],
   index: number,
 ): number | undefined {

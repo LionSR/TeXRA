@@ -13,10 +13,6 @@ import * as logger from '@logger/logUtils';
 const CHANNEL = 'XmlCommands';
 logger.initialize(CHANNEL);
 
-export const xmlCommands = {
-  parseXml: 'texra.parseXml',
-};
-
 export async function handleParseXml(): Promise<void> {
   try {
     const guardResult = await getActiveEditorWithGuards({

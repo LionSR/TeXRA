@@ -7,7 +7,7 @@ interface Logger {
 }
 
 /** Indent a single LaTeX file for better readability. */
-export async function indentLatexFile(
+async function indentLatexFile(
   fileLocation: FileLocation,
   logger: Logger,
 ): Promise<void> {

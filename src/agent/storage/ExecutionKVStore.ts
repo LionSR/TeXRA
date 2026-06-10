@@ -39,7 +39,7 @@ const KEYS = {
 // ============================================================================
 
 /** Execution metadata stored alongside config at launch time. */
-export const ExecutionMetaSchema = z.object({
+const ExecutionMetaSchema = z.object({
   timestamp: z.string(),
   parentExecutionId: ExecutionIdSchema.optional(),
   /** Persisted when execution reaches a terminal state (success or error). */
@@ -59,7 +59,7 @@ export const ExecutionMetaSchema = z.object({
 export type ExecutionMeta = z.infer<typeof ExecutionMetaSchema>;
 
 /** Shape of a persisted todo item from tool-use flow state. */
-export const TodoEntrySchema = z.object({
+const TodoEntrySchema = z.object({
   content: z.string().optional(),
   status: z.string().optional(),
 });
@@ -75,7 +75,7 @@ function parseTodoArray(raw: unknown[]): TodoEntry[] {
 }
 
 /** Stored data for a child execution record (without the derived `id` field). */
-export const ChildRecordDataSchema = z.object({
+const ChildRecordDataSchema = z.object({
   agent: z.string(),
   timestamp: z.string(),
 });
@@ -87,7 +87,7 @@ export interface ChildRecord extends ChildRecordData {
 }
 
 /** Result metadata for background bash processes. */
-export const ResultMetaSchema = z.object({
+const ResultMetaSchema = z.object({
   exitCode: z.int().optional(),
   wallTimeMs: z.number().nonnegative().optional(),
   success: z.boolean().optional(),
