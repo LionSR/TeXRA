@@ -241,7 +241,12 @@ export function toStorableSupabaseSession(
   };
 }
 
-/** Convert Edge Function token responses into the stored custom-refresh shape. */
+/**
+ * Convert Edge Function token responses into the stored session shape.
+ * The exchange endpoint returns native GoTrue sessions (auth-github v3+),
+ * so these refresh through the standard Supabase path; `useCustomRefresh`
+ * persists only on legacy stored sessions.
+ */
 export function toStorableGitHubTokenExchangeSession(
   data: GitHubTokenExchangeResponse,
   fallbackLabel: string,
@@ -258,7 +263,6 @@ export function toStorableGitHubTokenExchangeSession(
     expiresAt: data.expires_at
       ? data.expires_at * 1000
       : Date.now() + defaultSessionExpiryMs,
-    useCustomRefresh: true,
   };
 }
 

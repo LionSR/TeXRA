@@ -231,7 +231,6 @@ describe('SupabaseSession', () => {
           label: 'user@example.com',
         },
         expiresAt: 123_000,
-        useCustomRefresh: true,
       });
     });
 
@@ -385,6 +384,8 @@ describe('SupabaseSession', () => {
       assert.equal(await coordinator.ensureFreshToken(), 'new-access');
       assert.equal(getReadCount(), 1);
 
+      // The refresh endpoint returns a native GoTrue session, so the stored
+      // result drops useCustomRefresh and migrates to the standard path.
       assert.deepEqual(read(), {
         id: 'user-id',
         accessToken: 'new-access',
@@ -394,7 +395,6 @@ describe('SupabaseSession', () => {
           label: 'new@example.com',
         },
         expiresAt: 789_000,
-        useCustomRefresh: true,
       });
     });
 
