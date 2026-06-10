@@ -78,6 +78,7 @@ import { parseCliHistoryId } from '@cli/runtime/history';
 import {
   explainNonResumable,
   resolveCliResumeSnapshot,
+  type CliToolUseResumeResolution,
 } from '@cli/runtime/sessionResume';
 import {
   formatCliMemoryList,
@@ -172,13 +173,11 @@ export interface RunChatInit {
   readonly teamName?: string;
   /** Multi-agent preset id when chat was launched from a team preset. */
   readonly cliMultiAgentPresetId?: string;
-  /**
-   * Continue (resume) a stored tool-use session by its execution id instead of
-   * starting fresh: the interactive `texra --resume <id>` path. Set by the
-   * resume command for TTY sessions; the prior transcript is rehydrated and the
-   * suspended tool-use flow is continued on mount (see `resumeAgentRun`).
-   */
-  readonly resumeExecutionId?: ExecutionId;
+  /** Pre-resolved startup resume from `texra --resume <id>`. */
+  readonly initialResume?: {
+    readonly id: ExecutionId;
+    readonly resolution: CliToolUseResumeResolution;
+  };
 }
 
 export interface BuildInitialChatAgentConfigInput {
@@ -965,10 +964,11 @@ export async function runChat(
     return { exitCode: CliExitCode.Success };
   }
   const apiMode = effectiveCliApiMode(context);
+  const initialResume = init.initialResume;
   const defaults = await resolveChatDefaults({
     cwd: context.cwd,
-    agentOverride: init.agentOverride,
-    modelOverride: init.modelOverride,
+    agentOverride: initialResume?.resolution.config.agent ?? init.agentOverride,
+    modelOverride: initialResume?.resolution.config.model ?? init.modelOverride,
     envAgent: context.envAgent,
     envModel: context.envModel,
   });
@@ -1275,7 +1275,10 @@ export async function runChat(
   // (b) the streamId is already known (re-derived from the prior run), so we
   // set session.streamId up front and rehydrate that stream's transcript so
   // the user sees the prior conversation before the continued turn streams in.
-  const resumeAgentRun = async (id: ExecutionId): Promise<void> => {
+  const resumeAgentRun = async (
+    id: ExecutionId,
+    preResolved?: CliToolUseResumeResolution,
+  ): Promise<void> => {
     if (!chatTuiCanStartRootRun(session)) {
       appendLocalAssistantTranscript(
         'Finish the active chat before resuming a previous session.',
@@ -1283,7 +1286,7 @@ export async function runChat(
       return;
     }
 
-    const resolution = await resolveCliResumeSnapshot(id);
+    const resolution = preResolved ?? (await resolveCliResumeSnapshot(id));
     if (resolution.kind !== 'toolUse') {
       // Workflows / missing / already-completed sessions can't continue here —
       // surface why and leave the session idle so the user can still chat.
@@ -1737,13 +1740,15 @@ export async function runChat(
   // the signal handlers are armed. Fire-and-forget — resumeAgentRun installs
   // session.runPromise, and the normal first-input path stays available so the
   // user can keep chatting (follow-ups target session.streamId as usual).
-  if (init.resumeExecutionId) {
+  if (initialResume) {
     // Guard the void: resumeAgentRun awaits snapshot resolution / ensureLoaded
     // before installing its own .then/.catch, so an early throw there would
     // otherwise surface as an unhandled rejection.
-    void resumeAgentRun(init.resumeExecutionId).catch((error: unknown) => {
-      appendLocalErrorTranscript(toErrorMessage(error));
-    });
+    void resumeAgentRun(initialResume.id, initialResume.resolution).catch(
+      (error: unknown) => {
+        appendLocalErrorTranscript(toErrorMessage(error));
+      },
+    );
   }
 
   // Auto-prompt when the active stream goes WAITING so the UI clearly
