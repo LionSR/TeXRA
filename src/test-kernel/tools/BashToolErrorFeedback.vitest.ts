@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MODEL_CAPABILITIES, ModelProvider } from 'llm-zoo';
 
 // Local imports - agent state
-import * as agentConfig from '@utils/config/configUtils';
 import { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 
 // Local imports - model handlers
@@ -14,6 +13,7 @@ import type { OpenAIResponseToolCall } from '@agent/modelHandlers/types/IModelHa
 // Local imports - tools
 import { BashTool } from '@tools/bash';
 import { BASH_APPROVAL_CONFIG_KEY } from '@tools/approval/bashApproval';
+import * as agentConfig from '@utils/config/configUtils';
 
 // Local imports - system utilities
 import * as execUtils from '@utils/system/execUtils';

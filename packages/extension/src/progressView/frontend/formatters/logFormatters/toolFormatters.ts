@@ -14,7 +14,6 @@ import type {
   LogMessageData,
 } from '@shared/schemas';
 import { normalizeToolUseData } from '@shared/toolUse';
-import { isObject } from '@utils/core';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
 import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
 import type { ExecutionsToolInput } from '@tools/ExecutionsTool';
@@ -32,6 +31,7 @@ import {
   type CodexMcpToolOutput,
 } from '@tools/codexShared';
 import type { MemoryToolInput } from '@tools/memory/MemoryTool';
+import { isObject } from '@utils/core';
 import {
   collapseWhitespace,
   truncateWithEllipsis,
