@@ -27,7 +27,6 @@ import {
 } from '@agent/output/workflowOutputLayout';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import {
-  END_GROUP_STATUS,
   RUN_OUTCOME,
   type AgentFileLocation,
   type EndGroupStatus,
