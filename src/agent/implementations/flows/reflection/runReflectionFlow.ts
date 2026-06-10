@@ -26,7 +26,7 @@ import {
   WORKFLOW_RAW_OUTPUT_EXT,
 } from '@agent/output/workflowOutputLayout';
 import { executionToEndStatus } from '@common/constants/streamStatus';
-import { LatexMediaManager } from '@latex';
+import { LatexMediaManager } from '@latex/LatexMediaManager';
 import {
   END_GROUP_STATUS,
   type AgentFileLocation,
