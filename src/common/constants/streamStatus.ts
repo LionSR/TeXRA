@@ -11,6 +11,10 @@ import {
   type StreamStatus,
 } from '@shared/schemas';
 
+function unhandledRunOutcome(outcome: never): never {
+  throw new Error(`Unhandled run outcome: ${String(outcome)}`);
+}
+
 // ============================================================================
 // Run-outcome projections
 // ============================================================================
@@ -29,6 +33,8 @@ export function outcomeToExecutionStatus(outcome: RunOutcome): ExecutionStatus {
       return EXECUTION_STATUS.INTERRUPTED;
     case RUN_OUTCOME.FAILED:
       return EXECUTION_STATUS.ERROR;
+    default:
+      return unhandledRunOutcome(outcome);
   }
 }
 
@@ -40,14 +46,28 @@ export function outcomeToExecutionStatus(outcome: RunOutcome): ExecutionStatus {
 export function outcomeToEndGroupStatus(
   outcome: RunOutcome,
 ): 'error' | 'stopped' {
-  return outcome === RUN_OUTCOME.FAILED ? 'error' : 'stopped';
+  switch (outcome) {
+    case RUN_OUTCOME.COMPLETED:
+    case RUN_OUTCOME.CANCELLED:
+      return 'stopped';
+    case RUN_OUTCOME.FAILED:
+      return 'error';
+    default:
+      return unhandledRunOutcome(outcome);
+  }
 }
 
 /** Live stream-state projection for the terminal transition. */
 export function outcomeToStreamStatus(outcome: RunOutcome): StreamStatus {
-  return outcome === RUN_OUTCOME.FAILED
-    ? STREAM_STATUS.ERROR
-    : STREAM_STATUS.STOPPED;
+  switch (outcome) {
+    case RUN_OUTCOME.COMPLETED:
+    case RUN_OUTCOME.CANCELLED:
+      return STREAM_STATUS.STOPPED;
+    case RUN_OUTCOME.FAILED:
+      return STREAM_STATUS.ERROR;
+    default:
+      return unhandledRunOutcome(outcome);
+  }
 }
 
 // ============================================================================

@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CliContext } from '@cli/runtime/cliContext';
+import { RUN_OUTCOME } from '@shared/schemas';
 
 const mocks = vi.hoisted(() => {
   const stdinInputFile = Object.assign(vi.fn(), { cleanup: vi.fn() });
@@ -205,7 +206,7 @@ describe('CLI multi-agent run command', () => {
       result: {
         category: 'toolUse',
         executionId: 'exec-1',
-        status: 'completed',
+        outcome: RUN_OUTCOME.COMPLETED,
         lastResponse: 'The proof is correct.',
       },
       terminalStatus: 'completed',

@@ -6,21 +6,31 @@ import type {
   ToolUseFlowResult,
   WorkflowFlowResult,
 } from '@agent/runtime/AgentFlowResult';
+import { RUN_OUTCOME } from '@shared/schemas';
 import {
   formatBashDelivery,
   formatSubagentDelivery,
 } from '@tools/subagentResults';
 
+function toolUseResult(
+  outcome: ToolUseFlowResult['outcome'] = RUN_OUTCOME.COMPLETED,
+  overrides: Partial<ToolUseFlowResult> = {},
+): ToolUseFlowResult {
+  return {
+    category: 'toolUse',
+    executionId: 'abc123',
+    streamId: 'child-stream',
+    outcome,
+    ...overrides,
+  };
+}
+
 describe('formatSubagentDelivery', () => {
   it('escapes tool-use response bodies at the XML boundary', () => {
-    const result = {
-      category: 'toolUse',
-      executionId: 'abc123',
-      streamId: 'child-stream',
-      outcome: 'completed',
+    const result = toolUseResult(RUN_OUTCOME.COMPLETED, {
       lastResponse:
         'Keep </response> literal & preserve <subagent-result> text.',
-    } satisfies ToolUseFlowResult;
+    });
 
     const delivery = formatSubagentDelivery('reviewer', result);
 
@@ -31,11 +41,7 @@ describe('formatSubagentDelivery', () => {
   });
 
   it('includes attached memory misses in subagent delivery XML', () => {
-    const result = {
-      category: 'toolUse',
-      executionId: 'abc123',
-      streamId: 'child-stream',
-      outcome: 'completed',
+    const result = toolUseResult(RUN_OUTCOME.COMPLETED, {
       lastResponse: 'Checked the proof.',
       memoryMisses: [
         {
@@ -43,7 +49,7 @@ describe('formatSubagentDelivery', () => {
           reason: 'Path is missing & unreadable',
         },
       ],
-    } satisfies ToolUseFlowResult;
+    });
 
     const delivery = formatSubagentDelivery('reviewer', result);
 
@@ -58,7 +64,7 @@ describe('formatSubagentDelivery', () => {
       category: 'workflow',
       executionId: 'abc123',
       streamId: 'child-stream',
-      status: 'stopped',
+      outcome: RUN_OUTCOME.COMPLETED,
       outputs: [
         {
           round: 0,
@@ -89,7 +95,7 @@ describe('formatSubagentDelivery', () => {
       category: 'workflow',
       executionId: 'abc123',
       streamId: 'child-stream',
-      status: 'stopped',
+      outcome: RUN_OUTCOME.COMPLETED,
       outputs: [],
       compileFailures: [],
     } satisfies WorkflowFlowResult;
@@ -97,6 +103,15 @@ describe('formatSubagentDelivery', () => {
     expect(formatSubagentDelivery('polish', result)).not.toContain(
       'diffs-unavailable',
     );
+  });
+
+  it('emits canonical failed and cancelled statuses for orchestrators', () => {
+    expect(
+      formatSubagentDelivery('reviewer', toolUseResult(RUN_OUTCOME.FAILED)),
+    ).toContain('status="failed"');
+    expect(
+      formatSubagentDelivery('reviewer', toolUseResult(RUN_OUTCOME.CANCELLED)),
+    ).toContain('status="cancelled"');
   });
 
   it('keeps all content lines when a background output tail ends at the preview limit', () => {
