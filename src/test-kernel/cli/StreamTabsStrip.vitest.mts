@@ -12,6 +12,7 @@ import {
   streamTabsLineText,
   streamTabsDisplayItems,
 } from '@cli/chat/tui/panes/StreamTabsStrip';
+import { textDisplayWidth } from '@cli/chat/tui/render/terminalText';
 import {
   STREAM_STATUS,
   type ActiveChildInfo,
@@ -485,6 +486,23 @@ describe('CLI stream tabs strip', () => {
       fullText.length - 1,
     );
     expect(streamTabsLineText(items, fullText.length - 1)).toMatch(/…$/);
+  });
+
+  it('fits stream tab text by display width, not character count', () => {
+    const line = streamTabsLineText(
+      [
+        {
+          id: streamId('wide'),
+          label: '研究',
+          active: true,
+          running: false,
+        },
+      ],
+      5,
+    );
+
+    expect(textDisplayWidth(line)).toBeLessThanOrEqual(5);
+    expect(line).toMatch(/…$/);
   });
 
   it('keeps truncation attached to styled tab segments', () => {
