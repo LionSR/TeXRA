@@ -1,4 +1,9 @@
-import { isJsonRecord, type JsonRecord } from './reasoning.ts';
+import { asFiniteNumber, isJsonRecord, type JsonRecord } from './json.ts';
+import {
+  isGpt5Model,
+  normalizeModelName,
+  stripProviderPrefix,
+} from './modelNames.ts';
 
 const BYTES_PER_KIB = 1024;
 const BYTES_PER_MIB = BYTES_PER_KIB * 1024;
@@ -122,16 +127,12 @@ export interface MaxOutputTokenClampResult {
   originalValue: number | null;
 }
 
-function numericValue(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
 function clampRecordField(
   record: JsonRecord,
   field: string,
   limit: number,
 ): { record: JsonRecord; changed: boolean; originalValue: number | null } {
-  const current = numericValue(record[field]);
+  const current = asFiniteNumber(record[field]) ?? null;
   if (current !== null && current > 0 && current <= limit) {
     return { record, changed: false, originalValue: current };
   }
@@ -176,13 +177,9 @@ function clampGoogleGenerationConfig(
 
 function isOpenAICompletionTokenModel(model: unknown): boolean {
   if (typeof model !== 'string') return false;
-  const normalized = model.toLowerCase().trim();
-  const modelName = normalized.includes('/')
-    ? normalized.slice(normalized.indexOf('/') + 1)
-    : normalized;
+  if (isGpt5Model(model)) return true;
+  const modelName = stripProviderPrefix(normalizeModelName(model));
   return (
-    modelName.startsWith('gpt-5') ||
-    modelName.startsWith('gpt5') ||
     modelName.startsWith('o1') ||
     modelName.startsWith('o3') ||
     modelName.startsWith('o4')

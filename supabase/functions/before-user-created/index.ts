@@ -11,7 +11,10 @@
 //
 // Payload contract: https://supabase.com/docs/guides/auth/auth-hooks/before-user-created-hook
 // Signature contract: Standard Webhooks — https://www.standardwebhooks.com/
+// (verified via the reference `standardwebhooks` library, which also enforces
+// the spec's timestamp tolerance against replay).
 
+import { Webhook } from 'standardwebhooks';
 import {
   checkEmailDomain,
   checkGitHubAccountAge,
@@ -20,6 +23,9 @@ import {
 const HOOK_SECRET_RAW = Deno.env.get('BEFORE_USER_CREATED_HOOK_SECRET') ?? '';
 // Supabase stores the secret as "v1,whsec_<base64>"; strip the prefix.
 const HOOK_SECRET_BASE64 = HOOK_SECRET_RAW.replace(/^v1,whsec_/, '');
+
+// null = secret not configured; requests are allowed unsigned (with a warning).
+const webhook = HOOK_SECRET_BASE64 ? new Webhook(HOOK_SECRET_BASE64) : null;
 
 const GITHUB_FETCH_TIMEOUT_MS = 3000;
 
@@ -47,64 +53,6 @@ function block(message: string, httpCode = 400): Response {
     JSON.stringify({ error: { http_code: httpCode, message } }),
     { status: httpCode, headers: { 'content-type': 'application/json' } },
   );
-}
-
-function decodeBase64(s: string): ArrayBuffer {
-  // Return ArrayBuffer (not Uint8Array) so it satisfies WebCrypto's BufferSource
-  // under Deno's strict types (Uint8Array<ArrayBufferLike> doesn't match).
-  const decoded = atob(s);
-  const buf = new ArrayBuffer(decoded.length);
-  const view = new Uint8Array(buf);
-  for (let i = 0; i < decoded.length; i++) view[i] = decoded.charCodeAt(i);
-  return buf;
-}
-
-async function verifySignature(
-  msgId: string,
-  timestamp: string,
-  body: string,
-  signatureHeader: string,
-): Promise<boolean> {
-  if (!HOOK_SECRET_BASE64) {
-    console.warn(
-      '[before-user-created] BEFORE_USER_CREATED_HOOK_SECRET is not set; ' +
-        'allowing unsigned requests. Configure the hook secret to enforce verification.',
-    );
-    return true;
-  }
-
-  if (!msgId || !timestamp || !signatureHeader) return false;
-
-  const signedContent = `${msgId}.${timestamp}.${body}`;
-  const key = await crypto.subtle.importKey(
-    'raw',
-    decodeBase64(HOOK_SECRET_BASE64),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['verify'],
-  );
-
-  // webhook-signature is space-delimited "v1,<base64> v1,<base64>" (key rotation).
-  const candidates = signatureHeader
-    .split(' ')
-    .filter((s) => s.startsWith('v1,'))
-    .map((s) => s.slice(3));
-
-  const msgBytes = new TextEncoder().encode(signedContent);
-  for (const sigB64 of candidates) {
-    try {
-      const ok = await crypto.subtle.verify(
-        'HMAC',
-        key,
-        decodeBase64(sigB64),
-        msgBytes,
-      );
-      if (ok) return true;
-    } catch {
-      // ignore and try the next candidate
-    }
-  }
-  return false;
 }
 
 async function fetchGitHubCreatedAt(login: string): Promise<string | null> {
@@ -152,22 +100,33 @@ Deno.serve(async (req) => {
   }
 
   const rawBody = await req.text();
-  const sigOk = await verifySignature(
-    req.headers.get('webhook-id') ?? '',
-    req.headers.get('webhook-timestamp') ?? '',
-    rawBody,
-    req.headers.get('webhook-signature') ?? '',
-  );
-  if (!sigOk) {
-    console.warn('[before-user-created] Signature verification failed');
-    return new Response('Unauthorized', { status: 401 });
-  }
 
   let payload: HookRequest;
   try {
     payload = JSON.parse(rawBody) as HookRequest;
   } catch {
     return new Response('Invalid JSON', { status: 400 });
+  }
+
+  if (webhook) {
+    try {
+      // verify() enforces the spec's timestamp tolerance (anti-replay) and
+      // validates the signed raw body. JSON was already parsed above so
+      // malformed payloads remain 400 rather than looking like auth failures.
+      webhook.verify(rawBody, {
+        'webhook-id': req.headers.get('webhook-id') ?? '',
+        'webhook-timestamp': req.headers.get('webhook-timestamp') ?? '',
+        'webhook-signature': req.headers.get('webhook-signature') ?? '',
+      });
+    } catch {
+      console.warn('[before-user-created] Signature verification failed');
+      return new Response('Unauthorized', { status: 401 });
+    }
+  } else {
+    console.warn(
+      '[before-user-created] BEFORE_USER_CREATED_HOOK_SECRET is not set; ' +
+        'allowing unsigned requests. Configure the hook secret to enforce verification.',
+    );
   }
 
   const user = payload.user;

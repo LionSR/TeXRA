@@ -14,20 +14,21 @@
  * - JWTs signed with Supabase's JWT secret
  */
 
-import { Hono } from 'jsr:@hono/hono@4.12.15';
-import { createClient } from 'jsr:@supabase/supabase-js@2.104.1';
-import { create, getNumericDate } from 'https://deno.land/x/djwt@v3.0.2/mod.ts';
+import { Hono, type Context as HonoContext } from '@hono/hono';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { create, getNumericDate } from 'djwt';
 import { handleCors } from '../_shared/cors.ts';
 import {
   checkEmailDomain,
   checkGitHubAccountAge,
 } from '../_shared/emailPolicy.ts';
+import { versionedJsonResponse } from '../_shared/responses.ts';
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-const VERSION = '2.0.0';
+const VERSION = '2.0.1';
 const ACCESS_TOKEN_EXPIRY_SECONDS = 3600;
 const REFRESH_TOKEN_EXPIRY_DAYS = 7;
 
@@ -52,9 +53,9 @@ interface GitHubUser {
   created_at: string;
 }
 
+// `any` schema so `.schema('auth')` queries typecheck (service-role client).
 type Variables = {
-  supabase: ReturnType<typeof createClient>;
-  corsHeaders: Record<string, string>;
+  supabase: SupabaseClient<any>;
 };
 
 // =============================================================================
@@ -65,24 +66,25 @@ const app = new Hono<{ Variables: Variables }>();
 
 // CORS middleware using shared utilities
 app.use('*', async (c, next) => {
-  const { corsHeaders, response } = handleCors(c.req.raw);
+  const response = handleCors(c.req.raw);
   if (response) return response;
-  c.set('corsHeaders', corsHeaders);
   await next();
 });
 
 // Initialize Supabase client
 app.use('*', async (c, next) => {
   if (!supabaseUrl || !supabaseServiceKey || !jwtSecret) {
-    return c.json(
-      { error: 'Server configuration error', _version: VERSION },
+    return versionedJsonResponse(
+      c.req.raw,
+      VERSION,
+      { error: 'Server configuration error' },
       500,
     );
   }
 
   c.set(
     'supabase',
-    createClient(supabaseUrl, supabaseServiceKey, {
+    createClient<any>(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     }),
   );
@@ -94,14 +96,14 @@ app.use('*', async (c, next) => {
 // Helpers
 // =============================================================================
 
-type Context = Parameters<Parameters<typeof app.post>[1]>[0];
+type Context = HonoContext<{ Variables: Variables }>;
 
 function jsonResponse(
   c: Context,
   body: Record<string, unknown>,
   status: number,
 ) {
-  return c.json({ _version: VERSION, ...body }, status, c.get('corsHeaders'));
+  return versionedJsonResponse(c.req.raw, VERSION, body, status);
 }
 
 function errorResponse(c: Context, error: string, status: number) {
@@ -341,8 +343,9 @@ app.post('/exchange', async (c) => {
         userId = newUser.user.id;
       }
 
-      // Link identity
-      await supabase
+      // Duplicate/constraint failures are non-fatal; thrown transport/runtime
+      // failures should fail the exchange instead of leaving auth state split.
+      const { error: identityError } = await supabase
         .schema('auth')
         .from('identities')
         .insert({
@@ -359,8 +362,10 @@ app.post('/exchange', async (c) => {
           last_sign_in_at: new Date().toISOString(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        })
-        .catch(() => {}); // Ignore duplicate
+        });
+      if (identityError) {
+        console.warn('[AUTH] Identity link skipped:', identityError.message);
+      }
     }
 
     // Generate tokens
