@@ -311,6 +311,7 @@ export type CodexApprovalPolicy = z.infer<typeof CodexApprovalPolicySchema>;
  * string, but the dropdown is fixed to the canonical Anthropic families. */
 export const ClaudeAgentModelSchema = z.enum([
   'claude-sonnet-4-6',
+  'claude-fable-5',
   'claude-opus-4-8',
   'claude-haiku-4-5-20251001',
 ]);
