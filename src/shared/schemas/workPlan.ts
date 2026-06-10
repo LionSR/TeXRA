@@ -14,17 +14,23 @@ function parsePlan(value: unknown): Plan | null {
   return result.success ? result.data : null;
 }
 
-function extractPlanSummary(value: unknown): string | null {
-  return isObject(value) ? nonEmptyString(value.summary) : null;
+/** One-line label for a plan document: its first non-empty line. */
+export function planSummaryLine(objective: string): string {
+  const first = objective
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  return first ?? objective.trim();
 }
 
 function normalizeWorkPlanSnapshot(input: unknown): unknown {
   const record = isObject(input) ? input : {};
+  // Legacy structured plans fail to parse and read back as "no plan";
+  // their stored planSummary string still carries the one-line label.
   const plan = parsePlan(record.plan);
-  const planSummary =
-    plan?.summary ??
-    nonEmptyString(record.planSummary) ??
-    extractPlanSummary(record.plan);
+  const planSummary = plan
+    ? planSummaryLine(plan.objective)
+    : nonEmptyString(record.planSummary);
 
   return {
     todos: record.todos,

@@ -13,7 +13,7 @@ import {
 import { PlanApprovalCoordinator } from '@agent/runtime/PlanApprovalCoordinator';
 import { type RunCoordinators } from '@agent/runtime/RunContext';
 import { withToolEnvironment } from '@agent/toolUse/ToolFileInteractionContext';
-import type { Plan, StreamTabId } from '@shared/schemas';
+import { planSummaryLine, type Plan, type StreamTabId } from '@shared/schemas';
 import { GOAL_FEATURE_FLAG_KEY, GoalStore } from '@tools/goal';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { createRecordingHost } from '../agent/progressTestUtils';
@@ -21,27 +21,20 @@ import { createRecordingHost } from '../agent/progressTestUtils';
 import type { Platform } from '@platform/platform';
 
 const plan: Plan = {
-  summary: 'Refactor the plan state boundary.',
-  steps: [
-    {
-      title: 'Move ownership',
-      description: 'Store plan progress in WorkPlanState.',
-      status: 'pending',
-      files: ['src/agent/core/AgentWorkspaceState.ts'],
-    },
-  ],
+  objective: [
+    'Refactor the plan state boundary.',
+    '',
+    'Move plan progress ownership into WorkPlanState.',
+    'Done when the workspace typechecks and the work-plan tests pass.',
+  ].join('\n'),
 };
 
 const followUpPlan: Plan = {
-  summary: 'Implement the approved follow-up plan.',
-  steps: [
-    {
-      title: 'Retarget objective',
-      description: 'Make the active goal follow the newly approved plan.',
-      status: 'pending',
-      files: ['src/tools/plan/PlanTool.ts'],
-    },
-  ],
+  objective: [
+    'Implement the approved follow-up plan.',
+    '',
+    'Retarget the active goal at the newly approved objective.',
+  ].join('\n'),
 };
 
 async function installPlatform(flagOn: boolean): Promise<Platform> {
@@ -54,6 +47,43 @@ async function installPlatform(flagOn: boolean): Promise<Platform> {
 }
 
 describe('PlanTool — update (plan approval)', () => {
+  it('keeps an approved plan in displayed work-plan state and defers steps to the todo tool', async () => {
+    await installPlatform(false);
+    const { events, host } = createRecordingHost();
+    const coordinator = new PlanApprovalCoordinator(host);
+    const workPlanState = new WorkPlanState();
+    const tool = new PlanTool();
+
+    const resultPromise = withToolEnvironment(
+      {
+        run: {
+          runtimeHost: host,
+          streamId: 'stream:plan-approve' as StreamTabId,
+          coordinators: { plan: coordinator } as unknown as RunCoordinators,
+        },
+        call: {
+          tracker: new FileInteractionState(),
+          workPlanState,
+        },
+      },
+      () => tool.call({ command: 'update', objective: plan.objective }),
+    );
+
+    const approval = events.find((entry) => entry.event === 'showPlanApproval');
+    expect(approval).toBeDefined();
+    expect((approval!.payload as { plan: Plan }).plan).toEqual(plan);
+    coordinator.resolveRequest(
+      (approval!.payload as { approvalId: string }).approvalId,
+      { action: 'approve' },
+    );
+
+    const result = await resultPromise;
+    expect(result.isError).toBeFalsy();
+    expect(result.output).toContain('todo tool');
+    expect(workPlanState.plan).toEqual(plan);
+    expect(workPlanState.planSummary).toBe(planSummaryLine(plan.objective));
+  });
+
   it('clears a rejected plan from displayed work-plan state', async () => {
     await installPlatform(false);
     const { events, host } = createRecordingHost();
@@ -73,7 +103,7 @@ describe('PlanTool — update (plan approval)', () => {
           workPlanState,
         },
       },
-      () => tool.call({ command: 'update', plan }),
+      () => tool.call({ command: 'update', objective: plan.objective }),
     );
 
     const approval = events.find((entry) => entry.event === 'showPlanApproval');
@@ -89,7 +119,7 @@ describe('PlanTool — update (plan approval)', () => {
     expect(workPlanState.planSummary).toBeNull();
   });
 
-  it('approve_and_goal starts a goal using the plan as the objective', async () => {
+  it('approve_and_goal starts a goal using the plan document as the objective', async () => {
     const streamId = 'stream:plan-goal' as StreamTabId;
     await installPlatform(true);
 
@@ -111,7 +141,7 @@ describe('PlanTool — update (plan approval)', () => {
             workPlanState,
           },
         },
-        () => tool.call({ command: 'update', plan }),
+        () => tool.call({ command: 'update', objective: plan.objective }),
       );
 
       const approval = events.find(
@@ -132,9 +162,8 @@ describe('PlanTool — update (plan approval)', () => {
       const goal = GoalStore.getForStream(streamId);
       expect(goal).not.toBeNull();
       expect(goal!.status).toBe('active');
-      expect(goal!.objective).toContain(plan.summary);
-      expect(goal!.objective).toContain(plan.steps[0]!.title);
-      expect(goal!.plan).toEqual(plan);
+      // The approved plan document seeds the goal verbatim.
+      expect(goal!.objective).toBe(plan.objective);
     } finally {
       await GoalStore.forget(streamId);
     }
@@ -145,9 +174,7 @@ describe('PlanTool — update (plan approval)', () => {
     await installPlatform(true);
 
     try {
-      const existing = await GoalStore.start(streamId, 'Old objective', {
-        plan,
-      });
+      const existing = await GoalStore.start(streamId, 'Old objective');
       const { events, host } = createRecordingHost();
       const coordinator = new PlanApprovalCoordinator(host);
       const workPlanState = new WorkPlanState();
@@ -165,7 +192,8 @@ describe('PlanTool — update (plan approval)', () => {
             workPlanState,
           },
         },
-        () => tool.call({ command: 'update', plan: followUpPlan }),
+        () =>
+          tool.call({ command: 'update', objective: followUpPlan.objective }),
       );
 
       const approval = events.find(
@@ -185,9 +213,8 @@ describe('PlanTool — update (plan approval)', () => {
       expect(goal).not.toBeNull();
       expect(goal!.goalId).toBe(existing.goalId);
       expect(goal!.status).toBe('active');
-      expect(goal!.objective).toContain(followUpPlan.summary);
+      expect(goal!.objective).toBe(followUpPlan.objective);
       expect(goal!.objective).not.toContain('Old objective');
-      expect(goal!.plan).toEqual(followUpPlan);
     } finally {
       await GoalStore.forget(streamId);
     }
@@ -215,7 +242,7 @@ describe('PlanTool — update (plan approval)', () => {
             workPlanState,
           },
         },
-        () => tool.call({ command: 'update', plan }),
+        () => tool.call({ command: 'update', objective: plan.objective }),
       );
 
       const approval = events.find(
@@ -261,7 +288,7 @@ describe('PlanTool — update (plan approval)', () => {
           workPlanState,
         },
       },
-      () => tool.call({ command: 'update', plan }),
+      () => tool.call({ command: 'update', objective: plan.objective }),
     );
 
     const approval = events.find((entry) => entry.event === 'showPlanApproval');
@@ -302,9 +329,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
   }
 
   it('pauses an active goal with a reason', async () => {
-    await GoalStore.start(STREAM_ID, 'Drive the plan to completion.', {
-      plan,
-    });
+    await GoalStore.start(STREAM_ID, 'Drive the plan to completion.');
     const result = await callTool({
       command: 'pause',
       reason: 'Need API credentials from the user.',
@@ -314,9 +339,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
   });
 
   it('completes an active goal by forgetting the record', async () => {
-    await GoalStore.start(STREAM_ID, 'Drive the plan to completion.', {
-      plan,
-    });
+    await GoalStore.start(STREAM_ID, 'Drive the plan to completion.');
     const result = await callTool({
       command: 'complete',
       reason: 'Ran pnpm test; all 142 tests pass.',
@@ -347,7 +370,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
   });
 
   it('rejects whitespace-only reason on pause', async () => {
-    await GoalStore.start(STREAM_ID, 'objective', { plan });
+    await GoalStore.start(STREAM_ID, 'objective');
     const result = await callTool({ command: 'pause', reason: '   ' });
     expect(result.isError).toBe(true);
     expect(result.error).toMatch(/empty/i);

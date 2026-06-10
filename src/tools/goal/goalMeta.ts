@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 import { StreamTabIdSchema } from '@shared/schemas/identifiers';
-import { PlanSchema } from '@shared/schemas/plan';
 
 export const GOAL_FEATURE_FLAG_KEY = 'texra.goal.enabled' as const;
 
@@ -44,12 +43,6 @@ export const GoalSchema = z.object({
   status: GoalStatusSchema,
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-  /**
-   * Structured plan that seeded the goal, when it was started from a
-   * Plan-tool approval. Pure metadata for UI / inspection — the
-   * continuation prompt still uses `objective` as the canonical instruction.
-   */
-  plan: PlanSchema.nullish(),
 });
 export type Goal = z.infer<typeof GoalSchema>;
 

@@ -35,15 +35,9 @@ describe('promise coordinators', () => {
     const ambientHost = createRecordingHost();
     const coordinator = new PlanApprovalCoordinator(host);
     const plan: Plan = {
-      summary: 'Refactor runtime event plumbing',
-      steps: [
-        {
-          title: 'Capture host',
-          description: 'Use the current runtime host for approval events',
-          status: 'pending',
-          files: [],
-        },
-      ],
+      objective:
+        'Refactor runtime event plumbing.\n' +
+        'Use the current runtime host for approval events.',
     };
 
     const resultPromise = withRunContext(
@@ -87,10 +81,7 @@ describe('promise coordinators', () => {
     // host when resolving, so rebinding afterwards must not redirect events.
     let providerHost: AgentRuntimeHost = requestHost.host;
     const coordinator = new PlanApprovalCoordinator(() => providerHost);
-    const plan: Plan = {
-      summary: 'Use the host boundary',
-      steps: [],
-    };
+    const plan: Plan = { objective: 'Use the host boundary' };
 
     const resultPromise = withRunContext(
       createRunContext({ runtimeHost: ambientHost.host }),
@@ -121,10 +112,7 @@ describe('promise coordinators', () => {
   it('dismisses a replaced request through the coordinator host', async () => {
     const { events, host } = createRecordingHost();
     const coordinator = new PlanApprovalCoordinator(host);
-    const plan: Plan = {
-      summary: 'Replace pending approval',
-      steps: [],
-    };
+    const plan: Plan = { objective: 'Replace pending approval' };
 
     const firstResult = coordinator.waitForApproval('stream:first', {
       approvalId: 'approval:replace',

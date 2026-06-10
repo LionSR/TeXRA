@@ -8,8 +8,6 @@ import {
   type StreamTabId,
 } from '@shared/schemas/identifiers';
 
-import { PlanSchema, type Plan } from '@shared/schemas/plan';
-
 import { filterNotNull } from '@utils/core';
 import { hexId12 } from '@utils/core/executionId';
 import {
@@ -54,7 +52,6 @@ const LegacyOdysseySchema = z.object({
   status: z.enum(['active', 'paused', 'complete', 'abandoned']),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-  plan: PlanSchema.nullish(),
 });
 
 function normalizeGoalRecord(raw: unknown): Goal | null {
@@ -74,7 +71,6 @@ function normalizeGoalRecord(raw: unknown): Goal | null {
     status: legacy.status,
     createdAt: legacy.createdAt,
     updatedAt: legacy.updatedAt,
-    plan: legacy.plan ?? null,
   };
 }
 
@@ -187,11 +183,7 @@ export const GoalStore = {
    * Create a new active goal for the stream. Throws if one already exists
    * (active or paused). Finishing one (forget) and starting another is normal.
    */
-  async start(
-    streamId: StreamTabId,
-    objective: string,
-    options?: { plan?: Plan },
-  ): Promise<Goal> {
+  async start(streamId: StreamTabId, objective: string): Promise<Goal> {
     const trimmed = requireNonEmpty(objective, 'objective');
     const existing = readRaw(streamId);
     if (existing && isGoalInFlight(existing)) {
@@ -208,7 +200,6 @@ export const GoalStore = {
       status: 'active',
       createdAt: now,
       updatedAt: now,
-      plan: options?.plan ?? null,
     };
     await Promise.all([writeRaw(goal), addToIndex(streamId)]);
     bus.emit('goalStateChanged', { streamId });
@@ -241,25 +232,18 @@ export const GoalStore = {
   },
 
   /**
-   * Replace the objective (and optionally the originating plan).
-   * Used by the Approve & Run path when a goal is already in flight —
-   * re-targeting an active loop is preferable to silently leaving it
-   * pointed at a stale objective.
+   * Replace the objective. Used by the Approve & Run path when a goal is
+   * already in flight — re-targeting an active loop is preferable to
+   * silently leaving it pointed at a stale objective.
    */
   async editObjective(
     streamId: StreamTabId,
     newObjective: string,
-    options?: { plan?: Plan | null },
   ): Promise<Goal> {
     const trimmed = requireNonEmpty(newObjective, 'objective');
-    // `options.plan !== undefined` keeps absent and explicit `undefined` both
-    // as "don't touch plan"; `null` still means "clear".
-    const planUpdate =
-      options?.plan !== undefined ? { plan: options.plan } : {};
     const updated = await update(streamId, (goal) => ({
       ...goal,
       objective: trimmed,
-      ...planUpdate,
     }));
     if (!updated) {
       throw new Error('No goal found for this stream.');
