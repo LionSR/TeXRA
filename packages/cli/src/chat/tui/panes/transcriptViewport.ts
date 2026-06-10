@@ -4,10 +4,8 @@ import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { completedProcessDisplayLines } from '../state/completedProcessTranscript';
 import {
   ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS,
-  isInquiryContinuationText,
   LIVE_TAIL_ROWS,
   PROCESS_ENTRY_MARGIN_BOTTOM_ROWS,
-  USER_ENTRY_MARGIN_BOTTOM_ROWS,
   tailWindow,
 } from './TranscriptEntry';
 import { isRenderableTranscriptEntry } from './transcriptEntries';
@@ -63,10 +61,12 @@ export function estimateTranscriptEntryRows(
     });
   }
   if (entry.role === 'user') {
-    const rows = estimateWrappedRows(entry.text, Math.max(1, width - 2));
-    return isInquiryContinuationText(entry.text)
-      ? rows
-      : rows + USER_ENTRY_MARGIN_BOTTOM_ROWS;
+    // User rows — band and inquiry continuation alike — render inside a
+    // padded box plus the `› ` prefix, so long text wraps to `width - 4`
+    // (the same geometry as error rows). The static band's margins are not
+    // budgeted here: the live pane paints user rows through the margin-less
+    // bounded renderer.
+    return estimateWrappedRows(entry.text, Math.max(1, width - 4));
   }
   if (entry.role === 'error') {
     // Error rows render inside a padded box plus the `! ` prefix, so long text
