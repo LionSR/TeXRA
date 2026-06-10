@@ -49,6 +49,10 @@ export interface StopAgentStreamOptions {
   readonly runtimeHost?: AgentRuntimeHost;
 }
 
+export interface KillExecutionOptions {
+  readonly detachActiveChildren?: boolean;
+}
+
 export interface TrackAgentExecutionOptions {
   readonly status?: StreamStatus;
 }
@@ -355,11 +359,22 @@ export class ExecutionRegistry {
   }
 
   /** Terminate an execution via its handle. Returns true on success. */
-  kill(executionId: string): boolean {
+  kill(executionId: string, options: KillExecutionOptions = {}): boolean {
     const handle = this.handles.get(executionId);
     if (!handle) return false;
-    const result = this.terminate(handle, new Set(), {
-      cascadeChildren: true,
+    const visited = new Set<string>();
+    if (
+      options.detachActiveChildren === true &&
+      handle instanceof AgentExecutionHandle
+    ) {
+      this.detachActiveChildren(
+        handle.childStreamId,
+        handle.runtimeHost,
+        visited,
+      );
+    }
+    const result = this.terminate(handle, visited, {
+      cascadeChildren: options.detachActiveChildren !== true,
     });
     // Always notify waiters — even if terminate() returned false (e.g. PID not
     // yet assigned), callers blocking on this execution should be unblocked.
