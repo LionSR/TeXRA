@@ -157,8 +157,9 @@ async function mintGoTrueSession(
   authClient: SupabaseClient<any>,
   email: string,
 ): Promise<Session | null> {
-  // Supabase admin.generateLink returns link/OTP material for custom delivery;
-  // this function consumes the token hash server-side and does not send mail.
+  // Supabase admin.generateLink returns link/OTP material for custom delivery.
+  // Consume the hash immediately server-side; GoTrue mailer behavior depends on
+  // the deployment's auth email configuration.
   const { data: linkData, error: linkError } =
     await adminClient.auth.admin.generateLink({ type: 'magiclink', email });
 
