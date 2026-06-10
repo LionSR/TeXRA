@@ -1,5 +1,6 @@
 /**
- * KaTeX macros for LaTeX shortcuts in the progress view
+ * KaTeX macros for LaTeX shortcuts in markdown rendered to HTML
+ * (progress view, HTML chat export).
  * Based on patterns from src/replacement/maxRules.ts
  */
 

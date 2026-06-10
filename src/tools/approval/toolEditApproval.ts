@@ -64,6 +64,7 @@ export type ToolEditApprovalAction =
 export const toolEditApprovalController =
   createStreamApprovalController<ToolEditApprovalResult>({
     rejectionResult: () => ({ accepted: false }),
+    bypassEvent: 'updateToolEditApprovalBypassState',
   });
 
 let customHandler:
@@ -93,26 +94,23 @@ export function setToolEditApprovalSessionBypass(
   runtimeHost: AgentRuntimeHost,
   options?: { silent?: boolean },
 ): void {
-  toolEditApprovalController.setBypass(streamId, enabled);
-  if (!options?.silent) {
-    runtimeHost.emit('updateToolEditApprovalBypassState', {
-      streamId,
-      bypassActive: enabled,
-    });
-  }
+  toolEditApprovalController.bypass.setBypass(
+    streamId,
+    enabled,
+    runtimeHost,
+    options,
+  );
 }
 
 export function toggleToolEditApprovalSessionBypass(
   streamId: StreamTabId,
   runtimeHost: AgentRuntimeHost,
 ): boolean {
-  const next = !toolEditApprovalController.isBypassed(streamId);
-  setToolEditApprovalSessionBypass(streamId, next, runtimeHost);
-  return next;
+  return toolEditApprovalController.bypass.toggleBypass(streamId, runtimeHost);
 }
 
 export function isApprovalBypassedForStream(streamId: StreamTabId): boolean {
-  return toolEditApprovalController.isBypassed(streamId);
+  return toolEditApprovalController.bypass.isBypassed(streamId);
 }
 
 export function setToolEditApprovalHandler(
@@ -242,7 +240,7 @@ export async function requestToolEditApproval(
 
   const streamId = preparedRequest.streamId;
   const isStreamBypassed =
-    streamId && toolEditApprovalController.isBypassed(streamId);
+    streamId && toolEditApprovalController.bypass.isBypassed(streamId);
   if (!approvalsEnabled || isStreamBypassed) {
     return finalizeApprovalResult({ accepted: true }, preparedRequest);
   }
@@ -427,8 +425,11 @@ export function inheritBashBypassOnChildStream(
   childStreamId: StreamTabId,
   parentStreamId?: StreamTabId,
 ): void {
-  if (parentStreamId && bashApprovalController.isBypassed(parentStreamId)) {
-    bashApprovalController.setBypass(childStreamId, true);
+  if (
+    parentStreamId &&
+    bashApprovalController.bypass.isBypassed(parentStreamId)
+  ) {
+    bashApprovalController.bypass.setBypass(childStreamId, true);
   }
 }
 
@@ -442,5 +443,5 @@ export function inheritBashBypassOnChildStream(
  * follows the parent regardless of the tool-edit flag.
  */
 export function enableYoloOnChildStream(childStreamId: StreamTabId): void {
-  toolEditApprovalController.setBypass(childStreamId, true);
+  toolEditApprovalController.bypass.setBypass(childStreamId, true);
 }

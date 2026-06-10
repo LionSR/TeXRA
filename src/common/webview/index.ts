@@ -1,5 +1,9 @@
 // Barrel export for common webview components
-export { BaseViewContentProvider } from './BaseViewContentProvider';
+export {
+  BaseViewContentProvider,
+  BundledViewContentProvider,
+  type ViewBundle,
+} from './BaseViewContentProvider';
 export { BaseViewMessageHandler } from './BaseViewMessageHandler';
 export { BaseWebviewProvider } from './BaseWebviewProvider';
 export {

@@ -31,6 +31,7 @@ export type BashApprovalAction = (typeof BASH_APPROVAL_ACTIONS)[number];
 export const bashApprovalController =
   createStreamApprovalController<BashApprovalResult>({
     rejectionResult: () => ({ accepted: false }),
+    bypassEvent: 'updateBashApprovalBypassState',
   });
 
 let approvalCounter = 0;
@@ -41,28 +42,25 @@ export function setBashApprovalSessionBypass(
   runtimeHost: AgentRuntimeHost,
   options?: { silent?: boolean },
 ): void {
-  bashApprovalController.setBypass(streamId, enabled);
-  if (!options?.silent) {
-    runtimeHost.emit('updateBashApprovalBypassState', {
-      streamId,
-      bypassActive: enabled,
-    });
-  }
+  bashApprovalController.bypass.setBypass(
+    streamId,
+    enabled,
+    runtimeHost,
+    options,
+  );
 }
 
 export function toggleBashApprovalSessionBypass(
   streamId: StreamTabId,
   runtimeHost: AgentRuntimeHost,
 ): boolean {
-  const next = !bashApprovalController.isBypassed(streamId);
-  setBashApprovalSessionBypass(streamId, next, runtimeHost);
-  return next;
+  return bashApprovalController.bypass.toggleBypass(streamId, runtimeHost);
 }
 
 export function isBashApprovalBypassedForStream(
   streamId: StreamTabId,
 ): boolean {
-  return bashApprovalController.isBypassed(streamId);
+  return bashApprovalController.bypass.isBypassed(streamId);
 }
 
 export async function requestBashApproval(
