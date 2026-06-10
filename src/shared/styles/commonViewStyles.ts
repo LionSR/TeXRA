@@ -325,6 +325,16 @@ export const commonViewStyles: CSSResult = css`
     font-style: italic;
   }
 
+  /* Structure owned by the shared renderLoadingState helper (@shared/wa) */
+  .loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--wa-space-xs);
+    padding: var(--wa-space-l);
+    color: var(--color-text-secondary);
+  }
+
   .empty-state wa-icon {
     font-size: calc(var(--font-size) * 2.5);
     opacity: var(--opacity-disabled);
@@ -345,39 +355,6 @@ export const commonViewStyles: CSSResult = css`
   .tab-content-container {
     max-width: 1000px;
     margin: 0 auto;
-  }
-
-  /* Shared small action button — outlined style used in tab toolbars */
-  .tab-action-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--wa-space-2xs);
-    min-height: var(--height-control-compact);
-    padding: var(--wa-space-3xs) var(--wa-space-2xs);
-    font-size: var(--font-size-xs);
-    font-family: inherit;
-    color: var(--wa-color-text-normal);
-    background: none;
-    border: var(--border-thin) solid var(--color-border);
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    transition:
-      color var(--transition-fast),
-      border-color var(--transition-fast);
-  }
-
-  .tab-action-btn:hover {
-    color: var(--wa-color-text-normal);
-    border-color: var(--wa-color-focus);
-  }
-
-  .tab-action-btn:active {
-    background: var(--wa-color-toolbar-active, rgba(99, 102, 103, 0.31));
-  }
-
-  .tab-action-btn:focus-visible {
-    outline: var(--border-thin) solid var(--wa-color-focus);
-    outline-offset: 1px;
   }
 
   /* Shared settings reminder for compact informational panels at the top of tabs */

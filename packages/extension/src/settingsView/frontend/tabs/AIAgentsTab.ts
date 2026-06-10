@@ -12,6 +12,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared styles
 import { commonViewStyles, designTokens } from '@shared/styles';
+import { renderLoadingState } from '@shared/wa/loadingState';
 
 // Local imports - shared schemas
 import { createEvent } from '@shared/utils/events';
@@ -26,8 +27,8 @@ import type {
 } from '@shared/schemas/settingsViewMessages';
 
 // Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
@@ -290,10 +291,7 @@ export class AIAgentsTab extends LitElement {
     if (!this.loaded) {
       return html`
         <div class="tab-content-container">
-          <div class="ai-agents-empty">
-            <wa-spinner></wa-spinner>
-            Loading integrations…
-          </div>
+          ${renderLoadingState('Loading integrations…')}
         </div>
       `;
     }
@@ -308,14 +306,16 @@ export class AIAgentsTab extends LitElement {
             runs, such as coding agents, GitHub, and reference managers. Each
             integration shows its own setup and authentication state here.
           </p>
-          <button
-            class="tab-action-btn"
-            @click=${this.handleRecheck}
+          <wa-button
+            appearance="outlined"
+            variant="neutral"
+            size="small"
             title="Re-check integration availability"
+            @click=${this.handleRecheck}
           >
-            <wa-icon library="texra" name="refresh"></wa-icon>
+            <wa-icon slot="start" library="texra" name="refresh"></wa-icon>
             Re-check
-          </button>
+          </wa-button>
         </div>
 
         ${items.length === 0
