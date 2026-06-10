@@ -324,10 +324,7 @@ export function StaticConversationTranscript({
   const staticItems = useMemo(() => [...items], [items]);
 
   return (
-    <Static
-      key={`transcript:${ownerKey}`}
-      items={staticItems}
-    >
+    <Static key={`transcript:${ownerKey}`} items={staticItems}>
       {(item: StaticTranscriptItem) => (
         <Box key={item.id} flexDirection="column">
           {item.kind === 'header' ? (
