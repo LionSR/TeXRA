@@ -24,10 +24,7 @@ import type {
   StreamTabId,
 } from '@shared/schemas';
 import { formatRelativeTime } from '@shared/utils/string';
-import {
-  truncateSummary,
-  truncateWithEllipsis,
-} from '@utils/text/stringUtils';
+import { truncateSummary, truncateWithEllipsis } from '@utils/text/stringUtils';
 
 import {
   getThreadSummary,
