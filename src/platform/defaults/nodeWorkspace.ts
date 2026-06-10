@@ -7,21 +7,19 @@ import * as path from 'node:path';
 
 import { minimatch } from 'minimatch';
 
+import { normalizeFilePath } from '@shared/utils/path';
+
 import type { WorkspaceProvider } from '../interfaces/workspace';
 
 const CASE_INSENSITIVE_GLOBS =
   process.platform === 'win32' || process.platform === 'darwin';
-
-function normalizeRelativePath(filePath: string): string {
-  return filePath.replaceAll('\\', '/');
-}
 
 function shouldTraverseDirectory(
   root: string,
   directory: string,
   globPattern: string,
 ): boolean {
-  const relativePath = normalizeRelativePath(path.relative(root, directory));
+  const relativePath = normalizeFilePath(path.relative(root, directory));
   if (!relativePath) return true;
   return minimatch(relativePath, globPattern, {
     dot: true,
@@ -35,7 +33,7 @@ function shouldNotify(
   relativePath: string | null,
 ): boolean {
   if (relativePath == null) return false;
-  return minimatch(normalizeRelativePath(relativePath), globPattern, {
+  return minimatch(normalizeFilePath(relativePath), globPattern, {
     dot: true,
     nocase: CASE_INSENSITIVE_GLOBS,
   });
@@ -167,7 +165,7 @@ export function createNodeWorkspace(
       if (relative.startsWith('..') || path.isAbsolute(relative)) {
         return filePath;
       }
-      return normalizeRelativePath(relative);
+      return normalizeFilePath(relative);
     },
 
     watch(globPattern: string, listener: () => void): { dispose(): void } {

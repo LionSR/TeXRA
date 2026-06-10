@@ -38,6 +38,7 @@ import {
 // Local imports - model
 import { createChannelTrace } from '@logger';
 import { getApiKey, type ApiProvider } from '@model/apiProviders';
+import { isGpt5ModelName } from '@model/modelNames';
 
 // Local imports - logger
 import { MESSAGE_TYPES } from '@shared/schemas';
@@ -529,7 +530,7 @@ export abstract class ModelHandler<
     // Providers map it to their minimum effort level (e.g. Anthropic → 'low').
     // Returning null here would silently fall back to high/default effort.
 
-    const isGpt5 = this.config.name.startsWith('gpt5');
+    const isGpt5 = isGpt5ModelName(this.config.name);
     if (
       isGpt5 &&
       (reasoningEffort === ReasoningEffort.XHIGH ||

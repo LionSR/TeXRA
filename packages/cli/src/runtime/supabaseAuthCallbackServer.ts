@@ -13,6 +13,7 @@ import {
   type SupabaseSessionCoordinator,
 } from '@auth/SupabaseSession';
 import { toErrorMessage } from '@common/errors/errorMessage';
+import { escapeHtml } from '@shared/utils/xmlEscape';
 
 const LOOPBACK_HOST = '127.0.0.1';
 const CALLBACK_PATH = '/auth-callback';
@@ -264,15 +265,6 @@ function failureHtml(message: string): string {
 <body>
   <p>Sign-in failed: ${escapeHtml(message)}</p>
 </body>`;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
 }
 
 function closeServer(server: ReturnType<typeof createServer>): Promise<void> {

@@ -24,3 +24,11 @@ export function escapeText(s: string): string {
 export function escapeTextStrict(s: string): string {
   return escapeText(s).replaceAll('>', '&gt;');
 }
+
+/**
+ * Escape for arbitrary HTML interpolation — safe in text nodes and inside
+ * single- or double-quoted attribute values (escapes `&`, `<`, `>`, `"`, `'`).
+ */
+export function escapeHtml(s: string): string {
+  return escapeTextStrict(s).replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+}

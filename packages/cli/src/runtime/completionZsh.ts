@@ -1,8 +1,9 @@
+import { quotePosixShellArg as shellQuote } from '@utils/system/shellQuote';
+
 import {
   CLI_COMPLETION_SHELLS,
   commandKey,
   completionFlagVariants,
-  shellQuote,
   type CompletionCommand,
   type CompletionFlag,
 } from './completionCommandTree';
