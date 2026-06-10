@@ -443,6 +443,9 @@ export interface AppProps {
     change: TranscriptViewportChange,
   ) => void;
   readonly onCtrlC?: () => void;
+  /** Suspend the process (Ctrl-Z). Raw mode swallows the tty driver's own
+   *  ^Z→SIGTSTP translation, so the parsed key must be routed explicitly. */
+  readonly onSuspend?: () => void;
   readonly inputDisabled?: boolean;
   readonly history?: InputHistory;
 }
@@ -718,6 +721,14 @@ export function App(props: AppProps): React.JSX.Element {
         return;
       }
       exit();
+      return;
+    }
+
+    // Ctrl-Z suspends like a classic line-mode program would. Works over
+    // foreground surfaces for the same reason Ctrl-C does: process-level
+    // job control must not depend on which pane owns the keyboard.
+    if (key.ctrl && input === 'z' && props.onSuspend) {
+      props.onSuspend();
       return;
     }
 
