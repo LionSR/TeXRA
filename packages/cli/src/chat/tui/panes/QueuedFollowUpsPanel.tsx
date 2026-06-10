@@ -2,7 +2,8 @@ import { Box, Text } from 'ink';
 import stringWidth from 'string-width';
 
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
-import { collapseWhitespace } from '@utils/text/stringUtils';
+
+import { truncateSummaryToWidth } from '../render/terminalText';
 
 export const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;
 
@@ -15,23 +16,6 @@ export interface QueuedFollowUpPanelDisplay {
   readonly title: string | undefined;
   readonly rows: readonly QueuedFollowUpPanelRow[];
   readonly hiddenCount: number;
-}
-
-function truncateToColumns(text: string, maxColumns: number): string {
-  const summary = collapseWhitespace(text);
-  if (stringWidth(summary) <= maxColumns) return summary;
-
-  const ellipsis = '…';
-  const contentColumns = Math.max(0, maxColumns - stringWidth(ellipsis));
-  let width = 0;
-  let truncated = '';
-  for (const char of summary) {
-    const charWidth = stringWidth(char);
-    if (width + charWidth > contentColumns) break;
-    truncated += char;
-    width += charWidth;
-  }
-  return `${truncated}${ellipsis}`;
 }
 
 export function queuedFollowUpPanelRowCount(
@@ -55,7 +39,7 @@ export function queuedFollowUpPanelDisplay({
   }
 
   const contentWidth = Math.max(0, width - 2);
-  const title = truncateToColumns(
+  const title = truncateSummaryToWidth(
     `Queued follow-ups (${messages.length})`,
     contentWidth,
   );
@@ -75,7 +59,7 @@ export function queuedFollowUpPanelDisplay({
       const bodyWidth = Math.max(0, contentWidth - stringWidth(prefix));
       return {
         kind: 'message',
-        text: `${prefix}${truncateToColumns(
+        text: `${prefix}${truncateSummaryToWidth(
           summarizeFollowupMessage(message),
           bodyWidth,
         )}`,
@@ -86,7 +70,10 @@ export function queuedFollowUpPanelDisplay({
   if (hiddenCount > 0) {
     rows.push({
       kind: 'overflow',
-      text: truncateToColumns(`… ${hiddenCount} more queued`, contentWidth),
+      text: truncateSummaryToWidth(
+        `… ${hiddenCount} more queued`,
+        contentWidth,
+      ),
     });
   }
 

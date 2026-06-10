@@ -3,6 +3,7 @@ import { Box, Text } from 'ink';
 import { STREAM_STATUS, type StreamTabId } from '@shared/schemas';
 import { formatStreamStatusLabel } from '@shared/streams/streamStatusDisplay';
 
+import { textDisplayWidth, truncateToWidth } from '../render/terminalText';
 import { cliState, type StreamSlice } from '../state/cliState';
 import { activeStreamTreeViews } from '../state/streamViews';
 import { useSignal } from '../state/useSignal';
@@ -17,12 +18,6 @@ export interface StreamTabDisplayItem {
 }
 
 const MAX_LABEL_WIDTH = 18;
-
-function truncate(value: string, maxWidth: number): string {
-  if (value.length <= maxWidth) return value;
-  if (maxWidth <= 1) return '…';
-  return `${value.slice(0, maxWidth - 1)}…`;
-}
 
 export function streamTabSegmentText(item: StreamTabDisplayItem): string {
   if (item.id === 'ellipsis') return '…';
@@ -93,7 +88,7 @@ function buildLineSegments(
   for (const [index, item] of items.entries()) {
     const leadingSpace = index > 0;
     const text = streamTabSegmentText(item);
-    const totalWidth = text.length + (leadingSpace ? 1 : 0);
+    const totalWidth = textDisplayWidth(text) + (leadingSpace ? 1 : 0);
     if (totalWidth <= remaining) {
       segments.push({ item, leadingSpace, text });
       remaining -= totalWidth;
@@ -105,7 +100,7 @@ function buildLineSegments(
     segments.push({
       item,
       leadingSpace,
-      text: textWidth <= 1 ? '…' : `${text.slice(0, textWidth - 1)}…`,
+      text: truncateToWidth(text, textWidth),
     });
     break;
   }
@@ -138,7 +133,7 @@ export function streamTabsLineSegments(
 }
 
 function streamTabsTextLength(items: readonly StreamTabDisplayItem[]): number {
-  return streamTabsLineText(items).length;
+  return textDisplayWidth(streamTabsLineText(items));
 }
 
 function collapseMiddle(
@@ -188,7 +183,7 @@ export function streamTabsDisplayItems(init: {
     });
     return {
       id: view.id,
-      label: truncate(view.label, MAX_LABEL_WIDTH),
+      label: truncateToWidth(view.label, MAX_LABEL_WIDTH),
       active: view.active,
       running: slice?.status === STREAM_STATUS.RUNNING,
       shortcutIndex: view.shortcutIndex,
