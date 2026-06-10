@@ -95,4 +95,32 @@ describe('RetryState', () => {
       coordinatorMocks.waitForRetry.mockReset();
     }
   });
+
+  it.each(['cancel', 'timeout'] as const)(
+    'stops the stream after manual retry %s',
+    async (action) => {
+      const streamId = `retry-state-${action}` as StreamTabId;
+      const streamStatus = new StreamStatusRegistry();
+      const node = new ExposedRetryNode().setServices({
+        streamId,
+        runtimeHost: noopAgentRuntimeHost,
+        streamStatus,
+        logger: noopTrace,
+        setAbortController: vi.fn(),
+      });
+
+      coordinatorMocks.waitForRetry.mockResolvedValueOnce({ action });
+
+      try {
+        streamStatus.set(streamId, STREAM_STATUS.RUNNING, { emit: false });
+
+        await node.promptFor(new Error('temporary provider failure'));
+
+        expect(streamStatus.get(streamId)).toBe(STREAM_STATUS.STOPPED);
+      } finally {
+        streamStatus.clear(streamId, { emit: false });
+        coordinatorMocks.waitForRetry.mockReset();
+      }
+    },
+  );
 });

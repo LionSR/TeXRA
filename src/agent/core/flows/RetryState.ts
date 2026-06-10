@@ -294,7 +294,7 @@ export abstract class RetryableInvocationNode<
         ? 'Retry timed out (no response)'
         : 'Retry cancelled by user';
     logProgressStatus(logger, message);
-    streamStatus.set(streamId, STREAM_STATUS.WAITING, {
+    streamStatus.set(streamId, STREAM_STATUS.STOPPED, {
       runtimeHost,
     });
     return { shouldRetry: false, userCancelled: true };
