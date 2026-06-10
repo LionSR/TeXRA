@@ -1,7 +1,7 @@
 <script setup>
 // Frameless Dashboard navigation rail. Mirrors the ten Dashboard tabs from
 // SettingsApp.ts / SETTINGS_TAB_ORDER (Memory · History · Models · Agents ·
-// Multi-Agent · Tools · Integrations · Git · LaTeX · Odyssey), each with its
+// Multi-Agent · Tools · Integrations · Git · LaTeX · Goal), each with its
 // real wa-icon and a one-line role label. Reuses the .dash-tabs/.dt/.dt-on
 // accent-bar idea from MemoryHero/ApiKeysHero, extended with a sub-line — no
 // VS Code window chrome. The root carries `.mockup`, so it inherits the
@@ -54,9 +54,9 @@ const tabs = [
     role: 'Configure formatting, diff, and TikZ settings',
   },
   {
-    name: 'Odyssey',
+    name: 'Goal',
     icon: 'compass',
-    role: 'Monitor long-running multi-agent jobs',
+    role: 'Watch active and past autonomous Goals',
   },
 ];
 </script>

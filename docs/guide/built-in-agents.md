@@ -70,7 +70,7 @@ For details on the underlying structure and execution flow common to all agents,
 ### `chat`
 
 ::: tip Opt-in
-`chat` is no longer included in any of the built-in team presets (Lean Project, Physicist, Mathematician). Enable it from the **Agents** tab if you want to use it.
+`chat` is not included in any of the [built-in teams](#built-in-teams). Enable it from the **Agents** tab if you want to use it.
 :::
 
 A general research companion. It can read your project, edit files, run shell commands, and search through your workspace—all in a back-and-forth conversation.
@@ -360,6 +360,49 @@ Preserve mathematical notation and citations from the original.
 
 See [Intelligent Merge](./intelligent-merge.md) for details on the merge workflow.
 
+## Software Engineering Agents
+
+These agents make up the [Software Engineer team](#built-in-teams) for the code
+that accompanies a project — simulations, numerics, data pipelines, scripts,
+and small libraries.
+
+### `engineer`
+
+The team lead. Turns a coding goal into focused tasks, delegates each to the right specialist, reviews their work, and keeps the codebase coherent.
+
+**Best for:** Multi-step coding goals you want planned, delegated, and verified end to end
+
+**Example instruction:**
+
+```
+Speed up scripts/simulate.py without changing its results. Profile it first,
+then optimize the hot loops, and make sure the regression tests still pass.
+```
+
+### `coder`
+
+Implements features, makes surgical edits, and fixes bugs, then verifies the change builds and passes the project's checks.
+
+**Best for:** Implementation, focused edits, bug fixes
+
+### `codeReviewer`
+
+Reviews a diff or file for correctness, clarity, security, and convention fit, and reports prioritized findings. Read-only — it does not edit.
+
+**Best for:** Pre-merge review, auditing generated code
+
+### `testEngineer`
+
+Writes and maintains tests — pins down existing behaviour, covers new code and edge cases, and keeps the suite fast and reliable.
+
+**Best for:** Adding coverage, characterization tests, keeping suites healthy
+
+### `codeSimplifier`
+
+Refactors working code for clarity, reuse, and efficiency without changing its behaviour, then confirms the tests still pass. Quality only — it does not hunt for bugs.
+
+**Best for:** Behaviour-preserving cleanup of research code
+
 ## Setup & Meta Agents
 
 ### `setup`
@@ -434,6 +477,25 @@ single-use helper functions, and remove dead code. Run existing tests after each
 ::: tip
 Additional remote agents may be available depending on your access level. In the VS Code extension, run **TeXRA: View Profile** from the Command Palette for the full list. See [Remote Agents](./remote-agents.md) to sign in and sync them.
 :::
+
+## Built-in Teams
+
+Teams are predefined collections of agents for a discipline. Pick one from the
+**Multi-Agent** tab in the Dashboard, or run one from the CLI with
+`texra multi-agent run <team>`:
+
+| Team                    | For                                                                                        | Lead agent         |
+| :---------------------- | :----------------------------------------------------------------------------------------- | :----------------- |
+| Lean Project            | Lean 4 projects — theorem search, tactic simplification, and blueprints                    | `leanOrchestrator` |
+| Physicist               | Physics papers — derivations, numerical experiments, literature search, slides, and review | `orchestrator`     |
+| Mathematician           | Math papers — proofs, Lean 4 formalization, research, and LaTeX correction                 | `orchestrator`     |
+| Computer Scientist (ML) | ML/CS papers — algorithm design, experiments and ablations, review, and reproducibility    | `orchestrator`     |
+| Software Engineer       | A project's code — implementation, review, debugging, and testing across specialists       | `engineer`         |
+
+Every team bundles the `progressCheck` audit helper, and the paper-focused
+teams also include `latexFixer`. The Software Engineer lead and its specialists
+run locally; some specialists in other teams are
+[remote agents](./remote-agents.md) that sync after you sign in.
 
 ## Next Steps
 

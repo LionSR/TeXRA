@@ -27,9 +27,9 @@ const view = ref('search');
       <div class="stream-head">
         <span class="sh-name">orchestrator</span>
         <span class="sh-dot" title="Running"></span>
-        <span class="odyssey"
-          ><wa-icon class="ody-ic" library="texra" name="compass"></wa-icon
-          >Odyssey</span
+        <span class="goal-chip"
+          ><wa-icon class="goal-ic" library="texra" name="compass"></wa-icon
+          >Goal</span
         >
         <span class="sh-badge"
           ><wa-icon class="sh-pulse" library="texra" name="pulse"></wa-icon>4
@@ -261,7 +261,7 @@ const view = ref('search');
 .board {
   width: var(--mk-size-256);
 }
-/* This hero's header carries an extra Odyssey chip on top of the shared
+/* This hero's header carries an extra Goal chip on top of the shared
    name/badge/tools, which overflows the 256px sidebar. Let it wrap to a second
    line instead of clipping (the shared .stream-head is nowrap + overflow:hidden,
    sized for MockupSidebar's wider board). */
@@ -280,8 +280,8 @@ const view = ref('search');
   padding: var(--mk-space-8) var(--mk-space-8);
 }
 
-/* Orchestrator Odyssey chip (header) */
-.odyssey {
+/* Orchestrator Goal chip (header) */
+.goal-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--mk-space-4);
@@ -293,7 +293,7 @@ const view = ref('search');
   padding: 1px var(--mk-space-7);
   flex-shrink: 0;
 }
-.ody-ic {
+.goal-ic {
   font-size: var(--mk-space-10);
 }
 

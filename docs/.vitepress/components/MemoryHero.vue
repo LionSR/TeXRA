@@ -21,7 +21,7 @@ function toggle(id) {
   <MockupFrame title="Dashboard — texra-paper">
     <!-- Settings tab strip. Tab order, panel names, and icons mirror
          SettingsApp.ts (Memory · History · Models · Agents · Multi-Agent ·
-         Tools · Integrations · Git · LaTeX · Odyssey). The real UI lays them
+         Tools · Integrations · Git · LaTeX · Goal). The real UI lays them
          out horizontally above the content; this hero stacks them vertically
          only because ten tabs do not fit horizontally at mockup width. -->
     <aside class="board dash-nav">
@@ -56,7 +56,7 @@ function toggle(id) {
           ><wa-icon library="texra" name="file-code"></wa-icon> LaTeX</span
         >
         <span class="dt"
-          ><wa-icon library="texra" name="compass"></wa-icon> Odyssey</span
+          ><wa-icon library="texra" name="compass"></wa-icon> Goal</span
         >
       </nav>
     </aside>

@@ -75,20 +75,27 @@ with your own provider API keys — whichever you prefer.
 **Sign in with GitHub or Google** to use included access without managing keys:
 
 ```bash
-texra login                 # opens a browser to complete sign-in
+texra login                 # pick GitHub or Google, then sign in via browser
 texra login github          # choose the OAuth provider explicitly
 texra login --no-browser    # print the loopback sign-in URL
 ```
+
+Run interactively, a bare `texra login` asks which provider to use instead of
+silently defaulting.
 
 `--no-browser` still uses a local callback server. Open the printed URL in a
 browser that can reach the terminal session; SSH and container sessions may need
 callback port forwarding.
 
 ```bash
+texra auth                  # same as `texra auth status`
 texra auth status           # who am I signed in as?
 texra auth usage            # how much of my included quota have I used?
 texra logout
 ```
+
+`texra auth` on its own reports your account status and accepts the same flags
+as `texra auth status`, such as `--output-format json`.
 
 **Bring your own provider keys.** Set the right environment variable for the
 provider you want to use (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
@@ -125,9 +132,52 @@ texra chat --model deepseekT        # override the session model
 ```
 
 Slash commands inside the session: `/tools` lists and toggles integrations,
-`/api` switches between hosted and personal-key access, and `/resume` restores a
-stored execution. Chat requires an interactive terminal — for scripted, non-TTY
-runs use `texra run` with `--print` or `--output-format json|ndjson`.
+`/api` switches between hosted and personal-key access, `/model` switches to
+another model from the same provider mid-session (the change applies
+immediately and persists on resume), `/skills` lists available skills and
+applies one to your next request, and `/resume` restores a stored execution.
+Chat requires an interactive terminal — for scripted, non-TTY runs use
+`texra run` with `--print` or `--output-format json|ndjson`.
+
+## Multi-Agent Teams
+
+The CLI can list, inspect, and run the same built-in team presets as the
+extension's Multi-Agent settings tab — Lean Project, Physicist, Mathematician,
+Computer Scientist (ML), and Software Engineer:
+
+```bash
+texra multi-agent list
+texra multi-agent inspect software-engineer
+texra multi-agent run software-engineer --instruction "Profile and speed up scripts/simulate.py"
+```
+
+`run` starts the team's orchestrator, which plans the work and delegates to its
+specialists. For example, the Software Engineer team's `engineer` lead delegates
+to `coder`, `codeReviewer`, `testEngineer`, `codeSimplifier`, and
+`progressCheck`. Pass `--input` and `--context` files as with `texra run`;
+read-only context files are included in the instruction the team receives.
+
+In an interactive team session, focusing a subagent shows only its own
+transcript — scroll back through its earlier output with normal terminal
+scrolling and search. Each subagent keeps its own scoped history that persists
+across sessions, and resuming a subagent continues it where it left off.
+
+## Skills
+
+Skills are reusable instruction folders the agent can apply to a request. List
+what's available, and pull in extra skill folders for any agent run:
+
+```bash
+texra skills list
+texra run polish --input paper.tex --source ~/my-skills
+texra chat --include-interop
+```
+
+`--source` (alias `-s`) adds an additional skill root and may be repeated;
+`--include-interop` also includes `.agents`, `.claude`, `.codex`, and `.gemini`
+skill folders from the workspace and home directory. When skills share a name,
+project and user skills take precedence over bundled ones. In chat, pick a
+skill with `/skills` to apply it to your next request.
 
 ## Shell Completion
 
@@ -156,6 +206,7 @@ TeXRA stores completed executions in the workspace run store. List recent runs:
 
 ```bash
 texra history list
+texra history list --limit 10        # only the most recent runs (alias: -n)
 texra history list --output-format ndjson
 ```
 

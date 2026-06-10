@@ -53,7 +53,7 @@ const rows = [
           ><wa-icon library="texra" name="file-code"></wa-icon> LaTeX</span
         >
         <span class="dt"
-          ><wa-icon library="texra" name="compass"></wa-icon> Odyssey</span
+          ><wa-icon library="texra" name="compass"></wa-icon> Goal</span
         >
       </nav>
     </aside>

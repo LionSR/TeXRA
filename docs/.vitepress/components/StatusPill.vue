@@ -1,6 +1,6 @@
 <script setup>
 // One consolidated pill/badge. Replaces the ~7 bespoke pill variants scattered
-// across the heroes (.sh-badge, .task-tag, .ph-tag, .status--*, .odyssey,
+// across the heroes (.sh-badge, .task-tag, .ph-tag, .status--*, .goal-chip,
 // .mc-cmd verb chip, .pin-badge) with a single primitive + semantic variants.
 // Tints match the existing hand-rolled pills verbatim so adopting it is a
 // zero-regression consolidation, and the colors flip with the docs theme via

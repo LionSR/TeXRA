@@ -18,7 +18,7 @@ const rows = [
     icon: 'chart-line',
     use: 'Complex tasks',
     note: 'Powerful flagship models',
-    models: ['opus48', 'gpt55', 'gemini31p'],
+    models: ['fable5', 'opus48', 'gpt55', 'gemini31p'],
   },
   {
     icon: 'code',
@@ -30,13 +30,13 @@ const rows = [
     icon: 'sparkle',
     use: 'Reasoning-heavy',
     note: 'Thinking models',
-    models: ['opus48T', 'sonnet46T', 'deepseekT', 'kimi26T'],
+    models: ['fable5', 'opus48T', 'sonnet46T', 'deepseekT', 'kimi26T'],
   },
   {
     icon: 'file-lines',
     use: 'Large documents',
     note: 'High-context models',
-    models: ['gemini31p', 'sonnet46', 'opus48'],
+    models: ['gemini31p', 'fable5', 'sonnet46', 'opus48'],
   },
 ];
 </script>
