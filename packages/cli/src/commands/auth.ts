@@ -26,9 +26,11 @@ import {
   formatCliManualAuthUrlMessage,
   getCliAuthProfile,
   signInCliSupabase,
+  signInCliSupabaseDeviceCode,
   signOutCliSupabase,
   type CliAuthProfile,
 } from '../runtime/supabaseAuth';
+import { formatCliDeviceAuthMessage } from '../runtime/supabaseAuthDeviceCode';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -63,6 +65,7 @@ export function loginInitFromArgs(args: LoginCommandArgs): CliLoginInit {
     providerExplicit: provider.explicit,
     noBrowser:
       readBooleanArg(args, 'no-browser', 'noBrowser') || args.browser === false,
+    device: readBooleanArg(args, 'device', 'device'),
     selectAccount: readBooleanArg(args, 'select-account', 'selectAccount'),
     loginHint: readStringArg(args, 'login-hint', 'loginHint'),
   };
@@ -73,20 +76,62 @@ export function shouldPromptForLoginProvider(
     CliContext,
     'mode' | 'outputFormat' | 'stdoutIsTty' | 'termIsDumb'
   >,
-  init: Pick<CliLoginInit, 'providerExplicit' | 'noBrowser'>,
+  init: Pick<CliLoginInit, 'providerExplicit' | 'noBrowser' | 'device'>,
 ): boolean {
+  // Device-code logins pick the provider on the browser verification page,
+  // so a terminal-side provider prompt would be redundant.
   return (
     !init.providerExplicit &&
     !init.noBrowser &&
+    !init.device &&
     context.outputFormat === 'text' &&
     interactiveTerminalFailure(context) === undefined
   );
+}
+
+async function runDeviceLogin(context: CliContext): Promise<number> {
+  await initCliPlatform({ ...context, quietLogs: true });
+  // Human-facing progress goes to stdout only in text mode so the JSON/NDJSON
+  // result stream stays machine-readable (same convention as --no-browser).
+  const writeProgress =
+    context.outputFormat === 'text' ? writeTextStdout : writeTextStderr;
+  let session: SupabaseSession;
+  try {
+    session = await signInCliSupabaseDeviceCode({
+      onDeviceCode: (authorization) => {
+        writeProgress(formatCliDeviceAuthMessage(authorization));
+        writeProgress('Waiting for you to approve in the browser… (Ctrl-C cancels)');
+      },
+    });
+  } catch (error) {
+    writeErrorStderr(error);
+    return CliExitCode.ModelOrNetworkError;
+  }
+  emitLoginResult(context, session);
+  return CliExitCode.Success;
+}
+
+function emitLoginResult(context: CliContext, session: SupabaseSession): void {
+  const expiresAt = new Date(session.expiresAt).toISOString();
+  emitCliResult(context, {
+    json: { authenticated: true, account: session.account, expiresAt },
+    ndjson: {
+      kind: 'auth',
+      authenticated: true,
+      account: session.account,
+      expiresAt,
+    },
+    text: `Signed in as ${session.account.label}.`,
+  });
 }
 
 async function runLogin(
   context: CliContext,
   init: CliLoginInit,
 ): Promise<number> {
+  if (init.device) {
+    return runDeviceLogin(context);
+  }
   if (!isCliLoginProvider(init.provider)) {
     writeTextStderr(unsupportedLoginProviderMessage(init.provider));
     return CliExitCode.Usage;
@@ -118,17 +163,7 @@ async function runLogin(
     return CliExitCode.ModelOrNetworkError;
   }
 
-  const expiresAt = new Date(session.expiresAt).toISOString();
-  emitCliResult(context, {
-    json: { authenticated: true, account: session.account, expiresAt },
-    ndjson: {
-      kind: 'auth',
-      authenticated: true,
-      account: session.account,
-      expiresAt,
-    },
-    text: `Signed in as ${session.account.label}.`,
-  });
+  emitLoginResult(context, session);
   return CliExitCode.Success;
 }
 
@@ -149,6 +184,11 @@ export const loginCommand = defineCliCommand({
       type: 'boolean',
       description:
         'Print the loopback sign-in URL instead of opening a browser',
+    },
+    device: {
+      type: 'boolean',
+      description:
+        'Sign in with a device code from a browser on any device (for SSH, WSL2, and containers)',
     },
     'select-account': {
       type: 'boolean',
@@ -175,14 +215,17 @@ async function runLoginCommand(
   }
 
   const { promptForLoginProvider } = await import('./loginProviderPicker');
-  const provider = await promptForLoginProvider(
+  const choice = await promptForLoginProvider(
     context.stdoutColorEnabled ?? context.colorEnabled,
   );
-  if (!provider) {
+  if (!choice) {
     writeTextStderr('Cancelled. No sign-in started.');
     return CliExitCode.Success;
   }
-  return runLogin(context, { ...init, provider, providerExplicit: true });
+  if (choice === 'device') {
+    return runDeviceLogin(context);
+  }
+  return runLogin(context, { ...init, provider: choice, providerExplicit: true });
 }
 
 export const logoutCommand = defineCliCommand({

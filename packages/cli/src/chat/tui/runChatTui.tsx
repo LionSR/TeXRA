@@ -64,8 +64,10 @@ import { writeTextStderr, writeTextStdout } from '@cli/runtime/logSinks';
 import {
   formatCliManualAuthUrlMessage,
   signInCliSupabase,
+  signInCliSupabaseDeviceCode,
   signOutCliSupabase,
 } from '@cli/runtime/supabaseAuth';
+import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
 import {
   formatInteractiveTerminalFailure,
   interactiveTerminalFailure,
@@ -644,7 +646,7 @@ async function showCliAuthStatus(): Promise<void> {
 }
 
 const CHAT_LOGIN_USAGE =
-  'Usage: /login [github | google] [--no-browser] [--select-account] [--login-hint <account>]';
+  'Usage: /login [github | google] [--no-browser] [--device] [--select-account] [--login-hint <account>]';
 
 const CHAT_API_MODE_MODEL_RECOVERY = {
   includedModeAction: 'switch to included relay with `/api included`',
@@ -668,24 +670,36 @@ async function loginFromChat(input: string): Promise<void> {
   const accountWarning = githubSelectAccountWarning(args);
   if (accountWarning) appendLocalAssistantTranscript(accountWarning);
   appendLocalAssistantTranscript(
-    args.noBrowser
-      ? `Starting TeXRA ${args.provider} sign-in.`
-      : `Opening browser for TeXRA ${args.provider} sign-in...`,
+    args.device
+      ? 'Starting TeXRA device-code sign-in.'
+      : args.noBrowser
+        ? `Starting TeXRA ${args.provider} sign-in.`
+        : `Opening browser for TeXRA ${args.provider} sign-in...`,
   );
 
   try {
-    const session = await signInCliSupabase({
-      provider: args.provider,
-      openBrowser: !args.noBrowser,
-      selectAccount: args.selectAccount,
-      loginHint: args.loginHint,
-      manualBrowserHint: '/login --no-browser',
-      onAuthUrl: (url) => {
-        if (args.noBrowser) {
-          appendLocalAssistantTranscript(formatCliManualAuthUrlMessage(url));
-        }
-      },
-    });
+    const session = args.device
+      ? await signInCliSupabaseDeviceCode({
+          onDeviceCode: (authorization) => {
+            appendLocalAssistantTranscript(
+              formatCliDeviceAuthMessage(authorization),
+            );
+          },
+        })
+      : await signInCliSupabase({
+          provider: args.provider,
+          openBrowser: !args.noBrowser,
+          selectAccount: args.selectAccount,
+          loginHint: args.loginHint,
+          manualBrowserHint: '/login --no-browser',
+          onAuthUrl: (url) => {
+            if (args.noBrowser) {
+              appendLocalAssistantTranscript(
+                formatCliManualAuthUrlMessage(url),
+              );
+            }
+          },
+        });
     setCliSessionApiMode('included');
     appendLocalAssistantTranscript(
       [

@@ -33,11 +33,17 @@ import { type CliApiMode } from '../runtime/apiAccessMode';
 import { hasCliCredentialForApiMode } from '../runtime/credentialStatus';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { CLI_OAUTH_PROVIDER_ITEMS } from '../runtime/oauthProviderDisplay';
+import { isLikelyRemoteSession } from '../runtime/remoteSession';
 import {
   CLI_MANUAL_AUTH_REMOTE_HINT,
   CLI_MANUAL_AUTH_URL_PROMPT,
   signInCliSupabase,
+  signInCliSupabaseDeviceCode,
 } from '../runtime/supabaseAuth';
+import {
+  CLI_DEVICE_AUTH_URL_PROMPT,
+  type DeviceAuthorization,
+} from '../runtime/supabaseAuthDeviceCode';
 import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 import { saveProviderApiKey } from './applyOnboardingResult';
@@ -205,6 +211,7 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
   const [relayProvider, setRelayProvider] = useState<OAuthProvider>(
     DEFAULT_OAUTH_PROVIDER,
   );
+  const [relayMethod, setRelayMethod] = useState<RelayMethod>('loopback');
   const [noBrowser, setNoBrowser] = useState(false);
   const [keyProvider, setKeyProvider] = useState<ApiProvider>('anthropic');
   const [error, setError] = useState<string | undefined>(undefined);
@@ -245,6 +252,12 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
         onSelect={(provider) => {
           setError(undefined);
           setRelayProvider(provider);
+          setRelayMethod('loopback');
+          setScreen('relay-progress');
+        }}
+        onDeviceCode={() => {
+          setError(undefined);
+          setRelayMethod('device');
           setScreen('relay-progress');
         }}
         onCancel={() => setScreen('picker')}
@@ -255,6 +268,7 @@ function OnboardingApp(props: OnboardingAppProps): React.JSX.Element {
   if (screen === 'relay-progress') {
     return (
       <RelayProgressStep
+        method={relayMethod}
         provider={relayProvider}
         noBrowser={noBrowser}
         onSuccess={(label) =>
@@ -439,20 +453,25 @@ function PickerStep(props: {
   );
 }
 
+/** How the relay sign-in completes: loopback OAuth callback or device code. */
+type RelayMethod = 'loopback' | 'device';
+
 function RelayProviderStep(props: {
   readonly activeProvider: OAuthProvider;
   readonly noBrowser: boolean;
   readonly error?: string;
   readonly onToggleNoBrowser: () => void;
   readonly onSelect: (provider: OAuthProvider) => void;
+  readonly onDeviceCode: () => void;
   readonly onCancel: () => void;
 }): React.JSX.Element {
-  // `n` toggles no-browser. The Select child ignores `n` (no row 22), so the
-  // two active useInput handlers never collide on it.
+  // `n` toggles no-browser and `d` starts device-code sign-in. The Select
+  // child ignores both letters, so the two active useInput handlers never
+  // collide on them.
   useInput((input, key) => {
-    if (!key.ctrl && !key.meta && input.toLowerCase() === 'n') {
-      props.onToggleNoBrowser();
-    }
+    if (key.ctrl || key.meta) return;
+    if (input.toLowerCase() === 'n') props.onToggleNoBrowser();
+    if (input.toLowerCase() === 'd') props.onDeviceCode();
   });
 
   return (
@@ -461,13 +480,16 @@ function RelayProviderStep(props: {
       subtitle={
         props.noBrowser
           ? 'No-browser mode: we print the sign-in URL instead of opening it.'
-          : 'Choose a provider to sign in with:'
+          : isLikelyRemoteSession()
+            ? 'Remote session detected — press d for device-code sign-in (no callback port needed).'
+            : 'Choose a provider to sign in with:'
       }
       error={props.error}
       hints={[
         { key: '↑/↓', action: 'navigate' },
         { key: `1-${CLI_OAUTH_PROVIDER_ITEMS.length}/Enter`, action: 'select' },
         { key: 'n', action: 'no-browser' },
+        { key: 'd', action: 'device code' },
         { key: 'Esc', action: 'back' },
       ]}
     >
@@ -482,32 +504,44 @@ function RelayProviderStep(props: {
 }
 
 function RelayProgressStep(props: {
+  readonly method: RelayMethod;
   readonly provider: OAuthProvider;
   readonly noBrowser: boolean;
   readonly onSuccess: (accountLabel: string) => void;
   readonly onError: (message: string) => void;
 }): React.JSX.Element {
-  const { provider, noBrowser, onSuccess, onError } = props;
+  const { method, provider, noBrowser, onSuccess, onError } = props;
   const [url, setUrl] = useState<string | undefined>(undefined);
+  const [deviceAuth, setDeviceAuth] = useState<DeviceAuthorization | undefined>(
+    undefined,
+  );
 
   // Start the sign-in exactly once on mount. Empty deps is deliberate (not the
-  // captured props): re-running would open a second browser + loopback server,
-  // and a deps-triggered cleanup would flip `cancelled` and orphan the in-flight
-  // login (eternal spinner). The captured callbacks only invoke stable state
-  // setters / app.exit, so the mount-time closure stays correct. `cancelled`
-  // guards against the real unmount (the user navigating away).
+  // captured props): re-running would open a second browser + loopback server
+  // (or request a second device code), and a deps-triggered cleanup would flip
+  // `cancelled` and orphan the in-flight login (eternal spinner). The captured
+  // callbacks only invoke stable state setters / app.exit, so the mount-time
+  // closure stays correct. `cancelled` guards against the real unmount (the
+  // user navigating away).
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const session = await signInCliSupabase({
-          provider,
-          openBrowser: !noBrowser,
-          manualBrowserHint: 'texra login --no-browser',
-          onAuthUrl: (authUrl) => {
-            if (!cancelled) setUrl(authUrl);
-          },
-        });
+        const session =
+          method === 'device'
+            ? await signInCliSupabaseDeviceCode({
+                onDeviceCode: (authorization) => {
+                  if (!cancelled) setDeviceAuth(authorization);
+                },
+              })
+            : await signInCliSupabase({
+                provider,
+                openBrowser: !noBrowser,
+                manualBrowserHint: 'texra login --no-browser',
+                onAuthUrl: (authUrl) => {
+                  if (!cancelled) setUrl(authUrl);
+                },
+              });
         if (!cancelled) onSuccess(session.account.label);
       } catch (loginError: unknown) {
         if (!cancelled) onError(toErrorMessage(loginError));
@@ -529,24 +563,53 @@ function RelayProgressStep(props: {
         Sign in · included relay
       </Text>
       <Box marginTop={1} flexDirection="column">
-        <Text>
-          {noBrowser
-            ? CLI_MANUAL_AUTH_URL_PROMPT
-            : `Opening your browser to sign in with ${provider}…`}
-        </Text>
-        {url ? (
-          <Text color="cyan">{url}</Text>
+        {method === 'device' ? (
+          <>
+            <Text>{CLI_DEVICE_AUTH_URL_PROMPT}</Text>
+            {deviceAuth ? (
+              <>
+                <Text color="cyan">{deviceAuth.verification_uri}</Text>
+                <Text>
+                  and enter this code:{' '}
+                  <Text bold color="cyan">
+                    {deviceAuth.user_code}
+                  </Text>
+                </Text>
+              </>
+            ) : (
+              <Text dimColor>Requesting a sign-in code…</Text>
+            )}
+          </>
         ) : (
-          <Text dimColor>
-            {noBrowser
-              ? 'Preparing the sign-in URL…'
-              : "If it doesn't open, the URL will appear here."}
-          </Text>
+          <>
+            <Text>
+              {noBrowser
+                ? CLI_MANUAL_AUTH_URL_PROMPT
+                : `Opening your browser to sign in with ${provider}…`}
+            </Text>
+            {url ? (
+              <Text color="cyan">{url}</Text>
+            ) : (
+              <Text dimColor>
+                {noBrowser
+                  ? 'Preparing the sign-in URL…'
+                  : "If it doesn't open, the URL will appear here."}
+              </Text>
+            )}
+            {noBrowser ? (
+              <Text dimColor>{CLI_MANUAL_AUTH_REMOTE_HINT}</Text>
+            ) : null}
+          </>
         )}
-        {noBrowser ? <Text dimColor>{CLI_MANUAL_AUTH_REMOTE_HINT}</Text> : null}
       </Box>
       <Box marginTop={1}>
-        <Spinner label="Waiting for you to finish in the browser… (Ctrl-C cancels)" />
+        <Spinner
+          label={
+            method === 'device'
+              ? 'Waiting for you to approve in the browser… (Ctrl-C cancels)'
+              : 'Waiting for you to finish in the browser… (Ctrl-C cancels)'
+          }
+        />
       </Box>
     </Box>
   );

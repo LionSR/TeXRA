@@ -78,6 +78,7 @@ with your own provider API keys — whichever you prefer.
 texra login                 # pick GitHub or Google, then sign in via browser
 texra login github          # choose the OAuth provider explicitly
 texra login --no-browser    # print the loopback sign-in URL
+texra login --device        # device code: approve from a browser on any device
 ```
 
 When run interactively, a bare `texra login` asks which provider to use instead of
@@ -88,6 +89,12 @@ use.
 `--no-browser` still uses a local callback server. Open the printed URL in a
 browser that can reach the terminal session; SSH and container sessions may need
 callback port forwarding.
+
+`--device` needs no callback at all: the CLI prints a short code and a
+verification URL, you open the URL in a browser on **any** device (your laptop,
+even your phone), sign in, and approve the code. This is the recommended path on
+SSH, WSL2, and containers — the interactive pickers offer it automatically when
+they detect a remote session.
 
 ```bash
 texra auth                  # same as `texra auth status`

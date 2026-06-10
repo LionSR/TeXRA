@@ -1,8 +1,12 @@
 // Local imports - auth
-import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
+import {
+  DEFAULT_OAUTH_PROVIDER,
+  DEFAULT_SESSION_EXPIRY_MS,
+} from '@auth/config';
 import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
+  toStorableSupabaseSession,
   type SupabaseSession,
   type SupabaseSessionCoordinator,
 } from '@auth/SupabaseSession';
@@ -13,6 +17,11 @@ import { getServerSideKeyService } from '@auth/serverKeys';
 import { getCliSecrets } from './cliSecrets';
 import { openBrowser } from './supabaseAuthBrowser';
 import { startLoopbackCallbackServer } from './supabaseAuthCallbackServer';
+import {
+  pollForDeviceSession,
+  requestDeviceAuthorization,
+  type DeviceAuthorization,
+} from './supabaseAuthDeviceCode';
 
 /**
  * Channel-logger contract used by the CLI auth coordinator and supporting
@@ -148,6 +157,34 @@ function buildOAuthQueryParams(
     queryParams.prompt = 'select_account';
   }
   return Object.keys(queryParams).length > 0 ? queryParams : undefined;
+}
+
+export interface CliDeviceLoginOptions {
+  /** Called once with the code and verification URL the user must open. */
+  onDeviceCode?: (authorization: DeviceAuthorization) => void;
+}
+
+/**
+ * Device-code sign-in for headless terminals (SSH, WSL2, containers) where
+ * the loopback callback server can't be reached. The user approves a short
+ * code from a browser on any device; no callback port is needed here.
+ */
+export async function signInCliSupabaseDeviceCode(
+  options: CliDeviceLoginOptions = {},
+): Promise<SupabaseSession> {
+  const authCoordinator = getCliSupabaseAuthCoordinator();
+  const authorization = await requestDeviceAuthorization();
+  options.onDeviceCode?.(authorization);
+  const exchange = await pollForDeviceSession(authorization);
+  // The token endpoint mints a native GoTrue session (auth-github shape), so
+  // standard Supabase refresh applies — no custom refresh flag.
+  const session = toStorableSupabaseSession(exchange, {
+    defaultExpiryMs: DEFAULT_SESSION_EXPIRY_MS,
+  });
+  await authCoordinator.storeSession(session);
+  getServerSideKeyService().clearAllCaches({ resetQuotaFlip: true });
+  await getServerSideKeyService().setUseIncludedModelAccess(true);
+  return session;
 }
 
 export async function signOutCliSupabase(): Promise<void> {
