@@ -175,12 +175,18 @@ describe('executionRegistry', () => {
     const registry = new ExecutionRegistry({ interrupts, streamStatus });
     const rootStreamId = 'root-detach-stop-policy-test' as StreamTabId;
     const childStreamId = 'child-detach-stop-policy-test' as StreamTabId;
+    const grandchildStreamId =
+      'grandchild-detach-stop-policy-test' as StreamTabId;
     const rootInterrupt = vi.fn();
     const childInterrupt = vi.fn();
+    const grandchildInterrupt = vi.fn();
 
     try {
       interrupts.register(rootStreamId, { interrupt: rootInterrupt });
       interrupts.register(childStreamId, { interrupt: childInterrupt });
+      interrupts.register(grandchildStreamId, {
+        interrupt: grandchildInterrupt,
+      });
       registry.track(
         new AgentExecutionHandle(
           'exec-root-detach-stop-policy-test',
@@ -201,6 +207,16 @@ describe('executionRegistry', () => {
           explicit.host,
         ),
       );
+      registry.track(
+        new AgentExecutionHandle(
+          'exec-grandchild-detach-stop-policy-test',
+          childStreamId,
+          grandchildStreamId,
+          'test-grandchild',
+          'toolUse',
+          explicit.host,
+        ),
+      );
 
       expect(
         registry.stopAgentStream(rootStreamId, {
@@ -211,14 +227,22 @@ describe('executionRegistry', () => {
 
       expect(rootInterrupt).toHaveBeenCalledOnce();
       expect(childInterrupt).not.toHaveBeenCalled();
+      expect(grandchildInterrupt).not.toHaveBeenCalled();
       expect(registry.getActiveChildren(rootStreamId).subagents).toHaveLength(
         0,
       );
       expect(
         registry.getAgentHandleByStream(childStreamId)?.parentStreamId,
       ).toBe(childStreamId);
+      expect(
+        registry.getAgentHandleByStream(grandchildStreamId)?.parentStreamId,
+      ).toBe(childStreamId);
+      expect(registry.getActiveChildren(childStreamId).subagents).toEqual([
+        expect.objectContaining({ childStreamId: grandchildStreamId }),
+      ]);
       expect(streamStatus.get(rootStreamId)).toBe(STREAM_STATUS.STOPPED);
       expect(streamStatus.get(childStreamId)).toBeUndefined();
+      expect(streamStatus.get(grandchildStreamId)).toBeUndefined();
       expect(explicit.events).toContainEqual({
         event: 'setParentStream',
         payload: {

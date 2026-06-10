@@ -74,6 +74,7 @@ import {
   CLI_APPROVAL_POLICIES,
   type CliApprovalPolicy,
 } from '@cli/schemas/cliSettings';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import {
   explainNonResumable,
@@ -1138,7 +1139,13 @@ export async function runChat(
   const interruptActive = (): void => {
     clearApprovals();
     if (!session.streamId) return;
-    executionRegistry.stopAgentStream(session.streamId);
+    executionRegistry.stopAgentStream(session.streamId, {
+      detachActiveChildren:
+        tryPlatform()?.workspaceState.get<boolean>(
+          WorkspaceStateKey.DETACH_SUBAGENTS_ON_STOP,
+          false,
+        ) === true,
+    });
   };
 
   const resetSessionForClear = (): void => {

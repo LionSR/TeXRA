@@ -57,6 +57,10 @@ export interface FinishAgentExecutionOptions {
   readonly status: StreamStatus;
 }
 
+interface TerminateOptions {
+  readonly cascadeChildren?: boolean;
+}
+
 export type ToolUseFollowUpQueueReason =
   | 'resuming'
   | 'waiting'
@@ -354,7 +358,9 @@ export class ExecutionRegistry {
   kill(executionId: string): boolean {
     const handle = this.handles.get(executionId);
     if (!handle) return false;
-    const result = this.terminate(handle);
+    const result = this.terminate(handle, new Set(), {
+      cascadeChildren: true,
+    });
     // Always notify waiters — even if terminate() returned false (e.g. PID not
     // yet assigned), callers blocking on this execution should be unblocked.
     this.notifyWaiters(executionId);
@@ -449,10 +455,11 @@ export class ExecutionRegistry {
   interruptActiveChildren(
     parentStreamId: StreamTabId,
     visited: Set<string> = new Set(),
+    options: TerminateOptions = { cascadeChildren: true },
   ): void {
     for (const handle of this.handles.values()) {
       if (isChildExecution(handle, parentStreamId)) {
-        this.terminate(handle, visited);
+        this.terminate(handle, visited, options);
       }
     }
   }
@@ -480,9 +487,7 @@ export class ExecutionRegistry {
           parentStreamId: null,
         });
       } else if (handle instanceof ProcessExecutionHandle) {
-        // Killed processes keep parentStreamId === parentStreamId, so without
-        // the shared visited set the root cascade would kill them again.
-        this.terminate(handle, visited);
+        this.terminate(handle, visited, { cascadeChildren: false });
       }
     }
     this.emitActiveSubagentsUpdate(parentStreamId, runtimeHost);
@@ -512,11 +517,15 @@ export class ExecutionRegistry {
       }
       this.detachActiveChildren(streamId, runtimeHost, visited);
     } else {
-      this.interruptActiveChildren(streamId, visited);
+      this.interruptActiveChildren(streamId, visited, {
+        cascadeChildren: true,
+      });
     }
 
     const stopped = rootHandle
-      ? this.terminate(rootHandle, visited)
+      ? this.terminate(rootHandle, visited, {
+          cascadeChildren: options.detachActiveChildren !== true,
+        })
       : this.interruptRegisteredStream(streamId, runtimeHost);
     if (!stopped && runtimeHost) {
       this.streamStatus.set(streamId, STREAM_STATUS.STOPPED, { runtimeHost });
@@ -627,13 +636,14 @@ export class ExecutionRegistry {
   private terminate(
     handle: ExecutionHandle,
     visited: Set<string> = new Set(),
+    options: TerminateOptions = {},
   ): boolean {
     if (visited.has(handle.executionId)) return false;
     visited.add(handle.executionId);
     if (handle instanceof AgentExecutionHandle) {
-      // Interrupt the handle's own subagents first so no descendant outlives
-      // the chain — killing an orchestrator must also stop its grandchildren.
-      this.interruptActiveChildren(handle.childStreamId, visited);
+      if (options.cascadeChildren === true) {
+        this.interruptActiveChildren(handle.childStreamId, visited, options);
+      }
       const interruptible = this.interrupts.get(handle.childStreamId);
       if (!interruptible) return false;
       interruptible.interrupt();
