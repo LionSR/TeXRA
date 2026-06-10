@@ -1,17 +1,71 @@
 import {
+  ANSI_ESCAPE_START,
+  ansiEscapeEnd,
+  stripAnsiSequences,
+} from '@cli/runtime/ansiEscapes';
+import {
   LIVE_ELAPSED_STREAM_STATUSES,
   type StreamStatus,
 } from '@shared/schemas';
-import { stripAnsiSequences } from '@cli/runtime/ansiEscapes';
 
 import type { ConversationEntry } from '../state/cliState';
+
+const INVISIBLE_TRANSCRIPT_CHARS = new Set([
+  '\u200B',
+  '\u200C',
+  '\u200D',
+  '\uFEFF',
+]);
+
+function isInvisibleTranscriptChar(char: string | undefined): boolean {
+  return char !== undefined && INVISIBLE_TRANSCRIPT_CHARS.has(char);
+}
+
+export function terminalVisibleTranscriptText(text: string): string {
+  let out = '';
+  for (const char of stripAnsiSequences(text)) {
+    if (!isInvisibleTranscriptChar(char)) out += char;
+  }
+  return out;
+}
+
+export function trimAssistantTranscriptLead(text: string): string {
+  let index = 0;
+  let consumedInvisibleLead = false;
+  let leadingAnsi = '';
+  while (index < text.length) {
+    if (text[index] === ANSI_ESCAPE_START) {
+      const end = ansiEscapeEnd(text, index);
+      if (!consumedInvisibleLead) leadingAnsi += text.slice(index, end);
+      index = end;
+      continue;
+    }
+    if (isInvisibleTranscriptChar(text[index])) {
+      index += 1;
+      consumedInvisibleLead = true;
+      continue;
+    }
+    const newline = /^[ \t]*\r?\n/.exec(text.slice(index));
+    if (newline?.[0]) {
+      index += newline[0].length;
+      consumedInvisibleLead = true;
+      continue;
+    }
+    break;
+  }
+  if (!consumedInvisibleLead) return text;
+  const tail = text.slice(index);
+  return terminalVisibleTranscriptText(tail).trim().length > 0
+    ? leadingAnsi + tail
+    : tail;
+}
 
 export function isRenderableTranscriptEntry(entry: ConversationEntry): boolean {
   switch (entry.role) {
     case 'assistant':
     case 'error':
     case 'user':
-      return stripAnsiSequences(entry.text).trim().length > 0;
+      return terminalVisibleTranscriptText(entry.text).trim().length > 0;
     case 'process':
       return entry.process !== undefined;
     case 'tool':

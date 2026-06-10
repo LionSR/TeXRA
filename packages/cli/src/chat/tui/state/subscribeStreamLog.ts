@@ -14,7 +14,10 @@ import {
 import { normalizeToolUseData } from '@shared/toolUse';
 
 import { summarizeFollowupMessage } from '@shared/subagentFollowup';
-import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
+import {
+  isRenderableTranscriptEntry,
+  trimAssistantTranscriptLead,
+} from '../panes/transcriptEntries';
 import { cliState, patchStream, type ConversationEntry } from './cliState';
 import { isFinalTranscriptStatus } from './transcript';
 
@@ -152,7 +155,7 @@ function renderLogEntryText(
 ): string {
   switch (role) {
     case 'assistant':
-      return text.replace(/^(?:[ \t]*\r?\n)+/, '');
+      return trimAssistantTranscriptLead(text);
     case 'error':
       return appendCliApiSwitchHint(text);
     case 'user':
