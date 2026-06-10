@@ -27,8 +27,6 @@ export type HelperModelResult =
   | { kit: HelperModelKit }
   | { kit: undefined; reason: string };
 
-export { getHelperModelName };
-
 /** Resolve the configured helper model, create a non-streaming handler, and obtain a client. */
 export async function createHelperModelKit(): Promise<HelperModelResult> {
   const modelName = getHelperModelName();
