@@ -138,8 +138,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.9.0
-        version: 1.9.0(zod@4.4.3)
+        specifier: ^1.9.1
+        version: 1.9.1(zod@4.4.3)
       lru-cache:
         specifier: ^11.5.1
         version: 11.5.1
@@ -587,8 +587,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       llm-zoo:
-        specifier: ^1.9.0
-        version: 1.9.0(zod@4.4.3)
+        specifier: ^1.9.1
+        version: 1.9.1(zod@4.4.3)
       mark.js:
         specifier: ^8.11.1
         version: 8.11.1
@@ -4250,8 +4250,8 @@ packages:
   lit@3.3.3:
     resolution: {integrity: sha512-fycuvZg/hkpozL00lm1pEJH5nN/lr9ZXd6mJI2HSN4+Bzc+LDNdEApJ6HFbPkdFNHLvOplIIuJvxkS4XUxqirw==}
 
-  llm-zoo@1.9.0:
-    resolution: {integrity: sha512-7IBuxfK8R1ST+BOoWuq1F2iGpeyJPO8QKVO51bAD1HEFl2o3B6nX0l3L1OknMaSt4fCwXaU8wDyHf7jNgpIBHw==}
+  llm-zoo@1.9.1:
+    resolution: {integrity: sha512-86loA6jNXMnoRVyI64kQebv/hwYh/uQ29Lgkoq9mfdu0jexyKWr8yRY2JRSHlbNHfRL5ZRKfD0YMPEy6SLJArw==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^4.0.0
@@ -9807,7 +9807,7 @@ snapshots:
       lit-element: 4.2.2
       lit-html: 3.3.2
 
-  llm-zoo@1.9.0(zod@4.4.3):
+  llm-zoo@1.9.1(zod@4.4.3):
     optionalDependencies:
       zod: 4.4.3
 
