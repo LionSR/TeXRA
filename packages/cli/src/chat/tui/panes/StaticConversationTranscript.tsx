@@ -117,7 +117,9 @@ function SessionHeaderBlock({
   return (
     <Box flexDirection="column">
       <Box>
-        <Text color="cyan">{'─'.repeat(columns)}</Text>
+        <Text aria-hidden color="cyan">
+          {'─'.repeat(columns)}
+        </Text>
       </Box>
       <Box flexDirection="column" paddingX={1}>
         <Box gap={2}>
