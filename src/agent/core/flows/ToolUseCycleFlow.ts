@@ -51,7 +51,8 @@ import {
   formatZodIssuesForDiagnostics,
   type ValidationErrorDiagnostics,
 } from '@tools/result';
-import { AbsoluteFS, pathToLocation, type FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
+import { AbsoluteFS, pathToLocation } from '@utils/files';
 import { isNonEmptyString } from '@utils/core';
 import { formatContent } from '@utils/text/xmlUtils';
 

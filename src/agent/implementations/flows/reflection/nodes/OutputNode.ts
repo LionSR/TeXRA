@@ -32,7 +32,7 @@ import type {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
-import type { AgentFileLocation, FileLocation } from '@utils/files';
+import type { AgentFileLocation, FileLocation } from '@shared/schemas';
 import { flexibleFS } from '@utils/files';
 
 import type { ReflectionFlowShared } from '../ReflectionFlowState';

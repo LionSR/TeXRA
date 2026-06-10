@@ -30,14 +30,6 @@ export const TASK_RUNS_DIR = 'executions';
 /** Legacy directory name — checked as read fallback for pre-consolidation data. */
 export const LEGACY_RUNS_DIR = 'taskRuns';
 
-export type {
-  WorkspaceFileLocation,
-  RunStorageFileLocation,
-  ExternalFileLocation,
-  FileLocation,
-  AgentFileLocation,
-};
-
 export function createWorkspaceLocation(
   absolutePath: string,
   relativePath: string,

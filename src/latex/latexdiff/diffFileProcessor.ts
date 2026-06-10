@@ -1,5 +1,6 @@
 import replacementEngine from '@replacement/engine';
-import { flexibleFS, type FileLocation } from '@utils/files';
+import type { FileLocation } from '@shared/schemas';
+import { flexibleFS } from '@utils/files';
 
 /** LaTeX starred math environments that need label removal during diff processing. */
 const STAR_ENVIRONMENTS = [
