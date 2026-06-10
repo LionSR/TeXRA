@@ -26,6 +26,7 @@ import { terminalCapabilities } from '../state/terminalCapabilities';
 import {
   cliState,
   NO_BYPASS,
+  thinkingIndicatorVisible,
   type BypassState,
   type StreamSlice,
 } from '../state/cliState';
@@ -650,8 +651,10 @@ export function buildStatusBarDisplay(
       });
     }
     if (
-      input.status === STREAM_STATUS.RUNNING &&
-      input.thinkingActive === true
+      thinkingIndicatorVisible({
+        status: input.status,
+        thinkingActive: input.thinkingActive === true,
+      })
     ) {
       left.push({
         text: 'thinking...',
