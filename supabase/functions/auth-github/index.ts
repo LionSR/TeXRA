@@ -295,8 +295,13 @@ app.post('/exchange', async (c) => {
 
     if (identities?.length) {
       userId = identities[0].user_id;
-      const { data: userData } = await supabase.auth.admin.getUserById(userId);
-      userEmail = userData?.user?.email || email;
+      const { data: userData, error: userError } =
+        await supabase.auth.admin.getUserById(userId);
+      if (userError || !userData?.user?.email) {
+        console.error('[AUTH] Failed to load linked user:', userError?.message);
+        return errorResponse(c, 'Failed to load linked user', 500);
+      }
+      userEmail = userData.user.email;
     } else {
       // Check by email
       const { data: authUser } = await supabase
@@ -308,6 +313,7 @@ app.post('/exchange', async (c) => {
 
       if (authUser) {
         userId = authUser.id;
+        userEmail = authUser.email ?? email;
         await supabase.auth.admin.updateUserById(userId, {
           user_metadata: {
             ...authUser.raw_user_meta_data,
@@ -349,6 +355,7 @@ app.post('/exchange', async (c) => {
           return errorResponse(c, 'Failed to create user', 500);
         }
         userId = newUser.user.id;
+        userEmail = newUser.user.email ?? email;
       }
 
       // Identity linking is best-effort: constraint/duplicate failures are
@@ -383,6 +390,12 @@ app.post('/exchange', async (c) => {
       userEmail,
     );
     if (!session) {
+      return errorResponse(c, 'Failed to create session', 500);
+    }
+    if (session.user.id !== userId) {
+      console.error(
+        `[AUTH] Session user mismatch: resolved ${userId}, minted ${session.user.id}`,
+      );
       return errorResponse(c, 'Failed to create session', 500);
     }
 
