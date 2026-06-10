@@ -108,6 +108,8 @@ const SHOW_AGENT_PROPOSAL = process.env.HARNESS_AGENT_PROPOSAL === '1';
 const PLAN_APPROVAL_GOAL = process.env.HARNESS_PLAN_APPROVAL_GOAL === '1';
 const SHOW_SUBAGENT_FOLLOWUPS = process.env.HARNESS_SUBAGENT_FOLLOWUPS === '1';
 const SHOW_LONG_TOOL_OUTPUT = process.env.HARNESS_LONG_TOOL_OUTPUT === '1';
+const SHOW_ASSISTANT_TOOL_PREAMBLE =
+  process.env.HARNESS_ASSISTANT_TOOL_PREAMBLE === '1';
 const SHOW_LIVE_TOOL_ONLY = process.env.HARNESS_LIVE_TOOL_ONLY === '1';
 const LIVE_TOOL_COUNT = Math.max(
   1,
@@ -474,6 +476,41 @@ function makeLongToolOutputEntries(): ConversationEntry[] {
       text: '',
       finalized: true,
       toolUse: makeLongToolOutput(),
+    },
+  ];
+}
+
+function makeAssistantToolPreambleEntries(): ConversationEntry[] {
+  return [
+    {
+      id: 'preamble-user',
+      role: 'user',
+      text: 'what is this repo about',
+      finalized: true,
+    },
+    {
+      id: 'preamble-assistant',
+      role: 'assistant',
+      text: 'I will read the README first.',
+      finalized: true,
+    },
+    {
+      id: 'preamble-tool',
+      role: 'tool',
+      text: '',
+      finalized: true,
+      toolUse: {
+        parsed: {},
+        toolName: 'read_file',
+        errorText: '',
+        outputText: '',
+        userInstructionText: '',
+        input: { path: 'README.md' },
+        isError: false,
+        isUserFeedback: false,
+        headerSummary: 'Read README.md',
+        status: TOOL_USE_STATUS.COMPLETED,
+      },
     },
   ];
 }
@@ -881,9 +918,11 @@ patchStream(STREAM_ID, (slice) => ({
     ? makeRejectedBashToolEntries()
     : SHOW_LONG_TOOL_OUTPUT
       ? makeLongToolOutputEntries()
-      : SHOW_LIVE_TOOL_ONLY
-        ? []
-        : makeEntries(ENTRY_COUNT),
+      : SHOW_ASSISTANT_TOOL_PREAMBLE
+        ? makeAssistantToolPreambleEntries()
+        : SHOW_LIVE_TOOL_ONLY
+          ? []
+          : makeEntries(ENTRY_COUNT),
   queuedFollowUps: QUEUED_FOLLOW_UPS.length,
   queuedFollowUpMessages: QUEUED_FOLLOW_UPS,
 }));

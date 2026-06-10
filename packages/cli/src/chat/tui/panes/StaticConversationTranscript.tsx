@@ -25,7 +25,9 @@ import { useSignal } from '../state/useSignal';
 import { EntryErrorBoundary } from './EntryErrorBoundary';
 import { isRenderableTranscriptEntry } from './transcriptEntries';
 import {
+  ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS,
   isInquiryContinuationText,
+  PROCESS_ENTRY_MARGIN_BOTTOM_ROWS,
   TranscriptEntry,
   USER_ENTRY_MARGIN_BOTTOM_ROWS,
 } from './TranscriptEntry';
@@ -165,10 +167,18 @@ function staticTranscriptItemRowCount(
     item.entry,
     Math.max(1, Math.floor(width ?? 80)),
   ).length;
-  return item.entry.role === 'user' &&
+  let marginRows = 0;
+  if (
+    item.entry.role === 'user' &&
     !isInquiryContinuationText(item.entry.text)
-    ? lines + USER_ENTRY_MARGIN_BOTTOM_ROWS
-    : lines;
+  ) {
+    marginRows = USER_ENTRY_MARGIN_BOTTOM_ROWS;
+  } else if (item.entry.role === 'assistant') {
+    marginRows = ASSISTANT_ENTRY_MARGIN_BOTTOM_ROWS;
+  } else if (item.entry.role === 'process') {
+    marginRows = PROCESS_ENTRY_MARGIN_BOTTOM_ROWS;
+  }
+  return lines + marginRows;
 }
 
 export function appendStaticTranscriptItems({
