@@ -16,7 +16,7 @@ import {
   type AgentConfig,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import type { RoundFinalizedCallback } from '@agent/core/flows/CycleServices';
+import type { RoundFinalizedCallback } from '@agent/core/flows/BaseFlowServices';
 import { AgentCategory } from '@agent/core/definition/AgentDataclass';
 import { computeDelegationDepthFromStorage } from '@agent/runtime/delegationPolicy';
 import { agentConfigToTaskState } from '@agent/utils/agentConfigToTaskState';

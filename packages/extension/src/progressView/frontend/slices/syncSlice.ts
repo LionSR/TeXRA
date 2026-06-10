@@ -10,7 +10,7 @@ import {
   type WorkflowStreamState,
 } from '../store';
 import { updateParentStreamId } from '../stateUtils';
-import type { HandlerRegistry } from '../messageDispatcher';
+import type { HandlerRegistry } from '../messageHandlerTypes';
 
 export const syncHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.SYNC_STREAM_CONTENT]: (data, ctx) => {

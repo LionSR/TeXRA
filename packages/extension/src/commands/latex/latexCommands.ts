@@ -8,9 +8,9 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { withLaTeXGuard } from '@frontend/editor/activeFileGuards';
-import { indentLatexFilesInDirectory } from '@housekeeping';
 import { runLatexFormatter } from '@latex/texFormatter';
 import { getTeXCount, type TexcountMode } from '@latex/texcount';
+import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import * as logger from '@logger/logUtils';
 import replacementEngine from '@replacement/engine';

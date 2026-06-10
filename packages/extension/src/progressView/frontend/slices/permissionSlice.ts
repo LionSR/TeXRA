@@ -12,11 +12,11 @@ import { PERMISSION_KIND } from '@shared/utils/uiConstants';
 
 import { clearInquiryDraft } from '../components/ExternalInquiryPanel';
 import { updateToolUseState } from '../stateUtils';
-import type { PermissionState } from '../components/PermissionCard';
+import type { PermissionState } from '../permissionState';
 import type {
   HandlerRegistry,
   MessageHandlerContext,
-} from '../messageDispatcher';
+} from '../messageHandlerTypes';
 
 // ============================================================
 // Module state

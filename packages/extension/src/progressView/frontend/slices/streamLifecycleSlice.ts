@@ -24,7 +24,7 @@ import {
   removePermissionsForStream,
   updateParentStreamId,
 } from '../stateUtils';
-import type { HandlerRegistry } from '../messageDispatcher';
+import type { HandlerRegistry } from '../messageHandlerTypes';
 
 // ============================================================
 // Helpers

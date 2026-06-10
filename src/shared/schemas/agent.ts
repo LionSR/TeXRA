@@ -63,3 +63,18 @@ export function agentName(key: string): string {
   const idx = key.indexOf(':');
   return idx >= 0 ? key.slice(idx + 1) : key;
 }
+
+/**
+ * Extract the clean agent name from an identifier.
+ * Like agentName() but validates the prefix is a known AgentSource first,
+ * so arbitrary strings with colons (e.g. URLs) pass through unchanged.
+ */
+export function getCleanAgentName(agentIdentifier: string): string {
+  const colonIdx = agentIdentifier.indexOf(':');
+  if (colonIdx === -1) return agentIdentifier;
+
+  const source = agentIdentifier.slice(0, colonIdx);
+  if (!AgentSourceSchema.safeParse(source).success) return agentIdentifier;
+
+  return agentName(agentIdentifier);
+}

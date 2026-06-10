@@ -11,7 +11,7 @@ import {
 } from '@shared/schemas';
 
 import type { StreamLogs, StreamState } from '../store';
-import type { HandlerRegistry } from '../messageDispatcher';
+import type { HandlerRegistry } from '../messageHandlerTypes';
 
 function isTaskGroupStatus(
   value: unknown,

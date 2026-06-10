@@ -2,11 +2,11 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   bestConnectionMethod,
   bestConnectionMethodAnthropic,
-} from '@latex/textConnection';
+} from '@agent/runtime/textConnection';
+import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import * as logger from '@logger/logUtils';
 
 const CHANNEL = 'TestCommands';

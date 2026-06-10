@@ -16,10 +16,14 @@ import type {
   StreamTabInfo,
   TaskGroup,
 } from '@shared/schemas';
-import type { FollowupOptionsState, StreamState } from '../store';
+import type {
+  FollowupOptionsState,
+  ProcessOutputMap,
+  StreamState,
+} from '../store';
 
 // Local imports - progress view components
-import type { PermissionState } from '../components/PermissionCard';
+import type { PermissionState } from '../permissionState';
 
 /** Context value for stream state, providing all data needed by stream content components. */
 export interface StreamContextValue {
@@ -95,15 +99,6 @@ export const permissionsContext = createContext<PermissionState[]>(
  * Only consumed by BackgroundTasksPanel, avoiding re-renders of other components.
  * Keyed by executionId → accumulated stdout/stderr.
  */
-export interface ProcessOutputEntry {
-  stdout: string;
-  stderr: string;
-}
-
-export type ProcessOutputMap = Map<string, ProcessOutputEntry>;
-
-export const EMPTY_PROCESS_OUTPUTS: ProcessOutputMap = new Map();
-
 export const processOutputContext = createContext<ProcessOutputMap>(
   'progress-process-outputs',
 );

@@ -19,7 +19,6 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { executeAgent } from '@agent/runtime/executeAgent';
 import { evaluateCurrentDelegationGate } from '@agent/runtime/delegationPolicy';
 import { runCoordinatorBridge } from '@agent/runtime/runCoordinators';
 import type { ProposalResult } from '@agent/runtime/AgentProposalCoordinator';
@@ -334,6 +333,10 @@ async function executeSubagent(
   orchestratorStreamId: StreamTabId,
   options?: { enableYoloOnChild?: boolean; approvalMeta?: ApprovalMeta },
 ): Promise<ToolResult> {
+  // Lazy import: the delegation tool runs agents, and the agent runtime loads
+  // this tool through the registry. Same intentional recursion pattern as the
+  // dynamic RemoteAgentLoader import in agentRegistry.
+  const { executeAgent } = await import('@agent/runtime/executeAgent');
   const parentContext = tryUseRunContext();
   if (!parentContext?.runtimeHost) {
     return {

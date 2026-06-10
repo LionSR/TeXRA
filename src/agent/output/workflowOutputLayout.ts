@@ -9,37 +9,27 @@
  *
  * Per-execution isolation (executions/{id}/...) provides uniqueness;
  * agent/model/round-in-basename tokens are no longer needed.
+ *
+ * The current-layout constants and helpers live in
+ * `@shared/constants/workflowOutput` (a leaf module usable from low-level
+ * code like `@utils/files`); they are re-exported here so agent-side callers
+ * have one import point for both eras.
  */
 
-import { getCleanAgentName } from '@agent/index';
+import { getCleanAgentName } from '@shared/schemas/agent';
 import { escapeRegExp } from '@utils/core/stringCore';
 
 // ---------------------------------------------------------------------------
-// Current layout
+// Current layout (re-exported from the shared leaf module)
 // ---------------------------------------------------------------------------
 
-/** The fixed basename of every workflow output file (no extension). */
-export const WORKFLOW_OUTPUT_BASENAME = 'output';
-
-/** The fixed extension for TeXRA-named LaTeX workflow outputs. */
-export const WORKFLOW_DOCUMENT_OUTPUT_EXT = 'tex';
-
-/** The fixed extension for raw workflow round output. */
-export const WORKFLOW_RAW_OUTPUT_EXT = 'xml';
-
-/** Parse a directory name of the form `r{round}` into its round index. */
-export function parseWorkflowOutputRoundDir(dirName: string): number | null {
-  const match = /^r(\d+)$/.exec(dirName);
-  return match ? Number(match[1]) : null;
-}
-
-/** Build a runDir-relative workflow output path for a round. */
-export function workflowOutputPath(params: {
-  ext: string;
-  round: number;
-}): string {
-  return `r${params.round}/${WORKFLOW_OUTPUT_BASENAME}.${params.ext}`;
-}
+export {
+  WORKFLOW_OUTPUT_BASENAME,
+  WORKFLOW_DOCUMENT_OUTPUT_EXT,
+  WORKFLOW_RAW_OUTPUT_EXT,
+  parseWorkflowOutputRoundDir,
+  workflowOutputPath,
+} from '@shared/constants/workflowOutput';
 
 // ---------------------------------------------------------------------------
 // Legacy layout (frozen; pre-r{round}/ refactor) — read-only for migration
