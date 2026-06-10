@@ -18,11 +18,34 @@ import {
   editPatchGroups,
   type InlinePatchGroup,
 } from '../render/DiffView';
+import {
+  textDisplayWidth,
+  truncateSummaryToWidth,
+} from '../render/terminalText';
 
 const STATUS_DOT = '●';
 const OUTPUT_CORNER = '⎿';
 const MAX_HEADER_PREVIEW = 80;
 const MAX_ERROR_PREVIEW = 240;
+// Header chrome around the preview: `● ` plus ` (` and `)`.
+const HEADER_CHROME_COLS = 5;
+// Below this many remaining columns, drop the preview instead of overflowing
+// the row.
+const MIN_HEADER_PREVIEW = 4;
+
+/** Preview budget (in display columns) for live tool rows: fill the terminal
+ *  row instead of the historical fixed 80 columns, so wide terminals show the
+ *  whole command and narrow ones truncate to fit a single row. Returns 0 (no
+ *  preview) when the tool name plus chrome already eat the row. */
+export function toolHeaderPreviewBudget(
+  columns: number | undefined,
+  displayName: string,
+): number {
+  if (columns === undefined || columns <= 0) return MAX_HEADER_PREVIEW;
+  const available =
+    columns - textDisplayWidth(displayName) - HEADER_CHROME_COLS;
+  return available >= MIN_HEADER_PREVIEW ? available : 0;
+}
 
 // Tool output can be arbitrarily large (a 50 KB bash dump, a long grep). The
 // finalized `<Static>` scrollback and the live region show a head+tail slice
@@ -157,14 +180,27 @@ export function toolUsePatchDisplayLines(
   ]);
 }
 
+/** One-line input/summary preview for a tool header, truncated to
+ *  `maxPreview` display columns (so wide glyphs cannot overflow the budget).
+ *  Bash rows prefer the command text (input) over the generic header summary;
+ *  all other tools prefer the curated per-tool summary first. */
+function toolHeaderPreview(
+  toolUse: NormalizedToolUse,
+  maxPreview = MAX_HEADER_PREVIEW,
+  preferInputPreview = false,
+): string {
+  if (maxPreview <= 0) return '';
+  const sourceText = preferInputPreview
+    ? previewInput(toolUse.input) || toolUse.headerSummary || ''
+    : toolUse.headerSummary || previewInput(toolUse.input) || '';
+  return sourceText ? truncateSummaryToWidth(sourceText, maxPreview) : '';
+}
+
 function formatHeader(
   toolUse: NormalizedToolUse,
   displayName = displayToolName(toolUse.toolName) || 'tool',
 ): string {
-  const sourceText = toolUse.headerSummary || previewInput(toolUse.input) || '';
-  const preview = sourceText
-    ? truncateWithEllipsis(collapseWhitespace(sourceText), MAX_HEADER_PREVIEW)
-    : '';
+  const preview = toolHeaderPreview(toolUse);
   return `${STATUS_DOT} ${displayName}${preview ? ` (${preview})` : ''}`;
 }
 
@@ -411,27 +447,25 @@ function ToolRow(props: ToolRowProps): React.JSX.Element {
     showExitCode = false,
     preferInputPreview = false,
   } = props;
+  const { columns } = useWindowSize();
   const color = statusColor(toolUse);
   const name =
     (props.displayName ?? displayToolName(toolUse.toolName)) ||
     props.fallbackName ||
     'tool';
 
-  const { patchGroups, preview, visibleOutput } = useMemo(() => {
-    // Bash rows prefer the command text (input) over the generic header summary;
-    // all other tools prefer the summary (which is curated per-tool) first.
-    const sourceText = preferInputPreview
-      ? previewInput(toolUse.input) || toolUse.headerSummary || ''
-      : toolUse.headerSummary || previewInput(toolUse.input) || '';
-    const previewText = sourceText
-      ? truncateWithEllipsis(collapseWhitespace(sourceText), MAX_HEADER_PREVIEW)
-      : '';
-    return {
+  const { patchGroups, preview, visibleOutput } = useMemo(
+    () => ({
       patchGroups: showPatch ? toolUsePatchGroups(toolUse) : undefined,
-      preview: previewText,
+      preview: toolHeaderPreview(
+        toolUse,
+        toolHeaderPreviewBudget(columns, name),
+        preferInputPreview,
+      ),
       visibleOutput: showOutput ? visibleOutputLines(toolUse) : [],
-    };
-  }, [toolUse, showPatch, showOutput, preferInputPreview]);
+    }),
+    [toolUse, showPatch, showOutput, preferInputPreview, columns, name],
+  );
 
   const errorText = errorTextForDisplay(toolUse);
   const exitCode = showExitCode ? extractExitCode(toolUse) : undefined;

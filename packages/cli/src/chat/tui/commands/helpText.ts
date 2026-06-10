@@ -5,6 +5,7 @@
 // markdown (bold section headers + list items) so each command stays on
 // its own row in the transcript.
 
+import { textInputEditingHelp } from '../input/textInputBindings';
 import { metaChordLabel } from '../panes/StatusBar';
 
 import type { SlashCommand, SlashCommandCategory } from './slashRegistry';
@@ -59,6 +60,9 @@ function keyboardSection(options: SlashCommandHelpOptions): string {
     '**Keyboard**',
     `- \`Enter\` sends · ${newline}`,
     '- `↑`/`↓` browse input history · `Ctrl-R` searches it',
+    // Generated from the editing keymap so this list can't drift from the
+    // bindings that actually exist (see textInputBindings.ts).
+    `- ${textInputEditingHelp()}`,
     '- `Esc` stops the current response · `Ctrl-C` stops, twice exits',
     '- `Ctrl-T` opens the transcript viewer for the focused stream',
     `- \`Tab\` switches streams · \`${focusChord}\` jumps to one (when subagents are running)`,

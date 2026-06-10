@@ -7,6 +7,7 @@ import {
   listSlashCommands,
   matchSlashCommands,
   parseSlashInput,
+  prefixSlashCommands,
   registerSlashCommand,
   slashPickIntent,
   suggestSlashCommand,
@@ -532,6 +533,34 @@ describe('slashRegistry', () => {
     });
     expect(matchSlashCommands('h').map((c) => c.name)).toEqual(['help']);
     expect(matchSlashCommands('us').map((c) => c.name)).toEqual(['help']);
+  });
+
+  it('falls back to substring matches when no prefix matches', () => {
+    registerSlashCommand({ name: 'model', description: 'pick a model' });
+    registerSlashCommand({ name: 'agent', description: 'pick an agent' });
+
+    expect(matchSlashCommands('odel').map((c) => c.name)).toEqual(['model']);
+    expect(matchSlashCommands('gen').map((c) => c.name)).toEqual(['agent']);
+    // Prefix matches still win outright when present.
+    expect(matchSlashCommands('mo').map((c) => c.name)).toEqual(['model']);
+  });
+
+  it('falls back to the typo suggestion when nothing matches literally', () => {
+    registerSlashCommand({ name: 'help', description: 'show help' });
+    registerSlashCommand({ name: 'model', description: 'pick a model' });
+
+    expect(matchSlashCommands('hlp').map((c) => c.name)).toEqual(['help']);
+    expect(matchSlashCommands('frobnicate')).toEqual([]);
+  });
+
+  it('keeps the auto-run tier prefix-only so fallbacks never fire blind', () => {
+    registerSlashCommand({ name: 'help', description: 'show help' });
+    registerSlashCommand({ name: 'model', description: 'pick a model' });
+
+    expect(prefixSlashCommands('mo').map((c) => c.name)).toEqual(['model']);
+    // Substring ('odel') and typo ('hlp') matches are palette-only.
+    expect(prefixSlashCommands('odel')).toEqual([]);
+    expect(prefixSlashCommands('hlp')).toEqual([]);
   });
 
   it('finds exact command names and aliases case-insensitively', () => {
