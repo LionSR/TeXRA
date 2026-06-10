@@ -10,10 +10,12 @@
  * showing appropriate UI notifications based on the returned result.
  */
 
+import { platform } from '@platform';
 import {
   executionRegistry,
   type ToolUseFollowUpQueueReason,
 } from '@agent/runtime/executionRegistry';
+import { StreamStatusService } from '@agent/runtime/StreamStatusService';
 import type { AgentRuntimeHost } from '@agent/runtime/AgentRuntimeHost';
 import { createChannelTrace } from '@logger';
 import type { StreamTabId } from '@shared/schemas';
@@ -30,6 +32,56 @@ export type SendFollowUpResult =
       reason: ToolUseFollowUpQueueReason;
     }
   | { status: 'no_session'; streamStatus: string | undefined };
+
+/** In-flight resume attempts per stream — see {@link wakeOrReleaseQueuedStream}. */
+const wakeAttempts = new Map<StreamTabId, Promise<boolean>>();
+
+/**
+ * After a queued delivery, wake a stream whose cycle has exited (WAITING
+ * snapshot or disposed-with-children) via the host resume port so the queued
+ * item is consumed instead of sitting until the user pokes the stream. When
+ * the wake fails and the stream is gone for good (`children_running` on a
+ * non-in-flight stream), re-release the force-reopened queue so late
+ * deliveries don't leak into the next run on that stream.
+ *
+ * Returns false when the queued item was dropped by the re-release; callers
+ * should treat the delivery as failed and rely on their durable copy.
+ */
+export async function wakeOrReleaseQueuedStream(
+  streamId: StreamTabId,
+  result: SendFollowUpResult,
+): Promise<boolean> {
+  if (
+    result.status !== 'queued' ||
+    (result.reason !== 'waiting' && result.reason !== 'children_running')
+  ) {
+    return true;
+  }
+  // Serialize wakes per stream: hosts report an already-in-flight resume as
+  // `false`, indistinguishable from "unresumable", and may not have set
+  // RESUMING yet — so a concurrent wake must await the first attempt's
+  // outcome instead of re-poking the port and releasing the queue the
+  // in-flight resume is about to drain.
+  let attempt = wakeAttempts.get(streamId);
+  const resumePort = platform().agentResume;
+  if (!attempt) {
+    attempt = resumePort.tryResumeStream(streamId).finally(() => {
+      wakeAttempts.delete(streamId);
+    });
+    wakeAttempts.set(streamId, attempt);
+  }
+  const resumed = await attempt;
+  if (
+    resumed ||
+    result.reason !== 'children_running' ||
+    resumePort.isResumeInFlight?.(streamId) === true ||
+    StreamStatusService.isActiveOrResuming(streamId)
+  ) {
+    return true;
+  }
+  ToolUseFollowUpQueue.release(streamId);
+  return false;
+}
 
 const logger = createChannelTrace('ToolUseFollowUp');
 const followUpSentObservers = new Set<(streamId: StreamTabId) => void>();

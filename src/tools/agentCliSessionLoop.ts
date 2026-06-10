@@ -15,7 +15,10 @@ import {
   interruptRegistry,
   type IInterruptible,
 } from '@agent/runtime/InterruptRegistry';
-import { sendFollowUp } from '@agent/toolUse/ToolUseFollowUp';
+import {
+  sendFollowUp,
+  wakeOrReleaseQueuedStream,
+} from '@agent/toolUse/ToolUseFollowUp';
 import { ToolUseFollowUpQueue } from '@agent/toolUse/ToolUseFollowUpQueueManager';
 import type { FollowUpQueue } from '@agent/toolUse/FollowUpQueue';
 import { toErrorMessage } from '@common/errors';
@@ -222,13 +225,28 @@ export function runAgentCliSession<TTurn>(
             : strategy.formatError(turn, prompt, err);
         try {
           await getExecutionStore(executionId).writeReport(msg);
-        } catch {
-          // Best-effort; delivery must not block on storage.
+        } catch (storageErr) {
+          // Best-effort — but the report is the only durable copy of the
+          // result when delivery fails, so leave a trace.
+          logger.warn(
+            `Failed to persist report for ${executionId}: ${toErrorMessage(storageErr)}`,
+          );
         }
-        await sendFollowUp(parentStreamId, {
+        const delivery = await sendFollowUp(parentStreamId, {
           text: msg,
           origin: 'subagent_result',
         });
+        if (delivery.status === 'no_session') {
+          logger.warn(
+            `Turn result for ${executionId} not delivered: parent stream ${parentStreamId} has no active session (status: ${delivery.streamStatus ?? 'unknown'}). The result remains in the execution report.`,
+          );
+        } else if (
+          !(await wakeOrReleaseQueuedStream(parentStreamId, delivery))
+        ) {
+          logger.warn(
+            `Turn result for ${executionId} dropped: parent stream ${parentStreamId} is gone and could not be resumed. The result remains in the execution report.`,
+          );
+        }
 
         if (turnFailed) {
           sawTurnFailure = true;

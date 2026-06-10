@@ -138,6 +138,31 @@ describe('formatMultiAgentRunInstruction', () => {
     expect(instruction).toContain('Additional user instruction:');
   });
 
+  it('states explicitly when no files were attached to an instruction-only run', () => {
+    const instruction = formatMultiAgentRunInstruction(preset, {
+      inputFiles: [],
+      contextFiles: [],
+      instruction: 'Solve x^2 - 2y^2 = 1 for integer x and 0 < y < 20.',
+      approvalContext: { mode: 'headless', approvalPolicy: 'yolo' },
+    });
+
+    expect(instruction).toContain(
+      'No input or context files were attached to this run',
+    );
+    expect(instruction).toContain('User instruction:');
+  });
+
+  it('does not claim missing files when inputs are attached', () => {
+    const instruction = formatMultiAgentRunInstruction(preset, {
+      inputFiles: ['problem.md'],
+      contextFiles: [],
+      instruction: 'Solve the problem.',
+      approvalContext: { mode: 'headless', approvalPolicy: 'yolo' },
+    });
+
+    expect(instruction).not.toContain('were attached to this run');
+  });
+
   it('anchors input-only team runs on the provided files', () => {
     const instruction = formatMultiAgentRunInstruction(preset, {
       inputFiles: ['problems/pythagorean.md'],
