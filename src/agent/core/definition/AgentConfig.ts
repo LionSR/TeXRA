@@ -8,7 +8,7 @@ import { ToolConfigSchema } from '@shared/schemas/toolConfig';
 import { AgentCategory } from './AgentDataclass';
 
 const DEFAULT_AGENT_NAME = 'correct';
-const DEFAULT_AGENT_MODEL = 'gemini35f';
+export const DEFAULT_AGENT_MODEL = 'gemini35f';
 const DEFAULT_AGENT_INSTRUCTION = '';
 
 /** Pure object schema without refinements for use with .partial(). */
