@@ -2,10 +2,10 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import {
   buildInitConfig,
   gitignoreWithTexra,
-  initConfigPath,
   serializeInitConfig,
   type InitAnswers,
 } from '@cli/runtime/initConfig';
@@ -37,9 +37,9 @@ describe('serializeInitConfig', () => {
   });
 });
 
-describe('initConfigPath', () => {
+describe('workspaceTexraConfigPath', () => {
   it('resolves the workspace path under cwd', () => {
-    expect(initConfigPath('/projects/paper')).toBe(
+    expect(workspaceTexraConfigPath('/projects/paper')).toBe(
       path.join('/projects/paper', '.texra', 'config.json'),
     );
   });

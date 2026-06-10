@@ -41,11 +41,11 @@ import type {
   FileInteractionState,
   WorkPlanState,
 } from '@agent/core/execution/AgentWorkspaceState';
-import type { ToolResult } from '@agent/core/tools/ToolTypes';
 import { toErrorMessage } from '@common/errors';
 
 // Local imports - logging
 import { MESSAGE_TYPES } from '@shared/schemas';
+import type { ToolResult } from '@tools/result';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,

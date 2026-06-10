@@ -76,14 +76,6 @@ const DEFAULT_TOOLS_YAML = [
   .map((t) => `    - ${t}`)
   .join('\n');
 
-function buildRenderVars(vars: AgentTemplateVars): Record<string, string> {
-  return {
-    AGENT_NAME: vars.agentName,
-    DESCRIPTION: vars.description,
-    TOOLS_YAML: vars.toolsYaml ?? DEFAULT_TOOLS_YAML,
-  };
-}
-
 /**
  * Render a template string with agent-runtime-token passthrough applied.
  *
@@ -117,5 +109,9 @@ export async function renderAgentTemplateFromBundle(
     FILES[kind],
   );
   const raw = await AbsoluteFS.read(templatePath);
-  return renderAgentTemplateString(raw, buildRenderVars(vars));
+  return renderAgentTemplateString(raw, {
+    AGENT_NAME: vars.agentName,
+    DESCRIPTION: vars.description,
+    TOOLS_YAML: vars.toolsYaml ?? DEFAULT_TOOLS_YAML,
+  });
 }

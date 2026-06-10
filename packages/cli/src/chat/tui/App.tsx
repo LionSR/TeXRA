@@ -44,7 +44,7 @@ import {
   rewriteKittyEnterInput,
 } from './input/inputKeys';
 import {
-  hasChildExecutionRows,
+  hasChildControlItems,
   numericFocusTargetForActiveStream,
   resolveChildControlDisplayTargets,
   type ChildControlMode,
@@ -575,7 +575,7 @@ export function App(props: AppProps): React.JSX.Element {
   const taskControlsAvailable = childControlTargets.tasks.hasItems;
   const subagentControlsAvailable = childControlTargets.subagents.hasItems;
   const hasSubagentPanel =
-    !foregroundOpen && hasChildExecutionRows(activeSlice);
+    !foregroundOpen && hasChildControlItems(activeSlice, 'tasks');
   const hasTodosPlanPanel = shouldShowTodosPlanPanel({
     foregroundOpen,
     hasPlan: activeSlice?.plan != null,

@@ -2,16 +2,14 @@
 import { ZodError, type ZodType } from 'zod';
 
 // Local imports - core tool types (single source of truth)
-import type {
-  ITool,
-  ToolDefinition,
-  ToolResult,
-} from '@agent/core/tools/ToolTypes';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import { toErrorMessage } from '@common/errors';
+import type { ToolDefinition } from '@model/ToolDefinition';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesAsMessage,
   formatZodIssuesForDiagnostics,
+  type ToolResult,
 } from '@tools/result';
 
 /**
