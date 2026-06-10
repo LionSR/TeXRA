@@ -5,9 +5,6 @@
  * executions.
  */
 
-// Standard library imports
-import * as path from 'node:path';
-
 // Third-party imports
 import { z } from 'zod';
 
@@ -26,24 +23,16 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { flowKey } from '@agent/node/persistedFlow';
 import { tryUseRunContext } from '@agent/runtime/RunContext';
 import {
-  ACTIVE_STATUSES,
   AgentExecutionHandle,
   ProcessExecutionHandle,
   executionRegistry,
 } from '@agent/runtime/executionRegistry';
 import { executionSubscriptionBinder } from '@agent/runtime/ExecutionSubscriptionBinder';
-import { onFollowUpSent } from '@agent/toolUse/ToolUseFollowUp';
-
-// Local imports - shared
-import { EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS } from '@shared/constants/toolDefaults';
 
 // Local imports - utils
 import { toErrorMessage } from '@common/errors';
-import {
-  STREAM_STATUS,
-  ExecutionIdSchema,
-  type ExecutionId,
-} from '@shared/schemas';
+import { ExecutionIdSchema, type ExecutionId } from '@shared/schemas';
+import { EXECUTIONS_WAIT_DEFAULT_TIMEOUT_SECONDS } from '@shared/constants/toolDefaults';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { requireRunStream } from '@tools/contextHelpers';
 import { AbsoluteFS, StorageFS } from '@utils/files';
@@ -73,46 +62,16 @@ import {
   paginateToolListing,
   formatPaginationHint,
 } from './formatting';
-
-// ============================================================================
-// Category-aware field filtering
-// ============================================================================
-
-/** Config fields only relevant to workflow agents — hidden for toolUse. */
-const WORKFLOW_ONLY_FIELDS = new Set([
-  'inputFile',
-  'inputFiles',
-  'contextFile',
-  'contextFiles',
-  'mediaFile',
-  'mediaFiles',
-  'outputFiles',
-  'editedFile',
-  'editedFiles',
-]);
-
-/** Config fields only relevant to toolUse agents — hidden for workflow. */
-const TOOL_USE_ONLY_FIELDS = new Set(['toolConfig']);
-
-/** Synthetic process configs carry agent-only defaults that are not meaningful. */
-const PROCESS_HIDDEN_FIELDS = new Set(['model', 'agentCategory', 'toolConfig']);
-
-/**
- * Listen for follow-up messages on the current stream and abort the given
- * AbortController when one arrives. This lets users break out of a blocking
- * `executions wait` by sending a follow-up message.
- *
- * Returns a cleanup function that removes the listener.
- */
-function listenForFollowUp(ac: AbortController): () => void {
-  const ctx = tryUseRunContext();
-  if (!ctx?.streamId) return () => {};
-
-  const streamId = ctx.streamId;
-  return onFollowUpSent((followUpStreamId) => {
-    if (followUpStreamId === streamId) ac.abort();
-  });
-}
+import {
+  applyViewRange,
+  formatConversation,
+} from './executions/conversationFormat';
+import { listRunDirectoryFiles } from './executions/runDirectoryFiles';
+import { serializeFilteredConfig } from './executions/configFieldFilter';
+import {
+  listenForFollowUp,
+  shouldSkipWait,
+} from './executions/waitCoordination';
 
 // ============================================================================
 // Schema
@@ -189,46 +148,6 @@ const ExecutionsToolInputSchema = z.strictObject({
 });
 
 export type ExecutionsToolInput = z.infer<typeof ExecutionsToolInputSchema>;
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Single-pass check: should the wait endpoint skip blocking on this execution?
- *
- * Returns true when:
- * - The handle is gone (execution already untracked / completed), OR
- * - The stream left all ACTIVE_STATUSES, OR
- * - The execution is a *tool-use subagent* in WAITING (job done, result
- *   already delivered via onBeforeWaiting). Workflow subagents in WAITING
- *   may still be awaiting retry/user action and should keep blocking.
- *
- * One getHandle + one getStatus per call — no redundant lookups.
- */
-function shouldSkipWait(executionId: string): boolean {
-  const handle = executionRegistry.getHandle(executionId);
-  if (!handle) return true;
-
-  const { status } = executionRegistry.getStatus(handle);
-  if (!ACTIVE_STATUSES.has(status)) return true;
-
-  // Tool-use subagent in WAITING = job delivered via onBeforeWaiting, don't block.
-  // Workflow subagent in WAITING = may be waiting for retry/user action. Blocking
-  // isn't very useful (only the user can unblock it), but the subagent is still
-  // technically active so we don't skip — avoids misreporting it as done.
-  // Non-subagent WAITING = human input needed, keep blocking.
-  if (
-    status === STREAM_STATUS.WAITING &&
-    handle instanceof AgentExecutionHandle &&
-    handle.category === 'toolUse' &&
-    handle.parentStreamId !== handle.childStreamId
-  ) {
-    return true;
-  }
-
-  return false;
-}
 
 export class ExecutionsTool extends defineTool({
   name: 'executions',
@@ -723,7 +642,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       if (stdout) sections.push('', '<stdout>', stdout, '</stdout>');
       if (stderr) sections.push('', '<stderr>', stderr, '</stderr>');
       if (!stdout && !stderr) sections.push('', '(no output yet)');
-      return { output: this.applyViewRange(sections.join('\n'), viewRange) };
+      return { output: applyViewRange(sections.join('\n'), viewRange) };
     }
 
     // Completed process: temp files already cleaned up
@@ -781,22 +700,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       config.agent,
       config.agentCategory,
     );
-    if (category) {
-      const excludeSet =
-        category === 'process'
-          ? PROCESS_HIDDEN_FIELDS
-          : category === 'toolUse'
-            ? WORKFLOW_ONLY_FIELDS
-            : TOOL_USE_ONLY_FIELDS;
-      const filtered = Object.fromEntries(
-        Object.entries(config).filter(([key]) => !excludeSet.has(key)),
-      );
-      return { output: JSON.stringify(filtered, null, 2) };
-    }
-
-    return {
-      output: JSON.stringify(config, null, 2),
-    };
+    return { output: serializeFilteredConfig(config, category) };
   }
 
   private async showConversation(
@@ -818,76 +722,9 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       return { output: '(No conversation history available)' };
     }
 
-    const messages = conversation.map((msg, i) => {
-      const m = msg as { role?: string; content?: unknown };
-      const role = m.role ?? 'unknown';
-      const content = this.formatMessageContent(m.content);
-      return `<message index="${i + 1}" role="${role}">\n${content}\n</message>`;
-    });
-
-    const header = `Conversation (${conversation.length} messages):\n\n`;
-    const output = this.applyViewRange(
-      header + messages.join('\n\n'),
-      viewRange,
-    );
+    const output = applyViewRange(formatConversation(conversation), viewRange);
 
     return { output };
-  }
-
-  private formatMessageContent(content: unknown): string {
-    if (content == null) return '';
-    if (typeof content === 'string') {
-      return this.truncate(content, 500);
-    }
-    if (Array.isArray(content)) {
-      return content.map((block) => this.formatBlock(block)).join('\n');
-    }
-    return this.truncate(JSON.stringify(content) ?? '', 500);
-  }
-
-  private formatBlock(block: unknown): string {
-    if (typeof block === 'string') {
-      return block;
-    }
-    const b = block as Record<string, unknown>;
-    switch (b?.type) {
-      case 'text':
-        return (b.text as string) ?? '';
-      case 'tool_use':
-        return `[tool_use: ${b.name}(${this.truncate(JSON.stringify(b.input ?? {}), 100)})]`;
-      case 'tool_result': {
-        const output =
-          typeof b.content === 'string'
-            ? b.content
-            : (JSON.stringify(b.content) ?? '');
-        return `[tool_result: ${this.truncate(output, 100)}]`;
-      }
-      default:
-        return this.truncate(JSON.stringify(block), 100);
-    }
-  }
-
-  private truncate(str: string, maxLen: number): string {
-    return str.length > maxLen ? str.slice(0, maxLen - 3) + '...' : str;
-  }
-
-  /** Internal KV metadata files stored alongside generated files. */
-  private static readonly KV_FILES = new Set([
-    'meta.json',
-    'config.json',
-    'conversation.json',
-    'todos.json',
-    'report.json',
-    'workspace-files.json',
-    'result-meta.json',
-  ]);
-
-  private isKVFile(name: string): boolean {
-    return (
-      ExecutionsTool.KV_FILES.has(name) ||
-      name.startsWith('child-') ||
-      name.startsWith('flow_')
-    );
   }
 
   private async listFiles(executionId: ExecutionId): Promise<ToolResult> {
@@ -896,9 +733,7 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
       return { output: 'No files generated for this execution.' };
     }
 
-    const entries = (await this.walkDirectory(runDir, '', 2)).filter(
-      (entry) => !this.isKVFile(entry.path.split('/').pop() ?? ''),
-    );
+    const entries = await listRunDirectoryFiles(runDir);
 
     if (entries.length === 0) {
       return { output: 'No files generated for this execution.' };
@@ -912,50 +747,6 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
     return {
       output: `Files in /executions/${executionId}/files:\n\n${lines.join('\n')}`,
     };
-  }
-
-  private async walkDirectory(
-    basePath: string,
-    relativePath: string,
-    maxDepth: number,
-  ): Promise<Array<{ path: string; size: number; isDir: boolean }>> {
-    const results: Array<{ path: string; size: number; isDir: boolean }> = [];
-    const fullPath = relativePath
-      ? path.join(basePath, relativePath)
-      : basePath;
-
-    try {
-      const entries = await StorageFS.readDir(fullPath);
-
-      for (const [name, type] of entries) {
-        // Build raw path for filesystem access (preserves platform separators),
-        // then normalize to forward slashes only for display output.
-        const entryRaw = relativePath ? path.join(relativePath, name) : name;
-        const entryRelative = entryRaw.replaceAll('\\', '/');
-        const entryFull = path.join(basePath, entryRaw);
-        const isDir = isDirectory(type);
-
-        try {
-          const stats = await StorageFS.stat(entryFull);
-          results.push({ path: entryRelative, size: stats.size, isDir });
-
-          if (isDir && maxDepth > 1) {
-            const children = await this.walkDirectory(
-              basePath,
-              entryRaw,
-              maxDepth - 1,
-            );
-            results.push(...children);
-          }
-        } catch {
-          // Skip entries we can't stat
-        }
-      }
-    } catch {
-      // Directory doesn't exist or can't be read
-    }
-
-    return results;
   }
 
   private async readFile(
@@ -1081,14 +872,5 @@ Use action: "subscribe" on /executions/{id} to receive future status, progress, 
         return resolved ? [resolved.path] : [];
       }),
     );
-  }
-
-  private applyViewRange(output: string, viewRange?: number[]): string {
-    if (!viewRange || viewRange.length < 2) return output;
-    const lines = output.split('\n');
-    const [start, end] = viewRange;
-    return lines
-      .slice(Math.max(start - 1, 0), Math.min(end, lines.length))
-      .join('\n');
   }
 }

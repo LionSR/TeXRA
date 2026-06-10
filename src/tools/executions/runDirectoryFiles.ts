@@ -1,0 +1,87 @@
+/**
+ * Storage-directory traversal for an execution's generated files.
+ * Walks the run directory (bounded depth) and filters out the internal KV
+ * metadata blobs that live alongside generated output.
+ */
+
+import * as path from 'node:path';
+
+import { StorageFS } from '@utils/files';
+import { isDirectory } from '@utils/files/fsEntryType';
+
+export interface RunDirectoryEntry {
+  readonly path: string;
+  readonly size: number;
+  readonly isDir: boolean;
+}
+
+/** Internal KV metadata files stored alongside generated files. */
+const KV_FILES = new Set([
+  'meta.json',
+  'config.json',
+  'conversation.json',
+  'todos.json',
+  'report.json',
+  'workspace-files.json',
+  'result-meta.json',
+]);
+
+export function isKVFile(name: string): boolean {
+  return (
+    KV_FILES.has(name) || name.startsWith('child-') || name.startsWith('flow_')
+  );
+}
+
+async function walkDirectory(
+  basePath: string,
+  relativePath: string,
+  maxDepth: number,
+): Promise<RunDirectoryEntry[]> {
+  const results: RunDirectoryEntry[] = [];
+  const fullPath = relativePath ? path.join(basePath, relativePath) : basePath;
+
+  let entries: [string, number][];
+  try {
+    entries = await StorageFS.readDir(fullPath);
+  } catch {
+    // Directory doesn't exist or can't be read
+    return results;
+  }
+
+  for (const [name, type] of entries) {
+    // Build raw path for filesystem access (preserves platform separators),
+    // then normalize to forward slashes only for display output.
+    const entryRaw = relativePath ? path.join(relativePath, name) : name;
+    const entryRelative = entryRaw.replaceAll('\\', '/');
+    const entryFull = path.join(basePath, entryRaw);
+    const isDir = isDirectory(type);
+
+    try {
+      const stats = await StorageFS.stat(entryFull);
+      results.push({ path: entryRelative, size: stats.size, isDir });
+
+      if (isDir && maxDepth > 1) {
+        results.push(
+          ...(await walkDirectory(basePath, entryRaw, maxDepth - 1)),
+        );
+      }
+    } catch {
+      // Skip entries we can't stat
+    }
+  }
+
+  return results;
+}
+
+/**
+ * List the generated (non-KV) files under a run directory, recursing up to
+ * two levels deep.
+ */
+export async function listRunDirectoryFiles(
+  runDir: string,
+): Promise<RunDirectoryEntry[]> {
+  const entries = await walkDirectory(runDir, '', 2);
+  return entries.filter(
+    (entry) => !isKVFile(entry.path.split('/').pop() ?? ''),
+  );
+}
