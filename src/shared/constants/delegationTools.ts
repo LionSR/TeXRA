@@ -13,3 +13,14 @@ export const DELEGATION_TOOLS: ReadonlySet<string> = new Set([
   'propose_workflow',
   'propose_agent',
 ]);
+
+/** True when any of the given tool names is a delegation tool. */
+export function hasDelegationTool(
+  toolNames: Iterable<string> | undefined,
+): boolean {
+  if (!toolNames) return false;
+  for (const name of toolNames) {
+    if (DELEGATION_TOOLS.has(name)) return true;
+  }
+  return false;
+}

@@ -1,6 +1,6 @@
 import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
-import { AGENT_CATEGORY, type AgentCategory } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas/agent';
 import { type SwitchViewTarget } from '@shared/schemas/commonViewMessages';
 import {
   MainViewInboundMessageSchema,
@@ -231,8 +231,8 @@ function dispatchMainViewInboundOnShell(
     case MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS:
       actions.showSettings(
         SETTINGS_TAB.AGENTS,
-        message.sessionType === AGENT_CATEGORY.TOOL_USE
-          ? AGENT_CATEGORY.TOOL_USE
+        message.sessionType === AgentCategory.ToolUse
+          ? AgentCategory.ToolUse
           : undefined,
       );
       return true;

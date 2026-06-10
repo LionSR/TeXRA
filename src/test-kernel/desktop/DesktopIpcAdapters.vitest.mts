@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { COMMON_COMMANDS } from '@shared/ipc/commonCommands';
 import { MAIN_VIEW_COMMANDS } from '@shared/ipc/mainViewCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc/settingsViewCommands';
-import { AGENT_CATEGORY } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas/agent';
 import { SETTINGS_TAB } from '@shared/schemas/settingsViewMessages';
 
 // Local imports - desktop test paths
@@ -198,7 +198,7 @@ describe('desktop IPC adapters', () => {
     shellIpc.handleMessage({ command: MAIN_VIEW_COMMANDS.OPEN_MODEL_SETTINGS });
     shellIpc.handleMessage({
       command: MAIN_VIEW_COMMANDS.OPEN_AGENT_SETTINGS,
-      sessionType: AGENT_CATEGORY.TOOL_USE,
+      sessionType: AgentCategory.ToolUse,
     });
     shellIpc.handleMessage({
       command: MAIN_VIEW_COMMANDS.REQUEST_RECENT_COMMITS,
@@ -221,7 +221,7 @@ describe('desktop IPC adapters', () => {
       route: 'settings',
     });
     expect(postToRenderer).toHaveBeenNthCalledWith(5, {
-      agentSubTab: AGENT_CATEGORY.TOOL_USE,
+      agentSubTab: AgentCategory.ToolUse,
       command: SETTINGS_VIEW_COMMANDS.SET_TAB,
       tabIndex: SETTINGS_TAB.AGENTS,
     });

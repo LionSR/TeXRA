@@ -26,7 +26,10 @@ import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass'
 import * as logUtils from '@logger/logUtils';
 import type { ToolDefinition } from '@model';
 import { computeModelOptionsData } from '@model/computeModelOptions';
-import { DELEGATION_TOOLS } from '@shared/constants/delegationTools';
+import {
+  DELEGATION_TOOLS,
+  hasDelegationTool,
+} from '@shared/constants/delegationTools';
 import { getDefaultToolRegistry } from '@tools/registry';
 import {
   getDisabledToolNames,
@@ -73,7 +76,7 @@ export interface ResolvedAgentTools {
 async function availableDelegationModelNamesForTools(
   tools: readonly ToolDefinition[],
 ): Promise<readonly string[] | null | undefined> {
-  if (!tools.some((tool) => DELEGATION_TOOLS.has(tool.name))) {
+  if (!hasDelegationTool(tools.map((tool) => tool.name))) {
     return undefined;
   }
 
@@ -115,20 +118,22 @@ export async function resolveAgentTools({
   const toolConfigs = Array.isArray(tools) ? tools : [];
   let delegationTrimmed = false;
 
+  /** Delegation-depth and approval gates shared by declared and injected tools. */
+  const passesRuntimeGates = (name: string): boolean => {
+    if (DELEGATION_TOOLS.has(name) && delegationBlocked) {
+      delegationTrimmed = true;
+      return false;
+    }
+    return (
+      approvalPromptsUnavailable !== true || !isApprovalGatedToolName(name)
+    );
+  };
+
   const resolved: ToolDefinition[] = [];
   const resolvedNames = new Set<string>();
   for (const config of toolConfigs) {
     const def = typeof config === 'string' ? { name: config } : config;
-    if (DELEGATION_TOOLS.has(def.name) && delegationBlocked) {
-      delegationTrimmed = true;
-      continue;
-    }
-    if (
-      approvalPromptsUnavailable === true &&
-      isApprovalGatedToolName(def.name)
-    ) {
-      continue;
-    }
+    if (!passesRuntimeGates(def.name)) continue;
     if (disabled.has(def.name)) continue;
     if (unavailable.has(def.name)) {
       missingDependency.push(def.name);
@@ -141,16 +146,7 @@ export async function resolveAgentTools({
   for (const injection of toolInjections.list()) {
     if (!injection.shouldInject()) continue;
     if (resolvedNames.has(injection.toolName)) continue;
-    if (DELEGATION_TOOLS.has(injection.toolName) && delegationBlocked) {
-      delegationTrimmed = true;
-      continue;
-    }
-    if (
-      approvalPromptsUnavailable === true &&
-      isApprovalGatedToolName(injection.toolName)
-    ) {
-      continue;
-    }
+    if (!passesRuntimeGates(injection.toolName)) continue;
     const tool = effectiveRegistry.get(injection.toolName);
     if (tool) {
       resolved.push(tool.definition);

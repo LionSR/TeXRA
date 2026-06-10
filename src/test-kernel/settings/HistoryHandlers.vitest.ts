@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AGENT_CATEGORY } from '@shared/schemas/agent';
+import { AgentCategory } from '@shared/schemas/agent';
 
 const mocks = vi.hoisted(() => ({
   listExecutions: vi.fn(),
@@ -31,7 +31,7 @@ describe('settings history handlers', () => {
           agent: 'chat',
           model: 'deepseekT',
           instruction: 'Check a proof.',
-          agentCategory: AGENT_CATEGORY.TOOL_USE,
+          agentCategory: AgentCategory.ToolUse,
         },
         category: 'toolUse',
       },

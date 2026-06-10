@@ -7,7 +7,7 @@ import { when } from 'lit/directives/when.js';
 
 // Local imports - shared
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
-import { AGENT_CATEGORY } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
 import { postMessage } from '@shared/hostBridge';
 import type {
   AgentOptionData,
@@ -22,6 +22,7 @@ import type {
   WorkflowAgentProposalPermission,
 } from '@shared/schemas';
 import { getProposalFileGroups } from '@shared/schemas/proposalFields';
+import { renderWorkflowExtractFlagBadges } from '@shared/wa/extractFlagBadges';
 import { getBasename } from '@shared/utils/path';
 import { getTextareaValue } from '@shared/utils/textarea';
 import {
@@ -201,7 +202,7 @@ export class PermissionCard extends LitElement {
     if (!this.permission) return '';
 
     if (this.permission.kind === PERMISSION_KIND.PROPOSAL) {
-      return this.permission.data.agentCategory === AGENT_CATEGORY.WORKFLOW
+      return this.permission.data.agentCategory === AgentCategory.Workflow
         ? 'Approve task (Workflow)'
         : 'Approve task (Interactive)';
     }
@@ -277,7 +278,7 @@ export class PermissionCard extends LitElement {
             <span class="file-path">${data.workingDirectory}</span>
           </p>`
         : nothing}
-      ${data.agentCategory === AGENT_CATEGORY.WORKFLOW
+      ${data.agentCategory === AgentCategory.Workflow
         ? this.renderExtractFlags(data)
         : nothing}
       ${this.renderFileGroups(data)} ${this.renderFeedbackSection()}
@@ -287,25 +288,9 @@ export class PermissionCard extends LitElement {
   private renderExtractFlags(
     data: WorkflowAgentProposalPermission,
   ): TemplateResult | typeof nothing {
-    const flags: string[] = [];
-    if (data.toolConfig.autoExtractFigure) flags.push('Extract Figures');
-    if (data.toolConfig.autoExtractTikzFigure) flags.push('Extract TikZ');
-    if (flags.length === 0) return nothing;
-    return html`<p class="extract-flags">
-      ${repeat(
-        flags,
-        (flag) => flag,
-        (flag) =>
-          html`<wa-badge variant="neutral" appearance="filled"
-            ><wa-icon
-              library="texra"
-              name="file-media"
-              aria-hidden="true"
-            ></wa-icon>
-            ${flag}</wa-badge
-          >`,
-      )}
-    </p>`;
+    const badges = renderWorkflowExtractFlagBadges(data.toolConfig);
+    if (badges === nothing) return nothing;
+    return html`<p class="extract-flags">${badges}</p>`;
   }
 
   private renderPlanApprovalBody(data: PlanApprovalPermission): TemplateResult {
