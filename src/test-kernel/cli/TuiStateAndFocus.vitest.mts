@@ -1619,6 +1619,30 @@ describe('CLI transcript state', () => {
     }
   });
 
+  it('trims leading blank assistant rows at turn start', () => {
+    const previousStore = getDefaultStreamLogStore();
+    const store = new StreamLogStore();
+    setDefaultStreamLogStore(store);
+
+    try {
+      const logger = createRunTrace(root).trace;
+      logger.info('Why?', { messageType: MESSAGE_TYPES.USER_MESSAGE });
+      logger.info('\n\n  The answer starts here.', {
+        messageType: MESSAGE_TYPES.MODEL_RESPONSE,
+      });
+
+      syncStreamLog(root);
+
+      const entries = cliState.streams.get().get(root)?.entries ?? [];
+      expect(entries.map((entry) => entry.text)).toEqual([
+        'Why?',
+        '  The answer starts here.',
+      ]);
+    } finally {
+      setDefaultStreamLogStore(previousStore);
+    }
+  });
+
   // Regression: a sync tick that fires after `finalizeAssistantTranscriptEntries`
   // must not roll the entry back to `finalized: false`. Cursor Bugbot flagged
   // this when `entriesEqual` started comparing `finalized` — without this
