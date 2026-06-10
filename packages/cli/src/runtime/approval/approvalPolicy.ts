@@ -1,0 +1,174 @@
+import type { ProgressEventPayloads } from '@eventBus/ProgressEventBus';
+import type { ApprovalDecision as SharedApprovalDecision } from '@shared/schemas';
+
+import { type CliDecisionApprovalEvent } from '../approvalEvents';
+import { type CliContext, type CliPromptRequest } from '../cliContext';
+import { askCliQuestion } from '../logSinks';
+
+// The headless adapter only ever sets accepted + userMessage, but reusing the
+// host-neutral shape (which also carries optional userQuestionAnswers) keeps a
+// single source of truth for the decision vocabulary across hosts. See
+// docs/proposals/tui-extension-sharing.md (Rung 1).
+export type ApprovalDecision = SharedApprovalDecision;
+
+export const CLI_PERSONAL_API_RETRY_HINT =
+  'Use `/api personal` in the chat TUI, or press `k` on the retry prompt, to switch to personal API keys.';
+
+const deniedApprovalContexts = new WeakSet<CliContext>();
+const cliPromptQueues = new WeakMap<CliContext, Promise<unknown>>();
+
+export function denyMessage(policy: CliContext['approvalPolicy']): string {
+  return policy === 'ask'
+    ? 'Interactive approval requires a TTY; this CLI run is headless.'
+    : 'Denied by CLI approval policy.';
+}
+
+export function markApprovalDenied(context: CliContext): void {
+  deniedApprovalContexts.add(context);
+}
+
+export function hasCliApprovalDenied(context: CliContext): boolean {
+  return deniedApprovalContexts.has(context);
+}
+
+function isCliMonthlySpendingLimitMessage(
+  message: string | undefined,
+): boolean {
+  return (
+    message?.toLowerCase().includes('monthly spending limit reached') ?? false
+  );
+}
+
+export function isCliApiSwitchableRetry(
+  payload: ProgressEventPayloads['showRetryRequest'],
+): boolean {
+  const details = payload.errorDetails;
+  return (
+    details?.isCredentialExhausted === true &&
+    (details.isRelayError === true ||
+      isCliMonthlySpendingLimitMessage(payload.errorMessage))
+  );
+}
+
+export function appendCliApiSwitchHint(text: string): string {
+  if (!isCliMonthlySpendingLimitMessage(text)) return text;
+  if (text.includes('/api personal')) return text;
+  return [text, CLI_PERSONAL_API_RETRY_HINT].join('\n');
+}
+
+export function approvalPromptAllowed(context: CliContext): boolean {
+  return context.approvalPolicy === 'ask' && context.mode === 'interactive';
+}
+
+function enqueueCliPrompt<T>(
+  context: CliContext,
+  prompt: () => Promise<T>,
+): Promise<T> {
+  const previous = cliPromptQueues.get(context) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(prompt);
+  cliPromptQueues.set(
+    context,
+    next.catch(() => undefined),
+  );
+  return next;
+}
+
+async function askCliApprovalQuestion(
+  context: CliContext,
+  request: CliPromptRequest,
+): Promise<string> {
+  if (context.approvalPrompt) {
+    return context.approvalPrompt(request);
+  }
+  return askCliQuestion(`${request.summary}\n${request.prompt}`);
+}
+
+/**
+ * Queue a CLI prompt against the context's serial prompt queue. Exposed so the
+ * inquiry/user-question handlers can interleave their own multi-step prompts
+ * with approval prompts without overlapping reads from a single stdin.
+ */
+export function queueCliApprovalQuestion(
+  context: CliContext,
+  request: CliPromptRequest,
+): Promise<string> {
+  return enqueueCliPrompt(context, () =>
+    askCliApprovalQuestion(context, request),
+  );
+}
+
+export function immediateDecision(
+  context: CliContext,
+): ApprovalDecision | undefined {
+  if (context.approvalPolicy === 'yolo') return { accepted: true };
+  if (approvalPromptAllowed(context)) return undefined;
+  markApprovalDenied(context);
+  return { accepted: false, userMessage: denyMessage(context.approvalPolicy) };
+}
+
+/** Retry requests caused by exhausted credentials or auth failures need user
+ *  action (key swap, top-up, re-login). Interactive runs must still surface the
+ *  retry panel so the user can switch to personal API keys; non-interactive
+ *  and auto-approval modes should not burn the retry budget. */
+function isUnretryableRetryRequest(
+  event: CliDecisionApprovalEvent,
+  payload: ProgressEventPayloads[CliDecisionApprovalEvent],
+): boolean {
+  if (event !== 'showRetryRequest') return false;
+  const details = (payload as ProgressEventPayloads['showRetryRequest'])
+    .errorDetails;
+  if (!details) return false;
+  if (details.isCredentialExhausted) return true;
+  if (details.statusCode === 401 || details.statusCode === 403) return true;
+  return false;
+}
+
+export function immediateDecisionForApproval(
+  event: CliDecisionApprovalEvent,
+  payload: ProgressEventPayloads[CliDecisionApprovalEvent],
+  context: CliContext,
+): ApprovalDecision | undefined {
+  if (isUnretryableRetryRequest(event, payload)) {
+    if (approvalPromptAllowed(context)) return undefined;
+    markApprovalDenied(context);
+    return {
+      accepted: false,
+      userMessage: 'Retry skipped: credential exhausted or unauthorized.',
+    };
+  }
+  return immediateDecision(context);
+}
+
+export async function askApproval(
+  context: CliContext,
+  summary: string,
+): Promise<ApprovalDecision> {
+  let answer: string;
+  try {
+    answer = await queueCliApprovalQuestion(context, {
+      kind: 'approval',
+      summary,
+      prompt: 'Approve? [y/N] ',
+    });
+  } catch {
+    markApprovalDenied(context);
+    return { accepted: false, userMessage: 'CLI approval prompt failed.' };
+  }
+
+  const normalized = answer.trim().toLowerCase();
+  const accepted = normalized === 'y' || normalized === 'yes';
+  if (!accepted) markApprovalDenied(context);
+  return {
+    accepted,
+    userMessage: accepted ? undefined : 'Rejected from CLI approval prompt.',
+  };
+}
+
+export function humanInputDenialFeedback(
+  context: CliContext,
+  yoloMessage: string,
+): string {
+  if (context.approvalPolicy === 'yolo') return yoloMessage;
+  markApprovalDenied(context);
+  return denyMessage(context.approvalPolicy);
+}
