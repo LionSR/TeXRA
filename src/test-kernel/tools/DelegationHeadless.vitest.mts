@@ -24,10 +24,11 @@ const mocks = vi.hoisted(() => ({
   registerExecution: vi.fn(),
   writeReport: vi.fn(),
   computeModelOptionsData: vi.fn(),
+  canonicalAgentName: vi.fn(),
 }));
 
 vi.mock('@agent/index/agentRegistry', () => ({
-  canonicalAgentName: (name: string) => name,
+  canonicalAgentName: mocks.canonicalAgentName,
   getVisibleAgents: mocks.getVisibleAgents,
 }));
 
@@ -77,6 +78,9 @@ describe('headless delegation', () => {
         tools: [],
       },
     ]);
+    mocks.canonicalAgentName.mockImplementation((name: string) =>
+      name === 'chat' ? 'assistant' : name,
+    );
     mocks.computeModelOptionsData.mockResolvedValue([
       {
         value: 'deepseekT',
@@ -320,6 +324,44 @@ describe('headless delegation', () => {
       expect.anything(),
       expect.any(String),
       expect.not.objectContaining({ stopAfterCycle: true }),
+    );
+  });
+
+  it('canonicalizes legacy tool-use agent names before launch', async () => {
+    mocks.getVisibleAgents.mockReturnValue([
+      {
+        name: 'assistant',
+        description: 'General assistant.',
+        tools: [],
+      },
+    ]);
+
+    const result = await withRunContext(
+      createRunContext({
+        runtimeHost: runtimeHost(),
+        streamId: 'parent-stream',
+        executionId: 'parent-exec',
+        model: 'deepseekT',
+      }),
+      () =>
+        new DelegateAgentTool().call({
+          agent: 'chat',
+          model: null,
+          instruction: 'Check the proof.',
+          memories: [],
+          working_directory: null,
+          execution_id: null,
+        }),
+    );
+
+    expect(result.summary).toBe("Launched 'assistant' (async)");
+    expect(mocks.executeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'assistant',
+        agentCategory: AgentCategory.ToolUse,
+      }),
+      expect.any(String),
+      expect.anything(),
     );
   });
 

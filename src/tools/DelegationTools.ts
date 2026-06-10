@@ -700,14 +700,29 @@ async function resolveAvailableDelegationModel(input: {
   });
 }
 
-/** True when a visible agent of the given category matches the name. */
-function isVisibleAgent(category: AgentCategory, name: string): boolean {
-  return getVisibleAgents(category).some((a) => a.name === name);
+/** Return the visible, current agent name for an identifier. */
+function findVisibleAgentName(
+  category: AgentCategory,
+  name: string,
+): string | undefined {
+  const visibleAgents = getVisibleAgents(category);
+  if (visibleAgents.some((agent) => agent.name === name)) return name;
+  const canonicalName = canonicalAgentName(
+    name,
+    category === AgentCategory.ToolUse,
+  );
+  return visibleAgents.some((agent) => agent.name === canonicalName)
+    ? canonicalName
+    : undefined;
 }
 
-/** Throw if no visible agent of the given category matches the name. */
-function assertVisibleAgent(category: AgentCategory, name: string): void {
-  if (isVisibleAgent(category, name)) return;
+/** Return the visible current name, or throw if no visible agent matches. */
+function requireVisibleAgentName(
+  category: AgentCategory,
+  name: string,
+): string {
+  const resolvedName = findVisibleAgentName(category, name);
+  if (resolvedName) return resolvedName;
   const available = getVisibleAgents(category)
     .map((a) => a.name)
     .join(', ');
@@ -808,19 +823,17 @@ async function proposeAndExecute(
     throw new Error(`Unexpected non-approve proposal result: ${result.action}`);
   }
   const modelOverride = result.model;
-  const approvedAgent = result.agent
-    ? canonicalAgentName(result.agent)
-    : undefined;
   const agentOverride =
-    approvedAgent && approvedAgent !== proposal.agent
-      ? approvedAgent
-      : undefined;
+    result.agent && result.agent !== proposal.agent ? result.agent : undefined;
+  const resolvedAgentOverride = agentOverride
+    ? findVisibleAgentName(proposal.agentCategory, agentOverride)
+    : undefined;
 
   // Re-validate against the current registry — between proposal display and
   // approval the agent may have been removed/renamed, or the approval could
   // carry a malformed value. Fail fast so the orchestrator sees the problem
   // synchronously instead of after an async launch.
-  if (agentOverride && !isVisibleAgent(proposal.agentCategory, agentOverride)) {
+  if (agentOverride && !resolvedAgentOverride) {
     return {
       summary: `Approved agent override '${agentOverride}' is not available`,
       output: `Cannot launch '${agentOverride}': it is not currently a visible ${proposal.agentCategory} agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
@@ -831,9 +844,9 @@ async function proposeAndExecute(
   const effective = {
     ...proposal,
     ...(modelOverride && { model: modelOverride }),
-    ...(agentOverride && { agent: agentOverride }),
+    ...(resolvedAgentOverride && { agent: resolvedAgentOverride }),
   };
-  const effectiveAgentName = agentOverride ?? agentName;
+  const effectiveAgentName = resolvedAgentOverride ?? agentName;
   return executeSubagent(effective, effectiveAgentName, streamId, {
     enableYoloOnChild: isApprovalBypassedForStream(streamId),
     approvalMeta: {
@@ -962,11 +975,8 @@ Optional auto-attach from the input LaTeX:
 Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instruction="Quantum error correction paper. Fix grammar, tighten sentences, keep terminology consistent — especially in the abstract and intro."`,
   schema: WorkflowAgentInputSchema,
 }) {
-  protected async execute(rawInput: WorkflowAgentInput): Promise<ToolResult> {
-    // Normalize legacy agent names once at the entry point so validation,
-    // the proposal UI, and the launch all see the canonical name.
-    const input = { ...rawInput, agent: canonicalAgentName(rawInput.agent) };
-    assertVisibleAgent('workflow', input.agent);
+  protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
+    const agentName = requireVisibleAgentName('workflow', input.agent);
     const ctx = getRequiredContext();
 
     const model = await resolveAvailableDelegationModel({
@@ -1007,7 +1017,7 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
     // into MediaExtractionNode → LatexMediaManager at runtime.
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
-      agent: input.agent,
+      agent: agentName,
       model,
       instruction: input.instruction,
       inputFiles: input.inputFiles,
@@ -1022,7 +1032,7 @@ Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instructi
       memories: input.memories,
     } satisfies WorkflowAgentProposal);
 
-    return proposeAndExecute(proposal, input.agent, ctx.streamId);
+    return proposeAndExecute(proposal, agentName, ctx.streamId);
   }
 }
 
@@ -1074,7 +1084,7 @@ export class DelegateAgentTool extends defineTool({
 Available agents:
 ${formatAgentList(getVisibleAgents('toolUse'))}
 
-Agent selection: choose the most specific agent whose description matches the task. Specialized agents have domain-specific tools and focused prompts that produce better results for matching tasks. Do not choose assistant just because the task is a targeted edit, file operation, or mixed research/editing request; choose assistant only when no listed specialized agent covers the work, and state that reason in the instruction.
+Agent selection: choose the most specific agent whose description matches the task. Specialized agents have domain-specific tools and focused prompts that produce better results for matching tasks. Choose assistant for broad cross-phase work only when no listed specialized agent covers the work, and state that reason in the instruction.
 
 Available models: loaded from the active API mode at runtime.
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
@@ -1090,27 +1100,20 @@ Git worktree support: ${
     }`,
   schema: DelegateAgentInputSchema,
 }) {
-  protected async execute(rawInput: DelegateAgentInput): Promise<ToolResult> {
+  protected async execute(input: DelegateAgentInput): Promise<ToolResult> {
     // Resume path: execution_id is set
-    if (rawInput.execution_id) {
-      return this.resumeAgent(rawInput.execution_id, rawInput.instruction);
+    if (input.execution_id) {
+      return this.resumeAgent(input.execution_id, input.instruction);
     }
 
     // Delegate path: agent is required
-    if (!rawInput.agent) {
+    if (!input.agent) {
       throw new Error(
         `'agent' is required when starting a new delegation. Provide an agent name, or set 'execution_id' to resume an existing subagent.`,
       );
     }
 
-    // Normalize legacy agent names once at the entry point so validation,
-    // the proposal UI, and the launch all see the canonical name.
-    const input = {
-      ...rawInput,
-      agent: canonicalAgentName(rawInput.agent),
-    };
-
-    assertVisibleAgent('toolUse', input.agent);
+    const agentName = requireVisibleAgentName('toolUse', input.agent);
 
     const ctx = getRequiredContext();
 
@@ -1122,14 +1125,14 @@ Git worktree support: ${
     // Construct tool-use proposal (no file fields)
     const proposal = ToolUseAgentProposalSchema.parse({
       agentCategory: AgentCategory.ToolUse,
-      agent: input.agent,
+      agent: agentName,
       model,
       instruction: input.instruction,
       memories: input.memories,
       workingDirectory: input.working_directory,
     } satisfies ToolUseAgentProposal);
 
-    return proposeAndExecute(proposal, input.agent, ctx.streamId);
+    return proposeAndExecute(proposal, agentName, ctx.streamId);
   }
 
   /** Queue follow-up instructions for a tool-use subagent. */
