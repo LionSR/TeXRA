@@ -7,6 +7,7 @@ import { setProgressViewBridge } from '@agent/runtime/ProgressViewBridge';
 import { detectWaitingStreams } from '@agent/storage/detectWaitingStreams';
 import {
   BaseWebviewProvider,
+  BundledViewContentProvider,
   getSharedLocalResourceRoots,
   SIDEBAR_VIEWS,
   setActiveSidebarView,
@@ -40,7 +41,6 @@ import {
   readExternalInquiryThread,
 } from '@tools/inquiry/externalInquiryStorage';
 
-import { ProgressViewContentProvider } from './ProgressViewContentProvider';
 import { ProgressViewMessageHandler } from './ProgressViewMessageHandler';
 
 import type { MainViewProvider } from '../MainViewProvider';
@@ -69,7 +69,7 @@ export class ProgressViewProvider
   public readonly webviewBridge: ProgressBackend['webviewBridge'];
   public readonly webviewUpdater: ProgressBackend['webviewUpdater'];
 
-  protected readonly contentProvider: ProgressViewContentProvider;
+  protected readonly contentProvider: BundledViewContentProvider;
   protected readonly messageHandler: ProgressViewMessageHandler;
 
   private _sidebarReady = false;
@@ -221,7 +221,15 @@ export class ProgressViewProvider
     this.webviewBridge = this.backend.webviewBridge;
     this.eventHandler = this.backend.eventHandler;
 
-    this.contentProvider = new ProgressViewContentProvider(context);
+    this.contentProvider = new BundledViewContentProvider(
+      context,
+      'ProgressView',
+      {
+        dist: 'progressView',
+        bundleKey: 'progressBundleUri',
+        styleKey: 'progressStyleUri',
+      },
+    );
     this.messageHandler = new ProgressViewMessageHandler(this, context);
 
     ProgressViewProvider._instance = this;
@@ -258,7 +266,7 @@ export class ProgressViewProvider
     this._mainViewProvider = mvp;
   }
 
-  public getContentProvider(): ProgressViewContentProvider {
+  public getContentProvider(): BundledViewContentProvider {
     return this.contentProvider;
   }
 

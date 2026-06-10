@@ -3,6 +3,7 @@
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
 import { query, state } from 'lit/decorators.js';
+import { classMap } from 'lit/directives/class-map.js';
 
 // Side-effect imports - register WA textarea component
 import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
@@ -67,6 +68,54 @@ export abstract class BaseFeedbackPanel extends BaseRequestPanel {
     const feedback = this.getFeedbackValue();
     this.showFeedback = false;
     this.emitAction('reject', feedback);
+  }
+
+  /**
+   * Standard approve/reject panel shell: the BEM block with its
+   * `--feedback-active` modifier, `__details`, `__actions` (approve/reject
+   * plus optional extra buttons), and `__feedback` section. Keeps the class
+   * structure that `requestPanelStyles` targets defined in one place.
+   */
+  protected renderRequestShell(options: {
+    /** BEM block name, e.g. 'approval-request'. */
+    prefix: string;
+    details: TemplateResult;
+    approveTitle: string;
+    rejectTitle: string;
+    /** Extra action buttons rendered before the approve button. */
+    leadingActions?: TemplateResult | typeof nothing;
+    /** Extra action buttons rendered between approve and reject. */
+    middleActions?: TemplateResult | typeof nothing;
+    /** Extra action buttons rendered after the reject button. */
+    trailingActions?: TemplateResult | typeof nothing;
+    feedbackPlaceholder?: string;
+    /** Content rendered after the feedback section (e.g. an inline diff). */
+    trailing?: TemplateResult | typeof nothing;
+  }): TemplateResult {
+    const { prefix } = options;
+    return html`
+      <div
+        class=${classMap({
+          [prefix]: true,
+          [`${prefix}--feedback-active`]: this.showFeedback,
+        })}
+      >
+        <div class="${prefix}__details">${options.details}</div>
+        <div class="${prefix}__actions">
+          ${options.leadingActions ?? nothing}
+          ${this.renderApproveButton(options.approveTitle)}
+          ${options.middleActions ?? nothing}
+          ${this.renderRejectButton(options.rejectTitle)}
+          ${options.trailingActions ?? nothing}
+        </div>
+        ${this.renderFeedbackSection(
+          `${prefix}__feedback`,
+          `${prefix}__feedback-input`,
+          options.feedbackPlaceholder,
+        )}
+        ${options.trailing ?? nothing}
+      </div>
+    `;
   }
 
   protected renderApproveButton(approveTitle: string): TemplateResult {

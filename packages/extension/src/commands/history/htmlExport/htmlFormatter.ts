@@ -16,16 +16,10 @@
  * the file by the calling handler (see SettingsViewMessageHandler).
  */
 
-import katex from 'katex';
-
-import { katexMacros } from '@progressView/frontend/katexMacros';
-import {
-  createMarkdownProcessor,
-  createMarkdownRenderer,
-  type MarkdownProcessor,
-} from '@shared/markdown';
-import { highlightCode } from '@shared/highlighting/highlightCode';
-import { createTexmathPlugin } from '@shared/markdown/texmathPlugin';
+import { type MarkdownProcessor } from '@shared/markdown';
+// Direct path import — see `src/shared/markdown/index.ts` for why this isn't
+// re-exported through the barrel.
+import { createKatexHtmlProcessor } from '@shared/markdown/katexHtmlProcessor';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import {
   buildExportTemplate,
@@ -44,28 +38,15 @@ import {
 let cachedProcessor: MarkdownProcessor | null = null;
 
 function getProcessor(): MarkdownProcessor {
-  if (!cachedProcessor) {
-    const renderer = createMarkdownRenderer({
-      highlight: highlightCode,
-      usePlugin: createTexmathPlugin({
-        engine: katex,
-        engineOptions: {
-          throwOnError: false,
-          // Export targets a generic browser, not the VS Code webview, so use
-          // a literal colour instead of a CSS custom property.
-          errorColor: '#cc0000',
-          macros: katexMacros,
-        },
-      }),
-    });
-    cachedProcessor = createMarkdownProcessor({
-      renderer,
-      // Webview renders LaTeX refs as clickable scroll targets; in a static
-      // export they're decorative, so emit plain styled text.
-      formatLatexReference: (refType, label) =>
-        `<span class="latex-ref">\\${refType}{${escapeText(label)}}</span>`,
-    });
-  }
+  cachedProcessor ??= createKatexHtmlProcessor({
+    // Export targets a generic browser, not the VS Code webview, so use
+    // a literal colour instead of a CSS custom property.
+    errorColor: '#cc0000',
+    // Webview renders LaTeX refs as clickable scroll targets; in a static
+    // export they're decorative, so emit plain styled text.
+    formatLatexReference: (refType, label) =>
+      `<span class="latex-ref">\\${refType}{${escapeText(label)}}</span>`,
+  });
   return cachedProcessor;
 }
 

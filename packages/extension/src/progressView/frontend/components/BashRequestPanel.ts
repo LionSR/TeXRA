@@ -3,7 +3,6 @@
 // Third-party imports
 import { html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
-import { classMap } from 'lit/directives/class-map.js';
 
 // Side-effect imports - register WA icon component
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -39,28 +38,16 @@ export class BashRequestPanel extends BaseFeedbackPanel {
   override render(): TemplateResult {
     const data = this.permission.data as BashPermission;
 
-    return html`
-      <div
-        class=${classMap({
-          'bash-approval-request': true,
-          'bash-approval-request--feedback-active': this.showFeedback,
-        })}
-      >
-        <div class="bash-approval-request__details">
-          <div class="bash-approval-request__command">
-            ${buildCodeBlock(data.command ?? '', { language: 'bash' })}
-          </div>
+    return this.renderRequestShell({
+      prefix: 'bash-approval-request',
+      details: html`
+        <div class="bash-approval-request__command">
+          ${buildCodeBlock(data.command ?? '', { language: 'bash' })}
         </div>
-        <div class="bash-approval-request__actions">
-          ${this.renderApproveButton('Allow this command to execute (y)')}
-          ${this.renderRejectButton('Reject this command (n)')}
-        </div>
-        ${this.renderFeedbackSection(
-          'bash-approval-request__feedback',
-          'bash-approval-request__feedback-input',
-        )}
-      </div>
-    `;
+      `,
+      approveTitle: 'Allow this command to execute (y)',
+      rejectTitle: 'Reject this command (n)',
+    });
   }
 }
 
