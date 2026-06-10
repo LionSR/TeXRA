@@ -516,9 +516,9 @@ describe('CLI multi-agent presets', () => {
     expect(findCliMultiAgentPreset(presets, 'Lean Project')?.id).toBe(
       'lean-project',
     );
-    expect(
-      findCliMultiAgentPreset(presets, 'computer-scientist')?.id,
-    ).toBe('cs-ml');
+    expect(findCliMultiAgentPreset(presets, 'computer-scientist')?.id).toBe(
+      'cs-ml',
+    );
   });
 
   it('formats details without dropping empty agent categories', () => {

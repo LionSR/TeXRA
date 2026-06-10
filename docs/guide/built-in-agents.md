@@ -514,13 +514,13 @@ Teams are predefined collections of agents for a discipline. Pick one from the
 **Multi-Agent** tab in the Dashboard, or run one from the CLI with
 `texra multi-agent run <team>`:
 
-| Team                    | For                                                                                         | Lead agent         |
-| :---------------------- | :------------------------------------------------------------------------------------------ | :----------------- |
-| Lean Project            | Lean 4 projects — theorem search, tactic simplification, and blueprints                     | `leanOrchestrator` |
-| Physicist               | Physics papers — derivations, numerical experiments, literature search, slides, and review  | `orchestrator`     |
-| Mathematician           | Math research — attacking open problems, proofs, Lean 4 formalization, and LaTeX correction | `orchestrator`     |
-| Computer Scientist      | CS papers — algorithm design, code-driven experiments and ablations, tests, and review      | `orchestrator`     |
-| Software Engineer       | A project's code — implementation, review, debugging, and testing across specialists        | `engineer`         |
+| Team               | For                                                                                         | Lead agent         |
+| :----------------- | :------------------------------------------------------------------------------------------ | :----------------- |
+| Lean Project       | Lean 4 projects — theorem search, tactic simplification, and blueprints                     | `leanOrchestrator` |
+| Physicist          | Physics papers — derivations, numerical experiments, literature search, slides, and review  | `orchestrator`     |
+| Mathematician      | Math research — attacking open problems, proofs, Lean 4 formalization, and LaTeX correction | `orchestrator`     |
+| Computer Scientist | CS papers — algorithm design, code-driven experiments and ablations, tests, and review      | `orchestrator`     |
+| Software Engineer  | A project's code — implementation, review, debugging, and testing across specialists        | `engineer`         |
 
 Every team bundles the `progressCheck` audit helper, and the paper-focused
 teams also include `latexFixer`. The Software Engineer lead and its specialists
