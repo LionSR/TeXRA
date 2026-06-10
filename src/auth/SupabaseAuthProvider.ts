@@ -13,8 +13,10 @@ import {
   isOAuthProvider,
   type OAuthProvider,
 } from './config';
-import { DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS } from './SupabaseAuthCoordinator';
-import { createHostAuthCoordinator } from './createHostAuthCoordinator';
+import {
+  DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS,
+  createHostAuthCoordinator,
+} from './SupabaseAuthCoordinator';
 import { getServerSideKeyService } from './serverKeys';
 import {
   fetchWithTimeout,

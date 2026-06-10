@@ -22,51 +22,6 @@ export interface SupabaseSecretStore {
   delete(key: string): Promise<void>;
 }
 
-interface SupabaseAuthCoordinatorOptions {
-  storage: SupabaseSessionStorage;
-  whenReady?: () => Promise<void>;
-  log?: SupabaseSessionLog;
-  edgeFunctionTimeoutMs?: number;
-}
-
-function createSupabaseSessionStorage(
-  secrets: SupabaseSecretStore,
-  sessionKey = SUPABASE_SESSION_KEY,
-): SupabaseSessionStorage {
-  return {
-    get: () => secrets.get(sessionKey),
-    store: (sessionData) => secrets.set(sessionKey, sessionData),
-    delete: () => secrets.delete(sessionKey),
-  };
-}
-
-function createSupabaseAuthCoordinator(
-  options: SupabaseAuthCoordinatorOptions,
-): SupabaseSessionCoordinator {
-  try {
-    SupabaseClient.initialize(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publicKey);
-  } catch (error) {
-    throw new Error(
-      `Supabase authentication is not configured: ${toErrorMessage(error)}`,
-    );
-  }
-  const coordinator = new SupabaseSessionCoordinator({
-    storage: options.storage,
-    getClient: () => SupabaseClient.getClient(),
-    whenReady: options.whenReady ?? (async () => {}),
-    tokenRefreshThresholdMs: TOKEN_REFRESH_THRESHOLD_MS,
-    defaultSessionExpiryMs: DEFAULT_SESSION_EXPIRY_MS,
-    githubTokenRefreshUrl: GITHUB_TOKEN_REFRESH_URL,
-    edgeFunctionTimeoutMs:
-      options.edgeFunctionTimeoutMs ?? DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS,
-    log: options.log,
-    onTokenExpiryChanged: (expiresAt) =>
-      SupabaseClient.setTokenExpiry(expiresAt),
-  });
-  SupabaseClient.setAuthProvider(coordinator);
-  return coordinator;
-}
-
 export interface HostAuthCoordinatorInit {
   readonly secrets: SupabaseSecretStore;
   readonly log?: SupabaseSessionLog;
@@ -80,9 +35,30 @@ export interface HostAuthCoordinatorInit {
 export function createHostAuthCoordinator(
   init: HostAuthCoordinatorInit,
 ): SupabaseSessionCoordinator {
-  return createSupabaseAuthCoordinator({
-    storage: createSupabaseSessionStorage(init.secrets),
+  try {
+    SupabaseClient.initialize(SUPABASE_CONFIG.url, SUPABASE_CONFIG.publicKey);
+  } catch (error) {
+    throw new Error(
+      `Supabase authentication is not configured: ${toErrorMessage(error)}`,
+    );
+  }
+  const storage: SupabaseSessionStorage = {
+    get: () => init.secrets.get(SUPABASE_SESSION_KEY),
+    store: (sessionData) => init.secrets.set(SUPABASE_SESSION_KEY, sessionData),
+    delete: () => init.secrets.delete(SUPABASE_SESSION_KEY),
+  };
+  const coordinator = new SupabaseSessionCoordinator({
+    storage,
+    getClient: () => SupabaseClient.getClient(),
+    whenReady: init.whenReady ?? (async () => {}),
+    tokenRefreshThresholdMs: TOKEN_REFRESH_THRESHOLD_MS,
+    defaultSessionExpiryMs: DEFAULT_SESSION_EXPIRY_MS,
+    githubTokenRefreshUrl: GITHUB_TOKEN_REFRESH_URL,
+    edgeFunctionTimeoutMs: DEFAULT_AUTH_EDGE_FUNCTION_TIMEOUT_MS,
     log: init.log,
-    whenReady: init.whenReady,
+    onTokenExpiryChanged: (expiresAt) =>
+      SupabaseClient.setTokenExpiry(expiresAt),
   });
+  SupabaseClient.setAuthProvider(coordinator);
+  return coordinator;
 }

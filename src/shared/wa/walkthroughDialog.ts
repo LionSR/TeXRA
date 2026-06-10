@@ -61,17 +61,11 @@ export interface WalkthroughDialogController {
   hide(): void;
 }
 
-// Per-instance counter fallback for environments without crypto.randomUUID
-// (older webviews). Each createWalkthroughDialog() call grabs a unique id so
-// two co-existing dialogs cannot collide on aria-labelledby.
+// Each createWalkthroughDialog() call grabs a unique id so two co-existing
+// dialogs cannot collide on aria-labelledby.
 let walkthroughTitleCounter = 0;
 
 function nextWalkthroughTitleId(): string {
-  const cryptoApi: Crypto | undefined =
-    typeof crypto !== 'undefined' ? crypto : undefined;
-  if (typeof cryptoApi?.randomUUID === 'function') {
-    return `walkthrough-title-${cryptoApi.randomUUID()}`;
-  }
   walkthroughTitleCounter += 1;
   return `walkthrough-title-${walkthroughTitleCounter}`;
 }

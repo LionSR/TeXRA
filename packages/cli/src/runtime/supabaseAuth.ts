@@ -1,6 +1,6 @@
 // Local imports - auth
 import { DEFAULT_OAUTH_PROVIDER } from '@auth/config';
-import { createHostAuthCoordinator } from '@auth/createHostAuthCoordinator';
+import { createHostAuthCoordinator } from '@auth/SupabaseAuthCoordinator';
 import { SupabaseClient } from '@auth/SupabaseClient';
 import {
   type SupabaseSession,
