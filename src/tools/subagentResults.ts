@@ -22,6 +22,7 @@ import type {
 } from '@shared/schemas';
 import type { ExecResult } from '@shared/schemas/opResults';
 import { countByStatus, STATUS_DISPLAY } from '@shared/schemas/todoDisplay';
+import { planSummaryLine } from '@shared/schemas/workPlan';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import { formatDuration } from '@utils/core';
 import { splitContentLines } from '@utils/text/stringUtils';
@@ -271,9 +272,7 @@ export function formatSubagentProgress(
       if (!update.plan) {
         return `<subagent-progress ${idAttr} ${agentAttr} type="plan" status="cleared" />`;
       }
-      const steps = update.plan.steps;
-      const { completed, inProgress, pending } = countByStatus(steps);
-      return `<subagent-progress ${idAttr} ${agentAttr} type="plan" steps="${steps.length}" completed="${completed}" active="${inProgress}" pending="${pending}" />`;
+      return `<subagent-progress ${idAttr} ${agentAttr} type="plan" status="updated" summary="${escapeAttr(planSummaryLine(update.plan.objective))}" />`;
     }
 
     case 'started':
@@ -443,27 +442,12 @@ function formatTodoContext(todos: TodoItem[]): string[] {
 }
 
 /**
- * Format plan as XML lines for post-compaction context.
+ * Format the plan document as XML lines for post-compaction context.
  */
 function formatPlanContext(workPlan: WorkPlanSnapshot): string[] {
-  const plan = workPlan.plan;
-  const summary = plan?.summary ?? workPlan.planSummary;
-  if (!summary) return [];
-
-  const lines: string[] = [`<current-plan summary="${escapeAttr(summary)}">`];
-  if (plan) {
-    for (const [i, step] of plan.steps.entries()) {
-      const filesAttr =
-        step.files.length > 0
-          ? ` files="${escapeAttr(step.files.join(', '))}"`
-          : '';
-      lines.push(
-        `  <step index="${i + 1}" status="${escapeAttr(step.status)}" title="${escapeAttr(step.title)}"${filesAttr}>${escapeText(step.description)}</step>`,
-      );
-    }
-  }
-  lines.push('</current-plan>');
-  return lines;
+  const objective = workPlan.plan?.objective ?? workPlan.planSummary;
+  if (!objective) return [];
+  return ['<current-plan>', escapeText(objective), '</current-plan>'];
 }
 
 function lastNLines(text: string, n: number): string {

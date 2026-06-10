@@ -45,15 +45,11 @@ const todo: TodoItem = {
 };
 
 const plan: Plan = {
-  summary: 'Hydrate plan and todo state from one backend owner.',
-  steps: [
-    {
-      title: 'Sync active stream',
-      description: 'Read todos and plan from ProgressViewState.workPlan.',
-      status: 'pending',
-      files: ['src/shared/progressView/backend/events/ProgressEventHandler.ts'],
-    },
-  ],
+  objective: [
+    'Hydrate plan and todo state from one backend owner.',
+    '',
+    'Read todos and plan from ProgressViewState.workPlan.',
+  ].join('\n'),
 };
 
 const stream = 'stream:shared-snapshot' as StreamTabId;
@@ -168,7 +164,7 @@ describe('progress view snapshot hydration', () => {
     expect(state.snapshots.getWorkPlan(stream)).toEqual({
       todos: [todo],
       plan,
-      planSummary: plan.summary,
+      planSummary: 'Hydrate plan and todo state from one backend owner.',
     });
   });
 });

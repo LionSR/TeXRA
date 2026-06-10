@@ -366,10 +366,7 @@ describe('CLI TUI row allocation', () => {
             approvalId: 'plan-1',
             streamId: root,
             goalEnabled: false,
-            plan: {
-              summary: 'Coordinate a proof.',
-              steps: [],
-            },
+            plan: { objective: 'Coordinate a proof.' },
           },
         },
         decide,

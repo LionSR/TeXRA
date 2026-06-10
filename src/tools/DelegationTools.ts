@@ -373,7 +373,7 @@ async function executeSubagent(
   // Captured now (while the launching tool call's ALS frame is live) so the
   // async completion callbacks below can still roll the child's cost into the
   // parent run after this tool call has returned. Subagents count toward
-  // parent usage totals and the goal cost cap only — they never drive the loop.
+  // parent usage totals only — they never drive the loop.
   const recordSubagentCost = getCurrentToolCallContext()?.recordSubagentCost;
   let subagentCostSettled = false;
   function settleSubagentCost(result?: AgentFlowResult): void {

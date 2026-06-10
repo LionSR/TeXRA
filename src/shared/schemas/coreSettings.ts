@@ -65,7 +65,6 @@ export const DEFAULT_CORE_SETTINGS = {
   },
   goal: {
     enabled: true,
-    costCapUsd: 0,
   },
   ui: {
     showApiKeyReminders: true,
@@ -284,10 +283,6 @@ export const CoreSettingsShape = {
   goal: z
     .strictObject({
       enabled: z.boolean().prefault(DEFAULT_CORE_SETTINGS.goal.enabled),
-      costCapUsd: z
-        .number()
-        .nonnegative()
-        .prefault(DEFAULT_CORE_SETTINGS.goal.costCapUsd),
     })
     .prefault(DEFAULT_CORE_SETTINGS.goal),
   ui: z
@@ -523,7 +518,6 @@ export const CORE_SETTING_PATHS = [
   'agentOutputs.autoOpenFinal',
   'inlineCriticism.enabled',
   'goal.enabled',
-  'goal.costCapUsd',
   'ui.showApiKeyReminders',
   'ui.showLoginBanner',
   'ui.showGettingStartedBanner',

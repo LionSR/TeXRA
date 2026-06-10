@@ -20,15 +20,9 @@ const todo: TodoItem = {
 };
 
 const plan: Plan = {
-  summary: 'Move progress publication behind the runtime host',
-  steps: [
-    {
-      title: 'Replace bus events',
-      description: 'Publish tool-use cycle state through runtimeHost',
-      status: 'in_progress',
-      files: [],
-    },
-  ],
+  objective:
+    'Move progress publication behind the runtime host.\n' +
+    'Publish tool-use cycle state through runtimeHost.',
 };
 
 function createPrepResult(
