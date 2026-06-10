@@ -353,6 +353,50 @@ describe('CLI conversation transcript splitting', () => {
     expect(estimateTranscriptEntryRows(user, 80)).toBe(1);
   });
 
+  it('does not render empty assistant placeholders between user and tool rows', () => {
+    const user = entry('u1', 'user', 'what is this repo about', true);
+    const emptyAssistant = entry('a1', 'assistant', '\n  \n', false);
+    const tool = toolEntry('t1', 'in_progress');
+
+    const split = splitTranscriptEntries(
+      [user, emptyAssistant, tool],
+      STREAM_STATUS.RUNNING,
+    );
+    expect(split.finalized.map((item) => item.id)).toEqual(['u1']);
+    expect(split.pending.map((item) => item.id)).toEqual(['t1']);
+
+    expect(
+      selectTranscriptEntriesForViewport(
+        [emptyAssistant, tool],
+        4,
+        80,
+      ).entries.map((item) => item.id),
+    ).toEqual(['t1']);
+
+    const staticItems = appendStaticTranscriptItems({
+      scrollbackStreamId: STREAM_ID,
+      currentItems: [],
+      streams: streamsFromEntries(STREAM_ID, [
+        user,
+        { ...emptyAssistant, finalized: true },
+        { ...tool, finalized: true },
+      ]),
+      meta: SESSION_META,
+    });
+    expect(staticItems.map((item) => item.id)).toEqual([
+      'session-header',
+      'u1',
+      't1',
+    ]);
+
+    expect(
+      transcriptToLines(
+        sliceWithEntries(STREAM_ID, [user, emptyAssistant, tool]),
+        80,
+      ),
+    ).toEqual(['› what is this repo about', '', '● Bash (ls)']);
+  });
+
   it('does not budget regular user margin for inquiry continuations', () => {
     const continuation = entry(
       'u1',
