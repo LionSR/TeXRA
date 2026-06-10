@@ -202,10 +202,6 @@ const PROVIDER_CONFIGS: Record<ProviderKey, ProviderConfig> = {
 // Helper Functions
 // =============================================================================
 
-function getProviderConfig(provider: string): ProviderConfig | null {
-  return PROVIDER_CONFIGS[provider as ProviderKey] || null;
-}
-
 function getEnabledProviders(): string[] {
   return Object.entries(PROVIDER_CONFIGS)
     .filter(([, config]) => Deno.env.get(config.envKey))
@@ -524,7 +520,7 @@ app.all('/:provider{[^/]+}/*', async (c) => {
   const apiPath = '/' + c.req.path.split('/').slice(3).join('/');
 
   // 1. Validate provider
-  const providerConfig = getProviderConfig(provider);
+  const providerConfig = PROVIDER_CONFIGS[provider as ProviderKey] ?? null;
   if (!providerConfig) {
     return jsonError(`Unsupported provider: ${provider}`, 400);
   }
