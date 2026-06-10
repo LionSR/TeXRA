@@ -6,8 +6,8 @@ import {
 
 // Local imports - tools
 import {
-  interruptAllClaudeAgentSessions,
-  interruptAllCodexSessions,
+  claudeAgentSessions,
+  codexThreads,
 } from '@tools/agentCliSessionStores';
 
 // Local imports - runtime
@@ -22,10 +22,12 @@ export function registerAgentShutdownHandlers(lifecycle: LifecycleHost): void {
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
     executionRegistry.killBackgroundProcesses(),
   );
+  // Interrupt CLI-backed sessions so their streams don't reload in a stale
+  // WAITING state.
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    interruptAllCodexSessions(),
+    codexThreads.interruptAll(),
   );
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, () =>
-    interruptAllClaudeAgentSessions(),
+    claudeAgentSessions.interruptAll(),
   );
 }

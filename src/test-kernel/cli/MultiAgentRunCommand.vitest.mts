@@ -15,8 +15,7 @@ const mocks = vi.hoisted(() => {
     cliMultiAgentPresetCanLaunchTeam: vi.fn(),
     formatCliMultiAgentPresetRunWarnings: vi.fn(),
     formatCliMultiAgentTeamLaunchBlockMessage: vi.fn(),
-    getToolUseAgents: vi.fn(),
-    getWorkflowAgents: vi.fn(),
+    getAgentsByCategory: vi.fn(),
     initCliPlatform: vi.fn(),
     installCliApprovalHandlers: vi.fn(),
     isAuthenticated: vi.fn(),
@@ -30,8 +29,7 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock('@agent/index', () => ({
-  getToolUseAgents: mocks.getToolUseAgents,
-  getWorkflowAgents: mocks.getWorkflowAgents,
+  getAgentsByCategory: mocks.getAgentsByCategory,
   loadAgents: mocks.loadAgents,
 }));
 
@@ -157,7 +155,6 @@ describe('CLI multi-agent run command', () => {
       inputFiles: ['problem.tex'],
       contextFiles: [],
     });
-    mocks.getWorkflowAgents.mockReturnValue([]);
     mocks.cliMultiAgentPlanHasGaps.mockReturnValue(false);
     mocks.cliMultiAgentPresetCanLaunchTeam.mockReturnValue(true);
     mocks.formatCliMultiAgentTeamLaunchBlockMessage.mockReturnValue(
@@ -167,20 +164,24 @@ describe('CLI multi-agent run command', () => {
     mocks.planCliMultiAgentPresets.mockImplementation((presets) =>
       presets.map((preset: unknown) =>
         mocks.planCliMultiAgentPresetRun(preset, {
-          workflowAgents: mocks.getWorkflowAgents(),
-          toolUseAgents: mocks.getToolUseAgents(),
+          workflowAgents: mocks.getAgentsByCategory('workflow'),
+          toolUseAgents: mocks.getAgentsByCategory('toolUse'),
         }),
       ),
     );
-    mocks.getToolUseAgents.mockReturnValue([
-      {
-        name: 'orchestrator',
-        category: 'toolUse',
-        source: 'builtInToolUse',
-        path: '/agents/orchestrator.yaml',
-        tools: ['delegate_agent'],
-      },
-    ]);
+    mocks.getAgentsByCategory.mockImplementation((category: string) =>
+      category === 'toolUse'
+        ? [
+            {
+              name: 'orchestrator',
+              category: 'toolUse',
+              source: 'builtInToolUse',
+              path: '/agents/orchestrator.yaml',
+              tools: ['delegate_agent'],
+            },
+          ]
+        : [],
+    );
     mocks.planCliMultiAgentPresetRun.mockReturnValue({
       preset: {
         id: 'mathematician',

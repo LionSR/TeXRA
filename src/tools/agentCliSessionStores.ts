@@ -33,13 +33,3 @@ export const claudeAgentSessions =
   new AgentCliSessionRegistry<ActiveClaudeAgentSession>(
     'claude_agent_session_id',
   );
-
-/** Prevent Codex streams from remaining in stale WAITING state during reload. */
-export function interruptAllCodexSessions(): void {
-  codexThreads.interruptAll();
-}
-
-/** Prevent Claude Code streams from remaining in stale WAITING state during reload. */
-export function interruptAllClaudeAgentSessions(): void {
-  claudeAgentSessions.interruptAll();
-}
