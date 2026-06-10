@@ -402,9 +402,14 @@ export function getVisibleAgent(
 ): AgentEntry | undefined {
   const entries = getVisibleAgents(category);
   const name = agentName(identifier);
-  const exact = entries.find(
-    (entry) =>
-      entry.name === name || createKey(entry.source, entry.name) === identifier,
+  // A source-qualified identifier names one specific entry, so only an exact
+  // key match counts — matching its bare name could hit a different visible
+  // agent that shares the legacy name (e.g. a custom `chat` shadowing the
+  // renamed built-in). Bare identifiers may match any visible agent by name.
+  const exact = entries.find((entry) =>
+    identifier === name
+      ? entry.name === name
+      : createKey(entry.source, entry.name) === identifier,
   );
   if (exact) return exact;
 
