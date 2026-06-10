@@ -7,7 +7,11 @@ import {
   isInquiryContinuationText,
 } from '@cli/chat/tui/panes/TranscriptEntry';
 import { formatRenderError } from '@cli/chat/tui/panes/EntryErrorBoundary';
-import { splitTranscriptEntries } from '@cli/chat/tui/panes/transcriptEntries';
+import {
+  splitTranscriptEntries,
+  terminalVisibleTranscriptText,
+  trimAssistantTranscriptLead,
+} from '@cli/chat/tui/panes/transcriptEntries';
 import {
   appendStaticTranscriptItems,
   sessionHeaderIdentityLine,
@@ -392,6 +396,38 @@ describe('CLI conversation transcript splitting', () => {
     expect(
       transcriptToLines(
         sliceWithEntries(STREAM_ID, [user, emptyAssistant, tool]),
+        80,
+      ),
+    ).toEqual(['› what is this repo about', '● Bash (ls)']);
+  });
+
+  it('does not reserve rows for zero-width assistant placeholders before tools', () => {
+    const user = entry('u1', 'user', 'what is this repo about', true);
+    const invisibleAssistant = entry(
+      'a1',
+      'assistant',
+      '\u001B[2m\u001B[22m\u200B\n\n',
+      false,
+    );
+    const tool = toolEntry('t1', 'in_progress');
+
+    expect(terminalVisibleTranscriptText(invisibleAssistant.text)).toBe('\n\n');
+    expect(trimAssistantTranscriptLead(invisibleAssistant.text)).toBe('');
+    expect(trimAssistantTranscriptLead('\u001B[2m\u200B\nvisible')).toBe(
+      '\u001B[2mvisible',
+    );
+    expect(trimAssistantTranscriptLead('\n\u001B[31mvisible')).toBe(
+      '\u001B[31mvisible',
+    );
+    expect(
+      splitTranscriptEntries(
+        [user, invisibleAssistant, tool],
+        STREAM_STATUS.RUNNING,
+      ).pending.map((item) => item.id),
+    ).toEqual(['t1']);
+    expect(
+      transcriptToLines(
+        sliceWithEntries(STREAM_ID, [user, invisibleAssistant, tool]),
         80,
       ),
     ).toEqual(['› what is this repo about', '● Bash (ls)']);

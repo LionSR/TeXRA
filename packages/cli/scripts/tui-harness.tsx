@@ -496,7 +496,7 @@ function seedLiveToolOnlyTranscript(): void {
     timestamp: timestamp + 1,
     messageType: MESSAGE_TYPES.MODEL_RESPONSE,
     text: SHOW_LIVE_INVISIBLE_ASSISTANT
-      ? `${String.fromCharCode(27)}[2m${String.fromCharCode(27)}[22m`
+      ? `${String.fromCharCode(27)}[2m${String.fromCharCode(27)}[22m\u200B\n\n`
       : '',
   });
   const tools = [
