@@ -28,7 +28,7 @@ export const EXTENDED_CACHE_TTL_BETA: AnthropicBeta =
   'extended-cache-ttl-2025-04-11';
 
 /** Compaction must be triggered at or above this minimum input token threshold. */
-export const MIN_COMPACTION_TRIGGER_TOKENS = 50_000;
+const MIN_COMPACTION_TRIGGER_TOKENS = 50_000;
 
 export const SHORT_CACHE_CONTROL: CacheControlEphemeral = {
   type: 'ephemeral',
@@ -52,14 +52,14 @@ export const CACHE_CREATION_COST_MULTIPLIER_5M = 1.25;
 export const CACHE_CREATION_COST_MULTIPLIER_1H = 2.0;
 
 // Anthropic allows up to 4 cache breakpoint slots total.
-export const MAX_CACHE_BREAKPOINT_SLOTS = 4;
+const MAX_CACHE_BREAKPOINT_SLOTS = 4;
 
 type CacheControlCompactionBlock = Extract<
   BetaContentBlockParam,
   { type: 'compaction' }
 >;
 
-export const isCompactionCacheControlBlock = (
+const isCompactionCacheControlBlock = (
   block: ContentBlockParam | ContentBlock | BetaContentBlockParam | undefined,
 ): block is CacheControlCompactionBlock => {
   if (block == null || typeof block !== 'object') return false;

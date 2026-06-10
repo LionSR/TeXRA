@@ -43,7 +43,7 @@ export interface UploadedOpenAIResponseAttachment {
  * Composed from the shared OFFICE_MIME_TYPES plus PDF.
  * Images are handled separately via `input_image`.
  */
-export const INLINEABLE_FILE_MIME_TYPES: ReadonlySet<string> = new Set([
+const INLINEABLE_FILE_MIME_TYPES: ReadonlySet<string> = new Set([
   'application/pdf',
   ...OFFICE_MIME_TYPES,
 ]);

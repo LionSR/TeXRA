@@ -46,7 +46,7 @@ export function isDeprecatedModel(model: string): boolean {
 }
 
 /** Format context window number for display. */
-export function formatContext(context: number | undefined): string | undefined {
+function formatContext(context: number | undefined): string | undefined {
   if (context === undefined) return undefined;
   if (context >= MILLION) return `${(context / MILLION).toFixed(1)}M`;
   if (context >= THOUSAND) return `${Math.round(context / THOUSAND)}K`;
@@ -54,7 +54,7 @@ export function formatContext(context: number | undefined): string | undefined {
 }
 
 /** Format cost values for display. */
-export function formatCost(
+function formatCost(
   inputPrice: number | undefined,
   outputPrice: number | undefined,
 ): string | undefined {
@@ -67,7 +67,7 @@ function prefixHint(prefix: string, base: string): string {
 }
 
 /** Build the model tooltip string from static model metadata. */
-export function buildModelHint(config: ModelConfig): string {
+function buildModelHint(config: ModelConfig): string {
   const base = hint(config);
   if (isExpensiveModel(config.provider, config.name)) {
     return prefixHint(EXPENSIVE_MODEL_HINT, base);

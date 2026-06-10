@@ -124,7 +124,3 @@ async function loadPrompts(): Promise<GoalPrompts> {
 export async function getContinuationTemplate(): Promise<string> {
   return (await loadPrompts()).continuation.template;
 }
-
-export async function getObjectiveUpdatedTemplate(): Promise<string> {
-  return (await loadPrompts()).objective_updated.template;
-}

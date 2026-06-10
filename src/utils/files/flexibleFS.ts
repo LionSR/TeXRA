@@ -12,7 +12,7 @@ logger.initialize(CHANNEL);
  * Filesystem operations for FileLocation objects.
  * All paths must be FileLocation - use pathToLocation() to convert strings.
  */
-export class FlexibleFS {
+class FlexibleFS {
   exists(target: FileLocation): Promise<boolean> {
     return AbsoluteFS.exists(target.absolutePath);
   }

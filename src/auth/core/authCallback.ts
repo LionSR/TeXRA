@@ -1,4 +1,4 @@
-export const AUTH_CALLBACK_PATHS = [
+const AUTH_CALLBACK_PATHS = [
   '/auth-callback',
   '/extension-auth-callback',
 ] as const;

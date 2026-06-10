@@ -83,12 +83,6 @@ export type AgentToolUseSetting = Extract<
   { agentCategory: typeof AgentCategory.ToolUse }
 >;
 
-export function isWorkflowSetting(
-  setting: AgentSetting,
-): setting is AgentWorkflowSetting {
-  return setting.agentCategory === AgentCategory.Workflow;
-}
-
 export function hasEndTag(
   settings: AgentSetting,
   fileContent: string,

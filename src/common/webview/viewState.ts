@@ -1,7 +1,7 @@
 // Third-party imports
 import * as vscode from 'vscode';
 
-export const TEXRA_ACTIVE_VIEW_CONTEXT_KEY = 'texra.activeView';
+const TEXRA_ACTIVE_VIEW_CONTEXT_KEY = 'texra.activeView';
 
 export const SIDEBAR_VIEWS = {
   MAIN: 'main',
