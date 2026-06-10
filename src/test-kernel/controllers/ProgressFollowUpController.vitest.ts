@@ -87,7 +87,7 @@ function createController(
 }
 
 describe('ProgressFollowUpController', () => {
-  it('maps generated latexdiff candidates back to editable sources', async () => {
+  it('keeps generated latexdiff artifacts and exposes the source as an extra target', async () => {
     const plan = await createController(
       new Set(['main.tex', 'main-diffea268c1.tex']),
     ).planCompileFixer({
@@ -105,10 +105,22 @@ describe('ProgressFollowUpController', () => {
 
     expect(plan.kind).toBe('execute');
     if (plan.kind !== 'execute') return;
-    expect(plan.request.config.inputFiles).toEqual(['main.tex']);
+    expect(plan.request.config.inputFiles).toEqual([
+      'main-diffea268c1.tex',
+      'main.tex',
+    ]);
+    expect(plan.request.config.instruction).toContain(
+      'main-diffea268c1.tex is a latexdiff artifact generated from main.tex',
+    );
+    expect(plan.request.config.instruction).toContain(
+      'repair this artifact in place',
+    );
+    expect(plan.request.config.instruction).toContain(
+      'fix main.tex too so a regenerated diff stays fixed',
+    );
   });
 
-  it('does not edit generated latexdiff artifacts when source is absent', async () => {
+  it('keeps strong generated latexdiff artifacts when the source is absent', async () => {
     const plan = await createController(
       new Set(['main-diffea268c1.tex']),
     ).planCompileFixer({
@@ -124,10 +136,57 @@ describe('ProgressFollowUpController', () => {
       executionId: 'exec-123',
     });
 
-    expect(plan).toEqual({
-      kind: 'warning',
-      message:
-        'No editable workspace source file matched the compile failure. Accept the output into the workspace first, then run latexFixer.',
-    });
+    expect(plan.kind).toBe('execute');
+    if (plan.kind !== 'execute') return;
+    expect(plan.request.config.inputFiles).toEqual(['main-diffea268c1.tex']);
+    expect(plan.request.config.instruction).toContain(
+      'main-diffea268c1.tex is a latexdiff artifact; inferred source main.tex is not present in the workspace',
+    );
+  });
+
+  it('uses the inferred source when a generated latexdiff artifact is absent', async () => {
+    const plan = await createController(new Set(['main.tex'])).planCompileFixer(
+      {
+        streamId: 'stream-a',
+        taskState: createWorkflowTaskState({
+          inputFiles: ['main-diffea268c1.tex'],
+        }),
+        compileFailures: [createCompileFailure()],
+        runOutputs: new Map([
+          [2, [createRunStorageOutputFile('main-diffea268c1.tex')]],
+        ]),
+        modelOptions: [{ value: 'gemini31p' }],
+        executionId: 'exec-123',
+      },
+    );
+
+    expect(plan.kind).toBe('execute');
+    if (plan.kind !== 'execute') return;
+    expect(plan.request.config.inputFiles).toEqual(['main.tex']);
+    expect(plan.request.config.instruction).toContain(
+      'main-diffea268c1.tex was a latexdiff artifact candidate, but it is not present in the workspace. main.tex is the inferred source fallback.',
+    );
+  });
+
+  it('keeps missing latexdiff context when a source target is already present', async () => {
+    const plan = await createController(new Set(['main.tex'])).planCompileFixer(
+      {
+        streamId: 'stream-a',
+        taskState: createWorkflowTaskState({
+          inputFiles: ['main.tex', 'main-diffea268c1.tex'],
+        }),
+        compileFailures: [createCompileFailure()],
+        runOutputs: new Map(),
+        modelOptions: [{ value: 'gemini31p' }],
+        executionId: 'exec-123',
+      },
+    );
+
+    expect(plan.kind).toBe('execute');
+    if (plan.kind !== 'execute') return;
+    expect(plan.request.config.inputFiles).toEqual(['main.tex']);
+    expect(plan.request.config.instruction).toContain(
+      'main-diffea268c1.tex was a latexdiff artifact candidate, but it is not present in the workspace. main.tex is the inferred source fallback.',
+    );
   });
 });

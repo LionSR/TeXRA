@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { toErrorMessage } from '@common/errors/errorMessage';
-import type { Session as SupabaseNativeSession } from '@supabase/supabase-js';
 
 export const DEFAULT_SUPABASE_SESSION_EXPIRY_MS = 60 * 60 * 1000;
 
@@ -130,13 +129,28 @@ export async function parseTokenExchangeResponse(
   return parsed.data;
 }
 
+type StorableSessionInput = {
+  access_token: string;
+  refresh_token: string;
+  expires_at?: number;
+  token_type?: string;
+  user: {
+    id: string;
+    email?: string | null;
+  };
+};
+
 /**
- * Convert Supabase's native Session to our storage format.
+ * Convert Supabase's native session-shaped responses to our storage format.
  * Handles the snake_case to camelCase and seconds to milliseconds conversions.
  */
 export function toStorableSupabaseSession(
-  nativeSession: SupabaseNativeSession,
-  options?: { useCustomRefresh?: boolean },
+  nativeSession: StorableSessionInput,
+  options?: {
+    fallbackLabel?: string;
+    defaultExpiryMs?: number;
+    useCustomRefresh?: boolean;
+  },
 ): SupabaseSession {
   return {
     id: nativeSession.user.id,
@@ -144,32 +158,18 @@ export function toStorableSupabaseSession(
     refreshToken: nativeSession.refresh_token,
     account: {
       id: nativeSession.user.id,
-      label: firstAccountLabel(nativeSession.user.email, nativeSession.user.id),
+      label: firstAccountLabel(
+        nativeSession.user.email,
+        options?.fallbackLabel,
+        nativeSession.user.id,
+      ),
     },
     expiresAt: nativeSession.expires_at
       ? nativeSession.expires_at * 1000
-      : Date.now() + DEFAULT_SUPABASE_SESSION_EXPIRY_MS,
-    useCustomRefresh: options?.useCustomRefresh,
-  };
-}
-
-/** Convert Edge Function token responses into the stored custom-refresh shape. */
-export function toStorableGitHubTokenExchangeSession(
-  data: GitHubTokenExchangeResponse,
-  fallbackLabel: string,
-  defaultSessionExpiryMs: number,
-): SupabaseSession {
-  return {
-    id: data.user.id,
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    account: {
-      id: data.user.id,
-      label: firstAccountLabel(data.user.email, fallbackLabel, data.user.id),
-    },
-    expiresAt: data.expires_at
-      ? data.expires_at * 1000
-      : Date.now() + defaultSessionExpiryMs,
-    useCustomRefresh: true,
+      : Date.now() +
+        (options?.defaultExpiryMs ?? DEFAULT_SUPABASE_SESSION_EXPIRY_MS),
+    ...(options?.useCustomRefresh === undefined
+      ? {}
+      : { useCustomRefresh: options.useCustomRefresh }),
   };
 }

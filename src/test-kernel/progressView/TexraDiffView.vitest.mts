@@ -47,6 +47,13 @@ class MockWorker {
   terminate = vi.fn();
 }
 
+function setHostTheme(
+  element: TexraDiffView,
+  theme: (typeof DESKTOP_THEME_KIND)[keyof typeof DESKTOP_THEME_KIND],
+): void {
+  element.hostTheme = theme;
+}
+
 function installDom(): JSDOM {
   const dom = new JSDOM('<!doctype html><body class="vscode-dark"></body>', {
     url: 'http://localhost',
@@ -140,14 +147,13 @@ describe('texra-diff-view', () => {
     });
     expect(setTheme).toHaveBeenCalledWith('vs-dark');
 
-    dom.window.document.body.dataset.vscodeThemeKind = DESKTOP_THEME_KIND.LIGHT;
+    setHostTheme(element, DESKTOP_THEME_KIND.LIGHT);
     await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('vs'));
 
-    dom.window.document.body.dataset.vscodeThemeKind =
-      DESKTOP_THEME_KIND.HIGH_CONTRAST;
+    setHostTheme(element, DESKTOP_THEME_KIND.HIGH_CONTRAST);
     await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('hc-black'));
 
-    dom.window.document.body.dataset.vscodeThemeKind = DESKTOP_THEME_KIND.DARK;
+    setHostTheme(element, DESKTOP_THEME_KIND.DARK);
     await vi.waitFor(() => expect(setTheme).toHaveBeenCalledWith('vs-dark'));
   });
 });

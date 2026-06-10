@@ -553,15 +553,11 @@ describe('DesktopProgressBridge', () => {
   it('restores a ghost stream display from shared streamData sidecars', async () => {
     const messages: unknown[] = [];
     const plan = {
-      summary: 'Restore the prior display state.',
-      steps: [
-        {
-          title: 'Read sidecars',
-          description: 'Load all durable progress-view sidecar fields.',
-          status: 'pending',
-          files: ['paper.tex'],
-        },
-      ],
+      objective: [
+        'Restore the prior display state.',
+        '',
+        'Load all durable progress-view sidecar fields.',
+      ].join('\n'),
     };
     const outputLocation = {
       kind: 'workspace',
@@ -583,7 +579,7 @@ describe('DesktopProgressBridge', () => {
           },
         ],
         plan,
-        planSummary: plan.summary,
+        planSummary: 'Restore the prior display state.',
       },
       usageStats: {
         'run-1': {

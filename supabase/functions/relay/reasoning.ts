@@ -10,13 +10,6 @@ export interface ReasoningEffortCapContext {
 
 export type ReasoningEffortCap = 'high' | 'medium';
 
-function capForTier(
-  tier: string,
-  tierCaps: Record<string, ReasoningEffortCap>,
-): ReasoningEffortCap | null {
-  return tierCaps[tier] ?? null;
-}
-
 /**
  * Apply the relay-side GPT-5 reasoning cap for included-access requests.
  *
@@ -28,7 +21,7 @@ export function capOpenAIReasoningEffortForTier(
   requestBody: unknown,
   context: ReasoningEffortCapContext,
 ): unknown {
-  const cappedEffort = capForTier(context.tier, context.tierCaps);
+  const cappedEffort = context.tierCaps[context.tier] ?? null;
   if (
     context.provider !== 'openai' ||
     !cappedEffort ||
