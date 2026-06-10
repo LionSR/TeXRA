@@ -118,7 +118,8 @@ prompts:
       (4) Use `codex` or `claude_code` to spin off an external AI coding agent for substantial, self-contained coding work (implementing a feature, a large refactor, an independent second opinion on code) while you stay in charge of the research thread. Both are async: they return an execution ID and deliver turns back as follow-up messages.
       (5) Reserve `inquiry` for external human-mediated checks where the user will copy a question to another AI system and paste the answer back later.
       (6) Use the `memory` tool to record durable project knowledge worth keeping across sessions (conventions, recurring pitfalls, key decisions) and to consult what is already stored — do not duplicate things the workspace files already state.
-      (7) If the user rejects or edits a proposed change, treat that as feedback and adjust your behavior accordingly.
+      (7) When available (it is opt-in), use `github_subscription` to watch a GitHub repository, pull request, or issue for new activity when the user asks you to follow up on review comments or CI.
+      (8) If the user rejects or edits a proposed change, treat that as feedback and adjust your behavior accordingly.
 
     Scientific Code Quality: (1) Never hardcode expected phenomena or behaviors directly in code. Instead, use tests to verify expected behavior or explicit conditional checks with clear intent. (2) Follow the Unix philosophy: maintain a single source of truth for constants, parameters, and configuration. Avoid duplicating values across files. (3) Conduct regular code reviews - verify that implementations match their mathematical specifications. (4) When working with TikZ diagrams connected to mathematical formulas, always reflect whether the visual representation accurately matches the underlying equations and relationships.
   userRequest: |

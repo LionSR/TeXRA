@@ -14,7 +14,10 @@ import { z } from 'zod';
 
 // Local imports - agent
 import { getExecutionStore, registerExecution } from '@agent/storage';
-import { getVisibleAgents } from '@agent/index/agentRegistry';
+import {
+  canonicalAgentName,
+  getVisibleAgents,
+} from '@agent/index/agentRegistry';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -805,8 +808,13 @@ async function proposeAndExecute(
     throw new Error(`Unexpected non-approve proposal result: ${result.action}`);
   }
   const modelOverride = result.model;
+  const approvedAgent = result.agent
+    ? canonicalAgentName(result.agent)
+    : undefined;
   const agentOverride =
-    result.agent && result.agent !== proposal.agent ? result.agent : undefined;
+    approvedAgent && approvedAgent !== proposal.agent
+      ? approvedAgent
+      : undefined;
 
   // Re-validate against the current registry — between proposal display and
   // approval the agent may have been removed/renamed, or the approval could
@@ -954,7 +962,10 @@ Optional auto-attach from the input LaTeX:
 Example: agent=correct, inputFiles=["paper.tex"], extractFigures=true, instruction="Quantum error correction paper. Fix grammar, tighten sentences, keep terminology consistent — especially in the abstract and intro."`,
   schema: WorkflowAgentInputSchema,
 }) {
-  protected async execute(input: WorkflowAgentInput): Promise<ToolResult> {
+  protected async execute(rawInput: WorkflowAgentInput): Promise<ToolResult> {
+    // Normalize legacy agent names once at the entry point so validation,
+    // the proposal UI, and the launch all see the canonical name.
+    const input = { ...rawInput, agent: canonicalAgentName(rawInput.agent) };
     assertVisibleAgent('workflow', input.agent);
     const ctx = getRequiredContext();
 
@@ -1063,7 +1074,7 @@ export class DelegateAgentTool extends defineTool({
 Available agents:
 ${formatAgentList(getVisibleAgents('toolUse'))}
 
-Agent selection: choose the most specific agent whose description matches the task. Specialized agents have domain-specific tools and focused prompts that produce better results for matching tasks. Do not choose chat just because the task is a targeted edit, file operation, or mixed research/editing request; choose chat only when no listed specialized agent covers the work, and state that reason in the instruction.
+Agent selection: choose the most specific agent whose description matches the task. Specialized agents have domain-specific tools and focused prompts that produce better results for matching tasks. Do not choose assistant just because the task is a targeted edit, file operation, or mixed research/editing request; choose assistant only when no listed specialized agent covers the work, and state that reason in the instruction.
 
 Available models: loaded from the active API mode at runtime.
 Model selection: use the largest models for challenging tasks requiring deep reasoning; use cheaper long-context models for tedious but lengthy tasks; use cost-effective models for highly parallelizable routine work.
@@ -1079,18 +1090,25 @@ Git worktree support: ${
     }`,
   schema: DelegateAgentInputSchema,
 }) {
-  protected async execute(input: DelegateAgentInput): Promise<ToolResult> {
+  protected async execute(rawInput: DelegateAgentInput): Promise<ToolResult> {
     // Resume path: execution_id is set
-    if (input.execution_id) {
-      return this.resumeAgent(input.execution_id, input.instruction);
+    if (rawInput.execution_id) {
+      return this.resumeAgent(rawInput.execution_id, rawInput.instruction);
     }
 
     // Delegate path: agent is required
-    if (!input.agent) {
+    if (!rawInput.agent) {
       throw new Error(
         `'agent' is required when starting a new delegation. Provide an agent name, or set 'execution_id' to resume an existing subagent.`,
       );
     }
+
+    // Normalize legacy agent names once at the entry point so validation,
+    // the proposal UI, and the launch all see the canonical name.
+    const input = {
+      ...rawInput,
+      agent: canonicalAgentName(rawInput.agent),
+    };
 
     assertVisibleAgent('toolUse', input.agent);
 

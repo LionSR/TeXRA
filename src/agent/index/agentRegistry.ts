@@ -188,6 +188,16 @@ const LEGACY_AGENT_ALIASES: Record<string, string> = {
 };
 
 /**
+ * Map a legacy agent name to its canonical replacement (identity when not
+ * aliased). Single source of truth for rename handling — every exact-name
+ * comparison against user-supplied or persisted agent names (visibility sets,
+ * delegation targets) should go through this rather than hardcoding renames.
+ */
+export function canonicalAgentName(name: string): string {
+  return LEGACY_AGENT_ALIASES[name] ?? name;
+}
+
+/**
  * Canonical agent resolver: look up an agent by identifier.
  *
  * Supports "source:name" format or just "name". Plain names are matched
@@ -379,7 +389,15 @@ function filterVisible(
   // undefined = never configured → show all; [] = explicitly empty → show none
   if (configured === undefined) return entries;
   // Match by name so visibility survives when dedup changes the winning source.
-  const enabledNames = new Set(configured.map(agentName));
+  // A persisted legacy name also enables its canonical replacement, so agent
+  // renames don't silently hide an agent the user opted into.
+  const enabledNames = new Set(
+    configured.flatMap((value) => {
+      const name = agentName(value);
+      const canonical = canonicalAgentName(name);
+      return canonical === name ? [name] : [name, canonical];
+    }),
+  );
   return entries.filter((entry) => enabledNames.has(entry.name));
 }
 
