@@ -1,11 +1,11 @@
-import { createHelperModelKit } from '@agent/runtime/helperModel';
-import { renderPolishPrompt } from '@agent/runtime/polishModel';
 import type { TaskState } from '@agent/core/execution/TaskState';
 import { getSdkErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import { isNonEmptyString } from '@utils/core';
 
-import { extractTextFromTag } from './xmlUtils';
+import { extractTextFromTag } from '@utils/text/xmlUtils';
+import { renderPolishPrompt } from './polishModel';
+import { createHelperModelKit } from './helperModel';
 
 const CHANNEL = 'TextEnhancement';
 

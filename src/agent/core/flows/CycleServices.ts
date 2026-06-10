@@ -7,13 +7,8 @@ import type {
 import type { AgentWorkspaceState } from '@agent/core/execution/AgentWorkspaceState';
 import type { IToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { IToolUseSession } from '@agent/implementations/flows/tooluse/ToolUseSessionLifecycle';
-import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
+import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { TaskRunFileService } from '@utils/files';
-
-/** Callback invoked when a round/cycle completes for usage tracking. */
-export type RoundFinalizedCallback = (
-  run: AgentRunStateSnapshot,
-) => void | Promise<void>;
 
 /** Services for response cycle flow nodes. */
 export interface ResponseCycleServices<

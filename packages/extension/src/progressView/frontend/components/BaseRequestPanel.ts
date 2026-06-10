@@ -8,7 +8,7 @@ import { property } from 'lit/decorators.js';
 import { ProgressEvents } from '../events';
 
 // Local imports - progress view component types
-import type { PermissionState } from './PermissionCard';
+import type { PermissionState } from '../permissionState';
 
 export abstract class BaseRequestPanel extends LitElement {
   @property({ attribute: false }) permission!: PermissionState;

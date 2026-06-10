@@ -19,7 +19,6 @@
 
 import pMap from 'p-map';
 
-import { getCleanAgentName } from '@agent/index';
 import { getExecutionStore } from '@agent/storage';
 import {
   TaskStateSchema,
@@ -50,13 +49,14 @@ import {
   type TokenUsageStats,
   type WorkPlanSnapshot,
 } from '@shared/schemas';
+import { getCleanAgentName } from '@shared/schemas/agent';
 
+import { mapToRecord } from '@shared/progressView/backend/persistence/serializationUtils';
 import {
   STREAM_DATA_DIR,
   STREAM_DATA_KEYS,
   streamDataDir,
 } from './streamDataPaths';
-import { mapToRecord } from '@shared/progressView/backend/persistence/serializationUtils';
 import {
   assembleSnapshot,
   EMPTY_WORK_PLAN,

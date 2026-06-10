@@ -45,28 +45,7 @@ import { ProgressEvents } from '../events';
 // Types
 // =============================================================================
 
-export type PermissionState =
-  | { kind: typeof PERMISSION_KIND.TOOL_EDIT; data: ToolEditPermission }
-  | { kind: typeof PERMISSION_KIND.BASH; data: BashPermission }
-  | { kind: typeof PERMISSION_KIND.RETRY; data: RetryPermission }
-  | {
-      kind: typeof PERMISSION_KIND.PROPOSAL;
-      data: AgentProposalPermission;
-      modelOptions?: ModelOptionData[];
-      agentOptions?: AgentOptionData[];
-    }
-  | {
-      kind: typeof PERMISSION_KIND.PLAN_APPROVAL;
-      data: PlanApprovalPermission;
-    }
-  | {
-      kind: typeof PERMISSION_KIND.EXTERNAL_INQUIRY;
-      data: ExternalInquiryPermission;
-    }
-  | {
-      kind: typeof PERMISSION_KIND.USER_QUESTION;
-      data: UserQuestionPermission;
-    };
+import type { PermissionState } from '../permissionState';
 
 /** Action button configuration */
 type ActionConfig = {

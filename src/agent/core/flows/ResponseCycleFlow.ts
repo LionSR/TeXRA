@@ -19,7 +19,7 @@ import type { ProviderUsage } from '@agent/core/usage/ResponseUsage';
 
 import { isTokenLimitStopReason } from '@agent/modelHandlers/utils/stopReasonUtils';
 import { K_SLICE } from '@agent/core/constants';
-import { bestConnectionMethod } from '@latex';
+import { bestConnectionMethod } from '@agent/runtime/textConnection';
 import type { ToolDefinition } from '@model';
 import replacementEngine from '@replacement/engine';
 import { MESSAGE_TYPES, AgentFileLocationSchema } from '@shared/schemas';

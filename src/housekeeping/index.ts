@@ -13,4 +13,3 @@ export {
   runCleanLatexdiffvcMultiple,
   type LatexdiffPackResult,
 } from './latexdiff';
-export { indentLatexFilesInDirectory, type IndentLatexResult } from './indent';

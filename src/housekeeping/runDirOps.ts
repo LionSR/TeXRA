@@ -3,11 +3,11 @@ import * as path from 'node:path';
 
 // Local imports
 import { platform } from '@platform/platform';
-import { getCleanAgentName } from '@agent/index';
-import type { FileOpResult } from '@agent/types/ResultTypes';
 import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { ExecutionId } from '@shared/schemas';
+import type { FileOpResult } from '@shared/schemas/opResults';
+import { getCleanAgentName } from '@shared/schemas/agent';
 import { WorkspaceFS } from '@utils/files';
 import { resolveRunDir } from '@utils/files/taskRunStorage';
 

@@ -1,7 +1,7 @@
 // Internal imports
 import { platform } from '@platform/platform';
-import type { ExecResult } from '@agent/types/ResultTypes';
 import * as logger from '@logger/logUtils';
+import type { ExecResult } from '@shared/schemas/opResults';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latex';
 import { executeCommand } from '@utils/system';

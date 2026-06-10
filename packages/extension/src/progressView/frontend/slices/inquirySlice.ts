@@ -2,7 +2,7 @@ import { create } from 'mutative';
 
 import { PROGRESS_VIEW_COMMANDS } from '@shared/ipc';
 
-import type { HandlerRegistry } from '../messageDispatcher';
+import type { HandlerRegistry } from '../messageHandlerTypes';
 
 export const inquiryHandlers: HandlerRegistry = {
   [PROGRESS_VIEW_COMMANDS.SYNC_INQUIRY_THREADS]: (data, ctx) => {

@@ -1,15 +1,3 @@
-export const EXCLUDED_DIRS = new Set([
-  'figs',
-  'figures',
-  'media',
-  'medias',
-  'build',
-  'versions',
-  'history',
-  'notes',
-  'diffs',
-]);
-
 export const PACK_EXTENSIONS = ['.pdf', '.tex', '.txt', '.text', '.xml', '.md'];
 
 export const TEMP_EXTENSIONS = [

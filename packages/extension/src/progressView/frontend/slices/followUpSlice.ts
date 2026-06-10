@@ -13,7 +13,7 @@ import { updateToolUseState } from '../stateUtils';
 import type {
   HandlerRegistry,
   MessageHandlerContext,
-} from '../messageDispatcher';
+} from '../messageHandlerTypes';
 
 // ============================================================
 // Helpers

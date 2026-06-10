@@ -13,7 +13,7 @@ import { toErrorMessage } from '@common/errors';
 import * as logger from '@logger/logUtils';
 import type { AgentOptionData } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import { AgentSource } from '@shared/schemas/agent';
+import type { AgentSource } from '@shared/schemas/agent';
 import { agentKey as createKey, agentName } from '@shared/schemas/agent';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { AbsoluteFS } from '@utils/files';
@@ -568,21 +568,6 @@ export function resolveAgentKey(
   const entry = getAgent(agentIdentifier, preferToolUse);
   if (!entry) return agentIdentifier;
   return createKey(entry.source, entry.name);
-}
-
-/**
- * Extract the clean agent name from an identifier.
- * Like agentName() but validates the prefix is a known AgentSource first,
- * so arbitrary strings with colons (e.g. URLs) pass through unchanged.
- */
-export function getCleanAgentName(agentIdentifier: string): string {
-  const colonIdx = agentIdentifier.indexOf(':');
-  if (colonIdx === -1) return agentIdentifier;
-
-  const source = agentIdentifier.slice(0, colonIdx);
-  if (!AgentSource.safeParse(source).success) return agentIdentifier;
-
-  return agentName(agentIdentifier);
 }
 
 // =============================================================================

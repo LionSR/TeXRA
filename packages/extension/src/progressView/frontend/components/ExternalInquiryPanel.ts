@@ -39,7 +39,7 @@ import { renderLabeledActionButton } from '@shared/wa/actionButtons';
 
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { ProgressEvents } from '../events';
-import type { PermissionState } from './PermissionCard';
+import type { PermissionState } from '../permissionState';
 
 // ── Draft persistence ──
 

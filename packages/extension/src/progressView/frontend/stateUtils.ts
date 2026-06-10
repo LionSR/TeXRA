@@ -9,8 +9,8 @@ import {
 } from './store';
 
 // Local imports
-import type { FrontendEventHandlerContext } from './eventHandlers';
-import type { PermissionState } from './components/PermissionCard';
+import type { FrontendEventHandlerContext } from './messageHandlerTypes';
+import type { PermissionState } from './permissionState';
 
 /**
  * Update a per-round record. Handles full reset and merge semantics.

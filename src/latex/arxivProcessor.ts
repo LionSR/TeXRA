@@ -8,11 +8,11 @@ import * as arxivIdentifiers from 'identifiers-arxiv';
 import * as tar from 'tar';
 
 import { toErrorMessage } from '@common/errors';
-import { indentLatexFilesInDirectory } from '@housekeeping/indent';
 import * as logger from '@logger/logUtils';
-import { normaliseArxivIdentifier } from '@tools/latex/arxivShared';
 import { withTimeout } from '@utils/core';
 import { WorkspaceFS, AbsoluteFS } from '@utils/files';
+import { normaliseArxivIdentifier } from './arxivIdentifier';
+import { indentLatexFilesInDirectory } from './formatter/indentDirectory';
 
 export interface ExtractResult {
   success: boolean;

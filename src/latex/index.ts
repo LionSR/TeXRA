@@ -78,7 +78,3 @@ export {
   type TexcountOptions,
   type TexcountResult,
 } from './texcount';
-export {
-  bestConnectionMethod,
-  bestConnectionMethodAnthropic,
-} from './textConnection';

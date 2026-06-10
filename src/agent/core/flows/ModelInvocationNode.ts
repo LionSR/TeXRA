@@ -7,7 +7,7 @@ import {
   replaceMessagesInPlace,
   saveCycleDebug,
 } from '@agent/core/flows/CommonCycleTypes';
-import type { BaseFlowContextInit } from '@agent/implementations/flows/common/BaseFlowServices';
+import type { BaseFlowContextInit } from '@agent/core/flows/BaseFlowServices';
 import type { ToolDefinition } from '@model';
 
 import { FlowTransition } from './FlowTransitions';

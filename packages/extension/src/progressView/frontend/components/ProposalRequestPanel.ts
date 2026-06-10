@@ -48,7 +48,7 @@ import { renderWorkflowExtractFlagBadges } from '@shared/wa/extractFlagBadges';
 import { BaseFeedbackPanel } from './BaseFeedbackPanel';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
-import type { PermissionState } from './PermissionCard';
+import type { PermissionState } from '../permissionState';
 
 function proposalIdOf(
   p: PermissionState | null | undefined,
