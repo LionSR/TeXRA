@@ -1403,7 +1403,7 @@ items** — both anti-shim dead-export removals freshly created/exposed by the i
   period (new file in the `c096237..8b868e3` drift), and `runtime/helperModel.ts:30` carried a
   re-export `export { getHelperModelName };`. Both **external** importers
   (`packages/extension/src/frontend/agents/optionsLoader.ts:2`,
-  `commands/agent/mergeCommands.ts:5`) already import directly from
+  `packages/extension/src/commands/agent/mergeCommands.ts:5`) already import directly from
   `@agent/runtime/helperModelName` — **zero** files route through the re-export
   (`grep "from '@agent/runtime/helperModel'"` for the name → empty). Deleted the dead re-export;
   the local `import { getHelperModelName }` (still used internally at `:34`) stays. Exactly the
